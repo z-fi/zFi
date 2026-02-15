@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,8 +9,6 @@
 // Prevent dark-mode FOUC: apply class before first paint
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
 </script>
-<script src="./ethers.min.js"></script>
-<script src="./walletconnect.min.js"></script>
 <style>
 :root {
   --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
@@ -59,8 +56,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   min-height: 100vh;
-  padding: 60px 20px;
-  padding-bottom: 20px;
+  padding: 60px 20px 20px;
   max-width: 480px;
   margin: 0 auto;
 }
@@ -109,7 +105,7 @@ button {
   cursor: pointer;
   margin-right: 8px;
   margin-top: 8px;
-  transition: all 0.2s;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 button:hover { background: var(--btn-hover); }
 button:disabled { background: var(--btn-dis-bg); border-color: var(--btn-dis-border); color: var(--btn-dis-fg); cursor: not-allowed; }
@@ -140,7 +136,7 @@ button.secondary:hover { background: var(--surface-hover); }
   border: 1px solid var(--border);
   padding: 6px 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -197,7 +193,7 @@ button.secondary:hover { background: var(--surface-hover); }
   border: 1px solid var(--border);
   padding: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, background 0.2s;
   margin: 0;
 }
 .arrow-btn:hover { transform: rotate(180deg); background: var(--surface-hover); }
@@ -216,7 +212,6 @@ button.secondary:hover { background: var(--surface-hover); }
   cursor: pointer;
   width: 100%;
   margin-top: 16px;
-  transition: all 0.2s;
 }
 .swap-btn:hover:not(:disabled) { background: var(--btn-hover); }
 .swap-btn:disabled { background: var(--btn-dis-bg); border-color: var(--btn-dis-border); color: var(--btn-dis-fg); cursor: not-allowed; }
@@ -363,7 +358,6 @@ button.secondary:hover { background: var(--surface-hover); }
   align-items: center;
   padding: 20px;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 .modal-overlay.active { display: flex; }
 body.modal-open { overflow: hidden; }
@@ -408,7 +402,7 @@ body.modal-open { overflow: hidden; }
   color: var(--fg);
   cursor: pointer;
   margin-bottom: 8px;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
 .wallet-option-icon { font-size: 1.5rem; }
@@ -514,6 +508,7 @@ body.modal-open { overflow: hidden; }
   .amount-input { font-size: 20px; }
   .swap-btn { padding: 14px 20px; }
   .modal { max-width: 100%; margin: 0 10px; }
+  .dark-toggle { top: 18px; left: 16px; }
 }
 @media (max-width: 380px) {
   body { padding: 70px 12px 20px; }
@@ -574,7 +569,7 @@ body.modal-open { overflow: hidden; }
   padding: 6px;
   margin: 0;
   opacity: 0.7;
-  transition: all 0.2s;
+  transition: opacity 0.2s;
   z-index: 100;
   line-height: 1;
   color: var(--toggle-fg);
@@ -587,10 +582,6 @@ body.modal-open { overflow: hidden; }
   justify-content: center;
 }
 .dark-toggle:hover { opacity: 1; }
-
-@media (max-width: 700px) {
-  .dark-toggle { top: 18px; left: 16px; }
-}
 </style>
 </head>
 <body>
@@ -623,7 +614,7 @@ body.modal-open { overflow: hidden; }
 <!-- Swap direction arrow -->
 <div class="swap-arrow">
   <button class="arrow-btn" onclick="swapTokens()">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2"><path d="M7 10L12 15L17 10"/></svg>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M7 10L12 15L17 10"/></svg>
   </button>
 </div>
 
@@ -717,10 +708,12 @@ body.modal-open { overflow: hidden; }
 
 <!-- Footer web ring -->
 <div class="site-footer">
-  <a href="./domains.html">Domains</a> &middot; <a href="./dao.html">DAO</a> &middot; <a href="./ico.html">ICO</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao.html#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/zamm_defi" target="_blank" rel="noopener">zAMM</a>
+  <a href="./domains.html">Domains</a> &middot; <a href="./dao.html">DAO</a> &middot; <a href="./ico.html">ICO</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao.html#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/zammdefi/zfi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
 </div>
 
+<script src="./ethers.min.js"></script>
+<script src="./walletconnect.min.js"></script>
 <script>
 // ---- Dark mode ----
 function toggleDark() {
@@ -743,6 +736,7 @@ const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const WBTC_ADDRESS = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
+const WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const WSTETH_ADDRESS = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
 const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
@@ -762,7 +756,7 @@ const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
-const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS, ZORG_DAO_TOKEN].map(a => a.toLowerCase()));
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS, ZORG_DAO_TOKEN].map(a => a.toLowerCase()));
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -1279,6 +1273,7 @@ function handleError(e) {
 let currentModal = null;
 const tokens = {
   ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
+  WETH: { address: WETH_ADDRESS, symbol: "WETH", decimals: 18 },
   zOrg: { address: ZORG_DAO_TOKEN, symbol: "zOrg", decimals: 18, _isZOrg: true },
   USDC: { address: USDC_ADDRESS, symbol: "USDC", decimals: 6 },
   USDT: { address: USDT_ADDRESS, symbol: "USDT", decimals: 6 },
@@ -1309,6 +1304,7 @@ function saveCustomTokens() {
 // ---- .wei token list state ----
 const weiLists = new Map();       // name → { tokens: [...], loadedAt }
 const weiListTokenSource = new Map(); // symbol → listName
+let _tokenListAutoLoaded = false;  // true once auto-load of token-list.wei attempted
 
 function saveWeiLists() {
   try {
@@ -1519,6 +1515,7 @@ function removeWeiList(listName) {
   }
   weiLists.delete(listName);
   saveWeiLists();
+  if (listName === 'token-list.wei') _tokenListAutoLoaded = false;
 }
 
 function renderTokenList(filter) {
@@ -1614,16 +1611,15 @@ function renderTokenList(filter) {
   if (!hasAny) {
     const empty = document.createElement('div');
     empty.style.cssText = 'padding:16px 12px;color:#999;font-size:13px;text-align:center';
-    empty.textContent = q ? 'No tokens match "' + q + '"' : 'No tokens';
-    frag.appendChild(empty);
-  }
-
-  // Suggestion for token-list.wei
-  if (!q && weiLists.size === 0) {
-    const suggest = document.createElement('div');
-    suggest.style.cssText = 'padding:6px 12px;font-size:11px;color:#999';
-    suggest.innerHTML = 'Try loading <span id="weiSuggestLink" style="color:inherit;cursor:pointer;text-decoration:underline">token-list.wei</span>';
-    frag.appendChild(suggest);
+    if (q && !_tokenListAutoLoaded && !weiLists.has('token-list.wei') && !q.endsWith('.wei')) {
+      _tokenListAutoLoaded = true;
+      empty.textContent = 'Searching extended token list\u2026';
+      frag.appendChild(empty);
+      resolveWeiList('token-list.wei');
+    } else {
+      empty.textContent = q ? 'No tokens match \u201c' + q + '\u201d' : 'No tokens';
+      frag.appendChild(empty);
+    }
   }
 
   list.appendChild(frag);
@@ -1655,14 +1651,6 @@ function initTokenSearch() {
     }
   });
 
-  // Delegate click on suggestion link
-  $('tokenList').addEventListener('click', (e) => {
-    if (e.target.id === 'weiSuggestLink') {
-      input.value = 'token-list.wei';
-      renderTokenList('token-list.wei');
-      resolveWeiList('token-list.wei');
-    }
-  });
 }
 
 let fromToken = "ETH";
@@ -1689,7 +1677,7 @@ const ZORG_ICON = `<svg width="24" height="24" viewBox="0 0 200 200" xmlns="http
 const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="12" font-weight="bold">?</text></svg>`;
 
 const ICONS = {
-  ETH: ETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
+  ETH: ETH_ICON, WETH: ETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
   wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, zOrg: ZORG_ICON,
 };
 
@@ -1709,20 +1697,23 @@ function iconForSymbol(sym) {
 function makeLetterIcon(sym) {
   try {
     const full = String(sym ?? '').trim();
-    const clean = full.toUpperCase().replace(/[^A-Z0-9]/g, '') || '?';
-    const show = clean.length <= 5 ? clean : clean.slice(0, 4) + '…';
+    // Preserve original casing (stETH, crvUSD, frxETH, etc.)
+    const clean = full.replace(/[^A-Za-z0-9]/g, '') || '?';
+    const show = clean.length <= 7 ? clean : clean.slice(0, 6) + '\u2026';
     const L = show.length;
-    const fontSize = L <= 1 ? 8.2 : L === 2 ? 7.4 : L === 3 ? 6.3 : L === 4 ? 5.4 : 4.6;
-    let hue = 0;
-    for (let i = 0, n = Math.min(clean.length, 12); i < n; i++) {
-      hue = (hue * 31 + clean.charCodeAt(i)) % 360;
-    }
+    const fontSize = L <= 1 ? 10 : L === 2 ? 8.5 : L === 3 ? 7.2 : L === 4 ? 6 : L === 5 ? 5.2 : L === 6 ? 4.6 : 4;
+    // Deterministic hue from full symbol (case-sensitive for better spread)
+    let hash = 0;
+    for (let i = 0; i < clean.length; i++) hash = ((hash << 5) - hash + clean.charCodeAt(i)) | 0;
+    const hue = ((hash % 360) + 360) % 360;
+    // textLength compresses longer symbols to fit within the circle
+    const tl = L >= 5 ? ` textLength="${L >= 7 ? 19 : 18}" lengthAdjust="spacingAndGlyphs"` : '';
     return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="${escAttr(full)}">` +
       `<title>${escText(full)}</title>` +
-      `<circle cx="12" cy="12" r="11" fill="hsl(${hue},70%,55%)" stroke="#000" stroke-width="2"/>` +
-      `<text x="12" y="12.2" text-anchor="middle" dominant-baseline="middle"` +
+      `<circle cx="12" cy="12" r="11" fill="hsl(${hue},50%,50%)" stroke="hsl(${hue},35%,38%)" stroke-width="1"/>` +
+      `<text x="12" y="12.3" text-anchor="middle" dominant-baseline="middle"` +
       ` font-family="Helvetica,Arial,sans-serif"` +
-      ` font-size="${fontSize}" font-weight="700" fill="#fff">${escText(show)}</text>` +
+      ` font-size="${fontSize}" font-weight="700" fill="#fff"${tl}>${escText(show)}</text>` +
       `</svg>`;
   } catch (e) {
     return DEFAULT_ICON;
@@ -2315,6 +2306,32 @@ async function handleAmountChange() {
     return;
   }
 
+  // ETH ↔ WETH wrap/unwrap: 1:1, no DEX needed (only when sending to self)
+  const _receiverRaw = ($("receiverAddress")?.value || "").trim();
+  const _hasCustomReceiver = _receiverRaw && ethers.isAddress(_receiverRaw) && ethers.getAddress(_receiverRaw) !== connectedAddress;
+  const wrapDir = !_hasCustomReceiver ? isWrapUnwrap(fromToken, toToken) : null;
+  if (wrapDir) {
+    const fromData = tokens[fromToken];
+    try {
+      const amountIn = safeParseUnits(amtStr, fromData.decimals);
+      // Output equals input (1:1, both 18 decimals)
+      toAmountEl.value = amtStr;
+      fitRouteText(wrapDir === 'wrap' ? 'WETH Wrap' : 'WETH Unwrap');
+      setText('impactInfo', '0%');
+      setShown('allRoutesWrap', false);
+      setShown(quoteInfoEl, true);
+      stopQuoteRefresh(); // No refresh needed for 1:1
+      setText(swapBtn, wrapDir === 'wrap' ? 'Wrap' : 'Unwrap');
+      setDisabled(swapBtn, !connectedAddress);
+    } catch (e) {
+      toAmountEl.value = "";
+      setShown(quoteInfoEl, false);
+      setText(swapBtn, e.message || "Invalid amount");
+      setDisabled(swapBtn, true);
+    }
+    return;
+  }
+
   if (!provider) return;
 
   const seq = ++_quoteSeq;
@@ -2495,6 +2512,18 @@ function getWeinsContract(rpc) { return _getCached(rpc, WEINS_ADDRESS, WEINS_ABI
 // ---- zOrg swap+stake helpers ----
 function isZOrgSwap(toSym) {
   return tokens[toSym]?._isZOrg === true;
+}
+
+// ---- ETH ↔ WETH wrap/unwrap detection ----
+const WETH_ABI = ["function deposit() payable", "function withdraw(uint256 wad)"];
+
+function isWrapUnwrap(fromSym, toSym) {
+  const from = tokens[fromSym], to = tokens[toSym];
+  if (!from || !to) return null;
+  const fa = from.address.toLowerCase(), ta = to.address.toLowerCase();
+  if (fa === ZERO_ADDRESS.toLowerCase() && ta === WETH_ADDRESS.toLowerCase()) return 'wrap';
+  if (fa === WETH_ADDRESS.toLowerCase() && ta === ZERO_ADDRESS.toLowerCase()) return 'unwrap';
+  return null;
 }
 
 async function getZOrgQuote(fromAmountStr, fromSym) {
@@ -2932,6 +2961,48 @@ async function executeSwap() {
     const receiverRaw = ($("receiverAddress")?.value || "").trim();
     if (receiverRaw && !ethers.isAddress(receiverRaw)) {
       showStatus("Invalid receiver address", "error");
+      return;
+    }
+
+    // ETH ↔ WETH wrap/unwrap: direct contract call, no DEX (only when sending to self)
+    const hasCustomReceiver = receiverRaw && ethers.isAddress(receiverRaw) && ethers.getAddress(receiverRaw) !== connectedAddress;
+    const wrapDir = !hasCustomReceiver ? isWrapUnwrap(fromToken, toToken) : null;
+    if (wrapDir) {
+      const fromData = tokens[fromToken];
+      const amountIn = safeParseUnits(amtStr, fromData.decimals);
+      const wethContract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, signer);
+
+      if (wrapDir === 'wrap') {
+        swapBtn.textContent = "Wrapping...";
+        swapBtn.disabled = true;
+        const tx = await wcTransaction(
+          wethContract.deposit({ value: amountIn }),
+          'Confirm wrap in your wallet'
+        );
+        swapBtn.innerHTML = `Confirming wrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        const receipt = await waitForTx(tx);
+        if (receipt.status === 0) throw new Error("Wrap transaction failed");
+      } else {
+        swapBtn.textContent = "Unwrapping...";
+        swapBtn.disabled = true;
+        const tx = await wcTransaction(
+          wethContract.withdraw(amountIn),
+          'Confirm unwrap in your wallet'
+        );
+        swapBtn.innerHTML = `Confirming unwrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        const receipt = await waitForTx(tx);
+        if (receipt.status === 0) throw new Error("Unwrap transaction failed");
+      }
+
+      swapBtn.textContent = wrapDir === 'wrap' ? "Wrap Complete!" : "Unwrap Complete!";
+      $("fromAmount").value = "";
+      $("toAmount").value = "";
+      $("quoteInfo").style.display = "none";
+      setTimeout(() => {
+        updateBalances();
+        swapBtn.textContent = "Enter an amount";
+        swapBtn.disabled = true;
+      }, 1500);
       return;
     }
 
