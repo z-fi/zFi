@@ -679,7 +679,7 @@ body.modal-open { overflow: hidden; }
 
 <!-- Direct ZAMM stake link -->
 <div id="directStakeLink" style="text-align:center;margin-top:10px;font-size:13px;opacity:0.7">
-  <a href="#" onclick="setupDirectZammStake();return false" style="color:var(--accent);text-decoration:underline;cursor:pointer">Stake ZAMM directly to zOrg</a>
+  <a href="#" onclick="setupDirectZammStake();return false" style="color:var(--link-fg);text-decoration:underline;cursor:pointer">Stake ZAMM directly to zOrg</a>
 </div>
 
 <!-- Status -->
@@ -790,8 +790,9 @@ function setDisabled(btn, disabled) {
   if (!el) return;
   if (!!el.disabled !== !!disabled) el.disabled = !!disabled;
 }
+const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) {
-  return String(s).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+  return String(s).replace(/[&<>]/g, m => _escTextMap[m]);
 }
 function escAttr(s) {
   return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -1141,14 +1142,14 @@ async function connectWithWallet(walletKey) {
     provider = new ethers.BrowserProvider(walletProvider);
     signer = await provider.getSigner();
     connectedAddress = await signer.getAddress();
+    const oldWalletProvider = connectedWalletProvider;
     connectedWalletProvider = walletProvider;
     updateWalletDisplay();
 
-    // Clean up any previous listeners before adding new ones
-    if (connectedWalletProvider && walletEventHandlers) {
+    if (oldWalletProvider && walletEventHandlers) {
       try {
-        connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-        connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
+        oldWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
+        oldWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
       } catch (e) {}
     }
     walletEventHandlers = {
@@ -1697,7 +1698,16 @@ function iconForSymbol(sym) {
   if (ICONS[s]) return ICONS[s];
   if (s === 'PNKSTR') return getPNKSTRIcon();
   const t = tokens[s];
-  if (t?.icon) return `<img src="${escAttr(t.icon)}" width="24" height="24" style="border-radius:50%" alt="${escAttr(s)}" onerror="this.outerHTML=makeLetterIcon('${escAttr(s)}')">`;
+  if (t?.icon) {
+    const img = document.createElement('img');
+    img.src = t.icon;
+    img.width = 24;
+    img.height = 24;
+    img.style.borderRadius = '50%';
+    img.alt = s;
+    img.onerror = function() { this.outerHTML = makeLetterIcon(s); };
+    return img.outerHTML;
+  }
   if (_letterIconCache.has(s)) return _letterIconCache.get(s);
   const svg = makeLetterIcon(s);
   _letterIconCache.set(s, svg);
@@ -2560,8 +2570,9 @@ function isWrapUnwrap(fromSym, toSym) {
   const from = tokens[fromSym], to = tokens[toSym];
   if (!from || !to) return null;
   const fa = from.address.toLowerCase(), ta = to.address.toLowerCase();
-  if (fa === ZERO_ADDRESS.toLowerCase() && ta === WETH_ADDRESS.toLowerCase()) return 'wrap';
-  if (fa === WETH_ADDRESS.toLowerCase() && ta === ZERO_ADDRESS.toLowerCase()) return 'unwrap';
+  const weth = WETH_ADDRESS.toLowerCase();
+  if (fa === ZERO_ADDRESS && ta === weth) return 'wrap';
+  if (fa === weth && ta === ZERO_ADDRESS) return 'unwrap';
   return null;
 }
 

@@ -151,23 +151,40 @@ function updateIframeTheme() {
   const poolId = getPoolIdFromHash();
   if (!poolId) return;
   const theme = isDark() ? 'dark' : 'light';
+  try { iframe.contentWindow.postMessage({ type: 'theme', theme: theme }, 'https://www.zamm.finance'); } catch(e) {}
   iframe.src = 'https://www.zamm.finance/embed/pool/1/' + poolId + '?theme=' + theme;
 }
 
+var _currentPoolId = null;
 function render() {
-  const poolId = getPoolIdFromHash();
-  const container = document.getElementById('chartContainer');
-  const poolIdDisplay = document.getElementById('poolIdDisplay');
+  var poolId = getPoolIdFromHash();
+  var container = document.getElementById('chartContainer');
+  var poolIdDisplay = document.getElementById('poolIdDisplay');
 
   if (!poolId) {
+    _currentPoolId = null;
     poolIdDisplay.textContent = '';
-    container.innerHTML = '<div class="chart-error">No pool ID provided. Use chart/#/{poolId}</div>';
+    container.replaceChildren();
+    var err = document.createElement('div');
+    err.className = 'chart-error';
+    err.textContent = 'No pool ID provided. Use chart/#/{poolId}';
+    container.appendChild(err);
     return;
   }
 
+  if (poolId === _currentPoolId) return;
+  _currentPoolId = poolId;
+
   poolIdDisplay.textContent = 'Pool ID: ' + poolId;
-  const theme = isDark() ? 'dark' : 'light';
-  container.innerHTML = '<div class="chart-wrap"><iframe src="https://www.zamm.finance/embed/pool/1/' + poolId + '?theme=' + theme + '" allow="clipboard-write"></iframe></div>';
+  var theme = isDark() ? 'dark' : 'light';
+  var wrap = document.createElement('div');
+  wrap.className = 'chart-wrap';
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.zamm.finance/embed/pool/1/' + poolId + '?theme=' + theme;
+  iframe.allow = 'clipboard-write';
+  iframe.sandbox = 'allow-scripts allow-same-origin';
+  wrap.appendChild(iframe);
+  container.replaceChildren(wrap);
 }
 
 render();

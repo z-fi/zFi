@@ -279,7 +279,6 @@ body.modal-open { overflow: hidden; }
   .wallet { top: 16px; right: 16px; }
   .wallet button { padding: 10px 14px; font-size: 11px; }
   h1 { font-size: 12px; margin-bottom: 16px; }
-  .raise-options { grid-template-columns: 1fr 1fr; }
   button { padding: 14px 20px; }
 }
 @media (max-width: 380px) {
@@ -421,11 +420,20 @@ body.modal-open { overflow: hidden; }
   const PROPOSAL_TTL = 7 * 86400;   // 7 days voting period
   const TIMELOCK_DELAY = 3 * 86400; // 3 days before execution (ragequit window)
 
-  const RPCS = [
-    'https://1rpc.io/eth',
-    'https://eth.drpc.org',
-    'https://ethereum.publicnode.com'
-  ];
+  const RPCS = ['https://1rpc.io/eth'];
+  const WEINS_ADDRESS = '0x0000000000696760E15f265e828DB644A0c242EB';
+
+  function resolveWeiName(address) {
+    try {
+      const rpc = new ethers.JsonRpcProvider(RPCS[0]);
+      const ns = new ethers.Contract(WEINS_ADDRESS, ['function reverseResolve(address) view returns (string)'], rpc);
+      ns.reverseResolve(address).then(name => {
+        if (name && connectedAddress === address) getEl('walletBtn').textContent = name.toLowerCase();
+      }).catch(() => {});
+    } catch {}
+  }
+  function escHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function safeIconUrl(url) { if (!url) return ''; try { const u = new URL(url); if (u.protocol === 'https:' || u.protocol === 'data:') return url; } catch {} return ''; }
 
   // ==================== STATE ====================
   let provider = null;
@@ -569,11 +577,13 @@ body.modal-open { overflow: hidden; }
 
     // EIP-6963 wallets
     for (const [uuid, { info, provider: p }] of eip6963Providers) {
-      const name = info.name || 'Unknown Wallet';
-      const icon = info.icon
-        ? `<img src="${info.icon}" style="width: 1.2rem; height: 1.2rem;"/>`
+      const name = escHtml(info.name || 'Unknown Wallet');
+      const safeIcon = safeIconUrl(info.icon);
+      const icon = safeIcon
+        ? `<img src="${escHtml(safeIcon)}" style="width: 1.2rem; height: 1.2rem;"/>`
         : '\uD83D\uDD0C';
-      html += `<div class="wallet-option" onclick="connectSpecificWallet('eip6963_${uuid}')">
+      const safeUuid = escHtml(uuid);
+      html += `<div class="wallet-option" onclick="connectSpecificWallet('eip6963_${safeUuid}')">
         <span class="wallet-icon">${icon}</span>
         <span class="wallet-name">${name}</span>
         <span class="wallet-status installed">Detected</span>
@@ -685,6 +695,7 @@ body.modal-open { overflow: hidden; }
 
       const walletBtn = getEl('walletBtn');
       walletBtn.textContent = address.slice(0, 6) + '...' + address.slice(-4);
+      resolveWeiName(address);
 
       // Enable raise buttons
       document.querySelectorAll('.raise-btn').forEach(btn => btn.disabled = false);
@@ -784,7 +795,7 @@ body.modal-open { overflow: hidden; }
     if (!symbol || symbol.length < 1) { showStatus('Please enter a symbol', true); return; }
 
     isLaunching = true;
-    const btns = document.querySelectorAll('.raise-btn');
+    let btns = document.querySelectorAll('.raise-btn');
     btns.forEach(btn => { btn.disabled = true; });
     getEl('launchBtn').disabled = true;
 
@@ -808,7 +819,7 @@ body.modal-open { overflow: hidden; }
       const initShares = [ethers.parseEther('1')];
 
       // Predict addresses
-      const predictions = predictAddresses(initHolders, initShares.map(s => BigInt(s.toString())), salt);
+      const predictions = predictAddresses(initHolders, initShares, salt);
       const predictedDao = predictions.dao;
       const predictedLoot = predictions.loot;
 
@@ -1084,12 +1095,16 @@ body.modal-open { overflow: hidden; }
       try {
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts?.length > 0) {
+          const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+          if (BigInt(chainIdHex) !== 1n) throw new Error('Not mainnet');
           provider = new ethers.BrowserProvider(window.ethereum);
           signer = await provider.getSigner();
           connectedAddress = await signer.getAddress();
+          connectedWallet = 'metamask';
           connectedWalletProvider = window.ethereum;
 
           getEl('walletBtn').textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
+          resolveWeiName(connectedAddress);
           document.querySelectorAll('.raise-btn').forEach(btn => btn.disabled = false);
 
           walletEventHandlers = {

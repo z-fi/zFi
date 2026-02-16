@@ -861,6 +861,13 @@ const MULTICALL3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])'
 ];
 const iface = new ethers.Interface(ABI);
+const regIface = new ethers.Interface(REGISTRAR_ABI);
+const ownerOfIface = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
+const approvalIface = new ethers.Interface(['function isApprovedForAll(address owner, address operator) view returns (bool)']);
+const erc20BalNonceIface = new ethers.Interface([
+  'function balanceOf(address) view returns (uint256)',
+  'function nonces(address) view returns (uint256)'
+]);
 
 // Local tokenId computation (matches contract's computeId for top-level names)
 // Uses namehash: keccak256(WEI_NODE || keccak256(label))
@@ -910,6 +917,11 @@ let contract = null;
 let walletEventHandlers = null;
 let isWalletConnect = false;
 let wcDeepLink = null;
+function sanitizeDeepLink(url) {
+  if (!url) return null;
+  try { const u = new URL(url); if (u.protocol === 'https:' || u.protocol === 'wc:') return url; } catch {}
+  return null;
+}
 
 const eip6963Providers = new Map();
 
@@ -1123,9 +1135,9 @@ async function connectWithWallet(walletKey) {
           const session = walletConnectProvider.session;
           const peerMeta = session?.peer?.metadata;
           if (peerMeta?.redirect?.native) {
-            wcDeepLink = peerMeta.redirect.native;
+            wcDeepLink = sanitizeDeepLink(peerMeta.redirect.native);
           } else if (peerMeta?.redirect?.universal) {
-            wcDeepLink = peerMeta.redirect.universal;
+            wcDeepLink = sanitizeDeepLink(peerMeta.redirect.universal);
           }
         } catch (e) {}
       });
@@ -1139,9 +1151,9 @@ async function connectWithWallet(walletKey) {
         const session = walletConnectProvider.session;
         const peerMeta = session?.peer?.metadata;
         if (peerMeta?.redirect?.native) {
-          wcDeepLink = peerMeta.redirect.native;
+          wcDeepLink = sanitizeDeepLink(peerMeta.redirect.native);
         } else if (peerMeta?.redirect?.universal) {
-          wcDeepLink = peerMeta.redirect.universal;
+          wcDeepLink = sanitizeDeepLink(peerMeta.redirect.universal);
         }
       } catch (e) {}
     } else if (walletKey.startsWith('eip6963_')) {
@@ -1532,17 +1544,15 @@ async function doCheckName() {
             const parentId = await readContract.computeId(parentName + '.wei');
             if (thisVersion !== checkVersion) return;
 
-            const regIface = new ethers.Interface(REGISTRAR_ABI);
-            const ownerIface = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
             const [cfgRes, parentOwnerRes, escrowRes] = await Promise.all([
               rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [parentId]) }),
-              rpcProvider.call({ to: CONTRACT, data: ownerIface.encodeFunctionData('ownerOf', [parentId]) }),
+              rpcProvider.call({ to: CONTRACT, data: ownerOfIface.encodeFunctionData('ownerOf', [parentId]) }),
               rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('escrowedController', [parentId]) })
             ]);
             if (thisVersion !== checkVersion) return;
 
             const cfg = regIface.decodeFunctionResult('config', cfgRes);
-            const parentOwner = ownerIface.decodeFunctionResult('ownerOf', parentOwnerRes)[0];
+            const parentOwner = ownerOfIface.decodeFunctionResult('ownerOf', parentOwnerRes)[0];
             const escrowedAddr = regIface.decodeFunctionResult('escrowedController', escrowRes)[0];
             const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice] = cfg;
 
@@ -1840,13 +1850,52 @@ async function doReveal() {
   }
 }
 
-async function doRevealWithUSDC() {
+const USDC_REVEAL = {
+  addr: USDC_ADDR, name: 'USDC', decimals: 6,
+  permitDomain: { name: 'USD Coin', version: '2', chainId: 1, verifyingContract: USDC_ADDR },
+  permitTypes: { Permit: [
+    { name: 'owner', type: 'address' }, { name: 'spender', type: 'address' },
+    { name: 'value', type: 'uint256' }, { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' }
+  ]},
+  permitValue: (addr, maxAmt, nonce, deadline) =>
+    ({ owner: addr, spender: ZROUTER, value: maxAmt, nonce, deadline }),
+  routerAbi: [
+    'function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+    'function revealName(string label, bytes32 secret, address to) returns (uint256)',
+    'function sweep(address token, uint256 id, uint256 amount, address to)',
+    'function multicall(bytes[] data) payable returns (bytes[])'
+  ],
+  encodePermit: (ri, maxAmt, deadline, nonce, v, r, s) =>
+    ri.encodeFunctionData('permit', [USDC_ADDR, maxAmt, deadline, v, r, s])
+};
+const DAI_REVEAL = {
+  addr: DAI_ADDR, name: 'DAI', decimals: 18,
+  permitDomain: { name: 'Dai Stablecoin', version: '1', chainId: 1, verifyingContract: DAI_ADDR },
+  permitTypes: { Permit: [
+    { name: 'holder', type: 'address' }, { name: 'spender', type: 'address' },
+    { name: 'nonce', type: 'uint256' }, { name: 'expiry', type: 'uint256' },
+    { name: 'allowed', type: 'bool' }
+  ]},
+  permitValue: (addr, maxAmt, nonce, deadline) =>
+    ({ holder: addr, spender: ZROUTER, nonce, expiry: deadline, allowed: true }),
+  routerAbi: [
+    'function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)',
+    'function revealName(string label, bytes32 secret, address to) returns (uint256)',
+    'function sweep(address token, uint256 id, uint256 amount, address to)',
+    'function multicall(bytes[] data) payable returns (bytes[])'
+  ],
+  encodePermit: (ri, maxAmt, deadline, nonce, v, r, s) =>
+    ri.encodeFunctionData('permitDAI', [nonce, deadline, v, r, s])
+};
+
+async function doRevealWithToken(tk) {
   const pending = loadPending();
   if (!pending || !signer) return;
 
   try {
     if (!pending.commitOwner || pending.commitOwner !== ZROUTER) {
-      showStatus('This commitment was made before USDC support. Cancel and re-commit to use USDC.', 'error');
+      showStatus(`This commitment was made before ${tk.name} support. Cancel and re-commit to use ${tk.name}.`, 'error');
       return;
     }
 
@@ -1874,7 +1923,6 @@ async function doRevealWithUSDC() {
 
     showStatus('Calculating fee...', '');
 
-    // 1. Get fee in ETH
     const tokenId = localComputeId(pending.name);
     const feeResults = await multicall([
       { fn: 'getFee', args: [byteLength(pending.name)] },
@@ -1883,8 +1931,7 @@ async function doRevealWithUSDC() {
     if (!feeResults[0] || !feeResults[1]) throw new Error('Failed to fetch fee data');
     const totalEth = feeResults[0][0] + feeResults[1][0];
 
-    // 2. Get best USDC quote via zQuoter
-    showStatus('Getting USDC price...', '');
+    showStatus(`Getting ${tk.name} price...`, '');
     const rpc = await getRpc();
     const deadline = Math.floor(Date.now() / 1000) + 3600;
 
@@ -1893,216 +1940,58 @@ async function doRevealWithUSDC() {
     ];
     const quoter = new ethers.Contract(ZQUOTER, quoterAbi, rpc);
     const quote = await quoter.buildBestSwap(
-      ZROUTER,              // to: router (ETH stays for revealName)
-      true,                 // exactOut: get exact ETH needed
-      USDC_ADDR,            // tokenIn
-      ethers.ZeroAddress,   // tokenOut (ETH)
-      totalEth,             // exact ETH needed
-      200n,                 // 2% slippage
-      deadline
+      ZROUTER, true, tk.addr, ethers.ZeroAddress, totalEth, 200n, deadline
     );
 
-    const maxUSDC = quote.amountLimit; // max USDC including slippage
-    if (quote.best.amountIn === 0n) throw new Error('Could not get USDC quote');
+    const maxAmount = quote.amountLimit;
+    if (quote.best.amountIn === 0n) throw new Error(`Could not get ${tk.name} quote`);
 
-    // 3. Check USDC balance
-    const erc20Iface = new ethers.Interface([
-      'function balanceOf(address) view returns (uint256)',
-      'function nonces(address) view returns (uint256)'
-    ]);
     const [balRes, nonceRes] = await Promise.all([
-      rpc.call({ to: USDC_ADDR, data: erc20Iface.encodeFunctionData('balanceOf', [connectedAddress]) }),
-      rpc.call({ to: USDC_ADDR, data: erc20Iface.encodeFunctionData('nonces', [connectedAddress]) })
+      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('balanceOf', [connectedAddress]) }),
+      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('nonces', [connectedAddress]) })
     ]);
-    const usdcBalance = erc20Iface.decodeFunctionResult('balanceOf', balRes)[0];
-    const nonce = erc20Iface.decodeFunctionResult('nonces', nonceRes)[0];
+    const balance = erc20BalNonceIface.decodeFunctionResult('balanceOf', balRes)[0];
+    const nonce = erc20BalNonceIface.decodeFunctionResult('nonces', nonceRes)[0];
 
-    if (usdcBalance < maxUSDC) {
-      showStatus(`Insufficient USDC. Need ~${Number(ethers.formatUnits(maxUSDC, 6)).toFixed(2)}, have ${Number(ethers.formatUnits(usdcBalance, 6)).toFixed(2)}`, 'error');
+    if (balance < maxAmount) {
+      showStatus(`Insufficient ${tk.name}. Need ~${Number(ethers.formatUnits(maxAmount, tk.decimals)).toFixed(2)}, have ${Number(ethers.formatUnits(balance, tk.decimals)).toFixed(2)}`, 'error');
       return;
     }
 
-    // 4. Sign EIP-2612 permit
-    const usdcDisplay = Number(ethers.formatUnits(quote.best.amountIn, 6)).toFixed(2);
-    showStatus(`Sign permit for ~${usdcDisplay} USDC...`, '');
+    const displayAmount = Number(ethers.formatUnits(quote.best.amountIn, tk.decimals)).toFixed(2);
+    showStatus(`Sign permit for ~${displayAmount} ${tk.name}...`, '');
 
     const sig = await wcTransaction(
-      signer.signTypedData(
-        { name: 'USD Coin', version: '2', chainId: 1, verifyingContract: USDC_ADDR },
-        { Permit: [
-          { name: 'owner', type: 'address' },
-          { name: 'spender', type: 'address' },
-          { name: 'value', type: 'uint256' },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'deadline', type: 'uint256' }
-        ]},
-        { owner: connectedAddress, spender: ZROUTER, value: maxUSDC, nonce, deadline }
-      ),
-      'Sign USDC permit in your wallet'
+      signer.signTypedData(tk.permitDomain, tk.permitTypes,
+        tk.permitValue(connectedAddress, maxAmount, nonce, deadline)),
+      `Sign ${tk.name} permit in your wallet`
     );
 
     const { v, r, s } = ethers.Signature.from(sig);
 
-    // 5. Build multicall: permit + bestSwap (exactOut) + revealName
     showStatus('Submitting transaction...', '');
 
-    const routerIface = new ethers.Interface([
-      'function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
-      'function revealName(string label, bytes32 secret, address to) returns (uint256)',
-      'function sweep(address token, uint256 id, uint256 amount, address to)',
-      'function multicall(bytes[] data) payable returns (bytes[])'
-    ]);
-
-    const permitCall = routerIface.encodeFunctionData('permit', [USDC_ADDR, maxUSDC, deadline, v, r, s]);
+    const routerIface = new ethers.Interface(tk.routerAbi);
+    const permitCall = tk.encodePermit(routerIface, maxAmount, deadline, nonce, v, r, s);
     const revealCall = routerIface.encodeFunctionData('revealName', [pending.name, pending.secret, connectedAddress]);
     const sweepCall = routerIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, connectedAddress]);
-    const calls = [permitCall, quote.callData, revealCall, sweepCall];
 
     const router = new ethers.Contract(ZROUTER, routerIface, signer);
-    const tx = await wcTransaction(router.multicall(calls), 'Approve USDC registration');
+    const tx = await wcTransaction(router.multicall([permitCall, quote.callData, revealCall, sweepCall]), `Approve ${tk.name} registration`);
     const txHash = tx.hash;
     showStatus('Waiting for confirmation...', '', txHash);
     await waitForTx(tx);
 
     clearPending();
-    showStatus(pending.name + '.wei registered with USDC! (~' + usdcDisplay + ' USDC)', 'success', txHash);
+    showStatus(`${pending.name}.wei registered with ${tk.name}! (~${displayAmount} ${tk.name})`, 'success', txHash);
     doCheckName();
   } catch (e) {
     handleError(e);
   }
 }
 
-async function doRevealWithDAI() {
-  const pending = loadPending();
-  if (!pending || !signer) return;
-
-  try {
-    if (!pending.commitOwner || pending.commitOwner !== ZROUTER) {
-      showStatus('This commitment was made before DAI support. Cancel and re-commit to use DAI.', 'error');
-      return;
-    }
-
-    if (pending.owner && connectedAddress &&
-        pending.owner.toLowerCase() !== connectedAddress.toLowerCase()) {
-      showStatus(`Connect the wallet used to commit: ${pending.owner.slice(0,6)}...${pending.owner.slice(-4)}`, 'error');
-      return;
-    }
-
-    if (pending.confirmed === false) {
-      showStatus('Commitment not yet confirmed. Please wait.', 'error');
-      return;
-    }
-
-    const elapsed = Math.floor(Date.now() / 1000) - pending.timestamp;
-    if (elapsed < MIN_COMMIT_AGE) {
-      showStatus('Wait ' + (MIN_COMMIT_AGE - elapsed) + ' more seconds', 'error');
-      return;
-    }
-    if (elapsed > MAX_COMMIT_AGE) {
-      showStatus('Commitment expired. Please commit again.', 'error');
-      clearPending();
-      return;
-    }
-
-    showStatus('Calculating fee...', '');
-
-    // 1. Get fee in ETH
-    const tokenId = localComputeId(pending.name);
-    const feeResults = await multicall([
-      { fn: 'getFee', args: [byteLength(pending.name)] },
-      { fn: 'getPremium', args: [tokenId] }
-    ]);
-    if (!feeResults[0] || !feeResults[1]) throw new Error('Failed to fetch fee data');
-    const totalEth = feeResults[0][0] + feeResults[1][0];
-
-    // 2. Get best DAI quote via zQuoter
-    showStatus('Getting DAI price...', '');
-    const rpc = await getRpc();
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
-
-    const quoterAbi = [
-      'function buildBestSwap(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) view returns (tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) best, bytes callData, uint256 amountLimit, uint256 msgValue)'
-    ];
-    const quoter = new ethers.Contract(ZQUOTER, quoterAbi, rpc);
-    const quote = await quoter.buildBestSwap(
-      ZROUTER,              // to: router (ETH stays for revealName)
-      true,                 // exactOut: get exact ETH needed
-      DAI_ADDR,             // tokenIn
-      ethers.ZeroAddress,   // tokenOut (ETH)
-      totalEth,             // exact ETH needed
-      200n,                 // 2% slippage
-      deadline
-    );
-
-    const maxDAI = quote.amountLimit; // max DAI including slippage
-    if (quote.best.amountIn === 0n) throw new Error('Could not get DAI quote');
-
-    // 3. Check DAI balance & nonce
-    const erc20Iface = new ethers.Interface([
-      'function balanceOf(address) view returns (uint256)',
-      'function nonces(address) view returns (uint256)'
-    ]);
-    const [balRes, nonceRes] = await Promise.all([
-      rpc.call({ to: DAI_ADDR, data: erc20Iface.encodeFunctionData('balanceOf', [connectedAddress]) }),
-      rpc.call({ to: DAI_ADDR, data: erc20Iface.encodeFunctionData('nonces', [connectedAddress]) })
-    ]);
-    const daiBalance = erc20Iface.decodeFunctionResult('balanceOf', balRes)[0];
-    const nonce = erc20Iface.decodeFunctionResult('nonces', nonceRes)[0];
-
-    if (daiBalance < maxDAI) {
-      showStatus(`Insufficient DAI. Need ~${Number(ethers.formatUnits(maxDAI, 18)).toFixed(2)}, have ${Number(ethers.formatUnits(daiBalance, 18)).toFixed(2)}`, 'error');
-      return;
-    }
-
-    // 4. Sign DAI permit (DAI uses its own permit style with allowed=true)
-    const daiDisplay = Number(ethers.formatUnits(quote.best.amountIn, 18)).toFixed(2);
-    showStatus(`Sign permit for ~${daiDisplay} DAI...`, '');
-
-    const sig = await wcTransaction(
-      signer.signTypedData(
-        { name: 'Dai Stablecoin', version: '1', chainId: 1, verifyingContract: DAI_ADDR },
-        { Permit: [
-          { name: 'holder', type: 'address' },
-          { name: 'spender', type: 'address' },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'expiry', type: 'uint256' },
-          { name: 'allowed', type: 'bool' }
-        ]},
-        { holder: connectedAddress, spender: ZROUTER, nonce, expiry: deadline, allowed: true }
-      ),
-      'Sign DAI permit in your wallet'
-    );
-
-    const { v, r, s } = ethers.Signature.from(sig);
-
-    // 5. Build multicall: permitDAI + bestSwap (exactOut) + revealName + sweep
-    showStatus('Submitting transaction...', '');
-
-    const routerIface = new ethers.Interface([
-      'function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)',
-      'function revealName(string label, bytes32 secret, address to) returns (uint256)',
-      'function sweep(address token, uint256 id, uint256 amount, address to)',
-      'function multicall(bytes[] data) payable returns (bytes[])'
-    ]);
-
-    const permitCall = routerIface.encodeFunctionData('permitDAI', [nonce, deadline, v, r, s]);
-    const revealCall = routerIface.encodeFunctionData('revealName', [pending.name, pending.secret, connectedAddress]);
-    const sweepCall = routerIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, connectedAddress]);
-    const calls = [permitCall, quote.callData, revealCall, sweepCall];
-
-    const router = new ethers.Contract(ZROUTER, routerIface, signer);
-    const tx = await wcTransaction(router.multicall(calls), 'Approve DAI registration');
-    const txHash = tx.hash;
-    showStatus('Waiting for confirmation...', '', txHash);
-    await waitForTx(tx);
-
-    clearPending();
-    showStatus(pending.name + '.wei registered with DAI! (~' + daiDisplay + ' DAI)', 'success', txHash);
-    doCheckName();
-  } catch (e) {
-    handleError(e);
-  }
-}
+function doRevealWithUSDC() { return doRevealWithToken(USDC_REVEAL); }
+function doRevealWithDAI() { return doRevealWithToken(DAI_REVEAL); }
 
 function savePending(data) {
   pendingCache = null; // Invalidate cache
@@ -2345,15 +2234,11 @@ async function showManage(tokenId, name) {
     }
     if (contentHash && contentHash !== '0x' && contentHash.length > 2) {
       const cid = decodeContenthash(contentHash);
-      if (WEI_GATEWAY) {
-        const gatewayUrl = `https://${escapeHtml(name)}.${WEI_GATEWAY}`;
-        infoHtml += `<div><span>Website:</span><a href="${gatewayUrl}" target="_blank" rel="noopener" style="color:inherit;">${gatewayUrl}</a></div>`;
-      }
+      const gatewayUrl = `https://${escapeHtml(name)}.${WEI_GATEWAY}`;
+      infoHtml += `<div><span>Website:</span><a href="${gatewayUrl}" target="_blank" rel="noopener" style="color:inherit;">${gatewayUrl}</a></div>`;
       if (cid) {
         const short = cid.slice(0, 16) + '...' + cid.slice(-6);
         infoHtml += `<div><span>Content:</span><a href="https://ipfs.io/ipfs/${escapeHtml(cid)}" target="_blank" rel="noopener" style="color:inherit;font-family:monospace;font-size:11px;">${escapeHtml(short)}</a></div>`;
-      } else if (!WEI_GATEWAY) {
-        infoHtml += `<div><span>Content:</span><span style="opacity:0.6;font-family:monospace;font-size:11px;">${contentHash.slice(0, 18)}...</span></div>`;
       }
     }
     if (expiryDate && isTopLevel) {
@@ -2436,7 +2321,7 @@ function showManageForm(action) {
         <label>IPFS Content</label>
         <div style="font-size:11px;opacity:0.5;margin-bottom:8px;">Enter IPFS CID to host a website at ${escapeHtml(currentTokenName)}.wei</div>
         <input type="text" id="contentHash" placeholder="QmXxx... bafxxx... or 0x (raw bytes)">
-        ${WEI_GATEWAY ? `<div style="font-size:11px;opacity:0.5;margin-top:4px;">Visit via: <a href="https://${escapeHtml(currentTokenName)}.${WEI_GATEWAY}" target="_blank" rel="noopener">${escapeHtml(currentTokenName)}.${WEI_GATEWAY}</a></div>` : ''}
+        <div style="font-size:11px;opacity:0.5;margin-top:4px;">Visit via: <a href="https://${escapeHtml(currentTokenName)}.${WEI_GATEWAY}" target="_blank" rel="noopener">${escapeHtml(currentTokenName)}.${WEI_GATEWAY}</a></div>
         <button onclick="doSetContent()">Set Website</button>
         <button class="secondary" onclick="$('manageForm').classList.remove('show')">Cancel</button>
       `;
@@ -2549,7 +2434,7 @@ async function doTransfer() {
   if (!input) { showStatus('Recipient required', 'error'); return; }
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     showStatus('Resolving recipient...', '');
     const result = await resolveRecipient(input);
@@ -2580,7 +2465,7 @@ async function doSetAddr() {
   if (!ethers.isAddress(addr)) { showStatus('Invalid address', 'error'); return; }
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     showStatus('Setting address...', '');
     const tx = await wcTransaction(contract.setAddr(currentTokenId, addr), 'Approve address update');
@@ -2603,7 +2488,7 @@ async function doSetText() {
   if (!key) { showStatus('Key required', 'error'); return; }
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     showStatus('Setting text record...', '');
     const tx = await wcTransaction(contract.setText(currentTokenId, key, value), 'Approve text record');
@@ -2758,7 +2643,7 @@ async function doSetContent() {
   const input = $('contentHash').value.trim();
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   if (!input) {
     // Clear contenthash
     try {
@@ -2784,7 +2669,7 @@ async function doSetContent() {
     const tx = await wcTransaction(contract.setContenthash(currentTokenId, contenthash), 'Approve set website');
     showStatus('Waiting for confirmation...', '', tx.hash);
     await waitForTx(tx);
-    showStatus('Website set!' + (WEI_GATEWAY ? ' Visit ' + currentTokenName + '.' + WEI_GATEWAY : ''), 'success', tx.hash);
+    showStatus('Website set! Visit ' + currentTokenName + '.' + WEI_GATEWAY, 'success', tx.hash);
     $('manageForm').classList.remove('show');
     doCheckName(); // Refresh to show updated website link
   } catch (e) {
@@ -2803,7 +2688,7 @@ async function doSetPrimary() {
   if (isProcessing || !contract || !currentTokenId) return;
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     showStatus('Setting ' + currentTokenName + '.wei as your display name...', '');
     const tx = await wcTransaction(contract.setPrimaryName(currentTokenId), 'Approve primary name');
@@ -2825,7 +2710,7 @@ async function doSubdomain() {
   if (!label) { showStatus('Invalid subdomain label', 'error'); return; }
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     showStatus('Registering subdomain...', '');
     const tx = await wcTransaction(contract.registerSubdomain(label, currentTokenId), 'Approve subdomain');
@@ -2904,19 +2789,14 @@ async function showSubSalesForm() {
 
   try {
     const rpc = await getRpc();
-    const regIface = new ethers.Interface(REGISTRAR_ABI);
-    const nftIface = new ethers.Interface([
-      'function isApprovedForAll(address owner, address operator) view returns (bool)'
-    ]);
-
     const [cfgRes, approvedRes, balRes] = await Promise.all([
       rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [currentTokenId]) }),
-      rpc.call({ to: CONTRACT, data: nftIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR]) }),
+      rpc.call({ to: CONTRACT, data: approvalIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR]) }),
       rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('ethBalance', [connectedAddress]) })
     ]);
 
     const cfg = regIface.decodeFunctionResult('config', cfgRes);
-    const isApproved = nftIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
+    const isApproved = approvalIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
     const ethBal = regIface.decodeFunctionResult('ethBalance', balRes)[0];
 
     const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice, , , cfgPayout] = cfg;
@@ -3015,7 +2895,7 @@ async function showSubSalesForm() {
 async function doConfigureSubSales() {
   if (isProcessing || !signer || !currentTokenId) return;
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     let feeToken = ethers.ZeroAddress;
@@ -3048,14 +2928,11 @@ async function doConfigureSubSales() {
 
     // Check approval for flash mode
     const rpc = await getRpc();
-    const nftIface = new ethers.Interface([
-      'function isApprovedForAll(address owner, address operator) view returns (bool)'
-    ]);
     const approvedRes = await rpc.call({
       to: CONTRACT,
-      data: nftIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR])
+      data: approvalIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR])
     });
-    const isApproved = nftIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
+    const isApproved = approvalIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
 
     if (!isApproved) {
       showStatus('Approving registrar...', '');
@@ -3092,7 +2969,7 @@ async function doConfigureSubSales() {
 async function doDisableSubSales() {
   if (isProcessing || !signer || !currentTokenId) return;
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     showStatus('Disabling subdomain sales...', '');
@@ -3117,7 +2994,7 @@ async function doDisableSubSales() {
 async function doWithdrawRegFees() {
   if (isProcessing || !signer) return;
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     showStatus('Withdrawing fees...', '');
@@ -3186,15 +3063,13 @@ async function doFreeMint() {
 
     // Verify registrar config is still enabled + free
     showFreeStatus('Checking availability...', '');
-    const regIface = new ethers.Interface(REGISTRAR_ABI);
-    const ownerIface = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
     const [cfgRes, parentOwnerRes, escrowRes] = await Promise.all([
       rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [ID_WEI_PARENT]) }),
-      rpcProvider.call({ to: CONTRACT, data: ownerIface.encodeFunctionData('ownerOf', [ID_WEI_PARENT]) }),
+      rpcProvider.call({ to: CONTRACT, data: ownerOfIface.encodeFunctionData('ownerOf', [ID_WEI_PARENT]) }),
       rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('escrowedController', [ID_WEI_PARENT]) })
     ]);
     const cfg = regIface.decodeFunctionResult('config', cfgRes);
-    const parentOwner = ownerIface.decodeFunctionResult('ownerOf', parentOwnerRes)[0];
+    const parentOwner = ownerOfIface.decodeFunctionResult('ownerOf', parentOwnerRes)[0];
     const escrowedAddr = regIface.decodeFunctionResult('escrowedController', escrowRes)[0];
     const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice] = cfg;
     const currentController = escrowedAddr !== ethers.ZeroAddress ? escrowedAddr : parentOwner;
@@ -3251,7 +3126,7 @@ async function doFreeMint() {
 async function doMintSubdomain() {
   if (!signer || !pendingMintInfo) return;
   const { parentId, subLabel, feeToken, price, symbol } = pendingMintInfo;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     // Handle ERC20 approval if needed
@@ -3308,7 +3183,7 @@ async function doRenew() {
   if (isProcessing || !contract || !currentTokenId) return;
 
   isProcessing = true;
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     const rc = readContract || contract;
     const fee = await rc.getFee(byteLength(currentTokenName));
@@ -3408,7 +3283,7 @@ async function doSendEth() {
     return;
   }
 
-  const btn = event?.target; if (btn) btn.disabled = true;
+  const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
   try {
     // Resolve recipient (or self if empty for Base)
     let to, displayTo;

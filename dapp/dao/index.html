@@ -3041,43 +3041,7 @@ body.modal-open { overflow: hidden; }
         return 'data:application/json;utf8,' + json;
       }
 
-      // Mobile viewport height fix for handling browser chrome
-      function setVhProperty() { /* no-op - not needed in light theme */ }
-
-      // Set on load
-      setVhProperty();
-
-      // Debounced resize handler for performance
-      let resizeTimeout;
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          setVhProperty();
-          // Dispatch resize event for other components that need it
-          window.dispatchEvent(new Event('optimizedResize'));
-        }, 150);
-      }, { passive: true });
-
-      // Check for reduced motion preference
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      // Lazy loading for images
-      if ('IntersectionObserver' in window) {
-        const imageObserver = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const img = entry.target;
-              img.src = img.dataset.src || img.src;
-              imageObserver.unobserve(img);
-            }
-          });
-        });
-        document.querySelectorAll('img[data-src]').forEach(img => imageObserver.observe(img));
-      }
-
-
       // Auto-save form data to prevent loss
-      const formInputs = {};
       function saveToLocalStorage() {
         const formData = {
           daoName: getEl('daoName')?.value || '',
@@ -3224,24 +3188,6 @@ body.modal-open { overflow: hidden; }
 
       function getNetwork() {
         return NETWORK;
-      }
-
-      // Close mobile menu when clicking outside
-      document.addEventListener('click', (e) => {
-        const mobileMenu = document.getElementById('mobileMenu');
-        const hamburger = document.getElementById('hamburgerToggle');
-        if (mobileMenu && hamburger && !mobileMenu.contains(e.target) && !hamburger.contains(e.target)) {
-          mobileMenu.classList.remove('open');
-          hamburger.classList.remove('active');
-        }
-      });
-
-      // ==================== MOBILE MENU FUNCTIONS ====================
-      function toggleMobileMenu() {
-        const mobileMenu = document.getElementById('mobileMenu');
-        const hamburger = document.getElementById('hamburgerToggle');
-        if (mobileMenu) mobileMenu.classList.toggle('open');
-        if (hamburger) hamburger.classList.toggle('active');
       }
 
       function toggleSummoner() {
@@ -3463,20 +3409,23 @@ body.modal-open { overflow: hidden; }
         return result;
       }
 
-      // Get icon for a token address
+      let _tokenSymbolMap = null;
+
       function getTokenIcon(address) {
         const addr = address?.toLowerCase();
         if (!addr || addr === ethers.ZeroAddress.toLowerCase()) return TOKEN_ICONS.eth;
 
-        // Check for common tokens across networks
-        const symbolMap = {
-          'eth': TOKEN_ICONS.eth,
-          'usdc': TOKEN_ICONS.usdc,
-          'usdt': TOKEN_ICONS.usdt,
-          'dai': TOKEN_ICONS.dai,
-          'wsteth': TOKEN_ICONS.wsteth,
-          'reth': TOKEN_ICONS.reth
-        };
+        if (!_tokenSymbolMap) {
+          _tokenSymbolMap = {
+            'eth': TOKEN_ICONS.eth,
+            'usdc': TOKEN_ICONS.usdc,
+            'usdt': TOKEN_ICONS.usdt,
+            'dai': TOKEN_ICONS.dai,
+            'wsteth': TOKEN_ICONS.wsteth,
+            'reth': TOKEN_ICONS.reth
+          };
+        }
+        const symbolMap = _tokenSymbolMap;
 
         const network = getNetwork();
         const meta = network.tokenMeta[address] || network.tokenMeta[addr];
@@ -5280,7 +5229,7 @@ body.modal-open { overflow: hidden; }
             if (eip6963Wallet) {
               wallet = {
                 name: eip6963Wallet.info.name,
-                icon: eip6963Wallet.info.icon ? `<img src="${eip6963Wallet.info.icon}" style="width: 1.2rem; height: 1.2rem;"/>` : '🔌',
+                icon: (() => { const u = sanitizeUrl(eip6963Wallet.info.icon); return u ? `<img src="${escapeHtml(u)}" style="width: 1.2rem; height: 1.2rem;"/>` : '🔌'; })(),
                 getProvider: () => eip6963Wallet.provider
               };
             }
@@ -5648,10 +5597,11 @@ body.modal-open { overflow: hidden; }
         }
 
         // Check if it's a forbidden address
-        if (normalizedAddress === currentDAO.dao.meta.sharesToken?.toLowerCase() ||
-            normalizedAddress === currentDAO.dao.meta.lootToken?.toLowerCase() ||
-            normalizedAddress === currentDAO.dao.dao?.toLowerCase() ||
-            normalizedAddress === '0x00000000000000000000000000000000000003EF') { // address(1007)
+        const normalizedLower = normalizedAddress.toLowerCase();
+        if (normalizedLower === currentDAO.dao.meta.sharesToken?.toLowerCase() ||
+            normalizedLower === currentDAO.dao.meta.lootToken?.toLowerCase() ||
+            normalizedLower === currentDAO.dao.dao?.toLowerCase() ||
+            normalizedLower === '0x00000000000000000000000000000000000003ef') {
           showStatus('Cannot ragequit with shares, loot, or DAO tokens', true);
           return;
         }
@@ -6173,14 +6123,13 @@ body.modal-open { overflow: hidden; }
         const asset = depositAssets[selectedDepositAssetIndex];
 
         try {
+          const addr = await signer.getAddress();
           let balance;
           if (asset.address === ethers.ZeroAddress) {
-            // ETH balance
-            balance = await provider.getBalance(await signer.getAddress());
+            balance = await provider.getBalance(addr);
           } else {
-            // ERC20 balance
             const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, provider);
-            balance = await tokenContract.balanceOf(await signer.getAddress());
+            balance = await tokenContract.balanceOf(addr);
           }
 
           const formatted = parseFloat(ethers.formatUnits(balance, asset.decimals)).toFixed(4);
@@ -6452,12 +6401,13 @@ body.modal-open { overflow: hidden; }
         const asset = tributeAssets[selectedTributeAssetIndex];
 
         try {
+          const addr = await signer.getAddress();
           let balance;
           if (asset.address === ethers.ZeroAddress) {
-            balance = await provider.getBalance(await signer.getAddress());
+            balance = await provider.getBalance(addr);
           } else {
             const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, provider);
-            balance = await tokenContract.balanceOf(await signer.getAddress());
+            balance = await tokenContract.balanceOf(addr);
           }
 
           const formatted = parseFloat(ethers.formatUnits(balance, asset.decimals)).toFixed(4);
@@ -18579,10 +18529,8 @@ body.modal-open { overflow: hidden; }
             // To mint loot during init, we use the predicted loot proxy address
             // Create direct loot minting calls
 
-            let lootCallsAdded = 0;
             for (let i = 0; i < initHolders.length; i++) {
               if (lootAmounts[i] > 0n) {
-                // Add each loot mint directly to initCalls
                 initCalls.push({
                   target: predictedLoot,
                   value: 0n,
@@ -18591,13 +18539,9 @@ body.modal-open { overflow: hidden; }
                     lootAmounts[i]
                   ])
                 });
-                lootCallsAdded++;
               }
             }
 
-            if (lootCallsAdded > 0) {
-              // Successfully added loot minting calls to init sequence
-            }
           }
 
           // Add proposal threshold setting if specified
