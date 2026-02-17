@@ -94,7 +94,7 @@ input[type="number"], input[type="text"], .amount-input {
   color: var(--fg);
 }
 input::placeholder { color: var(--input-ph); }
-input:focus { border-bottom-width: 2.5px; }
+input:focus { border-bottom-width: 2.5px; margin-bottom: -1px; }
 button {
   display: inline-block;
   padding: 12px 24px;
@@ -760,7 +760,7 @@ body.modal-open { overflow: hidden; }
   <div class="quote-row">
     <span>Route:</span><span id="routeInfo">--</span><a id="chartLink" href="#" target="_blank" rel="noopener" title="View pool chart" style="display:none;margin-left:4px;opacity:0.5;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
   </div>
-  <div class="quote-row">
+  <div class="quote-row" id="impactRow">
     <span>Impact:</span><span id="impactInfo">--</span>
   </div>
   <div class="quote-row" id="slippageRow">
@@ -791,7 +791,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <!-- Receiver (optional) -->
-<div>
+<div style="min-height:46px">
   <div class="receiver-toggle" onclick="const w=document.getElementById('receiverWrap');const open=w.style.display!=='none';w.style.display=open?'none':'block';this.querySelector('.chevron').textContent=open?'\u25B6':'\u25BC'">
     <span class="chevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
     <label style="margin:0;cursor:pointer;pointer-events:none">Receiver</label>
@@ -866,12 +866,13 @@ document.addEventListener('click', () => document.querySelectorAll('.info-tip.op
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0x0c2EDe9115DFDBD5a47809F0Bd6a904bCC0cbf35";
+const ZQUOTER_ADDRESS = "0x305e175e80d7edaed2498e8b2d6526619feb16e7";
 const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const WBTC_ADDRESS = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
 const WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+const STETH_ADDRESS = "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84";
 const WSTETH_ADDRESS = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
 const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
@@ -882,8 +883,6 @@ const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
 const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
 const V4_ROUTER_ADDRESS = "0x00000000000044a361Ae3cAc094c9D1b14Eece97";
 // V4 USDC/PNKSTR hookless pool params (fee=10000, tickSpacing=200)
-const PNKSTR_USDC_V4_FEE = 10000;
-const PNKSTR_USDC_V4_TICK = 200;
 const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const ZAMM_HOOKED = "0x000000000000040470635EB91b7CE4D132D616eD";
 const ZAMM_HOOKLESS = "0x00000000000008882D72EfA6cCE4B6a40b24C860";
@@ -895,7 +894,7 @@ const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
-const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS, ZORG_DAO_TOKEN].map(a => a.toLowerCase()));
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS, ZORG_DAO_TOKEN].map(a => a.toLowerCase()));
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -1420,6 +1419,7 @@ const tokens = {
   USDT: { address: USDT_ADDRESS, symbol: "USDT", decimals: 6 },
   DAI: { address: DAI_ADDRESS, symbol: "DAI", decimals: 18 },
   WBTC: { address: WBTC_ADDRESS, symbol: "WBTC", decimals: 8 },
+  stETH: { address: STETH_ADDRESS, symbol: "stETH", decimals: 18 },
   wstETH: { address: WSTETH_ADDRESS, symbol: "wstETH", decimals: 18 },
   rETH: { address: RETH_ADDRESS, symbol: "rETH", decimals: 18 },
   PNKSTR: { address: PNKSTR_ADDRESS, symbol: "PNKSTR", decimals: 18 },
@@ -1840,6 +1840,7 @@ const WETH_ICON = `<svg width="24" height="24" viewBox="0 0 36 36" xmlns="http:/
 const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
 const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
 const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
+const STETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path d="M10.35 14.864c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 2.061 0 4.122-.832 5.683-2.353 2.637-2.571 3.082-6.727 1.034-9.824L16.067 18.611 10.35 14.864z" fill="#FFF" opacity=".6"/></g></svg>`;
 const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
 const RETH_ICON = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#FFAA6B;stop-opacity:1"/><stop offset="100%" style="stop-color:#FF8A5B;stop-opacity:1"/></linearGradient></defs><circle cx="100" cy="100" r="95" fill="#FFC93D"/><circle cx="100" cy="100" r="88" fill="#FF6B6B"/><circle cx="100" cy="100" r="82" fill="url(#bgGradient)"/><g transform="translate(100, 100) rotate(45)"><path d="M -8 -25 C -8 -30, -5 -35, 0 -35 C 5 -35, 8 -30, 8 -25 L 8 -5 L 18 5 L 18 15 L 8 10 L 8 20 L 0 25 L -8 20 L -8 10 L -18 15 L -18 5 L -8 -5 Z" fill="white"/><circle cx="0" cy="-20" r="4" fill="#FF8A5B"/><path d="M -6 20 L -9 35 L -3 30 L 0 38 L 3 30 L 9 35 L 6 20 Z" fill="white"/></g></svg>`;
 const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
@@ -1856,7 +1857,7 @@ const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none
 
 const ICONS = {
   ETH: ETH_ICON, WETH: WETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
-  wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, zOrg: ZORG_ICON, ZAMM: ZAMM_ICON,
+  stETH: STETH_ICON, wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, zOrg: ZORG_ICON, ZAMM: ZAMM_ICON,
 };
 
 const _letterIconCache = new Map();
@@ -2408,7 +2409,7 @@ const AMM_NAMES = {
 
 // ---- Hoisted ABIs / Interfaces (avoid re-parsing per call) ----
 const QUOTER_IFACE = new ethers.Interface([
-  "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
+  "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
   "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
   "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
@@ -2417,6 +2418,7 @@ const QUOTER_IFACE = new ethers.Interface([
   "function quoteZAMM(bool exactOut,uint256 feeOrHook,address tokenIn,address tokenOut,uint256 idIn,uint256 idOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
   "function build3HopMulticall(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) c, bytes[] calls, bytes multicall, uint256 msgValue)",
   "function buildHybridSplit(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
+  "function quoteLido(bool exactOut,address tokenOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
 ]);
 const ROUTER_IFACE = new ethers.Interface([
   "function deposit(address,uint256,uint256) payable",
@@ -2426,6 +2428,8 @@ const ROUTER_IFACE = new ethers.Interface([
   "function swapVZ(address to,bool exactOut,uint256 feeOrHook,address tokenIn,address tokenOut,uint256 idIn,uint256 idOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
   "function swapV4(address to,bool exactOut,uint24 swapFee,int24 tickSpace,address tokenIn,address tokenOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
   "function wrap(uint256 amount) payable",
+  "function exactETHToSTETH(address to) payable returns (uint256 shares)",
+  "function exactETHToWSTETH(address to) payable returns (uint256 wstOut)",
   "function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
   "function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)",
   "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
@@ -2531,9 +2535,12 @@ async function handleAmountChange() {
       // Output equals input (1:1, both 18 decimals)
       toAmountEl.value = amtStr;
       fitRouteText(wrapDir === 'wrap' ? 'WETH Wrap' : 'WETH Unwrap');
+      const _ln = $("routeInfo")?.parentNode?.querySelector('.lido-note');
+      if (_ln) _ln.style.display = 'none';
       $("chartLink").style.display = "none";
       setText('impactInfo', '0%');
       setShown('allRoutesWrap', false);
+      setShown('impactRow', true);
       setShown('slippageRow', false);
       setShown('refreshRow', false);
       setShown(quoteInfoEl, true);
@@ -2585,13 +2592,31 @@ async function handleAmountChange() {
     }
 
     // Route display
+    const isLidoRoute = quote.sourceA === "Lido" && !quote.isSplit && !quote.isTwoHop;
     const route = quote.isSplit
       ? formatSplitRoute(quote.splitLegs)
       : quote.isTwoHop
         ? `${quote.sourceA} + ${quote.sourceB}`
-        : `${quote.sourceA}`;
+        : isLidoRoute ? "Lido Stake" : `${quote.sourceA}`;
     fitRouteText(route);
     updateChartLink(quote);
+    // Show "Direct stake" note for Lido routes
+    const routeEl = $("routeInfo");
+    if (routeEl) {
+      let noteEl = routeEl.parentNode.querySelector('.lido-note');
+      if (isLidoRoute) {
+        if (!noteEl) {
+          noteEl = document.createElement('span');
+          noteEl.className = 'lido-note';
+          noteEl.style.cssText = 'font-size:11px;color:var(--fg-muted);margin-left:6px';
+          routeEl.parentNode.appendChild(noteEl);
+        }
+        noteEl.textContent = 'Direct stake — no DEX fees';
+        noteEl.style.display = '';
+      } else if (noteEl) {
+        noteEl.style.display = 'none';
+      }
+    }
 
     // Split/multi-hop slippage note
     const ssn = $('splitSlipNote');
@@ -2615,13 +2640,19 @@ async function handleAmountChange() {
     // Allowance check
     const fromData = tokens[fromSnap];
     const isDirectStake = isDirectZOrgStake(fromSnap, toSnap);
+    const isLidoStake = isLidoRoute;
+    const hideSlippage = isDirectStake || isLidoStake;
 
-    // Hide slippage & refresh for 1:1 operations
-    setShown('slippageRow', !isDirectStake);
+    // Hide slippage & refresh for 1:1 / Lido operations
+    setShown('slippageRow', !hideSlippage);
+    setShown('impactRow', !isLidoStake);
     setShown('refreshRow', !isDirectStake);
     setShown(quoteInfoEl, true);
     if (isDirectStake) stopQuoteRefresh(); else startQuoteRefresh();
-    let btnLabel = isDirectStake ? "Stake" : isZOrgSwap(toSnap) ? "Swap & Stake" : "Swap";
+    let btnLabel = isDirectStake ? "Stake"
+      : isLidoStake ? "Stake"
+      : isZOrgSwap(toSnap) ? "Swap & Stake"
+      : "Swap";
     if (fromData.address !== ZERO_ADDRESS) {
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
       if (isDirectStake) {
@@ -2929,7 +2960,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
       const r = await quoter.buildBestSwapViaETHMulticall(
         ZROUTER_ADDRESS, connectedAddress, false,
         fromData.address, ZERO_ADDRESS,
-        amountIn, BigInt(slippageBps), deadline, callOpts
+        amountIn, BigInt(slippageBps), deadline, 0, 0, ZERO_ADDRESS, callOpts
       );
       const isTwoHop = r.b.amountOut > 0n;
       ethForSwap = isTwoHop ? r.b.amountOut : r.a.amountOut;
@@ -3051,11 +3082,15 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     // Split/multi-hop routes need wider per-leg slippage to avoid intermittent reverts
     // (each leg has its own amountLimit; first leg moves price affecting the second)
     const splitSlip = BigInt(Math.min(Math.max(slippageBps * 3, 150), 500));
+    const hookFee = 0;
+    const hookTick = isPNKSTR ? 60 : 0;
+    const hookAddr = isPNKSTR ? PNKSTR_HOOK_ADDRESS : ZERO_ADDRESS;
     const allCalls = [
       quoter.buildBestSwapViaETHMulticall(
         receiver, connectedAddress, false,
         fromData.address, toData.address,
-        amountIn, BigInt(slippageBps), deadline, callOpts
+        amountIn, BigInt(slippageBps), deadline,
+        hookFee, hookTick, hookAddr, callOpts
       ),
       quoter.buildSplitSwap(
         receiver, fromData.address, toData.address,
@@ -3078,38 +3113,20 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         amountIn, splitSlip, deadline,
         0, 60, PNKSTR_HOOK_ADDRESS, callOpts
       ));
-      allCalls.push(quoter.quoteV4(
-        false, fromData.address, toData.address,
-        0, 60, PNKSTR_HOOK_ADDRESS, amountIn, callOpts
-      ));
     }
-    // ETH→USDC→PNKSTR via V4 USDC/PNKSTR pool (compound 2-hop, runs in parallel)
-    const isPnkstrViaUsdc = isPNKSTR && fromData.address === ZERO_ADDRESS
-      && toData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
-    let usdcRouteIdx = -1;
-    if (isPnkstrViaUsdc) {
-      usdcRouteIdx = allCalls.length;
-      allCalls.push((async () => {
-        const hop1 = await quoter.buildBestSwapViaETHMulticall(
-          ZROUTER_ADDRESS, connectedAddress, false,
-          ZERO_ADDRESS, USDC_ADDRESS,
-          amountIn, BigInt(slippageBps), deadline, callOpts
-        );
-        const usdcOut = hop1.b.amountOut > 0n ? hop1.b.amountOut : hop1.a.amountOut;
-        if (usdcOut === 0n) return null;
-        const hop2 = await quoter.quoteV4(
-          false, USDC_ADDRESS, toData.address,
-          PNKSTR_USDC_V4_FEE, PNKSTR_USDC_V4_TICK, ZERO_ADDRESS,
-          usdcOut, callOpts
-        );
-        return { hop1, hop2, usdcOut };
-      })());
+    // Lido quote for ETH → stETH / wstETH
+    const isLidoEligible = fromData.address === ZERO_ADDRESS
+      && (toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase()
+       || toData.address.toLowerCase() === WSTETH_ADDRESS.toLowerCase());
+    let lidoQuoteIdx = -1;
+    if (isLidoEligible) {
+      lidoQuoteIdx = allCalls.length;
+      allCalls.push(quoter.quoteLido(false, toData.address, amountIn, callOpts));
     }
     const settled = await Promise.allSettled(allCalls);
     const [bestResult, splitResult, quotesResult, curveResult, threeHopResult, hybridSplitResult] = settled;
     const v4SplitResult = isPNKSTR ? settled[6] : undefined;
-    const v4SingleResult = isPNKSTR ? settled[7] : undefined;
-    const usdcRouteResult = usdcRouteIdx >= 0 ? settled[usdcRouteIdx] : undefined;
+    const lidoQuoteResult = lidoQuoteIdx >= 0 ? settled[lidoQuoteIdx] : undefined;
 
     // bestResult is required
     if (bestResult.status === 'rejected') throw bestResult.reason;
@@ -3165,6 +3182,13 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         const c = curveResult.value;
         if (c.amountOut > 0n) {
           result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        }
+      }
+      // Merge Lido quote if available
+      if (lidoQuoteResult?.status === 'fulfilled') {
+        const l = lidoQuoteResult.value;
+        if (l.amountOut > 0n) {
+          result.allQuotes.push({ source: "Lido", sourceId: 6, feeBps: 0n, amountIn: l.amountIn, amountOut: l.amountOut });
         }
       }
     }
@@ -3256,69 +3280,29 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
-    // Add standalone V4 hooked single-hop quote to allQuotes
-    if (v4SingleResult?.status === 'fulfilled' && v4SingleResult.value) {
-      const v4q = v4SingleResult.value;
-      if (v4q.amountOut > 0n && result.allQuotes) {
-        result.allQuotes.push({ source: "V4 Hooked", sourceId: 8, feeBps: 0n, amountIn: v4q.amountIn, amountOut: v4q.amountOut });
-      }
-    }
-
-    // ETH→USDC→PNKSTR via V4 USDC/PNKSTR hookless pool (dapp-built 2-hop multicall)
-    if (usdcRouteResult?.status === 'fulfilled' && usdcRouteResult.value) {
-      const { hop1, hop2 } = usdcRouteResult.value;
-      const hop1Src = hop1.b.amountOut > 0n
-        ? `${AMM_NAMES[hop1.a.source] || "?"} → ${AMM_NAMES[hop1.b.source] || "?"}`
-        : (AMM_NAMES[hop1.a.source] || "?");
-      // Add to allQuotes for display
-      if (hop2.amountOut > 0n && result.allQuotes) {
-        result.allQuotes.push({
-          source: `${hop1Src} → V4 USDC`,
-          sourceId: 4,
-          feeBps: 0n,
-          amountIn,
-          amountOut: hop2.amountOut,
-        });
-      }
-      // If this route beats current best, build custom multicall
-      if (hop2.amountOut > result.expectedOutput) {
-        const hop2Min = hop2.amountOut * (10000n - BigInt(slippageBps)) / 10000n;
-        const hop2Call = ROUTER_IFACE.encodeFunctionData('swapV4', [
-          receiver, false, PNKSTR_USDC_V4_FEE, PNKSTR_USDC_V4_TICK,
-          USDC_ADDRESS, toData.address, 0n, hop2Min, deadline
-        ]);
-        const sweepTo = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
-        const sweepUsdc = ROUTER_IFACE.encodeFunctionData('sweep', [USDC_ADDRESS, 0, 0, connectedAddress]);
-        const sweepEth = ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]);
-        const customCalls = [...hop1.calls, hop2Call, sweepTo, sweepUsdc, sweepEth];
-        const customMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [customCalls]);
-
-        result.expectedOutput = hop2.amountOut;
-        result.multicall = customMulticall;
-        result.calls = customCalls;
-        result.msgValue = hop1.msgValue ?? amountIn;
-        result.isTwoHop = true;
-        result.isSplit = false;
-        result.splitLegs = null;
-        result.sourceA = hop1Src;
-        result.sourceB = "V4 USDC";
-      }
-    }
-
-    // Relabel V4 → V4 Hooked for PNKSTR swaps (contract reports source=4 for hooked pools)
-    // Skip sourceA/B relabel when USDC route won (hop1 may use hookless V4 for ETH→USDC)
-    if (isPNKSTR) {
-      const relabel = s => s === "Uniswap V4" ? "V4 Hooked" : s;
-      if (!result.isTwoHop) {
-        if (result.sourceA) result.sourceA = relabel(result.sourceA);
-        if (result.sourceB) result.sourceB = relabel(result.sourceB);
-      }
-      if (result.splitLegs) {
-        for (const leg of result.splitLegs) leg.source = relabel(leg.source);
-      }
-      if (result.allQuotes) {
-        for (const q of result.allQuotes) {
-          if (q.source === "Uniswap V4") { q.source = "V4 Hooked"; q.sourceId = 8; }
+    // Prefer Lido for ETH→stETH/wstETH when competitive (guaranteed execution, no pool risk)
+    if (isLidoEligible && lidoQuoteResult?.status === 'fulfilled') {
+      const l = lidoQuoteResult.value;
+      if (l.amountOut > 0n) {
+        // Use Lido if within 0.5% of best, or if Lido actually beats best
+        const threshold = result.expectedOutput * 9950n / 10000n;
+        if (l.amountOut >= threshold) {
+          const isStETH = toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase();
+          const lidoCall = isStETH
+            ? ROUTER_IFACE.encodeFunctionData('exactETHToSTETH', [receiver])
+            : ROUTER_IFACE.encodeFunctionData('exactETHToWSTETH', [receiver]);
+          const sweepEth = ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]);
+          const calls = [lidoCall, sweepEth];
+          const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+          result.expectedOutput = l.amountOut;
+          result.multicall = multicall;
+          result.calls = calls;
+          result.msgValue = amountIn;
+          result.isTwoHop = false;
+          result.isSplit = false;
+          result.splitLegs = null;
+          result.sourceA = "Lido";
+          result.sourceB = null;
         }
       }
     }
@@ -3750,7 +3734,9 @@ async function executeSwap() {
       }
     }
 
-    swapBtn.textContent = isZOrgSwap(toSnap) ? "Swapping & Staking..." : "Swapping...";
+    const isLidoExec = quote.sourceA === "Lido" && !quote.isSplit && !quote.isTwoHop;
+    const actionLabel = isLidoExec ? "Staking" : isZOrgSwap(toSnap) ? "Swapping & Staking" : "Swapping";
+    swapBtn.textContent = actionLabel + "...";
     const txValue = quote.msgValue ?? 0n;
 
     const swapTx = await wcTransaction(
@@ -3759,14 +3745,14 @@ async function executeSwap() {
         data: txData,
         value: txValue,
       }),
-      'Confirm swap in your wallet'
+      isLidoExec ? 'Confirm stake in your wallet' : 'Confirm swap in your wallet'
     );
-    swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+    swapBtn.innerHTML = `Confirming ${actionLabel.toLowerCase()}... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
     const receipt = await waitForTx(swapTx);
-    if (receipt.status === 0) throw new Error("Swap transaction failed");
+    if (receipt.status === 0) throw new Error(isLidoExec ? "Stake transaction failed" : "Swap transaction failed");
 
-    swapBtn.textContent = isZOrgSwap(toSnap) ? "Swap & Stake Complete!" : "Swap Complete!";
+    swapBtn.textContent = (isLidoExec ? "Stake" : isZOrgSwap(toSnap) ? "Swap & Stake" : "Swap") + " Complete!";
     $("fromAmount").value = "";
     $("toAmount").value = "";
     $("quoteInfo").style.display = "none";
