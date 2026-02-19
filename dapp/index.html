@@ -902,9 +902,9 @@ body.modal-open { overflow: hidden; }
   <div class="section token-section">
     <div class="token-header">
       <label style="margin:0"><span id="ppAmountLabel">Amount (ETH)</span></label>
-      <span id="ppBalance" class="balance" style="font-size:12px;color:var(--fg-muted)"></span>
     </div>
     <input type="number" id="ppAmount" class="amount-input" placeholder="0.0" min="0" step="any">
+    <div class="balance"><span id="ppBalance"></span> <span style="color:var(--fg-dim)">&middot;</span> <button class="max-btn" type="button" onclick="setPPPercentBalance(25)">25%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(50)">50%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(75)">75%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(100)">100%</button></div>
   </div>
 
   <div id="ppFeeInfo" style="display:none;font-size:12px;color:var(--fg-muted);margin-bottom:16px">
@@ -2557,24 +2557,32 @@ async function updateBalances() {
     const meta = [];
     const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
 
-    // ETH balance via getEthBalance
-    if (fromIsEth || toIsEth) {
-      calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
-        callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
-      meta.push({ type: 'eth' });
-    }
+    // ETH balance via getEthBalance (always — needed for PP deposit)
+    calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
+      callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
+    meta.push({ type: 'eth' });
+
+    const _addedErc20 = new Set();
     // From token balance
     if (!fromIsEth) {
       calls.push({ target: f.address, allowFailure: true, callData: balOfData });
       meta.push({ type: 'erc20', key: f.address.toLowerCase() });
+      _addedErc20.add(f.address.toLowerCase());
     }
     // To token balance (if different)
     if (!toIsEth) {
       const keyT = t.address.toLowerCase();
-      if (fromIsEth || keyT !== f.address.toLowerCase()) {
+      if (!_addedErc20.has(keyT)) {
         calls.push({ target: t.address, allowFailure: true, callData: balOfData });
         meta.push({ type: 'erc20', key: keyT });
+        _addedErc20.add(keyT);
       }
+    }
+    // BOLD balance (always — needed for PP deposit; deduped)
+    const boldKey = BOLD_ADDRESS.toLowerCase();
+    if (!_addedErc20.has(boldKey)) {
+      calls.push({ target: BOLD_ADDRESS, allowFailure: true, callData: balOfData });
+      meta.push({ type: 'erc20', key: boldKey });
     }
     // Batch allowance reads for from token (saves RPCs during quote/swap)
     if (!fromIsEth) {
@@ -2616,6 +2624,7 @@ async function updateBalances() {
 
     setText("fromBalance", `Balance: ${fromStr}`);
     setText("toBalance", `Balance: ${toStr}`);
+    updatePPBalance();
   } catch (e) {
     console.error("Balance update error:", e);
   }
@@ -5362,21 +5371,28 @@ async function loadPPConfig() {
   }
 }
 
-async function updatePPBalance() {
-  if (!connectedAddress) { setText('ppBalance', ''); return; }
-  try {
-    const rpc = await quoteRPC.call(r => r);
-    if (_ppSelectedAsset === 'BOLD') {
-      const bold = new ethers.Contract(BOLD_ADDRESS, ['function balanceOf(address) view returns (uint256)'], rpc);
-      const bal = await bold.balanceOf(connectedAddress);
-      setText('ppBalance', `Balance: ${fmt(ethers.formatEther(bal))} BOLD`);
-    } else {
-      const bal = await rpc.getBalance(connectedAddress);
-      setText('ppBalance', `Balance: ${fmt(ethers.formatEther(bal))} ETH`);
-    }
-  } catch (e) {
-    console.warn("PP balance error:", e);
+let _ppBalanceRaw = null;
+
+function updatePPBalance() {
+  if (!connectedAddress) { setText('ppBalance', ''); _ppBalanceRaw = null; return; }
+  const asset = _ppSelectedAsset;
+  const tokenAddr = asset === 'BOLD' ? BOLD_ADDRESS : ZERO_ADDRESS;
+  const cached = getCachedBalance(tokenAddr);
+  if (cached != null) {
+    _ppBalanceRaw = cached;
+    setText('ppBalance', `Balance: ${fmt(ethers.formatEther(cached))} ${asset}`);
+  } else {
+    _ppBalanceRaw = null;
+    setText('ppBalance', 'Balance: ...');
   }
+}
+
+function setPPPercentBalance(pct) {
+  if (!connectedAddress) { showWalletModal(); return; }
+  if (_ppBalanceRaw == null) return;
+  const amount = _ppBalanceRaw * BigInt(pct) / 100n;
+  $('ppAmount').value = ethers.formatEther(amount);
+  $('ppAmount').dispatchEvent(new Event('input'));
 }
 
 function updatePPButton() {
