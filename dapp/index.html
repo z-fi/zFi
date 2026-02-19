@@ -612,7 +612,6 @@ body.modal-open { overflow: hidden; }
   /* Privacy tab mobile */
   .pp-note-area { font-size: 10px; }
   .pp-asset-btn { padding: 8px 6px; font-size: 12px; min-height: 40px; }
-  .pp-withdraw-input { font-size: 14px; }
 }
 @media (max-width: 380px) {
   body { padding: 70px 12px 20px; }
@@ -865,7 +864,7 @@ body.modal-open { overflow: hidden; }
         <button id="ppSwapAssetETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:6px;border:2px solid var(--btn-bg);cursor:pointer;background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSwapSelectAsset('ETH')"><span class="pp-icon-16" data-icon="ETH"></span>ETH</button>
         <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:6px;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
       </div>
-      <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note to withdraw privately.</div>
+      <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note &mdash; withdraw via the Privacy tab or <a href="https://privacypools.com" target="_blank" style="color:var(--link-fg)">privacypools.com</a>.</div>
     </div>
   </div>
 </div>
@@ -882,8 +881,9 @@ body.modal-open { overflow: hidden; }
     <button onclick="ppSwapDownloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
   </div>
   <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-    To withdraw privately, go to <a href="https://privacypools.com" target="_blank">privacypools.com</a>
+    Withdraw directly below, or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
   </p>
+  <button onclick="setShown('ppSwapNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
 </div>
 
 </div><!-- end swap-card -->
@@ -899,7 +899,7 @@ body.modal-open { overflow: hidden; }
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Deposit to Privacy Pool</h2>
-  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH or BOLD into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). You'll receive a note &mdash; save it to withdraw privately later.</p>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH or BOLD into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). Save the note you receive &mdash; withdraw below or at <a href="https://privacypools.com" target="_blank">privacypools.com</a> with the same wallet.</p>
 
   <div style="display:flex;gap:8px;margin-bottom:12px">
     <button id="ppAssetETH" class="swap-btn pp-asset-btn active" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSelectAsset('ETH')"><span class="pp-icon-18" data-icon="ETH"></span>ETH</button>
@@ -928,8 +928,9 @@ body.modal-open { overflow: hidden; }
       <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
     </div>
     <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-      To withdraw privately, go to <a href="https://privacypools.com" target="_blank">privacypools.com</a>
+      Withdraw directly below, or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
     </p>
+    <button onclick="setShown('ppNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
   </div>
 
   <details style="margin-top:12px;font-size:12px">
@@ -3248,11 +3249,9 @@ function isWrapUnwrap(fromSym, toSym) {
 function getDirectZOrgStakeQuote(fromAmountStr, fromSym) {
   const fromData = tokens[fromSym];
   const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
-  readSlippage(true);
-  const slipOut = amountIn * (10000n - BigInt(slippageBps)) / 10000n;
 
-  // Encode the direct buyShares call on the DAO
-  const buySharesData = ZORG_BUYSHARES_IFACE.encodeFunctionData('buyShares', [ZORG_PAY_TOKEN, slipOut, amountIn]);
+  // Direct 1:1 stake — no swap, no slippage. shareAmount = maxPay = amountIn.
+  const buySharesData = ZORG_BUYSHARES_IFACE.encodeFunctionData('buyShares', [ZORG_PAY_TOKEN, amountIn, amountIn]);
 
   return {
     expectedOutput: amountIn,
@@ -3546,7 +3545,9 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
       ethIn ? 0 : ethForSwap, slipOut, zammDeadline
     ]));
 
-    // execute: buyShares on the DAO (payToken = ERC20 equivalent, shareAmount = slipOut, maxPay = full swap output)
+    // execute: buyShares on the DAO.
+    // swapVZ guarantees the router holds ≥ slipOut ZAMM. Request slipOut shares (safe minimum),
+    // maxPay = zammOut (upper bound). Any excess ZAMM is swept back to user.
     calls.push(ROUTER_IFACE.encodeFunctionData('execute', [
       ZORG_DAO, 0,
       ZORG_BUYSHARES_IFACE.encodeFunctionData('buyShares', [ZORG_PAY_TOKEN, slipOut, zammOut])
@@ -3569,7 +3570,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
     const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
 
     return {
-      expectedOutput: zammOut,
+      expectedOutput: slipOut,
       multicall,
       calls,
       msgValue,
@@ -3578,7 +3579,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
       splitLegs: null,
       sourceA: ethIn ? (useHookless ? "zAMM₀" : "zAMM") : firstLegSource,
       sourceB: ethIn ? null : (useHookless ? "zAMM₀" : "zAMM"),
-      allQuotes: [{ source: (useHookless ? "zAMM₀" : "zAMM") + " → DAO Stake", sourceId: 2, feeBps: 100n, amountIn, amountOut: zammOut }],
+      allQuotes: [{ source: (useHookless ? "zAMM₀" : "zAMM") + " → DAO Stake", sourceId: 2, feeBps: 100n, amountIn, amountOut: slipOut }],
     };
   });
 }
@@ -4757,10 +4758,13 @@ async function executeSwap() {
   } catch (e) {
     console.error("Swap error:", e);
     let msg = "Swap failed";
-    const s = String(e?.message || e?.reason || "");
+    const s = String(e?.data || e?.message || e?.reason || "");
     if (e.code === 4001 || /user rejected|denied/i.test(s)) msg = "Transaction cancelled";
     else if (/insufficient funds/i.test(s)) msg = "Insufficient balance";
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
+    else if (/PrecommitmentAlreadyUsed/i.test(s)) msg = "Precommitment already used. Try again.";
+    else if (/InsufficientAllowance/i.test(s)) msg = "Insufficient token allowance.";
+    else if (/InsufficientBalance/i.test(s)) msg = "Insufficient balance for deposit.";
 
     swapBtn.textContent = msg;
     _swapResetTimer = setTimeout(() => { handleAmountChange(); }, 2000);
@@ -5767,9 +5771,6 @@ function ppwParseNote() {
 
   setShown('ppwParsed', true);
   setDisabled('ppwWithdrawBtn', false);
-  // Show detected asset
-  const assetIndicator = $('ppwAssetIndicator');
-  if (assetIndicator) setText(assetIndicator, noteAsset);
 }
 
 function ppwUploadNote(event) {
