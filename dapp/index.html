@@ -2772,7 +2772,7 @@ async function handleAmountChange() {
   const _receiverRaw = ($("receiverAddress")?.value || "").trim();
   const _resolvedAddr = getReceiver();
   const _hasCustomReceiver = _receiverRaw && (isReceiverPending() || (_resolvedAddr && _resolvedAddr !== connectedAddress));
-  const wrapDir = !_hasCustomReceiver ? isWrapUnwrap(fromToken, toToken) : null;
+  const wrapDir = !_hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
   if (wrapDir) {
     const fromData = tokens[fromToken];
     try {
@@ -2799,6 +2799,15 @@ async function handleAmountChange() {
       setText(swapBtn, e.message || "Invalid amount");
       setDisabled(swapBtn, true);
     }
+    return;
+  }
+
+  // WETH→ETH + PP: can't route through quoter, user should unwrap first
+  if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
+    toAmountEl.value = "";
+    setShown(quoteInfoEl, false);
+    setText(swapBtn, "Unwrap WETH first");
+    setDisabled(swapBtn, true);
     return;
   }
 
@@ -4226,7 +4235,7 @@ async function executeSwap() {
     // ETH ↔ WETH wrap/unwrap: direct contract call, no DEX (only when sending to self)
     const resolvedAddr = getReceiver();
     const hasCustomReceiver = receiverRaw && (isReceiverPending() || (resolvedAddr && resolvedAddr !== connectedAddress));
-    const wrapDir = !hasCustomReceiver ? isWrapUnwrap(fromToken, toToken) : null;
+    const wrapDir = !hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
     if (wrapDir) {
       const fromData = tokens[fromToken];
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
@@ -4263,6 +4272,12 @@ async function executeSwap() {
         swapBtn.textContent = "Enter an amount";
         swapBtn.disabled = true;
       }, 1500);
+      return;
+    }
+
+    // WETH→ETH + PP: quoter can't route a pure unwrap — user should unwrap first
+    if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
+      showStatus("Unwrap WETH to ETH first, then deposit into Privacy Pool", "error");
       return;
     }
 
@@ -4373,6 +4388,10 @@ async function executeSwap() {
 
     // ---- zOrg → token sell: two-step (ragequit then ZAMM swap) ----
     if (isZOrgSellPath(fromToken, toToken)) {
+      if (_ppSwapEnabled) {
+        showStatus("Privacy Pool deposit not supported for zOrg sells — sell zOrg first, then deposit the output", "error");
+        return;
+      }
       swapBtn.innerHTML = `<span class="loading"></span> Preparing sell...`;
       swapBtn.disabled = true;
 
@@ -4760,7 +4779,8 @@ async function executeSwap() {
     let msg = "Swap failed";
     const s = String(e?.data || e?.message || e?.reason || "");
     if (e.code === 4001 || /user rejected|denied/i.test(s)) msg = "Transaction cancelled";
-    else if (/insufficient funds/i.test(s)) msg = "Insufficient balance";
+    else if (/insufficient funds/i.test(s) || /INSUFFICIENT_FUNDS/i.test(s)) msg = "Insufficient balance";
+    else if (/7939f424/.test(s)) msg = `Insufficient ${fromToken} balance or approval`;
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
     else if (/PrecommitmentAlreadyUsed/i.test(s)) msg = "Precommitment already used. Try again.";
     else if (/InsufficientAllowance/i.test(s)) msg = "Insufficient token allowance.";
@@ -5643,6 +5663,8 @@ async function ppDeposit() {
     console.error('ppDeposit error:', e);
     const errStr = String(e?.data || e?.message || e?.reason || e || '');
     const ppDepositErrors = {
+      'INSUFFICIENT_FUNDS': `Insufficient ${_ppSelectedAsset} balance for this deposit.`,
+      'insufficient funds': `Insufficient ${_ppSelectedAsset} balance for this deposit.`,
       'PrecommitmentAlreadyUsed': 'This precommitment has already been used. Try a new deposit.',
       'InsufficientAllowance': 'Insufficient token allowance. Please approve spending first.',
       'InsufficientBalance': 'Insufficient balance for this deposit amount.',
