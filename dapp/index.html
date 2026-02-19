@@ -146,6 +146,9 @@ button.secondary:hover { background: var(--surface-hover); }
 }
 .token-select:hover { opacity: 0.6; }
 .token-icon { width: 24px; height: 24px; display: inline-flex; align-items: center; }
+.pp-icon-16, .pp-icon-18 { display: inline-flex; align-items: center; line-height: 0; }
+.pp-icon-16 svg { width: 16px; height: 16px; }
+.pp-icon-18 svg { width: 18px; height: 18px; }
 .token-symbol { font-weight: 600; color: var(--fg); }
 .token-chevron { font-size: 10px; color: var(--fg-dim); margin-left: -2px; }
 
@@ -590,6 +593,8 @@ body.modal-open { overflow: hidden; }
   margin: 0 2px;
 }
 .site-footer a:hover { opacity: 0.7; }
+.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
+.dark .site-footer .tagline { opacity:1; color:#fff; font-weight:500; }
 
 /* Responsive */
 @media (max-width: 700px) {
@@ -678,6 +683,33 @@ body.modal-open { overflow: hidden; }
 :root.dark .dark-toggle { background: #fff; }
 .dark-toggle:hover { opacity: 1; }
 
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+}
+.tab-bar .tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.tab-bar .tab.active {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+.tab-bar .tab:hover:not(.active) {
+  color: var(--fg);
+}
+
 /* Swap card container */
 .swap-card {
   border: 1px solid var(--card-border);
@@ -713,7 +745,13 @@ body.modal-open { overflow: hidden; }
   <button id="walletBtn" onclick="toggleWallet()">connect</button>
 </div>
 
-<h1 style="display:flex;align-items:center;gap:8px">Swap <span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zRouter</a> is a fully on-chain DEX aggregator. Routes are discovered and optimized by zQuoter directly on the blockchain — no off-chain APIs, no solvers, no servers.<br><br>Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido with atomic multi-hop execution, split routing, and per-leg slippage protection.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the liquidity pools.</span></span></h1>
+<div class="tab-bar">
+  <button class="tab active" data-tab="swap" onclick="switchTab('swap')">Swap</button>
+  <button class="tab" data-tab="privacy" onclick="switchTab('privacy')">Privacy</button>
+</div>
+
+<div id="swapTab">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zRouter</a> is a fully on-chain DEX aggregator. Routes are discovered and optimized by zQuoter directly on the blockchain — no off-chain APIs, no solvers, no servers.<br><br>Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido with atomic multi-hop execution, split routing, and per-leg slippage protection.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the liquidity pools.</span></span></div>
 
 <!-- Swap card -->
 <div class="swap-card">
@@ -759,7 +797,7 @@ body.modal-open { overflow: hidden; }
 <!-- Quote info -->
 <div id="quoteInfo" class="quote-info" style="display:none">
   <div class="quote-row">
-    <span>Route:</span><span id="routeInfo">--</span><a id="chartLink" href="#" target="_blank" rel="noopener" title="View pool chart" style="display:none;margin-left:4px;opacity:0.5;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
+    <span>Route:</span><span id="routeInfo">--</span><a id="chartLink" href="#" target="_blank" rel="noopener" title="View chart" style="display:none;margin-left:4px;opacity:0.7;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
   </div>
   <div class="quote-row" id="impactRow">
     <span>Impact:</span><span id="impactInfo">--</span>
@@ -789,22 +827,58 @@ body.modal-open { overflow: hidden; }
     </div>
     <div id="allRoutesList" class="routes-list" style="display:none"></div>
   </div>
+  <a id="calldataLink" href="#" target="_blank" rel="noopener" title="Preview calldata — final tx may differ slightly (fresh quote at execution)" style="display:none;font-size:11px;color:var(--fg-muted);text-decoration:none;opacity:0.6;transition:opacity 0.15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Inspect calldata &#8599;</a>
 </div>
 
 <!-- Receiver (optional) -->
-<div style="min-height:46px">
-  <div class="receiver-toggle" onclick="const w=document.getElementById('receiverWrap');const open=w.style.display!=='none';w.style.display=open?'none':'block';this.querySelector('.chevron').textContent=open?'\u25B6':'\u25BC'">
+<div>
+  <div class="receiver-toggle" onclick="const w=document.getElementById('receiverWrap');const open=w.style.maxHeight==='0px';w.style.maxHeight=open?'80px':'0px';w.style.opacity=open?'1':'0';this.querySelector('.chevron').textContent=open?'\u25BC':'\u25B6'">
     <span class="chevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
     <label style="margin:0;cursor:pointer;pointer-events:none">Receiver</label>
   </div>
-  <div id="receiverWrap" style="display:none;margin-top:8px">
+  <div id="receiverWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:8px">
     <input type="text" id="receiverAddress" placeholder="0x address, name.wei, or name.eth" style="font-size:14px;padding:8px 0">
     <div id="receiverResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
+    <div id="receiverWarn" style="display:none;font-size:11px;margin-top:4px;color:#c0392b"></div>
+  </div>
+</div>
+
+<!-- Privacy Pool Deposit toggle -->
+<div>
+  <div class="receiver-toggle" onclick="togglePPSwap()">
+    <span class="chevron" id="ppSwapChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
+    <label style="margin:0;cursor:pointer;pointer-events:none">Privacy Pool Deposit</label>
+  </div>
+  <div id="ppSwapWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted);cursor:pointer;margin-bottom:0;text-transform:none;letter-spacing:0">
+      <input type="checkbox" id="ppSwapToggle" onchange="onPPSwapToggle()"> Deposit swap output into <a href="https://privacypools.com" target="_blank" style="color:var(--link-fg)">Privacy Pools</a>
+    </label>
+    <div id="ppSwapAssetWrap" style="display:none;margin-top:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--fg-muted)">Deposit as:</span>
+        <button id="ppSwapAssetETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:6px;border:2px solid var(--btn-bg);cursor:pointer;background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSwapSelectAsset('ETH')"><span class="pp-icon-16" data-icon="ETH"></span>ETH</button>
+        <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:6px;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
+      </div>
+      <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note to withdraw privately.</div>
+    </div>
   </div>
 </div>
 
 <!-- Swap button -->
 <button id="swapBtn" class="swap-btn" disabled>Connect Wallet</button>
+
+<!-- Privacy note display (swap tab) -->
+<div id="ppSwapNoteBox" style="display:none;margin-top:16px" class="quote-info">
+  <div style="font-weight:600;color:#c0392b;margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
+  <textarea id="ppSwapNoteText" readonly rows="3" style="width:100%;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button onclick="navigator.clipboard.writeText($('ppSwapNoteText').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
+    <button onclick="ppSwapDownloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
+  </div>
+  <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
+    To withdraw privately, go to <a href="https://privacypools.com" target="_blank">privacypools.com</a>
+  </p>
+</div>
 
 </div><!-- end swap-card -->
 
@@ -814,6 +888,131 @@ body.modal-open { overflow: hidden; }
   <span style="color:var(--fg-dim)">&middot;</span>
   <a href="#" onclick="setupRagequit();return false" style="color:var(--link-fg);text-decoration:underline;cursor:pointer">Ragequit zOrg to ZAMM</a>
 </div>
+</div><!-- end swapTab -->
+
+<div id="privacyTab" style="display:none">
+<div class="swap-card">
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Deposit to Privacy Pool</h2>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH or BOLD into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). You'll receive a note &mdash; save it to withdraw privately later.</p>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button id="ppAssetETH" class="swap-btn active" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSelectAsset('ETH')"><span class="pp-icon-18" data-icon="ETH"></span>ETH</button>
+    <button id="ppAssetBOLD" class="swap-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('BOLD')"><span class="pp-icon-18" data-icon="BOLD"></span>BOLD</button>
+  </div>
+
+  <div class="section token-section">
+    <div class="token-header">
+      <label style="margin:0"><span id="ppAmountLabel">Amount (ETH)</span></label>
+      <span id="ppBalance" class="balance" style="font-size:12px;color:var(--fg-muted)"></span>
+    </div>
+    <input type="number" id="ppAmount" class="amount-input" placeholder="0.0" min="0" step="any">
+  </div>
+
+  <div id="ppFeeInfo" style="display:none;font-size:12px;color:var(--fg-muted);margin-bottom:16px">
+    Vetting fee: <span id="ppFeeBps">--</span> bps &middot; Min deposit: <span id="ppMinDeposit">--</span> <span id="ppMinUnit">ETH</span>
+  </div>
+
+  <button id="ppDepositBtn" class="swap-btn" disabled>Connect Wallet</button>
+
+  <div id="ppNoteBox" style="display:none;margin-top:16px" class="quote-info">
+    <div style="font-weight:600;color:#c0392b;margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
+    <textarea id="ppNote" readonly rows="3" style="width:100%;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="navigator.clipboard.writeText($('ppNote').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
+      <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
+    </div>
+    <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
+      To withdraw privately, go to <a href="https://privacypools.com" target="_blank">privacypools.com</a>
+    </p>
+  </div>
+
+  <details style="margin-top:12px;font-size:12px">
+    <summary style="cursor:pointer;opacity:0.6">Saved notes (<span id="ppNoteCount">0</span>)</summary>
+    <div id="ppNotesList" style="margin-top:8px"></div>
+  </details>
+</div>
+
+<!-- Withdraw from Privacy Pool -->
+<div class="swap-card" style="margin-top:16px">
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Withdraw from Privacy Pool</h2>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Paste or upload your deposit note to withdraw. You can also manually fill in values from Etherscan logs. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
+
+  <div class="section" style="margin-bottom:12px">
+    <label style="margin:0;font-size:12px">Note JSON</label>
+    <textarea id="ppwNote" rows="3" placeholder='{"nullifier":"0x...","secret":"0x...",...}' style="width:100%;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical;margin-top:4px"></textarea>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button onclick="ppwParseNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Parse Note</button>
+      <button class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0" onclick="this.querySelector('input').click()">Upload JSON<input type="file" accept=".json" onchange="ppwUploadNote(event)" style="display:none"></button>
+    </div>
+  </div>
+
+  <div id="ppwParsed" style="display:none">
+    <div style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;font-weight:600">Parsed Note</div>
+    <div style="display:grid;gap:6px;font-size:11px;margin-bottom:12px">
+      <div><label style="color:var(--fg-muted);margin:0">Nullifier</label><div id="ppwNullifier" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+      <div><label style="color:var(--fg-muted);margin:0">Secret</label><div id="ppwSecret" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+      <div><label style="color:var(--fg-muted);margin:0">Precommitment (computed)</label><div id="ppwPrecommitment" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+    </div>
+
+    <details style="margin-bottom:12px;font-size:12px">
+      <summary style="cursor:pointer;opacity:0.6">On-chain values (from logs)</summary>
+      <div style="display:grid;gap:8px;margin-top:8px">
+        <div class="section" style="margin:0">
+          <label style="margin:0;font-size:11px">Leaf Index</label>
+          <input type="number" id="ppwLeafIndex" class="amount-input" placeholder="e.g. 6404" style="font-size:12px">
+        </div>
+        <div class="section" style="margin:0">
+          <label style="margin:0;font-size:11px">Value (wei)</label>
+          <input type="text" id="ppwValue" class="amount-input" placeholder="e.g. 13108144559799548" style="font-size:12px">
+        </div>
+        <div class="section" style="margin:0">
+          <label style="margin:0;font-size:11px">Label</label>
+          <input type="text" id="ppwLabel" class="amount-input" placeholder="0x... or decimal" style="font-size:12px">
+        </div>
+        <div class="section" style="margin:0">
+          <label style="margin:0;font-size:11px">Commitment</label>
+          <input type="text" id="ppwCommitment" class="amount-input" placeholder="0x... or decimal" style="font-size:12px">
+        </div>
+        <div class="section" style="margin:0">
+          <label style="margin:0;font-size:11px">State Root</label>
+          <input type="text" id="ppwRoot" class="amount-input" placeholder="0x... or decimal" style="font-size:12px">
+        </div>
+      </div>
+    </details>
+
+    <div class="section" style="margin-bottom:12px">
+      <label style="margin:0;font-size:11px">Withdraw Amount (wei) <span style="opacity:0.5">— leave blank for full withdrawal</span></label>
+      <input type="text" id="ppwWithdrawAmt" class="amount-input" placeholder="Full deposit amount (leave blank)" style="font-size:12px">
+    </div>
+
+    <div class="section" style="margin-bottom:12px">
+      <label style="margin:0;font-size:11px">Recipient Address</label>
+      <input type="text" id="ppwRecipient" class="amount-input" placeholder="0x... (defaults to connected wallet)" style="font-size:12px">
+    </div>
+
+    <details style="margin-bottom:12px;font-size:12px">
+      <summary style="cursor:pointer;opacity:0.6">Etherscan API Key (for fetching tree data)</summary>
+      <div style="margin-top:6px">
+        <input type="text" id="ppwEtherscanKey" class="amount-input" placeholder="Paste your free key from etherscan.io/myapikey" style="font-size:11px"
+          oninput="localStorage.setItem('pp_etherscan_key',this.value.trim())">
+        <div style="font-size:10px;color:var(--fg-muted);margin-top:4px">Free to create. Stored in your browser only.</div>
+      </div>
+    </details>
+
+    <div id="ppwVerify" style="display:none;margin-bottom:12px;font-size:11px;padding:8px;border:1px solid var(--border-muted);background:var(--surface)">
+      <div id="ppwVerifyStatus"></div>
+    </div>
+
+    <button id="ppwWithdrawBtn" class="swap-btn" disabled onclick="ppwWithdraw()">Verify &amp; Prepare Withdrawal</button>
+
+    <div id="ppwResult" style="display:none;margin-top:12px" class="quote-info">
+      <div style="font-size:11px;font-weight:600;margin-bottom:6px">Withdrawal Data</div>
+      <textarea id="ppwResultText" readonly rows="6" style="width:100%;font-family:monospace;font-size:10px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
+    </div>
+  </div>
+</div>
+
+</div><!-- end privacyTab -->
 
 <!-- Status -->
 <div id="status" class="status"></div>
@@ -850,11 +1049,16 @@ body.modal-open { overflow: hidden; }
 <div class="site-footer">
   <a href="./domains/">Domains</a> &middot; <a href="./dao/">DAO</a> &middot; <a href="./ico/">ICO</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div style="margin-top:4px;font-size:11px;opacity:0.5;letter-spacing:0.5px">the most secure-by-default exchange that does everything onchain</div>
+  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
+  <div style="margin-top:2px;font-size:11px;letter-spacing:0.5px;opacity:0.5">powered by $zorg the governance reward token of the zfi stack</div>
+  <div style="margin-top:2px;font-size:11px;opacity:0.5"><a href="https://etherscan.io/token/0x00a6bA94BBb5474725515De88fE04F854f2dCb12" target="_blank" rel="noopener" style="color:inherit">0x00a6bA94BBb5474725515De88fE04F854f2dCb12</a></div>
 </div>
 
 <script src="./ethers.min.js"></script>
 <script src="./walletconnect.min.js"></script>
+<script src="./poseidon2.min.js"></script>
+<script src="./poseidon1.min.js"></script>
+<script src="./poseidon3.min.js"></script>
 <script>
 // ---- Dark mode ----
 function toggleDark() {
@@ -1316,6 +1520,9 @@ async function connectWithWallet(walletKey) {
     const preAmt = $('fromAmount')?.value?.trim();
     if (preAmt) handleAmountChange();
 
+    // Update Privacy tab if visible
+    if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
+
   } catch (error) {
     handleError(error);
   } finally {
@@ -1394,6 +1601,10 @@ function disconnectWallet() {
   _erc20Read.clear();
   _balanceCache.clear();
   _allowCache.clear();
+  _ppMasterKeys = null;
+
+  // Update Privacy tab
+  updatePPButton(); setText('ppBalance', '');
 }
 
 function showStatus(msg, type) {
@@ -2131,6 +2342,11 @@ const PERMIT_CONFIG = {
     domain: { name: 'Dai Stablecoin', version: '1', chainId: 1, verifyingContract: DAI_ADDRESS },
     routerFn: 'permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)',
   },
+  [BOLD_ADDRESS.toLowerCase()]: {
+    type: 'eip2612',
+    domain: { name: 'BOLD Stablecoin', version: '1', chainId: 1, verifyingContract: BOLD_ADDRESS },
+    routerFn: 'permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+  },
 };
 
 // ---- Generic EIP-2612 permit detection ----
@@ -2507,10 +2723,12 @@ async function handleAmountChange() {
     stopQuoteRefresh();
     setText(swapBtn, "Enter an amount");
     setDisabled(swapBtn, true);
+    syncSwapURL();
     return;
   }
+  syncSwapURL();
 
-  if (fromToken === toToken) {
+  if (fromToken === toToken && !_ppSwapEnabled) {
     toAmountEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
@@ -2518,14 +2736,20 @@ async function handleAmountChange() {
     setDisabled(swapBtn, true);
     return;
   }
-
-  // ZAMM cannot be purchased directly — use the zOrg stake path instead
-  if (tokens[toToken]?._isZammStake && !isDirectZOrgStake(fromToken, toToken) && !isRagequitPath(fromToken, toToken)) {
-    toAmountEl.value = "";
+  if (_ppSwapEnabled && fromToken === 'ETH' && toToken === 'ETH') {
+    toAmountEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, "Swap to zOrg instead (includes ZAMM)");
-    setDisabled(swapBtn, true);
+    setText(swapBtn, "Deposit ETH to Privacy Pool");
+    setDisabled(swapBtn, !connectedAddress);
+    return;
+  }
+  if (_ppSwapEnabled && fromToken === 'BOLD' && toToken === 'BOLD') {
+    toAmountEl.value = amtStr;
+    setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
+    setText(swapBtn, "Deposit BOLD to Privacy Pool");
+    setDisabled(swapBtn, !connectedAddress);
     return;
   }
 
@@ -2550,6 +2774,7 @@ async function handleAmountChange() {
       setShown('slippageRow', false);
       setShown('refreshRow', false);
       setShown(quoteInfoEl, true);
+      updateCalldataLink(null);
       stopQuoteRefresh(); // No refresh needed for 1:1
       setText(swapBtn, wrapDir === 'wrap' ? 'Wrap' : 'Unwrap');
       setDisabled(swapBtn, !connectedAddress);
@@ -2660,6 +2885,7 @@ async function handleAmountChange() {
     setShown('impactRow', !isLidoStake && !isRagequit);
     setShown('refreshRow', !isDirectPath);
     setShown(quoteInfoEl, true);
+    updateCalldataLink(quote.multicall);
     if (isDirectPath) stopQuoteRefresh(); else startQuoteRefresh();
     const isZOrgSell = isZOrgSellPath(fromSnap, toSnap);
     const isZammSell = isZammSellPath(fromSnap, toSnap);
@@ -2668,13 +2894,18 @@ async function handleAmountChange() {
       : isLidoStake ? "Stake"
       : isZOrgSwap(toSnap) ? "Swap & Stake"
       : isZOrgSell ? "Ragequit & Sell"
+      : _ppSwapEnabled ? "Swap & Deposit"
       : "Swap";
     if (fromData.address !== ZERO_ADDRESS) {
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
       if (isDirectStake) {
         // Check allowance against zOrg DAO for direct stake
-        const r = erc20Read(fromData.address);
-        const allowance = await r.allowance(connectedAddress, ZORG_DAO);
+        let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZORG_DAO);
+        if (allowance == null) {
+          const r = erc20Read(fromData.address);
+          allowance = await r.allowance(connectedAddress, ZORG_DAO);
+          cacheSetAllowance(fromData.address, connectedAddress, ZORG_DAO, allowance);
+        }
         if (allowance < amountIn) btnLabel = "Approve & " + btnLabel;
       } else if (isRagequit) {
         // No approval needed for ragequit — DAO burns msg.sender's shares directly
@@ -2841,6 +3072,8 @@ function onReceiverInput() {
   // Clear state
   _resolvedReceiver = null;
 
+  updateReceiverWarn();
+  syncSwapURL();
   // Direct 0x address
   if (!v) { el.style.display = "none"; return; }
   if (ethers.isAddress(v)) {
@@ -2887,6 +3120,9 @@ async function resolveReceiverName(name) {
       _resolvedReceiver = { input: name, address: resolved };
       el.style.color = "var(--fg-muted)";
       el.textContent = resolved;
+      // Re-quote so calldata uses the resolved receiver
+      const amt = $("fromAmount")?.value;
+      if (amt && +amt > 0) handleAmountChange();
     } else {
       _resolvedReceiver = null;
       el.style.color = "#c0392b";
@@ -2932,6 +3168,10 @@ function isRagequitPath(fromSym, toSym) {
 function isZammSellPath(fromSym, toSym) {
   return tokens[fromSym]?._isZammStake === true && !isZOrgSwap(toSym) && !isRagequitPath(fromSym, toSym);
 }
+// any token → ZAMM (buy via zAMM pool)
+function isZammBuyPath(fromSym, toSym) {
+  return tokens[toSym]?._isZammStake === true && !tokens[fromSym]?._isZOrg && !tokens[fromSym]?._isZammStake;
+}
 // zOrg → any token except ZAMM (ragequit 1:1 to ZAMM, then sell ZAMM)
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
@@ -2951,19 +3191,22 @@ function computeZammPoolKey() {
   );
 }
 
+const _zammPoolId = BigInt(ethers.keccak256(computeZammPoolKey()));
+const _zammPoolsIface = new ethers.Interface(ZAMM_POOLS_ABI);
+const _zammPoolsCalldata = _zammPoolsIface.encodeFunctionData("pools", [_zammPoolId]);
+
 async function getZammPoolReserves(rpc) {
-  const poolId = BigInt(ethers.keccak256(computeZammPoolKey()));
-  const zammHooked = new ethers.Contract(ZAMM_HOOKED, ZAMM_POOLS_ABI, rpc);
-  const zammHookless = new ethers.Contract(ZAMM_HOOKLESS, ZAMM_POOLS_ABI, rpc);
-  const callOpts = { blockTag: "latest" };
-  const [hookedRes, hooklessRes] = await Promise.all([
-    zammHooked.pools(poolId, callOpts).catch(() => [0n, 0n]),
-    zammHookless.pools(poolId, callOpts).catch(() => [0n, 0n]),
-  ]);
-  return {
-    hooked: { reserve0: BigInt(hookedRes[0]), reserve1: BigInt(hookedRes[1]) },
-    hookless: { reserve0: BigInt(hooklessRes[0]), reserve1: BigInt(hooklessRes[1]) },
+  const raw = await rpc.call({ to: MULTICALL3_ADDRESS, data: MULTICALL3_IFACE.encodeFunctionData("aggregate3", [[
+    [ZAMM_HOOKED, true, _zammPoolsCalldata],
+    [ZAMM_HOOKLESS, true, _zammPoolsCalldata],
+  ]]) });
+  const results = MULTICALL3_IFACE.decodeFunctionResult("aggregate3", raw)[0];
+  const decode = (r) => {
+    if (!r.success) return { reserve0: 0n, reserve1: 0n };
+    const d = _zammPoolsIface.decodeFunctionResult("pools", r.returnData);
+    return { reserve0: BigInt(d[0]), reserve1: BigInt(d[1]) };
   };
+  return { hooked: decode(results[0]), hookless: decode(results[1]) };
 }
 
 // ZAMM → ETH: sell ERC6909 ZORG for ETH (zeroForOne=false, reserveIn=reserve1, reserveOut=reserve0)
@@ -3123,6 +3366,85 @@ async function getZammSellQuote(fromAmountStr, fromSym, toSym) {
   });
 }
 
+// any token → ZAMM: buy ZAMM via zAMM pool (optionally tokenIn → ETH first, then ETH → ZAMM)
+async function getZammBuyQuote(fromAmountStr, fromSym, toSym) {
+  const fromData = tokens[fromSym];
+  const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
+  readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+  const receiver = getReceiver();
+  const ethIn = fromData.address === ZERO_ADDRESS;
+
+  return await quoteRPC.call(async (rpc) => {
+    const quoter = getQuoterContract(rpc);
+    const callOpts = { blockTag: "latest" };
+
+    let ethForSwap = amountIn;
+    let firstLegCalls = null;
+    let firstLegSource = null;
+    let msgValue = ethIn ? amountIn : 0n;
+
+    // Non-ETH input: route tokenIn → ETH first via quoter (output stays in router)
+    if (!ethIn) {
+      const r = await quoter.buildBestSwapViaETHMulticall(
+        ZROUTER_ADDRESS, connectedAddress, false,
+        fromData.address, ZERO_ADDRESS,
+        amountIn, BigInt(slippageBps), deadline, 0, 0, ZERO_ADDRESS, callOpts
+      );
+      const isTwoHop = r.b.amountOut > 0n;
+      ethForSwap = isTwoHop ? r.b.amountOut : r.a.amountOut;
+      firstLegCalls = Array.from(r.calls);
+      firstLegSource = AMM_NAMES[r.a.source] || "Unknown";
+      msgValue = 0n;
+    }
+
+    // Quote both zAMM pools and pick the better rate
+    const reserves = await getZammPoolReserves(rpc);
+    // zeroForOne=true → reserveIn=reserve0 (ETH), reserveOut=reserve1 (ZAMM)
+    const hookedOut = getZammAmountOut(ethForSwap, reserves.hooked.reserve0, reserves.hooked.reserve1, 100n);
+    const hooklessOut = getZammAmountOut(ethForSwap, reserves.hookless.reserve0, reserves.hookless.reserve1, 100n);
+    const useHookless = hooklessOut >= hookedOut;
+    const zammOut = useHookless ? hooklessOut : hookedOut;
+    const zammDeadline = useHookless ? ethers.MaxUint256 : deadline;
+    const zammSource = useHookless ? "zAMM₀" : "zAMM";
+
+    const slipOut = zammOut * (10000n - BigInt(slippageBps)) / 10000n;
+    const calls = [];
+
+    // If non-ETH: include first leg calls (tokenIn → ETH)
+    if (firstLegCalls) {
+      for (const c of firstLegCalls) calls.push(c);
+    }
+
+    // swapVZ: ETH → ZAMM (zeroForOne=true)
+    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
+      ZROUTER_ADDRESS, false, 100,
+      ZERO_ADDRESS, ZORG_TOKEN, 0, ZORG_ID,
+      ethIn ? 0 : ethForSwap, slipOut, zammDeadline
+    ]));
+
+    // Sweep ERC20 ZAMM to receiver
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZORG_PAY_TOKEN, 0, 0, receiver]));
+    // Safety sweep: remaining ETH back to user
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+    // Safety sweep: input token back to user (if non-ETH)
+    if (!ethIn) {
+      calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [fromData.address, 0, 0, receiver]));
+    }
+
+    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+    return {
+      expectedOutput: zammOut,
+      multicall, calls, msgValue,
+      isTwoHop: !ethIn, isSplit: false, splitLegs: null,
+      sourceA: ethIn ? zammSource : firstLegSource,
+      sourceB: ethIn ? null : zammSource,
+      allQuotes: [{ source: zammSource, sourceId: 2, feeBps: 100n, amountIn, amountOut: zammOut }],
+    };
+  });
+}
+
 // zOrg → any token (except ZAMM, which is ragequit): ragequit (1:1) then sell ZAMM
 // This is a two-step flow: ragequit tx first, then ZAMM sell tx
 async function getZOrgSellQuote(fromAmountStr, fromSym, toSym) {
@@ -3183,27 +3505,10 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
     }
 
     // Quote both zAMM pools (hooked & hookless) and pick the better rate
-    // PoolKey: (id0=0, id1=ZORG_ID, token0=ZERO_ADDRESS, token1=ZORG_TOKEN, feeOrHook=100)
-    // sorted: address(0) < ZORG_TOKEN, so zeroForOne=true (ETH in, ZORG out)
-    const poolKey = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["uint256","uint256","address","address","uint256"],
-      [0, ZORG_ID, ZERO_ADDRESS, ZORG_TOKEN, 100]
-    );
-    const poolId = BigInt(ethers.keccak256(poolKey));
-    const zammHooked = new ethers.Contract(ZAMM_HOOKED, ZAMM_POOLS_ABI, rpc);
-    const zammHookless = new ethers.Contract(ZAMM_HOOKLESS, ZAMM_POOLS_ABI, rpc);
-    const [hookedRes, hooklessRes] = await Promise.all([
-      zammHooked.pools(poolId, callOpts).catch(() => [0n, 0n]),
-      zammHookless.pools(poolId, callOpts).catch(() => [0n, 0n]),
-    ]);
-    // zeroForOne=true → reserveIn=reserve0, reserveOut=reserve1
-    function getAmountOut(amtIn, resIn, resOut, feeBps) {
-      if (amtIn === 0n || resIn === 0n || resOut === 0n) return 0n;
-      const amtFee = amtIn * (10000n - feeBps);
-      return (amtFee * resOut) / (resIn * 10000n + amtFee);
-    }
-    const hookedOut = getAmountOut(ethForSwap, BigInt(hookedRes[0]), BigInt(hookedRes[1]), 100n);
-    const hooklessOut = getAmountOut(ethForSwap, BigInt(hooklessRes[0]), BigInt(hooklessRes[1]), 100n);
+    // zeroForOne=true → reserveIn=reserve0 (ETH), reserveOut=reserve1 (ZAMM)
+    const reserves = await getZammPoolReserves(rpc);
+    const hookedOut = getZammAmountOut(ethForSwap, reserves.hooked.reserve0, reserves.hooked.reserve1, 100n);
+    const hooklessOut = getZammAmountOut(ethForSwap, reserves.hookless.reserve0, reserves.hookless.reserve1, 100n);
     const useHookless = hooklessOut >= hookedOut;
     const zammOut = useHookless ? hooklessOut : hookedOut;
     // deadline=MaxUint256 signals router to use hookless ZAMM_0
@@ -3283,6 +3588,11 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   // zOrg special path: swap + stake
   if (isZOrgSwap(toSym)) {
     return await getZOrgQuote(fromAmountStr, fromSym);
+  }
+
+  // ZAMM buy path: any token → ZAMM via zAMM pool
+  if (isZammBuyPath(fromSym, toSym)) {
+    return await getZammBuyQuote(fromAmountStr, fromSym, toSym);
   }
 
   // ZAMM sell path: ZAMM → any token via zAMM pool
@@ -3542,7 +3852,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
           const lidoCall = isStETH
             ? ROUTER_IFACE.encodeFunctionData('exactETHToSTETH', [receiver])
             : ROUTER_IFACE.encodeFunctionData('exactETHToWSTETH', [receiver]);
-          const sweepEth = ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]);
+          const sweepEth = ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]);
           const calls = [lidoCall, sweepEth];
           const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
           result.expectedOutput = l.amountOut;
@@ -3852,10 +4162,12 @@ function requestQuote(amtStr, fromSnap, toSnap) {
 
 // ---- Swap execution ----
 let _swapBusy = false;
+let _swapResetTimer = null;
 
 async function executeSwap() {
   if (_swapBusy) return;
   _swapBusy = true;
+  if (_swapResetTimer) { clearTimeout(_swapResetTimer); _swapResetTimer = null; }
   stopQuoteRefresh();
 
   const swapBtn = $("swapBtn");
@@ -3871,8 +4183,17 @@ async function executeSwap() {
       showStatus("Please enter an amount", "error");
       return;
     }
-    if (fromToken === toToken) {
+    if (fromToken === toToken && !_ppSwapEnabled) {
       showStatus("Select different tokens", "error");
+      return;
+    }
+    // Direct deposit (no swap needed — from === to for the PP asset)
+    if (_ppSwapEnabled && fromToken === toToken && (fromToken === 'ETH' || fromToken === 'BOLD')) {
+      _ppSelectedAsset = fromToken;
+      ppSyncAssetUI(fromToken);
+      $('ppAmount').value = amtStr;
+      switchTab('privacy');
+      updatePPButton();
       return;
     }
     const receiverRaw = ($("receiverAddress")?.value || "").trim();
@@ -3903,7 +4224,7 @@ async function executeSwap() {
           wethContract.deposit({ value: amountIn }),
           'Confirm wrap in your wallet'
         );
-        swapBtn.innerHTML = `Confirming wrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        swapBtn.innerHTML = `Confirming wrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
         const receipt = await waitForTx(tx);
         if (receipt.status === 0) throw new Error("Wrap transaction failed");
       } else {
@@ -3913,7 +4234,7 @@ async function executeSwap() {
           wethContract.withdraw(amountIn),
           'Confirm unwrap in your wallet'
         );
-        swapBtn.innerHTML = `Confirming unwrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        swapBtn.innerHTML = `Confirming unwrap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
         const receipt = await waitForTx(tx);
         if (receipt.status === 0) throw new Error("Unwrap transaction failed");
       }
@@ -3922,7 +4243,7 @@ async function executeSwap() {
       $("fromAmount").value = "";
       $("toAmount").value = "";
       $("quoteInfo").style.display = "none";
-      setTimeout(() => {
+      _swapResetTimer = setTimeout(() => {
         updateBalances();
         swapBtn.textContent = "Enter an amount";
         swapBtn.disabled = true;
@@ -3965,7 +4286,7 @@ async function executeSwap() {
           erc20W.approve(ZORG_DAO, ethers.MaxUint256),
           'Approve ZAMM spending for zOrg DAO in your wallet'
         );
-        swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
         const rc = await waitForTx(approveTx);
         if (rc.status === 0) throw new Error("Approval transaction failed");
       }
@@ -3980,7 +4301,7 @@ async function executeSwap() {
         }),
         'Confirm stake in your wallet'
       );
-      swapBtn.innerHTML = `Confirming stake... <a href="https://etherscan.io/tx/${escAttr(stakeTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+      swapBtn.innerHTML = `Confirming stake... <a href="https://etherscan.io/tx/${escAttr(stakeTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
       const receipt = await waitForTx(stakeTx);
       if (receipt.status === 0) throw new Error("Stake transaction failed");
@@ -3990,7 +4311,7 @@ async function executeSwap() {
       $("toAmount").value = "";
       $("quoteInfo").style.display = "none";
       stopQuoteRefresh();
-      setTimeout(() => {
+      _swapResetTimer = setTimeout(() => {
         updateBalances();
         swapBtn.textContent = "Enter an amount";
         swapBtn.disabled = true;
@@ -4017,7 +4338,7 @@ async function executeSwap() {
         }),
         'Confirm ragequit in your wallet'
       );
-      swapBtn.innerHTML = `Confirming ragequit... <a href="https://etherscan.io/tx/${escAttr(rqTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+      swapBtn.innerHTML = `Confirming ragequit... <a href="https://etherscan.io/tx/${escAttr(rqTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
       const receipt = await waitForTx(rqTx);
       if (receipt.status === 0) throw new Error("Ragequit transaction failed");
@@ -4027,7 +4348,7 @@ async function executeSwap() {
       $("toAmount").value = "";
       $("quoteInfo").style.display = "none";
       stopQuoteRefresh();
-      setTimeout(() => {
+      _swapResetTimer = setTimeout(() => {
         updateBalances();
         swapBtn.textContent = "Enter an amount";
         swapBtn.disabled = true;
@@ -4055,7 +4376,7 @@ async function executeSwap() {
         }),
         'Step 1/2: Confirm ragequit in your wallet'
       );
-      swapBtn.innerHTML = `Confirming ragequit... <a href="https://etherscan.io/tx/${escAttr(rqTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+      swapBtn.innerHTML = `Confirming ragequit... <a href="https://etherscan.io/tx/${escAttr(rqTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
       const rqReceipt = await waitForTx(rqTx);
       if (rqReceipt.status === 0) throw new Error("Ragequit transaction failed");
 
@@ -4102,7 +4423,7 @@ async function executeSwap() {
               await waitForTx(resetTx);
             }
             const approveTx = await wcTransaction(erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256), 'Approve ZAMM for swap');
-            swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+            swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
             const rc = await waitForTx(approveTx);
             if (rc.status === 0) throw new Error("Approval failed");
             cacheSetAllowance(zammAddr, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
@@ -4118,7 +4439,7 @@ async function executeSwap() {
           }),
           'Step 2/2: Confirm swap in your wallet'
         );
-        swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+        swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
         const swapReceipt = await waitForTx(swapTx);
         if (swapReceipt.status === 0) throw new Error("Swap transaction failed");
       } catch (step2Err) {
@@ -4134,7 +4455,7 @@ async function executeSwap() {
         $("toAmount").value = "";
         $("quoteInfo").style.display = "none";
         stopQuoteRefresh();
-        setTimeout(() => {
+        _swapResetTimer = setTimeout(() => {
           updateBalances();
           swapBtn.textContent = "Enter an amount";
           swapBtn.disabled = true;
@@ -4147,7 +4468,7 @@ async function executeSwap() {
       $("toAmount").value = "";
       $("quoteInfo").style.display = "none";
       stopQuoteRefresh();
-      setTimeout(() => {
+      _swapResetTimer = setTimeout(() => {
         updateBalances();
         swapBtn.textContent = "Enter an amount";
         swapBtn.disabled = true;
@@ -4249,7 +4570,7 @@ async function executeSwap() {
             erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
             'Approve token spending in your wallet'
           );
-          swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+          swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
           const rc = await waitForTx(approveTx);
           if (rc.status === 0) throw new Error("Approval transaction failed");
           const fresh = await getQuote(amtStr, fromSnap, toSnap);
@@ -4258,6 +4579,128 @@ async function executeSwap() {
           cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
         }
       }
+    }
+
+    // ---- Privacy Pool deposit path ----
+    if (_ppSwapEnabled && (toSnap === 'ETH' || toSnap === 'BOLD')) {
+      const ppAsset = toSnap; // 'ETH' or 'BOLD'
+      const ppIsBOLD = ppAsset === 'BOLD';
+      const ppCfg = ppIsBOLD ? _ppConfigBold : _ppConfig;
+      swapBtn.textContent = "Preparing privacy deposit...";
+
+      // Re-quote with to=ZROUTER so output stays in router
+      const ppQuote = await withRetry(() => quoteRPC.call(async (rpc) => {
+        const quoter = getQuoterContract(rpc);
+        const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+        return quoter.buildBestSwapViaETHMulticall(
+          ZROUTER_ADDRESS, connectedAddress, false,
+          fromData.address, ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS,
+          amountIn, BigInt(slippageBps), deadline,
+          0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+        );
+      }));
+
+      const minOut = ppQuote.a.amountOut > 0n
+        ? (ppQuote.b.amountOut > 0n ? ppQuote.b.amountOut : ppQuote.a.amountOut)
+        : quote.expectedOutput;
+      // Apply slippage to get the amount we'll deposit (conservative)
+      const depositAmount = minOut * (10000n - BigInt(slippageBps)) / 10000n;
+
+      if (ppCfg && depositAmount < ppCfg.minimumDepositAmount) {
+        showStatus(`Output below PP minimum deposit of ${ethers.formatEther(ppCfg.minimumDepositAmount)} ${ppAsset}`, "error");
+        return;
+      }
+
+      swapBtn.textContent = "Deriving keys...";
+      const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
+      const _ppScope = ppComputeScope(ppAsset);
+      const _ppDepositIdx = ppGetDepositIndex(connectedAddress, _ppScope);
+      const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, _ppScope, _ppDepositIdx);
+
+      // Build multicall: [permit?] + swap calls + execute(PP deposit) + sweep excess
+      const swapCalls = ppQuote.calls ? Array.from(ppQuote.calls) : decodeMulticallCalls(ppQuote.multicall);
+      let depositCalldata, executeCall, sweepCalls;
+      if (ppIsBOLD) {
+        // ERC20 deposit: deposit(address asset, uint256 value, uint256 precommitment), value=0 (no ETH)
+        depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [BOLD_ADDRESS, depositAmount, precommitment]);
+        executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, depositCalldata]);
+        // Sweep excess BOLD + ETH remainder (ETH dust possible when input is ETH→BOLD two-hop)
+        sweepCalls = [
+          ROUTER_IFACE.encodeFunctionData('sweep', [BOLD_ADDRESS, 0, 0, connectedAddress]),
+          ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]),
+        ];
+      } else {
+        // ETH deposit: deposit(uint256 precommitment) payable, value=depositAmount
+        depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(uint256)', [precommitment]);
+        executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, depositAmount, depositCalldata]);
+        sweepCalls = [ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress])];
+      }
+
+      // If the approval flow embedded a permit/permit2 call in txData, extract it
+      // and prepend to the PP multicall (permit was signed for this tx, must be included)
+      const _permitSelectors = new Set([
+        ROUTER_IFACE.getFunction('permit').selector,
+        ROUTER_IFACE.getFunction('permitDAI').selector,
+        ROUTER_IFACE.getFunction('permit2TransferFrom').selector,
+      ]);
+      let permitPrefix = [];
+      if (txData !== quote.multicall) {
+        const modCalls = decodeMulticallCalls(txData);
+        if (modCalls.length > 0 && _permitSelectors.has(modCalls[0].slice(0, 10))) {
+          permitPrefix = [modCalls[0]];
+        }
+      }
+      const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, ...swapCalls, executeCall, ...sweepCalls]]);
+
+      swapBtn.textContent = "Confirm in wallet...";
+      const ppTxValue = ppQuote.msgValue ?? (fromData.address === ZERO_ADDRESS ? amountIn : 0n);
+
+      const swapTx = await wcTransaction(
+        signer.sendTransaction({
+          to: ZROUTER_ADDRESS,
+          data: ppMulticall,
+          value: ppTxValue,
+        }),
+        `Confirm swap & ${ppAsset} privacy deposit`
+      );
+      // Increment index immediately after tx submitted to prevent reuse if tab closes
+      ppSetDepositIndex(connectedAddress, _ppScope, _ppDepositIdx + 1);
+
+      // Show partial note immediately (nullifier+secret)
+      const partialNote = buildPPNote(nullifier, secret, null, ppAsset);
+      $('ppSwapNoteText').value = partialNote;
+      setShown('ppSwapNoteBox', true);
+
+      // Save partial note to localStorage
+      const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+      const noteIdx = saved.length;
+      saved.push({ note: partialNote, amount: depositAmount.toString(), asset: ppAsset, timestamp: Date.now(), txHash: swapTx.hash });
+      localStorage.setItem('pp_notes', JSON.stringify(saved));
+      renderPPNotes();
+
+      swapBtn.innerHTML = `Confirming deposit... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+      const receipt = await waitForTx(swapTx);
+      if (receipt.status === 0) throw new Error("Swap & deposit transaction failed");
+
+      // Parse deposit events to get value, label, leafIndex, commitment
+      const depositInfo = parsePPDepositReceipt(receipt);
+      const fullNote = buildPPNote(nullifier, secret, depositInfo, ppAsset);
+      $('ppSwapNoteText').value = fullNote;
+      // Update localStorage with full note
+      const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+      if (updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+
+      swapBtn.textContent = "Deposit Complete! Save your note.";
+      $("fromAmount").value = "";
+      $("toAmount").value = "";
+      $("quoteInfo").style.display = "none";
+      stopQuoteRefresh();
+      _swapResetTimer = setTimeout(() => {
+        updateBalances();
+        swapBtn.textContent = "Enter an amount";
+        swapBtn.disabled = true;
+      }, 3000);
+      return;
     }
 
     const isLidoExec = (quote.sourceA === "Lido" || quote.sourceA === "Rocket Pool") && !quote.isSplit && !quote.isTwoHop;
@@ -4273,7 +4716,7 @@ async function executeSwap() {
       }),
       isLidoExec ? 'Confirm stake in your wallet' : 'Confirm swap in your wallet'
     );
-    swapBtn.innerHTML = `Confirming ${actionLabel.toLowerCase()}... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:var(--btn-fg);text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+    swapBtn.innerHTML = `Confirming ${actionLabel.toLowerCase()}... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
     const receipt = await waitForTx(swapTx);
     if (receipt.status === 0) throw new Error(isLidoExec ? "Stake transaction failed" : "Swap transaction failed");
@@ -4283,7 +4726,7 @@ async function executeSwap() {
     $("toAmount").value = "";
     $("quoteInfo").style.display = "none";
     stopQuoteRefresh();
-    setTimeout(() => {
+    _swapResetTimer = setTimeout(() => {
       updateBalances();
       swapBtn.textContent = "Enter an amount";
       swapBtn.disabled = true;
@@ -4297,7 +4740,7 @@ async function executeSwap() {
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
 
     swapBtn.textContent = msg;
-    setTimeout(() => { handleAmountChange(); }, 2000);
+    _swapResetTimer = setTimeout(() => { handleAmountChange(); }, 2000);
   } finally {
     _swapBusy = false;
   }
@@ -4306,6 +4749,7 @@ async function executeSwap() {
 // ---- Token swap direction ----
 function swapTokens() {
   if (fromToken === toToken) return;
+  if (_ppSwapEnabled) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pool deposit`, "error"); return; }
   const prevFrom = fromToken, prevTo = toToken;
   const fAmt = $("fromAmount").value;
   const tAmt = $("toAmount").value;
@@ -4340,28 +4784,41 @@ function computeZammPoolId(addr0, addr1, id0, id1, fee) {
   return BigInt(ethers.keccak256(poolKey));
 }
 
+const COINGECKO_SLUGS = {
+  ETH: "ethereum", WETH: "weth", BOLD: "bold-stablecoin", LUSD: "liquity-usd",
+  DAI: "dai", USDC: "usdc", USDT: "tether", WBTC: "wrapped-bitcoin",
+  stETH: "lido-staked-ether", wstETH: "wrapped-steth", rETH: "rocket-pool-eth",
+  PNKSTR: "kleros",
+};
+
 function updateChartLink(quote) {
   const link = $("chartLink");
   const zammRe = /zAMM|V4 Hooked/;
   const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
     || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
-  if (!hasZamm) {
-    link.style.display = "none";
+  if (hasZamm) {
+    // Determine pool ID: for zOrg route use ZORG_ID; otherwise standard ERC20 pool
+    const fromAddr = tokens[fromToken].address;
+    const toAddr = tokens[toToken].address;
+    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
+    let poolId;
+    if (isZorg) {
+      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
+    } else {
+      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+    }
+    link.href = "./chart/#/" + poolId.toString();
+    link.style.display = "inline-flex";
     return;
   }
-  // Determine pool ID: for zOrg route use ZORG_ID; otherwise standard ERC20 pool
-  const fromAddr = tokens[fromToken].address;
-  const toAddr = tokens[toToken].address;
-  const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
-  let poolId;
-  if (isZorg) {
-    poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
+  // Non-zAMM: link to CoinGecko for the to-token (or from-token if to is ETH)
+  const slug = COINGECKO_SLUGS[toToken] || COINGECKO_SLUGS[fromToken];
+  if (slug) {
+    link.href = "https://www.coingecko.com/en/coins/" + slug;
+    link.style.display = "inline-flex";
   } else {
-    // Standard zAMM pool between the two tokens
-    poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+    link.style.display = "none";
   }
-  link.href = "./chart/#/" + poolId.toString();
-  link.style.display = "inline-flex";
 }
 
 // ---- Quick-pick popular tokens ----
@@ -4391,6 +4848,39 @@ function renderQuickTokens() {
   }
 }
 
+// Sync URL bar so users can copy/share the current swap
+function syncSwapURL() {
+  const _sp = new URLSearchParams();
+  _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
+  const _fa = $("fromAmount");
+  if (_fa && _fa.value && +_fa.value > 0) _sp.set('amt', _fa.value);
+  const _rv = ($("receiverAddress")?.value || "").trim();
+  if (_rv) _sp.set('recv', _rv);
+  history.replaceState(null, '', '?' + _sp.toString());
+}
+
+function updateCalldataLink(multicall) {
+  const el = $("calldataLink");
+  if (!el) return;
+  if (!multicall) { el.style.display = 'none'; return; }
+  el.href = `https://calldata.swiss-knife.xyz/decoder?calldata=${multicall}&chainId=1&address=${ZROUTER_ADDRESS}`;
+  el.style.display = '';
+}
+
+function updateReceiverWarn() {
+  const el = $("receiverWarn");
+  if (!el) return;
+  const recv = ($("receiverAddress")?.value || "").trim();
+  if (!recv) { el.style.display = 'none'; return; }
+  const isDirect = isDirectZOrgStake(fromToken, toToken) || isRagequitPath(fromToken, toToken);
+  if (isDirect) {
+    el.textContent = "Custom receiver not supported for direct DAO stake/ragequit — output goes to your wallet";
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 // ---- Token display ----
 function updateTokenDisplay() {
   const fSym = fromToken, tSym = toToken;
@@ -4399,6 +4889,8 @@ function updateTokenDisplay() {
   setHTML("toTokenIcon", iconForSymbol(tSym));
   setText("toTokenSymbol", tokens[tSym].symbol);
   renderQuickTokens();
+  updateReceiverWarn();
+  syncSwapURL();
 }
 
 // ---- Token modal ----
@@ -4455,6 +4947,7 @@ function selectToken(symbol) {
     if (symbol === toToken) toToken = fromToken;
     fromToken = symbol;
   } else {
+    if (_ppSwapEnabled) { closeTokenModal(); showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pool deposit`, "error"); return; }
     if (symbol === fromToken) fromToken = toToken;
     toToken = symbol;
   }
@@ -4535,6 +5028,29 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
+  // Deeplink: ?from=eth&to=bold&amt=1.5 (lowercase — wei.is gateway mangles mixed-case params)
+  const _urlp = new URLSearchParams(window.location.search);
+  const _findToken = (s) => { const u = (s||'').toUpperCase(); return Object.keys(tokens).find(k => k.toUpperCase() === u); };
+  const _dlFrom = _findToken(_urlp.get('from'));
+  const _dlTo = _findToken(_urlp.get('to'));
+  if (_dlFrom) fromToken = _dlFrom;
+  if (_dlTo) toToken = _dlTo;
+  if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
+  const _dlAmt = _urlp.get('amt');
+  if (_dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) {
+    const fa = $("fromAmount");
+    if (fa) { fa.value = _dlAmt; setTimeout(() => handleAmountChange(), 50); }
+  }
+  const _dlRecv = (_urlp.get('recv') || '').trim();
+  if (_dlRecv) {
+    const ri = $("receiverAddress");
+    if (ri) { ri.value = _dlRecv; setTimeout(() => onReceiverInput(), 50); }
+    // Expand the receiver accordion
+    const rw = $("receiverWrap");
+    if (rw) { rw.style.maxHeight = '80px'; rw.style.opacity = '1'; }
+    const chev = document.querySelector('.receiver-toggle .chevron');
+    if (chev) chev.textContent = '\u25BC';
+  }
   updateTokenDisplay();
   initTokenListClick();
   initTokenSearch();
@@ -4567,6 +5083,904 @@ window.addEventListener("load", () => {
     }
   }, 100);
 });
+
+// ---- Privacy Pools (0xbow) ----
+const PP_ENTRYPOINT = "0x6818809eefce719e480a7526d76bd3e561526b46";
+const PP_ENTRYPOINT_ABI = [
+  "function deposit(uint256) payable returns (uint256)",
+  "function deposit(address,uint256,uint256) returns (uint256)",
+  "function assetConfig(address) view returns (address pool, uint256 minimumDepositAmount, uint256 vettingFeeBPS, uint256 maxRelayFeeBPS)"
+];
+const PP_POOL_EVENTS = new ethers.Interface([
+  "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
+  "event LeafInserted(uint256 _index, uint256 _leaf, uint256 _root)"
+]);
+const SNARK_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+// Wallet-derived key derivation (privacypools.com compatible)
+let _ppMasterKeys = null; // { masterNullifier, masterSecret, address }
+
+async function ppDeriveWalletSeed(signer, address) {
+  const domain = { name: 'Privacy Pools', version: '1' };
+  const types = {
+    DeriveSeed: [
+      { name: 'action', type: 'string' },
+      { name: 'context', type: 'string' },
+      { name: 'addressHash', type: 'bytes32' },
+    ]
+  };
+  const message = {
+    action: 'Derive Account Seed',
+    context: 'privacy-pools/wallet-seed:v2',
+    addressHash: ethers.keccak256(address),
+  };
+  const sig = await signer.signTypedData(domain, types, message);
+  const sigBytes = ethers.getBytes(sig);
+  const r = sigBytes.slice(0, 32);
+
+  // HKDF-SHA256: IKM=r, salt=address bytes, info="privacy-pools/wallet-seed:v2", len=32
+  const ikm = await crypto.subtle.importKey('raw', r, 'HKDF', false, ['deriveBits']);
+  const hkdfBits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: ethers.getBytes(address), info: new TextEncoder().encode('privacy-pools/wallet-seed:v2') },
+    ikm, 256
+  );
+  return ethers.Mnemonic.fromEntropy(new Uint8Array(hkdfBits));
+}
+
+function ppDeriveMasterKeys(mnemonic) {
+  const key1 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/60'/0'/0/0").privateKey;
+  const key2 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/60'/1'/0/0").privateKey;
+  // Match SDK's bytesToNumber truncation: viem converts 32-byte key to JS Number (53-bit precision loss)
+  // then to BigInt. We must replicate this for cross-compatibility with privacypools.com.
+  const masterNullifier = poseidon1([BigInt(Number(BigInt(key1)))]);
+  const masterSecret = poseidon1([BigInt(Number(BigInt(key2)))]);
+  return { masterNullifier, masterSecret };
+}
+
+function ppDeriveDepositKeys(masterNullifier, masterSecret, scope, index) {
+  const nullifier = poseidon3([masterNullifier, scope, BigInt(index)]);
+  const secret = poseidon3([masterSecret, scope, BigInt(index)]);
+  const precommitment = poseidon2([nullifier, secret]);
+  return { nullifier, secret, precommitment };
+}
+
+async function ppEnsureMasterKeys() {
+  if (_ppMasterKeys && _ppMasterKeys.address === connectedAddress) return _ppMasterKeys;
+  const mnemonic = await ppDeriveWalletSeed(signer, connectedAddress);
+  const keys = ppDeriveMasterKeys(mnemonic);
+  _ppMasterKeys = { ...keys, address: connectedAddress };
+  return _ppMasterKeys;
+}
+
+function ppGetDepositIndex(address, scope) {
+  const key = `pp_deposit_idx_${address.toLowerCase()}_${scope}`;
+  return parseInt(localStorage.getItem(key) || '0', 10);
+}
+
+function ppSetDepositIndex(address, scope, index) {
+  const key = `pp_deposit_idx_${address.toLowerCase()}_${scope}`;
+  localStorage.setItem(key, index.toString());
+}
+
+const PP_ETH_POOL = '0xF241d57C6DebAe225c0F2e6eA1529373C9A9C9fB';
+const PP_ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+const PP_BOLD_POOL = '0xb4b5Fd38Fd4788071d7287e3cB52948e0d10b23E';
+
+function ppComputeScope(asset) {
+  const isETH = (!asset || asset === 'ETH');
+  const poolAddress = isETH ? (_ppConfig?.pool || PP_ETH_POOL) : (_ppConfigBold?.pool || PP_BOLD_POOL);
+  const assetAddress = isETH ? PP_ETH_ASSET : BOLD_ADDRESS;
+  return BigInt(ethers.keccak256('0x' +
+    poolAddress.slice(2).toLowerCase() +
+    '0000000000000000000000000000000000000000000000000000000000000001' +
+    assetAddress.slice(2).toLowerCase()
+  )) % SNARK_FIELD;
+}
+
+let _ppConfig = null; // { pool, minimumDepositAmount, vettingFeeBPS }
+let _ppConfigBold = null; // { pool, minimumDepositAmount, vettingFeeBPS }
+let _ppSelectedAsset = 'ETH'; // 'ETH' or 'BOLD'
+let _ppSwapEnabled = false;
+let _ppSavedToToken = null; // saved toToken before PP lock
+
+const PP_DEPOSIT_IFACE = new ethers.Interface([
+  "function deposit(uint256) payable returns (uint256)",
+  "function deposit(address,uint256,uint256) returns (uint256)"
+]);
+
+// Parse Privacy Pool deposit events from a tx receipt to get value, label, leafIndex, commitment
+function parsePPDepositReceipt(receipt) {
+  let value, label, commitment, leafIndex, root;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
+      if (parsed.name === 'Deposited') {
+        commitment = parsed.args._commitment;
+        label = parsed.args._label;
+        value = parsed.args._value;
+      } else if (parsed.name === 'LeafInserted') {
+        leafIndex = parsed.args._index;
+        root = parsed.args._root;
+      }
+    } catch {}
+  }
+  return { value, label, commitment, leafIndex, root };
+}
+
+// Build the full note JSON with all fields needed for withdrawal
+function buildPPNote(nullifier, secret, depositInfo, asset) {
+  const note = {
+    nullifier: '0x' + nullifier.toString(16).padStart(64, '0'),
+    secret: '0x' + secret.toString(16).padStart(64, '0'),
+  };
+  if (asset && asset !== 'ETH') note.asset = asset;
+  if (depositInfo) {
+    if (depositInfo.value != null) note.value = depositInfo.value.toString();
+    if (depositInfo.label != null) note.label = '0x' + BigInt(depositInfo.label).toString(16).padStart(64, '0');
+    if (depositInfo.leafIndex != null) note.leafIndex = Number(depositInfo.leafIndex);
+    if (depositInfo.commitment != null) note.commitment = '0x' + BigInt(depositInfo.commitment).toString(16).padStart(64, '0');
+    if (depositInfo.root != null) note.root = '0x' + BigInt(depositInfo.root).toString(16).padStart(64, '0');
+  }
+  return JSON.stringify(note);
+}
+
+function ppSyncAssetUI(asset) {
+  // Privacy tab buttons
+  const ethBtn = $('ppAssetETH'), boldBtn = $('ppAssetBOLD');
+  if (ethBtn) { ethBtn.style.background = asset === 'ETH' ? 'var(--btn-bg)' : 'var(--surface)'; ethBtn.style.color = asset === 'ETH' ? 'var(--btn-fg)' : 'var(--fg-muted)'; ethBtn.style.borderColor = asset === 'ETH' ? 'var(--btn-bg)' : 'transparent'; }
+  if (boldBtn) { boldBtn.style.background = asset === 'BOLD' ? 'var(--btn-bg)' : 'var(--surface)'; boldBtn.style.color = asset === 'BOLD' ? 'var(--btn-fg)' : 'var(--fg-muted)'; boldBtn.style.borderColor = asset === 'BOLD' ? 'var(--btn-bg)' : 'transparent'; }
+  // Swap tab buttons
+  const sEth = $('ppSwapAssetETH'), sBold = $('ppSwapAssetBOLD');
+  if (sEth) { sEth.style.background = asset === 'ETH' ? 'var(--btn-bg)' : 'var(--surface)'; sEth.style.color = asset === 'ETH' ? 'var(--btn-fg)' : 'var(--fg-muted)'; sEth.style.borderColor = asset === 'ETH' ? 'var(--btn-bg)' : 'transparent'; }
+  if (sBold) { sBold.style.background = asset === 'BOLD' ? 'var(--btn-bg)' : 'var(--surface)'; sBold.style.color = asset === 'BOLD' ? 'var(--btn-fg)' : 'var(--fg-muted)'; sBold.style.borderColor = asset === 'BOLD' ? 'var(--btn-bg)' : 'transparent'; }
+  setText('ppAmountLabel', `Amount (${asset})`);
+  setText('ppMinUnit', asset);
+}
+
+function ppSelectAsset(asset) {
+  _ppSelectedAsset = asset;
+  ppSyncAssetUI(asset);
+  loadPPConfig();
+  updatePPBalance();
+  updatePPButton();
+  if (_ppSwapEnabled) {
+    if (toToken !== asset) { toToken = asset; updateTokenDisplay(); }
+    handleAmountChange();
+  }
+}
+
+function ppSwapSelectAsset(asset) {
+  _ppSelectedAsset = asset;
+  ppSyncAssetUI(asset);
+  if (toToken !== asset) { toToken = asset; updateTokenDisplay(); }
+  handleAmountChange();
+  if (!_ppConfig) loadPPConfig();
+}
+
+function togglePPSwap() {
+  const w = $('ppSwapWrap');
+  const open = w.style.maxHeight === '0px';
+  w.style.maxHeight = open ? '120px' : '0px';
+  w.style.opacity = open ? '1' : '0';
+  $('ppSwapChevron').textContent = open ? '\u25BC' : '\u25B6';
+}
+
+function onPPSwapToggle() {
+  _ppSwapEnabled = $('ppSwapToggle').checked;
+  setShown('ppSwapAssetWrap', _ppSwapEnabled);
+  if (_ppSwapEnabled) {
+    // If output is already a supported PP asset, keep it; otherwise use current selection
+    let target;
+    if (toToken === 'ETH' || toToken === 'BOLD') {
+      target = toToken;
+    } else {
+      target = _ppSelectedAsset;
+    }
+    _ppSelectedAsset = target;
+    ppSyncAssetUI(target);
+    if (toToken !== target) { _ppSavedToToken = toToken; toToken = target; updateTokenDisplay(); }
+    handleAmountChange();
+    if (!_ppConfig) loadPPConfig();
+  } else {
+    // Restore previous token
+    if (_ppSavedToToken && _ppSavedToToken !== toToken) { toToken = _ppSavedToToken; updateTokenDisplay(); }
+    _ppSavedToToken = null;
+    handleAmountChange();
+  }
+}
+
+function ppSwapDownloadNote() {
+  const note = $('ppSwapNoteText').value;
+  if (!note) return;
+  const blob = new Blob([note], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `privacy-pool-note-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function randomFieldElement() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let n = 0n;
+  for (let i = 0; i < 32; i++) n = (n << 8n) | BigInt(bytes[i]);
+  return n % SNARK_FIELD;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  $('swapTab').style.display = tab === 'swap' ? '' : 'none';
+  $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
+  history.replaceState(null, '', tab === 'privacy' ? window.location.pathname + '#privacy' : window.location.pathname + window.location.search);
+  if (tab === 'privacy') {
+    loadPPConfig();
+    updatePPBalance();
+    renderPPNotes();
+    updatePPButton();
+  }
+}
+
+async function loadPPConfig() {
+  try {
+    const rpc = await quoteRPC.call(r => r);
+    const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
+    const [ethConfig, boldConfig] = await Promise.all([
+      ep.assetConfig(PP_ETH_ASSET),
+      ep.assetConfig(BOLD_ADDRESS)
+    ]);
+    _ppConfig = { pool: ethConfig.pool, minimumDepositAmount: ethConfig.minimumDepositAmount, vettingFeeBPS: ethConfig.vettingFeeBPS };
+    _ppConfigBold = { pool: boldConfig.pool, minimumDepositAmount: boldConfig.minimumDepositAmount, vettingFeeBPS: boldConfig.vettingFeeBPS };
+    const cfg = _ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig;
+    setText('ppFeeBps', cfg.vettingFeeBPS.toString());
+    setText('ppMinDeposit', ethers.formatEther(cfg.minimumDepositAmount));
+    setText('ppMinUnit', _ppSelectedAsset);
+    setShown('ppFeeInfo', true);
+  } catch (e) {
+    console.warn("Failed to load PP config:", e);
+  }
+}
+
+async function updatePPBalance() {
+  if (!connectedAddress) { setText('ppBalance', ''); return; }
+  try {
+    const rpc = await quoteRPC.call(r => r);
+    if (_ppSelectedAsset === 'BOLD') {
+      const bold = new ethers.Contract(BOLD_ADDRESS, ['function balanceOf(address) view returns (uint256)'], rpc);
+      const bal = await bold.balanceOf(connectedAddress);
+      setText('ppBalance', `Balance: ${fmt(ethers.formatEther(bal))} BOLD`);
+    } else {
+      const bal = await rpc.getBalance(connectedAddress);
+      setText('ppBalance', `Balance: ${fmt(ethers.formatEther(bal))} ETH`);
+    }
+  } catch (e) {
+    console.warn("PP balance error:", e);
+  }
+}
+
+function updatePPButton() {
+  const btn = $('ppDepositBtn');
+  if (!btn) return;
+  if (!connectedAddress) {
+    setText(btn, 'Connect Wallet');
+    setDisabled(btn, false);
+    btn.onclick = () => showWalletModal();
+    return;
+  }
+  const amt = $('ppAmount')?.value;
+  if (!amt || isNaN(+amt) || +amt <= 0) {
+    setText(btn, 'Enter an amount');
+    setDisabled(btn, true);
+    btn.onclick = null;
+    return;
+  }
+  try {
+    const wei = ethers.parseEther(amt);
+    const cfg = _ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig;
+    if (cfg && wei < cfg.minimumDepositAmount) {
+      setText(btn, `Min ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`);
+      setDisabled(btn, true);
+      btn.onclick = null;
+      return;
+    }
+  } catch {
+    setText(btn, 'Invalid amount');
+    setDisabled(btn, true);
+    btn.onclick = null;
+    return;
+  }
+  setText(btn, 'Deposit');
+  setDisabled(btn, false);
+  btn.onclick = ppDeposit;
+}
+
+async function ppDeposit() {
+  const btn = $('ppDepositBtn');
+  try {
+    const amtStr = $('ppAmount').value;
+    if (!amtStr || +amtStr <= 0) { showStatus("Enter an amount", "error"); return; }
+    const amount = ethers.parseEther(amtStr);
+
+    const isBOLD = _ppSelectedAsset === 'BOLD';
+    const cfg = isBOLD ? _ppConfigBold : _ppConfig;
+    if (cfg && amount < cfg.minimumDepositAmount) {
+      showStatus(`Minimum deposit is ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`, "error");
+      return;
+    }
+
+    if (!signer) { showWalletModal(); return; }
+
+    setText(btn, 'Deriving keys...');
+    setDisabled(btn, true);
+
+    const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
+    const scope = ppComputeScope(_ppSelectedAsset);
+    const depositIdx = ppGetDepositIndex(connectedAddress, scope);
+    const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx);
+
+    let tx;
+    if (isBOLD) {
+      // BOLD: use zRouter multicall for single-tx atomic deposit
+      // permit(BOLD) → router.deposit(BOLD,0,amt) → execute(PP, deposit(BOLD,amt,precom))
+      const ppDepositData = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [BOLD_ADDRESS, amount, precommitment]);
+      const routerPull = ROUTER_IFACE.encodeFunctionData('deposit', [BOLD_ADDRESS, 0, amount]);
+      const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, ppDepositData]);
+      const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [BOLD_ADDRESS, 0, 0, connectedAddress]);
+
+      let permitPrefix = [];
+      let approved = false;
+
+      // Check existing router allowance
+      const rpc = await quoteRPC.call(r => r);
+      const boldRead = new ethers.Contract(BOLD_ADDRESS, ['function allowance(address,address) view returns (uint256)'], rpc);
+      const routerAllowance = await boldRead.allowance(connectedAddress, ZROUTER_ADDRESS);
+      if (routerAllowance >= amount) approved = true;
+
+      // Try EIP-2612 permit (gasless signature, single tx)
+      if (!approved) {
+        const permitCfg = await getPermitConfig(BOLD_ADDRESS);
+        if (permitCfg) {
+          try {
+            setText(btn, 'Sign permit...');
+            const permitData = await signPermit(permitCfg, BOLD_ADDRESS);
+            const permitCall = ROUTER_IFACE.encodeFunctionData('permit', [BOLD_ADDRESS, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+            permitPrefix = [permitCall];
+            approved = true;
+          } catch (e) {
+            if (/user rejected|user denied|user cancelled/i.test(String(e?.message))) throw e;
+            console.warn("BOLD permit failed, falling back to approve:", e);
+          }
+        }
+      }
+
+      // Fallback: traditional approve (separate tx)
+      if (!approved) {
+        setText(btn, 'Approve BOLD...');
+        const boldW = new ethers.Contract(BOLD_ADDRESS, ['function approve(address,uint256) returns (bool)'], signer);
+        const approveTx = await wcTransaction(boldW.approve(ZROUTER_ADDRESS, ethers.MaxUint256), 'Approve BOLD spending');
+        await waitForTx(approveTx);
+      }
+
+      setText(btn, 'Confirm in wallet...');
+      const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, routerPull, executeCall, sweepCall]]);
+      tx = await wcTransaction(
+        signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: 0n }),
+        'Confirm BOLD Privacy Pool deposit'
+      );
+    } else {
+      const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, signer);
+      setText(btn, 'Confirm in wallet...');
+      tx = await wcTransaction(
+        ep['deposit(uint256)'](precommitment, { value: amount }),
+        'Confirm Privacy Pool deposit'
+      );
+    }
+    // Increment index immediately after tx submitted (before confirmation) to prevent reuse if tab closes
+    ppSetDepositIndex(connectedAddress, scope, depositIdx + 1);
+
+    // Show partial note immediately (nullifier+secret) — user must save before anything else
+    const partialNote = buildPPNote(nullifier, secret, null, _ppSelectedAsset);
+    $('ppNote').value = partialNote;
+    setShown('ppNoteBox', true);
+
+    // Save partial note to localStorage
+    const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+    const noteIdx = saved.length;
+    saved.push({ note: partialNote, amount: amount.toString(), asset: _ppSelectedAsset, timestamp: Date.now(), txHash: tx.hash });
+    localStorage.setItem('pp_notes', JSON.stringify(saved));
+    renderPPNotes();
+
+    btn.innerHTML = `Confirming deposit... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+    const receipt = await waitForTx(tx);
+
+    if (receipt && receipt.status === 1) {
+      // Parse deposit events to get value, label, leafIndex, commitment
+      const depositInfo = parsePPDepositReceipt(receipt);
+      const fullNote = buildPPNote(nullifier, secret, depositInfo, _ppSelectedAsset);
+      $('ppNote').value = fullNote;
+      // Update localStorage with full note
+      const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+      if (updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+      showStatus('Deposit confirmed! Save your note to withdraw later.', 'success');
+    } else {
+      showStatus('Transaction may have failed. Check Etherscan. Your note has been saved.', 'error');
+    }
+    updatePPBalance();
+  } catch (e) {
+    handleError(e);
+  } finally {
+    updatePPButton();
+  }
+}
+
+function downloadNote() {
+  const note = $('ppNote').value;
+  if (!note) return;
+  const blob = new Blob([note], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `privacy-pool-note-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function renderPPNotes() {
+  const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+  setText('ppNoteCount', saved.length.toString());
+  const list = $('ppNotesList');
+  if (!list) return;
+  if (saved.length === 0) {
+    list.innerHTML = '<div style="color:var(--fg-muted);padding:8px 0">No saved notes</div>';
+    return;
+  }
+  list.innerHTML = saved.map((entry, i) => {
+    const date = new Date(entry.timestamp).toLocaleDateString();
+    const unit = entry.asset || 'ETH';
+    const amtStr = entry.amount ? fmt(ethers.formatEther(BigInt(entry.amount))) + ` ${unit}` : '?';
+    const typeLabel = entry.isChange ? '<span style="color:orange;font-weight:600">CHANGE</span> ' : '';
+    const txLink = entry.txHash ? `<a href="https://etherscan.io/tx/${escAttr(entry.txHash)}" target="_blank" rel="noopener" style="font-size:11px">tx</a>` : '';
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border-muted);display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div style="min-width:0">
+        <div style="font-size:11px;color:var(--fg-muted)">${typeLabel}${escText(date)} &middot; ${amtStr} ${txLink}</div>
+        <div style="font-family:monospace;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;opacity:0.6">${escText(entry.note)}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button onclick="navigator.clipboard.writeText(ppGetNote(${i}))" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0">Copy</button>
+        <button onclick="ppDeleteNote(${i})" style="font-size:10px;padding:2px 6px;cursor:pointer;background:none;color:var(--remove-fg);border:1px solid var(--border-muted);border-radius:0">Del</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function ppGetNote(index) {
+  const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+  return saved[index]?.note || '';
+}
+
+function ppDeleteNote(index) {
+  const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+  saved.splice(index, 1);
+  localStorage.setItem('pp_notes', JSON.stringify(saved));
+  renderPPNotes();
+}
+
+// Wire up ppAmount input
+document.addEventListener("DOMContentLoaded", () => {
+  const ppAmtEl = $("ppAmount");
+  if (ppAmtEl) ppAmtEl.addEventListener("input", updatePPButton);
+
+  // Populate PP asset selector icons
+  document.querySelectorAll('.pp-icon-16[data-icon]').forEach(el => {
+    const icon = ICONS[el.dataset.icon];
+    if (icon) el.innerHTML = icon;
+  });
+  document.querySelectorAll('.pp-icon-18[data-icon]').forEach(el => {
+    const icon = ICONS[el.dataset.icon];
+    if (icon) el.innerHTML = icon;
+  });
+
+  // Restore saved Etherscan API key
+  const _savedEsKey = localStorage.getItem('pp_etherscan_key');
+  if (_savedEsKey && $('ppwEtherscanKey')) $('ppwEtherscanKey').value = _savedEsKey;
+
+  // Deeplink: ?tab=privacy or #privacy
+  const _urlp2 = new URLSearchParams(window.location.search);
+  if (_urlp2.get('tab') === 'privacy' || window.location.hash === '#privacy') switchTab('privacy');
+
+  // Init saved notes count
+  renderPPNotes();
+});
+
+// ---- Privacy Pool Withdrawal ----
+const PP_POOL_ABI = [
+  "function withdraw(tuple(address,bytes),tuple(uint256[2],uint256[2][2],uint256[2],uint256[8]))",
+  "function SCOPE() view returns (uint256)",
+  "event LeafInserted(uint256 _index, uint256 _leaf, uint256 _root)",
+  "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
+];
+const PP_POOL_DEPLOY_BLOCK = 22100000; // before first pool deposit (pool creation may predate entrypoint)
+const PP_MAX_TREE_DEPTH = 32;
+const PP_WITHDRAW_WASM = "https://privacypools.com/artifacts/withdraw.wasm";
+const PP_WITHDRAW_ZKEY = "https://privacypools.com/artifacts/withdraw.zkey";
+
+let _ppwNote = null;
+
+// LeanIMT: build tree from ordered leaves using poseidon2
+function leanIMTBuild(leaves) {
+  if (leaves.length === 0) return { levels: [[]], depth: 0, root: 0n };
+  const levels = [leaves.map(l => BigInt(l))];
+  while (levels[levels.length - 1].length > 1) {
+    const curr = levels[levels.length - 1];
+    const next = [];
+    for (let i = 0; i < curr.length; i += 2) {
+      if (i + 1 < curr.length) next.push(poseidon2([curr[i], curr[i + 1]]));
+      else next.push(curr[i]);
+    }
+    levels.push(next);
+  }
+  return { levels, depth: levels.length - 1, root: levels[levels.length - 1][0] };
+}
+
+// LeanIMT: Merkle proof for leaf at index, padded to PP_MAX_TREE_DEPTH
+function leanIMTProof(levels, leafIndex) {
+  const siblings = [];
+  let idx = leafIndex;
+  for (let d = 0; d < levels.length - 1; d++) {
+    const sib = idx ^ 1;
+    siblings.push(sib < levels[d].length ? levels[d][sib] : 0n);
+    idx = idx >> 1;
+  }
+  while (siblings.length < PP_MAX_TREE_DEPTH) siblings.push(0n);
+  return siblings;
+}
+
+function ppwParseNote() {
+  const raw = $('ppwNote').value.trim();
+  if (!raw) { showStatus('Paste a note JSON', 'error'); return; }
+  let note;
+  try { note = JSON.parse(raw); } catch { showStatus('Invalid JSON', 'error'); return; }
+  if (!note.nullifier || !note.secret) { showStatus('Note must have nullifier and secret', 'error'); return; }
+
+  const nullifier = BigInt(note.nullifier);
+  const secret = BigInt(note.secret);
+  const precommitment = poseidon2([nullifier, secret]);
+
+  _ppwNote = { nullifier, secret, precommitment };
+
+  setText('ppwNullifier', note.nullifier);
+  setText('ppwSecret', note.secret);
+  setText('ppwPrecommitment', '0x' + precommitment.toString(16).padStart(64, '0'));
+
+  if (note.leafIndex != null) $('ppwLeafIndex').value = note.leafIndex;
+  if (note.value != null) $('ppwValue').value = note.value;
+  if (note.label != null) $('ppwLabel').value = note.label;
+  if (note.commitment != null) $('ppwCommitment').value = note.commitment;
+
+  setShown('ppwParsed', true);
+  setDisabled('ppwWithdrawBtn', false);
+}
+
+function ppwUploadNote(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { $('ppwNote').value = e.target.result; ppwParseNote(); };
+  reader.readAsText(file);
+}
+
+async function ppwWithdraw() {
+  const statusEl = $('ppwVerifyStatus');
+  const statusBox = $('ppwVerify');
+  const btn = $('ppwWithdrawBtn');
+
+  function log(msg) { setShown(statusBox, true); statusEl.innerHTML += msg + '<br>'; }
+  function logReplace(msg) { setShown(statusBox, true); statusEl.innerHTML = msg; }
+
+  try {
+    setDisabled(btn, true);
+    setText(btn, 'Working...');
+    statusEl.innerHTML = '';
+
+    // Validate inputs
+    if (!_ppwNote) { showStatus('Parse a note first', 'error'); return; }
+    const leafIndex = parseInt($('ppwLeafIndex').value);
+    const value = BigInt($('ppwValue').value || '0');
+    const label = BigInt($('ppwLabel').value || '0');
+    if (isNaN(leafIndex)) { showStatus('Leaf index required', 'error'); return; }
+    if (value === 0n) { showStatus('Value (wei) required', 'error'); return; }
+    if (label === 0n) { showStatus('Label required', 'error'); return; }
+    const withdrawAmtRaw = $('ppwWithdrawAmt').value.trim();
+    const withdrawnValue = withdrawAmtRaw ? BigInt(withdrawAmtRaw) : value;
+    if (withdrawnValue > value) { showStatus('Withdraw amount exceeds deposit value', 'error'); return; }
+    if (withdrawnValue === 0n) { showStatus('Withdraw amount must be > 0', 'error'); return; }
+
+    const recipient = $('ppwRecipient').value.trim() || connectedAddress;
+    if (!recipient) { showStatus('Connect wallet or enter recipient', 'error'); return; }
+    if (!signer) { showWalletModal(); return; }
+
+    log('Validating inputs...');
+
+    const poolAddress = _ppConfig?.pool || PP_ETH_POOL;
+    const SCOPE = ppComputeScope();
+    log('Pool: ' + poolAddress.slice(0, 10) + '... SCOPE: ' + SCOPE.toString().slice(0, 16) + '...');
+
+    // Fetch state tree leaves via Etherscan log API (paginated by result count, not block range)
+    const esKey = ($('ppwEtherscanKey')?.value || '').trim() || localStorage.getItem('pp_etherscan_key') || '';
+    if (!esKey) { showStatus('Etherscan API key required — expand the field above and paste your free key from etherscan.io/myapikey', 'error'); return; }
+    log('Fetching state tree leaves via Etherscan...');
+    const leaves = [];
+    let lastEventRoot = null;
+    const LEAF_TOPIC = '0xcb249c8292372bd11f567786635483fca9e635030baafca55ff1a8940141d221';
+    let esFrom = PP_POOL_DEPLOY_BLOCK;
+    let batch = 0;
+
+    while (true) {
+      batch++;
+      const url = 'https://api.etherscan.io/v2/api?chainid=1&module=logs&action=getLogs' +
+        '&address=' + poolAddress +
+        '&topic0=' + LEAF_TOPIC +
+        '&fromBlock=' + esFrom + '&toBlock=latest' +
+        '&page=1&offset=1000' +
+        '&apikey=' + esKey;
+      let json;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        logReplace('Fetching leaves batch ' + batch + (attempt ? ' (retry ' + attempt + ')' : '') +
+          '... (' + leaves.length + ' so far, from block ' + esFrom + ')');
+        try {
+          const resp = await fetch(url);
+          json = await resp.json();
+        } catch (fetchErr) {
+          log('Network error, retrying in 8s... (' + fetchErr.message + ')');
+          await new Promise(r => setTimeout(r, 8000));
+          continue;
+        }
+        if (json.status === '1' && Array.isArray(json.result)) break;
+        const errMsg = typeof json.result === 'string' ? json.result : json.message || 'unknown error';
+        log('Etherscan: ' + errMsg + ', retrying in 8s...');
+        json = null;
+        await new Promise(r => setTimeout(r, 8000));
+      }
+      if (!json || json.status !== '1' || !Array.isArray(json.result) || json.result.length === 0) break;
+      for (const entry of json.result) {
+        const d = entry.data.slice(2);
+        leaves[parseInt(d.slice(0, 64), 16)] = BigInt('0x' + d.slice(64, 128));
+        lastEventRoot = BigInt('0x' + d.slice(128, 192));
+      }
+      // Log first event of first batch for debugging
+      if (batch === 1) {
+        const fd = json.result[0].data.slice(2);
+        log('First event: index=' + parseInt(fd.slice(0, 64), 16) + ' block=' + parseInt(json.result[0].blockNumber, 16));
+      }
+      if (json.result.length < 1000) break;
+      // Advance fromBlock to last result's block (duplicates harmless — same index overwrites)
+      const lastBlockHex = json.result[json.result.length - 1].blockNumber;
+      esFrom = parseInt(lastBlockHex, 16);
+      await new Promise(r => setTimeout(r, 5500));
+    }
+    if (leaves.length === 0) { showStatus('Failed to fetch leaves from Etherscan. Check your internet and try again.', 'error'); return; }
+    // Check for gaps in sparse array
+    let gaps = [];
+    for (let i = 0; i < leaves.length; i++) {
+      if (leaves[i] === undefined) { gaps.push(i); leaves[i] = 0n; }
+    }
+    if (gaps.length > 0) log('Missing leaf indices: ' + JSON.stringify(gaps));
+    log('Fetched ' + leaves.length + ' leaves' + (gaps.length ? ' (' + gaps.length + ' gaps)' : '') + '.');
+
+    // If only gap is index 0, the contract may 1-index events. Try both tree builds.
+    let treeLeaves = leaves;
+    let adjustedLeafIndex = leafIndex;
+    if (gaps.length === 1 && gaps[0] === 0) {
+      const leavesShifted = leaves.slice(1); // drop the bogus index 0, treat event _index as 1-based
+      const treeShifted = leanIMTBuild(leavesShifted);
+      if (lastEventRoot && treeShifted.root === lastEventRoot) {
+        log('Contract uses 1-based leaf indexing. Adjusting tree (index ' + leafIndex + ' → position ' + (leafIndex - 1) + ').');
+        treeLeaves = leavesShifted;
+        adjustedLeafIndex = leafIndex - 1;
+      } else {
+        log('Shifted tree root: 0x' + treeShifted.root.toString(16).slice(0, 16) + '... vs on-chain: 0x' + (lastEventRoot||0n).toString(16).slice(0, 16) + '...');
+      }
+    }
+
+    if (adjustedLeafIndex >= treeLeaves.length) {
+      showStatus('Leaf index ' + leafIndex + ' out of range (tree has ' + treeLeaves.length + ' leaves)', 'error');
+      return;
+    }
+
+    // Verify commitment if provided in note
+    const noteCommitment = $('ppwCommitment').value.trim();
+    if (noteCommitment) {
+      const expected = BigInt(noteCommitment);
+      if (treeLeaves[adjustedLeafIndex] !== expected) {
+        showStatus('Commitment mismatch at tree position ' + adjustedLeafIndex, 'error');
+        return;
+      }
+      log('Commitment verified at tree position ' + adjustedLeafIndex + '.');
+    }
+
+    // Build state Merkle tree
+    log('Building state Merkle tree...');
+    const stateTree = leanIMTBuild(treeLeaves);
+    const stateSiblings = leanIMTProof(stateTree.levels, adjustedLeafIndex);
+
+    // Verify tree root matches last event root
+    if (lastEventRoot && stateTree.root !== lastEventRoot) {
+      log('<b>Warning:</b> computed root differs from last on-chain root. Events may be incomplete.');
+    }
+    log('State tree depth=' + stateTree.depth + ' root=0x' + stateTree.root.toString(16).slice(0, 16) + '...');
+
+    // Fetch ASP (Association Set Provider) tree leaves from 0xbow API
+    log('Fetching ASP tree leaves from 0xbow API...');
+    let aspLeaves;
+    try {
+      const aspResp = await fetch('https://api.0xbow.io/1/public/mt-leaves', {
+        headers: { 'X-Pool-Scope': SCOPE.toString() }
+      });
+      if (!aspResp.ok) throw new Error('HTTP ' + aspResp.status);
+      const aspData = await aspResp.json();
+      if (!aspData.aspLeaves || !Array.isArray(aspData.aspLeaves) || aspData.aspLeaves.length === 0) {
+        throw new Error('No ASP leaves returned');
+      }
+      aspLeaves = aspData.aspLeaves.map(l => BigInt(l));
+      log('Fetched ' + aspLeaves.length + ' ASP leaves.');
+    } catch (aspErr) {
+      showStatus('Failed to fetch ASP data: ' + aspErr.message + '. The 0xbow API may be unavailable.', 'error');
+      return;
+    }
+
+    // Find our label in ASP leaves
+    const aspIndex = aspLeaves.indexOf(label);
+    if (aspIndex === -1) {
+      showStatus('Your deposit label is not yet in the ASP association set. This can take up to 7 days after deposit. Try again later.', 'error');
+      return;
+    }
+    log('Label found in ASP set at index ' + aspIndex + '.');
+
+    // Build ASP Merkle tree
+    const aspTree = leanIMTBuild(aspLeaves);
+    const aspSiblings = leanIMTProof(aspTree.levels, aspIndex);
+    log('ASP tree depth=' + aspTree.depth + ' root=0x' + aspTree.root.toString(16).slice(0, 16) + '...');
+
+    // Prepare circuit inputs
+    log('Preparing circuit inputs...');
+    const isPartial = withdrawnValue < value;
+    const changeValue = value - withdrawnValue;
+    let newNullifier, newSecret;
+    if (isPartial && signer && connectedAddress) {
+      const mk = await ppEnsureMasterKeys();
+      const changeIdx = ppGetDepositIndex(connectedAddress, SCOPE);
+      const changeKeys = ppDeriveDepositKeys(mk.masterNullifier, mk.masterSecret, SCOPE, changeIdx);
+      newNullifier = changeKeys.nullifier;
+      newSecret = changeKeys.secret;
+    } else {
+      newNullifier = randomFieldElement();
+      newSecret = randomFieldElement();
+    }
+    if (isPartial) {
+      log('Partial withdrawal: ' + ethers.formatEther(withdrawnValue) + ' ETH (change: ' + ethers.formatEther(changeValue) + ' ETH)');
+    }
+
+    // context = keccak256(abi.encode(Withdrawal{processooor,data}, SCOPE)) % SNARK_FIELD
+    const withdrawalData = '0x';
+    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+      ['tuple(address,bytes)', 'uint256'],
+      [[recipient, withdrawalData], SCOPE]
+    );
+    const context = BigInt(ethers.keccak256(encoded)) % SNARK_FIELD;
+
+    const circuitInputs = {
+      withdrawnValue: withdrawnValue.toString(),
+      stateRoot: stateTree.root.toString(),
+      stateTreeDepth: stateTree.depth.toString(),
+      ASPRoot: aspTree.root.toString(),
+      ASPTreeDepth: aspTree.depth.toString(),
+      context: context.toString(),
+      label: label.toString(),
+      existingValue: value.toString(),
+      existingNullifier: _ppwNote.nullifier.toString(),
+      existingSecret: _ppwNote.secret.toString(),
+      newNullifier: newNullifier.toString(),
+      newSecret: newSecret.toString(),
+      stateSiblings: stateSiblings.map(s => s.toString()),
+      stateIndex: adjustedLeafIndex.toString(),
+      ASPSiblings: aspSiblings.map(s => s.toString()),
+      ASPIndex: aspIndex.toString()
+    };
+
+    // Lazy-load snarkjs
+    if (typeof snarkjs === 'undefined') {
+      log('Loading snarkjs...');
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/snarkjs@0.7.5/build/snarkjs.min.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load snarkjs'));
+        document.head.appendChild(s);
+      });
+    }
+
+    // Generate ZK proof
+    log('Generating ZK proof (downloads ~40MB artifacts on first use, then 30\u2013120s proving)...');
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInputs, PP_WITHDRAW_WASM, PP_WITHDRAW_ZKEY
+    );
+    log('Proof generated!');
+
+    // Convert snarkjs proof to Solidity format (pB components reversed for BN128)
+    const pA = [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])];
+    const pB = [
+      [BigInt(proof.pi_b[0][1]), BigInt(proof.pi_b[0][0])],
+      [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])]
+    ];
+    const pC = [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])];
+    const pubSigs = publicSignals.map(s => BigInt(s));
+
+    // Submit withdrawal to pool contract
+    log('Submitting withdrawal transaction...');
+    const poolSigner = new ethers.Contract(poolAddress, PP_POOL_ABI, signer);
+    const tx = await wcTransaction(
+      poolSigner.withdraw([recipient, withdrawalData], [pA, pB, pC, pubSigs]),
+      'Confirm Privacy Pool withdrawal'
+    );
+    log('Transaction submitted: ' + tx.hash);
+    setText(btn, 'Waiting for confirmation...');
+
+    const receipt = await waitForTx(tx);
+    if (receipt && receipt.status === 1) {
+      log('<b>Withdrawal confirmed!</b> ' + ethers.formatEther(withdrawnValue) + ' ETH sent to ' + recipient.slice(0, 10) + '...');
+
+      // For partial withdrawals, save the change note
+      if (isPartial) {
+        // Parse LeafInserted event from receipt to get the new leaf index
+        let changeLeafIndex, changeCommitment;
+        for (const rlog of receipt.logs) {
+          try {
+            const parsed = PP_POOL_EVENTS.parseLog({ topics: rlog.topics, data: rlog.data });
+            if (parsed.name === 'LeafInserted') {
+              changeLeafIndex = Number(parsed.args._index);
+              changeCommitment = '0x' + BigInt(parsed.args._leaf).toString(16).padStart(64, '0');
+            }
+          } catch {}
+        }
+        const changeNote = {
+          nullifier: '0x' + newNullifier.toString(16).padStart(64, '0'),
+          secret: '0x' + newSecret.toString(16).padStart(64, '0'),
+          value: changeValue.toString(),
+          label: label.toString(),
+          leafIndex: changeLeafIndex,
+          commitment: changeCommitment
+        };
+        const changeNoteJson = JSON.stringify(changeNote);
+        // Save to localStorage
+        const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+        saved.push({ note: changeNoteJson, timestamp: Date.now(), amount: changeValue.toString(), txHash: tx.hash, isChange: true });
+        localStorage.setItem('pp_notes', JSON.stringify(saved));
+        if (connectedAddress) ppSetDepositIndex(connectedAddress, SCOPE, ppGetDepositIndex(connectedAddress, SCOPE) + 1);
+        renderPPNotes();
+        log('<b style="color:orange">CHANGE NOTE SAVED</b> — ' + ethers.formatEther(changeValue) + ' ETH remaining. The change note has been saved to your browser. <b>Copy and back it up now</b> — losing it means losing the remaining funds.');
+        // Also show in result textarea for easy copying
+        setShown('ppwResult', true);
+        $('ppwResultText').value = JSON.stringify({ changeNote, txHash: tx.hash, proof, publicSignals }, null, 2);
+      } else {
+        setShown('ppwResult', true);
+        $('ppwResultText').value = JSON.stringify({ txHash: tx.hash, proof, publicSignals }, null, 2);
+      }
+      showStatus('Withdrawal successful!', 'success');
+    } else {
+      log('<b>Transaction may have failed.</b> Check Etherscan.');
+      showStatus('Transaction may have failed', 'error');
+      setShown('ppwResult', true);
+      $('ppwResultText').value = JSON.stringify({ txHash: tx.hash, proof, publicSignals }, null, 2);
+    }
+
+  } catch (e) {
+    console.error('ppwWithdraw error:', e);
+    log('<b>Error:</b> ' + (e.shortMessage || e.message || e));
+    handleError(e);
+  } finally {
+    setText(btn, 'Verify & Prepare Withdrawal');
+    setDisabled(btn, !_ppwNote);
+  }
+}
 
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"8510b592df8f4a69b87bbf8e840f200c","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
