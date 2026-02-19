@@ -5120,7 +5120,7 @@ const PP_ENTRYPOINT_ABI = [
   "function deposit(address,uint256,uint256) returns (uint256)",
   "function assetConfig(address) view returns (address pool, uint256 minimumDepositAmount, uint256 vettingFeeBPS, uint256 maxRelayFeeBPS)",
   "function latestRoot() view returns (uint256)",
-  "function precommitments(uint256) view returns (bool)"
+  "function usedPrecommitments(uint256) view returns (bool)"
 ];
 const PP_POOL_EVENTS = new ethers.Interface([
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)",
@@ -5178,7 +5178,7 @@ async function ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, st
   let idx = startIndex;
   for (let i = 0; i < 20; i++) {
     const keys = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, idx);
-    const used = await ep.precommitments(keys.precommitment);
+    const used = await ep.usedPrecommitments(keys.precommitment);
     if (!used) return idx;
     idx++;
   }
