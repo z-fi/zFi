@@ -4878,11 +4878,13 @@ function renderQuickTokens() {
 // Sync URL bar so users can copy/share the current swap
 function syncSwapURL() {
   const _sp = new URLSearchParams();
-  _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
+  const _ppDirect = _ppSwapEnabled && fromToken === toToken && fromToken === _ppSelectedAsset;
+  if (!_ppDirect) { _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase()); }
   const _fa = $("fromAmount");
   if (_fa && _fa.value && +_fa.value > 0) _sp.set('amt', _fa.value);
   const _rv = ($("receiverAddress")?.value || "").trim();
   if (_rv) _sp.set('recv', _rv);
+  if (_ppSwapEnabled) _sp.set('pp', _ppSelectedAsset.toLowerCase());
   history.replaceState(null, '', '?' + _sp.toString());
 }
 
@@ -5084,6 +5086,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (rw) { rw.style.maxHeight = '80px'; rw.style.opacity = '1'; }
     const chev = document.querySelector('.receiver-toggle .chevron');
     if (chev) chev.textContent = '\u25BC';
+  }
+  // Deeplink: ?pp=eth or ?pp=bold — activate Privacy Pool deposit toggle
+  // Direct deposit: ?pp=eth&amt=1 (no from → from defaults to pp asset, making from===to for direct deposit)
+  // Swap+deposit: ?from=eth&pp=bold&amt=1.5 (explicit from → swap into pp asset)
+  const _dlPP = (_urlp.get('pp') || '').toUpperCase();
+  if (_dlPP === 'ETH' || _dlPP === 'BOLD') {
+    if (!_dlFrom) fromToken = _dlPP; // no explicit from → direct deposit
+    _ppSelectedAsset = _dlPP;
+    _ppSwapEnabled = true;
+    const cb = $('ppSwapToggle');
+    if (cb) cb.checked = true;
+    setShown('ppSwapAssetWrap', true);
+    ppSyncAssetUI(_dlPP);
+    if (toToken !== _dlPP) { _ppSavedToToken = toToken; toToken = _dlPP; }
+    if (!_ppConfig) setTimeout(() => loadPPConfig(), 100);
   }
   updateTokenDisplay();
   initTokenListClick();
