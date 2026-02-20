@@ -35,7 +35,23 @@ contract zQuoter {
         view
         returns (Quote memory best, Quote[] memory quotes)
     {
-        return ZQUOTER_BASE.getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        (best, quotes) = ZQUOTER_BASE.getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        // Sanity: reject exact-out best that is >5x cheaper than V2.
+        // Catches bogus results from low-liquidity pools (e.g. DAI/WETH V3 1bp).
+        if (exactOut && best.amountIn > 0) {
+            (uint256 v2In,) = quoteV2(true, tokenIn, tokenOut, swapAmount, false);
+            if (v2In > 0 && best.amountIn * 5 < v2In) {
+                // Also neuter bogus entries in the quotes array so split routing
+                // doesn't pick them up as candidates.
+                for (uint256 i; i < quotes.length; ++i) {
+                    if (quotes[i].amountIn > 0 && quotes[i].amountIn * 5 < v2In) {
+                        quotes[i].amountIn = 0;
+                        quotes[i].amountOut = 0;
+                    }
+                }
+                best = Quote(AMM.UNI_V2, 30, v2In, swapAmount);
+            }
+        }
     }
 
     function quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi)
@@ -94,34 +110,9 @@ contract zQuoter {
         view
         returns (Quote memory best)
     {
-        // 1. Base quoter: V2/Sushi/ZAMM/V3/V4
-        Quote[] memory allQ;
-        (best, allQ) = getQuotes(exactOut, tokenIn, tokenOut, amount);
+        // 1. Base quoter: V2/Sushi/ZAMM/V3/V4 (getQuotes already filters exact-out outliers)
+        (best,) = getQuotes(exactOut, tokenIn, tokenOut, amount);
         if (best.source == AMM.WETH_WRAP) best = Quote(AMM.UNI_V2, 0, 0, 0);
-
-        // Sanity: reject exact-out quotes that are >5x cheaper than the next-best.
-        // Catches bogus results from low-liquidity V3/V4 pools whose on-chain math
-        // doesn't revert but returns garbage (e.g. DAI/WETH 1bp pool).
-        if (exactOut && best.amountIn > 0 && allQ.length >= 2) {
-            uint256 secondBest = type(uint256).max;
-            for (uint256 i; i < allQ.length; ++i) {
-                uint256 ai = allQ[i].amountIn;
-                if (ai > 0 && ai > best.amountIn && ai < secondBest) secondBest = ai;
-            }
-            if (secondBest != type(uint256).max && best.amountIn * 5 < secondBest) {
-                // Best is an outlier — pick the cheapest non-outlier from the array
-                best = Quote(AMM.UNI_V2, 0, 0, 0);
-                for (uint256 i; i < allQ.length; ++i) {
-                    uint256 ai = allQ[i].amountIn;
-                    if (
-                        ai >= secondBest / 2
-                            && _isBetter(exactOut, ai, allQ[i].amountOut, best.amountIn, best.amountOut)
-                    ) {
-                        best = allQ[i];
-                    }
-                }
-            }
-        }
 
         // 2. Curve (unbuildable cases already filtered inside quoteCurve)
         {
@@ -162,7 +153,7 @@ contract zQuoter {
     }
 
     function _mc(bytes[] memory c) internal pure returns (bytes memory) {
-        return _mc(c);
+        return abi.encodeWithSelector(IRouterExt.multicall.selector, c);
     }
 
     function _i8(int128 x) internal pure returns (uint8) {
@@ -174,7 +165,7 @@ contract zQuoter {
         pure
         returns (bool)
     {
-        return exactOut ? (newIn < bestIn || bestIn == 0) : (newOut > bestOut);
+        return exactOut ? (newIn > 0 && (newIn < bestIn || bestIn == 0)) : (newOut > bestOut);
     }
 
     // ** CURVE
@@ -301,7 +292,7 @@ contract zQuoter {
             // Skip unbuildable exactOut stable-underlying when both indices are base coins
             uint8 ci_ = _i8(i);
             uint8 cj_ = _i8(j);
-            if (exactOut && isStable && (underlying && isStable) && ci_ > 0 && cj_ > 0) continue;
+            if (exactOut && underlying && isStable && ci_ > 0 && cj_ > 0) continue;
 
             if (exactOut) {
                 if (qIn < acc.bestIn) {
@@ -456,8 +447,18 @@ contract zQuoter {
         if (totalShares == 0 || totalPooled == 0) return (0, 0);
 
         if (tokenOut == STETH) {
-            // ETH → stETH is 1:1
-            return (swapAmount, swapAmount);
+            if (!exactOut) {
+                // ETH → stETH is 1:1
+                return (swapAmount, swapAmount);
+            } else {
+                // Match router's ethToExactSTETH double-ceil math:
+                // sharesNeeded = ceil(exactOut * totalShares / totalPooled)
+                // ethIn        = ceil(sharesNeeded * totalPooled / totalShares)
+                uint256 sharesNeeded = (swapAmount * totalShares + totalPooled - 1) / totalPooled;
+                uint256 ethIn = (sharesNeeded * totalPooled + totalShares - 1) / totalShares;
+                if (ethIn == 0) return (0, 0);
+                return (ethIn, swapAmount);
+            }
         } else if (tokenOut == WSTETH) {
             if (!exactOut) {
                 // exactIn: swapAmount ETH → stETH (1:1) → wstETH
@@ -549,7 +550,7 @@ contract zQuoter {
         // ---------- Normal path ----------
         // Single unified quote across all sources (V2/Sushi/V3/V4/ZAMM/Curve/Lido)
         best = _quoteBestSingleHop(exactOut, tokenIn, tokenOut, swapAmount);
-        if (best.amountIn == 0 && best.amountOut == 0) revert NoRoute();
+        if (exactOut ? best.amountIn == 0 : best.amountOut == 0) revert NoRoute();
 
         uint256 quoted = exactOut ? best.amountIn : best.amountOut;
         amountLimit = SlippageLib.limit(exactOut, quoted, slippageBps);

@@ -229,17 +229,7 @@ contract zRouter {
         (amountIn, amountOut) = abi.decode(
             IV4PoolManager(V4_POOL_MANAGER)
                 .unlock(
-                    abi.encode(
-                        msg.sender,
-                        to,
-                        exactOut,
-                        swapFee,
-                        tickSpace,
-                        tokenIn,
-                        tokenOut,
-                        swapAmount,
-                        amountLimit
-                    )
+                    abi.encode(msg.sender, to, exactOut, swapFee, tickSpace, tokenIn, tokenOut, swapAmount, amountLimit)
                 ),
             (uint256, uint256)
         );
@@ -247,11 +237,7 @@ contract zRouter {
     }
 
     /// @dev Handle V4 PoolManager swap callback - hookless default.
-    function unlockCallback(bytes calldata callbackData)
-        public
-        payable
-        returns (bytes memory result)
-    {
+    function unlockCallback(bytes calldata callbackData) public payable returns (bytes memory result) {
         require(msg.sender == V4_POOL_MANAGER, Unauthorized());
 
         assembly ("memory-safe") {
@@ -268,31 +254,19 @@ contract zRouter {
             address tokenOut,
             uint256 swapAmount,
             uint256 amountLimit
-        ) = abi.decode(
-            callbackData,
-            (address, address, bool, uint24, int24, address, address, uint256, uint256)
-        );
+        ) = abi.decode(callbackData, (address, address, bool, uint24, int24, address, address, uint256, uint256));
 
         bool zeroForOne = tokenIn < tokenOut;
         bool ethIn = tokenIn == address(0);
 
-        V4PoolKey memory key = V4PoolKey(
-            zeroForOne ? tokenIn : tokenOut,
-            zeroForOne ? tokenOut : tokenIn,
-            swapFee,
-            tickSpace,
-            address(0)
-        );
+        V4PoolKey memory key =
+            V4PoolKey(zeroForOne ? tokenIn : tokenOut, zeroForOne ? tokenOut : tokenIn, swapFee, tickSpace, address(0));
 
         unchecked {
             int256 delta = _swap(swapAmount, key, zeroForOne, exactOut);
             uint256 takeAmount = zeroForOne
-                ? (!exactOut
-                        ? uint256(uint128(delta.amount1()))
-                        : uint256(uint128(-delta.amount0())))
-                : (!exactOut
-                        ? uint256(uint128(delta.amount0()))
-                        : uint256(uint128(-delta.amount1())));
+                ? (!exactOut ? uint256(uint128(delta.amount1())) : uint256(uint128(-delta.amount0())))
+                : (!exactOut ? uint256(uint128(delta.amount0())) : uint256(uint128(-delta.amount1())));
 
             IV4PoolManager(msg.sender).sync(tokenIn);
             uint256 amountIn = !exactOut ? swapAmount : takeAmount;
@@ -315,13 +289,11 @@ contract zRouter {
             }
 
             uint256 amountOut = !exactOut ? takeAmount : swapAmount;
-            if (amountLimit != 0 && (exactOut ? takeAmount > amountLimit : amountOut < amountLimit))
-            {
+            if (amountLimit != 0 && (exactOut ? takeAmount > amountLimit : amountOut < amountLimit)) {
                 revert Slippage();
             }
 
-            IV4PoolManager(msg.sender)
-            .settle{value: ethIn ? (exactOut ? takeAmount : swapAmount) : 0}();
+            IV4PoolManager(msg.sender).settle{value: ethIn ? (exactOut ? takeAmount : swapAmount) : 0}();
             IV4PoolManager(msg.sender).take(tokenOut, to, amountOut);
 
             result = abi.encode(amountIn, amountOut);
@@ -381,19 +353,13 @@ contract zRouter {
             }
             if (swapAmount == 0) revert BadSwap();
         }
-        if (!_useTransientBalance(
-                address(this), tokenIn, idIn, !exactOut ? swapAmount : amountLimit
-            )) {
+        if (!_useTransientBalance(address(this), tokenIn, idIn, !exactOut ? swapAmount : amountLimit)) {
             if (!ethIn) {
                 if (idIn == 0) {
-                    safeTransferFrom(
-                        tokenIn, msg.sender, address(this), !exactOut ? swapAmount : amountLimit
-                    );
+                    safeTransferFrom(tokenIn, msg.sender, address(this), !exactOut ? swapAmount : amountLimit);
                 } else {
                     IERC6909(tokenIn)
-                        .transferFrom(
-                            msg.sender, address(this), idIn, !exactOut ? swapAmount : amountLimit
-                        );
+                        .transferFrom(msg.sender, address(this), idIn, !exactOut ? swapAmount : amountLimit);
                 }
             }
         }
@@ -409,15 +375,13 @@ contract zRouter {
         uint256 swapResult;
         if (!exactOut) {
             bytes4 sel = (dst == ZAMM) ? bytes4(0x3c5eec50) : bytes4(0x7466fde7);
-            bytes memory callData =
-                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
+            bytes memory callData = abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
             (bool ok, bytes memory ret) = dst.call{value: ethIn ? swapAmount : 0}(callData);
             require(ok, SwapExactInFail());
             swapResult = abi.decode(ret, (uint256));
         } else {
             bytes4 sel = (dst == ZAMM) ? bytes4(0x38c3f8db) : bytes4(0xd4ff3f0e);
-            bytes memory callData =
-                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
+            bytes memory callData = abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
             (bool ok, bytes memory ret) = dst.call{value: ethIn ? amountLimit : 0}(callData);
             require(ok, SwapExactOutFail());
             swapResult = abi.decode(ret, (uint256));
@@ -501,10 +465,8 @@ contract zRouter {
                         // inverse of add_liquidity (approx):
                         amount =
                             ((pt == 10)
-                                        ? IStableNgPool(pool)
-                                            .calc_withdraw_one_coin(amount, int128(int256(p[0])))
-                                        : ICryptoNgPool(pool).calc_withdraw_one_coin(amount, p[0]))
-                                + 1;
+                                        ? IStableNgPool(pool).calc_withdraw_one_coin(amount, int128(int256(p[0])))
+                                        : ICryptoNgPool(pool).calc_withdraw_one_coin(amount, p[0])) + 1;
                     } else if (st == 6) {
                         if (pt == 10) {
                             uint256[8] memory a;
@@ -590,20 +552,17 @@ contract zRouter {
                 }
 
                 // track output balance before hop
-                uint256 outBalBefore =
-                    _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
+                uint256 outBalBefore = _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
 
                 // perform hop:
                 if (st == 1) {
                     if (pt == 10) {
-                        IStableNgPool(pool)
-                            .exchange(int128(int256(p[0])), int128(int256(p[1])), amount, 0);
+                        IStableNgPool(pool).exchange(int128(int256(p[0])), int128(int256(p[1])), amount, 0);
                     } else {
                         ICryptoNgPool(pool).exchange(p[0], p[1], amount, 0);
                     }
                 } else if (st == 2) {
-                    IStableNgMetaPool(pool)
-                        .exchange_underlying(int128(int256(p[0])), int128(int256(p[1])), amount, 0);
+                    IStableNgMetaPool(pool).exchange_underlying(int128(int256(p[0])), int128(int256(p[1])), amount, 0);
                 } else if (st == 4) {
                     if (pt == 10) {
                         uint256[8] memory a;
@@ -622,8 +581,7 @@ contract zRouter {
                     }
                 } else if (st == 6) {
                     if (pt == 10) {
-                        IStableNgPool(pool)
-                            .remove_liquidity_one_coin(amount, int128(int256(p[1])), 0);
+                        IStableNgPool(pool).remove_liquidity_one_coin(amount, int128(int256(p[1])), 0);
                     } else {
                         ICryptoNgPool(pool).remove_liquidity_one_coin(amount, p[1], 0);
                     }
@@ -632,8 +590,7 @@ contract zRouter {
                 }
 
                 // compute output of hop:
-                uint256 outBalAfter =
-                    _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
+                uint256 outBalAfter = _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
                 if (outBalAfter <= outBalBefore) revert BadSwap();
                 amount = outBalAfter - outBalBefore; // next hop input
                 curIn = nextToken;
@@ -727,17 +684,11 @@ contract zRouter {
 
     // ** PERMIT HELPERS
 
-    function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
-        public
-        payable
-    {
+    function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public payable {
         IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s);
     }
 
-    function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)
-        public
-        payable
-    {
+    function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) public payable {
         IDAIPermit(DAI).permit(msg.sender, address(this), nonce, expiry, true, v, r, s);
     }
 
@@ -769,20 +720,15 @@ contract zRouter {
         bytes calldata signature
     ) public payable {
         uint256 len = permitted.length;
-        IPermit2.SignatureTransferDetails[] memory details =
-            new IPermit2.SignatureTransferDetails[](len);
+        IPermit2.SignatureTransferDetails[] memory details = new IPermit2.SignatureTransferDetails[](len);
 
         for (uint256 i; i != len; ++i) {
-            details[i] = IPermit2.SignatureTransferDetails({
-                to: address(this), requestedAmount: permitted[i].amount
-            });
+            details[i] = IPermit2.SignatureTransferDetails({to: address(this), requestedAmount: permitted[i].amount});
         }
 
         IPermit2(PERMIT2)
             .permitBatchTransferFrom(
-                IPermit2.PermitBatchTransferFrom({
-                    permitted: permitted, nonce: nonce, deadline: deadline
-                }),
+                IPermit2.PermitBatchTransferFrom({permitted: permitted, nonce: nonce, deadline: deadline}),
                 details,
                 msg.sender,
                 signature
@@ -869,10 +815,7 @@ contract zRouter {
         } else if (id == 0) {
             safeTransfer(token, to, amount == 0 ? balanceOf(token) : amount);
         } else {
-            IERC6909(token)
-                .transfer(
-                    to, id, amount == 0 ? IERC6909(token).balanceOf(address(this), id) : amount
-                );
+            IERC6909(token).transfer(to, id, amount == 0 ? IERC6909(token).balanceOf(address(this), id) : amount);
         }
     }
 
@@ -925,11 +868,7 @@ contract zRouter {
         v3pool = _computeV3pool(token0, token1, fee);
     }
 
-    function _computeV3pool(address token0, address token1, uint24 fee)
-        internal
-        pure
-        returns (address v3pool)
-    {
+    function _computeV3pool(address token0, address token1, uint24 fee) internal pure returns (address v3pool) {
         bytes32 salt = _hash(token0, token1, fee);
         assembly ("memory-safe") {
             mstore8(0x00, 0xff)
@@ -941,11 +880,7 @@ contract zRouter {
         }
     }
 
-    function _hash(address value0, address value1, uint24 value2)
-        internal
-        pure
-        returns (bytes32 result)
-    {
+    function _hash(address value0, address value1, uint24 value2) internal pure returns (bytes32 result) {
         assembly ("memory-safe") {
             let m := mload(0x40)
             mstore(m, value0)
@@ -982,11 +917,7 @@ contract zRouter {
         emit OwnershipTransferred(msg.sender, _owner = owner);
     }
 
-    function execute(address target, uint256 value, bytes calldata data)
-        public
-        payable
-        returns (bytes memory result)
-    {
+    function execute(address target, uint256 value, bytes calldata data) public payable returns (bytes memory result) {
         require(_isTrustedForCall[target], Unauthorized());
         assembly ("memory-safe") {
             tstore(0x00, 1) // lock callback (V3/V4)
@@ -1015,9 +946,7 @@ contract zRouter {
         address executor,
         bytes calldata executorData
     ) public payable returns (uint256 amountOut) {
-        uint256 initialBalance = tokenOut == address(0)
-            ? recipient.balance
-            : balanceOfAccount(tokenOut, recipient);
+        uint256 initialBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
 
         if (tokenIn != address(0)) {
             if (amountIn != 0) {
@@ -1032,8 +961,7 @@ contract zRouter {
 
         safeExecutor.execute{value: msg.value}(executor, executorData);
 
-        uint256 finalBalance =
-            tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
+        uint256 finalBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
         amountOut = finalBalance - initialBalance;
         if (amountOut < amountOutMin) revert SnwapSlippage(tokenOut, amountOut, amountOutMin);
         if (recipient == address(this)) depositFor(tokenOut, 0, amountOut, address(this));
@@ -1051,9 +979,7 @@ contract zRouter {
         uint256 len = tokensOut.length;
         uint256[] memory initBals = new uint256[](len);
         for (uint256 i; i != len; ++i) {
-            initBals[i] = tokensOut[i] == address(0)
-                ? recipient.balance
-                : balanceOfAccount(tokensOut[i], recipient);
+            initBals[i] = tokensOut[i] == address(0) ? recipient.balance : balanceOfAccount(tokensOut[i], recipient);
         }
 
         if (tokenIn != address(0)) {
@@ -1071,9 +997,8 @@ contract zRouter {
 
         amountsOut = new uint256[](len);
         for (uint256 i; i != len; ++i) {
-            uint256 finalBal = tokensOut[i] == address(0)
-                ? recipient.balance
-                : balanceOfAccount(tokensOut[i], recipient);
+            uint256 finalBal =
+                tokensOut[i] == address(0) ? recipient.balance : balanceOfAccount(tokensOut[i], recipient);
             amountsOut[i] = finalBal - initBals[i];
             if (amountsOut[i] < amountsOutMin[i]) {
                 revert SnwapSlippage(tokensOut[i], amountsOut[i], amountsOutMin[i]);
@@ -1167,17 +1092,7 @@ contract zRouter {
             mstore(0x34, 0)
             // Refund excess ETH
             if gt(callvalue(), ethIn) {
-                if iszero(
-                    call(
-                        gas(),
-                        caller(),
-                        sub(callvalue(), ethIn),
-                        codesize(),
-                        0x00,
-                        codesize(),
-                        0x00
-                    )
-                ) {
+                if iszero(call(gas(), caller(), sub(callvalue(), ethIn), codesize(), 0x00, codesize(), 0x00)) {
                     // ETHTransferFailed selector: 0xb12d13eb
                     mstore(0x00, 0xb12d13eb)
                     revert(0x1c, 0x04)
@@ -1216,17 +1131,7 @@ contract zRouter {
             mstore(0x34, 0)
             // Refund excess ETH
             if gt(callvalue(), ethIn) {
-                if iszero(
-                    call(
-                        gas(),
-                        caller(),
-                        sub(callvalue(), ethIn),
-                        codesize(),
-                        0x00,
-                        codesize(),
-                        0x00
-                    )
-                ) {
+                if iszero(call(gas(), caller(), sub(callvalue(), ethIn), codesize(), 0x00, codesize(), 0x00)) {
                     // ETHTransferFailed selector: 0xb12d13eb
                     mstore(0x00, 0xb12d13eb)
                     revert(0x1c, 0x04)
@@ -1237,11 +1142,7 @@ contract zRouter {
 
     // NameNFT - REVEAL NAME ****
 
-    function onERC721Received(address, address, uint256, bytes calldata)
-        public
-        pure
-        returns (bytes4)
-    {
+    function onERC721Received(address, address, uint256, bytes calldata) public pure returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
@@ -1269,10 +1170,7 @@ contract zRouter {
 address constant NAME_NFT = 0x0000000000696760E15f265e828DB644A0c242EB;
 
 interface INameNFT {
-    function reveal(string calldata label, bytes32 secret)
-        external
-        payable
-        returns (uint256 tokenId);
+    function reveal(string calldata label, bytes32 secret) external payable returns (uint256 tokenId);
     function transferFrom(address from, address to, uint256 tokenId) external;
 }
 
@@ -1284,14 +1182,12 @@ address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
 // Uniswap helpers:
 
 address constant V2_FACTORY = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
-bytes32 constant V2_POOL_INIT_CODE_HASH =
-    0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
+bytes32 constant V2_POOL_INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
 
 // ** SushiSwap:
 
 address constant SUSHI_FACTORY = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-bytes32 constant SUSHI_POOL_INIT_CODE_HASH =
-    0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
+bytes32 constant SUSHI_POOL_INIT_CODE_HASH = 0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
 
 interface IV2Pool {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
@@ -1299,8 +1195,7 @@ interface IV2Pool {
 }
 
 address constant V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
-bytes32 constant V3_POOL_INIT_CODE_HASH =
-    0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
+bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
@@ -1388,13 +1283,8 @@ address constant CURVE_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 interface IStableNgPool {
     function get_dx(int128 i, int128 j, uint256 out_amount) external view returns (uint256);
     function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
-    function calc_token_amount(uint256[8] calldata _amounts, bool _is_deposit)
-        external
-        view
-        returns (uint256);
-    function add_liquidity(uint256[8] calldata _amounts, uint256 _min_mint_amount)
-        external
-        returns (uint256);
+    function calc_token_amount(uint256[8] calldata _amounts, bool _is_deposit) external view returns (uint256);
+    function add_liquidity(uint256[8] calldata _amounts, uint256 _min_mint_amount) external returns (uint256);
     function calc_withdraw_one_coin(uint256 token_amount, int128 i) external view returns (uint256);
     function remove_liquidity_one_coin(uint256 token_amount, int128 i, uint256 min_amount) external;
 }
@@ -1412,23 +1302,13 @@ interface ICryptoNgPool {
 }
 
 interface ITwoCryptoNgPool {
-    function calc_token_amount(uint256[2] calldata amounts, bool is_deposit)
-        external
-        view
-        returns (uint256);
-    function add_liquidity(uint256[2] calldata amounts, uint256 min_mint_amount)
-        external
-        returns (uint256);
+    function calc_token_amount(uint256[2] calldata amounts, bool is_deposit) external view returns (uint256);
+    function add_liquidity(uint256[2] calldata amounts, uint256 min_mint_amount) external returns (uint256);
 }
 
 interface ITriCryptoNgPool {
-    function calc_token_amount(uint256[3] calldata amounts, bool is_deposit)
-        external
-        view
-        returns (uint256);
-    function add_liquidity(uint256[3] calldata amounts, uint256 min_mint_amount)
-        external
-        returns (uint256);
+    function calc_token_amount(uint256[3] calldata amounts, bool is_deposit) external view returns (uint256);
+    function add_liquidity(uint256[3] calldata amounts, uint256 min_mint_amount) external returns (uint256);
 }
 
 // Solady safe transfer helpers:
@@ -1494,10 +1374,7 @@ function balanceOf(address token) view returns (uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, address())
         mstore(0x00, 0x70a08231000000000000000000000000)
-        amount := mul(
-            mload(0x20),
-            and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20))
-        )
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)))
     }
 }
 
@@ -1507,10 +1384,7 @@ function allowance(address token, address owner, address spender) view returns (
         mstore(0x40, spender)
         mstore(0x2c, shl(96, owner))
         mstore(0x0c, 0xdd62ed3e000000000000000000000000)
-        amount := mul(
-            mload(0x20),
-            and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x1c, 0x44, 0x20, 0x20))
-        )
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x1c, 0x44, 0x20, 0x20)))
         mstore(0x40, m)
     }
 }
@@ -1519,10 +1393,7 @@ function balanceOfAccount(address token, address account) view returns (uint256 
     assembly ("memory-safe") {
         mstore(0x14, account)
         mstore(0x00, 0x70a08231000000000000000000000000)
-        amount := mul(
-            mload(0x20),
-            and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20))
-        )
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)))
     }
 }
 
@@ -1532,9 +1403,7 @@ interface IERC6909 {
     function setOperator(address spender, bool approved) external returns (bool);
     function balanceOf(address owner, uint256 id) external view returns (uint256 amount);
     function transfer(address receiver, uint256 id, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address receiver, uint256 id, uint256 amount)
-        external
-        returns (bool);
+    function transferFrom(address sender, address receiver, uint256 id, uint256 amount) external returns (bool);
 }
 
 // Low-level WETH helpers - we know WETH so we can make assumptions:
@@ -1580,15 +1449,8 @@ address constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
 interface IERC2612 {
-    function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
+    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        external;
 }
 
 interface IDAIPermit {

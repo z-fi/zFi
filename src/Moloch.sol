@@ -114,12 +114,8 @@ contract Moloch {
     }
     mapping(address payToken => Sale) public sales;
 
-    event SaleUpdated(
-        address indexed payToken, uint256 price, uint256 cap, bool minting, bool active, bool isLoot
-    );
-    event SharesPurchased(
-        address indexed buyer, address indexed payToken, uint256 shares, uint256 paid
-    );
+    event SaleUpdated(address indexed payToken, uint256 price, uint256 cap, bool minting, bool active, bool isLoot);
+    event SharesPurchased(address indexed buyer, address indexed payToken, uint256 shares, uint256 paid);
 
     /**
      * MSG STATE
@@ -157,9 +153,7 @@ contract Moloch {
     /**
      * ERC6909 STATE
      */
-    event Transfer(
-        address caller, address indexed from, address indexed to, uint256 indexed id, uint256 amount
-    );
+    event Transfer(address caller, address indexed from, address indexed to, uint256 indexed id, uint256 amount);
 
     mapping(address owner => mapping(uint256 id => uint256)) public balanceOf;
     mapping(uint256 id => uint256) public totalSupply;
@@ -191,12 +185,8 @@ contract Moloch {
 
     event FutarchyOpened(uint256 indexed id, address indexed rewardToken);
     event FutarchyFunded(uint256 indexed id, address indexed from, uint256 amount);
-    event FutarchyResolved(
-        uint256 indexed id, uint8 winner, uint256 pool, uint256 finalSupply, uint256 payoutPerUnit
-    );
-    event FutarchyClaimed(
-        uint256 indexed id, address indexed claimer, uint256 burned, uint256 payout
-    );
+    event FutarchyResolved(uint256 indexed id, uint8 winner, uint256 pool, uint256 finalSupply, uint256 payoutPerUnit);
+    event FutarchyClaimed(uint256 indexed id, address indexed claimer, uint256 burned, uint256 payout);
 
     /* INIT */
     constructor() payable {
@@ -496,7 +486,12 @@ contract Moloch {
         uint256 value,
         bytes calldata data,
         bytes32 nonce
-    ) public payable nonReentrant returns (bool ok, bytes memory retData) {
+    )
+        public
+        payable
+        nonReentrant
+        returns (bool ok, bytes memory retData)
+    {
         uint256 id = _intentHashId(op, to, value, data, nonce);
 
         if (executed[id]) revert AlreadyExecuted();
@@ -530,8 +525,8 @@ contract Moloch {
     function fundFutarchy(uint256 id, address token, uint256 amount) public payable {
         if (amount == 0) revert NotOk();
         if (
-            token != address(0) && token != address(this) && token != address(1007)
-                && token != address(shares) && token != address(loot)
+            token != address(0) && token != address(this) && token != address(1007) && token != address(shares)
+                && token != address(loot)
         ) {
             revert Unauthorized();
         }
@@ -580,11 +575,7 @@ contract Moloch {
         _finalizeFutarchy(id, F, 0);
     }
 
-    function cashOutFutarchy(uint256 id, uint256 amount)
-        public
-        nonReentrant
-        returns (uint256 payout)
-    {
+    function cashOutFutarchy(uint256 id, uint256 amount) public nonReentrant returns (uint256 payout) {
         FutarchyConfig storage F = futarchy[id];
         if (!F.enabled || !F.resolved) revert NotOk();
 
@@ -688,26 +679,18 @@ contract Moloch {
     }
 
     /* SALE */
-    function setSale(
-        address payToken,
-        uint256 pricePerShare,
-        uint256 cap,
-        bool minting,
-        bool active,
-        bool isLoot
-    ) public payable onlyDAO {
+    function setSale(address payToken, uint256 pricePerShare, uint256 cap, bool minting, bool active, bool isLoot)
+        public
+        payable
+        onlyDAO
+    {
         require(pricePerShare != 0, NotOk());
-        sales[payToken] = Sale({
-            pricePerShare: pricePerShare, cap: cap, minting: minting, active: active, isLoot: isLoot
-        });
+        sales[payToken] =
+            Sale({pricePerShare: pricePerShare, cap: cap, minting: minting, active: active, isLoot: isLoot});
         emit SaleUpdated(payToken, pricePerShare, cap, minting, active, isLoot);
     }
 
-    function buyShares(address payToken, uint256 shareAmount, uint256 maxPay)
-        public
-        payable
-        nonReentrant
-    {
+    function buyShares(address payToken, uint256 shareAmount, uint256 maxPay) public payable nonReentrant {
         if (shareAmount == 0) revert NotOk();
         Sale storage s = sales[payToken];
         if (!s.active) revert NotOk();
@@ -743,23 +726,16 @@ contract Moloch {
 
         // issue shares/loot
         if (s.minting) {
-            s.isLoot
-                ? loot.mintFromMoloch(msg.sender, shareAmount)
-                : shares.mintFromMoloch(msg.sender, shareAmount);
+            s.isLoot ? loot.mintFromMoloch(msg.sender, shareAmount) : shares.mintFromMoloch(msg.sender, shareAmount);
         } else {
-            s.isLoot
-                ? loot.transfer(msg.sender, shareAmount)
-                : shares.transfer(msg.sender, shareAmount);
+            s.isLoot ? loot.transfer(msg.sender, shareAmount) : shares.transfer(msg.sender, shareAmount);
         }
 
         emit SharesPurchased(msg.sender, payToken, shareAmount, cost);
     }
 
     /* RAGEQUIT */
-    function ragequit(address[] calldata tokens, uint256 sharesToBurn, uint256 lootToBurn)
-        public
-        nonReentrant
-    {
+    function ragequit(address[] calldata tokens, uint256 sharesToBurn, uint256 lootToBurn) public nonReentrant {
         uint256 amt = sharesToBurn + lootToBurn;
         unchecked {
             if (!ragequittable) revert NotOk();
@@ -848,11 +824,7 @@ contract Moloch {
         renderer = r;
     }
 
-    function setMetadata(string calldata n, string calldata s, string calldata uri)
-        public
-        payable
-        onlyDAO
-    {
+    function setMetadata(string calldata n, string calldata s, string calldata uri) public payable onlyDAO {
         (_orgName, _orgSymbol, _orgURI) = (n, s, uri);
     }
 
@@ -867,9 +839,8 @@ contract Moloch {
     /// @dev Default reward token for futarchy pools:
     function setFutarchyRewardToken(address _rewardToken) public payable onlyDAO {
         if (
-            _rewardToken != address(0) && _rewardToken != address(this)
-                && _rewardToken != address(1007) && _rewardToken != address(shares)
-                && _rewardToken != address(loot)
+            _rewardToken != address(0) && _rewardToken != address(this) && _rewardToken != address(1007)
+                && _rewardToken != address(shares) && _rewardToken != address(loot)
         ) revert NotOk();
         rewardToken = _rewardToken;
     }
@@ -922,10 +893,7 @@ contract Moloch {
         return true;
     }
 
-    function transferFrom(address sender, address receiver, uint256 id, uint256 amount)
-        public
-        returns (bool)
-    {
+    function transferFrom(address sender, address receiver, uint256 id, uint256 amount) public returns (bool) {
         if (isPermitReceipt[id]) revert SBT();
         require(msg.sender == sender || isOperator[sender][msg.sender], Unauthorized());
         balanceOf[sender][id] -= amount;
@@ -968,9 +936,7 @@ contract Moloch {
         view
         returns (uint256)
     {
-        return uint256(
-            keccak256(abi.encode(address(this), op, to, value, keccak256(data), nonce, config))
-        );
+        return uint256(keccak256(abi.encode(address(this), op, to, value, keccak256(data), nonce, config)));
     }
 
     function _execute(uint8 op, address to, uint256 value, bytes calldata data)
@@ -1032,19 +998,11 @@ contract Moloch {
     /* RECEIVERS */
     receive() external payable {}
 
-    function onERC721Received(address, address, uint256, bytes calldata)
-        public
-        pure
-        returns (bytes4)
-    {
+    function onERC721Received(address, address, uint256, bytes calldata) public pure returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
-    function onERC1155Received(address, address, uint256, uint256, bytes calldata)
-        public
-        pure
-        returns (bytes4)
-    {
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) public pure returns (bytes4) {
         return this.onERC1155Received.selector;
     }
 }
@@ -1077,12 +1035,8 @@ contract Shares {
     }
 
     /* VOTES (ERC20Votes-like minimal) */
-    event DelegateChanged(
-        address indexed delegator, address indexed fromDelegate, address indexed toDelegate
-    );
-    event DelegateVotesChanged(
-        address indexed delegate, uint256 previousBalance, uint256 newBalance
-    );
+    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
+    event DelegateVotesChanged(address indexed delegate, uint256 previousBalance, uint256 newBalance);
 
     struct Checkpoint {
         uint48 fromBlock;
@@ -1197,12 +1151,7 @@ contract Shares {
         _afterVotingBalanceChange(to, signed);
     }
 
-    function _updateDelegateVotes(
-        address delegate_,
-        Checkpoint[] storage ckpts,
-        bool add,
-        uint256 amount
-    ) internal {
+    function _updateDelegateVotes(address delegate_, Checkpoint[] storage ckpts, bool add, uint256 amount) internal {
         unchecked {
             uint256 len = ckpts.length;
             uint256 oldVal = len == 0 ? 0 : ckpts[len - 1].votes;
@@ -1427,9 +1376,7 @@ contract Shares {
     /// @dev Re-route an existing holder's current voting power from `old` distribution to
     ///      the holder's *current* distribution (as returned by _currentDistribution),
     ///      in a path-independent way based on old vs new target allocations:
-    function _repointVotesForHolder(address holder, address[] memory oldD, uint32[] memory oldB)
-        internal
-    {
+    function _repointVotesForHolder(address holder, address[] memory oldD, uint32[] memory oldB) internal {
         uint256 bal = balanceOf[holder];
         if (bal == 0) return;
 
@@ -1556,11 +1503,7 @@ contract Shares {
         }
     }
 
-    function _checkpointsLookup(Checkpoint[] storage ckpts, uint48 blockNumber)
-        internal
-        view
-        returns (uint256)
-    {
+    function _checkpointsLookup(Checkpoint[] storage ckpts, uint48 blockNumber) internal view returns (uint256) {
         unchecked {
             uint256 len = ckpts.length;
             if (len == 0) return 0;
@@ -2000,10 +1943,7 @@ function balanceOfThis(address token) view returns (uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, address())
         mstore(0x00, 0x70a08231000000000000000000000000)
-        amount := mul(
-            mload(0x20),
-            and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20))
-        )
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)))
     }
 }
 
@@ -2088,17 +2028,7 @@ contract Summoner {
             }
             mstore(0x24, 0)
         }
-        dao.init(
-            orgName,
-            orgSymbol,
-            orgURI,
-            quorumBps,
-            ragequittable,
-            renderer,
-            initHolders,
-            initShares,
-            initCalls
-        );
+        dao.init(orgName, orgSymbol, orgURI, quorumBps, ragequittable, renderer, initHolders, initShares, initCalls);
         daos.push(dao);
         emit NewDAO(msg.sender, dao);
     }
