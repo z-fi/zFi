@@ -156,22 +156,6 @@ button.secondary:hover { background: #f5f5f5; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-/* Progress bar */
-.progress-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  z-index: 9999;
-}
-.progress-bar-fill {
-  height: 100%;
-  background: #000;
-  width: 0%;
-  transition: width 0.3s;
-}
-
 /* Modal */
 .wallet-modal-overlay, .modal-overlay {
   display: none;
@@ -1694,13 +1678,6 @@ body.modal-open { overflow: hidden; }
 }
 @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
 
-/* Allowances */
-.allowances-panel {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #ddd;
-}
-
 /* Summoner toggle */
 .summoner-toggle {
   font-size: 12px;
@@ -1769,11 +1746,6 @@ body.modal-open { overflow: hidden; }
 </style>
 </head>
 <body>
-<!-- Progress Bar -->
-<div class="progress-bar" id="progressBar" style="display: none;">
-  <div class="progress-bar-fill"></div>
-</div>
-
 <!-- Toast Notifications -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -3374,11 +3346,6 @@ body.modal-open { overflow: hidden; }
         return `${getExplorerUrl()}/address/${address}`;
       }
 
-      // Get the block explorer link for a transaction
-      function getExplorerTxUrl(txHash) {
-        return `${getExplorerUrl()}/tx/${txHash}`;
-      }
-
       // Get the OpenSea URL for an NFT
       function getOpenSeaUrl(contractAddress, tokenId) {
         return `https://opensea.io/assets/ethereum/${contractAddress.toLowerCase()}/${tokenId}`;
@@ -3442,27 +3409,6 @@ body.modal-open { overflow: hidden; }
         return TOKEN_ICONS.defaultCoin || `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="14" fill="none" stroke="#000" stroke-width="2"/><circle cx="16" cy="16" r="8" fill="none" stroke="#000" stroke-width="1.5" opacity="0.5"/></svg>`;
       }
 
-      // Get tribute/payment tokens for current network (used for token selection dropdowns)
-      function getNetworkTributeTokens() {
-        const network = getNetwork();
-        const result = [];
-
-        for (const tokenAddr of network.treasuryTokens) {
-          if (tokenAddr === ethers.ZeroAddress) continue; // Skip ETH for tribute tokens
-          const meta = network.tokenMeta[tokenAddr];
-          if (meta) {
-            result.push({
-              address: tokenAddr,
-              symbol: meta.symbol,
-              decimals: meta.decimals,
-              icon: getTokenIcon(tokenAddr)
-            });
-          }
-        }
-
-        return result;
-      }
-
       // Get all supported tokens including ETH for current network
       function getNetworkTokens() {
         const network = getNetwork();
@@ -3524,6 +3470,18 @@ body.modal-open { overflow: hidden; }
         calls.push({ target: TRIBUTE_ADDRESS, allowFailure: true, callData: tributeIface.encodeFunctionData('getActiveDaoTributes', [daoAddress]) });
         callMap.push({ type: 'tributes' });
 
+        // 5. transfersLocked() on shares and loot tokens
+        const transfersLockedIface = new ethers.Interface(['function transfersLocked() view returns (bool)']);
+        const transfersLockedCalldata = transfersLockedIface.encodeFunctionData('transfersLocked');
+        calls.push({ target: currentDAO.dao.meta.sharesToken, allowFailure: true, callData: transfersLockedCalldata });
+        callMap.push({ type: 'sharesTransfersLocked' });
+        calls.push({ target: currentDAO.dao.meta.lootToken, allowFailure: true, callData: transfersLockedCalldata });
+        callMap.push({ type: 'lootTransfersLocked' });
+
+        // 6. contractURI()
+        calls.push({ target: daoAddress, allowFailure: true, callData: molochIface.encodeFunctionData('contractURI') });
+        callMap.push({ type: 'contractURI' });
+
         // Execute single multicall
         const results = await withRpcFallback(async (activeProvider) => {
           const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, activeProvider);
@@ -3531,7 +3489,7 @@ body.modal-open { overflow: hidden; }
         });
 
         // Decode results
-        const batch = { config: undefined, sales: [], allowances: [], tributes: undefined };
+        const batch = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined };
 
         for (let i = 0; i < results.length; i++) {
           const { success, returnData } = results[i];
@@ -3558,6 +3516,15 @@ body.modal-open { overflow: hidden; }
             } else if (entry.type === 'tributes') {
               const decoded = tributeIface.decodeFunctionResult('getActiveDaoTributes', returnData);
               batch.tributes = decoded[0];
+            } else if (entry.type === 'sharesTransfersLocked') {
+              const decoded = transfersLockedIface.decodeFunctionResult('transfersLocked', returnData);
+              batch.sharesTransfersLocked = decoded[0];
+            } else if (entry.type === 'lootTransfersLocked') {
+              const decoded = transfersLockedIface.decodeFunctionResult('transfersLocked', returnData);
+              batch.lootTransfersLocked = decoded[0];
+            } else if (entry.type === 'contractURI') {
+              const decoded = molochIface.decodeFunctionResult('contractURI', returnData);
+              batch.contractURI = decoded[0];
             }
           } catch (e) {
             logger.warn(`Multicall: failed to decode ${entry.type}:`, e.message);
@@ -4915,24 +4882,19 @@ body.modal-open { overflow: hidden; }
 
         let resolvedName = null;
 
-        // Try .wei reverse resolution first (works on all networks via RPC fallback)
-        try {
-          const weiName = await withRpcFallback(async (rpc) => {
+        // Run .wei and ENS lookups in parallel, prefer .wei
+        const [weiResult, ensResult] = await Promise.allSettled([
+          withRpcFallback(async (rpc) => {
             const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
             return await ns.reverseResolve(address);
-          });
-          if (weiName) resolvedName = weiName.toLowerCase();
-        } catch (e) {
-          // weiNS not available or failed, continue to ENS
-        }
+          }),
+          provider ? provider.lookupAddress(address) : Promise.resolve(null)
+        ]);
 
-        // Fall back to ENS if no .wei name
-        if (!resolvedName && provider) {
-          try {
-            resolvedName = await provider.lookupAddress(address);
-          } catch (e) {
-            // ENS lookup failed
-          }
+        if (weiResult.status === 'fulfilled' && weiResult.value) {
+          resolvedName = weiResult.value.toLowerCase();
+        } else if (ensResult.status === 'fulfilled' && ensResult.value) {
+          resolvedName = ensResult.value;
         }
 
         // Cache the result (even if null)
@@ -6954,6 +6916,11 @@ body.modal-open { overflow: hidden; }
       //
       // This design saves gas (no redundant storage) while keeping everything on-chain.
       function encodeProposalMessage(op, to, value, data, nonce, description) {
+        // Sanitize description to prevent delimiter collision
+        const safeDescription = description
+          .replace(/<<<PROPOSAL_DATA/g, '< <<PROPOSAL_DATA')
+          .replace(/PROPOSAL_DATA>>>/g, 'PROPOSAL_DATA>> >');
+
         const proposalData = {
           type: 'PROPOSAL',
           op: op,
@@ -6961,7 +6928,7 @@ body.modal-open { overflow: hidden; }
           value: value.toString(),
           data: data,
           nonce: nonce,
-          description: description
+          description: safeDescription
         };
 
         // Use unique delimiters that won't appear in hex data or descriptions
@@ -6978,6 +6945,11 @@ body.modal-open { overflow: hidden; }
         try {
           const decoded = JSON.parse(match[1]);
           if (decoded.type === 'PROPOSAL') {
+            // Validate nonce is a proper bytes32 hex string (0x + 64 hex chars)
+            if (typeof decoded.nonce !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(decoded.nonce)) {
+              logger.error('Invalid proposal nonce format:', decoded.nonce);
+              return null;
+            }
             return decoded;
           }
         } catch (e) {
@@ -7220,7 +7192,7 @@ body.modal-open { overflow: hidden; }
         ttlInfoDiv.style.display = 'block';
       }
 
-      async function renderGovernanceInfo() {
+      async function renderGovernanceInfo(prefetchedTransferLocks) {
         const governanceInfo = document.getElementById('governanceInfo');
         if (!governanceInfo || !currentDAO) return;
 
@@ -7264,15 +7236,21 @@ body.modal-open { overflow: hidden; }
         // Fetch transfer lock status for shares and loot
         let transferabilityText = 'Loading...';
         try {
-          const tokenABI = ['function transfersLocked() view returns (bool)'];
-          const [sharesLocked, lootLocked] = await withRpcFallback(async (activeProvider) => {
-            const sharesContract = new ethers.Contract(currentDAO.dao.meta.sharesToken, tokenABI, activeProvider);
-            const lootContract = new ethers.Contract(currentDAO.dao.meta.lootToken, tokenABI, activeProvider);
-            return await Promise.all([
-              sharesContract.transfersLocked(),
-              lootContract.transfersLocked()
-            ]);
-          });
+          let sharesLocked, lootLocked;
+          if (prefetchedTransferLocks && prefetchedTransferLocks.sharesTransfersLocked !== undefined) {
+            sharesLocked = prefetchedTransferLocks.sharesTransfersLocked;
+            lootLocked = prefetchedTransferLocks.lootTransfersLocked;
+          } else {
+            const tokenABI = ['function transfersLocked() view returns (bool)'];
+            [sharesLocked, lootLocked] = await withRpcFallback(async (activeProvider) => {
+              const sharesContract = new ethers.Contract(currentDAO.dao.meta.sharesToken, tokenABI, activeProvider);
+              const lootContract = new ethers.Contract(currentDAO.dao.meta.lootToken, tokenABI, activeProvider);
+              return await Promise.all([
+                sharesContract.transfersLocked(),
+                lootContract.transfersLocked()
+              ]);
+            });
+          }
 
           // Store for use in proposal helper
           currentDAO._transferLocks = { sharesLocked, lootLocked };
@@ -7912,23 +7890,25 @@ body.modal-open { overflow: hidden; }
         // Add custom sale tokens if any (skip tokens already in treasury)
         if (customSaleTokens.length > 0) {
           const existingAddrs = new Set(assets.map(a => a.address.toLowerCase()));
-          for (const customToken of customSaleTokens) {
-            if (existingAddrs.has(customToken.address.toLowerCase())) continue;
+          const newTokens = customSaleTokens.filter(t => !existingAddrs.has(t.address.toLowerCase()));
+          const balanceResults = await Promise.all(newTokens.map(async (customToken) => {
             try {
               const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, provider);
               const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
-              assets.push({
+              return {
                 symbol: customToken.symbol,
                 balance: balance,
                 decimals: customToken.decimals,
                 icon: TOKEN_ICONS.defaultCoin,
                 address: customToken.address,
                 isCustomSale: true
-              });
+              };
             } catch (error) {
               logger.error(`Error fetching balance for custom sale token ${customToken.symbol}:`, error);
+              return null;
             }
-          }
+          }));
+          assets.push(...balanceResults.filter(r => r !== null));
         }
 
         assets.forEach(asset => {
@@ -8305,12 +8285,12 @@ body.modal-open { overflow: hidden; }
             </button>
           `;
           setTimeout(() => {
-            const priceInput = getEl('salePrice');
+            const priceInput = getEl('modalSalePrice');
             if (priceInput) priceInput.focus();
 
             // Set up event listeners for custom token sale hints
-            const capInput = getEl('saleCap');
-            const typeInput = getEl('saleTokenType');
+            const capInput = getEl('modalSaleCap');
+            const typeInput = getEl('modalSaleTokenType');
 
             if (priceInput && capInput) {
               const updateHint = () => updateCustomTokenSaleHint(symbol);
@@ -8332,9 +8312,9 @@ body.modal-open { overflow: hidden; }
 
       // Update custom token sale hint
       function updateCustomTokenSaleHint(tokenSymbol) {
-        const priceInput = getEl('salePrice')?.value?.trim();
-        const capInput = getEl('saleCap')?.value?.trim();
-        const tokenType = getEl('saleTokenType')?.value || 'shares';
+        const priceInput = getEl('modalSalePrice')?.value?.trim();
+        const capInput = getEl('modalSaleCap')?.value?.trim();
+        const tokenType = getEl('modalSaleTokenType')?.value || 'shares';
 
         const hint = document.getElementById('customTokenSaleHint');
         const hintText = document.getElementById('customTokenSaleHintText');
@@ -9013,7 +8993,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9118,7 +9103,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9304,7 +9294,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9433,7 +9428,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9562,7 +9562,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9732,7 +9737,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -9824,7 +9834,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -10322,7 +10337,7 @@ body.modal-open { overflow: hidden; }
 
           let tx;
           if (payToken === ethers.ZeroAddress) {
-            tx = await molochContract.buyShares(payToken, shareAmount, maxPay, getWalletConnectTxOverrides({ value: cost }));
+            tx = await molochContract.buyShares(payToken, shareAmount, maxPay, getWalletConnectTxOverrides({ value: maxPay }));
           } else {
             tx = await molochContract.buyShares(payToken, shareAmount, maxPay, getWalletConnectTxOverrides());
           }
@@ -10980,7 +10995,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -11256,7 +11276,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -11521,13 +11546,12 @@ body.modal-open { overflow: hidden; }
 
           const active = status === 'active';
 
-          // Encode setSale(address token, bool loot, uint256 price, uint256 cap, bool minting, bool active)
+          // Encode setSale(address payToken, uint256 pricePerShare, uint256 cap, bool minting, bool active, bool isLoot)
           // Internal Moloch sale always uses minting=true
           const priceWei = ethers.parseEther(price);
           const capWei = ethers.parseEther(cap);
 
-          const setSaleIface = new ethers.Interface(['function setSale(address token, bool loot, uint256 price, uint256 cap, bool minting, bool active)']);
-          const calldata = setSaleIface.encodeFunctionData('setSale', [payTokenAddr, isLoot, priceWei, capWei, true, active]);
+          const calldata = INTERFACES.setSale.encodeFunctionData('setSale', [payTokenAddr, priceWei, capWei, true, active, isLoot]);
 
           // Target is the DAO itself (Moloch.setSale)
           getEl('proposalTo').value = daoAddress;
@@ -11557,7 +11581,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -11746,7 +11775,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -11801,7 +11835,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to show the populated form
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 300);
 
         } catch (error) {
@@ -11903,7 +11942,12 @@ body.modal-open { overflow: hidden; }
 
           // Scroll to description
           setTimeout(() => {
-            getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const lockedEl = getEl('proposalDescriptionLocked');
+            if (lockedEl && lockedEl.style.display !== 'none') {
+              lockedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+              getEl('proposalDescription').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }, 100);
         } catch (error) {
           logger.error('Error populating sale proposal:', error);
@@ -11911,155 +11955,11 @@ body.modal-open { overflow: hidden; }
         }
       }
 
-      // Legacy internal sale proposal helper (now superseded by prepareInternalSaleProposal)
-      async function prepareLegacySaleProposal() {
-        if (!currentDAO || !currentDAO.dao) {
-          showStatus('Please select a DAO first', true);
-          return;
-        }
-
-        const proposalForm = document.querySelector('.proposal-form');
-        if (proposalForm) {
-          proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        let helperDiv = getEl('saleHelper');
-        if (!helperDiv) {
-          helperDiv = document.createElement('div');
-          helperDiv.id = 'saleHelper';
-          helperDiv.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: #f9f9f9; border: 1px solid #ddd; ';
-          proposalForm.insertBefore(helperDiv, proposalForm.querySelector('.proposal-form-group'));
-        }
-
-        helperDiv.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <div style="font-size: 0.85rem; color: #000; letter-spacing: 0.1em;">CONFIGURE TOKEN SALE</div>
-            <button onclick="clearSaleHelper()" style="background: none; border: none; color: #999; cursor: pointer; font-size: 1.2rem; padding: 0; line-height: 1;">&times;</button>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-                Payment Token (18-decimal only)
-                <span style="font-size: 0.65rem; opacity: 0.7; font-weight: normal;">(Use + Custom in treasury for other 18-decimal tokens)</span>
-              </label>
-              <div style="position: relative;">
-                <div id="proposalPayTokenDisplay" onclick="toggleProposalPayTokenDropdown()"
-                     style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
-                  <div style="width: 20px; height: 20px; flex-shrink: 0;" id="proposalPayTokenIcon"></div>
-                  <span id="proposalPayTokenLabel">DAI</span>
-                </div>
-                <div id="proposalPayTokenDropdown" class="custom-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 0.25rem; background: #fff; border: 1px solid #ddd; z-index: 1000; ">
-                  <div onclick="selectProposalPayToken('dai', '${TOKEN_ADDRESSES.dai}')" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">
-                    <div style="width: 20px; height: 20px; flex-shrink: 0;" class="proposal-token-icon" data-token="dai"></div>
-                    <span style="color: #000; font-size: 0.95rem;">DAI</span>
-                  </div>
-                  <div onclick="selectProposalPayToken('custom', 'custom')" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #ddd;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">
-                    <div style="width: 20px; height: 20px; flex-shrink: 0;" class="proposal-token-icon" data-token="defaultCoin"></div>
-                    <span style="color: #000; font-size: 0.95rem;">Custom Token</span>
-                  </div>
-                </div>
-                <input type="hidden" id="salePayToken" value="${TOKEN_ADDRESSES.dai}">
-              </div>
-              <div id="customSaleTokenFields" style="display: none; margin-top: 0.5rem;">
-                <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Custom Token Address</label>
-                <div style="display: flex; gap: 0.5rem;">
-                  <input type="text" id="customSaleTokenAddress" placeholder="0x..."
-                         onkeydown="if(event.key==='Enter'){event.preventDefault();validateCustomSaleToken();}"
-                         style="flex: 1; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;" />
-                  <button onclick="validateCustomSaleToken()" type="button"
-                          style="padding: 0.6rem 1rem; background: #f5f5f5; border: 1px solid #ddd; color: #000; font-size: 0.75rem; letter-spacing: 0.1em; cursor: pointer; white-space: nowrap; min-height: 44px;">
-                    Validate
-                  </button>
-                </div>
-                <div id="customSaleTokenInfo" style="margin-top: 0.5rem; font-size: 0.75rem; color: #444;"></div>
-                <small style="display: block; margin-top: 0.25rem; font-size: 0.7rem; color: #999;">Must be an 18-decimal ERC20 token</small>
-              </div>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Token Type</label>
-              <select id="proposalSaleTokenType" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;">
-                <option value="false">Shares</option>
-                <option value="true">Loot</option>
-              </select>
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-                Price per Token
-                <span title="For 1:1 upgrades with 18 decimal tokens, use 1.0. This sale will be shown as 'Governance Staking/Upgrade' instead of 'Sale'." style="cursor: help; margin-left: 0.25rem;">ℹ️</span>
-              </label>
-              <input type="number" id="proposalSalePrice" placeholder="0.0" step="any" min="0" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;" />
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-                Cap (0 = unlimited)
-                <span title="For token upgrades, set to 0 for unlimited. Users can go back and forth via ragequit." style="cursor: help; margin-left: 0.25rem;">ℹ️</span>
-              </label>
-              <input type="number" id="proposalSaleCap" placeholder="0" step="any" min="0" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;" />
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Source</label>
-              <select id="proposalSaleMinting" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;">
-                <option value="true">Mint new</option>
-                <option value="false">From treasury</option>
-              </select>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Status</label>
-              <select id="proposalSaleActive" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #ddd; color: #000; font-size: 0.95rem;">
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </div>
-          </div>
-          <div id="proposalSaleHint" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem; background: #f9f9f9; border-left: 3px solid #000; font-size: 0.85rem; color: #000; line-height: 1.5;">
-            <strong style="color: #000;">Sale Preview:</strong> <span id="proposalSaleHintText"></span>
-          </div>
-          <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #f9f9f9; border-left: 3px solid #ccc; font-size: 0.8rem; color: #333; line-height: 1.5;">
-            <strong>Token Upgrade Path:</strong> With ragequit enabled, users can upgrade their tokens to DAO shares, then burn shares to reclaim tokens if desired, lowering risk.
-          </div>
-          <button onclick="populateSaleProposal('${currentDAO.dao.dao}')"
-                  onmouseover="this.style.background='#f0f0f0'; this.style.borderColor='#000';"
-                  onmouseout="this.style.background='#f0f0f0'; this.style.borderColor='#ddd';"
-                  style="width: 100%; padding: 0.75rem; background: #f5f5f5; border: 1px solid #ddd; color: #000; font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
-            Populate Proposal Form
-          </button>
-        `;
-
-        // Initialize token icons and set up event listeners
-        setTimeout(() => {
-          initializeProposalPayTokenIcons();
-
-          const priceInput = getEl('salePrice');
-          const capInput = getEl('saleCap');
-          const tokenInput = getEl('salePayToken');
-          const typeInput = getEl('saleTokenType');
-
-          if (priceInput && capInput) {
-            // Remove old listeners before adding new ones to prevent memory leaks
-            priceInput.removeEventListener('input', updateProposalSaleHint);
-            capInput.removeEventListener('input', updateProposalSaleHint);
-            tokenInput.removeEventListener('change', updateProposalSaleHint);
-            typeInput.removeEventListener('change', updateProposalSaleHint);
-
-            // Add fresh listeners
-            priceInput.addEventListener('input', updateProposalSaleHint);
-            capInput.addEventListener('input', updateProposalSaleHint);
-            tokenInput.addEventListener('change', updateProposalSaleHint);
-            typeInput.addEventListener('change', updateProposalSaleHint);
-            updateProposalSaleHint(); // Initial update
-          }
-        }, 10);
-      }
-
       // Update proposal form sale hint
       function updateProposalSaleHint() {
-        const priceInput = getEl('salePrice')?.value?.trim();
-        const capInput = getEl('saleCap')?.value?.trim();
-        const tokenType = getEl('saleTokenType')?.value === 'true' ? 'loot' : 'shares';
+        const priceInput = getEl('proposalSalePrice')?.value?.trim();
+        const capInput = getEl('proposalSaleCap')?.value?.trim();
+        const tokenType = getEl('proposalSaleTokenType')?.value === 'true' ? 'loot' : 'shares';
         const paymentToken = getEl('salePayToken')?.value;
 
         const hint = document.getElementById('proposalSaleHint');
@@ -12114,337 +12014,10 @@ body.modal-open { overflow: hidden; }
         hint.style.display = 'block';
       }
 
-      function clearSaleHelper() {
-        const helperDiv = getEl('saleHelper');
-        if (helperDiv) helperDiv.remove();
-      }
-
-      // DAICO Sale proposal helper - for setting up external OTC sales
-      async function prepareDaicoSaleProposal() {
-        if (!currentDAO || !currentDAO.dao) {
-          showStatus('Please select a DAO first', true);
-          return;
-        }
-
-        const proposalForm = document.querySelector('.proposal-form');
-        if (proposalForm) {
-          proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-        // Clear any existing sale helper
-        clearSaleHelper();
-
-        let helperDiv = document.getElementById('daicoSaleHelper');
-        if (!helperDiv) {
-          helperDiv = document.createElement('div');
-          helperDiv.id = 'daicoSaleHelper';
-          helperDiv.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: #f0fff0; border: 1px solid #2d8a2d; ';
-          proposalForm.insertBefore(helperDiv, proposalForm.querySelector('.proposal-form-group'));
-        }
-
-        const daoSymbol = currentDAO.dao.meta.symbol;
-        const sharesAddress = currentDAO.dao.meta.sharesToken;
-        const lootAddress = currentDAO.dao.meta.lootToken;
-
-        helperDiv.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <div style="font-size: 0.85rem; color: #2d8a2d; letter-spacing: 0.1em;">CONFIGURE DAICO SALE</div>
-            <button onclick="clearDaicoSaleHelper()" style="background: none; border: none; color: #999; cursor: pointer; font-size: 1.2rem; padding: 0; line-height: 1;">&times;</button>
-          </div>
-          <div style="margin-bottom: 0.75rem; padding: 0.6rem; background: #f0fff0; border-left: 3px solid #2d8a2d; font-size: 0.8rem; color: #000;">
-            <strong>DAICO Sale:</strong> External OTC contract. This proposal will create a batch of 3 calls:
-            <ol style="margin: 0.5rem 0 0 1rem; padding: 0;">
-              <li>Mint tokens to DAO</li>
-              <li>Approve DAICO to sell them</li>
-              <li>Configure the sale on DAICO contract</li>
-            </ol>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Payment Token</label>
-              <div style="position: relative;">
-                <div id="daicoProposalTribTokenDisplay" onclick="toggleDaicoProposalTokenDropdown()"
-                     style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #2d8a2d; color: #000; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
-                  <span id="daicoProposalTribTokenIcon" style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.eth}</span>
-                  <span id="daicoProposalTribTokenLabel">ETH</span>
-                </div>
-                <div id="daicoProposalTribTokenDropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 0.25rem; background: #fff; border: 1px solid #2d8a2d; z-index: 1000; ">
-                  <div onclick="selectDaicoProposalToken('${ethers.ZeroAddress}', 'ETH', 18)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.eth}</span>
-                    <span style="color: #000; font-size: 0.95rem;">ETH</span>
-                  </div>
-                  <div onclick="selectDaicoProposalToken('${TOKEN_ADDRESSES.usdc}', 'USDC', 6)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #eee;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.usdc}</span>
-                    <span style="color: #000; font-size: 0.95rem;">USDC</span>
-                  </div>
-                  <div onclick="selectDaicoProposalToken('${TOKEN_ADDRESSES.usdt}', 'USDT', 6)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #eee;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.usdt}</span>
-                    <span style="color: #000; font-size: 0.95rem;">USDT</span>
-                  </div>
-                  <div onclick="selectDaicoProposalToken('${TOKEN_ADDRESSES.dai}', 'DAI', 18)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #eee;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.dai}</span>
-                    <span style="color: #000; font-size: 0.95rem;">DAI</span>
-                  </div>
-                  <div onclick="selectDaicoProposalToken('${TOKEN_ADDRESSES.wsteth}', 'wstETH', 18)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #eee;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.wsteth}</span>
-                    <span style="color: #000; font-size: 0.95rem;">wstETH</span>
-                  </div>
-                  <div onclick="selectDaicoProposalToken('${TOKEN_ADDRESSES.reth}', 'rETH', 18)" style="padding: 0.6rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; transition: background 0.2s; border-top: 1px solid #eee;" onmouseover="this.style.background='#f0fff0'" onmouseout="this.style.background='transparent'">
-                    <span style="width: 20px; height: 20px; flex-shrink: 0;">${TOKEN_ICONS.reth}</span>
-                    <span style="color: #000; font-size: 0.95rem;">rETH</span>
-                  </div>
-                </div>
-                <input type="hidden" id="daicoProposalTribToken" value="${ethers.ZeroAddress}" data-decimals="18" data-symbol="ETH">
-              </div>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">Token to Sell</label>
-              <select id="daicoProposalForToken" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #2d8a2d; color: #000; font-size: 0.95rem; ">
-                <option value="${sharesAddress}">Shares (${daoSymbol})</option>
-                <option value="${lootAddress}">Loot (${daoSymbol}-LOOT)</option>
-              </select>
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-                Tribute Amount
-                <span title="Amount of payment token required per unit ratio (e.g., 1 ETH, 100 USDC)" style="cursor: help; margin-left: 0.25rem;">ℹ️</span>
-              </label>
-              <input type="number" id="daicoProposalTribAmt" placeholder="1" step="any" min="0.000001" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #2d8a2d; color: #000; font-size: 0.95rem;" />
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-                For Amount
-                <span title="Amount of shares/loot received for each tribute amount" style="cursor: help; margin-left: 0.25rem;">ℹ️</span>
-              </label>
-              <input type="number" id="daicoProposalForAmt" placeholder="1000" step="any" min="1" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #2d8a2d; color: #000; font-size: 0.95rem;" />
-            </div>
-          </div>
-          <div style="margin-bottom: 0.75rem;">
-            <label style="display: block; font-size: 0.75rem; color: #999; margin-bottom: 0.35rem;">
-              Sale Supply
-              <span title="Total amount of tokens to mint and make available for sale" style="cursor: help; margin-left: 0.25rem;">ℹ️</span>
-            </label>
-            <input type="number" id="daicoProposalSupply" placeholder="1000000" step="any" min="1" style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid #2d8a2d; color: #000; font-size: 0.95rem;" />
-          </div>
-
-          <!-- LP Configuration (Optional) -->
-          <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #f5f8ff; border: 1px solid #d0d8f0; ">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input type="checkbox" id="daicoProposalEnableLP" onchange="toggleDaicoLPFields()" style="width: 16px; height: 16px; accent-color: #4466aa;">
-              <label for="daicoProposalEnableLP" style="font-size: 0.8rem; color: #4466aa; font-weight: 600; cursor: pointer;">Enable Liquidity Provision (LP)</label>
-              <span title="Auto-route a portion of tribute to ZAMM liquidity pool. Buyers receive slightly fewer tokens but liquidity is built automatically." style="cursor: help;">ℹ️</span>
-            </div>
-            <div id="daicoLPFields" style="display: none;">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <div>
-                  <label style="display: block; font-size: 0.7rem; color: #999; margin-bottom: 0.25rem;">LP %</label>
-                  <input type="number" id="daicoProposalLpBps" placeholder="50" min="1" max="99" step="1" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #c0c8e0; color: #000; font-size: 0.9rem; " oninput="updateDaicoProposalHint();" />
-                  <small style="display: block; font-size: 0.65rem; color: #aaa; margin-top: 0.2rem;">% of tribute to LP (1-99)</small>
-                </div>
-                <div>
-                  <label style="display: block; font-size: 0.7rem; color: #999; margin-bottom: 0.25rem;">Pool Fee (bps)</label>
-                  <input type="number" id="daicoProposalFeeOrHook" placeholder="30" min="1" max="10000" step="1" value="30" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #c0c8e0; color: #000; font-size: 0.9rem; " />
-                  <small style="display: block; font-size: 0.65rem; color: #aaa; margin-top: 0.2rem;">ZAMM pool fee (30 = 0.3%)</small>
-                </div>
-              </div>
-              <div style="padding: 0.4rem; background: #f0f4ff; font-size: 0.7rem; color: #444;">
-                <strong>Note:</strong> Buyers receive (100% - LP%) of quoted rate. LP shares go to DAO treasury.
-              </div>
-            </div>
-          </div>
-
-          <!-- Tap Configuration (Optional) -->
-          <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #fffaf0; border: 1px solid #e8d5b0; ">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input type="checkbox" id="daicoProposalEnableTap" onchange="toggleDaicoTapFields()" style="width: 16px; height: 16px; accent-color: #b8860b;">
-              <label for="daicoProposalEnableTap" style="font-size: 0.8rem; color: #b8860b; font-weight: 600; cursor: pointer;">Enable Tap (Continuous Funding)</label>
-              <span title="Set up a continuous funding stream from sale proceeds to an operations address. Like Vitalik's DAICO tap mechanism." style="cursor: help;">ℹ️</span>
-            </div>
-            <div id="daicoTapFields" style="display: none;">
-              <div style="margin-bottom: 0.5rem;">
-                <label style="display: block; font-size: 0.7rem; color: #999; margin-bottom: 0.25rem;">Ops Address (Tap Beneficiary)</label>
-                <input type="text" id="daicoProposalTapOps" placeholder="0x..." style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #e0c8a0; color: #000; font-size: 0.85rem; " />
-              </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <div>
-                  <label style="display: block; font-size: 0.7rem; color: #999; margin-bottom: 0.25rem;">Tap Rate (per month)</label>
-                  <input type="number" id="daicoProposalTapRate" placeholder="1000" min="0" step="any" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #e0c8a0; color: #000; font-size: 0.9rem; " oninput="updateDaicoTapPreview();" />
-                  <small style="display: block; font-size: 0.65rem; color: #aaa; margin-top: 0.2rem;">Payment tokens/month</small>
-                </div>
-                <div>
-                  <label style="display: block; font-size: 0.7rem; color: #999; margin-bottom: 0.25rem;">Total Tap Budget</label>
-                  <input type="number" id="daicoProposalTapBudget" placeholder="100000" min="0" step="any" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px solid #e0c8a0; color: #000; font-size: 0.9rem; " oninput="updateDaicoTapPreview();" />
-                  <small style="display: block; font-size: 0.65rem; color: #aaa; margin-top: 0.2rem;">Max claimable amount</small>
-                </div>
-              </div>
-              <div id="daicoTapPreview" style="display: none; padding: 0.4rem; background: #fffaf0; font-size: 0.7rem; color: #444;"></div>
-            </div>
-          </div>
-
-          <div id="daicoProposalHint" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem; background: #f0fff0; border-left: 3px solid #2d8a2d; font-size: 0.85rem; color: #000; line-height: 1.5;">
-            <strong style="color: #2d8a2d;">Sale Preview:</strong> <span id="daicoProposalHintText"></span>
-          </div>
-          <button onclick="populateDaicoSaleProposal()"
-                  onmouseover="this.style.background='#f0fff0'; this.style.borderColor='#2d8a2d';"
-                  onmouseout="this.style.background='#f0fff0'; this.style.borderColor='#ddd';"
-                  style="width: 100%; padding: 0.75rem; background: #f0fff0; border: 1px solid #2d8a2d; color: #000; font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
-            Populate DAICO Proposal
-          </button>
-        `;
-
-        // Set up event listeners for hint updates
-        setTimeout(() => {
-          const tribAmtInput = document.getElementById('daicoProposalTribAmt');
-          const forAmtInput = document.getElementById('daicoProposalForAmt');
-          const supplyInput = document.getElementById('daicoProposalSupply');
-
-          tribAmtInput?.addEventListener('input', updateDaicoProposalHint);
-          forAmtInput?.addEventListener('input', updateDaicoProposalHint);
-          supplyInput?.addEventListener('input', updateDaicoProposalHint);
-        }, 10);
-      }
-
       function clearDaicoSaleHelper() {
         const helperDiv = document.getElementById('daicoSaleHelper');
         if (helperDiv) helperDiv.remove();
       }
-
-      // Toggle DAICO proposal token dropdown
-      function toggleDaicoProposalTokenDropdown() {
-        const dropdown = document.getElementById('daicoProposalTribTokenDropdown');
-        if (dropdown) {
-          dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-        }
-      }
-
-      // Select token in DAICO proposal dropdown
-      function selectDaicoProposalToken(address, symbol, decimals) {
-        const hiddenInput = getEl('daicoProposalTribToken');
-        const iconEl = document.getElementById('daicoProposalTribTokenIcon');
-        const labelEl = document.getElementById('daicoProposalTribTokenLabel');
-        const dropdown = document.getElementById('daicoProposalTribTokenDropdown');
-
-        if (hiddenInput) {
-          hiddenInput.value = address;
-          hiddenInput.setAttribute('data-decimals', decimals);
-          hiddenInput.setAttribute('data-symbol', symbol);
-        }
-
-        if (iconEl && TOKEN_ICONS[symbol.toLowerCase()]) {
-          iconEl.innerHTML = TOKEN_ICONS[symbol.toLowerCase()];
-        }
-
-        if (labelEl) {
-          labelEl.textContent = symbol;
-        }
-
-        if (dropdown) {
-          dropdown.style.display = 'none';
-        }
-
-        // Update the hint
-        updateDaicoProposalHint();
-      }
-
-      // Update DAICO proposal hint (called after token selection)
-      function updateDaicoProposalHint() {
-        const tribAmtInput = document.getElementById('daicoProposalTribAmt');
-        const forAmtInput = document.getElementById('daicoProposalForAmt');
-        const supplyInput = document.getElementById('daicoProposalSupply');
-        const tribTokenInput = getEl('daicoProposalTribToken');
-        const enableLP = document.getElementById('daicoProposalEnableLP');
-        const lpBpsInput = document.getElementById('daicoProposalLpBps');
-
-        if (!tribAmtInput || !forAmtInput || !supplyInput || !tribTokenInput) return;
-
-        const tribAmt = parseFloat(tribAmtInput.value) || 0;
-        const forAmt = parseFloat(forAmtInput.value) || 0;
-        const supply = parseFloat(supplyInput.value) || 0;
-        const tribSymbol = tribTokenInput.getAttribute('data-symbol') || 'ETH';
-        const lpBps = enableLP?.checked && lpBpsInput ? (parseInt(lpBpsInput.value) || 0) : 0;
-
-        const hint = document.getElementById('daicoProposalHint');
-        const hintText = document.getElementById('daicoProposalHintText');
-
-        if (!hint || !hintText) return;
-
-        if (tribAmt > 0 && forAmt > 0) {
-          const pricePerToken = tribAmt / forAmt;
-          let text = `${tribAmt} ${tribSymbol} → ${forAmt.toLocaleString()} tokens`;
-
-          // Show effective rate if LP is enabled
-          if (lpBps > 0 && lpBps < 100) {
-            const effectiveTokens = forAmt * (100 - lpBps) / 100;
-            text += ` <span style="color: #4466aa;">(buyer gets ${effectiveTokens.toLocaleString()} after ${lpBps}% LP)</span>`;
-          }
-
-          if (supply > 0) {
-            const maxRaise = supply * pricePerToken;
-            text += `<br>Max raise: ~${maxRaise.toLocaleString()} ${tribSymbol}`;
-          }
-          hintText.innerHTML = text;
-          hint.style.display = 'block';
-        } else {
-          hint.style.display = 'none';
-        }
-      }
-
-      // Toggle DAICO LP configuration fields
-      function toggleDaicoLPFields() {
-        const enableLP = document.getElementById('daicoProposalEnableLP');
-        const lpFields = document.getElementById('daicoLPFields');
-        if (lpFields) {
-          lpFields.style.display = enableLP?.checked ? 'block' : 'none';
-        }
-        updateDaicoProposalHint();
-      }
-
-      // Toggle DAICO Tap configuration fields
-      function toggleDaicoTapFields() {
-        const enableTap = document.getElementById('daicoProposalEnableTap');
-        const tapFields = document.getElementById('daicoTapFields');
-        if (tapFields) {
-          tapFields.style.display = enableTap?.checked ? 'block' : 'none';
-        }
-      }
-
-      // Update DAICO Tap preview
-      function updateDaicoTapPreview() {
-        const tribTokenInput = getEl('daicoProposalTribToken');
-        const tapRateInput = document.getElementById('daicoProposalTapRate');
-        const tapBudgetInput = document.getElementById('daicoProposalTapBudget');
-        const preview = document.getElementById('daicoTapPreview');
-
-        if (!preview || !tribTokenInput) return;
-
-        const tribSymbol = tribTokenInput.getAttribute('data-symbol') || 'ETH';
-        const ratePerMonth = parseFloat(tapRateInput?.value) || 0;
-        const budget = parseFloat(tapBudgetInput?.value) || 0;
-
-        if (ratePerMonth > 0) {
-          const ratePerYear = ratePerMonth * 12;
-          let text = `<strong>Tap:</strong> ${ratePerMonth.toLocaleString()} ${tribSymbol}/month (~${ratePerYear.toLocaleString()} ${tribSymbol}/year)`;
-          if (budget > 0) {
-            const months = budget / ratePerMonth;
-            text += ` • Budget lasts ~${months.toFixed(1)} months`;
-          }
-          preview.innerHTML = text;
-          preview.style.display = 'block';
-        } else {
-          preview.style.display = 'none';
-        }
-      }
-
-      // Close DAICO proposal dropdown when clicking outside
-      document.addEventListener('click', function(e) {
-        const dropdown = document.getElementById('daicoProposalTribTokenDropdown');
-        const display = document.getElementById('daicoProposalTribTokenDisplay');
-        if (dropdown && display && !dropdown.contains(e.target) && !display.contains(e.target)) {
-          dropdown.style.display = 'none';
-        }
-      });
 
       // Populate DAICO sale proposal with batch calls
       async function populateDaicoSaleProposal() {
@@ -13264,9 +12837,6 @@ body.modal-open { overflow: hidden; }
         return null;
       }
 
-      // Network switch prompt (Ethereum-only, no-op)
-      async function promptNetworkSwitch() { return false; }
-
       // Open DAO by address (for deep linking and search)
       async function openDAOByAddress(address) {
         // Check if already loaded in allDAOs (from search or prior fetch)
@@ -13368,7 +12938,6 @@ body.modal-open { overflow: hidden; }
 
         // Fire-and-forget (no downstream dependencies)
         renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
-        renderGovernanceInfo().catch(e => logger.error('renderGovernanceInfo failed:', e));
         renderDaoStats();
 
         // Batch all view calls into one RPC round-trip via Multicall3
@@ -13378,16 +12947,17 @@ body.modal-open { overflow: hidden; }
           batchData = await batchDashboardData(daoAddress, userAddr);
         } catch (e) {
           logger.warn('Multicall batch failed, falling back to individual calls:', e.message);
-          batchData = { config: undefined, sales: [], allowances: [], tributes: undefined };
+          batchData = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined };
         }
 
         // Render with pre-fetched data (falls back to individual RPC if batch data missing)
+        renderGovernanceInfo(batchData).catch(e => logger.error('renderGovernanceInfo failed:', e));
         await Promise.all([
           renderProposals(batchData.config),
           renderSalesInfo(batchData.sales),
           renderTributes(batchData.tributes),
           renderAllowances(batchData.allowances),
-          renderDAOEmblem(daoAddress)
+          renderDAOEmblem(daoAddress, batchData.contractURI)
         ]);
 
         // Sequential — depends on renderSalesInfo completing (needs customSaleTokens)
@@ -13501,19 +13071,14 @@ body.modal-open { overflow: hidden; }
 
         // Update badge info
         const badgeSeat = member.seatId;
-        if (badgeSeat > 0) {
-          document.getElementById('membershipBadge').textContent = `Seat #${badgeSeat}`;
-          await renderBadge(dao.dao, badgeSeat);
-        } else {
-          document.getElementById('membershipBadge').textContent = 'No Badge';
-          document.getElementById('badgeContent').innerHTML = '<p class="badge-empty">You don\'t have a badge seat yet</p>';
-        }
+        const badgePromise = badgeSeat > 0
+          ? (document.getElementById('membershipBadge').textContent = `Seat #${badgeSeat}`, renderBadge(dao.dao, badgeSeat))
+          : (document.getElementById('membershipBadge').textContent = 'No Badge',
+             document.getElementById('badgeContent').innerHTML = '<p class="badge-empty">You don\'t have a badge seat yet</p>',
+             Promise.resolve());
 
-        // Render vote receipts
-        await renderVoteReceipts();
-
-        // Load delegation status
-        await loadDelegationStatus();
+        // Render badge, vote receipts, and delegation in parallel (separate DOM targets)
+        await Promise.all([badgePromise, renderVoteReceipts(), loadDelegationStatus()]);
       }
 
       // Render badge NFT
@@ -13572,7 +13137,7 @@ body.modal-open { overflow: hidden; }
             </div>
             <div class="badge-info">
               <div class="badge-name">${metadata.name || `Badge #${seatId}`}</div>
-              ${metadata.description ? `<div class="badge-description">${metadata.description}</div>` : ''}
+              ${metadata.description ? `<div class="badge-description">${escapeHtml(metadata.description)}</div>` : ''}
               ${attributesHTML}
               <div class="badge-links">
                 <a href="${openseaLink}" target="_blank" rel="noopener noreferrer" class="badge-link">OpenSea ↗</a>
@@ -13617,44 +13182,63 @@ body.modal-open { overflow: hidden; }
           return proposal.voters?.some(v => v.voter?.toLowerCase() === connectedAddress.toLowerCase());
         });
 
-        // Batch balance checks in parallel
-        const balancePromises = userVotedProposals.map(async (proposal) => {
+        // Pre-compute receipt IDs and vote data
+        const voteData = userVotedProposals.map(proposal => {
           const userVote = proposal.voters.find(v => v.voter?.toLowerCase() === connectedAddress.toLowerCase());
           const support = Number(userVote.support); // 0=Against, 1=For, 2=Abstain
           const receiptId = ethers.solidityPackedKeccak256(
             ['string', 'uint256', 'uint8'],
             ['Moloch:receipt', proposal.id, support]
           );
-
-          try {
-            const balance = await molochContract.balanceOf(connectedAddress, receiptId);
-
-            // Show receipt if:
-            // 1. User still has balance > 0 (hasn't claimed), OR
-            // 2. User voted on winning side of resolved futarchy (even if claimed/burned)
-            const hasBalance = balance > 0n;
-
-            const isWinningFutarchyVote = proposal.futarchy?.enabled
-              && proposal.futarchy.resolved
-              && Number(proposal.futarchy.winner) === support;
-
-            if (hasBalance || isWinningFutarchyVote) {
-              return {
-                proposalId: proposal.id,
-                support,
-                balance,
-                receiptId,
-                claimed: !hasBalance && isWinningFutarchyVote // Track if already claimed
-              };
-            }
-          } catch (err) {
-            logger.error('Error checking receipt balance:', err);
-          }
-          return null;
+          return { proposal, support, receiptId };
         });
 
-        const results = await Promise.all(balancePromises);
-        receipts.push(...results.filter(r => r !== null));
+        // Batch all balanceOf calls into a single Multicall3 RPC
+        if (voteData.length > 0) {
+          try {
+            const molochIface = new ethers.Interface(MOLOCH_ABI);
+            const calls = voteData.map(({ receiptId }) => ({
+              target: currentDAO.dao.dao,
+              allowFailure: true,
+              callData: molochIface.encodeFunctionData('balanceOf', [connectedAddress, receiptId])
+            }));
+
+            const mcResults = await withRpcFallback(async (activeProvider) => {
+              const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, activeProvider);
+              return await multicall.aggregate3(calls);
+            });
+
+            for (let i = 0; i < mcResults.length; i++) {
+              const { success, returnData } = mcResults[i];
+              const { proposal, support, receiptId } = voteData[i];
+
+              if (!success) continue;
+
+              try {
+                const decoded = molochIface.decodeFunctionResult('balanceOf', returnData);
+                const balance = decoded[0];
+                const hasBalance = balance > 0n;
+                const isWinningFutarchyVote = proposal.futarchy?.enabled
+                  && proposal.futarchy.resolved
+                  && Number(proposal.futarchy.winner) === support;
+
+                if (hasBalance || isWinningFutarchyVote) {
+                  receipts.push({
+                    proposalId: proposal.id,
+                    support,
+                    balance,
+                    receiptId,
+                    claimed: !hasBalance && isWinningFutarchyVote
+                  });
+                }
+              } catch (err) {
+                logger.error('Error decoding receipt balance:', err);
+              }
+            }
+          } catch (err) {
+            logger.error('Error in multicall balance check:', err);
+          }
+        }
 
         if (receipts.length === 0) {
           receiptsGrid.innerHTML = '';
@@ -13918,7 +13502,7 @@ body.modal-open { overflow: hidden; }
       // Show emergency permit modal with use option
       function showEmergencyPermitModal(permitId, balance, metadata = null) {
         const modal = getEl('nftModal');
-        const modalContent = document.getElementById('nftModalContent');
+        const modalContent = document.getElementById('nftModalBody');
 
         const usesText = balance === 1 ? '1 use remaining' : `${balance} uses remaining`;
 
@@ -13982,7 +13566,7 @@ body.modal-open { overflow: hidden; }
           </div>
         `;
 
-        modal.style.display = 'flex';
+        modal.classList.add('active');
       }
 
       // Use emergency permit to bump config
@@ -14731,7 +14315,7 @@ body.modal-open { overflow: hidden; }
       // ==================== END DELEGATION FUNCTIONS ====================
 
       // Render DAO emblem from contractURI
-      async function renderDAOEmblem(daoAddress) {
+      async function renderDAOEmblem(daoAddress, prefetchedContractURI) {
         const emblem = document.getElementById('daoEmblem');
         if (!emblem) return;
 
@@ -14739,7 +14323,7 @@ body.modal-open { overflow: hidden; }
           // Clear any previous styling classes
           emblem.classList.remove('url-image', 'description-only');
 
-          const contractURI = await withRpcFallback(async (activeProvider) => {
+          const contractURI = prefetchedContractURI !== undefined ? prefetchedContractURI : await withRpcFallback(async (activeProvider) => {
             const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, activeProvider);
             return await molochContract.contractURI();
           });
@@ -14906,7 +14490,7 @@ body.modal-open { overflow: hidden; }
         modalBody.innerHTML = `
           ${imageHTML}
           <div class="nft-modal-title">${metadata.name || title}</div>
-          ${metadata.description ? `<div class="nft-modal-description">${metadata.description}</div>` : ''}
+          ${metadata.description ? `<div class="nft-modal-description">${escapeHtml(metadata.description)}</div>` : ''}
           ${attributesHTML}
           ${futarchyClaimHTML}
         `;
@@ -15050,15 +14634,20 @@ body.modal-open { overflow: hidden; }
         const totalLoot = currentDAO.dao.supplies.lootTotalSupply;
         const totalSupply = totalShares + totalLoot;
 
-        // Reverse ENS resolution for each member (with caching)
-        const membersWithENS = await Promise.all(
-          members.map(async (member) => {
-            // Member structure uses numeric indices: [0] = address
-            const memberAddress = member[0];
-            const ensName = memberAddress ? await lookupENS(memberAddress) : null;
-            return { ...member, ensName };
-          })
-        );
+        // Reverse ENS resolution for each member (with caching, batched to limit concurrency)
+        const membersWithENS = [];
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < members.length; i += BATCH_SIZE) {
+          const batch = members.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(async (member) => {
+              const memberAddress = member[0];
+              const ensName = memberAddress ? await lookupENS(memberAddress) : null;
+              return { ...member, ensName };
+            })
+          );
+          membersWithENS.push(...batchResults);
+        }
 
         // Render each member
         try {
@@ -15084,7 +14673,7 @@ body.modal-open { overflow: hidden; }
             // Calculate ownership %
             const memberTotal = sharesBN + lootBN;
             const ownershipPercent = totalSupply > 0n
-              ? ((Number(memberTotal) / Number(totalSupply)) * 100).toFixed(2)
+              ? (Number(memberTotal * 10000n / totalSupply) / 100).toFixed(2)
               : '0.00';
 
             memberDiv.innerHTML = `
@@ -15130,7 +14719,7 @@ body.modal-open { overflow: hidden; }
         if (!currentDAO) return;
 
         const modal = getEl('nftModal');
-        const modalContent = document.getElementById('nftModalContent');
+        const modalContent = document.getElementById('nftModalBody');
 
         // Show loading state
         modalContent.innerHTML = `
@@ -15143,13 +14732,15 @@ body.modal-open { overflow: hidden; }
             </div>
           </div>
         `;
-        modal.style.display = 'flex';
+        modal.classList.add('active');
 
         try {
           const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, provider);
+          const molochIface = new ethers.Interface(MOLOCH_ABI);
           const collectibles = [];
 
-          // Check for vote receipts
+          // Phase 1: Batch all balanceOf calls via Multicall3
+          const voteChecks = [];
           for (const proposal of currentDAO.dao.proposals) {
             const voterData = proposal.voters?.find(v => v.voter?.toLowerCase() === memberAddress.toLowerCase());
             if (voterData) {
@@ -15158,37 +14749,80 @@ body.modal-open { overflow: hidden; }
                 ['string', 'uint256', 'uint8'],
                 ['Moloch:receipt', proposal.id, support]
               );
-
-              const balance = await molochContract.balanceOf(memberAddress, receiptId);
-              if (balance > 0n) {
-                collectibles.push({
-                  type: 'receipt',
-                  proposalId: proposal.id,
-                  support,
-                  balance,
-                  receiptId
-                });
-              }
+              voteChecks.push({ proposal, support, receiptId });
             }
           }
 
-          // Check for emergency permits
+          // Also prepare emergency permit check
+          let permitId = null;
           try {
             const bumpConfigCalldata = INTERFACES.bumpConfig.encodeFunctionData('bumpConfig', []);
             const emergencyNonce = ethers.id("EMERGENCY_CONFIG_BUMP");
             const config = await molochContract.config();
-            const permitId = computeProposalId(currentDAO.dao.dao, 0, currentDAO.dao.dao, 0, bumpConfigCalldata, emergencyNonce, config);
-
-            const permitBalance = await molochContract.balanceOf(memberAddress, permitId);
-            if (permitBalance > 0n) {
-              collectibles.push({
-                type: 'emergency_permit',
-                permitId,
-                balance: permitBalance
-              });
-            }
+            permitId = computeProposalId(currentDAO.dao.dao, 0, currentDAO.dao.dao, 0, bumpConfigCalldata, emergencyNonce, config);
           } catch (permitError) {
-            logger.error('Error checking emergency permit:', permitError);
+            logger.error('Error computing emergency permit:', permitError);
+          }
+
+          // Build multicall for all balanceOf checks
+          const balanceCalls = voteChecks.map(({ receiptId }) => ({
+            target: currentDAO.dao.dao,
+            allowFailure: true,
+            callData: molochIface.encodeFunctionData('balanceOf', [memberAddress, receiptId])
+          }));
+          if (permitId) {
+            balanceCalls.push({
+              target: currentDAO.dao.dao,
+              allowFailure: true,
+              callData: molochIface.encodeFunctionData('balanceOf', [memberAddress, permitId])
+            });
+          }
+
+          if (balanceCalls.length > 0) {
+            try {
+              const mcResults = await withRpcFallback(async (activeProvider) => {
+                const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, activeProvider);
+                return await multicall.aggregate3(balanceCalls);
+              });
+
+              // Decode vote receipt balances
+              for (let i = 0; i < voteChecks.length; i++) {
+                const { success, returnData } = mcResults[i];
+                if (!success) continue;
+                try {
+                  const decoded = molochIface.decodeFunctionResult('balanceOf', returnData);
+                  const balance = decoded[0];
+                  if (balance > 0n) {
+                    collectibles.push({
+                      type: 'receipt',
+                      proposalId: voteChecks[i].proposal.id,
+                      support: voteChecks[i].support,
+                      balance,
+                      receiptId: voteChecks[i].receiptId
+                    });
+                  }
+                } catch (e) { /* skip */ }
+              }
+
+              // Decode emergency permit balance
+              if (permitId && mcResults.length > voteChecks.length) {
+                const { success, returnData } = mcResults[voteChecks.length];
+                if (success) {
+                  try {
+                    const decoded = molochIface.decodeFunctionResult('balanceOf', returnData);
+                    if (decoded[0] > 0n) {
+                      collectibles.push({
+                        type: 'emergency_permit',
+                        permitId,
+                        balance: decoded[0]
+                      });
+                    }
+                  } catch (e) { /* skip */ }
+                }
+              }
+            } catch (err) {
+              logger.error('Error in multicall collectibles balance check:', err);
+            }
           }
 
           // Render collectibles
@@ -15213,10 +14847,8 @@ body.modal-open { overflow: hidden; }
           const supportLabels = ['Against', 'For', 'Abstain'];
           const supportColors = ['#e74c3c', '#2d8a2d', '#000'];
 
-          let collectiblesHTML = '';
-
-          // Fetch metadata for all collectibles
-          for (const item of collectibles) {
+          // Fetch metadata for all collectibles in parallel
+          const metadataResults = await Promise.all(collectibles.map(async (item) => {
             if (item.type === 'receipt') {
               try {
                 const tokenURI = await molochContract.tokenURI(item.receiptId);
@@ -15241,7 +14873,7 @@ body.modal-open { overflow: hidden; }
                   imageHTML = `<img src="${imageUrl}" style="width: 100%; margin-bottom: 1rem;" alt="Receipt" />`;
                 }
 
-                collectiblesHTML += `
+                return `
                   <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem;">
                     ${imageHTML}
                     <div style="font-size: 0.75rem; color: #000; letter-spacing: 0.1em; margin-bottom: 0.5rem;">
@@ -15263,6 +14895,7 @@ body.modal-open { overflow: hidden; }
                 `;
               } catch (metadataError) {
                 logger.error('Error fetching receipt metadata:', metadataError);
+                return '';
               }
             } else if (item.type === 'emergency_permit') {
               try {
@@ -15286,16 +14919,13 @@ body.modal-open { overflow: hidden; }
                   imageHTML = `<img src="${imageUrl}" style="width: 100%; margin-bottom: 1rem;" alt="Emergency Permit" />`;
                 }
 
-                // Decode the permitData to show what action this permit can execute
                 const bumpConfigCalldata = INTERFACES.bumpConfig.encodeFunctionData('bumpConfig', []);
                 let actionDescription = 'Execute bumpConfig() - Resets governance state';
-
-                // Check if permitData contains spendPermit (0xa8841366)
                 if (bumpConfigCalldata.startsWith('0x7ec924db')) {
                   actionDescription = '⚡ <strong>Use Permit:</strong> Execute config bump (invalidates all proposals & permits)';
                 }
 
-                collectiblesHTML += `
+                return `
                   <div style="background: #fff5f5; border: 1px solid #e8c0c0; padding: 1rem; margin-bottom: 1rem;">
                     ${imageHTML}
                     <div style="font-size: 0.75rem; color: #c0392b; letter-spacing: 0.1em; margin-bottom: 0.5rem;">
@@ -15317,9 +14947,13 @@ body.modal-open { overflow: hidden; }
                 `;
               } catch (metadataError) {
                 logger.error('Error fetching permit metadata:', metadataError);
+                return '';
               }
             }
-          }
+            return '';
+          }));
+
+          const collectiblesHTML = metadataResults.join('');
 
           modalContent.innerHTML = `
             <div style="max-width: 600px; margin: 0 auto;">
@@ -15629,7 +15263,7 @@ body.modal-open { overflow: hidden; }
 
           // Refresh messages
           await refreshCurrentDAO();
-          renderChatroom();
+          await renderChatroom();
         } catch (error) {
           logger.error('Error sending message:', error);
           chatInput.value = message; // Restore the message
@@ -15731,6 +15365,36 @@ body.modal-open { overflow: hidden; }
           allMsgs[0].index === 0 &&
           allMsgs[allMsgs.length - 1].index === allMsgs.length - 1;
 
+        // Pre-build proposal verification map: proposalId => { description, data }
+        // This avoids O(proposals * messages * configs) by computing all IDs upfront
+        const proposalVerificationMap = new Map();
+        if (allMsgs.length > 0) {
+          const currentConfig = configFetched ? Number(daoConfig) : 0;
+          for (const msg of allMsgs) {
+            const propData = decodeProposalMessage(msg.text);
+            if (!propData) continue;
+            try {
+              for (let cfg = currentConfig; cfg >= 0; cfg--) {
+                const recomputedId = computeProposalId(
+                  currentDAO.dao.dao,
+                  propData.op,
+                  propData.to,
+                  BigInt(propData.value),
+                  propData.data,
+                  propData.nonce,
+                  BigInt(cfg)
+                );
+                const idStr = recomputedId.toString();
+                if (!proposalVerificationMap.has(idStr)) {
+                  proposalVerificationMap.set(idStr, { description: propData.description, data: propData.data });
+                }
+              }
+            } catch (e) {
+              logger.error('Error pre-computing proposal ID:', e);
+            }
+          }
+        }
+
         proposalsReversed.forEach(proposal => {
           const proposalDiv = document.createElement('div');
           proposalDiv.className = 'proposal-item';
@@ -15811,47 +15475,18 @@ body.modal-open { overflow: hidden; }
           const userHasVoted = hasVotedValue > 0;
           const userVoteType = hasVotedValue > 0 ? ['Against', 'For', 'Abstain'][hasVotedValue - 1] : null;
 
-          // Find proposal description from messages and verify hash
-          // Config can be bumped (incremented) over time, so a proposal created
-          // at config=N won't verify against current config=N+M. We try all
-          // config values from 0 to current to match proposals from any era.
+          // Find proposal description from pre-built verification map (O(1) lookup)
           let description = `Proposal #${proposal.id.toString()}`;
           let isVerified = false;
           let verificationBadge = '';
           let proposalCalldata = null;
           let hasMessages = currentDAO.dao.messages && currentDAO.dao.messages.length > 0;
 
-          if (hasMessages) {
-            for (const msg of currentDAO.dao.messages) {
-              const propData = decodeProposalMessage(msg.text);
-              if (propData) {
-                try {
-                  // Try all config values from current down to 0
-                  const currentConfig = configFetched ? Number(daoConfig) : 0;
-                  for (let cfg = currentConfig; cfg >= 0; cfg--) {
-                    const recomputedId = computeProposalId(
-                      currentDAO.dao.dao,
-                      propData.op,
-                      propData.to,
-                      BigInt(propData.value),
-                      propData.data,
-                      propData.nonce,
-                      BigInt(cfg)
-                    );
-
-                    if (recomputedId.toString() === proposal.id.toString()) {
-                      description = propData.description || description;
-                      isVerified = true;
-                      proposalCalldata = propData.data;
-                      break;
-                    }
-                  }
-                  if (isVerified) break; // Found it, stop searching messages
-                } catch (e) {
-                  logger.error('Error verifying proposal:', e);
-                }
-              }
-            }
+          const verifiedData = proposalVerificationMap.get(proposal.id.toString());
+          if (verifiedData) {
+            description = verifiedData.description || description;
+            isVerified = true;
+            proposalCalldata = verifiedData.data;
           }
 
           // Only show unverified badge if we have a COMPLETE message history AND config
@@ -16828,7 +16463,7 @@ body.modal-open { overflow: hidden; }
 
           // Refresh with loading feedback
           await refreshCurrentDAO(true);
-          renderChatroom();
+          await renderChatroom();
           await renderProposals();
         } catch (error) {
           logger.error('Error creating proposal:', error);
@@ -16931,29 +16566,32 @@ body.modal-open { overflow: hidden; }
         isExecutingProposal = true;
         try {
           const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
-          const config = await molochContract.config();
+          const currentConfig = await molochContract.config();
 
           // Find the proposal data from messages by matching the proposal ID
+          // Iterate from current config down to 0 to handle proposals created before config bumps
           let proposalData = null;
           for (const msg of currentDAO.dao.messages) {
             const propData = decodeProposalMessage(msg.text);
             if (propData) {
-              // Verify this is the correct proposal by computing its ID
               const valueBigInt = BigInt(propData.value);
-              const computedId = computeProposalId(
-                currentDAO.dao.dao,
-                propData.op,
-                propData.to,
-                valueBigInt,
-                propData.data,
-                propData.nonce,
-                config
-              );
+              for (let c = Number(currentConfig); c >= 0; c--) {
+                const computedId = computeProposalId(
+                  currentDAO.dao.dao,
+                  propData.op,
+                  propData.to,
+                  valueBigInt,
+                  propData.data,
+                  propData.nonce,
+                  BigInt(c)
+                );
 
-              if (computedId.toString() === proposalIdBigInt.toString()) {
-                proposalData = propData;
-                break;
+                if (computedId.toString() === proposalIdBigInt.toString()) {
+                  proposalData = propData;
+                  break;
+                }
               }
+              if (proposalData) break;
             }
           }
 
@@ -17031,20 +16669,22 @@ body.modal-open { overflow: hidden; }
             showStatus('Refreshing...', false);
           }
 
-          const viewHelper = new ethers.Contract(VIEW_HELPER_ADDRESS, VIEW_HELPER_ABI, provider);
           const treasuryTokens = getNetwork().treasuryTokens;
 
           // Fetch more proposals and messages to ensure we see new items
-          const updatedDAOs = await viewHelper.getUserDAOsFullState(
-            connectedAddress,
-            0,  // daoStart
-            10, // daoCount
-            0,  // proposalStart
-            20, // proposalCount
-            0,  // messageStart
-            200, // messageCount (fetch many to ensure we see recent ones)
-            treasuryTokens
-          );
+          const updatedDAOs = await withRpcFallback(async (activeProvider) => {
+            const viewHelper = new ethers.Contract(VIEW_HELPER_ADDRESS, VIEW_HELPER_ABI, activeProvider);
+            return await viewHelper.getUserDAOsFullState(
+              connectedAddress,
+              0,  // daoStart
+              10, // daoCount
+              0,  // proposalStart
+              20, // proposalCount
+              0,  // messageStart
+              200, // messageCount (fetch many to ensure we see recent ones)
+              treasuryTokens
+            );
+          });
 
           // Find current DAO in updated list
           for (let i = 0; i < updatedDAOs.length; i++) {
@@ -17105,16 +16745,36 @@ body.modal-open { overflow: hidden; }
           // Refresh DAO data
           await refreshCurrentDAO(true);
 
-          // Re-render all views
+          // Re-render all views using multicall batching (mirrors openDAO pattern)
           renderDaoStats();
-          renderChatroom();
-          await renderProposals();
-          await renderSalesInfo();
+          const daoAddress = currentDAO.dao.dao;
+          const userAddr = signer ? await signer.getAddress() : null;
+
+          // Fire-and-forget (no downstream dependencies)
+          renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
+
+          // Batch all view calls into one RPC round-trip via Multicall3
+          let batchData;
+          try {
+            batchData = await batchDashboardData(daoAddress, userAddr);
+          } catch (e) {
+            logger.warn('Multicall batch failed, falling back to individual calls:', e.message);
+            batchData = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined };
+          }
+
+          renderGovernanceInfo(batchData).catch(e => logger.error('renderGovernanceInfo failed:', e));
+          await Promise.all([
+            renderProposals(batchData.config),
+            renderSalesInfo(batchData.sales),
+            renderTributes(batchData.tributes),
+            renderAllowances(batchData.allowances),
+            renderDAOEmblem(daoAddress, batchData.contractURI),
+          ]);
+
+          // Sequential — depends on renderSalesInfo completing (needs customSaleTokens)
+          await renderTreasury();
           await renderMembership();
           await renderMembers();
-          await renderTreasury();
-          await renderTributes();
-          await renderAllowances();
 
           // Only update lastRefreshTime after successful completion
           lastRefreshTime = Date.now();
@@ -17189,28 +16849,6 @@ body.modal-open { overflow: hidden; }
           clearTimeout(timeout);
           timeout = setTimeout(later, wait);
         };
-      }
-
-      // Throttle utility for scroll/resize events
-      function throttle(func, limit) {
-        let inThrottle;
-        return function(...args) {
-          if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-          }
-        };
-      }
-
-      // Create tooltip helper
-      function addTooltip(element, text) {
-        if (!element || !text) return;
-        element.classList.add('tooltip');
-        const tooltip = document.createElement('span');
-        tooltip.className = 'tooltip-text';
-        tooltip.textContent = text;
-        element.appendChild(tooltip);
       }
 
       // Create enhanced empty state
@@ -17404,21 +17042,6 @@ body.modal-open { overflow: hidden; }
         }
       }
 
-      // Progress bar utilities
-      function showProgress() {
-        const bar = document.getElementById('progressBar');
-        if (bar) bar.style.display = 'block';
-      }
-
-      function hideProgress() {
-        const bar = document.getElementById('progressBar');
-        if (bar) {
-          setTimeout(() => {
-            bar.style.display = 'none';
-          }, 300);
-        }
-      }
-
       // Toast notification system
       function showToast(message, type = 'info', duration = 4000) {
         const container = document.getElementById('toastContainer');
@@ -17527,20 +17150,7 @@ body.modal-open { overflow: hidden; }
         }
       }
 
-      function clearStatus() {
-        const statusEl = document.getElementById('statusMessage');
-        const msgEl = statusEl.querySelector('.status-message');
-        if (msgEl) {
-          msgEl.style.animation = 'fadeOut 0.3s ease-out forwards';
-          setTimeout(() => {
-            statusEl.innerHTML = '';
-          }, 300);
-        }
-        if (statusTimeout) {
-          clearTimeout(statusTimeout);
-          statusTimeout = null;
-        }
-      }
+
 
       function copyProposalId(proposalId, proposalIdForButton) {
         // Use modern clipboard API
@@ -17874,19 +17484,6 @@ body.modal-open { overflow: hidden; }
             infoDiv.innerHTML = '<span style="color: #e74c3c;">Failed to validate token. Ensure it\'s a valid ERC20.</span>';
           }
         }, 500); // 500ms debounce
-      }
-
-      // Helper to get payment token address and decimals
-      function getSalePaymentTokenInfo(tokenKey) {
-        const tokenMap = {
-          'eth': { address: ethers.ZeroAddress, decimals: 18, symbol: 'ETH' },
-          'usdc': { address: TOKEN_ADDRESSES.usdc, decimals: 6, symbol: 'USDC' },
-          'usdt': { address: TOKEN_ADDRESSES.usdt, decimals: 6, symbol: 'USDT' },
-          'dai': { address: TOKEN_ADDRESSES.dai, decimals: 18, symbol: 'DAI' },
-          'wsteth': { address: TOKEN_ADDRESSES.wsteth, decimals: 18, symbol: 'wstETH' },
-          'reth': { address: TOKEN_ADDRESSES.reth, decimals: 18, symbol: 'rETH' },
-        };
-        return tokenMap[tokenKey] || null;
       }
 
       // Validate custom sale token in summoning form

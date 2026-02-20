@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><rect x='3' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='5' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='10' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='12' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='4' y='4' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='5' width='10' height='1' fill='%23e8e8e0'/><rect x='2' y='6' width='12' height='3' fill='%23e8e8e0'/><rect x='3' y='9' width='10' height='1' fill='%23e8e8e0'/><rect x='4' y='10' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='10' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='5' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='9' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='2' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='7' y='12' width='2' height='1' fill='%23e8e8e0'/><rect x='11' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='1' y='13' width='2' height='1' fill='%23e8e8e0'/><rect x='13' y='13' width='2' height='1' fill='%23e8e8e0'/></svg>" type="image/svg+xml">
 <script>
 // Prevent dark-mode FOUC: apply class before first paint
-(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+try{var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(_){}
 </script>
 <style>
 :root {
@@ -796,7 +796,7 @@ body.modal-open { overflow: hidden; }
       </div>
     </div>
   </div>
-  <input type="text" id="toAmount" class="amount-input" placeholder="0.0" readonly>
+  <input type="number" id="toAmount" class="amount-input" placeholder="0.0" step="any">
   <div id="toBalance" class="balance">Balance: --</div>
 </div>
 
@@ -1338,7 +1338,7 @@ async function waitForTx(tx, timeoutMs = 90000) {
           return receipt;
         }
       } catch (rpcErr) {
-        if (i === maxAttempts - 1) throw rpcErr;
+        if (/Transaction reverted/i.test(rpcErr?.message) || i === maxAttempts - 1) throw rpcErr;
       }
       await new Promise(r => setTimeout(r, 2000));
     }
@@ -2137,7 +2137,7 @@ const RPCS = [
   "https://eth.llamarpc.com",
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
-  "https://rpc.ankr.com/eth",
+  "https://eth.drpc.org",
 ];
 
 function makeWalletReader() {
@@ -2236,7 +2236,8 @@ const fmtOutput = (nStr) => {
   else if (Math.abs(n) >= 100) maxDec = 3;
   else if (Math.abs(n) >= 1) maxDec = 4;
   else maxDec = 6;
-  return n.toLocaleString(undefined, { maximumFractionDigits: maxDec, minimumFractionDigits: 0 });
+  // Use useGrouping:false — number inputs reject thousand separators (e.g. "1,234.56")
+  return n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: maxDec, minimumFractionDigits: 0 });
 };
 
 // ---- Allowance cache ----
@@ -2283,6 +2284,26 @@ async function multicallRead(calls) {
   const rpc = provider || await quoteRPC.call(r => r);
   const raw = await rpc.call({ to: MULTICALL3_ADDRESS, data: calldata });
   return MULTICALL3_IFACE.decodeFunctionResult("aggregate3", raw)[0];
+}
+
+// Batch view calls via Multicall3 aggregate3 — collapses N sub-calls into 1 eth_call
+function mc3ViewBatch(rpc, entries) {
+  if (entries.length === 0) return Promise.resolve([]);
+  const data = MULTICALL3_IFACE.encodeFunctionData("aggregate3", [
+    entries.map(e => [e.target, true, e.data])
+  ]);
+  return rpc.call({ to: MULTICALL3_ADDRESS, data }).then(raw =>
+    MULTICALL3_IFACE.decodeFunctionResult("aggregate3", raw)[0]
+  );
+}
+function mc3Decode(mc3, idx, iface, fn) {
+  if (!mc3 || idx < 0 || !mc3[idx]?.success) return null;
+  try { return iface.decodeFunctionResult(fn, mc3[idx].returnData); }
+  catch { return null; }
+}
+function mc3AsSettled(mc3, idx, iface, fn) {
+  const v = mc3Decode(mc3, idx, iface, fn);
+  return v ? { status: 'fulfilled', value: v } : { status: 'rejected' };
 }
 
 async function fetchModalBalances() {
@@ -2648,6 +2669,8 @@ const AMM_NAMES = {
 const ROCKET_DEPOSIT_POOL = "0xCE15294273CFb9D9b628F4D61636623decDF4fdC";
 const ROCKET_DEPOSIT_ABI = ["function getMaximumDepositAmount() view returns (uint256)"];
 const RETH_RATE_ABI = ["function getRethValue(uint256) view returns (uint256)", "function getEthValue(uint256) view returns (uint256)"];
+const ROCKET_DEPOSIT_IFACE = new ethers.Interface(ROCKET_DEPOSIT_ABI);
+const RETH_RATE_IFACE = new ethers.Interface(RETH_RATE_ABI);
 
 // ---- Hoisted ABIs / Interfaces (avoid re-parsing per call) ----
 const QUOTER_IFACE = new ethers.Interface([
@@ -2715,11 +2738,13 @@ function manualRefresh() {
 
 // ---- Quoting ----
 let _quoteSeq = 0;
+let _inputMode = 'exactIn'; // 'exactIn' | 'exactOut'
 
 async function handleAmountChange() {
-  const amtStr = $("fromAmount").value.trim();
+  const isExactOut = _inputMode === 'exactOut';
+  const amtStr = isExactOut ? $("toAmount").value.trim() : $("fromAmount").value.trim();
   const swapBtn = $("swapBtn");
-  const toAmountEl = $("toAmount");
+  const dstEl = isExactOut ? $("fromAmount") : $("toAmount");
   const quoteInfoEl = $("quoteInfo");
 
   if (!connectedAddress) {
@@ -2727,13 +2752,13 @@ async function handleAmountChange() {
     setDisabled(swapBtn, false);
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    toAmountEl.value = "";
+    dstEl.value = "";
     return;
   }
 
   const amtNum = Number(amtStr);
   if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
-    toAmountEl.value = "";
+    dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     setText(swapBtn, "Enter an amount");
@@ -2744,7 +2769,7 @@ async function handleAmountChange() {
   syncSwapURL();
 
   if (fromToken === toToken && !_ppSwapEnabled) {
-    toAmountEl.value = "";
+    dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     setText(swapBtn, "Select different tokens");
@@ -2752,7 +2777,7 @@ async function handleAmountChange() {
     return;
   }
   if (_ppSwapEnabled && fromToken === 'ETH' && toToken === 'ETH') {
-    toAmountEl.value = amtStr;
+    dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     setText(swapBtn, "Deposit ETH to Privacy Pool");
@@ -2760,7 +2785,7 @@ async function handleAmountChange() {
     return;
   }
   if (_ppSwapEnabled && fromToken === 'BOLD' && toToken === 'BOLD') {
-    toAmountEl.value = amtStr;
+    dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     setText(swapBtn, "Deposit BOLD to Privacy Pool");
@@ -2778,7 +2803,7 @@ async function handleAmountChange() {
     try {
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
       // Output equals input (1:1, both 18 decimals)
-      toAmountEl.value = amtStr;
+      dstEl.value = amtStr;
       fitRouteText(wrapDir === 'wrap' ? 'WETH Wrap' : 'WETH Unwrap');
       const _ln = $("routeInfo")?.parentNode?.querySelector('.lido-note');
       if (_ln) _ln.style.display = 'none';
@@ -2794,7 +2819,7 @@ async function handleAmountChange() {
       setText(swapBtn, wrapDir === 'wrap' ? 'Wrap' : 'Unwrap');
       setDisabled(swapBtn, !connectedAddress);
     } catch (e) {
-      toAmountEl.value = "";
+      dstEl.value = "";
       setShown(quoteInfoEl, false);
       setText(swapBtn, e.message || "Invalid amount");
       setDisabled(swapBtn, true);
@@ -2804,7 +2829,7 @@ async function handleAmountChange() {
 
   // WETH→ETH + PP: can't route through quoter, user should unwrap first
   if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
-    toAmountEl.value = "";
+    dstEl.value = "";
     setShown(quoteInfoEl, false);
     setText(swapBtn, "Unwrap WETH first");
     setDisabled(swapBtn, true);
@@ -2816,27 +2841,50 @@ async function handleAmountChange() {
   const seq = ++_quoteSeq;
   const fromSnap = fromToken, toSnap = toToken;
 
+  // Disable exact-out for special paths (zOrg, ZAMM, ragequit)
+  if (isExactOut && isExactOutDisabled(fromSnap, toSnap)) {
+    dstEl.value = "";
+    setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
+    setText(swapBtn, "Exact output not available for this pair");
+    setDisabled(swapBtn, true);
+    return;
+  }
+
   try {
     setHTML(swapBtn, `<span class="loading"></span> Getting quote...`);
     setDisabled(swapBtn, true);
-    toAmountEl.value = "";
-    toAmountEl.placeholder = "Fetching\u2026";
+    dstEl.value = "";
+    dstEl.placeholder = "Fetching\u2026";
 
-    const quote = await requestQuote(amtStr, fromSnap, toSnap);
+    const quote = await requestQuote(amtStr, fromSnap, toSnap, isExactOut);
 
-    if (seq !== _quoteSeq || fromSnap !== fromToken || toSnap !== toToken) return;
+    if (seq !== _quoteSeq || fromSnap !== fromToken || toSnap !== toToken) {
+      dstEl.placeholder = "0.0";
+      return;
+    }
 
     const toData = tokens[toSnap];
-    toAmountEl.placeholder = "0.0";
-    const outRaw = ethers.formatUnits(quote.expectedOutput, toData.decimals);
-    const outDisplay = fmtOutput(outRaw);
-    if (toAmountEl.value !== outDisplay) toAmountEl.value = outDisplay;
+    const fromDataQ = tokens[fromSnap];
+    dstEl.placeholder = "0.0";
+    let inNum, outNum;
+    if (isExactOut) {
+      const inRaw = ethers.formatUnits(quote.requiredInput, fromDataQ.decimals);
+      const inDisplay = fmtOutput(inRaw);
+      if (dstEl.value !== inDisplay) dstEl.value = inDisplay;
+      inNum = Number(inRaw);
+      outNum = Number(amtStr);
+    } else {
+      const outRaw = ethers.formatUnits(quote.expectedOutput, toData.decimals);
+      const outDisplay = fmtOutput(outRaw);
+      if (dstEl.value !== outDisplay) dstEl.value = outDisplay;
+      inNum = Number(amtStr);
+      outNum = Number(outRaw);
+    }
 
     // Exchange rate line
     const rateEl = $('quoteRate');
     if (rateEl) {
-      const inNum = Number(amtStr);
-      const outNum = Number(outRaw);
       if (inNum > 0 && Number.isFinite(outNum) && outNum > 0) {
         const rate = outNum / inNum;
         // Adaptive precision: use more decimals for tiny rates (e.g. ZAMM → ETH)
@@ -2891,10 +2939,11 @@ async function handleAmountChange() {
     }
 
     // Price impact
-    displayPriceImpact(amtStr, fromSnap, toSnap, quote);
+    const impactAmtStr = isExactOut ? ethers.formatUnits(quote.requiredInput, fromDataQ.decimals) : amtStr;
+    displayPriceImpact(impactAmtStr, fromSnap, toSnap, quote);
 
     // All routes
-    displayAllRoutes(quote, toSnap);
+    displayAllRoutes(quote, toSnap, isExactOut, fromSnap);
 
     // Allowance check
     const fromData = tokens[fromSnap];
@@ -2921,7 +2970,7 @@ async function handleAmountChange() {
       : _ppSwapEnabled ? "Swap & Deposit"
       : "Swap";
     if (fromData.address !== ZERO_ADDRESS) {
-      const amountIn = safeParseUnits(amtStr, fromData.decimals);
+      const amountIn = isExactOut ? quote.requiredInput : safeParseUnits(amtStr, fromData.decimals);
       if (isDirectStake) {
         // Check allowance against zOrg DAO for direct stake
         let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZORG_DAO);
@@ -2964,8 +3013,8 @@ async function handleAmountChange() {
     setDisabled(swapBtn, false);
   } catch (e) {
     console.error("Quote error:", e);
-    toAmountEl.value = "";
-    toAmountEl.placeholder = "0.0";
+    dstEl.value = "";
+    dstEl.placeholder = "0.0";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     const msg = /Too many decimals|Invalid number|Empty amount/i.test(String(e?.message || ""))
@@ -3013,6 +3062,7 @@ async function setPercentBalance(pct) {
 
     const input = $("fromAmount");
     input.value = pretty || "0";
+    _inputMode = 'exactIn';
     handleAmountChange();
   } catch (e) {
     console.error("Percent balance error:", e);
@@ -3047,7 +3097,7 @@ function initSimpleSlippage() {
   readSlippage(false);
 
   const reQuote = debounce(() => {
-    const amt = $("fromAmount")?.value;
+    const amt = _inputMode === 'exactOut' ? $("toAmount")?.value : $("fromAmount")?.value;
     if (amt) handleAmountChange();
   }, 250);
 
@@ -3145,7 +3195,7 @@ async function resolveReceiverName(name) {
       el.style.color = "var(--fg-muted)";
       el.textContent = resolved;
       // Re-quote so calldata uses the resolved receiver
-      const amt = $("fromAmount")?.value;
+      const amt = _inputMode === 'exactOut' ? $("toAmount")?.value : $("fromAmount")?.value;
       if (amt && +amt > 0) handleAmountChange();
     } else {
       _resolvedReceiver = null;
@@ -3199,6 +3249,11 @@ function isZammBuyPath(fromSym, toSym) {
 // zOrg → any token except ZAMM (ragequit 1:1 to ZAMM, then sell ZAMM)
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
+}
+function isExactOutDisabled(fromSym, toSym) {
+  return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
+    || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
+    || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym);
 }
 
 // ---- zAMM reverse quote: ZAMM → ETH (client-side AMM math) ----
@@ -3359,7 +3414,7 @@ async function getZammSellQuote(fromAmountStr, fromSym, toSym) {
     );
     const isTwoHop = r.b.amountOut > 0n;
     const finalOut = isTwoHop ? r.b.amountOut : r.a.amountOut;
-    const secondLegSource = AMM_NAMES[r.a.source] || "Unknown";
+    const secondLegSource = AMM_NAMES[isTwoHop ? r.b.source : r.a.source] || "Unknown";
 
     // Build multicall: deposit + swapVZ (ZAMM→ETH) + second-leg calls (ETH→target) + sweeps
     const slipZamm = ethOut * (10000n - splitSlip) / 10000n;
@@ -3462,7 +3517,7 @@ async function getZammBuyQuote(fromAmountStr, fromSym, toSym) {
       isTwoHop: !ethIn, isSplit: false, splitLegs: null,
       sourceA: ethIn ? zammSource : firstLegSource,
       sourceB: ethIn ? null : zammSource,
-      allQuotes: [{ source: zammSource, sourceId: 2, feeBps: 100n, amountIn, amountOut: zammOut }],
+      allQuotes: [{ source: ethIn ? zammSource : `${firstLegSource} + ${zammSource}`, sourceId: 2, feeBps: 100n, amountIn, amountOut: zammOut }],
     };
   });
 }
@@ -3647,6 +3702,37 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const hookFee = 0;
     const hookTick = isPNKSTR ? 60 : 0;
     const hookAddr = isPNKSTR ? PNKSTR_HOOK_ADDRESS : ZERO_ADDRESS;
+    // Light calls (getQuotes, quoteCurve, Lido, Rocket, spot rate) → single Multicall3 aggregate3
+    const mc3Entries = [];
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, amountIn]) });
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteCurve", [false, fromData.address, toData.address, amountIn, 8]) });
+    // Spot rate: exact-in with small ref amount (piggybacks on same batch)
+    const refExp = Math.max(0, fromData.decimals - 2);
+    const refAmount = 10n ** BigInt(refExp);
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, refAmount]) });
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteCurve", [false, fromData.address, toData.address, refAmount, 8]) });
+    // Lido quote for ETH → stETH / wstETH
+    const isLidoEligible = fromData.address === ZERO_ADDRESS
+      && (toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase()
+       || toData.address.toLowerCase() === WSTETH_ADDRESS.toLowerCase());
+    let mc3LidoIdx = -1;
+    if (isLidoEligible) {
+      mc3LidoIdx = mc3Entries.length;
+      mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteLido", [false, toData.address, amountIn]) });
+    }
+    // Rocket Pool quote for ETH → rETH
+    const isRocketEligible = fromData.address === ZERO_ADDRESS
+      && toData.address.toLowerCase() === RETH_ADDRESS.toLowerCase();
+    let mc3RethIdx = -1, mc3RocketMaxIdx = -1, mc3SpotRocketIdx = -1;
+    if (isRocketEligible) {
+      mc3RethIdx = mc3Entries.length;
+      mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [amountIn]) });
+      mc3RocketMaxIdx = mc3Entries.length;
+      mc3Entries.push({ target: ROCKET_DEPOSIT_POOL, data: ROCKET_DEPOSIT_IFACE.encodeFunctionData("getMaximumDepositAmount", []) });
+      mc3SpotRocketIdx = mc3Entries.length;
+      mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [refAmount]) });
+    }
+    // Heavy calls (complex return types + high gas) stay as separate eth_calls
     const allCalls = [
       quoter.buildBestSwapViaETHMulticall(
         receiver, connectedAddress, false,
@@ -3658,8 +3744,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         receiver, fromData.address, toData.address,
         amountIn, splitSlip, deadline, callOpts
       ),
-      quoter.getQuotes(false, fromData.address, toData.address, amountIn, callOpts),
-      quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts),
       quoter.build3HopMulticall(
         receiver, fromData.address, toData.address,
         amountIn, splitSlip, deadline, callOpts
@@ -3668,6 +3752,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         receiver, fromData.address, toData.address,
         amountIn, splitSlip, deadline, callOpts
       ),
+      mc3ViewBatch(rpc, mc3Entries),
     ];
     if (isPNKSTR) {
       allCalls.push(quoter.buildSplitSwapHooked(
@@ -3676,37 +3761,42 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         0, 60, PNKSTR_HOOK_ADDRESS, callOpts
       ));
     }
-    // Lido quote for ETH → stETH / wstETH
-    const isLidoEligible = fromData.address === ZERO_ADDRESS
-      && (toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase()
-       || toData.address.toLowerCase() === WSTETH_ADDRESS.toLowerCase());
-    let lidoQuoteIdx = -1;
-    if (isLidoEligible) {
-      lidoQuoteIdx = allCalls.length;
-      allCalls.push(quoter.quoteLido(false, toData.address, amountIn, callOpts));
-    }
-    // Rocket Pool quote for ETH → rETH (dapp-side via direct contract calls)
-    const isRocketEligible = fromData.address === ZERO_ADDRESS
-      && toData.address.toLowerCase() === RETH_ADDRESS.toLowerCase();
-    let rocketQuoteIdx = -1;
-    if (isRocketEligible) {
-      rocketQuoteIdx = allCalls.length;
-      const reth = new ethers.Contract(RETH_ADDRESS, RETH_RATE_ABI, rpc);
-      const rocketPool = new ethers.Contract(ROCKET_DEPOSIT_POOL, ROCKET_DEPOSIT_ABI, rpc);
-      allCalls.push((async () => {
-        const [rethOut, maxDeposit] = await Promise.all([
-          reth.getRethValue(amountIn, callOpts),
-          rocketPool.getMaximumDepositAmount(callOpts),
-        ]);
-        if (amountIn > maxDeposit || rethOut === 0n) return { amountIn: 0n, amountOut: 0n };
-        return { amountIn, amountOut: rethOut };
-      })());
-    }
     const settled = await Promise.allSettled(allCalls);
-    const [bestResult, splitResult, quotesResult, curveResult, threeHopResult, hybridSplitResult] = settled;
-    const v4SplitResult = isPNKSTR ? settled[6] : undefined;
-    const lidoQuoteResult = lidoQuoteIdx >= 0 ? settled[lidoQuoteIdx] : undefined;
-    const rocketQuoteResult = rocketQuoteIdx >= 0 ? settled[rocketQuoteIdx] : undefined;
+    const [bestResult, splitResult, threeHopResult, hybridSplitResult, mc3Result] = settled;
+    const v4SplitResult = isPNKSTR ? settled[5] : undefined;
+    // Decode Multicall3 batch into settled-style objects (post-processing code unchanged)
+    const mc3 = mc3Result.status === 'fulfilled' ? mc3Result.value : null;
+    const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
+    const curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
+    const lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
+    let rocketQuoteResult;
+    if (isRocketEligible) {
+      const rethDec = mc3Decode(mc3, mc3RethIdx, RETH_RATE_IFACE, "getRethValue");
+      const maxDec = mc3Decode(mc3, mc3RocketMaxIdx, ROCKET_DEPOSIT_IFACE, "getMaximumDepositAmount");
+      if (rethDec && maxDec) {
+        const rethOut = rethDec[0], maxDeposit = maxDec[0];
+        rocketQuoteResult = (amountIn <= maxDeposit && rethOut > 0n)
+          ? { status: 'fulfilled', value: { amountIn, amountOut: rethOut } }
+          : { status: 'fulfilled', value: { amountIn: 0n, amountOut: 0n } };
+      }
+    }
+    // Spot rate pre-cached from mc3 batch (eliminates second RPC round trip)
+    {
+      let bestSpotOut = 0n, bestSpotIn = 0n;
+      const sq = mc3Decode(mc3, 2, QUOTER_IFACE, "getQuotes");
+      if (sq && sq.best.amountOut > bestSpotOut) { bestSpotOut = sq.best.amountOut; bestSpotIn = sq.best.amountIn; }
+      const sc = mc3Decode(mc3, 3, QUOTER_IFACE, "quoteCurve");
+      if (sc && sc.amountOut > bestSpotOut) { bestSpotOut = sc.amountOut; bestSpotIn = sc.amountIn; }
+      if (mc3SpotRocketIdx >= 0) {
+        const sr = mc3Decode(mc3, mc3SpotRocketIdx, RETH_RATE_IFACE, "getRethValue");
+        if (sr && sr[0] > bestSpotOut) { bestSpotOut = sr[0]; bestSpotIn = refAmount; }
+      }
+      if (bestSpotOut > 0n && bestSpotIn > 0n) {
+        const key = _spotKey(fromData.address, toData.address);
+        if (_spotCache.size >= _spotMaxSize) _spotCache.delete(_spotCache.keys().next().value);
+        _spotCache.set(key, { rate: { num: bestSpotOut, den: bestSpotIn }, t: Date.now() });
+      }
+    }
 
     // bestResult is required
     if (bestResult.status === 'rejected') throw bestResult.reason;
@@ -3955,6 +4045,241 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   });
 }
 
+// ---- Exact-out quoting ----
+async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
+  if (!connectedAddress) throw new Error("Connect wallet to get a quote");
+  const fromData = tokens[fromSym], toData = tokens[toSym];
+  if (!fromData || !toData) throw new Error("Unknown token");
+  if (fromData.address === toData.address) throw new Error("Same token");
+
+  const receiver = getReceiver();
+  const amountOut = safeParseUnits(outputAmountStr, toData.decimals);
+  readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+
+  return await quoteRPC.call(async (rpc) => {
+    const quoter = getQuoterContract(rpc);
+    const callOpts = { blockTag: "latest" };
+
+    const isPNKSTR = fromData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase()
+      || toData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
+    const hookFee = 0;
+    const hookTick = isPNKSTR ? 60 : 0;
+    const hookAddr = isPNKSTR ? PNKSTR_HOOK_ADDRESS : ZERO_ADDRESS;
+    // Light calls → single Multicall3 aggregate3 (1 eth_call)
+    const mc3Entries = [];
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [true, fromData.address, toData.address, amountOut]) });
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteCurve", [true, fromData.address, toData.address, amountOut, 8]) });
+    // Spot rate: exact-in with small ref amount (piggybacks on same batch)
+    const refExp = Math.max(0, fromData.decimals - 2);
+    const refAmount = 10n ** BigInt(refExp);
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, refAmount]) });
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteCurve", [false, fromData.address, toData.address, refAmount, 8]) });
+    // Lido exact-out for ETH → stETH/wstETH
+    const isLidoEligible = fromData.address === ZERO_ADDRESS
+      && (toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase()
+       || toData.address.toLowerCase() === WSTETH_ADDRESS.toLowerCase());
+    let mc3LidoIdx = -1;
+    if (isLidoEligible) {
+      mc3LidoIdx = mc3Entries.length;
+      mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteLido", [true, toData.address, amountOut]) });
+    }
+    // Rocket Pool exact-out for ETH → rETH
+    const isRocketEligible = fromData.address === ZERO_ADDRESS
+      && toData.address.toLowerCase() === RETH_ADDRESS.toLowerCase();
+    let mc3RethIdx = -1, mc3RocketMaxIdx = -1, mc3SpotRocketIdx = -1;
+    if (isRocketEligible) {
+      mc3RethIdx = mc3Entries.length;
+      mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getEthValue", [amountOut]) });
+      mc3RocketMaxIdx = mc3Entries.length;
+      mc3Entries.push({ target: ROCKET_DEPOSIT_POOL, data: ROCKET_DEPOSIT_IFACE.encodeFunctionData("getMaximumDepositAmount", []) });
+      mc3SpotRocketIdx = mc3Entries.length;
+      mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [refAmount]) });
+    }
+    const allCalls = [
+      quoter.buildBestSwapViaETHMulticall(
+        receiver, connectedAddress, true,
+        fromData.address, toData.address,
+        amountOut, BigInt(slippageBps), deadline,
+        hookFee, hookTick, hookAddr, callOpts
+      ),
+      mc3ViewBatch(rpc, mc3Entries),
+    ];
+    const settled = await Promise.allSettled(allCalls);
+    const [bestResult, mc3Result] = settled;
+    // Decode Multicall3 batch
+    const mc3 = mc3Result.status === 'fulfilled' ? mc3Result.value : null;
+    const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
+    const curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
+    const lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
+    let rocketQuoteResult;
+    if (isRocketEligible) {
+      const rethDec = mc3Decode(mc3, mc3RethIdx, RETH_RATE_IFACE, "getEthValue");
+      const maxDec = mc3Decode(mc3, mc3RocketMaxIdx, ROCKET_DEPOSIT_IFACE, "getMaximumDepositAmount");
+      if (rethDec && maxDec) {
+        const ethNeeded = rethDec[0], maxDeposit = maxDec[0];
+        rocketQuoteResult = (ethNeeded <= maxDeposit && ethNeeded > 0n)
+          ? { status: 'fulfilled', value: { amountIn: ethNeeded, amountOut } }
+          : { status: 'fulfilled', value: { amountIn: 0n, amountOut: 0n } };
+      }
+    }
+    // Spot rate pre-cached from mc3 batch
+    {
+      let bestSpotOut = 0n, bestSpotIn = 0n;
+      const sq = mc3Decode(mc3, 2, QUOTER_IFACE, "getQuotes");
+      if (sq && sq.best.amountOut > bestSpotOut) { bestSpotOut = sq.best.amountOut; bestSpotIn = sq.best.amountIn; }
+      const sc = mc3Decode(mc3, 3, QUOTER_IFACE, "quoteCurve");
+      if (sc && sc.amountOut > bestSpotOut) { bestSpotOut = sc.amountOut; bestSpotIn = sc.amountIn; }
+      if (mc3SpotRocketIdx >= 0) {
+        const sr = mc3Decode(mc3, mc3SpotRocketIdx, RETH_RATE_IFACE, "getRethValue");
+        if (sr && sr[0] > bestSpotOut) { bestSpotOut = sr[0]; bestSpotIn = refAmount; }
+      }
+      if (bestSpotOut > 0n && bestSpotIn > 0n) {
+        const key = _spotKey(fromData.address, toData.address);
+        if (_spotCache.size >= _spotMaxSize) _spotCache.delete(_spotCache.keys().next().value);
+        _spotCache.set(key, { rate: { num: bestSpotOut, den: bestSpotIn }, t: Date.now() });
+      }
+    }
+
+    if (bestResult.status === 'rejected') throw bestResult.reason;
+    const r = bestResult.value;
+
+    const isTwoHop = r.b.amountOut > 0n;
+    const requiredInput = r.a.amountIn;
+
+    let result = {
+      expectedOutput: isTwoHop ? r.b.amountOut : r.a.amountOut,
+      requiredInput,
+      multicall: r.multicall,
+      calls: r.calls,
+      msgValue: r.msgValue ?? 0n,
+      isTwoHop,
+      isSplit: false,
+      splitLegs: null,
+      sourceA: AMM_NAMES[r.a.source] || "Unknown",
+      sourceB: isTwoHop ? (AMM_NAMES[r.b.source] || "Unknown") : null,
+      allQuotes: null,
+      exactOut: true,
+    };
+
+    // Attach all-quotes for display
+    if (quotesResult.status === 'fulfilled') {
+      const q = quotesResult.value;
+      result.allQuotes = q.quotes.map(qt => ({
+        source: AMM_NAMES[qt.source] || `AMM #${qt.source}`,
+        sourceId: Number(qt.source),
+        feeBps: qt.feeBps,
+        amountIn: qt.amountIn,
+        amountOut: qt.amountOut,
+      })).filter(qt => qt.amountIn > 0n);
+      if (curveResult.status === 'fulfilled') {
+        const c = curveResult.value;
+        if (c.amountIn > 0n) {
+          result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        }
+      }
+      if (lidoQuoteResult?.status === 'fulfilled') {
+        const l = lidoQuoteResult.value;
+        if (l.amountIn > 0n) {
+          result.allQuotes.push({ source: "Lido", sourceId: 6, feeBps: 0n, amountIn: l.amountIn, amountOut: l.amountOut });
+        }
+      }
+      if (rocketQuoteResult?.status === 'fulfilled') {
+        const rp = rocketQuoteResult.value;
+        if (rp.amountIn > 0n) {
+          result.allQuotes.push({ source: "Rocket Pool", sourceId: -1, feeBps: 0n, amountIn: rp.amountIn, amountOut: rp.amountOut });
+        }
+      }
+    }
+
+    // Use Lido for ETH→stETH/wstETH if it needs less input
+    if (isLidoEligible && lidoQuoteResult?.status === 'fulfilled') {
+      const l = lidoQuoteResult.value;
+      if (l.amountIn > 0n && l.amountIn <= result.requiredInput) {
+        const isStETH = toData.address.toLowerCase() === STETH_ADDRESS.toLowerCase();
+        const lidoCall = isStETH
+          ? ROUTER_IFACE.encodeFunctionData('exactETHToSTETH', [receiver])
+          : ROUTER_IFACE.encodeFunctionData('exactETHToWSTETH', [receiver]);
+        const sweepEth = ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]);
+        const calls = [lidoCall, sweepEth];
+        const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+        result.requiredInput = l.amountIn;
+        result.expectedOutput = l.amountOut;
+        result.multicall = multicall;
+        result.calls = calls;
+        result.msgValue = l.amountIn;
+        result.isTwoHop = false;
+        result.isSplit = false;
+        result.splitLegs = null;
+        result.sourceA = "Lido";
+        result.sourceB = null;
+      }
+    }
+
+    // Use Rocket Pool for ETH→rETH if it needs less input
+    if (isRocketEligible && rocketQuoteResult?.status === 'fulfilled') {
+      const rp = rocketQuoteResult.value;
+      if (rp.amountIn > 0n && rp.amountIn <= result.requiredInput) {
+        const depositCalldata = "0xd0e30db0";
+        const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [ROCKET_DEPOSIT_POOL, rp.amountIn, depositCalldata]);
+        const sweepReth = ROUTER_IFACE.encodeFunctionData('sweep', [RETH_ADDRESS, 0, 0, receiver]);
+        const calls = [executeCall, sweepReth];
+        const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+        result.requiredInput = rp.amountIn;
+        result.expectedOutput = rp.amountOut;
+        result.multicall = multicall;
+        result.calls = calls;
+        result.msgValue = rp.amountIn;
+        result.isTwoHop = false;
+        result.isSplit = false;
+        result.splitLegs = null;
+        result.sourceA = "Rocket Pool";
+        result.sourceB = null;
+      }
+    }
+
+    // Curve native-ETH pools: router's swapCurve wraps to WETH but legacy pools
+    // need msg.value. Detect and rebuild via execute+sweep, also promote Curve
+    // when it needs less input than the current best.
+    if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
+      const c = curveResult.value;
+      if (c.bestPool !== ZERO_ADDRESS && c.amountIn > 0n && !c.usedUnderlying) {
+        const curveIsWinner = result.sourceA === "Curve" && !result.isSplit && !result.isTwoHop;
+        const curveBeatsBest = c.amountIn < result.requiredInput;
+        if (curveIsWinner || curveBeatsBest) {
+          try {
+            const poolContract = new ethers.Contract(c.bestPool, ["function coins(uint256) view returns (address)"], rpc);
+            const inputCoin = await poolContract.coins(c.iIndex, callOpts);
+            if (inputCoin.toLowerCase() === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") {
+              const exchangeIface = c.usedStable
+                ? new ethers.Interface(["function exchange(int128,int128,uint256,uint256) payable"])
+                : new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"]);
+              // For exact-out: swap c.amountIn input, require at least amountOut output
+              const exchangeData = exchangeIface.encodeFunctionData('exchange', [c.iIndex, c.jIndex, c.amountIn, amountOut]);
+              const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, c.amountIn, exchangeData]);
+              const sweepOut = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
+              const calls = [executeCall, sweepOut];
+              const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+              result.requiredInput = c.amountIn;
+              result.expectedOutput = c.amountOut;
+              result.multicall = multicall;
+              result.calls = calls;
+              result.msgValue = c.amountIn;
+              result.isTwoHop = false;
+              result.isSplit = false;
+              result.splitLegs = null;
+              result.sourceA = "Curve";
+              result.sourceB = null;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    return result;
+  });
+}
+
 // ---- Split route formatting ----
 function formatSplitRoute(legs) {
   if (!legs || legs.length < 2) return "Split";
@@ -3974,23 +4299,37 @@ function toggleAllRoutes() {
   chev.innerHTML = open ? '&#9654;' : '&#9660;';
 }
 
-function displayAllRoutes(quote, toSym) {
+function displayAllRoutes(quote, toSym, isExactOut = false, fromSym = null) {
   const wrap = $('allRoutesWrap');
   const list = $('allRoutesList');
   if (!quote.allQuotes || quote.allQuotes.length === 0) {
     setShown(wrap, false);
     return;
   }
-  const toData = tokens[toSym];
-  const sorted = [...quote.allQuotes].sort((a, b) => (b.amountOut > a.amountOut ? 1 : b.amountOut < a.amountOut ? -1 : 0));
-  const bestAmt = sorted[0].amountOut;
-  list.innerHTML = sorted.map(q => {
-    const out = fmt(ethers.formatUnits(q.amountOut, toData.decimals));
-    const badge = q.amountOut === bestAmt ? '<span class="best-badge">best</span>' : '';
-    const fee = Number(q.feeBps);
-    const feeLabel = fee > 0 ? ` (${fee >= 100 ? (fee / 100) + '%' : fee + 'bp'})` : '';
-    return `<div class="routes-list-item"><span>${escText(q.source)}${escText(feeLabel)}</span><span>${out} ${escText(toData.symbol)}${badge}</span></div>`;
-  }).join('');
+  if (isExactOut && fromSym) {
+    // Exact-out: show required input per source (lower = better)
+    const fromData = tokens[fromSym];
+    const sorted = [...quote.allQuotes].sort((a, b) => (a.amountIn < b.amountIn ? -1 : a.amountIn > b.amountIn ? 1 : 0));
+    const bestAmt = sorted[0].amountIn;
+    list.innerHTML = sorted.map(q => {
+      const inp = fmt(ethers.formatUnits(q.amountIn, fromData.decimals));
+      const badge = q.amountIn === bestAmt ? '<span class="best-badge">best</span>' : '';
+      const fee = Number(q.feeBps);
+      const feeLabel = fee > 0 ? ` (${fee >= 100 ? (fee / 100) + '%' : fee + 'bp'})` : '';
+      return `<div class="routes-list-item"><span>${escText(q.source)}${escText(feeLabel)}</span><span>${inp} ${escText(fromData.symbol)}${badge}</span></div>`;
+    }).join('');
+  } else {
+    const toData = tokens[toSym];
+    const sorted = [...quote.allQuotes].sort((a, b) => (b.amountOut > a.amountOut ? 1 : b.amountOut < a.amountOut ? -1 : 0));
+    const bestAmt = sorted[0].amountOut;
+    list.innerHTML = sorted.map(q => {
+      const out = fmt(ethers.formatUnits(q.amountOut, toData.decimals));
+      const badge = q.amountOut === bestAmt ? '<span class="best-badge">best</span>' : '';
+      const fee = Number(q.feeBps);
+      const feeLabel = fee > 0 ? ` (${fee >= 100 ? (fee / 100) + '%' : fee + 'bp'})` : '';
+      return `<div class="routes-list-item"><span>${escText(q.source)}${escText(feeLabel)}</span><span>${out} ${escText(toData.symbol)}${badge}</span></div>`;
+    }).join('');
+  }
   setShown(wrap, true);
 }
 
@@ -4114,6 +4453,7 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
   try {
     const fromData = tokens[fromSym], toData = tokens[toSym];
     const amountIn = safeParseUnits(amtStr, fromData.decimals);
+    if (amountIn === 0n) { el.textContent = '--'; el.className = ''; return; }
 
     const spotRate = await getSpotRate(fromSym, toSym);
     if (seq !== _quoteSeq) return; // stale — newer quote already in flight
@@ -4171,14 +4511,16 @@ let _pendingQuoteArgs = null;
 let _pendingQuoteSeq = 0;
 
 let _quoteResult = null;
-function requestQuote(amtStr, fromSnap, toSnap) {
+function requestQuote(amtStr, fromSnap, toSnap, exactOut = false) {
   const mySeq = ++_pendingQuoteSeq;
-  _pendingQuoteArgs = { amtStr, fromSnap, toSnap, seq: mySeq };
+  _pendingQuoteArgs = { amtStr, fromSnap, toSnap, exactOut, seq: mySeq };
   _quoteLock = _quoteLock.catch(() => {}).then(async () => {
     const args = _pendingQuoteArgs;
     if (!args || args.seq !== mySeq) return _quoteResult;
     _pendingQuoteArgs = null;
-    _quoteResult = await withRetry(() => getQuote(args.amtStr, args.fromSnap, args.toSnap));
+    _quoteResult = await withRetry(() => args.exactOut
+      ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
+      : getQuote(args.amtStr, args.fromSnap, args.toSnap));
     return _quoteResult;
   });
   return _quoteLock;
@@ -4201,10 +4543,15 @@ async function executeSwap() {
       return;
     }
 
-    const amtStr = $("fromAmount").value;
+    const _isExactOut = _inputMode === 'exactOut';
+    const amtStr = _isExactOut ? $("toAmount").value : $("fromAmount").value;
     const amtNum = parseFloat(amtStr);
     if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
       showStatus("Please enter an amount", "error");
+      return;
+    }
+    if (isReceiverPending()) {
+      showStatus("Receiver address is still resolving — please wait", "error");
       return;
     }
     if (fromToken === toToken && !_ppSwapEnabled) {
@@ -4514,9 +4861,11 @@ async function executeSwap() {
     swapBtn.disabled = true;
 
     const fromSnap = fromToken, toSnap = toToken;
-    const quote = await withRetry(() => getQuote(amtStr, fromSnap, toSnap));
+    const quote = await withRetry(() => _isExactOut
+      ? getExactOutQuote(amtStr, fromSnap, toSnap)
+      : getQuote(amtStr, fromSnap, toSnap));
     const fromData = tokens[fromSnap];
-    const amountIn = safeParseUnits(amtStr, fromData.decimals);
+    const amountIn = _isExactOut ? quote.requiredInput : safeParseUnits(amtStr, fromData.decimals);
 
     let txData = quote.multicall;
 
@@ -4607,7 +4956,7 @@ async function executeSwap() {
           swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
           const rc = await waitForTx(approveTx);
           if (rc.status === 0) throw new Error("Approval transaction failed");
-          const fresh = await getQuote(amtStr, fromSnap, toSnap);
+          const fresh = _isExactOut ? await getExactOutQuote(amtStr, fromSnap, toSnap) : await getQuote(amtStr, fromSnap, toSnap);
           txData = fresh.multicall;
           quote.msgValue = fresh.msgValue;
           cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
@@ -4622,23 +4971,41 @@ async function executeSwap() {
       swapBtn.textContent = "Preparing privacy deposit...";
 
       // Re-quote with to=ZROUTER so output stays in router
+      const _ppTokenOut = ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS;
       const ppQuote = await withRetry(() => quoteRPC.call(async (rpc) => {
         const quoter = getQuoterContract(rpc);
         const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+        if (_isExactOut) {
+          // Exact-out: swap to get exactly the desired output, routed to router
+          const toData = tokens[toSnap];
+          const exactOutputAmt = safeParseUnits(amtStr, toData.decimals);
+          return quoter.buildBestSwapViaETHMulticall(
+            ZROUTER_ADDRESS, connectedAddress, true,
+            fromData.address, _ppTokenOut,
+            exactOutputAmt, BigInt(slippageBps), deadline,
+            0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+          );
+        }
         return quoter.buildBestSwapViaETHMulticall(
           ZROUTER_ADDRESS, connectedAddress, false,
-          fromData.address, ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS,
+          fromData.address, _ppTokenOut,
           amountIn, BigInt(slippageBps), deadline,
           0, 0, ZERO_ADDRESS, { blockTag: "latest" }
         );
       }));
 
-      // R-1: Use slippage-safe minimum, not raw quoted output.
-      // On-chain swap enforces SlippageLib.limit() independently; actual output may be lower than quoted.
-      const _rawOut = ppQuote.a.amountOut > 0n
-        ? (ppQuote.b.amountOut > 0n ? ppQuote.b.amountOut : ppQuote.a.amountOut)
-        : quote.expectedOutput;
-      const depositAmount = _rawOut * (10000n - BigInt(slippageBps)) / 10000n;
+      // For exact-out, the swap guarantees the output amount; for exact-in, use slippage-safe minimum
+      let depositAmount;
+      if (_isExactOut) {
+        const toData = tokens[toSnap];
+        depositAmount = safeParseUnits(amtStr, toData.decimals);
+      } else {
+        // R-1: Use slippage-safe minimum, not raw quoted output.
+        // On-chain swap enforces SlippageLib.limit() independently; actual output may be lower than quoted.
+        const _rawOut = ppQuote.b.amountOut > 0n ? ppQuote.b.amountOut : ppQuote.a.amountOut;
+        if (_rawOut === 0n) throw new Error("PP swap quote returned zero output — try a different amount or pair");
+        depositAmount = _rawOut * (10000n - BigInt(slippageBps)) / 10000n;
+      }
 
       if (ppCfg && depositAmount < ppCfg.minimumDepositAmount) {
         showStatus(`Output below PP minimum deposit of ${ethers.formatEther(ppCfg.minimumDepositAmount)} ${ppAsset}`, "error");
@@ -4653,6 +5020,7 @@ async function executeSwap() {
 
       // Build multicall: [permit?] + swap calls + execute(PP deposit) + sweep excess
       const swapCalls = ppQuote.calls ? Array.from(ppQuote.calls) : decodeMulticallCalls(ppQuote.multicall);
+      if (swapCalls.length === 0) throw new Error("PP swap routing failed — no swap calls generated");
       let depositCalldata, executeCall, sweepCalls;
       if (ppIsBOLD) {
         // R-3: Preflight check — router must have BOLD allowance to PP entrypoint
@@ -4714,11 +5082,17 @@ async function executeSwap() {
       setShown('ppSwapNoteBox', true);
 
       // Save partial note to localStorage
-      const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-      const noteIdx = saved.length;
-      saved.push({ note: partialNote, amount: depositAmount.toString(), asset: ppAsset, timestamp: Date.now(), txHash: swapTx.hash });
-      localStorage.setItem('pp_notes', JSON.stringify(saved));
-      renderPPNotes();
+      let noteIdx;
+      try {
+        const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+        noteIdx = saved.length;
+        saved.push({ note: partialNote, amount: depositAmount.toString(), asset: ppAsset, timestamp: Date.now(), txHash: swapTx.hash });
+        localStorage.setItem('pp_notes', JSON.stringify(saved));
+        renderPPNotes();
+      } catch (_lsErr) {
+        noteIdx = -1;
+        alert("CRITICAL: Could not save note to browser storage. Copy your note NOW from the text area — you need it to withdraw.");
+      }
 
       swapBtn.innerHTML = `Confirming deposit... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
       const receipt = await waitForTx(swapTx);
@@ -4730,8 +5104,10 @@ async function executeSwap() {
       const fullNote = buildPPNote(nullifier, secret, depositInfo, ppAsset);
       $('ppSwapNoteText').value = fullNote;
       // Update localStorage with full note
-      const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-      if (updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+      try {
+        const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+        if (noteIdx >= 0 && updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+      } catch (_) {}
 
       swapBtn.textContent = "Deposit Complete! Save your note.";
       $("fromAmount").value = "";
@@ -4787,6 +5163,7 @@ async function executeSwap() {
     else if (/InsufficientBalance/i.test(s)) msg = "Insufficient balance for deposit.";
 
     swapBtn.textContent = msg;
+    swapBtn.disabled = false;
     _swapResetTimer = setTimeout(() => { handleAmountChange(); }, 2000);
   } finally {
     _swapBusy = false;
@@ -4803,8 +5180,10 @@ function swapTokens() {
 
   fromToken = prevTo;
   toToken = prevFrom;
+  // Copy the user-typed amount to fromAmount, clear toAmount, reset to exact-in
   $("fromAmount").value = tAmt;
   $("toAmount").value = "";
+  _inputMode = 'exactIn';
   updateTokenDisplay();
   _quoteSeq++;
   updateBalances();
@@ -4901,8 +5280,13 @@ function syncSwapURL() {
   if (_activeTab !== 'swap') return; // privacy tab syncs its own URL
   const _sp = new URLSearchParams();
   _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
-  const _fa = $("fromAmount");
-  if (_fa && _fa.value && +_fa.value > 0) _sp.set('amt', _fa.value);
+  if (_inputMode === 'exactOut') {
+    const _ta = $("toAmount");
+    if (_ta && _ta.value && +_ta.value > 0) _sp.set('outamt', _ta.value);
+  } else {
+    const _fa = $("fromAmount");
+    if (_fa && _fa.value && +_fa.value > 0) _sp.set('amt', _fa.value);
+  }
   const _rv = ($("receiverAddress")?.value || "").trim();
   if (_rv) _sp.set('recv', _rv);
   if (_ppSwapEnabled) _sp.set('pp', _ppSelectedAsset.toLowerCase());
@@ -5019,9 +5403,9 @@ function selectToken(symbol) {
   updateBalances();
   closeTokenModal();
   currentModal = null;
-  const amt = $("fromAmount");
-  if (amt) amt.focus();
-  if (amt && amt.value) reQuoteDebounced();
+  const _srcField = _inputMode === 'exactOut' ? $("toAmount") : $("fromAmount");
+  if (_srcField) _srcField.focus();
+  if (_srcField && _srcField.value) reQuoteDebounced();
 }
 
 function setupDirectZammStake() {
@@ -5101,12 +5485,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (_dlTo) toToken = _dlTo;
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
   const _dlAmt = _urlp.get('amt');
+  const _dlOutAmt = _urlp.get('outamt');
   // Deeplink: ?pp=eth or ?pp=bold — Privacy Pool deposit
   // Direct deposit: ?pp=eth&amt=1 (no from → go straight to privacy tab)
   // Swap+deposit: ?from=eth&pp=bold&amt=1.5 (explicit from → swap into pp asset)
+  // Exact-out: ?from=usdc&to=eth&outamt=1 (exact output mode)
   const _dlPP = (_urlp.get('pp') || '').toUpperCase();
   const _ppIsDirect = (_dlPP === 'ETH' || _dlPP === 'BOLD') && !_dlFrom;
-  if (!_ppIsDirect && _dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) {
+  if (!_ppIsDirect && _dlOutAmt && !isNaN(+_dlOutAmt) && +_dlOutAmt > 0) {
+    _inputMode = 'exactOut';
+    const ta = $("toAmount");
+    if (ta) { ta.value = _dlOutAmt; setTimeout(() => handleAmountChange(), 50); }
+  } else if (!_ppIsDirect && _dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) {
+    _inputMode = 'exactIn';
     const fa = $("fromAmount");
     if (fa) { fa.value = _dlAmt; setTimeout(() => handleAmountChange(), 50); }
   }
@@ -5142,7 +5533,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initTokenListClick();
   initTokenSearch();
   const fromEl = $("fromAmount");
-  if (fromEl) fromEl.addEventListener("input", debounce(handleAmountChange, 400));
+  if (fromEl) fromEl.addEventListener("input", debounce(() => { _inputMode = 'exactIn'; handleAmountChange(); }, 400));
+  const toEl = $("toAmount");
+  if (toEl) toEl.addEventListener("input", debounce(() => { _inputMode = 'exactOut'; handleAmountChange(); }, 400));
   // Defer heavy localStorage parsing until after first render
   (window.requestIdleCallback || setTimeout)(() => loadWeiLists());
 });
@@ -5637,11 +6030,17 @@ async function ppDeposit() {
     setShown('ppNoteBox', true);
 
     // Save partial note to localStorage
-    const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-    const noteIdx = saved.length;
-    saved.push({ note: partialNote, amount: amount.toString(), asset: _ppSelectedAsset, timestamp: Date.now(), txHash: tx.hash });
-    localStorage.setItem('pp_notes', JSON.stringify(saved));
-    renderPPNotes();
+    let noteIdx;
+    try {
+      const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+      noteIdx = saved.length;
+      saved.push({ note: partialNote, amount: amount.toString(), asset: _ppSelectedAsset, timestamp: Date.now(), txHash: tx.hash });
+      localStorage.setItem('pp_notes', JSON.stringify(saved));
+      renderPPNotes();
+    } catch (_lsErr) {
+      noteIdx = -1;
+      alert("CRITICAL: Could not save note to browser storage. Copy your note NOW from the text area — you need it to withdraw.");
+    }
 
     btn.innerHTML = `Confirming deposit... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
     const receipt = await waitForTx(tx);
@@ -5652,8 +6051,10 @@ async function ppDeposit() {
       const fullNote = buildPPNote(nullifier, secret, depositInfo, _ppSelectedAsset);
       $('ppNote').value = fullNote;
       // Update localStorage with full note
-      const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-      if (updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+      try {
+        const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+        if (noteIdx >= 0 && updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+      } catch (_) {}
       showStatus('Deposit confirmed! Save your note to withdraw later.', 'success');
     } else {
       showStatus('Transaction may have failed. Check Etherscan. Your note has been saved.', 'error');
@@ -5724,9 +6125,11 @@ function ppGetNote(index) {
 }
 
 function ppDeleteNote(index) {
-  const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-  saved.splice(index, 1);
-  localStorage.setItem('pp_notes', JSON.stringify(saved));
+  try {
+    const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+    saved.splice(index, 1);
+    localStorage.setItem('pp_notes', JSON.stringify(saved));
+  } catch (_) { /* storage unavailable */ }
   renderPPNotes();
 }
 
@@ -5960,7 +6363,7 @@ async function ppwWithdraw() {
         }
         if (json.result.length < 1000) break;
         const lastBlockHex = json.result[json.result.length - 1].blockNumber;
-        esFrom = parseInt(lastBlockHex, 16);
+        esFrom = parseInt(lastBlockHex, 16) + 1;
         await new Promise(r => setTimeout(r, 5500));
       }
       if (leaves.length === 0) { showStatus('Failed to fetch leaves from Etherscan. Check your API key and try again.', 'error'); return; }
@@ -6203,9 +6606,15 @@ async function ppwWithdraw() {
         };
         const changeNoteJson = JSON.stringify(changeNote);
         // Save to localStorage
-        const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
-        saved.push({ note: changeNoteJson, timestamp: Date.now(), amount: changeValue.toString(), asset: wAsset, txHash: tx.hash, isChange: true });
-        localStorage.setItem('pp_notes', JSON.stringify(saved));
+        let _changeSaved = false;
+        try {
+          const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+          saved.push({ note: changeNoteJson, timestamp: Date.now(), amount: changeValue.toString(), asset: wAsset, txHash: tx.hash, isChange: true });
+          localStorage.setItem('pp_notes', JSON.stringify(saved));
+          _changeSaved = true;
+        } catch (_) {
+          alert("CRITICAL: Could not save change note to browser storage. Copy it NOW — you need it to withdraw remaining funds.");
+        }
         // H-4/M-7: Use withdrawal-specific index counter keyed by label
         if (connectedAddress) ppSetWithdrawalIndex(connectedAddress, label.toString(), ppGetWithdrawalIndex(connectedAddress, label.toString()) + 1);
         renderPPNotes();
@@ -6240,7 +6649,7 @@ async function ppwWithdraw() {
     for (const [key, msg] of Object.entries(ppErrors)) {
       if (errStr.includes(key)) { log('<b>Error:</b> ' + msg); decoded = true; break; }
     }
-    if (!decoded) log('<b>Error:</b> ' + (e.shortMessage || e.message || e));
+    if (!decoded) log('<b>Error:</b> ' + escText(e.shortMessage || e.message || e));
     handleError(e);
   } finally {
     setText(btn, 'Verify & Prepare Withdrawal');

@@ -391,6 +391,14 @@ body.modal-open { overflow: hidden; }
     "outputs": [{"internalType": "contract Moloch", "name": "dao", "type": "address"}],
     "stateMutability": "payable",
     "type": "function"
+  }, {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "summoner", "type": "address"},
+      {"indexed": true, "internalType": "contract Moloch", "name": "dao", "type": "address"}
+    ],
+    "name": "NewDAO",
+    "type": "event"
   }];
 
   const DAICO_ADDRESS = '0x000000000033e92DB97B4B3beCD2c255126C60aC';
@@ -420,16 +428,27 @@ body.modal-open { overflow: hidden; }
   const PROPOSAL_TTL = 7 * 86400;   // 7 days voting period
   const TIMELOCK_DELAY = 3 * 86400; // 3 days before execution (ragequit window)
 
-  const RPCS = ['https://1rpc.io/eth'];
+  const RPCS = ['https://eth.llamarpc.com', 'https://ethereum.publicnode.com', 'https://1rpc.io/eth', 'https://eth.drpc.org'];
+  const MAINNET = ethers.Network.from(1);
+  let _readRpc = null;
+  async function getReadRpc() {
+    if (_readRpc) return _readRpc;
+    const race = RPCS.map(async url => {
+      const p = new ethers.JsonRpcProvider(url, MAINNET, { staticNetwork: true, batchMaxCount: 1 });
+      await Promise.race([p.getBlockNumber(), new Promise((_, r) => setTimeout(() => r('timeout'), 3500))]);
+      return p;
+    });
+    _readRpc = await Promise.any(race);
+    return _readRpc;
+  }
   const WEINS_ADDRESS = '0x0000000000696760E15f265e828DB644A0c242EB';
 
-  function resolveWeiName(address) {
+  async function resolveWeiName(address) {
     try {
-      const rpc = new ethers.JsonRpcProvider(RPCS[0]);
+      const rpc = await getReadRpc();
       const ns = new ethers.Contract(WEINS_ADDRESS, ['function reverseResolve(address) view returns (string)'], rpc);
-      ns.reverseResolve(address).then(name => {
-        if (name && connectedAddress === address) getEl('walletBtn').textContent = name.toLowerCase();
-      }).catch(() => {});
+      const name = await ns.reverseResolve(address);
+      if (name && connectedAddress === address) getEl('walletBtn').textContent = name.toLowerCase();
     } catch {}
   }
   function escHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -972,7 +991,7 @@ body.modal-open { overflow: hidden; }
     getEl('trackerOutput').innerHTML = '<div class="status-message"><span class="spinner"></span>Loading...</div>';
 
     try {
-      const rpc = new ethers.JsonRpcProvider(RPCS[0]);
+      const rpc = await getReadRpc();
 
       // Get DAO info
       const daoContract = new ethers.Contract(addr, [
@@ -1010,9 +1029,17 @@ body.modal-open { overflow: hidden; }
       const [ops, tribTkn, ratePerSec, lastClaim] = tap;
 
       // Compute sale progress
-      const lootSold = lootSupply >= lootInDAO ? lootSupply - lootInDAO : 0n;
-      // If supply is 0 but sale was active, it means all loot was distributed + ragequit (burned)
-      const salePct = lootSupply > 0n ? Number((lootSold * 10000n) / lootSupply) / 100 : (forAmt > 0n ? 100 : 0);
+      // Use tap budget to derive original sale supply (resilient to ragequit burns reducing totalSupply)
+      let originalSupply = lootSupply;
+      if (ratePerSec > 0n && tribAmt > 0n) {
+        const totalTapSeconds = SECONDS_PER_MONTH * BigInt(TAP_MONTHS);
+        const tapBudget = ratePerSec * totalTapSeconds;
+        originalSupply = (tapBudget * forAmt) / tribAmt;
+      }
+      // Fallback: if no tap data, original supply >= current supply, use max of supply and DAO balance
+      if (originalSupply < lootInDAO) originalSupply = lootInDAO;
+      const lootSold = originalSupply >= lootInDAO ? originalSupply - lootInDAO : 0n;
+      const salePct = originalSupply > 0n ? Number((lootSold * 10000n) / originalSupply) / 100 : (forAmt > 0n ? 100 : 0);
 
       // Compute tap progress
       let tapPct = 0;
@@ -1036,7 +1063,7 @@ body.modal-open { overflow: hidden; }
 
       const treasuryEth = Number(ethers.formatEther(treasury));
       const lootSoldFmt = Number(ethers.formatEther(lootSold)).toLocaleString(undefined, {maximumFractionDigits: 0});
-      const lootTotalFmt = Number(ethers.formatEther(lootSupply)).toLocaleString(undefined, {maximumFractionDigits: 0});
+      const lootTotalFmt = Number(ethers.formatEther(originalSupply)).toLocaleString(undefined, {maximumFractionDigits: 0});
 
       const saleActive = lootInDAO > 0n && forAmt > 0n;
 
