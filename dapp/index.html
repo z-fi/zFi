@@ -6055,9 +6055,10 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
-  // If #coin or #privacy hash present, switch tab immediately and skip swap deeplinks
+  // If #coin/#send hash present (no PP query params), switch tab immediately and skip swap deeplinks
   const _dlTabHash = window.location.hash;
-  if (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send') {
+  const _hasppParam = new URLSearchParams(window.location.search).has('pp');
+  if (!_hasppParam && (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send')) {
     updateTokenDisplay();
     initTokenListClick();
     initTokenSearch();
@@ -7516,10 +7517,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const _savedEsKey = localStorage.getItem('pp_etherscan_key');
   if (_savedEsKey && $('ppwEtherscanKey')) $('ppwEtherscanKey').value = _savedEsKey;
 
-  // Deeplink: ?tab=privacy or #privacy
+  // Deeplink: ?tab=privacy or #privacy (skip if already on the right tab via PP deep link)
   const _urlp2 = new URLSearchParams(window.location.search);
-  if (_urlp2.get('tab') === 'privacy' || window.location.hash === '#privacy') switchTab('privacy');
-  if (_urlp2.get('tab') === 'coin' || window.location.hash === '#coin') switchTab('coin');
+  if (_activeTab !== 'privacy' && (_urlp2.get('tab') === 'privacy' || window.location.hash === '#privacy')) switchTab('privacy');
+  if (_activeTab !== 'coin' && (_urlp2.get('tab') === 'coin' || window.location.hash === '#coin')) switchTab('coin');
 
   // Wire up preview updates on withdraw inputs
   const _ppwAmtEl = $('ppwWithdrawAmt');
