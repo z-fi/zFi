@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Coins</title>
-<meta property="og:title" content="Coins - zFi">
+<title>COIN</title>
+<meta property="og:title" content="COIN">
 <meta property="og:description" content="Trade coins on zFi - the most secure-by-default exchange">
 <meta property="og:type" content="website">
 <meta property="og:url" content="">
 <meta property="og:image" content="">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Coins - zFi">
+<meta name="twitter:title" content="COIN">
 <meta name="twitter:description" content="Trade coins on zFi - the most secure-by-default exchange">
 <meta name="twitter:image" content="">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
@@ -411,6 +411,11 @@ const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
 function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
+function zfiLoadingSVG(s=48){
+const f=(i,v)=>`<g opacity="${i===0?1:0}"><animate attributeName="opacity" values="${Array.from({length:16},(_,j)=>j===i?1:0).join(';')}" dur="3.2s" repeatCount="indefinite"/>`;
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 8px"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
+
+
 const RPCS = [
   'https://ethereum.publicnode.com',
   'https://1rpc.io/eth',
@@ -504,6 +509,7 @@ async function fetchMetadata(contractURI) {
     const url = resolveIPFS(contractURI);
     if (url.startsWith('data:')) {
       const json = url.split(',').slice(1).join(',');
+      if (url.startsWith('data:application/json;base64,')) return JSON.parse(atob(json));
       return JSON.parse(decodeURIComponent(json));
     }
     const res = await fetch(url);
@@ -520,7 +526,7 @@ function symbolSVG(symbol, size) {
 function logoHTML(meta, metadata, size) {
   size = size || 40;
   const imgUrl = resolveIPFS(metadata.image);
-  if (imgUrl) return `<img src="${escText(imgUrl)}" alt="" onerror="this.parentNode.innerHTML=symbolSVG('${escText(meta.symbol)}',${size})">`;
+  if (imgUrl) return `<img src="${escText(imgUrl)}" alt="" onerror="this.parentNode.innerHTML=symbolSVG(${JSON.stringify(meta.symbol).replace(/</g,'\\u003c')},${size})">`;
   return symbolSVG(meta.symbol, size);
 }
 
@@ -713,14 +719,14 @@ window.addEventListener('hashchange', route);
 // ==================== GALLERY ====================
 
 async function renderGallery() {
-  updateOGMeta('Coins - zFi', 'Trade coins on zFi - the most secure-by-default exchange', '');
+  updateOGMeta('COIN', 'Trade coins on zFi - the most secure-by-default exchange', '');
   const app = $('app');
   app.innerHTML = `
     <div class="header">
       <h1>Coins</h1>
       <div><a href="../" class="nav-link">Swap</a> &middot; <a href="../dao/" class="nav-link">DAO</a></div>
     </div>
-    <div class="loading"><span class="spinner"></span>Scanning for coins...</div>
+    <div class="loading">${zfiLoadingSVG(48)}Scanning for coins...</div>
   `;
 
   try {
@@ -779,7 +785,7 @@ async function renderGallery() {
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
             <div>
               <div class="coin-card-name">${escText(d.meta.name || 'Unnamed')}</div>
-              <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.launchType === 'simple' ? `<span class="coin-tpl-badge coin-tpl-simple" title="Simple launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '50% LP'} &middot; ragequitable treasury &middot; no team &middot; no tap">simple</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
+              <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && (md.launchType === 'ez' || md.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
           <div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>
@@ -840,7 +846,7 @@ async function renderCoinPage(daoAddr) {
   const app = $('app');
   app.innerHTML = `
     <a href="#" class="back-link">&larr; All Coins</a>
-    <div class="loading"><span class="spinner"></span>Loading coin data...</div>
+    <div class="loading">${zfiLoadingSVG(48)}Loading coin data...</div>
   `;
 
   try {
@@ -931,7 +937,7 @@ async function renderCoinPage(daoAddr) {
         <div class="coin-detail-logo">${logoHTML(data.meta, metadata, 64)}</div>
         <div class="coin-detail-title">
           <h2>${escText(metadata.name || data.meta.name || 'Unnamed')}</h2>
-          <span>$${escText(metadata.symbol || data.meta.symbol || '???')}${metadata.launchType === 'simple' ? `<span class="coin-tpl-badge coin-tpl-simple" title="Simple launch &middot; ${metadata.lpBps ? (metadata.lpBps/100) + '% LP' : '50% LP'} &middot; ragequitable treasury &middot; no team &middot; no tap">simple</span>` : metadata.template ? `<span class="coin-tpl-badge" title="${escText(metadata.template)} template"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</span>
+          <span>$${escText(metadata.symbol || data.meta.symbol || '???')}${(metadata.launchType === 'ez' || metadata.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${metadata.lpBps ? (metadata.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : metadata.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : metadata.template ? `<span class="coin-tpl-badge" title="${escText(metadata.template)} template"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</span>
         </div>
       </div>
     `;
@@ -951,16 +957,16 @@ async function renderCoinPage(daoAddr) {
       html += `</div>`;
     }
 
-    // Simple launch info
-    if (metadata.launchType === 'simple') {
-      const simpleLpPct = metadata.lpBps ? metadata.lpBps / 100 : 50;
+    // ez launch info
+    if (metadata.launchType === 'ez' || metadata.launchType === 'simple') {
+      const simpleLpPct = metadata.lpBps ? metadata.lpBps / 100 : 80;
       const simpleTreasuryPct = 100 - simpleLpPct;
       html += `
         <div class="section-card" style="background:var(--surface);border:1px solid var(--border-muted)">
-          <div class="section-title">Simple Launch</div>
+          <div class="section-title">ez launch</div>
           <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
             ${simpleLpPct}% LP &middot; ${simpleTreasuryPct}% ragequitable treasury<br>
-            No team allocation &middot; No tap &middot; No vesting
+            No ops allocation &middot; No tap &middot; No vesting
           </div>
         </div>
       `;
@@ -974,7 +980,7 @@ async function renderCoinPage(daoAddr) {
         ${pctBar(salePct, 'var(--green)')}
         <div class="stat-row"><span class="stat-label">Raised</span><span class="stat-value">${fmtETH(raisedETH)}</span></div>
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ETH/share</span></div>` : ''}
-        ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM (${Number(feeOrHook) / 100}%)</span></div>` : ''}
+        ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
       </div>
     `;
 
@@ -1195,7 +1201,7 @@ async function renderCoinPage(daoAddr) {
             <span class="arrow">&#9660;</span>
           </button>
           <div class="activity-body">
-            <div id="activityContent"><div class="activity-empty"><span class="spinner"></span> Loading...</div></div>
+            <div id="activityContent"><div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div></div>
           </div>
         </div>
       `;
