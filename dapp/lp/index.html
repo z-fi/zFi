@@ -351,6 +351,7 @@ tr:hover td { background:var(--surface-hover); }
   <div id="addModeToggle" class="tab-row" style="display:none">
     <button class="tab-btn" data-addmode="zap" onclick="setAddMode('zap')">Zap (ETH only)</button>
     <button class="tab-btn active" data-addmode="pair" onclick="setAddMode('pair')">Two-sided</button>
+    <button class="tab-btn" data-addmode="collateral" onclick="setAddMode('collateral')" style="display:none">Collateral (ETH)</button>
   </div>
   <!-- Zap form -->
   <div id="addZapForm" style="display:none">
@@ -388,6 +389,18 @@ tr:hover td { background:var(--surface-hover); }
       </div>
       <div style="margin-top:16px">
         <button id="addLiqBtn" onclick="doAddLiquidity()" style="width:100%">Add Liquidity</button>
+      </div>
+    </div>
+  </div>
+  <!-- Collateral (split+add) form for prediction market pools -->
+  <div id="addCollateralForm" style="display:none">
+    <div class="lp-card">
+      <div class="lp-section">
+        <label class="lp-label">ETH (splits into YES + NO)</label>
+        <input class="lp-input" id="collateralAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal">
+      </div>
+      <div style="margin-top:16px">
+        <button id="collateralLiqBtn" onclick="doSplitAddLiquidity()" style="width:100%">Split &amp; Add Liquidity</button>
       </div>
     </div>
   </div>
@@ -456,6 +469,9 @@ function toggleDark() {
   localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
 }
 
+function zfiLoadingSVG(s=48){
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 8px"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
+
 // ---- Constants ----
 const ZAMM_V0 = "0x00000000000008882D72EfA6cCE4B6a40b24C860";
 const ZAMM_V1 = "0x000000000000040470635EB91b7CE4D132D616eD";
@@ -463,6 +479,7 @@ const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
 const ZERO    = "0x0000000000000000000000000000000000000000";
 const BASE    = "https://coinchan-indexer-production.up.railway.app";
 const RPCS    = ["https://ethereum.publicnode.com", "https://1rpc.io/eth", "https://eth.drpc.org", "https://eth.llamarpc.com"];
+const PAMM    = "0x000000000044bfe6c2BBFeD8862973E0612f07C0";
 const WEINS   = "0x0000000000696760E15f265e828DB644A0c242EB";
 const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
 const ZORG_TOKEN = "0x0000000000009710cd229bf635c4500029651ee8";
@@ -515,6 +532,10 @@ const V1_ZAP = "0x0000000000Ee8cD7fd26236a2e4C1505dAc0Dce9";
 const V0_ZAP_ABI = ["function addSingleLiqETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint96 swapFee) poolKey, uint256 amountOutMin, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256, uint256, uint256)"];
 const V1_ZAP_ABI = ["function addSingleLiqETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountOutMin, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256, uint256, uint256)"];
 
+const PAMM_ABI = [
+  "function splitAndAddLiquidity(uint256 marketId, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 liquidity)"
+];
+
 // ---- State ----
 let _provider = null, _signer = null;
 let _poolData = null;     // from indexer
@@ -527,7 +548,8 @@ let _poolKey = null;      // reconstructed PoolKey
 let _refreshTimer = null;
 let _refreshCountdown = 30;
 let _activeTab = 'pool';
-let _addMode = 'pair';    // 'pair' or 'zap'
+let _isPM = false;        // prediction market pool
+let _addMode = 'pair';    // 'pair', 'zap', or 'collateral'
 let _addDirection = 0;    // 0=from amt0, 1=from amt1
 let _coinMap = null;      // coinId -> { name, symbol, imageUrl, decimals }
 
@@ -989,6 +1011,7 @@ function coinLabel(coin, tokenAddr) {
   if (tokenAddr === ZERO) return 'ETH';
   const ta = (tokenAddr || '').toLowerCase();
   if (ta === COINS.toLowerCase() || ta === ZAMM_V1.toLowerCase()) return 'COINS';
+  if (ta === PAMM.toLowerCase()) return 'Shares';
   return '???';
 }
 
@@ -1003,6 +1026,10 @@ function resolveCoin(coin, tokenAddr, coinId) {
   // Try coin map by ID
   if (id && _coinMap && _coinMap[id]) {
     return { ...(coin || {}), ..._coinMap[id] };
+  }
+  // PAMM tokens: synthesize YES/NO labels from coin IDs
+  if (id && tokenAddr && tokenAddr.toLowerCase() === PAMM.toLowerCase()) {
+    return { id, symbol: 'Shares', name: 'Shares', decimals: 18, imageUrl: null, ...(coin || {}) };
   }
   // If coin has id but no symbol, still return what we have
   if (coin) return coin;
@@ -1021,8 +1048,8 @@ async function fetchPool(poolId) {
       reserve0 reserve1 price0 price1
     }
   }`;
-  // Try ZAMM (V0) first, then COOKBOOK (V1) — avoids COOKBOOK mis-detection for V0 pools
-  for (const source of ["ZAMM", "COOKBOOK"]) {
+  // Try ZAMM (V0) first, then COOKBOOK (V1), then PAMM — avoids COOKBOOK mis-detection for V0 pools
+  for (const source of ["ZAMM", "COOKBOOK", "PAMM"]) {
     try {
       const res = await fetch(BASE + "/graphql", {
         method: "POST",
@@ -1179,6 +1206,7 @@ function tokenLabel(side) {
   const addr = side === 0 ? _poolData.token0 : _poolData.token1;
   if (coin && coin.symbol) return coin.symbol;
   if (addr === ZERO) return 'ETH';
+  if (addr && addr.toLowerCase() === PAMM.toLowerCase()) return side === 0 ? 'YES' : 'NO';
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
@@ -1320,18 +1348,26 @@ function setAddMode(mode) {
   });
   $('addZapForm').style.display = mode === 'zap' ? '' : 'none';
   $('addPairForm').style.display = mode === 'pair' ? '' : 'none';
+  const collForm = $('addCollateralForm');
+  if (collForm) collForm.style.display = mode === 'collateral' ? '' : 'none';
   // Clear status
   $('addStatus').className = 'status-msg';
   $('addStatus').textContent = '';
 }
 
-// Show/hide zap toggle based on pool (only for ETH pools)
+// Show/hide zap toggle based on pool (ETH pools get zap, PM pools get collateral)
 function updateAddModeToggle() {
   const toggle = $('addModeToggle');
   if (!toggle) return;
   const isEthPool = _poolData && _poolData.token0 === ZERO;
-  toggle.style.display = isEthPool ? '' : 'none';
-  if (!isEthPool && _addMode === 'zap') setAddMode('pair');
+  const zapBtn = toggle.querySelector('[data-addmode="zap"]');
+  const collBtn = toggle.querySelector('[data-addmode="collateral"]');
+  if (zapBtn) zapBtn.style.display = isEthPool ? '' : 'none';
+  if (collBtn) collBtn.style.display = _isPM ? '' : 'none';
+  const showToggle = isEthPool || _isPM;
+  toggle.style.display = showToggle ? '' : 'none';
+  if (!isEthPool && _addMode === 'zap') setAddMode(_isPM ? 'collateral' : 'pair');
+  if (!_isPM && _addMode === 'collateral') setAddMode(isEthPool ? 'zap' : 'pair');
 }
 
 // ---- Zap: quote + preview ----
@@ -1430,6 +1466,41 @@ async function doZapLiquidity() {
   }
 }
 
+// ---- Split + Add Liquidity (prediction market pools) ----
+async function doSplitAddLiquidity() {
+  if (!_signer) { showWalletModal(); return; }
+  if (!_poolData || !_isPM) return;
+
+  const val = $('collateralAmt').value;
+  if (!val || Number(val) <= 0) return;
+  const amountWei = ethers.parseEther(val);
+
+  // Derive marketId from coin0.id (YES share id = marketId)
+  const marketId = BigInt(_poolData.coin0.id);
+  const feeOrHook = BigInt(_poolData.feeOrHook || 30);
+  const addr = await _signer.getAddress();
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+
+  try {
+    showStatus('addStatus', 'info', 'Sending split + add liquidity...');
+    const pamm = new ethers.Contract(PAMM, PAMM_ABI, _signer);
+    const tx = await pamm.splitAndAddLiquidity(
+      marketId, amountWei, feeOrHook, 0, 0, 0, addr, deadline,
+      { value: amountWei }
+    );
+    showStatus('addStatus', 'info', 'Waiting for confirmation...');
+    const receipt = await tx.wait();
+    showStatus('addStatus', 'success', 'Liquidity added! ' + receipt.hash.slice(0, 10) + '...');
+    $('collateralAmt').value = '';
+    await refreshOnchain();
+  } catch (e) {
+    console.error(e);
+    const msg = friendlyError(e, 'Split + add liquidity failed');
+    if (msg) showStatus('addStatus', 'error', msg);
+    else showStatus('addStatus', '', '');
+  }
+}
+
 // ---- Remove: show expected output ----
 function onRemoveAmtChange() {
   if (!_onchain || _onchain.supply === 0n) return;
@@ -1455,6 +1526,18 @@ async function ensureApproval(tokenAddr, coinId, amount) {
   const ammAddr = _ammAddress;
   const userAddr = await _signer.getAddress();
   const cid = BigInt(coinId);
+
+  // PAMM tokens (prediction market shares): use PAMM.setOperator
+  if (tokenAddr.toLowerCase() === PAMM.toLowerCase()) {
+    const pamm = new ethers.Contract(PAMM, COINS_ABI, _signer);
+    const approved = await pamm.isOperator(userAddr, ammAddr);
+    if (!approved) {
+      showStatus('addStatus', 'info', 'Approving prediction market shares...');
+      const tx = await pamm.setOperator(ammAddr, true);
+      await tx.wait();
+    }
+    return;
+  }
 
   // ZAMM coins (id >= 1000000): use Coins.setOperator on V0
   if (cid >= 1000000n) {
@@ -1493,7 +1576,7 @@ async function doAddLiquidity() {
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
   const amt0Str = $('addAmt0').value;
   const amt1Str = $('addAmt1').value;
-  if (!amt0Str || !amt1Str || Number(amt0Str) === 0) return;
+  if (!amt0Str || !amt1Str || Number(amt0Str) === 0 || Number(amt1Str) === 0) return;
 
   const amt0 = ethers.parseUnits(amt0Str, d0);
   const amt1 = ethers.parseUnits(amt1Str, d1);
@@ -1573,7 +1656,7 @@ async function renderPositions() {
     el.innerHTML = '<div class="empty-msg">Connect wallet to see positions</div>';
     return;
   }
-  el.innerHTML = '<div class="empty-msg">Loading...</div>';
+  el.innerHTML = '<div class="empty-msg">' + zfiLoadingSVG(36) + 'Loading...</div>';
   const addr = await _signer.getAddress();
   const addrLower = addr.toLowerCase();
   try {
@@ -1658,11 +1741,16 @@ async function renderPositions() {
       const p = pos.pool;
       const c0 = resolveCoin(p.coin0, p.token0, p.coin0Id);
       const c1 = resolveCoin(p.coin1, p.token1, p.coin1Id);
+      const posPM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
+      if (posPM) {
+        if (c0 && (!c0.symbol || c0.symbol === 'Shares')) { c0.symbol = 'YES'; }
+        if (c1 && (!c1.symbol || c1.symbol === 'Shares')) { c1.symbol = 'NO'; }
+      }
       const s0 = coinLabel(c0, p.token0);
       const s1 = coinLabel(c1, p.token1);
       const d0 = c0.decimals ? Number(c0.decimals) : 18;
       const d1 = c1.decimals ? Number(c1.decimals) : 18;
-      const ver = p.source === 'ZAMM' ? 'ZAMM' : 'ZAMM Hooked';
+      const ver = p.source === 'ZAMM' ? 'ZAMM' : (posPM ? 'Prediction Market' : 'ZAMM Hooked');
       html += `<tr>
         <td>${coinIcon(c0)}${esc(s0)} / ${coinIcon(c1)}${esc(s1)}<br><span class="text-muted" style="font-size:10px">${ver}</span></td>
         <td class="mono">${fmtWei(pos.liquidity, 18)}</td>
@@ -1729,7 +1817,7 @@ async function renderHistory() {
     return;
   }
   if (_historyLoaded) return;
-  el.innerHTML = '<div class="empty-msg">Loading...</div>';
+  el.innerHTML = '<div class="empty-msg">' + zfiLoadingSVG(36) + 'Loading...</div>';
   try {
     const res = await fetch(BASE + `/api/events?poolId=${poolId}&limit=200`);
     const data = await res.json();
@@ -1794,7 +1882,7 @@ function closePoolModal() {
 
 async function fetchPoolList() {
   const el = $('poolList');
-  el.innerHTML = '<div class="empty-msg">Loading pools...</div>';
+  el.innerHTML = '<div class="empty-msg">' + zfiLoadingSVG(36) + 'Loading pools...</div>';
   try {
     await loadCoinMap();
     const res = await fetch(BASE + "/graphql", {
@@ -1814,9 +1902,10 @@ async function fetchPoolList() {
     });
     const json = await res.json();
     const allPools = json.data && json.data.pools ? json.data.pools.items : [];
-    // Filter to ZAMM/COOKBOOK pools with reserves and known symbols
+    // Filter to ZAMM/COOKBOOK/PAMM pools with reserves and known symbols
     const pools = allPools.filter(p => {
-      if (p.source !== 'ZAMM' && p.source !== 'COOKBOOK') return false;
+      const isPAMM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
+      if (!isPAMM && p.source !== 'ZAMM' && p.source !== 'COOKBOOK') return false;
       if (!p.reserve0 || BigInt(p.reserve0) <= 0n) return false;
       return true;
     });
@@ -1824,6 +1913,12 @@ async function fetchPoolList() {
     for (const p of pools) {
       p.coin0 = resolveCoin(p.coin0, p.token0, p.coin0Id);
       p.coin1 = resolveCoin(p.coin1, p.token1, p.coin1Id);
+      // Label PAMM pool coins as YES/NO (override 'Shares' fallback from resolveCoin)
+      const pIsPM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
+      if (pIsPM) {
+        if (p.coin0 && (!p.coin0.symbol || p.coin0.symbol === 'Shares')) { p.coin0.symbol = 'YES'; }
+        if (p.coin1 && (!p.coin1.symbol || p.coin1.symbol === 'Shares')) { p.coin1.symbol = 'NO'; }
+      }
     }
     // Hide pools where either symbol is unknown
     const resolved = pools.filter(p => {
@@ -1851,7 +1946,8 @@ function renderPoolList(pools) {
     const c1 = p.coin1 || {};
     const s0 = coinLabel(c0, p.token0);
     const s1 = coinLabel(c1, p.token1);
-    const version = p.source === 'ZAMM' ? 'ZAMM' : 'ZAMM Hooked';
+    const listPM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
+    const version = p.source === 'ZAMM' ? 'ZAMM' : (listPM ? 'Prediction Market' : 'ZAMM Hooked');
     const feePct = poolFeePct(p);
     const d0 = c0.decimals || 18;
     const d1 = c1.decimals || 18;
@@ -1901,10 +1997,17 @@ async function init() {
   }
   _poolData = pool;
 
-  // Determine V0 vs V1
+  // Determine V0 vs V1 and prediction market
   _isV0 = pool.source === "ZAMM";
+  _isPM = pool.token0 && pool.token1 && pool.token0.toLowerCase() === PAMM.toLowerCase() && pool.token1.toLowerCase() === PAMM.toLowerCase();
   _ammAddress = _isV0 ? ZAMM_V0 : ZAMM_V1;
   _ammABI = _isV0 ? V0_ABI : V1_ABI;
+
+  // Label PAMM pool coins as YES/NO (override 'Shares' fallback from resolveCoin)
+  if (_isPM) {
+    if (pool.coin0 && (!pool.coin0.symbol || pool.coin0.symbol === 'Shares')) { pool.coin0.symbol = 'YES'; }
+    if (pool.coin1 && (!pool.coin1.symbol || pool.coin1.symbol === 'Shares')) { pool.coin1.symbol = 'NO'; }
+  }
 
   // Reconstruct PoolKey
   const id0 = pool.coin0 && pool.coin0.id ? BigInt(pool.coin0.id) : 0n;
@@ -1937,7 +2040,8 @@ async function init() {
 
   // Header + pool selector button label
   const l0 = tokenLabel(0), l1 = tokenLabel(1);
-  const version = _isV0 ? 'ZAMM' : 'ZAMM Hooked';
+  const isPM = pool.token0 && pool.token1 && pool.token0.toLowerCase() === PAMM.toLowerCase() && pool.token1.toLowerCase() === PAMM.toLowerCase();
+  const version = _isV0 ? 'ZAMM' : (isPM ? 'Prediction Market' : 'ZAMM Hooked');
   const feePct = poolFeePct(pool);
   const ic0 = coinIcon(_poolData.coin0, 18);
   const ic1 = coinIcon(_poolData.coin1, 18);

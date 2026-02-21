@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Predict</title>
-<meta property="og:title" content="Predict - zFi">
-<meta property="og:description" content="Prediction markets on zFi - the most secure-by-default exchange">
+<title>PM</title>
+<meta property="og:title" content="PREDICT">
+<meta property="og:description" content="The open onchain prediction market">
 <meta property="og:type" content="website">
 <meta property="og:url" content="">
 <meta property="og:image" content="">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Predict - zFi">
-<meta name="twitter:description" content="Prediction markets on zFi - the most secure-by-default exchange">
+<meta name="twitter:title" content="PREDICT">
+<meta name="twitter:description" content="The open onchain prediction market">
 <meta name="twitter:image" content="">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <script>
@@ -31,7 +31,7 @@
   --link-fg:inherit;
   --modal-overlay:rgba(0,0,0,0.8);--modal-bg:#fff;--modal-border:#000;
   --card-border:#ccc;
-  --green:#22c55e;--red:#ef4444;--yes:#0f0;--no:#f00;
+  --green:#22c55e;--red:#ef4444;--yes:#22c55e;--no:#ef4444;
 }
 .dark {
   --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
@@ -43,7 +43,7 @@
   --link-fg:#e8e8e0;
   --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
   --card-border:#333;
-  --green:#22c55e;--red:#ef4444;--yes:#0f0;--no:#f00;
+  --green:#22c55e;--red:#ef4444;--yes:#22c55e;--no:#ef4444;
 }
 body {
   font-family:Helvetica,Arial,sans-serif;
@@ -94,24 +94,28 @@ input {
 }
 .market-card:hover { background:var(--surface-hover); }
 .market-card-question {
-  font-size:14px;font-weight:600;line-height:1.4;margin-bottom:10px;
+  font-size:14px;font-weight:600;line-height:1.5;margin-bottom:12px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
+.market-card-odds-label {
+  display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px;
+}
+.market-card-odds-label .yes-label { color:var(--yes); }
+.market-card-odds-label .no-label { color:var(--no); }
 .market-card-odds {
-  display:flex;height:28px;overflow:hidden;margin-bottom:8px;
+  display:flex;height:6px;overflow:hidden;margin-bottom:8px;
 }
 .market-card-yes {
-  background:var(--yes);color:#000;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:700;min-width:32px;transition:width 0.3s;
+  background:var(--yes);transition:width 0.3s;
 }
 .market-card-no {
-  background:var(--no);color:#fff;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:700;min-width:32px;flex:1;transition:width 0.3s;
+  background:var(--no);flex:1;transition:width 0.3s;
 }
 .market-card-meta {
   font-size:11px;color:var(--fg-muted);display:flex;justify-content:space-between;
 }
-.market-card.resolved { opacity:0.6; }
+.market-card.resolved { opacity:0.7; }
+.market-card.resolved .market-card-question { color:var(--fg-muted); }
 .market-card.resolved .market-card-question::after {
   content:attr(data-outcome);font-size:11px;font-weight:700;margin-left:6px;
   padding:2px 6px;vertical-align:middle;
@@ -134,7 +138,7 @@ input {
 
 /* Detail page */
 .section-card {
-  border:1px solid var(--border-muted);padding:16px;margin-bottom:16px;
+  border:1px solid var(--border-muted);padding:16px;margin-bottom:20px;
 }
 .section-title {
   font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
@@ -145,28 +149,33 @@ input {
 .stat-value { font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0; }
 
 /* Odds bar (detail) */
+.odds-label {
+  display:flex;justify-content:space-between;margin-bottom:6px;
+}
+.odds-label span { font-size:24px;font-weight:700; }
+.odds-label .yes-label { color:var(--yes); }
+.odds-label .no-label { color:var(--no); }
 .odds-bar {
-  display:flex;height:48px;overflow:hidden;margin-bottom:16px;cursor:default;
+  display:flex;height:8px;overflow:hidden;margin-bottom:16px;cursor:default;
 }
 .odds-yes {
-  background:var(--yes);color:#000;display:flex;align-items:center;justify-content:center;
-  font-size:18px;font-weight:700;min-width:48px;transition:width 0.3s;
+  background:var(--yes);transition:width 0.3s;
 }
 .odds-no {
-  background:var(--no);color:#fff;display:flex;align-items:center;justify-content:center;
-  font-size:18px;font-weight:700;min-width:48px;flex:1;transition:width 0.3s;
+  background:var(--no);flex:1;transition:width 0.3s;
 }
 
 /* Trade panel */
-.trade-dir { display:flex;gap:6px;margin-bottom:14px; }
+.trade-dir { display:flex;gap:0;margin-bottom:14px; }
 .trade-dir button {
   flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
-  border:none;border-bottom:2px solid transparent;border-radius:0;
+  border:1px solid var(--border-muted);border-radius:0;
   background:transparent;color:var(--fg-muted);
-  cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;margin:0;
+  cursor:pointer;font-family:inherit;transition:color 0.15s,background 0.15s,border-color 0.15s;margin:0;
 }
+.trade-dir button + button { border-left:none; }
 .trade-dir button:hover { color:var(--fg); }
-.trade-dir button.active { color:var(--fg);border-bottom-color:var(--fg); }
+.trade-dir button.active { color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg); }
 .trade-side { display:flex;gap:6px;margin-bottom:14px; }
 .trade-side button {
   flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
@@ -176,8 +185,8 @@ input {
 }
 .trade-side button:hover { color:var(--fg); }
 .trade-side button.active { color:var(--fg);border-bottom-color:var(--fg); }
-.trade-side button[data-side="yes"].active { border-bottom-color:var(--yes); }
-.trade-side button[data-side="no"].active { border-bottom-color:var(--no); }
+.trade-side button[data-side="yes"].active { color:var(--yes);border-bottom-color:var(--yes); }
+.trade-side button[data-side="no"].active { color:var(--no);border-bottom-color:var(--no); }
 
 .trade-section { margin-bottom:8px; }
 .trade-section-head {
@@ -217,21 +226,22 @@ input {
 .resolve-section { margin-top:16px; }
 .resolve-toggle {
   display:flex;align-items:center;justify-content:space-between;
-  padding:10px 12px;border:1px solid var(--border);opacity:0.6;
+  padding:10px 12px;border:1px solid var(--border);
   cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--fg-muted);transition:color 0.15s,border-color 0.15s;
 }
-.resolve-toggle:hover { opacity:0.8; }
-.resolve-toggle.expanded { opacity:1;border-color:#F50; }
+.resolve-toggle:hover { color:var(--fg); }
+.resolve-toggle.expanded { color:var(--fg);border-color:#F50; }
 .resolve-toggle-status { font-weight:bold; }
 .resolve-toggle-status.pending { color:#F50; }
 .resolve-toggle-status.ready { color:var(--yes); }
 .resolve-toggle-status.resolved { color:#0FF; }
 .resolve-details {
   display:none;padding:16px;border:1px solid var(--border);border-top:none;
-  background:rgba(128,128,128,0.05);
+  background:transparent;
 }
 .resolve-details.expanded { display:block; }
-.resolve-details.ready { border-color:var(--yes);background:rgba(0,255,0,0.05); }
+.resolve-details.ready { border-color:var(--yes);background:transparent; }
 .resolve-condition { font-size:13px;margin-bottom:16px;line-height:1.5; }
 .resolve-condition-target { opacity:0.7;font-size:11px; }
 .resolve-condition-val { font-weight:bold;color:#0FF; }
@@ -344,9 +354,6 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
 }
 .liq-preset:hover { border-color:var(--fg);color:var(--fg); }
 .liq-preset.active { border-color:var(--fg);color:var(--fg);background:var(--surface); }
-.liq-split-bar { display:flex;height:6px;overflow:hidden;margin:8px 0 6px; }
-.liq-split-bar > div { transition:width 0.2s; }
-.liq-split-legend { display:flex;justify-content:space-between;font-size:10px;color:var(--fg-muted);margin-bottom:10px; }
 .date-presets { display:flex;gap:4px;margin-top:6px; }
 .date-preset {
   padding:4px 10px;font-size:10px;font-weight:600;border:1px solid var(--border-muted);
@@ -359,22 +366,15 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
 .form-toggle-row { display:flex;align-items:center;gap:8px;margin-bottom:10px; }
 .form-toggle-row label { font-size:11px;color:var(--fg-muted);cursor:pointer;user-select:none;margin:0;text-transform:none;letter-spacing:0; }
 .form-toggle-row input[type="checkbox"] { accent-color:var(--fg);width:14px;height:14px; }
-.adv-toggle {
-  font-size:11px;color:var(--fg-dim);cursor:pointer;text-align:center;margin:12px 0;
-  letter-spacing:0.1em;text-transform:uppercase;transition:color 0.15s;
-}
-.adv-toggle:hover { color:var(--fg); }
-.adv-section { display:none; }
-.adv-section.active { display:block; }
-.balance-type-toggle { display:flex;gap:0; }
+.balance-type-toggle { display:flex;gap:6px; }
 .balance-type-btn {
-  flex:1;padding:7px;font-size:11px;font-weight:600;letter-spacing:0.05em;
+  flex:1;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.05em;
   border:1px solid var(--border-muted);background:transparent;color:var(--fg-muted);
   cursor:pointer;font-family:inherit;transition:border-color 0.15s,color 0.15s,background 0.15s;
 }
-.balance-type-btn:first-child { border-right:none; }
-.balance-type-btn:last-child { border-left:none; }
 .balance-type-btn.active { border-color:var(--fg);color:var(--fg);background:var(--surface); }
+input[type="datetime-local"] { color-scheme:light; }
+.dark input[type="datetime-local"] { color-scheme:dark; }
 
 /* LP Modal extras */
 .lp-alloc-row { display:flex;align-items:center;gap:8px;margin-bottom:4px; }
@@ -453,8 +453,7 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
   .stat-row { font-size:12px; }
   .trade-section input { font-size:18px; }
   .trade-pct-btn { font-size:9px;padding:5px 0; }
-  .odds-bar { height:40px; }
-  .odds-yes, .odds-no { font-size:15px; }
+  .odds-label span { font-size:20px; }
   .modal { max-width:100%;margin:0 10px;max-height:calc(100vh - 40px);overflow-y:auto; }
   .dark-toggle { top:18px;left:16px; }
   .market-type-tab { font-size:10px;padding:6px 2px; }
@@ -506,7 +505,7 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
       <button class="market-type-tab active" onclick="switchMarketType('price')">Price</button>
       <button class="market-type-tab" onclick="switchMarketType('balance')">Balance</button>
       <button class="market-type-tab" onclick="switchMarketType('supply')">Supply</button>
-      <button class="market-type-tab" onclick="switchMarketType('custom')">Custom</button>
+      <button class="market-type-tab" onclick="switchMarketType('custom')">Question</button>
     </div>
 
     <!-- PRICE FORM -->
@@ -603,14 +602,15 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
 
     <!-- CUSTOM FORM -->
     <div class="form-section" id="customForm">
-      <div class="form-preview" id="customPreview">Custom Y/N market with your chosen resolver</div>
+      <div class="form-preview" id="customPreview">Yes/No market with your own question and resolver</div>
       <div class="form-group">
         <label class="form-label">Question</label>
         <input class="form-input" id="customQuestion" type="text" placeholder="Will X happen by Y?" oninput="updateCustomPreview()">
       </div>
       <div class="form-group">
         <label class="form-label">Resolver Address</label>
-        <input class="form-input" id="customResolver" type="text" placeholder="0x... (EOA or contract that can resolve)">
+        <input class="form-input" id="customResolver" type="text" placeholder="0x address, name.wei, or name.eth">
+        <div id="customResolverResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         <div class="form-hint">The address that will be able to resolve this market as YES or NO</div>
       </div>
       <div class="form-toggle-row">
@@ -638,60 +638,6 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
       <button type="button" class="liq-preset" onclick="setLiqPreset(1)">1.0</button>
     </div>
     <input class="form-input" id="totalLiquidity" type="number" placeholder="0.01" step="0.001" min="0.001" value="0.01" oninput="updateLiqSplit()" style="margin-bottom:10px">
-    <div class="liq-split-bar" id="liqSplitBar">
-      <div style="background:var(--fg);width:100%"></div>
-    </div>
-    <div class="liq-split-legend">
-      <span id="liqLegAmm">0.010 AMM</span>
-      <span id="liqLegVault">0 Vault</span>
-      <span id="liqLegBids">0 Bids</span>
-    </div>
-
-    <!-- Advanced options -->
-    <div class="adv-toggle" onclick="toggleAdvanced()"><span id="advChevron" style="font-size:9px;margin-right:4px">&#9654;</span>Advanced</div>
-    <div class="adv-section" id="advSection">
-      <div class="form-toggle-row">
-        <input type="checkbox" id="enableVault" onchange="updateLiqSplit()">
-        <label for="enableVault">Vault liquidity</label>
-      </div>
-      <div id="vaultFields" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Vault (ETH)</label>
-          <input class="form-input" id="vaultAmount" type="number" placeholder="0" step="0.01" min="0" oninput="updateLiqSplit()">
-        </div>
-        <div style="display:flex;gap:8px">
-          <div class="form-group" style="flex:1">
-            <label class="form-label">YES %</label>
-            <input class="form-input" id="vaultYesPct" type="number" value="50" step="1" min="0" max="100">
-          </div>
-          <div class="form-group" style="flex:1">
-            <label class="form-label">NO %</label>
-            <input class="form-input" id="vaultNoPct" type="number" value="50" step="1" min="0" max="100">
-          </div>
-        </div>
-      </div>
-
-      <div class="form-toggle-row">
-        <input type="checkbox" id="enableBids" onchange="updateLiqSplit()">
-        <label for="enableBids">Orderbook bids</label>
-      </div>
-      <div id="bidsFields" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Bids (ETH)</label>
-          <input class="form-input" id="bidsAmount" type="number" placeholder="0" step="0.01" min="0" oninput="updateLiqSplit()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Spread</label>
-          <select class="form-input" id="bidSpread">
-            <option value="balanced">Balanced 25-75%</option>
-            <option value="tight">Tight 35-65%</option>
-            <option value="wide">Wide 15-85%</option>
-            <option value="yesOnly">YES only 20-45%</option>
-            <option value="noOnly">NO only 55-80%</option>
-          </select>
-        </div>
-      </div>
-    </div>
 
     <div style="font-size:12px;color:var(--fg-muted);text-align:center;margin:12px 0 4px;letter-spacing:0.02em" id="totalCostDisplay">Total: 0.01 ETH</div>
     <button class="form-btn" id="createBtn" onclick="createMarket()">Create Market</button>
@@ -749,6 +695,10 @@ const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
 function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
+function zfiLoadingSVG(s=48){
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 8px"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
+
+
 // ==================== CONFIG ====================
 
 const RPCS = [
@@ -759,7 +709,7 @@ const RPCS = [
 ];
 
 const WEINS = "0x0000000000696760E15f265e828DB644A0c242EB";
-const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
+const WEINS_ABI = ["function reverseResolve(address) view returns (string)", "function computeId(string) pure returns (uint256)", "function ownerOf(uint256) view returns (address)"];
 
 const CONTRACTS = {
   PAMM: '0x000000000044bfe6c2BBFeD8862973E0612f07C0',
@@ -844,28 +794,11 @@ const LEGACY_RESOLVER_ABI = [
 ];
 
 const BOOTSTRAPPER_ABI = [
-  // Open resolver markets (custom resolver address)
   'function bootstrapMarket(string description, address resolverAddr, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, bool buyYes, uint256 collateralForBuy, uint256 minSharesOut, address to, uint256 deadline) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut)',
-  'function bootstrapMarketWithVault(string description, address resolverAddr, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, address to, uint256 deadline, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  'function bootstrapMarketWithVaultAndBids(string description, address resolverAddr, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, address to, uint256 deadline, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  // Price markets (Chainlink)
   'function bootstrapPriceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address priceFeed, uint8 op, uint256 priceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
-  'function bootstrapPriceMarketWithBids(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address priceFeed, uint8 op, uint256 priceThreshold, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
-  'function bootstrapPriceMarketWithVault(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address priceFeed, uint8 op, uint256 priceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  'function bootstrapPriceMarketWithVaultAndBids(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address priceFeed, uint8 op, uint256 priceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  // ETH balance markets
   'function bootstrapETHBalanceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address account, uint8 op, uint256 balanceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
-  'function bootstrapETHBalanceMarketWithVault(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address account, uint8 op, uint256 balanceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  'function bootstrapETHBalanceMarketWithVaultAndBids(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address account, uint8 op, uint256 balanceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  // Token balance markets
   'function bootstrapTokenBalanceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address token, address account, uint8 op, uint256 balanceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
-  'function bootstrapTokenBalanceMarketWithVault(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address token, address account, uint8 op, uint256 balanceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  'function bootstrapTokenBalanceMarketWithVaultAndBids(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address token, address account, uint8 op, uint256 balanceThreshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  // Generic condition
   'function bootstrapWithCondition(string description, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, bool buyYes, uint256 collateralForBuy, uint256 minSharesOut, address to, uint256 deadline, address target, bytes callData, uint8 op, uint256 threshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut)',
-  'function bootstrapWithConditionAndVault(string description, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, address to, uint256 deadline, address target, bytes callData, uint8 op, uint256 threshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  'function bootstrapWithConditionAndVaultAndBids(string description, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, address to, uint256 deadline, address target, bytes callData, uint8 op, uint256 threshold, tuple(uint256 collateralForVault, uint256 vaultYesShares, uint256 vaultNoShares) vault, tuple(bool buyYes, uint256 collateralForBuy) buy, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut, uint256 yesVaultShares, uint256 noVaultShares)',
-  // Orderbook
   'function addOrderbookBids(uint256 marketId, address collateral, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids, address to) payable',
   'function computeMarketIdResolver(string description, address collateral) view returns (uint256)'
 ];
@@ -892,29 +825,6 @@ const PM_HOOK_ROUTER_ABI = [
 const MULTICALL3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])'
 ];
-
-const BID_PRESETS = {
-  balanced: [
-    { buyYes: true, priceInBps: 2500 }, { buyYes: true, priceInBps: 3500 }, { buyYes: true, priceInBps: 4500 },
-    { buyYes: false, priceInBps: 5500 }, { buyYes: false, priceInBps: 6500 }, { buyYes: false, priceInBps: 7500 }
-  ],
-  tight: [
-    { buyYes: true, priceInBps: 3500 }, { buyYes: true, priceInBps: 4000 }, { buyYes: true, priceInBps: 4500 },
-    { buyYes: false, priceInBps: 5500 }, { buyYes: false, priceInBps: 6000 }, { buyYes: false, priceInBps: 6500 }
-  ],
-  wide: [
-    { buyYes: true, priceInBps: 1500 }, { buyYes: true, priceInBps: 2500 }, { buyYes: true, priceInBps: 3500 },
-    { buyYes: false, priceInBps: 6500 }, { buyYes: false, priceInBps: 7500 }, { buyYes: false, priceInBps: 8500 }
-  ],
-  yesOnly: [
-    { buyYes: true, priceInBps: 2000 }, { buyYes: true, priceInBps: 3000 }, { buyYes: true, priceInBps: 3500 },
-    { buyYes: true, priceInBps: 4000 }, { buyYes: true, priceInBps: 4500 }
-  ],
-  noOnly: [
-    { buyYes: false, priceInBps: 5500 }, { buyYes: false, priceInBps: 6000 }, { buyYes: false, priceInBps: 6500 },
-    { buyYes: false, priceInBps: 7500 }, { buyYes: false, priceInBps: 8000 }
-  ]
-};
 
 // ==================== RPC ====================
 
@@ -991,7 +901,8 @@ function isOurLabeledMarket(description) {
       description.startsWith('GAS|') ||
       description.startsWith('TOKBAL|') ||
       description.startsWith('NFTBAL|') ||
-      description.startsWith('ETHBAL|')) return true;
+      description.startsWith('ETHBAL|') ||
+      description.startsWith('SUPPLY|')) return true;
   if (description.startsWith('V4 Protocol') ||
       description.startsWith('UNI balance') ||
       description.startsWith('UNI voting power') ||
@@ -1515,7 +1426,7 @@ async function connectWithWallet(walletKey) {
     walletProvider.on('chainChanged', _walletEventHandlers.chainChanged);
     try { localStorage.setItem('zpred_wallet', walletKey); if (walletKey.startsWith('eip6963_')) { const uuid = walletKey.replace('eip6963_', ''); const name = eip6963Providers.get(uuid)?.info?.name; if (name) localStorage.setItem('zpred_wallet_name', name); } } catch (e) {}
   } catch (error) {
-    if (error.code === 'ACTION_REJECTED' || error.code === 4001 || (error.message || '').includes('user rejected') || (error.message || '').includes('User rejected')) {
+    if (isUserRejection(error)) {
       // User cancelled - silently ignore
     } else {
       console.error('Wallet connect error:', error);
@@ -1595,6 +1506,7 @@ window.addEventListener('hashchange', route);
 // ==================== GALLERY ====================
 
 async function renderGallery() {
+  document.title = 'PREDICT';
   const app = $('app');
   const createBtnHTML = '<button onclick="openCreateModal()" style="font-size:11px;padding:6px 14px">+ Create</button>';
   app.innerHTML = `
@@ -1602,7 +1514,7 @@ async function renderGallery() {
       <h1>Predict</h1>
       <div>${createBtnHTML}</div>
     </div>
-    <div class="loading"><span class="spinner"></span>Loading markets...</div>
+    <div class="loading">${zfiLoadingSVG(48)}Loading markets...</div>
   `;
 
   try {
@@ -1821,9 +1733,10 @@ function renderGalleryUI() {
     cards += `
       <a href="#${m.marketId}" class="market-card${resolvedClass}"${wonAttr}>
         <div class="market-card-question" data-outcome="${escText(outcomeLabel)}">${cardHtml(m.question)}</div>
+        <div class="market-card-odds-label"><span class="yes-label">YES ${yPct}%</span><span class="no-label">NO ${nPct}%</span></div>
         <div class="market-card-odds">
-          <div class="market-card-yes" style="width:${yPct}%">Y ${yPct}%</div>
-          <div class="market-card-no">N ${nPct}%</div>
+          <div class="market-card-yes" style="width:${yPct}%"></div>
+          <div class="market-card-no"></div>
         </div>
         <div class="market-card-meta">
           <span>${tvlDisplay} ${getCollateralSymbol(m.collateral)}</span>
@@ -1849,6 +1762,7 @@ function renderGalleryUI() {
     </div>
     <input type="text" class="market-search" id="marketSearch" placeholder="Search markets..." oninput="renderGalleryUI()" value="${escText(searchVal)}">
     <div class="market-grid" id="marketGrid">${cards}</div>
+    <div style="text-align:center;font-size:11px;color:var(--fg-dim);margin-top:24px;letter-spacing:0.05em;text-transform:uppercase">the open prediction market</div>
   `;
 }
 
@@ -1864,7 +1778,7 @@ async function renderMarketPage(marketId) {
   app.dataset.marketId = marketId;
   app.innerHTML = `
     <a href="#" class="back-link">&larr; All Markets</a>
-    <div class="loading"><span class="spinner"></span>Loading market...</div>
+    <div class="loading">${zfiLoadingSVG(48)}Loading market...</div>
   `;
 
   _tradeDir = 'buy';
@@ -1901,9 +1815,9 @@ async function renderMarketPage(marketId) {
 
       // Determine if this is a labeled (hooked) or legacy market
       const description = mkt.description || '';
-      const isLabeled = isOurLabeledMarket(description);
       const resolverAddr = mkt.resolver;
       const isOurResolver = resolverAddr.toLowerCase() === CONTRACTS.RESOLVER.toLowerCase();
+      const isLabeled = isOurLabeledMarket(description) || isOurResolver;
       // Legacy: check LEGACY_MARKETS array, resolver address match, description prefix, or gallery flag
       const isLegacyMarket = LEGACY_MARKETS.some(l => l.marketId === marketId)
         || resolverAddr.toLowerCase() === CONTRACTS.LEGACY_RESOLVER.toLowerCase()
@@ -1993,9 +1907,10 @@ async function renderMarketPage(marketId) {
     // Question + odds bar
     html += `
       <div style="font-size:18px;font-weight:700;line-height:1.4;margin-bottom:16px">${parsed.question}</div>
+      <div class="odds-label"><span class="yes-label">YES ${yPct}%</span><span class="no-label">NO ${nPct}%</span></div>
       <div class="odds-bar">
-        <div class="odds-yes" style="width:${yPct}%">YES ${yPct}%</div>
-        <div class="odds-no">NO ${nPct}%</div>
+        <div class="odds-yes" style="width:${yPct}%"></div>
+        <div class="odds-no"></div>
       </div>
     `;
 
@@ -2088,20 +2003,35 @@ async function renderMarketPage(marketId) {
         console.error('buildResolutionSection error:', e);
         html += `<div class="section-card"><div class="section-title">Resolution</div><div class="resolve-status">Error loading resolver data</div></div>`;
       }
-    } else if (!resolved && _connectedAddress && resolverAddr.toLowerCase() === _connectedAddress.toLowerCase() && (close <= now || mkt.canClose)) {
+    } else if (!resolved && _connectedAddress && resolverAddr.toLowerCase() === _connectedAddress.toLowerCase()) {
+      const canResolveNow = close <= now || mkt.canClose;
       html += `
         <div class="section-card">
           <div class="section-title">You are the Resolver</div>
-          <div class="resolve-status">You can resolve this market as the designated resolver.</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="resolve-btn" id="resolveYesBtn" onclick="resolveCustomMarket('${marketId}', true)" style="flex:1;background:var(--yes);color:#000">Resolve YES</button>
-            <button class="resolve-btn" id="resolveNoBtn" onclick="resolveCustomMarket('${marketId}', false)" style="flex:1;background:var(--no);color:#fff">Resolve NO</button>
-          </div>
+          ${canResolveNow
+            ? `<div class="resolve-status">You can resolve this market as the designated resolver.</div>
+               <div style="display:flex;gap:8px;margin-top:8px">
+                 <button class="resolve-btn" id="resolveYesBtn" onclick="resolveCustomMarket('${marketId}', true)" style="flex:1;background:var(--yes);color:#000">Resolve YES</button>
+                 <button class="resolve-btn" id="resolveNoBtn" onclick="resolveCustomMarket('${marketId}', false)" style="flex:1;background:var(--no);color:#fff">Resolve NO</button>
+               </div>`
+            : `<div class="resolve-status" style="opacity:0.6">Early close is not enabled. You can resolve after the close date (${fmtDate(close)}).</div>`
+          }
         </div>
       `;
     }
 
     app.innerHTML = html;
+
+    // Update page title and meta tags for sharing
+    const plainQ = parsed.question.replace(/<[^>]*>/g, '');
+    document.title = plainQ + ' — PREDICT';
+    const ogDesc = `${plainQ} — YES ${yPct}% / NO ${nPct}%`;
+    const metaUpdates = { 'og:title': plainQ, 'og:description': ogDesc, 'twitter:title': plainQ, 'twitter:description': ogDesc };
+    for (const [prop, val] of Object.entries(metaUpdates)) {
+      const attr = prop.startsWith('og:') ? 'property' : 'name';
+      const el = document.querySelector(`meta[${attr}="${prop}"]`);
+      if (el) el.setAttribute('content', val);
+    }
 
     // Store market data for trading
     app.dataset.marketId = marketId;
@@ -2204,7 +2134,15 @@ async function loadTradeBalance(marketId, collateral, userYes, userNo) {
           const token = new ethers.Contract(collateral, ERC20_ABI, _walletProvider);
           const [bal, dec] = await Promise.all([token.balanceOf(_connectedAddress), token.decimals()]);
           const sym = getCollateralSymbol(collateral);
-          balEl.textContent = 'Bal: ' + Number(ethers.formatUnits(bal, dec)).toFixed(4) + ' ' + sym;
+          if (bal === 0n) {
+            const ethBal = await _walletProvider.getBalance(_connectedAddress);
+            const quarter = ethBal / 4n;
+            const amt = quarter > 0n ? Number(ethers.formatEther(quarter)).toFixed(4) : '';
+            const href = `../?from=ETH&to=${collateral}${amt ? '&amt=' + amt : ''}`;
+            balEl.innerHTML = `Bal: 0 — <a href="${href}" style="color:var(--fg);text-decoration:underline">Swap ETH → ${escText(sym)}</a>`;
+          } else {
+            balEl.textContent = 'Bal: ' + Number(ethers.formatUnits(bal, dec)).toFixed(4) + ' ' + sym;
+          }
           balEl.dataset.balance = bal.toString();
         } catch {
           balEl.textContent = '';
@@ -2535,9 +2473,7 @@ async function executeTrade() {
     setTimeout(() => renderMarketPage(marketId), 2000);
 
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      if (quoteEl) quoteEl.textContent = 'Cancelled';
-    } else {
+    if (!isUserRejection(e)) {
       console.error('Trade failed:', e);
       if (quoteEl) quoteEl.textContent = 'Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 80);
     }
@@ -2827,11 +2763,7 @@ async function resolveMarket(marketId) {
     btn.textContent = 'Resolved!';
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
-    } else {
-      btn.textContent = 'Failed';
-    }
+    if (!isUserRejection(e)) btn.textContent = 'Failed';
     setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
   }
 }
@@ -2852,11 +2784,7 @@ async function claimWinnings(marketId) {
     btn.textContent = 'Claimed!';
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
-    } else {
-      btn.textContent = 'Failed';
-    }
+    if (!isUserRejection(e)) btn.textContent = 'Failed';
     setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
   }
 }
@@ -2886,11 +2814,7 @@ async function resolveCustomMarket(marketId, outcomeYes) {
     btn.textContent = outcomeYes ? 'Resolved YES!' : 'Resolved NO!';
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
-    } else {
-      btn.textContent = 'Failed: ' + (e.shortMessage || e.reason || '').slice(0, 40);
-    }
+    if (!isUserRejection(e)) btn.textContent = 'Failed: ' + (e.shortMessage || e.reason || '').slice(0, 40);
     setTimeout(() => { btn.textContent = origText; btn.disabled = false; if (otherBtn) otherBtn.disabled = false; }, 3000);
   }
 }
@@ -3036,42 +2960,11 @@ function updateSupplyPreview() {
   el.innerHTML = `Will <b>${sym}</b> supply ${verb} <b>${Number(threshold).toLocaleString() || '___'}</b> by <b>${date}</b>?`;
 }
 
-function toggleAdvanced() {
-  const sec = $('advSection');
-  const open = sec.classList.toggle('active');
-  const ch = $('advChevron');
-  if (ch) ch.textContent = open ? '\u25BC' : '\u25B6';
-}
-
 function updateLiqSplit() {
   const total = parseFloat($('totalLiquidity').value) || 0;
-  const vault = $('enableVault').checked ? (parseFloat($('vaultAmount').value) || 0) : 0;
-  const bids = $('enableBids').checked ? (parseFloat($('bidsAmount').value) || 0) : 0;
-  const amm = Math.max(0, total - vault - bids);
-
-  // Show/hide vault and bids fields
-  $('vaultFields').style.display = $('enableVault').checked ? '' : 'none';
-  $('bidsFields').style.display = $('enableBids').checked ? '' : 'none';
-
-  // Update split bar
-  const bar = $('liqSplitBar');
-  if (bar && total > 0) {
-    const aPct = (amm / total * 100).toFixed(1);
-    const vPct = (vault / total * 100).toFixed(1);
-    const bPct = (bids / total * 100).toFixed(1);
-    bar.innerHTML = `<div style="background:var(--fg);width:${aPct}%"></div><div style="background:var(--green);width:${vPct}%"></div><div style="background:var(--red);width:${bPct}%"></div>`;
-  }
-
-  $('liqLegAmm').textContent = amm.toFixed(3) + ' AMM';
-  $('liqLegVault').textContent = vault.toFixed(3) + ' Vault';
-  $('liqLegBids').textContent = bids.toFixed(3) + ' Bids';
-
-  // Update presets
   document.querySelectorAll('.liq-preset').forEach(b => {
     b.classList.toggle('active', parseFloat(b.textContent) === total);
   });
-
-  // Total cost
   const el = $('totalCostDisplay');
   if (el) el.textContent = 'Total: ' + total.toFixed(4) + ' ETH';
 }
@@ -3081,34 +2974,8 @@ function setLiqPreset(val) {
   updateLiqSplit();
 }
 
-function getVaultParams() {
-  if (!$('enableVault').checked) return null;
-  const vaultAmount = parseFloat($('vaultAmount').value) || 0;
-  if (vaultAmount <= 0) return null;
-  const yesPct = parseInt($('vaultYesPct').value) || 0;
-  const noPct = parseInt($('vaultNoPct').value) || 0;
-  const collateralForVault = ethers.parseEther(vaultAmount.toFixed(18));
-  const vaultYesShares = collateralForVault * BigInt(yesPct) / 100n;
-  const vaultNoShares = collateralForVault * BigInt(noPct) / 100n;
-  return { collateralForVault, vaultYesShares, vaultNoShares };
-}
-
-function getBidsParams() {
-  if (!$('enableBids').checked) return null;
-  const amount = parseFloat($('bidsAmount').value) || 0;
-  if (amount <= 0) return null;
-  const preset = $('bidSpread').value;
-  const levels = BID_PRESETS[preset];
-  if (!levels || !levels.length) return null;
-  const totalWei = ethers.parseEther(amount.toString());
-  const perLevel = totalWei / BigInt(levels.length);
-  const remainder = totalWei % BigInt(levels.length);
-  return levels.map((level, i) => ({
-    buyYes: level.buyYes,
-    priceInBps: BigInt(level.priceInBps),
-    amount: i === 0 ? perLevel + remainder : perLevel,
-    minShares: 0n
-  }));
+function isUserRejection(e) {
+  return e.code === 'ACTION_REJECTED' || e.code === 4001 || /user rejected/i.test(e.message || '');
 }
 
 function parseMarketIdFromReceipt(receipt) {
@@ -3144,27 +3011,21 @@ async function createMarket() {
   const total = parseFloat($('totalLiquidity').value) || 0;
   if (total < 0.0001) { alert('Enter at least 0.0001 ETH liquidity'); return; }
 
-  const vaultParams = getVaultParams();
-  const bidsParams = getBidsParams();
-  const vaultAmt = vaultParams ? parseFloat($('vaultAmount').value) || 0 : 0;
-  const bidsAmt = bidsParams ? parseFloat($('bidsAmount').value) || 0 : 0;
-  const ammAmt = Math.max(0, total - vaultAmt - bidsAmt);
-  const collateralForLP = ethers.parseEther(ammAmt.toFixed(18));
-  const totalWei = ethers.parseEther(total.toFixed(18));
+  const collateralForLP = ethers.parseEther(total.toFixed(18));
   const deadline = Math.floor(Date.now() / 1000) + 3600;
 
   if (_currentMarketType === 'price') {
-    await createPriceMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams);
+    await createPriceMarket(collateralForLP, deadline);
   } else if (_currentMarketType === 'balance') {
-    await createBalanceMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams);
+    await createBalanceMarket(collateralForLP, deadline);
   } else if (_currentMarketType === 'supply') {
-    await createSupplyMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams);
+    await createSupplyMarket(collateralForLP, deadline);
   } else if (_currentMarketType === 'custom') {
-    await createCustomMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams);
+    await createCustomMarket(collateralForLP, deadline);
   }
 }
 
-async function createPriceMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams) {
+async function createPriceMarket(collateralForLP, deadline) {
   const raw = ($('targetPrice').value || '').replace(/[^0-9]/g, '');
   const targetPrice = parseInt(raw);
   const closeDateStr = $('closeDate').value;
@@ -3182,40 +3043,12 @@ async function createPriceMarket(collateralForLP, totalWei, deadline, vaultParam
 
   try {
     const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    let tx;
-    const hasVault = !!vaultParams;
-    const hasBids = bidsParams && bidsParams.length > 0;
-    const buy = { buyYes: false, collateralForBuy: 0n };
-
-    if (hasVault && hasBids) {
-      tx = await bootstrapper.bootstrapPriceMarketWithVaultAndBids(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
-        vaultParams, buy, bidsParams, { value: totalWei }
-      );
-    } else if (hasVault) {
-      tx = await bootstrapper.bootstrapPriceMarketWithVault(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
-        vaultParams, buy, { value: totalWei }
-      );
-    } else if (hasBids) {
-      tx = await bootstrapper.bootstrapPriceMarketWithBids(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
-        bidsParams, { value: totalWei }
-      );
-    } else {
-      tx = await bootstrapper.bootstrapPriceMarket(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
-        { value: collateralForLP }
-      );
-    }
+    const tx = await bootstrapper.bootstrapPriceMarket(
+      description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
+      collateralForLP, _connectedAddress, deadline,
+      CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
+      { value: collateralForLP }
+    );
 
     btn.textContent = 'Confirming...';
     const receipt = await tx.wait();
@@ -3225,17 +3058,17 @@ async function createPriceMarket(collateralForLP, totalWei, deadline, vaultParam
     if (marketId) { location.hash = '#' + marketId; }
     else { renderGallery(); }
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
+    if (isUserRejection(e)) {
+      // silently reset
     } else {
       console.error('Create market failed:', e);
       alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
     }
-    setTimeout(() => { btn.disabled = false; btn.textContent = 'Create Market'; }, 2000);
+    btn.disabled = false; btn.textContent = 'Create Market';
   }
 }
 
-async function createBalanceMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams) {
+async function createBalanceMarket(collateralForLP, deadline) {
   const walletAddr = ($('balWalletAddr').value || '').trim();
   const threshold = parseFloat($('balThreshold').value);
   const closeDateStr = $('balCloseDate').value;
@@ -3253,59 +3086,26 @@ async function createBalanceMarket(collateralForLP, totalWei, deadline, vaultPar
   try {
     const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
     let tx;
-    const hasVault = !!vaultParams;
-    const hasBids = bidsParams && bidsParams.length > 0;
-    const buy = { buyYes: false, collateralForBuy: 0n };
 
     if (_balanceAssetType === 'eth') {
       const thresholdWei = ethers.parseEther(threshold.toString());
       const description = `ETHBAL|${walletAddr}|3|${threshold}|${closeTimestamp}`;
-
-      if (hasVault && hasBids) {
-        tx = await bootstrapper.bootstrapETHBalanceMarketWithVaultAndBids(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, walletAddr, OP.GTE, thresholdWei,
-          vaultParams, buy, bidsParams, { value: totalWei }
-        );
-      } else if (hasVault) {
-        tx = await bootstrapper.bootstrapETHBalanceMarketWithVault(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, walletAddr, OP.GTE, thresholdWei,
-          vaultParams, buy, { value: totalWei }
-        );
-      } else {
-        tx = await bootstrapper.bootstrapETHBalanceMarket(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, walletAddr, OP.GTE, thresholdWei,
-          { value: collateralForLP }
-        );
-      }
+      tx = await bootstrapper.bootstrapETHBalanceMarket(
+        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
+        collateralForLP, _connectedAddress, deadline, walletAddr, OP.GTE, thresholdWei,
+        { value: collateralForLP }
+      );
     } else {
       const tokenAddr = _balTokenData.address || ($('balTokenAddr').value || '').trim();
       if (!tokenAddr || !ethers.isAddress(tokenAddr)) { alert('Enter a valid token address'); btn.disabled = false; btn.textContent = 'Create Market'; return; }
       const decimals = _balTokenData.decimals || 18;
       const thresholdUnits = ethers.parseUnits(threshold.toString(), decimals);
       const description = `TOKBAL|${tokenAddr}|${walletAddr}|3|${threshold}|${closeTimestamp}`;
-
-      if (hasVault && hasBids) {
-        tx = await bootstrapper.bootstrapTokenBalanceMarketWithVaultAndBids(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, OP.GTE, thresholdUnits,
-          vaultParams, buy, bidsParams, { value: totalWei }
-        );
-      } else if (hasVault) {
-        tx = await bootstrapper.bootstrapTokenBalanceMarketWithVault(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, OP.GTE, thresholdUnits,
-          vaultParams, buy, { value: totalWei }
-        );
-      } else {
-        tx = await bootstrapper.bootstrapTokenBalanceMarket(
-          description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-          collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, OP.GTE, thresholdUnits,
-          { value: collateralForLP }
-        );
-      }
+      tx = await bootstrapper.bootstrapTokenBalanceMarket(
+        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
+        collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, OP.GTE, thresholdUnits,
+        { value: collateralForLP }
+      );
     }
 
     btn.textContent = 'Confirming...';
@@ -3316,17 +3116,17 @@ async function createBalanceMarket(collateralForLP, totalWei, deadline, vaultPar
     if (marketId) { location.hash = '#' + marketId; }
     else { renderGallery(); }
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
+    if (isUserRejection(e)) {
+      // silently reset
     } else {
       console.error('Create market failed:', e);
       alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
     }
-    setTimeout(() => { btn.disabled = false; btn.textContent = 'Create Market'; }, 2000);
+    btn.disabled = false; btn.textContent = 'Create Market';
   }
 }
 
-async function createSupplyMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams) {
+async function createSupplyMarket(collateralForLP, deadline) {
   const tokenAddr = (_supplyTokenData.address || $('supplyTokenAddr').value || '').trim();
   const threshold = parseFloat($('supplyThreshold').value);
   const closeDateStr = $('supplyCloseDate').value;
@@ -3353,33 +3153,12 @@ async function createSupplyMarket(collateralForLP, totalWei, deadline, vaultPara
 
   try {
     const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    let tx;
-    const hasVault = !!vaultParams;
-    const hasBids = bidsParams && bidsParams.length > 0;
-    const buy = { buyYes: false, collateralForBuy: 0n };
-
-    if (hasVault && hasBids) {
-      tx = await bootstrapper.bootstrapWithConditionAndVaultAndBids(
-        description, ethers.ZeroAddress, closeTimestamp, true, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        tokenAddr, callData, op, thresholdUnits,
-        vaultParams, buy, bidsParams, { value: totalWei }
-      );
-    } else if (hasVault) {
-      tx = await bootstrapper.bootstrapWithConditionAndVault(
-        description, ethers.ZeroAddress, closeTimestamp, true, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        tokenAddr, callData, op, thresholdUnits,
-        vaultParams, buy, { value: totalWei }
-      );
-    } else {
-      tx = await bootstrapper.bootstrapWithCondition(
-        description, ethers.ZeroAddress, closeTimestamp, true, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
-        tokenAddr, callData, op, thresholdUnits,
-        { value: collateralForLP }
-      );
-    }
+    const tx = await bootstrapper.bootstrapWithCondition(
+      description, ethers.ZeroAddress, closeTimestamp, true, CONTRACTS.PM_FEE_HOOK,
+      collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
+      tokenAddr, callData, op, thresholdUnits,
+      { value: collateralForLP }
+    );
 
     btn.textContent = 'Confirming...';
     const receipt = await tx.wait();
@@ -3389,13 +3168,13 @@ async function createSupplyMarket(collateralForLP, totalWei, deadline, vaultPara
     if (marketId) { location.hash = '#' + marketId; }
     else { renderGallery(); }
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
+    if (isUserRejection(e)) {
+      // silently reset
     } else {
       console.error('Create market failed:', e);
       alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
     }
-    setTimeout(() => { btn.disabled = false; btn.textContent = 'Create Market'; }, 2000);
+    btn.disabled = false; btn.textContent = 'Create Market';
   }
 }
 
@@ -3410,18 +3189,92 @@ function updateCustomPreview() {
   if (q) {
     el.innerHTML = `<b>${escText(q)}</b> (closes <b>${date}</b>)`;
   } else {
-    el.innerHTML = 'Custom Y/N market with your chosen resolver';
+    el.innerHTML = 'Yes/No market with your own question and resolver';
   }
 }
 
-async function createCustomMarket(collateralForLP, totalWei, deadline, vaultParams, bidsParams) {
+// ---- Resolver name resolution ----
+let _resolvedResolver = null;
+let _resolverResolveSeq = 0;
+let _resolverDebounce = null;
+
+function onResolverInput() {
+  clearTimeout(_resolverDebounce);
+  const v = ($('customResolver')?.value || '').trim();
+  const el = $('customResolverResolved');
+  _resolvedResolver = null;
+  if (!v) { el.style.display = 'none'; return; }
+  if (ethers.isAddress(v)) {
+    _resolvedResolver = ethers.getAddress(v);
+    el.style.display = 'block';
+    el.style.color = 'var(--fg-muted)';
+    el.textContent = ethers.getAddress(v);
+    return;
+  }
+  if (v.endsWith('.wei') || v.endsWith('.eth')) {
+    el.style.display = 'block';
+    el.style.color = 'var(--fg-muted)';
+    el.textContent = 'Resolving ' + v + '...';
+    _resolverDebounce = setTimeout(() => resolveResolverName(v), 350);
+  } else {
+    el.style.display = 'block';
+    el.style.color = '#c0392b';
+    el.textContent = 'Enter 0x address, name.wei, or name.eth';
+  }
+}
+
+async function resolveResolverName(name) {
+  const seq = ++_resolverResolveSeq;
+  const el = $('customResolverResolved');
+  try {
+    let resolved = null;
+    if (name.endsWith('.wei')) {
+      resolved = await withRPC(async (rpc) => {
+        const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+        const tokenId = await ns.computeId(name);
+        const owner = await ns.ownerOf(tokenId).catch(() => null);
+        if (!owner || owner === ethers.ZeroAddress) return null;
+        return ethers.getAddress(owner);
+      });
+    } else if (name.endsWith('.eth')) {
+      resolved = await withRPC(async (rpc) => rpc.resolveName(name));
+    }
+    if (seq !== _resolverResolveSeq) return;
+    if (resolved && resolved !== ethers.ZeroAddress) {
+      _resolvedResolver = resolved;
+      el.style.color = 'var(--fg-muted)';
+      el.textContent = resolved;
+    } else {
+      el.style.color = '#c0392b';
+      el.textContent = 'Name not found';
+    }
+  } catch {
+    if (seq !== _resolverResolveSeq) return;
+    el.style.color = '#c0392b';
+    el.textContent = 'Failed to resolve ' + name;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const ri = $('customResolver');
+  if (ri) ri.addEventListener('input', onResolverInput);
+});
+
+function getResolverAddress() {
+  const v = ($('customResolver')?.value || '').trim();
+  if (ethers.isAddress(v)) return ethers.getAddress(v);
+  if (_resolvedResolver) return _resolvedResolver;
+  return null;
+}
+
+async function createCustomMarket(collateralForLP, deadline) {
   const question = ($('customQuestion').value || '').trim();
-  const resolverAddr = ($('customResolver').value || '').trim();
+  const resolverAddr = getResolverAddress();
   const canClose = $('customCanClose').checked;
   const closeDateStr = $('customCloseDate').value;
 
   if (!question) { alert('Enter a question'); return; }
-  if (!resolverAddr || !ethers.isAddress(resolverAddr)) { alert('Enter a valid resolver address'); return; }
+  if (!resolverAddr) { alert('Enter a valid resolver address (0x, name.wei, or name.eth)'); return; }
   if (!closeDateStr) { alert('Select a close date'); return; }
 
   const closeTimestamp = Math.floor(new Date(closeDateStr).getTime() / 1000);
@@ -3434,30 +3287,11 @@ async function createCustomMarket(collateralForLP, totalWei, deadline, vaultPara
 
   try {
     const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    let tx;
-    const hasVault = !!vaultParams;
-    const hasBids = bidsParams && bidsParams.length > 0;
-    const buy = { buyYes: false, collateralForBuy: 0n };
-
-    if (hasVault && hasBids) {
-      tx = await bootstrapper.bootstrapMarketWithVaultAndBids(
-        description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        vaultParams, buy, bidsParams, { value: totalWei }
-      );
-    } else if (hasVault) {
-      tx = await bootstrapper.bootstrapMarketWithVault(
-        description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline,
-        vaultParams, buy, { value: totalWei }
-      );
-    } else {
-      tx = await bootstrapper.bootstrapMarket(
-        description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
-        { value: collateralForLP }
-      );
-    }
+    const tx = await bootstrapper.bootstrapMarket(
+      description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose, CONTRACTS.PM_FEE_HOOK,
+      collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
+      { value: collateralForLP }
+    );
 
     btn.textContent = 'Confirming...';
     const receipt = await tx.wait();
@@ -3467,13 +3301,13 @@ async function createCustomMarket(collateralForLP, totalWei, deadline, vaultPara
     if (marketId) { location.hash = '#' + marketId; }
     else { renderGallery(); }
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
+    if (isUserRejection(e)) {
+      // silently reset
     } else {
       console.error('Create market failed:', e);
       alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
     }
-    setTimeout(() => { btn.disabled = false; btn.textContent = 'Create Market'; }, 2000);
+    btn.disabled = false; btn.textContent = 'Create Market';
   }
 }
 
@@ -3481,7 +3315,7 @@ async function createCustomMarket(collateralForLP, totalWei, deadline, vaultPara
 
 function openLPModal(marketId) {
   const m = markets.find(x => x.marketId === marketId);
-  $('lpMarketName').textContent = m ? m.question : 'Market #' + marketId.slice(0, 8) + '...';
+  $('lpMarketName').innerHTML = m ? m.question : 'Market #' + marketId.slice(0, 8) + '...';
   const collateral = $('app').dataset.collateral;
   const isETH = !collateral || collateral === ethers.ZeroAddress;
   $('lpAmountLabel').textContent = 'Amount (' + (isETH ? 'ETH' : getCollateralSymbol(collateral)) + ')';
@@ -3599,9 +3433,7 @@ async function provideLiquidity() {
     alert('Liquidity provided!');
     renderMarketPage(marketId);
   } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) {
-      btn.textContent = 'Cancelled';
-    } else {
+    if (!isUserRejection(e)) {
       console.error('LP failed:', e);
       btn.textContent = 'Failed';
       alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
@@ -3619,7 +3451,7 @@ route();
 <footer class="site-footer">
   <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
+  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the open onchain prediction market</div>
   <div style="margin-top:2px;font-size:11px;letter-spacing:0.5px;opacity:0.5">powered by $zorg the governance reward token of the zfi stack</div>
   <div style="margin-top:2px;font-size:11px;opacity:0.5"><a href="https://etherscan.io/token/0x00a6bA94BBb5474725515De88fE04F854f2dCb12" target="_blank" rel="noopener" style="color:inherit">0x00a6bA94BBb5474725515De88fE04F854f2dCb12</a></div>
 </footer>

@@ -7,6 +7,10 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@adraffy/ens-normalize@1.11.0/+esm" integrity="sha384-wZEz5bl83QiQdUg5m/tIOQtZl9ncAoDleaNxEJNoNRmYLBpEprsT4si9P2xOvSbx" crossorigin="anonymous">
 <script>
+// Prevent dark-mode FOUC: apply class before first paint
+try{var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(_){}
+</script>
+<script>
 // Load ens-normalize with integrity via modulepreload
 (async () => {
   try {
@@ -32,20 +36,42 @@
 </script>
 <style>
 :root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;--input-ph:#ccc;
+  --surface:#f9f9f9;--surface-hover:#f5f5f5;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --btn-dis-bg:#ccc;--btn-dis-border:#ccc;--btn-dis-fg:#999;
+  --sec-bg:#fff;--sec-border:#000;
   --modal-overlay:rgba(0,0,0,0.8);--modal-bg:#fff;--modal-border:#000;
+  --status-error:#fff0f0;--status-success:#f0fff0;
+  --free-accent:#1a8917;--free-bg:#f6fff6;--free-border:#c3e6cb;--free-status-bg:#eaffea;
+  --pending-bg:#f5f5f5;--pending-border:#000;
+  --send-bg:#fafafa;--send-border:#eee;
+  --manage-border:#ddd;--manage-bg:#f5f5f5;
+  --link-dim:0.5;
 }
-@media(prefers-color-scheme:dark){
-  :root {
-    --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
-  }
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
+  --border:#333;--border-muted:#333;--input-ph:#555;
+  --surface:#111;--surface-hover:#151515;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --btn-dis-bg:#444;--btn-dis-border:#444;--btn-dis-fg:#666;
+  --sec-bg:#0a0a0a;--sec-border:#333;
+  --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
+  --status-error:#1a0000;--status-success:#001a00;
+  --free-accent:#2ecc40;--free-bg:#0a1a0a;--free-border:#1a3a1a;--free-status-bg:#0a1a0a;
+  --pending-bg:#111;--pending-border:#333;
+  --send-bg:#111;--send-border:#222;
+  --manage-border:#333;--manage-bg:#151515;
+  --link-dim:0.5;
 }
 .zorg-bg{fill:#fff}.zorg-fg{fill:#000}
 .dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body {
   font-family: Helvetica, Arial, sans-serif;
-  background: #fff;
-  color: #000;
+  background: var(--bg);
+  color: var(--fg);
   min-height: 100vh;
   padding: 60px 20px 20px;
   max-width: 480px;
@@ -67,7 +93,7 @@ label {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 8px;
-  color: #666;
+  color: var(--fg-muted);
 }
 input {
   width: 100%;
@@ -75,11 +101,12 @@ input {
   font-size: 24px;
   font-family: inherit;
   border: none;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--border);
   outline: none;
   background: transparent;
+  color: var(--fg);
 }
-input::placeholder { color: #ccc; }
+input::placeholder { color: var(--input-ph); }
 input:focus { border-bottom-width: 2.5px; margin-bottom: -1px; }
 button {
   display: inline-block;
@@ -88,39 +115,39 @@ button {
   font-family: inherit;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: #000;
-  color: #fff;
-  border: 1px solid #000;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--btn-bg);
   cursor: pointer;
   margin-right: 8px;
   margin-top: 8px;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
-button:hover { background: #333; }
-button:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; }
+button:hover { background: var(--btn-hover); }
+button:disabled { background: var(--btn-dis-bg); border-color: var(--btn-dis-border); color: var(--btn-dis-fg); cursor: not-allowed; }
 button.secondary {
-  background: #fff;
-  color: #000;
+  background: var(--bg);
+  color: var(--fg);
 }
-button.secondary:hover { background: #f5f5f5; }
+button.secondary:hover { background: var(--surface-hover); }
 .status {
   font-size: 13px;
   margin-top: 16px;
   padding: 12px;
-  background: #f9f9f9;
+  background: var(--surface);
   display: none;
 }
 .status.show { display: block; }
-.status.error { background: #fff0f0; }
-.status.success { background: #f0fff0; }
+.status.error { background: var(--status-error); }
+.status.success { background: var(--status-success); }
 .availability {
   font-size: 18px;
   margin-top: 16px;
   display: none;
 }
 .availability.show { display: block; }
-.availability .available { color: #000; }
-.availability .taken { color: #999; }
+.availability .available { color: var(--fg); }
+.availability .taken { color: var(--fg-dim); }
 .home-btn {
   position: fixed;
   bottom: max(20px, env(safe-area-inset-bottom, 0px));
@@ -142,13 +169,13 @@ button.secondary:hover { background: #f5f5f5; }
 .wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
 .fee {
   font-size: 12px;
-  color: #666;
+  color: var(--fg-muted);
   margin-top: 8px;
 }
 .free-cta {
   margin-top: 10px;
   font-size: 12px;
-  color: #1a8917;
+  color: var(--free-accent);
   cursor: pointer;
   letter-spacing: 0.03em;
 }
@@ -157,12 +184,12 @@ button.secondary:hover { background: #f5f5f5; }
   display: none;
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid #c3e6cb;
-  background: #f6fff6;
+  border: 1px solid var(--free-border);
+  background: var(--free-bg);
 }
 .free-panel.show { display: block; }
 .free-panel label {
-  color: #1a8917;
+  color: var(--free-accent);
 }
 .free-panel .free-input-wrap {
   display: flex;
@@ -173,36 +200,36 @@ button.secondary:hover { background: #f5f5f5; }
 .free-panel .free-input-wrap input {
   flex: 1;
   font-size: 20px;
-  border-bottom: 1px solid #1a8917;
+  border-bottom: 1px solid var(--free-accent);
   min-width: 0;
 }
 .free-panel .free-input-wrap input:focus { border-bottom-width: 2.5px; margin-bottom: -1px; }
 .free-panel .free-suffix {
   font-size: 20px;
-  color: #999;
+  color: var(--fg-dim);
   white-space: nowrap;
 }
 .free-panel button {
-  background: #1a8917;
-  border-color: #1a8917;
+  background: var(--free-accent);
+  border-color: var(--free-accent);
 }
-.free-panel button:hover { background: #156d13; }
-.free-panel button:disabled { background: #ccc; border-color: #ccc; }
+.free-panel button:hover { background: var(--free-accent); opacity: 0.85; }
+.free-panel button:disabled { background: var(--btn-dis-bg); border-color: var(--btn-dis-border); }
 .free-panel .free-status {
   font-size: 13px;
   margin-top: 12px;
   padding: 10px;
-  background: #eaffea;
+  background: var(--free-status-bg);
   display: none;
 }
 .free-panel .free-status.show { display: block; }
-.free-panel .free-status.error { background: #fff0f0; }
-.free-panel .free-status.success { background: #eaffea; }
+.free-panel .free-status.error { background: var(--status-error); }
+.free-panel .free-status.success { background: var(--free-status-bg); }
 .pending {
   margin-top: 24px;
   padding: 20px;
-  border: 2px solid #000;
-  background: #f5f5f5;
+  border: 2px solid var(--pending-border);
+  background: var(--pending-bg);
   display: none;
 }
 .pending.show { display: block; }
@@ -220,7 +247,7 @@ button.secondary:hover { background: #f5f5f5; }
 }
 .pending .timer {
   font-size: 14px;
-  color: #000;
+  color: var(--fg);
   font-family: monospace;
   margin-bottom: 16px;
 }
@@ -241,7 +268,7 @@ button.secondary:hover { background: #f5f5f5; }
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--fg-muted);
   margin: 0 10px 0 0;
   white-space: nowrap;
 }
@@ -253,9 +280,9 @@ button.secondary:hover { background: #f5f5f5; }
   font-size: 12px;
   font-family: inherit;
   font-weight: 600;
-  border: 1.5px solid #ddd;
-  background: #fff;
-  color: #000;
+  border: 1.5px solid var(--border-muted);
+  background: var(--bg);
+  color: var(--fg);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   letter-spacing: 0.02em;
@@ -263,13 +290,13 @@ button.secondary:hover { background: #f5f5f5; }
 .pay-option:first-of-type { border-radius: 0; }
 .pay-option:last-of-type { border-radius: 0; }
 .pay-option + .pay-option { border-left: none; }
-.pay-option:hover { background: #f5f5f5; }
-.pay-option.active { border-color: #000; background: #000; color: #fff; z-index: 1; position: relative; }
+.pay-option:hover { background: var(--surface-hover); }
+.pay-option.active { border-color: var(--btn-bg); background: var(--btn-bg); color: var(--btn-fg); z-index: 1; position: relative; }
 .pay-option.active + .pay-option { border-left: none; }
 .pay-option svg { display: block; }
 .suffix {
   font-size: 24px;
-  color: #999;
+  color: var(--fg-dim);
   position: absolute;
   right: 0;
   bottom: 12px;
@@ -317,7 +344,7 @@ body.modal-open { overflow: hidden; }
 .modal-close {
   background: none;
   border: none;
-  color: #000;
+  color: var(--fg);
   font-size: 24px;
   cursor: pointer;
   line-height: 1;
@@ -336,7 +363,7 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 8px;
   transition: background 0.15s, color 0.15s;
 }
-.wallet-option:hover { background: #000; color: #fff; }
+.wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
 .wallet-option-icon { font-size: 1.5rem; }
 .wallet-option-name { font-weight: 600; }
 .wallet-option.disconnect {
@@ -353,7 +380,7 @@ body.modal-open { overflow: hidden; }
 .manage {
   margin-top: 24px;
   padding: 20px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--manage-border);
   display: none;
 }
 .manage.show { display: block; }
@@ -368,7 +395,7 @@ body.modal-open { overflow: hidden; }
   font-size: 13px;
   margin-bottom: 16px;
   padding: 12px;
-  background: #f5f5f5;
+  background: var(--manage-bg);
 }
 .manage-info div {
   margin-bottom: 6px;
@@ -387,23 +414,23 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 16px;
 }
 .manage-actions button {
-  background: #fff;
-  color: #000;
-  border: 1.5px solid #000;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1.5px solid var(--border);
   padding: 10px 16px;
   font-size: 11px;
   width: 100%;
   margin: 0;
 }
 .manage-actions button:hover:not(:disabled) {
-  background: #000;
-  color: #fff;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
 }
 .manage-form {
   display: none;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--manage-border);
 }
 .manage-form.show { display: block; }
 .manage-form label {
@@ -418,7 +445,7 @@ body.modal-open { overflow: hidden; }
   margin-top: 8px;
 }
 .view-link a {
-  color: #000;
+  color: var(--fg);
   opacity: 0.5;
 }
 .view-link a:hover { opacity: 1; }
@@ -452,6 +479,7 @@ body.modal-open { overflow: hidden; }
 }
 @media (max-width: 700px) {
   .scroll-names { display: none; }
+  .dark-toggle { top: 18px; left: 16px; }
   body { padding: 80px 16px 100px; }
   .wallet { top: 16px; right: 16px; }
   .wallet button { padding: 10px 14px; font-size: 11px; }
@@ -485,11 +513,11 @@ body.modal-open { overflow: hidden; }
 .send-section {
   margin-bottom: 40px;
   padding-top: 24px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--send-border);
 }
 .send-toggle {
   font-size: 11px;
-  color: #000;
+  color: var(--fg);
   opacity: 0.4;
   text-decoration: none;
   letter-spacing: 0.05em;
@@ -499,8 +527,8 @@ body.modal-open { overflow: hidden; }
   display: none;
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid #ddd;
-  background: #fafafa;
+  border: 1px solid var(--manage-border);
+  background: var(--send-bg);
 }
 .send-form.show { display: block; }
 .send-form input {
@@ -511,17 +539,17 @@ body.modal-open { overflow: hidden; }
   flex: 1;
   padding: 10px;
   font-size: 12px;
-  background: #fff;
-  color: #000;
-  border: 1px solid #ccc;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border-muted);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.net-btn:hover { border-color: #000; }
+.net-btn:hover { border-color: var(--border); }
 .net-btn.active {
-  background: #000;
-  color: #fff;
-  border-color: #000;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-color: var(--btn-bg);
 }
 
 /* Footer */
@@ -541,11 +569,32 @@ body.modal-open { overflow: hidden; }
   margin: 0 2px;
 }
 .site-footer a:hover { opacity: 0.7; }
-.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
-.dark .site-footer .tagline { opacity:1; color:#fff; font-weight:500; }
+.site-footer .tagline { opacity:1; color:var(--fg); font-weight:500; }
+
+/* Dark mode toggle */
+.dark-toggle {
+  position: fixed;
+  top: max(22px, env(safe-area-inset-top, 0px));
+  left: max(20px, env(safe-area-inset-left, 0px));
+  z-index: 100;
+  border: none;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+  padding: 0;
+  margin: 0;
+  background: #000;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+:root.dark .dark-toggle { background: #fff; }
+.dark-toggle:hover { opacity: 1; }
 </style>
 </head>
 <body>
+
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 
 <a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
 
@@ -718,7 +767,7 @@ body.modal-open { overflow: hidden; }
 
 <!-- Footer -->
 <footer class="site-footer">
-<a href="../">Swap</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; <a href="https://opensea.io/collection/wei-name-service" target="_blank" rel="noopener">OpenSea</a> &middot; <a href="https://import.wei.domains" target="_blank" rel="noopener">SDK</a> &middot; <a href="https://www.npmjs.com/package/wns-utils" target="_blank" rel="noopener"><svg fill="#000" width="14" height="14" viewBox="-2 -8 24 24" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin" style="vertical-align:middle"><path d='M0 0h20v6.857H10V8H5.556V6.857H0V0zm1.111 5.714h2.222V2.286h1.111v3.428h1.112V1.143H1.11v4.571zm5.556-4.571v5.714h2.222V5.714h2.222V1.143H6.667zm5.555 0v4.571h2.222V2.286h1.112v3.428h1.11V2.286h1.112v3.428h1.11V1.143h-6.666z'/><path d='M10 4.7H9V2.2h1z'/></svg></a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
+<a href="../">Swap</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; <a href="https://opensea.io/collection/wei-name-service" target="_blank" rel="noopener">OpenSea</a> &middot; <a href="https://import.wei.domains" target="_blank" rel="noopener">SDK</a> &middot; <a href="https://www.npmjs.com/package/wns-utils" target="_blank" rel="noopener"><svg fill="currentColor" width="14" height="14" viewBox="-2 -8 24 24" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin" style="vertical-align:middle"><path d='M0 0h20v6.857H10V8H5.556V6.857H0V0zm1.111 5.714h2.222V2.286h1.111v3.428h1.112V1.143H1.11v4.571zm5.556-4.571v5.714h2.222V5.714h2.222V1.143H6.667zm5.555 0v4.571h2.222V2.286h1.112v3.428h1.11V2.286h1.112v3.428h1.11V1.143h-6.666z'/><path d='M10 4.7H9V2.2h1z'/></svg></a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
 <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
 <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
 </footer>
@@ -726,6 +775,12 @@ body.modal-open { overflow: hidden; }
 <script src="../ethers.min.js"></script>
 <script src="../walletconnect.min.js"></script>
 <script>
+// ---- Dark mode ----
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', on ? '1' : '0');
+}
+
 // Global error handler for debugging on mobile
 window.onerror = function(msg, url, line) {
   const status = document.getElementById('status');
@@ -736,6 +791,9 @@ window.onerror = function(msg, url, line) {
   console.error('Global error:', msg, 'at', url, line);
   return false;
 };
+
+function zfiLoadingSVG(s=48){
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
 
 const CONTRACT = '0x0000000000696760E15f265e828DB644A0c242EB';
 const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
@@ -2435,7 +2493,7 @@ function previewTransferRecipient() {
   }
 
   // Show loading for .wei names
-  preview.innerHTML = '<span style="opacity:0.5;">Resolving...</span>';
+  preview.innerHTML = '<span style="opacity:0.5;">' + zfiLoadingSVG(14) + ' Resolving...</span>';
   preview.style.display = 'block';
 
   clearTimeout(transferPreviewDebounce);
@@ -2814,7 +2872,7 @@ function previewSubSalesToken() {
 
 async function showSubSalesForm() {
   const form = $('manageForm');
-  form.innerHTML = '<div style="opacity:0.5;font-size:12px;">Loading config...</div>';
+  form.innerHTML = '<div style="opacity:0.5;font-size:12px;text-align:center;">' + zfiLoadingSVG(32) + 'Loading config...</div>';
   form.classList.add('show');
 
   try {
@@ -3258,7 +3316,7 @@ function previewSendRecipient() {
     return;
   }
 
-  preview.innerHTML = '<span style="opacity:0.5;">Resolving...</span>';
+  preview.innerHTML = '<span style="opacity:0.5;">' + zfiLoadingSVG(14) + ' Resolving...</span>';
   preview.style.display = 'block';
 
   clearTimeout(sendPreviewDebounce);

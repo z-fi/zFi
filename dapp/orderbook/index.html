@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Orderbook</title>
+<title>ORDER</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <script>
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
@@ -123,6 +123,11 @@ body.modal-open { overflow:hidden; }
 .pair-row {
   display:flex; align-items:center; gap:10px; margin-bottom:6px;
 }
+.pair-icons {
+  display:inline-flex; align-items:center;
+}
+.pair-icons svg, .pair-icons img { width:22px; height:22px; border-radius:50%; }
+.pair-icons .icon-1 { margin-left:-6px; }
 .pair-name {
   font-size:18px; font-weight:600; letter-spacing:-0.01em;
 }
@@ -420,6 +425,19 @@ body.modal-open { overflow:hidden; }
 .fill-modal-note {
   font-size:11px; color:var(--fg-dim); margin-bottom:14px; text-align:center;
 }
+.fill-amt-row {
+  display:flex; align-items:center; gap:8px; margin-bottom:14px;
+}
+.fill-amt-row input {
+  flex:1; background:var(--bg-surface); border:1px solid var(--border-muted);
+  border-radius:6px; padding:6px 8px; color:var(--fg); font-family:monospace; font-size:13px;
+}
+.fill-amt-row input:focus { outline:none; border-color:var(--accent); }
+.fill-amt-row .max-btn {
+  font-size:11px; color:var(--accent); cursor:pointer; background:none; border:none;
+  font-weight:600; letter-spacing:0.03em; padding:4px 6px;
+}
+.fill-amt-row .max-btn:hover { text-decoration:underline; }
 
 /* Footer */
 .site-footer {
@@ -469,11 +487,12 @@ body.modal-open { overflow:hidden; }
 
 <div class="page-header">
   <div class="pair-row">
+    <span class="pair-icons" id="pairIcons"></span>
     <span class="pair-name" id="pairName">---</span>
     <div class="sub-links">
       <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Chart</a>
       <a class="sub-link" id="lpLink" href="#" title="Manage LP" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v12M6 12h12"/></svg>LP</a>
-      <a class="sub-link" id="swapLink" href="../" title="Swap">Swap</a>
+      <a class="sub-link" id="swapLink" href="../" title="Swap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Swap</a>
     </div>
   </div>
   <div class="pool-meta" id="poolMeta">Loading...</div>
@@ -604,6 +623,9 @@ function toggleDark() {
   localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
 }
 
+function zfiLoadingSVG(s=48){
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 8px"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
+
 // ---- Constants ----
 const COOKBOOK = "0x000000000000040470635EB91b7CE4D132D616eD";
 const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
@@ -621,6 +643,22 @@ const COINS_ABI = [
   "function setOperator(address operator, bool approved) returns (bool)",
   "function isOperator(address owner, address spender) view returns (bool)"
 ];
+
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)"
+];
+
+const MAX_UINT96 = (1n << 96n) - 1n;
+
+// Multiply two decimal strings precisely using BigInt (18-decimal fixed-point)
+function mulDecimals(a, b, decimals) {
+  const d = BigInt(decimals || 18);
+  const BASE = 10n ** d;
+  const aw = ethers.parseUnits(a, d);
+  const bw = ethers.parseUnits(b, d);
+  return (aw * bw) / BASE;
+}
 
 const WEINS = "0x0000000000696760E15f265e828DB644A0c242EB";
 const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
@@ -1377,7 +1415,9 @@ async function doMakeOrder() {
     return;
   }
 
-  const total = parseFloat(amt) * parseFloat(price);
+  const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
+  const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
+  const totalWei = mulDecimals(amt, price, dec0);
   const expiry = Math.floor(Date.now() / 1000) + Number($('orderExpiry').value);
   const partial = $('orderPartial').checked;
 
@@ -1386,31 +1426,44 @@ async function doMakeOrder() {
   if (side === 'buy') {
     tokenIn = _poolData.token0;
     idIn = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
-    amtIn = ethers.parseEther(total.toFixed(18));
+    amtIn = totalWei;
     tokenOut = _poolData.token1;
     idOut = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtOut = ethers.parseEther(amt);
+    amtOut = ethers.parseUnits(amt, dec1);
     value = tokenIn === ZERO ? amtIn : 0n;
   } else {
     tokenIn = _poolData.token1;
     idIn = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtIn = ethers.parseEther(amt);
+    amtIn = ethers.parseUnits(amt, dec1);
     tokenOut = _poolData.token0;
     idOut = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
-    amtOut = ethers.parseEther(total.toFixed(18));
+    amtOut = totalWei;
     value = tokenIn === ZERO ? amtIn : 0n;
+  }
+
+  if (amtIn > MAX_UINT96 || amtOut > MAX_UINT96) {
+    showStatus('Amount too large', 'error');
+    return;
   }
 
   try {
     $('makeOrderBtn').disabled = true;
     showStatus('Preparing transaction...', 'info');
 
+    const addr = await _signer.getAddress();
     if (tokenIn !== ZERO && idIn >= 1000000n) {
-      const addr = await _signer.getAddress();
       const isOp = await _coins.isOperator(addr, COOKBOOK);
       if (!isOp) {
         showStatus('Approving Cookbook as operator...', 'info');
         const approveTx = await _coins.setOperator(COOKBOOK, true);
+        await approveTx.wait();
+      }
+    } else if (tokenIn !== ZERO && idIn < 1000000n) {
+      const token = new ethers.Contract(tokenIn, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, COOKBOOK);
+      if (allowance < amtIn) {
+        showStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
         await approveTx.wait();
       }
     }
@@ -1442,14 +1495,29 @@ async function doFillOrder(orderId) {
   if (remaining <= 0n) { alert('Order already filled'); return; }
 
   const isPayingEth = o.tokenOut === ZERO;
-  const fillPart = remaining;
+  const outDec = coinLabel(o.tokenOut, o.idOut).decimals;
+  let fillPart = remaining;
+
+  const fillInput = $('fillAmtInput');
+  if (o.partialFill && fillInput && fillInput.value) {
+    const parsed = ethers.parseUnits(fillInput.value, outDec);
+    if (parsed <= 0n) { alert('Enter a valid fill amount'); return; }
+    fillPart = parsed > remaining ? remaining : parsed;
+  }
 
   try {
+    const addr = await _signer.getAddress();
     if (!isPayingEth && BigInt(o.idOut) >= 1000000n) {
-      const addr = await _signer.getAddress();
       const isOp = await _coins.isOperator(addr, COOKBOOK);
       if (!isOp) {
         const approveTx = await _coins.setOperator(COOKBOOK, true);
+        await approveTx.wait();
+      }
+    } else if (!isPayingEth && BigInt(o.idOut) < 1000000n) {
+      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, COOKBOOK);
+      if (allowance < fillPart) {
+        const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
         await approveTx.wait();
       }
     }
@@ -1634,22 +1702,30 @@ function showFillModal(orderId) {
   const youGet = fmt(remainingIn.toString(), inL.decimals);
 
   const body = $('fillModalBody');
+  const canPartial = o.partialFill;
+  const remainingStr = ethers.formatUnits(remaining, outL.decimals);
+
   body.innerHTML = `
     <div class="fill-modal-pair">
       <div class="fill-modal-token">
         <span class="sym">You pay</span>
         <span class="icon">${outIcon}</span>
-        <span class="amt">${escText(youPay)}</span>
+        <span class="amt" id="fillPayAmt">${escText(youPay)}</span>
         <span class="sym">${escText(outL.symbol)}</span>
       </div>
       <span class="fill-modal-arrow">&rarr;</span>
       <div class="fill-modal-token">
         <span class="sym">You get</span>
         <span class="icon">${inIcon}</span>
-        <span class="amt">${escText(youGet)}</span>
+        <span class="amt" id="fillGetAmt">${escText(youGet)}</span>
         <span class="sym">${escText(inL.symbol)}</span>
       </div>
     </div>
+    ${canPartial ? `
+    <div class="fill-amt-row">
+      <input type="number" id="fillAmtInput" step="any" min="0" placeholder="Amount to fill (${escAttr(outL.symbol)})" value="${escAttr(remainingStr)}">
+      <button class="max-btn" onclick="document.getElementById('fillAmtInput').value='${escAttr(remainingStr)}';updateFillPreview()">MAX</button>
+    </div>` : ''}
     <div class="fill-modal-details">
       <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}</span></div>
       <div class="row"><span class="label">Filled</span><span class="value">${pct}%</span></div>
@@ -1657,15 +1733,39 @@ function showFillModal(orderId) {
       <div class="row"><span class="label">Partial fill</span><span class="value">${o.partialFill ? 'Yes' : 'No'}</span></div>
       <div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>
     </div>
-    <div class="fill-modal-note">Full remaining amount will be filled</div>
-    <button class="submit-btn buy" onclick="closeFillModal();doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>
+    <div class="fill-modal-note">${canPartial ? 'Enter amount or use MAX for full fill' : 'Full remaining amount will be filled'}</div>
+    <button class="submit-btn buy" id="fillOrderBtn" onclick="closeFillModal();doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>
     <div class="status-msg" id="fillStatus" style="margin-top:8px"></div>
   `;
+
+  if (canPartial) {
+    // Store order data for the preview updater
+    window._fillOrder = { remaining, remainingIn, outDecimals: outL.decimals, inDecimals: inL.decimals };
+    $('fillAmtInput').addEventListener('input', updateFillPreview);
+  }
+
   $('fillModal').classList.add('active');
   document.body.classList.add('modal-open');
 }
 
+function updateFillPreview() {
+  const f = window._fillOrder;
+  if (!f) return;
+  const val = $('fillAmtInput').value;
+  if (!val || parseFloat(val) <= 0) {
+    $('fillPayAmt').textContent = '--';
+    $('fillGetAmt').textContent = '--';
+    return;
+  }
+  const fillWei = ethers.parseUnits(val, f.outDecimals);
+  const clamped = fillWei > f.remaining ? f.remaining : fillWei;
+  const proportionalIn = (f.remainingIn * clamped) / f.remaining;
+  $('fillPayAmt').textContent = fmt(clamped.toString(), f.outDecimals);
+  $('fillGetAmt').textContent = fmt(proportionalIn.toString(), f.inDecimals);
+}
+
 function closeFillModal() {
+  window._fillOrder = null;
   $('fillModal').classList.remove('active');
   document.body.classList.remove('modal-open');
 }
@@ -1698,12 +1798,13 @@ function startRefreshLoop() {
 
 // ---- Init ----
 async function init() {
+  $('poolMeta').innerHTML = zfiLoadingSVG(28) + 'Loading...';
   const poolId = getPoolId();
   if (!poolId) {
     _globalMode = true;
     $('pairName').textContent = 'Orderbook';
     $('poolMeta').textContent = 'All active orders';
-    document.title = 'Orderbook';
+    document.title = 'ORDER';
     document.querySelector('.tab-row').style.display = 'none';
     $('tab-book').style.display = 'none';
     $('priceBanner').style.display = 'none';
@@ -1719,6 +1820,7 @@ async function init() {
   $('lpLink').style.display = 'inline-flex';
 
   try {
+    await loadCoinMap();
     _poolData = await fetchPool(poolId);
   } catch (e) {
     console.error('Pool fetch failed:', e);
@@ -1727,11 +1829,16 @@ async function init() {
   if (_poolData) {
     const label0 = tokenLabel(_poolData, 0);
     const label1 = tokenLabel(_poolData, 1);
+    const id0 = _poolData.coin0 ? String(_poolData.coin0.id) : '0';
+    const id1 = _poolData.coin1 ? String(_poolData.coin1.id) : '0';
+    const icon0 = iconForToken(_poolData.token0, id0);
+    const icon1 = iconForToken(_poolData.token1, id1);
+    $('pairIcons').innerHTML = '<span class="icon-0">' + icon0 + '</span><span class="icon-1">' + icon1 + '</span>';
     $('pairName').textContent = label0 + ' / ' + label1;
     $('poolMeta').innerHTML = 'Pool ' + poolId.slice(0, 16) + '...'
       + ' &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">Cookbook</a>'
       + ' &middot; ' + (_poolData._source || 'ZAMM');
-    document.title = label0 + '/' + label1 + ' Orderbook';
+    document.title = label0 + '/' + label1 + ' ORDER';
 
     // Show AMM price computed from reserves (token0 per token1, matching book prices)
     if (_poolData.reserve0 && _poolData.reserve1 && BigInt(_poolData.reserve1) > 0n) {

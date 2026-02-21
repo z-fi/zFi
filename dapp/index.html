@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SWAP</title>
+<meta property="og:title" content="SWAP">
+<meta property="og:description" content="Swap tokens on zFi - the most secure-by-default exchange">
+<meta property="og:type" content="website">
+<meta property="og:url" content="">
+<meta property="og:image" content="">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="SWAP">
+<meta name="twitter:description" content="Swap tokens on zFi - the most secure-by-default exchange">
+<meta name="twitter:image" content="">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <script>
 // Prevent dark-mode FOUC: apply class before first paint
@@ -620,7 +629,7 @@ body.modal-open { overflow: hidden; }
   .coin-name-row .section { margin-bottom:14px; }
   .coin-slider-row { gap:8px; }
   .coin-slider-row label { flex:0 0 90px;font-size:11px; }
-  .coin-slider-row .coin-slider-val { flex:0 0 50px;font-size:12px; }
+  .coin-slider-row .coin-slider-val { flex:0 0 60px;font-size:12px; }
 }
 @media (max-width: 380px) {
   body { padding: 70px 12px 20px; }
@@ -643,7 +652,7 @@ body.modal-open { overflow: hidden; }
   .coin-slider-row { flex-wrap:wrap;gap:4px 8px; }
   .coin-slider-row label { flex:0 0 100%;font-size:10px;margin-bottom:-2px; }
   .coin-slider-row input[type="range"] { flex:1; }
-  .coin-slider-row .coin-slider-val { flex:0 0 45px;font-size:11px; }
+  .coin-slider-row .coin-slider-val { flex:0 0 55px;font-size:11px; }
 }
 
 /* Info tooltip */
@@ -743,15 +752,18 @@ body.modal-open { overflow: hidden; }
   color:var(--fg-dim);font-size:18px;transition:border-color 0.15s;
 }
 .coin-upload-btn:hover { border-color:var(--fg-muted); }
+.coin-upload-label { font-size:10px;letter-spacing:0.08em;text-transform:uppercase;pointer-events:none; }
 .coin-upload-btn img {
   position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
 }
+.coin-upload-btn img ~ .coin-upload-label { display:none; }
 .coin-upload-logo { width:56px;height:56px;border-radius:50%;flex-shrink:0; }
 .coin-upload-banner { flex:1;height:56px;border-radius:6px; }
 
 .coin-summary { display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:1.6; }
 .coin-summary dt { color:var(--fg-muted);grid-column:1; }
 .coin-summary dd { font-weight:600;margin:0;grid-column:2; }
+.coin-summary dd svg { vertical-align:-1px; }
 
 .coin-tpl-toggle { display:flex;gap:6px;margin-bottom:14px; }
 .coin-tpl-btn {
@@ -773,7 +785,8 @@ body.modal-open { overflow: hidden; }
 .coin-slider-row input[type="range"]::-moz-range-thumb {
   width:16px;height:16px;border-radius:50%;background:var(--fg);cursor:pointer;border:none;
 }
-.coin-slider-row .coin-slider-val { flex:0 0 60px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums; }
+.coin-slider-row .coin-slider-val { flex:0 0 70px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;justify-content:flex-end;gap:3px; }
+.coin-slider-row .coin-slider-val svg { vertical-align:middle;flex-shrink:0; }
 .coin-sliders.locked input[type="range"] { pointer-events:none;opacity:0.4; }
 .coin-drawer-body { display:none;padding-top:4px; }
 #coinSocialsWrap.open .coin-drawer-body,
@@ -1194,10 +1207,12 @@ body.modal-open { overflow: hidden; }
 <div class="swap-card">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Launch a Coin</h2>
 
-  <div class="coin-tpl-toggle" style="margin-bottom:14px">
-    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('simple')">Simple</button>
-    <button class="coin-tpl-btn" onclick="coinSetLaunchType('advanced')">Advanced</button>
+  <div class="coin-tpl-toggle" style="margin-bottom:4px">
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('simple')">ez</button>
+    <button class="coin-tpl-btn" onclick="coinSetLaunchType('advanced')">Fund</button>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>ez</strong> — memecoin-style launch. 80% of ETH raised seeds liquidity, 20% goes to a ragequitable treasury. No ops allocation, no vesting, no tap. Buyers can always exit at the treasury-backed floor price. Best for community tokens, memes, and experiments.<br><br><strong>Fund</strong> — structured fundraise (DAICO). Includes an ops allocation with lockup, tap vesting that drips ETH to the DAO over time, and full governance. Buyers fund a project and the DAO controls how funds are spent. Best for projects, protocols, and teams that need operating capital.</span></span>
   </div>
+  <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">80% liquidity &middot; 20% treasury &middot; no ops</div>
 
   <div class="coin-name-row">
     <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="e.g., MyCoin" maxlength="50" style="font-size:16px"></div>
@@ -1206,13 +1221,13 @@ body.modal-open { overflow: hidden; }
 
   <div class="section" style="margin-bottom:14px">
     <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional)</span></label>
-    <textarea id="coinDescription" placeholder="What does this coin do?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px"></textarea>
+    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px"></textarea>
   </div>
 
   <div class="coin-upload-row">
-    <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo">+</label>
+    <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo"><span class="coin-upload-label">Logo</span></label>
     <input type="file" id="coinImageInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'image')">
-    <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner">+</label>
+    <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner"><span class="coin-upload-label">Banner</span></label>
     <input type="file" id="coinBannerInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'banner')">
   </div>
 
@@ -1223,24 +1238,6 @@ body.modal-open { overflow: hidden; }
         <input type="text" id="coinTwitter" class="amount-input" placeholder="X.com username (e.g., mycoin)" maxlength="60" style="font-size:13px">
         <input type="text" id="coinTelegram" class="amount-input" placeholder="Telegram (e.g., mycoin_chat)" maxlength="60" style="font-size:13px">
         <input type="text" id="coinDiscord" class="amount-input" placeholder="Discord link (e.g., https://discord.gg/abc123)" maxlength="100" style="font-size:13px">
-      </div>
-    </div>
-  </div>
-
-  <div id="coinSimpleSettingsWrap" style="margin-bottom:14px">
-    <button onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit"><span>Settings</span><span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span></button>
-    <div class="coin-drawer-body">
-      <div class="coin-sliders">
-        <div class="coin-slider-row">
-          <label>Raise</label>
-          <input type="range" id="coinSimpleSliderRaise" min="1" max="100" step="1" value="5" oninput="coinSimpleSliderChanged()">
-          <span class="coin-slider-val" id="coinSimpleValRaise">5 ETH</span>
-        </div>
-        <div class="coin-slider-row">
-          <label>LP Allocation</label>
-          <input type="range" id="coinSimpleSliderLP" min="30" max="70" step="1" value="50" oninput="coinSimpleSliderChanged()">
-          <span class="coin-slider-val" id="coinSimpleValLP">50%</span>
-        </div>
       </div>
     </div>
   </div>
@@ -1258,15 +1255,15 @@ body.modal-open { overflow: hidden; }
           <div class="coin-slider-row">
             <label>Raise</label>
             <input type="range" id="coinSliderRaise" min="1" max="100" step="1" value="5" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValRaise">5 ETH</span>
+            <span class="coin-slider-val" id="coinValRaise" style="cursor:pointer" title="Click to enter custom amount" onclick="coinCustomRaise()">5 ETH</span>
           </div>
           <div class="coin-slider-row">
-            <label>Team Alloc</label>
+            <label>Ops Alloc</label>
             <input type="range" id="coinSliderTeam" min="5" max="50" step="1" value="15" oninput="coinSliderChanged()">
             <span class="coin-slider-val" id="coinValTeam">15%</span>
           </div>
           <div class="coin-slider-row">
-            <label>Team Lockup</label>
+            <label>Ops Lockup</label>
             <input type="range" id="coinSliderLock" min="1" max="24" step="1" value="6" oninput="coinSliderChanged()">
             <span class="coin-slider-val" id="coinValLock">6 mo</span>
           </div>
@@ -1299,22 +1296,13 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
-  <button id="coinLaunchBtn" style="display:none;width:100%;padding:14px 24px;font-size:13px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
+  <button id="coinLaunchBtn" disabled style="width:100%;padding:14px 24px;font-size:13px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
 
   <div id="coinStatus"></div>
 </div>
 
-<div style="margin-top:20px">
-  <div class="swap-card">
-    <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Browse Coins</h2>
-    <a href="./coin/" style="display:block;text-align:center;padding:12px;font-size:13px;color:var(--fg-muted)">View all launched coins &rarr;</a>
-    <div style="margin-top:12px;border-top:1px solid var(--border-muted);padding-top:12px">
-      <div style="display:flex;gap:8px;align-items:flex-end">
-        <input type="text" id="coinTrackAddr" class="amount-input" placeholder="address (0x...)" style="font-size:14px;flex:1">
-        <a id="coinTrackBtn" style="white-space:nowrap;padding:8px 16px;font-size:12px;color:var(--fg-muted);cursor:pointer;text-decoration:none" onclick="if($('coinTrackAddr').value.trim().length===42)location.href='./coin/#'+$('coinTrackAddr').value.trim()">View &rarr;</a>
-      </div>
-    </div>
-  </div>
+<div style="margin-top:14px;text-align:center">
+  <a href="./coin/" style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);text-decoration:none">Browse coins &rarr;</a>
 </div>
 </div><!-- end coinTab -->
 
@@ -1417,6 +1405,9 @@ function toggleDark() {
   localStorage.setItem('dark', on ? '1' : '0');
 }
 document.addEventListener('click', () => document.querySelectorAll('.info-tip.open').forEach(t => t.classList.remove('open')));
+
+function zfiLoadingSVG(s=48){
+return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle"><g><polygon points="200,80 155,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 165,160 200,130" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 230,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="165,160 200,130 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="165,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 230,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="165" y1="160" x2="230" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;1;0;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 155,160 200,135" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 245,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,135 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 245,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="155,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 245,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="155" y1="160" x2="245" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;1;0;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;1;0;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;1;0;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;1;0;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 195,160 200,140" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,80 200,140 205,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="195,160 200,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><polygon points="200,160 205,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="195" y1="160" x2="205" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;1;0;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 180,160 200,135" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,135 220,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,135 220,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="180,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 220,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="180" y1="160" x2="220" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;1;0;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 170,160 200,130" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,130 235,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="200,130 235,160 200,160" fill="#FFE066" stroke="#000" stroke-width="2"/><polygon points="170,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 235,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="170" y1="160" x2="235" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;0" dur="3.2s" repeatCount="indefinite"/></g><g opacity="0"><polygon points="200,80 160,160 200,132" fill="#00D4FF" stroke="#000" stroke-width="2"/><polygon points="200,80 200,132 240,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,132 200,160" fill="#66D9A6" stroke="#000" stroke-width="2"/><polygon points="200,132 240,160 200,160" fill="#FF6B9D" stroke="#000" stroke-width="2"/><polygon points="160,160 200,160 200,240" fill="#B967DB" stroke="#000" stroke-width="2"/><polygon points="200,160 240,160 200,240" fill="#FF9F40" stroke="#000" stroke-width="2"/><line x1="200" y1="80" x2="200" y2="240" stroke="#000" stroke-width="2"/><line x1="160" y1="160" x2="240" y2="160" stroke="#000" stroke-width="2"/><animate attributeName="opacity" values="0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1" dur="3.2s" repeatCount="indefinite"/></g></svg>`;}
 
 // ---- Constants ----
 const CHAIN_ID = 1;
@@ -3261,7 +3252,7 @@ async function handleAmountChange() {
   }
 
   try {
-    setHTML(swapBtn, `<span class="loading"></span> Getting quote...`);
+    setHTML(swapBtn, `${zfiLoadingSVG(14)} Getting quote...`);
     setDisabled(swapBtn, true);
     dstEl.value = "";
     dstEl.placeholder = "Fetching\u2026";
@@ -5100,7 +5091,7 @@ async function executeSwap() {
 
     // ---- Direct ZAMM → zOrg stake: approve DAO + call buyShares directly ----
     if (isDirectZOrgStake(fromToken, toToken)) {
-      swapBtn.innerHTML = `<span class="loading"></span> Preparing stake...`;
+      swapBtn.innerHTML = `${zfiLoadingSVG(14)} Preparing stake...`;
       swapBtn.disabled = true;
 
       const fromData = tokens[fromToken];
@@ -5168,7 +5159,7 @@ async function executeSwap() {
 
     // ---- zOrg → ZAMM ragequit: burn shares, claim ZAMM directly ----
     if (isRagequitPath(fromToken, toToken)) {
-      swapBtn.innerHTML = `<span class="loading"></span> Preparing ragequit...`;
+      swapBtn.innerHTML = `${zfiLoadingSVG(14)} Preparing ragequit...`;
       swapBtn.disabled = true;
 
       const fromData = tokens[fromToken];
@@ -5209,7 +5200,7 @@ async function executeSwap() {
         showStatus("Privacy Pool deposit not supported for zOrg sells — sell zOrg first, then deposit the output", "error");
         return;
       }
-      swapBtn.innerHTML = `<span class="loading"></span> Preparing sell...`;
+      swapBtn.innerHTML = `${zfiLoadingSVG(14)} Preparing sell...`;
       swapBtn.disabled = true;
 
       const fromSnap = fromToken, toSnap = toToken;
@@ -5327,7 +5318,7 @@ async function executeSwap() {
       return;
     }
 
-    swapBtn.innerHTML = `<span class="loading"></span> Getting quote...`;
+    swapBtn.innerHTML = `${zfiLoadingSVG(14)} Getting quote...`;
     swapBtn.disabled = true;
 
     const fromSnap = fromToken, toSnap = toToken;
@@ -5853,6 +5844,30 @@ function syncPrivacyURL() {
   if (_pa && _pa.value && +_pa.value > 0) _sp.set('amt', _pa.value);
   history.replaceState(null, '', '?' + _sp.toString() + '#privacy');
 }
+function syncSendURL() {
+  if (_activeTab !== 'send') return;
+  const _sp = new URLSearchParams();
+  _sp.set('token', _sendToken.toLowerCase());
+  const _sa = $('sendAmount');
+  if (_sa && _sa.value && +_sa.value > 0) _sp.set('amt', _sa.value);
+  const _st = ($('sendTo')?.value || '').trim();
+  if (_st) _sp.set('to', _st);
+  history.replaceState(null, '', '?' + _sp.toString() + '#send');
+}
+
+function updateOGMeta(title, description) {
+  document.title = title;
+  const set = (prop, val, attr) => {
+    attr = attr || 'property';
+    const el = document.querySelector(`meta[${attr}="${prop}"]`);
+    if (el) el.setAttribute('content', val || '');
+  };
+  set('og:title', title);
+  set('og:description', description);
+  set('og:url', window.location.href);
+  set('twitter:title', title, 'name');
+  set('twitter:description', description, 'name');
+}
 
 function updateCalldataLink(multicall) {
   const el = $("calldataLink");
@@ -5945,6 +5960,7 @@ function selectToken(symbol) {
     closeTokenModal();
     currentModal = null;
     sendUpdateBalance();
+    syncSendURL();
     const _sf = $("sendAmount");
     if (_sf) _sf.focus();
     return;
@@ -6059,6 +6075,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const _dlTabHash = window.location.hash;
   const _hasppParam = new URLSearchParams(window.location.search).has('pp');
   if (!_hasppParam && (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send')) {
+    // Capture query params BEFORE updateTokenDisplay() → syncSwapURL() clobbers them
+    const _sp = new URLSearchParams(window.location.search);
     updateTokenDisplay();
     initTokenListClick();
     initTokenSearch();
@@ -6067,13 +6085,59 @@ document.addEventListener("DOMContentLoaded", () => {
     const toEl = $("toAmount");
     if (toEl) toEl.addEventListener("input", debounce(() => { _inputMode = 'exactOut'; handleAmountChange(); }, 400));
     (window.requestIdleCallback || setTimeout)(() => loadWeiLists());
+    // Parse send deeplink params: ?token=ETH&amt=1.5&to=0x...#send
+    if (_dlTabHash === '#send') {
+      const _dlToken = _sp.get('token');
+      if (_dlToken) {
+        const u = _dlToken.toUpperCase();
+        const found = Object.keys(tokens).find(k => k.toUpperCase() === u)
+          || (_dlToken.startsWith('0x') && _dlToken.length === 42 && Object.keys(tokens).find(k => tokens[k].address.toLowerCase() === _dlToken.toLowerCase()));
+        if (found) _sendToken = found;
+      }
+      const _dlAmt = _sp.get('amt');
+      if (_dlAmt && +_dlAmt > 0) { const el = $('sendAmount'); if (el) el.value = _dlAmt; }
+      const _dlTo = _sp.get('to');
+      if (_dlTo) {
+        const el = $('sendTo');
+        if (el) {
+          el.value = _dlTo;
+          if (ethers.isAddress(_dlTo)) {
+            _sendResolvedAddr = ethers.getAddress(_dlTo);
+          } else if (_dlTo.endsWith('.wei') || _dlTo.endsWith('.eth')) {
+            sendResolveName(_dlTo);
+          }
+        }
+      }
+      // Update OG meta for social cards: "Send 1.5 ETH to alice.wei"
+      const _ogTok = _sendToken || 'ETH';
+      const _ogAmt = _sp.get('amt');
+      const _ogTo = _sp.get('to');
+      let _ogTitle = 'Send';
+      if (_ogAmt && +_ogAmt > 0) _ogTitle += ' ' + _ogAmt;
+      _ogTitle += ' ' + _ogTok;
+      if (_ogTo) _ogTitle += ' to ' + _ogTo;
+      updateOGMeta(_ogTitle, 'Send tokens on zFi');
+    }
     switchTab(_dlTabHash.slice(1));
     return;
   }
 
   // Deeplink: ?from=eth&to=bold&amt=1.5 (lowercase — wei.is gateway mangles mixed-case params)
+  loadWeiLists(); // ensure extended token lists are available for deeplink resolution
   const _urlp = new URLSearchParams(window.location.search);
-  const _findToken = (s) => { const u = (s||'').toUpperCase(); return Object.keys(tokens).find(k => k.toUpperCase() === u); };
+  const _findToken = (s) => {
+    if (!s) return undefined;
+    const u = s.toUpperCase();
+    // Match by symbol
+    const byKey = Object.keys(tokens).find(k => k.toUpperCase() === u);
+    if (byKey) return byKey;
+    // Match by address (e.g. from predict page swap links)
+    if (s.startsWith('0x') && s.length === 42) {
+      const lo = s.toLowerCase();
+      return Object.keys(tokens).find(k => tokens[k].address.toLowerCase() === lo);
+    }
+    return undefined;
+  };
   const _dlFrom = _findToken(_urlp.get('from'));
   const _dlTo = _findToken(_urlp.get('to'));
   if (_dlFrom) fromToken = _dlFrom;
@@ -6133,6 +6197,37 @@ document.addEventListener("DOMContentLoaded", () => {
       if (toToken !== _dlPP) { _ppSavedToToken = toToken; toToken = _dlPP; }
       if (!_ppConfig) setTimeout(() => loadPPConfig(), 100);
     }
+  }
+  // Auto-import deeplinked token by address if not found in any list
+  const _dlToRaw = _urlp.get('to') || '';
+  if (!_dlTo && _dlToRaw.startsWith('0x') && _dlToRaw.length === 42) {
+    (async () => {
+      try {
+        const rpc = provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
+        const erc20 = new ethers.Contract(_dlToRaw, ["function symbol() view returns (string)", "function decimals() view returns (uint8)"], rpc);
+        const [sym, dec] = await Promise.all([erc20.symbol(), erc20.decimals()]);
+        const symbol = String(sym || '').trim().slice(0, 24) || 'TKN';
+        const addr = ethers.getAddress(_dlToRaw);
+        if (!tokens[symbol] || tokens[symbol].address.toLowerCase() === addr.toLowerCase()) {
+          tokens[symbol] = { address: addr, symbol, decimals: Number(dec) };
+          toToken = symbol;
+          updateTokenDisplay();
+          handleAmountChange();
+        }
+      } catch (_) {}
+    })();
+  }
+  // Update OG meta for swap / privacy pool social cards
+  if (_dlPP === 'ZAP' || (_isPPAsset(_dlPP) && _ppIsDirect)) {
+    const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
+    updateOGMeta('Deposit ' + _ogAmt2 + (_dlPP === 'ZAP' ? 'ZAP' : _dlPP), 'Privacy pool deposit on zFi');
+  } else if (_isPPAsset(_dlPP)) {
+    const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
+    updateOGMeta('Swap ' + _ogAmt2 + fromToken + ' → ' + _dlPP + ' (PP)', 'Swap and deposit into privacy pool on zFi');
+  } else {
+    const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : (_dlOutAmt && +_dlOutAmt > 0) ? '' : '';
+    const _ogOut = (_dlOutAmt && +_dlOutAmt > 0) ? _dlOutAmt + ' ' : '';
+    updateOGMeta('Swap ' + _ogAmt2 + fromToken + ' → ' + _ogOut + toToken, 'Swap tokens on zFi');
   }
   updateTokenDisplay();
   initTokenListClick();
@@ -6572,7 +6667,10 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(_sendDebounce);
       _sendDebounce = setTimeout(() => sendResolveName(v), 350);
     }
+    syncSendURL();
   });
+  const sa = $('sendAmount');
+  if (sa) sa.addEventListener('input', debounce(syncSendURL, 400));
   const ut = $('sendUnlockTime');
   if (ut) ut.addEventListener('input', sendUpdateButton);
 });
@@ -6620,12 +6718,12 @@ async function doSendOrLock() {
   const unlockStr = $('sendUnlockTime').value;
   const statusEl = $('sendStatus');
 
-  if (!amtStr || Number(amtStr) <= 0) { statusEl.textContent = 'Enter an amount'; statusEl.className = 'status error'; return; }
+  if (!amtStr || Number(amtStr) <= 0) { statusEl.textContent = 'Enter an amount'; statusEl.className = 'status show error'; return; }
 
   // Resolve recipient
   let toAddr = _sendResolvedAddr;
   if (!toAddr && ethers.isAddress(toRaw)) toAddr = ethers.getAddress(toRaw);
-  if (!toAddr) { statusEl.textContent = 'Enter a valid recipient'; statusEl.className = 'status error'; return; }
+  if (!toAddr) { statusEl.textContent = 'Enter a valid recipient'; statusEl.className = 'status show error'; return; }
 
   const t = tokens[sym];
   if (!t) { statusEl.textContent = 'Unknown token'; statusEl.className = 'status error'; return; }
@@ -6640,7 +6738,7 @@ async function doSendOrLock() {
       const unlockTime = Math.floor(new Date(unlockStr).getTime() / 1000);
       if (unlockTime <= Math.floor(Date.now() / 1000)) {
         statusEl.textContent = 'Unlock time must be in the future';
-        statusEl.className = 'status error';
+        statusEl.className = 'status show error';
         return;
       }
       const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
@@ -6648,34 +6746,34 @@ async function doSendOrLock() {
       // Approve ERC20 if needed
       if (!isETH) {
         statusEl.textContent = 'Checking approval...';
-        statusEl.className = 'status';
+        statusEl.className = 'status show';
         const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
         const allowance = await erc20.allowance(connectedAddress, COOKBOOK_ADDRESS);
         if (allowance < amount) {
-          statusEl.textContent = 'Approving token...';
+          statusEl.textContent = 'Approving token...'; statusEl.className = 'status show';
           const approveTx = await erc20.approve(COOKBOOK_ADDRESS, ethers.MaxUint256);
           await approveTx.wait();
         }
       }
 
       statusEl.textContent = 'Creating timelock...';
-      statusEl.className = 'status';
+      statusEl.className = 'status show';
       const tx = await cookbook.lockup(
         isETH ? ZERO_ADDRESS : tokenAddr,
         toAddr, 0, amount, unlockTime,
         { value: isETH ? amount : 0n }
       );
-      statusEl.textContent = 'Waiting for confirmation...';
+      statusEl.textContent = 'Waiting for confirmation...'; statusEl.className = 'status show';
       const receipt = await tx.wait();
       statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
-      statusEl.className = 'status success';
+      statusEl.className = 'status show success';
       $('sendAmount').value = '';
       sendUpdateBalance();
       setTimeout(sendLoadTimelocks, 3000);
     } else {
       // Direct send
       statusEl.textContent = 'Sending...';
-      statusEl.className = 'status';
+      statusEl.className = 'status show';
       let tx;
       if (isETH) {
         tx = await signer.sendTransaction({ to: toAddr, value: amount });
@@ -6683,17 +6781,17 @@ async function doSendOrLock() {
         const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
         tx = await erc20.transfer(toAddr, amount);
       }
-      statusEl.textContent = 'Waiting for confirmation...';
+      statusEl.textContent = 'Waiting for confirmation...'; statusEl.className = 'status show';
       const receipt = await tx.wait();
       statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
-      statusEl.className = 'status success';
+      statusEl.className = 'status show success';
       $('sendAmount').value = '';
       sendUpdateBalance();
     }
   } catch (e) {
     console.error(e);
     statusEl.textContent = e.reason || e.message || 'Transaction failed';
-    statusEl.className = 'status error';
+    statusEl.className = 'status show error';
   }
 }
 
@@ -6827,10 +6925,10 @@ function switchTab(tab) {
     history.replaceState(null, '', window.location.pathname + '#coin');
     coinUpdatePreview();
   } else if (tab === 'send') {
-    history.replaceState(null, '', window.location.pathname + '#send');
     sendUpdateTokenDisplay();
     sendUpdateBalance();
     sendLoadTimelocks();
+    syncSendURL();
   }
 }
 
@@ -8393,7 +8491,7 @@ const COIN_SEC_PER_MONTH = 2_629_746n;
 const COIN_PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
 
 const COIN_DEFAULTS = { raise: 5, teamBps: 1500, lockMonths: 6, tapMonths: 3, lpBps: 3300 };
-const COIN_SIMPLE_DEFAULTS = { raise: 5, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 5000 };
+const COIN_SIMPLE_DEFAULTS = { raise: 5, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 8000 };
 let _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
 let _coinTemplate = 'simple';
 let _coinLaunchType = 'simple';
@@ -8424,15 +8522,18 @@ function coinSetLaunchType(type) {
   const btns = document.querySelectorAll('#coinTab > .swap-card > .coin-tpl-toggle > .coin-tpl-btn');
   btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'simple' ? 0 : 1)));
   const isSimple = type === 'simple';
-  $('coinSimpleSettingsWrap').style.display = isSimple ? '' : 'none';
   $('coinSettingsWrap').style.display = isSimple ? 'none' : '';
   $('coinSimplePreviewWrap').style.display = 'none';
   $('coinPreviewWrap').style.display = 'none';
-  setShown('coinLaunchBtn', false);
+  $('coinSocialsWrap').style.display = isSimple ? 'none' : '';
+  if (isSimple) { $('coinTwitter').value = ''; $('coinTelegram').value = ''; $('coinDiscord').value = ''; }
+  setDisabled('coinLaunchBtn', true);
+  $('coinLaunchTypeHint').textContent = isSimple
+    ? '80% liquidity \u00b7 20% treasury \u00b7 no ops'
+    : 'ops allocation \u00b7 tap vesting \u00b7 full governance';
   if (isSimple) {
     _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
     _coinTemplate = 'simple';
-    coinSimpleSyncSliders();
   } else {
     _coinCfg = { ...COIN_DEFAULTS };
     _coinTemplate = 'standard';
@@ -8442,19 +8543,16 @@ function coinSetLaunchType(type) {
   coinUpdatePreview();
 }
 
-function coinSimpleSliderChanged() {
-  _coinCfg.raise = +$('coinSimpleSliderRaise').value;
-  _coinCfg.lpBps = +$('coinSimpleSliderLP').value * 100;
-  $('coinSimpleValRaise').textContent = _coinCfg.raise + ' ETH';
-  $('coinSimpleValLP').textContent = (_coinCfg.lpBps / 100) + '%';
-  coinUpdatePreview();
-}
 
-function coinSimpleSyncSliders() {
-  $('coinSimpleSliderRaise').value = _coinCfg.raise;
-  $('coinSimpleSliderLP').value = _coinCfg.lpBps / 100;
-  $('coinSimpleValRaise').textContent = _coinCfg.raise + ' ETH';
-  $('coinSimpleValLP').textContent = (_coinCfg.lpBps / 100) + '%';
+function coinCustomRaise() {
+  const v = prompt('Raise amount (ETH):', _coinCfg.raise);
+  if (v === null) return;
+  const n = parseFloat(v);
+  if (isNaN(n) || n <= 0) return;
+  _coinCfg.raise = n;
+  $('coinSliderRaise').value = Math.min(Math.max(Math.round(n), 1), 100);
+  coinUpdateSliderLabels();
+  coinUpdatePreview();
 }
 
 function coinSliderChanged() {
@@ -8477,7 +8575,7 @@ function coinSyncSliders() {
 }
 
 function coinUpdateSliderLabels() {
-  $('coinValRaise').textContent = _coinCfg.raise + ' ETH';
+  $('coinValRaise').innerHTML = _coinCfg.raise + ' ' + ETH_ICON.replace('width="24" height="24"', 'width="13" height="13"');
   $('coinValTeam').textContent = (_coinCfg.teamBps / 100) + '%';
   $('coinValLock').textContent = _coinCfg.lockMonths + ' mo';
   $('coinValTap').textContent = _coinCfg.tapMonths + ' mo';
@@ -8486,26 +8584,27 @@ function coinUpdateSliderLabels() {
 
 function coinUpdatePreview() {
   const c = _coinCfg;
+  const ethMini = ETH_ICON.replace('width="24" height="24"', 'width="12" height="12"');
   const saleBps = 10000 - c.teamBps;
-  const saleSupply = (COIN_SUPPLY * BigInt(saleBps)) / 10000n;
+  const saleSupply = (COIN_SUPPLY * BigInt(saleBps)) / 10000n - 1n; // -1 for deployer share
   const lpPct = c.lpBps / 100;
   const treasuryPct = 100 - lpPct;
   const pricePerShare = Number(c.raise) / Number(saleSupply);
   const pricePerM = (pricePerShare * 1e6).toPrecision(3);
   const saleNum = Number(saleSupply);
-  const saleFmt = saleNum >= 1e9 ? (saleNum / 1e9).toFixed(saleNum % 1e9 === 0 ? 0 : 1) + 'B' : (saleNum / 1e6).toFixed(0) + 'M';
+  const saleFmt = saleNum >= 999e6 ? (saleNum / 1e9).toFixed(saleNum % 1e9 === 0 ? 0 : 1) + 'B' : (saleNum / 1e6).toFixed(0) + 'M';
 
   if (_coinLaunchType === 'simple') {
     const p = $('coinSimplePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
       `<dt>Sale</dt><dd>${saleFmt} (100%)</dd>` +
-      `<dt>Raise</dt><dd>${c.raise} ETH</dd>` +
+      `<dt>Raise</dt><dd><span style="cursor:pointer;border-bottom:1px dashed var(--fg-dim)" title="Click to edit" onclick="coinCustomRaise()">${c.raise}</span> ${ethMini}</dd>` +
       `<dt>LP</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
       `<dt>Treasury</dt><dd>${treasuryPct}% &rarr; ragequitable</dd>` +
-      `<dt>Price</dt><dd>${pricePerM} ETH / 1M</dd>` +
+      `<dt>Price</dt><dd>${pricePerM} ${ethMini} / 1M</dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury &middot; no team &middot; no tap</div>`;
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury &middot; no ops &middot; no tap</div>`;
     $('coinSimplePreviewWrap').style.display = '';
     $('coinPreviewWrap').style.display = 'none';
   } else {
@@ -8517,17 +8616,17 @@ function coinUpdatePreview() {
     p.innerHTML =
       `<dl class="coin-summary">` +
       `<dt>Sale</dt><dd>${saleFmt} (${salePct}%)</dd>` +
-      `<dt>Raise</dt><dd>${c.raise} ETH</dd>` +
+      `<dt>Raise</dt><dd>${c.raise} ${ethMini}</dd>` +
       `<dt>LP Seed</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
-      `<dt>Team</dt><dd>${teamPct}% (locked ${c.lockMonths}mo)</dd>` +
-      `<dt>Tap</dt><dd>${tapBudget.toFixed(2)} ETH / ${c.tapMonths}mo</dd>` +
-      `<dt>Price</dt><dd>${pricePerM} ETH / 1M</dd>` +
+      `<dt>Ops</dt><dd>${teamPct}% (locked ${c.lockMonths}mo)</dd>` +
+      `<dt>Tap</dt><dd>${tapBudget.toFixed(2)} ${ethMini} / ${c.tapMonths}mo</dd>` +
+      `<dt>Price</dt><dd>${pricePerM} ${ethMini} / 1M</dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">15% quorum &middot; 7d voting &middot; 3d timelock &middot; ragequit</div>`;
     $('coinPreviewWrap').style.display = '';
     $('coinSimplePreviewWrap').style.display = 'none';
   }
-  setShown('coinLaunchBtn', true);
+  setDisabled('coinLaunchBtn', false);
 }
 
 function coinFilePicked(input, type) {
@@ -8595,7 +8694,7 @@ function coinPredict(initHolders, initShares, salt) {
 function coinShowStatus(msg, isError) {
   const el = $('coinStatus');
   const cls = isError ? 'status-message error' : msg.includes('Launch') ? 'status-message success' : 'status-message';
-  const spinner = msg.includes('...') && !isError && !msg.includes('Launch') ? '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border-muted);border-top:2px solid var(--fg);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px"></span>' : '';
+  const spinner = msg.includes('...') && !isError && !msg.includes('Launch') ? zfiLoadingSVG(14) : '';
   el.innerHTML = `<div class="${cls}">${spinner}${msg}</div>`;
 }
 
@@ -8708,13 +8807,14 @@ async function coinLaunch() {
 
     const c = _coinCfg;
     const saleBps = BigInt(10000 - c.teamBps);
-    const raiseETH = BigInt(c.raise);
-    const saleSupply = (COIN_SUPPLY * saleBps) / 10000n;
+    const saleSupply = (COIN_SUPPLY * saleBps) / 10000n - 1n; // -1 for deployer share
     const saleSupplyWei = ethers.parseEther(saleSupply.toString());
 
     // Sale rate: 1 ETH base unit → (saleSupply / raiseETH) shares
+    // Use wei-level math to support decimal raise amounts (e.g. 0.01 ETH)
     const tribAmt = ethers.parseEther('1');
-    const forAmt = ethers.parseEther((saleSupply / raiseETH).toString());
+    const raiseWei = ethers.parseEther(String(c.raise));
+    const forAmt = (saleSupplyWei * tribAmt) / raiseWei;
 
     // Pin images + metadata to IPFS (or fallback to data URI)
     const metadata = { name, symbol };
@@ -8727,9 +8827,11 @@ async function coinLaunch() {
     if (discord) metadata.discord = discord;
     if (_coinTemplate) metadata.template = _coinTemplate;
     if (_coinLaunchType === 'simple') {
-      metadata.launchType = 'simple';
-      metadata.lpBps = c.lpBps;
+      metadata.launchType = 'ez';
+    } else {
+      metadata.launchType = 'fund';
     }
+    metadata.lpBps = c.lpBps;
     if (_coinImageFile) {
       coinShowStatus('Uploading logo to IPFS...');
       _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
@@ -8796,7 +8898,7 @@ async function coinLaunch() {
       let tapRate = tapBudget / totalTapSec;
       if (tapRate === 0n && tapBudget > 0n) tapRate = 1n;
 
-      const lockDuration = BigInt(c.lockMonths) * 30n * 86400n;
+      const lockDuration = BigInt(c.lockMonths) * COIN_SEC_PER_MONTH;
       const unlockTime = BigInt(Math.floor(Date.now() / 1000)) + lockDuration;
 
       const customCalls = [
@@ -8831,7 +8933,7 @@ async function coinLaunch() {
 
     const receipt = await tx.wait();
     const daoAddress = predicted.dao;
-    const fmtBM = n => n >= 1e9 ? (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M' : n.toLocaleString();
+    const fmtBM = n => n >= 999e6 ? (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M' : n.toLocaleString();
     const saleSupplyFmt = fmtBM(Number(saleSupply));
     const lpPct = c.lpBps / 100;
 
@@ -8857,7 +8959,7 @@ async function coinLaunch() {
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
         `Sale: ${c.raise} ETH &rarr; ${saleSupplyFmt} shares (${salePct}%)<br>` +
-        `Team: ${teamSupplyFmt} shares locked ${c.lockMonths}mo<br>` +
+        `Ops: ${teamSupplyFmt} shares locked ${c.lockMonths}mo<br>` +
         `LP: ${lpPct}% of buys &rarr; zAMM &middot; Tap: &asymp;${dailyTap.toFixed(4)} ETH/day<br><br>` +
         `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
@@ -8869,7 +8971,7 @@ async function coinLaunch() {
       coinShowStatus('Launch cancelled', false);
     } else {
       const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      coinShowStatus(msg.length < 120 ? msg : 'Launch failed', true);
+      coinShowStatus(escText(msg.length < 120 ? msg : 'Launch failed'), true);
     }
   } finally {
     _coinLaunching = false;
