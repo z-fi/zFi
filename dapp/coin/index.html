@@ -18,6 +18,8 @@
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
 </script>
 <style>
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root {
   --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
@@ -44,12 +46,12 @@
 body {
   font-family:Helvetica,Arial,sans-serif;
   background:var(--bg);color:var(--fg);
-  min-height:100vh;padding:40px 20px 40px;
+  min-height:100vh;padding:60px 20px 20px;
   max-width:720px;margin:0 auto;
 }
 a { color:var(--link-fg); }
 button {
-  font-family:inherit;cursor:pointer;border:none;border-radius:6px;
+  font-family:inherit;cursor:pointer;border:none;border-radius:0;
   background:var(--btn-bg);color:var(--btn-fg);
   padding:10px 20px;font-size:13px;font-weight:600;letter-spacing:0.05em;
 }
@@ -176,7 +178,7 @@ input {
 .swap-pct-row { display:flex;gap:6px;margin-top:6px; }
 .swap-pct-btn {
   flex:1;padding:4px 0;font-size:10px;font-weight:600;letter-spacing:0.05em;
-  border:none;border-radius:4px;background:var(--surface);color:var(--fg-muted);
+  border:none;border-radius:0;background:var(--surface);color:var(--fg-muted);
   cursor:pointer;font-family:inherit;transition:background 0.15s,color 0.15s;
 }
 .swap-pct-btn:hover { background:var(--surface-hover);color:var(--fg); }
@@ -262,7 +264,7 @@ input {
 }
 /* Footer */
 .site-footer {
-  position:relative;text-align:center;padding:48px 20px;font-size:11px;opacity:0.35;
+  position:relative;text-align:center;padding:48px 20px;font-size:11px;opacity:0.55;margin-top:40px;
   letter-spacing:0.5px;font-weight:300;
 }
 .site-footer a { color:inherit;text-decoration:underline;margin:0 2px; }
@@ -272,11 +274,21 @@ input {
 /* Dark toggle */
 .dark-toggle {
   position:fixed;top:max(22px, env(safe-area-inset-top, 0px));left:max(20px, env(safe-area-inset-left, 0px));
-  border:none;cursor:pointer;padding:0;margin:0;opacity:0.5;transition:opacity 0.2s;
-  z-index:100;background:#000;border-radius:50%;width:14px;height:14px;
+  border:none;cursor:pointer;padding:13px;margin:-13px;opacity:0.5;transition:opacity 0.2s;
+  z-index:100;background:#000;border-radius:50%;width:40px;height:40px;background-clip:content-box;
 }
 :root.dark .dark-toggle { background:#fff; }
 .dark-toggle:hover { opacity:1; }
+.home-btn {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+  z-index: 100;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  line-height: 0;
+}
+.home-btn:hover { opacity: 1; }
 
 /* Wallet */
 .wallet {
@@ -324,7 +336,7 @@ body.modal-open { overflow:hidden; }
 
 /* Mobile */
 @media (max-width: 600px) {
-  body { padding:24px 14px 32px; }
+  body { padding:80px 16px 20px; }
   .header h1 { font-size:13px; }
   .coin-grid { grid-template-columns:1fr 1fr;gap:10px; }
   .coin-card { padding:12px; }
@@ -341,7 +353,7 @@ body.modal-open { overflow:hidden; }
   .stat-row { font-size:12px; }
   .stat-value { word-break:break-all; }
   .swap-section input { font-size:18px; }
-  .swap-pct-btn { font-size:9px;padding:5px 0;border-radius:3px; }
+  .swap-pct-btn { font-size:9px;padding:5px 0;border-radius:0; }
   .activity-table { font-size:11px; }
   .activity-table th, .activity-table td { padding:4px 6px; }
   .activity-body { overflow-x:auto; }
@@ -354,7 +366,7 @@ body.modal-open { overflow:hidden; }
   .wallet-modal { max-width:100%; margin:0 10px; max-height:calc(100vh - 40px); overflow-y:auto; }
 }
 @media (max-width: 380px) {
-  body { padding:16px 10px 24px; }
+  body { padding:70px 12px 20px; }
   .coin-grid { grid-template-columns:1fr;gap:8px; }
   .coin-detail-head { gap:10px; }
   .coin-detail-logo { width:40px;height:40px; }
@@ -369,6 +381,7 @@ body.modal-open { overflow:hidden; }
 </style>
 </head>
 <body>
+<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 
 <div class="wallet">
@@ -1517,7 +1530,7 @@ function updateWcBanner() {
     const banner = document.createElement('div');
     banner.id = 'wcBanner';
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
-    banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Disconnect</button>';
+    banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
     document.body.prepend(banner);
     document.body.style.paddingTop = '44px';
   } else {
@@ -2182,10 +2195,10 @@ async function onTapClaim() {
 // ==================== INIT ====================
 route();
 </script>
-<div class="site-footer">
+<footer class="site-footer">
   <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
   <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</div>
+</footer>
 </body>
 </html>

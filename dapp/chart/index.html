@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CHART</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><rect x='3' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='5' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='10' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='12' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='4' y='4' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='5' width='10' height='1' fill='%23e8e8e0'/><rect x='2' y='6' width='12' height='3' fill='%23e8e8e0'/><rect x='3' y='9' width='10' height='1' fill='%23e8e8e0'/><rect x='4' y='10' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='10' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='5' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='9' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='2' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='7' y='12' width='2' height='1' fill='%23e8e8e0'/><rect x='11' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='1' y='13' width='2' height='1' fill='%23e8e8e0'/><rect x='13' y='13' width='2' height='1' fill='%23e8e8e0'/></svg>" type="image/svg+xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <script>
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
 </script>
@@ -39,7 +39,7 @@ h1 {
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 .pool-id {
   font-size: 11px;
@@ -73,24 +73,38 @@ h1 {
   position: fixed;
   top: max(22px, env(safe-area-inset-top, 0px));
   left: max(20px, env(safe-area-inset-left, 0px));
-  border: none; cursor: pointer; padding: 0; margin: 0;
+  border: none; cursor: pointer; padding: 13px; margin: -13px;
   opacity: 0.5; transition: opacity 0.2s; z-index: 100;
-  background: #000; border-radius: 50%; width: 14px; height: 14px;
+  background: #000; border-radius: 50%; width: 40px; height: 40px; background-clip: content-box;
 }
 :root.dark .dark-toggle { background: #fff; }
 .dark-toggle:hover { opacity: 1; }
 .site-footer {
   position: relative;
   text-align: center; padding: 48px 20px; font-size: 11px;
-  opacity: 0.35; letter-spacing: 0.5px; font-weight: 300;
+  opacity: 0.55; letter-spacing: 0.5px; font-weight: 300; margin-top: 40px;
 }
 .site-footer a { color: inherit; text-decoration: underline; margin: 0 2px; }
 .site-footer a:hover { opacity: 0.7; }
 .site-footer .tagline { opacity:1; color:#000; font-weight:500; }
 .dark .site-footer .tagline { color:#fff; }
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
+.home-btn {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+  z-index: 100;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  line-height: 0;
+}
+.home-btn:hover { opacity: 1; }
 </style>
 </head>
 <body>
+
+<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
 
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 
@@ -98,11 +112,11 @@ h1 {
 <div class="pool-id" id="poolIdDisplay"></div>
 <div id="chartContainer"></div>
 
-<div class="site-footer">
+<footer class="site-footer">
   <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
   <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</div>
+</footer>
 
 <script>
 function toggleDark() {
