@@ -471,9 +471,8 @@ contract SimpleCoinLaunchTest is Test {
         // Swap directly on ZAMM: buyer2 buys shares with ETH
         uint256 sharesBefore = shares.balanceOf(buyer2);
         vm.prank(buyer2);
-        uint256 amtOut = zamm.swapExactIn{value: 0.1 ether}(
-            _poolKey(r.shares), 0.1 ether, 0, true, buyer2, block.timestamp + 300
-        );
+        uint256 amtOut =
+            zamm.swapExactIn{value: 0.1 ether}(_poolKey(r.shares), 0.1 ether, 0, true, buyer2, block.timestamp + 300);
 
         assertGt(amtOut, 0, "swap received shares");
         assertEq(shares.balanceOf(buyer2) - sharesBefore, amtOut, "shares delivered");
@@ -498,8 +497,7 @@ contract SimpleCoinLaunchTest is Test {
 
         uint256 ethBefore = buyer1.balance;
         vm.prank(buyer1);
-        uint256 amtOut =
-            zamm.swapExactIn(_poolKey(r.shares), sellAmount, 0, false, buyer1, block.timestamp + 300);
+        uint256 amtOut = zamm.swapExactIn(_poolKey(r.shares), sellAmount, 0, false, buyer1, block.timestamp + 300);
 
         assertGt(amtOut, 0, "received ETH");
         assertEq(buyer1.balance - ethBefore, amtOut, "ETH delivered");
