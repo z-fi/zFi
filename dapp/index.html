@@ -1052,7 +1052,7 @@ body.modal-open { overflow: hidden; }
     <button onclick="setShown('ppNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
   </div>
 
-  <details style="margin-top:12px;font-size:12px">
+  <details id="ppNotesDetails" style="margin-top:12px;font-size:12px">
     <summary style="cursor:pointer;opacity:0.6">Saved notes (<span id="ppNoteCount">0</span>)</summary>
     <div id="ppNotesList" style="margin-top:8px"></div>
   </details>
@@ -1456,7 +1456,7 @@ async function searchDaicoCoins() {
   if (_daicoCoinsCache || _daicoScanBusy) return _daicoCoinsCache;
   _daicoScanBusy = true;
   try {
-    const rpc = new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
     const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
     const daicos = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
     const graduated = [];
@@ -2552,10 +2552,10 @@ function makeLetterIcon(sym) {
 
 // ---- RPC fallback system ----
 const RPCS = [
-  "https://eth.llamarpc.com",
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
   "https://eth.drpc.org",
+  "https://eth.llamarpc.com",
 ];
 
 function makeWalletReader() {
@@ -5977,7 +5977,7 @@ async function addCustomToken() {
   if (address === ZERO_ADDRESS) { showStatus("Zero address is not a valid ERC-20", "error"); return; }
 
   try {
-    const rpc = provider || new ethers.JsonRpcProvider("https://eth.llamarpc.com");
+    const rpc = provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
     try {
       const code = await rpc.getCode(address);
       if (!code || code === "0x") { showStatus("That address has no contract code on Ethereum", "error"); return; }
@@ -6444,7 +6444,7 @@ async function sendUpdateBalance() {
       _sendTokenDec = 18;
       balEl.textContent = 'Balance: ' + (+ethers.formatEther(bal)).toFixed(5) + ' ' + sym;
     } else {
-      const rpc = signer.provider || new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+      const rpc = signer.provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
       const c = new ethers.Contract(t.address, ERC20_TRANSFER_ABI, rpc);
       const [bal, dec] = await Promise.all([c.balanceOf(connectedAddress), c.decimals().catch(() => t.decimals || 18)]);
       _sendTokenBal = bal;
@@ -6638,7 +6638,7 @@ async function sendLoadTimelocks() {
     if (all.length === 0) { el.textContent = 'No timelocks found'; return; }
 
     // Check on-chain status in batch
-    const rpc = new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
     const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, rpc);
     const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
@@ -7008,9 +7008,10 @@ function renderPPNotes() {
     const status = _ppNoteStatuses[i];
     let statusHtml = '';
     if (status) {
-      if (status.asp === 'approved') statusHtml += '<span style="font-size:10px;color:#27ae60;font-weight:600">ASP Approved</span> ';
+      if (status.spent) statusHtml += '<span style="font-size:10px;color:#e74c3c;font-weight:600">Spent</span> ';
+      else if (status.asp === 'approved') statusHtml += '<span style="font-size:10px;color:#27ae60;font-weight:600">ASP Approved</span> ';
       else if (status.asp === 'pending') statusHtml += '<span style="font-size:10px;color:var(--fg-dim)">ASP Pending</span> ';
-      if (status.anon) {
+      if (!status.spent && status.anon) {
         statusHtml += '<span style="font-size:10px;color:var(--fg-dim)">' + escText(status.anon.eligible + '/' + status.anon.total) + ' deposits';
         if (status.anon.percentage) statusHtml += ' (' + escText(status.anon.percentage) + ')';
         statusHtml += '</span>';
@@ -7078,12 +7079,25 @@ async function ppRefreshNoteStatuses() {
   const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
   if (saved.length === 0) return;
   _ppNoteStatuses = {};
+  const list = $('ppNotesList');
+  if (list) list.innerHTML = '<div style="color:var(--fg-muted);padding:8px 0;font-size:11px">Checking note statuses...</div>';
 
   // Group notes by scope for batch API calls
   const scopeGroups = {};
+  const spentChecks = []; // {index, nullifierHash, poolAddress} for on-chain spent check
   for (let i = 0; i < saved.length; i++) {
     try {
       const note = JSON.parse(saved[i].note);
+      // Compute nullifier hash for spent check: nullifierHash = poseidon1(nullifier)
+      if (note.nullifier) {
+        try {
+          const nullHash = poseidon1([BigInt(note.nullifier)]);
+          const asset = (note.asset || saved[i].asset || 'ETH').toUpperCase();
+          const isBOLD = asset === 'BOLD';
+          const pool = isBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL);
+          spentChecks.push({ index: i, nullifierHash: nullHash, poolAddress: pool });
+        } catch {}
+      }
       if (!note.label || !note.value) continue;
       const asset = (note.asset || saved[i].asset || 'ETH').toUpperCase();
       const scope = ppComputeScope(asset === 'BOLD' ? 'BOLD' : 'ETH');
@@ -7092,6 +7106,21 @@ async function ppRefreshNoteStatuses() {
       scopeGroups[scopeKey].notes.push({ index: i, label: BigInt(note.label), value: BigInt(note.value) });
     } catch {}
   }
+
+  // Check spent status on-chain via pool.nullifierHashes()
+  try {
+    const rpc = await quoteRPC.call(r => r);
+    const results = await Promise.all(spentChecks.map(c => {
+      const pool = new ethers.Contract(c.poolAddress, PP_POOL_ABI, rpc);
+      return pool.nullifierHashes(c.nullifierHash).catch(() => null);
+    }));
+    for (let j = 0; j < spentChecks.length; j++) {
+      if (results[j] != null) {
+        _ppNoteStatuses[spentChecks[j].index] = _ppNoteStatuses[spentChecks[j].index] || {};
+        _ppNoteStatuses[spentChecks[j].index].spent = !!results[j];
+      }
+    }
+  } catch (e) { console.warn('Spent check failed:', e); }
 
   for (const [scopeKey, group] of Object.entries(scopeGroups)) {
     // Fetch ASP leaves for this scope
@@ -7187,12 +7216,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Init saved notes count
   renderPPNotes();
+  // Auto-refresh note statuses (spent, ASP) when user opens the saved notes panel
+  const _ppDetailsEl = $('ppNotesDetails');
+  if (_ppDetailsEl) _ppDetailsEl.addEventListener('toggle', () => { if (_ppDetailsEl.open) ppRefreshNoteStatuses(); });
 });
 
 const PP_POOL_ABI = [
   "function withdraw(tuple(address,bytes),tuple(uint256[2],uint256[2][2],uint256[2],uint256[8]))",
   "function SCOPE() view returns (uint256)",
   "function currentRoot() view returns (uint256)",
+  "function nullifierHashes(uint256) view returns (bool)",
   "event LeafInserted(uint256 _index, uint256 _leaf, uint256 _root)",
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
 ];
@@ -7204,6 +7237,7 @@ const PP_WITHDRAW_ZKEY = "https://privacypools.com/artifacts/withdraw.zkey";
 let _ppwNote = null;
 let _ppwMode = 'direct'; // 'direct' or 'relay'
 let _ppwRelayExpiryTimer = null;
+let _ppArtifactCache = null; // cached {wasmUrl, zkeyUrl} blob URLs
 
 function ppwSetMode(mode) {
   _ppwMode = mode;
@@ -7319,7 +7353,8 @@ async function ppwRelayerRequest(chainId, scope, withdrawal, proof, publicSignal
     })
   });
   if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
+    let errBody = '';
+    try { const txt = await resp.text(); try { const j = JSON.parse(txt); errBody = j.message || j.error || txt; } catch { errBody = txt; } } catch {}
     throw new Error('Relayer request HTTP ' + resp.status + (errBody ? ': ' + errBody : ''));
   }
   return resp.json();
@@ -7329,7 +7364,7 @@ function ppwStartExpiryCountdown(expiration) {
   if (_ppwRelayExpiryTimer) clearInterval(_ppwRelayExpiryTimer);
   const expiryEl = $('ppwRelayExpiry');
   function update() {
-    const remaining = Math.max(0, Math.floor((expiration * 1000 - Date.now()) / 1000));
+    const remaining = Math.max(0, Math.floor((expiration - Date.now()) / 1000));
     if (remaining <= 0) {
       expiryEl.textContent = 'EXPIRED';
       expiryEl.style.color = 'red';
@@ -7351,8 +7386,8 @@ function ppwParseNote() {
   try { note = JSON.parse(raw); } catch { showStatus('Invalid JSON', 'error'); _ppwNote = null; setDisabled('ppwWithdrawBtn', true); return; }
   if (!note.nullifier || !note.secret) { showStatus('Note must have nullifier and secret', 'error'); _ppwNote = null; setDisabled('ppwWithdrawBtn', true); return; }
 
-  const nullifier = BigInt(note.nullifier);
-  const secret = BigInt(note.secret);
+  let nullifier, secret;
+  try { nullifier = BigInt(note.nullifier); secret = BigInt(note.secret); } catch { showStatus('Invalid nullifier or secret value in note', 'error'); _ppwNote = null; setDisabled('ppwWithdrawBtn', true); return; }
   const precommitment = poseidon2([nullifier, secret]);
 
   // R-6: Normalize and validate asset to canonical ETH/BOLD
@@ -7442,6 +7477,22 @@ async function ppwWithdraw() {
     const poolAddress = wIsBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL);
     const SCOPE = ppComputeScope(wAsset);
     log('Asset: ' + wAsset + ' Pool: ' + poolAddress.slice(0, 10) + '... SCOPE: ' + SCOPE.toString().slice(0, 16) + '...');
+
+    // Pre-check: is this note's nullifier already spent on-chain?
+    try {
+      const rpc = await quoteRPC.call(r => r);
+      const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+      const nullHash = poseidon1([_ppwNote.nullifier]);
+      const isSpent = await pool.nullifierHashes(nullHash);
+      if (isSpent) {
+        showStatus('This note has already been withdrawn (nullifier spent on-chain).', 'error');
+        log('<b>Note already spent.</b> Nullifier hash 0x' + nullHash.toString(16).slice(0, 16) + '... is marked as used.');
+        return;
+      }
+      log('Nullifier not yet spent — note is valid.');
+    } catch (spentErr) {
+      log('Warning: Could not verify spent status (' + escText(spentErr.message) + '). Proceeding.');
+    }
 
     // Fetch state tree + ASP leaves from 0xbow API (primary), Etherscan fallback for state tree
     log('Fetching tree data from 0xbow API...');
@@ -7624,8 +7675,12 @@ async function ppwWithdraw() {
       }
       log('ASP root verified against on-chain.');
     } catch (aspRootErr) {
-      log('<b>Warning:</b> Could not verify ASP root on-chain (' + escText(aspRootErr.message) + '). Proceeding — tx may revert if root is stale.');
-      showStatus('Could not verify ASP root on-chain (RPC issue). Withdrawal will proceed but may revert. Consider retrying if it fails.', 'error');
+      log('<b>Warning:</b> Could not verify ASP root on-chain (' + escText(aspRootErr.message) + ').');
+      if (!window.confirm('Could not verify ASP root on-chain (RPC issue). Proving may be wasted if the root is stale.\n\nProceed anyway?')) {
+        showStatus('Withdrawal cancelled — ASP root could not be verified.', 'error');
+        return;
+      }
+      log('User chose to proceed without ASP root verification.');
     }
 
     // Relay mode: fetch quote before proving
@@ -7668,8 +7723,9 @@ async function ppwWithdraw() {
         return;
       }
 
-      // Display fee info
-      const feeAmt = relayQuote.feeCommitment?.fee || relayQuote.fee;
+      // Display fee info — compute from feeBPS if fee field absent
+      let feeAmt = relayQuote.feeCommitment?.fee || relayQuote.fee;
+      if (!feeAmt && quotedFeeBPS) feeAmt = (withdrawnValue * BigInt(quotedFeeBPS) / 10000n).toString();
       setText('ppwRelayFeeBps', (quotedFeeBPS || '--') + ' bps');
       setText('ppwRelayFeeAmt', feeAmt ? ethers.formatEther(BigInt(feeAmt)) + ' ' + wAsset : '--');
       setShown('ppwRelayFeePanel', true);
@@ -7751,36 +7807,39 @@ async function ppwWithdraw() {
     }
 
     // M-9: Download, verify artifact integrity, then pass Blob URLs to snarkjs
-    log('Downloading & verifying proving artifacts...');
+    // PP-07: Cache verified artifacts across attempts within session
     const PP_EXPECTED_HASHES = {
       wasm: '36cda22791def3d520a55c0fc808369cd5849532a75fab65686e666ed3d55c10',
       zkey: '2a893b42174c813566e5c40c715a8b90cd49fc4ecf384e3a6024158c3d6de677'
     };
-    async function fetchAndVerify(url, expectedHash, label) {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(label + ': HTTP ' + resp.status);
-      const buf = await resp.arrayBuffer();
-      const hashBuf = await crypto.subtle.digest('SHA-256', buf);
-      const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-      if (hash !== expectedHash) throw new Error(label + ' integrity check failed: expected ' + expectedHash.slice(0, 16) + '... got ' + hash.slice(0, 16) + '...');
-      // snarkjs expects URL strings — create Blob URL from verified buffer
-      return URL.createObjectURL(new Blob([buf]));
+    let wasmUrl, zkeyUrl;
+    if (_ppArtifactCache) {
+      log('Using cached proving artifacts.');
+      wasmUrl = _ppArtifactCache.wasmUrl;
+      zkeyUrl = _ppArtifactCache.zkeyUrl;
+    } else {
+      log('Downloading & verifying proving artifacts...');
+      async function fetchAndVerify(url, expectedHash, label) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(label + ': HTTP ' + resp.status);
+        const buf = await resp.arrayBuffer();
+        const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+        const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        if (hash !== expectedHash) throw new Error(label + ' integrity check failed: expected ' + expectedHash.slice(0, 16) + '... got ' + hash.slice(0, 16) + '...');
+        return URL.createObjectURL(new Blob([buf]));
+      }
+      [wasmUrl, zkeyUrl] = await Promise.all([
+        fetchAndVerify(PP_WITHDRAW_WASM, PP_EXPECTED_HASHES.wasm, 'withdraw.wasm'),
+        fetchAndVerify(PP_WITHDRAW_ZKEY, PP_EXPECTED_HASHES.zkey, 'withdraw.zkey')
+      ]);
+      _ppArtifactCache = { wasmUrl, zkeyUrl };
+      log('Artifacts verified & cached.');
     }
-    const [wasmUrl, zkeyUrl] = await Promise.all([
-      fetchAndVerify(PP_WITHDRAW_WASM, PP_EXPECTED_HASHES.wasm, 'withdraw.wasm'),
-      fetchAndVerify(PP_WITHDRAW_ZKEY, PP_EXPECTED_HASHES.zkey, 'withdraw.zkey')
-    ]);
-    log('Artifacts verified.');
 
     // Generate ZK proof
     log('Generating ZK proof (30\u2013120s proving)...');
     let proof, publicSignals;
-    try {
-      ({ proof, publicSignals } = await snarkjs.groth16.fullProve(circuitInputs, wasmUrl, zkeyUrl));
-    } finally {
-      URL.revokeObjectURL(wasmUrl);
-      URL.revokeObjectURL(zkeyUrl);
-    }
+    ({ proof, publicSignals } = await snarkjs.groth16.fullProve(circuitInputs, wasmUrl, zkeyUrl));
     log('Proof generated!');
 
     // Convert snarkjs proof to Solidity format (pB components reversed for BN128)
@@ -7796,7 +7855,7 @@ async function ppwWithdraw() {
     let txHash, receipt;
     if (isRelayMode) {
       // Check quote hasn't expired
-      if (relayQuote.feeCommitment?.expiration && Date.now() / 1000 > Number(relayQuote.feeCommitment.expiration)) {
+      if (relayQuote.feeCommitment?.expiration && Date.now() > Number(relayQuote.feeCommitment.expiration)) {
         showStatus('Relay quote expired. Please retry — a new quote will be fetched.', 'error');
         return;
       }
@@ -7811,11 +7870,17 @@ async function ppwWithdraw() {
           relayQuote.feeCommitment
         );
       } catch (relayErr) {
-        // Offer self-submit fallback
+        // PP-03: Offer self-submit fallback with explicit cost warning
         log('<b>Relayer submission failed:</b> ' + escText(relayErr.message));
-        log('You can self-submit via the entrypoint contract. Attempting fallback...');
         if (signer) {
+          if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit on-chain, but you will pay gas AND the relay fee (' + (quotedFeeBPS || '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
+            showStatus('Relay failed. Proof data shown below for manual submission.', 'error');
+            setShown('ppwResult', true);
+            $('ppwResultText').value = JSON.stringify({ proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
+            return;
+          }
           try {
+            log('Self-submitting via entrypoint contract...');
             const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, signer);
             const fallbackTx = await wcTransaction(
               ep.relay([withdrawalProcessooor, withdrawalData], [pA, pB, pC, pubSigs], SCOPE),
@@ -7828,7 +7893,6 @@ async function ppwWithdraw() {
           } catch (fbErr) {
             log('<b>Fallback also failed:</b> ' + escText(fbErr.message || fbErr));
             showStatus('Both relayer and on-chain fallback failed.', 'error');
-            // Still show proof data so user can try manually
             setShown('ppwResult', true);
             $('ppwResultText').value = JSON.stringify({ proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
             return;
@@ -7840,8 +7904,16 @@ async function ppwWithdraw() {
           return;
         }
       }
-      if (!txHash && relayResult?.txHash) {
-        txHash = relayResult.txHash;
+      if (!txHash && relayResult) {
+        // Try common txHash field names from relayer response
+        txHash = relayResult.txHash || relayResult.hash || relayResult.transactionHash;
+        if (!txHash) {
+          log('<b>Relayer returned unexpected response:</b> ' + escText(JSON.stringify(relayResult).slice(0, 500)));
+          showStatus('Relayer did not return a transaction hash. Response: ' + JSON.stringify(relayResult).slice(0, 200), 'error');
+          setShown('ppwResult', true);
+          $('ppwResultText').value = JSON.stringify({ relayerResponse: relayResult, proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
+          return;
+        }
         log('Relayer accepted! Transaction: ' + txHash);
         setText(btn, 'Waiting for confirmation...');
         // Poll for receipt (same pattern as waitForTx)
@@ -7943,8 +8015,16 @@ async function ppwWithdraw() {
       }
       showStatus('Withdrawal successful!', 'success');
     } else {
-      log('<b>Transaction may have failed.</b> Check Etherscan.');
-      showStatus('Transaction may have failed', 'error');
+      if (receipt && receipt.status === 0) {
+        log('<b>Transaction reverted on-chain.</b> tx: ' + (txHash || '?') + '. This may indicate the note was already spent, the proof was invalid, or the fee commitment expired.');
+        showStatus('Transaction reverted on-chain. The note may have been already spent or the relay quote may have expired.', 'error');
+      } else if (!receipt) {
+        log('<b>Transaction not confirmed</b> within polling window. tx: ' + (txHash || '?'));
+        showStatus('Transaction submitted but not yet confirmed. Check Etherscan for tx: ' + (txHash || '?'), 'error');
+      } else {
+        log('<b>Transaction may have failed.</b> Check Etherscan.');
+        showStatus('Transaction may have failed', 'error');
+      }
       setShown('ppwResult', true);
       $('ppwResultText').value = JSON.stringify({ txHash, proof, publicSignals }, null, 2);
     }

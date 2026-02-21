@@ -462,7 +462,7 @@ const ZAMM_V1 = "0x000000000000040470635EB91b7CE4D132D616eD";
 const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
 const ZERO    = "0x0000000000000000000000000000000000000000";
 const BASE    = "https://coinchan-indexer-production.up.railway.app";
-const RPCS    = ["https://eth.llamarpc.com", "https://ethereum.publicnode.com", "https://1rpc.io/eth", "https://eth.drpc.org"];
+const RPCS    = ["https://ethereum.publicnode.com", "https://1rpc.io/eth", "https://eth.drpc.org", "https://eth.llamarpc.com"];
 const WEINS   = "0x0000000000696760E15f265e828DB644A0c242EB";
 const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
 const ZORG_TOKEN = "0x0000000000009710cd229bf635c4500029651ee8";
@@ -1625,10 +1625,10 @@ async function renderPositions() {
     for (let i = 0; i < items.length; i++) {
       const bal = onchainBals[i];
       seenPoolIds.add(items[i].poolId);
-      // Use on-chain balance (authoritative), fall back to indexer
+      // Use on-chain balance as authoritative source of truth
       verifiedItems.push({
         ...items[i],
-        liquidity: bal > 0n ? bal.toString() : items[i].liquidity,
+        liquidity: (bal != null && bal !== undefined) ? bal.toString() : items[i].liquidity,
         _onchainBal: bal
       });
     }
