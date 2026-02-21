@@ -982,6 +982,7 @@ body.modal-open { overflow: hidden; }
         <span style="font-size:11px;color:var(--fg-muted)">Deposit as:</span>
         <button id="ppSwapAssetETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid var(--btn-bg);cursor:pointer;background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSwapSelectAsset('ETH')"><span class="pp-icon-16" data-icon="ETH"></span>ETH</button>
         <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
+        <button id="ppSwapAssetWSTETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('wstETH')"><span class="pp-icon-16" data-icon="wstETH"></span>wstETH</button>
       </div>
       <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note &mdash; withdraw via the Privacy tab or <a href="https://privacypools.com" target="_blank" style="color:var(--link-fg)">privacypools.com</a>.</div>
     </div>
@@ -1018,12 +1019,15 @@ body.modal-open { overflow: hidden; }
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Deposit to Privacy Pool</h2>
-  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH or BOLD into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). Save the note you receive &mdash; withdraw below or at <a href="https://privacypools.com" target="_blank">privacypools.com</a> with the same wallet.</p>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH, BOLD, or wstETH into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). Save the note you receive &mdash; withdraw below or at <a href="https://privacypools.com" target="_blank">privacypools.com</a> with the same wallet.</p>
 
   <div style="display:flex;gap:8px;margin-bottom:12px">
     <button id="ppAssetETH" class="swap-btn pp-asset-btn active" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSelectAsset('ETH')"><span class="pp-icon-18" data-icon="ETH"></span>ETH</button>
     <button id="ppAssetBOLD" class="swap-btn pp-asset-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('BOLD')"><span class="pp-icon-18" data-icon="BOLD"></span>BOLD</button>
+    <button id="ppAssetWSTETH" class="swap-btn pp-asset-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('wstETH')"><span class="pp-icon-18" data-icon="wstETH"></span>wstETH</button>
+    <button id="ppZapBtn" class="swap-btn pp-asset-btn" style="flex:none;width:36px;padding:6px 0;font-size:14px;display:inline-flex;align-items:center;justify-content:center;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted);cursor:pointer" onclick="ppToggleZap()" title="Zap: Stake ETH &rarr; wstETH &rarr; Privacy Pool in one tx">&#9889;</button>
   </div>
+  <div id="ppZapInfo" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:10px;padding:6px 8px;background:var(--surface);border:1px solid var(--border-muted)">&#9889; <b>Zap mode:</b> Send ETH &rarr; auto-stake to wstETH (best rate) &rarr; deposit into Privacy Pool, all in one transaction.</div>
 
   <div class="section token-section">
     <div class="token-header">
@@ -1031,6 +1035,7 @@ body.modal-open { overflow: hidden; }
     </div>
     <input type="number" id="ppAmount" class="amount-input" placeholder="0.0" min="0" step="any">
     <div class="balance"><span id="ppBalance"></span> <span style="color:var(--fg-dim)">&middot;</span> <button class="max-btn" type="button" onclick="setPPPercentBalance(25)">25%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(50)">50%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(75)">75%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(100)">100%</button></div>
+    <div id="ppZapEstimate" style="display:none;font-size:12px;color:var(--fg-muted);margin-top:4px">&#9889; Est. deposit: <span id="ppZapEstAmt">--</span> wstETH</div>
   </div>
 
   <div id="ppFeeInfo" style="display:none;font-size:12px;color:var(--fg-muted);margin-bottom:16px">
@@ -3188,19 +3193,11 @@ async function handleAmountChange() {
     setDisabled(swapBtn, true);
     return;
   }
-  if (_ppSwapEnabled && fromToken === 'ETH' && toToken === 'ETH') {
+  if (_ppSwapEnabled && fromToken === toToken && _isPPAsset(fromToken)) {
     dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, "Deposit ETH to Privacy Pool");
-    setDisabled(swapBtn, !connectedAddress);
-    return;
-  }
-  if (_ppSwapEnabled && fromToken === 'BOLD' && toToken === 'BOLD') {
-    dstEl.value = amtStr;
-    setShown(quoteInfoEl, false);
-    stopQuoteRefresh();
-    setText(swapBtn, "Deposit BOLD to Privacy Pool");
+    setText(swapBtn, `Deposit ${fromToken} to Privacy Pool`);
     setDisabled(swapBtn, !connectedAddress);
     return;
   }
@@ -5032,7 +5029,7 @@ async function executeSwap() {
       return;
     }
     // Direct deposit (no swap needed — from === to for the PP asset)
-    if (_ppSwapEnabled && fromToken === toToken && (fromToken === 'ETH' || fromToken === 'BOLD')) {
+    if (_ppSwapEnabled && fromToken === toToken && _isPPAsset(fromToken)) {
       _ppSelectedAsset = fromToken;
       ppSyncAssetUI(fromToken);
       $('ppAmount').value = amtStr;
@@ -5437,47 +5434,90 @@ async function executeSwap() {
       }
     }
 
-    if (_ppSwapEnabled && (toSnap === 'ETH' || toSnap === 'BOLD')) {
-      const ppAsset = toSnap; // 'ETH' or 'BOLD'
+    if (_ppSwapEnabled && _isPPAsset(toSnap)) {
+      const ppAsset = toSnap;
       const ppIsBOLD = ppAsset === 'BOLD';
-      const ppCfg = ppIsBOLD ? _ppConfigBold : _ppConfig;
+      const ppIsWSTETH = ppAsset === 'wstETH';
+      const ppIsERC20 = ppIsBOLD || ppIsWSTETH;
+      const ppTokenAddr = ppIsWSTETH ? WSTETH_ADDRESS : (ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS);
+      const ppCfg = ppIsWSTETH ? _ppConfigWstETH : (ppIsBOLD ? _ppConfigBold : _ppConfig);
       swapBtn.textContent = "Preparing privacy deposit...";
 
-      // Re-quote with to=ZROUTER so output stays in router
-      const _ppTokenOut = ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS;
-      const ppQuote = await withRetry(() => quoteRPC.call(async (rpc) => {
-        const quoter = getQuoterContract(rpc);
+      // ETH → wstETH zap: use Lido direct staking + PP deposit (best rate, no DEX needed)
+      const isLidoZap = fromSnap === 'ETH' && ppIsWSTETH;
+      let ppQuote, swapCalls, ppTxValue, depositAmount;
+
+      if (isLidoZap) {
+        // Quote both Lido staking and DEX in parallel for ETH → wstETH, pick best
         const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
-        if (_isExactOut) {
-          // Exact-out: swap to get exactly the desired output, routed to router
-          const toData = tokens[toSnap];
-          const exactOutputAmt = safeParseUnits(amtStr, toData.decimals);
+        const [lidoResult, dexResult] = await Promise.allSettled([
+          withRetry(() => quoteRPC.call(async (rpc) => {
+            const quoter = getQuoterContract(rpc);
+            return quoter.quoteLido(false, WSTETH_ADDRESS, amountIn, { blockTag: "latest" });
+          })),
+          withRetry(() => quoteRPC.call(async (rpc) => {
+            const quoter = getQuoterContract(rpc);
+            return quoter.buildBestSwapViaETHMulticall(
+              ZROUTER_ADDRESS, connectedAddress, false,
+              fromData.address, WSTETH_ADDRESS,
+              amountIn, BigInt(slippageBps), deadline,
+              0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+            );
+          })),
+        ]);
+        const lidoOut = lidoResult.status === 'fulfilled' ? lidoResult.value.amountOut : 0n;
+        const dexQuote = dexResult.status === 'fulfilled' ? dexResult.value : null;
+        const dexOut = dexQuote ? (dexQuote.b.amountOut > 0n ? dexQuote.b.amountOut : dexQuote.a.amountOut) : 0n;
+
+        if (lidoOut > 0n && lidoOut >= dexOut) {
+          // Lido wins: exactETHToWSTETH(router) → execute(PP deposit) → sweep
+          const lidoCall = ROUTER_IFACE.encodeFunctionData('exactETHToWSTETH', [ZROUTER_ADDRESS]);
+          swapCalls = [lidoCall];
+          depositAmount = lidoOut * (10000n - BigInt(slippageBps)) / 10000n;
+          ppTxValue = amountIn;
+        } else if (dexOut > 0n && dexQuote) {
+          // DEX wins: use DEX swap calls
+          ppQuote = dexQuote;
+          swapCalls = ppQuote.calls ? Array.from(ppQuote.calls) : decodeMulticallCalls(ppQuote.multicall);
+          depositAmount = dexOut * (10000n - BigInt(slippageBps)) / 10000n;
+          ppTxValue = ppQuote.msgValue ?? amountIn;
+        } else {
+          throw new Error("No route found for ETH → wstETH — Lido and DEX both returned zero");
+        }
+      } else {
+        // Standard swap flow: re-quote with to=ZROUTER so output stays in router
+        const _ppTokenOut = ppIsWSTETH ? WSTETH_ADDRESS : (ppIsBOLD ? BOLD_ADDRESS : ZERO_ADDRESS);
+        ppQuote = await withRetry(() => quoteRPC.call(async (rpc) => {
+          const quoter = getQuoterContract(rpc);
+          const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+          if (_isExactOut) {
+            const toData = tokens[toSnap];
+            const exactOutputAmt = safeParseUnits(amtStr, toData.decimals);
+            return quoter.buildBestSwapViaETHMulticall(
+              ZROUTER_ADDRESS, connectedAddress, true,
+              fromData.address, _ppTokenOut,
+              exactOutputAmt, BigInt(slippageBps), deadline,
+              0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+            );
+          }
           return quoter.buildBestSwapViaETHMulticall(
-            ZROUTER_ADDRESS, connectedAddress, true,
+            ZROUTER_ADDRESS, connectedAddress, false,
             fromData.address, _ppTokenOut,
-            exactOutputAmt, BigInt(slippageBps), deadline,
+            amountIn, BigInt(slippageBps), deadline,
             0, 0, ZERO_ADDRESS, { blockTag: "latest" }
           );
-        }
-        return quoter.buildBestSwapViaETHMulticall(
-          ZROUTER_ADDRESS, connectedAddress, false,
-          fromData.address, _ppTokenOut,
-          amountIn, BigInt(slippageBps), deadline,
-          0, 0, ZERO_ADDRESS, { blockTag: "latest" }
-        );
-      }));
+        }));
+        swapCalls = ppQuote.calls ? Array.from(ppQuote.calls) : decodeMulticallCalls(ppQuote.multicall);
+        ppTxValue = ppQuote.msgValue ?? (fromData.address === ZERO_ADDRESS ? amountIn : 0n);
 
-      // For exact-out, the swap guarantees the output amount; for exact-in, use slippage-safe minimum
-      let depositAmount;
-      if (_isExactOut) {
-        const toData = tokens[toSnap];
-        depositAmount = safeParseUnits(amtStr, toData.decimals);
-      } else {
-        // R-1: Use slippage-safe minimum, not raw quoted output.
-        // On-chain swap enforces SlippageLib.limit() independently; actual output may be lower than quoted.
-        const _rawOut = ppQuote.b.amountOut > 0n ? ppQuote.b.amountOut : ppQuote.a.amountOut;
-        if (_rawOut === 0n) throw new Error("PP swap quote returned zero output — try a different amount or pair");
-        depositAmount = _rawOut * (10000n - BigInt(slippageBps)) / 10000n;
+        if (_isExactOut) {
+          const toData = tokens[toSnap];
+          depositAmount = safeParseUnits(amtStr, toData.decimals);
+        } else {
+          const _rawOut = ppQuote.b.amountOut > 0n ? ppQuote.b.amountOut : ppQuote.a.amountOut;
+          if (_rawOut === 0n) throw new Error("PP swap quote returned zero output — try a different amount or pair");
+          depositAmount = _rawOut * (10000n - BigInt(slippageBps)) / 10000n;
+        }
       }
 
       if (ppCfg && depositAmount < ppCfg.minimumDepositAmount) {
@@ -5492,24 +5532,22 @@ async function executeSwap() {
       const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, _ppScope, _ppDepositIdx);
 
       // Build multicall: [permit?] + swap calls + execute(PP deposit) + sweep excess
-      const swapCalls = ppQuote.calls ? Array.from(ppQuote.calls) : decodeMulticallCalls(ppQuote.multicall);
       if (swapCalls.length === 0) throw new Error("PP swap routing failed — no swap calls generated");
       let depositCalldata, executeCall, sweepCalls;
-      if (ppIsBOLD) {
-        // R-3: Preflight check — router must have BOLD allowance to PP entrypoint
+      if (ppIsERC20) {
+        // Preflight check — router must have token allowance to PP entrypoint
         const rpcPF = await quoteRPC.call(r => r);
-        const boldPF = new ethers.Contract(BOLD_ADDRESS, ['function allowance(address,address) view returns (uint256)'], rpcPF);
-        const routerToEPAllow = await boldPF.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
+        const tokenPF = new ethers.Contract(ppTokenAddr, ['function allowance(address,address) view returns (uint256)'], rpcPF);
+        const routerToEPAllow = await tokenPF.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
         if (routerToEPAllow < depositAmount) {
-          showStatus('Router lacks BOLD allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.', 'error');
+          showStatus(`Router lacks ${ppAsset} allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.`, 'error');
           return;
         }
         // ERC20 deposit: deposit(address asset, uint256 value, uint256 precommitment), value=0 (no ETH)
-        depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [BOLD_ADDRESS, depositAmount, precommitment]);
+        depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [ppTokenAddr, depositAmount, precommitment]);
         executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, depositCalldata]);
-        // Sweep excess BOLD + ETH remainder (ETH dust possible when input is ETH→BOLD two-hop)
         sweepCalls = [
-          ROUTER_IFACE.encodeFunctionData('sweep', [BOLD_ADDRESS, 0, 0, connectedAddress]),
+          ROUTER_IFACE.encodeFunctionData('sweep', [ppTokenAddr, 0, 0, connectedAddress]),
           ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]),
         ];
       } else {
@@ -5536,7 +5574,6 @@ async function executeSwap() {
       const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, ...swapCalls, executeCall, ...sweepCalls]]);
 
       swapBtn.textContent = "Confirm in wallet...";
-      const ppTxValue = ppQuote.msgValue ?? (fromData.address === ZERO_ADDRESS ? amountIn : 0n);
 
       const swapTx = await wcTransaction(
         signer.sendTransaction({
@@ -5811,7 +5848,7 @@ function syncSwapURL() {
 }
 function syncPrivacyURL() {
   const _sp = new URLSearchParams();
-  _sp.set('pp', _ppSelectedAsset.toLowerCase());
+  _sp.set('pp', _ppZapMode ? 'zap' : _ppSelectedAsset.toLowerCase());
   const _pa = $('ppAmount');
   if (_pa && _pa.value && +_pa.value > 0) _sp.set('amt', _pa.value);
   history.replaceState(null, '', '?' + _sp.toString() + '#privacy');
@@ -5930,8 +5967,8 @@ function selectToken(symbol) {
     if (symbol === toToken) toToken = fromToken;
     fromToken = symbol;
     // If PP swap is on and new from matches PP deposit asset, flip to the other
-    if (_ppSwapEnabled && (fromToken === 'ETH' || fromToken === 'BOLD') && fromToken === _ppSelectedAsset) {
-      const alt = fromToken === 'ETH' ? 'BOLD' : 'ETH';
+    if (_ppSwapEnabled && _isPPAsset(fromToken) && fromToken === _ppSelectedAsset) {
+      const alt = PP_ASSETS.find(a => a !== fromToken) || 'ETH';
       _ppSelectedAsset = alt;
       toToken = alt;
       ppSyncAssetUI(alt);
@@ -6047,8 +6084,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Direct deposit: ?pp=eth&amt=1 (no from → go straight to privacy tab)
   // Swap+deposit: ?from=eth&pp=bold&amt=1.5 (explicit from → swap into pp asset)
   // Exact-out: ?from=usdc&to=eth&outamt=1 (exact output mode)
-  const _dlPP = (_urlp.get('pp') || '').toUpperCase();
-  const _ppIsDirect = (_dlPP === 'ETH' || _dlPP === 'BOLD') && !_dlFrom;
+  const _dlPPRaw = (_urlp.get('pp') || '');
+  const _dlPPLower = _dlPPRaw.toLowerCase();
+  const _dlPP = _dlPPLower === 'wsteth' ? 'wstETH' : _dlPPLower === 'zap' ? 'ZAP' : _dlPPRaw.toUpperCase();
+  const _ppIsDirect = (_isPPAsset(_dlPP) || _dlPP === 'ZAP') && !_dlFrom;
   if (!_ppIsDirect && _dlOutAmt && !isNaN(+_dlOutAmt) && +_dlOutAmt > 0) {
     _inputMode = 'exactOut';
     const ta = $("toAmount");
@@ -6068,7 +6107,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const chev = document.querySelector('.receiver-toggle .chevron');
     if (chev) chev.textContent = '\u25BC';
   }
-  if (_dlPP === 'ETH' || _dlPP === 'BOLD') {
+  if (_dlPP === 'ZAP') {
+    // Deep link: ?pp=zap → privacy tab with zap mode active
+    _ppSelectedAsset = 'wstETH';
+    ppSetZap(true);
+    if (_dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) $('ppAmount').value = _dlAmt;
+    switchTab('privacy');
+  } else if (_isPPAsset(_dlPP)) {
     _ppSelectedAsset = _dlPP;
     if (_ppIsDirect) {
       // Direct deposit — skip swap panel, go straight to privacy tab
@@ -6240,11 +6285,13 @@ function ppSetDepositIndex(address, scope, index) {
 const PP_ETH_POOL = '0xF241d57C6DebAe225c0F2e6eA1529373C9A9C9fB';
 const PP_ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PP_BOLD_POOL = '0xb4b5Fd38Fd4788071d7287e3cB52948e0d10b23E';
+const PP_WSTETH_POOL = '0x1A604E9DFa0EFDC7FFda378AF16Cb81243b61633';
 
 function ppComputeScope(asset) {
   const isETH = (!asset || asset === 'ETH');
-  const poolAddress = isETH ? (_ppConfig?.pool || PP_ETH_POOL) : (_ppConfigBold?.pool || PP_BOLD_POOL);
-  const assetAddress = isETH ? PP_ETH_ASSET : BOLD_ADDRESS;
+  const isWSTETH = (asset === 'wstETH');
+  const poolAddress = isWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (isETH ? (_ppConfig?.pool || PP_ETH_POOL) : (_ppConfigBold?.pool || PP_BOLD_POOL));
+  const assetAddress = isWSTETH ? WSTETH_ADDRESS : (isETH ? PP_ETH_ASSET : BOLD_ADDRESS);
   return BigInt(ethers.keccak256('0x' +
     poolAddress.slice(2).toLowerCase() +
     '0000000000000000000000000000000000000000000000000000000000000001' +
@@ -6254,7 +6301,9 @@ function ppComputeScope(asset) {
 
 let _ppConfig = null; // { pool, minimumDepositAmount, vettingFeeBPS }
 let _ppConfigBold = null; // { pool, minimumDepositAmount, vettingFeeBPS }
-let _ppSelectedAsset = 'ETH'; // 'ETH' or 'BOLD'
+let _ppConfigWstETH = null; // { pool, minimumDepositAmount, vettingFeeBPS }
+let _ppSelectedAsset = 'ETH'; // 'ETH', 'BOLD', or 'wstETH'
+let _ppZapMode = false; // ETH → wstETH → PP zap on privacy tab
 let _ppSwapEnabled = false;
 let _ppSavedToToken = null; // saved toToken before PP lock
 
@@ -6300,34 +6349,41 @@ function buildPPNote(nullifier, secret, depositInfo, asset) {
 
 function ppSyncAssetUI(asset) {
   // Privacy tab buttons
-  const ethBtn = $('ppAssetETH'), boldBtn = $('ppAssetBOLD');
-  if (ethBtn) { ethBtn.style.background = asset === 'ETH' ? 'var(--btn-bg)' : 'var(--surface)'; ethBtn.style.color = asset === 'ETH' ? 'var(--btn-fg)' : 'var(--fg-muted)'; ethBtn.style.borderColor = asset === 'ETH' ? 'var(--btn-bg)' : 'transparent'; }
-  if (boldBtn) { boldBtn.style.background = asset === 'BOLD' ? 'var(--btn-bg)' : 'var(--surface)'; boldBtn.style.color = asset === 'BOLD' ? 'var(--btn-fg)' : 'var(--fg-muted)'; boldBtn.style.borderColor = asset === 'BOLD' ? 'var(--btn-bg)' : 'transparent'; }
+  const ppBtns = [
+    { el: $('ppAssetETH'), key: 'ETH' },
+    { el: $('ppAssetBOLD'), key: 'BOLD' },
+    { el: $('ppAssetWSTETH'), key: 'wstETH' },
+  ];
+  for (const b of ppBtns) {
+    if (!b.el) continue;
+    const active = asset === b.key;
+    b.el.style.background = active ? 'var(--btn-bg)' : 'var(--surface)';
+    b.el.style.color = active ? 'var(--btn-fg)' : 'var(--fg-muted)';
+    b.el.style.borderColor = active ? 'var(--btn-bg)' : 'transparent';
+  }
   // Swap tab buttons — disable the one matching fromToken (same-token swap+deposit is just a direct deposit)
-  const sEth = $('ppSwapAssetETH'), sBold = $('ppSwapAssetBOLD');
-  const ethDisabled = fromToken === 'ETH';
-  const boldDisabled = fromToken === 'BOLD';
-  if (sEth) {
-    sEth.disabled = ethDisabled;
-    sEth.style.background = asset === 'ETH' ? 'var(--btn-bg)' : 'var(--surface)';
-    sEth.style.color = ethDisabled ? 'var(--fg-dim)' : (asset === 'ETH' ? 'var(--btn-fg)' : 'var(--fg-muted)');
-    sEth.style.borderColor = asset === 'ETH' ? 'var(--btn-bg)' : 'transparent';
-    sEth.style.opacity = ethDisabled ? '0.4' : '1';
-    sEth.style.cursor = ethDisabled ? 'not-allowed' : 'pointer';
+  const swapBtns = [
+    { el: $('ppSwapAssetETH'), key: 'ETH' },
+    { el: $('ppSwapAssetBOLD'), key: 'BOLD' },
+    { el: $('ppSwapAssetWSTETH'), key: 'wstETH' },
+  ];
+  for (const b of swapBtns) {
+    if (!b.el) continue;
+    const active = asset === b.key;
+    const disabled = fromToken === b.key;
+    b.el.disabled = disabled;
+    b.el.style.background = active ? 'var(--btn-bg)' : 'var(--surface)';
+    b.el.style.color = disabled ? 'var(--fg-dim)' : (active ? 'var(--btn-fg)' : 'var(--fg-muted)');
+    b.el.style.borderColor = active ? 'var(--btn-bg)' : 'transparent';
+    b.el.style.opacity = disabled ? '0.4' : '1';
+    b.el.style.cursor = disabled ? 'not-allowed' : 'pointer';
   }
-  if (sBold) {
-    sBold.disabled = boldDisabled;
-    sBold.style.background = asset === 'BOLD' ? 'var(--btn-bg)' : 'var(--surface)';
-    sBold.style.color = boldDisabled ? 'var(--fg-dim)' : (asset === 'BOLD' ? 'var(--btn-fg)' : 'var(--fg-muted)');
-    sBold.style.borderColor = asset === 'BOLD' ? 'var(--btn-bg)' : 'transparent';
-    sBold.style.opacity = boldDisabled ? '0.4' : '1';
-    sBold.style.cursor = boldDisabled ? 'not-allowed' : 'pointer';
-  }
-  setText('ppAmountLabel', `Amount (${asset})`);
+  setText('ppAmountLabel', _ppZapMode ? 'Amount (ETH \u2192 wstETH)' : `Amount (${asset})`);
   setText('ppMinUnit', asset);
 }
 
 function ppSelectAsset(asset) {
+  if (_ppZapMode) ppSetZap(false);
   _ppSelectedAsset = asset;
   ppSyncAssetUI(asset);
   loadPPConfig();
@@ -6340,13 +6396,39 @@ function ppSelectAsset(asset) {
   }
 }
 
+function ppToggleZap() {
+  ppSetZap(!_ppZapMode);
+}
+
+function ppSetZap(on) {
+  _ppZapMode = on;
+  const zapBtn = $('ppZapBtn');
+  if (zapBtn) {
+    zapBtn.style.background = on ? 'var(--btn-bg)' : 'var(--surface)';
+    zapBtn.style.color = on ? 'var(--btn-fg)' : 'var(--fg-muted)';
+    zapBtn.style.borderColor = on ? 'var(--btn-bg)' : 'transparent';
+  }
+  setShown('ppZapInfo', on);
+  if (on) {
+    _ppSelectedAsset = 'wstETH';
+    ppSyncAssetUI('wstETH');
+    loadPPConfig();
+    ppRequestZapEstimate();
+  } else {
+    ppClearZapEstimate();
+  }
+  updatePPBalance();
+  updatePPButton();
+  syncPrivacyURL();
+}
+
 function ppSwapSelectAsset(asset) {
   if (asset === fromToken) return;
   _ppSelectedAsset = asset;
   ppSyncAssetUI(asset);
   if (toToken !== asset) { toToken = asset; updateTokenDisplay(); }
   handleAmountChange();
-  if (!_ppConfig) loadPPConfig();
+  loadPPConfig();
 }
 
 function togglePPSwap() {
@@ -6357,23 +6439,26 @@ function togglePPSwap() {
   $('ppSwapChevron').textContent = open ? '\u25BC' : '\u25B6';
 }
 
+const PP_ASSETS = ['ETH', 'BOLD', 'wstETH'];
+function _isPPAsset(t) { return PP_ASSETS.includes(t); }
+
 function onPPSwapToggle() {
   _ppSwapEnabled = $('ppSwapToggle').checked;
   setShown('ppSwapAssetWrap', _ppSwapEnabled);
   if (_ppSwapEnabled) {
     // Pick a PP deposit asset that differs from fromToken
     let target;
-    if (toToken === 'ETH' || toToken === 'BOLD') {
+    if (_isPPAsset(toToken)) {
       target = toToken;
     } else {
       target = _ppSelectedAsset;
     }
-    if (target === fromToken) target = (fromToken === 'ETH') ? 'BOLD' : 'ETH';
+    if (target === fromToken) target = PP_ASSETS.find(a => a !== fromToken) || 'ETH';
     _ppSelectedAsset = target;
     ppSyncAssetUI(target);
     if (toToken !== target) { _ppSavedToToken = toToken; toToken = target; updateTokenDisplay(); }
     handleAmountChange();
-    if (!_ppConfig) loadPPConfig();
+    loadPPConfig();
   } else {
     // Restore previous token
     if (_ppSavedToToken && _ppSavedToToken !== toToken) { toToken = _ppSavedToToken; updateTokenDisplay(); }
@@ -6750,17 +6835,24 @@ async function loadPPConfig() {
   try {
     const rpc = await quoteRPC.call(r => r);
     const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
-    const [ethConfig, boldConfig] = await Promise.all([
+    const [ethResult, boldResult, wstethResult] = await Promise.allSettled([
       ep.assetConfig(PP_ETH_ASSET),
-      ep.assetConfig(BOLD_ADDRESS)
+      ep.assetConfig(BOLD_ADDRESS),
+      ep.assetConfig(WSTETH_ADDRESS)
     ]);
-    _ppConfig = { pool: ethConfig.pool, minimumDepositAmount: ethConfig.minimumDepositAmount, vettingFeeBPS: ethConfig.vettingFeeBPS, maxRelayFeeBPS: ethConfig.maxRelayFeeBPS };
-    _ppConfigBold = { pool: boldConfig.pool, minimumDepositAmount: boldConfig.minimumDepositAmount, vettingFeeBPS: boldConfig.vettingFeeBPS, maxRelayFeeBPS: boldConfig.maxRelayFeeBPS };
-    const cfg = _ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig;
-    setText('ppFeeBps', cfg.vettingFeeBPS.toString());
-    setText('ppMinDeposit', ethers.formatEther(cfg.minimumDepositAmount));
-    setText('ppMinUnit', _ppSelectedAsset);
-    setShown('ppFeeInfo', true);
+    if (ethResult.status === 'fulfilled') { const c = ethResult.value; _ppConfig = { pool: c.pool, minimumDepositAmount: c.minimumDepositAmount, vettingFeeBPS: c.vettingFeeBPS, maxRelayFeeBPS: c.maxRelayFeeBPS }; }
+    else console.warn("Failed to load ETH PP config:", ethResult.reason);
+    if (boldResult.status === 'fulfilled') { const c = boldResult.value; _ppConfigBold = { pool: c.pool, minimumDepositAmount: c.minimumDepositAmount, vettingFeeBPS: c.vettingFeeBPS, maxRelayFeeBPS: c.maxRelayFeeBPS }; }
+    else console.warn("Failed to load BOLD PP config:", boldResult.reason);
+    if (wstethResult.status === 'fulfilled') { const c = wstethResult.value; _ppConfigWstETH = { pool: c.pool, minimumDepositAmount: c.minimumDepositAmount, vettingFeeBPS: c.vettingFeeBPS, maxRelayFeeBPS: c.maxRelayFeeBPS }; }
+    else console.warn("Failed to load wstETH PP config:", wstethResult.reason);
+    const cfg = _ppSelectedAsset === 'wstETH' ? _ppConfigWstETH : (_ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig);
+    if (cfg) {
+      setText('ppFeeBps', cfg.vettingFeeBPS.toString());
+      setText('ppMinDeposit', ethers.formatEther(cfg.minimumDepositAmount));
+      setText('ppMinUnit', _ppSelectedAsset);
+      setShown('ppFeeInfo', true);
+    }
   } catch (e) {
     console.warn("Failed to load PP config:", e);
   }
@@ -6771,11 +6863,13 @@ let _ppBalanceRaw = null;
 function updatePPBalance() {
   if (!connectedAddress) { setText('ppBalance', ''); _ppBalanceRaw = null; return; }
   const asset = _ppSelectedAsset;
-  const tokenAddr = asset === 'BOLD' ? BOLD_ADDRESS : ZERO_ADDRESS;
+  // In zap mode, user sends ETH (balance shown is ETH)
+  const balAsset = _ppZapMode ? 'ETH' : asset;
+  const tokenAddr = balAsset === 'wstETH' ? WSTETH_ADDRESS : (balAsset === 'BOLD' ? BOLD_ADDRESS : ZERO_ADDRESS);
   const cached = getCachedBalance(tokenAddr);
   if (cached != null) {
     _ppBalanceRaw = cached;
-    setText('ppBalance', `Balance: ${fmt(ethers.formatEther(cached))} ${asset}`);
+    setText('ppBalance', `Balance: ${fmt(ethers.formatEther(cached))} ${balAsset}`);
   } else {
     _ppBalanceRaw = null;
     setText('ppBalance', 'Balance: ...');
@@ -6788,6 +6882,69 @@ function setPPPercentBalance(pct) {
   const amount = _ppBalanceRaw * BigInt(pct) / 100n;
   $('ppAmount').value = ethers.formatEther(amount);
   $('ppAmount').dispatchEvent(new Event('input'));
+}
+
+// Zap estimate: debounced Lido quote for ETH → wstETH preview
+let _ppZapEstimate = null; // bigint wstETH amount or null
+let _ppZapEstTimer = null;
+let _ppZapEstSeq = 0;
+
+function ppClearZapEstimate() {
+  _ppZapEstimate = null;
+  _ppZapEstSeq++;
+  if (_ppZapEstTimer) { clearTimeout(_ppZapEstTimer); _ppZapEstTimer = null; }
+  setShown('ppZapEstimate', false);
+  setText('ppZapEstAmt', '--');
+}
+
+function ppRequestZapEstimate() {
+  if (!_ppZapMode) { ppClearZapEstimate(); return; }
+  const amtStr = $('ppAmount')?.value;
+  if (!amtStr || isNaN(+amtStr) || +amtStr <= 0) { ppClearZapEstimate(); return; }
+  let wei;
+  try { wei = ethers.parseEther(amtStr); } catch { ppClearZapEstimate(); return; }
+  if (wei <= 0n) { ppClearZapEstimate(); return; }
+  _ppZapEstSeq++;
+  const seq = _ppZapEstSeq;
+  if (_ppZapEstTimer) clearTimeout(_ppZapEstTimer);
+  setText('ppZapEstAmt', '...');
+  setShown('ppZapEstimate', true);
+  _ppZapEstTimer = setTimeout(async () => {
+    try {
+      const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+      const [lidoResult, dexResult] = await Promise.allSettled([
+        quoteRPC.call(async (rpc) => {
+          const quoter = getQuoterContract(rpc);
+          return quoter.quoteLido(false, WSTETH_ADDRESS, wei, { blockTag: "latest" });
+        }),
+        quoteRPC.call(async (rpc) => {
+          const quoter = getQuoterContract(rpc);
+          return quoter.buildBestSwapViaETHMulticall(
+            ZROUTER_ADDRESS, connectedAddress || ZERO_ADDRESS, false,
+            ZERO_ADDRESS, WSTETH_ADDRESS,
+            wei, 50n, deadline,
+            0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+          );
+        }),
+      ]);
+      if (seq !== _ppZapEstSeq) return; // stale
+      const lidoOut = lidoResult.status === 'fulfilled' ? lidoResult.value.amountOut : 0n;
+      const dexQuote = dexResult.status === 'fulfilled' ? dexResult.value : null;
+      const dexOut = dexQuote ? (dexQuote.b.amountOut > 0n ? dexQuote.b.amountOut : dexQuote.a.amountOut) : 0n;
+      const best = lidoOut >= dexOut ? lidoOut : dexOut;
+      if (best <= 0n) { _ppZapEstimate = null; setText('ppZapEstAmt', 'no route'); return; }
+      const source = lidoOut >= dexOut ? 'Lido' : 'DEX';
+      const afterSlippage = best * 9950n / 10000n; // 0.5% slippage matching deposit flow
+      _ppZapEstimate = afterSlippage;
+      setText('ppZapEstAmt', '~' + fmt(ethers.formatEther(afterSlippage)) + ' (' + source + ')');
+      setShown('ppZapEstimate', true);
+      updatePPButton(); // re-check min with estimate
+    } catch {
+      if (seq !== _ppZapEstSeq) return;
+      _ppZapEstimate = null;
+      setText('ppZapEstAmt', '~err');
+    }
+  }, 400);
 }
 
 function updatePPButton() {
@@ -6808,12 +6965,23 @@ function updatePPButton() {
   }
   try {
     const wei = ethers.parseEther(amt);
-    const cfg = _ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig;
-    if (cfg && wei < cfg.minimumDepositAmount) {
-      setText(btn, `Min ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`);
-      setDisabled(btn, true);
-      btn.onclick = null;
-      return;
+    if (_ppZapMode) {
+      // Use zap estimate to enforce wstETH min deposit
+      const cfg = _ppConfigWstETH;
+      if (cfg && _ppZapEstimate != null && _ppZapEstimate < cfg.minimumDepositAmount) {
+        setText(btn, `Est. below min ${ethers.formatEther(cfg.minimumDepositAmount)} wstETH`);
+        setDisabled(btn, true);
+        btn.onclick = null;
+        return;
+      }
+    } else {
+      const cfg = _ppSelectedAsset === 'wstETH' ? _ppConfigWstETH : (_ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig);
+      if (cfg && wei < cfg.minimumDepositAmount) {
+        setText(btn, `Min ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`);
+        setDisabled(btn, true);
+        btn.onclick = null;
+        return;
+      }
     }
   } catch {
     setText(btn, 'Invalid amount');
@@ -6821,7 +6989,7 @@ function updatePPButton() {
     btn.onclick = null;
     return;
   }
-  setText(btn, 'Deposit');
+  setText(btn, _ppZapMode ? '\u26A1 Zap ETH \u2192 wstETH \u2192 PP' : 'Deposit');
   setDisabled(btn, false);
   btn.onclick = ppDeposit;
 }
@@ -6833,8 +7001,125 @@ async function ppDeposit() {
     if (!amtStr || +amtStr <= 0) { showStatus("Enter an amount", "error"); return; }
     const amount = ethers.parseEther(amtStr);
 
+    // Zap mode: ETH → wstETH → PP deposit in one tx
+    if (_ppZapMode) {
+      const zapCfg = _ppConfigWstETH;
+      if (!signer) { showWalletModal(); return; }
+      setText(btn, 'Quoting ETH \u2192 wstETH...');
+      setDisabled(btn, true);
+
+      // Quote both Lido and DEX in parallel
+      const slippageBps = 50; // 0.5% default for staking
+      const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+      const [lidoResult, dexResult] = await Promise.allSettled([
+        withRetry(() => quoteRPC.call(async (rpc) => {
+          const quoter = getQuoterContract(rpc);
+          return quoter.quoteLido(false, WSTETH_ADDRESS, amount, { blockTag: "latest" });
+        })),
+        withRetry(() => quoteRPC.call(async (rpc) => {
+          const quoter = getQuoterContract(rpc);
+          return quoter.buildBestSwapViaETHMulticall(
+            ZROUTER_ADDRESS, connectedAddress, false,
+            ZERO_ADDRESS, WSTETH_ADDRESS,
+            amount, BigInt(slippageBps), deadline,
+            0, 0, ZERO_ADDRESS, { blockTag: "latest" }
+          );
+        })),
+      ]);
+      const lidoOut = lidoResult.status === 'fulfilled' ? lidoResult.value.amountOut : 0n;
+      const dexQuote = dexResult.status === 'fulfilled' ? dexResult.value : null;
+      const dexOut = dexQuote ? (dexQuote.b.amountOut > 0n ? dexQuote.b.amountOut : dexQuote.a.amountOut) : 0n;
+
+      let zapSwapCalls, depositAmount;
+      const useLido = lidoOut > 0n && lidoOut >= dexOut;
+      if (useLido) {
+        zapSwapCalls = [ROUTER_IFACE.encodeFunctionData('exactETHToWSTETH', [ZROUTER_ADDRESS])];
+        depositAmount = lidoOut * (10000n - BigInt(slippageBps)) / 10000n;
+      } else if (dexOut > 0n && dexQuote) {
+        zapSwapCalls = dexQuote.calls ? Array.from(dexQuote.calls) : decodeMulticallCalls(dexQuote.multicall);
+        depositAmount = dexOut * (10000n - BigInt(slippageBps)) / 10000n;
+      } else {
+        showStatus('No route found for ETH \u2192 wstETH. Try again later.', 'error');
+        return;
+      }
+
+      if (zapCfg && depositAmount < zapCfg.minimumDepositAmount) {
+        showStatus(`Estimated wstETH output (${ethers.formatEther(depositAmount)}) below minimum deposit of ${ethers.formatEther(zapCfg.minimumDepositAmount)} wstETH`, "error");
+        return;
+      }
+
+      // Preflight: router must have wstETH allowance to PP entrypoint
+      const rpcPF = await quoteRPC.call(r => r);
+      const wstPF = new ethers.Contract(WSTETH_ADDRESS, ['function allowance(address,address) view returns (uint256)'], rpcPF);
+      const routerToEPAllow = await wstPF.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
+      if (routerToEPAllow < depositAmount) {
+        showStatus('Router lacks wstETH allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.', 'error');
+        return;
+      }
+
+      setText(btn, 'Deriving keys...');
+      const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
+      const scope = ppComputeScope('wstETH');
+      const depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, ppGetDepositIndex(connectedAddress, scope));
+      const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx);
+
+      const depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [WSTETH_ADDRESS, depositAmount, precommitment]);
+      const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, depositCalldata]);
+      const sweepCalls = [
+        ROUTER_IFACE.encodeFunctionData('sweep', [WSTETH_ADDRESS, 0, 0, connectedAddress]),
+        ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]),
+      ];
+      const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...zapSwapCalls, executeCall, ...sweepCalls]]);
+
+      setText(btn, 'Confirm in wallet...');
+      const tx = await wcTransaction(
+        signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: amount }),
+        'Confirm ETH \u2192 wstETH \u2192 Privacy Pool deposit'
+      );
+      ppSetDepositIndex(connectedAddress, scope, depositIdx + 1);
+
+      const zapAsset = 'wstETH';
+      const partialNote = buildPPNote(nullifier, secret, null, zapAsset);
+      $('ppNote').value = partialNote;
+      setShown('ppNoteBox', true);
+
+      let noteIdx;
+      try {
+        const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+        noteIdx = saved.length;
+        saved.push({ note: partialNote, amount: depositAmount.toString(), asset: zapAsset, timestamp: Date.now(), txHash: tx.hash });
+        localStorage.setItem('pp_notes', JSON.stringify(saved));
+        renderPPNotes();
+      } catch (_lsErr) {
+        noteIdx = -1;
+        alert("CRITICAL: Could not save note to browser storage. Copy your note NOW.");
+      }
+
+      btn.innerHTML = `Confirming zap... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+      const receipt = await waitForTx(tx);
+
+      if (receipt && receipt.status === 1) {
+        const depositInfo = parsePPDepositReceipt(receipt);
+        const fullNote = buildPPNote(nullifier, secret, depositInfo, zapAsset);
+        $('ppNote').value = fullNote;
+        try {
+          const updSaved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+          if (noteIdx >= 0 && updSaved[noteIdx]) { updSaved[noteIdx].note = fullNote; localStorage.setItem('pp_notes', JSON.stringify(updSaved)); renderPPNotes(); }
+        } catch (_) {}
+        const routeLabel = useLido ? 'Lido' : 'DEX';
+        showStatus(`Zap complete! ETH staked via ${routeLabel} \u2192 wstETH deposited to Privacy Pool. Save your note.`, 'success');
+      } else {
+        showStatus('Transaction may have failed. Check Etherscan. Your note has been saved.', 'error');
+      }
+      updatePPBalance();
+      updatePPButton();
+      return;
+    }
+
     const isBOLD = _ppSelectedAsset === 'BOLD';
-    const cfg = isBOLD ? _ppConfigBold : _ppConfig;
+    const isWSTETH = _ppSelectedAsset === 'wstETH';
+    const isERC20PP = isBOLD || isWSTETH;
+    const cfg = isWSTETH ? _ppConfigWstETH : (isBOLD ? _ppConfigBold : _ppConfig);
     if (cfg && amount < cfg.minimumDepositAmount) {
       showStatus(`Minimum deposit is ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`, "error");
       return;
@@ -6851,54 +7136,78 @@ async function ppDeposit() {
     const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx);
 
     let tx;
-    if (isBOLD) {
-      // BOLD: use zRouter multicall for single-tx atomic deposit
-      // permit(BOLD) → router.deposit(BOLD,0,amt) → execute(PP, deposit(BOLD,amt,precom))
-      const ppDepositData = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [BOLD_ADDRESS, amount, precommitment]);
-      const routerPull = ROUTER_IFACE.encodeFunctionData('deposit', [BOLD_ADDRESS, 0, amount]);
+    if (isERC20PP) {
+      // ERC20 (BOLD/wstETH): use zRouter multicall for single-tx atomic deposit
+      // permit(token) → router.deposit(token,0,amt) → execute(PP, deposit(token,amt,precom))
+      const tokenAddr = isWSTETH ? WSTETH_ADDRESS : BOLD_ADDRESS;
+      const tokenLabel = isWSTETH ? 'wstETH' : 'BOLD';
+      const ppDepositData = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [tokenAddr, amount, precommitment]);
+      const routerPull = ROUTER_IFACE.encodeFunctionData('deposit', [tokenAddr, 0, amount]);
       const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, ppDepositData]);
-      const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [BOLD_ADDRESS, 0, 0, connectedAddress]);
+      const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [tokenAddr, 0, 0, connectedAddress]);
 
       let permitPrefix = [];
       let approved = false;
 
       // Check existing router allowance
       const rpc = await quoteRPC.call(r => r);
-      const boldRead = new ethers.Contract(BOLD_ADDRESS, ['function allowance(address,address) view returns (uint256)'], rpc);
-      const routerAllowance = await boldRead.allowance(connectedAddress, ZROUTER_ADDRESS);
+      const tokenRead = new ethers.Contract(tokenAddr, ['function allowance(address,address) view returns (uint256)'], rpc);
+      const routerAllowance = await tokenRead.allowance(connectedAddress, ZROUTER_ADDRESS);
       if (routerAllowance >= amount) approved = true;
 
       // Try EIP-2612 permit (gasless signature, single tx)
       if (!approved) {
-        const permitCfg = await getPermitConfig(BOLD_ADDRESS);
+        const permitCfg = await getPermitConfig(tokenAddr);
         if (permitCfg) {
           try {
             setText(btn, 'Sign permit...');
-            const permitData = await signPermit(permitCfg, BOLD_ADDRESS);
-            const permitCall = ROUTER_IFACE.encodeFunctionData('permit', [BOLD_ADDRESS, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+            const permitData = await signPermit(permitCfg, tokenAddr);
+            const permitCall = ROUTER_IFACE.encodeFunctionData('permit', [tokenAddr, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
             permitPrefix = [permitCall];
             approved = true;
           } catch (e) {
             if (/user rejected|user denied|user cancelled/i.test(String(e?.message))) throw e;
-            console.warn("BOLD permit failed, falling back to approve:", e);
+            console.warn(tokenLabel + " permit failed, trying permit2:", e);
           }
+        }
+      }
+
+      // Try Permit2 fallback
+      if (!approved) {
+        try {
+          const p2Allowance = cacheGetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS);
+          if (p2Allowance == null || p2Allowance < amount) {
+            setText(btn, `Approve ${tokenLabel} for Permit2...`);
+            const erc20W = new ethers.Contract(tokenAddr, ['function approve(address,uint256) returns (bool)'], signer);
+            const p2ApproveTx = await wcTransaction(erc20W.approve(PERMIT2_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} for Permit2`);
+            await waitForTx(p2ApproveTx);
+            cacheSetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS, ethers.MaxUint256);
+          }
+          setText(btn, 'Sign Permit2...');
+          const permit2Data = await signPermit2(tokenAddr, amount);
+          const permit2Call = ROUTER_IFACE.encodeFunctionData('permit2TransferFrom', [tokenAddr, amount, permit2Data.nonce, permit2Data.deadline, permit2Data.signature]);
+          permitPrefix = [permit2Call];
+          approved = true;
+        } catch (e) {
+          if (/user rejected|user denied|user cancelled/i.test(String(e?.message))) throw e;
+          console.warn(tokenLabel + " permit2 failed, falling back to approve:", e);
         }
       }
 
       // Fallback: traditional approve (separate tx)
       if (!approved) {
-        setText(btn, 'Approve BOLD...');
-        const boldW = new ethers.Contract(BOLD_ADDRESS, ['function approve(address,uint256) returns (bool)'], signer);
-        const approveTx = await wcTransaction(boldW.approve(ZROUTER_ADDRESS, ethers.MaxUint256), 'Approve BOLD spending');
+        setText(btn, `Approve ${tokenLabel}...`);
+        const tokenW = new ethers.Contract(tokenAddr, ['function approve(address,uint256) returns (bool)'], signer);
+        const approveTx = await wcTransaction(tokenW.approve(ZROUTER_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} spending`);
         await waitForTx(approveTx);
       }
 
-      // M-6: Preflight check — router must have BOLD allowance to PP entrypoint
+      // Preflight check — router must have token allowance to PP entrypoint
       const rpcPreflight = await quoteRPC.call(r => r);
-      const boldPreflight = new ethers.Contract(BOLD_ADDRESS, ['function allowance(address,address) view returns (uint256)'], rpcPreflight);
-      const routerToEPAllowance = await boldPreflight.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
+      const tokenPreflight = new ethers.Contract(tokenAddr, ['function allowance(address,address) view returns (uint256)'], rpcPreflight);
+      const routerToEPAllowance = await tokenPreflight.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
       if (routerToEPAllowance < amount) {
-        showStatus('Router lacks BOLD allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.', 'error');
+        showStatus(`Router lacks ${tokenLabel} allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.`, 'error');
         return;
       }
 
@@ -6906,7 +7215,7 @@ async function ppDeposit() {
       const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, routerPull, executeCall, sweepCall]]);
       tx = await wcTransaction(
         signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: 0n }),
-        'Confirm BOLD Privacy Pool deposit'
+        `Confirm ${tokenLabel} Privacy Pool deposit`
       );
     } else {
       const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, signer);
@@ -6958,9 +7267,10 @@ async function ppDeposit() {
   } catch (e) {
     console.error('ppDeposit error:', e);
     const errStr = String(e?.data || e?.message || e?.reason || e || '');
+    const _ppInputAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
     const ppDepositErrors = {
-      'INSUFFICIENT_FUNDS': `Insufficient ${_ppSelectedAsset} balance for this deposit.`,
-      'insufficient funds': `Insufficient ${_ppSelectedAsset} balance for this deposit.`,
+      'INSUFFICIENT_FUNDS': `Insufficient ${_ppInputAsset} balance for this deposit.`,
+      'insufficient funds': `Insufficient ${_ppInputAsset} balance for this deposit.`,
       'PrecommitmentAlreadyUsed': 'This precommitment has already been used. Try a new deposit.',
       'InsufficientAllowance': 'Insufficient token allowance. Please approve spending first.',
       'InsufficientBalance': 'Insufficient balance for this deposit amount.',
@@ -7094,13 +7404,14 @@ async function ppRefreshNoteStatuses() {
           const nullHash = poseidon1([BigInt(note.nullifier)]);
           const asset = (note.asset || saved[i].asset || 'ETH').toUpperCase();
           const isBOLD = asset === 'BOLD';
-          const pool = isBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL);
+          const isWSTETH = asset === 'WSTETH';
+          const pool = isWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (isBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL));
           spentChecks.push({ index: i, nullifierHash: nullHash, poolAddress: pool });
         } catch {}
       }
       if (!note.label || !note.value) continue;
       const asset = (note.asset || saved[i].asset || 'ETH').toUpperCase();
-      const scope = ppComputeScope(asset === 'BOLD' ? 'BOLD' : 'ETH');
+      const scope = ppComputeScope(asset === 'BOLD' ? 'BOLD' : asset === 'WSTETH' ? 'wstETH' : 'ETH');
       const scopeKey = scope.toString();
       if (!scopeGroups[scopeKey]) scopeGroups[scopeKey] = { scope, asset, notes: [] };
       scopeGroups[scopeKey].notes.push({ index: i, label: BigInt(note.label), value: BigInt(note.value) });
@@ -7187,7 +7498,7 @@ function ppwUseChangeNote() {
 // Wire up ppAmount input
 document.addEventListener("DOMContentLoaded", () => {
   const ppAmtEl = $("ppAmount");
-  if (ppAmtEl) ppAmtEl.addEventListener("input", () => { updatePPButton(); syncPrivacyURL(); });
+  if (ppAmtEl) ppAmtEl.addEventListener("input", () => { updatePPButton(); syncPrivacyURL(); ppRequestZapEstimate(); });
 
   // Populate PP asset selector icons
   document.querySelectorAll('.pp-icon-16[data-icon]').forEach(el => {
@@ -7390,10 +7701,11 @@ function ppwParseNote() {
   try { nullifier = BigInt(note.nullifier); secret = BigInt(note.secret); } catch { showStatus('Invalid nullifier or secret value in note', 'error'); _ppwNote = null; setDisabled('ppwWithdrawBtn', true); return; }
   const precommitment = poseidon2([nullifier, secret]);
 
-  // R-6: Normalize and validate asset to canonical ETH/BOLD
-  const rawAsset = (note.asset || 'ETH').toUpperCase().trim();
-  const noteAsset = (rawAsset === 'BOLD') ? 'BOLD' : 'ETH';
-  if (note.asset && rawAsset !== 'ETH' && rawAsset !== 'BOLD') {
+  // R-6: Normalize and validate asset to canonical ETH/BOLD/wstETH
+  const rawAsset = (note.asset || 'ETH').trim();
+  const rawAssetUpper = rawAsset.toUpperCase();
+  const noteAsset = (rawAssetUpper === 'BOLD') ? 'BOLD' : (rawAssetUpper === 'WSTETH') ? 'wstETH' : 'ETH';
+  if (note.asset && rawAssetUpper !== 'ETH' && rawAssetUpper !== 'BOLD' && rawAssetUpper !== 'WSTETH') {
     showStatus('Unrecognized note asset "' + escText(note.asset) + '", defaulting to ETH.', 'error');
   }
   _ppwNote = { nullifier, secret, precommitment, asset: noteAsset };
@@ -7409,10 +7721,11 @@ function ppwParseNote() {
 
   setShown('ppwParsed', true);
   setDisabled('ppwWithdrawBtn', false);
-  // Update extraGas toggle state for parsed note asset
+  // Update extraGas toggle state for parsed note asset (only relevant for non-native-ETH assets)
   if (_ppwMode === 'relay') {
     const egEl = $('ppwExtraGas');
-    if (noteAsset === 'ETH') { egEl.checked = false; egEl.disabled = true; }
+    const isNativeETH = noteAsset === 'ETH';
+    if (isNativeETH) { egEl.checked = false; egEl.disabled = true; }
     else { egEl.disabled = false; }
   }
   ppwUpdatePreview();
@@ -7471,10 +7784,11 @@ async function ppwWithdraw() {
 
     log('Validating inputs...');
 
-    // Resolve pool and scope from note asset (H-2: support BOLD withdrawal)
+    // Resolve pool and scope from note asset (H-2: support BOLD/wstETH withdrawal)
     const wAsset = _ppwNote.asset || 'ETH';
     const wIsBOLD = wAsset === 'BOLD';
-    const poolAddress = wIsBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL);
+    const wIsWSTETH = wAsset === 'wstETH';
+    const poolAddress = wIsWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (wIsBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL));
     const SCOPE = ppComputeScope(wAsset);
     log('Asset: ' + wAsset + ' Pool: ' + poolAddress.slice(0, 10) + '... SCOPE: ' + SCOPE.toString().slice(0, 16) + '...');
 
@@ -7688,8 +8002,8 @@ async function ppwWithdraw() {
     if (isRelayMode) {
       log('Fetching relay quote...');
       const chainId = 1; // mainnet
-      const assetAddr = wIsBOLD ? BOLD_ADDRESS : PP_ETH_ASSET;
-      const isNativeETH = !wIsBOLD;
+      const assetAddr = wIsWSTETH ? WSTETH_ADDRESS : (wIsBOLD ? BOLD_ADDRESS : PP_ETH_ASSET);
+      const isNativeETH = !wIsBOLD && !wIsWSTETH;
 
       // Preflight: check relayer supports this asset
       try {
@@ -7717,7 +8031,7 @@ async function ppwWithdraw() {
 
       // Validate fee against on-chain maxRelayFeeBPS
       const quotedFeeBPS = relayQuote.feeBPS || relayQuote.feeCommitment?.feeBPS;
-      const wConfig = wIsBOLD ? _ppConfigBold : _ppConfig;
+      const wConfig = wIsWSTETH ? _ppConfigWstETH : (wIsBOLD ? _ppConfigBold : _ppConfig);
       if (wConfig?.maxRelayFeeBPS && quotedFeeBPS > Number(wConfig.maxRelayFeeBPS)) {
         showStatus('Relay fee (' + quotedFeeBPS + ' bps) exceeds on-chain max (' + wConfig.maxRelayFeeBPS + ' bps). Aborting.', 'error');
         return;
