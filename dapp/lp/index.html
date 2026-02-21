@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><rect x='3' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='5' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='10' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='12' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='4' y='4' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='5' width='10' height='1' fill='%23e8e8e0'/><rect x='2' y='6' width='12' height='3' fill='%23e8e8e0'/><rect x='3' y='9' width='10' height='1' fill='%23e8e8e0'/><rect x='4' y='10' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='10' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='5' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='9' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='2' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='7' y='12' width='2' height='1' fill='%23e8e8e0'/><rect x='11' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='1' y='13' width='2' height='1' fill='%23e8e8e0'/><rect x='13' y='13' width='2' height='1' fill='%23e8e8e0'/></svg>" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+:root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;
+  --surface:#f9f9f9;--surface-hover:#f5f5f5;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --link-fg:inherit;
+  --modal-overlay:rgba(0,0,0,0.8);--modal-bg:#fff;--modal-border:#000;
+  --green:#22c55e;--red:#ef4444;
+}
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#777;--fg-dim:#555;
+  --border:#333;--border-muted:#333;
+  --surface:#111;--surface-hover:#151515;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --link-fg:#e8e8e0;
+  --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
+  --green:#22c55e;--red:#ef4444;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family:Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--fg);
+  min-height:100vh; padding:60px 20px 20px;
+  max-width:560px; margin:0 auto;
+}
+a { color:var(--link-fg); }
+button {
+  display:inline-block; padding:12px 24px;
+  font-size:12px; font-family:inherit;
+  text-transform:uppercase; letter-spacing:0.1em;
+  background:var(--btn-bg); color:var(--btn-fg);
+  border:1px solid var(--btn-bg); cursor:pointer;
+  transition:background 0.2s, color 0.2s;
+}
+button:hover { background:var(--btn-hover); }
+button:disabled { opacity:0.4; cursor:not-allowed; }
+h1 {
+  font-size:14px; font-weight:400;
+  letter-spacing:0.1em; text-transform:uppercase;
+  margin-bottom:8px;
+}
+.pool-id {
+  font-size:11px; color:var(--fg-muted);
+  margin-bottom:16px; word-break:break-all;
+  letter-spacing:0.02em;
+}
+.pool-id a { color:var(--fg-muted); }
+.dark-toggle {
+  position:fixed;
+  top:max(22px, env(safe-area-inset-top, 0px));
+  left:max(20px, env(safe-area-inset-left, 0px));
+  border:none; cursor:pointer; padding:0; margin:0;
+  opacity:0.5; transition:opacity 0.2s; z-index:100;
+  background:#000; border-radius:50%; width:14px; height:14px;
+}
+:root.dark .dark-toggle { background:#fff; }
+.dark-toggle:hover { opacity:1; }
+.wallet {
+  position:fixed;
+  top:max(20px, env(safe-area-inset-top, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
+  font-size:11px; letter-spacing:0.05em;
+  z-index:100;
+}
+.wallet button { margin:0; padding:8px 16px; text-transform:none; }
+
+/* Wallet modal */
+.wallet-modal-overlay {
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:var(--modal-overlay); backdrop-filter:blur(4px);
+  z-index:2000; justify-content:center; align-items:center;
+  padding:20px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.wallet-modal-overlay.active { display:flex; }
+body.modal-open { overflow:hidden; }
+.wallet-modal {
+  background:var(--modal-bg); border:1px solid var(--modal-border);
+  padding:16px; width:100%; max-width:380px;
+  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px);
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.wallet-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.wallet-modal-title { font-size:14px; text-transform:uppercase; letter-spacing:0.1em; }
+.wallet-modal-close {
+  background:none; border:none; color:var(--fg); font-size:20px;
+  cursor:pointer; line-height:1; padding:4px; margin:-4px;
+  opacity:0.4; transition:opacity 0.15s;
+}
+.wallet-modal-close:hover { opacity:1; }
+.wallet-option {
+  display:flex; align-items:center; gap:12px; padding:12px;
+  background:var(--modal-bg); border:1px solid var(--border); color:var(--fg);
+  cursor:pointer; margin-bottom:8px; transition:background 0.15s, color 0.15s;
+}
+.wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
+.wallet-option-icon { font-size:1.5rem; }
+.wallet-option-name { font-weight:600; }
+.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; }
+.wallet-option.disconnect:hover { background:#f00; color:#fff; }
+
+/* Sections */
+.section { margin-bottom:24px; }
+.section-title {
+  font-size:11px; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--fg-muted); margin-bottom:8px;
+}
+
+/* Info grid */
+.info-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:12px; margin-bottom:16px;
+}
+.info-item { }
+.info-label { font-size:10px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:2px; }
+.info-value { font-size:13px; font-family:monospace; word-break:break-all; }
+
+/* Form card */
+.lp-card {
+  border:1px solid var(--border-muted); padding:20px; background:var(--bg);
+}
+.lp-section { margin-bottom:16px; }
+.lp-section:last-of-type { margin-bottom:0; }
+.lp-label {
+  display:block; font-size:11px; text-transform:uppercase;
+  letter-spacing:0.1em; margin-bottom:6px; color:var(--fg-muted);
+}
+.lp-input {
+  width:100%; padding:8px 0; font-size:24px; font-family:inherit;
+  border:none; border-bottom:1.5px solid var(--border-muted);
+  outline:none; background:transparent; color:var(--fg);
+}
+.lp-input:focus { border-bottom-width:2.5px; margin-bottom:-1px; }
+.lp-input::placeholder { color:var(--fg-dim); }
+.lp-input::-webkit-outer-spin-button,
+.lp-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.lp-input[type=number] { -moz-appearance:textfield; }
+.lp-input-sm {
+  width:60px; padding:4px 0; font-size:14px; font-family:inherit;
+  border:none; border-bottom:1px solid var(--border-muted);
+  outline:none; background:transparent; color:var(--fg);
+  text-align:center;
+}
+.lp-input-sm:focus { border-bottom-width:2px; }
+.lp-row {
+  display:flex; align-items:center; gap:8px; margin-top:6px;
+  font-size:12px; color:var(--fg-muted);
+}
+.lp-max {
+  padding:2px 4px; border:none; background:none;
+  color:var(--fg-dim); font-size:10px; font-weight:600;
+  letter-spacing:0.03em; text-transform:uppercase;
+  cursor:pointer; transition:color 0.15s; border-radius:3px;
+  font-family:inherit;
+}
+.lp-max:hover { color:var(--fg); background:var(--surface-hover); }
+
+/* Buttons */
+.btn {
+  font-family:inherit; font-size:11px; cursor:pointer;
+  border:1px solid var(--border-muted); border-radius:4px;
+  padding:3px 8px; background:var(--surface); color:var(--fg);
+  transition:background 0.15s;
+}
+.btn:hover { background:var(--surface-hover); }
+
+/* Tabs */
+.tab-row { display:flex; gap:0; margin-bottom:16px; border-bottom:1px solid var(--border-muted); }
+.tab-btn {
+  font-family:inherit; font-size:11px; font-weight:500;
+  letter-spacing:0.06em; text-transform:uppercase;
+  cursor:pointer; border:none; background:none;
+  color:var(--fg-muted); padding:8px 16px;
+  border-bottom:2px solid transparent; transition:color 0.15s;
+}
+.tab-btn:hover { color:var(--fg); }
+.tab-btn.active { color:var(--fg); border-bottom-color:var(--fg); }
+
+/* Status */
+.status-msg {
+  font-size:11px; padding:6px 10px; margin-top:8px;
+  border-radius:4px; display:none;
+}
+.status-msg.show { display:block; }
+.status-msg.error { background:#fff0f0; color:#c00; }
+.dark .status-msg.error { background:#1a0000; color:#f87171; }
+.status-msg.success { background:#f0fff0; color:#070; }
+.dark .status-msg.success { background:#001a00; color:#4ade80; }
+.status-msg.info { background:var(--surface); color:var(--fg-muted); }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--fg-muted); text-align:left; padding:6px 8px; border-bottom:1px solid var(--border-muted); }
+td { padding:6px 8px; border-bottom:1px solid var(--border-muted); vertical-align:middle; }
+tr:hover td { background:var(--surface-hover); }
+.mono { font-family:monospace; font-size:11px; }
+.text-muted { color:var(--fg-muted); }
+.empty-msg { font-size:12px; color:var(--fg-dim); padding:16px 0; text-align:center; }
+
+/* Chart/orderbook links */
+.sub-link {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:11px; color:var(--fg-muted); text-decoration:none;
+  opacity:0.7; transition:opacity 0.15s;
+}
+.sub-link:hover { opacity:1; }
+
+/* Countdown */
+.countdown { font-size:10px; color:var(--fg-dim); }
+
+/* Footer */
+.site-footer {
+  text-align:center; padding:48px 20px; font-size:11px;
+  opacity:0.35; letter-spacing:0.5px; font-weight:300;
+}
+.site-footer a { color:inherit; text-decoration:underline; margin:0 2px; }
+.site-footer a:hover { opacity:0.7; }
+.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
+.dark .site-footer .tagline { color:#fff; }
+
+/* Pool selector */
+.pool-selector-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  font-family:inherit; font-size:11px; cursor:pointer;
+  border:1px solid var(--border-muted); border-radius:4px;
+  padding:3px 8px; background:var(--surface); color:var(--fg);
+  transition:background 0.15s; vertical-align:middle;
+}
+.pool-selector-btn:hover { background:var(--surface-hover); }
+.pool-modal-overlay {
+  display:none; position:fixed;
+  top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.4); backdrop-filter:blur(4px);
+  z-index:2000; justify-content:center; align-items:center;
+  padding:20px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.pool-modal-overlay.active { display:flex; }
+.pool-modal {
+  background:var(--bg); border:1px solid var(--border-muted);
+  padding:16px; width:100%; max-width:420px;
+  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px);
+  overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius:8px;
+}
+.pool-modal-header {
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
+}
+.pool-modal-title { font-size:14px; text-transform:uppercase; letter-spacing:0.1em; }
+.pool-modal-close {
+  background:none; border:none; color:var(--fg); font-size:20px;
+  cursor:pointer; line-height:1; padding:4px; margin:-4px; opacity:0.4; transition:opacity 0.15s;
+}
+.pool-modal-close:hover { opacity:1; }
+.pool-list-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; cursor:pointer; transition:background 0.12s;
+  border-radius:4px; margin:0 4px;
+}
+.pool-list-item:hover { background:var(--surface-hover); }
+.pool-list-item .pool-pair { font-size:13px; font-weight:500; }
+.pool-list-item .pool-meta { font-size:10px; color:var(--fg-muted); }
+.pool-list-item .pool-reserves { font-size:10px; color:var(--fg-dim); font-family:monospace; margin-left:auto; text-align:right; }
+
+/* Responsive */
+@media (max-width:600px) {
+  body { padding:50px 12px 12px; }
+  .wallet { top:16px; right:16px; }
+  .wallet button { padding:10px 14px; font-size:11px; }
+  .dark-toggle { top:18px; left:16px; }
+  .info-grid { grid-template-columns:1fr; }
+  .lp-input { font-size:20px; }
+  .wallet-modal { max-width:100%; margin:0 10px; max-height:calc(100vh - 40px); overflow-y:auto; }
+}
+</style>
+</head>
+<body>
+
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
+<div class="wallet">
+  <button id="walletBtn" onclick="toggleWallet()">connect</button>
+</div>
+
+<div class="wallet-modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
+  <div class="wallet-modal">
+    <div class="wallet-modal-header">
+      <div class="wallet-modal-title">Connect Wallet</div>
+      <button class="wallet-modal-close" onclick="closeWalletModal()">&times;</button>
+    </div>
+    <div class="wallet-modal-body" id="walletOptions"></div>
+  </div>
+</div>
+
+<h1>Liquidity
+  <button class="pool-selector-btn" id="poolSelectorBtn" onclick="openPoolModal()">Select Pool &#9662;</button>
+  <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
+  <a class="sub-link" id="orderbookLink" href="#" title="View orderbook" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/></svg></a>
+</h1>
+<div class="pool-id" id="poolInfo">Loading...</div>
+
+<!-- Tab row -->
+<div class="tab-row">
+  <button class="tab-btn active" data-tab="pool" onclick="switchTab('pool')">Pool</button>
+  <button class="tab-btn" data-tab="add" onclick="switchTab('add')">Add</button>
+  <button class="tab-btn" data-tab="remove" onclick="switchTab('remove')">Remove</button>
+  <button class="tab-btn" data-tab="positions" onclick="switchTab('positions')">My Positions</button>
+  <button class="tab-btn" data-tab="history" onclick="switchTab('history')">History</button>
+</div>
+
+<!-- Pool tab -->
+<div id="tab-pool">
+  <div class="info-grid" id="poolGrid">
+    <div class="info-item"><div class="info-label">Reserve 0</div><div class="info-value" id="reserve0">--</div></div>
+    <div class="info-item"><div class="info-label">Reserve 1</div><div class="info-value" id="reserve1">--</div></div>
+    <div class="info-item"><div class="info-label">Price</div><div class="info-value" id="poolPrice">--</div></div>
+    <div class="info-item"><div class="info-label">LP Supply</div><div class="info-value" id="lpSupply">--</div></div>
+    <div class="info-item"><div class="info-label">Your LP</div><div class="info-value" id="userLp">--</div></div>
+    <div class="info-item"><div class="info-label">Your Share</div><div class="info-value" id="userShare">--</div></div>
+    <div class="info-item"><div class="info-label">Share Value</div><div class="info-value" id="shareValue">--</div></div>
+    <div class="info-item"><div class="info-label">Fee / Hook</div><div class="info-value" id="poolFee">--</div></div>
+  </div>
+  <div class="countdown" id="refreshCountdown"></div>
+</div>
+
+<!-- Add liquidity tab -->
+<div id="tab-add" style="display:none">
+  <div id="addModeToggle" class="tab-row" style="display:none">
+    <button class="tab-btn" data-addmode="zap" onclick="setAddMode('zap')">Zap (ETH only)</button>
+    <button class="tab-btn active" data-addmode="pair" onclick="setAddMode('pair')">Two-sided</button>
+  </div>
+  <!-- Zap form -->
+  <div id="addZapForm" style="display:none">
+    <div class="lp-card">
+      <div class="lp-section">
+        <label class="lp-label">ETH</label>
+        <input class="lp-input" id="zapEthAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onZapEthInput()">
+      </div>
+      <div class="lp-row" id="zapPreview" style="margin-top:10px;font-size:11px;color:var(--fg-muted)"></div>
+      <div class="lp-row" style="margin-top:12px">
+        <span>Slippage</span>
+        <input class="lp-input-sm" id="zapSlippage" type="number" step="0.1" min="0" max="50" value="5" inputmode="decimal">
+        <span>%</span>
+      </div>
+      <div style="margin-top:16px">
+        <button id="zapLiqBtn" onclick="doZapLiquidity()" style="width:100%">Zap Liquidity</button>
+      </div>
+    </div>
+  </div>
+  <!-- Two-sided form -->
+  <div id="addPairForm">
+    <div class="lp-card">
+      <div class="lp-section">
+        <label class="lp-label" id="addLabel0">ETH</label>
+        <input class="lp-input" id="addAmt0" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onAddAmt0Change()">
+      </div>
+      <div class="lp-section">
+        <label class="lp-label" id="addLabel1">Token</label>
+        <input class="lp-input" id="addAmt1" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onAddAmt1Change()">
+      </div>
+      <div class="lp-row" style="margin-top:12px">
+        <span>Slippage</span>
+        <input class="lp-input-sm" id="addSlippage" type="number" step="0.1" min="0" max="50" value="2" inputmode="decimal">
+        <span>%</span>
+      </div>
+      <div style="margin-top:16px">
+        <button id="addLiqBtn" onclick="doAddLiquidity()" style="width:100%">Add Liquidity</button>
+      </div>
+    </div>
+  </div>
+  <div class="status-msg" id="addStatus"></div>
+</div>
+
+<!-- Remove liquidity tab -->
+<div id="tab-remove" style="display:none">
+  <div class="lp-card">
+    <div class="lp-section">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <label class="lp-label" style="margin:0">LP Amount</label>
+        <button class="lp-max" onclick="setMaxRemove()">MAX</button>
+      </div>
+      <input class="lp-input" id="removeAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onRemoveAmtChange()">
+    </div>
+    <div class="lp-row">
+      <span>You receive</span>
+      <span id="removeExpected" style="margin-left:auto;font-family:monospace;font-size:11px;color:var(--fg)">--</span>
+    </div>
+    <div class="lp-row" style="margin-top:8px">
+      <span>Slippage</span>
+      <input class="lp-input-sm" id="removeSlippage" type="number" step="0.1" min="0" max="50" value="2" inputmode="decimal">
+      <span>%</span>
+    </div>
+    <div style="margin-top:16px">
+      <button id="removeLiqBtn" onclick="doRemoveLiquidity()" style="width:100%">Remove Liquidity</button>
+    </div>
+  </div>
+  <div class="status-msg" id="removeStatus"></div>
+</div>
+
+<!-- My Positions tab -->
+<div id="tab-positions" style="display:none">
+  <div id="positionsTable"><div class="empty-msg">Connect wallet to see positions</div></div>
+</div>
+
+<!-- History tab -->
+<div id="tab-history" style="display:none">
+  <div id="historyTable"><div class="empty-msg">Loading history...</div></div>
+</div>
+
+<!-- Pool selector modal -->
+<div class="pool-modal-overlay" id="poolModal" onclick="if(event.target===this)closePoolModal()">
+  <div class="pool-modal">
+    <div class="pool-modal-header">
+      <div class="pool-modal-title">Select Pool</div>
+      <button class="pool-modal-close" onclick="closePoolModal()">&times;</button>
+    </div>
+    <div id="poolList" style="max-height:360px;overflow-y:auto"><div class="empty-msg">Loading pools...</div></div>
+  </div>
+</div>
+
+<div class="site-footer">
+  <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
+  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
+  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
+</div>
+
+<script src="../ethers.min.js"></script>
+<script src="../walletconnect.min.js"></script>
+<script>
+// ---- Dark mode (dot toggle, matching swap page) ----
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
+}
+
+// ---- Constants ----
+const ZAMM_V0 = "0x00000000000008882D72EfA6cCE4B6a40b24C860";
+const ZAMM_V1 = "0x000000000000040470635EB91b7CE4D132D616eD";
+const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
+const ZERO    = "0x0000000000000000000000000000000000000000";
+const BASE    = "https://coinchan-indexer-production.up.railway.app";
+const RPCS    = ["https://eth.llamarpc.com", "https://ethereum.publicnode.com", "https://1rpc.io/eth", "https://eth.drpc.org"];
+const WEINS   = "0x0000000000696760E15f265e828DB644A0c242EB";
+const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
+const ZORG_TOKEN = "0x0000000000009710cd229bf635c4500029651ee8";
+const ZORG_ID = 1334160193485309697971829933264346612480800613613n;
+
+// V1 (ZAMM Hooked) PoolKey: uint256 feeOrHook
+const V1_ABI = [
+  "function addLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) key, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256 amount0, uint256 amount1, uint256 liquidity)",
+  "function removeLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) key, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) returns (uint256 amount0, uint256 amount1)",
+  "function pools(uint256) view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast, uint256 price0CumulativeLast, uint256 price1CumulativeLast, uint256 kLast, uint256 supply)",
+  "function balanceOf(address, uint256) view returns (uint256)",
+  "function setOperator(address operator, bool approved) returns (bool)",
+  "function isOperator(address owner, address spender) view returns (bool)"
+];
+
+// V0 (ZAMM Hookless) PoolKey: uint96 swapFee
+const V0_ABI = [
+  "function addLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint96 swapFee) key, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256 amount0, uint256 amount1, uint256 liquidity)",
+  "function removeLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint96 swapFee) key, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) returns (uint256 amount0, uint256 amount1)",
+  "function pools(uint256) view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast, uint256 price0CumulativeLast, uint256 price1CumulativeLast, uint256 kLast, uint256 supply)",
+  "function balanceOf(address, uint256) view returns (uint256)",
+  "function setOperator(address operator, bool approved) returns (bool)",
+  "function isOperator(address owner, address spender) view returns (bool)"
+];
+
+const COINS_ABI = [
+  "function setOperator(address operator, bool approved) returns (bool)",
+  "function isOperator(address owner, address spender) view returns (bool)"
+];
+
+const ERC20_ABI = [
+  "function approve(address, uint256) returns (bool)",
+  "function allowance(address, address) view returns (uint256)"
+];
+
+// LP Helpers: calculate optimal ETH for add liquidity
+const V0_HELPER = "0xc4bfFdA77EB0E165220B0f18C8395db9Ce4b078F";
+const V1_HELPER = "0xD3791C4Db2F20f198c77eDb70157085cB963D7f2";
+const V0_HELPER_ABI = [
+  "function calculateRequiredETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint96 swapFee) poolKey, uint256 amount0Desired, uint256 amount1Desired) view returns (uint256 ethAmount, uint256 amount0, uint256 amount1)"
+];
+const V1_HELPER_ABI = [
+  "function calculateRequiredETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amount0Desired, uint256 amount1Desired) view returns (uint256 ethAmount, uint256 amount0, uint256 amount1)",
+  "function calculateRequiredETHForToken1(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amount0Desired, uint256 amount1Desired) view returns (uint256 ethAmount, uint256 amount0, uint256 amount1)"
+];
+
+// Single-sided ETH zap contracts
+const V0_ZAP = "0x7c1E515F1c7F1c4909206BD92F6A4BFc0138E58b";
+const V1_ZAP = "0x0000000000Ee8cD7fd26236a2e4C1505dAc0Dce9";
+const V0_ZAP_ABI = ["function addSingleLiqETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint96 swapFee) poolKey, uint256 amountOutMin, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256, uint256, uint256)"];
+const V1_ZAP_ABI = ["function addSingleLiqETH(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountOutMin, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256, uint256, uint256)"];
+
+// ---- State ----
+let _provider = null, _signer = null;
+let _poolData = null;     // from indexer
+let _onchain = null;      // { reserve0, reserve1, supply }
+let _userLpBal = 0n;
+let _ammAddress = null;   // V0 or V1
+let _ammABI = null;
+let _isV0 = false;
+let _poolKey = null;      // reconstructed PoolKey
+let _refreshTimer = null;
+let _refreshCountdown = 30;
+let _activeTab = 'pool';
+let _addMode = 'pair';    // 'pair' or 'zap'
+let _addDirection = 0;    // 0=from amt0, 1=from amt1
+let _coinMap = null;      // coinId -> { name, symbol, imageUrl, decimals }
+
+function $(id) { return document.getElementById(id); }
+const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
+function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ---- Pool ID from hash ----
+function getPoolId() {
+  const m = location.hash.match(/^#\/(\d+)$/);
+  return m ? m[1] : null;
+}
+
+// ---- RPC helper (fallback provider, same as swap page) ----
+function makeWalletReader() {
+  try {
+    if (!window.ethereum) return null;
+    return new ethers.BrowserProvider(window.ethereum, 1);
+  } catch { return null; }
+}
+
+function makeFallbackProvider(urls) {
+  const network = { chainId: 1, name: "mainnet" };
+  const nodes = urls.map(u => ({
+    url: u,
+    p: new ethers.JsonRpcProvider(u, network, { staticNetwork: true, batchMaxCount: 10 }),
+    downUntil: 0,
+    ok: true,
+  }));
+
+  const walletReader = makeWalletReader();
+  if (walletReader) {
+    nodes.push({ url: "wallet", p: walletReader, downUntil: 0, ok: true });
+  }
+
+  const withTimeout = (ms, work) =>
+    Promise.race([
+      work(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
+
+  const isInfraErr = (e) => {
+    const s = String(e?.message || "");
+    return /server response 400\b/i.test(s) ||
+      /502|503|504|ECONNRESET|ENETUNREACH|EAI_AGAIN|Failed to fetch/i.test(s) ||
+      /failed to detect network|timeout|timed out|ETIMEDOUT/i.test(s);
+  };
+  const isAuthErr = (e) => /Unauthorized|invalid api key|403|401/i.test(String(e?.message || ""));
+
+  return {
+    async call(fn) {
+      const now = Date.now();
+      let lastErr;
+      const candidates = nodes
+        .filter(n => n.ok && n.downUntil <= now)
+        .concat(nodes.filter(n => n.ok && n.downUntil > now));
+      for (const n of candidates) {
+        try {
+          const res = await withTimeout(3500, () => fn(n.p));
+          n.downUntil = 0;
+          return res;
+        } catch (e) {
+          lastErr = e;
+          if (isAuthErr(e)) n.ok = false;
+          else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
+        }
+      }
+      throw lastErr || new Error("All RPCs failed");
+    },
+  };
+}
+
+const rpc = makeFallbackProvider(RPCS);
+
+// Simple helper that returns a single provider (for Contract construction)
+function getRPC() {
+  return new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+}
+
+function resolveWeiName(addr) {
+  rpc.call(p => new ethers.Contract(WEINS, WEINS_ABI, p).reverseResolve(addr))
+    .then(name => {
+      if (name && _connectedAddress === addr) $('walletBtn').textContent = name.toLowerCase();
+    }).catch(() => {});
+}
+
+// ---- Wallet state ----
+let _connectedAddress = null;
+let _connectedWalletProvider = null;
+let _walletConnectProvider = null;
+let _isConnecting = false;
+let _walletEventHandlers = null;
+let _isWalletConnect = false;
+let _wcDeepLink = null;
+
+const eip6963Providers = new Map();
+window.addEventListener('eip6963:announceProvider', (event) => {
+  try {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid && provider) eip6963Providers.set(info.uuid, { info, provider });
+  } catch (e) {}
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+function findProvider(checkFn) {
+  if (window.ethereum?.providers?.length) {
+    for (const p of window.ethereum.providers) { if (checkFn(p)) return p; }
+  }
+  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
+  return null;
+}
+
+const WALLET_CONFIG = {
+  metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
+  coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
+  rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
+  rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
+  walletconnect: { name: 'WalletConnect', icon: '📱' }
+};
+
+function detectWallets() {
+  const detected = [];
+  const seenNames = new Set();
+
+  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
+    const name = info?.name || 'Unknown';
+    if (!seenNames.has(name.toLowerCase())) {
+      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
+      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
+      detected.push({
+        key: `eip6963_${uuid}`, name,
+        icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
+        getProvider: () => provider
+      });
+      seenNames.add(name.toLowerCase());
+    }
+  }
+
+  if (window.ethereum?.providers?.length) {
+    for (let i = 0; i < window.ethereum.providers.length; i++) {
+      const p = window.ethereum.providers[i];
+      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
+      if (name && !seenNames.has(name.toLowerCase())) {
+        detected.push({ key: `provider_${i}`, name, icon: '🔗', getProvider: () => p });
+        seenNames.add(name.toLowerCase());
+      }
+    }
+  }
+
+  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
+    if (key === 'walletconnect') continue;
+    try {
+      if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) {
+        detected.push({ key, ...config });
+        seenNames.add(config.name.toLowerCase());
+      }
+    } catch (e) {}
+  }
+
+  if (detected.length === 0 && window.ethereum) {
+    detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum });
+  }
+
+  const wcModule = globalThis['@walletconnect/ethereum-provider'];
+  if (wcModule?.EthereumProvider) {
+    detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
+  }
+
+  return detected;
+}
+
+function showWalletModal() {
+  $('walletModal').classList.add('active');
+  document.body.classList.add('modal-open');
+  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  const doDetect = (attempt = 1) => {
+    const wallets = detectWallets();
+    const hasBrowserWallet = wallets.some(w => w.key !== 'walletconnect');
+    if (!hasBrowserWallet && attempt < 2) setTimeout(() => doDetect(attempt + 1), 250);
+    else renderWalletModal(wallets);
+  };
+  setTimeout(() => doDetect(), 150);
+}
+
+function renderWalletModal(wallets) {
+  const container = $('walletOptions');
+  if (_connectedAddress) {
+    const displayName = $('walletBtn').textContent;
+    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
+    container.innerHTML = `
+      <div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;">
+        <div style="font-weight:600;margin-bottom:6px;">Connected</div>
+        ${showName ? `<div style="font-size:16px;margin-bottom:4px;">${escText(displayName)}</div>` : ''}
+        <div style="font-size:12px;word-break:break-all;opacity:0.6;">${escText(_connectedAddress)}</div>
+      </div>
+      <div class="wallet-option disconnect" onclick="disconnectWallet()">
+        <span class="wallet-option-name">Disconnect</span>
+      </div>
+    `;
+  } else {
+    container.innerHTML = wallets.length > 0 ? wallets.map(w => `
+      <div class="wallet-option" data-wallet-key="${escAttr(w.key)}">
+        <span class="wallet-option-icon">${w.icon}</span>
+        <span class="wallet-option-name">${escText(w.name)}</span>
+      </div>
+    `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
+    container.querySelectorAll('[data-wallet-key]').forEach(el => {
+      el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey));
+    });
+  }
+}
+
+function closeWalletModal() {
+  $('walletModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+}
+
+function toggleWallet() { showWalletModal(); }
+
+async function connectWithWallet(walletKey) {
+  if (_isConnecting) return;
+  _isConnecting = true;
+  try {
+    closeWalletModal();
+    let walletProvider;
+
+    if (walletKey === 'walletconnect') {
+      const wcModule = globalThis['@walletconnect/ethereum-provider'];
+      const WCProvider = wcModule?.EthereumProvider;
+      if (!WCProvider?.init) throw new Error('WalletConnect not available');
+
+      if (_walletConnectProvider) {
+        try { await _walletConnectProvider.disconnect?.(); } catch (e) {}
+        _walletConnectProvider = null;
+      }
+
+      _walletConnectProvider = await WCProvider.init({
+        projectId: '1e8390ef1c1d8a185e035912a1409749',
+        chains: [1],
+        showQrModal: true,
+        rpcMap: { 1: 'https://1rpc.io/eth' },
+        metadata: {
+          name: 'zFi LP',
+          description: 'Onchain LP management',
+          url: window.location.origin,
+          icons: []
+        }
+      });
+
+      _walletConnectProvider.on('display_uri', (uri) => {
+        try {
+          const session = _walletConnectProvider.session;
+          const peerMeta = session?.peer?.metadata;
+          if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) _wcDeepLink = peerMeta.redirect.native;
+          else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) _wcDeepLink = peerMeta.redirect.universal;
+        } catch (e) {}
+      });
+
+      await _walletConnectProvider.enable();
+      walletProvider = _walletConnectProvider;
+      _isWalletConnect = true;
+
+      try {
+        const session = _walletConnectProvider.session;
+        const peerMeta = session?.peer?.metadata;
+        if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) _wcDeepLink = peerMeta.redirect.native;
+        else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) _wcDeepLink = peerMeta.redirect.universal;
+      } catch (e) {}
+    } else if (walletKey.startsWith('eip6963_')) {
+      const uuid = walletKey.replace('eip6963_', '');
+      walletProvider = eip6963Providers.get(uuid)?.provider;
+      if (!walletProvider) {
+        const savedName = localStorage.getItem('zlp_wallet_name')?.toLowerCase();
+        if (savedName) {
+          for (const [, { info, provider }] of eip6963Providers) {
+            if (info?.name?.toLowerCase() === savedName) { walletProvider = provider; break; }
+          }
+        }
+      }
+      _isWalletConnect = false;
+      _wcDeepLink = null;
+    } else {
+      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
+      _isWalletConnect = false;
+      _wcDeepLink = null;
+    }
+
+    if (!walletProvider) throw new Error('Wallet not found');
+
+    if (walletKey !== 'walletconnect') {
+      await walletProvider.request({ method: 'eth_requestAccounts' });
+    }
+
+    const chainId = await walletProvider.request({ method: 'eth_chainId' });
+    if (BigInt(chainId) !== 1n) {
+      try {
+        await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+        const newChainId = await walletProvider.request({ method: 'eth_chainId' });
+        if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
+      } catch (switchErr) {
+        alert('Please switch to Ethereum Mainnet');
+        if (walletKey === 'walletconnect') {
+          try { _walletConnectProvider?.disconnect(); } catch (e) {}
+          _walletConnectProvider = null;
+        }
+        _isWalletConnect = false;
+        _wcDeepLink = null;
+        return;
+      }
+    }
+
+    _provider = new ethers.BrowserProvider(walletProvider);
+    _signer = await _provider.getSigner();
+    _connectedAddress = await _signer.getAddress();
+
+    const oldWalletProvider = _connectedWalletProvider;
+    _connectedWalletProvider = walletProvider;
+
+    $('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
+    resolveWeiName(_connectedAddress);
+    updateWcBanner();
+
+    if (oldWalletProvider && _walletEventHandlers) {
+      try {
+        oldWalletProvider.removeListener('accountsChanged', _walletEventHandlers.accountsChanged);
+        oldWalletProvider.removeListener('chainChanged', _walletEventHandlers.chainChanged);
+      } catch (e) {}
+    }
+    _walletEventHandlers = {
+      accountsChanged: () => window.location.reload(),
+      chainChanged: () => window.location.reload()
+    };
+    walletProvider.on('accountsChanged', _walletEventHandlers.accountsChanged);
+    walletProvider.on('chainChanged', _walletEventHandlers.chainChanged);
+
+    try {
+      localStorage.setItem('zlp_wallet', walletKey);
+      if (walletKey.startsWith('eip6963_')) {
+        const uuid = walletKey.replace('eip6963_', '');
+        const name = eip6963Providers.get(uuid)?.info?.name;
+        if (name) localStorage.setItem('zlp_wallet_name', name);
+      }
+    } catch (e) {}
+
+    await refreshOnchain();
+    if (_activeTab === 'positions') renderPositions();
+  } catch (error) {
+    console.error('Wallet connect error:', error);
+    if (!isUserRejection(error)) {
+      alert(error.message || 'Connection failed');
+    }
+  } finally {
+    _isConnecting = false;
+  }
+}
+
+function disconnectWallet() {
+  if (_connectedWalletProvider && _walletEventHandlers) {
+    try {
+      _connectedWalletProvider.removeListener('accountsChanged', _walletEventHandlers.accountsChanged);
+      _connectedWalletProvider.removeListener('chainChanged', _walletEventHandlers.chainChanged);
+    } catch (e) {}
+  }
+  _walletEventHandlers = null;
+  if (_walletConnectProvider) {
+    try { _walletConnectProvider.disconnect(); } catch (e) {}
+    _walletConnectProvider = null;
+  }
+  _provider = null;
+  _signer = null;
+  _connectedAddress = null;
+  _connectedWalletProvider = null;
+  _isWalletConnect = false;
+  _wcDeepLink = null;
+  $('walletBtn').textContent = 'connect';
+  updateWcBanner();
+  closeWalletModal();
+  try { localStorage.removeItem('zlp_wallet'); localStorage.removeItem('zlp_wallet_name'); } catch (e) {}
+  if (_activeTab === 'positions') renderPositions();
+}
+
+function updateWcBanner() {
+  const existing = document.getElementById('wcBanner');
+  if (existing) existing.remove();
+  if (_isWalletConnect && _connectedAddress) {
+    const banner = document.createElement('div');
+    banner.id = 'wcBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
+    banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Disconnect</button>';
+    document.body.prepend(banner);
+    document.body.style.paddingTop = '44px';
+  } else {
+    document.body.style.paddingTop = '';
+  }
+}
+
+async function tryAutoConnect() {
+  const savedWallet = localStorage.getItem('zlp_wallet');
+  if (!savedWallet) {
+    if (!window.ethereum) return;
+    try {
+      const accts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accts && accts.length > 0) await connectWithWallet('injected');
+    } catch {}
+    return;
+  }
+  $('walletBtn').textContent = '...';
+  setTimeout(async () => {
+    try {
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise(r => setTimeout(r, 300));
+      await connectWithWallet(savedWallet);
+    } catch (e) {
+      console.error('Auto-reconnect failed:', e);
+      $('walletBtn').textContent = 'connect';
+    }
+  }, 100);
+}
+
+// ---- Tab switching ----
+function switchTab(tab) {
+  _activeTab = tab;
+  ['pool','add','remove','positions','history'].forEach(t => {
+    const el = $('tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    const btn = document.querySelector(`.tab-btn[data-tab="${t}"]`);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'positions') renderPositions();
+  if (tab === 'history') renderHistory();
+}
+
+// ---- Coin registry: preload from /api/coins for metadata resolution ----
+async function loadCoinMap() {
+  if (_coinMap) return _coinMap;
+  try {
+    const res = await fetch(BASE + "/api/coins");
+    const data = await res.json();
+    const coins = data.data || data || [];
+    _coinMap = {};
+    for (const c of coins) {
+      _coinMap[c.coinId] = {
+        name: c.name, symbol: c.symbol, imageUrl: c.imageUrl,
+        decimals: c.decimals || 18, id: c.coinId
+      };
+    }
+  } catch (e) {
+    console.warn("loadCoinMap failed:", e);
+    _coinMap = {};
+  }
+  return _coinMap;
+}
+
+// Friendly label for a coin, with known-contract fallbacks
+function coinLabel(coin, tokenAddr) {
+  if (coin && (coin.symbol || coin.name)) return coin.symbol || coin.name;
+  if (tokenAddr === ZERO) return 'ETH';
+  const ta = (tokenAddr || '').toLowerCase();
+  if (ta === COINS.toLowerCase() || ta === ZAMM_V1.toLowerCase()) return 'COINS';
+  return '???';
+}
+
+// Resolve coin metadata: try pool data, then coin map, then fallback
+// coinId param: optional top-level coinId when nested coin object is null
+function resolveCoin(coin, tokenAddr, coinId) {
+  if (coin && coin.id && coin.symbol) return coin;
+  // ETH shortcut
+  if (tokenAddr === ZERO) return { id: "0", symbol: "ETH", name: "Ethereum", decimals: 18, imageUrl: null };
+  // Determine the best ID we have
+  const id = (coin && coin.id) || coinId || null;
+  // Try coin map by ID
+  if (id && _coinMap && _coinMap[id]) {
+    return { ...(coin || {}), ..._coinMap[id] };
+  }
+  // If coin has id but no symbol, still return what we have
+  if (coin) return coin;
+  // Build minimal fallback from coinId if available
+  if (id) return { id, symbol: null, name: null, decimals: 18, imageUrl: null };
+  return { id: null, symbol: null, name: null, decimals: 18, imageUrl: null };
+}
+
+// ---- Fetch pool from indexer (try both sources) ----
+async function fetchPool(poolId) {
+  const query = `query ($id: BigInt!, $source: String!, $chainId: Float!) {
+    pool(id: $id, source: $source, chainId: $chainId) {
+      id token0 token1 coin0Id coin1Id source feeOrHook swapFee hook hookType
+      coin0 { id decimals name symbol imageUrl source }
+      coin1 { id decimals name symbol imageUrl source }
+      reserve0 reserve1 price0 price1
+    }
+  }`;
+  // Try ZAMM (V0) first, then COOKBOOK (V1) — avoids COOKBOOK mis-detection for V0 pools
+  for (const source of ["ZAMM", "COOKBOOK"]) {
+    try {
+      const res = await fetch(BASE + "/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { id: poolId, source, chainId: 1 } })
+      });
+      const { data } = await res.json();
+      if (data && data.pool) {
+        data.pool.source = source;
+        // Resolve coin metadata: coin map first, then tx calldata fallback
+        data.pool.coin0 = resolveCoin(data.pool.coin0, data.pool.token0, data.pool.coin0Id);
+        data.pool.coin1 = resolveCoin(data.pool.coin1, data.pool.token1, data.pool.coin1Id);
+        // If coin IDs are still missing (no symbol = unknown), recover from tx calldata
+        if (!data.pool.coin0.id || !data.pool.coin1.id ||
+            (!data.pool.coin0.symbol && data.pool.token0 !== ZERO) ||
+            (!data.pool.coin1.symbol && data.pool.token1 !== ZERO)) {
+          await recoverCoinIds(data.pool, poolId);
+        }
+        return data.pool;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// Recover missing coin IDs by decoding a recent swap tx's calldata
+// PoolKey is always the first struct param: bytes 4..35=id0, 36..67=id1
+async function recoverCoinIds(pool, poolId) {
+  try {
+    const evRes = await fetch(BASE + "/api/events?poolId=" + poolId + "&limit=1");
+    const evData = await evRes.json();
+    const events = evData.data || evData || [];
+    if (!events.length || !events[0].txhash) return;
+
+    const tx = await rpc.call(p => p.getTransaction(events[0].txhash));
+    if (!tx || !tx.data || tx.data.length < 330) return; // 4 selector + 5*64 hex = 324 min
+
+    const calldata = tx.data;
+    // PoolKey struct: id0(32) + id1(32) + token0(32) + token1(32) + fee(32)
+    // In hex after 0x + 8-char selector: word0=10..73, word1=74..137, word2=138..201, word3=202..265, word4=266..329
+    const recoveredId0 = BigInt('0x' + calldata.slice(10, 74));
+    const recoveredId1 = BigInt('0x' + calldata.slice(74, 138));
+
+    // Validate: check that recovered IDs produce the correct pool ID
+    const recoveredToken0 = '0x' + calldata.slice(162, 202); // address = last 40 chars of word2
+    const recoveredToken1 = '0x' + calldata.slice(226, 266); // last 40 chars of word3
+    const recoveredFee = BigInt('0x' + calldata.slice(266, 330));
+    const checkEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint256","uint256","address","address","uint256"],
+      [recoveredId0, recoveredId1, recoveredToken0, recoveredToken1, recoveredFee]
+    );
+    const checkId = BigInt(ethers.keccak256(checkEncoded)).toString();
+    if (checkId !== poolId) {
+      console.warn("recoverCoinIds: hash mismatch, skipping", checkId, poolId);
+      return;
+    }
+
+    console.log("Recovered coin IDs from tx:", recoveredId0.toString(), recoveredId1.toString());
+
+    // Fill in missing coin data for both sides
+    const sides = [
+      { key: 'coin0', id: recoveredId0, token: pool.token0 },
+      { key: 'coin1', id: recoveredId1, token: pool.token1 }
+    ];
+    for (const { key, id, token } of sides) {
+      if (!pool[key] || !pool[key].id) {
+        pool[key] = pool[key] || {};
+        pool[key].id = id.toString();
+        if (id === 0n && token === ZERO) {
+          pool[key].symbol = 'ETH'; pool[key].name = 'Ethereum'; pool[key].decimals = 18;
+        } else if (_coinMap && _coinMap[id.toString()]) {
+          // Fast path: use preloaded coin registry
+          Object.assign(pool[key], _coinMap[id.toString()]);
+        } else {
+          // Slow path: individual GraphQL lookup
+          try {
+            const coinRes = await fetch(BASE + "/graphql", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: `query ($token: String!, $id: BigInt!, $chainId: Float!) {
+                  coin(token: $token, id: $id, chainId: $chainId) { id symbol name decimals imageUrl }
+                }`,
+                variables: { token, id: id.toString(), chainId: 1 }
+              })
+            });
+            const coinJson = await coinRes.json();
+            if (coinJson.data && coinJson.data.coin) {
+              Object.assign(pool[key], coinJson.data.coin);
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("recoverCoinIds failed:", e);
+  }
+}
+
+// ---- Read on-chain pool state ----
+async function refreshOnchain() {
+  const poolId = getPoolId();
+  if (!poolId || !_ammAddress) return;
+  const pid = BigInt(poolId);
+  try {
+    const result = await rpc.call(p => {
+      const amm = new ethers.Contract(_ammAddress, _ammABI, p);
+      return amm.pools(pid);
+    });
+    _onchain = {
+      reserve0: result[0],
+      reserve1: result[1],
+      supply: result[6]
+    };
+    // User LP balance (ERC6909: balanceOf(owner, tokenId) on the AMM singleton)
+    if (_signer) {
+      const addr = await _signer.getAddress();
+      _userLpBal = await rpc.call(p => {
+        const amm = new ethers.Contract(_ammAddress, _ammABI, p);
+        return amm.balanceOf(addr, pid);
+      });
+    }
+    renderPool();
+  } catch (e) {
+    console.error("refreshOnchain:", e);
+    renderPool(); // render what we have
+  }
+}
+
+// ---- Format helpers ----
+function fmtWei(val, decimals) {
+  if (!val) return "0";
+  const d = decimals || 18;
+  const n = BigInt(val);
+  if (n === 0n) return "0";
+  const divisor = 10n ** BigInt(d);
+  const whole = n / divisor;
+  const frac = n % divisor;
+  const fracStr = frac.toString().padStart(d, '0').slice(0, 6).replace(/0+$/, '');
+  return whole.toString() + (fracStr ? '.' + fracStr : '');
+}
+
+function esc(s) { const d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
+
+function coinIcon(coin, size) {
+  if (!coin || !coin.imageUrl) return '';
+  const s = size || 16;
+  return `<img src="${escAttr(coin.imageUrl)}" width="${s}" height="${s}" style="border-radius:50%;vertical-align:middle;margin-right:3px" onerror="this.style.display='none'">`;
+}
+
+function tokenLabel(side) {
+  if (!_poolData) return side === 0 ? 'Token0' : 'Token1';
+  const coin = side === 0 ? _poolData.coin0 : _poolData.coin1;
+  const addr = side === 0 ? _poolData.token0 : _poolData.token1;
+  if (coin && coin.symbol) return coin.symbol;
+  if (addr === ZERO) return 'ETH';
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function tokenDecimals(side) {
+  if (!_poolData) return 18;
+  const coin = side === 0 ? _poolData.coin0 : _poolData.coin1;
+  return coin && coin.decimals ? Number(coin.decimals) : 18;
+}
+
+// ---- Render pool tab ----
+function renderPool() {
+  if (!_onchain) return;
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const l0 = tokenLabel(0), l1 = tokenLabel(1);
+
+  $('reserve0').textContent = fmtWei(_onchain.reserve0, d0) + ' ' + l0;
+  $('reserve1').textContent = fmtWei(_onchain.reserve1, d1) + ' ' + l1;
+
+  // Price: how much of token0 per token1
+  const r0 = Number(_onchain.reserve0) / (10 ** d0);
+  const r1 = Number(_onchain.reserve1) / (10 ** d1);
+  const price = r1 > 0 ? (r0 / r1).toPrecision(6) : '--';
+  $('poolPrice').textContent = price + ' ' + l0 + '/' + l1;
+
+  $('lpSupply').textContent = fmtWei(_onchain.supply, 18);
+  $('userLp').textContent = fmtWei(_userLpBal, 18);
+
+  // Share %
+  const supply = _onchain.supply;
+  if (supply > 0n && _userLpBal > 0n) {
+    const sharePct = Number(_userLpBal * 10000n / supply) / 100;
+    $('userShare').textContent = sharePct.toFixed(2) + '%';
+    // Share value
+    const val0 = _onchain.reserve0 * _userLpBal / supply;
+    const val1 = _onchain.reserve1 * _userLpBal / supply;
+    $('shareValue').textContent = fmtWei(val0, d0) + ' ' + l0 + ' + ' + fmtWei(val1, d1) + ' ' + l1;
+  } else {
+    $('userShare').textContent = _signer ? '0%' : '--';
+    $('shareValue').textContent = '--';
+  }
+
+  // Fee / hook info
+  if (_poolData) {
+    const feeTxt = poolFeePct(_poolData);
+    const hooked = !_isV0 && _poolData.hookType && _poolData.hookType !== 'NONE';
+    if (hooked) {
+      $('poolFee').innerHTML = feeTxt !== 'hooked'
+        ? feeTxt + ' <span style="color:var(--fg-muted);font-size:10px">(Hooked: ' + esc(_poolData.hookType) + ')</span>'
+        : '<span style="color:var(--fg-muted);font-size:10px">Hooked (' + esc(_poolData.hookType) + ')</span>';
+    } else {
+      $('poolFee').textContent = feeTxt;
+    }
+  }
+
+  // Update add form labels
+  $('addLabel0').textContent = l0;
+  $('addLabel1').textContent = l1;
+
+  // Show/hide zap toggle for ETH pools
+  updateAddModeToggle();
+}
+
+// ---- Add liquidity: auto-calculate matching amount ----
+// Uses helper contract for ETH pools, falls back to ratio math
+let _helperDebounce = null;
+
+function onAddAmt0Change() {
+  _addDirection = 0;
+  if (!_onchain || _onchain.reserve0 === 0n) return;
+  const val = $('addAmt0').value;
+  if (!val || Number(val) === 0) { $('addAmt1').value = ''; return; }
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const amt0 = ethers.parseUnits(val, d0);
+  // Ratio fallback (instant)
+  const amt1 = amt0 * _onchain.reserve1 / _onchain.reserve0;
+  $('addAmt1').value = ethers.formatUnits(amt1, d1);
+  // Try helper for ETH pools (async, debounced)
+  if (_poolData && _poolData.token0 === ZERO && _poolKey) {
+    clearTimeout(_helperDebounce);
+    _helperDebounce = setTimeout(() => calcHelperETH(amt0, null), 300);
+  }
+}
+
+function onAddAmt1Change() {
+  _addDirection = 1;
+  if (!_onchain || _onchain.reserve1 === 0n) return;
+  const val = $('addAmt1').value;
+  if (!val || Number(val) === 0) { $('addAmt0').value = ''; return; }
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const amt1 = ethers.parseUnits(val, d1);
+  // Ratio fallback (instant)
+  const amt0 = amt1 * _onchain.reserve0 / _onchain.reserve1;
+  $('addAmt0').value = ethers.formatUnits(amt0, d0);
+  // Try helper for ETH pools (async, debounced)
+  if (_poolData && _poolData.token0 === ZERO && _poolKey) {
+    clearTimeout(_helperDebounce);
+    _helperDebounce = setTimeout(() => calcHelperETH(null, amt1), 300);
+  }
+}
+
+async function calcHelperETH(ethAmt, tokenAmt) {
+  try {
+    const helperAddr = _isV0 ? V0_HELPER : V1_HELPER;
+    const helperABI = _isV0 ? V0_HELPER_ABI : V1_HELPER_ABI;
+    const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+
+    if (ethAmt !== null) {
+      // User specified ETH (token0), calculate optimal token1
+      const [, actual0, actual1] = await rpc.call(p => {
+        const helper = new ethers.Contract(helperAddr, helperABI, p);
+        return helper.calculateRequiredETH(_poolKey, ethAmt, ethers.parseUnits("999999999", d1));
+      });
+      if (_addDirection === 0) {
+        $('addAmt0').value = ethers.formatUnits(actual0, d0);
+        $('addAmt1').value = ethers.formatUnits(actual1, d1);
+      }
+    } else if (tokenAmt !== null) {
+      // User specified token1, calculate optimal ETH
+      const [ethNeeded, actual0, actual1] = await rpc.call(p => {
+        const helper = new ethers.Contract(helperAddr, helperABI, p);
+        return helper.calculateRequiredETH(_poolKey, ethers.parseEther("1000000"), tokenAmt);
+      });
+      if (_addDirection === 1) {
+        $('addAmt0').value = ethers.formatUnits(ethNeeded, d0);
+        $('addAmt1').value = ethers.formatUnits(actual1, d1);
+      }
+    }
+  } catch (e) {
+    // Helper call failed, ratio fallback already applied
+    console.debug("Helper calculateRequiredETH failed, using ratio:", e.message);
+  }
+}
+
+// ---- Add mode toggle (zap vs pair) ----
+function setAddMode(mode) {
+  _addMode = mode;
+  document.querySelectorAll('#addModeToggle .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.addmode === mode);
+  });
+  $('addZapForm').style.display = mode === 'zap' ? '' : 'none';
+  $('addPairForm').style.display = mode === 'pair' ? '' : 'none';
+  // Clear status
+  $('addStatus').className = 'status-msg';
+  $('addStatus').textContent = '';
+}
+
+// Show/hide zap toggle based on pool (only for ETH pools)
+function updateAddModeToggle() {
+  const toggle = $('addModeToggle');
+  if (!toggle) return;
+  const isEthPool = _poolData && _poolData.token0 === ZERO;
+  toggle.style.display = isEthPool ? '' : 'none';
+  if (!isEthPool && _addMode === 'zap') setAddMode('pair');
+}
+
+// ---- Zap: quote + preview ----
+function onZapEthInput() {
+  const val = $('zapEthAmt').value;
+  const preview = $('zapPreview');
+  if (!val || Number(val) <= 0 || !_onchain || _onchain.reserve0 === 0n) {
+    preview.textContent = '';
+    return;
+  }
+  const q = quoteZap(ethers.parseEther(val));
+  const d1 = tokenDecimals(1);
+  const l1 = tokenLabel(1);
+  const halfEthFmt = Number(ethers.formatEther(q.halfEth)).toFixed(6);
+  const tokFmt = Number(ethers.formatUnits(q.tokensOut, d1)).toFixed(6);
+  const approx = q.isHooked ? '(approx) ' : '';
+  preview.textContent = `${approx}~${halfEthFmt} ETH + ~${tokFmt} ${l1} → LP`;
+}
+
+function getPoolFeeBps() {
+  if (_isV0) return BigInt(_poolData.swapFee || 100);
+  const foh = BigInt(_poolData.feeOrHook || 30);
+  // If feeOrHook > 10000 it's a hook address, not fee bps — use swapFee fallback
+  if (foh > 10000n) return BigInt(_poolData.swapFee || 30);
+  return foh;
+}
+
+// Fee display for any pool object (used in pool list + header)
+function poolFeePct(p) {
+  if (p.source === 'ZAMM') return (Number(p.swapFee || 100) / 100).toFixed(2) + '%';
+  const foh = Number(p.feeOrHook || 30);
+  const hooked = p.hookType && p.hookType !== 'NONE';
+  if (hooked || foh > 10000) {
+    // Hooked pool: show swapFee if available, else "hooked"
+    if (p.swapFee && Number(p.swapFee) > 0 && Number(p.swapFee) <= 10000) {
+      return (Number(p.swapFee) / 100).toFixed(2) + '%';
+    }
+    return 'hooked';
+  }
+  return (foh / 100).toFixed(2) + '%';
+}
+
+function quoteZap(ethAmount) {
+  const reserve0 = _onchain.reserve0;
+  const reserve1 = _onchain.reserve1;
+  const feeBps = getPoolFeeBps();
+  const halfEth = ethAmount / 2n;
+  const amtInWithFee = halfEth * (10000n - feeBps);
+  const tokensOut = (amtInWithFee * reserve1) / (reserve0 * 10000n + amtInWithFee);
+  const isHooked = !_isV0 && BigInt(_poolData.feeOrHook || 30) > 10000n;
+  return { halfEth, tokensOut, feeBps, isHooked };
+}
+
+function quoteZapMins(ethAmount) {
+  const q = quoteZap(ethAmount);
+  const slip = Number($('zapSlippage').value) || 5;
+  const slipMul = BigInt(Math.floor((100 - slip) * 100));
+  const amountOutMin = q.tokensOut * slipMul / 10000n;
+  const amount0Min = q.halfEth * slipMul / 10000n;
+  const amount1Min = q.tokensOut * slipMul / 10000n;
+  return { amountOutMin, amount0Min, amount1Min };
+}
+
+async function doZapLiquidity() {
+  if (!_signer) { showWalletModal(); return; }
+  if (!_poolKey || !_onchain) return;
+
+  const val = $('zapEthAmt').value;
+  if (!val || Number(val) <= 0) return;
+  const ethAmount = ethers.parseEther(val);
+  const mins = quoteZapMins(ethAmount);
+
+  try {
+    showStatus('addStatus', 'info', 'Sending zap transaction...');
+    const zapAddr = _isV0 ? V0_ZAP : V1_ZAP;
+    const zapABI = _isV0 ? V0_ZAP_ABI : V1_ZAP_ABI;
+    const zap = new ethers.Contract(zapAddr, zapABI, _signer);
+    const addr = await _signer.getAddress();
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+
+    const tx = await zap.addSingleLiqETH(
+      _poolKey, mins.amountOutMin, mins.amount0Min, mins.amount1Min,
+      addr, deadline, { value: ethAmount }
+    );
+    showStatus('addStatus', 'info', 'Waiting for confirmation...');
+    const receipt = await tx.wait();
+    showStatus('addStatus', 'success', 'Zap liquidity added! ' + receipt.hash.slice(0, 10) + '...');
+    $('zapEthAmt').value = '';
+    $('zapPreview').textContent = '';
+    await refreshOnchain();
+  } catch (e) {
+    console.error(e);
+    const msg = friendlyError(e, 'Zap failed');
+    if (msg) showStatus('addStatus', 'error', msg);
+    else showStatus('addStatus', '', '');
+  }
+}
+
+// ---- Remove: show expected output ----
+function onRemoveAmtChange() {
+  if (!_onchain || _onchain.supply === 0n) return;
+  const val = $('removeAmt').value;
+  if (!val || Number(val) === 0) { $('removeExpected').textContent = '--'; return; }
+  const liq = ethers.parseUnits(val, 18);
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const out0 = liq * _onchain.reserve0 / _onchain.supply;
+  const out1 = liq * _onchain.reserve1 / _onchain.supply;
+  $('removeExpected').textContent = fmtWei(out0, d0) + ' ' + tokenLabel(0) + ' + ' + fmtWei(out1, d1) + ' ' + tokenLabel(1);
+}
+
+function setMaxRemove() {
+  if (_userLpBal > 0n) {
+    $('removeAmt').value = ethers.formatUnits(_userLpBal, 18);
+    onRemoveAmtChange();
+  }
+}
+
+// ---- Approval helpers ----
+async function ensureApproval(tokenAddr, coinId, amount) {
+  if (!_signer) return;
+  const ammAddr = _ammAddress;
+  const userAddr = await _signer.getAddress();
+  const cid = BigInt(coinId);
+
+  // ZAMM coins (id >= 1000000): use Coins.setOperator on V0
+  if (cid >= 1000000n) {
+    const coins = new ethers.Contract(COINS, COINS_ABI, _signer);
+    const approved = await coins.isOperator(userAddr, ammAddr);
+    if (!approved) {
+      showStatus('addStatus', 'info', 'Approving coins operator...');
+      const tx = await coins.setOperator(ammAddr, true);
+      await tx.wait();
+    }
+    return;
+  }
+
+  // ZAMM Hooked coins (id > 0, id < 1000000): no approval needed
+  if (cid > 0n && !_isV0) {
+    return;
+  }
+
+  // ERC20: standard approve
+  if (tokenAddr !== ZERO) {
+    const erc20 = new ethers.Contract(tokenAddr, ERC20_ABI, _signer);
+    const allowance = await erc20.allowance(userAddr, ammAddr);
+    if (allowance < amount) {
+      showStatus('addStatus', 'info', 'Approving token...');
+      const tx = await erc20.approve(ammAddr, ethers.MaxUint256);
+      await tx.wait();
+    }
+  }
+}
+
+// ---- Add Liquidity ----
+async function doAddLiquidity() {
+  if (!_signer) { showWalletModal(); return; }
+  if (!_poolKey || !_onchain) return;
+
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const amt0Str = $('addAmt0').value;
+  const amt1Str = $('addAmt1').value;
+  if (!amt0Str || !amt1Str || Number(amt0Str) === 0) return;
+
+  const amt0 = ethers.parseUnits(amt0Str, d0);
+  const amt1 = ethers.parseUnits(amt1Str, d1);
+  const slip = Number($('addSlippage').value) || 2;
+  const min0 = amt0 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
+  const min1 = amt1 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
+
+  try {
+    // Approvals
+    const coin0Id = _poolData.coin0 ? _poolData.coin0.id : "0";
+    const coin1Id = _poolData.coin1 ? _poolData.coin1.id : "0";
+    if (_poolData.token0 !== ZERO) await ensureApproval(_poolData.token0, coin0Id, amt0);
+    if (_poolData.token1 !== ZERO) await ensureApproval(_poolData.token1, coin1Id, amt1);
+
+    showStatus('addStatus', 'info', 'Sending transaction...');
+    const amm = new ethers.Contract(_ammAddress, _ammABI, _signer);
+    const addr = await _signer.getAddress();
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    const ethValue = _poolData.token0 === ZERO ? amt0 : (_poolData.token1 === ZERO ? amt1 : 0n);
+
+    const tx = await amm.addLiquidity(_poolKey, amt0, amt1, min0, min1, addr, deadline, { value: ethValue });
+    showStatus('addStatus', 'info', 'Waiting for confirmation...');
+    const receipt = await tx.wait();
+    showStatus('addStatus', 'success', 'Liquidity added! ' + receipt.hash.slice(0, 10) + '...');
+    $('addAmt0').value = '';
+    $('addAmt1').value = '';
+    await refreshOnchain();
+  } catch (e) {
+    console.error(e);
+    const msg = friendlyError(e, 'Add liquidity failed');
+    if (msg) showStatus('addStatus', 'error', msg);
+    else showStatus('addStatus', '', '');
+  }
+}
+
+// ---- Remove Liquidity ----
+async function doRemoveLiquidity() {
+  if (!_signer) { showWalletModal(); return; }
+  if (!_poolKey || !_onchain) return;
+
+  const amtStr = $('removeAmt').value;
+  if (!amtStr || Number(amtStr) === 0) return;
+  const liq = ethers.parseUnits(amtStr, 18);
+
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const out0 = liq * _onchain.reserve0 / _onchain.supply;
+  const out1 = liq * _onchain.reserve1 / _onchain.supply;
+  const slip = Number($('removeSlippage').value) || 2;
+  const min0 = out0 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
+  const min1 = out1 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
+
+  try {
+    showStatus('removeStatus', 'info', 'Sending transaction...');
+    const amm = new ethers.Contract(_ammAddress, _ammABI, _signer);
+    const addr = await _signer.getAddress();
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+
+    const tx = await amm.removeLiquidity(_poolKey, liq, min0, min1, addr, deadline);
+    showStatus('removeStatus', 'info', 'Waiting for confirmation...');
+    const receipt = await tx.wait();
+    showStatus('removeStatus', 'success', 'Liquidity removed! ' + receipt.hash.slice(0, 10) + '...');
+    $('removeAmt').value = '';
+    $('removeExpected').textContent = '--';
+    await refreshOnchain();
+  } catch (e) {
+    console.error(e);
+    const msg = friendlyError(e, 'Remove liquidity failed');
+    if (msg) showStatus('removeStatus', 'error', msg);
+    else showStatus('removeStatus', '', '');
+  }
+}
+
+// ---- My Positions (indexer + on-chain ERC6909 verification) ----
+async function renderPositions() {
+  const el = $('positionsTable');
+  if (!_signer) {
+    el.innerHTML = '<div class="empty-msg">Connect wallet to see positions</div>';
+    return;
+  }
+  el.innerHTML = '<div class="empty-msg">Loading...</div>';
+  const addr = await _signer.getAddress();
+  const addrLower = addr.toLowerCase();
+  try {
+    // Helper: on-chain balanceOf via fallback provider
+    const onchainBal = (ammAddr, abi, owner, tokenId) =>
+      rpc.call(p => new ethers.Contract(ammAddr, abi, p).balanceOf(owner, tokenId)).catch(() => 0n);
+
+    // Always check on-chain balance for current pool
+    const currentPoolId = getPoolId();
+    const currentPoolBalP = (currentPoolId && _ammAddress)
+      ? onchainBal(_ammAddress, _ammABI, addr, BigInt(currentPoolId))
+      : Promise.resolve(0n);
+
+    const [indexerRes, currentPoolBal] = await Promise.all([
+      fetch(BASE + "/graphql", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `query ($userId: String!) {
+            lpUserPositions(where: { userId: $userId }, limit: 100) {
+              totalCount
+              items {
+                liquidity poolId source
+                pool {
+                  id source reserve0 reserve1 swapFee feeOrHook hook hookType token0 token1 coin0Id coin1Id
+                  coin0 { id name symbol decimals imageUrl }
+                  coin1 { id name symbol decimals imageUrl }
+                }
+              }
+            }
+          }`,
+          variables: { userId: addrLower }
+        })
+      }).then(r => r.json()).catch(() => ({ data: null })),
+      currentPoolBalP
+    ]);
+
+    const items = indexerRes.data && indexerRes.data.lpUserPositions
+      ? indexerRes.data.lpUserPositions.items : [];
+
+    // Verify on-chain balances for all indexer positions
+    const verifiedItems = [];
+    const balChecks = items.map(pos => {
+      const ammAddr = pos.pool.source === 'ZAMM' ? ZAMM_V0 : ZAMM_V1;
+      const abi = pos.pool.source === 'ZAMM' ? V0_ABI : V1_ABI;
+      return onchainBal(ammAddr, abi, addr, BigInt(pos.poolId));
+    });
+    const onchainBals = await Promise.all(balChecks);
+    const seenPoolIds = new Set();
+    for (let i = 0; i < items.length; i++) {
+      const bal = onchainBals[i];
+      seenPoolIds.add(items[i].poolId);
+      // Use on-chain balance (authoritative), fall back to indexer
+      verifiedItems.push({
+        ...items[i],
+        liquidity: bal > 0n ? bal.toString() : items[i].liquidity,
+        _onchainBal: bal
+      });
+    }
+
+    // If current pool has on-chain balance but wasn't in indexer, add it
+    if (currentPoolId && currentPoolBal > 0n && !seenPoolIds.has(currentPoolId) && _poolData) {
+      verifiedItems.unshift({
+        poolId: currentPoolId,
+        liquidity: currentPoolBal.toString(),
+        source: _poolData.source,
+        pool: _poolData,
+        _onchainBal: currentPoolBal
+      });
+    }
+
+    // Filter out zero-balance positions
+    const activeItems = verifiedItems.filter(pos => {
+      try { return BigInt(pos.liquidity) > 0n; } catch { return false; }
+    });
+
+    if (activeItems.length === 0) {
+      el.innerHTML = '<div class="empty-msg">No LP positions found</div>';
+      return;
+    }
+    let html = '<table><tr><th>Pool</th><th>LP Balance</th><th>Reserves</th><th></th></tr>';
+    for (const pos of activeItems) {
+      const p = pos.pool;
+      const c0 = resolveCoin(p.coin0, p.token0, p.coin0Id);
+      const c1 = resolveCoin(p.coin1, p.token1, p.coin1Id);
+      const s0 = coinLabel(c0, p.token0);
+      const s1 = coinLabel(c1, p.token1);
+      const d0 = c0.decimals ? Number(c0.decimals) : 18;
+      const d1 = c1.decimals ? Number(c1.decimals) : 18;
+      const ver = p.source === 'ZAMM' ? 'ZAMM' : 'ZAMM Hooked';
+      html += `<tr>
+        <td>${coinIcon(c0)}${esc(s0)} / ${coinIcon(c1)}${esc(s1)}<br><span class="text-muted" style="font-size:10px">${ver}</span></td>
+        <td class="mono">${fmtWei(pos.liquidity, 18)}</td>
+        <td class="mono" style="font-size:10px">${fmtWei(p.reserve0, d0)} / ${fmtWei(p.reserve1, d1)}</td>
+        <td><a href="#/${p.id || pos.poolId}" class="btn" onclick="setTimeout(()=>location.reload(),0)">Manage</a></td>
+      </tr>`;
+    }
+    html += '</table>';
+    el.innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    el.innerHTML = '<div class="empty-msg">Failed to load positions</div>';
+  }
+}
+
+// ---- Status helper ----
+function showStatus(id, type, msg) {
+  const el = $(id);
+  el.className = 'status-msg show ' + type;
+  el.textContent = msg;
+}
+
+// ---- Error classification (matches swap page pattern) ----
+function isUserRejection(e) {
+  if (e.code === 4001 || e.code === 'ACTION_REJECTED') return true;
+  const s = String(e?.data || e?.message || e?.reason || '').toLowerCase();
+  return /user rejected|user denied|user cancelled|user refused/i.test(s);
+}
+
+function friendlyError(e, fallback) {
+  if (isUserRejection(e)) return null; // null = silently clear status
+  const s = String(e?.data || e?.message || e?.reason || '');
+  if (/insufficient funds/i.test(s) || /INSUFFICIENT_FUNDS/i.test(s)) return 'Insufficient balance';
+  if (/MulDivFailed/i.test(s)) return 'Pool has no liquidity or pool key mismatch';
+  if (/InsufficientOutputAmount|InsufficientAmount/i.test(s)) return 'Slippage too tight — try increasing slippage';
+  if (/expired|deadline/i.test(s)) return 'Transaction expired — try again';
+  if (/InsufficientAllowance/i.test(s)) return 'Insufficient token allowance';
+  return e.reason || fallback || 'Transaction failed';
+}
+
+// ---- Countdown + auto-refresh ----
+function startRefreshTimer() {
+  if (_refreshTimer) clearInterval(_refreshTimer);
+  _refreshCountdown = 30;
+  _refreshTimer = setInterval(async () => {
+    _refreshCountdown--;
+    const cd = $('refreshCountdown');
+    if (cd) cd.textContent = _refreshCountdown > 0 ? _refreshCountdown + 's' : '';
+    if (_refreshCountdown <= 0) {
+      _refreshCountdown = 30;
+      await refreshOnchain();
+    }
+  }, 1000);
+}
+
+// ---- LP Event History ----
+let _historyLoaded = false;
+
+async function renderHistory() {
+  const el = $('historyTable');
+  const poolId = getPoolId();
+  if (!poolId) {
+    el.innerHTML = '<div class="empty-msg">No pool selected</div>';
+    return;
+  }
+  if (_historyLoaded) return;
+  el.innerHTML = '<div class="empty-msg">Loading...</div>';
+  try {
+    const res = await fetch(BASE + `/api/events?poolId=${poolId}&limit=200`);
+    const data = await res.json();
+    const events = (data.data || data || []).filter(e => e.type === 'LIQADD' || e.type === 'LIQREM');
+    if (!events.length) {
+      el.innerHTML = '<div class="empty-msg">No LP events found</div>';
+      _historyLoaded = true;
+      return;
+    }
+    const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+    const l0 = tokenLabel(0), l1 = tokenLabel(1);
+    let html = '<table><tr><th>Type</th><th>Amounts</th><th>User</th><th>Time</th></tr>';
+    for (const ev of events) {
+      const isAdd = ev.type === 'LIQADD';
+      const typeLabel = isAdd
+        ? '<span style="color:var(--green)">+ Add</span>'
+        : '<span style="color:var(--red)">- Remove</span>';
+      const a0raw = isAdd ? ev.amount0_in : ev.amount0_out;
+      const a1raw = isAdd ? ev.amount1_in : ev.amount1_out;
+      const a0 = a0raw ? fmtWei(a0raw, d0) : '--';
+      const a1 = a1raw ? fmtWei(a1raw, d1) : '--';
+      const user = ev.maker || ev.sender || ev.user || ev.from || '--';
+      const userShort = user.length > 10 ? user.slice(0, 6) + '...' + user.slice(-4) : user;
+      const time = ev.timestamp ? new Date(Number(ev.timestamp) * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (ev.blockNumber || '--');
+      html += `<tr>
+        <td>${typeLabel}</td>
+        <td class="mono" style="font-size:10px">${a0} ${esc(l0)}<br>${a1} ${esc(l1)}</td>
+        <td class="mono" style="font-size:10px"><a href="https://etherscan.io/address/${user}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${esc(userShort)}</a></td>
+        <td class="text-muted" style="font-size:10px">${time}</td>
+      </tr>`;
+    }
+    html += '</table>';
+    el.innerHTML = html;
+    _historyLoaded = true;
+  } catch (e) {
+    console.error("renderHistory:", e);
+    el.innerHTML = '<div class="empty-msg">Failed to load history</div>';
+  }
+}
+
+// ---- Canonical ZAMM V0 pool ID ----
+function computeCanonicalPoolId() {
+  const poolKey = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["uint256","uint256","address","address","uint256"],
+    [0, ZORG_ID, ZERO, ZORG_TOKEN, 100]
+  );
+  return BigInt(ethers.keccak256(poolKey)).toString();
+}
+
+// ---- Pool selector modal ----
+let _poolListCache = null;
+
+function openPoolModal() {
+  $('poolModal').classList.add('active');
+  if (!_poolListCache) fetchPoolList();
+  else renderPoolList(_poolListCache);
+}
+
+function closePoolModal() {
+  $('poolModal').classList.remove('active');
+}
+
+async function fetchPoolList() {
+  const el = $('poolList');
+  el.innerHTML = '<div class="empty-msg">Loading pools...</div>';
+  try {
+    await loadCoinMap();
+    const res = await fetch(BASE + "/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `{
+          pools(limit: 50, orderBy: "reserve0", orderDirection: "desc") {
+            items {
+              id source token0 token1 coin0Id coin1Id reserve0 reserve1 swapFee feeOrHook hookType
+              coin0 { id symbol name decimals imageUrl }
+              coin1 { id symbol name decimals imageUrl }
+            }
+          }
+        }`
+      })
+    });
+    const json = await res.json();
+    const allPools = json.data && json.data.pools ? json.data.pools.items : [];
+    // Filter to ZAMM/COOKBOOK pools with reserves and known symbols
+    const pools = allPools.filter(p => {
+      if (p.source !== 'ZAMM' && p.source !== 'COOKBOOK') return false;
+      if (!p.reserve0 || BigInt(p.reserve0) <= 0n) return false;
+      return true;
+    });
+    // Resolve coin metadata for each pool (use top-level coin0Id/coin1Id as fallback)
+    for (const p of pools) {
+      p.coin0 = resolveCoin(p.coin0, p.token0, p.coin0Id);
+      p.coin1 = resolveCoin(p.coin1, p.token1, p.coin1Id);
+    }
+    // Hide pools where either symbol is unknown
+    const resolved = pools.filter(p => {
+      const s0 = coinLabel(p.coin0, p.token0);
+      const s1 = coinLabel(p.coin1, p.token1);
+      return s0 !== '???' && s1 !== '???';
+    });
+    _poolListCache = resolved;
+    renderPoolList(resolved);
+  } catch (e) {
+    console.error("fetchPoolList:", e);
+    el.innerHTML = '<div class="empty-msg">Failed to load pools</div>';
+  }
+}
+
+function renderPoolList(pools) {
+  const el = $('poolList');
+  if (!pools || pools.length === 0) {
+    el.innerHTML = '<div class="empty-msg">No pools found</div>';
+    return;
+  }
+  let html = '';
+  for (const p of pools) {
+    const c0 = p.coin0 || {};
+    const c1 = p.coin1 || {};
+    const s0 = coinLabel(c0, p.token0);
+    const s1 = coinLabel(c1, p.token1);
+    const version = p.source === 'ZAMM' ? 'ZAMM' : 'ZAMM Hooked';
+    const feePct = poolFeePct(p);
+    const d0 = c0.decimals || 18;
+    const d1 = c1.decimals || 18;
+    const r0 = p.reserve0 ? fmtWei(p.reserve0, Number(d0)) : '--';
+    const r1 = p.reserve1 ? fmtWei(p.reserve1, Number(d1)) : '--';
+    html += `<div class="pool-list-item" onclick="selectPool('${p.id}')">
+      <div>
+        <div class="pool-pair">${coinIcon(c0)}${esc(s0)} / ${coinIcon(c1)}${esc(s1)}</div>
+        <div class="pool-meta">${version} &middot; ${feePct} &middot; ${String(p.id).slice(0,8)}...</div>
+      </div>
+      <div class="pool-reserves">${r0} ${esc(s0)}<br>${r1} ${esc(s1)}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function selectPool(poolId) {
+  closePoolModal();
+  location.hash = '#/' + poolId;
+}
+
+// ---- Init ----
+async function init() {
+  let poolId = getPoolId();
+
+  // Default to canonical ZAMM V0 pool if no hash
+  if (!poolId) {
+    poolId = computeCanonicalPoolId();
+    location.hash = '#/' + poolId;
+    return; // hashchange will trigger reload
+  }
+
+  // Set up cross-links
+  $('chartLink').href = '../chart/#/' + poolId;
+  $('chartLink').style.display = 'inline-flex';
+  $('orderbookLink').href = '../orderbook/#/' + poolId;
+  $('orderbookLink').style.display = 'inline-flex';
+
+  $('poolInfo').textContent = 'Loading pool ' + poolId.slice(0, 12) + '...';
+
+  // Preload coin registry before fetching pool (needed for coin resolution)
+  await loadCoinMap();
+  const pool = await fetchPool(poolId);
+  if (!pool) {
+    $('poolInfo').textContent = 'Pool not found: ' + poolId.slice(0, 20) + '...';
+    return;
+  }
+  _poolData = pool;
+
+  // Determine V0 vs V1
+  _isV0 = pool.source === "ZAMM";
+  _ammAddress = _isV0 ? ZAMM_V0 : ZAMM_V1;
+  _ammABI = _isV0 ? V0_ABI : V1_ABI;
+
+  // Reconstruct PoolKey
+  const id0 = pool.coin0 && pool.coin0.id ? BigInt(pool.coin0.id) : 0n;
+  const id1 = pool.coin1 && pool.coin1.id ? BigInt(pool.coin1.id) : 0n;
+  const fee = _isV0 ? BigInt(pool.swapFee || 100) : BigInt(pool.feeOrHook || 30);
+  _poolKey = {
+    id0: id0,
+    id1: id1,
+    token0: pool.token0,
+    token1: pool.token1
+  };
+  if (_isV0) {
+    _poolKey.swapFee = fee;
+  } else {
+    _poolKey.feeOrHook = fee;
+  }
+
+  // Validate: reconstructed PoolKey must hash to the expected pool ID
+  const checkEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["uint256","uint256","address","address","uint256"],
+    [id0, id1, pool.token0, pool.token1, fee]
+  );
+  const checkId = BigInt(ethers.keccak256(checkEncoded)).toString();
+  if (checkId !== poolId) {
+    console.error("PoolKey mismatch! expected:", poolId, "got:", checkId,
+      "id0:", id0.toString(), "id1:", id1.toString(), "fee:", fee.toString(),
+      "source:", pool.source);
+    _poolKey = null; // Prevent transactions with wrong key
+  }
+
+  // Header + pool selector button label
+  const l0 = tokenLabel(0), l1 = tokenLabel(1);
+  const version = _isV0 ? 'ZAMM' : 'ZAMM Hooked';
+  const feePct = poolFeePct(pool);
+  const ic0 = coinIcon(_poolData.coin0, 18);
+  const ic1 = coinIcon(_poolData.coin1, 18);
+  $('poolInfo').innerHTML = ic0 + esc(l0) + ' / ' + ic1 + esc(l1) + ' <span style="opacity:0.5">(' + version + ' &middot; ' + feePct + ')</span> &middot; <a href="https://etherscan.io/address/' + _ammAddress + '" target="_blank" rel="noopener" style="font-size:10px">' + poolId.slice(0, 12) + '...</a>';
+  $('poolSelectorBtn').innerHTML = ic0 + esc(l0) + '/' + ic1 + esc(l1) + ' &#9662;';
+
+  // Fetch on-chain state
+  await refreshOnchain();
+  startRefreshTimer();
+  tryAutoConnect();
+}
+
+window.addEventListener('hashchange', () => location.reload());
+init();
+</script>
+</body>
+</html>

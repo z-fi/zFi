@@ -614,6 +614,12 @@ body.modal-open { overflow: hidden; }
   /* Privacy tab mobile */
   .pp-note-area { font-size: 10px; }
   .pp-asset-btn { padding: 8px 6px; font-size: 12px; min-height: 40px; }
+  /* Coin launch form mobile */
+  .coin-name-row { flex-direction:column;gap:0; }
+  .coin-name-row .section { margin-bottom:14px; }
+  .coin-slider-row { gap:8px; }
+  .coin-slider-row label { flex:0 0 90px;font-size:11px; }
+  .coin-slider-row .coin-slider-val { flex:0 0 50px;font-size:12px; }
 }
 @media (max-width: 380px) {
   body { padding: 70px 12px 20px; }
@@ -632,6 +638,11 @@ body.modal-open { overflow: hidden; }
   /* Privacy tab tight mobile */
   .pp-asset-btn { padding: 6px 4px; font-size: 11px; }
   .pp-note-area { font-size: 9px; }
+  /* Coin launch form tight mobile */
+  .coin-slider-row { flex-wrap:wrap;gap:4px 8px; }
+  .coin-slider-row label { flex:0 0 100%;font-size:10px;margin-bottom:-2px; }
+  .coin-slider-row input[type="range"] { flex:1; }
+  .coin-slider-row .coin-slider-val { flex:0 0 45px;font-size:11px; }
 }
 
 /* Info tooltip */
@@ -718,6 +729,65 @@ body.modal-open { overflow: hidden; }
   color: var(--fg);
 }
 
+/* Coin tab */
+.coin-name-row { display:flex;gap:12px;margin-bottom:14px; }
+.coin-name-row .section { flex:2;margin-bottom:0; }
+.coin-name-row .section:last-child { flex:1; }
+
+.coin-upload-row { display:flex;gap:12px;margin-bottom:14px; }
+.coin-upload-btn {
+  position:relative;display:flex;align-items:center;justify-content:center;
+  border:1.5px dashed var(--border-muted);cursor:pointer;overflow:hidden;
+  color:var(--fg-dim);font-size:18px;transition:border-color 0.15s;
+}
+.coin-upload-btn:hover { border-color:var(--fg-muted); }
+.coin-upload-btn img {
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+}
+.coin-upload-logo { width:56px;height:56px;border-radius:50%;flex-shrink:0; }
+.coin-upload-banner { flex:1;height:56px;border-radius:6px; }
+
+.coin-summary { display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:1.6; }
+.coin-summary dt { color:var(--fg-muted);grid-column:1; }
+.coin-summary dd { font-weight:600;margin:0;grid-column:2; }
+
+.coin-tpl-toggle { display:flex;gap:6px;margin-bottom:14px; }
+.coin-tpl-btn {
+  flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  border:none;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:var(--fg-muted);
+  cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;
+}
+.coin-tpl-btn.active { color:var(--fg);border-bottom-color:var(--fg); }
+.coin-slider-row {
+  display:flex;align-items:center;gap:12px;margin-bottom:10px;
+}
+.coin-slider-row label { flex:0 0 120px;font-size:12px;letter-spacing:0.05em;text-transform:uppercase;margin:0; }
+.coin-slider-row input[type="range"] { flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--border);outline:none;border-radius:2px; }
+.coin-slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--fg);cursor:pointer;border:none;
+}
+.coin-slider-row input[type="range"]::-moz-range-thumb {
+  width:16px;height:16px;border-radius:50%;background:var(--fg);cursor:pointer;border:none;
+}
+.coin-slider-row .coin-slider-val { flex:0 0 60px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums; }
+.coin-sliders.locked input[type="range"] { pointer-events:none;opacity:0.4; }
+.coin-drawer-body { display:none;padding-top:4px; }
+#coinSocialsWrap.open .coin-drawer-body,
+#coinSettingsWrap.open .coin-drawer-body { display:block; }
+#coinSocialsWrap.open .coin-drawer-arrow,
+#coinSettingsWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
+.coin-tpl-badge {
+  display:inline-flex;align-items:center;vertical-align:middle;margin-left:4px;
+  color:var(--fg);opacity:0.7;
+}
+.coin-tpl-badge svg { display:block; }
+#coinStatus .status-message { font-size: 13px; line-height: 1.6; padding: 12px; background: var(--surface); margin-top: 12px; }
+#coinStatus .status-message a { color: var(--fg); text-decoration: underline; }
+#coinStatus .status-message.error { background: var(--status-error); }
+#coinStatus .status-message.success { background: var(--status-success); }
+
 /* Swap card container */
 .swap-card {
   border: 1px solid var(--card-border);
@@ -742,6 +812,49 @@ body.modal-open { overflow: hidden; }
   pointer-events: none;
   margin: 0;
 }
+/* Send tab */
+.send-field { margin-bottom:14px; }
+.send-field label { margin-bottom:4px; }
+.send-field input {
+  width:100%; padding:8px 0; font-size:16px; font-family:inherit;
+  border:none; border-bottom:1.5px solid var(--border); outline:none;
+  background:transparent; color:var(--fg);
+}
+.send-field input:focus { border-bottom-width:2.5px; margin-bottom:-1px; }
+.send-datetime {
+  width:100%; padding:6px 0; font-size:13px; font-family:inherit;
+  border:none; border-bottom:1px solid var(--border-muted); outline:none;
+  background:transparent; color:var(--fg);
+}
+.send-datetime:focus { border-bottom-color:var(--fg); }
+.dark .send-datetime::-webkit-calendar-picker-indicator { filter:invert(1); }
+.send-datetime::-webkit-calendar-picker-indicator { opacity:0.5; cursor:pointer; }
+.send-datetime::-webkit-calendar-picker-indicator:hover { opacity:1; }
+.send-balance { font-size:12px; color:var(--token-bal); margin-top:4px; }
+.send-balance .max-btn { font-size:11px; background:none; border:none; color:var(--fg-muted); cursor:pointer; text-decoration:underline; padding:0 2px; font-family:inherit; }
+.send-balance .max-btn:hover { color:var(--fg); }
+.timelock-item {
+  border:1px solid var(--card-border); padding:14px 16px; margin-bottom:0;
+  border-bottom:none; font-size:12px; background:var(--bg);
+}
+.timelock-item:first-child { border-top:1px solid var(--card-border); }
+.timelock-item:last-child { border-bottom:1px solid var(--card-border); }
+.timelock-head { display:flex; justify-content:space-between; align-items:center; }
+.timelock-amount { font-size:14px; font-weight:600; letter-spacing:0.01em; }
+.timelock-status { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; }
+.timelock-status.locked { color:#f59e0b; }
+.timelock-status.unlockable { color:var(--green, #22c55e); }
+.timelock-meta { font-size:11px; color:var(--fg-muted); margin-top:6px; letter-spacing:0.02em; }
+.timelock-meta a { text-decoration:none; }
+.timelock-meta a:hover { text-decoration:underline; }
+.timelock-claim { margin-top:8px; }
+.timelock-claim button {
+  font-family:inherit; font-size:11px; font-weight:600; cursor:pointer;
+  padding:8px 20px; border:1px solid var(--btn-bg); background:var(--btn-bg);
+  color:var(--btn-fg); text-transform:uppercase; letter-spacing:0.08em; transition:background 0.2s;
+}
+.timelock-claim button:hover { background:var(--btn-hover); }
+.timelock-claim button:disabled { background:var(--btn-dis-bg); border-color:var(--btn-dis-border); color:var(--btn-dis-fg); cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -756,6 +869,8 @@ body.modal-open { overflow: hidden; }
 <div class="tab-bar">
   <button class="tab active" data-tab="swap" onclick="switchTab('swap')">Swap</button>
   <button class="tab" data-tab="privacy" onclick="switchTab('privacy')">Privacy</button>
+  <button class="tab" data-tab="coin" onclick="switchTab('coin')">Coin</button>
+  <button class="tab" data-tab="send" onclick="switchTab('send')">Send</button>
 </div>
 
 <div id="swapTab">
@@ -805,7 +920,7 @@ body.modal-open { overflow: hidden; }
 <!-- Quote info -->
 <div id="quoteInfo" class="quote-info" style="display:none">
   <div class="quote-row">
-    <span>Route:</span><span id="routeInfo">--</span><a id="chartLink" href="#" target="_blank" rel="noopener" title="View chart" style="display:none;margin-left:4px;opacity:0.7;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
+    <span>Route:</span><span id="routeInfo">--</span><a id="chartLink" href="#" target="_blank" rel="noopener" title="View chart" style="display:none;margin-left:4px;opacity:0.7;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a><a id="orderbookLink" href="#" target="_blank" rel="noopener" title="View orderbook" style="display:none;margin-left:3px;opacity:0.7;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/></svg></a><a id="lpLink" href="#" target="_blank" rel="noopener" title="Manage liquidity" style="display:none;margin-left:3px;opacity:0.7;transition:opacity 0.15s;line-height:1" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></a>
   </div>
   <div class="quote-row" id="impactRow">
     <span>Impact:</span><span id="impactInfo">--</span>
@@ -1022,6 +1137,181 @@ body.modal-open { overflow: hidden; }
 
 </div><!-- end privacyTab -->
 
+<div id="coinTab" style="display:none">
+<div class="swap-card">
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Launch a Coin</h2>
+
+  <div class="coin-tpl-toggle" style="margin-bottom:14px">
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('simple')">Simple</button>
+    <button class="coin-tpl-btn" onclick="coinSetLaunchType('advanced')">Advanced</button>
+  </div>
+
+  <div class="coin-name-row">
+    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="e.g., MyCoin" maxlength="50" style="font-size:16px"></div>
+    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="e.g., MC" maxlength="10" style="font-size:16px"></div>
+  </div>
+
+  <div class="section" style="margin-bottom:14px">
+    <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional)</span></label>
+    <textarea id="coinDescription" placeholder="What does this coin do?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px"></textarea>
+  </div>
+
+  <div class="coin-upload-row">
+    <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo">+</label>
+    <input type="file" id="coinImageInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'image')">
+    <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner">+</label>
+    <input type="file" id="coinBannerInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'banner')">
+  </div>
+
+  <div id="coinSocialsWrap" style="margin-bottom:14px">
+    <button onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit"><span>Socials</span><span style="text-transform:none;font-weight:400;color:var(--fg-dim)">(optional)</span><span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span></button>
+    <div class="coin-drawer-body">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <input type="text" id="coinTwitter" class="amount-input" placeholder="X.com username (e.g., mycoin)" maxlength="60" style="font-size:13px">
+        <input type="text" id="coinTelegram" class="amount-input" placeholder="Telegram (e.g., mycoin_chat)" maxlength="60" style="font-size:13px">
+        <input type="text" id="coinDiscord" class="amount-input" placeholder="Discord link (e.g., https://discord.gg/abc123)" maxlength="100" style="font-size:13px">
+      </div>
+    </div>
+  </div>
+
+  <div id="coinSimpleSettingsWrap" style="margin-bottom:14px">
+    <button onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit"><span>Settings</span><span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span></button>
+    <div class="coin-drawer-body">
+      <div class="coin-sliders">
+        <div class="coin-slider-row">
+          <label>Raise</label>
+          <input type="range" id="coinSimpleSliderRaise" min="1" max="100" step="1" value="5" oninput="coinSimpleSliderChanged()">
+          <span class="coin-slider-val" id="coinSimpleValRaise">5 ETH</span>
+        </div>
+        <div class="coin-slider-row">
+          <label>LP Allocation</label>
+          <input type="range" id="coinSimpleSliderLP" min="30" max="70" step="1" value="50" oninput="coinSimpleSliderChanged()">
+          <span class="coin-slider-val" id="coinSimpleValLP">50%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="coinSettingsWrap" style="display:none;margin-bottom:14px">
+    <button onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit"><span>Settings</span><span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span></button>
+    <div class="coin-drawer-body">
+      <div class="section" style="margin-bottom:14px">
+        <label>Configuration</label>
+        <div class="coin-tpl-toggle" style="margin-top:4px">
+          <button class="coin-tpl-btn active" onclick="coinSetTemplate('standard')">Standard</button>
+          <button class="coin-tpl-btn" onclick="coinSetTemplate('custom')">Custom</button>
+        </div>
+        <div id="coinSliders" class="coin-sliders locked">
+          <div class="coin-slider-row">
+            <label>Raise</label>
+            <input type="range" id="coinSliderRaise" min="1" max="100" step="1" value="5" oninput="coinSliderChanged()">
+            <span class="coin-slider-val" id="coinValRaise">5 ETH</span>
+          </div>
+          <div class="coin-slider-row">
+            <label>Team Alloc</label>
+            <input type="range" id="coinSliderTeam" min="5" max="50" step="1" value="15" oninput="coinSliderChanged()">
+            <span class="coin-slider-val" id="coinValTeam">15%</span>
+          </div>
+          <div class="coin-slider-row">
+            <label>Team Lockup</label>
+            <input type="range" id="coinSliderLock" min="1" max="24" step="1" value="6" oninput="coinSliderChanged()">
+            <span class="coin-slider-val" id="coinValLock">6 mo</span>
+          </div>
+          <div class="coin-slider-row">
+            <label>Tap Vesting</label>
+            <input type="range" id="coinSliderTap" min="1" max="12" step="1" value="3" oninput="coinSliderChanged()">
+            <span class="coin-slider-val" id="coinValTap">3 mo</span>
+          </div>
+          <div class="coin-slider-row">
+            <label>LP Allocation</label>
+            <input type="range" id="coinSliderLP" min="10" max="50" step="1" value="33" oninput="coinSliderChanged()">
+            <span class="coin-slider-val" id="coinValLP">33%</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="coinPreviewWrap" style="display:none">
+        <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:4px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
+          <div id="coinPreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="coinSimplePreviewWrap" style="display:none;margin-bottom:14px">
+    <div style="border-top:1px solid var(--border-muted);padding-top:12px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
+      <div id="coinSimplePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
+    </div>
+  </div>
+
+  <button id="coinLaunchBtn" style="display:none;width:100%;padding:14px 24px;font-size:13px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
+
+  <div id="coinStatus"></div>
+</div>
+
+<div style="margin-top:20px">
+  <div class="swap-card">
+    <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Browse Coins</h2>
+    <a href="./coin/" style="display:block;text-align:center;padding:12px;font-size:13px;color:var(--fg-muted)">View all launched coins &rarr;</a>
+    <div style="margin-top:12px;border-top:1px solid var(--border-muted);padding-top:12px">
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <input type="text" id="coinTrackAddr" class="amount-input" placeholder="address (0x...)" style="font-size:14px;flex:1">
+        <a id="coinTrackBtn" style="white-space:nowrap;padding:8px 16px;font-size:12px;color:var(--fg-muted);cursor:pointer;text-decoration:none" onclick="if($('coinTrackAddr').value.trim().length===42)location.href='./coin/#'+$('coinTrackAddr').value.trim()">View &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- end coinTab -->
+
+<div id="sendTab" style="display:none">
+<div class="swap-card">
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Send</h2>
+
+  <div class="send-field">
+    <div class="token-header">
+      <label style="margin:0">Token</label>
+      <div class="token-select" onclick="openTokenModal('send')">
+        <span id="sendTokenIcon" class="token-icon"></span>
+        <span id="sendTokenSymbol" class="token-symbol">ETH</span>
+        <span class="token-chevron">&#9662;</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="send-field">
+    <label>Amount</label>
+    <input type="number" id="sendAmount" placeholder="0.0" step="any" style="font-size:24px">
+    <div class="send-balance"><span id="sendBalanceText">Balance: --</span> <button class="max-btn" onclick="sendSetMax()">Max</button></div>
+  </div>
+
+  <div class="send-field">
+    <label>Recipient</label>
+    <input type="text" id="sendTo" placeholder="0x address, name.wei, or name.eth" style="font-size:14px">
+    <div id="sendToResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
+  </div>
+
+  <div>
+    <div class="receiver-toggle" onclick="const w=$('sendLockWrap');const open=w.style.maxHeight==='0px';w.style.maxHeight=open?'60px':'0px';w.style.opacity=open?'1':'0';this.querySelector('.chevron').textContent=open?'\u25BC':'\u25B6'">
+      <span class="chevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
+      <label style="margin:0;cursor:pointer;pointer-events:none">Timelock</label>
+    </div>
+    <div id="sendLockWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
+      <input type="datetime-local" id="sendUnlockTime" class="send-datetime" placeholder="Unlock date">
+    </div>
+  </div>
+
+  <button id="sendBtn" class="swap-btn" onclick="doSendOrLock()" disabled style="margin-top:4px">Connect Wallet</button>
+  <div id="sendStatus" class="status" style="margin-top:8px"></div>
+</div>
+
+<div style="margin-top:24px">
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Timelocks</h2>
+  <div id="timelockList" style="font-size:12px;color:var(--fg-muted)">Connect wallet to view timelocks</div>
+</div>
+</div><!-- end sendTab -->
+
 <!-- Status -->
 <div id="status" class="status"></div>
 
@@ -1055,7 +1345,7 @@ body.modal-open { overflow: hidden; }
 
 <!-- Footer web ring -->
 <div class="site-footer">
-  <a href="./domains/">Domains</a> &middot; <a href="./dao/">DAO</a> &middot; <a href="./ico/">ICO</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
+  <a href="./domains/">Domains</a> &middot; <a href="./dao/">DAO</a> &middot; <a href="./coin/">Coin</a> &middot; <a href="./predict/">Predict</a> &middot; <a href="./orderbook/">Orderbook</a> &middot; <a href="./lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
   <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
   <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
   <div style="margin-top:2px;font-size:11px;letter-spacing:0.5px;opacity:0.5">powered by $zorg the governance reward token of the zfi stack</div>
@@ -1108,9 +1398,62 @@ const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
 const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
+// DAICO graduated coin discovery (search-triggered only)
+const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
+const DAICO_SCAN_ABI = ["function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"];
+let _daicoCoinsCache = null; // [{symbol, address, decimals, feeOrHook, dao}]
+let _daicoScanBusy = false;
+const DAICO_IPFS_GW = "https://content.wrappr.wtf/ipfs/";
+async function searchDaicoCoins() {
+  if (_daicoCoinsCache || _daicoScanBusy) return _daicoCoinsCache;
+  _daicoScanBusy = true;
+  try {
+    const rpc = new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+    const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
+    const daicos = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+    const graduated = [];
+    for (const d of daicos) {
+      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+      if (!sale) continue;
+      // graduated = sale ended (no remaining supply) and pool was seeded (feeOrHook > 0)
+      const saleEnded = sale.remainingSupply === 0n || sale.forAmt === 0n;
+      if (!saleEnded) continue;
+      if (sale.feeOrHook === 0n) continue;
+      const sym = d.meta.symbol || 'TKN';
+      graduated.push({
+        symbol: sym, address: d.meta.sharesToken, decimals: 18,
+        feeOrHook: '30', dao: d.dao,
+        contractURI: d.meta.contractURI,
+      });
+    }
+    // Fetch icons in parallel
+    const metaPromises = graduated.map(async g => {
+      if (!g.contractURI) return;
+      try {
+        let url = g.contractURI;
+        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
+        else if (url.startsWith('data:')) { const j = url.split(',').slice(1).join(','); const m = JSON.parse(decodeURIComponent(j)); if (m.image) { g.icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; } return; }
+        const res = await fetch(url);
+        const m = await res.json();
+        if (m.image) g.icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+      } catch {}
+    });
+    await Promise.allSettled(metaPromises);
+    _daicoCoinsCache = graduated;
+    // Merge into tokens (won't override builtins)
+    for (const g of graduated) {
+      const key = g.symbol;
+      if (tokens[key] && tokens[key].address.toLowerCase() !== g.address.toLowerCase()) continue;
+      tokens[key] = { address: g.address, symbol: g.symbol, decimals: 18, _isDaicoCoin: true, _feeOrHook: g.feeOrHook, _dao: g.dao, icon: g.icon };
+    }
+    return graduated;
+  } catch (e) { console.warn('DAICO scan failed:', e); _daicoCoinsCache = []; return []; }
+  finally { _daicoScanBusy = false; }
+}
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function setText(id, s) {
   const el = typeof id === 'string' ? $(id) : id;
@@ -1531,6 +1874,9 @@ async function connectWithWallet(walletKey) {
     // Update Privacy tab if visible
     if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
 
+    // Update Send tab if visible
+    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); }
+
   } catch (error) {
     handleError(error);
   } finally {
@@ -1900,6 +2246,11 @@ function renderTokenList(filter) {
 
   const builtInAddrs = BUILTIN_ADDRS;
 
+  // Lazy-load DAICO coins on first search
+  if (q && !_daicoCoinsCache && !_daicoScanBusy) {
+    searchDaicoCoins().then(() => renderTokenList(q));
+  }
+
   function matchesFilter(sym, addr) {
     if (!q) return true;
     return sym.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
@@ -1964,10 +2315,27 @@ function renderTokenList(filter) {
     hasAny = true;
   }
 
+  // DAICO graduated coins (ETH buy only)
+  const daicoTokens = [];
+  for (const sym of Object.keys(tokens)) {
+    if (!tokens[sym]._isDaicoCoin) continue;
+    if (!matchesFilter(sym, tokens[sym].address)) continue;
+    daicoTokens.push(sym);
+  }
+  if (daicoTokens.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    label.textContent = 'Coins';
+    frag.appendChild(label);
+    for (const sym of daicoTokens) frag.appendChild(makeRow(sym));
+    hasAny = true;
+  }
+
   // Custom tokens (not built-in, not from .wei lists)
   const customTokens = [];
   for (const sym of Object.keys(tokens)) {
     if (tokens[sym]._isZammStake) continue; // ZAMM is in built-in section, skip here
+    if (tokens[sym]._isDaicoCoin) continue;
     if (builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
     if (weiListTokenSource.has(sym)) continue;
     if (!matchesFilter(sym, tokens[sym].address)) continue;
@@ -2903,6 +3271,8 @@ async function handleAmountChange() {
         : isStakeRoute ? `${quote.sourceA} Stake` : `${quote.sourceA}`;
     fitRouteText(route);
     updateChartLink(quote);
+    updateOrderbookLink(quote);
+    updateLpLink(quote);
     // Show "Direct stake" note for Lido/Rocket Pool routes
     const routeEl = $("routeInfo");
     if (routeEl) {
@@ -3246,10 +3616,64 @@ function isZammBuyPath(fromSym, toSym) {
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
 }
+// DAICO graduated coin: ETH → coin buy only (via ZAMM hooked pool)
+function isDaicoCoinBuyPath(fromSym, toSym) {
+  return tokens[fromSym]?.address === ZERO_ADDRESS && tokens[toSym]?._isDaicoCoin === true;
+}
 function isExactOutDisabled(fromSym, toSym) {
   return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
     || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
-    || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym);
+    || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
+    || isDaicoCoinBuyPath(fromSym, toSym);
+}
+
+// ---- DAICO graduated coin buy: ETH → coin via ZAMM hooked pool ----
+async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
+  const toData = tokens[toSym];
+  const amountIn = safeParseUnits(fromAmountStr, 18);
+  readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+  const receiver = getReceiver();
+  const fee = BigInt(toData._feeOrHook);
+
+  return await quoteRPC.call(async (rpc) => {
+    const quoter = getQuoterContract(rpc);
+    const result = await quoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, amountIn, { blockTag: "latest" });
+    const amountOut = result.amountOut;
+    const slipOut = amountOut * (10000n - BigInt(slippageBps)) / 10000n;
+
+    const calls = [];
+    // swapVZ: ETH → coin (zeroForOne=true, ids both 0 for ERC20)
+    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
+      ZROUTER_ADDRESS, false, fee,
+      ZERO_ADDRESS, toData.address, 0, 0,
+      0, slipOut, deadline
+    ]));
+    // Sweep coin tokens to receiver
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]));
+    // Safety sweep: remaining ETH back
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+
+    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+    // Spot rate for display
+    const refAmount = 10n ** 16n; // 0.01 ETH
+    let spotOut = 0n;
+    try {
+      const spot = await quoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, { blockTag: "latest" });
+      spotOut = spot.amountOut;
+    } catch {}
+
+    return {
+      expectedOutput: amountOut,
+      multicall, calls, msgValue: amountIn,
+      isTwoHop: false, isSplit: false, splitLegs: null,
+      sourceA: "zAMM", sourceB: null,
+      allQuotes: [{ source: "zAMM", sourceId: 2, feeBps: fee, amountIn, amountOut }],
+      spotRate: spotOut > 0n ? spotOut : null,
+      spotRefAmount: refAmount,
+    };
+  });
 }
 
 // ---- zAMM reverse quote: ZAMM → ETH (client-side AMM math) ----
@@ -3678,6 +4102,11 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   // zOrg sell path: ragequit (1:1 → ZAMM) then sell ZAMM
   if (isZOrgSellPath(fromSym, toSym)) {
     return await getZOrgSellQuote(fromAmountStr, fromSym, toSym);
+  }
+
+  // DAICO graduated coin buy: ETH → coin via ZAMM hooked pool
+  if (isDaicoCoinBuyPath(fromSym, toSym)) {
+    return await getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym);
   }
 
   const receiver = getReceiver();
@@ -5243,6 +5672,50 @@ function updateChartLink(quote) {
   }
 }
 
+function updateOrderbookLink(quote) {
+  const link = $("orderbookLink");
+  const zammRe = /zAMM|V4 Hooked/;
+  const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
+    || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
+  if (hasZamm) {
+    const fromAddr = tokens[fromToken].address;
+    const toAddr = tokens[toToken].address;
+    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
+    let poolId;
+    if (isZorg) {
+      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
+    } else {
+      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+    }
+    link.href = "./orderbook/#/" + poolId.toString();
+    link.style.display = "inline-flex";
+    return;
+  }
+  link.style.display = "none";
+}
+
+function updateLpLink(quote) {
+  const link = $("lpLink");
+  const zammRe = /zAMM|V4 Hooked/;
+  const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
+    || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
+  if (hasZamm) {
+    const fromAddr = tokens[fromToken].address;
+    const toAddr = tokens[toToken].address;
+    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
+    let poolId;
+    if (isZorg) {
+      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
+    } else {
+      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+    }
+    link.href = "./lp/#/" + poolId.toString();
+    link.style.display = "inline-flex";
+    return;
+  }
+  link.style.display = "none";
+}
+
 // ---- Quick-pick popular tokens ----
 const QUICK_TOKENS = ["BOLD", "DAI", "stETH", "rETH"];
 
@@ -5380,6 +5853,31 @@ function closeTokenModal() {
 const reQuoteDebounced = debounce(handleAmountChange, 600);
 
 function selectToken(symbol) {
+  // Send tab: just set the send token
+  if (currentModal === "send") {
+    _sendToken = symbol;
+    sendUpdateTokenDisplay();
+    closeTokenModal();
+    currentModal = null;
+    sendUpdateBalance();
+    const _sf = $("sendAmount");
+    if (_sf) _sf.focus();
+    return;
+  }
+  // DAICO coins are buy-only (ETH → coin)
+  if (tokens[symbol]?._isDaicoCoin) {
+    if (currentModal === "from") { closeTokenModal(); showStatus("This coin can only be bought with ETH", "error"); return; }
+    fromToken = "ETH";
+    toToken = symbol;
+    updateTokenDisplay();
+    updateBalances();
+    closeTokenModal();
+    currentModal = null;
+    const _srcField = $("fromAmount");
+    if (_srcField) _srcField.focus();
+    if (_srcField && _srcField.value) reQuoteDebounced();
+    return;
+  }
   if (currentModal === "from") {
     if (symbol === toToken) toToken = fromToken;
     fromToken = symbol;
@@ -5472,6 +5970,21 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
+  // If #coin or #privacy hash present, switch tab immediately and skip swap deeplinks
+  const _dlTabHash = window.location.hash;
+  if (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send') {
+    updateTokenDisplay();
+    initTokenListClick();
+    initTokenSearch();
+    const fromEl = $("fromAmount");
+    if (fromEl) fromEl.addEventListener("input", debounce(() => { _inputMode = 'exactIn'; handleAmountChange(); }, 400));
+    const toEl = $("toAmount");
+    if (toEl) toEl.addEventListener("input", debounce(() => { _inputMode = 'exactOut'; handleAmountChange(); }, 400));
+    (window.requestIdleCallback || setTimeout)(() => loadWeiLists());
+    switchTab(_dlTabHash.slice(1));
+    return;
+  }
+
   // Deeplink: ?from=eth&to=bold&amt=1.5 (lowercase — wei.is gateway mangles mixed-case params)
   const _urlp = new URLSearchParams(window.location.search);
   const _findToken = (s) => { const u = (s||'').toUpperCase(); return Object.keys(tokens).find(k => k.toUpperCase() === u); };
@@ -5831,19 +6344,348 @@ function randomFieldElement() {
   return n % SNARK_FIELD;
 }
 
+// ---- Send Tab ----
+const COOKBOOK_ADDRESS = "0x000000000000040470635EB91b7CE4D132D616eD";
+const COOKBOOK_LOCK_ABI = [
+  "function lockup(address token, address to, uint256 id, uint256 amount, uint256 unlockTime) payable returns (bytes32)",
+  "function unlock(address token, address to, uint256 id, uint256 amount, uint256 unlockTime)",
+  "function lockups(bytes32) view returns (uint256)"
+];
+const ERC20_TRANSFER_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)"
+];
+const INDEXER_BASE = "https://coinchan-indexer-production.up.railway.app";
+
+let _sendToken = 'ETH';
+let _sendResolvedAddr = null;
+let _sendResolveSeq = 0;
+let _sendDebounce = null;
+let _sendTokenBal = null;
+let _sendTokenDec = 18;
+
+function sendUpdateTokenDisplay() {
+  const t = tokens[_sendToken];
+  if (!t) return;
+  setHTML('sendTokenIcon', iconForSymbol(_sendToken));
+  setText('sendTokenSymbol', t.symbol || _sendToken);
+}
+
+async function sendUpdateBalance() {
+  const balEl = $('sendBalanceText');
+  if (!connectedAddress) { balEl.textContent = 'Balance: --'; return; }
+  const sym = _sendToken;
+  const t = tokens[sym];
+  if (!t) { balEl.textContent = 'Balance: --'; return; }
+  try {
+    if (t.address === ZERO_ADDRESS) {
+      const bal = await signer.provider.getBalance(connectedAddress);
+      _sendTokenBal = bal;
+      _sendTokenDec = 18;
+      balEl.textContent = 'Balance: ' + (+ethers.formatEther(bal)).toFixed(5) + ' ' + sym;
+    } else {
+      const rpc = signer.provider || new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+      const c = new ethers.Contract(t.address, ERC20_TRANSFER_ABI, rpc);
+      const [bal, dec] = await Promise.all([c.balanceOf(connectedAddress), c.decimals().catch(() => t.decimals || 18)]);
+      _sendTokenBal = bal;
+      _sendTokenDec = Number(dec);
+      balEl.textContent = 'Balance: ' + (+ethers.formatUnits(bal, _sendTokenDec)).toFixed(5) + ' ' + sym;
+    }
+  } catch {
+    balEl.textContent = 'Balance: --';
+  }
+  sendUpdateButton();
+}
+
+function sendSetMax() {
+  if (_sendTokenBal != null && _sendTokenBal > 0n) {
+    $('sendAmount').value = ethers.formatUnits(_sendTokenBal, _sendTokenDec);
+  }
+}
+
+function sendUpdateButton() {
+  const btn = $('sendBtn');
+  if (!connectedAddress) { btn.disabled = true; btn.textContent = 'Connect Wallet'; return; }
+  btn.disabled = false;
+  btn.textContent = $('sendUnlockTime').value ? 'Create Timelock' : 'Send';
+}
+
+// Recipient resolution
+document.addEventListener("DOMContentLoaded", () => {
+  const el = $('sendTo');
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const v = el.value.trim();
+    _sendResolvedAddr = null;
+    $('sendToResolved').style.display = 'none';
+    if (ethers.isAddress(v)) {
+      _sendResolvedAddr = ethers.getAddress(v);
+    } else if (v.endsWith('.wei') || v.endsWith('.eth')) {
+      clearTimeout(_sendDebounce);
+      _sendDebounce = setTimeout(() => sendResolveName(v), 350);
+    }
+  });
+  const ut = $('sendUnlockTime');
+  if (ut) ut.addEventListener('input', sendUpdateButton);
+});
+
+async function sendResolveName(name) {
+  const seq = ++_sendResolveSeq;
+  const el = $('sendToResolved');
+  try {
+    let resolved = null;
+    if (name.endsWith('.wei')) {
+      resolved = await quoteRPC.call(async (rpc) => {
+        const ns = getWeinsContract(rpc);
+        const tokenId = await ns.computeId(name);
+        const owner = await ns.ownerOf(tokenId).catch(() => null);
+        if (!owner || owner === ZERO_ADDRESS) return null;
+        return ethers.getAddress(owner);
+      });
+    } else if (name.endsWith('.eth')) {
+      resolved = await quoteRPC.call(async (rpc) => rpc.resolveName(name));
+    }
+    if (seq !== _sendResolveSeq) return;
+    if (resolved && resolved !== ZERO_ADDRESS) {
+      _sendResolvedAddr = resolved;
+      el.style.display = 'block';
+      el.style.color = 'var(--fg-muted)';
+      el.textContent = resolved;
+    } else {
+      el.style.display = 'block';
+      el.style.color = '#c0392b';
+      el.textContent = 'Name not found';
+    }
+  } catch {
+    if (seq !== _sendResolveSeq) return;
+    el.style.display = 'block';
+    el.style.color = '#c0392b';
+    el.textContent = 'Failed to resolve';
+  }
+}
+
+async function doSendOrLock() {
+  if (!connectedAddress) { toggleWallet(); return; }
+  const sym = _sendToken;
+  const amtStr = $('sendAmount').value;
+  const toRaw = $('sendTo').value.trim();
+  const unlockStr = $('sendUnlockTime').value;
+  const statusEl = $('sendStatus');
+
+  if (!amtStr || Number(amtStr) <= 0) { statusEl.textContent = 'Enter an amount'; statusEl.className = 'status error'; return; }
+
+  // Resolve recipient
+  let toAddr = _sendResolvedAddr;
+  if (!toAddr && ethers.isAddress(toRaw)) toAddr = ethers.getAddress(toRaw);
+  if (!toAddr) { statusEl.textContent = 'Enter a valid recipient'; statusEl.className = 'status error'; return; }
+
+  const t = tokens[sym];
+  if (!t) { statusEl.textContent = 'Unknown token'; statusEl.className = 'status error'; return; }
+  const tokenAddr = t.address;
+  const isETH = tokenAddr === ZERO_ADDRESS;
+  const dec = _sendTokenDec;
+  const amount = ethers.parseUnits(amtStr, dec);
+  const isTimelock = !!unlockStr;
+
+  try {
+    if (isTimelock) {
+      const unlockTime = Math.floor(new Date(unlockStr).getTime() / 1000);
+      if (unlockTime <= Math.floor(Date.now() / 1000)) {
+        statusEl.textContent = 'Unlock time must be in the future';
+        statusEl.className = 'status error';
+        return;
+      }
+      const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
+
+      // Approve ERC20 if needed
+      if (!isETH) {
+        statusEl.textContent = 'Checking approval...';
+        statusEl.className = 'status';
+        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
+        const allowance = await erc20.allowance(connectedAddress, COOKBOOK_ADDRESS);
+        if (allowance < amount) {
+          statusEl.textContent = 'Approving token...';
+          const approveTx = await erc20.approve(COOKBOOK_ADDRESS, ethers.MaxUint256);
+          await approveTx.wait();
+        }
+      }
+
+      statusEl.textContent = 'Creating timelock...';
+      statusEl.className = 'status';
+      const tx = await cookbook.lockup(
+        isETH ? ZERO_ADDRESS : tokenAddr,
+        toAddr, 0, amount, unlockTime,
+        { value: isETH ? amount : 0n }
+      );
+      statusEl.textContent = 'Waiting for confirmation...';
+      const receipt = await tx.wait();
+      statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
+      statusEl.className = 'status success';
+      $('sendAmount').value = '';
+      sendUpdateBalance();
+      setTimeout(sendLoadTimelocks, 3000);
+    } else {
+      // Direct send
+      statusEl.textContent = 'Sending...';
+      statusEl.className = 'status';
+      let tx;
+      if (isETH) {
+        tx = await signer.sendTransaction({ to: toAddr, value: amount });
+      } else {
+        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
+        tx = await erc20.transfer(toAddr, amount);
+      }
+      statusEl.textContent = 'Waiting for confirmation...';
+      const receipt = await tx.wait();
+      statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
+      statusEl.className = 'status success';
+      $('sendAmount').value = '';
+      sendUpdateBalance();
+    }
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = e.reason || e.message || 'Transaction failed';
+    statusEl.className = 'status error';
+  }
+}
+
+// ---- Timelocks ----
+async function sendLoadTimelocks() {
+  const el = $('timelockList');
+  if (!connectedAddress) { el.textContent = 'Connect wallet to view timelocks'; return; }
+  el.innerHTML = '<div style="color:var(--fg-dim);font-size:12px">Loading...</div>';
+  try {
+    const res = await fetch(INDEXER_BASE + "/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `query ($address: String!) {
+          account(address: $address) {
+            lockupSent { items { id token coinId sender to amount unlockTime createdAt txHash coin { name symbol decimals } } }
+            lockupReceived { items { id token coinId sender to amount unlockTime createdAt txHash coin { name symbol decimals } } }
+          }
+        }`,
+        variables: { address: connectedAddress }
+      })
+    });
+    const { data } = await res.json();
+    const account = data ? data.account : null;
+    if (!account) { el.textContent = 'No timelocks found'; return; }
+
+    const sent = (account.lockupSent?.items || []).map(l => ({ ...l, direction: 'sent' }));
+    const received = (account.lockupReceived?.items || []).map(l => ({ ...l, direction: 'received' }));
+    const all = [...sent, ...received].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+    if (all.length === 0) { el.textContent = 'No timelocks found'; return; }
+
+    // Check on-chain status in batch
+    const rpc = new ethers.JsonRpcProvider("https://eth.llamarpc.com", 1, { staticNetwork: true });
+    const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, rpc);
+    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+
+    // Precompute lock metadata and hashes
+    const lockMeta = all.map(lock => {
+      const token = lock.token || ZERO_ADDRESS;
+      const isETH = token.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+      const coinId = isETH ? 0n : (lock.coinId ? BigInt(lock.coinId) : 0n);
+      const amount = BigInt(lock.amount || '0');
+      const unlockTime = BigInt(lock.unlockTime || '0');
+      const encoded = abiCoder.encode(
+        ["address", "address", "uint256", "uint256", "uint256"],
+        [token, lock.to, coinId, amount, unlockTime]
+      );
+      return { lock, token, isETH, coinId, amount, unlockTime, hash: ethers.keccak256(encoded) };
+    });
+
+    // Batch on-chain status checks
+    const onChainResults = await Promise.all(
+      lockMeta.map(m => cookbook.lockups(m.hash).catch(() => 1n))
+    );
+    const now = Math.floor(Date.now() / 1000);
+
+    let html = '';
+    for (let i = 0; i < lockMeta.length; i++) {
+      const m = lockMeta[i];
+      const lock = m.lock;
+      const onChain = onChainResults[i];
+      let status;
+      if (onChain === 0n) continue;
+      else if (now >= Number(m.unlockTime)) status = 'unlockable';
+      else status = 'locked';
+
+      const asset = m.isETH ? 'ETH' : esc(lock.coin?.symbol || 'ERC20');
+      const dec = m.isETH ? 18 : (lock.coin?.decimals ? Number(lock.coin.decimals) : 18);
+      const fmtAmt = (+ethers.formatUnits(m.amount, dec)).toFixed(5);
+      const unlockDate = new Date(Number(m.unlockTime) * 1000).toLocaleString();
+      const counterparty = lock.direction === 'sent'
+        ? 'To: ' + lock.to.slice(0, 6) + '...' + lock.to.slice(-4)
+        : 'From: ' + lock.sender.slice(0, 6) + '...' + lock.sender.slice(-4);
+
+      html += `<div class="timelock-item ${status}">
+        <div class="timelock-head">
+          <span class="timelock-amount">${fmtAmt} <span style="font-weight:400;font-size:12px;letter-spacing:0.04em">${asset}</span></span>
+          <span class="timelock-status ${status}">${status}</span>
+        </div>
+        <div class="timelock-meta">
+          ${esc(counterparty)} &middot; ${lock.direction} &middot; ${unlockDate}
+          &middot; <a href="https://etherscan.io/tx/${lock.txHash}" target="_blank" rel="noopener" style="color:inherit">${lock.txHash.slice(0, 10)}...</a>
+        </div>
+        ${status === 'unlockable' ? `<div class="timelock-claim"><button onclick="claimTimelock('${m.token}','${lock.to}','${m.coinId}','${m.amount}','${m.unlockTime}',this)">Claim</button></div>` : ''}
+      </div>`;
+    }
+    el.innerHTML = html || 'No active timelocks';
+  } catch (e) {
+    console.error(e);
+    el.textContent = 'Failed to load timelocks';
+  }
+}
+
+async function claimTimelock(token, to, coinId, amount, unlockTime, btn) {
+  if (!signer) { toggleWallet(); return; }
+  btn.disabled = true;
+  btn.textContent = 'Claiming...';
+  try {
+    const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
+    const tx = await cookbook.unlock(token, to, BigInt(coinId), BigInt(amount), BigInt(unlockTime));
+    btn.textContent = 'Confirming...';
+    await tx.wait();
+    btn.textContent = 'Claimed!';
+    setTimeout(sendLoadTimelocks, 2000);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Claim';
+    alert('Claim failed: ' + (e.reason || e.message));
+  }
+}
+
 function switchTab(tab) {
   _activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
-  if (tab === 'privacy') {
+  $('coinTab').style.display = tab === 'coin' ? '' : 'none';
+  $('sendTab').style.display = tab === 'send' ? '' : 'none';
+  // Update hash for deeplink persistence (strip unrelated query params)
+  if (tab === 'swap') {
+    if (window.location.hash === '#privacy' || window.location.hash === '#coin' || window.location.hash === '#send') history.replaceState(null, '', window.location.pathname + window.location.search);
+    syncSwapURL();
+  } else if (tab === 'privacy') {
+    history.replaceState(null, '', window.location.pathname + '#privacy');
     syncPrivacyURL();
     loadPPConfig();
     updatePPBalance();
     renderPPNotes();
     updatePPButton();
-  } else {
-    syncSwapURL();
+  } else if (tab === 'coin') {
+    history.replaceState(null, '', window.location.pathname + '#coin');
+    coinUpdatePreview();
+  } else if (tab === 'send') {
+    history.replaceState(null, '', window.location.pathname + '#send');
+    sendUpdateTokenDisplay();
+    sendUpdateBalance();
+    sendLoadTimelocks();
   }
 }
 
@@ -6151,6 +6993,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Deeplink: ?tab=privacy or #privacy
   const _urlp2 = new URLSearchParams(window.location.search);
   if (_urlp2.get('tab') === 'privacy' || window.location.hash === '#privacy') switchTab('privacy');
+  if (_urlp2.get('tab') === 'coin' || window.location.hash === '#coin') switchTab('coin');
 
   // Init saved notes count
   renderPPNotes();
@@ -6652,6 +7495,515 @@ async function ppwWithdraw() {
     setDisabled(btn, !_ppwNote);
   }
 }
+
+// ==================== COIN TAB ====================
+const COIN_SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
+const COIN_DAICO = '0x000000000033e92DB97B4B3beCD2c255126C60aC';
+const COIN_RENDERER = '0x000000000011C799980827F52d3137b4abD6E654';
+const COIN_ZAMM = '0x000000000000040470635EB91b7CE4D132D616eD';
+const COIN_IMPLS = {
+  moloch: '0x643A45B599D81be3f3A68F37EB3De55fF10673C1',
+  shares: '0x71E9b38d301b5A58cb998C1295045FE276Acf600',
+  loot: '0x6f1f2aF76a3aDD953277e9F369242697C87bc6A5'
+};
+const COIN_CLONE_PREFIX = '0x602d5f8160095f39f35f5f365f5f37365f73';
+const COIN_CLONE_SUFFIX = '0x5af43d5f5f3e6029573d5ffd5b3d5ff3';
+
+const COIN_SUPPLY = 1_000_000_000n;
+const COIN_FEE = 30;
+const COIN_QUORUM_BPS = 1500;
+const COIN_VOTING_DAYS = 7;
+const COIN_TIMELOCK_DAYS = 3;
+const COIN_SEC_PER_MONTH = 2_629_746n;
+
+const COIN_PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
+
+const COIN_DEFAULTS = { raise: 5, teamBps: 1500, lockMonths: 6, tapMonths: 3, lpBps: 3300 };
+const COIN_SIMPLE_DEFAULTS = { raise: 5, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 5000 };
+let _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
+let _coinTemplate = 'simple';
+let _coinLaunchType = 'simple';
+let _coinLaunching = false;
+let _coinImageCID = null;
+let _coinImageFile = null;
+let _coinBannerCID = null;
+let _coinBannerFile = null;
+
+function coinSetTemplate(mode) {
+  _coinTemplate = mode === 'standard' ? 'standard' : null;
+  $('coinSettingsWrap').querySelectorAll('.coin-tpl-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === (mode === 'standard' ? 0 : 1));
+  });
+  const sl = $('coinSliders');
+  if (mode === 'standard') {
+    sl.classList.add('locked');
+    _coinCfg = { ...COIN_DEFAULTS };
+    coinSyncSliders();
+  } else {
+    sl.classList.remove('locked');
+  }
+  coinUpdatePreview();
+}
+
+function coinSetLaunchType(type) {
+  _coinLaunchType = type;
+  const btns = document.querySelectorAll('#coinTab > .swap-card > .coin-tpl-toggle > .coin-tpl-btn');
+  btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'simple' ? 0 : 1)));
+  const isSimple = type === 'simple';
+  $('coinSimpleSettingsWrap').style.display = isSimple ? '' : 'none';
+  $('coinSettingsWrap').style.display = isSimple ? 'none' : '';
+  $('coinSimplePreviewWrap').style.display = 'none';
+  $('coinPreviewWrap').style.display = 'none';
+  setShown('coinLaunchBtn', false);
+  if (isSimple) {
+    _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
+    _coinTemplate = 'simple';
+    coinSimpleSyncSliders();
+  } else {
+    _coinCfg = { ...COIN_DEFAULTS };
+    _coinTemplate = 'standard';
+    coinSyncSliders();
+    coinSetTemplate('standard');
+  }
+  coinUpdatePreview();
+}
+
+function coinSimpleSliderChanged() {
+  _coinCfg.raise = +$('coinSimpleSliderRaise').value;
+  _coinCfg.lpBps = +$('coinSimpleSliderLP').value * 100;
+  $('coinSimpleValRaise').textContent = _coinCfg.raise + ' ETH';
+  $('coinSimpleValLP').textContent = (_coinCfg.lpBps / 100) + '%';
+  coinUpdatePreview();
+}
+
+function coinSimpleSyncSliders() {
+  $('coinSimpleSliderRaise').value = _coinCfg.raise;
+  $('coinSimpleSliderLP').value = _coinCfg.lpBps / 100;
+  $('coinSimpleValRaise').textContent = _coinCfg.raise + ' ETH';
+  $('coinSimpleValLP').textContent = (_coinCfg.lpBps / 100) + '%';
+}
+
+function coinSliderChanged() {
+  _coinCfg.raise = +$('coinSliderRaise').value;
+  _coinCfg.teamBps = +$('coinSliderTeam').value * 100;
+  _coinCfg.lockMonths = +$('coinSliderLock').value;
+  _coinCfg.tapMonths = +$('coinSliderTap').value;
+  _coinCfg.lpBps = +$('coinSliderLP').value * 100;
+  coinUpdateSliderLabels();
+  coinUpdatePreview();
+}
+
+function coinSyncSliders() {
+  $('coinSliderRaise').value = _coinCfg.raise;
+  $('coinSliderTeam').value = _coinCfg.teamBps / 100;
+  $('coinSliderLock').value = _coinCfg.lockMonths;
+  $('coinSliderTap').value = _coinCfg.tapMonths;
+  $('coinSliderLP').value = _coinCfg.lpBps / 100;
+  coinUpdateSliderLabels();
+}
+
+function coinUpdateSliderLabels() {
+  $('coinValRaise').textContent = _coinCfg.raise + ' ETH';
+  $('coinValTeam').textContent = (_coinCfg.teamBps / 100) + '%';
+  $('coinValLock').textContent = _coinCfg.lockMonths + ' mo';
+  $('coinValTap').textContent = _coinCfg.tapMonths + ' mo';
+  $('coinValLP').textContent = (_coinCfg.lpBps / 100) + '%';
+}
+
+function coinUpdatePreview() {
+  const c = _coinCfg;
+  const saleBps = 10000 - c.teamBps;
+  const saleSupply = (COIN_SUPPLY * BigInt(saleBps)) / 10000n;
+  const lpPct = c.lpBps / 100;
+  const treasuryPct = 100 - lpPct;
+  const pricePerShare = Number(c.raise) / Number(saleSupply);
+  const pricePerM = (pricePerShare * 1e6).toPrecision(3);
+  const saleNum = Number(saleSupply);
+  const saleFmt = saleNum >= 1e9 ? (saleNum / 1e9).toFixed(saleNum % 1e9 === 0 ? 0 : 1) + 'B' : (saleNum / 1e6).toFixed(0) + 'M';
+
+  if (_coinLaunchType === 'simple') {
+    const p = $('coinSimplePreview');
+    p.innerHTML =
+      `<dl class="coin-summary">` +
+      `<dt>Sale</dt><dd>${saleFmt} (100%)</dd>` +
+      `<dt>Raise</dt><dd>${c.raise} ETH</dd>` +
+      `<dt>LP</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
+      `<dt>Treasury</dt><dd>${treasuryPct}% &rarr; ragequitable</dd>` +
+      `<dt>Price</dt><dd>${pricePerM} ETH / 1M</dd>` +
+      `</dl>` +
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury &middot; no team &middot; no tap</div>`;
+    $('coinSimplePreviewWrap').style.display = '';
+    $('coinPreviewWrap').style.display = 'none';
+  } else {
+    const teamSupply = (COIN_SUPPLY * BigInt(c.teamBps)) / 10000n;
+    const teamPct = c.teamBps / 100;
+    const salePct = 100 - teamPct;
+    const tapBudget = Number(c.raise) * (treasuryPct / 100);
+    const p = $('coinPreview');
+    p.innerHTML =
+      `<dl class="coin-summary">` +
+      `<dt>Sale</dt><dd>${saleFmt} (${salePct}%)</dd>` +
+      `<dt>Raise</dt><dd>${c.raise} ETH</dd>` +
+      `<dt>LP Seed</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
+      `<dt>Team</dt><dd>${teamPct}% (locked ${c.lockMonths}mo)</dd>` +
+      `<dt>Tap</dt><dd>${tapBudget.toFixed(2)} ETH / ${c.tapMonths}mo</dd>` +
+      `<dt>Price</dt><dd>${pricePerM} ETH / 1M</dd>` +
+      `</dl>` +
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">15% quorum &middot; 7d voting &middot; 3d timelock &middot; ragequit</div>`;
+    $('coinPreviewWrap').style.display = '';
+    $('coinSimplePreviewWrap').style.display = 'none';
+  }
+  setShown('coinLaunchBtn', true);
+}
+
+function coinFilePicked(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('Too large (5MB max)'); input.value = ''; return; }
+  if (type === 'banner') { _coinBannerFile = file; _coinBannerCID = null; }
+  else { _coinImageFile = file; _coinImageCID = null; }
+  const btn = input.previousElementSibling.tagName === 'LABEL' ? input.previousElementSibling : input.nextElementSibling;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let img = btn.querySelector('img');
+    if (!img) { img = document.createElement('img'); btn.textContent = ''; btn.appendChild(img); }
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function coinPinFile(file, cachedCID) {
+  if (!file) return null;
+  if (cachedCID) return cachedCID;
+  if (!COIN_PIN_URL) throw new Error('Pin service not configured (set COIN_PIN_URL)');
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const res = await fetch(COIN_PIN_URL + '/pin-image', { method: 'POST', body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Image pin failed');
+  return data.cid;
+}
+
+async function coinPinMetadata(metadata) {
+  if (!COIN_PIN_URL) return 'data:application/json;utf8,' + JSON.stringify(metadata);
+  const res = await fetch(COIN_PIN_URL + '/pin-json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(metadata),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Metadata pin failed');
+  return 'ipfs://' + data.cid;
+}
+
+function coinMinimalProxy(impl) {
+  return ethers.concat([COIN_CLONE_PREFIX, impl.toLowerCase(), COIN_CLONE_SUFFIX]);
+}
+
+function coinCreate2(deployer, salt, impl) {
+  const hash = ethers.keccak256(ethers.solidityPacked(
+    ['bytes1','address','bytes32','bytes32'],
+    ['0xff', deployer, salt, ethers.keccak256(coinMinimalProxy(impl))]
+  ));
+  return ethers.getAddress('0x' + hash.slice(-40));
+}
+
+function coinPredict(initHolders, initShares, salt) {
+  const abiCoder = new ethers.AbiCoder();
+  const summonerSalt = ethers.keccak256(abiCoder.encode(['address[]','uint256[]','bytes32'], [initHolders, initShares, salt]));
+  const dao = coinCreate2(COIN_SUMMONER, summonerSalt, COIN_IMPLS.moloch);
+  const childSalt = '0x' + dao.toLowerCase().replace('0x','') + '000000000000000000000000';
+  const shares = coinCreate2(dao, childSalt, COIN_IMPLS.shares);
+  const loot = coinCreate2(dao, childSalt, COIN_IMPLS.loot);
+  return { dao, shares, loot };
+}
+
+function coinShowStatus(msg, isError) {
+  const el = $('coinStatus');
+  const cls = isError ? 'status-message error' : msg.includes('Launch') ? 'status-message success' : 'status-message';
+  const spinner = msg.includes('...') && !isError && !msg.includes('Launch') ? '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border-muted);border-top:2px solid var(--fg);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px"></span>' : '';
+  el.innerHTML = `<div class="${cls}">${spinner}${msg}</div>`;
+}
+
+const COIN_DAICO_ABI = [{
+  inputs: [
+    { components: [
+      { name: 'summoner', type: 'address' },
+      { name: 'molochImpl', type: 'address' },
+      { name: 'sharesImpl', type: 'address' },
+      { name: 'lootImpl', type: 'address' }
+    ], name: 'summonConfig', type: 'tuple' },
+    { name: 'orgName', type: 'string' },
+    { name: 'orgSymbol', type: 'string' },
+    { name: 'orgURI', type: 'string' },
+    { name: 'quorumBps', type: 'uint16' },
+    { name: 'ragequittable', type: 'bool' },
+    { name: 'renderer', type: 'address' },
+    { name: 'salt', type: 'bytes32' },
+    { name: 'initHolders', type: 'address[]' },
+    { name: 'initShares', type: 'uint256[]' },
+    { name: 'sharesLocked', type: 'bool' },
+    { name: 'lootLocked', type: 'bool' },
+    { components: [
+      { name: 'tribTkn', type: 'address' },
+      { name: 'tribAmt', type: 'uint256' },
+      { name: 'saleSupply', type: 'uint256' },
+      { name: 'forAmt', type: 'uint256' },
+      { name: 'deadline', type: 'uint40' },
+      { name: 'sellLoot', type: 'bool' },
+      { name: 'lpBps', type: 'uint16' },
+      { name: 'maxSlipBps', type: 'uint16' },
+      { name: 'feeOrHook', type: 'uint256' }
+    ], name: 'daicoConfig', type: 'tuple' },
+    { components: [
+      { name: 'ops', type: 'address' },
+      { name: 'ratePerSec', type: 'uint128' },
+      { name: 'tapAllowance', type: 'uint256' }
+    ], name: 'tapConfig', type: 'tuple' },
+    { components: [
+      { name: 'target', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'data', type: 'bytes' }
+    ], name: 'customCalls', type: 'tuple[]' }
+  ],
+  name: 'summonDAICOWithTapCustom',
+  outputs: [{ name: 'dao', type: 'address' }],
+  stateMutability: 'payable',
+  type: 'function'
+}, {
+  inputs: [
+    { components: [
+      { name: 'summoner', type: 'address' },
+      { name: 'molochImpl', type: 'address' },
+      { name: 'sharesImpl', type: 'address' },
+      { name: 'lootImpl', type: 'address' }
+    ], name: 'summonConfig', type: 'tuple' },
+    { name: 'orgName', type: 'string' },
+    { name: 'orgSymbol', type: 'string' },
+    { name: 'orgURI', type: 'string' },
+    { name: 'quorumBps', type: 'uint16' },
+    { name: 'ragequittable', type: 'bool' },
+    { name: 'renderer', type: 'address' },
+    { name: 'salt', type: 'bytes32' },
+    { name: 'initHolders', type: 'address[]' },
+    { name: 'initShares', type: 'uint256[]' },
+    { name: 'sharesLocked', type: 'bool' },
+    { name: 'lootLocked', type: 'bool' },
+    { components: [
+      { name: 'tribTkn', type: 'address' },
+      { name: 'tribAmt', type: 'uint256' },
+      { name: 'saleSupply', type: 'uint256' },
+      { name: 'forAmt', type: 'uint256' },
+      { name: 'deadline', type: 'uint40' },
+      { name: 'sellLoot', type: 'bool' },
+      { name: 'lpBps', type: 'uint16' },
+      { name: 'maxSlipBps', type: 'uint16' },
+      { name: 'feeOrHook', type: 'uint256' }
+    ], name: 'daicoConfig', type: 'tuple' }
+  ],
+  name: 'summonDAICO',
+  outputs: [{ name: 'dao', type: 'address' }],
+  stateMutability: 'payable',
+  type: 'function'
+}];
+
+const COIN_IFACES = {
+  setProposalTTL: new ethers.Interface(['function setProposalTTL(uint64)']),
+  setTimelockDelay: new ethers.Interface(['function setTimelockDelay(uint64)']),
+  mintFromMoloch: new ethers.Interface(['function mintFromMoloch(address,uint256)']),
+  approve: new ethers.Interface(['function approve(address,uint256)']),
+  lockup: new ethers.Interface(['function lockup(address,address,uint256,uint256,uint256)'])
+};
+
+async function coinLaunch() {
+  if (_coinLaunching) return;
+  if (!signer) { toggleWallet(); return; }
+
+  const name = $('coinName').value.trim();
+  const symbol = $('coinSymbol').value.trim();
+  const desc = $('coinDescription').value.trim();
+  if (!name || name.length < 2) { coinShowStatus('Enter a name (at least 2 characters)', true); return; }
+  if (!symbol || symbol.length < 1) { coinShowStatus('Enter a symbol', true); return; }
+
+  _coinLaunching = true;
+  setDisabled('coinLaunchBtn', true);
+
+  try {
+    const address = await signer.getAddress();
+    coinShowStatus('Preparing coin launch...');
+
+    const c = _coinCfg;
+    const saleBps = BigInt(10000 - c.teamBps);
+    const raiseETH = BigInt(c.raise);
+    const saleSupply = (COIN_SUPPLY * saleBps) / 10000n;
+    const saleSupplyWei = ethers.parseEther(saleSupply.toString());
+
+    // Sale rate: 1 ETH base unit → (saleSupply / raiseETH) shares
+    const tribAmt = ethers.parseEther('1');
+    const forAmt = ethers.parseEther((saleSupply / raiseETH).toString());
+
+    // Pin images + metadata to IPFS (or fallback to data URI)
+    const metadata = { name, symbol };
+    if (desc) metadata.description = desc;
+    const twitter = $('coinTwitter').value.trim().replace(/^@/,'');
+    const telegram = $('coinTelegram').value.trim().replace(/^@/,'');
+    const discord = $('coinDiscord').value.trim();
+    if (twitter) metadata.twitter = twitter;
+    if (telegram) metadata.telegram = telegram;
+    if (discord) metadata.discord = discord;
+    if (_coinTemplate) metadata.template = _coinTemplate;
+    if (_coinLaunchType === 'simple') {
+      metadata.launchType = 'simple';
+      metadata.lpBps = c.lpBps;
+    }
+    if (_coinImageFile) {
+      coinShowStatus('Uploading logo to IPFS...');
+      _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
+      metadata.image = 'ipfs://' + _coinImageCID;
+    }
+    if (_coinBannerFile) {
+      coinShowStatus('Uploading banner to IPFS...');
+      _coinBannerCID = await coinPinFile(_coinBannerFile, _coinBannerCID);
+      metadata.banner = 'ipfs://' + _coinBannerCID;
+    }
+    coinShowStatus('Pinning metadata...');
+    const orgURI = await coinPinMetadata(metadata);
+
+    const salt = ethers.hexlify(ethers.randomBytes(32));
+    const initHolders = [address];
+    const initShares = [ethers.parseEther('1')];
+    const predicted = coinPredict(initHolders, initShares, salt);
+
+    const summonConfig = {
+      summoner: COIN_SUMMONER,
+      molochImpl: COIN_IMPLS.moloch,
+      sharesImpl: COIN_IMPLS.shares,
+      lootImpl: COIN_IMPLS.loot
+    };
+    const daicoConfig = {
+      tribTkn: ZERO_ADDRESS,
+      tribAmt,
+      saleSupply: saleSupplyWei,
+      forAmt,
+      deadline: 0,
+      sellLoot: false,
+      lpBps: c.lpBps,
+      maxSlipBps: 100,
+      feeOrHook: COIN_FEE
+    };
+
+    coinShowStatus('Please confirm the transaction in your wallet...');
+    const daico = new ethers.Contract(COIN_DAICO, COIN_DAICO_ABI, signer);
+    let tx;
+
+    if (_coinLaunchType === 'simple') {
+      // Simple mode: no tap, no team, no custom calls
+      tx = await daico.summonDAICO(
+        summonConfig,
+        name, symbol, orgURI,
+        COIN_QUORUM_BPS,
+        true, // ragequittable
+        COIN_RENDERER,
+        salt,
+        initHolders, initShares,
+        false, false, // shares/loot not locked
+        daicoConfig
+      );
+    } else {
+      // Advanced mode: tap + team lockup + governance custom calls
+      const teamBps = BigInt(c.teamBps);
+      const teamSupply = (COIN_SUPPLY * teamBps) / 10000n;
+      const teamSupplyWei = ethers.parseEther(teamSupply.toString());
+
+      const treasuryBps = 10000n - BigInt(c.lpBps);
+      const expectedTreasury = (ethers.parseEther(c.raise.toString()) * treasuryBps) / 10000n;
+      const tapBudget = expectedTreasury;
+      const totalTapSec = COIN_SEC_PER_MONTH * BigInt(c.tapMonths);
+      let tapRate = tapBudget / totalTapSec;
+      if (tapRate === 0n && tapBudget > 0n) tapRate = 1n;
+
+      const lockDuration = BigInt(c.lockMonths) * 30n * 86400n;
+      const unlockTime = BigInt(Math.floor(Date.now() / 1000)) + lockDuration;
+
+      const customCalls = [
+        { target: predicted.dao, value: 0n,
+          data: COIN_IFACES.setProposalTTL.encodeFunctionData('setProposalTTL', [COIN_VOTING_DAYS * 86400]) },
+        { target: predicted.dao, value: 0n,
+          data: COIN_IFACES.setTimelockDelay.encodeFunctionData('setTimelockDelay', [COIN_TIMELOCK_DAYS * 86400]) },
+        { target: predicted.shares, value: 0n,
+          data: COIN_IFACES.mintFromMoloch.encodeFunctionData('mintFromMoloch', [predicted.dao, teamSupplyWei]) },
+        { target: predicted.shares, value: 0n,
+          data: COIN_IFACES.approve.encodeFunctionData('approve', [COIN_ZAMM, teamSupplyWei]) },
+        { target: COIN_ZAMM, value: 0n,
+          data: COIN_IFACES.lockup.encodeFunctionData('lockup', [predicted.shares, address, 0, teamSupplyWei, unlockTime]) }
+      ];
+
+      tx = await daico.summonDAICOWithTapCustom(
+        summonConfig,
+        name, symbol, orgURI,
+        COIN_QUORUM_BPS,
+        true, // ragequittable
+        COIN_RENDERER,
+        salt,
+        initHolders, initShares,
+        false, false, // shares/loot not locked
+        daicoConfig,
+        { ops: address, ratePerSec: tapRate, tapAllowance: tapBudget },
+        customCalls
+      );
+    }
+
+    coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
+
+    const receipt = await tx.wait();
+    const daoAddress = predicted.dao;
+    const fmtBM = n => n >= 1e9 ? (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M' : n.toLocaleString();
+    const saleSupplyFmt = fmtBM(Number(saleSupply));
+    const lpPct = c.lpBps / 100;
+
+    if (_coinLaunchType === 'simple') {
+      const treasuryPct = 100 - lpPct;
+      coinShowStatus(
+        `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
+        `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
+        `Sale: ${c.raise} ETH &rarr; ${saleSupplyFmt} shares<br>` +
+        `${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury<br><br>` +
+        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
+        ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
+        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
+      );
+    } else {
+      const teamSupplyFmt = fmtBM(Number((COIN_SUPPLY * BigInt(c.teamBps)) / 10000n));
+      const salePct = (10000 - c.teamBps) / 100;
+      const treasuryBps = 10000n - BigInt(c.lpBps);
+      const tapBudget = (ethers.parseEther(c.raise.toString()) * treasuryBps) / 10000n;
+      const dailyTap = (Number(ethers.formatEther(tapBudget)) / (c.tapMonths * 30.44));
+
+      coinShowStatus(
+        `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
+        `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
+        `Sale: ${c.raise} ETH &rarr; ${saleSupplyFmt} shares (${salePct}%)<br>` +
+        `Team: ${teamSupplyFmt} shares locked ${c.lockMonths}mo<br>` +
+        `LP: ${lpPct}% of buys &rarr; zAMM &middot; Tap: &asymp;${dailyTap.toFixed(4)} ETH/day<br><br>` +
+        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
+        ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
+        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
+      );
+    }
+  } catch (e) {
+    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      coinShowStatus('Launch cancelled', false);
+    } else {
+      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
+      coinShowStatus(msg.length < 120 ? msg : 'Launch failed', true);
+    }
+  } finally {
+    _coinLaunching = false;
+    setDisabled('coinLaunchBtn', false);
+  }
+}
+
+// end COIN TAB
 
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"8510b592df8f4a69b87bbf8e840f200c","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
