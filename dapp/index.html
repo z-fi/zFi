@@ -7165,7 +7165,7 @@ function ppRequestZapEstimate() {
       const source = lidoOut >= dexOut ? 'Lido' : 'DEX';
       const afterSlippage = best * 9950n / 10000n; // 0.5% slippage matching deposit flow
       _ppZapEstimate = afterSlippage;
-      setText('ppZapEstAmt', '~' + fmt(ethers.formatEther(afterSlippage)) + ' (' + source + ')');
+      setText('ppZapEstAmt', '~' + fmt(ppFormatAmountWei(afterSlippage, 'wstETH')) + ' (' + source + ')');
       setShown('ppZapEstimate', true);
       updatePPButton(); // re-check min with estimate
     } catch {
