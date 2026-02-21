@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Orderbook</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+:root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;
+  --surface:#f9f9f9;--surface-hover:#f3f3f3;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --link-fg:inherit;
+  --modal-overlay:rgba(0,0,0,0.8);--modal-bg:#fff;--modal-border:#000;
+  --green:#16a34a;--green-bg:rgba(22,163,74,0.06);--green-dim:rgba(22,163,74,0.15);
+  --red:#dc2626;--red-bg:rgba(220,38,38,0.06);--red-dim:rgba(220,38,38,0.15);
+}
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#777;--fg-dim:#555;
+  --border:#333;--border-muted:#222;
+  --surface:#111;--surface-hover:#161616;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --link-fg:#e8e8e0;
+  --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.08);--green-dim:rgba(34,197,94,0.18);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.08);--red-dim:rgba(239,68,68,0.18);
+}
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family:Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--fg);
+  min-height:100vh; padding:60px 20px 20px;
+  max-width:620px; margin:0 auto;
+}
+a { color:var(--link-fg); }
+button {
+  font-family:inherit; cursor:pointer;
+  background:var(--btn-bg); color:var(--btn-fg);
+  border:1px solid var(--btn-bg); border-radius:0;
+  padding:8px 16px; font-size:12px; font-weight:600;
+  letter-spacing:0.05em; text-transform:uppercase;
+  transition:background 0.2s, border-color 0.2s, color 0.2s;
+}
+button:hover { background:var(--btn-hover); }
+
+/* Dark toggle — 14px dot matching swap page */
+.dark-toggle {
+  position:fixed;
+  top:max(22px, env(safe-area-inset-top, 0px));
+  left:max(20px, env(safe-area-inset-left, 0px));
+  border:none; cursor:pointer; padding:13px; margin:-13px;
+  opacity:0.5; transition:opacity 0.2s; z-index:100;
+  background:#000; border-radius:50%; width:40px; height:40px; background-clip:content-box;
+}
+:root.dark .dark-toggle { background:#fff; }
+.dark-toggle:hover { opacity:1; }
+
+.home-btn {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+  z-index: 100;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  line-height: 0;
+}
+.home-btn:hover { opacity: 1; }
+
+/* Wallet — matching swap page pattern */
+.wallet {
+  position:fixed;
+  top:max(20px, env(safe-area-inset-top, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
+  font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+  z-index:100;
+}
+.wallet button { margin:0; padding:8px 16px; text-transform:none; }
+
+/* Modal overlay + wallet modal */
+.modal-overlay {
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:var(--modal-overlay); backdrop-filter:blur(4px);
+  z-index:2000; justify-content:center; align-items:center;
+  padding:20px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.modal-overlay.active { display:flex; }
+body.modal-open { overflow:hidden; }
+.modal {
+  background:var(--modal-bg); border:1px solid var(--modal-border);
+  padding:16px; width:100%; max-width:380px;
+  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px);
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  border-radius:0;
+}
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-title { font-size:14px; text-transform:uppercase; letter-spacing:0.1em; }
+.modal-close {
+  background:none; border:none; color:var(--fg); font-size:20px;
+  cursor:pointer; line-height:1; padding:4px; margin:-4px;
+  opacity:0.4; transition:opacity 0.15s;
+}
+.modal-close:hover { opacity:1; }
+.wallet-option {
+  display:flex; align-items:center; gap:12px; padding:12px;
+  background:var(--modal-bg); border:1px solid var(--border); color:var(--fg);
+  cursor:pointer; margin-bottom:8px; transition:background 0.15s, color 0.15s;
+  border-radius:0;
+}
+.wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
+.wallet-option-icon { font-size:1.5rem; }
+.wallet-option-name { font-weight:600; }
+.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; }
+.wallet-option.disconnect:hover { background:#f00; color:#fff; }
+
+/* Header */
+.page-header { margin-bottom:20px; }
+.pair-row {
+  display:flex; align-items:center; gap:10px; margin-bottom:6px;
+}
+.pair-name {
+  font-size:18px; font-weight:600; letter-spacing:-0.01em;
+}
+.sub-links {
+  display:flex; align-items:center; gap:6px; margin-left:auto;
+}
+.sub-link {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:10px; color:var(--fg-muted); text-decoration:none;
+  opacity:0.6; transition:opacity 0.15s;
+  letter-spacing:0.03em; text-transform:uppercase;
+}
+.sub-link:hover { opacity:1; }
+.pool-meta {
+  font-size:11px; color:var(--fg-dim);
+  letter-spacing:0.02em;
+}
+.pool-meta a { color:var(--fg-dim); }
+
+/* AMM price banner */
+.price-banner {
+  display:flex; gap:16px; align-items:baseline;
+  padding:12px 0; margin-bottom:16px;
+  border-bottom:1px solid var(--border-muted);
+}
+.amm-price {
+  font-size:22px; font-weight:600; font-family:monospace;
+  letter-spacing:-0.02em;
+}
+.amm-price-label {
+  font-size:10px; color:var(--fg-dim); text-transform:uppercase;
+  letter-spacing:0.06em;
+}
+.amm-reserves {
+  font-size:11px; color:var(--fg-muted); font-family:monospace;
+}
+
+/* Tabs */
+.tab-row { display:flex; gap:0; margin-bottom:0; border-bottom:1px solid var(--border-muted); }
+.tab-btn {
+  font-family:inherit; font-size:11px; font-weight:500;
+  letter-spacing:0.06em; text-transform:uppercase;
+  cursor:pointer; border:none; background:none;
+  color:var(--fg-muted); padding:10px 16px;
+  border-bottom:2px solid transparent; transition:color 0.15s;
+  border-radius:0;
+}
+.tab-btn:hover { color:var(--fg); background:none; }
+.tab-btn.active { color:var(--fg); border-bottom-color:var(--fg); }
+
+/* ---- Orderbook (exchange-style) ---- */
+.book-container {
+  border:1px solid var(--border-muted); border-radius:0;
+  overflow:hidden; margin-top:16px;
+}
+.book-header {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  font-size:10px; font-weight:600; letter-spacing:0.06em;
+  text-transform:uppercase; color:var(--fg-dim);
+  padding:8px 12px; border-bottom:1px solid var(--border-muted);
+  background:var(--surface);
+}
+.book-header span:last-child { text-align:right; }
+
+.book-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr;
+  padding:0 12px; font-size:12px; font-family:monospace;
+  line-height:26px; position:relative; cursor:pointer;
+  transition:background 0.1s;
+}
+.book-row:hover { background:var(--surface-hover); z-index:1; }
+.book-row .price { font-weight:600; }
+.book-row .total { text-align:right; color:var(--fg-muted); }
+.book-row .depth {
+  position:absolute; top:0; right:0; bottom:0;
+  pointer-events:none;
+}
+.bid-row .price { color:var(--green); }
+.bid-row .depth { background:var(--green-bg); }
+.ask-row .price { color:var(--red); }
+.ask-row .depth { background:var(--red-bg); }
+
+/* Spread row */
+.spread-row {
+  display:flex; align-items:center; justify-content:center; gap:12px;
+  padding:8px 12px; font-size:11px;
+  border-top:1px solid var(--border-muted);
+  border-bottom:1px solid var(--border-muted);
+  background:var(--surface);
+}
+.spread-price {
+  font-family:monospace; font-size:14px; font-weight:600;
+}
+.spread-label {
+  font-size:10px; color:var(--fg-dim); text-transform:uppercase;
+  letter-spacing:0.06em;
+}
+
+.book-empty {
+  padding:24px 12px; text-align:center;
+  font-size:12px; color:var(--fg-dim);
+}
+
+.book-footer {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:6px 12px; font-size:10px; color:var(--fg-dim);
+  border-top:1px solid var(--border-muted);
+  background:var(--surface);
+}
+
+/* ---- Order form ---- */
+.order-card {
+  border:1px solid var(--border-muted); border-radius:0;
+  overflow:hidden; margin-top:16px; background:var(--bg);
+}
+.side-tabs {
+  display:flex; border-bottom:1px solid var(--border-muted);
+}
+.side-tab {
+  flex:1; padding:12px; text-align:center;
+  font-family:inherit; font-size:11px; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase;
+  cursor:pointer; border:none; background:transparent;
+  color:var(--fg-muted); transition:all 0.15s; border-radius:0;
+  border-bottom:2px solid transparent;
+}
+.side-tab:hover { color:var(--fg); }
+.side-tab.active-buy { color:var(--green); border-bottom-color:var(--green); }
+.side-tab.active-sell { color:var(--red); border-bottom-color:var(--red); }
+.order-form-inner { padding:20px; }
+.field { margin-bottom:16px; }
+.field-label {
+  display:block; font-size:11px; color:var(--fg-muted); text-transform:uppercase;
+  letter-spacing:0.1em; margin-bottom:8px;
+}
+.field-row { display:flex; align-items:baseline; gap:8px; }
+.field-input {
+  font-family:inherit; font-size:20px; padding:6px 0;
+  border:none; border-bottom:1.5px solid var(--border);
+  background:transparent; color:var(--fg);
+  flex:1; min-width:0; outline:none;
+  transition:border-color 0.15s;
+}
+.field-input:focus { border-bottom-width:2.5px; margin-bottom:-1px; }
+.field-input::placeholder { color:var(--fg-dim); }
+.field-suffix {
+  font-size:11px; color:var(--fg-muted); flex-shrink:0;
+  text-transform:uppercase; letter-spacing:0.05em; font-weight:600;
+}
+.field-row-between {
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:12px; padding:8px 0; margin-bottom:8px;
+  border-top:1px solid var(--border-muted);
+}
+.field-row-between .label { color:var(--fg-muted); }
+.field-row-between .value { font-family:monospace; }
+.order-opts {
+  display:flex; align-items:center; gap:16px; margin-bottom:16px;
+}
+.order-opt {
+  display:flex; align-items:center; gap:5px;
+  font-size:11px; color:var(--fg-muted); cursor:pointer;
+  letter-spacing:0.02em;
+}
+.order-opt input { cursor:pointer; }
+.order-opt select {
+  font-family:inherit; font-size:11px; padding:4px 6px;
+  border:1px solid var(--border-muted); border-radius:0;
+  background:var(--bg); color:var(--fg); cursor:pointer;
+}
+.submit-btn {
+  width:100%; padding:14px 24px; border:1px solid transparent;
+  font-family:inherit; font-size:13px; font-weight:600;
+  letter-spacing:0.02em; cursor:pointer; transition:all 0.2s;
+  text-transform:none; border-radius:0;
+}
+.submit-btn:hover:not(:disabled) { opacity:0.85; }
+.submit-btn:disabled { opacity:0.35; cursor:not-allowed; }
+.submit-btn.buy { background:var(--green); color:#fff; border-color:var(--green); }
+.submit-btn.sell { background:var(--red); color:#fff; border-color:var(--red); }
+
+/* Status */
+.status-msg {
+  font-size:11px; padding:6px 10px; margin-top:8px;
+  border-radius:4px; display:none;
+}
+.status-msg.show { display:block; }
+.status-msg.error { background:var(--red-bg); color:var(--red); }
+.status-msg.success { background:var(--green-bg); color:var(--green); }
+.status-msg.info { background:var(--surface); color:var(--fg-muted); }
+
+/* My orders */
+.my-orders { margin-top:16px; }
+.my-order-item {
+  display:flex; align-items:center; gap:10px;
+  padding:12px;
+  border:1px solid var(--border-muted); border-radius:0;
+  margin-bottom:0; border-bottom:none; font-size:12px;
+  transition:background 0.1s;
+}
+.my-order-item:last-child { border-bottom:1px solid var(--border-muted); }
+.my-order-item:hover { background:var(--surface-hover); }
+.my-order-side {
+  font-size:10px; font-weight:700; letter-spacing:0.06em;
+  text-transform:uppercase; width:32px; flex-shrink:0;
+}
+.my-order-side.bid { color:var(--green); }
+.my-order-side.ask { color:var(--red); }
+.my-order-details {
+  flex:1; min-width:0;
+  font-family:monospace; font-size:11px;
+}
+.my-order-details .line2 { color:var(--fg-muted); font-size:10px; margin-top:2px; }
+.my-order-fill {
+  font-size:10px; color:var(--fg-muted); text-align:right; flex-shrink:0;
+}
+.my-order-fill .pct { font-weight:600; }
+.cancel-btn {
+  font-family:inherit; font-size:10px; cursor:pointer;
+  border:1px solid var(--red-dim); border-radius:0;
+  padding:4px 10px; background:transparent; color:var(--red);
+  transition:all 0.15s; flex-shrink:0;
+  letter-spacing:0.05em; text-transform:uppercase; font-weight:600;
+  margin:0;
+}
+.cancel-btn:hover { background:var(--red-bg); }
+.empty-msg { font-size:12px; color:var(--fg-dim); padding:24px 0; text-align:center; }
+
+/* Global orders view */
+.global-search {
+  margin-bottom:12px;
+}
+.global-search input {
+  width:100%; padding:8px 10px; font-family:inherit; font-size:13px;
+  border:1px solid var(--border-muted); border-radius:6px;
+  background:var(--bg); color:var(--fg); outline:none;
+  transition:border-color 0.15s;
+}
+.global-search input:focus { border-color:var(--fg-muted); }
+.global-search input::placeholder { color:var(--fg-dim); }
+.global-order-item {
+  display:flex; align-items:center; gap:10px;
+  padding:12px;
+  border:1px solid var(--border-muted); border-radius:0;
+  margin-bottom:0; border-bottom:none; font-size:12px;
+  cursor:pointer; transition:background 0.1s;
+}
+.global-order-item:first-child { border-top:1px solid var(--border-muted); }
+.global-order-item:last-child { border-bottom:1px solid var(--border-muted); }
+.global-order-item:hover { background:var(--surface-hover); }
+.order-token-pair {
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+}
+.order-token-pair .token-icon { display:flex; align-items:center; }
+.order-token-pair .token-icon svg, .order-token-pair .token-icon img { width:20px; height:20px; }
+.order-arrow { color:var(--fg-dim); font-size:14px; margin:0 2px; }
+.order-info {
+  flex:1; min-width:0;
+}
+.order-info .amounts {
+  font-family:monospace; font-size:11px; font-weight:500;
+}
+.order-info .meta {
+  color:var(--fg-muted); font-size:10px; margin-top:2px;
+}
+.order-fill-badge {
+  font-size:10px; color:var(--fg-muted); text-align:right; flex-shrink:0;
+}
+.order-fill-badge .pct { font-weight:600; }
+
+/* Fill confirmation modal */
+.fill-modal-pair {
+  display:flex; align-items:center; justify-content:center;
+  gap:12px; padding:20px 0; margin-bottom:16px;
+  border-bottom:1px solid var(--border-muted);
+}
+.fill-modal-token {
+  display:flex; flex-direction:column; align-items:center; gap:6px; min-width:80px;
+}
+.fill-modal-token .icon { display:flex; align-items:center; }
+.fill-modal-token .icon svg, .fill-modal-token .icon img { width:32px; height:32px; }
+.fill-modal-token .amt { font-family:monospace; font-size:14px; font-weight:600; text-align:center; }
+.fill-modal-token .sym { font-size:11px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:0.04em; }
+.fill-modal-arrow { font-size:20px; color:var(--fg-dim); }
+.fill-modal-details {
+  font-size:12px; margin-bottom:16px;
+}
+.fill-modal-details .row {
+  display:flex; justify-content:space-between; padding:4px 0;
+  border-bottom:1px solid var(--border-muted);
+}
+.fill-modal-details .row:last-child { border-bottom:none; }
+.fill-modal-details .label { color:var(--fg-muted); }
+.fill-modal-details .value { font-family:monospace; }
+.fill-modal-note {
+  font-size:11px; color:var(--fg-dim); margin-bottom:14px; text-align:center;
+}
+
+/* Footer */
+.site-footer {
+  position:relative;
+  text-align:center; padding:48px 20px; font-size:11px;
+  opacity:0.55; letter-spacing:0.5px; font-weight:300; margin-top:40px;
+}
+.site-footer a { color:inherit; text-decoration:underline; margin:0 2px; }
+.site-footer a:hover { opacity:0.7; }
+.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
+.dark .site-footer .tagline { color:#fff; }
+
+/* Responsive */
+@media (max-width:600px) {
+  body { padding:50px 12px 12px; }
+  .wallet { top:16px; right:16px; }
+  .wallet button { padding:10px 14px; font-size:11px; }
+  .dark-toggle { top:18px; left:16px; }
+  .pair-name { font-size:15px; }
+  .amm-price { font-size:18px; }
+  .price-banner { gap:10px; flex-wrap:wrap; }
+  .book-row { font-size:11px; padding:0 8px; }
+  .book-header { padding:6px 8px; }
+  .spread-row { padding:6px 8px; }
+  .order-form-inner { padding:12px; }
+  .modal { max-width:100%; margin:0 10px; max-height:calc(100vh - 40px); overflow-y:auto; }
+}
+</style>
+</head>
+<body>
+
+<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
+<div class="wallet">
+  <button id="walletBtn" onclick="toggleWallet()">connect</button>
+</div>
+
+<div class="modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Connect Wallet</div>
+      <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="walletOptions"></div>
+  </div>
+</div>
+
+<div class="page-header">
+  <div class="pair-row">
+    <span class="pair-name" id="pairName">---</span>
+    <div class="sub-links">
+      <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Chart</a>
+      <a class="sub-link" id="lpLink" href="#" title="Manage LP" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v12M6 12h12"/></svg>LP</a>
+      <a class="sub-link" id="swapLink" href="../" title="Swap">Swap</a>
+    </div>
+  </div>
+  <div class="pool-meta" id="poolMeta">Loading...</div>
+</div>
+
+<div class="price-banner" id="priceBanner" style="display:none">
+  <div>
+    <div class="amm-price" id="ammPrice">--</div>
+    <div class="amm-price-label" id="ammPriceLabel">AMM Price</div>
+  </div>
+  <div class="amm-reserves" id="ammReserves"></div>
+</div>
+
+<!-- Tab row -->
+<div class="tab-row">
+  <button class="tab-btn active" data-tab="book" onclick="switchTab('book')">Book</button>
+  <button class="tab-btn" data-tab="make" onclick="switchTab('make')">Trade</button>
+  <button class="tab-btn" data-tab="mine" onclick="switchTab('mine')">My Orders</button>
+</div>
+
+<!-- Book tab -->
+<div id="tab-book">
+  <div class="book-container" id="bookContainer">
+    <div class="book-header">
+      <span id="hdrPrice">Price</span>
+      <span id="hdrSize">Size</span>
+      <span id="hdrTotal">Total</span>
+    </div>
+    <div id="asksSection"></div>
+    <div class="spread-row" id="spreadRow" style="display:none">
+      <span class="spread-price" id="spreadPrice">--</span>
+      <span class="spread-label" id="spreadLabel">Spread</span>
+    </div>
+    <div id="bidsSection"></div>
+    <div class="book-footer">
+      <span id="orderCount">0 orders</span>
+      <span id="refreshCountdown"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Make order tab -->
+<div id="tab-make" style="display:none">
+  <div class="order-card">
+    <div class="side-tabs">
+      <button class="side-tab active-buy" id="sideBuy" onclick="setSide('buy')">Buy</button>
+      <button class="side-tab" id="sideSell" onclick="setSide('sell')">Sell</button>
+    </div>
+    <div class="order-form-inner">
+      <div class="field">
+        <div class="field-label">Price</div>
+        <div class="field-row">
+          <input class="field-input" id="orderPrice" type="number" step="any" min="0" placeholder="0.0">
+          <span class="field-suffix" id="orderPriceUnit">--</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Amount</div>
+        <div class="field-row">
+          <input class="field-input" id="orderAmt" type="number" step="any" min="0" placeholder="0.0">
+          <span class="field-suffix" id="orderAmtUnit">--</span>
+        </div>
+      </div>
+      <div class="field-row-between">
+        <span class="label">Total</span>
+        <span class="value" id="orderTotal">--</span>
+      </div>
+      <div class="order-opts">
+        <label class="order-opt">
+          <span>Expires</span>
+          <select id="orderExpiry">
+            <option value="3600">1h</option>
+            <option value="86400">1d</option>
+            <option value="172800" selected>2d</option>
+            <option value="604800">1w</option>
+            <option value="2592000">1mo</option>
+          </select>
+        </label>
+        <label class="order-opt"><input type="checkbox" id="orderPartial" checked> Partial fill</label>
+      </div>
+      <button class="submit-btn buy" id="makeOrderBtn" onclick="doMakeOrder()">Buy</button>
+    </div>
+  </div>
+  <div class="status-msg" id="makeStatus"></div>
+</div>
+
+<!-- My orders tab -->
+<div id="tab-mine" style="display:none">
+  <div class="my-orders" id="myOrdersTable"></div>
+  <div class="status-msg" id="cancelStatus"></div>
+</div>
+
+<!-- Global orders view (no pool) -->
+<div id="globalView" style="display:none">
+  <div class="global-search">
+    <input type="text" id="globalSearch" placeholder="Search by token symbol, name, or address..." oninput="filterGlobalOrders()">
+  </div>
+  <div id="globalOrdersList"></div>
+  <div class="book-footer">
+    <span id="globalOrderCount">0 orders</span>
+    <span id="globalRefreshCountdown"></span>
+  </div>
+</div>
+
+<!-- Fill confirmation modal -->
+<div class="modal-overlay" id="fillModal" onclick="if(event.target===this)closeFillModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Fill Order</div>
+      <button class="modal-close" onclick="closeFillModal()">&times;</button>
+    </div>
+    <div id="fillModalBody"></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
+  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
+  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
+</footer>
+
+<script src="../ethers.min.js"></script>
+<script src="../walletconnect.min.js"></script>
+<script>
+// ---- Dark mode (dot toggle, matching swap page) ----
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
+}
+
+// ---- Constants ----
+const COOKBOOK = "0x000000000000040470635EB91b7CE4D132D616eD";
+const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
+const ZERO    = "0x0000000000000000000000000000000000000000";
+const BASE    = "https://coinchan-indexer-production.up.railway.app";
+
+const COOKBOOK_ABI = [
+  "function makeOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill) payable returns (bytes32)",
+  "function fillOrder(address maker, address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill, uint96 fillPart) payable",
+  "function cancelOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill)",
+  "function orders(bytes32) view returns (bool partialFill, uint56 deadline, uint96 inDone, uint96 outDone)"
+];
+
+const COINS_ABI = [
+  "function setOperator(address operator, bool approved) returns (bool)",
+  "function isOperator(address owner, address spender) view returns (bool)"
+];
+
+const WEINS = "0x0000000000696760E15f265e828DB644A0c242EB";
+const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
+const READ_RPCS = ["https://eth.llamarpc.com", "https://ethereum.publicnode.com", "https://1rpc.io/eth", "https://eth.drpc.org"];
+
+// ---- Known tokens (from swap page) ----
+const KNOWN_TOKENS = {
+  "0x0000000000000000000000000000000000000000": { symbol: "ETH", decimals: 18 },
+  "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": { symbol: "WETH", decimals: 18 },
+  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": { symbol: "USDC", decimals: 6 },
+  "0xdac17f958d2ee523a2206206994597c13d831ec7": { symbol: "USDT", decimals: 6 },
+  "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": { symbol: "WBTC", decimals: 8 },
+  "0xae7ab96520de3a18e5e111b5eaab095312d7fe84": { symbol: "stETH", decimals: 18 },
+  "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": { symbol: "wstETH", decimals: 18 },
+  "0xae78736cd615f374d3085123a210448e74fc6393": { symbol: "rETH", decimals: 18 },
+  "0x6b175474e89094c44da98b954eedeac495271d0f": { symbol: "DAI", decimals: 18 },
+  "0x6440f144b7e50d6a8439336510312d2f54beb01d": { symbol: "BOLD", decimals: 18 },
+  "0x5f98805a4e8be255a32880fdec7f6728c6568ba0": { symbol: "LUSD", decimals: 18 },
+  "0xc50673edb3a7b94e8cad8a7d4e0cd68864e33edf": { symbol: "PNKSTR", decimals: 18 },
+  "0x00a6ba94bbb5474725515de88fe04f854f2dcb12": { symbol: "zOrg", decimals: 18 },
+  "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed": { symbol: "ZAMM", decimals: 18 },
+};
+
+// ---- Token Icons ----
+const ETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>`;
+const WETH_ICON = `<svg width="24" height="24" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="17" fill="none" stroke="#90CAF9" stroke-width="1.5" stroke-dasharray="4 2.5"/><g transform="translate(2,2)"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></g></svg>`;
+const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
+const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
+const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
+const STETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path d="M10.35 14.864c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 2.061 0 4.122-.832 5.683-2.353 2.637-2.571 3.082-6.727 1.034-9.824L16.067 18.611 10.35 14.864z" fill="#FFF" opacity=".6"/></g></svg>`;
+const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
+const RETH_ICON = `<svg width="24" height="24" viewBox="0 0 33 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#rc)"><circle cx="16.5" cy="16" r="16" fill="url(#rg)"/><path d="M16.476 19.452L10.389 15.851 16.476 5.753 22.558 15.851Z" fill="white"/><path d="M16.476 25.584L10.389 17.01 16.476 20.605 22.564 17.01Z" fill="white"/></g><defs><radialGradient id="rg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10.95 7.65) rotate(54.17) scale(26.51)"><stop stop-color="#FFD794"/><stop offset="1" stop-color="#ED5A37"/></radialGradient><clipPath id="rc"><rect width="32" height="32" fill="white" transform="translate(.5)"/></clipPath></defs></svg>`;
+const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
+const BOLD_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#bc)"><path d="M32 16C32 7.164 24.836 0 16 0 7.164 0 0 7.164 0 16s7.164 16 16 16 16-7.164 16-16Z" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.172 4.566H8.582v21.536h7.18v-.86a8.9 8.9 0 003.594.864c4.359 0 7.894-3.535 7.894-7.899 0-4.363-3.535-7.898-7.894-7.898a8.9 8.9 0 00-3.594.864V4.566Zm3.59 6.606c-2.555 1.309-4.305 3.969-4.305 7.035s1.75 5.727 4.305 7.035V11.172Z" fill="#1C1D4F"/></g><defs><clipPath id="bc"><rect width="32" height="32" fill="white"/></clipPath></defs></svg>`;
+const LUSD_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><circle cx="128" cy="132" r="102" fill="#29C9EB"/><rect x="110" y="4" width="36" height="32" rx="9" fill="#29C9EB"/><rect x="110" y="228" width="36" height="24" rx="9" fill="#29C9EB"/><path d="M128 30A102 102 0 01128 234Z" fill="#7B6AD6"/><path d="M128 4h9q9 0 9 9v23h-18Z" fill="#7B6AD6"/><path d="M128 228h18v15q0 9-9 9h-9Z" fill="#7B6AD6"/><g fill="none" stroke="white" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"><path d="M154 90c-8-12-20-18-34-16-22 4-38 20-38 38 0 20 16 30 46 38s46 20 46 36c0 20-16 32-38 34-16 2-30-4-38-16"/><line x1="128" y1="74" x2="128" y2="15"/><line x1="128" y1="220" x2="128" y2="241"/></g></svg>`;
+const ZORG_ICON = `<svg width="24" height="24" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><clipPath id="zc"><circle cx="200" cy="200" r="200"/></clipPath><g clip-path="url(#zc)"><rect width="400" height="400" fill="#0a0a0a"/><path fill="#e8e8e0" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>`;
+const ZAMM_ICON = `<svg width="24" height="24" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="99" fill="#fff"/><circle cx="100" cy="100" r="93" fill="none" stroke="#000" stroke-width="1.2"/><path d="M69 65L96 64 97 65 98 64 120 64 121 65 122 64 130 64 130 70 117 85 118 86 104 100 105 101 91 115 92 116 78 130 96 130 97 131 98 130 120 130 121 131 122 130 132 131 120 136 119 135 118 136 96 136 95 135 94 136 71 136 71 130 84 115 83 114 97 100 96 99 110 85 109 84 123 70 105 70 104 69 103 70 83 70 82 69 81 70 69 69Z" fill="#000"/></svg>`;
+const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="12" font-weight="bold">?</text></svg>`;
+
+const TOKEN_ICONS = {
+  ETH: ETH_ICON, WETH: WETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
+  stETH: STETH_ICON, wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, BOLD: BOLD_ICON,
+  LUSD: LUSD_ICON, zOrg: ZORG_ICON, ZAMM: ZAMM_ICON,
+};
+
+function makeLetterIcon(sym) {
+  const full = String(sym ?? '').trim();
+  const clean = full.replace(/[^A-Za-z0-9]/g, '') || '?';
+  const show = clean.length <= 7 ? clean : clean.slice(0, 6) + '\u2026';
+  const L = show.length;
+  const fontSize = L <= 1 ? 10 : L === 2 ? 8.5 : L === 3 ? 7.2 : L === 4 ? 6 : L === 5 ? 5.2 : L === 6 ? 4.6 : 4;
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) hash = ((hash << 5) - hash + clean.charCodeAt(i)) | 0;
+  const hue = ((hash % 360) + 360) % 360;
+  const tl = L >= 5 ? ` textLength="${L >= 7 ? 19 : 18}" lengthAdjust="spacingAndGlyphs"` : '';
+  return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">` +
+    `<circle cx="12" cy="12" r="11" fill="hsl(${hue},50%,50%)" stroke="hsl(${hue},35%,38%)" stroke-width="1"/>` +
+    `<text x="12" y="12.3" text-anchor="middle" dominant-baseline="middle"` +
+    ` font-family="Helvetica,Arial,sans-serif"` +
+    ` font-size="${fontSize}" font-weight="700" fill="#fff"${tl}>${escText(show)}</text></svg>`;
+}
+
+const _obLetterIconCache = new Map();
+function iconForSymbol(sym) {
+  const s = String(sym);
+  if (TOKEN_ICONS[s]) return TOKEN_ICONS[s];
+  if (_obLetterIconCache.has(s)) return _obLetterIconCache.get(s);
+  const svg = makeLetterIcon(s);
+  _obLetterIconCache.set(s, svg);
+  return svg;
+}
+
+async function resolveWeiName(addr) {
+  for (const url of READ_RPCS) {
+    try {
+      const rpc = new ethers.JsonRpcProvider(url, 1, { staticNetwork: true });
+      const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+      const name = await ns.reverseResolve(addr);
+      if (name && _connectedAddress === addr) $('walletBtn').textContent = name.toLowerCase();
+      return;
+    } catch (e) {}
+  }
+}
+
+// ---- State ----
+let _provider = null, _signer = null, _cookbook = null, _coins = null;
+let _poolData = null;
+let _allOrders = [];
+let _refreshCountdown = 30;
+let _activeTab = 'book';
+let _orderSide = 'buy';
+let _globalMode = false;
+let _coinLabelCache = new Map();
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { const d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
+const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
+function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ---- Pool ID from hash ----
+function getPoolId() {
+  const m = location.hash.match(/^#\/(\d+)$/);
+  return m ? m[1] : null;
+}
+
+// ---- Wallet state ----
+let _connectedAddress = null;
+let _connectedWalletProvider = null;
+let _walletConnectProvider = null;
+let _isConnecting = false;
+let _walletEventHandlers = null;
+let _isWalletConnect = false;
+let _wcDeepLink = null;
+
+const eip6963Providers = new Map();
+window.addEventListener('eip6963:announceProvider', (event) => {
+  try {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid && provider) eip6963Providers.set(info.uuid, { info, provider });
+  } catch (e) {}
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+// ---- Wallet helpers ----
+function findProvider(checkFn) {
+  if (window.ethereum?.providers?.length) {
+    for (const p of window.ethereum.providers) { if (checkFn(p)) return p; }
+  }
+  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
+  return null;
+}
+
+const WALLET_CONFIG = {
+  metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
+  coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
+  rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
+  rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
+  walletconnect: { name: 'WalletConnect', icon: '📱' }
+};
+
+function detectWallets() {
+  const detected = [];
+  const seenNames = new Set();
+
+  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
+    const name = info?.name || 'Unknown';
+    if (!seenNames.has(name.toLowerCase())) {
+      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
+      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
+      detected.push({
+        key: `eip6963_${uuid}`, name,
+        icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
+        getProvider: () => provider
+      });
+      seenNames.add(name.toLowerCase());
+    }
+  }
+
+  if (window.ethereum?.providers?.length) {
+    for (let i = 0; i < window.ethereum.providers.length; i++) {
+      const p = window.ethereum.providers[i];
+      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
+      if (name && !seenNames.has(name.toLowerCase())) {
+        detected.push({ key: `provider_${i}`, name, icon: '🔗', getProvider: () => p });
+        seenNames.add(name.toLowerCase());
+      }
+    }
+  }
+
+  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
+    if (key === 'walletconnect') continue;
+    try {
+      if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) {
+        detected.push({ key, ...config });
+        seenNames.add(config.name.toLowerCase());
+      }
+    } catch (e) {}
+  }
+
+  if (detected.length === 0 && window.ethereum) {
+    detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum });
+  }
+
+  const wcModule = globalThis['@walletconnect/ethereum-provider'];
+  if (wcModule?.EthereumProvider) {
+    detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
+  }
+
+  return detected;
+}
+
+function showWalletModal() {
+  $('walletModal').classList.add('active');
+  document.body.classList.add('modal-open');
+  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  const doDetect = (attempt = 1) => {
+    const wallets = detectWallets();
+    const hasBrowserWallet = wallets.some(w => w.key !== 'walletconnect');
+    if (!hasBrowserWallet && attempt < 2) setTimeout(() => doDetect(attempt + 1), 250);
+    else renderWalletModal(wallets);
+  };
+  setTimeout(() => doDetect(), 150);
+}
+
+function renderWalletModal(wallets) {
+  const container = $('walletOptions');
+  if (_connectedAddress) {
+    const displayName = $('walletBtn').textContent;
+    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
+    container.innerHTML = `
+      <div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;">
+        <div style="font-weight:600;margin-bottom:6px;">Connected</div>
+        ${showName ? `<div style="font-size:16px;margin-bottom:4px;">${escText(displayName)}</div>` : ''}
+        <div style="font-size:12px;word-break:break-all;opacity:0.6;">${escText(_connectedAddress)}</div>
+      </div>
+      <div class="wallet-option disconnect" onclick="disconnectWallet()">
+        <span class="wallet-option-name">Disconnect</span>
+      </div>
+    `;
+  } else {
+    container.innerHTML = wallets.length > 0 ? wallets.map(w => `
+      <div class="wallet-option" data-wallet-key="${escAttr(w.key)}">
+        <span class="wallet-option-icon">${w.icon}</span>
+        <span class="wallet-option-name">${escText(w.name)}</span>
+      </div>
+    `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
+    container.querySelectorAll('[data-wallet-key]').forEach(el => {
+      el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey));
+    });
+  }
+}
+
+function closeWalletModal() {
+  $('walletModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+}
+
+function toggleWallet() { showWalletModal(); }
+
+async function connectWithWallet(walletKey) {
+  if (_isConnecting) return;
+  _isConnecting = true;
+  try {
+    closeWalletModal();
+    let walletProvider;
+
+    if (walletKey === 'walletconnect') {
+      const wcModule = globalThis['@walletconnect/ethereum-provider'];
+      const WCProvider = wcModule?.EthereumProvider;
+      if (!WCProvider?.init) throw new Error('WalletConnect not available');
+
+      if (_walletConnectProvider) {
+        try { await _walletConnectProvider.disconnect?.(); } catch (e) {}
+        _walletConnectProvider = null;
+      }
+
+      _walletConnectProvider = await WCProvider.init({
+        projectId: '1e8390ef1c1d8a185e035912a1409749',
+        chains: [1],
+        showQrModal: true,
+        rpcMap: { 1: 'https://1rpc.io/eth' },
+        metadata: {
+          name: 'zFi Orderbook',
+          description: 'Onchain orderbook',
+          url: window.location.origin,
+          icons: []
+        }
+      });
+
+      _walletConnectProvider.on('display_uri', (uri) => {
+        try {
+          const session = _walletConnectProvider.session;
+          const peerMeta = session?.peer?.metadata;
+          if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) _wcDeepLink = peerMeta.redirect.native;
+          else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) _wcDeepLink = peerMeta.redirect.universal;
+        } catch (e) {}
+      });
+
+      await _walletConnectProvider.enable();
+      walletProvider = _walletConnectProvider;
+      _isWalletConnect = true;
+
+      try {
+        const session = _walletConnectProvider.session;
+        const peerMeta = session?.peer?.metadata;
+        if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) _wcDeepLink = peerMeta.redirect.native;
+        else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) _wcDeepLink = peerMeta.redirect.universal;
+      } catch (e) {}
+    } else if (walletKey.startsWith('eip6963_')) {
+      const uuid = walletKey.replace('eip6963_', '');
+      walletProvider = eip6963Providers.get(uuid)?.provider;
+      if (!walletProvider) {
+        const savedName = localStorage.getItem('zob_wallet_name')?.toLowerCase();
+        if (savedName) {
+          for (const [, { info, provider }] of eip6963Providers) {
+            if (info?.name?.toLowerCase() === savedName) { walletProvider = provider; break; }
+          }
+        }
+      }
+      _isWalletConnect = false;
+      _wcDeepLink = null;
+    } else {
+      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
+      _isWalletConnect = false;
+      _wcDeepLink = null;
+    }
+
+    if (!walletProvider) throw new Error('Wallet not found');
+
+    if (walletKey !== 'walletconnect') {
+      await walletProvider.request({ method: 'eth_requestAccounts' });
+    }
+
+    const chainId = await walletProvider.request({ method: 'eth_chainId' });
+    if (BigInt(chainId) !== 1n) {
+      try {
+        await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+        const newChainId = await walletProvider.request({ method: 'eth_chainId' });
+        if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
+      } catch (switchErr) {
+        alert('Please switch to Ethereum Mainnet');
+        if (walletKey === 'walletconnect') {
+          try { _walletConnectProvider?.disconnect(); } catch (e) {}
+          _walletConnectProvider = null;
+        }
+        _isWalletConnect = false;
+        _wcDeepLink = null;
+        return;
+      }
+    }
+
+    _provider = new ethers.BrowserProvider(walletProvider);
+    _signer = await _provider.getSigner();
+    _connectedAddress = await _signer.getAddress();
+    _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer);
+    _coins = new ethers.Contract(COINS, COINS_ABI, _signer);
+
+    const oldWalletProvider = _connectedWalletProvider;
+    _connectedWalletProvider = walletProvider;
+
+    $('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
+    resolveWeiName(_connectedAddress);
+    updateWcBanner();
+
+    if (oldWalletProvider && _walletEventHandlers) {
+      try {
+        oldWalletProvider.removeListener('accountsChanged', _walletEventHandlers.accountsChanged);
+        oldWalletProvider.removeListener('chainChanged', _walletEventHandlers.chainChanged);
+      } catch (e) {}
+    }
+    _walletEventHandlers = {
+      accountsChanged: () => window.location.reload(),
+      chainChanged: () => window.location.reload()
+    };
+    walletProvider.on('accountsChanged', _walletEventHandlers.accountsChanged);
+    walletProvider.on('chainChanged', _walletEventHandlers.chainChanged);
+
+    try {
+      localStorage.setItem('zob_wallet', walletKey);
+      if (walletKey.startsWith('eip6963_')) {
+        const uuid = walletKey.replace('eip6963_', '');
+        const name = eip6963Providers.get(uuid)?.info?.name;
+        if (name) localStorage.setItem('zob_wallet_name', name);
+      }
+    } catch (e) {}
+
+    renderMyOrders();
+  } catch (error) {
+    console.error('Wallet connect error:', error);
+    alert(error.message || 'Connection failed');
+  } finally {
+    _isConnecting = false;
+  }
+}
+
+function disconnectWallet() {
+  if (_connectedWalletProvider && _walletEventHandlers) {
+    try {
+      _connectedWalletProvider.removeListener('accountsChanged', _walletEventHandlers.accountsChanged);
+      _connectedWalletProvider.removeListener('chainChanged', _walletEventHandlers.chainChanged);
+    } catch (e) {}
+  }
+  _walletEventHandlers = null;
+  if (_walletConnectProvider) {
+    try { _walletConnectProvider.disconnect(); } catch (e) {}
+    _walletConnectProvider = null;
+  }
+  _provider = null;
+  _signer = null;
+  _connectedAddress = null;
+  _connectedWalletProvider = null;
+  _cookbook = null;
+  _coins = null;
+  _isWalletConnect = false;
+  _wcDeepLink = null;
+  $('walletBtn').textContent = 'connect';
+  updateWcBanner();
+  closeWalletModal();
+  try { localStorage.removeItem('zob_wallet'); localStorage.removeItem('zob_wallet_name'); } catch (e) {}
+  renderMyOrders();
+}
+
+function updateWcBanner() {
+  const existing = document.getElementById('wcBanner');
+  if (existing) existing.remove();
+  if (_isWalletConnect && _connectedAddress) {
+    const banner = document.createElement('div');
+    banner.id = 'wcBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
+    banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
+    document.body.prepend(banner);
+    document.body.style.paddingTop = '44px';
+  } else {
+    document.body.style.paddingTop = '';
+  }
+}
+
+async function tryAutoConnect() {
+  const savedWallet = localStorage.getItem('zob_wallet');
+  if (!savedWallet) {
+    // Legacy: try eth_accounts for injected
+    if (!window.ethereum) return;
+    try {
+      const accts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accts && accts.length > 0) await connectWithWallet('injected');
+    } catch {}
+    return;
+  }
+  $('walletBtn').textContent = '...';
+  setTimeout(async () => {
+    try {
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise(r => setTimeout(r, 300));
+      await connectWithWallet(savedWallet);
+    } catch (e) {
+      console.error('Auto-reconnect failed:', e);
+      $('walletBtn').textContent = 'connect';
+    }
+  }, 100);
+}
+
+// ---- Tab switching ----
+function switchTab(tab) {
+  _activeTab = tab;
+  ['book','make','mine'].forEach(t => {
+    const el = $('tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    document.querySelector(`.tab-btn[data-tab="${t}"]`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'mine') renderMyOrders();
+}
+
+// ---- Fetch pool data (tries both ZAMM and COOKBOOK sources) ----
+async function fetchPool(poolId) {
+  const query = `query ($id: BigInt!, $source: String!, $chainId: Float!) {
+    pool(id: $id, source: $source, chainId: $chainId) {
+      id token0 token1
+      coin0 { id decimals name symbol imageUrl }
+      coin1 { id decimals name symbol imageUrl }
+      reserve0 reserve1 price0 price1
+    }
+  }`;
+  // Try ZAMM first, then COOKBOOK
+  for (const source of ["ZAMM", "COOKBOOK"]) {
+    try {
+      const res = await fetch(BASE + "/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { id: poolId, source, chainId: 1 } })
+      });
+      const { data } = await res.json();
+      if (data && data.pool) {
+        data.pool._source = source;
+        return data.pool;
+      }
+    } catch (e) {
+      console.warn('Pool fetch failed for source=' + source, e);
+    }
+  }
+  return null;
+}
+
+// ---- Fetch orders ----
+async function fetchOrders() {
+  try {
+    const res = await fetch(BASE + "/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 500) {
+          items { id maker tokenIn idIn amtIn tokenOut idOut amtOut deadline partialFill inDone outDone status txHash }
+        }}`
+      })
+    });
+    const { data } = await res.json();
+    const items = data ? data.orders.items : [];
+    console.log('[orderbook] fetched', items.length, 'orders from indexer');
+    return items;
+  } catch (e) {
+    console.error('[orderbook] fetchOrders failed:', e);
+    return [];
+  }
+}
+
+// ---- Filter orders by pool pair ----
+function filterOrdersForPool(orders, pool) {
+  if (!pool) return [];
+  const now = Math.floor(Date.now() / 1000);
+  const t0 = pool.token0.toLowerCase();
+  const t1 = pool.token1.toLowerCase();
+  const id0 = pool.coin0 ? pool.coin0.id : "0";
+  const id1 = pool.coin1 ? pool.coin1.id : "0";
+
+  const filtered = orders.filter(o => {
+    if (o.status !== "ACTIVE") return false;
+    if (Number(o.deadline) <= now) return false;
+    const oti = o.tokenIn.toLowerCase(), oto = o.tokenOut.toLowerCase();
+    const oii = o.idIn, oio = o.idOut;
+    return (oti === t0 && oii === id0 && oto === t1 && oio === id1)
+        || (oti === t1 && oii === id1 && oto === t0 && oio === id0);
+  });
+  console.log('[orderbook] filtered', filtered.length, 'orders for pool pair',
+    't0=' + t0.slice(0,10), 'id0=' + id0,
+    't1=' + t1.slice(0,10), 'id1=' + id1);
+  return filtered;
+}
+
+// ---- Classify bids and asks ----
+function classifyOrders(orders, pool) {
+  if (!pool) return { bids: [], asks: [] };
+  const t0 = pool.token0.toLowerCase();
+  const id0 = pool.coin0 ? pool.coin0.id : "0";
+  const bids = [], asks = [];
+  for (const o of orders) {
+    if (o.tokenIn.toLowerCase() === t0 && o.idIn === id0) {
+      bids.push(o);
+    } else {
+      asks.push(o);
+    }
+  }
+  const price = (o, isBid) => {
+    const inAmt = BigInt(o.amtIn), outAmt = BigInt(o.amtOut);
+    if (isBid) return outAmt > 0n ? Number(inAmt * 10000n / outAmt) / 10000 : 0;
+    return inAmt > 0n ? Number(outAmt * 10000n / inAmt) / 10000 : 0;
+  };
+  bids.sort((a, b) => price(b, true) - price(a, true));
+  asks.sort((a, b) => price(a, false) - price(b, false));
+  return { bids, asks };
+}
+
+// ---- Format helpers ----
+function fmt(wei, decimals) {
+  if (!wei || wei === "0") return "0";
+  const d = decimals || 18;
+  const n = BigInt(wei);
+  const whole = n / (10n ** BigInt(d));
+  const frac = n % (10n ** BigInt(d));
+  const fracStr = frac.toString().padStart(d, '0').slice(0, 5).replace(/0+$/, '');
+  return whole.toString() + (fracStr ? '.' + fracStr : '');
+}
+
+function fmtCompact(n) {
+  if (n >= 1) return n.toPrecision(6);
+  return n.toPrecision(4);
+}
+
+function shortAddr(a) {
+  return a.slice(0, 6) + '...' + a.slice(-4);
+}
+
+function timeLeft(deadline) {
+  const secs = Number(deadline) - Math.floor(Date.now() / 1000);
+  if (secs <= 0) return 'expired';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm';
+  if (secs < 86400) return Math.floor(secs / 3600) + 'h';
+  return Math.floor(secs / 86400) + 'd';
+}
+
+function tokenLabel(pool, side) {
+  const coin = side === 0 ? pool.coin0 : pool.coin1;
+  const addr = side === 0 ? pool.token0 : pool.token1;
+  if (coin && coin.symbol) return coin.symbol;
+  if (addr === ZERO) return 'ETH';
+  return shortAddr(addr);
+}
+
+function fillPct(o) {
+  const total = BigInt(o.amtOut);
+  if (total === 0n) return 0;
+  return Number(BigInt(o.outDone) * 100n / total);
+}
+
+// ---- Render book (exchange-style) ----
+function renderBook() {
+  if (!_poolData) return;
+  const filtered = filterOrdersForPool(_allOrders, _poolData);
+  const { bids, asks } = classifyOrders(filtered, _poolData);
+  const label0 = tokenLabel(_poolData, 0);
+  const label1 = tokenLabel(_poolData, 1);
+
+  $('hdrPrice').textContent = 'Price (' + label0 + ')';
+  $('hdrSize').textContent = 'Size (' + label1 + ')';
+  $('hdrTotal').textContent = 'Total (' + label0 + ')';
+  $('orderCount').textContent = (bids.length + asks.length) + ' orders';
+
+  // Compute max sizes for depth bars
+  const bidSizes = bids.map(o => Number(BigInt(o.amtOut)));
+  const askSizes = asks.map(o => Number(BigInt(o.amtIn)));
+  const maxBid = Math.max(...bidSizes, 1);
+  const maxAsk = Math.max(...askSizes, 1);
+
+  // Asks (reversed: lowest ask at bottom, closest to spread)
+  const displayAsks = asks.slice(0, 12).reverse();
+  if (displayAsks.length === 0) {
+    $('asksSection').innerHTML = '<div class="book-empty">No asks</div>';
+  } else {
+    let html = '';
+    for (const o of displayAsks) {
+      const price = BigInt(o.amtIn) > 0n ? Number(BigInt(o.amtOut)) / Number(BigInt(o.amtIn)) : 0;
+      const size = Number(BigInt(o.amtIn));
+      const depth = (size / maxAsk * 100).toFixed(1);
+      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}">
+        <span class="depth" style="width:${depth}%"></span>
+        <span class="price">${fmtCompact(price)}</span>
+        <span class="size">${fmt(o.amtIn)}</span>
+        <span class="total">${fmt(o.amtOut)}</span>
+      </div>`;
+    }
+    $('asksSection').innerHTML = html;
+  }
+
+  // Spread
+  if (bids.length > 0 && asks.length > 0) {
+    const bestBidPrice = BigInt(bids[0].amtOut) > 0n ? Number(BigInt(bids[0].amtIn)) / Number(BigInt(bids[0].amtOut)) : 0;
+    const bestAskPrice = BigInt(asks[0].amtIn) > 0n ? Number(BigInt(asks[0].amtOut)) / Number(BigInt(asks[0].amtIn)) : 0;
+    const mid = (bestBidPrice + bestAskPrice) / 2;
+    const spreadPct = mid > 0 ? ((bestAskPrice - bestBidPrice) / mid * 100).toFixed(2) : '0';
+    $('spreadPrice').textContent = fmtCompact(mid);
+    $('spreadLabel').textContent = spreadPct + '% spread';
+    $('spreadRow').style.display = '';
+  } else {
+    $('spreadRow').style.display = 'none';
+  }
+
+  // Bids (highest bid at top, closest to spread)
+  const displayBids = bids.slice(0, 12);
+  if (displayBids.length === 0) {
+    $('bidsSection').innerHTML = '<div class="book-empty">No bids</div>';
+  } else {
+    let html = '';
+    for (const o of displayBids) {
+      const price = BigInt(o.amtOut) > 0n ? Number(BigInt(o.amtIn)) / Number(BigInt(o.amtOut)) : 0;
+      const size = Number(BigInt(o.amtOut));
+      const depth = (size / maxBid * 100).toFixed(1);
+      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}">
+        <span class="depth" style="width:${depth}%"></span>
+        <span class="price">${fmtCompact(price)}</span>
+        <span class="size">${fmt(o.amtOut)}</span>
+        <span class="total">${fmt(o.amtIn)}</span>
+      </div>`;
+    }
+    $('bidsSection').innerHTML = html;
+  }
+}
+
+// ---- Order side toggle ----
+function setSide(side) {
+  _orderSide = side;
+  const label1 = _poolData ? tokenLabel(_poolData, 1) : 'token';
+  const label0 = _poolData ? tokenLabel(_poolData, 0) : 'ETH';
+
+  $('sideBuy').className = 'side-tab' + (side === 'buy' ? ' active-buy' : '');
+  $('sideSell').className = 'side-tab' + (side === 'sell' ? ' active-sell' : '');
+
+  $('orderAmtUnit').textContent = label1;
+  $('orderPriceUnit').textContent = label0 + '/' + label1;
+
+  const btn = $('makeOrderBtn');
+  btn.className = 'submit-btn ' + side;
+  btn.textContent = side === 'buy' ? 'Buy ' + label1 : 'Sell ' + label1;
+
+  updateOrderTotal();
+}
+
+// ---- Render my orders ----
+async function renderMyOrders() {
+  if (!_signer || !_poolData) {
+    $('myOrdersTable').innerHTML = '<div class="empty-msg">Connect wallet to see your orders</div>';
+    return;
+  }
+  const addr = (await _signer.getAddress()).toLowerCase();
+  const filtered = filterOrdersForPool(_allOrders, _poolData);
+  const mine = filtered.filter(o => o.maker.toLowerCase() === addr);
+  const label0 = tokenLabel(_poolData, 0);
+  const label1 = tokenLabel(_poolData, 1);
+
+  if (mine.length === 0) {
+    $('myOrdersTable').innerHTML = '<div class="empty-msg">No active orders for this pair</div>';
+    return;
+  }
+
+  const t0 = _poolData.token0.toLowerCase();
+  const id0 = _poolData.coin0 ? _poolData.coin0.id : "0";
+  let html = '';
+  for (const o of mine) {
+    const isBid = o.tokenIn.toLowerCase() === t0 && o.idIn === id0;
+    const price = isBid
+      ? (BigInt(o.amtOut) > 0n ? Number(BigInt(o.amtIn)) / Number(BigInt(o.amtOut)) : 0)
+      : (BigInt(o.amtIn) > 0n ? Number(BigInt(o.amtOut)) / Number(BigInt(o.amtIn)) : 0);
+    const pct = fillPct(o);
+    const size = isBid ? fmt(o.amtOut) : fmt(o.amtIn);
+    html += `<div class="my-order-item">
+      <span class="my-order-side ${isBid ? 'bid' : 'ask'}">${isBid ? 'BID' : 'ASK'}</span>
+      <div class="my-order-details">
+        <div>${fmtCompact(price)} ${esc(label0)}/${esc(label1)} &middot; ${size} ${esc(label1)}</div>
+        <div class="line2">Expires ${timeLeft(o.deadline)} &middot; <a href="https://etherscan.io/tx/${o.txHash}" target="_blank" rel="noopener" style="color:inherit">${o.txHash.slice(0,10)}...</a></div>
+      </div>
+      <div class="my-order-fill"><span class="pct">${pct}%</span> filled</div>
+      <button class="cancel-btn" onclick="doCancelOrder('${o.id}')">Cancel</button>
+    </div>`;
+  }
+  $('myOrdersTable').innerHTML = html;
+}
+
+// ---- Order form ----
+function updateOrderTotal() {
+  const amt = parseFloat($('orderAmt').value) || 0;
+  const price = parseFloat($('orderPrice').value) || 0;
+  const label0 = _poolData ? tokenLabel(_poolData, 0) : 'ETH';
+  const total = amt * price;
+  $('orderTotal').textContent = total > 0 ? total.toPrecision(6) + ' ' + label0 : '--';
+}
+
+$('orderAmt').addEventListener('input', updateOrderTotal);
+$('orderPrice').addEventListener('input', updateOrderTotal);
+
+async function doMakeOrder() {
+  const statusEl = $('makeStatus');
+  function showStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status-msg show ' + type;
+  }
+
+  if (!_signer) { showWalletModal(); return; }
+  if (!_poolData) { showStatus('No pool loaded', 'error'); return; }
+
+  const side = _orderSide;
+  const amt = $('orderAmt').value;
+  const price = $('orderPrice').value;
+  if (!amt || !price || parseFloat(amt) <= 0 || parseFloat(price) <= 0) {
+    showStatus('Enter valid amount and price', 'error');
+    return;
+  }
+
+  const total = parseFloat(amt) * parseFloat(price);
+  const expiry = Math.floor(Date.now() / 1000) + Number($('orderExpiry').value);
+  const partial = $('orderPartial').checked;
+
+  let tokenIn, idIn, amtIn, tokenOut, idOut, amtOut, value;
+
+  if (side === 'buy') {
+    tokenIn = _poolData.token0;
+    idIn = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
+    amtIn = ethers.parseEther(total.toFixed(18));
+    tokenOut = _poolData.token1;
+    idOut = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
+    amtOut = ethers.parseEther(amt);
+    value = tokenIn === ZERO ? amtIn : 0n;
+  } else {
+    tokenIn = _poolData.token1;
+    idIn = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
+    amtIn = ethers.parseEther(amt);
+    tokenOut = _poolData.token0;
+    idOut = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
+    amtOut = ethers.parseEther(total.toFixed(18));
+    value = tokenIn === ZERO ? amtIn : 0n;
+  }
+
+  try {
+    $('makeOrderBtn').disabled = true;
+    showStatus('Preparing transaction...', 'info');
+
+    if (tokenIn !== ZERO && idIn >= 1000000n) {
+      const addr = await _signer.getAddress();
+      const isOp = await _coins.isOperator(addr, COOKBOOK);
+      if (!isOp) {
+        showStatus('Approving Cookbook as operator...', 'info');
+        const approveTx = await _coins.setOperator(COOKBOOK, true);
+        await approveTx.wait();
+      }
+    }
+
+    showStatus('Confirm in wallet...', 'info');
+    const tx = await _cookbook.makeOrder(tokenIn, idIn, amtIn, tokenOut, idOut, amtOut, expiry, partial, { value });
+    showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+    await tx.wait();
+    showStatus('Order created!', 'success');
+    $('orderAmt').value = '';
+    $('orderPrice').value = '';
+    $('orderTotal').textContent = '--';
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+  } finally {
+    $('makeOrderBtn').disabled = false;
+  }
+}
+
+// ---- Fill order ----
+async function doFillOrder(orderId) {
+  if (!_signer) { showWalletModal(); return; }
+
+  const o = _allOrders.find(x => x.id === orderId);
+  if (!o) { alert('Order not found'); return; }
+
+  const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
+  if (remaining <= 0n) { alert('Order already filled'); return; }
+
+  const isPayingEth = o.tokenOut === ZERO;
+  const fillPart = remaining;
+
+  try {
+    if (!isPayingEth && BigInt(o.idOut) >= 1000000n) {
+      const addr = await _signer.getAddress();
+      const isOp = await _coins.isOperator(addr, COOKBOOK);
+      if (!isOp) {
+        const approveTx = await _coins.setOperator(COOKBOOK, true);
+        await approveTx.wait();
+      }
+    }
+
+    const tx = await _cookbook.fillOrder(
+      o.maker,
+      o.tokenIn,
+      BigInt(o.idIn),
+      BigInt(o.amtIn),
+      o.tokenOut,
+      BigInt(o.idOut),
+      BigInt(o.amtOut),
+      BigInt(o.deadline),
+      o.partialFill,
+      fillPart,
+      { value: isPayingEth ? fillPart : 0n }
+    );
+    await tx.wait();
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    alert(e.reason || e.message || 'Fill failed');
+  }
+}
+
+// ---- Cancel order ----
+async function doCancelOrder(orderId) {
+  if (!_signer) { showWalletModal(); return; }
+
+  const o = _allOrders.find(x => x.id === orderId);
+  if (!o) { alert('Order not found'); return; }
+
+  const statusEl = $('cancelStatus');
+  function showStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status-msg show ' + type;
+  }
+
+  try {
+    showStatus('Confirm in wallet...', 'info');
+    const tx = await _cookbook.cancelOrder(
+      o.tokenIn,
+      BigInt(o.idIn),
+      BigInt(o.amtIn),
+      o.tokenOut,
+      BigInt(o.idOut),
+      BigInt(o.amtOut),
+      BigInt(o.deadline),
+      o.partialFill
+    );
+    showStatus('Tx sent...', 'info');
+    await tx.wait();
+    showStatus('Order cancelled!', 'success');
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    showStatus(e.reason || e.message || 'Cancel failed', 'error');
+  }
+}
+
+// ---- Global orders view ----
+// Bulk-fetch all coin metadata from /api/coins (one request, cached)
+let _coinMapLoaded = false;
+async function loadCoinMap() {
+  if (_coinMapLoaded) return;
+  try {
+    const res = await fetch(BASE + "/api/coins");
+    const coins = await res.json();
+    for (const c of coins.data || coins) {
+      if (!c.coinId) continue;
+      _coinLabelCache.set(c.coinId, {
+        symbol: c.symbol || c.name || ('Coin#' + c.coinId.slice(0, 8)),
+        decimals: c.decimals || 18,
+        imageUrl: c.imageUrl || null,
+        name: c.name || null,
+      });
+    }
+    _coinMapLoaded = true;
+  } catch (e) {
+    console.warn('[orderbook] loadCoinMap failed:', e);
+  }
+}
+
+function coinLabel(token, id) {
+  if (token === ZERO) return { symbol: 'ETH', decimals: 18 };
+  // Known ERC20 tokens by address
+  const known = KNOWN_TOKENS[token.toLowerCase()];
+  if (known) return known;
+  // ZAMM or Cookbook coin — look up by coinId
+  const cached = _coinLabelCache.get(id);
+  if (cached) return cached;
+  return { symbol: shortAddr(token), decimals: 18 };
+}
+
+function iconForToken(token, id) {
+  const label = coinLabel(token, id);
+  // Built-in SVG icons for known tokens
+  if (TOKEN_ICONS[label.symbol]) return TOKEN_ICONS[label.symbol];
+  // Indexer imageUrl for ZAMM/Cookbook coins
+  const cached = _coinLabelCache.get(id);
+  if (cached?.imageUrl) {
+    return `<img src="${escAttr(cached.imageUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
+  }
+  // Fallback: letter icon
+  return iconForSymbol(label.symbol);
+}
+
+let _renderedGlobalOrders = []; // cached for filtering
+
+async function renderGlobalOrders() {
+  const now = Math.floor(Date.now() / 1000);
+  _renderedGlobalOrders = _allOrders.filter(o => o.status === "ACTIVE" && Number(o.deadline) > now);
+
+  await loadCoinMap();
+  filterGlobalOrders();
+}
+
+function filterGlobalOrders() {
+  const q = ($('globalSearch')?.value || '').toLowerCase().trim();
+  const orders = q ? _renderedGlobalOrders.filter(o => {
+    const inL = coinLabel(o.tokenIn, o.idIn);
+    const outL = coinLabel(o.tokenOut, o.idOut);
+    const inC = _coinLabelCache.get(o.idIn);
+    const outC = _coinLabelCache.get(o.idOut);
+    const searchable = [
+      inL.symbol, outL.symbol,
+      inC?.name, outC?.name,
+      o.tokenIn, o.tokenOut,
+      o.maker
+    ].filter(Boolean).join(' ').toLowerCase();
+    return searchable.includes(q);
+  }) : _renderedGlobalOrders;
+
+  $('globalOrderCount').textContent = orders.length + ' order' + (orders.length !== 1 ? 's' : '')
+    + (q ? ' matching' : '');
+
+  if (orders.length === 0) {
+    $('globalOrdersList').innerHTML = `<div class="empty-msg">${q ? 'No orders match your search' : 'No active orders'}</div>`;
+    return;
+  }
+
+  let html = '';
+  for (const o of orders) {
+    const inL = coinLabel(o.tokenIn, o.idIn);
+    const outL = coinLabel(o.tokenOut, o.idOut);
+    const pct = fillPct(o);
+    const tl = timeLeft(o.deadline);
+    const inIcon = iconForToken(o.tokenIn, o.idIn);
+    const outIcon = iconForToken(o.tokenOut, o.idOut);
+    html += `<div class="global-order-item" onclick="showFillModal('${escAttr(o.id)}')">
+      <div class="order-token-pair">
+        <span class="token-icon">${inIcon}</span>
+        <span class="order-arrow">&rarr;</span>
+        <span class="token-icon">${outIcon}</span>
+      </div>
+      <div class="order-info">
+        <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}</div>
+        <div class="meta">${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${escText(tl)} left &middot; <a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit" onclick="event.stopPropagation()">${escText(o.txHash.slice(0,10))}&hellip;</a></div>
+      </div>
+      <div class="order-fill-badge"><span class="pct">${pct}%</span><br>filled</div>
+    </div>`;
+  }
+  $('globalOrdersList').innerHTML = html;
+}
+
+// ---- Fill confirmation modal ----
+function showFillModal(orderId) {
+  const o = _allOrders.find(x => x.id === orderId);
+  if (!o) { alert('Order not found'); return; }
+
+  const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
+  if (remaining <= 0n) { alert('Order already filled'); return; }
+
+  const inL = coinLabel(o.tokenIn, o.idIn);
+  const outL = coinLabel(o.tokenOut, o.idOut);
+  const inIcon = iconForToken(o.tokenIn, o.idIn);
+  const outIcon = iconForToken(o.tokenOut, o.idOut);
+  const pct = fillPct(o);
+  const tl = timeLeft(o.deadline);
+
+  // What the filler pays (tokenOut side) and receives (tokenIn side)
+  const remainingIn = BigInt(o.amtIn) - BigInt(o.inDone);
+  const youPay = fmt(remaining.toString(), outL.decimals);
+  const youGet = fmt(remainingIn.toString(), inL.decimals);
+
+  const body = $('fillModalBody');
+  body.innerHTML = `
+    <div class="fill-modal-pair">
+      <div class="fill-modal-token">
+        <span class="sym">You pay</span>
+        <span class="icon">${outIcon}</span>
+        <span class="amt">${escText(youPay)}</span>
+        <span class="sym">${escText(outL.symbol)}</span>
+      </div>
+      <span class="fill-modal-arrow">&rarr;</span>
+      <div class="fill-modal-token">
+        <span class="sym">You get</span>
+        <span class="icon">${inIcon}</span>
+        <span class="amt">${escText(youGet)}</span>
+        <span class="sym">${escText(inL.symbol)}</span>
+      </div>
+    </div>
+    <div class="fill-modal-details">
+      <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}</span></div>
+      <div class="row"><span class="label">Filled</span><span class="value">${pct}%</span></div>
+      <div class="row"><span class="label">Expires</span><span class="value">${escText(tl)}</span></div>
+      <div class="row"><span class="label">Partial fill</span><span class="value">${o.partialFill ? 'Yes' : 'No'}</span></div>
+      <div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>
+    </div>
+    <div class="fill-modal-note">Full remaining amount will be filled</div>
+    <button class="submit-btn buy" onclick="closeFillModal();doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>
+    <div class="status-msg" id="fillStatus" style="margin-top:8px"></div>
+  `;
+  $('fillModal').classList.add('active');
+  document.body.classList.add('modal-open');
+}
+
+function closeFillModal() {
+  $('fillModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+}
+
+// ---- Refresh loop ----
+async function refresh() {
+  try {
+    _allOrders = await fetchOrders();
+    if (_globalMode) {
+      await renderGlobalOrders();
+    } else {
+      renderBook();
+      if (_activeTab === 'mine') renderMyOrders();
+    }
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+  _refreshCountdown = 30;
+}
+
+function startRefreshLoop() {
+  refresh();
+  setInterval(() => {
+    _refreshCountdown--;
+    if (_refreshCountdown <= 0) refresh();
+    const el = $(_globalMode ? 'globalRefreshCountdown' : 'refreshCountdown');
+    if (el) el.textContent = _refreshCountdown + 's';
+  }, 1000);
+}
+
+// ---- Init ----
+async function init() {
+  const poolId = getPoolId();
+  if (!poolId) {
+    _globalMode = true;
+    $('pairName').textContent = 'Orderbook';
+    $('poolMeta').textContent = 'All active orders';
+    document.title = 'Orderbook';
+    document.querySelector('.tab-row').style.display = 'none';
+    $('tab-book').style.display = 'none';
+    $('priceBanner').style.display = 'none';
+    $('globalView').style.display = '';
+    startRefreshLoop();
+    tryAutoConnect();
+    return;
+  }
+
+  $('chartLink').href = '../chart/#/' + poolId;
+  $('chartLink').style.display = 'inline-flex';
+  $('lpLink').href = '../lp/#/' + poolId;
+  $('lpLink').style.display = 'inline-flex';
+
+  try {
+    _poolData = await fetchPool(poolId);
+  } catch (e) {
+    console.error('Pool fetch failed:', e);
+  }
+
+  if (_poolData) {
+    const label0 = tokenLabel(_poolData, 0);
+    const label1 = tokenLabel(_poolData, 1);
+    $('pairName').textContent = label0 + ' / ' + label1;
+    $('poolMeta').innerHTML = 'Pool ' + poolId.slice(0, 16) + '...'
+      + ' &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">Cookbook</a>'
+      + ' &middot; ' + (_poolData._source || 'ZAMM');
+    document.title = label0 + '/' + label1 + ' Orderbook';
+
+    // Show AMM price computed from reserves (token0 per token1, matching book prices)
+    if (_poolData.reserve0 && _poolData.reserve1 && BigInt(_poolData.reserve1) > 0n) {
+      const d0 = _poolData.coin0?.decimals || 18;
+      const d1 = _poolData.coin1?.decimals || 18;
+      const r0 = Number(BigInt(_poolData.reserve0)) / (10 ** d0);
+      const r1 = Number(BigInt(_poolData.reserve1)) / (10 ** d1);
+      if (r1 > 0) {
+        const ammPx = r0 / r1;
+        $('ammPrice').textContent = fmtCompact(ammPx);
+        $('ammPriceLabel').textContent = label0 + ' per ' + label1 + ' (AMM)';
+        $('priceBanner').style.display = '';
+      }
+      $('ammReserves').innerHTML = fmt(_poolData.reserve0, d0) + ' ' + esc(label0) + '<br>' + fmt(_poolData.reserve1, d1) + ' ' + esc(label1);
+    }
+
+    setSide('buy');
+  } else {
+    $('pairName').textContent = 'Orderbook';
+    $('poolMeta').textContent = 'Pool ' + poolId.slice(0, 20) + '... (metadata unavailable)';
+    console.warn('[orderbook] Pool not found in ZAMM or COOKBOOK sources for id:', poolId);
+  }
+
+  startRefreshLoop();
+  tryAutoConnect();
+}
+
+window.addEventListener('hashchange', () => location.reload());
+init();
+</script>
+</body>
+</html>
