@@ -1054,6 +1054,11 @@ body.modal-open { overflow: hidden; }
   <div id="ppFeeInfo" style="display:none;font-size:12px;color:var(--fg-muted);margin-bottom:16px">
     Vetting fee: <span id="ppFeeBps">--</span> bps &middot; Min deposit: <span id="ppMinDeposit">--</span> <span id="ppMinUnit">ETH</span>
   </div>
+  <div id="ppDepositRoundingHint" style="display:none;font-size:11px;color:var(--fg-muted);margin-top:-8px;margin-bottom:6px">Rounded amounts can improve privacy on later withdrawals.</div>
+  <div id="ppDepositSuggestWrap" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:12px">
+    Try rounded:
+    <span id="ppDepositSuggestBtns" style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:4px"></span>
+  </div>
 
   <button id="ppDepositBtn" class="swap-btn" disabled>Connect Wallet</button>
 
@@ -1124,8 +1129,22 @@ body.modal-open { overflow: hidden; }
     </details>
 
     <div class="section" style="margin-bottom:12px">
-      <label style="margin:0;font-size:11px">Withdraw Amount (wei) <span style="opacity:0.5">— leave blank for full withdrawal</span></label>
+      <label id="ppwWithdrawAmtLabel" style="margin:0;font-size:11px">Withdraw Amount (ETH) <span style="opacity:0.5">— leave blank for full withdrawal</span></label>
       <input type="text" id="ppwWithdrawAmt" class="amount-input" placeholder="Leave blank for full withdrawal" style="font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <span id="ppwWithdrawBalanceHint" style="font-size:11px;color:var(--fg-muted)">Balance: --</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button type="button" onclick="ppwSetWithdrawPercent(25)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">25%</button>
+          <button type="button" onclick="ppwSetWithdrawPercent(50)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">50%</button>
+          <button type="button" onclick="ppwSetWithdrawPercent(75)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">75%</button>
+          <button type="button" onclick="ppwSetWithdrawPercent(100)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">100%</button>
+        </div>
+      </div>
+      <div id="ppwAnonHint" style="display:none;font-size:11px;color:var(--fg-muted);margin-top:6px"></div>
+      <div id="ppwSuggestWrap" style="display:none;font-size:11px;color:var(--fg-muted);margin-top:6px">
+        Try rounded:
+        <span id="ppwSuggestBtns" style="display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:4px"></span>
+      </div>
     </div>
 
     <div class="section" style="margin-bottom:12px">
@@ -5512,7 +5531,7 @@ async function executeSwap() {
       }
 
       if (ppCfg && depositAmount < ppCfg.minimumDepositAmount) {
-        showStatus(`Output below PP minimum deposit of ${ethers.formatEther(ppCfg.minimumDepositAmount)} ${ppAsset}`, "error");
+        showStatus(`Output below PP minimum deposit of ${fmt(ppFormatAmountWei(ppCfg.minimumDepositAmount, ppAsset))} ${ppAsset}`, "error");
         return;
       }
 
@@ -6405,6 +6424,207 @@ let _ppZapMode = false; // ETH → wstETH → PP zap on privacy tab
 let _ppSwapEnabled = false;
 let _ppSavedToToken = null; // saved toToken before PP lock
 
+function ppGetAssetDecimals(asset) {
+  const t = tokens && tokens[asset];
+  return t && Number.isFinite(Number(t.decimals)) ? Number(t.decimals) : 18;
+}
+
+function ppFormatAmountWei(valueWei, asset) {
+  return ethers.formatUnits(valueWei, ppGetAssetDecimals(asset));
+}
+
+function ppParseAmountToWei(valueRaw, asset) {
+  return ethers.parseUnits(valueRaw, ppGetAssetDecimals(asset));
+}
+
+function ppNormalizeAmountText(amountStr) {
+  const s = String(amountStr || '0');
+  if (!s.includes('.')) return s;
+  return s
+    .replace(/(\.\d*?[1-9])0+$/, '$1')
+    .replace(/\.0+$/, '')
+    .replace(/\.$/, '');
+}
+
+function ppGetDynamicRoundingStepWeis(amountWei, asset) {
+  try { amountWei = BigInt(amountWei); } catch { return []; }
+  if (amountWei <= 0n) return [];
+  const decimals = ppGetAssetDecimals(asset);
+  const amountStr = ppFormatAmountWei(amountWei, asset);
+  const parts = amountStr.split('.');
+  const whole = (parts[0] || '0').replace(/^0+/, '');
+  const frac = parts[1] || '';
+  let magnitude = null;
+  if (whole.length > 0) magnitude = whole.length - 1;
+  else {
+    const firstNonZero = frac.search(/[1-9]/);
+    if (firstNonZero !== -1) magnitude = -(firstNonZero + 1);
+  }
+  if (magnitude == null) return [];
+
+  const exponents = magnitude >= 0
+    ? [magnitude - 2, magnitude - 1, magnitude]
+    : [magnitude - 1, magnitude];
+  const multipliers = [1n, 2n, 5n];
+  const steps = [];
+  const seen = new Set();
+  for (const exp of exponents) {
+    const weiPow = exp + decimals;
+    if (weiPow < 0) continue;
+    const base = 10n ** BigInt(weiPow);
+    for (const m of multipliers) {
+      const stepWei = m * base;
+      if (stepWei <= 0n) continue;
+      const k = stepWei.toString();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      steps.push(stepWei);
+    }
+  }
+  steps.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+  return steps;
+}
+
+function ppGetPreferredRoundingDecimals(asset, amountWei) {
+  const decimals = ppGetAssetDecimals(asset);
+  const symRaw = (tokens && tokens[asset] && tokens[asset].symbol) ? tokens[asset].symbol : (asset || '');
+  const sym = String(symRaw).toUpperCase();
+  const stableLike =
+    sym.includes('USD') ||
+    ['BOLD', 'DAI', 'USDC', 'USDT', 'LUSD', 'USDE', 'PYUSD', 'FDUSD', 'FRAX', 'TUSD', 'USDP', 'GUSD', 'SUSD', 'CRVUSD', 'MIM'].includes(sym);
+  const ethLike = ['ETH', 'WETH', 'STETH', 'WSTETH', 'RETH', 'CBETH', 'WEETH'].includes(sym);
+
+  const unit = 10n ** BigInt(decimals);
+  const tenth = unit >= 10n ? unit / 10n : 1n;
+
+  if (stableLike) {
+    let amt = null;
+    try { if (amountWei != null) amt = BigInt(amountWei); } catch {}
+    if (amt != null) {
+      if (amt >= unit) return 0;
+      if (amt >= tenth) return 1;
+      return 2;
+    }
+    return 0;
+  }
+
+  if (ethLike) return 3;
+
+  const cfg = ppGetAssetConfig(asset);
+  const min = (cfg && cfg.minimumDepositAmount != null) ? BigInt(cfg.minimumDepositAmount) : null;
+  if (min != null && min > 0n) {
+    const hundredth = unit >= 100n ? unit / 100n : 1n;
+    if (min >= 10n * unit) return 0;
+    if (min >= unit) return 1;
+    if (min >= tenth) return 2;
+    if (min >= hundredth) return 3;
+    return 4;
+  }
+
+  return decimals >= 18 ? 3 : 2;
+}
+
+function ppFilterStepWeisByPreferredDecimals(stepWeis, asset, amountWei) {
+  const preferred = ppGetPreferredRoundingDecimals(asset, amountWei);
+  const filtered = stepWeis.filter(sw => {
+    const txt = ppNormalizeAmountText(ppFormatAmountWei(sw, asset));
+    const frac = (txt.split('.')[1] || '');
+    return frac.length <= preferred;
+  });
+  return filtered.length ? filtered : stepWeis;
+}
+
+function ppGetAssetConfig(asset) {
+  if (asset === 'wstETH') return _ppConfigWstETH;
+  if (asset === 'BOLD') return _ppConfigBold;
+  return _ppConfig;
+}
+
+function ppUseSuggestedDepositAmount(amountStr) {
+  const inp = $('ppAmount');
+  if (!inp) return;
+  inp.value = amountStr;
+  inp.dispatchEvent(new Event('input'));
+}
+
+function ppRenderDepositRoundedSuggestions() {
+  const hint = $('ppDepositRoundingHint');
+  const wrap = $('ppDepositSuggestWrap');
+  const btns = $('ppDepositSuggestBtns');
+  if (!hint || !wrap || !btns) return;
+
+  const raw = ($('ppAmount')?.value || '').trim();
+  if (!raw) {
+    setShown(hint, false);
+    setShown(wrap, false);
+    btns.innerHTML = '';
+    return;
+  }
+
+  const inputAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
+  let amountWei;
+  try { amountWei = ppParseAmountToWei(raw, inputAsset); } catch { setShown(hint, false); setShown(wrap, false); btns.innerHTML = ''; return; }
+  if (amountWei <= 0n) { setShown(hint, false); setShown(wrap, false); btns.innerHTML = ''; return; }
+
+  let stepWeis = ppGetDynamicRoundingStepWeis(amountWei, inputAsset);
+  stepWeis = ppFilterStepWeisByPreferredDecimals(stepWeis, inputAsset, amountWei);
+  if (!stepWeis.length) { setShown(hint, false); setShown(wrap, false); btns.innerHTML = ''; return; }
+  // If amount is already aligned to any configured rounded step, hide suggestions.
+  if (stepWeis.some(sw => amountWei % sw === 0n)) {
+    setShown(hint, false);
+    setShown(wrap, false);
+    btns.innerHTML = '';
+    return;
+  }
+
+  const maxSuggestedWei = (_ppBalanceRaw != null && _ppBalanceRaw > 0n) ? _ppBalanceRaw : null;
+  const enforceBalanceCap = (maxSuggestedWei != null && amountWei <= maxSuggestedWei);
+  const ranked = [];
+  const seen = new Set();
+  const pushCandidate = (candidateWei) => {
+    if (candidateWei <= 0n || candidateWei === amountWei) return;
+    if (enforceBalanceCap && candidateWei > maxSuggestedWei) return;
+    const txt = ppNormalizeAmountText(ppFormatAmountWei(candidateWei, inputAsset));
+    if (seen.has(txt)) return;
+    seen.add(txt);
+    const dist = candidateWei > amountWei ? candidateWei - amountWei : amountWei - candidateWei;
+    const isUp = candidateWei > amountWei ? 1 : 0;
+    ranked.push({ txt, candidateWei, dist, isUp });
+  };
+
+  for (const stepWei of stepWeis) {
+    if (stepWei <= 0n) continue;
+    const lower = (amountWei / stepWei) * stepWei;
+    const upper = lower + stepWei;
+    pushCandidate(lower);
+    pushCandidate(upper);
+  }
+
+  ranked.sort((a, b) => {
+    if (a.dist === b.dist) {
+      if (a.isUp !== b.isUp) return b.isUp - a.isUp; // prefer upward rounding on ties
+      if (a.candidateWei === b.candidateWei) return 0;
+      return a.candidateWei > b.candidateWei ? -1 : 1; // then prefer larger amount
+    }
+    return a.dist < b.dist ? -1 : 1;
+  });
+
+  const suggestions = ranked.slice(0, 3).map(r => r.txt);
+
+  if (!suggestions.length) {
+    setShown(hint, false);
+    setShown(wrap, false);
+    btns.innerHTML = '';
+    return;
+  }
+
+  setShown(hint, true);
+  btns.innerHTML = suggestions
+    .map(s => `<button type="button" onclick="ppUseSuggestedDepositAmount('${escAttr(s)}')" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">${escText(s)}</button>`)
+    .join('');
+  setShown(wrap, true);
+}
+
 const PP_DEPOSIT_IFACE = new ethers.Interface([
   "function deposit(uint256) payable returns (uint256)",
   "function deposit(address,uint256,uint256) returns (uint256)"
@@ -6946,16 +7166,21 @@ async function loadPPConfig() {
     if (boldResult.status === 'fulfilled') { const c = boldResult.value; _ppConfigBold = { pool: c.pool, minimumDepositAmount: c.minimumDepositAmount, vettingFeeBPS: c.vettingFeeBPS, maxRelayFeeBPS: c.maxRelayFeeBPS }; }
     else console.warn("Failed to load BOLD PP config:", boldResult.reason);
     if (wstethResult.status === 'fulfilled') { const c = wstethResult.value; _ppConfigWstETH = { pool: c.pool, minimumDepositAmount: c.minimumDepositAmount, vettingFeeBPS: c.vettingFeeBPS, maxRelayFeeBPS: c.maxRelayFeeBPS }; }
-    else console.warn("Failed to load wstETH PP config:", wstethResult.reason);
-    const cfg = _ppSelectedAsset === 'wstETH' ? _ppConfigWstETH : (_ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig);
+    else { _ppConfigWstETH = null; console.warn("Failed to load wstETH PP config:", wstethResult.reason); }
+    const cfg = ppGetAssetConfig(_ppSelectedAsset);
     if (cfg) {
       setText('ppFeeBps', cfg.vettingFeeBPS.toString());
-      setText('ppMinDeposit', ethers.formatEther(cfg.minimumDepositAmount));
+      setText('ppMinDeposit', fmt(ppFormatAmountWei(cfg.minimumDepositAmount, _ppSelectedAsset)));
       setText('ppMinUnit', _ppSelectedAsset);
       setShown('ppFeeInfo', true);
+      ppRenderDepositRoundedSuggestions();
+    } else {
+      setShown('ppFeeInfo', false);
+      ppRenderDepositRoundedSuggestions();
     }
   } catch (e) {
     console.warn("Failed to load PP config:", e);
+    ppRenderDepositRoundedSuggestions();
   }
 }
 
@@ -6970,7 +7195,7 @@ function updatePPBalance() {
   const cached = getCachedBalance(tokenAddr);
   if (cached != null) {
     _ppBalanceRaw = cached;
-    setText('ppBalance', `Balance: ${fmt(ethers.formatEther(cached))} ${balAsset}`);
+    setText('ppBalance', `Balance: ${fmt(ppFormatAmountWei(cached, balAsset))} ${balAsset}`);
   } else {
     _ppBalanceRaw = null;
     setText('ppBalance', 'Balance: ...');
@@ -6980,8 +7205,9 @@ function updatePPBalance() {
 function setPPPercentBalance(pct) {
   if (!connectedAddress) { showWalletModal(); return; }
   if (_ppBalanceRaw == null) return;
+  const balAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
   const amount = _ppBalanceRaw * BigInt(pct) / 100n;
-  $('ppAmount').value = ethers.formatEther(amount);
+  $('ppAmount').value = ppFormatAmountWei(amount, balAsset);
   $('ppAmount').dispatchEvent(new Event('input'));
 }
 
@@ -7037,7 +7263,7 @@ function ppRequestZapEstimate() {
       const source = lidoOut >= dexOut ? 'Lido' : 'DEX';
       const afterSlippage = best * 9950n / 10000n; // 0.5% slippage matching deposit flow
       _ppZapEstimate = afterSlippage;
-      setText('ppZapEstAmt', '~' + fmt(ethers.formatEther(afterSlippage)) + ' (' + source + ')');
+      setText('ppZapEstAmt', '~' + fmt(ppFormatAmountWei(afterSlippage, 'wstETH')) + ' (' + source + ')');
       setShown('ppZapEstimate', true);
       updatePPButton(); // re-check min with estimate
     } catch {
@@ -7051,6 +7277,7 @@ function ppRequestZapEstimate() {
 function updatePPButton() {
   const btn = $('ppDepositBtn');
   if (!btn) return;
+  ppRenderDepositRoundedSuggestions();
   if (!connectedAddress) {
     setText(btn, 'Connect Wallet');
     setDisabled(btn, false);
@@ -7065,20 +7292,21 @@ function updatePPButton() {
     return;
   }
   try {
-    const wei = ethers.parseEther(amt);
+    const inputAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
+    const wei = ppParseAmountToWei(amt, inputAsset);
     if (_ppZapMode) {
       // Use zap estimate to enforce wstETH min deposit
       const cfg = _ppConfigWstETH;
       if (cfg && _ppZapEstimate != null && _ppZapEstimate < cfg.minimumDepositAmount) {
-        setText(btn, `Est. below min ${ethers.formatEther(cfg.minimumDepositAmount)} wstETH`);
+        setText(btn, `Est. below min ${fmt(ppFormatAmountWei(cfg.minimumDepositAmount, 'wstETH'))} wstETH`);
         setDisabled(btn, true);
         btn.onclick = null;
         return;
       }
     } else {
-      const cfg = _ppSelectedAsset === 'wstETH' ? _ppConfigWstETH : (_ppSelectedAsset === 'BOLD' ? _ppConfigBold : _ppConfig);
+      const cfg = ppGetAssetConfig(_ppSelectedAsset);
       if (cfg && wei < cfg.minimumDepositAmount) {
-        setText(btn, `Min ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`);
+        setText(btn, `Min ${fmt(ppFormatAmountWei(cfg.minimumDepositAmount, _ppSelectedAsset))} ${_ppSelectedAsset}`);
         setDisabled(btn, true);
         btn.onclick = null;
         return;
@@ -7100,7 +7328,7 @@ async function ppDeposit() {
   try {
     const amtStr = $('ppAmount').value;
     if (!amtStr || +amtStr <= 0) { showStatus("Enter an amount", "error"); return; }
-    const amount = ethers.parseEther(amtStr);
+    const amount = ppParseAmountToWei(amtStr, _ppZapMode ? 'ETH' : _ppSelectedAsset);
 
     // Zap mode: ETH → wstETH → PP deposit in one tx
     if (_ppZapMode) {
@@ -7145,7 +7373,7 @@ async function ppDeposit() {
       }
 
       if (zapCfg && depositAmount < zapCfg.minimumDepositAmount) {
-        showStatus(`Estimated wstETH output (${ethers.formatEther(depositAmount)}) below minimum deposit of ${ethers.formatEther(zapCfg.minimumDepositAmount)} wstETH`, "error");
+        showStatus(`Estimated wstETH output (${fmt(ppFormatAmountWei(depositAmount, 'wstETH'))}) below minimum deposit of ${fmt(ppFormatAmountWei(zapCfg.minimumDepositAmount, 'wstETH'))} wstETH`, "error");
         return;
       }
 
@@ -7220,9 +7448,9 @@ async function ppDeposit() {
     const isBOLD = _ppSelectedAsset === 'BOLD';
     const isWSTETH = _ppSelectedAsset === 'wstETH';
     const isERC20PP = isBOLD || isWSTETH;
-    const cfg = isWSTETH ? _ppConfigWstETH : (isBOLD ? _ppConfigBold : _ppConfig);
+    const cfg = ppGetAssetConfig(_ppSelectedAsset);
     if (cfg && amount < cfg.minimumDepositAmount) {
-      showStatus(`Minimum deposit is ${ethers.formatEther(cfg.minimumDepositAmount)} ${_ppSelectedAsset}`, "error");
+      showStatus(`Minimum deposit is ${fmt(ppFormatAmountWei(cfg.minimumDepositAmount, _ppSelectedAsset))} ${_ppSelectedAsset}`, "error");
       return;
     }
 
@@ -7411,7 +7639,7 @@ function renderPPNotes() {
   let html = saved.map((entry, i) => {
     const date = new Date(entry.timestamp).toLocaleDateString();
     const unit = escText(entry.asset || 'ETH');
-    const amtStr = entry.amount ? escText(fmt(ethers.formatEther(BigInt(entry.amount)))) + ` ${unit}` : '?';
+    const amtStr = entry.amount ? escText(fmt(ppFormatAmountWei(BigInt(entry.amount), entry.asset || 'ETH'))) + ` ${unit}` : '?';
     const typeLabel = entry.isChange ? '<span style="color:orange;font-weight:600">CHANGE</span> ' : '';
     const txLink = entry.txHash ? `<a href="https://etherscan.io/tx/${escAttr(entry.txHash)}" target="_blank" rel="noopener" style="font-size:11px">tx</a>` : '';
 
@@ -7600,6 +7828,7 @@ function ppwUseChangeNote() {
 document.addEventListener("DOMContentLoaded", () => {
   const ppAmtEl = $("ppAmount");
   if (ppAmtEl) ppAmtEl.addEventListener("input", () => { updatePPButton(); syncPrivacyURL(); ppRequestZapEstimate(); });
+  ppRenderDepositRoundedSuggestions();
 
   // Populate PP asset selector icons
   document.querySelectorAll('.pp-icon-16[data-icon]').forEach(el => {
@@ -7650,6 +7879,130 @@ let _ppwNote = null;
 let _ppwMode = 'direct'; // 'direct' or 'relay'
 let _ppwRelayExpiryTimer = null;
 let _ppArtifactCache = null; // cached {wasmUrl, zkeyUrl} blob URLs
+let _ppwAnonTimer = null;
+let _ppwAnonReqId = 0;
+
+function ppwClearAnonymityHint() {
+  if (_ppwAnonTimer) { clearTimeout(_ppwAnonTimer); _ppwAnonTimer = null; }
+  _ppwAnonReqId++;
+  setShown('ppwAnonHint', false);
+  setShown('ppwSuggestWrap', false);
+  setText('ppwAnonHint', '');
+  setText('ppwSuggestBtns', '');
+}
+
+function ppwUpdateAmountSection(value, asset) {
+  const lbl = $('ppwWithdrawAmtLabel');
+  if (lbl) lbl.innerHTML = `Withdraw Amount (${escText(asset)}) <span style="opacity:0.5">— leave blank for full withdrawal</span>`;
+  if (value == null || value <= 0n) {
+    setText('ppwWithdrawBalanceHint', 'Balance: --');
+    return;
+  }
+  setText('ppwWithdrawBalanceHint', `Balance: ${fmt(ppFormatAmountWei(value, asset))} ${asset}`);
+}
+
+function ppwUseSuggestedAmount(amountStr) {
+  $('ppwWithdrawAmt').value = amountStr;
+  ppwUpdatePreview();
+}
+
+function ppwSetWithdrawPercent(pct) {
+  if (!_ppwNote) return;
+  try {
+    const value = BigInt($('ppwValue').value || '0');
+    if (value <= 0n) return;
+    const asset = _ppwNote.asset || 'ETH';
+    const amt = value * BigInt(pct) / 100n;
+    $('ppwWithdrawAmt').value = ppFormatAmountWei(amt, asset);
+    ppwUpdatePreview();
+  } catch {}
+}
+
+function ppwRenderRoundedSuggestions(withdrawnValue, value, asset) {
+  const wrap = $('ppwSuggestWrap');
+  const btns = $('ppwSuggestBtns');
+  if (!wrap || !btns) return;
+  let stepWeis = ppGetDynamicRoundingStepWeis(withdrawnValue, asset);
+  stepWeis = ppFilterStepWeisByPreferredDecimals(stepWeis, asset, withdrawnValue);
+  if (!stepWeis.length) { setShown(wrap, false); btns.innerHTML = ''; return; }
+  // If already aligned to a configured rounded step, hide suggestions.
+  if (stepWeis.some(sw => withdrawnValue % sw === 0n)) {
+    setShown(wrap, false);
+    btns.innerHTML = '';
+    return;
+  }
+
+  const ranked = [];
+  const seen = new Set();
+  const pushCandidate = (candidateWei) => {
+    if (candidateWei <= 0n || candidateWei > value || candidateWei === withdrawnValue) return;
+    const txt = ppNormalizeAmountText(ppFormatAmountWei(candidateWei, asset));
+    if (seen.has(txt)) return;
+    seen.add(txt);
+    const dist = candidateWei > withdrawnValue ? candidateWei - withdrawnValue : withdrawnValue - candidateWei;
+    const isUp = candidateWei > withdrawnValue ? 1 : 0;
+    ranked.push({ txt, candidateWei, dist, isUp });
+  };
+
+  for (const stepWei of stepWeis) {
+    if (stepWei <= 0n) continue;
+    const lower = (withdrawnValue / stepWei) * stepWei;
+    const upper = lower + stepWei;
+    pushCandidate(lower);
+    pushCandidate(upper);
+  }
+
+  ranked.sort((a, b) => {
+    if (a.dist === b.dist) {
+      if (a.isUp !== b.isUp) return b.isUp - a.isUp; // prefer upward rounding on ties
+      if (a.candidateWei === b.candidateWei) return 0;
+      return a.candidateWei > b.candidateWei ? -1 : 1; // then prefer larger amount
+    }
+    return a.dist < b.dist ? -1 : 1;
+  });
+
+  const suggestions = ranked.slice(0, 3).map(r => r.txt);
+  if (!suggestions.length) {
+    setShown(wrap, false);
+    btns.innerHTML = '';
+    return;
+  }
+  btns.innerHTML = suggestions
+    .map(s => `<button type="button" onclick="ppwUseSuggestedAmount('${escAttr(s)}')" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">${escText(s)}</button>`)
+    .join('');
+  setShown(wrap, true);
+}
+
+function ppwScheduleAnonymityHint(withdrawnValue, asset) {
+  const hint = $('ppwAnonHint');
+  if (!hint) return;
+  if (_ppwAnonTimer) clearTimeout(_ppwAnonTimer);
+  const reqId = ++_ppwAnonReqId;
+  setText(hint, 'Loading anonymity set...');
+  setShown(hint, true);
+  _ppwAnonTimer = setTimeout(async () => {
+    try {
+      const scope = ppComputeScope(asset);
+      const resp = await fetch('https://api.0xbow.io/1/public/deposits-larger-than?amount=' + withdrawnValue.toString(), {
+        headers: { 'X-Pool-Scope': scope.toString() }
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      if (reqId !== _ppwAnonReqId) return;
+      if (typeof data.eligibleDeposits === 'number') {
+        setText(hint, 'Your anonymity set is ' + data.eligibleDeposits);
+        setShown(hint, true);
+      } else {
+        setShown(hint, false);
+      }
+    } catch (e) {
+      if (reqId !== _ppwAnonReqId) return;
+      console.warn('Withdrawal anonymity hint unavailable:', e);
+      setText(hint, 'Anonymity set unavailable');
+      setShown(hint, true);
+    }
+  }, 500);
+}
 
 function ppwSetMode(mode) {
   _ppwMode = mode;
@@ -7677,26 +8030,49 @@ function ppwSetMode(mode) {
 function ppwUpdatePreview() {
   const previewEl = $('ppwPreview');
   const warningEl = $('ppwChangeWarning');
-  if (!_ppwNote || !$('ppwValue').value) { setShown(previewEl, false); setShown(warningEl, false); return; }
+  if (!_ppwNote || !$('ppwValue').value) {
+    setShown(previewEl, false);
+    setShown(warningEl, false);
+    ppwUpdateAmountSection(null, _ppwNote?.asset || 'ETH');
+    ppwClearAnonymityHint();
+    return;
+  }
   try {
     const value = BigInt($('ppwValue').value || '0');
-    if (value === 0n) { setShown(previewEl, false); setShown(warningEl, false); return; }
+    const asset = _ppwNote.asset || 'ETH';
+    ppwUpdateAmountSection(value, asset);
+    if (value === 0n) {
+      setShown(previewEl, false);
+      setShown(warningEl, false);
+      ppwClearAnonymityHint();
+      return;
+    }
     const withdrawAmtRaw = $('ppwWithdrawAmt').value.trim();
-    const withdrawnValue = withdrawAmtRaw ? BigInt(withdrawAmtRaw) : value;
-    if (withdrawnValue > value || withdrawnValue === 0n) { setShown(previewEl, false); setShown(warningEl, false); return; }
+    const withdrawnValue = withdrawAmtRaw ? ppParseAmountToWei(withdrawAmtRaw, asset) : value;
+    if (withdrawnValue > value || withdrawnValue === 0n) {
+      setShown(previewEl, false);
+      setShown(warningEl, false);
+      ppwClearAnonymityHint();
+      return;
+    }
     const changeValue = value - withdrawnValue;
     const isPartial = changeValue > 0n;
-    const asset = _ppwNote.asset || 'ETH';
     let html = '<div style="display:grid;gap:2px">';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Committed</span><span>' + ethers.formatEther(value) + ' ' + escText(asset) + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Withdraw</span><span>' + ethers.formatEther(withdrawnValue) + ' ' + escText(asset) + '</span></div>';
-    if (isPartial) html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Change</span><span style="color:orange">' + ethers.formatEther(changeValue) + ' ' + escText(asset) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Committed</span><span>' + fmt(ppFormatAmountWei(value, asset)) + ' ' + escText(asset) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Withdraw</span><span>' + fmt(ppFormatAmountWei(withdrawnValue, asset)) + ' ' + escText(asset) + '</span></div>';
+    if (isPartial) html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Change</span><span style="color:orange">' + fmt(ppFormatAmountWei(changeValue, asset)) + ' ' + escText(asset) + '</span></div>';
     html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Mode</span><span>' + (_ppwMode === 'relay' ? 'Relay' : 'Direct') + '</span></div>';
     html += '</div>';
     $('ppwPreviewContent').innerHTML = html;
     setShown(previewEl, true);
     setShown(warningEl, isPartial);
-  } catch { setShown(previewEl, false); setShown(warningEl, false); }
+    ppwScheduleAnonymityHint(withdrawnValue, asset);
+    ppwRenderRoundedSuggestions(withdrawnValue, value, asset);
+  } catch {
+    setShown(previewEl, false);
+    setShown(warningEl, false);
+    ppwClearAnonymityHint();
+  }
 }
 
 // LeanIMT: build tree from ordered leaves using poseidon2
@@ -7744,7 +8120,16 @@ async function ppwRelayerQuote(chainId, amount, asset, recipient, extraGas) {
     body: JSON.stringify({ chainId, amount: amount.toString(), asset, recipient, extraGas: !!extraGas })
   });
   if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
+    let errBody = '';
+    try {
+      const txt = await resp.text();
+      try {
+        const j = JSON.parse(txt);
+        errBody = j.message || j.error || txt;
+      } catch {
+        errBody = txt;
+      }
+    } catch {}
     throw new Error('Relayer quote HTTP ' + resp.status + (errBody ? ': ' + errBody : ''));
   }
   return resp.json();
@@ -7858,13 +8243,25 @@ async function ppwWithdraw() {
     const leafIndex = parseInt($('ppwLeafIndex').value);
     const value = BigInt($('ppwValue').value || '0');
     const label = BigInt($('ppwLabel').value || '0');
+    const wAsset = _ppwNote.asset || 'ETH';
     if (isNaN(leafIndex)) { showStatus('Leaf index required', 'error'); return; }
-    if (value === 0n) { showStatus('Value (wei) required', 'error'); return; }
+    if (value === 0n) { showStatus('Value required', 'error'); return; }
     if (label === 0n) { showStatus('Label required', 'error'); return; }
     const withdrawAmtRaw = $('ppwWithdrawAmt').value.trim();
-    const withdrawnValue = withdrawAmtRaw ? BigInt(withdrawAmtRaw) : value;
+    let withdrawnValue;
+    try {
+      withdrawnValue = withdrawAmtRaw ? ppParseAmountToWei(withdrawAmtRaw, wAsset) : value;
+    } catch {
+      showStatus(`Invalid withdraw amount. Enter a valid ${wAsset} amount.`, 'error');
+      return;
+    }
     if (withdrawnValue > value) { showStatus('Withdraw amount exceeds deposit value', 'error'); return; }
     if (withdrawnValue === 0n) { showStatus('Withdraw amount must be > 0', 'error'); return; }
+    const isPartialRequested = withdrawnValue < value;
+    if (isPartialRequested && (!signer || !connectedAddress)) {
+      showStatus('Partial withdrawals require a connected wallet for deterministic change-note derivation.', 'error');
+      return;
+    }
 
     const customRecipient = $('ppwRecipient').value.trim();
     const isRelayMode = _ppwMode === 'relay';
@@ -7886,7 +8283,6 @@ async function ppwWithdraw() {
     log('Validating inputs...');
 
     // Resolve pool and scope from note asset (H-2: support BOLD/wstETH withdrawal)
-    const wAsset = _ppwNote.asset || 'ETH';
     const wIsBOLD = wAsset === 'BOLD';
     const wIsWSTETH = wAsset === 'wstETH';
     const poolAddress = wIsWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (wIsBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL));
@@ -8098,54 +8494,56 @@ async function ppwWithdraw() {
       log('User chose to proceed without ASP root verification.');
     }
 
-    // Relay mode: fetch quote before proving
+    // Relay mode: quote helper (also used for auto-refresh when quote expires)
     let relayQuote = null;
-    if (isRelayMode) {
-      log('Fetching relay quote...');
-      const chainId = 1; // mainnet
-      const assetAddr = wIsWSTETH ? WSTETH_ADDRESS : (wIsBOLD ? BOLD_ADDRESS : PP_ETH_ASSET);
-      const isNativeETH = !wIsBOLD && !wIsWSTETH;
+    let quotedFeeBPS = null;
+    const relayChainId = 1; // mainnet
+    const relayAssetAddr = wIsWSTETH ? WSTETH_ADDRESS : (wIsBOLD ? BOLD_ADDRESS : PP_ETH_ASSET);
+    const relayIsNativeETH = !wIsBOLD && !wIsWSTETH;
+    const relayExtraGas = !relayIsNativeETH && !!$('ppwExtraGas')?.checked;
+    let relayPreflightDone = false;
 
-      // Preflight: check relayer supports this asset
-      try {
-        const details = await ppwRelayerDetails(chainId, assetAddr);
+    async function fetchRelayQuoteAndUpdateUI(runPreflight) {
+      if (runPreflight && !relayPreflightDone) {
+        const details = await ppwRelayerDetails(relayChainId, relayAssetAddr);
         if (!details || details.error) throw new Error(details?.error || 'Relayer does not support this asset');
         if (details.minWithdrawAmount && withdrawnValue < BigInt(details.minWithdrawAmount)) {
-          showStatus('Withdraw amount below relayer minimum (' + ethers.formatEther(BigInt(details.minWithdrawAmount)) + ' ' + wAsset + ').', 'error');
-          return;
+          throw new Error('Withdraw amount below relayer minimum (' + fmt(ppFormatAmountWei(BigInt(details.minWithdrawAmount), wAsset)) + ' ' + wAsset + ').');
         }
-        log('Relayer supports ' + wAsset + ' on chain ' + chainId + '.');
-      } catch (detailsErr) {
-        showStatus('Relayer preflight failed: ' + escText(detailsErr.message), 'error');
-        return;
+        relayPreflightDone = true;
+        log('Relayer supports ' + wAsset + ' on chain ' + relayChainId + '.');
       }
 
-      // Fetch quote
+      const quote = await ppwRelayerQuote(relayChainId, withdrawnValue, relayAssetAddr, recipient, relayExtraGas);
+      if (!quote || !quote.feeCommitment) throw new Error('Invalid quote response');
+
+      // Validate fee against on-chain maxRelayFeeBPS
+      const localQuotedFeeBPS = quote.feeBPS || quote.feeCommitment?.feeBPS;
+      const wConfig = wIsWSTETH ? _ppConfigWstETH : (wIsBOLD ? _ppConfigBold : _ppConfig);
+      if (wConfig?.maxRelayFeeBPS && localQuotedFeeBPS > Number(wConfig.maxRelayFeeBPS)) {
+        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + wConfig.maxRelayFeeBPS + ' bps).');
+      }
+
+      quotedFeeBPS = localQuotedFeeBPS || null;
+
+      // Display fee info — compute from feeBPS if fee field absent
+      let feeAmt = quote.feeCommitment?.fee || quote.fee;
+      if (!feeAmt && localQuotedFeeBPS) feeAmt = (withdrawnValue * BigInt(localQuotedFeeBPS) / 10000n).toString();
+      setText('ppwRelayFeeBps', (localQuotedFeeBPS || '--') + ' bps');
+      setText('ppwRelayFeeAmt', feeAmt ? fmt(ppFormatAmountWei(BigInt(feeAmt), wAsset)) + ' ' + wAsset : '--');
+      setShown('ppwRelayFeePanel', true);
+      if (quote.feeCommitment?.expiration) ppwStartExpiryCountdown(Number(quote.feeCommitment.expiration));
+
+      return quote;
+    }
+
+    if (isRelayMode) {
+      log('Fetching relay quote...');
       try {
-        const extraGas = !isNativeETH && !!$('ppwExtraGas')?.checked;
-        relayQuote = await ppwRelayerQuote(chainId, withdrawnValue, assetAddr, recipient, extraGas);
-        if (!relayQuote || !relayQuote.feeCommitment) throw new Error('Invalid quote response');
+        relayQuote = await fetchRelayQuoteAndUpdateUI(true);
       } catch (quoteErr) {
         showStatus('Relay quote failed: ' + escText(quoteErr.message), 'error');
         return;
-      }
-
-      // Validate fee against on-chain maxRelayFeeBPS
-      const quotedFeeBPS = relayQuote.feeBPS || relayQuote.feeCommitment?.feeBPS;
-      const wConfig = wIsWSTETH ? _ppConfigWstETH : (wIsBOLD ? _ppConfigBold : _ppConfig);
-      if (wConfig?.maxRelayFeeBPS && quotedFeeBPS > Number(wConfig.maxRelayFeeBPS)) {
-        showStatus('Relay fee (' + quotedFeeBPS + ' bps) exceeds on-chain max (' + wConfig.maxRelayFeeBPS + ' bps). Aborting.', 'error');
-        return;
-      }
-
-      // Display fee info — compute from feeBPS if fee field absent
-      let feeAmt = relayQuote.feeCommitment?.fee || relayQuote.fee;
-      if (!feeAmt && quotedFeeBPS) feeAmt = (withdrawnValue * BigInt(quotedFeeBPS) / 10000n).toString();
-      setText('ppwRelayFeeBps', (quotedFeeBPS || '--') + ' bps');
-      setText('ppwRelayFeeAmt', feeAmt ? ethers.formatEther(BigInt(feeAmt)) + ' ' + wAsset : '--');
-      setShown('ppwRelayFeePanel', true);
-      if (relayQuote.feeCommitment?.expiration) {
-        ppwStartExpiryCountdown(Number(relayQuote.feeCommitment.expiration));
       }
       log('Relay quote received: fee=' + (quotedFeeBPS || '?') + 'bps, expires=' + (relayQuote.feeCommitment?.expiration || '?'));
     }
@@ -8168,33 +8566,16 @@ async function ppwWithdraw() {
     }
     const assetUnit = wAsset;
     if (isPartial) {
-      log('Partial withdrawal: ' + ethers.formatEther(withdrawnValue) + ' ' + assetUnit + ' (change: ' + ethers.formatEther(changeValue) + ' ' + assetUnit + ')');
+      log('Partial withdrawal: ' + fmt(ppFormatAmountWei(withdrawnValue, wAsset)) + ' ' + assetUnit + ' (change: ' + fmt(ppFormatAmountWei(changeValue, wAsset)) + ' ' + assetUnit + ')');
     }
 
-    // context = keccak256(abi.encode(Withdrawal{processooor,data}, SCOPE)) % SNARK_FIELD
-    // For relay mode: processooor = entrypoint, data = feeCommitment.withdrawalData
-    // For direct mode: processooor = connected wallet, data = 0x
-    let withdrawalProcessooor, withdrawalData;
-    if (isRelayMode) {
-      withdrawalProcessooor = PP_ENTRYPOINT;
-      withdrawalData = relayQuote.feeCommitment.withdrawalData;
-    } else {
-      withdrawalProcessooor = recipient;
-      withdrawalData = '0x';
-    }
-    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-      ['tuple(address,bytes)', 'uint256'],
-      [[withdrawalProcessooor, withdrawalData], SCOPE]
-    );
-    const context = BigInt(ethers.keccak256(encoded)) % SNARK_FIELD;
-
-    const circuitInputs = {
+    // Base circuit inputs. context is set per proving attempt from withdrawalData.
+    const circuitInputsBase = {
       withdrawnValue: withdrawnValue.toString(),
       stateRoot: stateTree.root.toString(),
       stateTreeDepth: stateTree.depth.toString(),
       ASPRoot: aspTree.root.toString(),
       ASPTreeDepth: aspTree.depth.toString(),
-      context: context.toString(),
       label: label.toString(),
       existingValue: value.toString(),
       existingNullifier: _ppwNote.nullifier.toString(),
@@ -8251,11 +8632,60 @@ async function ppwWithdraw() {
       log('Artifacts verified & cached.');
     }
 
-    // Generate ZK proof
-    log('Generating ZK proof (30\u2013120s proving)...');
+    // Generate ZK proof (relay mode can auto-refresh quote and re-prove once if needed)
+    let withdrawalProcessooor, withdrawalData;
     let proof, publicSignals;
-    ({ proof, publicSignals } = await snarkjs.groth16.fullProve(circuitInputs, wasmUrl, zkeyUrl));
-    log('Proof generated!');
+    let proveAttempt = 0;
+    while (true) {
+      proveAttempt++;
+      // context = keccak256(abi.encode(Withdrawal{processooor,data}, SCOPE)) % SNARK_FIELD
+      // For relay mode: processooor = entrypoint, data = feeCommitment.withdrawalData
+      // For direct mode: processooor = connected wallet, data = 0x
+      if (isRelayMode) {
+        withdrawalProcessooor = PP_ENTRYPOINT;
+        withdrawalData = relayQuote.feeCommitment.withdrawalData;
+      } else {
+        withdrawalProcessooor = recipient;
+        withdrawalData = '0x';
+      }
+      const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+        ['tuple(address,bytes)', 'uint256'],
+        [[withdrawalProcessooor, withdrawalData], SCOPE]
+      );
+      const context = BigInt(ethers.keccak256(encoded)) % SNARK_FIELD;
+      const circuitInputs = { ...circuitInputsBase, context: context.toString() };
+
+      log((proveAttempt > 1 ? 'Re-generating' : 'Generating') + ' ZK proof (30-120s proving)...');
+      ({ proof, publicSignals } = await snarkjs.groth16.fullProve(circuitInputs, wasmUrl, zkeyUrl));
+      log('Proof generated!');
+
+      if (!isRelayMode) break;
+
+      const expMs = Number(relayQuote.feeCommitment?.expiration || 0);
+      if (!expMs || Date.now() <= expMs) break;
+
+      log('Relay quote expired during proving. Fetching fresh quote...');
+      let refreshedQuote;
+      try {
+        refreshedQuote = await fetchRelayQuoteAndUpdateUI(false);
+      } catch (refreshErr) {
+        showStatus('Relay quote refresh failed: ' + escText(refreshErr.message), 'error');
+        return;
+      }
+
+      const oldWithdrawalData = withdrawalData;
+      relayQuote = refreshedQuote;
+      if (relayQuote.feeCommitment.withdrawalData === oldWithdrawalData) {
+        log('Relay quote refreshed with unchanged withdrawal data. Reusing proof.');
+        break;
+      }
+
+      if (proveAttempt >= 2) {
+        showStatus('Relay quote changed after expiry. Please retry withdrawal to regenerate proof with a fresh quote.', 'error');
+        return;
+      }
+      log('Relay withdrawal data changed after quote refresh. Re-generating proof once.');
+    }
 
     // Convert snarkjs proof to Solidity format (pB components reversed for BN128)
     const pA = [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])];
@@ -8269,17 +8699,29 @@ async function ppwWithdraw() {
     // Submit withdrawal
     let txHash, receipt;
     if (isRelayMode) {
-      // Check quote hasn't expired
+      // Check quote hasn't expired (refresh once if needed)
       if (relayQuote.feeCommitment?.expiration && Date.now() > Number(relayQuote.feeCommitment.expiration)) {
-        showStatus('Relay quote expired. Please retry — a new quote will be fetched.', 'error');
-        return;
+        log('Relay quote expired before submission. Refreshing quote...');
+        let refreshedQuote;
+        try {
+          refreshedQuote = await fetchRelayQuoteAndUpdateUI(false);
+        } catch (refreshErr) {
+          showStatus('Relay quote refresh failed: ' + escText(refreshErr.message), 'error');
+          return;
+        }
+        if (refreshedQuote.feeCommitment.withdrawalData !== withdrawalData) {
+          showStatus('Relay quote changed before submission. Please retry so proof can be regenerated with the fresh quote.', 'error');
+          return;
+        }
+        relayQuote = refreshedQuote;
+        log('Relay quote refreshed. Submitting with existing proof.');
       }
       log('Submitting to relayer...');
       setText(btn, 'Submitting to relayer...');
       let relayResult;
       try {
         relayResult = await ppwRelayerRequest(
-          1, SCOPE,
+          relayChainId, SCOPE,
           { processooor: withdrawalProcessooor, data: withdrawalData },
           proof, publicSignals,
           relayQuote.feeCommitment
@@ -8354,7 +8796,7 @@ async function ppwWithdraw() {
     }
 
     if (receipt && receipt.status === 1) {
-      log('<b>Withdrawal confirmed!</b> ' + ethers.formatEther(withdrawnValue) + ' ' + assetUnit + ' sent to ' + recipient.slice(0, 10) + '...' + (isRelayMode ? ' (via relay)' : ''));
+      log('<b>Withdrawal confirmed!</b> ' + fmt(ppFormatAmountWei(withdrawnValue, wAsset)) + ' ' + assetUnit + ' sent to ' + recipient.slice(0, 10) + '...' + (isRelayMode ? ' (via relay)' : ''));
 
       // For partial withdrawals, save the change note
       if (isPartial) {
@@ -8416,7 +8858,7 @@ async function ppwWithdraw() {
         // H-4/M-7: Use withdrawal-specific index counter keyed by label
         if (connectedAddress) ppSetWithdrawalIndex(connectedAddress, label.toString(), ppGetWithdrawalIndex(connectedAddress, label.toString()) + 1);
         renderPPNotes();
-        log('<b style="color:orange">CHANGE NOTE SAVED</b> — ' + ethers.formatEther(changeValue) + ' ' + assetUnit + ' remaining. The change note has been saved to your browser. <b>Copy and back it up now</b> — losing it means losing the remaining funds.');
+        log('<b style="color:orange">CHANGE NOTE SAVED</b> — ' + fmt(ppFormatAmountWei(changeValue, wAsset)) + ' ' + assetUnit + ' remaining. The change note has been saved to your browser. <b>Copy and back it up now</b> — losing it means losing the remaining funds.');
         // Also show in result textarea for easy copying + change note actions
         _ppwLastChangeNote = changeNote;
         setShown('ppwResult', true);
