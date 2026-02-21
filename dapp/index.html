@@ -6110,8 +6110,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (_dlPP === 'ZAP') {
     // Deep link: ?pp=zap → privacy tab with zap mode active
     _ppSelectedAsset = 'wstETH';
-    ppSetZap(true);
     if (_dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) $('ppAmount').value = _dlAmt;
+    ppSetZap(true);
     switchTab('privacy');
   } else if (_isPPAsset(_dlPP)) {
     _ppSelectedAsset = _dlPP;
@@ -6119,6 +6119,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Direct deposit — skip swap panel, go straight to privacy tab
       ppSyncAssetUI(_dlPP);
       if (_dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) $('ppAmount').value = _dlAmt;
+      loadPPConfig();
+      setTimeout(() => updatePPButton(), 50);
       switchTab('privacy');
     } else {
       // Swap + deposit into PP
