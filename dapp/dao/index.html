@@ -3371,7 +3371,7 @@ body.modal-open { overflow: hidden; }
           });
 
           fireHandle.stop();
-          const dao = result.base;
+          const dao = result.base || result.dao || result[0];
           if (!dao || !dao.meta || !dao.meta.name) {
             tilesContainer.innerHTML = '<p class="badge-empty">No DAO found at this address</p>';
             return;
@@ -6996,11 +6996,11 @@ body.modal-open { overflow: hidden; }
           const result = await withRpcFallback(async (activeProvider) => {
             const viewHelper = new ethers.Contract(VIEW_HELPER_ADDRESS, VIEW_HELPER_ABI, activeProvider);
 
-            // Default params: start at DAO 0, fetch up to 10 DAOs, recent 20 proposals, messages
+            // Default params: start at DAO 0, fetch up to 50 DAOs, recent 20 proposals, messages
             return await viewHelper.getUserDAOsFullState(
               userAddr,
               0,  // daoStart
-              10, // daoCount
+              50, // daoCount
               0,  // proposalStart
               20, // proposalCount (increased for better visibility)
               0,  // messageStart
@@ -7744,9 +7744,10 @@ body.modal-open { overflow: hidden; }
 
             // Process sales from view helper response
             for (const sale of currentDAICO.sales) {
-              // Check if sale is active: tribAmt > 0, forAmt > 0, not expired
+              // Check if sale is active: tribAmt > 0, forAmt > 0, has supply, not expired
               const isExpired = sale.deadline > 0 && Number(sale.deadline) < now;
-              if (sale.tribAmt > 0n && sale.forAmt > 0n && sale.forTkn !== ethers.ZeroAddress && !isExpired) {
+              const soldOut = sale.remainingSupply === 0n && sale.totalSupply > 0n;
+              if (sale.tribAmt > 0n && sale.forAmt > 0n && sale.forTkn !== ethers.ZeroAddress && !isExpired && !soldOut) {
                 const forTknLower = sale.forTkn.toLowerCase();
                 const isLoot = forTknLower === lootAddress;
 
@@ -13049,7 +13050,7 @@ body.modal-open { overflow: hidden; }
             );
           });
 
-          const dao = result.base;
+          const dao = result.base || result.dao || result[0];
           if (dao && dao.meta && dao.meta.name) {
             allDAOs = [dao];
             allDAOsLoaded = true;
@@ -13057,11 +13058,12 @@ body.modal-open { overflow: hidden; }
             await openDAO(0, 'all');
             return true;
           }
+          logger.warn('DAO data missing name:', dao);
         } catch (error) {
           logger.error('Failed to fetch DAO by address:', error);
         }
 
-        showStatus('DAO not found. It may not exist on this network.', true);
+        showStatus('DAO not found at ' + address.slice(0,8) + '... — it may not exist on this network.', true);
         return false;
       }
 
@@ -16916,7 +16918,7 @@ body.modal-open { overflow: hidden; }
             return await viewHelper.getUserDAOsFullState(
               connectedAddress,
               0,  // daoStart
-              10, // daoCount
+              50, // daoCount
               0,  // proposalStart
               20, // proposalCount
               0,  // messageStart

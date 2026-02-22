@@ -1229,13 +1229,13 @@ body.modal-open { overflow: hidden; }
   <div class="coin-tpl-toggle" style="margin-bottom:4px">
     <button class="coin-tpl-btn active" onclick="coinSetLaunchType('simple')">ez</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('advanced')">Fund</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>ez</strong> — memecoin-style launch. 80% of ETH raised seeds liquidity, 20% goes to a ragequitable treasury. No ops allocation, no vesting, no tap. Buyers can always exit at the treasury-backed floor price. Best for community tokens, memes, and experiments.<br><br><strong>Fund</strong> — structured fundraise (DAICO). Includes an ops allocation with lockup, tap vesting that drips ETH to the DAO over time, and full governance. Buyers fund a project and the DAO controls how funds are spent. Best for projects, protocols, and teams that need operating capital.</span></span>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>ez</strong> — memecoin-style launch. 80% of ETH raised seeds liquidity, 20% goes to a ragequitable treasury. No ops allocation, no vesting, no tap. Buyers can always exit at the treasury-backed floor price. Best for community tokens, memes, and experiments.<br><br><strong>fund</strong> — structured fundraise (DAICO). Includes an ops allocation with lockup, tap vesting that drips ETH to the DAO over time, and full governance. Buyers fund a project and the DAO controls how funds are spent. Best for projects, protocols, and teams that need operating capital.</span></span>
   </div>
   <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">80% liquidity &middot; 20% treasury &middot; no ops</div>
 
   <div class="coin-name-row">
-    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="e.g., MyCoin" maxlength="50" style="font-size:16px"></div>
-    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="e.g., MC" maxlength="10" style="font-size:16px"></div>
+    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="coin" maxlength="50" style="font-size:16px"></div>
+    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="coin" maxlength="10" style="font-size:16px"></div>
   </div>
 
   <div class="section" style="margin-bottom:14px">
@@ -8939,7 +8939,7 @@ const COIN_PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
 const COIN_DEFAULTS = { raise: 5, teamBps: 1500, lockMonths: 6, tapMonths: 3, lpBps: 3300 };
 const COIN_SIMPLE_DEFAULTS = { raise: 5, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 8000 };
 let _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
-let _coinTemplate = 'simple';
+let _coinTemplate = 'ez';
 let _coinLaunchType = 'simple';
 let _coinLaunching = false;
 let _coinImageCID = null;
@@ -8948,7 +8948,7 @@ let _coinBannerCID = null;
 let _coinBannerFile = null;
 
 function coinSetTemplate(mode) {
-  _coinTemplate = mode === 'standard' ? 'standard' : null;
+  _coinTemplate = mode === 'standard' ? 'fund' : null;
   $('coinSettingsWrap').querySelectorAll('.coin-tpl-btn').forEach((b, i) => {
     b.classList.toggle('active', i === (mode === 'standard' ? 0 : 1));
   });
@@ -8979,10 +8979,10 @@ function coinSetLaunchType(type) {
     : 'ops allocation \u00b7 tap vesting \u00b7 full governance';
   if (isSimple) {
     _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
-    _coinTemplate = 'simple';
+    _coinTemplate = 'ez';
   } else {
     _coinCfg = { ...COIN_DEFAULTS };
-    _coinTemplate = 'standard';
+    _coinTemplate = 'fund';
     coinSyncSliders();
     coinSetTemplate('standard');
   }
@@ -9089,6 +9089,23 @@ function coinFilePicked(input, type) {
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+}
+
+function coinSvgEsc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function coinGenerateLogo(text) {
+  const t = coinSvgEsc(text.slice(0, 12));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#000"/><text x="512" y="512" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, Liberation Sans, sans-serif" font-size="${Math.min(300, Math.floor(900 / text.slice(0,12).length))}" font-weight="400" fill="#fff">${t}</text></svg>`;
+}
+
+function coinGenerateBanner(text) {
+  const raw = text.slice(0, 12) + ' coin';
+  const t = coinSvgEsc(raw);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500"><rect width="1500" height="500" fill="#000"/><text x="750" y="250" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, Liberation Sans, sans-serif" font-size="${Math.min(200, Math.floor(1300 / raw.length))}" font-weight="400" fill="#fff">${t}</text></svg>`;
+}
+
+function coinSvgToFile(svg, filename) {
+  return new File([svg], filename, { type: 'image/svg+xml' });
 }
 
 async function coinPinFile(file, cachedCID) {
@@ -9224,6 +9241,46 @@ const COIN_DAICO_ABI = [{
   outputs: [{ name: 'dao', type: 'address' }],
   stateMutability: 'payable',
   type: 'function'
+}, {
+  inputs: [
+    { components: [
+      { name: 'summoner', type: 'address' },
+      { name: 'molochImpl', type: 'address' },
+      { name: 'sharesImpl', type: 'address' },
+      { name: 'lootImpl', type: 'address' }
+    ], name: 'summonConfig', type: 'tuple' },
+    { name: 'orgName', type: 'string' },
+    { name: 'orgSymbol', type: 'string' },
+    { name: 'orgURI', type: 'string' },
+    { name: 'quorumBps', type: 'uint16' },
+    { name: 'ragequittable', type: 'bool' },
+    { name: 'renderer', type: 'address' },
+    { name: 'salt', type: 'bytes32' },
+    { name: 'initHolders', type: 'address[]' },
+    { name: 'initShares', type: 'uint256[]' },
+    { name: 'sharesLocked', type: 'bool' },
+    { name: 'lootLocked', type: 'bool' },
+    { components: [
+      { name: 'tribTkn', type: 'address' },
+      { name: 'tribAmt', type: 'uint256' },
+      { name: 'saleSupply', type: 'uint256' },
+      { name: 'forAmt', type: 'uint256' },
+      { name: 'deadline', type: 'uint40' },
+      { name: 'sellLoot', type: 'bool' },
+      { name: 'lpBps', type: 'uint16' },
+      { name: 'maxSlipBps', type: 'uint16' },
+      { name: 'feeOrHook', type: 'uint256' }
+    ], name: 'daicoConfig', type: 'tuple' },
+    { components: [
+      { name: 'target', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'data', type: 'bytes' }
+    ], name: 'customCalls', type: 'tuple[]' }
+  ],
+  name: 'summonDAICOCustom',
+  outputs: [{ name: 'dao', type: 'address' }],
+  stateMutability: 'payable',
+  type: 'function'
 }];
 
 const COIN_IFACES = {
@@ -9276,17 +9333,37 @@ async function coinLaunch() {
       metadata.launchType = 'ez';
     } else {
       metadata.launchType = 'fund';
+      metadata.teamBps = c.teamBps;
+      metadata.lockMonths = c.lockMonths;
     }
     metadata.lpBps = c.lpBps;
     if (_coinImageFile) {
       coinShowStatus('Uploading logo to IPFS...');
       _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
       metadata.image = 'ipfs://' + _coinImageCID;
+    } else {
+      const logoSvg = coinGenerateLogo(symbol);
+      if (COIN_PIN_URL) {
+        coinShowStatus('Generating logo...');
+        const logoCID = await coinPinFile(coinSvgToFile(logoSvg, 'logo.svg'), null);
+        metadata.image = 'ipfs://' + logoCID;
+      } else {
+        metadata.image = 'data:image/svg+xml;base64,' + btoa(logoSvg);
+      }
     }
     if (_coinBannerFile) {
       coinShowStatus('Uploading banner to IPFS...');
       _coinBannerCID = await coinPinFile(_coinBannerFile, _coinBannerCID);
       metadata.banner = 'ipfs://' + _coinBannerCID;
+    } else {
+      const bannerSvg = coinGenerateBanner(symbol);
+      if (COIN_PIN_URL) {
+        coinShowStatus('Generating banner...');
+        const bannerCID = await coinPinFile(coinSvgToFile(bannerSvg, 'banner.svg'), null);
+        metadata.banner = 'ipfs://' + bannerCID;
+      } else {
+        metadata.banner = 'data:image/svg+xml;base64,' + btoa(bannerSvg);
+      }
     }
     coinShowStatus('Pinning metadata...');
     const orgURI = await coinPinMetadata(metadata);
@@ -9319,8 +9396,14 @@ async function coinLaunch() {
     let tx;
 
     if (_coinLaunchType === 'simple') {
-      // Simple mode: no tap, no team, no custom calls
-      tx = await daico.summonDAICO(
+      // Simple mode: no tap, no team, but set governance params for safety
+      const ezGovCalls = [
+        { target: predicted.dao, value: 0n,
+          data: COIN_IFACES.setProposalTTL.encodeFunctionData('setProposalTTL', [COIN_VOTING_DAYS * 86400]) },
+        { target: predicted.dao, value: 0n,
+          data: COIN_IFACES.setTimelockDelay.encodeFunctionData('setTimelockDelay', [COIN_TIMELOCK_DAYS * 86400]) }
+      ];
+      tx = await daico.summonDAICOCustom(
         summonConfig,
         name, symbol, orgURI,
         COIN_QUORUM_BPS,
@@ -9329,7 +9412,8 @@ async function coinLaunch() {
         salt,
         initHolders, initShares,
         false, false, // shares/loot not locked
-        daicoConfig
+        daicoConfig,
+        ezGovCalls
       );
     } else {
       // Advanced mode: tap + team lockup + governance custom calls

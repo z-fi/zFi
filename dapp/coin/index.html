@@ -128,7 +128,9 @@ input {
 }
 .coin-detail-logo img { width:100%;height:100%;object-fit:cover; }
 .coin-detail-title h2 { font-size:18px;font-weight:600;margin:0;text-transform:none;letter-spacing:0; }
-.coin-detail-title span { font-size:13px;color:var(--fg-muted); }
+.coin-detail-title .coin-symbol-row { display:flex;align-items:center;gap:6px; }
+.coin-detail-title .coin-symbol-row span { font-size:13px;color:var(--fg-muted); }
+.coin-user-balance { margin-left:auto;font-size:12px;color:var(--fg-muted);white-space:nowrap; }
 
 .section-card {
   border:1px solid var(--border-muted);border-radius:8px;padding:16px;margin-bottom:16px;
@@ -574,6 +576,58 @@ function toggleChart() {
 // ==================== POOL ACTIVITY ====================
 
 const INDEXER = 'https://coinchan-indexer-production.up.railway.app';
+
+const LOCKUP_CHECK_ABI = ['function lockups(bytes32) view returns (uint256)'];
+const COIN_SUPPLY_TOTAL = 1_000_000_000n;
+
+async function fetchOpsLockup(sharesAddr, opsAddr, metadata) {
+  // Derive team allocation from metadata or try common defaults
+  const teamBpsList = metadata.teamBps ? [metadata.teamBps] : [1500, 1000, 2000, 2500, 500, 3000];
+  try {
+    // Get lockup hashes from indexer (cap at 10 most recent)
+    const res = await fetch(INDEXER + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query ($address: String!) {
+          account(address: $address) {
+            lockupReceived(limit: 10) { items { id } }
+          }
+        }`,
+        variables: { address: opsAddr.toLowerCase() }
+      })
+    });
+    const { data } = await res.json();
+    const items = data?.account?.lockupReceived?.items || [];
+    if (items.length === 0) return null;
+    // Batch: read all unlockTimes in one RPC round via Promise.all
+    const hashes = items.map(i => i.id);
+    const unlockTimes = await withRPC(async rpc => {
+      const zamm = new ethers.Contract(ZAMM, LOCKUP_CHECK_ABI, rpc);
+      return await Promise.all(hashes.map(h => zamm.lockups(h).catch(() => 0n)));
+    });
+    // Precompute hashes for each teamBps candidate (pure CPU, no RPC)
+    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+    for (let i = 0; i < hashes.length; i++) {
+      const unlockTime = unlockTimes[i];
+      if (unlockTime === 0n) continue;
+      for (const tb of teamBpsList) {
+        const teamSupply = (COIN_SUPPLY_TOTAL * BigInt(tb)) / 10000n;
+        const teamSupplyWei = ethers.parseEther(teamSupply.toString());
+        const encoded = abiCoder.encode(
+          ['address', 'address', 'uint256', 'uint256', 'uint256'],
+          [sharesAddr, opsAddr, 0n, teamSupplyWei, unlockTime]
+        );
+        const computed = ethers.keccak256(encoded);
+        if (computed.toLowerCase() === hashes[i].toLowerCase()) {
+          return { amount: teamSupplyWei.toString(), unlockTime: unlockTime.toString(), coinId: '0' };
+        }
+      }
+    }
+    return null;
+  } catch { return null; }
+}
+
 let _activityCursor = null;
 let _activityInterval = null;
 
@@ -767,9 +821,13 @@ async function renderGallery() {
 
       let salePct = 0, raisedETH = '0';
       if (sale && sale.totalSupply > 0n) {
-        const sold = sale.totalSupply - sale.remainingSupply;
-        salePct = Number((sold * 10000n) / sale.totalSupply) / 100;
-        raisedETH = fmtETH(sale.treasuryBalance);
+        const lp = sale.lpBps ? Number(sale.lpBps) : 0;
+        const soldShares = (sale.forAmt > 0n && sale.tribAmt > 0n && sale.treasuryBalance > 0n)
+          ? (sale.treasuryBalance * sale.forAmt * 10000n) / (sale.tribAmt * BigInt(10000 - lp))
+          : 0n;
+        const totalSale = soldShares + sale.remainingSupply;
+        if (totalSale > 0n) salePct = Number((soldShares * 10000n) / totalSale) / 100;
+        raisedETH = fmtETH((sale.forAmt > 0n && sale.treasuryBalance > 0n) ? (soldShares * sale.tribAmt / sale.forAmt) : 0n);
       }
 
       const now = BigInt(Math.floor(Date.now() / 1000));
@@ -862,9 +920,10 @@ async function renderCoinPage(daoAddr) {
     const tap = data.tap;
     const sharesAddr = data.meta.sharesToken;
 
-    // Fetch metadata + pool reserves in parallel
+    // Fetch metadata + pool reserves + ops lockup in parallel
     const feeOrHookVal = sale ? BigInt(sale.feeOrHook) : 30n;
     const poolId = computePoolId(ZERO, sharesAddr, 0n, 0n, feeOrHookVal);
+    const tapActive_ = tap && tap.ratePerSec > 0n;
     const [metadata, poolResult] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
       withRPC(async rpc => {
@@ -873,26 +932,34 @@ async function renderCoinPage(daoAddr) {
       }).catch(() => null)
     ]);
     _coinMeta = metadata;
+    const opsLockup = tapActive_ && tap.ops ? await fetchOpsLockup(sharesAddr, tap.ops, metadata) : null;
 
     // Sale stats
-    let salePct = 0, sold = 0n, totalSale = 0n, raisedETH = 0n, saleActive = false;
+    const lpBps = sale ? Number(sale.lpBps) : 0;
+    let salePct = 0, sold = 0n, totalSale = 0n, totalRaised = 0n, treasuryETH = 0n, saleActive = false;
     if (sale) {
-      totalSale = sale.totalSupply;
-      sold = totalSale - sale.remainingSupply;
+      // Derive sold shares from treasury ETH (excludes team allocation)
+      const soldFromETH = (sale.forAmt > 0n && sale.tribAmt > 0n && sale.treasuryBalance > 0n)
+        ? (sale.treasuryBalance * sale.forAmt * 10000n) / (sale.tribAmt * BigInt(10000 - lpBps))
+        : 0n;
+      sold = soldFromETH;
+      totalSale = sold + sale.remainingSupply;
       if (totalSale > 0n) salePct = Number((sold * 10000n) / totalSale) / 100;
-      raisedETH = sale.treasuryBalance;
+      totalRaised = (sale.forAmt > 0n && sale.treasuryBalance > 0n) ? (sold * sale.tribAmt / sale.forAmt) : 0n;
+      treasuryETH = sale.treasuryBalance;
       const now = BigInt(Math.floor(Date.now() / 1000));
       saleActive = sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
     }
 
     // Tap stats
-    let tapPct = 0, tapClaimed = 0, tapTotal = 0, dailyRate = 0, tapActive = false;
+    let tapPct = 0, tapVested = 0, tapTotal = 0, dailyRate = 0, tapActive = false;
     if (tap && tap.ratePerSec > 0n) {
       tapActive = true;
       const budget = tap.tapAllowance;
-      const claimed = budget > tap.treasuryBalance ? budget - tap.treasuryBalance : 0n;
-      if (budget > 0n) tapPct = Number((claimed * 10000n) / budget) / 100;
-      tapClaimed = Number(ethers.formatEther(claimed));
+      // pending = total owed by time (ratePerSec * elapsed), claimable = min(pending, allowance, balance)
+      const vested = tap.pending || 0n;
+      if (budget > 0n) tapPct = Number((vested * 10000n) / budget) / 100;
+      tapVested = Number(ethers.formatEther(vested));
       tapTotal = Number(ethers.formatEther(budget));
       dailyRate = Number(ethers.formatEther(tap.ratePerSec * 86400n));
     }
@@ -911,7 +978,7 @@ async function renderCoinPage(daoAddr) {
     const coinSymbol = data.meta.symbol || '???';
     const ogDesc = metadata.description
       ? metadata.description.slice(0, 200)
-      : `$${coinSymbol} on zFi${saleActive ? ' — sale live' : ''} — ${fmtETH(raisedETH)} raised`;
+      : `$${coinSymbol} on zFi${saleActive ? ' — sale live' : ''} — ${fmtETH(totalRaised)} raised`;
     updateOGMeta(
       `$${coinSymbol} — ${coinName}`,
       ogDesc,
@@ -922,8 +989,8 @@ async function renderCoinPage(daoAddr) {
       : '';
 
     // LP info
-    const lpBps = sale ? sale.lpBps : 0;
     const feeOrHook = feeOrHookVal;
+    const ethIco = `<svg width="10" height="10" viewBox="0 0 256 417" fill="currentColor" opacity="0.5" style="vertical-align:-1px"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg>`;
 
     // Pool reserves (already fetched in parallel above)
     const reserve0 = poolResult ? (poolResult.reserve0 ?? poolResult[0] ?? 0n) : 0n;
@@ -935,9 +1002,12 @@ async function renderCoinPage(daoAddr) {
       ${bannerHTML}
       <div class="coin-detail-head">
         <div class="coin-detail-logo">${logoHTML(data.meta, metadata, 64)}</div>
-        <div class="coin-detail-title">
+        <div class="coin-detail-title" style="flex:1">
           <h2>${escText(metadata.name || data.meta.name || 'Unnamed')}</h2>
-          <span>$${escText(metadata.symbol || data.meta.symbol || '???')}${(metadata.launchType === 'ez' || metadata.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${metadata.lpBps ? (metadata.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : metadata.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : metadata.template ? `<span class="coin-tpl-badge" title="${escText(metadata.template)} template"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</span>
+          <div class="coin-symbol-row">
+            <span>$${escText(metadata.symbol || data.meta.symbol || '???')}${(metadata.launchType === 'ez' || metadata.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${metadata.lpBps ? (metadata.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : metadata.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : metadata.template ? `<span class="coin-tpl-badge" title="${escText(metadata.template)} template"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</span>
+            <div id="coinUserBalance" class="coin-user-balance" style="display:none"></div>
+          </div>
         </div>
       </div>
     `;
@@ -978,8 +1048,8 @@ async function renderCoinPage(daoAddr) {
         <div class="section-title">Sale ${saleActive ? '(Live)' : '(Ended)'}</div>
         <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value">${fmtShares(sold)} / ${fmtShares(totalSale)}</span></div>
         ${pctBar(salePct, 'var(--green)')}
-        <div class="stat-row"><span class="stat-label">Raised</span><span class="stat-value">${fmtETH(raisedETH)}</span></div>
-        ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ETH/share</span></div>` : ''}
+        <div class="stat-row"><span class="stat-label">Raised</span><span class="stat-value">${fmtETH(totalRaised)} ${ethIco}</span></div>
+        ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/share</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
       </div>
     `;
@@ -988,9 +1058,9 @@ async function renderCoinPage(daoAddr) {
     html += `
       <div class="section-card">
         <div class="section-title">Treasury</div>
-        <div class="stat-row"><span class="stat-label">ETH Balance</span><span class="stat-value">${fmtETH(raisedETH)}</span></div>
+        <div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>
         ${hasPool ? `
-          <div class="stat-row"><span class="stat-label">Pool ETH${saleActive ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)}</span></div>
+          <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
           <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
         ` : ''}
       </div>
@@ -1006,12 +1076,49 @@ async function renderCoinPage(daoAddr) {
             <span class="arrow">&#9660;</span>
           </button>
           <div class="drawer-body">
-            <div class="stat-row"><span class="stat-label">Claimed</span><span class="stat-value">${tapClaimed.toFixed(4)} / ${tapTotal.toFixed(4)} ETH</span></div>
+            <div class="stat-row"><span class="stat-label">Vested</span><span class="stat-value">${tapVested.toFixed(4)} / ${tapTotal.toFixed(4)} ${ethIco}</span></div>
             ${pctBar(tapPct, 'var(--green)')}
-            <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">${dailyRate.toFixed(4)} ETH/day</span></div>
-            <div class="stat-row"><span class="stat-label">Claimable now</span><span class="stat-value">${claimableETH.toFixed(6)} ETH</span></div>
-            <div class="stat-row"><span class="stat-label">Ops</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">${tap.ops}</a></span></div>
+            <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">${dailyRate.toFixed(4)} ${ethIco}/day</span></div>
+            <div class="stat-row"><span class="stat-label">Claimable now</span><span class="stat-value">${claimableETH.toFixed(6)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Ops</span><span class="stat-value" style="font-size:11px"><a class="ops-addr-link" href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">${tap.ops}</a></span></div>
             ${claimableETH > 0 ? `<button id="tapClaimBtn" onclick="onTapClaim()" style="width:100%;margin-top:10px;padding:10px;font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:none;font-family:inherit">Claim ${claimableETH.toFixed(6)} ETH</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Ops Allocation drawer (only for fund launches with lockup data)
+    if (tapActive && opsLockup) {
+      const lockAmt = BigInt(opsLockup.amount || '0');
+      const lockUnlockTime = Number(opsLockup.unlockTime || '0');
+      const lockCoinId = opsLockup.coinId || '0';
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isUnlockable = nowSec >= lockUnlockTime;
+      const unlockDate = new Date(lockUnlockTime * 1000);
+      const dateStr = unlockDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const diffMs = unlockDate - Date.now();
+      const absDiffMs = Math.abs(diffMs);
+      const days = Math.floor(absDiffMs / 86400000);
+      const relStr = diffMs > 0
+        ? (days >= 30 ? `in ${Math.round(days / 30)} month${Math.round(days / 30) !== 1 ? 's' : ''}` : `in ${days} day${days !== 1 ? 's' : ''}`)
+        : (days >= 30 ? `${Math.round(days / 30)} month${Math.round(days / 30) !== 1 ? 's' : ''} ago` : `${days} day${days !== 1 ? 's' : ''} ago`);
+      const statusBadge = isUnlockable
+        ? '<span style="font-size:11px;font-weight:600;color:#22c55e">Unlockable</span>'
+        : '<span style="font-size:11px;font-weight:600;color:#f59e0b">Locked</span>';
+      const isOpsWallet = _connectedAddress && _connectedAddress.toLowerCase() === tap.ops.toLowerCase();
+      const opsSymbol = escText(data.meta.symbol || '???');
+      html += `
+        <div class="drawer" id="opsDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>Ops Allocation</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="drawer-body">
+            <div class="stat-row"><span class="stat-label">Amount</span><span class="stat-value">${fmtShares(lockAmt)} $${opsSymbol}</span></div>
+            <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value">${statusBadge}</span></div>
+            <div class="stat-row"><span class="stat-label">Unlocks</span><span class="stat-value">${dateStr} (${relStr})</span></div>
+            <div class="stat-row"><span class="stat-label">Recipient</span><span class="stat-value" style="font-size:11px"><a class="ops-addr-link" href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">${tap.ops}</a></span></div>
+            ${isUnlockable && isOpsWallet ? `<button id="opsUnlockBtn" onclick="onOpsUnlock('${sharesAddr}','${tap.ops}','${lockCoinId}','${opsLockup.amount}','${opsLockup.unlockTime}')" style="width:100%;margin-top:10px;padding:10px;font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:none;font-family:inherit">Unlock ${fmtShares(lockAmt)} $${opsSymbol}</button>` : ''}
           </div>
         </div>
       `;
@@ -1066,6 +1173,7 @@ async function renderCoinPage(daoAddr) {
             <div class="sale-lp-note" id="saleLpNote"></div>
           </div>
           <div class="swap-quote" id="saleQuote">${priceDisplay ? `Sale price: ${priceDisplay} ETH/share` : ''}</div>
+          <button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>
           <button id="saleBuyBtn" onclick="onSaleBuyBtn()" style="width:100%;margin:0">Connect Wallet</button>
         </div>
         ` : ''}
@@ -1230,6 +1338,19 @@ async function renderCoinPage(daoAddr) {
     _lpSubMode = 'zap';
     _tradeMode = defaultMode;
     tryAutoConnect();
+
+    // Resolve .wei name for ops address
+    if (tapActive && tap.ops) {
+      try {
+        const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+        const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+        ns.reverseResolve(tap.ops).then(name => {
+          if (name) {
+            document.querySelectorAll('.ops-addr-link').forEach(el => { el.textContent = name.toLowerCase(); });
+          }
+        }).catch(() => {});
+      } catch {}
+    }
 
   } catch(e) {
     app.innerHTML = `
@@ -1602,6 +1723,18 @@ async function loadBalances() {
     _sharesBalance = tokenBal;
     _ragequitTotalSupply = sharesTotalSupply + lootTotalSupply;
 
+    // User balance display
+    const balEl = $('coinUserBalance');
+    if (balEl) {
+      const sym = _coinData?.meta?.symbol || '???';
+      if (tokenBal > 0n) {
+        balEl.textContent = `Your balance: ${fmtShares(tokenBal)} $${sym}`;
+        balEl.style.display = '';
+      } else {
+        balEl.style.display = 'none';
+      }
+    }
+
     // Swap mode balance
     const isBuy = _swapDir === 'buy';
     _payBalance = isBuy ? ethBal : tokenBal;
@@ -1720,6 +1853,23 @@ function onSaleReceiveInput() {
   }
 }
 
+function fillSweep() {
+  if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt || _saleData.remainingSupply <= 0n) return;
+  const lpBps = BigInt(_saleData.lpBps);
+  // remainingSupply is gross (includes LP portion), net to buyer = remaining * (10000 - lpBps) / 10000
+  const net = _saleData.remainingSupply * (10000n - lpBps) / 10000n;
+  // cost = ceil(remainingSupply * tribAmt / forAmt)
+  const payNeeded = (_saleData.remainingSupply * _saleData.tribAmt + _saleData.forAmt - 1n) / _saleData.forAmt;
+  $('saleReceiveInput').value = ethers.formatEther(net);
+  $('salePayInput').value = ethers.formatEther(payNeeded);
+  _saleExactOut = false;
+  if (lpBps > 0n) {
+    $('saleLpNote').textContent = `~${fmtShares(net)} shares (${Number(lpBps)/100}% to LP)`;
+  } else {
+    $('saleLpNote').textContent = '';
+  }
+}
+
 async function onSaleBuyBtn() {
   if (!_signer) { await connectWallet(); return; }
   executeSaleBuy();
@@ -1755,7 +1905,7 @@ async function executeSaleBuy() {
       const minBuyAmt = netShares * 95n / 100n;
       tx = await daico.buy(daoAddr, ZERO, payAmt, minBuyAmt, { value: payAmt });
     }
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
 
     const quoteEl = $('saleQuote');
@@ -1821,7 +1971,7 @@ async function executeRagequit() {
     const sharesToBurn = ethers.parseEther(raw);
 
     const tx = await dao.ragequit([ZERO], sharesToBurn, 0);
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
 
     const el = $('rqEstimate');
@@ -1864,6 +2014,8 @@ function fillLpPct(pct) {
   if (pct === 100 && amt > ethers.parseEther('0.005')) amt -= ethers.parseEther('0.005');
   if (amt <= 0n) return;
   if (_lpSubMode === 'zap') {
+    const max = maxZapETH();
+    if (max > 0n && amt > max) amt = max;
     $('lpZapEthInput').value = ethers.formatEther(amt);
     onLpEthInput();
   } else {
@@ -1883,20 +2035,46 @@ function quoteLpZap(ethAmount) {
   return { halfEth, tokensOut, feeBps, isHooked };
 }
 
+// Max ETH that can be zapped without exceeding slippage tolerance.
+// The swap half moves the price; we find the max ethAmount such that
+// price impact stays within the user's slippage %.
+// After swapping halfEth, new reserve0 = R0 + halfEth, new reserve1 = R1 - tokensOut.
+// For the LP add to succeed, the ratio (halfEth / tokensOut) must be close to
+// (R0 + halfEth) / (R1 - tokensOut), within slippage.
+// Simpler bound: price impact ≈ halfEth / R0, so max halfEth ≈ R0 * slipPct.
+// Then max total zap ≈ 2 * R0 * slipPct.
+function maxZapETH() {
+  if (_poolReserve0 === 0n) return 0n;
+  const slip = Number(($('lpZapSlippage')?.value || '5').trim()) || 5;
+  // Use slip% of reserve as max for the swap half, then double for total zap
+  return _poolReserve0 * BigInt(slip) * 2n / 100n;
+}
+
 function onLpEthInput() {
   const raw = ($('lpZapEthInput').value || '').trim();
   const quoteEl = $('lpZapQuote');
+  const btn = $('lpZapDoBtn');
   if (!raw || isNaN(raw) || Number(raw) <= 0 || _poolReserve0 === 0n) {
     if (quoteEl) quoteEl.textContent = '';
+    if (btn && _signer) btn.disabled = false;
     return;
   }
   const ethAmt = ethers.parseEther(raw);
+  const max = maxZapETH();
   const q = quoteLpZap(ethAmt);
   const halfFmt = Number(ethers.formatEther(q.halfEth)).toFixed(6);
   const tokFmt = Number(ethers.formatEther(q.tokensOut)).toFixed(6);
   const sym = _coinData?.meta?.symbol || '???';
   const approx = q.isHooked ? '(approx) ' : '';
-  if (quoteEl) quoteEl.textContent = `${approx}~${halfFmt} ETH + ~${tokFmt} $${sym} → LP`;
+  if (ethAmt > max && max > 0n) {
+    const maxFmt = Number(ethers.formatEther(max)).toLocaleString(undefined, {maximumFractionDigits:8});
+    const maxRaw = ethers.formatEther(max);
+    if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--red,#e55)">Too large — max zap <a href="#" onclick="event.preventDefault();document.getElementById('lpZapEthInput').value='${maxRaw}';onLpEthInput()" style="color:inherit;text-decoration:underline;cursor:pointer">~${maxFmt} ETH</a> at current slippage</span>`;
+    if (btn) btn.disabled = true;
+  } else {
+    if (quoteEl) quoteEl.textContent = `${approx}~${halfFmt} ETH + ~${tokFmt} $${sym} → LP`;
+    if (btn && _signer) btn.disabled = false;
+  }
 }
 
 function onLpPairEthInput() {
@@ -1945,6 +2123,13 @@ async function doLpZap() {
   if (!raw || isNaN(raw) || Number(raw) <= 0) return;
 
   const ethAmount = ethers.parseEther(raw);
+  const max = maxZapETH();
+  if (max > 0n && ethAmount > max) {
+    const status = $('lpStatus');
+    const maxFmt = Number(ethers.formatEther(max)).toLocaleString(undefined, {maximumFractionDigits:8});
+    if (status) status.innerHTML = `<span style="color:var(--red,#e55)">Amount too large — max ~${maxFmt} ETH at current slippage</span>`;
+    return;
+  }
   const shares = $('app').dataset.shares;
   const feeOrHook = BigInt($('app').dataset.feeOrHook || '30');
   const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: shares, feeOrHook };
@@ -1970,7 +2155,7 @@ async function doLpZap() {
       poolKey, amountOutMin, amount0Min, amount1Min,
       addr, deadline, { value: ethAmount }
     );
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
 
     if (status) status.innerHTML = `<span style="color:var(--green)">Zap LP added!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
@@ -2032,7 +2217,7 @@ async function doLpAdd() {
       poolKey, ethAmt, tokenAmt, min0, min1, addr, deadline,
       { value: ethAmt }
     );
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
 
     if (status) status.innerHTML = `<span style="color:var(--green)">Liquidity added!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
@@ -2155,7 +2340,7 @@ async function executeSwap() {
       );
     }
 
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
 
     $('swapQuote').innerHTML = `<span style="color:var(--green)">Swap confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
@@ -2193,9 +2378,38 @@ async function onTapClaim() {
   try {
     const daico = new ethers.Contract(DAICO_ADDR, DAICO_CLAIM_ABI, s);
     const tx = await daico.claimTap($('app').dataset.dao);
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
     await tx.wait();
     btn.textContent = 'Claimed!';
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) {
+    if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
+      btn.textContent = 'Cancelled';
+    } else {
+      btn.textContent = 'Failed';
+    }
+    setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+  }
+}
+
+// ==================== OPS UNLOCK ====================
+
+const OPS_UNLOCK_ABI = ['function unlock(address token, address to, uint256 id, uint256 amount, uint256 unlockTime)'];
+
+async function onOpsUnlock(token, to, coinId, amount, unlockTime) {
+  const s = await connectWallet();
+  if (!s) return;
+  const btn = $('opsUnlockBtn');
+  if (!btn) return;
+  const origText = btn.textContent;
+  btn.textContent = 'Unlocking...';
+  btn.disabled = true;
+  try {
+    const zamm = new ethers.Contract(ZAMM, OPS_UNLOCK_ABI, s);
+    const tx = await zamm.unlock(token, to, BigInt(coinId), BigInt(amount), BigInt(unlockTime));
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+    await tx.wait();
+    btn.textContent = 'Unlocked!';
     setTimeout(() => location.reload(), 1500);
   } catch(e) {
     if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
