@@ -1235,13 +1235,13 @@ body.modal-open { overflow: hidden; }
   <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">80% liquidity &middot; 20% treasury &middot; no ops</div>
 
   <div class="coin-name-row">
-    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="coin" maxlength="50" style="font-size:16px"></div>
-    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="coin" maxlength="10" style="font-size:16px"></div>
+    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="coin" maxlength="50" style="font-size:16px" oninput="syncCoinURL()"></div>
+    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="coin" maxlength="10" style="font-size:16px" oninput="syncCoinURL()"></div>
   </div>
 
   <div class="section" style="margin-bottom:14px">
     <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional)</span></label>
-    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px"></textarea>
+    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px" oninput="syncCoinURL()"></textarea>
   </div>
 
   <div class="coin-upload-row">
@@ -5968,6 +5968,20 @@ function syncSendURL() {
   history.replaceState(null, '', '?' + _sp.toString() + '#send');
 }
 
+function syncCoinURL() {
+  if (_activeTab !== 'coin') return;
+  const _sp = new URLSearchParams();
+  const _cn = ($('coinName').value || '').trim();
+  const _cs = ($('coinSymbol').value || '').trim();
+  const _cd = ($('coinDescription').value || '').trim();
+  if (_cn) _sp.set('name', _cn);
+  if (_cs) _sp.set('symbol', _cs);
+  if (_cd) _sp.set('desc', _cd);
+  if (_coinLaunchType === 'advanced') _sp.set('mode', 'fund');
+  const qs = _sp.toString();
+  history.replaceState(null, '', (qs ? '?' + qs : window.location.pathname) + '#coin');
+}
+
 function updateOGMeta(title, description) {
   document.title = title;
   const set = (prop, val, attr) => {
@@ -6236,6 +6250,22 @@ document.addEventListener("DOMContentLoaded", () => {
       _ogTitle += ' ' + _ogTok;
       if (_ogTo) _ogTitle += ' to ' + _ogTo;
       updateOGMeta(_ogTitle, 'Send tokens on zFi');
+    }
+    // Coin launch deeplink: ?name=MyCoin&symbol=MC&desc=Cool+coin#coin (optionally &mode=fund)
+    if (_dlTabHash === '#coin') {
+      const _dlName = _sp.get('name');
+      const _dlSymbol = _sp.get('symbol');
+      const _dlDesc = _sp.get('desc');
+      const _dlMode = _sp.get('mode');
+      if (_dlName) $('coinName').value = _dlName;
+      if (_dlSymbol) $('coinSymbol').value = _dlSymbol;
+      if (_dlDesc) $('coinDescription').value = _dlDesc;
+      if (_dlMode === 'fund') coinSetLaunchType('advanced');
+      // Update OG meta for social sharing
+      let _ogCoinTitle = 'Launch';
+      if (_dlName) _ogCoinTitle += ' ' + _dlName;
+      if (_dlSymbol) _ogCoinTitle += ' ($' + _dlSymbol + ')';
+      updateOGMeta(_ogCoinTitle, _dlDesc || 'Launch a coin on zFi');
     }
     switchTab(_dlTabHash.slice(1));
     return;
@@ -7253,8 +7283,8 @@ function switchTab(tab) {
     renderPPNotes();
     updatePPButton();
   } else if (tab === 'coin') {
-    history.replaceState(null, '', window.location.pathname + '#coin');
     document.title = 'COIN';
+    syncCoinURL();
     coinUpdatePreview();
   } else if (tab === 'send') {
     document.title = 'SEND';
@@ -9099,6 +9129,7 @@ function coinSetLaunchType(type) {
     coinSetTemplate('standard');
   }
   coinUpdatePreview();
+  syncCoinURL();
 }
 
 

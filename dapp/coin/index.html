@@ -1585,6 +1585,15 @@ async function renderCoinPage(daoAddr) {
     _tradeMode = defaultMode;
     tryAutoConnect();
 
+    // Fund deeplink: ?amt=1.5#0xDAO... — pre-fill sale amount
+    const _dlParams = new URLSearchParams(location.search);
+    const _dlAmt = _dlParams.get('amt');
+    if (_dlAmt && +_dlAmt > 0 && saleActive) {
+      const payEl = $('salePayInput');
+      if (payEl) { payEl.value = _dlAmt; onSalePayInput(); }
+      if (_tradeMode !== 'sale') setTradeMode('sale');
+    }
+
     // Resolve .wei name for ops address
     if (tapActive && tap.ops) {
       try {

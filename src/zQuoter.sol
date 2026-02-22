@@ -281,7 +281,8 @@ contract zQuoter {
             if (fromSet2) {
                 bool dup;
                 for (uint256 d; d < pools1.length; ++d) {
-                    if (pools1[d] == pool) { dup = true; break; }
+                    if (pools1[d] == pool) dup = true;
+                    break;
                 }
                 if (dup) continue;
             }
@@ -368,8 +369,9 @@ contract zQuoter {
                 (bool sd2, bytes memory rd2) = pool.staticcall(abi.encodeWithSelector(selD, i, j, amt));
                 if (sd2 && rd2.length >= 32) {
                     uint256 qd = abi.decode(rd2, (uint256));
-                    if (exactOut ? qd >= qu : qd <= qu)
+                    if (exactOut ? qd >= qu : qd <= qu) {
                         return exactOut ? (true, qd, amt, true, false) : (true, amt, qd, true, false);
+                    }
                 }
                 return exactOut ? (true, qu, amt, true, true) : (true, amt, qu, true, true);
             }
