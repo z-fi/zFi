@@ -53,7 +53,7 @@ h1 {
 .chart-wrap {
   position: relative;
   width: 100%;
-  padding-bottom: 56.25%; /* 16:9 */
+  height: min(56.25vw, 400px);
   background: var(--surface);
   border: 1px solid var(--border);
 }
@@ -82,6 +82,14 @@ h1 {
 }
 .chart-type-toggle button.active { background:var(--btn-bg);color:var(--btn-fg); }
 .chart-type-toggle button:not(.active):hover { color:var(--fg); }
+.chart-tf-toggle { display:none;gap:0;margin-bottom:8px; }
+.chart-tf-toggle.show { display:inline-flex; }
+.chart-tf-toggle button {
+  font-family:inherit;font-size:10px;font-weight:600;letter-spacing:0.05em;
+  padding:4px 10px;border:none;cursor:pointer;background:transparent;color:var(--fg-dim);
+}
+.chart-tf-toggle button.active { color:var(--fg);text-decoration:underline;text-underline-offset:3px; }
+.chart-tf-toggle button:not(.active):hover { color:var(--fg-muted); }
 .dark-toggle {
   position: fixed;
   top: max(22px, env(safe-area-inset-top, 0px));
@@ -201,10 +209,13 @@ function getPoolIdFromHash() {
 }
 
 var _chartType = 'line';
+var _chartTf = '1h';
 
 function chartEmbedUrl(poolId, type) {
   var theme = isDark() ? 'dark' : 'light';
-  return 'https://www.zamm.finance/embed/pool/1/' + poolId + '?type=' + type + '&theme=' + theme;
+  var url = 'https://www.zamm.finance/embed/pool/1/' + poolId + '?type=' + type + '&theme=' + theme;
+  if (type === 'candle') url += '&tf=' + _chartTf;
+  return url;
 }
 
 function updateIframeTheme() {
@@ -218,6 +229,8 @@ function setChartType(type) {
   _chartType = type;
   var poolId = getPoolIdFromHash();
   if (!poolId) return;
+  var tfEl = document.getElementById('chartTfToggle');
+  if (tfEl) tfEl.classList.toggle('show', type === 'candle');
   var wrap = document.querySelector('.chart-wrap');
   if (wrap) {
     var iframe = document.createElement('iframe');
@@ -228,6 +241,23 @@ function setChartType(type) {
   }
   var btns = document.querySelectorAll('.chart-type-toggle button');
   btns.forEach(function(b){ b.classList.toggle('active', b.dataset.type === type); });
+}
+
+function setChartTf(tf) {
+  if (tf === _chartTf) return;
+  _chartTf = tf;
+  var poolId = getPoolIdFromHash();
+  if (!poolId) return;
+  var wrap = document.querySelector('.chart-wrap');
+  if (wrap) {
+    var iframe = document.createElement('iframe');
+    iframe.src = chartEmbedUrl(poolId, 'candle');
+    iframe.allow = 'clipboard-write';
+    iframe.sandbox = 'allow-scripts allow-same-origin';
+    wrap.replaceChildren(iframe);
+  }
+  var tfEl = document.getElementById('chartTfToggle');
+  if (tfEl) tfEl.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.tf === tf); });
 }
 
 var _currentPoolId = null;
@@ -252,27 +282,60 @@ function render() {
   _currentPoolId = poolId;
 
   poolIdDisplay.textContent = 'Pool ID: ' + poolId;
+  container.replaceChildren();
+  renderActivitySection(null);
 
-  var toggle = document.createElement('div');
-  toggle.className = 'chart-type-toggle';
-  var btnLine = document.createElement('button');
-  btnLine.textContent = 'Line'; btnLine.dataset.type = 'line'; btnLine.className = 'active';
-  btnLine.onclick = function(){ setChartType('line'); };
-  var btnCandle = document.createElement('button');
-  btnCandle.textContent = 'Candle'; btnCandle.dataset.type = 'candle';
-  btnCandle.onclick = function(){ setChartType('candle'); };
-  toggle.appendChild(btnLine); toggle.appendChild(btnCandle);
+  // Check for activity before showing chart
+  fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=1')
+    .then(function(r){ return r.json(); })
+    .then(function(json){
+      if (poolId !== _currentPoolId) return; // stale
+      if (!json.data || !json.data.length) {
+        var msg = document.createElement('div');
+        msg.className = 'chart-error';
+        msg.textContent = 'No trading activity for this pool';
+        container.replaceChildren(msg);
+        return;
+      }
+      var toggle = document.createElement('div');
+      toggle.className = 'chart-type-toggle';
+      var btnLine = document.createElement('button');
+      btnLine.textContent = 'Line'; btnLine.dataset.type = 'line'; btnLine.className = 'active';
+      btnLine.onclick = function(){ setChartType('line'); };
+      var btnCandle = document.createElement('button');
+      btnCandle.textContent = 'Candle'; btnCandle.dataset.type = 'candle';
+      btnCandle.onclick = function(){ setChartType('candle'); };
+      toggle.appendChild(btnLine); toggle.appendChild(btnCandle);
 
-  var wrap = document.createElement('div');
-  wrap.className = 'chart-wrap';
-  var iframe = document.createElement('iframe');
-  iframe.src = chartEmbedUrl(poolId, _chartType);
-  iframe.allow = 'clipboard-write';
-  iframe.sandbox = 'allow-scripts allow-same-origin';
-  wrap.appendChild(iframe);
+      var tfToggle = document.createElement('div');
+      tfToggle.className = 'chart-tf-toggle' + (_chartType === 'candle' ? ' show' : '');
+      tfToggle.id = 'chartTfToggle';
+      ['1m','1h','1d'].forEach(function(tf){
+        var btn = document.createElement('button');
+        btn.textContent = tf; btn.dataset.tf = tf;
+        if (tf === _chartTf) btn.className = 'active';
+        btn.onclick = function(){ setChartTf(tf); };
+        tfToggle.appendChild(btn);
+      });
 
-  container.replaceChildren(toggle, wrap);
-  renderActivitySection(poolId);
+      var wrap = document.createElement('div');
+      wrap.className = 'chart-wrap';
+      var iframe = document.createElement('iframe');
+      iframe.src = chartEmbedUrl(poolId, _chartType);
+      iframe.allow = 'clipboard-write';
+      iframe.sandbox = 'allow-scripts allow-same-origin';
+      wrap.appendChild(iframe);
+
+      container.replaceChildren(toggle, tfToggle, wrap);
+      renderActivitySection(poolId);
+    })
+    .catch(function(){
+      if (poolId !== _currentPoolId) return;
+      var msg = document.createElement('div');
+      msg.className = 'chart-error';
+      msg.textContent = 'Failed to check pool activity';
+      container.replaceChildren(msg);
+    });
 }
 
 // ==================== POOL ACTIVITY ====================

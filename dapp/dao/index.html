@@ -15676,9 +15676,16 @@ body.modal-open { overflow: hidden; }
       }
 
       // Render proposals
+      let proposalsRenderId = 0; // Counter to track the most recent render
       async function renderProposals(prefetchedConfig) {
         const proposalsList = document.getElementById('proposalsList');
         if (!proposalsList || !currentDAO?.dao) return;
+
+        // Increment render ID and capture it - only the most recent render should update DOM
+        const thisRenderId = ++proposalsRenderId;
+
+        // Capture DAO state at start to avoid race conditions with async operations
+        const daoAddress = currentDAO.dao.dao;
 
         try {
           proposalsList.innerHTML = '';
@@ -15698,7 +15705,7 @@ body.modal-open { overflow: hidden; }
         } else {
           try {
             daoConfig = await withRpcFallback(async (activeProvider) => {
-              const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, activeProvider);
+              const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, activeProvider);
               return await molochContract.config();
             });
             configFetched = true;
@@ -15706,6 +15713,11 @@ body.modal-open { overflow: hidden; }
             logger.warn('Error getting DAO config:', e.message);
             daoConfig = 0n; // fallback (but we know it failed)
           }
+        }
+
+        // Check if this render is stale (newer render started, or DAO changed)
+        if (thisRenderId !== proposalsRenderId || currentDAO?.dao?.dao !== daoAddress) {
+          return; // A newer render is in progress, skip this stale one
         }
 
         // Must match Moloch.sol enum ProposalState (line 79-87)
@@ -15759,7 +15771,7 @@ body.modal-open { overflow: hidden; }
             try {
               for (let cfg = currentConfig; cfg >= 0; cfg--) {
                 const recomputedId = computeProposalId(
-                  currentDAO.dao.dao,
+                  daoAddress,
                   propData.op,
                   propData.to,
                   BigInt(propData.value),

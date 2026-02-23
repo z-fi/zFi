@@ -88,6 +88,7 @@ input {
   cursor:pointer;transition:background 0.15s, transform 0.15s;text-decoration:none;color:var(--fg);display:block;
 }
 .coin-card:hover { background:var(--surface-hover);transform:translateY(-1px); }
+.coin-test { display:none; }
 .coin-card-head { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
 .coin-logo {
   width:40px;height:40px;border-radius:50%;border:1px solid var(--border);
@@ -113,6 +114,29 @@ input {
   background:var(--surface);border:1px solid var(--border-muted);
   opacity:1;color:var(--fg-muted);
 }
+
+/* Stacked duplicates */
+.coin-stack { position:relative;padding-bottom:4px;padding-right:4px; }
+.coin-stack > .coin-card:first-of-type { position:relative;z-index:2;background:var(--bg); }
+.coin-stack .coin-stacked {
+  position:absolute;bottom:0;left:4px;right:0;z-index:1;
+  height:100%;pointer-events:none;
+  overflow:hidden;opacity:1;
+}
+.coin-stack .coin-stacked > * { visibility:hidden; }
+.coin-stack .coin-stack-badge {
+  position:absolute;bottom:10px;right:10px;z-index:3;
+  font-size:10px;font-weight:600;padding:3px 8px;
+  background:var(--btn-bg);color:var(--btn-fg);
+  cursor:pointer;letter-spacing:0.03em;
+}
+.coin-stack .coin-stack-badge:hover { background:var(--btn-hover); }
+.coin-stack.expanded .coin-stacked {
+  position:relative;bottom:auto;left:0;right:0;
+  height:auto;margin-top:-1px;pointer-events:auto;
+  overflow:visible;
+}
+.coin-stack.expanded .coin-stacked > * { visibility:visible; }
 
 /* Detail page */
 .coin-banner {
@@ -241,7 +265,15 @@ input {
 }
 .chart-type-toggle button.active { background:var(--btn-bg);color:var(--btn-fg); }
 .chart-type-toggle button:not(.active):hover { color:var(--fg); }
-.chart-iframe-wrap { position:relative;width:100%;padding-bottom:56.25%; }
+.chart-tf-toggle { display:none;gap:0;border-bottom:1px solid var(--border-muted); }
+.chart-tf-toggle.show { display:flex; }
+.chart-tf-toggle button {
+  font-family:inherit;font-size:10px;font-weight:600;letter-spacing:0.05em;
+  padding:4px 10px;border:none;cursor:pointer;background:transparent;color:var(--fg-dim);
+}
+.chart-tf-toggle button.active { color:var(--fg);text-decoration:underline;text-underline-offset:3px; }
+.chart-tf-toggle button:not(.active):hover { color:var(--fg-muted); }
+.chart-iframe-wrap { position:relative;width:100%;height:min(56.25vw, 400px); }
 .chart-iframe-wrap iframe { position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:var(--surface);color-scheme:light dark; }
 
 /* Pool activity drawer */
@@ -589,10 +621,13 @@ function updateOGMeta(title, description, imageUrl) {
 }
 
 var _coinChartType = 'line';
+var _coinChartTf = '1h';
 
 function coinChartUrl(poolId, type) {
   const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-  return `https://www.zamm.finance/embed/pool/1/${poolId}?type=${type}&theme=${theme}`;
+  let url = `https://www.zamm.finance/embed/pool/1/${poolId}?type=${type}&theme=${theme}`;
+  if (type === 'candle') url += `&tf=${_coinChartTf}`;
+  return url;
 }
 
 function toggleChart() {
@@ -603,7 +638,7 @@ function toggleChart() {
     el.dataset.loaded = '1';
     const poolId = el.dataset.poolId;
     const body = el.querySelector('.chart-body');
-    body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(poolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
+    body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(poolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
   }
 }
 
@@ -613,6 +648,8 @@ function setCoinChartType(type) {
   const el = $('chartDrawer');
   if (!el) return;
   const poolId = el.dataset.poolId;
+  const tfEl = document.getElementById('coinTfToggle');
+  if (tfEl) tfEl.classList.toggle('show', type === 'candle');
   const wrap = el.querySelector('.chart-iframe-wrap');
   if (wrap) {
     const iframe = document.createElement('iframe');
@@ -622,6 +659,24 @@ function setCoinChartType(type) {
     wrap.replaceChildren(iframe);
   }
   el.querySelectorAll('.chart-type-toggle button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+}
+
+function setCoinChartTf(tf) {
+  if (tf === _coinChartTf) return;
+  _coinChartTf = tf;
+  const el = $('chartDrawer');
+  if (!el) return;
+  const poolId = el.dataset.poolId;
+  const wrap = el.querySelector('.chart-iframe-wrap');
+  if (wrap) {
+    const iframe = document.createElement('iframe');
+    iframe.src = coinChartUrl(poolId, 'candle');
+    iframe.allow = 'clipboard-write';
+    iframe.sandbox = 'allow-scripts allow-same-origin';
+    wrap.replaceChildren(iframe);
+  }
+  const tfEl = document.getElementById('coinTfToggle');
+  if (tfEl) tfEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
 }
 
 // ==================== POOL ACTIVITY ====================
@@ -981,10 +1036,9 @@ async function renderGallery() {
     ]);
     if (gen !== _renderGen) return;
 
-    // Team locked: fund templates have ops with 15% (150M) locked
-    const TEAM_LOCKED_DEFAULT = 150_000_000;
-
-    let grid = '';
+    const cards = [];
+    let testCount = 0;
+    let lowMcapCount = 0;
     for (let i = 0; i < filtered.length; i++) {
       const d = filtered[i];
       const md = allMetadata[i];
@@ -997,45 +1051,50 @@ async function renderGallery() {
         treasuryDisplay = fmtETH(sale.treasuryBalance || 0n);
       }
 
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      const saleActive = sale && sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
+
       // Market cap (circulating): price * circulating supply
-      // Circulating = total - unsold - tokens in LP
+      // Circulating = total - unsold - team locked
+      const teamBps = md && md.teamBps ? md.teamBps : 0;
+      const teamLocked = teamBps > 0 ? Number(COIN_SUPPLY_TOTAL) * teamBps / 10000 : 0;
       let mcapETH = 0;
+      let poolR0 = 0n;
       let poolR1 = 0n;
       const pr = poolResults[i];
       if (pr && pr.success) {
         try {
           const decoded = zammI.decodeFunctionResult('pools', pr.returnData);
-          const r0 = decoded[0], r1 = decoded[1];
-          poolR1 = r1;
-          if (r0 > 0n && r1 > 0n) {
-            const price = Number(ethers.formatEther(r0)) / Number(ethers.formatEther(r1));
-            const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
-            const inLp = Number(ethers.formatEther(r1));
-            const teamLocked = (d.tap && d.tap.ops && d.tap.ops !== ZERO) ? TEAM_LOCKED_DEFAULT : 0;
-            const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - inLp - teamLocked;
-            mcapETH = circulating > 0 ? price * circulating : 0;
-          }
+          poolR0 = decoded[0];
+          poolR1 = decoded[1];
         } catch(e) {}
       }
-      if (!mcapETH && sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
-        const price = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt));
-        const unsold = Number(ethers.formatEther(sale.remainingSupply));
-        const teamLocked = (d.tap && d.tap.ops && d.tap.ops !== ZERO) ? TEAM_LOCKED_DEFAULT : 0;
-        const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - teamLocked;
-        mcapETH = circulating > 0 ? price * circulating : 0;
+      const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
+      const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - teamLocked;
+      // Price: pool spot if sale ended or pool is deep, else sale price
+      const lpTokens = Number(ethers.formatEther(poolR1));
+      const hasPool = poolR0 > 0n && poolR1 > 0n;
+      const poolDeep = hasPool && lpTokens > Number(COIN_SUPPLY_TOTAL) * 0.01;
+      const usePool = hasPool && (!saleActive || poolDeep);
+      if (circulating > 0) {
+        if (usePool) {
+          mcapETH = (Number(ethers.formatEther(poolR0)) / lpTokens) * circulating;
+        } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
+          mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
+        }
       }
       const mcapDisplay = mcapETH > 1e-6 ? fmtMcap(mcapETH) : '';
       const mcapUsd = mcapETH > 1e-6 && ethUsd > 0 ? fmtUsd(mcapETH * ethUsd) : '';
 
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      const saleActive = sale && sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
-
       const cardName = (md.name || d.meta.name || '').toLowerCase();
       const cardSym = (md.symbol || d.meta.symbol || '').toLowerCase();
       const cardAddr = d.dao.toLowerCase();
+      const isTest = cardName === 'test';
+      if (isTest) testCount++;
+      if (!isTest && !saleActive && mcapETH < 0.01) { lowMcapCount++; continue; }
 
-      grid += `
-        <a href="#${d.dao}" class="coin-card" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}">
+      const cardHTML = `
+        <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}">
           <div class="coin-card-head">
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
             <div>
@@ -1048,15 +1107,52 @@ async function renderGallery() {
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
+      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest });
+    }
+
+    // Group by name|symbol, stack duplicates
+    const groups = new Map();
+    for (const c of cards) {
+      if (!groups.has(c.key)) groups.set(c.key, []);
+      groups.get(c.key).push(c);
+    }
+    let stackedCount = 0;
+    let grid = '';
+    const sortedGroups = [...groups.values()];
+    for (const group of sortedGroups) group.sort((a, b) => b.mcap - a.mcap);
+    // Finalized coins (sale ended) first sorted by liquidity, then in-sale coins by mcap
+    sortedGroups.sort((a, b) => {
+      const aTop = a[0], bTop = b[0];
+      const aFinalized = !aTop.saleActive;
+      const bFinalized = !bTop.saleActive;
+      if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
+      if (aFinalized) return aTop.r0 > bTop.r0 ? -1 : aTop.r0 < bTop.r0 ? 1 : 0;
+      return bTop.mcap - aTop.mcap;
+    });
+    for (const group of sortedGroups) {
+      if (group.length === 1) {
+        grid += group[0].html;
+      } else {
+        const extra = group.length - 1;
+        stackedCount += extra;
+        grid += `<div class="coin-stack">`;
+        grid += `<span class="coin-stack-badge" onclick="event.preventDefault();toggleStack(this)">+${extra} more</span>`;
+        grid += group[0].html;
+        for (let j = 1; j < group.length; j++) {
+          grid += group[j].html.replace('class="coin-card', 'class="coin-card coin-stacked');
+        }
+        grid += `</div>`;
+      }
     }
 
     app.innerHTML = `
       <div class="header">
-        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${filtered.length})</span></h1>
+        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${filtered.length - testCount})</span></h1>
         <div><a href="../#coin" class="nav-link">Launch</a><span class="nav-sep">&middot;</span><a href="../" class="nav-link">Swap</a><span class="nav-sep">&middot;</span><a href="../dao/" class="nav-link">DAO</a></div>
       </div>
       <input type="text" class="coin-search" id="coinSearch" placeholder="Search by name, symbol, or address..." oninput="filterCoins()">
       <div class="coin-grid" id="coinGrid">${grid}</div>
+      ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
   } catch(e) {
     app.innerHTML = `
@@ -1069,13 +1165,23 @@ async function renderGallery() {
   }
 }
 
+function toggleStack(el) {
+  el.closest('.coin-stack').classList.toggle('expanded');
+}
+
 function filterCoins() {
   const q = ($('coinSearch')?.value || '').toLowerCase().trim();
+  const stacks = document.querySelectorAll('#coinGrid .coin-stack');
+  stacks.forEach(s => {
+    if (q) s.classList.add('expanded');
+    else s.classList.remove('expanded');
+  });
   const cards = document.querySelectorAll('#coinGrid .coin-card');
   cards.forEach(c => {
-    if (!q) { c.style.display = ''; return; }
+    const isTest = c.classList.contains('coin-test');
+    if (!q) { c.style.display = isTest ? 'none' : ''; return; }
     const match = c.dataset.name.includes(q) || c.dataset.symbol.includes(q) || c.dataset.addr.includes(q);
-    c.style.display = match ? '' : 'none';
+    c.style.display = match ? 'block' : 'none';
   });
 }
 
@@ -1197,17 +1303,21 @@ async function renderCoinPage(daoAddr) {
     const hasPool = reserve0 > 0n || reserve1 > 0n;
 
     // Compute market cap (circulating): price * circulating supply
-    // Circulating = total - unsold - tokens in LP - locked team allocation
+    // Circulating = total - unsold - team locked
+    const detailTeamBps = metadata && metadata.teamBps ? metadata.teamBps : 0;
+    const detailTeamLocked = detailTeamBps > 0 ? Number(COIN_SUPPLY_TOTAL) * detailTeamBps / 10000 : 0;
     const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
     const inLp = Number(ethers.formatEther(reserve1));
-    const teamLocked = opsLockup ? Number(ethers.formatEther(BigInt(opsLockup.amount || '0'))) : 0;
-    const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - inLp - teamLocked;
-    if (hasPool && reserve1 > 0n && circulating > 0) {
-      const spotPrice = Number(ethers.formatEther(reserve0)) / Number(ethers.formatEther(reserve1));
-      mcapETH = spotPrice * circulating;
-    } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n && circulating > 0) {
-      const salePrice = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt));
-      mcapETH = circulating > 0 ? salePrice * circulating : 0;
+    const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - detailTeamLocked;
+    // Price: pool spot if sale ended or pool is deep, else sale price
+    const poolDeep = hasPool && reserve1 > 0n && inLp > Number(COIN_SUPPLY_TOTAL) * 0.01;
+    const usePool = hasPool && (!saleActive || poolDeep);
+    if (circulating > 0) {
+      if (usePool) {
+        mcapETH = (Number(ethers.formatEther(reserve0)) / inLp) * circulating;
+      } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
+        mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
+      }
     }
     const mcapDisplay = mcapETH > 1e-6 ? fmtMcap(mcapETH) : '';
     const mcapUsd = mcapETH > 1e-6 && ethUsd > 0 ? fmtUsd(mcapETH * ethUsd) : '';
@@ -1293,7 +1403,7 @@ async function renderCoinPage(daoAddr) {
           <div class="section-title">Treasury</div>
           ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
           ${hasPool ? `
-            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
           ` : ''}
         </div>
@@ -1527,18 +1637,17 @@ async function renderCoinPage(daoAddr) {
       </div>
     `;
 
-    // Chart drawer (only if pool has reserves; auto-open if sale ended)
-    const chartOpen = hasPool && !saleActive;
+    // Chart drawer (only if pool has reserves; hidden until activity confirmed)
     const dark = document.documentElement.classList.contains('dark');
     const chartTheme = dark ? 'dark' : 'light';
     if (hasPool) {
       html += `
-        <div class="drawer${chartOpen ? ' open' : ''}" id="chartDrawer" data-pool-id="${poolId}"${chartOpen ? ' data-loaded="1"' : ''}>
+        <div class="drawer" id="chartDrawer" data-pool-id="${poolId}" style="display:none">
           <button class="drawer-toggle" onclick="toggleChart()">
             <span>Price Chart</span>
             <span class="arrow">&#9660;</span>
           </button>
-          <div class="chart-body">${chartOpen ? `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-iframe-wrap"><iframe src="https://www.zamm.finance/embed/pool/1/${poolId}?type=line&theme=${chartTheme}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>` : ''}</div>
+          <div class="chart-body"></div>
         </div>
         <div class="drawer" id="activityDrawer" data-pool-id="${poolId}">
           <button class="drawer-toggle" onclick="toggleActivity()">
@@ -1584,6 +1693,29 @@ async function renderCoinPage(daoAddr) {
     _lpSubMode = 'zap';
     _tradeMode = defaultMode;
     tryAutoConnect();
+
+    // Show chart drawer only if pool has trading activity
+    if (hasPool) {
+      const _chartPoolId = poolId.toString();
+      fetch(`${INDEXER}/api/events?poolId=${_chartPoolId}&limit=1`)
+        .then(r => r.json())
+        .then(json => {
+          const el = $('chartDrawer');
+          if (!el || el.dataset.poolId !== _chartPoolId) return; // stale
+          if (json.data && json.data.length) {
+            el.style.display = '';
+            if (!saleActive) {
+              el.classList.add('open');
+              el.dataset.loaded = '1';
+              const body = el.querySelector('.chart-body');
+              if (body) body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(_chartPoolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
+            }
+          } else {
+            el.remove();
+          }
+        })
+        .catch(() => { const el = $('chartDrawer'); if (el && el.dataset.poolId === _chartPoolId) el.remove(); });
+    }
 
     // Fund deeplink: ?amt=1.5#0xDAO... — pre-fill sale amount
     const _dlParams = new URLSearchParams(location.search);

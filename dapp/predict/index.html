@@ -216,11 +216,15 @@ input {
 .trade-pct-btn:hover { background:var(--surface-hover);color:var(--fg); }
 
 /* Positions */
-.pos-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border-muted); }
+.pos-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border-muted);gap:8px; }
 .pos-row:last-child { border-bottom:none; }
-.pos-side { font-weight:600; }
+.pos-side { font-weight:600;min-width:70px;flex-shrink:0; }
 .pos-side.yes { color:var(--yes); }
 .pos-side.no { color:var(--no); }
+.pos-val { flex:1;text-align:right; }
+.lp-withdraw-btn { padding:3px 8px;font-size:10px;font-weight:700;letter-spacing:0.5px;border:1px solid var(--border-muted);background:transparent;color:var(--fg-muted);cursor:pointer;flex-shrink:0;transition:all 0.15s; }
+.lp-withdraw-btn:hover { opacity:1;background:var(--fg);color:var(--bg); }
+.lp-withdraw-btn:disabled { opacity:0.3;cursor:not-allowed; }
 
 /* Resolution */
 .resolve-section { margin-top:16px; }
@@ -386,6 +390,57 @@ input[type="datetime-local"] { color-scheme:light; }
 .lp-alloc-pct { font-size:11px;width:36px;text-align:right;color:var(--fg-muted); }
 .lp-alloc-hint { font-size:10px;color:var(--fg-dim);margin:0 0 8px 68px; }
 
+/* Odds chart drawer */
+.market-chart-drawer {
+  border:1px solid var(--border);margin-bottom:16px;overflow:hidden;
+}
+.market-chart-toggle-btn {
+  display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:10px 14px;border:none;background:transparent;color:var(--fg);cursor:pointer;
+  font-family:inherit;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+}
+.market-chart-toggle-btn:hover { background:var(--surface); }
+.market-chart-toggle-btn .arrow { transition:transform 0.2s;font-size:10px; }
+.market-chart-drawer.open .market-chart-toggle-btn .arrow { transform:rotate(180deg); }
+.market-chart {
+  padding:0;
+}
+.market-chart-wrap {
+  position:relative;width:100%;height:200px;
+  background:var(--bg);overflow:hidden;
+  border-top:1px solid var(--border-muted);
+}
+.market-chart-wrap canvas {
+  display:block;width:100%;height:100%;
+}
+.market-chart-empty {
+  display:flex;align-items:center;justify-content:center;height:100%;
+  font-size:12px;color:var(--fg-dim);
+}
+/* Pool activity drawer */
+.pm-activity-table { width:100%;border-collapse:collapse;font-size:12px; }
+.pm-activity-table th {
+  text-align:left;padding:6px 10px;font-size:10px;font-weight:600;letter-spacing:0.06em;
+  text-transform:uppercase;color:var(--fg-dim);border-bottom:1px solid var(--border-muted);
+}
+.pm-activity-table td { padding:5px 10px;border-bottom:1px solid var(--border-muted);white-space:nowrap; }
+.pm-activity-table tr:last-child td { border-bottom:none; }
+.pm-activity-table .evt-buy-yes { color:var(--green); }
+.pm-activity-table .evt-sell-yes { color:var(--red); }
+.pm-activity-table .evt-buy-no { color:var(--red); }
+.pm-activity-table .evt-sell-no { color:var(--green); }
+.pm-activity-table .evt-liqadd { color:var(--green); }
+.pm-activity-table .evt-liqrem { color:var(--red); }
+.pm-activity-table .evt-type { font-weight:600;font-size:11px; }
+.pm-activity-table a { color:var(--fg-muted);font-size:11px; }
+.pm-activity-table a:hover { color:var(--fg); }
+.pm-activity-more {
+  display:block;width:100%;padding:8px;border:none;background:none;
+  color:var(--fg-muted);font-size:11px;cursor:pointer;text-align:center;
+}
+.pm-activity-more:hover { color:var(--fg);background:var(--surface); }
+.pm-activity-empty { padding:16px;text-align:center;font-size:12px;color:var(--fg-muted); }
+
 /* Footer */
 .site-footer {
   position:relative;text-align:center;padding:48px 20px;font-size:11px;opacity:0.65;margin-top:40px;
@@ -513,9 +568,16 @@ input[type="datetime-local"] { color-scheme:light; }
       <div class="form-preview" id="pricePreview">Will ETH hit <b>$___</b> by <b>___</b>?</div>
       <div style="font-size:11px;color:var(--fg-muted);text-align:center;margin-bottom:10px">Current: ETH <b id="livePrice">...</b></div>
       <div class="form-group">
+        <label class="form-label">Direction</label>
+        <div class="trade-side" id="priceDirection">
+          <button class="active" data-dir="up" onclick="setPriceDir('up')">Above</button>
+          <button data-dir="down" onclick="setPriceDir('down')">Below</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Target Price (USD)</label>
         <input class="form-input" id="targetPrice" type="text" inputmode="numeric" placeholder="e.g. 10000" oninput="fmtTargetPrice();updatePricePreview()">
-        <div class="date-presets">
+        <div class="date-presets" id="pricePresets">
           <button type="button" class="date-preset" onclick="setPricePreset(0)">current</button>
           <button type="button" class="date-preset" onclick="setPricePreset(5)">+5%</button>
           <button type="button" class="date-preset" onclick="setPricePreset(10)">+10%</button>
@@ -609,12 +671,12 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Resolver Address</label>
-        <input class="form-input" id="customResolver" type="text" placeholder="0x address, name.wei, or name.eth">
+        <input class="form-input" id="customResolver" type="text" placeholder="0x address, name.wei, or name.eth" oninput="updateCreateDeeplink()">
         <div id="customResolverResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         <div class="form-hint">The address that will be able to resolve this market as YES or NO</div>
       </div>
       <div class="form-toggle-row">
-        <input type="checkbox" id="customCanClose" checked>
+        <input type="checkbox" id="customCanClose" checked onchange="updateCreateDeeplink()">
         <label for="customCanClose">Can close early (resolver can resolve before close date)</label>
       </div>
       <div class="form-group">
@@ -656,27 +718,7 @@ input[type="datetime-local"] { color-scheme:light; }
       <label class="form-label" id="lpAmountLabel">Amount (ETH)</label>
       <input class="form-input" id="lpAmount" type="number" placeholder="0.1" step="0.01" min="0.001">
     </div>
-    <div id="lpAllocSection" style="margin:12px 0">
-      <div class="lp-alloc-row">
-        <span class="lp-alloc-label amm">AMM</span>
-        <input type="range" class="lp-alloc-slider" id="lpAmmSlider" min="0" max="100" value="100" oninput="updateLPAlloc()">
-        <span class="lp-alloc-pct" id="lpAmmPct">100%</span>
-      </div>
-      <div class="lp-alloc-hint">Earn swap fees from both sides</div>
-      <div class="lp-alloc-row">
-        <span class="lp-alloc-label yes">YES Vault</span>
-        <input type="range" class="lp-alloc-slider" id="lpYesSlider" min="0" max="100" value="0" oninput="updateLPAlloc()">
-        <span class="lp-alloc-pct" id="lpYesPct">0%</span>
-      </div>
-      <div class="lp-alloc-hint">Earn from YES share sells</div>
-      <div class="lp-alloc-row">
-        <span class="lp-alloc-label no">NO Vault</span>
-        <input type="range" class="lp-alloc-slider" id="lpNoSlider" min="0" max="100" value="0" oninput="updateLPAlloc()">
-        <span class="lp-alloc-pct" id="lpNoPct">0%</span>
-      </div>
-      <div class="lp-alloc-hint">Earn from NO share sells</div>
-    </div>
-    <div id="lpLegacyHint" style="display:none;margin:12px 0;padding:10px;font-size:12px;color:var(--fg-muted);background:var(--surface);text-align:center">
+    <div style="margin:12px 0;padding:10px;font-size:12px;color:var(--fg-muted);background:var(--surface);text-align:center">
       Splits collateral into YES + NO shares and adds to AMM pool. You earn swap fees from trades.
     </div>
     <button class="form-btn" id="lpBtn" onclick="provideLiquidity()">Provide Liquidity</button>
@@ -689,7 +731,506 @@ input[type="datetime-local"] { color-scheme:light; }
 function toggleDark() {
   const on = document.documentElement.classList.toggle('dark');
   localStorage.setItem('dark', on ? '1' : '0');
+  // Redraw odds chart with new theme colors
+  const chart = document.getElementById('marketChart');
+  if (chart) {
+    const canvas = chart.querySelector('canvas');
+    if (canvas && canvas._oddsPoints) drawOddsChart(canvas, canvas._oddsPoints);
+  }
 }
+// ==================== CHART ====================
+
+const FLAG_BEFORE = 1n << 255n;
+const FLAG_AFTER = 1n << 254n;
+
+function computePredictionPoolId(marketId, isLabeled) {
+  const yesId = BigInt(marketId);
+  const noId = BigInt(ethers.keccak256(ethers.solidityPacked(['string', 'uint256'], ['PMARKET:NO', yesId])));
+  const yesIsToken0 = yesId < noId;
+  const [id0, id1] = yesIsToken0 ? [yesId, noId] : [noId, yesId];
+  const feeOrHook = isLabeled
+    ? BigInt(CONTRACTS.PM_FEE_HOOK) | FLAG_BEFORE | FLAG_AFTER
+    : BigInt(LEGACY_FEE_BPS);
+  const toBytes32 = v => { let h = BigInt(v).toString(16); if (h.length > 64) h = h.slice(-64); return h.padStart(64, '0'); };
+  const addrBytes32 = a => a.slice(2).toLowerCase().padStart(64, '0');
+  const encoded = '0x' + toBytes32(id0) + toBytes32(id1) + addrBytes32(CONTRACTS.PAMM) + addrBytes32(CONTRACTS.PAMM) + toBytes32(feeOrHook);
+  return { poolId: BigInt(ethers.keccak256(encoded)).toString(), yesIsToken0 };
+}
+
+const INDEXER = 'https://coinchan-indexer-production.up.railway.app';
+
+async function fetchAllEvents(poolId) {
+  const all = [];
+  let cursor = null;
+  for (let i = 0; i < 20; i++) {
+    let url = INDEXER + '/api/events?poolId=' + poolId + '&limit=100';
+    if (cursor) url += '&cursor=' + cursor;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.data || !json.data.length) break;
+    all.push(...json.data);
+    if (!json.nextCursor) break;
+    cursor = json.nextCursor;
+  }
+  return all.reverse(); // chronological order
+}
+
+// roundRect polyfill for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    const [tl, tr, br, bl] = r;
+    this.moveTo(x + tl, y);
+    this.lineTo(x + w - tr, y); this.arcTo(x + w, y, x + w, y + tr, tr);
+    this.lineTo(x + w, y + h - br); this.arcTo(x + w, y + h, x + w - br, y + h, br);
+    this.lineTo(x + bl, y + h); this.arcTo(x, y + h, x, y + h - bl, bl);
+    this.lineTo(x, y + tl); this.arcTo(x, y, x + tl, y, tl);
+    this.closePath();
+  };
+}
+
+function drawOddsChart(canvas, points) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 60, bottom: 26, left: 36 };
+  const cW = W - pad.left - pad.right;
+  const cH = H - pad.top - pad.bottom;
+
+  const cs = getComputedStyle(document.documentElement);
+  const yesColor = cs.getPropertyValue('--yes').trim() || '#22c55e';
+  const noColor = cs.getPropertyValue('--no').trim() || '#ef4444';
+  const fgMuted = cs.getPropertyValue('--fg-muted').trim() || '#666';
+  const fgDim = cs.getPropertyValue('--fg-dim').trim() || '#999';
+  const borderColor = cs.getPropertyValue('--border-muted').trim() || '#eee';
+  const bgColor = cs.getPropertyValue('--bg').trim() || '#fff';
+
+  const yOf = pct => pad.top + cH - (pct / 100) * cH;
+
+  // Horizontal gridlines
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 0.5;
+  ctx.fillStyle = fgDim;
+  ctx.font = '9px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'right';
+  for (let p = 0; p <= 100; p += 25) {
+    const y = yOf(p);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(W - pad.right, y);
+    ctx.stroke();
+    ctx.fillText(p + '%', pad.left - 5, y + 3);
+  }
+
+  // 50% center line (emphasized)
+  ctx.save();
+  ctx.strokeStyle = fgDim;
+  ctx.lineWidth = 0.7;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pad.left, yOf(50));
+  ctx.lineTo(W - pad.right, yOf(50));
+  ctx.stroke();
+  ctx.restore();
+
+  // Single data point
+  if (points.length < 2) {
+    if (points.length === 1) {
+      const yVal = points[0].yesPct;
+      const cx = pad.left + cW / 2;
+      const cy = yOf(yVal);
+      // Glow
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
+      glow.addColorStop(0, yesColor + '40');
+      glow.addColorStop(1, yesColor + '00');
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - 20, cy - 20, 40, 40);
+      // Dot
+      ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = yesColor; ctx.fill();
+      ctx.strokeStyle = bgColor; ctx.lineWidth = 1.5; ctx.stroke();
+      // Label
+      ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = yesColor;
+      ctx.fillText('YES ' + Math.round(yVal) + '%', cx, cy - 12);
+      ctx.fillStyle = noColor;
+      ctx.fillText('NO ' + Math.round(100 - yVal) + '%', cx, cy + 18);
+    }
+    return;
+  }
+
+  // Time range
+  const tMin = points[0].t, tMax = points[points.length - 1].t;
+  const tRange = tMax - tMin || 1;
+  const x = t => pad.left + ((t - tMin) / tRange) * cW;
+
+  // Step-line path (step-after: hold value until next event)
+  const buildStepPath = () => {
+    const path = [];
+    for (let i = 0; i < points.length; i++) {
+      path.push({ x: x(points[i].t), y: yOf(points[i].yesPct) });
+      if (i < points.length - 1) {
+        path.push({ x: x(points[i + 1].t), y: yOf(points[i].yesPct) });
+      }
+    }
+    path.push({ x: W - pad.right, y: yOf(points[points.length - 1].yesPct) });
+    return path;
+  };
+  const stepPath = buildStepPath();
+
+  // YES gradient fill (below line — green zone)
+  const yesGrad = ctx.createLinearGradient(0, yOf(50), 0, pad.top + cH);
+  yesGrad.addColorStop(0, yesColor + '08');
+  yesGrad.addColorStop(1, yesColor + '18');
+  ctx.beginPath();
+  ctx.moveTo(stepPath[0].x, yOf(0));
+  for (const p of stepPath) ctx.lineTo(p.x, p.y);
+  ctx.lineTo(stepPath[stepPath.length - 1].x, yOf(0));
+  ctx.closePath();
+  ctx.fillStyle = yesGrad;
+  ctx.fill();
+
+  // NO gradient fill (above line — red zone)
+  const noGrad = ctx.createLinearGradient(0, pad.top, 0, yOf(50));
+  noGrad.addColorStop(0, noColor + '18');
+  noGrad.addColorStop(1, noColor + '08');
+  ctx.beginPath();
+  ctx.moveTo(stepPath[0].x, yOf(100));
+  for (const p of stepPath) ctx.lineTo(p.x, p.y);
+  ctx.lineTo(stepPath[stepPath.length - 1].x, yOf(100));
+  ctx.closePath();
+  ctx.fillStyle = noGrad;
+  ctx.fill();
+
+  // Main step line
+  ctx.beginPath();
+  ctx.moveTo(stepPath[0].x, stepPath[0].y);
+  for (let i = 1; i < stepPath.length; i++) ctx.lineTo(stepPath[i].x, stepPath[i].y);
+  ctx.strokeStyle = yesColor;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'miter';
+  ctx.stroke();
+
+  // Data point dots (skip if too many to avoid clutter)
+  if (points.length <= 40) {
+    for (const p of points) {
+      const px = x(p.t), py = yOf(p.yesPct);
+      ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = yesColor; ctx.fill();
+    }
+  }
+
+  // Current price indicator — pill badges on right edge
+  const last = points[points.length - 1];
+  const lastY = yOf(last.yesPct);
+  const yesPctR = Math.round(last.yesPct);
+  const noPctR = 100 - yesPctR;
+
+  // Dashed line from last point to right edge label
+  ctx.save();
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = yesColor + '60';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x(last.t), lastY);
+  ctx.lineTo(W - pad.right, lastY);
+  ctx.stroke();
+  ctx.restore();
+
+  // YES + NO pills on right edge
+  const pillW = 48, pillH = 16, pillR = 3;
+  const pillX = W - pad.right + 4;
+  let yesPillY = Math.max(lastY - pillH - 4, pad.top);
+  let noPillY = Math.min(lastY + 4, H - pad.bottom - pillH);
+  // Prevent overlap
+  if (noPillY - yesPillY < pillH + 2) {
+    const mid = (yesPillY + noPillY) / 2;
+    yesPillY = mid - pillH / 2 - 1;
+    noPillY = mid + pillH / 2 + 1;
+    yesPillY = Math.max(yesPillY, pad.top);
+    noPillY = Math.min(noPillY, H - pad.bottom - pillH);
+  }
+  // YES pill
+  ctx.fillStyle = yesColor;
+  ctx.beginPath(); ctx.roundRect(pillX, yesPillY, pillW, pillH, pillR); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('YES ' + yesPctR + '%', pillX + pillW / 2, yesPillY + pillH / 2 + 3);
+  // NO pill
+  ctx.fillStyle = noColor;
+  ctx.beginPath(); ctx.roundRect(pillX, noPillY, pillW, pillH, pillR); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText('NO ' + noPctR + '%', pillX + pillW / 2, noPillY + pillH / 2 + 3);
+
+  // X axis dates
+  ctx.fillStyle = fgDim;
+  ctx.font = '9px Helvetica, Arial, sans-serif';
+  const fmtShort = t => {
+    const d = new Date(t * 1000);
+    return (d.getMonth()+1) + '/' + d.getDate();
+  };
+  const fmtTime = t => {
+    const d = new Date(t * 1000);
+    return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const span = tMax - tMin;
+  const fmt = span < 86400 * 2 ? t => fmtShort(t) + ' ' + fmtTime(t) : fmtShort;
+  // Evenly spaced date labels
+  const numLabels = Math.min(Math.floor(cW / 70), 5);
+  for (let i = 0; i <= numLabels; i++) {
+    const t = tMin + (tRange * i) / numLabels;
+    const lx = x(t);
+    ctx.textAlign = i === 0 ? 'left' : i === numLabels ? 'right' : 'center';
+    ctx.fillText(fmt(t), lx, H - 6);
+  }
+}
+
+var _chartLoaded = false;
+var _chartEventsCache = null;
+function toggleMarketChart() {
+  const drawer = document.getElementById('marketChartDrawer');
+  if (!drawer) return;
+  drawer.classList.toggle('open');
+  const chart = document.getElementById('marketChart');
+  if (!chart) return;
+  const isOpen = drawer.classList.contains('open');
+  chart.style.display = isOpen ? '' : 'none';
+  if (isOpen && !_chartLoaded) {
+    _chartLoaded = true;
+    const poolId = chart.dataset.poolId;
+    const yesIsToken0 = chart.dataset.yesIsToken0 === '1';
+    loadMarketChart(poolId, yesIsToken0);
+  }
+}
+
+function loadMarketChart(poolId, yesIsToken0) {
+  const el = document.getElementById('marketChart');
+  if (!el) return;
+  el.dataset.poolId = poolId;
+  el.innerHTML = `<div class="market-chart-wrap"><div class="market-chart-empty">Loading chart...</div></div>`;
+
+  const cached = _chartEventsCache;
+  _chartEventsCache = null;
+  (cached ? Promise.resolve(cached) : fetchAllEvents(poolId)).then(events => {
+    const cur = document.getElementById('marketChart');
+    if (!cur || cur.dataset.poolId !== poolId) return;
+    // No swap events → no trading activity → hide entire drawer
+    const hasSwaps = events.some(ev => ev.category === 'SWAP');
+    if (!hasSwaps) {
+      cur.innerHTML = '';
+      const drawer = document.getElementById('marketChartDrawer');
+      if (drawer) drawer.style.display = 'none';
+      return;
+    }
+
+    // Reconstruct reserves from all events, but only plot swap points
+    let r0 = 0, r1 = 0;
+    const allPoints = [];
+    for (const ev of events) {
+      const a0in = Number(ev.amount0_in || 0);
+      const a1in = Number(ev.amount1_in || 0);
+      const a0out = Number(ev.amount0_out || 0);
+      const a1out = Number(ev.amount1_out || 0);
+      r0 += a0in - a0out;
+      r1 += a1in - a1out;
+      if (r0 + r1 <= 0) continue;
+      // Only plot swaps — LP adds/removes shift reserves but aren't price actions
+      if (ev.category !== 'SWAP') continue;
+      // YES price = noReserve / total (CPMM formula)
+      const yesPct = yesIsToken0
+        ? (r1 / (r0 + r1)) * 100
+        : (r0 / (r0 + r1)) * 100;
+      allPoints.push({ t: Number(ev.timestamp), yesPct });
+    }
+
+    if (!allPoints.length) { cur.innerHTML = ''; return; }
+
+    // Show only last 7 days of activity; if all data is older, show last cluster
+    const now = Math.floor(Date.now() / 1000);
+    const sevenDaysAgo = now - 7 * 86400;
+    let points = allPoints.filter(p => p.t >= sevenDaysAgo);
+    if (!points.length) {
+      // All data older than 7d — show most recent activity cluster
+      // Find last point and include everything within 7 days of it
+      const lastT = allPoints[allPoints.length - 1].t;
+      points = allPoints.filter(p => p.t >= lastT - 7 * 86400);
+    }
+    // Prepend a carry-forward point so chart starts with prior odds
+    if (points.length && points[0] !== allPoints[0]) {
+      const idx = allPoints.indexOf(points[0]);
+      if (idx > 0) {
+        points = [{ t: points[0].t, yesPct: allPoints[idx - 1].yesPct }, ...points];
+      }
+    }
+
+    cur.innerHTML = `<div class="market-chart-wrap"><canvas></canvas></div>`;
+    const canvas = cur.querySelector('canvas');
+    canvas._oddsPoints = points;
+    drawOddsChart(canvas, points);
+
+    // Redraw on resize / theme change
+    const ro = new ResizeObserver(() => drawOddsChart(canvas, points));
+    ro.observe(canvas.parentElement);
+  }).catch(() => {
+    const cur = document.getElementById('marketChart');
+    if (cur && cur.dataset.poolId === poolId) cur.innerHTML = '';
+  });
+}
+
+// ==================== POOL ACTIVITY ====================
+
+var _pmActivityCursor = null;
+var _pmActivityInterval = null;
+
+function togglePoolActivity() {
+  const el = $('pmActivityDrawer');
+  if (!el) return;
+  el.classList.toggle('open');
+  const body = el.querySelector('.pm-activity-body');
+  if (body) body.style.display = el.classList.contains('open') ? '' : 'none';
+  if (el.classList.contains('open') && !el.dataset.loaded) {
+    el.dataset.loaded = '1';
+    loadPoolActivity(el.dataset.poolId);
+    _pmActivityInterval = setInterval(() => refreshPoolActivity(el.dataset.poolId), 30000);
+  } else if (!el.classList.contains('open') && _pmActivityInterval) {
+    clearInterval(_pmActivityInterval);
+    _pmActivityInterval = null;
+  }
+}
+
+function pmFmtWei(wei) {
+  if (!wei || wei === '0') return '0';
+  const s = wei.padStart(19, '0');
+  const whole = s.slice(0, s.length - 18) || '0';
+  const frac = s.slice(s.length - 18, s.length - 14);
+  return whole + '.' + frac;
+}
+
+function pmFmtAge(ts) {
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function pmActivityRow(e, yesIsToken0) {
+  let label, cls, amount;
+  if (e.category === 'SWAP') {
+    // Determine direction from actual token flows
+    const a0out = BigInt(e.amount0_out || 0), a1out = BigInt(e.amount1_out || 0);
+    const a0in = BigInt(e.amount0_in || 0), a1in = BigInt(e.amount1_in || 0);
+    // User gets YES tokens out = Buy YES; user puts YES tokens in = Sell YES
+    const yesOut = yesIsToken0 ? a0out : a1out;
+    const yesIn = yesIsToken0 ? a0in : a1in;
+    const noOut = yesIsToken0 ? a1out : a0out;
+    const noIn = yesIsToken0 ? a1in : a0in;
+    if (yesOut > 0n) {
+      label = 'Buy YES'; cls = 'evt-buy-yes';
+      amount = pmFmtWei(yesOut.toString());
+    } else if (yesIn > 0n) {
+      label = 'Sell YES'; cls = 'evt-sell-yes';
+      amount = pmFmtWei(yesIn.toString());
+    } else if (noOut > 0n) {
+      label = 'Buy NO'; cls = 'evt-buy-no';
+      amount = pmFmtWei(noOut.toString());
+    } else if (noIn > 0n) {
+      label = 'Sell NO'; cls = 'evt-sell-no';
+      amount = pmFmtWei(noIn.toString());
+    } else {
+      label = 'Swap'; cls = '';
+      amount = '-';
+    }
+  } else if (e.type === 'LIQADD') {
+    label = '+LP'; cls = 'evt-liqadd';
+    amount = pmFmtWei(e.amount0_in || '0');
+  } else if (e.type === 'LIQREM') {
+    label = '-LP'; cls = 'evt-liqrem';
+    amount = pmFmtWei(e.amount0_out || '0');
+  } else {
+    label = e.type; cls = '';
+    amount = '-';
+  }
+  const txShort = e.txhash.slice(0, 6) + '\u2026' + e.txhash.slice(-4);
+  return `<tr class="${cls}">
+    <td>${pmFmtAge(Number(e.timestamp))}</td>
+    <td class="evt-type">${label}</td>
+    <td>${amount}</td>
+    <td><a href="https://etherscan.io/tx/${e.txhash}" target="_blank" rel="noopener">${txShort}</a></td>
+  </tr>`;
+}
+
+function _getYesIsToken0() {
+  const el = $('pmActivityDrawer');
+  return el ? el.dataset.yesIsToken0 === '1' : true;
+}
+
+function renderPmActivityTable(events, append) {
+  const content = $('pmActivityContent');
+  if (!content) return;
+  if (!events.length && !append) {
+    content.innerHTML = '<div class="pm-activity-empty">No activity yet</div>';
+    return;
+  }
+  const y0 = _getYesIsToken0();
+  const rows = events.map(e => pmActivityRow(e, y0)).join('');
+  if (append) {
+    const tbody = content.querySelector('tbody');
+    if (tbody) tbody.insertAdjacentHTML('beforeend', rows);
+  } else {
+    content.innerHTML = `<table class="pm-activity-table">
+      <thead><tr><th>Age</th><th>Type</th><th>Amount</th><th>Tx</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>` + (_pmActivityCursor ? `<button class="pm-activity-more" onclick="loadMorePmActivity()">Load More</button>` : '');
+  }
+}
+
+async function loadPoolActivity(poolId) {
+  try {
+    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30');
+    const json = await res.json();
+    _pmActivityCursor = json.nextCursor || null;
+    renderPmActivityTable(json.data, false);
+  } catch(e) {
+    const content = $('pmActivityContent');
+    if (content) content.innerHTML = '<div class="pm-activity-empty">Failed to load activity</div>';
+  }
+}
+
+async function refreshPoolActivity(poolId) {
+  try {
+    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30');
+    const json = await res.json();
+    _pmActivityCursor = json.nextCursor || null;
+    renderPmActivityTable(json.data, false);
+  } catch(e) {}
+}
+
+async function loadMorePmActivity() {
+  if (!_pmActivityCursor) return;
+  const el = $('pmActivityDrawer');
+  if (!el) return;
+  const poolId = el.dataset.poolId;
+  const btn = el.querySelector('.pm-activity-more');
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+  try {
+    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30&before=' + _pmActivityCursor);
+    const json = await res.json();
+    _pmActivityCursor = json.nextCursor || null;
+    renderPmActivityTable(json.data, true);
+    if (!_pmActivityCursor && btn) btn.remove();
+    else if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
+  } catch(e) {
+    if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
+  }
+}
+
 const $ = id => document.getElementById(id);
 const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
@@ -757,7 +1298,8 @@ const PAMM_ABI = [
   'function getMarkets(uint256 start, uint256 count) view returns (uint256[] marketIds, address[] resolvers, address[] collaterals, uint8[] states, uint64[] closes, uint256[] collateralAmounts, uint256[] yesSupplies, uint256[] noSupplies, string[] descs, uint256 next)',
   'function getPoolState(uint256 marketId, uint256 feeOrHook) view returns (uint256 rYes, uint256 rNo, uint256 pYesNum, uint256 pYesDen)',
   'function getMarket(uint256 marketId) view returns (address resolver, address collateral, bool resolved, bool outcome, bool canClose, uint64 close, uint256 collateralLocked, uint256 yesSupply, uint256 noSupply, string description)',
-  'function splitAndAddLiquidity(uint256 marketId, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 liquidity)'
+  'function splitAndAddLiquidity(uint256 marketId, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 liquidity)',
+  'function removeLiquidityToCollateral(uint256 marketId, uint256 feeOrHook, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 minCollateralOut, address to, uint256 deadline) returns (uint256 collateralOut, uint256 leftoverYes, uint256 leftoverNo)'
 ];
 
 const QUOTER_ABI = [
@@ -766,6 +1308,13 @@ const QUOTER_ABI = [
   'function getUserFullPosition(uint256 marketId, address user) view returns (uint256 yesShareBalance, uint256 noShareBalance, uint112 yesVaultLP, uint112 noVaultLP, uint256 pendingYesCollateral, uint256 pendingNoCollateral)',
   'function quoteBuyWithSweep(uint256 marketId, bool buyYes, uint256 collateralIn, uint256 maxPriceBps) view returns (uint256 totalSharesOut, uint256 poolSharesOut, uint256 poolLevelsFilled, uint256 pmSharesOut, bytes4 pmSource)',
   'function quoteSellWithSweep(uint256 marketId, bool sellYes, uint256 sharesIn, uint256 minPriceBps) view returns (uint256 totalCollateralOut, uint256 poolCollateralOut, uint256 poolLevelsFilled, uint256 pmCollateralOut, bytes4 pmSource)'
+];
+
+const ZAMM_ABI = [
+  'function balanceOf(address, uint256) view returns (uint256)',
+  'function pools(uint256) view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast, uint256 price0CumulativeLast, uint256 price1CumulativeLast, uint256 kLast, uint256 supply)',
+  'function isOperator(address, address) view returns (bool)',
+  'function setOperator(address, bool)'
 ];
 
 const MASTER_ROUTER_ABI = [
@@ -819,7 +1368,8 @@ const ERC20_ABI = [
 
 const PM_HOOK_ROUTER_ABI = [
   'function addLiquidity(uint256 marketId, address collateral, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address lpRecipient, uint256 deadline) payable returns (uint256 shares, uint256 liquidity)',
-  'function depositToVault(uint256 marketId, address collateral, uint256 amount, bool yesVault, address to) payable returns (uint256 vaultShares)'
+  'function depositToVault(uint256 marketId, address collateral, uint256 amount, bool yesVault, address to) payable returns (uint256 vaultShares)',
+  'function withdrawFromVault(uint256 marketId, bool isYes, uint256 vaultSharesToRedeem, address receiver, uint256 deadline) returns (uint256 sharesReturned, uint256 feesEarned)'
 ];
 
 const MULTICALL3_ABI = [
@@ -1063,7 +1613,7 @@ function parseMarketDescription(description) {
       const price = formatPrice(t);
       const date = formatCloseDate(parseInt(close));
       const opNum = parseInt(op);
-      const verb = opNum >= 2 ? 'hit' : 'drop to';
+      const verb = (opNum === 0 || opNum === 2) ? 'drop to' : 'hit';
       const color = COLORS[asset] || '#627EEA';
       return {
         question: `<u style="text-decoration-color:${color}">${asset}</u> ${verb} <u style="text-decoration-color:#0F0">${price}</u> by <u style="text-decoration-color:#F50">${date}</u>?`,
@@ -1078,7 +1628,7 @@ function parseMarketDescription(description) {
       const bal = formatBalance(t);
       const date = formatCloseDate(parseInt(close));
       const opNum = parseInt(op);
-      const verb = opNum >= 2 ? 'hold' : 'have under';
+      const verb = (opNum === 0 || opNum === 2) ? 'have under' : 'hold';
       const addrLink = etherscanLink(addr, { color: '#627EEA' });
       return {
         question: `${addrLink} ${verb} <u style="text-decoration-color:#0F0">${bal} ETH</u> by <u style="text-decoration-color:#F50">${date}</u>?`,
@@ -1093,7 +1643,7 @@ function parseMarketDescription(description) {
       const bal = formatBalance(t, 0);
       const date = formatCloseDate(parseInt(close));
       const opNum = parseInt(op);
-      const verb = opNum >= 2 ? 'hold' : 'have under';
+      const verb = (opNum === 0 || opNum === 2) ? 'have under' : 'hold';
       const addrLink = etherscanLink(addr, { color: '#8247E5' });
       const tokenLink = etherscanLink(token, { color: '#FF007A', type: 'token' });
       return {
@@ -1108,7 +1658,7 @@ function parseMarketDescription(description) {
       const t = parseInt(thresh);
       const date = formatCloseDate(parseInt(close));
       const opNum = parseInt(op);
-      const verb = opNum >= 2 ? 'hold' : 'have under';
+      const verb = (opNum === 0 || opNum === 2) ? 'have under' : 'hold';
       const addrLink = etherscanLink(addr, { color: '#8247E5' });
       const tokenLink = etherscanLink(token, { color: '#e8e8e0', type: 'token' });
       return {
@@ -1141,7 +1691,7 @@ function parseMarketDescription(description) {
       const t = parseFloat(thresh);
       const date = formatCloseDate(parseInt(close));
       const opNum = parseInt(op);
-      const verb = opNum >= 2 ? 'exceed' : 'drop below';
+      const verb = (opNum === 0 || opNum === 2) ? 'drop below' : 'exceed';
       const tokenLink = etherscanLink(token, { color: '#9945FF', type: 'token' });
       return {
         question: `${tokenLink} supply ${verb} <u style="text-decoration-color:#0F0">${formatBalance(t)}</u> by <u style="text-decoration-color:#F50">${date}</u>?`,
@@ -1496,9 +2046,97 @@ function route() {
   const hash = location.hash.replace('#', '').trim();
   if (hash && /^\d+$/.test(hash)) {
     renderMarketPage(hash);
+  } else if (hash === 'create') {
+    renderGallery().then(() => applyCreateDeeplink());
   } else {
     renderGallery();
   }
+}
+
+function applyCreateDeeplink() {
+  _applyingDeeplink = true;
+  const params = new URLSearchParams(location.search);
+  const type = params.get('type'); // price, balance, supply, custom
+  if (type && ['price','balance','supply','custom'].includes(type)) {
+    switchMarketType(type);
+  }
+  // Price form
+  if (params.get('target'))   { const el = $('targetPrice'); if (el) { el.value = params.get('target'); fmtTargetPrice(); } }
+  if (params.get('dir'))      { const d = params.get('dir'); if (d === 'up' || d === 'down') setPriceDir(d); }
+  if (params.get('close'))    { const el = $('closeDate'); if (el) el.value = params.get('close'); }
+  // Balance form
+  if (params.get('wallet'))   { const el = $('balWalletAddr'); if (el) el.value = params.get('wallet'); }
+  if (params.get('token'))    { const el = $('balTokenAddr'); if (el) { el.value = params.get('token'); setBalanceType('token'); } }
+  if (params.get('bal'))      { const el = $('balThreshold'); if (el) el.value = params.get('bal'); }
+  if (params.get('balClose')) { const el = $('balCloseDate'); if (el) el.value = params.get('balClose'); }
+  // Supply form
+  if (params.get('supplyToken')) { const el = $('supplyTokenAddr'); if (el) el.value = params.get('supplyToken'); }
+  if (params.get('supplyOp'))    { const el = $('supplyOp'); if (el) el.value = params.get('supplyOp'); }
+  if (params.get('supplyVal'))   { const el = $('supplyThreshold'); if (el) el.value = params.get('supplyVal'); }
+  if (params.get('supplyClose')) { const el = $('supplyCloseDate'); if (el) el.value = params.get('supplyClose'); }
+  // Custom form
+  if (params.get('question')) { const el = $('customQuestion'); if (el) el.value = params.get('question'); }
+  if (params.get('resolver')) { const el = $('customResolver'); if (el) el.value = params.get('resolver'); }
+  if (params.has('canClose')) { const el = $('customCanClose'); if (el) el.checked = params.get('canClose') !== '0'; }
+  if (params.get('customClose')) { const el = $('customCloseDate'); if (el) el.value = params.get('customClose'); }
+  // Liquidity
+  if (params.get('liq'))      { const el = $('totalLiquidity'); if (el) { el.value = params.get('liq'); updateLiqSplit(); } }
+  // Update previews
+  updatePricePreview();
+  updateBalPreview();
+  updateSupplyPreview();
+  updateCustomPreview();
+  _applyingDeeplink = false;
+  openCreateModal();
+}
+let _applyingDeeplink = false;
+
+function updateCreateDeeplink() {
+  if (_applyingDeeplink) return;
+  if (location.hash.replace('#','').trim() !== 'create') return;
+  const p = new URLSearchParams();
+  const type = _currentMarketType || 'price';
+  if (type !== 'price') p.set('type', type);
+  if (type === 'price') {
+    const raw = ($('targetPrice').value || '').replace(/[^0-9]/g, '');
+    if (raw) p.set('target', raw);
+    if (_priceDir === 'down') p.set('dir', 'down');
+    const close = $('closeDate').value;
+    if (close) p.set('close', close);
+  } else if (type === 'balance') {
+    const wallet = $('balWalletAddr').value.trim();
+    if (wallet) p.set('wallet', wallet);
+    if (_balanceAssetType === 'token') {
+      const tok = $('balTokenAddr').value.trim();
+      if (tok) p.set('token', tok);
+    }
+    const bal = $('balThreshold').value;
+    if (bal) p.set('bal', bal);
+    const close = $('balCloseDate').value;
+    if (close) p.set('balClose', close);
+  } else if (type === 'supply') {
+    const tok = $('supplyTokenAddr').value.trim();
+    if (tok) p.set('supplyToken', tok);
+    const op = $('supplyOp').value;
+    if (op && op !== '3') p.set('supplyOp', op);
+    const val = $('supplyThreshold').value;
+    if (val) p.set('supplyVal', val);
+    const close = $('supplyCloseDate').value;
+    if (close) p.set('supplyClose', close);
+  } else if (type === 'custom') {
+    const q = $('customQuestion').value.trim();
+    if (q) p.set('question', q);
+    const r = $('customResolver').value.trim();
+    if (r) p.set('resolver', r);
+    if (!$('customCanClose').checked) p.set('canClose', '0');
+    const close = $('customCloseDate').value;
+    if (close) p.set('customClose', close);
+  }
+  const liq = $('totalLiquidity').value;
+  if (liq && liq !== '0.01') p.set('liq', liq);
+  const qs = p.toString();
+  const url = location.pathname + (qs ? '?' + qs : '') + '#create';
+  history.replaceState(null, '', url);
 }
 
 window.addEventListener('hashchange', route);
@@ -1559,9 +2197,8 @@ async function renderGallery() {
           const batchSize = result.marketIds.length;
           if (batchSize === 0) break;
           for (let i = 0; i < batchSize; i++) {
-            // Accept markets with our resolver
-            if (result.resolvers[i].toLowerCase() !== CONTRACTS.RESOLVER.toLowerCase()) continue;
             const marketId = result.marketIds[i].toString();
+            const resolver = result.resolvers[i];
             const description = result.descs[i];
             const close = Number(result.closes[i]);
             const tvl = Number(result.collateralAmounts[i]) / 1e18;
@@ -1569,11 +2206,16 @@ async function renderGallery() {
             const resolved = (states & 1) !== 0;
             const outcome = (states & 2) !== 0;
             const parsed = parseMarketDescription(description);
+            const legacy = LEGACY_MARKETS.some(l => l.marketId === marketId)
+              || resolver.toLowerCase() === CONTRACTS.LEGACY_RESOLVER.toLowerCase()
+              || description.startsWith('LEGACY|');
             fetched.push({
               marketId, description, close, tvl, resolved, outcome,
               question: parsed.question,
               collateral: result.collaterals[i],
-              isLegacy: false,
+              resolver,
+              isLegacy: legacy,
+              isLabeled: !legacy,
               y: 50, oddsLoaded: false
             });
           }
@@ -1607,7 +2249,9 @@ async function renderGallery() {
               outcome: marketData.outcome,
               question: parsed.question,
               collateral: marketData.collateral || legacy.collateral,
+              resolver: marketData.resolver,
               isLegacy: true,
+              isLabeled: false,
               y: yPct,
               oddsLoaded: true
             });
@@ -1624,14 +2268,15 @@ async function renderGallery() {
     }
 
     if (fetchSuccess) {
-      // Sort: active first, then by TVL
+      // Sort: active first by TVL, resolved by close date (most recent first)
       const now = Math.floor(Date.now() / 1000);
       allFetched.sort((a, b) => {
         const aActive = !a.resolved && a.close > now;
         const bActive = !b.resolved && b.close > now;
         if (aActive && !bActive) return -1;
         if (!aActive && bActive) return 1;
-        return (b.tvl || 0) - (a.tvl || 0);
+        if (aActive) return (b.tvl || 0) - (a.tvl || 0);
+        return (b.close || 0) - (a.close || 0);
       });
 
       markets = allFetched;
@@ -1648,19 +2293,20 @@ async function renderGallery() {
         try {
           await withRPC(async (rpc) => {
             const calls = needsOdds.map(m => {
-              if (isOurLabeledMarket(m.description)) {
-                return {
-                  target: CONTRACTS.QUOTER,
-                  callData: quoterIface.encodeFunctionData('getMarketSummary', [m.marketId]),
-                  decode: data => quoterIface.decodeFunctionResult('getMarketSummary', data),
-                  market: m, isLabeled: true
-                };
-              } else {
+              if (m.isLegacy) {
                 return {
                   target: CONTRACTS.PAMM,
                   callData: pammIface.encodeFunctionData('getPoolState', [BigInt(m.marketId), LEGACY_FEE_BPS]),
                   decode: data => pammIface.decodeFunctionResult('getPoolState', data),
                   market: m, isLabeled: false
+                };
+              } else {
+                // getMarketSummary works for both our resolver and open resolver markets
+                return {
+                  target: CONTRACTS.QUOTER,
+                  callData: quoterIface.encodeFunctionData('getMarketSummary', [m.marketId]),
+                  decode: data => quoterIface.decodeFunctionResult('getMarketSummary', data),
+                  market: m, isLabeled: true
                 };
               }
             });
@@ -1721,6 +2367,11 @@ function renderGalleryUI() {
       const q = searchVal.toLowerCase();
       const plainQ = stripHtml(m.question).toLowerCase();
       if (!plainQ.includes(q) && !m.marketId.includes(q) && !(m.description || '').toLowerCase().includes(q)) continue;
+    } else if (!m.resolved) {
+      // Hide dust-liquidity markets unless searching or resolved
+      const isETH = !m.collateral || m.collateral === ethers.ZeroAddress;
+      if (isETH && (m.tvl || 0) < 0.01) continue;
+      if (!isETH && (m.tvl || 0) < 10) continue;
     }
     const yPct = m.oddsLoaded ? m.y : 50;
     const nPct = 100 - yPct;
@@ -1730,6 +2381,10 @@ function renderGalleryUI() {
     const outcomeLabel = m.resolved ? (m.outcome ? 'YES' : 'NO') : '';
     const tvlDisplay = m.tvl >= 1 ? m.tvl.toFixed(2) : m.tvl.toFixed(4);
     const timeDisplay = isActive ? fmtCountdown(m.close) : (m.resolved ? 'Resolved' : 'Closed');
+    const isOurRes = m.resolver && m.resolver.toLowerCase() === CONTRACTS.RESOLVER.toLowerCase();
+    const resolverTag = (!isOurRes && !m.isLegacy && m.resolver)
+      ? `<span style="font-size:9px;color:var(--fg-dim);opacity:0.7">${m.resolver.slice(0,6)}\u2026${m.resolver.slice(-4)}</span>`
+      : '';
     cards += `
       <a href="#${m.marketId}" class="market-card${resolvedClass}"${wonAttr}>
         <div class="market-card-question" data-outcome="${escText(outcomeLabel)}">${cardHtml(m.question)}</div>
@@ -1740,6 +2395,7 @@ function renderGalleryUI() {
         </div>
         <div class="market-card-meta">
           <span>${tvlDisplay} ${getCollateralSymbol(m.collateral)}</span>
+          ${resolverTag}
           <span>${timeDisplay}</span>
         </div>
       </a>
@@ -1777,7 +2433,7 @@ async function renderMarketPage(marketId) {
   const app = $('app');
   app.dataset.marketId = marketId;
   app.innerHTML = `
-    <a href="#" class="back-link">&larr; All Markets</a>
+    <a href="#" class="back-link" onclick="event.preventDefault();history.replaceState(null,'',location.pathname);route()">&larr; All Markets</a>
     <div class="loading">${zfiLoadingSVG(48)}Loading market...</div>
   `;
 
@@ -1817,25 +2473,19 @@ async function renderMarketPage(marketId) {
       const description = mkt.description || '';
       const resolverAddr = mkt.resolver;
       const isOurResolver = resolverAddr.toLowerCase() === CONTRACTS.RESOLVER.toLowerCase();
-      const isLabeled = isOurLabeledMarket(description) || isOurResolver;
       // Legacy: check LEGACY_MARKETS array, resolver address match, description prefix, or gallery flag
       const isLegacyMarket = LEGACY_MARKETS.some(l => l.marketId === marketId)
         || resolverAddr.toLowerCase() === CONTRACTS.LEGACY_RESOLVER.toLowerCase()
         || description.startsWith('LEGACY|')
         || (markets.find(m => m.marketId === marketId)?.isLegacy === true);
       const isLegacyResolver = isLegacyMarket;
+      // All non-legacy markets use hooks (including open-resolver markets created via bootstrapper)
+      const isLabeled = !isLegacyMarket;
 
-      // Fetch odds: getMarketSummary for labeled, getPoolState for legacy
+      // Fetch odds: getMarketSummary for labeled/open-resolver, getPoolState for legacy
       let yPct = 50, ammYesReserve = 0n, ammNoReserve = 0n;
-      if (isLabeled) {
-        try {
-          const quoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
-          const summary = await quoter.getMarketSummary(marketId);
-          yPct = Math.round(Number(summary.ammPriceYesBps) / 100);
-          ammYesReserve = BigInt(summary.ammYesReserve);
-          ammNoReserve = BigInt(summary.ammNoReserve);
-        } catch {}
-      } else {
+      let vaultYesShares = 0n, vaultNoShares = 0n, totalYesVaultLP = 0n, totalNoVaultLP = 0n;
+      if (isLegacyMarket) {
         try {
           const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, rpc);
           const poolState = await pamm.getPoolState(BigInt(marketId), LEGACY_FEE_BPS);
@@ -1845,6 +2495,18 @@ async function renderMarketPage(marketId) {
           const rN = Number(poolState.rNo);
           const total = rY + rN;
           yPct = total > 0 ? Math.round((rN / total) * 100) : 50;
+        } catch {}
+      } else {
+        try {
+          const quoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
+          const summary = await quoter.getMarketSummary(marketId);
+          yPct = Math.round(Number(summary.ammPriceYesBps) / 100);
+          ammYesReserve = BigInt(summary.ammYesReserve);
+          ammNoReserve = BigInt(summary.ammNoReserve);
+          vaultYesShares = BigInt(summary.vaultYesShares);
+          vaultNoShares = BigInt(summary.vaultNoShares);
+          totalYesVaultLP = BigInt(summary.totalYesVaultLP);
+          totalNoVaultLP = BigInt(summary.totalNoVaultLP);
         } catch {}
       }
 
@@ -1866,28 +2528,47 @@ async function renderMarketPage(marketId) {
       }
 
       // Parse user positions
-      let userYes = 0n, userNo = 0n;
+      let userYes = 0n, userNo = 0n, userYesVaultLP = 0n, userNoVaultLP = 0n;
       const posIdx = _connectedAddress ? 1 : -1;
       if (posIdx >= 0 && results[posIdx] && results[posIdx].success) {
         try {
           const pos = results[posIdx].decode();
           userYes = BigInt(pos.yesShareBalance);
           userNo = BigInt(pos.noShareBalance);
+          userYesVaultLP = BigInt(pos.yesVaultLP);
+          userNoVaultLP = BigInt(pos.noVaultLP);
         } catch {}
       }
+
+      // Fetch ZAMM AMM LP balance + pool supply
+      let userAmmLP = 0n, ammLPSupply = 0n;
+      try {
+        const { poolId: pid } = computePredictionPoolId(marketId, isLabeled);
+        const zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, rpc);
+        const [poolInfo, userBal] = await Promise.all([
+          zamm.pools(pid),
+          _connectedAddress ? zamm.balanceOf(_connectedAddress, pid) : Promise.resolve(0n)
+        ]);
+        ammLPSupply = BigInt(poolInfo.supply);
+        userAmmLP = BigInt(userBal);
+      } catch {}
 
       return {
         mkt, description, isLabeled, isOurResolver, isLegacyResolver, resolverAddr,
         yPct, ammYesReserve, ammNoReserve,
+        vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP,
         resValue, resCond, resReady, condData,
-        userYes, userNo
+        userYes, userNo, userYesVaultLP, userNoVaultLP,
+        userAmmLP, ammLPSupply
       };
     });
 
     const { mkt, description, isLabeled, isOurResolver, isLegacyResolver, resolverAddr,
             yPct, ammYesReserve, ammNoReserve,
+            vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP,
             resValue, resCond, resReady, condData,
-            userYes, userNo } = marketData;
+            userYes, userNo, userYesVaultLP, userNoVaultLP,
+            userAmmLP, ammLPSupply } = marketData;
 
     const close = Number(mkt.close);
     const resolved = mkt.resolved;
@@ -1902,7 +2583,7 @@ async function renderMarketPage(marketId) {
     const isActive = !resolved && close > now;
     const collSym = getCollateralSymbol(collateral);
 
-    let html = `<a href="#" class="back-link">&larr; All Markets</a>`;
+    let html = `<a href="#" class="back-link" onclick="event.preventDefault();history.replaceState(null,'',location.pathname);route()">&larr; All Markets</a>`;
 
     // Question + odds bar
     html += `
@@ -1913,6 +2594,18 @@ async function renderMarketPage(marketId) {
         <div class="odds-no"></div>
       </div>
     `;
+
+    // Odds chart drawer — collapsed by default, loaded on open
+    const { poolId: chartPoolId, yesIsToken0: chartYesIsToken0 } = computePredictionPoolId(marketId, isLabeled);
+    html += `<div class="market-chart-drawer" id="marketChartDrawer">
+      <button class="market-chart-toggle-btn" onclick="toggleMarketChart()"><span>Odds Chart</span><span class="arrow">&#9660;</span></button>
+      <div class="market-chart" id="marketChart" style="display:none"></div>
+    </div>`;
+
+    html += `<div class="market-chart-drawer" id="pmActivityDrawer" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}">
+      <button class="market-chart-toggle-btn" onclick="togglePoolActivity()"><span>Pool Activity</span><span class="arrow">&#9660;</span></button>
+      <div class="pm-activity-body" style="display:none"><div id="pmActivityContent"><div class="pm-activity-empty">Click to load</div></div></div>
+    </div>`;
 
     // Market info card
     const resolverShort = resolverAddr.slice(0, 6) + '...' + resolverAddr.slice(-4);
@@ -1929,14 +2622,32 @@ async function renderMarketPage(marketId) {
     `;
 
     // User positions (if any)
-    if (userYes > 0n || userNo > 0n) {
-      html += `
-        <div class="section-card">
-          <div class="section-title">Your Positions</div>
-          ${userYes > 0n ? `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)} shares</span></div>` : ''}
-          ${userNo > 0n ? `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)} shares</span></div>` : ''}
-        </div>
-      `;
+    const hasTradePos = userYes > 0n || userNo > 0n;
+    const hasLPPos = userAmmLP > 0n || userYesVaultLP > 0n || userNoVaultLP > 0n;
+    if (hasTradePos || hasLPPos) {
+      let posHtml = `<div class="section-card"><div class="section-title">Your Positions</div>`;
+      if (hasTradePos) {
+        if (userYes > 0n) posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)} shares</span></div>`;
+        if (userNo > 0n) posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)} shares</span></div>`;
+      }
+      if (hasLPPos) {
+        if (hasTradePos) posHtml += `<div style="border-top:1px solid var(--border-muted);margin:8px 0"></div>`;
+        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:6px">LP Shares</div>`;
+        if (userAmmLP > 0n) {
+          const ammPctShare = ammLPSupply > 0n ? (Number(userAmmLP) / Number(ammLPSupply) * 100) : 0;
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM Pool</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">WITHDRAW</button></div>`;
+        }
+        if (userYesVaultLP > 0n) {
+          const yPctShare = vaultYesShares > 0n ? (Number(userYesVaultLP) / Number(vaultYesShares) * 100) : 0;
+          posHtml += `<div class="pos-row"><span class="pos-side yes">YES Vault</span><span class="pos-val">${Number(ethers.formatEther(userYesVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${yPctShare < 0.01 ? '<0.01' : yPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawYesVaultBtn" onclick="withdrawVault(true)">WITHDRAW</button></div>`;
+        }
+        if (userNoVaultLP > 0n) {
+          const nPctShare = vaultNoShares > 0n ? (Number(userNoVaultLP) / Number(vaultNoShares) * 100) : 0;
+          posHtml += `<div class="pos-row"><span class="pos-side no">NO Vault</span><span class="pos-val">${Number(ethers.formatEther(userNoVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${nPctShare < 0.01 ? '<0.01' : nPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawNoVaultBtn" onclick="withdrawVault(false)">WITHDRAW</button></div>`;
+        }
+      }
+      posHtml += `</div>`;
+      html += posHtml;
     }
 
     // Trade card (only if market is active)
@@ -1975,17 +2686,31 @@ async function renderMarketPage(marketId) {
       `;
     }
 
-    // Claim card (if resolved and user has winning shares)
-    if (resolved && (userYes > 0n || userNo > 0n)) {
+    // Claim card (if resolved and user has position)
+    if (resolved && _connectedAddress && (userYes > 0n || userNo > 0n)) {
       const winningShares = outcome ? userYes : userNo;
+      const losingShares = outcome ? userNo : userYes;
       if (winningShares > 0n) {
+        const winAmt = Number(ethers.formatEther(winningShares));
         html += `
-          <div class="section-card">
-            <div class="section-title">Claim Winnings</div>
+          <div class="section-card" style="border-color:var(--yes)">
+            <div class="section-title" style="color:var(--yes)">Claim Winnings</div>
             <div style="text-align:center;margin-bottom:12px;font-size:14px">
-              You have <b>${Number(ethers.formatEther(winningShares)).toFixed(4)}</b> winning ${outcome ? 'YES' : 'NO'} shares
+              You have <b>${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)}</b> winning ${outcome ? 'YES' : 'NO'} shares
             </div>
-            <button class="resolve-btn" id="claimBtn" onclick="claimWinnings('${marketId}')">Claim</button>
+            <div id="claimQuote" style="text-align:center;font-size:12px;color:var(--fg-muted);margin-bottom:12px">
+              ~${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)} ${collSym} payout
+            </div>
+            <button class="resolve-btn" id="claimBtn" style="background:var(--yes);color:#000" onclick="claimWinnings('${marketId}')">Claim ${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)} ${collSym}</button>
+          </div>
+        `;
+      } else if (losingShares > 0n) {
+        html += `
+          <div class="section-card" style="border-color:var(--no);opacity:0.7">
+            <div class="section-title" style="color:var(--no)">No Payout</div>
+            <div style="text-align:center;font-size:13px;color:var(--fg-muted)">
+              Market resolved ${outcome ? 'YES' : 'NO'} — your ${outcome ? 'NO' : 'YES'} shares have no value
+            </div>
           </div>
         `;
       }
@@ -2018,6 +2743,24 @@ async function renderMarketPage(marketId) {
 
     app.innerHTML = html;
 
+    // Pre-check activity: hide odds chart drawer entirely if no swap events
+    _chartLoaded = false;
+    _chartEventsCache = null;
+    const chartEl = document.getElementById('marketChart');
+    if (chartEl) {
+      chartEl.dataset.poolId = chartPoolId;
+      chartEl.dataset.yesIsToken0 = chartYesIsToken0 ? '1' : '0';
+    }
+    fetchAllEvents(chartPoolId).then(events => {
+      const hasSwaps = events.some(ev => ev.category === 'SWAP');
+      if (!hasSwaps) {
+        const drawer = document.getElementById('marketChartDrawer');
+        if (drawer) drawer.style.display = 'none';
+      } else {
+        _chartEventsCache = events;
+      }
+    }).catch(() => {});
+
     // Update page title and meta tags for sharing
     const plainQ = parsed.question.replace(/<[^>]*>/g, '');
     document.title = plainQ + ' — PREDICT';
@@ -2038,6 +2781,9 @@ async function renderMarketPage(marketId) {
     app.dataset.isLabeled = isLabeled ? '1' : '0';
     app.dataset.resolverAddr = resolverAddr;
     app.dataset.isOurResolver = isOurResolver ? '1' : '0';
+    app.dataset.userAmmLP = userAmmLP.toString();
+    app.dataset.userYesVaultLP = userYesVaultLP.toString();
+    app.dataset.userNoVaultLP = userNoVaultLP.toString();
 
     // Load balances if connected
     if (_connectedAddress && isActive) {
@@ -2052,7 +2798,7 @@ async function renderMarketPage(marketId) {
 
   } catch (e) {
     app.innerHTML = `
-      <a href="#" class="back-link">&larr; All Markets</a>
+      <a href="#" class="back-link" onclick="event.preventDefault();history.replaceState(null,'',location.pathname);route()">&larr; All Markets</a>
       <div class="loading">Failed to load market: ${escText(e.message || '')}</div>
     `;
   }
@@ -2376,8 +3122,9 @@ async function executeTrade() {
           { value: isETH ? amountWei : 0n }
         );
         btn.textContent = 'Confirming...';
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
         await tx.wait();
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
         input.value = '';
 
       } else {
@@ -2401,8 +3148,9 @@ async function executeTrade() {
           _connectedAddress, deadline
         );
         btn.textContent = 'Confirming...';
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
         await tx.wait();
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
         input.value = '';
       }
 
@@ -2435,8 +3183,9 @@ async function executeTrade() {
           { value: isETH ? amountWei : 0n }
         );
         btn.textContent = 'Confirming...';
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
         await tx.wait();
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
         input.value = '';
 
       } else {
@@ -2459,8 +3208,9 @@ async function executeTrade() {
           LEGACY_FEE_BPS, _connectedAddress, deadline
         );
         btn.textContent = 'Confirming...';
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
         await tx.wait();
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
         input.value = '';
       }
     }
@@ -2676,9 +3426,19 @@ function buildConditionDetails(marketId, data) {
       if (v < 0.01 && v > 0) return v.toFixed(6);
       return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
-    const progressPct = thresholdFormatted > 0
-      ? Math.min(100, (valueFormatted / thresholdFormatted) * 100) : 0;
-    const conditionVerb = Number(condData.op) >= 2 ? 'reaches' : 'falls below';
+    const op = Number(condData.op);
+    const isFallBelow = op === 0 || op === 2; // LT or LTE
+    let progressPct;
+    if (isFallBelow) {
+      // Value needs to fall below threshold — progress = how far it has dropped
+      // Use 2x threshold as the "starting" reference so the bar empties as value approaches threshold
+      progressPct = thresholdFormatted > 0
+        ? Math.max(0, Math.min(100, (1 - (valueFormatted - thresholdFormatted) / thresholdFormatted) * 100)) : 0;
+    } else {
+      progressPct = thresholdFormatted > 0
+        ? Math.min(100, (valueFormatted / thresholdFormatted) * 100) : 0;
+    }
+    const conditionVerb = isFallBelow ? 'falls below' : 'reaches';
     conditionHtml = `
       <div class="resolve-condition">
         <div class="resolve-condition-target">${oracleHtml || 'Oracle value'}</div>
@@ -2768,6 +3528,7 @@ async function claimWinnings(marketId) {
   const s = await connectWallet();
   if (!s) return;
   const btn = $('claimBtn');
+  const quoteEl = $('claimQuote');
   if (!btn) return;
   const origText = btn.textContent;
   btn.textContent = 'Claiming...';
@@ -2776,12 +3537,16 @@ async function claimWinnings(marketId) {
     const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
     const tx = await pamm.claim(marketId, _connectedAddress);
     btn.textContent = 'Confirming...';
+    if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
     await tx.wait();
     btn.textContent = 'Claimed!';
+    btn.style.background = 'var(--green)';
+    if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Claimed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
     if (!isUserRejection(e)) btn.textContent = 'Failed';
-    setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+    else btn.textContent = origText;
+    btn.disabled = false;
   }
 }
 
@@ -2821,9 +3586,14 @@ function openCreateModal() {
   $('createModal').classList.add('active');
   loadEthPrice();
   updateLiqSplit();
+  if (location.hash.replace('#','').trim() !== 'create') {
+    history.replaceState(null, '', location.pathname + '#create');
+  }
+  updateCreateDeeplink();
 }
 function closeCreateModal() {
   $('createModal').classList.remove('active');
+  history.replaceState(null, '', location.pathname);
 }
 
 function switchMarketType(type) {
@@ -2836,6 +3606,7 @@ function switchMarketType(type) {
   const formId = { price: 'priceForm', balance: 'balanceForm', supply: 'supplyForm', custom: 'customForm' }[type];
   const form = $(formId);
   if (form) form.classList.add('active');
+  updateCreateDeeplink();
 }
 
 async function loadEthPrice() {
@@ -2860,6 +3631,32 @@ function fmtTargetPrice() {
   if (raw) el.value = Number(raw).toLocaleString();
 }
 
+let _priceDir = 'up';
+
+function setPriceDir(dir) {
+  _priceDir = dir;
+  const btns = $('priceDirection').querySelectorAll('button');
+  btns.forEach(b => b.classList.toggle('active', b.dataset.dir === dir));
+  // Update presets
+  const presets = $('pricePresets');
+  if (dir === 'down') {
+    presets.innerHTML = `
+      <button type="button" class="date-preset" onclick="setPricePreset(0)">current</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(-5)">-5%</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(-10)">-10%</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(-50)">-50%</button>
+    `;
+  } else {
+    presets.innerHTML = `
+      <button type="button" class="date-preset" onclick="setPricePreset(0)">current</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(5)">+5%</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(10)">+10%</button>
+      <button type="button" class="date-preset" onclick="setPricePreset(100)">+100%</button>
+    `;
+  }
+  updatePricePreview();
+}
+
 function setPricePreset(pct) {
   if (!_currentEthPrice) return;
   const target = pct === 0 ? Math.round(_currentEthPrice) : Math.round(_currentEthPrice * (1 + pct / 100));
@@ -2874,7 +3671,9 @@ function updatePricePreview() {
   const price = raw ? '$' + Number(raw).toLocaleString() : '$___';
   const dateStr = $('closeDate').value;
   const date = dateStr ? fmtDate(Math.floor(new Date(dateStr).getTime() / 1000)) : '___';
-  el.innerHTML = `Will ETH hit <b>${price}</b> by <b>${date}</b>?`;
+  const verb = _priceDir === 'down' ? 'drop to' : 'hit';
+  el.innerHTML = `Will ETH ${verb} <b>${price}</b> by <b>${date}</b>?`;
+  updateCreateDeeplink();
 }
 
 function setDatePreset(days, inputId) {
@@ -2925,6 +3724,7 @@ function updateBalPreview() {
   const dateStr = $('balCloseDate').value;
   const date = dateStr ? fmtDate(Math.floor(new Date(dateStr).getTime() / 1000)) : '___';
   el.innerHTML = `Will <b>${short}</b> hold &ge; <b>${threshold} ${asset}</b> by <b>${date}</b>?`;
+  updateCreateDeeplink();
 }
 
 async function loadSupplyTokenInfo() {
@@ -2954,6 +3754,7 @@ function updateSupplyPreview() {
   const dateStr = $('supplyCloseDate').value;
   const date = dateStr ? fmtDate(Math.floor(new Date(dateStr).getTime() / 1000)) : '___';
   el.innerHTML = `Will <b>${sym}</b> supply ${verb} <b>${Number(threshold).toLocaleString() || '___'}</b> by <b>${date}</b>?`;
+  updateCreateDeeplink();
 }
 
 function updateLiqSplit() {
@@ -2963,6 +3764,7 @@ function updateLiqSplit() {
   });
   const el = $('totalCostDisplay');
   if (el) el.textContent = 'Total: ' + total.toFixed(4) + ' ETH';
+  updateCreateDeeplink();
 }
 
 function setLiqPreset(val) {
@@ -3032,7 +3834,9 @@ async function createPriceMarket(collateralForLP, deadline) {
   if (closeTimestamp < Math.floor(Date.now() / 1000) + 3600) { alert('Close date must be at least 1 hour in the future'); return; }
 
   const threshold = BigInt(targetPrice) * BigInt(1e8); // Chainlink 8 decimals
-  const description = `PRICE|ETH|USD|3|${targetPrice}|${closeTimestamp}`;
+  const opCode = _priceDir === 'down' ? OP.LTE : OP.GTE;
+  const opNum = _priceDir === 'down' ? 2 : 3;
+  const description = `PRICE|ETH|USD|${opNum}|${targetPrice}|${closeTimestamp}`;
 
   const btn = $('createBtn');
   btn.disabled = true; btn.textContent = 'Creating...';
@@ -3042,7 +3846,7 @@ async function createPriceMarket(collateralForLP, deadline) {
     const tx = await bootstrapper.bootstrapPriceMarket(
       description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
       collateralForLP, _connectedAddress, deadline,
-      CONTRACTS.CHAINLINK_ETH_USD, OP.GTE, threshold,
+      CONTRACTS.CHAINLINK_ETH_USD, opCode, threshold,
       { value: collateralForLP }
     );
 
@@ -3187,6 +3991,7 @@ function updateCustomPreview() {
   } else {
     el.innerHTML = 'Yes/No market with your own question and resolver';
   }
+  updateCreateDeeplink();
 }
 
 // ---- Resolver name resolution ----
@@ -3316,37 +4121,13 @@ function openLPModal(marketId) {
   const isETH = !collateral || collateral === ethers.ZeroAddress;
   $('lpAmountLabel').textContent = 'Amount (' + (isETH ? 'ETH' : getCollateralSymbol(collateral)) + ')';
   const isLabeled = $('app').dataset.isLabeled === '1';
-  // Legacy markets: hide all sliders, show simple hint
-  const allocSection = $('lpAllocSection');
-  const legacyHint = $('lpLegacyHint');
-  if (isLabeled) {
-    if (allocSection) allocSection.style.display = '';
-    if (legacyHint) legacyHint.style.display = 'none';
-  } else {
-    if (allocSection) allocSection.style.display = 'none';
-    if (legacyHint) legacyHint.style.display = '';
-    $('lpAmmSlider').value = 100;
-    $('lpYesSlider').value = 0;
-    $('lpNoSlider').value = 0;
-  }
   $('lpModal').classList.add('active');
   $('lpModal').dataset.marketId = marketId;
   $('lpModal').dataset.isLabeled = isLabeled ? '1' : '0';
-  updateLPAlloc();
 }
 
 function closeLPModal() {
   $('lpModal').classList.remove('active');
-}
-
-function updateLPAlloc() {
-  const amm = parseInt($('lpAmmSlider').value) || 0;
-  const yes = parseInt($('lpYesSlider').value) || 0;
-  const no = parseInt($('lpNoSlider').value) || 0;
-  const total = amm + yes + no || 1;
-  $('lpAmmPct').textContent = Math.round(amm / total * 100) + '%';
-  $('lpYesPct').textContent = Math.round(yes / total * 100) + '%';
-  $('lpNoPct').textContent = Math.round(no / total * 100) + '%';
 }
 
 async function provideLiquidity() {
@@ -3358,72 +4139,36 @@ async function provideLiquidity() {
   if (!marketId || amount <= 0) { alert('Enter an amount'); return; }
 
   const amountWei = ethers.parseEther(amount.toString());
-  const ammVal = parseInt($('lpAmmSlider').value) || 0;
-  const yesVal = parseInt($('lpYesSlider').value) || 0;
-  const noVal = parseInt($('lpNoSlider').value) || 0;
-  const total = ammVal + yesVal + noVal || 1;
-
-  const ammWei = amountWei * BigInt(ammVal) / BigInt(total);
-  const yesWei = amountWei * BigInt(yesVal) / BigInt(total);
-  const noWei = amountWei - ammWei - yesWei; // remainder goes to NO vault
-
   const btn = $('lpBtn');
   btn.disabled = true; btn.textContent = 'Providing...';
   const isLabeled = $('lpModal').dataset.isLabeled === '1';
+  const collateral = $('app').dataset.collateral;
+  const isETH = !collateral || collateral === ethers.ZeroAddress;
 
   try {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, _signer);
+    const feeOrHook = isLabeled
+      ? (BigInt(CONTRACTS.PM_FEE_HOOK) | FLAG_BEFORE | FLAG_AFTER)
+      : BigInt(LEGACY_FEE_BPS);
 
-    if (!isLabeled) {
-      // Legacy markets: AMM only via PAMM.splitAndAddLiquidity
-      btn.textContent = 'Adding AMM LP...';
-      const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, _signer);
-      const collateral = $('app').dataset.collateral;
-      const isETH = !collateral || collateral === ethers.ZeroAddress;
-      if (!isETH) {
-        const token = new ethers.Contract(collateral, ERC20_ABI, _signer);
-        const allowance = await token.allowance(_connectedAddress, CONTRACTS.PAMM);
-        if (allowance < amountWei) {
-          btn.textContent = 'Approve in wallet...';
-          const approveTx = await token.approve(CONTRACTS.PAMM, ethers.MaxUint256);
-          await approveTx.wait();
-        }
+    if (!isETH) {
+      const token = new ethers.Contract(collateral, ERC20_ABI, _signer);
+      const allowance = await token.allowance(_connectedAddress, CONTRACTS.PAMM);
+      if (allowance < amountWei) {
+        btn.textContent = 'Approve in wallet...';
+        const approveTx = await token.approve(CONTRACTS.PAMM, ethers.MaxUint256);
+        await approveTx.wait();
       }
-      btn.textContent = 'Confirm in wallet...';
-      const tx = await pamm.splitAndAddLiquidity(
-        BigInt(marketId), amountWei, LEGACY_FEE_BPS, 0, 0, 0, _connectedAddress, deadline,
-        isETH ? { value: amountWei } : {}
-      );
-      await tx.wait();
-    } else {
-      // Labeled markets: hook router with AMM + optional vaults
-      const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, _signer);
-      const txs = [];
-
-      if (ammWei > 0n) {
-        btn.textContent = 'Adding AMM LP...';
-        const tx = await hookRouter.addLiquidity(
-          marketId, ethers.ZeroAddress, ammWei, CONTRACTS.PM_FEE_HOOK,
-          0, 0, 0, _connectedAddress, deadline, { value: ammWei }
-        );
-        txs.push(tx.wait());
-      }
-      if (yesWei > 0n) {
-        btn.textContent = 'Adding YES Vault...';
-        const tx = await hookRouter.depositToVault(
-          marketId, ethers.ZeroAddress, yesWei, true, _connectedAddress, { value: yesWei }
-        );
-        txs.push(tx.wait());
-      }
-      if (noWei > 0n) {
-        btn.textContent = 'Adding NO Vault...';
-        const tx = await hookRouter.depositToVault(
-          marketId, ethers.ZeroAddress, noWei, false, _connectedAddress, { value: noWei }
-        );
-        txs.push(tx.wait());
-      }
-      await Promise.all(txs);
     }
+
+    btn.textContent = 'Confirm in wallet...';
+    const tx = await pamm.splitAndAddLiquidity(
+      BigInt(marketId), amountWei, feeOrHook, 0, 0, 0, _connectedAddress, deadline,
+      isETH ? { value: amountWei } : {}
+    );
+    btn.textContent = 'Pending...';
+    await tx.wait();
 
     closeLPModal();
     alert('Liquidity provided!');
@@ -3436,6 +4181,81 @@ async function provideLiquidity() {
     }
   } finally {
     setTimeout(() => { btn.disabled = false; btn.textContent = 'Provide Liquidity'; }, 2000);
+  }
+}
+
+// ==================== WITHDRAW LP ====================
+
+async function withdrawVault(isYes) {
+  const s = await connectWallet();
+  if (!s) return;
+  const marketId = $('app').dataset.marketId;
+  if (!marketId) return;
+  const vaultShares = BigInt($('app').dataset[isYes ? 'userYesVaultLP' : 'userNoVaultLP'] || '0');
+  if (vaultShares <= 0n) { alert(`No ${isYes ? 'YES' : 'NO'} vault shares to withdraw`); return; }
+
+  const btn = $(isYes ? 'withdrawYesVaultBtn' : 'withdrawNoVaultBtn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
+    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    const tx = await hookRouter.withdrawFromVault(marketId, isYes, vaultShares, _connectedAddress, deadline);
+    btn.textContent = 'Pending...';
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) {
+    if (!isUserRejection(e)) {
+      console.error('Withdraw vault failed:', e);
+      alert('Withdraw failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+    }
+    btn.disabled = false;
+    btn.textContent = 'WITHDRAW';
+  }
+}
+
+async function withdrawAmmLP() {
+  const s = await connectWallet();
+  if (!s) return;
+  const marketId = $('app').dataset.marketId;
+  if (!marketId) return;
+  const ammLP = BigInt($('app').dataset.userAmmLP || '0');
+  if (ammLP <= 0n) { alert('No AMM LP to withdraw'); return; }
+
+  const btn = $('withdrawAmmBtn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    // Approve ZAMM operator for PAMM if needed
+    const zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, s);
+    const isOp = await zamm.isOperator(_connectedAddress, CONTRACTS.PAMM);
+    if (!isOp) {
+      btn.textContent = 'Approve...';
+      const approveTx = await zamm.setOperator(CONTRACTS.PAMM, true);
+      await approveTx.wait();
+    }
+
+    const isLabeled = $('app').dataset.isLabeled === '1';
+    const feeOrHook = isLabeled
+      ? (BigInt(CONTRACTS.PM_FEE_HOOK) | FLAG_BEFORE | FLAG_AFTER)
+      : BigInt(LEGACY_FEE_BPS);
+    const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+    btn.textContent = 'Confirm...';
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
+    const tx = await pamm.removeLiquidityToCollateral(marketId, feeOrHook, ammLP, 0, 0, 0, _connectedAddress, deadline);
+    btn.textContent = 'Pending...';
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) {
+    if (!isUserRejection(e)) {
+      console.error('Withdraw AMM LP failed:', e);
+      alert('Withdraw failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+    }
+    btn.disabled = false;
+    btn.textContent = 'WITHDRAW';
   }
 }
 
