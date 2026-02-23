@@ -314,11 +314,12 @@ tr:hover td { background:var(--surface-hover); }
     <a href="../">Swap</a>
     <a href="../coin/">Coins</a>
     <a href="../predict/">Predict</a>
-    <a href="../orderbook/">Orderbook</a>
+    <a id="navOrderbook" href="../orderbook/">Orderbook</a>
     <a href="./" class="active">Liquidity</a>
     <a href="../domains/">Domains</a>
     <a href="../dao/">DAO</a>
     <div class="z-nav-sep"></div>
+    <a href="../about/">About</a>
     <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
   </div>
 </div>
@@ -855,7 +856,7 @@ async function connectWithWallet(walletKey) {
       const uuid = walletKey.replace('eip6963_', '');
       walletProvider = eip6963Providers.get(uuid)?.provider;
       if (!walletProvider) {
-        const savedName = localStorage.getItem('zlp_wallet_name')?.toLowerCase();
+        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
         if (savedName) {
           for (const [, { info, provider }] of eip6963Providers) {
             if (info?.name?.toLowerCase() === savedName) { walletProvider = provider; break; }
@@ -920,11 +921,11 @@ async function connectWithWallet(walletKey) {
     walletProvider.on('chainChanged', _walletEventHandlers.chainChanged);
 
     try {
-      localStorage.setItem('zlp_wallet', walletKey);
+      localStorage.setItem('zfi_wallet', walletKey);
       if (walletKey.startsWith('eip6963_')) {
         const uuid = walletKey.replace('eip6963_', '');
         const name = eip6963Providers.get(uuid)?.info?.name;
-        if (name) localStorage.setItem('zlp_wallet_name', name);
+        if (name) localStorage.setItem('zfi_wallet_name', name);
       }
     } catch (e) {}
 
@@ -961,7 +962,7 @@ function disconnectWallet() {
   $('walletBtn').textContent = 'connect';
   updateWcBanner();
   closeWalletModal();
-  try { localStorage.removeItem('zlp_wallet'); localStorage.removeItem('zlp_wallet_name'); } catch (e) {}
+  try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
   if (_activeTab === 'positions') renderPositions();
 }
 
@@ -981,13 +982,36 @@ function updateWcBanner() {
 }
 
 async function tryAutoConnect() {
-  const savedWallet = localStorage.getItem('zlp_wallet');
+  const savedWallet = localStorage.getItem('zfi_wallet');
   if (!savedWallet) return;
   $('walletBtn').textContent = '...';
   setTimeout(async () => {
     try {
       window.dispatchEvent(new Event('eip6963:requestProvider'));
       await new Promise(r => setTimeout(r, 300));
+      // Silent check: only auto-connect if wallet already unlocked
+      let probe;
+      if (savedWallet.startsWith('eip6963_')) {
+        const uuid = savedWallet.replace('eip6963_', '');
+        probe = eip6963Providers.get(uuid)?.provider;
+        if (!probe) {
+          const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
+          if (savedName) {
+            for (const [, { info, provider }] of eip6963Providers) {
+              if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
+            }
+          }
+        }
+      } else if (savedWallet !== 'walletconnect') {
+        probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
+      }
+      if (probe) {
+        const accts = await probe.request({ method: 'eth_accounts' });
+        if (!accts || accts.length === 0) {
+          $('walletBtn').textContent = 'connect';
+          return;
+        }
+      }
       await connectWithWallet(savedWallet);
     } catch (e) {
       console.error('Auto-reconnect failed:', e);
@@ -2089,16 +2113,10 @@ async function init() {
   $('swapLink').href = '../';
   $('swapLink').style.display = 'inline-flex';
 
-  // After pool data loads, update orderbook link with token params as fallback
+  // After pool data loads, update nav orderbook link with pool context
   const _updateObLink = () => {
-    if (!_poolData) return;
-    let obHref = '../orderbook/?token0=' + encodeURIComponent(_poolData.token0)
-      + '&token1=' + encodeURIComponent(_poolData.token1);
-    if (_poolData.coin0 && _poolData.coin0.symbol) obHref += '&label0=' + encodeURIComponent(_poolData.coin0.symbol);
-    if (_poolData.coin1 && _poolData.coin1.symbol) obHref += '&label1=' + encodeURIComponent(_poolData.coin1.symbol);
-    if (_poolData.coin0 && _poolData.coin0.id) obHref += '&id0=' + encodeURIComponent(_poolData.coin0.id);
-    if (_poolData.coin1 && _poolData.coin1.id) obHref += '&id1=' + encodeURIComponent(_poolData.coin1.id);
-    $('orderbookLink').href = obHref;
+    const nav = $('navOrderbook');
+    if (nav) nav.href = '../orderbook/#/' + poolId;
   };
   // Deferred: run after fetchPool completes (below)
 

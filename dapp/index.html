@@ -895,6 +895,7 @@ body.modal-open { overflow: hidden; }
     <a href="./domains/">Domains</a>
     <a href="./dao/">DAO</a>
     <div class="z-nav-sep"></div>
+    <a href="./about/">About</a>
     <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
   </div>
 </div>
@@ -1868,7 +1869,7 @@ async function connectWithWallet(walletKey) {
       const uuid = walletKey.replace('eip6963_', '');
       walletProvider = eip6963Providers.get(uuid)?.provider;
       if (!walletProvider) {
-        const savedName = localStorage.getItem('zswap_wallet_name')?.toLowerCase();
+        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
         if (savedName) {
           for (const [, { info, provider }] of eip6963Providers) {
             if (info?.name?.toLowerCase() === savedName) {
@@ -1936,11 +1937,11 @@ async function connectWithWallet(walletKey) {
     walletProvider.on('chainChanged', walletEventHandlers.chainChanged);
 
     try {
-      localStorage.setItem('zswap_wallet', walletKey);
+      localStorage.setItem('zfi_wallet', walletKey);
       if (walletKey.startsWith('eip6963_')) {
         const uuid = walletKey.replace('eip6963_', '');
         const name = eip6963Providers.get(uuid)?.info?.name;
-        if (name) localStorage.setItem('zswap_wallet_name', name);
+        if (name) localStorage.setItem('zfi_wallet_name', name);
       }
     } catch (e) {}
 
@@ -2029,7 +2030,7 @@ function disconnectWallet() {
   $('walletBtn').textContent = 'connect';
   updateWcBanner();
   closeWalletModal();
-  try { localStorage.removeItem('zswap_wallet'); localStorage.removeItem('zswap_wallet_name'); } catch (e) {}
+  try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
 
   // Reset swap UI
   setText('swapBtn', 'Connect Wallet');
@@ -6430,7 +6431,7 @@ $("swapBtn").addEventListener("click", () => {
 
 // ---- Auto-reconnect (non-blocking) ----
 window.addEventListener("load", () => {
-  const savedWallet = localStorage.getItem('zswap_wallet');
+  const savedWallet = localStorage.getItem('zfi_wallet');
   if (!savedWallet) return;
   setText('walletBtn', '...');
   // Fire-and-forget: don't block page interactivity
@@ -6438,6 +6439,29 @@ window.addEventListener("load", () => {
     try {
       window.dispatchEvent(new Event('eip6963:requestProvider'));
       await new Promise(r => setTimeout(r, 300));
+      // Silent check: only auto-connect if wallet already unlocked
+      let probe;
+      if (savedWallet.startsWith('eip6963_')) {
+        const uuid = savedWallet.replace('eip6963_', '');
+        probe = eip6963Providers.get(uuid)?.provider;
+        if (!probe) {
+          const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
+          if (savedName) {
+            for (const [, { info, provider }] of eip6963Providers) {
+              if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
+            }
+          }
+        }
+      } else if (savedWallet !== 'walletconnect') {
+        probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
+      }
+      if (probe) {
+        const accts = await probe.request({ method: 'eth_accounts' });
+        if (!accts || accts.length === 0) {
+          setText('walletBtn', 'connect');
+          return;
+        }
+      }
       await connectWithWallet(savedWallet);
     } catch (e) {
       console.error("Auto-reconnect failed:", e);

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ABOUT</title>
+<meta property="og:title" content="About zFi">
+<meta property="og:description" content="zFi is the first superdapp that integrates all of DeFi into a single domain.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="About zFi">
+<meta name="twitter:description" content="zFi is the first superdapp that integrates all of DeFi into a single domain.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+:root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;
+  --surface:#f9f9f9;--surface-hover:#f5f5f5;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --link-fg:inherit;
+}
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
+  --border:#333;--border-muted:#333;
+  --surface:#111;--surface-hover:#151515;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --link-fg:#e8e8e0;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family:Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--fg);
+  min-height:100vh;padding:60px 20px 40px;
+  max-width:480px;margin:0 auto;
+}
+a { color:var(--link-fg); }
+h1 {
+  font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
+  margin-bottom:24px;
+}
+.lead {
+  font-size:15px;line-height:1.6;margin-bottom:32px;
+}
+.section {
+  margin-bottom:28px;
+}
+.section h2 {
+  font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-muted);margin-bottom:8px;
+}
+.section p {
+  font-size:13px;line-height:1.6;color:var(--fg);
+}
+.section a {
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;
+}
+.section a:hover {
+  text-decoration-style:solid;
+}
+.addr {
+  font-size:11px;word-break:break-all;color:var(--fg-muted);letter-spacing:0.01em;
+}
+.links {
+  margin-top:32px;padding-top:20px;border-top:1px solid var(--border-muted);
+}
+.links h2 {
+  font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-muted);margin-bottom:12px;
+}
+.links ul {
+  list-style:none;
+}
+.links li {
+  font-size:13px;margin-bottom:6px;
+}
+.links a {
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;
+}
+.links a:hover {
+  text-decoration-style:solid;
+}
+.dark-toggle {
+  position:fixed;bottom:max(20px, env(safe-area-inset-bottom, 0px));right:max(20px, env(safe-area-inset-right, 0px));
+  border:none;cursor:pointer;padding:13px;margin:-13px;opacity:0.5;transition:opacity 0.2s;z-index:100;
+  background:#000;border-radius:50%;width:40px;height:40px;background-clip:content-box;
+}
+:root.dark .dark-toggle { background:#fff; }
+.dark-toggle:hover { opacity:1; }
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
+@media (max-width:600px) {
+  body { padding:60px 16px 32px; }
+  .dark-toggle { bottom:16px; right:16px; }
+  .z-nav { top:14px; left:14px; }
+  .z-nav-btn { padding:4px; margin:-4px; }
+  .z-nav-menu a { padding:10px 16px; }
+  h1 { font-size:13px; margin-bottom:16px; }
+  .lead { font-size:14px; margin-bottom:24px; }
+  .section { margin-bottom:22px; }
+  .section p { font-size:13px; }
+  .links li { padding:4px 0; }
+}
+@media (max-width:380px) {
+  body { padding:60px 12px 24px; }
+  h1 { font-size:12px; }
+  .lead { font-size:13px; }
+  .section h2 { font-size:10px; }
+  .section p { font-size:12px; }
+  .addr { font-size:10px; }
+  .links li { font-size:12px; }
+}
+</style>
+</head>
+<body>
+
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coins</a>
+    <a href="../predict/">Predict</a>
+    <a id="navOrderbook" href="../orderbook/">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="../domains/">Domains</a>
+    <a href="../dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="./" class="active">About</a>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
+
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
+
+<h1>About</h1>
+
+<p class="lead">zFi is the first superdapp that integrates all of DeFi into a single domain.</p>
+
+<div class="section">
+  <h2>Swap</h2>
+  <p><a href="../">zRouter</a> is a fully on-chain DEX aggregator. Deterministic route solving with no off-chain APIs. Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido. Zero protocol fees.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4" target="_blank" rel="noopener">0x000000000000FB114709235f1ccBFfb925F600e4</a></p>
+</div>
+
+<div class="section">
+  <h2>Coins</h2>
+  <p><a href="../coin/">DAICO launchpad</a>. Bonding curves with built-in liquidity.</p>
+</div>
+
+<div class="section">
+  <h2>Predict</h2>
+  <p><a href="../predict/">pAMM prediction markets</a>. Trade YES/NO outcome shares.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x000000000044bfe6c2BBFeD8862973E0612f07C0" target="_blank" rel="noopener">0x000000000044bfe6c2BBFeD8862973E0612f07C0</a></p>
+</div>
+
+<div class="section">
+  <h2>Orderbook</h2>
+  <p><a href="../orderbook/">On-chain limit orders</a> for any ERC20 pair. Partial fills, all-or-nothing, and expiring orders.</p>
+</div>
+
+<div class="section">
+  <h2>Liquidity</h2>
+  <p><a href="../lp/">zAMM</a> is the most gas-efficient AMM singleton. ERC6909 fungible LP. Hybrid launchpad/orderbook AMM.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x00000000000008882D72EfA6cCE4B6a40b24C860" target="_blank" rel="noopener">V0: 0x00000000000008882D72EfA6cCE4B6a40b24C860</a></p>
+  <p class="addr"><a href="https://etherscan.io/address/0x000000000000040470635EB91b7CE4D132D616eD" target="_blank" rel="noopener">V1: 0x000000000000040470635EB91b7CE4D132D616eD</a></p>
+</div>
+
+<div class="section">
+  <h2>Domains</h2>
+  <p><a href="../domains/">.wei namespace</a>. The superdapp itself is pinned to IPFS and resolved from .wei.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x0000000000696760E15f265e828DB644A0c242EB" target="_blank" rel="noopener">0x0000000000696760E15f265e828DB644A0c242EB</a></p>
+</div>
+
+<div class="section">
+  <h2>DAO</h2>
+  <p><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">Majeur governance</a>. zOrg DAO owns and maintains the superdapp.</p>
+</div>
+
+<div class="section">
+  <h2>Tokenomics</h2>
+  <p>zAMM as protocol token. zOrg is the staked governance share eligible for rewards. Revenue from zAMM LP mint fees and .wei domain registration is DAO-owned. Buybacks approved; the DAO distributes rewards to stakers and supports the protocol through DeFi yield.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0xd14a07B5c61dfBe050d98d41AC8Ce8A8075013aa" target="_blank" rel="noopener">Buyback &amp; ops: 0xd14a07B5c61dfBe050d98d41AC8Ce8A8075013aa</a></p>
+</div>
+
+<div class="links">
+  <h2>Links</h2>
+  <ul>
+    <li><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg DAO</a></li>
+    <li><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin-right:4px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrgz on OpenSea</a></li>
+    <li><a href="https://opensea.io/collection/wei-name-service" target="_blank" rel="noopener">WNS on OpenSea</a></li>
+  </ul>
+</div>
+
+<script>
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
+}
+</script>
+</body>
+</html>
