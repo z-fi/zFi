@@ -874,10 +874,13 @@ function drawOddsChart(canvas, points) {
     ctx.moveTo(pad.left, y);
     ctx.lineTo(W - pad.right, y);
     ctx.stroke();
-    ctx.fillText(p + '%', pad.left - 5, y + 3);
+    if (p === 50) continue; // drawn separately below
+    // Show as leading-side probability: above 50 = Yes %, below 50 = No %
+    const label = p > 50 ? p + '%' : (100 - p) + '%';
+    ctx.fillText(label, pad.left - 5, y + 3);
   }
 
-  // 50% center line (emphasized)
+  // 50% center line (emphasized) with label
   ctx.save();
   ctx.strokeStyle = fgDim;
   ctx.lineWidth = 0.7;
@@ -887,6 +890,10 @@ function drawOddsChart(canvas, points) {
   ctx.lineTo(W - pad.right, yOf(50));
   ctx.stroke();
   ctx.restore();
+  ctx.fillStyle = fgDim;
+  ctx.font = '9px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('50%', pad.left - 5, yOf(50) + 3);
 
   // Single data point
   if (points.length < 2) {
@@ -894,13 +901,14 @@ function drawOddsChart(canvas, points) {
       const yVal = points[0].yesPct;
       const cx = pad.left + cW / 2;
       const cy = yOf(yVal);
+      const _dotColor = yVal >= 50 ? yesColor : noColor;
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
-      glow.addColorStop(0, yesColor + '40');
-      glow.addColorStop(1, yesColor + '00');
+      glow.addColorStop(0, _dotColor + '40');
+      glow.addColorStop(1, _dotColor + '00');
       ctx.fillStyle = glow;
       ctx.fillRect(cx - 20, cy - 20, 40, 40);
       ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-      ctx.fillStyle = yesColor; ctx.fill();
+      ctx.fillStyle = _dotColor; ctx.fill();
       ctx.strokeStyle = bgColor; ctx.lineWidth = 1.5; ctx.stroke();
       const _lPct = Math.max(Math.round(yVal), Math.round(100 - yVal));
       const _lYes = Math.round(yVal) >= 50;
@@ -933,66 +941,69 @@ function drawOddsChart(canvas, points) {
     }
   };
 
-  // YES gradient fill (from line downward — green glow)
-  const yesGrad = ctx.createLinearGradient(0, 0, 0, pad.top + cH);
-  yesGrad.addColorStop(0, yesColor + '00');
-  // approximate line position as ratio
-  const avgY = points.reduce((s, p) => s + p.yesPct, 0) / points.length;
-  const lineRatio = 1 - avgY / 100;
-  yesGrad.addColorStop(Math.max(0, lineRatio - 0.05), yesColor + '00');
-  yesGrad.addColorStop(Math.min(1, lineRatio + 0.02), yesColor + '30');
-  yesGrad.addColorStop(1, yesColor + '00');
+  // Gradient fill — green glow below line when YES leads, red glow above when NO leads
+  const midY = yOf(50);
+  const lastPct = points[points.length - 1].yesPct;
+  const lastLeadColor = lastPct >= 50 ? yesColor : noColor;
+
+  // Fill from line down to bottom (YES/green territory)
+  const fillGrad = ctx.createLinearGradient(0, midY, 0, pad.top + cH);
+  fillGrad.addColorStop(0, yesColor + '00');
+  fillGrad.addColorStop(0.3, yesColor + '20');
+  fillGrad.addColorStop(1, yesColor + '00');
   ctx.beginPath();
   traceCurve();
   ctx.lineTo(W - pad.right, pad.top + cH);
   ctx.lineTo(curvePoints[0].x, pad.top + cH);
   ctx.closePath();
-  ctx.fillStyle = yesGrad;
+  ctx.fillStyle = fillGrad;
   ctx.fill();
 
-  // NO gradient fill (from line upward — red glow)
-  const noGrad = ctx.createLinearGradient(0, 0, 0, pad.top + cH);
-  noGrad.addColorStop(0, noColor + '00');
-  noGrad.addColorStop(Math.max(0, lineRatio - 0.02), noColor + '30');
-  noGrad.addColorStop(Math.min(1, lineRatio + 0.05), noColor + '00');
-  noGrad.addColorStop(1, noColor + '00');
+  // Fill from line up to top (NO/red territory)
+  const fillGrad2 = ctx.createLinearGradient(0, pad.top, 0, midY);
+  fillGrad2.addColorStop(0, noColor + '00');
+  fillGrad2.addColorStop(0.7, noColor + '20');
+  fillGrad2.addColorStop(1, noColor + '00');
   ctx.beginPath();
   traceCurve();
   ctx.lineTo(W - pad.right, pad.top);
   ctx.lineTo(curvePoints[0].x, pad.top);
   ctx.closePath();
-  ctx.fillStyle = noGrad;
+  ctx.fillStyle = fillGrad2;
   ctx.fill();
 
-  // Main curve line
+  // Main curve line — color reflects current leading side
   ctx.beginPath();
   traceCurve();
-  ctx.strokeStyle = yesColor;
+  ctx.strokeStyle = lastLeadColor;
   ctx.lineWidth = 2;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
 
-  // Data point dots (skip if too many)
+  // Data point dots (skip if too many) — colored by side at that point
   if (points.length <= 40) {
     for (const p of points) {
       const px = xOf(p.t), py = yOf(p.yesPct);
       ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = yesColor; ctx.fill();
+      ctx.fillStyle = p.yesPct >= 50 ? yesColor : noColor; ctx.fill();
     }
   }
 
-  // Current price indicator — stacked YES/NO pills on right edge
+  // Current price indicator — single leading-side pill on right edge
   const last = points[points.length - 1];
   const lastY = yOf(last.yesPct);
   const yesPctR = Math.round(last.yesPct);
   const noPctR = 100 - yesPctR;
   const leadIsYes = yesPctR >= noPctR;
+  const leadPct = Math.max(yesPctR, noPctR);
+  const leadLabel = leadPct + '% ' + (leadIsYes ? 'Yes' : 'No');
+  const leadColor = leadIsYes ? yesColor : noColor;
 
   // Dashed line to right edge
   ctx.save();
   ctx.setLineDash([2, 2]);
-  ctx.strokeStyle = yesColor + '60';
+  ctx.strokeStyle = leadColor + '60';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(xOf(last.t), lastY);
@@ -1000,40 +1011,16 @@ function drawOddsChart(canvas, points) {
   ctx.stroke();
   ctx.restore();
 
-  // Stacked pills
-  const pillW = 54, pillH = 16, pillR = 4, pillGap = 2;
+  // Single pill
+  const pillW = 54, pillH = 18, pillR = 4;
   const pillX = W - pad.right + 4;
-  const stackCenter = Math.max(pad.top + pillH + pillGap / 2, Math.min(lastY, H - pad.bottom - pillH - pillGap / 2));
-  // YES pill (top)
-  const yPillY = stackCenter - pillH - pillGap / 2;
-  if (leadIsYes) {
-    ctx.fillStyle = yesColor;
-    ctx.beginPath(); ctx.roundRect(pillX, yPillY, pillW, pillH, pillR); ctx.fill();
-    ctx.fillStyle = '#fff';
-  } else {
-    ctx.strokeStyle = yesColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(pillX, yPillY, pillW, pillH, pillR); ctx.stroke();
-    ctx.fillStyle = yesColor;
-  }
-  ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
+  const pillY = Math.max(pad.top, Math.min(lastY - pillH / 2, H - pad.bottom - pillH));
+  ctx.fillStyle = leadColor;
+  ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, pillR); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(yesPctR + '% Yes', pillX + pillW / 2, yPillY + pillH / 2 + 3.5);
-  // NO pill (bottom)
-  const nPillY = stackCenter + pillGap / 2;
-  if (!leadIsYes) {
-    ctx.fillStyle = noColor;
-    ctx.beginPath(); ctx.roundRect(pillX, nPillY, pillW, pillH, pillR); ctx.fill();
-    ctx.fillStyle = '#fff';
-  } else {
-    ctx.strokeStyle = noColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(pillX, nPillY, pillW, pillH, pillR); ctx.stroke();
-    ctx.fillStyle = noColor;
-  }
-  ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(noPctR + '% No', pillX + pillW / 2, nPillY + pillH / 2 + 3.5);
+  ctx.fillText(leadLabel, pillX + pillW / 2, pillY + pillH / 2 + 4);
 
   // X axis dates — smarter formatting
   ctx.fillStyle = fgDim;
@@ -1073,35 +1060,38 @@ function drawOddsChart(canvas, points) {
     ctx.stroke();
     ctx.restore();
 
-    // Dot on curve
+    // Dot on curve — colored by side
+    const dotColor = nearest.yesPct >= 50 ? yesColor : noColor;
     ctx.beginPath(); ctx.arc(nx, ny, 4, 0, Math.PI * 2);
-    ctx.fillStyle = yesColor; ctx.fill();
+    ctx.fillStyle = dotColor; ctx.fill();
     ctx.strokeStyle = bgColor; ctx.lineWidth = 2; ctx.stroke();
 
-    // Tooltip box
-    const yPct = Math.round(nearest.yesPct);
-    const nPct = 100 - yPct;
+    // Tooltip box — single leading probability
+    const tipYesPct = Math.round(nearest.yesPct);
+    const tipLeadIsYes = tipYesPct >= 50;
+    const tipLeadPct = tipLeadIsYes ? tipYesPct : 100 - tipYesPct;
+    const tipColor = tipLeadIsYes ? yesColor : noColor;
     const d = new Date(nearest.t * 1000);
     const timeStr = (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
     const line1 = timeStr;
-    const line2 = 'YES ' + yPct + '%  NO ' + nPct + '%';
-    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-    const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 14;
+    const line2 = tipLeadPct + '% ' + (tipLeadIsYes ? 'Yes' : 'No');
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+    const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 16;
     const th = 34;
     let tx = nx + 10, ty = ny - th - 8;
     if (tx + tw > W - pad.right) tx = nx - tw - 10;
     if (ty < pad.top) ty = ny + 10;
-    // Shadow
     ctx.fillStyle = bgColor + 'e0';
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = fgMuted;
+    ctx.fillStyle = fgDim;
     ctx.font = '9px Helvetica, Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(line1, tx + 7, ty + 13);
-    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-    ctx.fillText(line2, tx + 7, ty + 27);
+    ctx.fillText(line1, tx + 8, ty + 13);
+    ctx.fillStyle = tipColor;
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+    ctx.fillText(line2, tx + 8, ty + 27);
   }
 }
 
@@ -1275,23 +1265,24 @@ function pmActivityRow(e, yesIsToken0) {
     // Determine direction from actual token flows
     const a0out = BigInt(e.amount0_out || 0), a1out = BigInt(e.amount1_out || 0);
     const a0in = BigInt(e.amount0_in || 0), a1in = BigInt(e.amount1_in || 0);
-    // User gets YES tokens out = Buy YES; user puts YES tokens in = Sell YES
+    // Pool perspective: token_out = what user is buying, token_in = what user is selling
+    // In CPMM: Buy NO → YES flows in, NO flows out. Buy YES → NO flows in, YES flows out.
     const yesOut = yesIsToken0 ? a0out : a1out;
     const yesIn = yesIsToken0 ? a0in : a1in;
     const noOut = yesIsToken0 ? a1out : a0out;
     const noIn = yesIsToken0 ? a1in : a0in;
-    if (yesOut > 0n) {
+    if (yesOut > 0n && noIn > 0n) {
       label = 'Buy YES'; cls = 'evt-buy-yes';
       amount = pmFmtWei(yesOut.toString());
-    } else if (yesIn > 0n) {
-      label = 'Sell YES'; cls = 'evt-sell-yes';
-      amount = pmFmtWei(yesIn.toString());
-    } else if (noOut > 0n) {
+    } else if (noOut > 0n && yesIn > 0n) {
       label = 'Buy NO'; cls = 'evt-buy-no';
       amount = pmFmtWei(noOut.toString());
-    } else if (noIn > 0n) {
+    } else if (yesOut > 0n) {
       label = 'Sell NO'; cls = 'evt-sell-no';
-      amount = pmFmtWei(noIn.toString());
+      amount = pmFmtWei(yesOut.toString());
+    } else if (noOut > 0n) {
+      label = 'Sell YES'; cls = 'evt-sell-yes';
+      amount = pmFmtWei(noOut.toString());
     } else {
       label = 'Swap'; cls = '';
       amount = '-';
