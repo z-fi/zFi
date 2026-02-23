@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -392,7 +393,7 @@ input[type="datetime-local"] { color-scheme:light; }
 
 /* Odds chart drawer */
 .market-chart-drawer {
-  border:1px solid var(--border);margin-bottom:16px;overflow:hidden;border-radius:8px;
+  border:1px solid var(--border);margin-bottom:16px;overflow:hidden;
 }
 .market-chart-toggle-btn {
   display:flex;justify-content:space-between;align-items:center;width:100%;
@@ -406,20 +407,10 @@ input[type="datetime-local"] { color-scheme:light; }
   padding:0;
 }
 .market-chart-wrap {
-  position:relative;width:100%;height:280px;
+  position:relative;width:100%;height:200px;
   background:var(--bg);overflow:hidden;
   border-top:1px solid var(--border-muted);
 }
-.market-chart-tabs {
-  display:flex;gap:4px;padding:8px 12px 4px;
-}
-.market-chart-tabs button {
-  border:1px solid var(--border);background:transparent;color:var(--fg-muted);
-  font-family:inherit;font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;cursor:pointer;
-  letter-spacing:0.03em;
-}
-.market-chart-tabs button:hover { background:var(--surface); }
-.market-chart-tabs button.active { background:var(--accent,#6366f1);color:#fff;border-color:var(--accent,#6366f1); }
 .market-chart-wrap canvas {
   display:block;width:100%;height:100%;
 }
@@ -799,47 +790,6 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-function _chartTooltip(canvas, e) {
-  const rect = canvas.getBoundingClientRect();
-  canvas._tooltip = { cx: e.clientX - rect.left, cy: e.clientY - rect.top };
-  drawOddsChart(canvas, canvas._oddsPoints);
-}
-
-function _monotoneCurve(ctx, pts) {
-  // Attempt monotone cubic spline through pts [{x,y}]
-  const n = pts.length;
-  if (n < 2) return;
-  ctx.moveTo(pts[0].x, pts[0].y);
-  if (n === 2) { ctx.lineTo(pts[1].x, pts[1].y); return; }
-  // Compute tangents (Fritsch-Carlson monotone)
-  const dx = [], dy = [], m = [], d = [];
-  for (let i = 0; i < n - 1; i++) {
-    dx[i] = pts[i+1].x - pts[i].x;
-    dy[i] = pts[i+1].y - pts[i].y;
-    d[i] = dx[i] === 0 ? 0 : dy[i] / dx[i];
-  }
-  m[0] = d[0];
-  for (let i = 1; i < n - 1; i++) {
-    if (d[i-1] * d[i] <= 0) m[i] = 0;
-    else m[i] = (d[i-1] + d[i]) / 2;
-  }
-  m[n-1] = d[n-2];
-  // Monotonicity constraints
-  for (let i = 0; i < n - 1; i++) {
-    if (Math.abs(d[i]) < 1e-10) { m[i] = 0; m[i+1] = 0; continue; }
-    const a = m[i] / d[i], b = m[i+1] / d[i];
-    const s = a * a + b * b;
-    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i+1] = t * b * d[i]; }
-  }
-  for (let i = 0; i < n - 1; i++) {
-    const c1x = pts[i].x + dx[i] / 3;
-    const c1y = pts[i].y + m[i] * dx[i] / 3;
-    const c2x = pts[i+1].x - dx[i] / 3;
-    const c2y = pts[i+1].y - m[i+1] * dx[i] / 3;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, pts[i+1].x, pts[i+1].y);
-  }
-}
-
 function drawOddsChart(canvas, points) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -848,7 +798,7 @@ function drawOddsChart(canvas, points) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   const W = rect.width, H = rect.height;
-  const pad = { top: 20, right: 64, bottom: 26, left: 36 };
+  const pad = { top: 20, right: 60, bottom: 26, left: 36 };
   const cW = W - pad.left - pad.right;
   const cH = H - pad.top - pad.bottom;
 
@@ -894,20 +844,23 @@ function drawOddsChart(canvas, points) {
       const yVal = points[0].yesPct;
       const cx = pad.left + cW / 2;
       const cy = yOf(yVal);
+      // Glow
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
       glow.addColorStop(0, yesColor + '40');
       glow.addColorStop(1, yesColor + '00');
       ctx.fillStyle = glow;
       ctx.fillRect(cx - 20, cy - 20, 40, 40);
+      // Dot
       ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
       ctx.fillStyle = yesColor; ctx.fill();
       ctx.strokeStyle = bgColor; ctx.lineWidth = 1.5; ctx.stroke();
-      const _lPct = Math.max(Math.round(yVal), Math.round(100 - yVal));
-      const _lYes = Math.round(yVal) >= 50;
+      // Label
       ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = _lYes ? yesColor : noColor;
-      ctx.fillText(_lPct + '% ' + (_lYes ? 'Yes' : 'No'), cx, cy - 12);
+      ctx.fillStyle = yesColor;
+      ctx.fillText('YES ' + Math.round(yVal) + '%', cx, cy - 12);
+      ctx.fillStyle = noColor;
+      ctx.fillText('NO ' + Math.round(100 - yVal) + '%', cx, cy + 18);
     }
     return;
   }
@@ -915,202 +868,128 @@ function drawOddsChart(canvas, points) {
   // Time range
   const tMin = points[0].t, tMax = points[points.length - 1].t;
   const tRange = tMax - tMin || 1;
-  const xOf = t => pad.left + ((t - tMin) / tRange) * cW;
+  const x = t => pad.left + ((t - tMin) / tRange) * cW;
 
-  // Build curve points
-  const curvePoints = points.map(p => ({ x: xOf(p.t), y: yOf(p.yesPct) }));
-  // Extend to right edge
-  curvePoints.push({ x: W - pad.right, y: yOf(points[points.length - 1].yesPct) });
-  const useSmooth = points.length > 3;
-
-  // Helper to trace curve path (line or smooth)
-  const traceCurve = () => {
-    if (useSmooth) {
-      _monotoneCurve(ctx, curvePoints);
-    } else {
-      ctx.moveTo(curvePoints[0].x, curvePoints[0].y);
-      for (let i = 1; i < curvePoints.length; i++) ctx.lineTo(curvePoints[i].x, curvePoints[i].y);
+  // Step-line path (step-after: hold value until next event)
+  const buildStepPath = () => {
+    const path = [];
+    for (let i = 0; i < points.length; i++) {
+      path.push({ x: x(points[i].t), y: yOf(points[i].yesPct) });
+      if (i < points.length - 1) {
+        path.push({ x: x(points[i + 1].t), y: yOf(points[i].yesPct) });
+      }
     }
+    path.push({ x: W - pad.right, y: yOf(points[points.length - 1].yesPct) });
+    return path;
   };
+  const stepPath = buildStepPath();
 
-  // YES gradient fill (from line downward — green glow)
-  const yesGrad = ctx.createLinearGradient(0, 0, 0, pad.top + cH);
-  yesGrad.addColorStop(0, yesColor + '00');
-  // approximate line position as ratio
-  const avgY = points.reduce((s, p) => s + p.yesPct, 0) / points.length;
-  const lineRatio = 1 - avgY / 100;
-  yesGrad.addColorStop(Math.max(0, lineRatio - 0.05), yesColor + '00');
-  yesGrad.addColorStop(Math.min(1, lineRatio + 0.02), yesColor + '30');
-  yesGrad.addColorStop(1, yesColor + '00');
+  // YES gradient fill (below line — green zone)
+  const yesGrad = ctx.createLinearGradient(0, yOf(50), 0, pad.top + cH);
+  yesGrad.addColorStop(0, yesColor + '08');
+  yesGrad.addColorStop(1, yesColor + '18');
   ctx.beginPath();
-  traceCurve();
-  ctx.lineTo(W - pad.right, pad.top + cH);
-  ctx.lineTo(curvePoints[0].x, pad.top + cH);
+  ctx.moveTo(stepPath[0].x, yOf(0));
+  for (const p of stepPath) ctx.lineTo(p.x, p.y);
+  ctx.lineTo(stepPath[stepPath.length - 1].x, yOf(0));
   ctx.closePath();
   ctx.fillStyle = yesGrad;
   ctx.fill();
 
-  // NO gradient fill (from line upward — red glow)
-  const noGrad = ctx.createLinearGradient(0, 0, 0, pad.top + cH);
-  noGrad.addColorStop(0, noColor + '00');
-  noGrad.addColorStop(Math.max(0, lineRatio - 0.02), noColor + '30');
-  noGrad.addColorStop(Math.min(1, lineRatio + 0.05), noColor + '00');
-  noGrad.addColorStop(1, noColor + '00');
+  // NO gradient fill (above line — red zone)
+  const noGrad = ctx.createLinearGradient(0, pad.top, 0, yOf(50));
+  noGrad.addColorStop(0, noColor + '18');
+  noGrad.addColorStop(1, noColor + '08');
   ctx.beginPath();
-  traceCurve();
-  ctx.lineTo(W - pad.right, pad.top);
-  ctx.lineTo(curvePoints[0].x, pad.top);
+  ctx.moveTo(stepPath[0].x, yOf(100));
+  for (const p of stepPath) ctx.lineTo(p.x, p.y);
+  ctx.lineTo(stepPath[stepPath.length - 1].x, yOf(100));
   ctx.closePath();
   ctx.fillStyle = noGrad;
   ctx.fill();
 
-  // Main curve line
+  // Main step line
   ctx.beginPath();
-  traceCurve();
+  ctx.moveTo(stepPath[0].x, stepPath[0].y);
+  for (let i = 1; i < stepPath.length; i++) ctx.lineTo(stepPath[i].x, stepPath[i].y);
   ctx.strokeStyle = yesColor;
   ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
+  ctx.lineJoin = 'miter';
   ctx.stroke();
 
-  // Data point dots (skip if too many)
+  // Data point dots (skip if too many to avoid clutter)
   if (points.length <= 40) {
     for (const p of points) {
-      const px = xOf(p.t), py = yOf(p.yesPct);
+      const px = x(p.t), py = yOf(p.yesPct);
       ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = yesColor; ctx.fill();
     }
   }
 
-  // Current price indicator — stacked YES/NO pills on right edge
+  // Current price indicator — pill badges on right edge
   const last = points[points.length - 1];
   const lastY = yOf(last.yesPct);
   const yesPctR = Math.round(last.yesPct);
   const noPctR = 100 - yesPctR;
-  const leadIsYes = yesPctR >= noPctR;
 
-  // Dashed line to right edge
+  // Dashed line from last point to right edge label
   ctx.save();
   ctx.setLineDash([2, 2]);
   ctx.strokeStyle = yesColor + '60';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(xOf(last.t), lastY);
+  ctx.moveTo(x(last.t), lastY);
   ctx.lineTo(W - pad.right, lastY);
   ctx.stroke();
   ctx.restore();
 
-  // Stacked pills
-  const pillW = 54, pillH = 16, pillR = 4, pillGap = 2;
+  // YES + NO pills on right edge
+  const pillW = 48, pillH = 16, pillR = 3;
   const pillX = W - pad.right + 4;
-  const stackCenter = Math.max(pad.top + pillH + pillGap / 2, Math.min(lastY, H - pad.bottom - pillH - pillGap / 2));
-  // YES pill (top)
-  const yPillY = stackCenter - pillH - pillGap / 2;
-  if (leadIsYes) {
-    ctx.fillStyle = yesColor;
-    ctx.beginPath(); ctx.roundRect(pillX, yPillY, pillW, pillH, pillR); ctx.fill();
-    ctx.fillStyle = '#fff';
-  } else {
-    ctx.strokeStyle = yesColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(pillX, yPillY, pillW, pillH, pillR); ctx.stroke();
-    ctx.fillStyle = yesColor;
+  let yesPillY = Math.max(lastY - pillH - 4, pad.top);
+  let noPillY = Math.min(lastY + 4, H - pad.bottom - pillH);
+  // Prevent overlap
+  if (noPillY - yesPillY < pillH + 2) {
+    const mid = (yesPillY + noPillY) / 2;
+    yesPillY = mid - pillH / 2 - 1;
+    noPillY = mid + pillH / 2 + 1;
+    yesPillY = Math.max(yesPillY, pad.top);
+    noPillY = Math.min(noPillY, H - pad.bottom - pillH);
   }
-  ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
+  // YES pill
+  ctx.fillStyle = yesColor;
+  ctx.beginPath(); ctx.roundRect(pillX, yesPillY, pillW, pillH, pillR); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(yesPctR + '% Yes', pillX + pillW / 2, yPillY + pillH / 2 + 3.5);
-  // NO pill (bottom)
-  const nPillY = stackCenter + pillGap / 2;
-  if (!leadIsYes) {
-    ctx.fillStyle = noColor;
-    ctx.beginPath(); ctx.roundRect(pillX, nPillY, pillW, pillH, pillR); ctx.fill();
-    ctx.fillStyle = '#fff';
-  } else {
-    ctx.strokeStyle = noColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(pillX, nPillY, pillW, pillH, pillR); ctx.stroke();
-    ctx.fillStyle = noColor;
-  }
-  ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(noPctR + '% No', pillX + pillW / 2, nPillY + pillH / 2 + 3.5);
+  ctx.fillText('YES ' + yesPctR + '%', pillX + pillW / 2, yesPillY + pillH / 2 + 3);
+  // NO pill
+  ctx.fillStyle = noColor;
+  ctx.beginPath(); ctx.roundRect(pillX, noPillY, pillW, pillH, pillR); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText('NO ' + noPctR + '%', pillX + pillW / 2, noPillY + pillH / 2 + 3);
 
-  // X axis dates — smarter formatting
+  // X axis dates
   ctx.fillStyle = fgDim;
   ctx.font = '9px Helvetica, Arial, sans-serif';
-  const fmtDate = t => { const d = new Date(t * 1000); return (d.getMonth()+1) + '/' + d.getDate(); };
-  const fmtTime = t => { const d = new Date(t * 1000); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const fmtShort = t => {
+    const d = new Date(t * 1000);
+    return (d.getMonth()+1) + '/' + d.getDate();
+  };
+  const fmtTime = t => {
+    const d = new Date(t * 1000);
+    return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
   const span = tMax - tMin;
-  const fmt = span < 86400 ? fmtTime : span < 86400 * 30 ? t => fmtDate(t) + ' ' + fmtTime(t) : fmtDate;
+  const fmt = span < 86400 * 2 ? t => fmtShort(t) + ' ' + fmtTime(t) : fmtShort;
+  // Evenly spaced date labels
   const numLabels = Math.min(Math.floor(cW / 70), 5);
   for (let i = 0; i <= numLabels; i++) {
     const t = tMin + (tRange * i) / numLabels;
-    const lx = xOf(t);
+    const lx = x(t);
     ctx.textAlign = i === 0 ? 'left' : i === numLabels ? 'right' : 'center';
     ctx.fillText(fmt(t), lx, H - 6);
   }
-
-  // Hover crosshair tooltip
-  const tip = canvas._tooltip;
-  if (tip && tip.cx >= pad.left && tip.cx <= W - pad.right) {
-    // Find nearest point via linear scan (fast enough for typical data)
-    const hoverT = tMin + ((tip.cx - pad.left) / cW) * tRange;
-    let nearest = points[0], minDist = Math.abs(points[0].t - hoverT);
-    for (let i = 1; i < points.length; i++) {
-      const dist = Math.abs(points[i].t - hoverT);
-      if (dist < minDist) { minDist = dist; nearest = points[i]; }
-    }
-    const nx = xOf(nearest.t), ny = yOf(nearest.yesPct);
-
-    // Vertical crosshair
-    ctx.save();
-    ctx.setLineDash([4, 3]);
-    ctx.strokeStyle = fgMuted + '80';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(nx, pad.top);
-    ctx.lineTo(nx, pad.top + cH);
-    ctx.stroke();
-    ctx.restore();
-
-    // Dot on curve
-    ctx.beginPath(); ctx.arc(nx, ny, 4, 0, Math.PI * 2);
-    ctx.fillStyle = yesColor; ctx.fill();
-    ctx.strokeStyle = bgColor; ctx.lineWidth = 2; ctx.stroke();
-
-    // Tooltip box
-    const yPct = Math.round(nearest.yesPct);
-    const nPct = 100 - yPct;
-    const d = new Date(nearest.t * 1000);
-    const timeStr = (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
-    const line1 = timeStr;
-    const line2 = 'YES ' + yPct + '%  NO ' + nPct + '%';
-    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-    const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 14;
-    const th = 34;
-    let tx = nx + 10, ty = ny - th - 8;
-    if (tx + tw > W - pad.right) tx = nx - tw - 10;
-    if (ty < pad.top) ty = ny + 10;
-    // Shadow
-    ctx.fillStyle = bgColor + 'e0';
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = fgMuted;
-    ctx.font = '9px Helvetica, Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(line1, tx + 7, ty + 13);
-    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
-    ctx.fillText(line2, tx + 7, ty + 27);
-  }
-}
-
-function toggleDrawer(id) {
-  const drawer = document.getElementById(id);
-  if (!drawer) return;
-  drawer.classList.toggle('open');
-  const body = drawer.querySelector('.drawer-body');
-  if (body) body.style.display = drawer.classList.contains('open') ? '' : 'none';
 }
 
 var _chartLoaded = false;
@@ -1128,9 +1007,6 @@ function toggleMarketChart() {
     const poolId = chart.dataset.poolId;
     const yesIsToken0 = chart.dataset.yesIsToken0 === '1';
     loadMarketChart(poolId, yesIsToken0);
-  } else if (isOpen) {
-    const canvas = chart.querySelector('canvas');
-    if (canvas && canvas._oddsPoints) drawOddsChart(canvas, canvas._oddsPoints);
   }
 }
 
@@ -1176,55 +1052,31 @@ function loadMarketChart(poolId, yesIsToken0) {
 
     if (!allPoints.length) { cur.innerHTML = ''; return; }
 
-    // Build tabs + chart container
-    cur.innerHTML = `<div class="market-chart-tabs" id="chartTabs">
-      <button data-range="1">1D</button><button data-range="7" class="active">7D</button>
-      <button data-range="30">1M</button><button data-range="0">ALL</button>
-    </div><div class="market-chart-wrap"><canvas></canvas></div>`;
+    // Show only last 7 days of activity; if all data is older, show last cluster
+    const now = Math.floor(Date.now() / 1000);
+    const sevenDaysAgo = now - 7 * 86400;
+    let points = allPoints.filter(p => p.t >= sevenDaysAgo);
+    if (!points.length) {
+      // All data older than 7d — show most recent activity cluster
+      // Find last point and include everything within 7 days of it
+      const lastT = allPoints[allPoints.length - 1].t;
+      points = allPoints.filter(p => p.t >= lastT - 7 * 86400);
+    }
+    // Prepend a carry-forward point so chart starts with prior odds
+    if (points.length && points[0] !== allPoints[0]) {
+      const idx = allPoints.indexOf(points[0]);
+      if (idx > 0) {
+        points = [{ t: points[0].t, yesPct: allPoints[idx - 1].yesPct }, ...points];
+      }
+    }
+
+    cur.innerHTML = `<div class="market-chart-wrap"><canvas></canvas></div>`;
     const canvas = cur.querySelector('canvas');
-    canvas._allPoints = allPoints;
+    canvas._oddsPoints = points;
+    drawOddsChart(canvas, points);
 
-    function filterPoints(rangeDays) {
-      if (rangeDays === 0) return allPoints.slice(); // ALL
-      const now = Math.floor(Date.now() / 1000);
-      const cutoff = now - rangeDays * 86400;
-      let pts = allPoints.filter(p => p.t >= cutoff);
-      if (!pts.length) {
-        const lastT = allPoints[allPoints.length - 1].t;
-        pts = allPoints.filter(p => p.t >= lastT - rangeDays * 86400);
-      }
-      // Prepend carry-forward point
-      if (pts.length && pts[0] !== allPoints[0]) {
-        const idx = allPoints.indexOf(pts[0]);
-        if (idx > 0) pts = [{ t: pts[0].t, yesPct: allPoints[idx - 1].yesPct }, ...pts];
-      }
-      return pts;
-    }
-
-    function setRange(rangeDays) {
-      const pts = filterPoints(rangeDays);
-      canvas._oddsPoints = pts;
-      canvas._tooltip = null;
-      drawOddsChart(canvas, pts);
-      cur.querySelectorAll('.market-chart-tabs button').forEach(b => {
-        b.classList.toggle('active', Number(b.dataset.range) === rangeDays);
-      });
-    }
-    cur.querySelector('.market-chart-tabs').addEventListener('click', e => {
-      const btn = e.target.closest('button[data-range]');
-      if (btn) setRange(Number(btn.dataset.range));
-    });
-
-    setRange(7); // default 7D
-
-    // Hover/touch crosshair
-    canvas.addEventListener('mousemove', e => { _chartTooltip(canvas, e); });
-    canvas.addEventListener('mouseleave', () => { canvas._tooltip = null; drawOddsChart(canvas, canvas._oddsPoints); });
-    canvas.addEventListener('touchmove', e => { e.preventDefault(); _chartTooltip(canvas, e.touches[0]); }, { passive: false });
-    canvas.addEventListener('touchend', () => { canvas._tooltip = null; drawOddsChart(canvas, canvas._oddsPoints); });
-
-    // Redraw on resize
-    const ro = new ResizeObserver(() => drawOddsChart(canvas, canvas._oddsPoints));
+    // Redraw on resize / theme change
+    const ro = new ResizeObserver(() => drawOddsChart(canvas, points));
     ro.observe(canvas.parentElement);
   }).catch(() => {
     const cur = document.getElementById('marketChart');
@@ -1518,17 +1370,7 @@ const ERC20_ABI = [
 const PM_HOOK_ROUTER_ABI = [
   'function addLiquidity(uint256 marketId, address collateral, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address lpRecipient, uint256 deadline) payable returns (uint256 shares, uint256 liquidity)',
   'function depositToVault(uint256 marketId, address collateral, uint256 amount, bool yesVault, address to) payable returns (uint256 vaultShares)',
-  'function withdrawFromVault(uint256 marketId, bool isYes, uint256 vaultSharesToRedeem, address receiver, uint256 deadline) returns (uint256 sharesReturned, uint256 feesEarned)',
-  'function vaultPositions(uint256, address) view returns (uint112 yesVaultShares, uint112 noVaultShares, uint32 lastDepositTime, uint256 yesRewardDebt, uint256 noRewardDebt)',
-  'function rebalanceBootstrapVault(uint256 marketId, uint256 deadline) returns (uint256 collateralUsed)',
-  'function updateTWAPObservation(uint256 marketId)',
-  'function settleRebalanceBudget(uint256 marketId) returns (uint256 budgetDistributed, uint256 sharesMerged)',
-  'function harvestVaultFees(uint256 marketId, bool isYes) returns (uint256 feesEarned)',
-  'function finalizeMarket(uint256 marketId) returns (uint256 totalToDAO)',
-  'function redeemVaultWinningShares(uint256 marketId) returns (uint256 payout)',
-  'function rebalanceCollateralBudget(uint256) view returns (uint256)',
-  'function bootstrapVaults(uint256) view returns (uint112 yesShares, uint112 noShares, uint32 lastActivity)',
-  'function twapObservations(uint256) view returns (uint32 timestamp0, uint32 timestamp1, uint32 cachedTwapBps, uint32 cacheBlockNum, uint256 cumulative0, uint256 cumulative1)'
+  'function withdrawFromVault(uint256 marketId, bool isYes, uint256 vaultSharesToRedeem, address receiver, uint256 deadline) returns (uint256 sharesReturned, uint256 feesEarned)'
 ];
 
 const MULTICALL3_ABI = [
@@ -1583,23 +1425,6 @@ function fmtCountdown(closeTs) {
 
 function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function fmtDuration(sec) {
-  if (sec <= 0) return '';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  return `${m}m`;
-}
-
-function _vaultCooldownRemaining(depositTime, closeTime) {
-  const now = Math.floor(Date.now() / 1000);
-  // Late deposit (within 12h of close) = 24h cooldown, otherwise 6h
-  const isLate = closeTime > 0 && (closeTime - depositTime) < 43200;
-  const cooldown = isLate ? 86400 : 21600;
-  const unlockTime = depositTime + cooldown;
-  return Math.max(0, unlockTime - now);
 }
 
 function formatPrice(val) {
@@ -1753,7 +1578,7 @@ function showRawTooltip(el, text) {
   if (!tooltip) {
     tooltip = document.createElement('div');
     tooltip.id = 'rawHintTooltip';
-    tooltip.style.cssText = 'position:fixed;background:#111;border:1px solid #333;color:#888;padding:8px 12px;font-size:10px;max-width:400px;word-break:break-word;white-space:pre-wrap;z-index:9999;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.5)';
+    tooltip.style.cssText = 'position:fixed;background:#111;border:1px solid #333;color:#888;padding:8px 12px;font-size:10px;max-width:400px;word-break:break-word;z-index:9999;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.5)';
     document.body.appendChild(tooltip);
   }
   if (tooltip.style.display === 'block' && tooltip._sourceEl === el) {
@@ -2210,14 +2035,10 @@ async function tryAutoConnect() {
     return;
   }
   $('walletBtn').textContent = '...';
-  try {
-    window.dispatchEvent(new Event('eip6963:requestProvider'));
-    await new Promise(r => setTimeout(r, 400));
-    await connectWithWallet(savedWallet);
-  } catch (e) {
-    console.error('Auto-reconnect failed:', e);
-    $('walletBtn').textContent = 'connect';
-  }
+  setTimeout(async () => {
+    try { window.dispatchEvent(new Event('eip6963:requestProvider')); await new Promise(r => setTimeout(r, 300)); await connectWithWallet(savedWallet); }
+    catch (e) { console.error('Auto-reconnect failed:', e); $('walletBtn').textContent = 'connect'; }
+  }, 100);
 }
 
 // ==================== ROUTER ====================
@@ -2609,9 +2430,7 @@ function setFilter(f) {
 
 // ==================== MARKET DETAIL PAGE ====================
 
-let _renderSeq = 0;
 async function renderMarketPage(marketId) {
-  const seq = ++_renderSeq;
   const app = $('app');
   app.dataset.marketId = marketId;
   app.innerHTML = `
@@ -2664,10 +2483,53 @@ async function renderMarketPage(marketId) {
       // All non-legacy markets use hooks (including open-resolver markets created via bootstrapper)
       const isLabeled = !isLegacyMarket;
 
-      // Parse user positions from first multicall
+      // Fetch odds: getMarketSummary for labeled/open-resolver, getPoolState for legacy
+      let yPct = 50, ammYesReserve = 0n, ammNoReserve = 0n;
+      let vaultYesShares = 0n, vaultNoShares = 0n, totalYesVaultLP = 0n, totalNoVaultLP = 0n;
+      if (isLegacyMarket) {
+        try {
+          const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, rpc);
+          const poolState = await pamm.getPoolState(BigInt(marketId), LEGACY_FEE_BPS);
+          ammYesReserve = BigInt(poolState.rYes);
+          ammNoReserve = BigInt(poolState.rNo);
+          const rY = Number(poolState.rYes);
+          const rN = Number(poolState.rNo);
+          const total = rY + rN;
+          yPct = total > 0 ? Math.round((rN / total) * 100) : 50;
+        } catch {}
+      } else {
+        try {
+          const quoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
+          const summary = await quoter.getMarketSummary(marketId);
+          yPct = Math.round(Number(summary.ammPriceYesBps) / 100);
+          ammYesReserve = BigInt(summary.ammYesReserve);
+          ammNoReserve = BigInt(summary.ammNoReserve);
+          vaultYesShares = BigInt(summary.vaultYesShares);
+          vaultNoShares = BigInt(summary.vaultNoShares);
+          totalYesVaultLP = BigInt(summary.totalYesVaultLP);
+          totalNoVaultLP = BigInt(summary.totalNoVaultLP);
+        } catch {}
+      }
+
+      // Fetch resolution preview + conditions (use correct resolver ABI)
+      let resValue = null, resCond = null, resReady = false, condData = null;
+      try {
+        const resolverAbi = isOurResolver ? RESOLVER_ABI : LEGACY_RESOLVER_ABI;
+        const resolver = new ethers.Contract(resolverAddr, resolverAbi, rpc);
+        const [prev, cond] = await Promise.all([
+          resolver.preview(BigInt(marketId)),
+          resolver.conditions(BigInt(marketId)).catch(() => null)
+        ]);
+        resValue = prev[0]; // value
+        resCond = prev[1]; // condTrue
+        resReady = prev[2]; // ready
+        condData = cond;
+      } catch (e) {
+        console.warn('Resolver fetch failed:', resolverAddr, e.message);
+      }
+
+      // Parse user positions
       let userYes = 0n, userNo = 0n, userYesVaultLP = 0n, userNoVaultLP = 0n;
-      let pendingYesColl = 0n, pendingNoColl = 0n;
-      let vaultDepositTime = 0;
       const posIdx = _connectedAddress ? 1 : -1;
       if (posIdx >= 0 && results[posIdx] && results[posIdx].success) {
         try {
@@ -2676,196 +2538,38 @@ async function renderMarketPage(marketId) {
           userNo = BigInt(pos.noShareBalance);
           userYesVaultLP = BigInt(pos.yesVaultLP);
           userNoVaultLP = BigInt(pos.noVaultLP);
-          pendingYesColl = BigInt(pos.pendingYesCollateral);
-          pendingNoColl = BigInt(pos.pendingNoCollateral);
         } catch {}
       }
-      // Fallback: if multicall didn't return positions, try direct call via wallet provider
-      if (_connectedAddress && userYes === 0n && userNo === 0n && userYesVaultLP === 0n && userNoVaultLP === 0n) {
-        const _posProviders = [_walletProvider, rpc].filter(Boolean);
-        for (const _p of _posProviders) {
-          try {
-            const q = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, _p);
-            const pos = await q.getUserFullPosition(marketId, _connectedAddress);
-            userYes = BigInt(pos.yesShareBalance);
-            userNo = BigInt(pos.noShareBalance);
-            userYesVaultLP = BigInt(pos.yesVaultLP);
-            userNoVaultLP = BigInt(pos.noVaultLP);
-            pendingYesColl = BigInt(pos.pendingYesCollateral);
-            pendingNoColl = BigInt(pos.pendingNoCollateral);
-            break;
-          } catch { /* try next */ }
-        }
-      }
-      // Fetch vault deposit time directly from PMHookRouter (Quoter doesn't return it)
-      if (_connectedAddress && isLabeled) {
-        const _vpProviders = [_walletProvider, rpc].filter(Boolean);
-        for (const _p of _vpProviders) {
-          try {
-            const hr = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, _p);
-            const vp = await hr.vaultPositions(marketId, _connectedAddress);
-            const vyLP = BigInt(vp.yesVaultShares);
-            const vnLP = BigInt(vp.noVaultShares);
-            if (vyLP > 0n || vnLP > 0n) {
-              userYesVaultLP = vyLP;
-              userNoVaultLP = vnLP;
-            }
-            vaultDepositTime = Number(vp.lastDepositTime);
-            break;
-          } catch { /* try next */ }
-        }
-      }
 
-      // Second multicall: batch all remaining reads in one RPC round-trip
-      let yPct = 50, ammYesReserve = 0n, ammNoReserve = 0n;
-      let vaultYesShares = 0n, vaultNoShares = 0n, totalYesVaultLP = 0n, totalNoVaultLP = 0n, vaultBudget = 0n, currentFeeBps = 0n;
-      let twapTimestamp1 = 0;
-      let resValue = null, resCond = null, resReady = false, condData = null;
+      // Fetch ZAMM AMM LP balance + pool supply
       let userAmmLP = 0n, ammLPSupply = 0n;
-
-      const hookIface = new ethers.Interface(PM_HOOK_ROUTER_ABI);
-      const zammIface = new ethers.Interface(ZAMM_ABI);
-      const resolverAbi = isOurResolver ? RESOLVER_ABI : LEGACY_RESOLVER_ABI;
-      const resolverIface = new ethers.Interface(resolverAbi);
-      const { poolId: pid } = computePredictionPoolId(marketId, isLabeled);
-
-      const calls2 = [];
-      const IDX = {};
-      // Market data (summary or pool state)
-      if (isLegacyMarket) {
-        IDX.poolState = calls2.length;
-        calls2.push({ target: CONTRACTS.PAMM, allowFailure: true,
-          callData: pammIface.encodeFunctionData('getPoolState', [marketId, LEGACY_FEE_BPS]) });
-      } else {
-        IDX.summary = calls2.length;
-        calls2.push({ target: CONTRACTS.QUOTER, allowFailure: true,
-          callData: quoterIface.encodeFunctionData('getMarketSummary', [marketId]) });
-        IDX.twap = calls2.length;
-        calls2.push({ target: CONTRACTS.PM_HOOK_ROUTER, allowFailure: true,
-          callData: hookIface.encodeFunctionData('twapObservations', [marketId]) });
-      }
-      // Resolver
-      IDX.preview = calls2.length;
-      calls2.push({ target: resolverAddr, allowFailure: true,
-        callData: resolverIface.encodeFunctionData('preview', [marketId]) });
-      IDX.conditions = calls2.length;
-      calls2.push({ target: resolverAddr, allowFailure: true,
-        callData: resolverIface.encodeFunctionData('conditions', [marketId]) });
-      // ZAMM pool + user LP
-      IDX.zammPool = calls2.length;
-      calls2.push({ target: CONTRACTS.ZAMM, allowFailure: true,
-        callData: zammIface.encodeFunctionData('pools', [pid]) });
-      // ZAMM balanceOf and vaultPositions fetched separately after batch (more reliable)
-
       try {
-        const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, rpc);
-        const r2 = await mc.aggregate3(calls2);
-
-        // Parse market data
-        if (isLegacyMarket) {
-          if (r2[IDX.poolState].success) {
-            const ps = pammIface.decodeFunctionResult('getPoolState', r2[IDX.poolState].returnData);
-            ammYesReserve = BigInt(ps.rYes);
-            ammNoReserve = BigInt(ps.rNo);
-            const rY = Number(ps.rYes), rN = Number(ps.rNo), total = rY + rN;
-            yPct = total > 0 ? Math.round((rN / total) * 100) : 50;
-          }
-        } else {
-          if (r2[IDX.summary].success) {
-            const s = quoterIface.decodeFunctionResult('getMarketSummary', r2[IDX.summary].returnData);
-            yPct = Math.round(Number(s.ammPriceYesBps) / 100);
-            ammYesReserve = BigInt(s.ammYesReserve);
-            ammNoReserve = BigInt(s.ammNoReserve);
-            vaultYesShares = BigInt(s.vaultYesShares);
-            vaultNoShares = BigInt(s.vaultNoShares);
-            totalYesVaultLP = BigInt(s.totalYesVaultLP);
-            totalNoVaultLP = BigInt(s.totalNoVaultLP);
-            vaultBudget = BigInt(s.vaultBudget);
-            currentFeeBps = BigInt(s.feeBps);
-
-          }
-          if (r2[IDX.twap].success) {
-            try {
-              const t = hookIface.decodeFunctionResult('twapObservations', r2[IDX.twap].returnData);
-              twapTimestamp1 = Number(t.timestamp1);
-            } catch {}
-          }
-        }
-
-        // Parse resolver
-        if (r2[IDX.preview].success) {
-          try {
-            const prev = resolverIface.decodeFunctionResult('preview', r2[IDX.preview].returnData);
-            resValue = prev[0]; resCond = prev[1]; resReady = prev[2];
-          } catch {}
-        }
-        if (r2[IDX.conditions].success) {
-          try { condData = resolverIface.decodeFunctionResult('conditions', r2[IDX.conditions].returnData); } catch {}
-        }
-
-        // Parse ZAMM
-        if (r2[IDX.zammPool].success) {
-          try { ammLPSupply = BigInt(zammIface.decodeFunctionResult('pools', r2[IDX.zammPool].returnData).supply); } catch {}
-        }
-        // vaultPositions fetched separately after batch
-      } catch (e) {
-        // Retry once on batch failure
-        try {
-          const mc2 = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, rpc);
-          const r2 = await mc2.aggregate3(calls2);
-          if (!isLegacyMarket && r2[IDX.summary].success) {
-            const s = quoterIface.decodeFunctionResult('getMarketSummary', r2[IDX.summary].returnData);
-            yPct = Math.round(Number(s.ammPriceYesBps) / 100);
-            ammYesReserve = BigInt(s.ammYesReserve); ammNoReserve = BigInt(s.ammNoReserve);
-            vaultYesShares = BigInt(s.vaultYesShares); vaultNoShares = BigInt(s.vaultNoShares);
-            totalYesVaultLP = BigInt(s.totalYesVaultLP); totalNoVaultLP = BigInt(s.totalNoVaultLP);
-            vaultBudget = BigInt(s.vaultBudget); currentFeeBps = BigInt(s.feeBps);
-          }
-          if (r2[IDX.zammPool].success) {
-            try { ammLPSupply = BigInt(zammIface.decodeFunctionResult('pools', r2[IDX.zammPool].returnData).supply); } catch {}
-          }
-          if (r2[IDX.preview].success) {
-            try { const prev = resolverIface.decodeFunctionResult('preview', r2[IDX.preview].returnData); resValue = prev[0]; resCond = prev[1]; resReady = prev[2]; } catch {}
-          }
-          if (r2[IDX.conditions].success) {
-            try { condData = resolverIface.decodeFunctionResult('conditions', r2[IDX.conditions].returnData); } catch {}
-          }
-        } catch {}
-      }
-
-      // Fetch user-specific balances directly (unreliable inside multicall3 batch)
-      // Try wallet provider first (most reliable), then current RPC
-      if (_connectedAddress) {
-        const _tryProviders = [_walletProvider, rpc].filter(Boolean);
-        for (const _p of _tryProviders) {
-          try {
-            userAmmLP = await new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, _p).balanceOf(_connectedAddress, pid);
-            break;
-          } catch { /* try next */ }
-        }
-      }
+        const { poolId: pid } = computePredictionPoolId(marketId, isLabeled);
+        const zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, rpc);
+        const [poolInfo, userBal] = await Promise.all([
+          zamm.pools(pid),
+          _connectedAddress ? zamm.balanceOf(_connectedAddress, pid) : Promise.resolve(0n)
+        ]);
+        ammLPSupply = BigInt(poolInfo.supply);
+        userAmmLP = BigInt(userBal);
+      } catch {}
 
       return {
         mkt, description, isLabeled, isOurResolver, isLegacyResolver, resolverAddr,
         yPct, ammYesReserve, ammNoReserve,
-        vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP, vaultBudget, currentFeeBps,
-        twapTimestamp1,
+        vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP,
         resValue, resCond, resReady, condData,
-        userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-        userAmmLP, ammLPSupply, vaultDepositTime
+        userYes, userNo, userYesVaultLP, userNoVaultLP,
+        userAmmLP, ammLPSupply
       };
     });
 
     const { mkt, description, isLabeled, isOurResolver, isLegacyResolver, resolverAddr,
             yPct, ammYesReserve, ammNoReserve,
-            vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP, vaultBudget, currentFeeBps,
-            twapTimestamp1,
+            vaultYesShares, vaultNoShares, totalYesVaultLP, totalNoVaultLP,
             resValue, resCond, resReady, condData,
-            userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-            userAmmLP, ammLPSupply, vaultDepositTime } = marketData;
-
-    // Abort if a newer render was started while we were loading
-    if (seq !== _renderSeq) return;
+            userYes, userNo, userYesVaultLP, userNoVaultLP,
+            userAmmLP, ammLPSupply } = marketData;
 
     const close = Number(mkt.close);
     const resolved = mkt.resolved;
@@ -2882,10 +2586,7 @@ async function renderMarketPage(marketId) {
 
     let html = `<a href="#" class="back-link" onclick="event.preventDefault();history.replaceState(null,'',location.pathname);route()">&larr; All Markets</a>`;
 
-    // Question + odds bar + implied outcome
-    const _leadSide = yPct >= 50 ? 'Yes' : 'No';
-    const _leadPct = Math.max(yPct, nPct);
-    const _leadColor = yPct >= 50 ? 'var(--yes)' : 'var(--no)';
+    // Question + odds bar
     html += `
       <div style="font-size:18px;font-weight:700;line-height:1.4;margin-bottom:16px">${parsed.question}</div>
       <div class="odds-label"><span class="yes-label">YES ${yPct}%</span><span class="no-label">NO ${nPct}%</span></div>
@@ -2893,37 +2594,13 @@ async function renderMarketPage(marketId) {
         <div class="odds-yes" style="width:${yPct}%"></div>
         <div class="odds-no"></div>
       </div>
-      ${!resolved && _leadPct !== 50 ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:6px;margin-bottom:2px">${_leadPct}% chance <span style="color:${_leadColor};font-weight:600">${_leadSide}</span></div>` : ''}
     `;
-
-    // Oracle price + countdown strip for onchain-resolver markets
-    if ((isOurResolver || isLegacyResolver) && condData && resValue !== null && !resolved) {
-      const _cd = condData;
-      const _callData = (typeof _cd.callDataA === 'string' ? _cd.callDataA : ethers.hexlify(_cd.callDataA || '0x')).toLowerCase();
-      const _isPrice = _callData.slice(0, 10) === '0x50d25bcd';
-      const _isBalance = _callData.length >= 74 && _callData.slice(0, 10) === '0x70a08231';
-      const _isETHBal = _cd.targetA && (!_cd.callDataA || _cd.callDataA === '0x' || _callData.length < 10);
-      const _dec = _isPrice ? 8 : (_isBalance || _isETHBal) ? 18 : 8;
-      const _pre = _isPrice ? '$' : '';
-      const _suf = _isBalance ? (' ' + (TOKEN_NAMES[_cd.targetA.toLowerCase()] || '')) : _isETHBal ? ' ETH' : '';
-      const _val = Number(resValue) / Math.pow(10, _dec);
-      const _thresh = Number(_cd.threshold) / Math.pow(10, _dec);
-      const _fmtV = (v) => v >= 1e9 ? (v/1e9).toFixed(2)+'B' : v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v < 0.01 && v > 0 ? v.toFixed(4) : v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-      const _timeLeft = close - now;
-      const _urgent = _timeLeft > 0 && _timeLeft < 86400;
-      const _timeColor = _urgent ? 'var(--no)' : 'var(--fg-muted)';
-      const _countdown = _timeLeft <= 0 ? 'Closed' : fmtCountdown(close);
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:14px;padding:8px 0;border-bottom:1px solid var(--border-muted)">
-        <span style="color:var(--fg-muted)">Now <span style="color:var(--fg);font-weight:600">${_pre}${_fmtV(_val)}${_suf}</span> <span style="opacity:0.5">/ ${_pre}${_fmtV(_thresh)}${_suf}</span></span>
-        <span style="color:${_timeColor};font-weight:${_urgent ? '700' : '400'}">${_countdown}</span>
-      </div>`;
-    }
 
     // Odds chart drawer — collapsed by default, loaded on open
     const { poolId: chartPoolId, yesIsToken0: chartYesIsToken0 } = computePredictionPoolId(marketId, isLabeled);
     html += `<div class="market-chart-drawer" id="marketChartDrawer">
       <button class="market-chart-toggle-btn" onclick="toggleMarketChart()"><span>Odds Chart</span><span class="arrow">&#9660;</span></button>
-      <div class="market-chart" id="marketChart" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}" style="display:none"></div>
+      <div class="market-chart" id="marketChart" style="display:none"></div>
     </div>`;
 
     html += `<div class="market-chart-drawer" id="pmActivityDrawer" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}">
@@ -2935,62 +2612,15 @@ async function renderMarketPage(marketId) {
     const resolverShort = resolverAddr.slice(0, 6) + '...' + resolverAddr.slice(-4);
     const resolverLabel = isOurResolver ? 'Onchain Resolver' : resolverShort;
     html += `
-      <div class="market-chart-drawer" id="marketInfoDrawer">
-        <button class="market-chart-toggle-btn" onclick="toggleDrawer('marketInfoDrawer')"><span>Market Info</span><span class="arrow">&#9660;</span></button>
-        <div class="drawer-body" style="display:none;padding:0 14px 12px">
-          <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value">${resolved ? (outcome ? '<span style="color:var(--yes)">Resolved YES</span>' : '<span style="color:var(--no)">Resolved NO</span>') : (isActive ? `<span style="color:${close - now < 86400 ? 'var(--no)' : 'var(--fg)'}">${fmtCountdown(close)} left</span>` : 'Closed')}</span></div>
-          <div class="stat-row"><span class="stat-label">Closes</span><span class="stat-value"${!resolved && close - now < 86400 ? ' style="color:var(--no)"' : ''}>${fmtDate(close)}</span></div>
-          <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value">${tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4)} ${collSym}</span></div>
-          <div class="stat-row"><span class="stat-label">Resolver</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${resolverAddr}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${resolverLabel}</a></span></div>
-          <div class="stat-row"><span class="stat-label">Market ID</span><span class="stat-value" style="font-size:11px;word-break:break-all"><a href="https://etherscan.io/address/${CONTRACTS.PAMM}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${marketId.slice(0, 12)}...${marketId.slice(-6)}</a></span></div>
-          ${isLabeled && currentFeeBps > 0n && currentFeeBps <= 10000n ? `<div class="stat-row"><span class="stat-label">Swap Fee <span onclick="event.stopPropagation();showRawTooltip(this,'Dynamic fee — adapts each swap based on market conditions.\\n\\nComponents:\\n• Base fee: decays from high to low over the bootstrap window\\n• Skew fee: increases when probability deviates from 50% (non-linear curve)\\n• Directional fee: linear scaling with probability deviation from 50%\\n• Volatility fee: added when recent price variance is high\\n\\nTotal fee is capped at 3%. Fee shown is the current rate — it changes with every trade.\\n\\nzAMM LPs earn fees from pool swaps. Vault LPs earn fees from vault OTC fills — 90% to vault when inventory is balanced, 70% when imbalanced. The remainder goes to a rebalance budget.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></span><span class="stat-value">${(Number(currentFeeBps) / 100).toFixed(2)}%</span></div>` : ''}
-        </div>
+      <div class="section-card">
+        <div class="section-title">Market Info</div>
+        <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value">${resolved ? (outcome ? '<span style="color:var(--yes)">Resolved YES</span>' : '<span style="color:var(--no)">Resolved NO</span>') : (isActive ? fmtCountdown(close) + ' left' : 'Closed')}</span></div>
+        <div class="stat-row"><span class="stat-label">Closes</span><span class="stat-value">${fmtDate(close)}</span></div>
+        <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value">${tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4)} ${collSym}</span></div>
+        <div class="stat-row"><span class="stat-label">Resolver</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${resolverAddr}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${resolverLabel}</a></span></div>
+        <div class="stat-row"><span class="stat-label">Market ID</span><span class="stat-value" style="font-size:11px;word-break:break-all"><a href="https://etherscan.io/address/${CONTRACTS.PAMM}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${marketId.slice(0, 12)}...${marketId.slice(-6)}</a></span></div>
       </div>
     `;
-    // Vault cooldown (computed once, used in vault card and positions)
-    const vaultCooldownSec = vaultDepositTime ? _vaultCooldownRemaining(vaultDepositTime, close) : 0;
-    const vaultCooldownLabel = vaultCooldownSec > 0 ? fmtDuration(vaultCooldownSec) : '';
-
-    // Vault info card (labeled markets with vault inventory)
-    if (isLabeled && (vaultYesShares > 0n || vaultNoShares > 0n)) {
-      const vYes = Number(ethers.formatEther(vaultYesShares));
-      const vNo = Number(ethers.formatEther(vaultNoShares));
-      const vBudgetEth = Number(ethers.formatEther(vaultBudget));
-
-      // Health checks
-      const twapAge = twapTimestamp1 > 0 ? now - twapTimestamp1 : 0;
-      const twapStale = twapTimestamp1 > 0 && twapAge >= 1800;
-      const twapVeryStale = twapTimestamp1 > 0 && twapAge >= 7200;
-      const totalInventory = vaultYesShares + vaultNoShares;
-      const imbalanceRatio = totalInventory > 0n
-        ? Number(vaultYesShares > vaultNoShares ? vaultYesShares - vaultNoShares : vaultNoShares - vaultYesShares) / Number(totalInventory) * 100
-        : 0;
-      const isImbalanced = imbalanceRatio > 20;
-      const budgetMaterial = vBudgetEth >= 0.0001;
-      const needsRebalance = isImbalanced && budgetMaterial && isActive;
-      const needsSettle = budgetMaterial && !isActive;
-      const needsAttention = (twapVeryStale && isActive) || needsRebalance || needsSettle;
-      const hasActions = (isActive && twapStale) || needsRebalance || needsSettle || (resolved && (vaultYesShares > 0n || vaultNoShares > 0n || vaultBudget > 0n));
-
-      html += `
-        <div class="market-chart-drawer" id="vaultInfoDrawer">
-          <button class="market-chart-toggle-btn" onclick="toggleDrawer('vaultInfoDrawer')"><span>Vault</span><span class="arrow">&#9660;</span></button>
-          <div class="drawer-body" style="display:none;padding:0 14px 12px">
-            <div style="font-size:11px;color:var(--fg-muted);margin-bottom:10px">Holds shares from sweep trades. Depositors earn OTC fees. <span onclick="event.stopPropagation();showRawTooltip(this,'When large trades sweep through the zAMM, the opposite-side shares are deposited into the vault automatically. Vault depositors earn fees from vault OTC fills proportional to their LP tokens.\\n\\nHow it works:\\n• Sweep buys deposit opposite shares into the vault\\n• Vault LPs earn 90% of OTC fees when inventory is balanced, 70% when imbalanced\\n• Remaining OTC fees go to a rebalance budget used to re-equalize YES/NO inventory\\n\\nMaintenance (permissionless):\\n• Update TWAP — refreshes the price oracle used for vault pricing (every 30min)\\n• Rebalance — uses budget to swap excess inventory toward balance\\n• Settle — after market closes, distributes remaining budget to LPs\\n• Finalize — after resolution, redeems vault shares and closes out\\n\\nHarvest lets you claim earned fees without withdrawing your vault position.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></div>
-            ${vaultYesShares > 0n ? `<div class="stat-row"><span class="stat-label">YES Inventory</span><span class="stat-value">${vYes >= 1 ? vYes.toFixed(2) : vYes.toFixed(4)} shares</span></div>` : ''}
-            ${vaultNoShares > 0n ? `<div class="stat-row"><span class="stat-label">NO Inventory</span><span class="stat-value">${vNo >= 1 ? vNo.toFixed(2) : vNo.toFixed(4)} shares</span></div>` : ''}
-            ${vaultBudget > 0n && vBudgetEth >= 0.0001 ? `<div class="stat-row"><span class="stat-label">Budget</span><span class="stat-value">${vBudgetEth >= 1 ? vBudgetEth.toFixed(2) : vBudgetEth.toFixed(4)} ${collSym}</span></div>` : ''}
-            ${needsAttention ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-muted)">${[twapVeryStale && isActive ? 'TWAP oracle is stale' : '', needsRebalance ? 'Inventory is imbalanced' : '', needsSettle ? 'Budget can be settled' : ''].filter(Boolean).join('. ')}.</div>` : ''}
-            ${hasActions ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-              ${isActive && twapStale ? `<button onclick="updateTWAP('${marketId}')" id="twapBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Update TWAP</button>` : ''}
-              ${needsRebalance ? `<button onclick="rebalanceVault('${marketId}')" id="rebalanceBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Rebalance</button>` : ''}
-              ${needsSettle ? `<button onclick="settleBudget('${marketId}')" id="settleBudgetBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Settle</button>` : ''}
-              ${resolved ? `<button onclick="finalizeMarket('${marketId}')" id="finalizeBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Finalize</button>` : ''}
-            </div>` : ''}
-          </div>
-        </div>
-      `;
-    }
 
     // User positions (if any)
     const hasTradePos = userYes > 0n || userNo > 0n;
@@ -2998,30 +2628,23 @@ async function renderMarketPage(marketId) {
     if (hasTradePos || hasLPPos) {
       let posHtml = `<div class="section-card"><div class="section-title">Your Positions</div>`;
       if (hasTradePos) {
-        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:4px">Outcome Tokens</div>`;
-        if (userYes > 0n) posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)}</span></div>`;
-        if (userNo > 0n) posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)}</span></div>`;
+        if (userYes > 0n) posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)} shares</span></div>`;
+        if (userNo > 0n) posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)} shares</span></div>`;
       }
       if (hasLPPos) {
         if (hasTradePos) posHtml += `<div style="border-top:1px solid var(--border-muted);margin:8px 0"></div>`;
-        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:4px">Liquidity</div>`;
+        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:6px">LP Shares</div>`;
         if (userAmmLP > 0n) {
           const ammPctShare = ammLPSupply > 0n ? (Number(userAmmLP) / Number(ammLPSupply) * 100) : 0;
-          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM Pool</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">WITHDRAW</button></div>`;
         }
         if (userYesVaultLP > 0n) {
-          const yPctShare = totalYesVaultLP > 0n ? (Number(userYesVaultLP) / Number(totalYesVaultLP) * 100) : 0;
-          const yBtn = vaultCooldownSec > 0
-            ? `<span style="font-size:10px;color:var(--fg-muted)">&#128274; ${vaultCooldownLabel}</span>`
-            : `<span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="harvestYesVaultBtn" onclick="harvestFees('${marketId}',true)">HARVEST</button><button class="lp-withdraw-btn" id="withdrawYesVaultBtn" onclick="withdrawVault(true)">WITHDRAW</button></span>`;
-          posHtml += `<div class="pos-row"><span class="pos-side yes">YES Vault</span><span class="pos-val">${Number(ethers.formatEther(userYesVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${yPctShare < 0.01 ? '<0.01' : yPctShare.toFixed(2)}%)</span></span>${yBtn}</div>`;
+          const yPctShare = vaultYesShares > 0n ? (Number(userYesVaultLP) / Number(vaultYesShares) * 100) : 0;
+          posHtml += `<div class="pos-row"><span class="pos-side yes">YES Vault</span><span class="pos-val">${Number(ethers.formatEther(userYesVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${yPctShare < 0.01 ? '<0.01' : yPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawYesVaultBtn" onclick="withdrawVault(true)">WITHDRAW</button></div>`;
         }
         if (userNoVaultLP > 0n) {
-          const nPctShare = totalNoVaultLP > 0n ? (Number(userNoVaultLP) / Number(totalNoVaultLP) * 100) : 0;
-          const nBtn = vaultCooldownSec > 0
-            ? `<span style="font-size:10px;color:var(--fg-muted)">&#128274; ${vaultCooldownLabel}</span>`
-            : `<span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="harvestNoVaultBtn" onclick="harvestFees('${marketId}',false)">HARVEST</button><button class="lp-withdraw-btn" id="withdrawNoVaultBtn" onclick="withdrawVault(false)">WITHDRAW</button></span>`;
-          posHtml += `<div class="pos-row"><span class="pos-side no">NO Vault</span><span class="pos-val">${Number(ethers.formatEther(userNoVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${nPctShare < 0.01 ? '<0.01' : nPctShare.toFixed(2)}%)</span></span>${nBtn}</div>`;
+          const nPctShare = vaultNoShares > 0n ? (Number(userNoVaultLP) / Number(vaultNoShares) * 100) : 0;
+          posHtml += `<div class="pos-row"><span class="pos-side no">NO Vault</span><span class="pos-val">${Number(ethers.formatEther(userNoVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${nPctShare < 0.01 ? '<0.01' : nPctShare.toFixed(2)}%)</span></span><button class="lp-withdraw-btn" id="withdrawNoVaultBtn" onclick="withdrawVault(false)">WITHDRAW</button></div>`;
         }
       }
       posHtml += `</div>`;
@@ -3029,14 +2652,6 @@ async function renderMarketPage(marketId) {
     }
 
     // Trade card (only if market is active)
-    if (!isActive && !resolved) {
-      html += `
-        <div class="section-card" style="text-align:center;opacity:0.7">
-          <div style="font-size:13px;color:var(--fg-muted)">Market closed — awaiting resolution</div>
-          ${(isOurResolver || isLegacyResolver) ? `<button class="resolve-btn" style="margin-top:10px;font-size:12px;padding:6px 18px" onclick="document.getElementById('resolveSection')?.scrollIntoView({behavior:'smooth'})">Check Resolution</button>` : ''}
-        </div>
-      `;
-    }
     if (isActive) {
       const isETH = !collateral || collateral === ethers.ZeroAddress;
       html += `
@@ -3073,22 +2688,11 @@ async function renderMarketPage(marketId) {
     }
 
     // Claim card (if resolved and user has position)
-    if (resolved && !_connectedAddress) {
-      html += `
-        <div class="section-card" style="text-align:center">
-          <div style="font-size:13px;color:var(--fg-muted);margin-bottom:10px">Market resolved <b style="color:${outcome ? 'var(--yes)' : 'var(--no)'}">${outcome ? 'YES' : 'NO'}</b></div>
-          <button class="form-btn" onclick="connectWallet().then(()=>renderMarketPage('${marketId}'))">Connect wallet to check winnings</button>
-        </div>
-      `;
-    }
     if (resolved && _connectedAddress && (userYes > 0n || userNo > 0n)) {
       const winningShares = outcome ? userYes : userNo;
       const losingShares = outcome ? userNo : userYes;
       if (winningShares > 0n) {
         const winAmt = Number(ethers.formatEther(winningShares));
-        const pendingColl = outcome ? pendingYesColl : pendingNoColl;
-        const payoutAmt = pendingColl > 0n ? Number(ethers.formatEther(pendingColl)) : winAmt;
-        const payoutFmt = payoutAmt >= 1 ? payoutAmt.toFixed(2) : payoutAmt.toFixed(4);
         html += `
           <div class="section-card" style="border-color:var(--yes)">
             <div class="section-title" style="color:var(--yes)">Claim Winnings</div>
@@ -3096,9 +2700,9 @@ async function renderMarketPage(marketId) {
               You have <b>${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)}</b> winning ${outcome ? 'YES' : 'NO'} shares
             </div>
             <div id="claimQuote" style="text-align:center;font-size:12px;color:var(--fg-muted);margin-bottom:12px">
-              ~${payoutFmt} ${collSym} payout${pendingColl > 0n && pendingColl < winningShares ? ' (after resolver fee)' : ''}
+              ~${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)} ${collSym} payout
             </div>
-            <button class="resolve-btn" id="claimBtn" style="background:var(--yes);color:#000" onclick="claimWinnings('${marketId}')">Claim ${payoutFmt} ${collSym}</button>
+            <button class="resolve-btn" id="claimBtn" style="background:var(--yes);color:#000" onclick="claimWinnings('${marketId}')">Claim ${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)} ${collSym}</button>
           </div>
         `;
       } else if (losingShares > 0n) {
@@ -3140,9 +2744,14 @@ async function renderMarketPage(marketId) {
 
     app.innerHTML = html;
 
-    // Pre-check activity: hide odds chart drawer entirely if no swap events, auto-open if data exists
+    // Pre-check activity: hide odds chart drawer entirely if no swap events
     _chartLoaded = false;
     _chartEventsCache = null;
+    const chartEl = document.getElementById('marketChart');
+    if (chartEl) {
+      chartEl.dataset.poolId = chartPoolId;
+      chartEl.dataset.yesIsToken0 = chartYesIsToken0 ? '1' : '0';
+    }
     fetchAllEvents(chartPoolId).then(events => {
       const hasSwaps = events.some(ev => ev.category === 'SWAP');
       if (!hasSwaps) {
@@ -3182,11 +2791,11 @@ async function renderMarketPage(marketId) {
       loadTradeBalance(marketId, collateral, userYes, userNo);
     }
 
-    if (!_connectedAddress) {
-      tryAutoConnect().then(() => {
-        if (_connectedAddress) renderMarketPage(marketId);
-      });
-    }
+    tryAutoConnect().then(() => {
+      if (_connectedAddress && isActive) {
+        loadTradeBalance(marketId, collateral, userYes, userNo);
+      }
+    });
 
   } catch (e) {
     app.innerHTML = `
@@ -3401,13 +3010,7 @@ async function fetchOnchainQuote(amountWei) {
         if (_tradeDir === 'buy') {
           const result = await quoter.quoteBuyWithSweep(marketId, buyYes, amountWei, 9999, { gasLimit: 5000000 });
           const shares = BigInt(result.totalSharesOut);
-          const pmShares = BigInt(result.pmSharesOut);
-          let quoteHtml = Number(ethers.formatEther(shares)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares';
-          if (pmShares > 0n) {
-            const oppSide = buyYes ? 'NO' : 'YES';
-            quoteHtml += `<br><span style="font-size:11px;color:var(--fg-muted)">~${Number(ethers.formatEther(pmShares)).toFixed(4)} ${oppSide} minted to vault (withdrawal cooldown)</span>`;
-          }
-          quoteEl.innerHTML = quoteHtml;
+          quoteEl.textContent = Number(ethers.formatEther(shares)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares';
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: shares, ts: Date.now() };
         } else {
           const result = await quoter.quoteSellWithSweep(marketId, buyYes, amountWei, 1, { gasLimit: 5000000 });
@@ -3496,10 +3099,10 @@ async function executeTrade() {
       const router = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
 
       if (_tradeDir === 'buy') {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
-          throw new Error('Quote expired — please re-enter amount to get a fresh quote');
+        let minSharesOut = 0n;
+        if (_lastQuote && _lastQuote.marketId === marketId && _lastQuote.dir === 'buy' && (Date.now() - _lastQuote.ts) < 30000) {
+          minSharesOut = _lastQuote.expectedOut * 99n / 100n;
         }
-        const minSharesOut = _lastQuote.expectedOut * 99n / 100n;
 
         if (!isETH) {
           btn.textContent = 'Checking approval...';
@@ -3526,10 +3129,6 @@ async function executeTrade() {
         input.value = '';
 
       } else {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
-          throw new Error('Quote expired — please re-enter amount to get a fresh quote');
-        }
-        const minCollOut = _lastQuote.expectedOut * 95n / 100n; // 5% slippage buffer for sell
         btn.textContent = 'Checking approval...';
         const isOp = await pamm.isOperator(_connectedAddress, CONTRACTS.MASTER_ROUTER);
         if (!isOp) {
@@ -3539,6 +3138,10 @@ async function executeTrade() {
           await approveTx.wait();
           // Wait for state propagation after operator approval
           await new Promise(r => setTimeout(r, 1000));
+        }
+        let minCollOut = 0n;
+        if (_lastQuote && _lastQuote.marketId === marketId && _lastQuote.dir === 'sell' && (Date.now() - _lastQuote.ts) < 30000) {
+          minCollOut = _lastQuote.expectedOut * 95n / 100n; // 5% slippage buffer for sell
         }
         btn.textContent = 'Confirm in wallet...';
         const tx = await router.sellWithSweep(
@@ -3557,10 +3160,10 @@ async function executeTrade() {
       const pmRouter = new ethers.Contract(CONTRACTS.PM_ROUTER, PM_ROUTER_ABI, s);
 
       if (_tradeDir === 'buy') {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
-          throw new Error('Quote expired — please re-enter amount to get a fresh quote');
+        let minSharesOut = 0n;
+        if (_lastQuote && _lastQuote.marketId === marketId && _lastQuote.dir === 'buy' && (Date.now() - _lastQuote.ts) < 30000) {
+          minSharesOut = _lastQuote.expectedOut * 99n / 100n;
         }
-        const minSharesOut = _lastQuote.expectedOut * 99n / 100n;
 
         if (!isETH) {
           btn.textContent = 'Checking approval...';
@@ -3587,10 +3190,6 @@ async function executeTrade() {
         input.value = '';
 
       } else {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
-          throw new Error('Quote expired — please re-enter amount to get a fresh quote');
-        }
-        const minCollOut = _lastQuote.expectedOut * 95n / 100n;
         btn.textContent = 'Checking approval...';
         const isOp = await pamm.isOperator(_connectedAddress, CONTRACTS.PM_ROUTER);
         if (!isOp) {
@@ -3599,6 +3198,10 @@ async function executeTrade() {
           btn.textContent = 'Confirming approval...';
           await approveTx.wait();
           await new Promise(r => setTimeout(r, 1000));
+        }
+        let minCollOut = 0n;
+        if (_lastQuote && _lastQuote.marketId === marketId && _lastQuote.dir === 'sell' && (Date.now() - _lastQuote.ts) < 30000) {
+          minCollOut = _lastQuote.expectedOut * 95n / 100n;
         }
         btn.textContent = 'Confirm in wallet...';
         const tx = await pmRouter.sell(
@@ -3676,11 +3279,11 @@ function buildResolutionSection(marketId, data) {
 
   return `
     <div class="resolve-section" id="resolveSection">
-      <div class="resolve-toggle${resReady && !resolved ? ' expanded' : ''}" id="resolveToggle" onclick="toggleResolveDetails()">
+      <div class="resolve-toggle" id="resolveToggle" onclick="toggleResolveDetails()">
         <span id="resolveToggleLabel">${resolverLink}</span>
         <span class="resolve-toggle-status ${statusClass}" id="resolveToggleStatus">${statusText}</span>
       </div>
-      <div class="resolve-details${resReady && !resolved ? ' ready expanded' : ''}" id="resolveDetails">
+      <div class="resolve-details${resReady ? ' ready' : ''}" id="resolveDetails">
         ${detailsHtml}
       </div>
     </div>
@@ -4582,124 +4185,6 @@ async function provideLiquidity() {
   }
 }
 
-// ==================== VAULT MAINTENANCE ====================
-
-async function updateTWAP(marketId) {
-  const s = await connectWallet();
-  if (!s) return;
-  const btn = $('twapBtn');
-  btn.disabled = true;
-  btn.textContent = 'Confirm...';
-  try {
-    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
-    const tx = await hookRouter.updateTWAPObservation(marketId);
-    btn.textContent = 'Pending...';
-    await tx.wait();
-    alert('TWAP updated!');
-    renderMarketPage(marketId);
-  } catch (e) {
-    if (!isUserRejection(e)) {
-      console.error('TWAP update failed:', e);
-      alert('TWAP update failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
-    }
-    btn.disabled = false;
-    btn.textContent = 'Update TWAP';
-  }
-}
-
-async function rebalanceVault(marketId) {
-  const s = await connectWallet();
-  if (!s) return;
-  const btn = $('rebalanceBtn');
-  btn.disabled = true;
-  btn.textContent = 'Confirm...';
-  try {
-    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
-    const tx = await hookRouter.rebalanceBootstrapVault(marketId, deadline);
-    btn.textContent = 'Pending...';
-    await tx.wait();
-    alert('Vault rebalanced!');
-    renderMarketPage(marketId);
-  } catch (e) {
-    if (!isUserRejection(e)) {
-      console.error('Rebalance failed:', e);
-      alert('Rebalance failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
-    }
-    btn.disabled = false;
-    btn.textContent = 'Rebalance';
-  }
-}
-
-async function settleBudget(marketId) {
-  const s = await connectWallet();
-  if (!s) return;
-  const btn = $('settleBudgetBtn');
-  btn.disabled = true;
-  btn.textContent = 'Confirm...';
-  try {
-    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
-    const tx = await hookRouter.settleRebalanceBudget(marketId);
-    btn.textContent = 'Pending...';
-    await tx.wait();
-    alert('Budget settled!');
-    renderMarketPage(marketId);
-  } catch (e) {
-    if (!isUserRejection(e)) {
-      console.error('Settle budget failed:', e);
-      alert('Settle budget failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
-    }
-    btn.disabled = false;
-    btn.textContent = 'Settle';
-  }
-}
-
-async function harvestFees(marketId, isYes) {
-  const s = await connectWallet();
-  if (!s) return;
-  const btn = $(isYes ? 'harvestYesVaultBtn' : 'harvestNoVaultBtn');
-  btn.disabled = true;
-  btn.textContent = '...';
-  try {
-    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
-    const tx = await hookRouter.harvestVaultFees(marketId, isYes);
-    btn.textContent = 'Pending...';
-    await tx.wait();
-    alert('Fees harvested!');
-    renderMarketPage(marketId);
-  } catch (e) {
-    if (!isUserRejection(e)) {
-      console.error('Harvest fees failed:', e);
-      alert('Harvest failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
-    }
-    btn.disabled = false;
-    btn.textContent = 'HARVEST';
-  }
-}
-
-async function finalizeMarket(marketId) {
-  const s = await connectWallet();
-  if (!s) return;
-  const btn = $('finalizeBtn');
-  btn.disabled = true;
-  btn.textContent = 'Confirm...';
-  try {
-    const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
-    const tx = await hookRouter.finalizeMarket(marketId);
-    btn.textContent = 'Pending...';
-    await tx.wait();
-    alert('Market finalized!');
-    renderMarketPage(marketId);
-  } catch (e) {
-    if (!isUserRejection(e)) {
-      console.error('Finalize failed:', e);
-      alert('Finalize failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
-    }
-    btn.disabled = false;
-    btn.textContent = 'Finalize';
-  }
-}
-
 // ==================== WITHDRAW LP ====================
 
 async function withdrawVault(isYes) {
@@ -4731,25 +4216,24 @@ async function withdrawVault(isYes) {
   }
 }
 
-async function withdrawAmmLP(pct) {
+async function withdrawAmmLP() {
   const s = await connectWallet();
   if (!s) return;
   const marketId = $('app').dataset.marketId;
   if (!marketId) return;
-  const totalLP = BigInt($('app').dataset.userAmmLP || '0');
-  if (totalLP <= 0n) { alert('No AMM LP to withdraw'); return; }
-
-  const withdrawAmt = pct ? totalLP * BigInt(pct) / 100n : totalLP;
-  if (withdrawAmt <= 0n) return;
+  const ammLP = BigInt($('app').dataset.userAmmLP || '0');
+  if (ammLP <= 0n) { alert('No AMM LP to withdraw'); return; }
 
   const btn = $('withdrawAmmBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  btn.disabled = true;
+  btn.textContent = '...';
 
   try {
+    // Approve ZAMM operator for PAMM if needed
     const zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, s);
     const isOp = await zamm.isOperator(_connectedAddress, CONTRACTS.PAMM);
     if (!isOp) {
-      if (btn) btn.textContent = 'Approve...';
+      btn.textContent = 'Approve...';
       const approveTx = await zamm.setOperator(CONTRACTS.PAMM, true);
       await approveTx.wait();
     }
@@ -4760,10 +4244,10 @@ async function withdrawAmmLP(pct) {
       : BigInt(LEGACY_FEE_BPS);
     const deadline = Math.floor(Date.now() / 1000) + 3600;
 
-    if (btn) btn.textContent = 'Confirm...';
+    btn.textContent = 'Confirm...';
     const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
-    const tx = await pamm.removeLiquidityToCollateral(marketId, feeOrHook, withdrawAmt, 0, 0, 0, _connectedAddress, deadline);
-    if (btn) btn.textContent = 'Pending...';
+    const tx = await pamm.removeLiquidityToCollateral(marketId, feeOrHook, ammLP, 0, 0, 0, _connectedAddress, deadline);
+    btn.textContent = 'Pending...';
     await tx.wait();
     renderMarketPage(marketId);
   } catch (e) {
@@ -4771,13 +4255,15 @@ async function withdrawAmmLP(pct) {
       console.error('Withdraw AMM LP failed:', e);
       alert('Withdraw failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
     }
-    if (btn) { btn.disabled = false; btn.textContent = 'WITHDRAW'; }
+    btn.disabled = false;
+    btn.textContent = 'WITHDRAW';
   }
 }
 
 // ==================== INIT ====================
 
-tryAutoConnect().then(() => route());
+tryAutoConnect();
+route();
 </script>
 <footer class="site-footer">
   <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
@@ -4786,5 +4272,6 @@ tryAutoConnect().then(() => route());
   <div style="margin-top:2px;font-size:11px;letter-spacing:0.5px;opacity:0.5">powered by $zorg the governance reward token of the zfi stack</div>
   <div style="margin-top:2px;font-size:11px;opacity:0.5"><a href="https://etherscan.io/token/0x00a6bA94BBb5474725515De88fE04F854f2dCb12" target="_blank" rel="noopener" style="color:inherit">0x00a6bA94BBb5474725515De88fE04F854f2dCb12</a></div>
 </footer>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"8510b592df8f4a69b87bbf8e840f200c","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
