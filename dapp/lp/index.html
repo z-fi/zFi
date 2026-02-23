@@ -60,24 +60,23 @@ h1 {
 .pool-id a { color:var(--fg-muted); }
 .dark-toggle {
   position:fixed;
-  top:max(22px, env(safe-area-inset-top, 0px));
-  left:max(20px, env(safe-area-inset-left, 0px));
+  bottom:max(20px, env(safe-area-inset-bottom, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
   border:none; cursor:pointer; padding:13px; margin:-13px;
   opacity:0.5; transition:opacity 0.2s; z-index:100;
   background:#000; border-radius:50%; width:40px; height:40px; background-clip:content-box;
 }
 :root.dark .dark-toggle { background:#fff; }
 .dark-toggle:hover { opacity:1; }
-.home-btn {
-  position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  z-index: 100;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  line-height: 0;
-}
-.home-btn:hover { opacity: 1; }
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 .wallet {
   position:fixed;
   top:max(20px, env(safe-area-inset-top, 0px));
@@ -92,34 +91,37 @@ h1 {
 .wallet-modal-overlay {
   display:none; position:fixed; top:0; left:0; right:0; bottom:0;
   background:var(--modal-overlay); backdrop-filter:blur(4px);
-  z-index:2000; justify-content:center; align-items:center;
-  padding:20px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  z-index:2000; justify-content:center; align-items:flex-start;
+  padding:20px; padding-top:max(60px, env(safe-area-inset-top, 60px));
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
 }
 .wallet-modal-overlay.active { display:flex; }
 body.modal-open { overflow:hidden; }
 .wallet-modal {
   background:var(--modal-bg); border:1px solid var(--modal-border);
-  padding:16px; width:100%; max-width:380px;
-  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px);
-  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:20px; width:100%; max-width:380px;
+  max-height:calc(100vh - 80px); max-height:calc(100dvh - 80px);
+  display:flex; flex-direction:column; overflow:hidden;
 }
-.wallet-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.wallet-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-shrink:0; }
 .wallet-modal-title { font-size:14px; text-transform:uppercase; letter-spacing:0.1em; }
 .wallet-modal-close {
-  background:none; border:none; color:var(--fg); font-size:20px;
-  cursor:pointer; line-height:1; padding:4px; margin:-4px;
+  background:none; border:none; color:var(--fg); font-size:24px;
+  cursor:pointer; line-height:1; padding:8px; margin:-8px;
   opacity:0.4; transition:opacity 0.15s;
 }
 .wallet-modal-close:hover { opacity:1; }
+.wallet-modal-body { overflow-y:auto; -webkit-overflow-scrolling:touch; }
 .wallet-option {
-  display:flex; align-items:center; gap:12px; padding:12px;
+  display:flex; align-items:center; gap:12px; padding:14px 16px;
   background:var(--modal-bg); border:1px solid var(--border); color:var(--fg);
   cursor:pointer; margin-bottom:8px; transition:background 0.15s, color 0.15s;
 }
 .wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
+.wallet-option:active { opacity:0.7; }
 .wallet-option-icon { font-size:1.5rem; }
-.wallet-option-name { font-weight:600; }
-.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; }
+.wallet-option-name { font-weight:600; font-size:14px; }
+.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; margin-top:4px; }
 .wallet-option.disconnect:hover { background:#f00; color:#fff; }
 
 /* Sections */
@@ -160,7 +162,7 @@ body.modal-open { overflow:hidden; }
 .lp-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 .lp-input[type=number] { -moz-appearance:textfield; }
 .lp-input-sm {
-  width:60px; padding:4px 0; font-size:14px; font-family:inherit;
+  width:60px; padding:4px 0; font-size:16px; font-family:inherit;
   border:none; border-bottom:1px solid var(--border);
   outline:none; background:transparent; color:var(--fg);
   text-align:center;
@@ -232,16 +234,6 @@ tr:hover td { background:var(--surface-hover); }
 /* Countdown */
 .countdown { font-size:10px; color:var(--fg-dim); }
 
-/* Footer */
-.site-footer {
-  position:relative;
-  text-align:center; padding:48px 20px; font-size:11px;
-  opacity:0.65; letter-spacing:0.5px; font-weight:300; margin-top:40px;
-}
-.site-footer a { color:inherit; text-decoration:underline; margin:0 2px; }
-.site-footer a:hover { opacity:0.7; }
-.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
-.dark .site-footer .tagline { color:#fff; }
 
 /* Pool selector */
 .pool-selector-btn {
@@ -287,16 +279,21 @@ tr:hover td { background:var(--surface-hover); }
 
 /* Responsive */
 @media (max-width:600px) {
-  body { padding:50px 12px 12px; }
+  body { padding:60px 12px 12px; }
   .wallet { top:16px; right:16px; }
   .wallet button { padding:10px 14px; font-size:11px; }
-  .dark-toggle { top:18px; left:16px; }
+  .dark-toggle { bottom:16px; right:16px; }
+  .z-nav { top:14px; left:14px; }
+  .z-nav-btn { padding:4px; margin:-4px; }
+  .z-nav-menu a { padding:10px 16px; }
   .info-grid { grid-template-columns:1fr; }
   .lp-input { font-size:20px; }
-  .wallet-modal { max-width:100%; margin:0 10px; max-height:calc(100vh - 40px); overflow-y:auto; }
+  .wallet-modal-overlay { padding:0; padding-top:0; align-items:flex-end; }
+  .wallet-modal { max-width:100%; margin:0; border-left:none; border-right:none; border-bottom:none; max-height:85vh; max-height:85dvh; padding:16px; padding-bottom:max(16px, env(safe-area-inset-bottom)); }
+  .wallet-option { padding:14px 16px; }
 }
 @media (max-width:380px) {
-  body { padding:50px 8px 8px; }
+  body { padding:60px 8px 8px; }
   h1 { font-size:12px; }
   .lp-input { font-size:18px; }
   .lp-card { padding:14px; }
@@ -309,7 +306,22 @@ tr:hover td { background:var(--surface-hover); }
 </head>
 <body>
 
-<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coins</a>
+    <a href="../predict/">Predict</a>
+    <a href="../orderbook/">Orderbook</a>
+    <a href="./" class="active">Liquidity</a>
+    <a href="../domains/">Domains</a>
+    <a href="../dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 <div class="wallet">
   <button id="walletBtn" onclick="toggleWallet()">connect</button>
@@ -329,6 +341,7 @@ tr:hover td { background:var(--surface-hover); }
   <button class="pool-selector-btn" id="poolSelectorBtn" onclick="openPoolModal()">Select Pool &#9662;</button>
   <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></a>
   <a class="sub-link" id="orderbookLink" href="#" title="View orderbook" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/></svg></a>
+  <a class="sub-link" id="swapLink" href="../" title="Swap" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></a>
 </h1>
 <div class="pool-id" id="poolInfo">Loading...</div>
 
@@ -344,8 +357,8 @@ tr:hover td { background:var(--surface-hover); }
 <!-- Pool tab -->
 <div id="tab-pool">
   <div class="info-grid" id="poolGrid">
-    <div class="info-item"><div class="info-label">Reserve 0</div><div class="info-value" id="reserve0">--</div></div>
-    <div class="info-item"><div class="info-label">Reserve 1</div><div class="info-value" id="reserve1">--</div></div>
+    <div class="info-item"><div class="info-label" id="reserve0Label">Reserve 0</div><div class="info-value" id="reserve0">--</div></div>
+    <div class="info-item"><div class="info-label" id="reserve1Label">Reserve 1</div><div class="info-value" id="reserve1">--</div></div>
     <div class="info-item"><div class="info-label">Price</div><div class="info-value" id="poolPrice">--</div></div>
     <div class="info-item"><div class="info-label">LP Supply</div><div class="info-value" id="lpSupply">--</div></div>
     <div class="info-item"><div class="info-label">Your LP</div><div class="info-value" id="userLp">--</div></div>
@@ -367,7 +380,10 @@ tr:hover td { background:var(--surface-hover); }
   <div id="addZapForm" style="display:none">
     <div class="lp-card">
       <div class="lp-section">
-        <label class="lp-label">ETH</label>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label class="lp-label" style="margin:0">ETH</label>
+          <span style="font-size:10px;color:var(--fg-muted)">Bal: <span id="zapBal">--</span> <button class="lp-max" onclick="setMaxZap()">MAX</button></span>
+        </div>
         <input class="lp-input" id="zapEthAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onZapEthInput()">
       </div>
       <div class="lp-row" id="zapPreview" style="margin-top:10px;font-size:11px;color:var(--fg-muted)"></div>
@@ -385,11 +401,17 @@ tr:hover td { background:var(--surface-hover); }
   <div id="addPairForm">
     <div class="lp-card">
       <div class="lp-section">
-        <label class="lp-label" id="addLabel0">ETH</label>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label class="lp-label" id="addLabel0" style="margin:0">ETH</label>
+          <span style="font-size:10px;color:var(--fg-muted)">Bal: <span id="addBal0">--</span> <button class="lp-max" onclick="setMaxAdd(0)">MAX</button></span>
+        </div>
         <input class="lp-input" id="addAmt0" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onAddAmt0Change()">
       </div>
       <div class="lp-section">
-        <label class="lp-label" id="addLabel1">Token</label>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label class="lp-label" id="addLabel1" style="margin:0">Token</label>
+          <span style="font-size:10px;color:var(--fg-muted)">Bal: <span id="addBal1">--</span> <button class="lp-max" onclick="setMaxAdd(1)">MAX</button></span>
+        </div>
         <input class="lp-input" id="addAmt1" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal" oninput="onAddAmt1Change()">
       </div>
       <div class="lp-row" style="margin-top:12px">
@@ -464,16 +486,12 @@ tr:hover td { background:var(--surface-hover); }
   </div>
 </div>
 
-<footer class="site-footer">
-  <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
-  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</footer>
 
 <script src="../ethers.min.js"></script>
 <script src="../walletconnect.min.js"></script>
 <script>
 // ---- Dark mode (dot toggle, matching swap page) ----
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
 function toggleDark() {
   document.documentElement.classList.toggle('dark');
   localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
@@ -522,7 +540,8 @@ const COINS_ABI = [
 
 const ERC20_ABI = [
   "function approve(address, uint256) returns (bool)",
-  "function allowance(address, address) view returns (uint256)"
+  "function allowance(address, address) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)"
 ];
 
 // LP Helpers: calculate optimal ETH for add liquidity
@@ -562,6 +581,8 @@ let _isPM = false;        // prediction market pool
 let _addMode = 'pair';    // 'pair', 'zap', or 'collateral'
 let _addDirection = 0;    // 0=from amt0, 1=from amt1
 let _coinMap = null;      // coinId -> { name, symbol, imageUrl, decimals }
+let _userBal0 = null;     // user balance of token0 (BigInt or null)
+let _userBal1 = null;     // user balance of token1 (BigInt or null)
 
 function $(id) { return document.getElementById(id); }
 const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
@@ -862,7 +883,8 @@ async function connectWithWallet(walletKey) {
         const newChainId = await walletProvider.request({ method: 'eth_chainId' });
         if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
       } catch (switchErr) {
-        alert('Please switch to Ethereum Mainnet');
+        console.error('Chain switch failed:', switchErr);
+        $('walletBtn').textContent = 'connect';
         if (walletKey === 'walletconnect') {
           try { _walletConnectProvider?.disconnect(); } catch (e) {}
           _walletConnectProvider = null;
@@ -911,7 +933,7 @@ async function connectWithWallet(walletKey) {
   } catch (error) {
     console.error('Wallet connect error:', error);
     if (!isUserRejection(error)) {
-      alert(error.message || 'Connection failed');
+      $('walletBtn').textContent = 'connect';
     }
   } finally {
     _isConnecting = false;
@@ -952,7 +974,7 @@ function updateWcBanner() {
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
     banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
     document.body.prepend(banner);
-    document.body.style.paddingTop = '44px';
+    document.body.style.paddingTop = '54px';
   } else {
     document.body.style.paddingTop = '';
   }
@@ -960,14 +982,7 @@ function updateWcBanner() {
 
 async function tryAutoConnect() {
   const savedWallet = localStorage.getItem('zlp_wallet');
-  if (!savedWallet) {
-    if (!window.ethereum) return;
-    try {
-      const accts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accts && accts.length > 0) await connectWithWallet('injected');
-    } catch {}
-    return;
-  }
+  if (!savedWallet) return;
   $('walletBtn').textContent = '...';
   setTimeout(async () => {
     try {
@@ -1183,10 +1198,62 @@ async function refreshOnchain() {
       });
     }
     renderPool();
+    refreshUserBalances();
   } catch (e) {
     console.error("refreshOnchain:", e);
     renderPool(); // render what we have
   }
+}
+
+async function refreshUserBalances() {
+  if (!_signer || !_poolData) { _userBal0 = null; _userBal1 = null; return; }
+  const addr = await _signer.getAddress();
+  try {
+    const [b0, b1] = await Promise.all([
+      fetchTokenBalance(_poolData.token0, _poolData.coin0, addr),
+      fetchTokenBalance(_poolData.token1, _poolData.coin1, addr)
+    ]);
+    _userBal0 = b0;
+    _userBal1 = b1;
+    renderBalances();
+  } catch (e) {
+    console.debug("refreshUserBalances:", e);
+  }
+}
+
+async function fetchTokenBalance(tokenAddr, coin, userAddr) {
+  if (tokenAddr === ZERO) {
+    return await rpc.call(p => p.getBalance(userAddr));
+  }
+  const coinId = coin ? BigInt(coin.id || 0) : 0n;
+  if (coinId >= 1000000n) {
+    // ZAMM coin: balanceOf(owner, id) on Coins contract
+    return await rpc.call(p => {
+      const c = new ethers.Contract(COINS, ["function balanceOf(address,uint256) view returns (uint256)"], p);
+      return c.balanceOf(userAddr, coinId);
+    });
+  }
+  if (tokenAddr.toLowerCase() === PAMM.toLowerCase() && coinId > 0n) {
+    return await rpc.call(p => {
+      const c = new ethers.Contract(PAMM, ["function balanceOf(address,uint256) view returns (uint256)"], p);
+      return c.balanceOf(userAddr, coinId);
+    });
+  }
+  // Standard ERC20
+  return await rpc.call(p => {
+    const c = new ethers.Contract(tokenAddr, ERC20_ABI, p);
+    return c.balanceOf(userAddr);
+  });
+}
+
+function renderBalances() {
+  const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
+  const el0 = $('addBal0');
+  const el1 = $('addBal1');
+  if (el0) el0.textContent = _userBal0 !== null ? fmtWei(_userBal0, d0) : '--';
+  if (el1) el1.textContent = _userBal1 !== null ? fmtWei(_userBal1, d1) : '--';
+  const zapEl = $('zapBal');
+  if (zapEl) zapEl.textContent = _userBal0 !== null ? fmtWei(_userBal0, 18) : '--';
 }
 
 // ---- Format helpers ----
@@ -1232,8 +1299,10 @@ function renderPool() {
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
   const l0 = tokenLabel(0), l1 = tokenLabel(1);
 
-  $('reserve0').textContent = fmtWei(_onchain.reserve0, d0) + ' ' + l0;
-  $('reserve1').textContent = fmtWei(_onchain.reserve1, d1) + ' ' + l1;
+  $('reserve0Label').textContent = l0 + ' Reserve';
+  $('reserve1Label').textContent = l1 + ' Reserve';
+  $('reserve0').textContent = fmtWei(_onchain.reserve0, d0);
+  $('reserve1').textContent = fmtWei(_onchain.reserve1, d1);
 
   // Price: how much of token0 per token1
   const r0 = Number(_onchain.reserve0) / (10 ** d0);
@@ -1315,6 +1384,24 @@ function onAddAmt1Change() {
     clearTimeout(_helperDebounce);
     _helperDebounce = setTimeout(() => calcHelperETH(null, amt1), 300);
   }
+}
+
+function setMaxAdd(side) {
+  const bal = side === 0 ? _userBal0 : _userBal1;
+  if (!bal || bal <= 0n) return;
+  const d = tokenDecimals(side);
+  const el = side === 0 ? $('addAmt0') : $('addAmt1');
+  el.value = ethers.formatUnits(bal, d);
+  if (side === 0) onAddAmt0Change(); else onAddAmt1Change();
+}
+
+function setMaxZap() {
+  if (!_userBal0 || _userBal0 <= 0n) return;
+  // Leave a small amount for gas
+  const gasBuffer = ethers.parseEther("0.005");
+  const usable = _userBal0 > gasBuffer ? _userBal0 - gasBuffer : _userBal0;
+  $('zapEthAmt').value = ethers.formatEther(usable);
+  onZapEthInput();
 }
 
 async function calcHelperETH(ethAmt, tokenAmt) {
@@ -1467,6 +1554,7 @@ async function doZapLiquidity() {
     showStatus('addStatus', 'success', 'Zap liquidity added! ' + receipt.hash.slice(0, 10) + '...');
     $('zapEthAmt').value = '';
     $('zapPreview').textContent = '';
+    _historyLoaded = false;
     await refreshOnchain();
   } catch (e) {
     console.error(e);
@@ -1520,7 +1608,8 @@ function onRemoveAmtChange() {
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
   const out0 = liq * _onchain.reserve0 / _onchain.supply;
   const out1 = liq * _onchain.reserve1 / _onchain.supply;
-  $('removeExpected').textContent = fmtWei(out0, d0) + ' ' + tokenLabel(0) + ' + ' + fmtWei(out1, d1) + ' ' + tokenLabel(1);
+  const sharePct = Number(liq * 10000n / _onchain.supply) / 100;
+  $('removeExpected').textContent = fmtWei(out0, d0) + ' ' + tokenLabel(0) + ' + ' + fmtWei(out1, d1) + ' ' + tokenLabel(1) + ' (' + sharePct.toFixed(2) + '% of pool)';
 }
 
 function setMaxRemove() {
@@ -1613,6 +1702,7 @@ async function doAddLiquidity() {
     showStatus('addStatus', 'success', 'Liquidity added! ' + receipt.hash.slice(0, 10) + '...');
     $('addAmt0').value = '';
     $('addAmt1').value = '';
+    _historyLoaded = false;
     await refreshOnchain();
   } catch (e) {
     console.error(e);
@@ -1650,6 +1740,7 @@ async function doRemoveLiquidity() {
     showStatus('removeStatus', 'success', 'Liquidity removed! ' + receipt.hash.slice(0, 10) + '...');
     $('removeAmt').value = '';
     $('removeExpected').textContent = '--';
+    _historyLoaded = false;
     await refreshOnchain();
   } catch (e) {
     console.error(e);
@@ -1995,6 +2086,21 @@ async function init() {
   $('chartLink').style.display = 'inline-flex';
   $('orderbookLink').href = '../orderbook/#/' + poolId;
   $('orderbookLink').style.display = 'inline-flex';
+  $('swapLink').href = '../';
+  $('swapLink').style.display = 'inline-flex';
+
+  // After pool data loads, update orderbook link with token params as fallback
+  const _updateObLink = () => {
+    if (!_poolData) return;
+    let obHref = '../orderbook/?token0=' + encodeURIComponent(_poolData.token0)
+      + '&token1=' + encodeURIComponent(_poolData.token1);
+    if (_poolData.coin0 && _poolData.coin0.symbol) obHref += '&label0=' + encodeURIComponent(_poolData.coin0.symbol);
+    if (_poolData.coin1 && _poolData.coin1.symbol) obHref += '&label1=' + encodeURIComponent(_poolData.coin1.symbol);
+    if (_poolData.coin0 && _poolData.coin0.id) obHref += '&id0=' + encodeURIComponent(_poolData.coin0.id);
+    if (_poolData.coin1 && _poolData.coin1.id) obHref += '&id1=' + encodeURIComponent(_poolData.coin1.id);
+    $('orderbookLink').href = obHref;
+  };
+  // Deferred: run after fetchPool completes (below)
 
   $('poolInfo').textContent = 'Loading pool ' + poolId.slice(0, 12) + '...';
 
@@ -2006,6 +2112,7 @@ async function init() {
     return;
   }
   _poolData = pool;
+  _updateObLink();
 
   // Determine V0 vs V1 and prediction market
   _isV0 = pool.source === "ZAMM";
@@ -2057,6 +2164,7 @@ async function init() {
   const ic1 = coinIcon(_poolData.coin1, 18);
   $('poolInfo').innerHTML = ic0 + esc(l0) + ' / ' + ic1 + esc(l1) + ' <span style="opacity:0.5">(' + version + ' &middot; ' + feePct + ')</span> &middot; <a href="https://etherscan.io/address/' + _ammAddress + '" target="_blank" rel="noopener" style="font-size:10px">' + poolId.slice(0, 12) + '...</a>';
   $('poolSelectorBtn').innerHTML = ic0 + esc(l0) + '/' + ic1 + esc(l1) + ' &#9662;';
+  document.title = l0 + '/' + l1 + ' LP';
 
   // Fetch on-chain state
   await refreshOnchain();

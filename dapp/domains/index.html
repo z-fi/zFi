@@ -148,16 +148,15 @@ button.secondary:hover { background: var(--surface-hover); }
 .availability.show { display: block; }
 .availability .available { color: var(--fg); }
 .availability .taken { color: var(--fg-dim); }
-.home-btn {
-  position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  z-index: 100;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  line-height: 0;
-}
-.home-btn:hover { opacity: 1; }
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 .wallet {
   position: fixed;
   top: max(20px, env(safe-area-inset-top, 0px));
@@ -315,8 +314,9 @@ button.secondary:hover { background: var(--surface-hover); }
   backdrop-filter: blur(4px);
   z-index: 2000;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 20px;
+  padding-top: max(60px, env(safe-area-inset-top, 60px));
   overflow-y: auto;
 }
 .modal-overlay.active { display: flex; }
@@ -327,14 +327,18 @@ body.modal-open { overflow: hidden; }
   padding: 20px;
   width: 100%;
   max-width: 360px;
-  max-height: calc(100dvh - 40px);
-  overflow-y: auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .modal-title {
   font-size: 14px;
@@ -348,15 +352,18 @@ body.modal-open { overflow: hidden; }
   font-size: 24px;
   cursor: pointer;
   line-height: 1;
-  padding: 0;
-  margin: 0;
+  padding: 8px;
+  margin: -8px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
 }
-.modal-close:hover { opacity: 0.5; }
+.modal-close:hover { opacity: 1; }
+.modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .wallet-option {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 14px 16px;
   background: var(--modal-bg);
   border: 1px solid var(--modal-border);
   cursor: pointer;
@@ -364,12 +371,14 @@ body.modal-open { overflow: hidden; }
   transition: background 0.15s, color 0.15s;
 }
 .wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
+.wallet-option:active { opacity: 0.7; }
 .wallet-option-icon { font-size: 1.5rem; }
-.wallet-option-name { font-weight: 600; }
+.wallet-option-name { font-weight: 600; font-size: 14px; }
 .wallet-option.disconnect {
   border-color: #f00;
   color: #f00;
   justify-content: center;
+  margin-top: 4px;
 }
 .wallet-option.disconnect:hover {
   background: #f00;
@@ -479,7 +488,10 @@ body.modal-open { overflow: hidden; }
 }
 @media (max-width: 700px) {
   .scroll-names { display: none; }
-  .dark-toggle { top: 18px; left: 16px; }
+  .dark-toggle { bottom: 16px; right: 16px; }
+  .z-nav { top: 14px; left: 14px; }
+  .z-nav-btn { padding: 4px; margin: -4px; }
+  .z-nav-menu a { padding: 10px 16px; }
   body { padding: 80px 16px 100px; }
   .wallet { top: 16px; right: 16px; }
   .wallet button { padding: 10px 14px; font-size: 11px; }
@@ -492,7 +504,9 @@ body.modal-open { overflow: hidden; }
   .pay-method { flex-wrap: wrap; }
   .pending .actions { flex-direction: row; gap: 8px; }
   .pending .actions button { flex: 1; }
-  .modal { max-width: 100%; margin: 0 10px; }
+  .modal-overlay { padding: 0; padding-top: 0; align-items: flex-end; }
+  .modal { max-width: 100%; margin: 0; border-left: none; border-right: none; border-bottom: none; max-height: 85vh; max-height: 85dvh; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .wallet-option { padding: 14px 16px; }
   .send-form { padding: 14px; }
   .send-form button { width: auto; display: inline-block; }
   .manage-form button { width: auto; display: inline-block; }
@@ -561,39 +575,21 @@ body.modal-open { overflow: hidden; }
   border-color: var(--btn-bg);
 }
 
-/* Footer */
-.site-footer {
-  position: relative;
-  text-align: center;
-  padding: 48px 20px;
-  font-size: 11px;
-  opacity: 0.65;
-  margin-top: 40px;
-  letter-spacing: 0.5px;
-  font-weight: 300;
-}
-.site-footer a {
-  color: inherit;
-  text-decoration: underline;
-  margin: 0 2px;
-}
-.site-footer a:hover { opacity: 0.7; }
-.site-footer .tagline { opacity:1; color:var(--fg); font-weight:500; }
-
 /* Dark mode toggle */
 .dark-toggle {
   position: fixed;
-  top: max(22px, env(safe-area-inset-top, 0px));
-  left: max(20px, env(safe-area-inset-left, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
   z-index: 100;
   border: none;
   cursor: pointer;
-  opacity: 0.35;
+  padding: 13px;
+  margin: -13px;
+  opacity: 0.5;
   transition: opacity 0.2s;
-  padding: 0;
-  margin: 0;
   background: #000;
   border-radius: 50%;
+  background-clip: content-box;
   width: 40px;
   height: 40px;
 }
@@ -605,7 +601,22 @@ body.modal-open { overflow: hidden; }
 
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 
-<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coins</a>
+    <a href="../predict/">Predict</a>
+    <a href="../orderbook/">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="./" class="active">Domains</a>
+    <a href="../dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
 
 <div class="scroll-names">
   <div class="scroll-names-inner">
@@ -774,17 +785,11 @@ body.modal-open { overflow: hidden; }
   </div>
 </div>
 
-<!-- Footer -->
-<footer class="site-footer">
-<a href="../">Swap</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; <a href="https://opensea.io/collection/wei-name-service" target="_blank" rel="noopener">OpenSea</a> &middot; <a href="https://import.wei.domains" target="_blank" rel="noopener">SDK</a> &middot; <a href="https://www.npmjs.com/package/wns-utils" target="_blank" rel="noopener"><svg fill="currentColor" width="14" height="14" viewBox="-2 -8 24 24" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin" style="vertical-align:middle"><path d='M0 0h20v6.857H10V8H5.556V6.857H0V0zm1.111 5.714h2.222V2.286h1.111v3.428h1.112V1.143H1.11v4.571zm5.556-4.571v5.714h2.222V5.714h2.222V1.143H6.667zm5.555 0v4.571h2.222V2.286h1.112v3.428h1.11V2.286h1.112v3.428h1.11V1.143h-6.666z'/><path d='M10 4.7H9V2.2h1z'/></svg></a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
-<div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-<div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</footer>
-
 <script src="../ethers.min.js"></script>
 <script src="../walletconnect.min.js"></script>
 <script>
 // ---- Dark mode ----
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
 function toggleDark() {
   const on = document.documentElement.classList.toggle('dark');
   localStorage.setItem('dark', on ? '1' : '0');
@@ -1358,7 +1363,7 @@ function updateWcBanner() {
       <button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>
     `;
     document.body.prepend(banner);
-    document.body.style.paddingTop = '44px';
+    document.body.style.paddingTop = '54px';
   } else {
     document.body.style.paddingTop = '';
   }
@@ -1675,15 +1680,17 @@ async function doCheckName() {
                 }
               }
 
-              pendingMintInfo = { parentId, subLabel, feeToken: cfgFeeToken, price: cfgPrice, decimals: tokenDecimals, symbol: tokenSymbol };
+              pendingMintInfo = { parentId, subLabel, parentName, feeToken: cfgFeeToken, price: cfgPrice, decimals: tokenDecimals, symbol: tokenSymbol };
               feeEl.innerHTML = 'Price: ' + escapeHtml(priceDisplay) +
                 '<br><button onclick="doMintSubdomain()" style="margin-top:8px;"' +
                 (!signer ? ' disabled' : '') + '>Mint ' + escaped + '.wei</button>';
+            } else if (!cfgEnabled) {
+              feeEl.textContent = 'Subdomain sales are not enabled for this name';
             } else {
               feeEl.textContent = 'Only the parent owner can register this subdomain';
             }
           } catch {
-            feeEl.textContent = 'Only the parent owner can register this subdomain';
+            feeEl.textContent = 'Could not check subdomain availability — try again';
           }
         }
       } else {
@@ -2945,17 +2952,17 @@ async function showSubSalesForm() {
       } else {
         priceDesc = (currentPriceStr || '0') + ' ' + (subSalesTokenSymbol || cfgFeeToken.slice(0, 8) + '...');
       }
-      statusHtml = '<div style="padding:10px;background:#f0fff0;margin-bottom:12px;font-size:12px;">Currently enabled — ' + escapeHtml(priceDesc) + ' per subdomain</div>';
+      statusHtml = '<div style="padding:10px;background:var(--status-success);margin-bottom:12px;font-size:12px;">Currently enabled — ' + escapeHtml(priceDesc) + ' per subdomain</div>';
     } else if (isConfigured) {
-      statusHtml = '<div style="padding:10px;background:#f5f5f5;margin-bottom:12px;font-size:12px;">Currently disabled</div>';
+      statusHtml = '<div style="padding:10px;background:var(--surface);margin-bottom:12px;font-size:12px;">Currently disabled</div>';
     }
 
     if (!isApproved) {
-      statusHtml += '<div style="padding:10px;background:#fff8e0;margin-bottom:12px;font-size:11px;">Approval required — the registrar needs permission to flash-borrow your name for minting. Your name stays in your wallet.</div>';
+      statusHtml += '<div style="padding:10px;background:var(--status-warning);margin-bottom:12px;font-size:11px;">Approval required — the registrar needs permission to use your name for minting. Your name stays in your wallet.</div>';
     }
 
     if (ethBal > 0n) {
-      statusHtml += '<div style="padding:10px;background:#f5f5ff;margin-bottom:12px;font-size:12px;">Claimable fees: ' + ethers.formatEther(ethBal) + ' ETH <button onclick="doWithdrawRegFees()" style="margin-left:8px;padding:4px 10px;font-size:11px;">Withdraw</button></div>';
+      statusHtml += '<div style="padding:10px;background:var(--surface);margin-bottom:12px;font-size:12px;">Claimable fees: ' + ethers.formatEther(ethBal) + ' ETH <button onclick="doWithdrawRegFees()" style="margin-left:8px;padding:4px 10px;font-size:11px;">Withdraw</button></div>';
     }
 
     const showPrice = currentFeeType !== 'free';
@@ -2983,7 +2990,7 @@ async function showSubSalesForm() {
       <button onclick="doConfigureSubSales()">Enable Subdomain Sales</button>\
       ' + (hasActiveConfig ? '<button class="secondary" onclick="doDisableSubSales()">Disable</button>' : '') + '\
       <button class="secondary" onclick="$(\'manageForm\').classList.remove(\'show\')">Cancel</button>\
-      <div style="font-size:10px;opacity:0.4;margin-top:12px;">Flash mode — your name stays in your wallet. The registrar borrows it atomically to mint each subdomain.</div>';
+      <div style="font-size:10px;opacity:0.4;margin-top:12px;">Your name stays in your wallet at all times. The registrar temporarily uses it to create each subdomain, then returns it in the same transaction.</div>';
   } catch (e) {
     form.innerHTML = '<div style="color:#c00;font-size:12px;">Error loading config: ' + escapeHtml(e.message) + '</div><button class="secondary" onclick="$(\'manageForm\').classList.remove(\'show\')" style="margin-top:8px;">Close</button>';
   }
@@ -3226,6 +3233,41 @@ async function doMintSubdomain() {
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
+    // Check if subdomain is already taken
+    if (readContract && pendingMintInfo.parentName) {
+      try {
+        const tokenId = await readContract.computeId(subLabel + '.' + pendingMintInfo.parentName + '.wei');
+        const owner = await readContract.ownerOf(tokenId);
+        if (owner) {
+          showStatus(subLabel + '.' + pendingMintInfo.parentName + '.wei is already taken', 'error');
+          if (btn) btn.disabled = false;
+          return;
+        }
+      } catch (e) { /* ownerOf reverts if not minted — name is available */ }
+    }
+
+    // Balance check
+    if (price > 0n) {
+      const rpc = await getRpc();
+      if (feeToken === ethers.ZeroAddress) {
+        const bal = await rpc.getBalance(connectedAddress);
+        if (bal < price) {
+          showStatus('Insufficient ETH — need ' + ethers.formatEther(price) + ' ETH', 'error');
+          if (btn) btn.disabled = false;
+          return;
+        }
+      } else {
+        const balIface = new ethers.Interface(['function balanceOf(address) view returns (uint256)']);
+        const balRes = await rpc.call({ to: feeToken, data: balIface.encodeFunctionData('balanceOf', [connectedAddress]) });
+        const bal = balIface.decodeFunctionResult('balanceOf', balRes)[0];
+        if (bal < price) {
+          showStatus('Insufficient ' + (symbol || 'token') + ' balance', 'error');
+          if (btn) btn.disabled = false;
+          return;
+        }
+      }
+    }
+
     // Handle ERC20 approval if needed
     if (feeToken !== ethers.ZeroAddress && price > 0n) {
       const rpc = await getRpc();
@@ -3538,7 +3580,7 @@ async function doVerifyNow() {
       }
     }
 
-    let html = `<div style="padding:12px;background:#f5f5f5;border:1px solid #ddd;">`;
+    let html = `<div style="padding:12px;background:var(--surface);border:1px solid var(--border-muted);">`;
     html += `<div style="font-size:16px;font-weight:600;margin-bottom:8px;">${escapeHtml(fullName)}</div>`;
     html += `<div style="font-size:12px;margin-bottom:4px;"><span style="opacity:0.5;">Characters:</span> ${charCount}</div>`;
     html += `<div style="font-size:12px;margin-bottom:4px;"><span style="opacity:0.5;">Bytes:</span> ${byteCount}</div>`;

@@ -26,7 +26,7 @@
 }
 .dark {
   --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
-  --border:#e8e8e0;--border-muted:#333;
+  --border:#333;--border-muted:#333;
   --surface:#111;--surface-hover:#1a1a1a;
   --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
   --btn-dis-bg:#333;--btn-dis-fg:#666;
@@ -141,8 +141,8 @@ button.secondary:hover { background: var(--surface-hover); }
 /* Dark toggle */
 .dark-toggle {
   position:fixed;
-  top:max(22px, env(safe-area-inset-top, 0px));
-  left:max(20px, env(safe-area-inset-left, 0px));
+  bottom:max(20px, env(safe-area-inset-bottom, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
   border:none; cursor:pointer; padding:13px; margin:-13px;
   opacity:0.5; transition:opacity 0.2s; z-index:100;
   background:#000; border-radius:50%; width:40px; height:40px;
@@ -150,16 +150,15 @@ button.secondary:hover { background: var(--surface-hover); }
 }
 :root.dark .dark-toggle { background:#fff; }
 .dark-toggle:hover { opacity:1; }
-.home-btn {
-  position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  z-index: 100;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  line-height: 0;
-}
-.home-btn:hover { opacity: 1; }
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 
 /* Dark mode — semantic color overrides (elements not using CSS vars) */
 .dark .wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
@@ -251,8 +250,9 @@ button.secondary:hover { background: var(--surface-hover); }
   backdrop-filter: blur(4px);
   z-index: 2000;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 20px;
+  padding-top: max(60px, env(safe-area-inset-top, 60px));
   overflow-y: auto;
 }
 .wallet-modal-overlay.active, .modal-overlay.active { display: flex; }
@@ -260,15 +260,21 @@ body.modal-open { overflow: hidden; }
 .wallet-modal, .modal {
   background: var(--modal-bg);
   border: 2px solid var(--modal-border);
-  padding: 16px;
+  padding: 20px;
   width: 100%;
   max-width: 400px;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .wallet-modal-header, .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .wallet-modal-title, .modal-title {
   font-size: 14px;
@@ -282,17 +288,20 @@ body.modal-open { overflow: hidden; }
   font-size: 24px;
   cursor: pointer;
   line-height: 1;
-  padding: 0;
-  margin: 0;
+  padding: 8px;
+  margin: -8px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
 }
-.wallet-modal-close:hover, .modal-close:hover { opacity: 0.5; }
+.wallet-modal-close:hover, .modal-close:hover { opacity: 1; }
+.modal-body, .wallet-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 /* Wallet modal options */
 .wallet-option {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 14px 16px;
   background: var(--modal-bg);
   border: 1px solid var(--modal-border);
   cursor: pointer;
@@ -300,6 +309,7 @@ body.modal-open { overflow: hidden; }
   transition: background 0.15s, color 0.15s;
 }
 .wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
+.wallet-option:active { opacity: 0.7; }
 .wallet-icon { font-size: 1.5rem; }
 .wallet-name { font-weight: 600; }
 .wallet-status { font-size: 11px; color: var(--fg-dim); }
@@ -1819,30 +1829,15 @@ body.modal-open { overflow: hidden; }
 .summoner-toggle:hover { color: var(--fg); }
 .summoner-toggle.open { margin-bottom: 16px; }
 
-/* Footer */
-.site-footer {
-  position: relative;
-  text-align: center;
-  padding: 48px 20px;
-  font-size: 11px;
-  opacity: 0.65;
-  margin-top: 40px;
-  letter-spacing: 0.5px;
-  font-weight: 300;
-}
-.site-footer a {
-  color: inherit;
-  text-decoration: underline;
-  margin: 0 2px;
-}
-.site-footer a:hover { opacity: 0.7; }
-.site-footer .tagline { opacity:1; color:var(--fg); font-weight:500; }
-.dark .site-footer .tagline { opacity:1; color:var(--fg); font-weight:500; }
+
 
 /* Responsive */
 @media (max-width: 700px) {
   body { padding: 80px 16px 20px; }
-  .dark-toggle { top: 18px; left: 16px; }
+  .dark-toggle { bottom: 16px; right: 16px; }
+  .z-nav { top: 14px; left: 14px; }
+  .z-nav-btn { padding: 4px; margin: -4px; }
+  .z-nav-menu a { padding: 10px 16px; }
   .wallet { top: 16px; right: 16px; }
   .wallet button { padding: 10px 14px; font-size: 11px; }
   h1 { font-size: 13px; margin-bottom: 16px; }
@@ -1852,7 +1847,9 @@ body.modal-open { overflow: hidden; }
   .voting-power-summary { grid-template-columns: 1fr; }
   .delegation-type-selector { grid-template-columns: 1fr; }
   .nft-modal-attributes { grid-template-columns: 1fr; }
-  .modal, .wallet-modal { max-width: 100%; margin: 0 10px; }
+  .wallet-modal-overlay, .modal-overlay { padding: 0; padding-top: 0; align-items: flex-end; }
+  .modal, .wallet-modal { max-width: 100%; margin: 0; border-left: none; border-right: none; border-bottom: none; max-height: 85vh; max-height: 85dvh; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .wallet-option { padding: 14px 16px; }
   button { padding: 14px 20px; }
   .member-item {
     grid-template-columns: 1fr 1fr;
@@ -1889,7 +1886,22 @@ body.modal-open { overflow: hidden; }
 <body>
 
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
-<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coins</a>
+    <a href="../predict/">Predict</a>
+    <a id="navOrderbook" href="../orderbook/">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="../domains/">Domains</a>
+    <a href="./" class="active">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
 
 <!-- Toast Notifications -->
 <div class="toast-container" id="toastContainer"></div>
@@ -2804,6 +2816,11 @@ body.modal-open { overflow: hidden; }
             <div class="balance-item">
               <div class="balance-label">
                 Voting Shares
+                <a id="sharesOrderbookLink" href="#" class="token-explorer-link" title="Limit orders for this token">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/>
+                  </svg>
+                </a>
                 <a id="sharesEtherscanLink" href="#" target="_blank" rel="noopener noreferrer" class="token-explorer-link">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -2998,20 +3015,13 @@ body.modal-open { overflow: hidden; }
     </div>
 
 
-<!-- Footer web ring -->
-<footer class="site-footer">
-  <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../orderbook/">Orderbook</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot;
-  <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
-  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</footer>
-
     <script src="../ethers.min.js"></script>
     <script src="../walletconnect.min.js"></script>
     <!-- Web3 Integration Script -->
     <script>
       function isDark() { return document.documentElement.classList.contains('dark'); }
       function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+      document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
       function toggleDark() {
         document.documentElement.classList.toggle('dark');
         localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
@@ -5197,13 +5207,12 @@ body.modal-open { overflow: hidden; }
       // LocalStorage helpers
       function saveWalletPreference(walletKey, walletName) {
         try {
-          localStorage.setItem('preferredWallet', walletKey);
-          localStorage.setItem('zcoin_wallet', walletKey);
-          if (walletName) localStorage.setItem('zcoin_wallet_name', walletName);
+          localStorage.setItem('zdao_wallet', walletKey);
+          if (walletName) localStorage.setItem('zdao_wallet_name', walletName);
           else if (walletKey.startsWith('eip6963_')) {
             const uuid = walletKey.replace('eip6963_', '');
             const name = eip6963Providers.get(uuid)?.info?.name;
-            if (name) localStorage.setItem('zcoin_wallet_name', name);
+            if (name) localStorage.setItem('zdao_wallet_name', name);
           }
         } catch (e) {
           logger.warn('Failed to save wallet preference:', e);
@@ -5212,7 +5221,7 @@ body.modal-open { overflow: hidden; }
 
       function getWalletPreference() {
         try {
-          return localStorage.getItem('preferredWallet') || localStorage.getItem('zcoin_wallet') || null;
+          return localStorage.getItem('zdao_wallet') || null;
         } catch (e) {
           logger.warn('Failed to get wallet preference:', e);
           return null;
@@ -5221,9 +5230,8 @@ body.modal-open { overflow: hidden; }
 
       function clearWalletPreference() {
         try {
-          localStorage.removeItem('preferredWallet');
-          localStorage.removeItem('zcoin_wallet');
-          localStorage.removeItem('zcoin_wallet_name');
+          localStorage.removeItem('zdao_wallet');
+          localStorage.removeItem('zdao_wallet_name');
         } catch (e) {
           logger.warn('Failed to clear wallet preference:', e);
         }
@@ -5257,7 +5265,7 @@ body.modal-open { overflow: hidden; }
               };
             }
           } else if (connectedWallet.startsWith('provider_') || connectedWallet === 'injected') {
-            wallet = { name: localStorage.getItem('zcoin_wallet_name') || 'Wallet', icon: '🔗' };
+            wallet = { name: localStorage.getItem('zdao_wallet_name') || 'Wallet', icon: '🔗' };
           } else {
             wallet = WALLET_CONFIG[connectedWallet];
           }
@@ -5405,7 +5413,7 @@ body.modal-open { overflow: hidden; }
             }
             // Name-based fallback: UUID may differ across pages, match by wallet name
             if (!wallet) {
-              const savedName = (localStorage.getItem('zcoin_wallet_name') || '').toLowerCase();
+              const savedName = (localStorage.getItem('zdao_wallet_name') || '').toLowerCase();
               if (savedName) {
                 for (const [, { info, provider }] of eip6963Providers) {
                   if (info?.name?.toLowerCase() === savedName) {
@@ -5630,7 +5638,7 @@ body.modal-open { overflow: hidden; }
           banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--surface);color:var(--fg);border-bottom:1px solid var(--border-muted);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
           banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:var(--bg);color:var(--fg);border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
           document.body.prepend(banner);
-          document.body.style.paddingTop = '44px';
+          document.body.style.paddingTop = '54px';
         } else {
           document.body.style.paddingTop = '';
         }
@@ -13255,6 +13263,15 @@ body.modal-open { overflow: hidden; }
         etherscanLink.href = `${getNetwork().explorer}/address/${daoAddress}`;
         addressText.textContent = `${daoAddress.slice(0, 6)}...${daoAddress.slice(-4)}`;
 
+        // Update nav orderbook link for this DAO's shares token
+        const _sharesAddr = currentDAO.dao.meta?.sharesToken;
+        const _navOb = document.getElementById('navOrderbook');
+        if (_navOb && _sharesAddr) {
+          let _obNav = '../orderbook/?token0=' + encodeURIComponent(ethers.ZeroAddress) + '&token1=' + encodeURIComponent(_sharesAddr);
+          if (currentDAO.dao.meta?.symbol) _obNav += '&label1=' + encodeURIComponent(currentDAO.dao.meta.symbol);
+          _navOb.href = _obNav;
+        }
+
         // Update URL hash for deep linking (allows sharing direct links to this DAO)
         history.replaceState(null, '', `#/dao/${getNetwork().chainId}/${daoAddress}`);
 
@@ -13282,6 +13299,15 @@ body.modal-open { overflow: hidden; }
           renderDAOEmblem(daoAddress, batchData.contractURI)
         ]);
 
+        // Update nav orderbook link with emblem logo now that it's rendered
+        if (_navOb && _sharesAddr) {
+          const _embImg = document.querySelector('#daoEmblem img');
+          if (_embImg && _embImg.src) {
+            const _sep = _navOb.href.includes('?') ? '&' : '?';
+            _navOb.href += _sep + 'logo1=' + encodeURIComponent(_embImg.src);
+          }
+        }
+
         // Sequential — depends on renderSalesInfo completing (needs customSaleTokens)
         await renderTreasury();
 
@@ -13306,6 +13332,8 @@ body.modal-open { overflow: hidden; }
       function backToGallery() {
         currentDAO = null;
         currentDAICO = null;
+        const _navOb = document.getElementById('navOrderbook');
+        if (_navOb) _navOb.href = '../orderbook/';
         DOMCache.daoDashboard.classList.remove('show');
         DOMCache.daoGallery.classList.add('show');
 
@@ -13377,6 +13405,15 @@ body.modal-open { overflow: hidden; }
           const sharesLink = document.getElementById('sharesEtherscanLink');
           sharesLink.href = `${getNetwork().explorer}/token/${dao.meta.sharesToken}`;
           sharesLink.classList.add('visible');
+          const sharesObLink = document.getElementById('sharesOrderbookLink');
+          if (sharesObLink) {
+            let _obHref = '../orderbook/?token0=' + encodeURIComponent(ethers.ZeroAddress) + '&token1=' + encodeURIComponent(dao.meta.sharesToken);
+            if (dao.meta.symbol) _obHref += '&label1=' + encodeURIComponent(dao.meta.symbol);
+            const _emblemImg = document.querySelector('#daoEmblem img');
+            if (_emblemImg && _emblemImg.src) _obHref += '&logo1=' + encodeURIComponent(_emblemImg.src);
+            sharesObLink.href = _obHref;
+            sharesObLink.classList.add('visible');
+          }
         }
 
         if (dao.meta && dao.meta.lootToken) {
@@ -19089,69 +19126,22 @@ body.modal-open { overflow: hidden; }
           }
         }
 
-        // Re-dispatch EIP-6963 and wait for providers to announce
-        window.dispatchEvent(new Event('eip6963:requestProvider'));
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Auto-reconnect logic with improved wallet preference handling
+        // Auto-reconnect: only if user previously connected on this page
+        const savedWallet = getWalletPreference();
         let autoReconnected = false;
-        const preferredWallet = getWalletPreference();
-
-        // WalletConnect sessions don't persist across page reloads - clear stale preference
-        if (preferredWallet === 'walletconnect') {
-          clearWalletPreference();
-        } else if (preferredWallet) {
+        if (savedWallet && savedWallet !== 'walletconnect') {
           try {
-            // Check if any provider has authorized accounts (works even with competing wallets)
-            let hasAccounts = false;
-            if (window.ethereum?.providers?.length) {
-              for (const p of window.ethereum.providers) {
-                try { const a = await p.request({ method: 'eth_accounts' }); if (a?.length > 0) { hasAccounts = true; break; } } catch {}
-              }
-            }
-            if (!hasAccounts && window.ethereum) {
-              try { const a = await window.ethereum.request({ method: 'eth_accounts' }); if (a?.length > 0) hasAccounts = true; } catch {}
-            }
-
-            if (hasAccounts) {
-              const wallets = detectWallets();
-
-              if (wallets.some(w => w.key === preferredWallet)) {
-                // Exact key match
-                await connectWithWallet(preferredWallet);
-                autoReconnected = true;
-              } else {
-                // Key mismatch (cross-page EIP-6963 UUID difference, provider_ key, etc.)
-                // Try name-based match first
-                const savedName = (localStorage.getItem('zcoin_wallet_name') || '').toLowerCase();
-                const nameMatch = savedName && wallets.find(w => w.name.toLowerCase() === savedName && w.key !== 'walletconnect');
-                if (nameMatch) {
-                  await connectWithWallet(nameMatch.key);
-                  autoReconnected = true;
-                } else if (preferredWallet) {
-                  // Direct attempt — connectWithWallet now handles provider_/injected/fallback keys
-                  await connectWithWallet(preferredWallet);
-                  autoReconnected = !!connectedAddress;
-                }
-                if (!autoReconnected && wallets.length > 0) {
-                  const nonWC = wallets.find(w => w.key !== 'walletconnect');
-                  if (nonWC) {
-                    await connectWithWallet(nonWC.key);
-                    autoReconnected = true;
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            logger.error('Auto-reconnect failed:', error);
-            // Silently fail auto-reconnect, user can manually connect
+            window.dispatchEvent(new Event('eip6963:requestProvider'));
+            await new Promise(r => setTimeout(r, 300));
+            await connectWithWallet(savedWallet);
+            autoReconnected = !!connectedAddress;
+          } catch (e) {
+            logger.error('Auto-reconnect failed:', e);
           }
         }
 
-        // If we have a deep link and a DAO was loaded (either read-only or via auto-reconnect),
-        // ensure we scroll to the dashboard
+        // If we have a deep link and a DAO was loaded, scroll to the dashboard
         if (deepLink && currentDAO) {
-          // Use a longer delay to ensure DOM is fully rendered after auto-reconnect
           requestAnimationFrame(() => {
             setTimeout(() => {
               const dashboard = document.getElementById('daoDashboard');

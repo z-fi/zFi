@@ -52,8 +52,8 @@ button:hover { background:var(--btn-hover); }
 /* Dark toggle — 14px dot matching swap page */
 .dark-toggle {
   position:fixed;
-  top:max(22px, env(safe-area-inset-top, 0px));
-  left:max(20px, env(safe-area-inset-left, 0px));
+  bottom:max(20px, env(safe-area-inset-bottom, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
   border:none; cursor:pointer; padding:13px; margin:-13px;
   opacity:0.5; transition:opacity 0.2s; z-index:100;
   background:#000; border-radius:50%; width:40px; height:40px; background-clip:content-box;
@@ -61,16 +61,15 @@ button:hover { background:var(--btn-hover); }
 :root.dark .dark-toggle { background:#fff; }
 .dark-toggle:hover { opacity:1; }
 
-.home-btn {
-  position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  z-index: 100;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  line-height: 0;
-}
-.home-btn:hover { opacity: 1; }
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 
 /* Wallet — matching swap page pattern */
 .wallet {
@@ -86,36 +85,37 @@ button:hover { background:var(--btn-hover); }
 .modal-overlay {
   display:none; position:fixed; top:0; left:0; right:0; bottom:0;
   background:var(--modal-overlay); backdrop-filter:blur(4px);
-  z-index:2000; justify-content:center; align-items:center;
-  padding:20px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  z-index:2000; justify-content:center; align-items:flex-start;
+  padding:20px; padding-top:max(60px, env(safe-area-inset-top, 60px));
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
 }
 .modal-overlay.active { display:flex; }
 body.modal-open { overflow:hidden; }
 .modal {
   background:var(--modal-bg); border:1px solid var(--modal-border);
-  padding:16px; width:100%; max-width:380px;
-  max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px);
-  overflow-y:auto; -webkit-overflow-scrolling:touch;
-  border-radius:0;
+  padding:20px; width:100%; max-width:380px;
+  max-height:calc(100vh - 80px); max-height:calc(100dvh - 80px);
+  display:flex; flex-direction:column; overflow:hidden;
 }
-.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-shrink:0; }
 .modal-title { font-size:14px; text-transform:uppercase; letter-spacing:0.1em; }
 .modal-close {
-  background:none; border:none; color:var(--fg); font-size:20px;
-  cursor:pointer; line-height:1; padding:4px; margin:-4px;
+  background:none; border:none; color:var(--fg); font-size:24px;
+  cursor:pointer; line-height:1; padding:8px; margin:-8px;
   opacity:0.4; transition:opacity 0.15s;
 }
 .modal-close:hover { opacity:1; }
+.modal-body { overflow-y:auto; -webkit-overflow-scrolling:touch; }
 .wallet-option {
-  display:flex; align-items:center; gap:12px; padding:12px;
+  display:flex; align-items:center; gap:12px; padding:14px 16px;
   background:var(--modal-bg); border:1px solid var(--border); color:var(--fg);
   cursor:pointer; margin-bottom:8px; transition:background 0.15s, color 0.15s;
-  border-radius:0;
 }
 .wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
+.wallet-option:active { opacity:0.7; }
 .wallet-option-icon { font-size:1.5rem; }
-.wallet-option-name { font-weight:600; }
-.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; }
+.wallet-option-name { font-weight:600; font-size:14px; }
+.wallet-option.disconnect { border-color:#f00; color:#f00; justify-content:center; margin-top:4px; }
 .wallet-option.disconnect:hover { background:#f00; color:#fff; }
 
 /* Header */
@@ -209,6 +209,7 @@ body.modal-open { overflow:hidden; }
 .bid-row .depth { background:var(--green-bg); }
 .ask-row .price { color:var(--red); }
 .ask-row .depth { background:var(--red-bg); }
+.aon-tag { font-size:8px; font-family:sans-serif; font-weight:700; letter-spacing:.3px; padding:1px 3px; border-radius:3px; background:var(--fg-muted); color:var(--bg); opacity:.7; vertical-align:middle; margin-left:3px; }
 
 /* Spread row */
 .spread-row {
@@ -357,9 +358,8 @@ body.modal-open { overflow:hidden; }
 .empty-msg { font-size:12px; color:var(--fg-dim); padding:24px 0; text-align:center; }
 
 /* Global orders view */
-.global-search {
-  margin-bottom:12px;
-}
+.global-controls { margin-bottom:12px; }
+.global-search { margin-bottom:8px; }
 .global-search input {
   width:100%; padding:8px 10px; font-family:inherit; font-size:13px;
   border:1px solid var(--border); border-radius:0;
@@ -368,9 +368,31 @@ body.modal-open { overflow:hidden; }
 }
 .global-search input:focus { border-color:var(--fg-muted); }
 .global-search input::placeholder { color:var(--fg-dim); }
+.global-toolbar {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.global-toolbar select {
+  padding:4px 6px; font-family:inherit; font-size:11px;
+  border:1px solid var(--border); border-radius:0;
+  background:var(--bg); color:var(--fg); cursor:pointer; margin-left:auto;
+}
+.pair-filters { display:flex; gap:4px; flex-wrap:wrap; }
+.pair-chip {
+  font-size:10px; padding:3px 7px; border:1px solid var(--border);
+  background:var(--bg); color:var(--fg-muted); cursor:pointer;
+  font-family:monospace; transition:all 0.1s; border-radius:0;
+}
+.pair-chip:hover { border-color:var(--fg-muted); }
+.pair-chip.active { background:var(--fg); color:var(--bg); border-color:var(--fg); }
+.order-side-tag {
+  font-size:9px; font-weight:700; letter-spacing:.3px; padding:2px 5px;
+  border-radius:0; flex-shrink:0; min-width:28px; text-align:center;
+}
+.order-side-tag.bid { background:var(--green-bg); color:var(--green); }
+.order-side-tag.ask { background:var(--red-bg); color:var(--red); }
 .global-order-item {
   display:flex; align-items:center; gap:10px;
-  padding:12px;
+  padding:10px 12px;
   border:1px solid var(--border); border-radius:0;
   margin-bottom:0; border-bottom:none; font-size:12px;
   cursor:pointer; transition:background 0.1s;
@@ -439,23 +461,16 @@ body.modal-open { overflow:hidden; }
 }
 .fill-amt-row .max-btn:hover { text-decoration:underline; }
 
-/* Footer */
-.site-footer {
-  position:relative;
-  text-align:center; padding:48px 20px; font-size:11px;
-  opacity:0.65; letter-spacing:0.5px; font-weight:300; margin-top:40px;
-}
-.site-footer a { color:inherit; text-decoration:underline; margin:0 2px; }
-.site-footer a:hover { opacity:0.7; }
-.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
-.dark .site-footer .tagline { color:#fff; }
 
 /* Responsive */
 @media (max-width:600px) {
-  body { padding:50px 12px 12px; }
+  body { padding:60px 12px 12px; }
   .wallet { top:16px; right:16px; }
   .wallet button { padding:10px 14px; font-size:11px; }
-  .dark-toggle { top:18px; left:16px; }
+  .dark-toggle { bottom:16px; right:16px; }
+  .z-nav { top:14px; left:14px; }
+  .z-nav-btn { padding:4px; margin:-4px; }
+  .z-nav-menu a { padding:10px 16px; }
   .pair-name { font-size:15px; }
   .amm-price { font-size:18px; }
   .price-banner { gap:10px; flex-wrap:wrap; }
@@ -463,17 +478,19 @@ body.modal-open { overflow:hidden; }
   .book-header { padding:6px 8px; }
   .spread-row { padding:6px 8px; }
   .order-form-inner { padding:12px; }
-  .modal { max-width:100%; margin:0 10px; max-height:calc(100vh - 40px); overflow-y:auto; }
+  .modal-overlay { padding:0; padding-top:0; align-items:flex-end; }
+  .modal { max-width:100%; margin:0; border-left:none; border-right:none; border-bottom:none; max-height:85vh; max-height:85dvh; padding:16px; padding-bottom:max(16px, env(safe-area-inset-bottom)); }
+  .wallet-option { padding:14px 16px; }
 }
 @media (max-width:380px) {
-  body { padding:50px 8px 8px; }
+  body { padding:60px 8px 8px; }
   .pair-name { font-size:13px; }
   .amm-price { font-size:16px; }
   .book-row { font-size:10px; padding:0 6px; }
   .book-header { font-size:9px; padding:4px 6px; }
   .spread-row { font-size:10px; padding:4px 6px; }
   .order-form-inner { padding:10px; }
-  .order-form-inner input { font-size:14px; }
+  .order-form-inner input { font-size:16px; }
   .order-card { padding:10px; }
   h1 { font-size:12px; }
 }
@@ -481,7 +498,22 @@ body.modal-open { overflow:hidden; }
 </head>
 <body>
 
-<a href="../" class="home-btn" title="Home"><svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coins</a>
+    <a href="../predict/">Predict</a>
+    <a href="./" class="active">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="../domains/">Domains</a>
+    <a href="../dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 <div class="wallet">
   <button id="walletBtn" onclick="toggleWallet()">connect</button>
@@ -599,8 +631,18 @@ body.modal-open { overflow:hidden; }
 
 <!-- Global orders view (no pool) -->
 <div id="globalView" style="display:none">
-  <div class="global-search">
-    <input type="text" id="globalSearch" placeholder="Search by token symbol, name, or address..." oninput="filterGlobalOrders()">
+  <div class="global-controls">
+    <div class="global-search">
+      <input type="text" id="globalSearch" placeholder="Search by token, address, or maker..." oninput="filterGlobalOrders()">
+    </div>
+    <div class="global-toolbar">
+      <div class="pair-filters" id="pairFilters"></div>
+      <select id="globalSort" onchange="filterGlobalOrders()">
+        <option value="newest">Newest</option>
+        <option value="expiring">Expiring soon</option>
+        <option value="largest">Largest</option>
+      </select>
+    </div>
   </div>
   <div id="globalOrdersList"></div>
   <div class="book-footer">
@@ -620,16 +662,12 @@ body.modal-open { overflow:hidden; }
   </div>
 </div>
 
-<footer class="site-footer">
-  <a href="../">Swap</a> &middot; <a href="../domains/">Domains</a> &middot; <a href="../dao/">DAO</a> &middot; <a href="../coin/">Coin</a> &middot; <a href="../predict/">Predict</a> &middot; <a href="../lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="../dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
-  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-</footer>
 
 <script src="../ethers.min.js"></script>
 <script src="../walletconnect.min.js"></script>
 <script>
 // ---- Dark mode (dot toggle, matching swap page) ----
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
 function toggleDark() {
   document.documentElement.classList.toggle('dark');
   localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
@@ -692,6 +730,7 @@ const KNOWN_TOKENS = {
   "0xc50673edb3a7b94e8cad8a7d4e0cd68864e33edf": { symbol: "PNKSTR", decimals: 18 },
   "0x00a6ba94bbb5474725515de88fe04f854f2dcb12": { symbol: "zOrg", decimals: 18 },
   "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed": { symbol: "ZAMM", decimals: 18 },
+  "0x000000000044bfe6c2bbfed8862973e0612f07c0": { symbol: "PAMM", decimals: 18, erc6909: true },
 };
 
 // ---- Token Icons ----
@@ -775,6 +814,29 @@ function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&
 function getPoolId() {
   const m = location.hash.match(/^#\/(\d+)$/);
   return m ? m[1] : null;
+}
+
+function getTokenParams() {
+  const p = new URLSearchParams(location.search);
+  const token0 = p.get('token0');
+  const token1 = p.get('token1');
+  if (!token0 || !token1) return null;
+  const id0 = p.get('id0') || '0';
+  const id1 = p.get('id1') || '0';
+  const price = p.get('price');
+  const label0 = p.get('label0') || '';
+  const label1 = p.get('label1') || '';
+  const logo0 = p.get('logo0') || '';
+  const logo1 = p.get('logo1') || '';
+  // Sort by address, then by id when addresses are equal
+  let sorted0, sorted1, sId0, sId1, sLabel0, sLabel1, sLogo0, sLogo1;
+  const a = token0.toLowerCase(), b = token1.toLowerCase();
+  if (a < b || (a === b && BigInt(id0) <= BigInt(id1))) {
+    [sorted0, sorted1, sId0, sId1, sLabel0, sLabel1, sLogo0, sLogo1] = [token0, token1, id0, id1, label0, label1, logo0, logo1];
+  } else {
+    [sorted0, sorted1, sId0, sId1, sLabel0, sLabel1, sLogo0, sLogo1] = [token1, token0, id1, id0, label1, label0, logo1, logo0];
+  }
+  return { token0: sorted0, token1: sorted1, id0: sId0, id1: sId1, price, label0: sLabel0, label1: sLabel1, logo0: sLogo0, logo1: sLogo1 };
 }
 
 // ---- Wallet state ----
@@ -993,7 +1055,8 @@ async function connectWithWallet(walletKey) {
         const newChainId = await walletProvider.request({ method: 'eth_chainId' });
         if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
       } catch (switchErr) {
-        alert('Please switch to Ethereum Mainnet');
+        console.error('Chain switch failed:', switchErr);
+        $('walletBtn').textContent = 'connect';
         if (walletKey === 'walletconnect') {
           try { _walletConnectProvider?.disconnect(); } catch (e) {}
           _walletConnectProvider = null;
@@ -1042,7 +1105,7 @@ async function connectWithWallet(walletKey) {
     renderMyOrders();
   } catch (error) {
     console.error('Wallet connect error:', error);
-    alert(error.message || 'Connection failed');
+    $('walletBtn').textContent = 'connect';
   } finally {
     _isConnecting = false;
   }
@@ -1084,7 +1147,7 @@ function updateWcBanner() {
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
     banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
     document.body.prepend(banner);
-    document.body.style.paddingTop = '44px';
+    document.body.style.paddingTop = '54px';
   } else {
     document.body.style.paddingTop = '';
   }
@@ -1092,15 +1155,7 @@ function updateWcBanner() {
 
 async function tryAutoConnect() {
   const savedWallet = localStorage.getItem('zob_wallet');
-  if (!savedWallet) {
-    // Legacy: try eth_accounts for injected
-    if (!window.ethereum) return;
-    try {
-      const accts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accts && accts.length > 0) await connectWithWallet('injected');
-    } catch {}
-    return;
-  }
+  if (!savedWallet) return;
   $('walletBtn').textContent = '...';
   setTimeout(async () => {
     try {
@@ -1294,10 +1349,11 @@ function renderBook() {
       const price = BigInt(o.amtIn) > 0n ? Number(BigInt(o.amtOut)) / Number(BigInt(o.amtIn)) : 0;
       const size = Number(BigInt(o.amtIn));
       const depth = (size / maxAsk * 100).toFixed(1);
-      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}">
+      const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
+      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(o.amtIn)}</span>
+        <span class="size">${fmt(o.amtIn)}${aon}</span>
         <span class="total">${fmt(o.amtOut)}</span>
       </div>`;
     }
@@ -1327,10 +1383,11 @@ function renderBook() {
       const price = BigInt(o.amtOut) > 0n ? Number(BigInt(o.amtIn)) / Number(BigInt(o.amtOut)) : 0;
       const size = Number(BigInt(o.amtOut));
       const depth = (size / maxBid * 100).toFixed(1);
-      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}">
+      const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
+      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(o.amtOut)}</span>
+        <span class="size">${fmt(o.amtOut)}${aon}</span>
         <span class="total">${fmt(o.amtIn)}</span>
       </div>`;
     }
@@ -1464,10 +1521,11 @@ async function doMakeOrder() {
 
     const addr = await _signer.getAddress();
     if (tokenIn !== ZERO && idIn >= 1000000n) {
-      const isOp = await _coins.isOperator(addr, COOKBOOK);
+      const erc6909 = new ethers.Contract(tokenIn, COINS_ABI, _signer);
+      const isOp = await erc6909.isOperator(addr, COOKBOOK);
       if (!isOp) {
         showStatus('Approving Cookbook as operator...', 'info');
-        const approveTx = await _coins.setOperator(COOKBOOK, true);
+        const approveTx = await erc6909.setOperator(COOKBOOK, true);
         await approveTx.wait();
       }
     } else if (tokenIn !== ZERO && idIn < 1000000n) {
@@ -1520,9 +1578,10 @@ async function doFillOrder(orderId) {
   try {
     const addr = await _signer.getAddress();
     if (!isPayingEth && BigInt(o.idOut) >= 1000000n) {
-      const isOp = await _coins.isOperator(addr, COOKBOOK);
+      const erc6909 = new ethers.Contract(o.tokenOut, COINS_ABI, _signer);
+      const isOp = await erc6909.isOperator(addr, COOKBOOK);
       if (!isOp) {
-        const approveTx = await _coins.setOperator(COOKBOOK, true);
+        const approveTx = await erc6909.setOperator(COOKBOOK, true);
         await approveTx.wait();
       }
     } else if (!isPayingEth && BigInt(o.idOut) < 1000000n) {
@@ -1616,6 +1675,14 @@ function coinLabel(token, id) {
   // Known ERC20 tokens by address
   const known = KNOWN_TOKENS[token.toLowerCase()];
   if (known) return known;
+  // Synthetic pool label hints (URL params take priority for the current pair view)
+  if (_poolData) {
+    const _t = token.toLowerCase();
+    if (_poolData.token0 === _t && _poolData.coin0 && _poolData.coin0.id === id && _poolData.coin0.symbol)
+      return { symbol: _poolData.coin0.symbol, decimals: _poolData.coin0.decimals || 18 };
+    if (_poolData.token1 === _t && _poolData.coin1 && _poolData.coin1.id === id && _poolData.coin1.symbol)
+      return { symbol: _poolData.coin1.symbol, decimals: _poolData.coin1.decimals || 18 };
+  }
   // ZAMM or Cookbook coin — look up by coinId
   const cached = _coinLabelCache.get(id);
   if (cached) return cached;
@@ -1626,46 +1693,133 @@ function iconForToken(token, id) {
   const label = coinLabel(token, id);
   // Built-in SVG icons for known tokens
   if (TOKEN_ICONS[label.symbol]) return TOKEN_ICONS[label.symbol];
-  // Indexer imageUrl for ZAMM/Cookbook coins
-  const cached = _coinLabelCache.get(id);
-  if (cached?.imageUrl) {
-    return `<img src="${escAttr(cached.imageUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
+  // Logo URL from synthetic pool data (passed via URL params)
+  const _t = token.toLowerCase();
+  const poolCoin = _poolData
+    ? ((_poolData.token0 === _t && _poolData.coin0 && _poolData.coin0.id === id) ? _poolData.coin0
+      : (_poolData.token1 === _t && _poolData.coin1 && _poolData.coin1.id === id) ? _poolData.coin1 : null)
+    : null;
+  if (poolCoin?.logoUrl) {
+    return `<img src="${escAttr(poolCoin.logoUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
+  }
+  // Indexer imageUrl for ZAMM/Cookbook coins (skip if poolData already identified this token — id may collide)
+  if (!poolCoin) {
+    const cached = _coinLabelCache.get(id);
+    if (cached?.imageUrl) {
+      return `<img src="${escAttr(cached.imageUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
+    }
   }
   // Fallback: letter icon
   return iconForSymbol(label.symbol);
 }
 
 let _renderedGlobalOrders = []; // cached for filtering
+let _activePairFilter = null;
+
+function orderPairKey(o) {
+  const a = o.tokenIn.toLowerCase(), b = o.tokenOut.toLowerCase();
+  return a < b ? a + ':' + b : b + ':' + a;
+}
+
+function orderPairLabel(o) {
+  const a = o.tokenIn.toLowerCase(), b = o.tokenOut.toLowerCase();
+  const la = coinLabel(o.tokenIn, o.idIn).symbol;
+  const lb = coinLabel(o.tokenOut, o.idOut).symbol;
+  return a < b ? la + '/' + lb : lb + '/' + la;
+}
+
+function orderRate(o) {
+  const inL = coinLabel(o.tokenIn, o.idIn);
+  const outL = coinLabel(o.tokenOut, o.idOut);
+  const inAmt = Number(BigInt(o.amtIn)) / (10 ** (inL.decimals || 18));
+  const outAmt = Number(BigInt(o.amtOut)) / (10 ** (outL.decimals || 18));
+  if (inAmt <= 0) return 0;
+  return outAmt / inAmt;
+}
 
 async function renderGlobalOrders() {
   const now = Math.floor(Date.now() / 1000);
   _renderedGlobalOrders = _allOrders.filter(o => o.status === "ACTIVE" && Number(o.deadline) > now);
 
   await loadCoinMap();
+
+  // Build pair filter chips
+  const pairCounts = new Map();
+  for (const o of _renderedGlobalOrders) {
+    const key = orderPairKey(o);
+    pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+  }
+  // Sort pairs by order count desc, show top pairs
+  const topPairs = [...pairCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  let chipHtml = '<span class="pair-chip' + (!_activePairFilter ? ' active' : '') + '" data-pair="" onclick="setPairFilter(null)">All</span>';
+  for (const [key, count] of topPairs) {
+    if (count < 2) continue;
+    const sample = _renderedGlobalOrders.find(o => orderPairKey(o) === key);
+    const label = orderPairLabel(sample);
+    const active = _activePairFilter === key ? ' active' : '';
+    chipHtml += `<span class="pair-chip${active}" data-pair="${escAttr(key)}" onclick="setPairFilter('${escAttr(key)}')">${escText(label)} (${count})</span>`;
+  }
+  $('pairFilters').innerHTML = chipHtml;
+
+  filterGlobalOrders();
+}
+
+function setPairFilter(key) {
+  _activePairFilter = key;
+  const chips = $('pairFilters').querySelectorAll('.pair-chip');
+  chips.forEach(c => c.classList.toggle('active', key === null ? !c.dataset.pair : c.dataset.pair === key));
   filterGlobalOrders();
 }
 
 function filterGlobalOrders() {
   const q = ($('globalSearch')?.value || '').toLowerCase().trim();
-  const orders = q ? _renderedGlobalOrders.filter(o => {
-    const inL = coinLabel(o.tokenIn, o.idIn);
-    const outL = coinLabel(o.tokenOut, o.idOut);
-    const inC = _coinLabelCache.get(o.idIn);
-    const outC = _coinLabelCache.get(o.idOut);
-    const searchable = [
-      inL.symbol, outL.symbol,
-      inC?.name, outC?.name,
-      o.tokenIn, o.tokenOut,
-      o.maker
-    ].filter(Boolean).join(' ').toLowerCase();
-    return searchable.includes(q);
-  }) : _renderedGlobalOrders;
+  const sort = $('globalSort')?.value || 'newest';
 
+  let orders = _renderedGlobalOrders;
+
+  // Pair filter
+  if (_activePairFilter) {
+    orders = orders.filter(o => orderPairKey(o) === _activePairFilter);
+  }
+
+  // Text search
+  if (q) {
+    orders = orders.filter(o => {
+      const inL = coinLabel(o.tokenIn, o.idIn);
+      const outL = coinLabel(o.tokenOut, o.idOut);
+      const inC = _coinLabelCache.get(o.idIn);
+      const outC = _coinLabelCache.get(o.idOut);
+      const searchable = [
+        inL.symbol, outL.symbol,
+        inC?.name, outC?.name,
+        o.tokenIn, o.tokenOut,
+        o.maker
+      ].filter(Boolean).join(' ').toLowerCase();
+      return searchable.includes(q);
+    });
+  }
+
+  // Sort
+  if (sort === 'expiring') {
+    orders = [...orders].sort((a, b) => Number(a.deadline) - Number(b.deadline));
+  } else if (sort === 'largest') {
+    orders = [...orders].sort((a, b) => {
+      const aIn = Number(BigInt(a.amtIn));
+      const bIn = Number(BigInt(b.amtIn));
+      return bIn - aIn;
+    });
+  }
+  // 'newest' keeps indexer order (createdAt desc)
+
+  const filtered = q || _activePairFilter;
   $('globalOrderCount').textContent = orders.length + ' order' + (orders.length !== 1 ? 's' : '')
-    + (q ? ' matching' : '');
+    + (filtered ? ' matching' : '');
 
   if (orders.length === 0) {
-    $('globalOrdersList').innerHTML = `<div class="empty-msg">${q ? 'No orders match your search' : 'No active orders'}</div>`;
+    $('globalOrdersList').innerHTML = `<div class="empty-msg">${filtered ? 'No orders match your search' : 'No active orders'}</div>`;
     return;
   }
 
@@ -1677,6 +1831,9 @@ function filterGlobalOrders() {
     const tl = timeLeft(o.deadline);
     const inIcon = iconForToken(o.tokenIn, o.idIn);
     const outIcon = iconForToken(o.tokenOut, o.idOut);
+    const rate = orderRate(o);
+    const rateStr = rate > 0 ? fmtCompact(rate) + ' ' + escText(outL.symbol) + '/' + escText(inL.symbol) : '';
+    const aon = o.partialFill ? '' : ' <span class="aon-tag" title="All-or-nothing">AON</span>';
     html += `<div class="global-order-item" onclick="showFillModal('${escAttr(o.id)}')">
       <div class="order-token-pair">
         <span class="token-icon">${inIcon}</span>
@@ -1684,8 +1841,8 @@ function filterGlobalOrders() {
         <span class="token-icon">${outIcon}</span>
       </div>
       <div class="order-info">
-        <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}</div>
-        <div class="meta">${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${escText(tl)} left &middot; <a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit" onclick="event.stopPropagation()">${escText(o.txHash.slice(0,10))}&hellip;</a></div>
+        <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}${aon}</div>
+        <div class="meta">${rateStr}${rateStr ? ' &middot; ' : ''}${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${escText(tl)} left</div>
       </div>
       <div class="order-fill-badge"><span class="pct">${pct}%</span><br>filled</div>
     </div>`;
@@ -1808,14 +1965,41 @@ function startRefreshLoop() {
   }, 1000);
 }
 
+// ---- Build synthetic pool data from token addresses ----
+function buildSyntheticPool(token0, token1, id0, id1, labelHint0, labelHint1, logoHint0, logoHint1) {
+  const t0 = token0.toLowerCase();
+  const t1 = token1.toLowerCase();
+  const k0 = KNOWN_TOKENS[t0];
+  const k1 = KNOWN_TOKENS[t1];
+  const dec0 = k0 ? k0.decimals : 18;
+  const dec1 = k1 ? k1.decimals : 18;
+  // Use label hints if provided, else known token symbol, else short address
+  let label0 = labelHint0 || (k0 ? k0.symbol : shortAddr(t0));
+  let label1 = labelHint1 || (k1 ? k1.symbol : shortAddr(t1));
+  // When both tokens are the same ERC6909 contract, disambiguate by coin ID
+  if (t0 === t1 && id0 !== id1 && !labelHint0 && !labelHint1) {
+    const base = k0 ? k0.symbol : shortAddr(t0);
+    label0 = base + ' #' + id0.toString().slice(0, 6);
+    label1 = base + ' #' + id1.toString().slice(0, 6);
+  }
+  return {
+    token0: t0, token1: t1,
+    coin0: { id: id0, decimals: dec0, symbol: label0, logoUrl: logoHint0 || null },
+    coin1: { id: id1, decimals: dec1, symbol: label1, logoUrl: logoHint1 || null },
+    reserve0: null, reserve1: null
+  };
+}
+
 // ---- Init ----
 async function init() {
   $('poolMeta').innerHTML = zfiLoadingSVG(28) + 'Loading...';
   const poolId = getPoolId();
-  if (!poolId) {
+  const tokenParams = !poolId ? getTokenParams() : null;
+
+  if (!poolId && !tokenParams) {
     _globalMode = true;
     $('pairName').textContent = 'Orderbook';
-    $('poolMeta').textContent = 'All active orders';
+    $('poolMeta').innerHTML = 'All active orders &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>';
     document.title = 'ORDER';
     document.querySelector('.tab-row').style.display = 'none';
     $('tab-book').style.display = 'none';
@@ -1826,16 +2010,24 @@ async function init() {
     return;
   }
 
-  $('chartLink').href = '../chart/#/' + poolId;
-  $('chartLink').style.display = 'inline-flex';
-  $('lpLink').href = '../lp/#/' + poolId;
-  $('lpLink').style.display = 'inline-flex';
+  if (poolId) {
+    $('chartLink').href = '../chart/#/' + poolId;
+    $('chartLink').style.display = 'inline-flex';
+    $('lpLink').href = '../lp/#/' + poolId;
+    $('lpLink').style.display = 'inline-flex';
 
-  try {
+    try {
+      await loadCoinMap();
+      _poolData = await fetchPool(poolId);
+    } catch (e) {
+      console.error('Pool fetch failed:', e);
+    }
+  }
+
+  // Fallback: build synthetic pool from query params
+  if (!_poolData && tokenParams) {
     await loadCoinMap();
-    _poolData = await fetchPool(poolId);
-  } catch (e) {
-    console.error('Pool fetch failed:', e);
+    _poolData = buildSyntheticPool(tokenParams.token0, tokenParams.token1, tokenParams.id0, tokenParams.id1, tokenParams.label0, tokenParams.label1, tokenParams.logo0, tokenParams.logo1);
   }
 
   if (_poolData) {
@@ -1847,9 +2039,8 @@ async function init() {
     const icon1 = iconForToken(_poolData.token1, id1);
     $('pairIcons').innerHTML = '<span class="icon-0">' + icon0 + '</span><span class="icon-1">' + icon1 + '</span>';
     $('pairName').textContent = label0 + ' / ' + label1;
-    $('poolMeta').innerHTML = 'Pool ' + poolId.slice(0, 16) + '...'
-      + ' &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">Cookbook</a>'
-      + ' &middot; ' + (_poolData._source || 'ZAMM');
+    $('poolMeta').innerHTML = (poolId ? 'Pool ' + poolId.slice(0, 16) + '... &middot; ' : '')
+      + '<a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>';
     document.title = label0 + '/' + label1 + ' ORDER';
 
     // Show AMM price computed from reserves (token0 per token1, matching book prices)
@@ -1868,10 +2059,17 @@ async function init() {
     }
 
     setSide('buy');
+
+    // Pre-fill price from URL param
+    const urlPrice = tokenParams ? tokenParams.price : new URLSearchParams(location.search).get('price');
+    if (urlPrice) {
+      $('orderPrice').value = urlPrice;
+      updateOrderTotal();
+    }
   } else {
     $('pairName').textContent = 'Orderbook';
-    $('poolMeta').textContent = 'Pool ' + poolId.slice(0, 20) + '... (metadata unavailable)';
-    console.warn('[orderbook] Pool not found in ZAMM or COOKBOOK sources for id:', poolId);
+    $('poolMeta').textContent = 'Pool ' + (poolId || '').slice(0, 20) + '... (metadata unavailable)';
+    console.warn('[orderbook] Pool not found for id:', poolId);
   }
 
   startRefreshLoop();

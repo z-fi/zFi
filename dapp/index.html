@@ -440,8 +440,9 @@ button.secondary:hover { background: var(--surface-hover); }
   backdrop-filter: blur(4px);
   z-index: 2000;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 20px;
+  padding-top: max(60px, env(safe-area-inset-top, 60px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -450,19 +451,21 @@ body.modal-open { overflow: hidden; }
 .modal {
   background: var(--modal-bg);
   border: 1px solid var(--modal-border);
-  padding: 16px;
+  padding: 20px;
   width: 100%;
   max-width: 380px;
-  max-height: calc(100vh - 40px);
-  max-height: calc(100dvh - 40px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .modal-title {
   font-size: 14px;
@@ -473,11 +476,11 @@ body.modal-open { overflow: hidden; }
   background: none;
   border: none;
   color: var(--fg);
-  font-size: 20px;
+  font-size: 24px;
   cursor: pointer;
   line-height: 1;
-  padding: 4px;
-  margin: -4px;
+  padding: 8px;
+  margin: -8px;
   opacity: 0.4;
   transition: opacity 0.15s;
 }
@@ -488,7 +491,7 @@ body.modal-open { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 14px 16px;
   background: var(--modal-bg);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -497,14 +500,17 @@ body.modal-open { overflow: hidden; }
   transition: background 0.15s, color 0.15s;
 }
 .wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
+.wallet-option:active { opacity: 0.7; }
 .wallet-option-icon { font-size: 1.5rem; }
-.wallet-option-name { font-weight: 600; }
+.wallet-option-name { font-weight: 600; font-size: 14px; }
 .wallet-option.disconnect {
   border-color: #f00;
   color: #f00;
   justify-content: center;
+  margin-top: 4px;
 }
 .wallet-option.disconnect:hover { background: #f00; color: #fff; }
+.modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 /* Token list in modal */
 .token-list-item {
@@ -514,10 +520,11 @@ body.modal-open { overflow: hidden; }
   padding: 10px 12px;
   cursor: pointer;
   transition: background 0.12s;
-  border-radius: 4px;
-  margin: 0 4px;
+  border-radius: 0;
+  margin: 0;
 }
 .token-list-item:hover { background: var(--list-hover); }
+.token-list-item:active { background: var(--surface-hover); }
 .token-list-item.highlight {
   background: var(--surface);
   outline: 1px solid var(--border);
@@ -528,14 +535,15 @@ body.modal-open { overflow: hidden; }
 /* Custom token input */
 .custom-token-input, .token-search {
   width: 100%;
-  padding: 10px 0;
+  padding: 12px 0;
   border: none;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
   background: transparent;
   color: var(--fg);
+  flex-shrink: 0;
 }
 .custom-token-input { margin-top: 8px; font-size: 12px; padding: 8px 0; }
 .custom-token-input:focus, .token-search:focus { border-bottom-color: var(--fg); }
@@ -544,6 +552,7 @@ body.modal-open { overflow: hidden; }
   color: var(--fg-dim);
   margin: 4px 0 6px;
   min-height: 14px;
+  flex-shrink: 0;
 }
 .token-search-status.error { color: #e74c3c; }
 .token-group-label {
@@ -588,25 +597,16 @@ body.modal-open { overflow: hidden; }
 .status.error { background: var(--status-error); }
 .status.success { background: var(--status-success); }
 
-/* Footer */
-.site-footer {
-  position: relative;
-  text-align: center;
-  margin-top: 40px;
-  padding: 48px 20px;
-  font-size: 11px;
-  opacity: 0.65;
-  letter-spacing: 0.5px;
-  font-weight: 300;
-}
-.site-footer a {
-  color: inherit;
-  text-decoration: underline;
-  margin: 0 2px;
-}
-.site-footer a:hover { opacity: 0.7; }
-.site-footer .tagline { opacity:1; color:#000; font-weight:500; }
-.dark .site-footer .tagline { opacity:1; color:#fff; font-weight:500; }
+/* Z Nav */
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 
 /* Responsive */
 @media (max-width: 700px) {
@@ -617,14 +617,21 @@ body.modal-open { overflow: hidden; }
   input[type="number"], input[type="text"] { font-size: 20px; padding: 8px 0; }
   .amount-input { font-size: 20px; }
   .swap-btn { padding: 12px 20px; }
-  .modal { max-width: 100%; margin: 0 10px; max-height: calc(100vh - 40px); overflow-y: auto; }
-  .dark-toggle { top: 18px; left: 16px; }
+  .modal-overlay { padding: 0; padding-top: 0; align-items: flex-end; }
+  .modal { max-width: 100%; margin: 0; border-left: none; border-right: none; border-bottom: none; max-height: 85vh; max-height: 85dvh; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .token-list-item { padding: 12px; }
+  .token-search { font-size: 16px; }
+  .dark-toggle { bottom: 16px; right: 16px; }
+  .z-nav { top: 14px; left: 14px; }
+  .z-nav-btn { padding: 4px; margin: -4px; }
+  .z-nav-menu a { padding: 10px 16px; }
   .swap-card { padding: 20px 16px; }
   .quick-token { min-width: 26px; min-height: 26px; padding: 4px; }
   .arrow-btn { width: 38px; height: 38px; }
   /* Privacy tab mobile */
   .pp-note-area { font-size: 10px; }
   .pp-asset-btn { padding: 8px 6px; font-size: 12px; min-height: 40px; }
+  #privacyTab .amount-input { font-size: 16px !important; }
   /* Coin launch form mobile */
   .coin-name-row { flex-direction:column;gap:0; }
   .coin-name-row .section { margin-bottom:14px; }
@@ -696,8 +703,8 @@ body.modal-open { overflow: hidden; }
 /* Dark mode toggle */
 .dark-toggle {
   position: fixed;
-  top: max(22px, env(safe-area-inset-top, 0px));
-  left: max(20px, env(safe-area-inset-left, 0px));
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
   border: none;
   cursor: pointer;
   padding: 13px;
@@ -838,7 +845,7 @@ body.modal-open { overflow: hidden; }
 }
 .send-field input:focus { border-bottom-width:2.5px; margin-bottom:-1px; }
 .send-datetime {
-  width:100%; padding:6px 0; font-size:13px; font-family:inherit;
+  width:100%; padding:6px 0; font-size:16px; font-family:inherit;
   border:none; border-bottom:1px solid var(--border-muted); outline:none;
   background:transparent; color:var(--fg);
 }
@@ -874,6 +881,23 @@ body.modal-open { overflow: hidden; }
 </style>
 </head>
 <body>
+
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="./" class="active">Swap</a>
+    <a href="./coin/">Coins</a>
+    <a href="./predict/">Predict</a>
+    <a id="navOrderbook" href="./orderbook/">Orderbook</a>
+    <a href="./lp/">Liquidity</a>
+    <a href="./domains/">Domains</a>
+    <a href="./dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
 
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
 
@@ -976,9 +1000,9 @@ body.modal-open { overflow: hidden; }
     <label style="margin:0;cursor:pointer;pointer-events:none">Receiver</label>
   </div>
   <div id="receiverWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:8px">
-    <input type="text" id="receiverAddress" placeholder="0x address, name.wei, or name.eth" style="font-size:14px;padding:8px 0">
+    <input type="text" id="receiverAddress" placeholder="0x address, name.wei, or name.eth" style="font-size:16px;padding:8px 0">
     <div id="receiverResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
-    <div id="receiverWarn" style="display:none;font-size:11px;margin-top:4px;color:#c0392b"></div>
+    <div id="receiverWarn" style="display:none;font-size:11px;margin-top:4px;color:var(--remove-fg, #c0392b)"></div>
   </div>
 </div>
 
@@ -1008,7 +1032,7 @@ body.modal-open { overflow: hidden; }
 
 <!-- Privacy note display (swap tab) -->
 <div id="ppSwapNoteBox" style="display:none;margin-top:16px" class="quote-info">
-  <div style="font-weight:600;color:#c0392b;margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
+  <div style="font-weight:600;color:var(--remove-fg, #c0392b);margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
   <textarea id="ppSwapNoteText" readonly rows="3" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button onclick="navigator.clipboard.writeText($('ppSwapNoteText').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
@@ -1022,12 +1046,6 @@ body.modal-open { overflow: hidden; }
 
 </div><!-- end swap-card -->
 
-<!-- Direct ZAMM stake / ragequit links -->
-<div id="directStakeLink" style="text-align:center;margin-top:10px;font-size:13px;opacity:0.7">
-  <a href="#" onclick="setupDirectZammStake();return false" style="color:var(--link-fg);text-decoration:underline;cursor:pointer">Stake ZAMM directly to zOrg</a>
-  <span style="color:var(--fg-dim)">&middot;</span>
-  <a href="#" onclick="setupRagequit();return false" style="color:var(--link-fg);text-decoration:underline;cursor:pointer">Ragequit zOrg to ZAMM</a>
-</div>
 </div><!-- end swapTab -->
 
 <div id="privacyTab" style="display:none">
@@ -1064,7 +1082,7 @@ body.modal-open { overflow: hidden; }
   <button id="ppDepositBtn" class="swap-btn" disabled>Connect Wallet</button>
 
   <div id="ppNoteBox" style="display:none;margin-top:16px" class="quote-info">
-    <div style="font-weight:600;color:#c0392b;margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
+    <div style="font-weight:600;color:var(--remove-fg, #c0392b);margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
     <textarea id="ppNote" readonly rows="3" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button onclick="navigator.clipboard.writeText($('ppNote').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
@@ -1204,7 +1222,7 @@ body.modal-open { overflow: hidden; }
       This is a partial withdrawal. Your old note will be fully spent and a new change note will be created. <b>Back up the change note immediately</b> — it is the only way to access remaining funds.
     </div>
 
-    <button id="ppwWithdrawBtn" class="swap-btn" disabled onclick="ppwWithdraw()">Verify &amp; Prepare Withdrawal</button>
+    <button id="ppwWithdrawBtn" class="swap-btn" disabled onclick="ppwWithdraw()">Withdraw</button>
 
     <div id="ppwResult" style="display:none;margin-top:12px" class="quote-info">
       <div style="font-size:11px;font-weight:600;margin-bottom:6px">Withdrawal Data</div>
@@ -1259,6 +1277,17 @@ body.modal-open { overflow: hidden; }
         <input type="text" id="coinTelegram" class="amount-input" placeholder="Telegram (e.g., mycoin_chat)" maxlength="60" style="font-size:13px">
         <input type="text" id="coinDiscord" class="amount-input" placeholder="Discord link (e.g., https://discord.gg/abc123)" maxlength="100" style="font-size:13px">
       </div>
+    </div>
+  </div>
+
+  <div id="coinOpsWrap" style="display:none;margin-bottom:14px">
+    <div class="receiver-toggle" onclick="const w=document.getElementById('coinOpsInnerWrap');const open=w.style.maxHeight==='0px';w.style.maxHeight=open?'80px':'0px';w.style.opacity=open?'1':'0';this.querySelector('.chevron').textContent=open?'\u25BC':'\u25B6'">
+      <span class="chevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
+      <label style="margin:0;cursor:pointer;pointer-events:none">Ops Wallet</label>
+    </div>
+    <div id="coinOpsInnerWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:8px">
+      <input type="text" id="coinOpsAddress" placeholder="0x address, name.wei, or name.eth" style="font-size:14px;padding:8px 0" oninput="onCoinOpsInput()">
+      <div id="coinOpsResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
     </div>
   </div>
 
@@ -1350,7 +1379,7 @@ body.modal-open { overflow: hidden; }
 
   <div class="send-field">
     <label>Recipient</label>
-    <input type="text" id="sendTo" placeholder="0x address, name.wei, or name.eth" style="font-size:14px">
+    <input type="text" id="sendTo" placeholder="0x address, name.wei, or name.eth" style="font-size:16px">
     <div id="sendToResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
   </div>
 
@@ -1397,22 +1426,14 @@ body.modal-open { overflow: hidden; }
     </div>
     <input type="text" id="tokenSearchInput" class="token-search" placeholder="Search or enter list.wei" autocomplete="off">
     <div id="weiListStatus" class="token-search-status"></div>
-    <div id="tokenList" style="max-height:320px;overflow-y:auto"></div>
-    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;display:flex;gap:8px;align-items:center">
+    <div id="tokenList" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0"></div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;display:flex;gap:8px;align-items:center;flex-shrink:0">
       <input type="text" id="customTokenAddress" class="custom-token-input" placeholder="Paste token address" style="margin:0;flex:1">
-      <button style="white-space:nowrap;font-size:12px;padding:6px 12px" onclick="addCustomToken()">Add</button>
+      <button style="white-space:nowrap;font-size:12px;padding:8px 14px" onclick="addCustomToken()">Add</button>
     </div>
   </div>
 </div>
 
-<!-- Footer web ring -->
-<footer class="site-footer">
-  <a href="./domains/">Domains</a> &middot; <a href="./dao/">DAO</a> &middot; <a href="./coin/">Coin</a> &middot; <a href="./predict/">Predict</a> &middot; <a href="./orderbook/">Orderbook</a> &middot; <a href="./lp/">LP</a> &middot; built by <a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg></a><a href="./dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E">zOrg</a> &middot; <a href="https://x.com/z_fi_" target="_blank" rel="noopener" title="X"><svg width="14" height="14" viewBox="0 0 300 300.251" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;fill:currentColor"><path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/></svg></a>
-  <div style="margin-top:8px;letter-spacing:1px"><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">zfi.wei</a></div>
-  <div class="tagline" style="margin-top:4px;font-size:12px;letter-spacing:0.5px;font-style:italic">the most secure-by-default exchange that does everything onchain</div>
-  <div style="margin-top:2px;font-size:11px;letter-spacing:0.5px;opacity:0.5">powered by $zorg the governance reward token of the zfi stack</div>
-  <div style="margin-top:2px;font-size:11px;opacity:0.5"><a href="https://etherscan.io/token/0x00a6bA94BBb5474725515De88fE04F854f2dCb12" target="_blank" rel="noopener" style="color:inherit">0x00a6bA94BBb5474725515De88fE04F854f2dCb12</a></div>
-</footer>
 
 <script src="./ethers.min.js"></script>
 <script src="./walletconnect.min.js"></script>
@@ -1421,6 +1442,7 @@ body.modal-open { overflow: hidden; }
 <script src="./poseidon3.min.js"></script>
 <script>
 // ---- Dark mode ----
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
 function toggleDark() {
   const on = document.documentElement.classList.toggle('dark');
   localStorage.setItem('dark', on ? '1' : '0');
@@ -1962,7 +1984,7 @@ function updateWcBanner() {
       <button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>
     `;
     document.body.prepend(banner);
-    document.body.style.paddingTop = '44px';
+    document.body.style.paddingTop = '54px';
   } else {
     document.body.style.paddingTop = '';
   }
@@ -2670,7 +2692,7 @@ const fmtOutput = (nStr) => {
 };
 
 // ---- Allowance cache ----
-const _allowTTLms = 10_000;
+const _allowTTLms = 30_000;
 const _allowCache = new Map();
 const _allowKey = (token, owner, spender) =>
   `${token.toLowerCase()}:${owner.toLowerCase()}:${spender.toLowerCase()}`;
@@ -3136,6 +3158,15 @@ const ZORG_RAGEQUIT_IFACE = new ethers.Interface([
   "function ragequit(address[] tokens, uint256 sharesToBurn, uint256 lootToBurn)",
 ]);
 
+// ---- Hoisted ERC20 approve ABI (avoid re-parsing per approval tx) ----
+const ERC20_APPROVE_ABI = ["function approve(address,uint256) returns (bool)"];
+
+// ---- Hoisted Curve exchange interfaces (avoid re-parsing per quote) ----
+const CURVE_CRYPTO_EXCHANGE_IFACE = new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"]);
+const CURVE_STABLE_EXCHANGE_IFACE = new ethers.Interface(["function exchange(int128,int128,uint256,uint256) payable"]);
+const CURVE_STABLE_UNDERLYING_IFACE = new ethers.Interface(["function exchange_underlying(int128,int128,uint256,uint256) payable"]);
+const CURVE_GET_DY_IFACE = new ethers.Interface(["function get_dy(uint256,uint256,uint256) view returns (uint256)"]);
+
 // ---- Quote refresh timer ----
 let _refreshTimer = null;
 let _refreshCountdown = 0;
@@ -3277,6 +3308,13 @@ async function handleAmountChange() {
     setDisabled(swapBtn, true);
     dstEl.value = "";
     dstEl.placeholder = "Fetching\u2026";
+
+    // Pre-warm permit caches in parallel with the quote (fire-and-forget)
+    const _fromAddr = tokens[fromSnap]?.address;
+    if (_fromAddr && _fromAddr !== ZERO_ADDRESS && connectedAddress) {
+      getPermitConfig(_fromAddr).catch(() => {});
+      checkPermit2Allowance(_fromAddr).catch(() => {});
+    }
 
     const quote = await requestQuote(amtStr, fromSnap, toSnap, isExactOut);
 
@@ -3467,9 +3505,9 @@ async function setPercentBalance(pct) {
       if (f.address === ZERO_ADDRESS) {
         raw = await provider.getBalance(connectedAddress);
       } else {
-        const c = new ethers.Contract(f.address,
-          ["function balanceOf(address) view returns (uint256)"], provider);
-        raw = await c.balanceOf(connectedAddress);
+        const balData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
+        const balRaw = await provider.call({ to: f.address, data: balData });
+        raw = MC_BAL_IFACE.decodeFunctionResult("balanceOf", balRaw)[0];
       }
       setCachedBalance(f.address, raw);
     }
@@ -3589,7 +3627,7 @@ function onReceiverInput() {
     _receiverDebounce = setTimeout(() => resolveReceiverName(v), 350);
   } else {
     el.style.display = "block";
-    el.style.color = "#c0392b";
+    el.style.color = "var(--remove-fg, #c0392b)";
     el.textContent = "Enter 0x address, name.wei, or name.eth";
   }
 }
@@ -3622,13 +3660,13 @@ async function resolveReceiverName(name) {
       if (amt && +amt > 0) handleAmountChange();
     } else {
       _resolvedReceiver = null;
-      el.style.color = "#c0392b";
+      el.style.color = "var(--remove-fg, #c0392b)";
       el.textContent = "Name not found";
     }
   } catch (e) {
     if (seq !== _receiverResolveSeq) return;
     _resolvedReceiver = null;
-    el.style.color = "#c0392b";
+    el.style.color = "var(--remove-fg, #c0392b)";
     el.textContent = "Failed to resolve " + name;
   }
 }
@@ -4214,41 +4252,60 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       mc3SpotRocketIdx = mc3Entries.length;
       mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [refAmount]) });
     }
-    // Heavy calls (complex return types + high gas) stay as separate eth_calls
-    const allCalls = [
-      quoter.buildBestSwapViaETHMulticall(
-        receiver, connectedAddress, false,
-        fromData.address, toData.address,
-        amountIn, BigInt(slippageBps), deadline,
-        hookFee, hookTick, hookAddr, callOpts
-      ),
-      quoter.buildSplitSwap(
-        receiver, fromData.address, toData.address,
-        amountIn, splitSlip, deadline, callOpts
-      ),
-      quoter.build3HopMulticall(
-        receiver, fromData.address, toData.address,
-        amountIn, splitSlip, deadline, callOpts
-      ),
-      quoter.buildHybridSplit(
-        receiver, fromData.address, toData.address,
-        amountIn, splitSlip, deadline, callOpts
-      ),
-      mc3ViewBatch(rpc, mc3Entries),
-    ];
+    // Skip split/3-hop/hybrid for small amounts (saves RPC gas and latency)
+    // Threshold: 0.05 ETH for native, 100 units for 18-dec tokens, scaled for others
+    const _smallThreshold = 10n ** BigInt(Math.max(0, fromData.decimals - 2)) * 5n;
+    const _skipSplitRoutes = amountIn < _smallThreshold;
+
+    // Heavy quoter calls batched into a second Multicall3 (reduces eth_calls from 5 to 2)
+    const heavyEntries = [];
+    const _heavyBestIdx = heavyEntries.length;
+    heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
+      receiver, connectedAddress, false,
+      fromData.address, toData.address,
+      amountIn, BigInt(slippageBps), deadline,
+      hookFee, hookTick, hookAddr
+    ]) });
+    let _heavySplitIdx = -1, _heavy3HopIdx = -1, _heavyHybridIdx = -1, _heavyV4SplitIdx = -1;
+    if (!_skipSplitRoutes) {
+    _heavySplitIdx = heavyEntries.length;
+    heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildSplitSwap", [
+      receiver, fromData.address, toData.address,
+      amountIn, splitSlip, deadline
+    ]) });
+    _heavy3HopIdx = heavyEntries.length;
+    heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("build3HopMulticall", [
+      receiver, fromData.address, toData.address,
+      amountIn, splitSlip, deadline
+    ]) });
+    _heavyHybridIdx = heavyEntries.length;
+    heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildHybridSplit", [
+      receiver, fromData.address, toData.address,
+      amountIn, splitSlip, deadline
+    ]) });
     if (isPNKSTR) {
-      allCalls.push(quoter.buildSplitSwapHooked(
+      _heavyV4SplitIdx = heavyEntries.length;
+      heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildSplitSwapHooked", [
         receiver, fromData.address, toData.address,
         amountIn, splitSlip, deadline,
-        0, 60, PNKSTR_HOOK_ADDRESS, callOpts
-      ));
+        0, 60, PNKSTR_HOOK_ADDRESS
+      ]) });
     }
+    } // end !_skipSplitRoutes
+    const allCalls = [
+      mc3ViewBatch(rpc, heavyEntries),
+      mc3ViewBatch(rpc, mc3Entries),
+    ];
     const settled = await Promise.allSettled(allCalls);
-    const [bestResult, splitResult, threeHopResult, hybridSplitResult, mc3Result] = settled;
-    const v4SplitResult = isPNKSTR ? settled[5] : undefined;
-    // Decode Multicall3 batch into settled-style objects (post-processing code unchanged)
-    if (mc3Result.status !== 'fulfilled') console.error("[mc3] batch FAILED:", mc3Result.reason);
-    else console.log("[mc3] batch OK, entries:", mc3Result.value?.length);
+    const [heavyMc3Result, mc3Result] = settled;
+    // Decode heavy batch
+    const heavyMc3 = heavyMc3Result.status === 'fulfilled' ? heavyMc3Result.value : null;
+    const bestResult = mc3AsSettled(heavyMc3, _heavyBestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
+    const splitResult = mc3AsSettled(heavyMc3, _heavySplitIdx, QUOTER_IFACE, "buildSplitSwap");
+    const threeHopResult = mc3AsSettled(heavyMc3, _heavy3HopIdx, QUOTER_IFACE, "build3HopMulticall");
+    const hybridSplitResult = mc3AsSettled(heavyMc3, _heavyHybridIdx, QUOTER_IFACE, "buildHybridSplit");
+    const v4SplitResult = isPNKSTR ? mc3AsSettled(heavyMc3, _heavyV4SplitIdx, QUOTER_IFACE, "buildSplitSwapHooked") : undefined;
+    // Decode light Multicall3 batch into settled-style objects
     const mc3 = mc3Result.status === 'fulfilled' ? mc3Result.value : null;
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     let curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
@@ -4301,7 +4358,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     }
 
     // bestResult is required
-    if (bestResult.status === 'rejected') throw bestResult.reason;
+    if (bestResult.status !== 'fulfilled') throw new Error("Best swap quote failed");
     const r = bestResult.value;
 
     const isTwoHop = r.b.amountOut > 0n;
@@ -4377,7 +4434,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         result.allQuotes.push({ source: "Rocket Pool", sourceId: -1, feeBps: 0n, amountIn: rp.amountIn, amountOut: rp.amountOut });
       }
     }
-    console.log("[allQuotes]", result.allQuotes.length, "entries:", result.allQuotes.map(q => q.source + "=" + q.amountOut));
 
     // Check if 3-hop beats current best
     if (threeHopResult?.status === 'fulfilled' && threeHopResult.value) {
@@ -4519,24 +4575,21 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     // ETH→Curve: bypass swapCurve (which may misclassify pool ABI) and use
     // execute to forward native ETH directly. Independently probe the pool to
     // determine the correct exchange ABI (crypto uint256 vs stable int128).
-    console.log("[CurveOverride] fromData.address:", fromData.address, "ZERO:", ZERO_ADDRESS, "curveResult status:", curveResult?.status, "curveResult value:", curveResult?.status === 'fulfilled' ? curveResult.value : curveResult?.reason?.toString?.());
     if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
       const c = curveResult.value;
       if (c.bestPool !== ZERO_ADDRESS && c.amountOut > 0n && c.amountOut >= result.expectedOutput) {
         // Probe: try crypto get_dy(uint256,uint256,uint256) to determine true pool type
         let isCrypto = false;
         try {
-          const probePool = new ethers.Contract(c.bestPool, [
-            "function get_dy(uint256,uint256,uint256) view returns (uint256)"
-          ], rpc);
+          const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
           const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), amountIn, callOpts);
           isCrypto = probeOut > 0n;
         } catch (_) {}
         const useUnderlying = c.usedUnderlying && !isCrypto;
         const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
         const exchangeIface = isCrypto
-          ? new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"])
-          : new ethers.Interface([`function ${fnName}(int128,int128,uint256,uint256) payable`]);
+          ? CURVE_CRYPTO_EXCHANGE_IFACE
+          : useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
         const minOut = c.amountOut * (10000n - BigInt(slippageBps)) / 10000n;
         const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, amountIn, minOut]);
         const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, amountIn, exchangeData]);
@@ -4610,19 +4663,17 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       mc3SpotRocketIdx = mc3Entries.length;
       mc3Entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [refAmount]) });
     }
-    const allCalls = [
-      quoter.buildBestSwapViaETHMulticall(
-        receiver, connectedAddress, true,
-        fromData.address, toData.address,
-        amountOut, BigInt(slippageBps), deadline,
-        hookFee, hookTick, hookAddr, callOpts
-      ),
-      mc3ViewBatch(rpc, mc3Entries),
-    ];
-    const settled = await Promise.allSettled(allCalls);
-    const [bestResult, mc3Result] = settled;
-    // Decode Multicall3 batch
-    const mc3 = mc3Result.status === 'fulfilled' ? mc3Result.value : null;
+    // Merge heavy buildBestSwap into the mc3 batch (1 eth_call instead of 2)
+    const _mc3BestIdx = mc3Entries.length;
+    mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
+      receiver, connectedAddress, true,
+      fromData.address, toData.address,
+      amountOut, BigInt(slippageBps), deadline,
+      hookFee, hookTick, hookAddr
+    ]) });
+    let mc3 = null;
+    try { mc3 = await mc3ViewBatch(rpc, mc3Entries); } catch (_) {}
+    const bestResult = mc3AsSettled(mc3, _mc3BestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     const curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
     const lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
@@ -4656,7 +4707,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     }
 
 
-    if (bestResult.status === 'rejected') throw bestResult.reason;
+    if (bestResult.status !== 'fulfilled') throw new Error("Best swap quote failed");
     const r = bestResult.value;
 
     const isTwoHop = r.b.amountOut > 0n;
@@ -4765,17 +4816,15 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
         // Probe: try crypto get_dy(uint256,uint256,uint256) to determine true pool type
         let isCrypto = false;
         try {
-          const probePool = new ethers.Contract(c.bestPool, [
-            "function get_dy(uint256,uint256,uint256) view returns (uint256)"
-          ], rpc);
+          const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
           const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), c.amountIn, callOpts);
           isCrypto = probeOut > 0n;
         } catch (_) {}
         const useUnderlying = c.usedUnderlying && !isCrypto;
         const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
         const exchangeIface = isCrypto
-          ? new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"])
-          : new ethers.Interface([`function ${fnName}(int128,int128,uint256,uint256) payable`]);
+          ? CURVE_CRYPTO_EXCHANGE_IFACE
+          : useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
         // For exact-out: swap c.amountIn input, require at least amountOut output
         const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, c.amountIn, amountOut]);
         const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, c.amountIn, exchangeData]);
@@ -4854,7 +4903,7 @@ function displayAllRoutes(quote, toSym, isExactOut = false, fromSym = null) {
 
 // ---- Price impact via spot rate ----
 const _spotCache = new Map();
-const _spotTTL = 60_000;
+const _spotTTL = 120_000;
 const _spotMaxSize = 50;
 
 function _spotKey(tokenIn, tokenOut) {
@@ -4917,38 +4966,31 @@ async function getSpotRate(fromSym, toSym) {
 
   try {
     const spotRate = await quoteRPC.call(async (rpc) => {
-      const quoter = getQuoterContract(rpc);
-      const callOpts = { blockTag: "latest" };
-      const spotCalls = [
-        quoter.getQuotes(false, fromData.address, toData.address, refAmount, callOpts),
-        quoter.quoteCurve(false, fromData.address, toData.address, refAmount, 8, callOpts),
-      ];
-      // Rocket Pool spot rate for ETH→rETH
+      // Batch all spot rate calls into a single Multicall3 (1 eth_call)
+      const entries = [];
+      const _sqIdx = entries.length;
+      entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, refAmount]) });
+      const _scIdx = entries.length;
+      entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("quoteCurve", [false, fromData.address, toData.address, refAmount, 8]) });
       const isRocketSpot = fromData.address === ZERO_ADDRESS
         && toData.address.toLowerCase() === RETH_ADDRESS.toLowerCase();
+      let _srIdx = -1;
       if (isRocketSpot) {
-        spotCalls.push((async () => {
-          const reth = new ethers.Contract(RETH_ADDRESS, RETH_RATE_ABI, rpc);
-          const rethOut = await reth.getRethValue(refAmount);
-          return { amountIn: refAmount, amountOut: rethOut };
-        })());
+        _srIdx = entries.length;
+        entries.push({ target: RETH_ADDRESS, data: RETH_RATE_IFACE.encodeFunctionData("getRethValue", [refAmount]) });
       }
-      const [baseResult, curveResult, rocketSpotResult] = await Promise.allSettled(spotCalls);
+      let mc3 = null;
+      try { mc3 = await mc3ViewBatch(rpc, entries); } catch (_) {}
       let bestOut = 0n, bestIn = 0n;
-      if (baseResult.status === 'fulfilled') {
-        const q = baseResult.value;
-        if (q.best.amountOut > bestOut) { bestOut = q.best.amountOut; bestIn = q.best.amountIn; }
-      }
-      if (curveResult.status === 'fulfilled') {
-        const c = curveResult.value;
-        if (c.amountOut > bestOut) { bestOut = c.amountOut; bestIn = c.amountIn; }
-      }
-      if (rocketSpotResult?.status === 'fulfilled') {
-        const rp = rocketSpotResult.value;
-        if (rp.amountOut > bestOut) { bestOut = rp.amountOut; bestIn = rp.amountIn; }
+      const sq = mc3Decode(mc3, _sqIdx, QUOTER_IFACE, "getQuotes");
+      if (sq && sq.best.amountOut > bestOut) { bestOut = sq.best.amountOut; bestIn = sq.best.amountIn; }
+      const sc = mc3Decode(mc3, _scIdx, QUOTER_IFACE, "quoteCurve");
+      if (sc && sc.amountOut > bestOut) { bestOut = sc.amountOut; bestIn = sc.amountIn; }
+      if (_srIdx >= 0) {
+        const sr = mc3Decode(mc3, _srIdx, RETH_RATE_IFACE, "getRethValue");
+        if (sr && sr[0] > bestOut) { bestOut = sr[0]; bestIn = refAmount; }
       }
       if (bestOut === 0n || bestIn === 0n) return null;
-      // Store raw BigInts to avoid precision loss in Number conversion
       return { num: bestOut, den: bestIn };
     });
     if (spotRate != null) {
@@ -5165,7 +5207,7 @@ async function executeSwap() {
         swapBtn.textContent = "Approving ZAMM for DAO...";
         const erc20W = new ethers.Contract(
           fromData.address,
-          ["function approve(address,uint256) returns (bool)"],
+          ERC20_APPROVE_ABI,
           signer
         );
         // Reset stale non-zero allowance first (safety for non-standard tokens)
@@ -5317,7 +5359,7 @@ async function executeSwap() {
           }
           if (!approved) {
             swapBtn.textContent = "Approving ZAMM...";
-            const erc20W = new ethers.Contract(zammAddr, ["function approve(address,uint256) returns (bool)"], signer);
+            const erc20W = new ethers.Contract(zammAddr, ERC20_APPROVE_ABI, signer);
             if (allowance > 0n) {
               const resetTx = await wcTransaction(erc20W.approve(ZROUTER_ADDRESS, 0), 'Reset allowance');
               await waitForTx(resetTx);
@@ -5406,49 +5448,15 @@ async function executeSwap() {
 
     let txData = quote.multicall;
 
-    // ETH→Curve override: only when quote actually chose Curve as source, rebuild
-    // calldata using execute (bypasses swapCurve which doesn't handle native-ETH pools)
-    if (fromData.address === ZERO_ADDRESS && !_isExactOut && quote.sourceA === "Curve" && !quote.isSplit) {
-      try {
-        const toData = tokens[toSnap];
-        const rpc = new ethers.JsonRpcProvider(RPCS[0], { chainId: CHAIN_ID, name: "mainnet" }, { staticNetwork: true });
-        const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
-        const callOpts = { blockTag: "latest" };
-        const cq = await quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts);
-        if (cq.bestPool !== ZERO_ADDRESS && cq.amountOut > 0n) {
-          // Determine correct exchange ABI by probing pool
-          let isCrypto = false;
-          try {
-            const pp = new ethers.Contract(cq.bestPool, ["function get_dy(uint256,uint256,uint256) view returns (uint256)"], rpc);
-            isCrypto = (await pp.get_dy(BigInt(cq.iIndex), BigInt(cq.jIndex), amountIn, callOpts)) > 0n;
-          } catch(_){}
-          const fnName = (cq.usedUnderlying && !isCrypto) ? 'exchange_underlying' : 'exchange';
-          const exchIface = isCrypto
-            ? new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"])
-            : new ethers.Interface([`function ${fnName}(int128,int128,uint256,uint256) payable`]);
-          const slipBps = slippageBps || 50;
-          const minOut = cq.amountOut * (10000n - BigInt(slipBps)) / 10000n;
-          const exchData = exchIface.encodeFunctionData(fnName, [cq.iIndex, cq.jIndex, amountIn, minOut]);
-          const receiver = getReceiver();
-          const execCall = ROUTER_IFACE.encodeFunctionData('execute', [cq.bestPool, amountIn, exchData]);
-          const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
-          const newMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[execCall, sweepCall]]);
-          txData = newMulticall;
-          quote.msgValue = amountIn;
-          quote.expectedOutput = cq.amountOut;
-          console.log("[CurveExecOverride] Applied! isCrypto:", isCrypto, "pool:", cq.bestPool);
-        }
-      } catch (overrideErr) {
-        console.warn("[CurveExecOverride] Failed, using original calldata:", overrideErr);
-      }
-    }
-
-    // ERC20 approval
+    // ERC20 approval (use cache from updateBalances, fresh read only if stale)
     if (fromData.address !== ZERO_ADDRESS) {
-      const r = erc20Read(fromData.address);
-      swapBtn.textContent = "Checking allowance...";
-      let allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-      cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+      let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
+      if (allowance == null) {
+        const r = erc20Read(fromData.address);
+        swapBtn.textContent = "Checking allowance...";
+        allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
+        cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+      }
 
       if (allowance < amountIn) {
         let approved = false;
@@ -5509,7 +5517,7 @@ async function executeSwap() {
           swapBtn.textContent = "Approving token...";
           const erc20W = new ethers.Contract(
             fromData.address,
-            ["function approve(address,uint256) returns (bool)"],
+            ERC20_APPROVE_ABI,
             signer
           );
           // WBTC/USDT revert on approve(spender, newVal) when current != 0
@@ -5738,8 +5746,33 @@ async function executeSwap() {
 
     const isLidoExec = (quote.sourceA === "Lido" || quote.sourceA === "Rocket Pool") && !quote.isSplit && !quote.isTwoHop;
     const actionLabel = isLidoExec ? "Staking" : isZOrgSwap(toSnap) ? "Swapping & Staking" : "Swapping";
-    swapBtn.textContent = actionLabel + "...";
     const txValue = quote.msgValue ?? 0n;
+
+    // Pre-flight simulation: dry-run the tx to catch reverts before the user signs
+    swapBtn.textContent = "Simulating...";
+    try {
+      await provider.estimateGas({
+        from: connectedAddress,
+        to: ZROUTER_ADDRESS,
+        data: txData,
+        value: txValue,
+      });
+    } catch (simErr) {
+      const simMsg = String(simErr?.data || simErr?.message || simErr?.reason || "");
+      // Decode common revert reasons into user-friendly messages
+      let failReason = "Swap would fail on-chain";
+      if (/STF|TRANSFER_FROM_FAILED/i.test(simMsg)) failReason = "Insufficient balance or allowance";
+      else if (/Too little received|TLR|amountOutMin/i.test(simMsg)) failReason = "Price moved — increase slippage or try again";
+      else if (/EXPIRED|deadline/i.test(simMsg)) failReason = "Quote expired — refreshing";
+      else if (/INSUFFICIENT_LIQUIDITY/i.test(simMsg)) failReason = "Insufficient liquidity";
+      // For expired quotes, auto-refresh
+      if (/EXPIRED|deadline/i.test(simMsg)) {
+        handleAmountChange();
+      }
+      throw new Error(failReason);
+    }
+
+    swapBtn.textContent = actionLabel + "...";
 
     const swapTx = await wcTransaction(
       signer.sendTransaction({
@@ -5831,22 +5864,24 @@ const COINGECKO_SLUGS = {
   PNKSTR: "kleros",
 };
 
-function updateChartLink(quote) {
-  const link = $("chartLink");
+function getZammPoolInfo(quote) {
   const zammRe = /zAMM|V4 Hooked/;
   const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
     || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
+  if (!hasZamm) return { hasZamm: false, poolId: null };
+  const fromAddr = tokens[fromToken].address;
+  const toAddr = tokens[toToken].address;
+  const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
+  const poolId = isZorg
+    ? computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n)
+    : computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+  return { hasZamm: true, poolId };
+}
+
+function updateChartLink(quote) {
+  const link = $("chartLink");
+  const { hasZamm, poolId } = getZammPoolInfo(quote);
   if (hasZamm) {
-    // Determine pool ID: for zOrg route use ZORG_ID; otherwise standard ERC20 pool
-    const fromAddr = tokens[fromToken].address;
-    const toAddr = tokens[toToken].address;
-    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
-    let poolId;
-    if (isZorg) {
-      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
-    } else {
-      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
-    }
     link.href = "./chart/#/" + poolId.toString();
     link.style.display = "inline-flex";
     return;
@@ -5863,41 +5898,33 @@ function updateChartLink(quote) {
 
 function updateOrderbookLink(quote) {
   const link = $("orderbookLink");
-  const zammRe = /zAMM|V4 Hooked/;
-  const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
-    || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
+  const nav = $("navOrderbook");
+  const { hasZamm, poolId } = getZammPoolInfo(quote);
+  let href;
   if (hasZamm) {
+    href = "./orderbook/#/" + poolId.toString();
+  } else {
     const fromAddr = tokens[fromToken].address;
     const toAddr = tokens[toToken].address;
-    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
-    let poolId;
-    if (isZorg) {
-      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
-    } else {
-      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
-    }
-    link.href = "./orderbook/#/" + poolId.toString();
-    link.style.display = "inline-flex";
-    return;
+    href = "./orderbook/?token0=" + encodeURIComponent(fromAddr) + "&token1=" + encodeURIComponent(toAddr)
+      + "&label0=" + encodeURIComponent(fromToken) + "&label1=" + encodeURIComponent(toToken);
   }
-  link.style.display = "none";
+  // Append market price from displayed amounts
+  const inVal = parseFloat($("fromAmount").value);
+  const outVal = parseFloat($("toAmount").value);
+  if (inVal > 0 && outVal > 0) {
+    const rate = outVal / inVal;
+    href += (href.includes("?") ? "&" : "?") + "price=" + rate;
+  }
+  link.href = href;
+  link.style.display = "inline-flex";
+  if (nav) nav.href = href;
 }
 
 function updateLpLink(quote) {
   const link = $("lpLink");
-  const zammRe = /zAMM|V4 Hooked/;
-  const hasZamm = zammRe.test(quote.sourceA || "") || zammRe.test(quote.sourceB || "")
-    || (quote.splitLegs && quote.splitLegs.some(l => zammRe.test(l.source || "")));
+  const { hasZamm, poolId } = getZammPoolInfo(quote);
   if (hasZamm) {
-    const fromAddr = tokens[fromToken].address;
-    const toAddr = tokens[toToken].address;
-    const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
-    let poolId;
-    if (isZorg) {
-      poolId = computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n);
-    } else {
-      poolId = computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
-    }
     link.href = "./lp/#/" + poolId.toString();
     link.style.display = "inline-flex";
     return;
@@ -6977,13 +7004,13 @@ async function sendUpdateBalance() {
   const t = tokens[sym];
   if (!t) { balEl.textContent = 'Balance: --'; return; }
   try {
+    const rpc = await quoteRPC.call(r => r);
     if (t.address === ZERO_ADDRESS) {
-      const bal = await signer.provider.getBalance(connectedAddress);
+      const bal = await rpc.getBalance(connectedAddress);
       _sendTokenBal = bal;
       _sendTokenDec = 18;
       balEl.textContent = 'Balance: ' + (+ethers.formatEther(bal)).toFixed(5) + ' ' + sym;
     } else {
-      const rpc = signer.provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
       const c = new ethers.Contract(t.address, ERC20_TRANSFER_ABI, rpc);
       const [bal, dec] = await Promise.all([c.balanceOf(connectedAddress), c.decimals().catch(() => t.decimals || 18)]);
       _sendTokenBal = bal;
@@ -7058,13 +7085,13 @@ async function sendResolveName(name) {
       el.textContent = resolved;
     } else {
       el.style.display = 'block';
-      el.style.color = '#c0392b';
+      el.style.color = 'var(--remove-fg, #c0392b)';
       el.textContent = 'Name not found';
     }
   } catch {
     if (seq !== _sendResolveSeq) return;
     el.style.display = 'block';
-    el.style.color = '#c0392b';
+    el.style.color = 'var(--remove-fg, #c0392b)';
     el.textContent = 'Failed to resolve';
   }
 }
@@ -7089,7 +7116,9 @@ async function doSendOrLock() {
   const tokenAddr = t.address;
   const isETH = tokenAddr === ZERO_ADDRESS;
   const dec = _sendTokenDec;
-  const amount = ethers.parseUnits(amtStr, dec);
+  let amount;
+  try { amount = ethers.parseUnits(amtStr, dec); } catch { statusEl.textContent = 'Invalid amount'; statusEl.className = 'status show error'; return; }
+  if (_sendTokenBal != null && amount > _sendTokenBal) { statusEl.textContent = 'Insufficient ' + sym + ' balance'; statusEl.className = 'status show error'; return; }
   const isTimelock = !!unlockStr;
 
   try {
@@ -7183,7 +7212,7 @@ async function sendLoadTimelocks() {
     if (all.length === 0) { el.textContent = 'No timelocks found'; return; }
 
     // Check on-chain status in batch
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
+    const rpc = await quoteRPC.call(r => r);
     const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, rpc);
     const abiCoder = ethers.AbiCoder.defaultAbiCoder();
 
@@ -7232,9 +7261,9 @@ async function sendLoadTimelocks() {
         </div>
         <div class="timelock-meta">
           ${esc(counterparty)} &middot; ${lock.direction} &middot; ${unlockDate}
-          &middot; <a href="https://etherscan.io/tx/${lock.txHash}" target="_blank" rel="noopener" style="color:inherit">${lock.txHash.slice(0, 10)}...</a>
+          &middot; <a href="https://etherscan.io/tx/${escAttr(lock.txHash)}" target="_blank" rel="noopener" style="color:inherit">${esc(lock.txHash.slice(0, 10))}...</a>
         </div>
-        ${status === 'unlockable' ? `<div class="timelock-claim"><button onclick="claimTimelock('${m.token}','${lock.to}','${m.coinId}','${m.amount}','${m.unlockTime}',this)">Claim</button></div>` : ''}
+        ${status === 'unlockable' ? `<div class="timelock-claim"><button onclick="claimTimelock('${escAttr(m.token)}','${escAttr(lock.to)}','${escAttr(String(m.coinId))}','${escAttr(String(m.amount))}','${escAttr(String(m.unlockTime))}',this)">Claim</button></div>` : ''}
       </div>`;
     }
     el.innerHTML = html || 'No active timelocks';
@@ -7477,6 +7506,12 @@ async function ppDeposit() {
     if (_ppZapMode) {
       const zapCfg = _ppConfigWstETH;
       if (!signer) { showWalletModal(); return; }
+      // Balance pre-check (ETH for zap)
+      try {
+        const rpcBal = await quoteRPC.call(r => r);
+        const bal = await rpcBal.getBalance(connectedAddress);
+        if (bal < amount) { showStatus('Insufficient ETH — need ' + fmt(ethers.formatEther(amount)) + ' ETH', 'error'); return; }
+      } catch (_) {}
       setText(btn, 'Quoting ETH \u2192 wstETH...');
       setDisabled(btn, true);
 
@@ -7599,6 +7634,21 @@ async function ppDeposit() {
 
     if (!signer) { showWalletModal(); return; }
 
+    // Balance pre-check
+    try {
+      const rpcBal = await quoteRPC.call(r => r);
+      if (isERC20PP) {
+        const tokenAddr = isWSTETH ? WSTETH_ADDRESS : BOLD_ADDRESS;
+        const balIface = new ethers.Interface(['function balanceOf(address) view returns (uint256)']);
+        const balRes = await rpcBal.call({ to: tokenAddr, data: balIface.encodeFunctionData('balanceOf', [connectedAddress]) });
+        const bal = balIface.decodeFunctionResult('balanceOf', balRes)[0];
+        if (bal < amount) { showStatus('Insufficient ' + _ppSelectedAsset + ' balance', 'error'); return; }
+      } else {
+        const bal = await rpcBal.getBalance(connectedAddress);
+        if (bal < amount) { showStatus('Insufficient ETH — need ' + fmt(ethers.formatEther(amount)) + ' ETH', 'error'); return; }
+      }
+    } catch (_) {}
+
     setText(btn, 'Deriving keys...');
     setDisabled(btn, true);
 
@@ -7650,7 +7700,7 @@ async function ppDeposit() {
           const p2Allowance = cacheGetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS);
           if (p2Allowance == null || p2Allowance < amount) {
             setText(btn, `Approve ${tokenLabel} for Permit2...`);
-            const erc20W = new ethers.Contract(tokenAddr, ['function approve(address,uint256) returns (bool)'], signer);
+            const erc20W = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, signer);
             const p2ApproveTx = await wcTransaction(erc20W.approve(PERMIT2_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} for Permit2`);
             await waitForTx(p2ApproveTx);
             cacheSetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS, ethers.MaxUint256);
@@ -7669,7 +7719,7 @@ async function ppDeposit() {
       // Fallback: traditional approve (separate tx)
       if (!approved) {
         setText(btn, `Approve ${tokenLabel}...`);
-        const tokenW = new ethers.Contract(tokenAddr, ['function approve(address,uint256) returns (bool)'], signer);
+        const tokenW = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, signer);
         const approveTx = await wcTransaction(tokenW.approve(ZROUTER_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} spending`);
         await waitForTx(approveTx);
       }
@@ -7841,6 +7891,7 @@ function ppGetNote(index) {
 }
 
 function ppDeleteNote(index) {
+  if (!confirm('Delete this note? If you have not backed it up, the deposited funds will be permanently lost.')) return;
   try {
     const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
     saved.splice(index, 1);
@@ -8162,7 +8213,7 @@ function ppwSetMode(mode) {
   relayBtn.style.borderColor = isDirect ? 'transparent' : 'var(--btn-bg)';
   relayBtn.style.background = isDirect ? 'var(--surface)' : 'var(--btn-bg)';
   relayBtn.style.color = isDirect ? 'var(--fg-muted)' : 'var(--btn-fg)';
-  $('ppwRecipientHint').textContent = isDirect ? '— defaults to connected wallet (direct mode)' : '— defaults to connected wallet (relay mode)';
+  $('ppwRecipientHint').textContent = isDirect ? '— defaults to connected wallet' : '— enter address (no wallet needed for full relay withdrawal)';
   setShown('ppwExtraGasWrap', !isDirect);
   // For native ETH, relayer forces extraGas=false — disable the toggle
   const noteAsset = _ppwNote?.asset || 'ETH';
@@ -9051,7 +9102,7 @@ async function ppwWithdraw() {
     if (!decoded) log('<b>Error:</b> ' + escText(e.shortMessage || e.message || e));
     handleError(e);
   } finally {
-    setText(btn, 'Verify & Prepare Withdrawal');
+    setText(btn, 'Withdraw');
     setDisabled(btn, !_ppwNote);
   }
 }
@@ -9089,6 +9140,81 @@ let _coinImageFile = null;
 let _coinBannerCID = null;
 let _coinBannerFile = null;
 
+// ---- Coin ops wallet name resolution ----
+let _resolvedCoinOps = null; // { input, address } or null
+let _coinOpsResolveSeq = 0;
+let _coinOpsDebounce = null;
+
+function getCoinOpsAddress() {
+  const v = ($("coinOpsAddress")?.value || "").trim();
+  if (!v) return null; // caller should default to connected wallet
+  if (ethers.isAddress(v) && v !== ZERO_ADDRESS) return ethers.getAddress(v);
+  if (_resolvedCoinOps && _resolvedCoinOps.input === v && _resolvedCoinOps.address) return _resolvedCoinOps.address;
+  return null;
+}
+
+function onCoinOpsInput() {
+  clearTimeout(_coinOpsDebounce);
+  const v = ($("coinOpsAddress")?.value || "").trim();
+  const el = $("coinOpsResolved");
+  _resolvedCoinOps = null;
+  syncCoinURL();
+  if (!v) { el.style.display = "none"; return; }
+  if (ethers.isAddress(v)) {
+    el.style.display = "block";
+    el.style.color = "var(--fg-muted)";
+    el.textContent = ethers.getAddress(v);
+    _resolvedCoinOps = { input: v, address: ethers.getAddress(v) };
+    return;
+  }
+  if (v.endsWith(".wei") || v.endsWith(".eth")) {
+    el.style.display = "block";
+    el.style.color = "var(--fg-muted)";
+    el.textContent = "Resolving " + v + "...";
+    _coinOpsDebounce = setTimeout(() => resolveCoinOpsName(v), 350);
+  } else {
+    el.style.display = "block";
+    el.style.color = "var(--remove-fg, #c0392b)";
+    el.textContent = "Enter 0x address, name.wei, or name.eth";
+  }
+}
+
+async function resolveCoinOpsName(name) {
+  const seq = ++_coinOpsResolveSeq;
+  const el = $("coinOpsResolved");
+  try {
+    let resolved = null;
+    if (name.endsWith(".wei")) {
+      resolved = await quoteRPC.call(async (rpc) => {
+        const ns = getWeinsContract(rpc);
+        const tokenId = await ns.computeId(name);
+        const owner = await ns.ownerOf(tokenId).catch(() => null);
+        if (!owner || owner === ZERO_ADDRESS) return null;
+        return ethers.getAddress(owner);
+      });
+    } else if (name.endsWith(".eth")) {
+      resolved = await quoteRPC.call(async (rpc) => {
+        return await rpc.resolveName(name);
+      });
+    }
+    if (seq !== _coinOpsResolveSeq) return;
+    if (resolved && resolved !== ZERO_ADDRESS) {
+      _resolvedCoinOps = { input: name, address: resolved };
+      el.style.color = "var(--fg-muted)";
+      el.textContent = resolved;
+    } else {
+      _resolvedCoinOps = null;
+      el.style.color = "var(--remove-fg, #c0392b)";
+      el.textContent = "Name not found";
+    }
+  } catch (e) {
+    if (seq !== _coinOpsResolveSeq) return;
+    _resolvedCoinOps = null;
+    el.style.color = "var(--remove-fg, #c0392b)";
+    el.textContent = "Failed to resolve " + name;
+  }
+}
+
 function coinSetTemplate(mode) {
   _coinTemplate = mode === 'standard' ? 'fund' : null;
   $('coinSettingsWrap').querySelectorAll('.coin-tpl-btn').forEach((b, i) => {
@@ -9111,6 +9237,7 @@ function coinSetLaunchType(type) {
   btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'simple' ? 0 : 1)));
   const isSimple = type === 'simple';
   $('coinSettingsWrap').style.display = isSimple ? 'none' : '';
+  $('coinOpsWrap').style.display = isSimple ? 'none' : '';
   $('coinSimplePreviewWrap').style.display = 'none';
   $('coinPreviewWrap').style.display = 'none';
   $('coinSocialsWrap').style.display = isSimple ? 'none' : '';
@@ -9444,6 +9571,15 @@ async function coinLaunch() {
   if (!name || name.length < 2) { coinShowStatus('Enter a name (at least 2 characters)', true); return; }
   if (!symbol || symbol.length < 1) { coinShowStatus('Enter a symbol', true); return; }
 
+  // Validate ops wallet if user typed something but it hasn't resolved
+  if (_coinLaunchType !== 'simple') {
+    const opsInput = ($('coinOpsAddress')?.value || '').trim();
+    if (opsInput && !getCoinOpsAddress()) {
+      coinShowStatus('Ops wallet address is invalid or still resolving', true);
+      return;
+    }
+  }
+
   _coinLaunching = true;
   setDisabled('coinLaunchBtn', true);
 
@@ -9560,6 +9696,7 @@ async function coinLaunch() {
       );
     } else {
       // Advanced mode: tap + team lockup + governance custom calls
+      const opsAddr = getCoinOpsAddress() || address; // custom ops wallet or connected wallet
       const teamBps = BigInt(c.teamBps);
       const teamSupply = (COIN_SUPPLY * teamBps) / 10000n;
       const teamSupplyWei = ethers.parseEther(teamSupply.toString());
@@ -9584,7 +9721,7 @@ async function coinLaunch() {
         { target: predicted.shares, value: 0n,
           data: COIN_IFACES.approve.encodeFunctionData('approve', [COIN_ZAMM, teamSupplyWei]) },
         { target: COIN_ZAMM, value: 0n,
-          data: COIN_IFACES.lockup.encodeFunctionData('lockup', [predicted.shares, address, 0, teamSupplyWei, unlockTime]) }
+          data: COIN_IFACES.lockup.encodeFunctionData('lockup', [predicted.shares, opsAddr, 0, teamSupplyWei, unlockTime]) }
       ];
 
       tx = await daico.summonDAICOWithTapCustom(
@@ -9597,7 +9734,7 @@ async function coinLaunch() {
         initHolders, initShares,
         false, false, // shares/loot not locked
         daicoConfig,
-        { ops: address, ratePerSec: tapRate, tapAllowance: tapBudget },
+        { ops: opsAddr, ratePerSec: tapRate, tapAllowance: tapBudget },
         customCalls
       );
     }
