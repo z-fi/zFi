@@ -1473,6 +1473,14 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
 const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
 const V4_ROUTER_ADDRESS = "0x00000000000044a361Ae3cAc094c9D1b14Eece97";
+// 0x / Matcha integration
+const MATCHA_ADDRESS = "0xBB11c36FBF566B5fad265218bCdB4F528d14E0b5";
+const OX_API_BASE = "https://zfi-pin.rosscampbell9.workers.dev/0x";
+const OX_CHAIN_ID = 1;
+const OX_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const MATCHA_IFACE = new ethers.Interface([
+  "function swap(address settler, address tokenIn, address tokenOut, address recipient, bytes data)",
+]);
 // V4 USDC/PNKSTR hookless pool params (fee=10000, tickSpacing=200)
 const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const ZAMM_HOOKED = "0x000000000000040470635EB91b7CE4D132D616eD";
@@ -3152,6 +3160,7 @@ const ROUTER_IFACE = new ethers.Interface([
   "function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
   "function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)",
   "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
+  "function snwap(address tokenIn, uint256 amountIn, address recipient, address tokenOut, uint256 amountOutMin, address executor, bytes executorData) payable returns (uint256 amountOut)",
 ]);
 const ZORG_BUYSHARES_IFACE = new ethers.Interface([
   "function buyShares(address payToken, uint256 shareAmount, uint256 maxPay)",
@@ -4166,6 +4175,38 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
   });
 }
 
+// ---- 0x / Matcha API helpers ----
+function ox0xToken(addr) {
+  return addr === ZERO_ADDRESS ? OX_ETH_SENTINEL : addr;
+}
+async function get0xPrice(sellToken, buyToken, sellAmount) {
+  if (MATCHA_ADDRESS === ZERO_ADDRESS) return null;
+  const params = new URLSearchParams({
+    chainId: String(OX_CHAIN_ID),
+    sellToken: ox0xToken(sellToken),
+    buyToken: ox0xToken(buyToken),
+    taker: MATCHA_ADDRESS,
+    sellAmount: sellAmount.toString(),
+  });
+  const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/price?${params}`);
+  if (!resp.ok) return null;
+  return resp.json();
+}
+async function get0xQuote(sellToken, buyToken, sellAmount, slippageBps) {
+  if (MATCHA_ADDRESS === ZERO_ADDRESS) return null;
+  const params = new URLSearchParams({
+    chainId: String(OX_CHAIN_ID),
+    sellToken: ox0xToken(sellToken),
+    buyToken: ox0xToken(buyToken),
+    taker: MATCHA_ADDRESS,
+    slippageBps: String(slippageBps),
+    sellAmount: sellAmount.toString(),
+  });
+  const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/quote?${params}`);
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
 async function getQuote(fromAmountStr, fromSym, toSym) {
   if (!connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
@@ -4295,6 +4336,8 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ]) });
     }
     } // end !_skipSplitRoutes
+    // Fire 0x price in parallel with Multicall3 batches
+    const ox0xPriceP = get0xPrice(fromData.address, toData.address, amountIn).catch(() => null);
     const allCalls = [
       mc3ViewBatch(rpc, heavyEntries),
       mc3ViewBatch(rpc, mc3Entries),
@@ -4636,6 +4679,25 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
+    // 0x / Matcha: compare against all sources
+    const oxPrice = await ox0xPriceP;
+    if (oxPrice && oxPrice.buyAmount) {
+      const oxOut = BigInt(oxPrice.buyAmount);
+      if (result.allQuotes) {
+        result.allQuotes.push({ source: "0x", sourceId: -2, feeBps: 0n, amountIn, amountOut: oxOut });
+      }
+      if (oxOut > result.expectedOutput) {
+        result.expectedOutput = oxOut;
+        result.is0x = true;
+        result.ox = oxPrice;
+        result.sourceA = "0x";
+        result.sourceB = null;
+        result.isTwoHop = false;
+        result.isSplit = false;
+        result.splitLegs = null;
+      }
+    }
+
     return result;
   });
 }
@@ -4699,6 +4761,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       amountOut, BigInt(slippageBps), deadline,
       hookFee, hookTick, hookAddr
     ]) });
+    // 0x Swap API v2 does not support exact-out (no buyAmount param)
     let mc3 = null;
     try { mc3 = await mc3ViewBatch(rpc, mc3Entries); } catch (_) {}
     let bestResult = mc3AsSettled(mc3, _mc3BestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
@@ -5507,6 +5570,44 @@ async function executeSwap() {
 
     let txData = quote.multicall;
 
+    // 0x / Matcha execution: fetch firm quote and build snwap multicall
+    if (quote.is0x) {
+      swapBtn.textContent = "Fetching 0x route...";
+      const toData = tokens[toSnap];
+      const oxQ = await get0xQuote(fromData.address, toData.address, amountIn, slippageBps);
+      if (!oxQ || !oxQ.transaction) {
+        if (!quote.multicall) throw new Error("0x quote unavailable and no on-chain route");
+        quote.is0x = false;
+      } else {
+
+      const isEthIn = fromData.address === ZERO_ADDRESS;
+      const receiver = getReceiver();
+      const matchaData = MATCHA_IFACE.encodeFunctionData('swap', [
+        oxQ.transaction.to,
+        fromData.address,
+        toData.address,
+        receiver,
+        oxQ.transaction.data,
+      ]);
+      const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+        fromData.address,
+        isEthIn ? 0n : amountIn,
+        receiver,
+        toData.address,
+        BigInt(oxQ.minBuyAmount),
+        MATCHA_ADDRESS,
+        matchaData,
+      ]);
+      txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+      quote.multicall = txData;
+      quote.calls = [snwapCall];
+      quote.msgValue = isEthIn ? amountIn : 0n;
+      // Stash for permit2 rebuild (needs amountIn=0 variant)
+      quote._oxMinBuy = oxQ.minBuyAmount;
+      quote._oxMatchaData = matchaData;
+      }
+    }
+
     // ERC20 approval (use cache from updateBalances, fresh read only if stale)
     if (fromData.address !== ZERO_ADDRESS) {
       let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
@@ -5559,7 +5660,18 @@ async function executeSwap() {
             try {
               swapBtn.textContent = "Sign Permit2...";
               const permit2Data = await signPermit2(fromData.address, amountIn);
-              const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+              let innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+              // For 0x/snwap: permit2TransferFrom moves tokens to router,
+              // so snwap needs amountIn=0 to read router balance instead of pulling from user
+              if (quote.is0x) {
+                const toData = tokens[toSnap];
+                const receiver = getReceiver();
+                const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
+                  fromData.address, 0n, receiver, toData.address,
+                  BigInt(quote._oxMinBuy), MATCHA_ADDRESS, quote._oxMatchaData,
+                ]);
+                innerCalls = [snwapCall0];
+              }
               txData = buildPermit2Multicall(innerCalls, permit2Data);
               approved = true;
             } catch (p2Err) {
@@ -5598,8 +5710,30 @@ async function executeSwap() {
           const rc = await waitForTx(approveTx);
           if (rc.status === 0) throw new Error("Approval transaction failed");
           const fresh = _isExactOut ? await getExactOutQuote(amtStr, fromSnap, toSnap) : await getQuote(amtStr, fromSnap, toSnap);
-          txData = fresh.multicall;
-          quote.msgValue = fresh.msgValue;
+          // If 0x won the re-quote, rebuild the snwap multicall (getQuote only flags is0x)
+          if (fresh.is0x) {
+            const toData = tokens[toSnap];
+            const oxQ = await get0xQuote(fromData.address, toData.address, amountIn, slippageBps);
+            if (oxQ && oxQ.transaction) {
+              const isEthIn = fromData.address === ZERO_ADDRESS;
+              const receiver = getReceiver();
+              const matchaData = MATCHA_IFACE.encodeFunctionData('swap', [
+                oxQ.transaction.to, fromData.address, toData.address, receiver, oxQ.transaction.data,
+              ]);
+              const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+                fromData.address, isEthIn ? 0n : amountIn, receiver, toData.address,
+                BigInt(oxQ.minBuyAmount), MATCHA_ADDRESS, matchaData,
+              ]);
+              txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+              quote.msgValue = isEthIn ? amountIn : 0n;
+            } else {
+              txData = fresh.multicall;
+              quote.msgValue = fresh.msgValue;
+            }
+          } else {
+            txData = fresh.multicall;
+            quote.msgValue = fresh.msgValue;
+          }
           cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
         }
       }

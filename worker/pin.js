@@ -1,18 +1,19 @@
-// Cloudflare Worker: IPFS pinning proxy for Pinata
+// Cloudflare Worker: IPFS pinning proxy for Pinata + 0x swap API proxy
 // Deploy: wrangler deploy
-// Secrets: wrangler secret put PINATA_KEY / PINATA_SECRET
+// Secrets: wrangler secret put PINATA_KEY / PINATA_SECRET / OX_API_KEY
 
 const PINATA = 'https://api.pinata.cloud';
+const OX_API = 'https://api.0x.org';
 const MAX_IMAGE = 5 * 1024 * 1024; // 5MB
 const MAX_JSON = 64 * 1024; // 64KB
 
-const ALLOWED_ORIGINS = ['https://zfi.wei.is', 'http://localhost:8888'];
+const ALLOWED_ORIGINS = ['https://zfi.wei.is'];
 
 function cors(request) {
   const origin = request.headers.get('Origin') || '';
   return {
     'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : '',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
@@ -28,9 +29,34 @@ function pinHeaders(env) {
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors(request) });
-    if (request.method !== 'POST') return json(request, { error: 'POST only' }, 405);
+
+    // Reject requests from non-allowlisted origins (CORS is browser-only; this blocks curl/scripts too)
+    const origin = request.headers.get('Origin') || '';
+    if (!ALLOWED_ORIGINS.includes(origin)) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = new URL(request.url);
+
+    // GET /0x/*  — proxy to 0x Swap API (hides API key, bypasses CORS)
+    if (url.pathname.startsWith('/0x/')) {
+      if (request.method !== 'GET') return json(request, { error: 'GET only' }, 405);
+      const oxPath = url.pathname.slice(3); // strip "/0x" prefix
+      if (!oxPath.startsWith('/swap/allowance-holder/')) return json(request, { error: 'forbidden path' }, 403);
+      const oxUrl = `${OX_API}${oxPath}?${url.searchParams}`;
+      const res = await fetch(oxUrl, {
+        headers: { '0x-api-key': env.OX_API_KEY, '0x-version': 'v2' },
+      });
+      return new Response(res.body, {
+        status: res.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (request.method !== 'POST') return json(request, { error: 'method not allowed' }, 405);
 
     // POST /pin-image  — multipart image upload → pinFileToIPFS
     if (url.pathname === '/pin-image') {
