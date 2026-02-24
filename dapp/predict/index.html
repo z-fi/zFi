@@ -3240,11 +3240,21 @@ async function renderMarketPage(marketId) {
 
       // Fetch user-specific balances directly (unreliable inside multicall3 batch)
       // Try wallet provider first (most reliable), then current RPC
+      let userAmmLPLegacy = 0n;
       if (_connectedAddress) {
         const _tryProviders = [_walletProvider, rpc].filter(Boolean);
         for (const _p of _tryProviders) {
           try {
-            userAmmLP = await new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, _p).balanceOf(_connectedAddress, pid);
+            const _zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, _p);
+            userAmmLP = await _zamm.balanceOf(_connectedAddress, pid);
+            // For resolved non-legacy markets, also check fee=30 pool (users who
+            // added LP outside the UI may have LP in a plain-fee pool)
+            if (mkt.resolved && isLabeled) {
+              const { poolId: legacyPid } = computePredictionPoolId(marketId, false);
+              if (legacyPid !== pid.toString()) {
+                try { userAmmLPLegacy = await _zamm.balanceOf(_connectedAddress, legacyPid); } catch {}
+              }
+            }
             break;
           } catch (e) { console.warn('ZAMM balanceOf failed:', e.message); }
         }
@@ -3257,7 +3267,7 @@ async function renderMarketPage(marketId) {
         twapTimestamp1,
         resValue, resCond, resReady, condData,
         userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-        userAmmLP, ammLPSupply, vaultDepositTime, resolverFeeBps
+        userAmmLP, userAmmLPLegacy, ammLPSupply, vaultDepositTime, resolverFeeBps
       };
     });
 
@@ -3267,7 +3277,7 @@ async function renderMarketPage(marketId) {
             twapTimestamp1,
             resValue, resCond, resReady, condData,
             userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-            userAmmLP, ammLPSupply, vaultDepositTime, resolverFeeBps } = marketData;
+            userAmmLP, userAmmLPLegacy, ammLPSupply, vaultDepositTime, resolverFeeBps } = marketData;
 
     // Resolver verification + reverse .wei name (skip for onchain resolver)
     let resolverVerified = false, resolverWeiName = null;
@@ -3410,7 +3420,7 @@ async function renderMarketPage(marketId) {
 
     // User positions (if any)
     const hasTradePos = userYes > 0n || userNo > 0n;
-    const hasLPPos = userAmmLP > 0n || userYesVaultLP > 0n || userNoVaultLP > 0n;
+    const hasLPPos = userAmmLP > 0n || userAmmLPLegacy > 0n || userYesVaultLP > 0n || userNoVaultLP > 0n;
     if (hasTradePos || hasLPPos) {
       let posHtml = `<div class="market-chart-drawer open" id="positionsDrawer">
         <button class="market-chart-toggle-btn" onclick="toggleDrawer('positionsDrawer')">
@@ -3439,6 +3449,9 @@ async function renderMarketPage(marketId) {
             lpCollEst = ` <span style="color:var(--fg-muted);font-size:11px">~${estVal >= 1 ? estVal.toFixed(2) : estVal.toFixed(4)} ${collSym}</span>`;
           }
           posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} LP${lpCollEst} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
+        }
+        if (userAmmLPLegacy > 0n) {
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM <span style="font-size:9px;opacity:0.5">(alt pool)</span></span><span class="pos-val">${Number(ethers.formatEther(userAmmLPLegacy)).toFixed(4)} LP</span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="withdrawAmmLegacyBtn" onclick="withdrawAmmLPLegacy()">WITHDRAW</button></span></div>`;
         }
         if (userYesVaultLP > 0n) {
           const yPctShare = totalYesVaultLP > 0n ? (Number(userYesVaultLP) / Number(totalYesVaultLP) * 100) : 0;
@@ -3639,6 +3652,7 @@ async function renderMarketPage(marketId) {
     app.dataset.resolverAddr = resolverAddr;
     app.dataset.isOurResolver = isOurResolver ? '1' : '0';
     app.dataset.userAmmLP = userAmmLP.toString();
+    app.dataset.userAmmLPLegacy = userAmmLPLegacy.toString();
     app.dataset.userYesVaultLP = userYesVaultLP.toString();
     app.dataset.userNoVaultLP = userNoVaultLP.toString();
 
@@ -6072,6 +6086,42 @@ async function withdrawAmmLP(pct) {
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Withdraw AMM LP failed:', e);
+      alert('Withdraw failed: ' + decodeError(e));
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'WITHDRAW'; }
+  }
+}
+
+async function withdrawAmmLPLegacy() {
+  const s = await connectWallet();
+  if (!s) return;
+  const marketId = $('app').dataset.marketId;
+  if (!marketId) return;
+  const totalLP = BigInt($('app').dataset.userAmmLPLegacy || '0');
+  if (totalLP <= 0n) { alert('No LP to withdraw'); return; }
+
+  const btn = $('withdrawAmmLegacyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+  try {
+    const zamm = new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, s);
+    const isOp = await zamm.isOperator(_connectedAddress, CONTRACTS.PAMM);
+    if (!isOp) {
+      if (btn) btn.textContent = 'Approve...';
+      const approveTx = await zamm.setOperator(CONTRACTS.PAMM, true);
+      await approveTx.wait();
+    }
+
+    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    if (btn) btn.textContent = 'Confirm...';
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
+    const tx = await pamm.removeLiquidityToCollateral(marketId, BigInt(LEGACY_FEE_BPS), totalLP, 0, 0, 0, _connectedAddress, deadline);
+    if (btn) btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) {
+    if (!isUserRejection(e)) {
+      console.error('Withdraw legacy AMM LP failed:', e);
       alert('Withdraw failed: ' + decodeError(e));
     }
     if (btn) { btn.disabled = false; btn.textContent = 'WITHDRAW'; }
