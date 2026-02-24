@@ -888,11 +888,11 @@ body.modal-open { overflow: hidden; }
   </button>
   <div class="z-nav-menu">
     <a href="./" class="active">Swap</a>
-    <a href="./coin/">Coins</a>
+    <a href="./coin/">Coin</a>
     <a href="./predict/">Predict</a>
     <a id="navOrderbook" href="./orderbook/">Orderbook</a>
     <a href="./lp/">Liquidity</a>
-    <a href="./domains/">Domains</a>
+    <a href="./domains/">Domain</a>
     <a href="./dao/">DAO</a>
     <div class="z-nav-sep"></div>
     <a href="./about/">About</a>
@@ -2617,7 +2617,9 @@ function makeFallbackProvider(urls) {
 
   const walletReader = makeWalletReader();
   if (walletReader) {
-    nodes.push({
+    // Wallet RPC (Infura/Alchemy) typically has higher eth_call gas limits
+    // than public RPCs, so insert it first when available.
+    nodes.unshift({
       url: "wallet",
       p: walletReader,
       downUntil: 0,
@@ -3016,7 +3018,7 @@ function erc20Read(address) {
   if (!_erc20Read.has(k)) {
     _erc20Read.set(k, new ethers.Contract(
       address,
-      ["function allowance(address,address) view returns (uint256)"],
+      ["function allowance(address,address) view returns (uint256)", "function balanceOf(address) view returns (uint256)"],
       provider
     ));
   }
@@ -4301,7 +4303,20 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const [heavyMc3Result, mc3Result] = settled;
     // Decode heavy batch
     const heavyMc3 = heavyMc3Result.status === 'fulfilled' ? heavyMc3Result.value : null;
-    const bestResult = mc3AsSettled(heavyMc3, _heavyBestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
+    let bestResult = mc3AsSettled(heavyMc3, _heavyBestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
+    // Fallback: if heavy batch failed entirely (RPC gas/compute limit), retry the
+    // essential buildBestSwapViaETHMulticall as a standalone call.
+    if (bestResult.status !== 'fulfilled') {
+      try {
+        const fb = await quoter.buildBestSwapViaETHMulticall(
+          receiver, connectedAddress, false,
+          fromData.address, toData.address,
+          amountIn, BigInt(slippageBps), deadline,
+          hookFee, hookTick, hookAddr, callOpts
+        );
+        bestResult = { status: 'fulfilled', value: fb };
+      } catch (_) {}
+    }
     const splitResult = mc3AsSettled(heavyMc3, _heavySplitIdx, QUOTER_IFACE, "buildSplitSwap");
     const threeHopResult = mc3AsSettled(heavyMc3, _heavy3HopIdx, QUOTER_IFACE, "build3HopMulticall");
     const hybridSplitResult = mc3AsSettled(heavyMc3, _heavyHybridIdx, QUOTER_IFACE, "buildHybridSplit");
@@ -4341,20 +4356,32 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
     // Spot rate pre-cached from mc3 batch (eliminates second RPC round trip)
+    // Use the median of viable AMM quotes (not the best) to avoid inflated
+    // rates from thin concentrated-liquidity pools (e.g. V3 5bp) that give
+    // unrealistically good rates for tiny amounts but poor rates at real size.
     {
-      let bestSpotOut = 0n, bestSpotIn = 0n;
+      const spotCandidates = [];
       const sq = mc3Decode(mc3, 2, QUOTER_IFACE, "getQuotes");
-      if (sq && sq.best.amountOut > bestSpotOut) { bestSpotOut = sq.best.amountOut; bestSpotIn = sq.best.amountIn; }
+      if (sq) {
+        for (const qt of sq.quotes) {
+          if (qt.amountOut > 0n && qt.amountIn > 0n) spotCandidates.push({ out: qt.amountOut, in_: qt.amountIn });
+        }
+      }
       const sc = mc3Decode(mc3, 3, QUOTER_IFACE, "quoteCurve");
-      if (sc && sc.amountOut > bestSpotOut) { bestSpotOut = sc.amountOut; bestSpotIn = sc.amountIn; }
+      if (sc && sc.amountOut > 0n && sc.amountIn > 0n) spotCandidates.push({ out: sc.amountOut, in_: sc.amountIn });
       if (mc3SpotRocketIdx >= 0) {
         const sr = mc3Decode(mc3, mc3SpotRocketIdx, RETH_RATE_IFACE, "getRethValue");
-        if (sr && sr[0] > bestSpotOut) { bestSpotOut = sr[0]; bestSpotIn = refAmount; }
+        if (sr && sr[0] > 0n) spotCandidates.push({ out: sr[0], in_: refAmount });
       }
-      if (bestSpotOut > 0n && bestSpotIn > 0n) {
+      if (spotCandidates.length > 0) {
+        // Sort by rate (out/in) descending, pick median
+        spotCandidates.sort((a, b) => (b.out * a.in_ > a.out * b.in_) ? 1 : -1);
+        const mid = spotCandidates.length >= 3
+          ? spotCandidates[Math.floor(spotCandidates.length / 2)]
+          : spotCandidates[spotCandidates.length - 1]; // if ≤2 candidates, use the worst (most conservative)
         const key = _spotKey(fromData.address, toData.address);
         if (_spotCache.size >= _spotMaxSize) _spotCache.delete(_spotCache.keys().next().value);
-        _spotCache.set(key, { rate: { num: bestSpotOut, den: bestSpotIn }, t: Date.now() });
+        _spotCache.set(key, { rate: { num: mid.out, den: mid.in_ }, t: Date.now() });
       }
     }
 
@@ -4674,7 +4701,19 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     ]) });
     let mc3 = null;
     try { mc3 = await mc3ViewBatch(rpc, mc3Entries); } catch (_) {}
-    const bestResult = mc3AsSettled(mc3, _mc3BestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
+    let bestResult = mc3AsSettled(mc3, _mc3BestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
+    // Fallback: if mc3 batch failed, retry buildBestSwapViaETHMulticall standalone
+    if (bestResult.status !== 'fulfilled') {
+      try {
+        const fb = await quoter.buildBestSwapViaETHMulticall(
+          receiver, connectedAddress, true,
+          fromData.address, toData.address,
+          amountOut, BigInt(slippageBps), deadline,
+          hookFee, hookTick, hookAddr, callOpts
+        );
+        bestResult = { status: 'fulfilled', value: fb };
+      } catch (_) {}
+    }
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     const curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
     const lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
@@ -4689,21 +4728,30 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
           : { status: 'fulfilled', value: { amountIn: 0n, amountOut: 0n } };
       }
     }
-    // Spot rate pre-cached from mc3 batch
+    // Spot rate pre-cached from mc3 batch (median, not best — avoids inflated
+    // rates from thin concentrated-liquidity pools)
     {
-      let bestSpotOut = 0n, bestSpotIn = 0n;
+      const spotCandidates = [];
       const sq = mc3Decode(mc3, 2, QUOTER_IFACE, "getQuotes");
-      if (sq && sq.best.amountOut > bestSpotOut) { bestSpotOut = sq.best.amountOut; bestSpotIn = sq.best.amountIn; }
+      if (sq) {
+        for (const qt of sq.quotes) {
+          if (qt.amountOut > 0n && qt.amountIn > 0n) spotCandidates.push({ out: qt.amountOut, in_: qt.amountIn });
+        }
+      }
       const sc = mc3Decode(mc3, 3, QUOTER_IFACE, "quoteCurve");
-      if (sc && sc.amountOut > bestSpotOut) { bestSpotOut = sc.amountOut; bestSpotIn = sc.amountIn; }
+      if (sc && sc.amountOut > 0n && sc.amountIn > 0n) spotCandidates.push({ out: sc.amountOut, in_: sc.amountIn });
       if (mc3SpotRocketIdx >= 0) {
         const sr = mc3Decode(mc3, mc3SpotRocketIdx, RETH_RATE_IFACE, "getRethValue");
-        if (sr && sr[0] > bestSpotOut) { bestSpotOut = sr[0]; bestSpotIn = refAmount; }
+        if (sr && sr[0] > 0n) spotCandidates.push({ out: sr[0], in_: refAmount });
       }
-      if (bestSpotOut > 0n && bestSpotIn > 0n) {
+      if (spotCandidates.length > 0) {
+        spotCandidates.sort((a, b) => (b.out * a.in_ > a.out * b.in_) ? 1 : -1);
+        const mid = spotCandidates.length >= 3
+          ? spotCandidates[Math.floor(spotCandidates.length / 2)]
+          : spotCandidates[spotCandidates.length - 1];
         const key = _spotKey(fromData.address, toData.address);
         if (_spotCache.size >= _spotMaxSize) _spotCache.delete(_spotCache.keys().next().value);
-        _spotCache.set(key, { rate: { num: bestSpotOut, den: bestSpotIn }, t: Date.now() });
+        _spotCache.set(key, { rate: { num: mid.out, den: mid.in_ }, t: Date.now() });
       }
     }
 
@@ -4982,17 +5030,27 @@ async function getSpotRate(fromSym, toSym) {
       }
       let mc3 = null;
       try { mc3 = await mc3ViewBatch(rpc, entries); } catch (_) {}
-      let bestOut = 0n, bestIn = 0n;
+      // Collect all viable spot candidates and use median to avoid inflated
+      // rates from thin concentrated-liquidity pools (e.g. V3 5bp).
+      const spotCandidates = [];
       const sq = mc3Decode(mc3, _sqIdx, QUOTER_IFACE, "getQuotes");
-      if (sq && sq.best.amountOut > bestOut) { bestOut = sq.best.amountOut; bestIn = sq.best.amountIn; }
+      if (sq) {
+        for (const qt of sq.quotes) {
+          if (qt.amountOut > 0n && qt.amountIn > 0n) spotCandidates.push({ out: qt.amountOut, in_: qt.amountIn });
+        }
+      }
       const sc = mc3Decode(mc3, _scIdx, QUOTER_IFACE, "quoteCurve");
-      if (sc && sc.amountOut > bestOut) { bestOut = sc.amountOut; bestIn = sc.amountIn; }
+      if (sc && sc.amountOut > 0n && sc.amountIn > 0n) spotCandidates.push({ out: sc.amountOut, in_: sc.amountIn });
       if (_srIdx >= 0) {
         const sr = mc3Decode(mc3, _srIdx, RETH_RATE_IFACE, "getRethValue");
-        if (sr && sr[0] > bestOut) { bestOut = sr[0]; bestIn = refAmount; }
+        if (sr && sr[0] > 0n) spotCandidates.push({ out: sr[0], in_: refAmount });
       }
-      if (bestOut === 0n || bestIn === 0n) return null;
-      return { num: bestOut, den: bestIn };
+      if (spotCandidates.length === 0) return null;
+      spotCandidates.sort((a, b) => (b.out * a.in_ > a.out * b.in_) ? 1 : -1);
+      const mid = spotCandidates.length >= 3
+        ? spotCandidates[Math.floor(spotCandidates.length / 2)]
+        : spotCandidates[spotCandidates.length - 1];
+      return { num: mid.out, den: mid.in_ };
     });
     if (spotRate != null) {
       if (_spotCache.size >= _spotMaxSize) {
@@ -5883,7 +5941,10 @@ function updateChartLink(quote) {
   const link = $("chartLink");
   const { hasZamm, poolId } = getZammPoolInfo(quote);
   if (hasZamm) {
-    link.href = "./chart/#/" + poolId.toString();
+    const fromAddr = tokens[fromToken].address;
+    const toAddr = tokens[toToken].address;
+    link.href = "./chart/?token0=" + encodeURIComponent(fromAddr) + "&token1=" + encodeURIComponent(toAddr)
+      + "&label0=" + encodeURIComponent(fromToken) + "&label1=" + encodeURIComponent(toToken) + "#/" + poolId.toString();
     link.style.display = "inline-flex";
     return;
   }
@@ -5900,23 +5961,14 @@ function updateChartLink(quote) {
 function updateOrderbookLink(quote) {
   const link = $("orderbookLink");
   const nav = $("navOrderbook");
-  const { hasZamm, poolId } = getZammPoolInfo(quote);
-  let href;
-  if (hasZamm) {
-    href = "./orderbook/#/" + poolId.toString();
-  } else {
-    const fromAddr = tokens[fromToken].address;
-    const toAddr = tokens[toToken].address;
-    href = "./orderbook/?token0=" + encodeURIComponent(fromAddr) + "&token1=" + encodeURIComponent(toAddr)
-      + "&label0=" + encodeURIComponent(fromToken) + "&label1=" + encodeURIComponent(toToken);
-  }
+  const fromAddr = tokens[fromToken].address;
+  const toAddr = tokens[toToken].address;
+  let href = "./orderbook/?token0=" + encodeURIComponent(fromAddr) + "&token1=" + encodeURIComponent(toAddr)
+    + "&label0=" + encodeURIComponent(fromToken) + "&label1=" + encodeURIComponent(toToken);
   // Append market price from displayed amounts
   const inVal = parseFloat($("fromAmount").value);
   const outVal = parseFloat($("toAmount").value);
-  if (inVal > 0 && outVal > 0) {
-    const rate = outVal / inVal;
-    href += (href.includes("?") ? "&" : "?") + "price=" + rate;
-  }
+  if (inVal > 0 && outVal > 0) href += "&price=" + (outVal / inVal);
   link.href = href;
   link.style.display = "inline-flex";
   if (nav) nav.href = href;
@@ -7175,9 +7227,9 @@ async function doSendOrLock() {
         toAddr, 0, amount, unlockTime,
         { value: isETH ? amount : 0n }
       );
-      statusEl.textContent = 'Waiting for confirmation...'; statusEl.className = 'status show';
+      statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
       const receipt = await tx.wait();
-      statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
+      statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
       statusEl.className = 'status show success';
       $('sendAmount').value = '';
       sendUpdateBalance();
@@ -7193,9 +7245,9 @@ async function doSendOrLock() {
         const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
         tx = await erc20.transfer(toAddr, amount);
       }
-      statusEl.textContent = 'Waiting for confirmation...'; statusEl.className = 'status show';
+      statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
       const receipt = await tx.wait();
-      statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + receipt.hash + '" target="_blank" style="color:inherit">' + receipt.hash.slice(0, 10) + '...</a>';
+      statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
       statusEl.className = 'status show success';
       $('sendAmount').value = '';
       sendUpdateBalance();
@@ -7304,9 +7356,9 @@ async function claimTimelock(token, to, coinId, amount, unlockTime, btn) {
   try {
     const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
     const tx = await cookbook.unlock(token, to, BigInt(coinId), BigInt(amount), BigInt(unlockTime));
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>';
     await tx.wait();
-    btn.textContent = 'Claimed!';
+    btn.innerHTML = 'Claimed! <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>';
     setTimeout(sendLoadTimelocks, 2000);
   } catch (e) {
     btn.disabled = false;

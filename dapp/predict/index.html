@@ -89,22 +89,22 @@ input {
   display:flex;flex-direction:column;gap:14px;
 }
 .market-card {
-  border:1px solid var(--border);padding:18px 16px;
-  cursor:pointer;transition:background 0.15s, transform 0.15s, border-color 0.15s;text-decoration:none;color:var(--fg);display:block;
+  border:1px solid var(--border-muted);padding:18px 16px;
+  cursor:pointer;transition:background 0.15s, border-color 0.15s;text-decoration:none;color:var(--fg);display:block;
 }
-.market-card:hover { background:var(--surface-hover);transform:translateY(-1px);border-color:var(--fg-muted); }
-.market-card:active { transform:translateY(0); }
+.market-card:hover { background:var(--surface-hover);border-color:var(--fg-muted); }
+.market-card:active { opacity:0.8; }
 .market-card-question {
   font-size:clamp(12.5px, 3.5vw, 14px);font-weight:600;line-height:1.55;margin-bottom:12px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 .market-card-odds-label {
-  display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px;
+  display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:4px;
 }
 .market-card-odds-label .yes-label { color:var(--yes); }
 .market-card-odds-label .no-label { color:var(--no); }
 .market-card-odds {
-  display:flex;height:8px;overflow:hidden;margin-bottom:10px;gap:2px;
+  display:flex;height:3px;overflow:hidden;margin-bottom:10px;gap:1px;
 }
 .market-card-yes {
   background:var(--yes);transition:width 0.3s;
@@ -139,25 +139,25 @@ input {
 
 /* Detail page */
 .section-card {
-  border:1px solid var(--border);padding:16px;margin-bottom:20px;
+  border:1px solid var(--border-muted);padding:16px;margin-bottom:16px;
 }
 .section-title {
-  font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
-  color:var(--fg-muted);margin-bottom:12px;
+  font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-dim);margin-bottom:10px;
 }
-.stat-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px; }
-.stat-label { color:var(--fg-muted); }
-.stat-value { font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0; }
+.stat-row { display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px; }
+.stat-label { color:var(--fg-dim);font-size:11px; }
+.stat-value { font-weight:500;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--fg-muted); }
 
 /* Odds bar (detail) */
 .odds-label {
   display:flex;justify-content:space-between;margin-bottom:6px;
 }
-.odds-label span { font-size:24px;font-weight:700; }
+.odds-label span { font-size:20px;font-weight:700; }
 .odds-label .yes-label { color:var(--yes); }
 .odds-label .no-label { color:var(--no); }
 .odds-bar {
-  display:flex;height:8px;overflow:hidden;margin-bottom:16px;cursor:default;gap:2px;
+  display:flex;height:4px;overflow:hidden;margin-bottom:16px;cursor:default;gap:1px;
 }
 .odds-yes {
   background:var(--yes);transition:width 0.3s;
@@ -208,45 +208,45 @@ input {
 .trade-section input::placeholder { color:var(--fg-dim); }
 .trade-section input:focus { border-bottom-width:2.5px;margin-bottom:-1px; }
 .trade-quote { font-size:12px;color:var(--fg-muted);min-height:18px;margin-bottom:10px; }
-.trade-pct-row { display:flex;gap:6px;margin-top:6px; }
+.trade-pct-row { display:flex;gap:4px;margin-top:6px; }
 .trade-pct-btn {
-  flex:1;padding:4px 0;font-size:10px;font-weight:600;letter-spacing:0.05em;
-  border:none;background:var(--surface);color:var(--fg-muted);
-  cursor:pointer;font-family:inherit;transition:background 0.15s,color 0.15s;
+  flex:1;padding:3px 0;font-size:10px;font-weight:500;letter-spacing:0.04em;
+  border:none;background:transparent;color:var(--fg-dim);
+  cursor:pointer;font-family:inherit;transition:color 0.15s;
 }
-.trade-pct-btn:hover { background:var(--surface-hover);color:var(--fg); }
+.trade-pct-btn:hover { color:var(--fg); }
 
 /* Positions */
-.pos-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border-muted);gap:8px; }
+.pos-row { display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:none;gap:8px; }
 .pos-row:last-child { border-bottom:none; }
 .pos-side { font-weight:600;min-width:70px;flex-shrink:0; }
 .pos-side.yes { color:var(--yes); }
 .pos-side.no { color:var(--no); }
 .pos-val { flex:1;text-align:right; }
-.lp-withdraw-btn { padding:3px 8px;font-size:10px;font-weight:700;letter-spacing:0.5px;border:1px solid var(--border-muted);background:transparent;color:var(--fg-muted);cursor:pointer;flex-shrink:0;transition:all 0.15s; }
-.lp-withdraw-btn:hover { opacity:1;background:var(--fg);color:var(--bg); }
+.lp-withdraw-btn { padding:3px 8px;font-size:9px;font-weight:600;letter-spacing:0.5px;border:none;background:transparent;color:var(--fg-dim);cursor:pointer;flex-shrink:0;transition:color 0.15s; }
+.lp-withdraw-btn:hover { color:var(--fg); }
 .lp-withdraw-btn:disabled { opacity:0.3;cursor:not-allowed; }
 
 /* Resolution */
 .resolve-section { margin-top:16px; }
 .resolve-toggle {
   display:flex;align-items:center;justify-content:space-between;
-  padding:10px 12px;border:1px solid var(--border);
-  cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:1px;
-  color:var(--fg-muted);transition:color 0.15s,border-color 0.15s;
+  padding:10px 0;border:none;border-top:1px solid var(--border-muted);
+  cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--fg-muted);transition:color 0.15s;
 }
 .resolve-toggle:hover { color:var(--fg); }
-.resolve-toggle.expanded { color:var(--fg);border-color:#F50; }
+.resolve-toggle.expanded { color:var(--fg); }
 .resolve-toggle-status { font-weight:bold; }
 .resolve-toggle-status.pending { color:#F50; }
 .resolve-toggle-status.ready { color:var(--yes); }
 .resolve-toggle-status.resolved { color:#0FF; }
 .resolve-details {
-  display:none;padding:16px;border:1px solid var(--border);border-top:none;
+  display:none;padding:16px 0;border:none;
   background:transparent;
 }
 .resolve-details.expanded { display:block; }
-.resolve-details.ready { border-color:var(--yes);background:transparent; }
+.resolve-details.ready { background:transparent; }
 .resolve-condition { font-size:13px;margin-bottom:16px;line-height:1.5; }
 .resolve-condition-target { opacity:0.7;font-size:11px; }
 .resolve-condition-val { font-weight:bold;color:#0FF; }
@@ -317,6 +317,29 @@ body.modal-open { overflow:hidden; }
 }
 .modal-close:hover { opacity:1; }
 .modal-body { overflow-y:auto;-webkit-overflow-scrolling:touch; }
+.pay-token-row { display:flex;gap:0;align-items:baseline; }
+.pay-token-row input { flex:1;min-width:0; }
+.pay-token-btn {
+  background:none;border:none;color:var(--fg-muted);
+  font-family:inherit;font-size:13px;padding:0 0 0 6px;cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:3px;transition:color 0.15s;
+  position:relative;top:-1px;
+}
+.pay-token-btn:hover { color:var(--fg); }
+.pay-token-btn svg { position:relative;top:1px; }
+.pay-token-list { list-style:none;padding:0;margin:0; }
+.pay-token-list li {
+  padding:10px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border-muted);transition:background 0.1s;
+}
+.pay-token-list li svg { flex-shrink:0; }
+.pay-token-list li:last-child { border-bottom:none; }
+.pay-token-list li:hover { background:var(--surface); }
+.pay-token-list li.active { color:var(--green); }
+.pay-token-list .tok-sym { font-weight:500; }
+.pay-token-list .tok-note { font-size:11px;color:var(--fg-muted);margin-left:auto; }
+
+
 .market-type-tabs { display:flex;gap:0;margin-bottom:20px; }
 .market-type-tab {
   flex:1;padding:8px 4px;font-size:11px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
@@ -339,15 +362,26 @@ body.modal-open { overflow:hidden; }
 .form-input::placeholder { color:var(--fg-dim); }
 select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;cursor:pointer; }
 .form-preview {
-  font-size:13px;line-height:1.6;padding:12px 16px;
+  font-size:14px;font-weight:600;line-height:1.6;padding:12px 16px;
   background:var(--surface);margin-bottom:16px;text-align:center;
-  border-left:2px solid var(--border);
+  border:1px solid var(--border-muted);border-left:3px solid var(--fg);
 }
 .form-hint { font-size:11px;color:var(--fg-dim);margin-top:4px; }
+.form-hint.tab-hint { text-align:center;margin-bottom:16px;margin-top:0; }
 .form-divider {
   font-size:11px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
   color:var(--fg-muted);margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--border-muted);
 }
+.form-divider.in-liq { border-top:none;margin:0 0 12px;padding-top:0; }
+.liq-section {
+  border:1px solid var(--border-muted);padding:16px;margin-top:20px;
+}
+.total-cost-display {
+  font-size:12px;font-weight:600;color:var(--fg);text-align:center;margin:12px 0 4px;letter-spacing:0.02em;
+}
+#priceDirection button[data-dir="up"].active { color:var(--yes);border-bottom-color:var(--yes); }
+#priceDirection button[data-dir="down"].active { color:var(--no);border-bottom-color:var(--no); }
+.date-hint { font-size:11px;color:var(--fg-dim);margin-top:4px;display:block; }
 .form-btn {
   width:100%;padding:14px;font-size:13px;font-weight:600;margin-top:12px;
   letter-spacing:0.02em;transition:all 0.2s;
@@ -396,34 +430,34 @@ input[type="datetime-local"] { color-scheme:light; }
 
 /* Odds chart drawer */
 .market-chart-drawer {
-  border:1px solid var(--border);margin-bottom:16px;overflow:hidden;border-radius:8px;
+  border-top:1px solid var(--border-muted);margin-bottom:0;overflow:hidden;
 }
 .market-chart-toggle-btn {
   display:flex;justify-content:space-between;align-items:center;width:100%;
-  padding:10px 14px;border:none;background:transparent;color:var(--fg);cursor:pointer;
-  font-family:inherit;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  padding:10px 0;border:none;background:transparent;color:var(--fg-muted);cursor:pointer;
+  font-family:inherit;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  transition:opacity 0.15s;
 }
-.market-chart-toggle-btn:hover { background:var(--surface); }
-.market-chart-toggle-btn .arrow { transition:transform 0.2s;font-size:10px; }
+.market-chart-toggle-btn:hover { opacity:0.7; }
+.market-chart-toggle-btn .arrow { transition:transform 0.2s;font-size:8px;opacity:0.4; }
 .market-chart-drawer.open .market-chart-toggle-btn .arrow { transform:rotate(180deg); }
 .market-chart {
   padding:0;
 }
 .market-chart-wrap {
-  position:relative;width:100%;height:280px;
+  position:relative;width:100%;height:260px;
   background:var(--bg);overflow:hidden;
-  border-top:1px solid var(--border-muted);
 }
 .market-chart-tabs {
-  display:flex;gap:4px;padding:8px 12px 4px;
+  display:flex;gap:2px;padding:6px 0 4px;
 }
 .market-chart-tabs button {
-  border:1px solid var(--border);background:transparent;color:var(--fg-muted);
-  font-family:inherit;font-size:10px;font-weight:600;padding:3px 10px;border-radius:12px;cursor:pointer;
+  border:none;background:transparent;color:var(--fg-dim);
+  font-family:inherit;font-size:10px;font-weight:600;padding:3px 8px;cursor:pointer;
   letter-spacing:0.03em;
 }
-.market-chart-tabs button:hover { background:var(--surface); }
-.market-chart-tabs button.active { background:var(--accent,#6366f1);color:#fff;border-color:var(--accent,#6366f1); }
+.market-chart-tabs button:hover { color:var(--fg-muted); }
+.market-chart-tabs button.active { color:var(--fg);border-bottom:1px solid var(--fg); }
 .market-chart-wrap canvas {
   display:block;width:100%;height:100%;
 }
@@ -432,12 +466,12 @@ input[type="datetime-local"] { color-scheme:light; }
   font-size:12px;color:var(--fg-dim);
 }
 /* Pool activity drawer */
-.pm-activity-table { width:100%;border-collapse:collapse;font-size:12px; }
+.pm-activity-table { width:100%;border-collapse:collapse;font-size:11px; }
 .pm-activity-table th {
-  text-align:left;padding:6px 10px;font-size:10px;font-weight:600;letter-spacing:0.06em;
-  text-transform:uppercase;color:var(--fg-dim);border-bottom:1px solid var(--border-muted);
+  text-align:left;padding:6px 10px;font-size:9px;font-weight:600;letter-spacing:0.06em;
+  text-transform:uppercase;color:var(--fg-dim);border-bottom:none;
 }
-.pm-activity-table td { padding:5px 10px;border-bottom:1px solid var(--border-muted);white-space:nowrap; }
+.pm-activity-table td { padding:4px 10px;border-bottom:none;white-space:nowrap;color:var(--fg-muted); }
 .pm-activity-table tr:last-child td { border-bottom:none; }
 .pm-activity-table .evt-buy-yes { color:var(--green); }
 .pm-activity-table .evt-sell-yes { color:var(--red); }
@@ -445,7 +479,7 @@ input[type="datetime-local"] { color-scheme:light; }
 .pm-activity-table .evt-sell-no { color:var(--green); }
 .pm-activity-table .evt-liqadd { color:var(--green); }
 .pm-activity-table .evt-liqrem { color:var(--red); }
-.pm-activity-table .evt-type { font-weight:600;font-size:11px; }
+.pm-activity-table .evt-type { font-weight:600;font-size:10px; }
 .pm-activity-table a { color:var(--fg-muted);font-size:11px; }
 .pm-activity-table a:hover { color:var(--fg); }
 .pm-activity-more {
@@ -541,11 +575,11 @@ input[type="datetime-local"] { color-scheme:light; }
   </button>
   <div class="z-nav-menu">
     <a href="../">Swap</a>
-    <a href="../coin/">Coins</a>
+    <a href="../coin/">Coin</a>
     <a href="./" class="active">Predict</a>
     <a id="navOrderbook" href="../orderbook/">Orderbook</a>
     <a href="../lp/">Liquidity</a>
-    <a href="../domains/">Domains</a>
+    <a href="../domains/">Domain</a>
     <a href="../dao/">DAO</a>
     <div class="z-nav-sep"></div>
     <a href="../about/">About</a>
@@ -583,6 +617,7 @@ input[type="datetime-local"] { color-scheme:light; }
       <button class="market-type-tab" onclick="switchMarketType('supply')">Supply</button>
       <button class="market-type-tab" onclick="switchMarketType('custom')">Question</button>
     </div>
+    <div class="form-hint tab-hint" id="tabHint">Will an asset hit a target price?</div>
 
     <!-- PRICE FORM -->
     <div class="form-section active" id="priceForm">
@@ -597,7 +632,7 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Target Price (USD)</label>
-        <input class="form-input" id="targetPrice" type="text" inputmode="numeric" placeholder="e.g. 10000" oninput="fmtTargetPrice();updatePricePreview()">
+        <input class="form-input" id="targetPrice" type="text" inputmode="numeric" placeholder="e.g. 10000" oninput="fmtTargetPrice();updatePricePreview();updateCreateBtn()">
         <div class="date-presets" id="pricePresets">
           <button type="button" class="date-preset" onclick="setPricePreset(0)">current</button>
           <button type="button" class="date-preset" onclick="setPricePreset(5)">+5%</button>
@@ -607,7 +642,8 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Resolution Date</label>
-        <input class="form-input" id="closeDate" type="datetime-local" oninput="updatePricePreview()">
+        <input class="form-input" id="closeDate" type="datetime-local" oninput="updatePricePreview();updateDateHint('closeDate');updateCreateBtn()">
+        <span class="date-hint" id="closeDateHint"></span>
         <div class="date-presets">
           <button type="button" class="date-preset" onclick="setDatePreset(7,'closeDate')">1w</button>
           <button type="button" class="date-preset" onclick="setDatePreset(30,'closeDate')">1m</button>
@@ -620,11 +656,19 @@ input[type="datetime-local"] { color-scheme:light; }
     <!-- BALANCE FORM -->
     <div class="form-section" id="balanceForm">
       <div class="form-preview" id="balancePreview">Will <b>address</b> hold &ge; <b>___</b> by <b>___</b>?</div>
+
       <div class="form-group">
         <label class="form-label">Asset Type</label>
         <div class="balance-type-toggle">
           <button type="button" class="balance-type-btn active" onclick="setBalanceType('eth')">ETH</button>
           <button type="button" class="balance-type-btn" onclick="setBalanceType('token')">Token</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Direction</label>
+        <div class="trade-side" id="balanceDirection">
+          <button class="active" data-dir="above" onclick="setBalanceDir('above')">Above</button>
+          <button data-dir="below" onclick="setBalanceDir('below')">Below</button>
         </div>
       </div>
       <div class="form-group" id="balTokenGroup" style="display:none">
@@ -634,15 +678,17 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Wallet Address</label>
-        <input class="form-input" id="balWalletAddr" type="text" placeholder="0x..." oninput="updateBalPreview()">
+        <input class="form-input" id="balWalletAddr" type="text" placeholder="0x address, name.wei, or name.eth" oninput="onBalWalletInput()">
+        <div id="balWalletResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">Minimum Balance</label>
-        <input class="form-input" id="balThreshold" type="number" placeholder="e.g. 100" step="any" min="0" oninput="updateBalPreview()">
+        <label class="form-label">Threshold</label>
+        <input class="form-input" id="balThreshold" type="number" placeholder="e.g. 100" step="any" min="0" oninput="updateBalPreview();updateCreateBtn()">
       </div>
       <div class="form-group">
         <label class="form-label">Resolution Date</label>
-        <input class="form-input" id="balCloseDate" type="datetime-local" oninput="updateBalPreview()">
+        <input class="form-input" id="balCloseDate" type="datetime-local" oninput="updateBalPreview();updateDateHint('balCloseDate');updateCreateBtn()">
+        <span class="date-hint" id="balCloseDateHint"></span>
         <div class="date-presets">
           <button type="button" class="date-preset" onclick="setDatePreset(7,'balCloseDate')">1w</button>
           <button type="button" class="date-preset" onclick="setDatePreset(30,'balCloseDate')">1m</button>
@@ -657,7 +703,7 @@ input[type="datetime-local"] { color-scheme:light; }
       <div class="form-preview" id="supplyPreview">Will <b>token</b> supply reach <b>___</b> by <b>___</b>?</div>
       <div class="form-group">
         <label class="form-label">Token Contract</label>
-        <input class="form-input" id="supplyTokenAddr" type="text" placeholder="0x... (ERC20)" oninput="loadSupplyTokenInfo()">
+        <input class="form-input" id="supplyTokenAddr" type="text" placeholder="0x... (ERC20)" oninput="loadSupplyTokenInfo();updateCreateBtn()">
         <div class="form-hint" id="supplyTokenHint"></div>
       </div>
       <div class="form-group">
@@ -669,11 +715,12 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Threshold</label>
-        <input class="form-input" id="supplyThreshold" type="number" placeholder="e.g. 1000000" step="any" min="0" oninput="updateSupplyPreview()">
+        <input class="form-input" id="supplyThreshold" type="number" placeholder="e.g. 1000000" step="any" min="0" oninput="updateSupplyPreview();updateCreateBtn()">
       </div>
       <div class="form-group">
         <label class="form-label">Resolution Date</label>
-        <input class="form-input" id="supplyCloseDate" type="datetime-local" oninput="updateSupplyPreview()">
+        <input class="form-input" id="supplyCloseDate" type="datetime-local" oninput="updateSupplyPreview();updateDateHint('supplyCloseDate');updateCreateBtn()">
+        <span class="date-hint" id="supplyCloseDateHint"></span>
         <div class="date-presets">
           <button type="button" class="date-preset" onclick="setDatePreset(7,'supplyCloseDate')">1w</button>
           <button type="button" class="date-preset" onclick="setDatePreset(30,'supplyCloseDate')">1m</button>
@@ -688,13 +735,24 @@ input[type="datetime-local"] { color-scheme:light; }
       <div class="form-preview" id="customPreview">Yes/No market with your own question and resolver</div>
       <div class="form-group">
         <label class="form-label">Question</label>
-        <input class="form-input" id="customQuestion" type="text" placeholder="Will X happen by Y?" oninput="updateCustomPreview()">
+        <input class="form-input" id="customQuestion" type="text" placeholder="Will X happen by Y?" oninput="updateCustomPreview();updateCreateBtn()">
       </div>
       <div class="form-group">
         <label class="form-label">Resolver Address</label>
-        <input class="form-input" id="customResolver" type="text" placeholder="0x address, name.wei, or name.eth" oninput="updateCreateDeeplink()">
+        <input class="form-input" id="customResolver" type="text" placeholder="0x address, name.wei, or name.eth" oninput="updateCreateDeeplink();updateCreateBtn()">
         <div id="customResolverResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         <div class="form-hint">The address that will be able to resolve this market as YES or NO</div>
+        <div id="resolverFeeSection" style="display:none;margin-top:8px">
+          <a href="#" style="font-size:12px;color:var(--fg-muted)" onclick="event.preventDefault();const b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none'">Set your resolver fee</a>
+          <div style="display:none;margin-top:6px">
+            <div id="resolverFeeCurrentLabel" style="font-size:11px;color:var(--fg-dim);margin-bottom:4px"></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input class="form-input" id="resolverFeeInput" type="number" min="0" max="10" step="0.01" placeholder="0.00" style="width:80px;padding:6px 8px;font-size:13px">
+              <span style="font-size:12px;color:var(--fg-muted)">%</span>
+              <button class="btn" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="submitResolverFee()">Set Fee</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="form-toggle-row">
         <input type="checkbox" id="customCanClose" checked onchange="updateCreateDeeplink()">
@@ -702,7 +760,8 @@ input[type="datetime-local"] { color-scheme:light; }
       </div>
       <div class="form-group">
         <label class="form-label">Resolution Date</label>
-        <input class="form-input" id="customCloseDate" type="datetime-local" oninput="updateCustomPreview()">
+        <input class="form-input" id="customCloseDate" type="datetime-local" oninput="updateCustomPreview();updateDateHint('customCloseDate');updateCreateBtn()">
+        <span class="date-hint" id="customCloseDateHint"></span>
         <div class="date-presets">
           <button type="button" class="date-preset" onclick="setDatePreset(7,'customCloseDate')">1w</button>
           <button type="button" class="date-preset" onclick="setDatePreset(30,'customCloseDate')">1m</button>
@@ -713,17 +772,18 @@ input[type="datetime-local"] { color-scheme:light; }
     </div>
 
     <!-- SEED LIQUIDITY -->
-    <div class="form-divider">Seed Liquidity (ETH)</div>
-    <div class="liq-presets">
-      <button type="button" class="liq-preset active" onclick="setLiqPreset(0.01)">0.01</button>
-      <button type="button" class="liq-preset" onclick="setLiqPreset(0.1)">0.1</button>
-      <button type="button" class="liq-preset" onclick="setLiqPreset(0.5)">0.5</button>
-      <button type="button" class="liq-preset" onclick="setLiqPreset(1)">1.0</button>
+    <div class="liq-section">
+      <div class="form-label" style="margin-bottom:12px">Seed Liquidity (ETH)</div>
+      <div class="liq-presets">
+        <button type="button" class="liq-preset active" onclick="setLiqPreset(0.01)">0.01</button>
+        <button type="button" class="liq-preset" onclick="setLiqPreset(0.1)">0.1</button>
+        <button type="button" class="liq-preset" onclick="setLiqPreset(0.5)">0.5</button>
+        <button type="button" class="liq-preset" onclick="setLiqPreset(1)">1.0</button>
+      </div>
+      <input class="form-input" id="totalLiquidity" type="number" placeholder="0.01" step="0.001" min="0.001" value="0.01" oninput="updateLiqSplit()" style="margin-bottom:10px">
+      <div class="total-cost-display" id="totalCostDisplay">Total: 0.01 ETH</div>
+      <button class="form-btn" id="createBtn" onclick="createMarket()" disabled>Enter target price</button>
     </div>
-    <input class="form-input" id="totalLiquidity" type="number" placeholder="0.01" step="0.001" min="0.001" value="0.01" oninput="updateLiqSplit()" style="margin-bottom:10px">
-
-    <div style="font-size:12px;color:var(--fg-muted);text-align:center;margin:12px 0 4px;letter-spacing:0.02em" id="totalCostDisplay">Total: 0.01 ETH</div>
-    <button class="form-btn" id="createBtn" onclick="createMarket()">Create Market</button>
   </div>
 </div>
 
@@ -743,6 +803,26 @@ input[type="datetime-local"] { color-scheme:light; }
       Splits collateral into YES + NO shares and adds to AMM pool. You earn swap fees from trades.
     </div>
     <button class="form-btn" id="lpBtn" onclick="provideLiquidity()">Provide Liquidity</button>
+  </div>
+</div>
+
+
+<!-- Pay Token Modal -->
+<div class="modal-overlay" id="payTokenModal" onclick="if(event.target===this)closePayTokenModal()">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header">
+      <div class="modal-title">Pay With</div>
+      <button class="modal-close" onclick="closePayTokenModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="payTokenSearch" class="form-input" placeholder="Search tokens..." oninput="renderPayTokenList()" style="margin-bottom:8px;font-size:13px;padding:8px 10px">
+      <ul class="pay-token-list" id="payTokenList"></ul>
+      <div style="border-top:1px solid var(--border-muted);padding-top:10px;margin-top:8px;display:flex;gap:8px;align-items:center">
+        <input type="text" id="payTokenCustomAddr" class="form-input" placeholder="Paste token address" style="margin:0;flex:1;font-size:12px;padding:6px 8px">
+        <button style="white-space:nowrap;font-size:12px;padding:6px 12px;background:var(--surface);border:1px solid var(--border-muted);color:var(--fg);cursor:pointer;font-family:inherit" onclick="addPredictCustomToken()">Add</button>
+      </div>
+      <div id="payTokenCustomStatus" style="font-size:11px;color:var(--fg-muted);margin-top:4px;min-height:16px"></div>
+    </div>
   </div>
 </div>
 
@@ -1419,6 +1499,10 @@ const CONTRACTS = {
   PM_ROUTER: '0x000000000055ff709f26efb262fba8b0ae8c35dc'
 };
 
+const ZORG_TOKEN = '0x00a6bA94BBb5474725515De88fE04F854f2dCb12';
+const ZORG_VERIFY_THRESHOLD = 100000n * 10n**18n; // 100k tokens (18 decimals)
+const VERIFIED_BADGE = `<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle;margin-left:3px"><circle cx="8" cy="8" r="7.5" fill="#1d9bf0"/><path d="M5 8.2l2 2 4-4.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 // Op enum: 0=LT, 1=GT, 2=LTE, 3=GTE, 4=EQ, 5=NEQ
 const OP = { LT: 0, GT: 1, LTE: 2, GTE: 3, EQ: 4, NEQ: 5 };
 
@@ -1451,7 +1535,9 @@ const PAMM_ABI = [
   'function getPoolState(uint256 marketId, uint256 feeOrHook) view returns (uint256 rYes, uint256 rNo, uint256 pYesNum, uint256 pYesDen)',
   'function getMarket(uint256 marketId) view returns (address resolver, address collateral, bool resolved, bool outcome, bool canClose, uint64 close, uint256 collateralLocked, uint256 yesSupply, uint256 noSupply, string description)',
   'function splitAndAddLiquidity(uint256 marketId, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 liquidity)',
-  'function removeLiquidityToCollateral(uint256 marketId, uint256 feeOrHook, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 minCollateralOut, address to, uint256 deadline) returns (uint256 collateralOut, uint256 leftoverYes, uint256 leftoverNo)'
+  'function removeLiquidityToCollateral(uint256 marketId, uint256 feeOrHook, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 minCollateralOut, address to, uint256 deadline) returns (uint256 collateralOut, uint256 leftoverYes, uint256 leftoverNo)',
+  'function resolverFeeBps(address) view returns (uint16)',
+  'function setResolverFeeBps(uint16 bps)'
 ];
 
 const QUOTER_ABI = [
@@ -1475,6 +1561,245 @@ const MASTER_ROUTER_ABI = [
   'function multicall(bytes[] data) payable returns (bytes[] results)',
   'function permit(address token, address owner, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)'
 ];
+
+
+// ==================== zRouter integration (buy with any token) ====================
+
+const ZROUTER_ADDRESS = '0x000000000000FB114709235f1ccBFfb925F600e4';
+const ZQUOTER_ADDRESS = '0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef';
+const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+const ZQUOTER_IFACE = new ethers.Interface([
+  'function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)'
+]);
+
+const ZROUTER_IFACE = new ethers.Interface([
+  'function execute(address,uint256,bytes) payable returns (bytes)',
+  'function multicall(bytes[]) payable returns (bytes[])',
+  'function sweep(address,uint256,uint256,address) payable',
+  'function unwrap(uint256) payable',
+  'function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+  'function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)',
+  'function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)'
+]);
+
+const MASTER_ROUTER_IFACE = new ethers.Interface(MASTER_ROUTER_ABI);
+
+// ---- Permit support for zRouter pay tokens ----
+const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+
+const _predictPermitIface = new ethers.Interface([
+  'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
+  'function nonces(address) view returns (uint256)',
+  'function DOMAIN_SEPARATOR() view returns (bytes32)',
+  'function name() view returns (string)',
+  'function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+]);
+
+const _predictPermitConfig = {
+  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { type: 'eip2612', domain: { name: 'USD Coin', version: '2', chainId: 1, verifyingContract: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' } },
+  '0x6b175474e89094c44da98b954eedeac495271d0f': { type: 'dai', domain: { name: 'Dai Stablecoin', version: '1', chainId: 1, verifyingContract: '0x6B175474E89094C44Da98b954EedeAC495271d0F' } },
+  '0x6440f144b7e50d6a8439336510312d2f54beb01d': { type: 'eip2612', domain: { name: 'BOLD Stablecoin', version: '1', chainId: 1, verifyingContract: '0x6440f144b7e50D6a8439336510312d2F54beB01D' } },
+};
+const _predictPermitCache = new Map();
+
+async function _predictStaticCall(tokenAddr, data) {
+  return await withRPC(async (rpc) => rpc.call({ to: tokenAddr, data }));
+}
+
+async function predictDetectPermit(tokenAddress) {
+  const key = tokenAddress.toLowerCase();
+  if (_predictPermitConfig[key]) return _predictPermitConfig[key];
+  if (_predictPermitCache.has(key)) return _predictPermitCache.get(key);
+  try {
+    const [nonceRes, dsRes] = await Promise.all([
+      _predictStaticCall(tokenAddress, _predictPermitIface.encodeFunctionData('nonces', [ZERO_ADDRESS])),
+      _predictStaticCall(tokenAddress, _predictPermitIface.encodeFunctionData('DOMAIN_SEPARATOR')),
+    ]);
+    if (!nonceRes || nonceRes === '0x' || !dsRes || dsRes === '0x') throw new Error('no permit');
+    let domainName, domainVersion;
+    try {
+      const domRes = await _predictStaticCall(tokenAddress, _predictPermitIface.encodeFunctionData('eip712Domain'));
+      const decoded = _predictPermitIface.decodeFunctionResult('eip712Domain', domRes);
+      domainName = decoded[1]; domainVersion = decoded[2];
+    } catch (_) {
+      const nameRes = await _predictStaticCall(tokenAddress, _predictPermitIface.encodeFunctionData('name'));
+      domainName = _predictPermitIface.decodeFunctionResult('name', nameRes)[0];
+      domainVersion = '1';
+    }
+    const candidateDomain = { name: domainName, version: domainVersion, chainId: 1, verifyingContract: tokenAddress };
+    const computed = ethers.TypedDataEncoder.hashDomain(candidateDomain);
+    const onchain = ethers.AbiCoder.defaultAbiCoder().decode(['bytes32'], dsRes)[0];
+    if (computed !== onchain) {
+      candidateDomain.version = '2';
+      if (ethers.TypedDataEncoder.hashDomain(candidateDomain) !== onchain) {
+        _predictPermitCache.set(key, null); return null;
+      }
+    }
+    const config = { type: 'eip2612', domain: candidateDomain };
+    _predictPermitCache.set(key, config);
+    return config;
+  } catch (_) { _predictPermitCache.set(key, null); return null; }
+}
+
+async function predictGetPermitConfig(tokenAddress) {
+  const key = tokenAddress.toLowerCase();
+  if (_predictPermitConfig[key]) return _predictPermitConfig[key];
+  return await predictDetectPermit(tokenAddress);
+}
+
+async function predictSignPermit(config, tokenAddress) {
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
+  const owner = _connectedAddress;
+  const spender = ZROUTER_ADDRESS;
+  const nonceData = _predictPermitIface.encodeFunctionData('nonces', [owner]);
+  const nonceResult = await _walletProvider.call({ to: tokenAddress, data: nonceData });
+  const nonce = _predictPermitIface.decodeFunctionResult('nonces', nonceResult)[0];
+  let types, values;
+  if (config.type === 'dai') {
+    types = { Permit: [{ name: 'holder', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'nonce', type: 'uint256' }, { name: 'expiry', type: 'uint256' }, { name: 'allowed', type: 'bool' }] };
+    values = { holder: owner, spender, nonce, expiry: deadline, allowed: true };
+  } else {
+    types = { Permit: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }] };
+    values = { owner, spender, value: ethers.MaxUint256, nonce, deadline };
+  }
+  const sig = await _signer.signTypedData(config.domain, types, values);
+  const { v, r, s } = ethers.Signature.from(sig);
+  return { v, r, s, nonce, deadline, config, tokenAddress };
+}
+
+async function predictCheckPermit2Allowance(tokenAddress) {
+  const token = new ethers.Contract(tokenAddress, ERC20_ABI, _walletProvider);
+  return await token.allowance(_connectedAddress, PERMIT2_ADDRESS);
+}
+
+async function predictSignPermit2(tokenAddress, amount) {
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
+  const _nb = new Uint8Array(8); crypto.getRandomValues(_nb);
+  const nonce = _nb.reduce((n, b) => (n << 8n) | BigInt(b), 0n);
+  const values = { permitted: { token: tokenAddress, amount }, spender: ZROUTER_ADDRESS, nonce, deadline };
+  const types = {
+    PermitTransferFrom: [{ name: 'permitted', type: 'TokenPermissions' }, { name: 'spender', type: 'address' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }],
+    TokenPermissions: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }],
+  };
+  const sig = await _signer.signTypedData({ name: 'Permit2', chainId: 1, verifyingContract: PERMIT2_ADDRESS }, types, values);
+  return { signature: sig, nonce, deadline, token: tokenAddress, amount };
+}
+
+function predictBuildPermitCall(permitData) {
+  if (permitData.config.type === 'dai') {
+    return ZROUTER_IFACE.encodeFunctionData('permitDAI', [permitData.nonce, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+  }
+  return ZROUTER_IFACE.encodeFunctionData('permit', [permitData.tokenAddress, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+}
+
+function predictBuildPermit2Call(p2) {
+  return ZROUTER_IFACE.encodeFunctionData('permit2TransferFrom', [p2.token, p2.amount, p2.nonce, p2.deadline, p2.signature]);
+}
+
+const PREDICT_TOKENS = {
+  ETH:    { address: ZERO_ADDRESS, symbol: 'ETH', decimals: 18 },
+  WETH:   { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', decimals: 18 },
+  USDC:   { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 },
+  USDT:   { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', decimals: 6 },
+  DAI:    { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', symbol: 'DAI', decimals: 18 },
+  WBTC:   { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC', decimals: 8 },
+  stETH:  { address: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', symbol: 'stETH', decimals: 18 },
+  wstETH: { address: '0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0', symbol: 'wstETH', decimals: 18 },
+  rETH:   { address: '0xae78736Cd615f374D3085123A210448E74Fc6393', symbol: 'rETH', decimals: 18 },
+  BOLD:   { address: '0x6440f144b7e50D6a8439336510312d2F54beB01D', symbol: 'BOLD', decimals: 18 },
+  LUSD:   { address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0', symbol: 'LUSD', decimals: 18 },
+  PNKSTR: { address: '0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF', symbol: 'PNKSTR', decimals: 18 },
+};
+
+const _predictBuiltinAddrs = new Set(Object.values(PREDICT_TOKENS).map(t => t.address.toLowerCase()));
+
+// Custom tokens from swap page (shared localStorage)
+const _predictCustomTokens = {};
+try {
+  const saved = JSON.parse(localStorage.getItem('zswap_custom_tokens') || '[]');
+  for (const t of saved) {
+    if (t.address && t.symbol && t.decimals != null && !PREDICT_TOKENS[t.symbol]) {
+      _predictCustomTokens[t.symbol] = { address: t.address, symbol: t.symbol, decimals: t.decimals };
+    }
+  }
+} catch (_) {}
+
+function _savePredictCustomTokens() {
+  try {
+    const all = [];
+    // Merge with existing swap custom tokens to not lose them
+    try {
+      const existing = JSON.parse(localStorage.getItem('zswap_custom_tokens') || '[]');
+      for (const t of existing) all.push(t);
+    } catch (_) {}
+    for (const t of Object.values(_predictCustomTokens)) {
+      if (!all.some(x => x.address.toLowerCase() === t.address.toLowerCase())) {
+        all.push({ address: t.address, symbol: t.symbol, decimals: t.decimals });
+      }
+    }
+    localStorage.setItem('zswap_custom_tokens', JSON.stringify(all));
+  } catch (_) {}
+}
+
+function getAllPayTokens() {
+  return { ...PREDICT_TOKENS, ..._predictCustomTokens };
+}
+
+function findPayTokenByAddress(addr) {
+  const lc = addr.toLowerCase();
+  const all = getAllPayTokens();
+  for (const t of Object.values(all)) {
+    if (t.address.toLowerCase() === lc) return t;
+  }
+  return null;
+}
+
+const PAY_TOKEN_ICONS = {
+  ETH: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>',
+  WETH: '<svg width="20" height="20" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="17" fill="none" stroke="#90CAF9" stroke-width="1.5" stroke-dasharray="4 2.5"/><g transform="translate(2,2)"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></g></svg>',
+  USDC: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>',
+  USDT: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>',
+  DAI: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>',
+  WBTC: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>',
+  stETH: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path d="M10.35 14.864c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 2.061 0 4.122-.832 5.683-2.353 2.637-2.571 3.082-6.727 1.034-9.824L16.067 18.611 10.35 14.864z" fill="#FFF" opacity=".6"/></g></svg>',
+  wstETH: '<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>',
+  BOLD: '<svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_1_6)"><path d="M32 16C32 7.16406 24.8359 0 16 0C7.16406 0 0 7.16406 0 16C0 24.8359 7.16406 32 16 32C24.8359 32 32 24.8359 32 16Z" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.1719 4.56641H8.58203V26.1016H15.7617V25.2422C16.8398 25.793 18.0586 26.1055 19.3555 26.1055C23.7148 26.1055 27.25 22.5703 27.25 18.207C27.25 13.8438 23.7148 10.3086 19.3555 10.3086C18.0586 10.3086 16.8398 10.6211 15.7617 11.1719V4.56641H12.1719ZM15.7617 11.1719C13.207 12.4805 11.457 15.1406 11.457 18.207C11.457 21.2734 13.207 23.9336 15.7617 25.2422V11.1719Z" fill="#1C1D4F"/></g><defs><clipPath id="clip0_1_6"><rect width="32" height="32" fill="white"/></clipPath></defs></svg>',
+  LUSD: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="20" height="20"><circle cx="128" cy="132" r="102" fill="#29C9EB"/><rect x="110" y="4" width="36" height="32" rx="9" fill="#29C9EB"/><rect x="110" y="228" width="36" height="24" rx="9" fill="#29C9EB"/><path d="M 128 30 A 102 102 0 0 1 128 234 Z" fill="#7B6AD6"/><path d="M 128 4 L 137 4 Q 146 4 146 13 L 146 36 L 128 36 Z" fill="#7B6AD6"/><path d="M 128 228 L 146 228 L 146 243 Q 146 252 137 252 L 128 252 Z" fill="#7B6AD6"/><g fill="none" stroke="white" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"><path d="M 154 90 C 146 78, 134 72, 120 74 C 98 78, 82 94, 82 112 C 82 132, 98 142, 128 150 C 158 158, 174 168, 174 186 C 174 206, 158 218, 136 220 C 120 222, 106 216, 98 204"/><line x1="128" y1="74" x2="128" y2="15"/><line x1="128" y1="220" x2="128" y2="241"/></g></svg>',
+  rETH: '<svg width="20" height="20" viewBox="0 0 33 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#pt_reth_c)"><path d="M16.5 32C25.3365 32 32.5 24.8365 32.5 16C32.5 7.16347 25.3365 0 16.5 0C7.66347 0 0.5 7.16347 0.5 16C0.5 24.8365 7.66347 32 16.5 32Z" fill="url(#pt_reth_g)"/><path d="M16.4763 19.4523L10.3889 15.8513L16.4763 5.75293L22.5583 15.8513L16.4763 19.4523Z" fill="white"/><path d="M16.4763 25.5835L10.3889 17.0098L16.4763 20.6054L22.5638 17.0098L16.4763 25.5835Z" fill="white"/></g><defs><radialGradient id="pt_reth_g" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10.9533 7.65333) rotate(54.1675) scale(26.511)"><stop stop-color="#FFD794"/><stop offset="1" stop-color="#ED5A37"/></radialGradient><clipPath id="pt_reth_c"><rect width="32" height="32" fill="white" transform="translate(0.5)"/></clipPath></defs></svg>',
+  PNKSTR: '<svg width="20" height="20" viewBox="0 0 296 296" xmlns="http://www.w3.org/2000/svg"><circle r="148" transform="translate(148 148)" fill="#0d0d0d"/><path d="M141.692,120.865v-43.1014h11.213v43.1014h-11.213ZM125.299,78.8923v-9.4526h43.857v9.4526h-43.857Zm53.228,41.9727L164.05,69.4397h11.425l9.51,39.2913h-.923l10.007-39.2913h10.716l9.864,39.2913h-.852l9.581-39.2913h11.567L220.184,120.865h-12.135l-9.084-36.0472h.994l-9.155,36.0472h-12.277Z" fill="#fff"/><g transform="translate(135.33781,207.03926)"><circle cx="0" cy="0" r="17.5" fill="#d2dbed"/><path d="M-7.12,-12.9l14.24,0l0,5.8l-8.05,13l8.05,0l0,6.05l-14.24,0l0-5.8l8.04-13l-8.04,0Z" fill="#0d0d0d"/></g></svg>',
+};
+
+function _makeLetterIcon(sym, size) {
+  size = size || 20;
+  const clean = String(sym || '').replace(/[^A-Za-z0-9]/g, '') || '?';
+  const show = clean.length <= 5 ? clean : clean.slice(0, 4) + '\u2026';
+  const L = show.length;
+  const fontSize = L <= 1 ? 10 : L === 2 ? 8.5 : L === 3 ? 7 : L === 4 ? 6 : 5;
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) hash = ((hash << 5) - hash + clean.charCodeAt(i)) | 0;
+  const hue = ((hash % 360) + 360) % 360;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">` +
+    `<circle cx="12" cy="12" r="11" fill="hsl(${hue},50%,50%)" stroke="hsl(${hue},35%,38%)" stroke-width="1"/>` +
+    `<text x="12" y="12.3" text-anchor="middle" dominant-baseline="middle" font-family="Helvetica,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="#fff">${escText(show)}</text></svg>`;
+}
+
+function payTokenIcon(sym) {
+  return PAY_TOKEN_ICONS[sym] || _makeLetterIcon(sym, 20);
+}
+
+let _selectedPayToken = null; // null = use market collateral (default)
+
+function safeParseUnits(valStr, decimals) {
+  const s = String(valStr).trim();
+  if (!s) throw new Error('Empty amount');
+  const m = s.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!m) throw new Error('Invalid number');
+  const frac = m[2] || '';
+  if (frac.length > decimals) throw new Error(`Too many decimals (max ${decimals})`);
+  return ethers.parseUnits(s, decimals);
+}
 
 const PM_ROUTER_ABI = [
   'function buy(uint256 marketId, bool isYes, uint256 collateralIn, uint256 minSharesOut, uint256 feeOrHook, address to, uint256 deadline) payable returns (uint256)',
@@ -1561,6 +1886,35 @@ async function multicall(calls, rpc) {
   const callData = calls.map(c => ({ target: c.target, allowFailure: true, callData: c.callData }));
   const results = await mc.aggregate3(callData);
   return results.map((r, i) => ({ success: r.success, data: r.returnData, decode: () => calls[i].decode(r.returnData) }));
+}
+
+async function checkResolverVerified(addr) {
+  try {
+    return await withRPC(async (rpc) => {
+      const token = new ethers.Contract(ZORG_TOKEN, ERC20_ABI, rpc);
+      const bal = await token.balanceOf(addr);
+      return bal >= ZORG_VERIFY_THRESHOLD;
+    });
+  } catch { return false; }
+}
+
+async function getResolverFeeBps(addr) {
+  try {
+    return await withRPC(async (rpc) => {
+      const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, rpc);
+      return Number(await pamm.resolverFeeBps(addr));
+    });
+  } catch { return 0; }
+}
+
+async function reverseResolveWei(addr) {
+  try {
+    return await withRPC(async (rpc) => {
+      const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+      const name = await ns.reverseResolve(addr);
+      return name || null;
+    });
+  } catch { return null; }
 }
 
 // ==================== HELPERS ====================
@@ -2011,9 +2365,11 @@ let _tradeSide = 'yes';
 let _quoteTimer = null;
 let _lastQuote = null;
 let _isTrading = false;
+let _tradeSlippage = 5; // default 5% slippage tolerance
 let _galleryFilter = 'active'; // 'active' | 'resolved' | 'all'
 let _currentMarketType = 'price'; // 'price' | 'balance' | 'supply'
 let _balanceAssetType = 'eth'; // 'eth' | 'token'
+let _balanceDir = 'above'; // 'above' | 'below'
 let _currentEthPrice = 0;
 let _balTokenData = { address: '', symbol: '', decimals: 18 };
 let _supplyTokenData = { address: '', symbol: '', decimals: 18 };
@@ -2099,7 +2455,8 @@ function renderWalletModal(wallets) {
   if (_connectedAddress) {
     const displayName = $('walletBtn').textContent;
     const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
-    container.innerHTML = `<div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">Connected</div>${showName ? `<div style="font-size:16px;margin-bottom:4px;">${escText(displayName)}</div>` : ''}<div style="font-size:12px;word-break:break-all;opacity:0.6;">${escText(_connectedAddress)}</div></div><div class="wallet-option disconnect" onclick="disconnectWallet()"><span class="wallet-option-name">Disconnect</span></div>`;
+    container.innerHTML = `<div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">Connected</div>${showName ? `<div style="font-size:16px;margin-bottom:4px;">${escText(displayName)}</div>` : ''}<div style="font-size:12px;word-break:break-all;opacity:0.6;">${escText(_connectedAddress)}</div></div><div id="walletResolverFee" style="padding:0 12px 12px"><a href="#" style="font-size:12px;color:var(--fg-muted)" onclick="event.preventDefault();const p=this.nextElementSibling;p.style.display=p.style.display==='none'?'block':'none'">Resolver Fee</a><div style="display:none;margin-top:8px"><div id="walletResolverFeeLabel" style="font-size:11px;color:var(--fg-dim);margin-bottom:6px">Loading...</div><div style="display:flex;align-items:center;gap:8px"><input class="form-input" id="walletResolverFeeInput" type="number" min="0" max="10" step="0.01" placeholder="0.00" style="width:80px;padding:6px 8px;font-size:13px"><span style="font-size:12px;color:var(--fg-muted)">%</span><button class="btn" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="submitResolverFee()">Set</button></div></div></div><div class="wallet-option disconnect" onclick="disconnectWallet()"><span class="wallet-option-name">Disconnect</span></div>`;
+    getResolverFeeBps(_connectedAddress).then(bps => { const lbl = $('walletResolverFeeLabel'); if (lbl) lbl.textContent = bps > 0 ? 'Current fee: ' + (bps / 100).toFixed(2) + '%' : 'No fee set'; });
   } else {
     container.innerHTML = wallets.length > 0 ? wallets.map(w => `<div class="wallet-option" data-wallet-key="${escAttr(w.key)}"><span class="wallet-option-icon">${w.icon}</span><span class="wallet-option-name">${escText(w.name)}</span></div>`).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
     container.querySelectorAll('[data-wallet-key]').forEach(el => { el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey)); });
@@ -2149,6 +2506,10 @@ async function connectWithWallet(walletKey) {
     $('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
     resolveWeiName(_connectedAddress);
     updateWcBanner();
+    updateResolverFeeSection();
+    // Re-render market page so resolver/position sections update with connected address
+    const _hash = location.hash.replace('#', '').trim();
+    if (_hash && /^\d+$/.test(_hash)) renderMarketPage(_hash);
     if (oldWP && _walletEventHandlers) { try { oldWP.removeListener('accountsChanged', _walletEventHandlers.accountsChanged); oldWP.removeListener('chainChanged', _walletEventHandlers.chainChanged); } catch (e) {} }
     _walletEventHandlers = { accountsChanged: () => window.location.reload(), chainChanged: () => window.location.reload() };
     walletProvider.on('accountsChanged', _walletEventHandlers.accountsChanged);
@@ -2171,6 +2532,7 @@ function disconnectWallet() {
   _walletProvider = null; _signer = null; _connectedAddress = null; _connectedWalletProvider = null; _isWalletConnect = false; _wcDeepLink = null;
   $('walletBtn').textContent = 'connect';
   updateWcBanner();
+  updateResolverFeeSection();
   closeWalletModal();
   try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
 }
@@ -2269,7 +2631,8 @@ function applyCreateDeeplink() {
   if (params.get('dir'))      { const d = params.get('dir'); if (d === 'up' || d === 'down') setPriceDir(d); }
   if (params.get('close'))    { const el = $('closeDate'); if (el) el.value = params.get('close'); }
   // Balance form
-  if (params.get('wallet'))   { const el = $('balWalletAddr'); if (el) el.value = params.get('wallet'); }
+  if (params.get('balDir'))   { const d = params.get('balDir'); if (d === 'above' || d === 'below') setBalanceDir(d); }
+  if (params.get('wallet'))   { const el = $('balWalletAddr'); if (el) { el.value = params.get('wallet'); onBalWalletInput(); } }
   if (params.get('token'))    { const el = $('balTokenAddr'); if (el) { el.value = params.get('token'); setBalanceType('token'); } }
   if (params.get('bal'))      { const el = $('balThreshold'); if (el) el.value = params.get('bal'); }
   if (params.get('balClose')) { const el = $('balCloseDate'); if (el) el.value = params.get('balClose'); }
@@ -2280,7 +2643,7 @@ function applyCreateDeeplink() {
   if (params.get('supplyClose')) { const el = $('supplyCloseDate'); if (el) el.value = params.get('supplyClose'); }
   // Custom form
   if (params.get('question')) { const el = $('customQuestion'); if (el) el.value = params.get('question'); }
-  if (params.get('resolver')) { const el = $('customResolver'); if (el) el.value = params.get('resolver'); }
+  if (params.get('resolver')) { const el = $('customResolver'); if (el) { el.value = params.get('resolver'); onResolverInput(); } }
   if (params.has('canClose')) { const el = $('customCanClose'); if (el) el.checked = params.get('canClose') !== '0'; }
   if (params.get('customClose')) { const el = $('customCloseDate'); if (el) el.value = params.get('customClose'); }
   // Liquidity
@@ -2310,6 +2673,7 @@ function updateCreateDeeplink() {
   } else if (type === 'balance') {
     const wallet = $('balWalletAddr').value.trim();
     if (wallet) p.set('wallet', wallet);
+    if (_balanceDir === 'below') p.set('balDir', 'below');
     if (_balanceAssetType === 'token') {
       const tok = $('balTokenAddr').value.trim();
       if (tok) p.set('token', tok);
@@ -2638,6 +3002,7 @@ function setFilter(f) {
 let _renderSeq = 0;
 async function renderMarketPage(marketId) {
   const seq = ++_renderSeq;
+  _selectedPayToken = null;
   const app = $('app');
   app.dataset.marketId = marketId;
   app.innerHTML = `
@@ -2748,6 +3113,7 @@ async function renderMarketPage(marketId) {
       let twapTimestamp1 = 0;
       let resValue = null, resCond = null, resReady = false, condData = null;
       let userAmmLP = 0n, ammLPSupply = 0n;
+      let resolverFeeBps = 0;
 
       const hookIface = new ethers.Interface(PM_HOOK_ROUTER_ABI);
       const zammIface = new ethers.Interface(ZAMM_ABI);
@@ -2781,6 +3147,12 @@ async function renderMarketPage(marketId) {
       IDX.zammPool = calls2.length;
       calls2.push({ target: CONTRACTS.ZAMM, allowFailure: true,
         callData: zammIface.encodeFunctionData('pools', [pid]) });
+      // Resolver fee (custom resolvers only)
+      if (!isOurResolver && !isLegacyResolver) {
+        IDX.resolverFee = calls2.length;
+        calls2.push({ target: CONTRACTS.PAMM, allowFailure: true,
+          callData: pammIface.encodeFunctionData('resolverFeeBps', [resolverAddr]) });
+      }
       // ZAMM balanceOf and vaultPositions fetched separately after batch (more reliable)
 
       try {
@@ -2833,6 +3205,10 @@ async function renderMarketPage(marketId) {
         if (r2[IDX.zammPool].success) {
           try { ammLPSupply = BigInt(zammIface.decodeFunctionResult('pools', r2[IDX.zammPool].returnData).supply); } catch {}
         }
+        // Parse resolver fee
+        if (IDX.resolverFee !== undefined && r2[IDX.resolverFee].success) {
+          try { resolverFeeBps = Number(pammIface.decodeFunctionResult('resolverFeeBps', r2[IDX.resolverFee].returnData)[0]); } catch {}
+        }
         // vaultPositions fetched separately after batch
       } catch (e) {
         // Retry once on batch failure
@@ -2856,7 +3232,10 @@ async function renderMarketPage(marketId) {
           if (r2[IDX.conditions].success) {
             try { condData = resolverIface.decodeFunctionResult('conditions', r2[IDX.conditions].returnData); } catch {}
           }
-        } catch {}
+          if (IDX.resolverFee !== undefined && r2[IDX.resolverFee].success) {
+            try { resolverFeeBps = Number(pammIface.decodeFunctionResult('resolverFeeBps', r2[IDX.resolverFee].returnData)[0]); } catch {}
+          }
+        } catch (retryErr) { console.warn('Market data batch retry failed:', retryErr.message); }
       }
 
       // Fetch user-specific balances directly (unreliable inside multicall3 batch)
@@ -2867,7 +3246,7 @@ async function renderMarketPage(marketId) {
           try {
             userAmmLP = await new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, _p).balanceOf(_connectedAddress, pid);
             break;
-          } catch { /* try next */ }
+          } catch (e) { console.warn('ZAMM balanceOf failed:', e.message); }
         }
       }
 
@@ -2878,7 +3257,7 @@ async function renderMarketPage(marketId) {
         twapTimestamp1,
         resValue, resCond, resReady, condData,
         userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-        userAmmLP, ammLPSupply, vaultDepositTime
+        userAmmLP, ammLPSupply, vaultDepositTime, resolverFeeBps
       };
     });
 
@@ -2888,7 +3267,16 @@ async function renderMarketPage(marketId) {
             twapTimestamp1,
             resValue, resCond, resReady, condData,
             userYes, userNo, userYesVaultLP, userNoVaultLP, pendingYesColl, pendingNoColl,
-            userAmmLP, ammLPSupply, vaultDepositTime } = marketData;
+            userAmmLP, ammLPSupply, vaultDepositTime, resolverFeeBps } = marketData;
+
+    // Resolver verification + reverse .wei name (skip for onchain resolver)
+    let resolverVerified = false, resolverWeiName = null;
+    if (!isOurResolver && !isLegacyResolver) {
+      [resolverVerified, resolverWeiName] = await Promise.all([
+        checkResolverVerified(resolverAddr),
+        reverseResolveWei(resolverAddr)
+      ]);
+    }
 
     // Abort if a newer render was started while we were loading
     if (seq !== _renderSeq) return;
@@ -2959,15 +3347,17 @@ async function renderMarketPage(marketId) {
 
     // Market info card
     const resolverShort = resolverAddr.slice(0, 6) + '...' + resolverAddr.slice(-4);
-    const resolverLabel = isOurResolver ? 'Onchain Resolver' : resolverShort;
+    const resolverDisplayName = isOurResolver ? 'Onchain Resolver' : (resolverWeiName ? resolverWeiName : resolverShort);
+    const resolverLabel = resolverDisplayName + (resolverVerified ? VERIFIED_BADGE : '');
     html += `
       <div class="market-chart-drawer" id="marketInfoDrawer">
         <button class="market-chart-toggle-btn" onclick="toggleDrawer('marketInfoDrawer')"><span>Market Info</span><span class="arrow">&#9660;</span></button>
-        <div class="drawer-body" style="display:none;padding:0 14px 12px">
+        <div class="drawer-body" style="display:none;padding:4px 0 8px">
           <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value">${resolved ? (outcome ? '<span style="color:var(--yes)">Resolved YES</span>' : '<span style="color:var(--no)">Resolved NO</span>') : (isActive ? `<span style="color:${close - now < 86400 ? 'var(--no)' : 'var(--fg)'}">${fmtCountdown(close)} left</span>` : 'Closed')}</span></div>
           <div class="stat-row"><span class="stat-label">Closes</span><span class="stat-value"${!resolved && close - now < 86400 ? ' style="color:var(--no)"' : ''}>${fmtDate(close)}</span></div>
-          <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value">${tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4)} ${collSym}</span></div>
+          <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value" style="display:inline-flex;align-items:center;gap:3px">${tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4)} ${collSym} ${payTokenIcon(collSym).replace(/width="20"/g,'width="14"').replace(/height="20"/g,'height="14"')}</span></div>
           <div class="stat-row"><span class="stat-label">Resolver</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${resolverAddr}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${resolverLabel}</a></span></div>
+          ${!isOurResolver && !isLegacyResolver && resolverFeeBps > 0 ? `<div class="stat-row"><span class="stat-label">Resolver Fee</span><span class="stat-value">${(resolverFeeBps / 100).toFixed(2)}%</span></div>` : ''}
           <div class="stat-row"><span class="stat-label">Market ID</span><span class="stat-value" style="font-size:11px;word-break:break-all"><a href="https://etherscan.io/address/${CONTRACTS.PAMM}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${marketId.slice(0, 12)}...${marketId.slice(-6)}</a></span></div>
           ${isLabeled && currentFeeBps > 0n && currentFeeBps <= 10000n ? `<div class="stat-row"><span class="stat-label">Swap Fee <span onclick="event.stopPropagation();showRawTooltip(this,'Dynamic fee — adapts each swap based on market conditions.\\n\\nComponents:\\n• Base fee: decays from high to low over the bootstrap window\\n• Skew fee: increases when probability deviates from 50% (non-linear curve)\\n• Directional fee: linear scaling with probability deviation from 50%\\n• Volatility fee: added when recent price variance is high\\n\\nTotal fee is capped at 3%. Fee shown is the current rate — it changes with every trade.\\n\\nzAMM LPs earn fees from pool swaps. Vault LPs earn fees from vault OTC fills — 90% to vault when inventory is balanced, 70% when imbalanced. The remainder goes to a rebalance budget.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></span><span class="stat-value">${(Number(currentFeeBps) / 100).toFixed(2)}%</span></div>` : ''}
         </div>
@@ -3001,7 +3391,7 @@ async function renderMarketPage(marketId) {
       html += `
         <div class="market-chart-drawer" id="vaultInfoDrawer">
           <button class="market-chart-toggle-btn" onclick="toggleDrawer('vaultInfoDrawer')"><span>Vault</span><span class="arrow">&#9660;</span></button>
-          <div class="drawer-body" style="display:none;padding:0 14px 12px">
+          <div class="drawer-body" style="display:none;padding:4px 0 8px">
             <div style="font-size:11px;color:var(--fg-muted);margin-bottom:10px">Holds shares from sweep trades. Depositors earn OTC fees. <span onclick="event.stopPropagation();showRawTooltip(this,'When large trades sweep through the zAMM, the opposite-side shares are deposited into the vault automatically. Vault depositors earn fees from vault OTC fills proportional to their LP tokens.\\n\\nHow it works:\\n• Sweep buys deposit opposite shares into the vault\\n• Vault LPs earn 90% of OTC fees when inventory is balanced, 70% when imbalanced\\n• Remaining OTC fees go to a rebalance budget used to re-equalize YES/NO inventory\\n\\nMaintenance (permissionless):\\n• Update TWAP — refreshes the price oracle used for vault pricing (every 30min)\\n• Rebalance — uses budget to swap excess inventory toward balance\\n• Settle — after market closes, distributes remaining budget to LPs\\n• Finalize — after resolution, redeems vault shares and closes out\\n\\nHarvest lets you claim earned fees without withdrawing your vault position.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></div>
             ${vaultYesShares > 0n ? `<div class="stat-row"><span class="stat-label">YES Inventory</span><span class="stat-value">${vYes >= 1 ? vYes.toFixed(2) : vYes.toFixed(4)} shares</span></div>` : ''}
             ${vaultNoShares > 0n ? `<div class="stat-row"><span class="stat-label">NO Inventory</span><span class="stat-value">${vNo >= 1 ? vNo.toFixed(2) : vNo.toFixed(4)} shares</span></div>` : ''}
@@ -3022,18 +3412,33 @@ async function renderMarketPage(marketId) {
     const hasTradePos = userYes > 0n || userNo > 0n;
     const hasLPPos = userAmmLP > 0n || userYesVaultLP > 0n || userNoVaultLP > 0n;
     if (hasTradePos || hasLPPos) {
-      let posHtml = `<div class="section-card"><div class="section-title">Your Positions</div>`;
+      let posHtml = `<div class="market-chart-drawer open" id="positionsDrawer">
+        <button class="market-chart-toggle-btn" onclick="toggleDrawer('positionsDrawer')">
+          <span>Your Positions</span><span class="arrow">▼</span>
+        </button>
+        <div class="drawer-body" style="padding:0 0 8px">`;
       if (hasTradePos) {
-        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:4px">Outcome Tokens</div>`;
+        posHtml += `<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-dim);margin-bottom:4px">Outcome Tokens</div>`;
         if (userYes > 0n) posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)}</span></div>`;
         if (userNo > 0n) posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)}</span></div>`;
       }
       if (hasLPPos) {
         if (hasTradePos) posHtml += `<div style="border-top:1px solid var(--border-muted);margin:8px 0"></div>`;
-        posHtml += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:4px">Liquidity</div>`;
+        posHtml += `<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-dim);margin-bottom:4px">Liquidity</div>`;
         if (userAmmLP > 0n) {
           const ammPctShare = ammLPSupply > 0n ? (Number(userAmmLP) / Number(ammLPSupply) * 100) : 0;
-          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
+          // Estimate collateral value: proportional share of reserves
+          let lpCollEst = '';
+          if (ammLPSupply > 0n && (ammYesReserve > 0n || ammNoReserve > 0n)) {
+            const uYR = ammYesReserve * userAmmLP / ammLPSupply;
+            const uNR = ammNoReserve * userAmmLP / ammLPSupply;
+            const matched = uYR < uNR ? uYR : uNR;
+            const leftover = uYR > uNR ? uYR - uNR : uNR - uYR;
+            const leftoverPrice = uYR > uNR ? yPct : nPct; // YES excess → valued at YES%, NO excess → NO%
+            const estVal = Number(ethers.formatEther(matched)) + Number(ethers.formatEther(leftover)) * leftoverPrice / 100;
+            lpCollEst = ` <span style="color:var(--fg-muted);font-size:11px">~${estVal >= 1 ? estVal.toFixed(2) : estVal.toFixed(4)} ${collSym}</span>`;
+          }
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} LP${lpCollEst} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
         }
         if (userYesVaultLP > 0n) {
           const yPctShare = totalYesVaultLP > 0n ? (Number(userYesVaultLP) / Number(totalYesVaultLP) * 100) : 0;
@@ -3050,7 +3455,7 @@ async function renderMarketPage(marketId) {
           posHtml += `<div class="pos-row"><span class="pos-side no">NO Vault</span><span class="pos-val">${Number(ethers.formatEther(userNoVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${nPctShare < 0.01 ? '<0.01' : nPctShare.toFixed(2)}%)</span></span>${nBtn}</div>`;
         }
       }
-      posHtml += `</div>`;
+      posHtml += `</div></div>`;
       html += posHtml;
     }
 
@@ -3078,10 +3483,13 @@ async function renderMarketPage(marketId) {
           </div>
           <div class="trade-section">
             <div class="trade-section-head">
-              <label id="tradeInputLabel">${isETH ? 'ETH' : 'Amount'}</label>
+              <label id="tradeInputLabel">${isETH ? 'ETH' : getCollateralSymbol(collateral)}</label>
               <span class="trade-balance" id="tradeBalance" onclick="setMaxAmount()"></span>
             </div>
-            <input type="number" id="tradeInput" placeholder="0.0" step="any" min="0" oninput="onTradeInput()">
+            <div class="pay-token-row">
+              <input type="number" id="tradeInput" placeholder="0.0" step="any" min="0" oninput="onTradeInput()">
+              <button class="pay-token-btn" id="payTokenBtn" onclick="openPayTokenModal()" style="display:none">${isETH ? 'ETH' : getCollateralSymbol(collateral)} <span style="font-size:9px;opacity:0.5">&#9662;</span></button>
+            </div>
             <div class="trade-pct-row" id="tradePctRow">
               <button class="trade-pct-btn" onclick="setPct(0.25)">25%</button>
               <button class="trade-pct-btn" onclick="setPct(0.5)">50%</button>
@@ -3090,6 +3498,14 @@ async function renderMarketPage(marketId) {
             </div>
           </div>
           <div class="trade-quote" id="tradeQuote"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--fg-muted)">
+            <span>Slippage</span>
+            <span style="display:flex;gap:4px;align-items:center" id="slippageRow">
+              ${[1,3,5,10].map(v => `<button onclick="setSlippage(${v})" class="trade-pct-btn" style="font-size:10px;padding:2px 6px;min-width:0;${_tradeSlippage===v?'color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg)':''}" data-slip="${v}">${v}%</button>`).join('')}
+              <input type="number" id="slippageCustom" min="0.1" max="50" step="0.1" style="width:44px;padding:2px 4px;font-size:10px;background:var(--surface);border:1px solid ${![1,3,5,10].includes(_tradeSlippage)?'var(--btn-bg)':'var(--border-muted)'};color:var(--fg);text-align:center;border-radius:3px" value="${_tradeSlippage}" onfocus="clearSlippagePresets()" oninput="setSlippage(parseFloat(this.value)||5,true)">
+              <span style="font-size:10px">%</span>
+            </span>
+          </div>
           <button class="form-btn" id="tradeBtn" onclick="executeTrade()" disabled>Enter amount</button>
           <div style="text-align:center;margin-top:12px">
             <button onclick="openLPModal('${marketId}')" style="font-size:11px;padding:6px 16px;background:transparent;border:1px solid var(--border-muted);color:var(--fg-muted)">Provide Liquidity</button>
@@ -3243,6 +3659,7 @@ async function renderMarketPage(marketId) {
     if (_connectedAddress && isActive) {
       loadTradeBalance(marketId, collateral, userYes, userNo);
     }
+    showPayTokenBtn();
 
     if (!_connectedAddress) {
       tryAutoConnect().then(() => {
@@ -3263,6 +3680,7 @@ async function renderMarketPage(marketId) {
 function setTradeDir(dir) {
   _tradeDir = dir;
   _lastQuote = null;
+  if (dir === 'sell') _selectedPayToken = null;
   document.querySelectorAll('.trade-dir button').forEach(b => {
     b.classList.toggle('active', b.dataset.dir === dir);
   });
@@ -3272,6 +3690,8 @@ function setTradeDir(dir) {
   if (tradeQuote) tradeQuote.textContent = '';
   const tradeBtn = $('tradeBtn');
   if (tradeBtn) { tradeBtn.textContent = 'Enter amount'; tradeBtn.disabled = true; }
+  // Update pay token button text when switching back to buy
+  if (dir === 'buy') _updatePayTokenBtn();
 
   updateTradeLabels();
   const marketId = $('app').dataset.marketId;
@@ -3302,16 +3722,241 @@ function setTradeSide(side) {
   }
 }
 
+function setSlippage(pct, fromCustom) {
+  if (!pct || pct < 0.1) pct = 0.1;
+  if (pct > 50) pct = 50;
+  _tradeSlippage = pct;
+  const row = $('slippageRow');
+  if (row) {
+    const isPreset = [1,3,5,10].includes(pct);
+    row.querySelectorAll('button[data-slip]').forEach(b => {
+      const v = Number(b.dataset.slip);
+      if (v === pct && !fromCustom) { b.style.color = 'var(--btn-fg)'; b.style.background = 'var(--btn-bg)'; b.style.borderColor = 'var(--btn-bg)'; }
+      else { b.style.color = ''; b.style.background = ''; b.style.borderColor = ''; }
+    });
+    const custom = $('slippageCustom');
+    if (custom) {
+      if (!fromCustom) custom.value = pct;
+      custom.style.borderColor = (!isPreset || fromCustom) ? 'var(--btn-bg)' : 'var(--border-muted)';
+    }
+  }
+}
+function clearSlippagePresets() {
+  const row = $('slippageRow');
+  if (row) row.querySelectorAll('button[data-slip]').forEach(b => { b.style.color = ''; b.style.background = ''; b.style.borderColor = ''; });
+}
+
 function updateTradeLabels() {
   const label = $('tradeInputLabel');
   if (!label) return;
-  const collateral = $('app').dataset.collateral;
-  const isETH = !collateral || collateral === ethers.ZeroAddress;
   if (_tradeDir === 'buy') {
-    label.textContent = isETH ? 'ETH' : getCollateralSymbol(collateral);
+    const d = getSelectedPayTokenData();
+    label.textContent = d.symbol;
   } else {
     label.textContent = _tradeSide.toUpperCase() + ' shares';
   }
+  showPayTokenBtn();
+}
+
+// ==================== PAY TOKEN SELECTOR ====================
+
+function getSelectedPayTokenData() {
+  if (!_selectedPayToken) {
+    const collateral = $('app').dataset.collateral;
+    const isETH = !collateral || collateral === ethers.ZeroAddress;
+    if (isETH) return PREDICT_TOKENS.ETH;
+    // Find in all tokens by address
+    const found = findPayTokenByAddress(collateral);
+    if (found) return found;
+    return { address: collateral, symbol: getCollateralSymbol(collateral), decimals: 18 };
+  }
+  return _selectedPayToken;
+}
+
+function isPayTokenCollateral() {
+  if (!_selectedPayToken) return true;
+  const collateral = ($('app').dataset.collateral || '').toLowerCase();
+  const isETHCollateral = !collateral || collateral === ethers.ZeroAddress.toLowerCase();
+  const selAddr = _selectedPayToken.address.toLowerCase();
+  if (isETHCollateral) return selAddr === ZERO_ADDRESS.toLowerCase();
+  return selAddr === collateral;
+}
+
+function openPayTokenModal() {
+  const searchInput = $('payTokenSearch');
+  if (searchInput) searchInput.value = '';
+  const statusEl = $('payTokenCustomStatus');
+  if (statusEl) statusEl.textContent = '';
+  const addrInput = $('payTokenCustomAddr');
+  if (addrInput) addrInput.value = '';
+  renderPayTokenList();
+  $('payTokenModal').classList.add('active');
+  if (searchInput) setTimeout(() => searchInput.focus(), 50);
+}
+
+function renderPayTokenList() {
+  const collateral = $('app').dataset.collateral;
+  const isETH = !collateral || collateral === ethers.ZeroAddress;
+  const collAddr = (collateral || ZERO_ADDRESS).toLowerCase();
+  const sel = getSelectedPayTokenData();
+  const selAddr = sel.address.toLowerCase();
+  const filter = ($('payTokenSearch')?.value || '').trim().toLowerCase();
+
+  const list = $('payTokenList');
+  if (!list) return;
+  let html = '';
+
+  function matchesFilter(tok) {
+    if (!filter) return true;
+    return tok.symbol.toLowerCase().includes(filter) || tok.address.toLowerCase().includes(filter);
+  }
+
+  function renderItem(key, tok) {
+    if (!matchesFilter(tok)) return '';
+    const isDefault = tok.address.toLowerCase() === collAddr;
+    const isActive = tok.address.toLowerCase() === selAddr;
+    const icon = payTokenIcon(tok.symbol);
+    const symSafe = escText(tok.symbol);
+    return `<li class="${isActive ? 'active' : ''}" onclick="selectPayToken('${escText(key)}')">
+      ${icon}<span class="tok-sym">${symSafe}</span>
+      ${isDefault ? '<span class="tok-note">collateral</span>' : ''}
+    </li>`;
+  }
+
+  // Builtin tokens
+  for (const [key, tok] of Object.entries(PREDICT_TOKENS)) {
+    html += renderItem(key, tok);
+  }
+
+  // Custom tokens
+  const customEntries = Object.entries(_predictCustomTokens);
+  if (customEntries.length > 0) {
+    const customHtml = customEntries.map(([k, t]) => renderItem(k, t)).join('');
+    if (customHtml) {
+      html += `<li style="padding:6px 12px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-muted);cursor:default;border-bottom:1px solid var(--border-muted)">Custom</li>`;
+      html += customHtml;
+    }
+  }
+
+  if (!html) {
+    html = `<li style="padding:16px;text-align:center;color:var(--fg-muted);cursor:default">No tokens found</li>`;
+  }
+
+  list.innerHTML = html;
+}
+
+function closePayTokenModal() {
+  $('payTokenModal').classList.remove('active');
+}
+
+function selectPayToken(sym) {
+  const all = getAllPayTokens();
+  const tok = all[sym];
+  if (!tok) return;
+  const collateral = ($('app').dataset.collateral || '').toLowerCase();
+  const isETHCollateral = !collateral || collateral === ethers.ZeroAddress.toLowerCase();
+  const collAddr = isETHCollateral ? ZERO_ADDRESS.toLowerCase() : collateral;
+
+  // If selecting the collateral token, reset to null (default)
+  if (tok.address.toLowerCase() === collAddr) {
+    _selectedPayToken = null;
+  } else {
+    _selectedPayToken = tok;
+  }
+
+  _updatePayTokenBtn();
+  updateTradeLabels();
+
+  // Re-load balance for new token
+  const marketId = $('app').dataset.marketId;
+  if (_connectedAddress && marketId) {
+    loadTradeBalance(marketId, $('app').dataset.collateral, 0n, 0n);
+  }
+
+  // Clear quote and re-trigger
+  _lastQuote = null;
+  const input = $('tradeInput');
+  if (input && parseFloat(input.value) > 0) {
+    onTradeInput();
+  }
+
+  closePayTokenModal();
+}
+
+function _updatePayTokenBtn() {
+  const btn = $('payTokenBtn');
+  if (!btn) return;
+  const d = getSelectedPayTokenData();
+  btn.innerHTML = payTokenIcon(d.symbol) + ' ' + escText(d.symbol) + ' <span style="font-size:9px;opacity:0.5">&#9662;</span>';
+}
+
+async function addPredictCustomToken() {
+  const addrInput = $('payTokenCustomAddr');
+  const statusEl = $('payTokenCustomStatus');
+  if (!addrInput) return;
+  let address = addrInput.value.trim();
+  if (!ethers.isAddress(address)) {
+    if (statusEl) statusEl.textContent = 'Invalid address';
+    return;
+  }
+  address = ethers.getAddress(address);
+  if (address === ZERO_ADDRESS || address === ethers.ZeroAddress) {
+    if (statusEl) statusEl.textContent = 'Use ETH from the list above';
+    return;
+  }
+
+  // Check if already exists
+  const existing = findPayTokenByAddress(address);
+  if (existing) {
+    selectPayToken(existing.symbol);
+    return;
+  }
+
+  if (statusEl) statusEl.textContent = 'Loading token info...';
+
+  try {
+    const rpc = _walletProvider || new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
+    const code = await rpc.getCode(address);
+    if (!code || code === '0x') {
+      if (statusEl) statusEl.textContent = 'No contract at this address';
+      return;
+    }
+
+    const erc20 = new ethers.Contract(address, [
+      'function symbol() view returns (string)',
+      'function decimals() view returns (uint8)',
+    ], rpc);
+    const [rawSymbol, rawDecimals] = await Promise.all([erc20.symbol(), erc20.decimals()]);
+
+    const symbol = String(rawSymbol || '').trim().slice(0, 24) || 'TKN';
+    const rawDec = Number(rawDecimals);
+    const decimals = Number.isInteger(rawDec) && rawDec >= 0 && rawDec <= 36 ? rawDec : 18;
+
+    // Check symbol collision
+    const all = getAllPayTokens();
+    if (all[symbol] && all[symbol].address.toLowerCase() !== address.toLowerCase()) {
+      if (statusEl) statusEl.textContent = `Symbol ${symbol} already used by a different token`;
+      return;
+    }
+
+    _predictCustomTokens[symbol] = { address, symbol, decimals };
+    _savePredictCustomTokens();
+    addrInput.value = '';
+    if (statusEl) statusEl.textContent = '';
+    selectPayToken(symbol);
+  } catch (e) {
+    console.error('Error adding custom token:', e);
+    if (statusEl) statusEl.textContent = 'Failed — ensure valid ERC-20 on Ethereum';
+  }
+}
+
+function showPayTokenBtn() {
+  const btn = $('payTokenBtn');
+  if (!btn) return;
+  const isLabeled = $('app').dataset.isLabeled === '1';
+  // Only show pay token selector for labeled markets (legacy markets only support ETH)
+  btn.style.display = (_tradeDir === 'buy' && isLabeled) ? '' : 'none';
+  if (_tradeDir === 'buy' && isLabeled) _updatePayTokenBtn();
 }
 
 async function loadTradeBalance(marketId, collateral, userYes, userNo) {
@@ -3320,29 +3965,35 @@ async function loadTradeBalance(marketId, collateral, userYes, userNo) {
 
   try {
     if (_tradeDir === 'buy') {
-      const isETH = !collateral || collateral === ethers.ZeroAddress;
-      if (isETH) {
+      // Use selected pay token if set, otherwise default to collateral
+      const payData = getSelectedPayTokenData();
+      const isPayETH = payData.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+
+      if (isPayETH) {
         const bal = await _walletProvider.getBalance(_connectedAddress);
         balEl.textContent = 'Bal: ' + Number(ethers.formatEther(bal)).toFixed(4) + ' ETH';
         balEl.dataset.balance = bal.toString();
+        balEl.dataset.decimals = '18';
       } else {
         try {
-          const token = new ethers.Contract(collateral, ERC20_ABI, _walletProvider);
+          const token = new ethers.Contract(payData.address, ERC20_ABI, _walletProvider);
           const [bal, dec] = await Promise.all([token.balanceOf(_connectedAddress), token.decimals()]);
-          const sym = getCollateralSymbol(collateral);
-          if (bal === 0n) {
+          const sym = payData.symbol;
+          if (bal === 0n && isPayTokenCollateral()) {
             const ethBal = await _walletProvider.getBalance(_connectedAddress);
             const quarter = ethBal / 4n;
             const amt = quarter > 0n ? Number(ethers.formatEther(quarter)).toFixed(4) : '';
-            const href = `../?from=ETH&to=${collateral}${amt ? '&amt=' + amt : ''}`;
+            const href = `../?from=ETH&to=${payData.address}${amt ? '&amt=' + amt : ''}`;
             balEl.innerHTML = `Bal: 0 — <a href="${href}" style="color:var(--fg);text-decoration:underline">Swap ETH → ${escText(sym)}</a>`;
           } else {
-            balEl.textContent = 'Bal: ' + Number(ethers.formatUnits(bal, dec)).toFixed(4) + ' ' + sym;
+            balEl.textContent = 'Bal: ' + Number(ethers.formatUnits(bal, Number(dec))).toFixed(4) + ' ' + sym;
           }
           balEl.dataset.balance = bal.toString();
+          balEl.dataset.decimals = dec.toString();
         } catch {
           balEl.textContent = '';
           balEl.dataset.balance = '0';
+          balEl.dataset.decimals = '18';
         }
       }
     } else {
@@ -3369,20 +4020,41 @@ async function loadTradeBalance(marketId, collateral, userYes, userNo) {
   }
 }
 
+function _getPayDecimals() {
+  const balEl = $('tradeBalance');
+  return parseInt(balEl?.dataset.decimals || '18', 10);
+}
+
+function _isPayETH() {
+  if (_tradeDir !== 'buy') {
+    const collateral = $('app').dataset.collateral;
+    return !collateral || collateral === ethers.ZeroAddress;
+  }
+  const d = getSelectedPayTokenData();
+  return d.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+}
+
 function setMaxAmount() {
   const balEl = $('tradeBalance');
   const input = $('tradeInput');
   if (!balEl || !input) return;
   const bal = BigInt(balEl.dataset.balance || '0');
-  if (bal === 0n) return;
-  // Leave small gas buffer for ETH buys
-  const collateral = $('app').dataset.collateral;
-  const isETH = !collateral || collateral === ethers.ZeroAddress;
+  if (bal === 0n) {
+    const marketId = $('app').dataset.marketId;
+    if (_connectedAddress && marketId) {
+      loadTradeBalance(marketId, $('app').dataset.collateral, 0n, 0n).then(() => {
+        const b2 = BigInt(balEl.dataset.balance || '0');
+        if (b2 > 0n) setMaxAmount();
+      });
+    }
+    return;
+  }
+  const dec = _getPayDecimals();
   let amount = bal;
-  if (_tradeDir === 'buy' && isETH && bal > ethers.parseEther('0.001')) {
+  if (_tradeDir === 'buy' && _isPayETH() && bal > ethers.parseEther('0.001')) {
     amount = bal - ethers.parseEther('0.001');
   }
-  input.value = ethers.formatEther(amount);
+  input.value = ethers.formatUnits(amount, dec);
   onTradeInput();
 }
 
@@ -3391,15 +4063,23 @@ function setPct(pct) {
   const input = $('tradeInput');
   if (!balEl || !input) return;
   const bal = BigInt(balEl.dataset.balance || '0');
-  if (bal === 0n) return;
+  if (bal === 0n) {
+    // Balance may not have loaded yet — trigger load and retry
+    const marketId = $('app').dataset.marketId;
+    if (_connectedAddress && marketId) {
+      loadTradeBalance(marketId, $('app').dataset.collateral, 0n, 0n).then(() => {
+        const b2 = BigInt(balEl.dataset.balance || '0');
+        if (b2 > 0n) setPct(pct);
+      });
+    }
+    return;
+  }
+  const dec = _getPayDecimals();
   let amount = bal * BigInt(Math.round(pct * 10000)) / 10000n;
-  // Gas buffer for max ETH buys
-  const collateral = $('app').dataset.collateral;
-  const isETH = !collateral || collateral === ethers.ZeroAddress;
-  if (pct === 1 && _tradeDir === 'buy' && isETH && amount > ethers.parseEther('0.001')) {
+  if (pct === 1 && _tradeDir === 'buy' && _isPayETH() && amount > ethers.parseEther('0.001')) {
     amount = amount - ethers.parseEther('0.001');
   }
-  input.value = ethers.formatEther(amount);
+  input.value = ethers.formatUnits(amount, dec);
   onTradeInput();
 }
 
@@ -3419,7 +4099,16 @@ function onTradeInput() {
     return;
   }
 
-  // Instant local estimate
+  // Routed buy: non-collateral pay token
+  if (_tradeDir === 'buy' && !isPayTokenCollateral()) {
+    if (quoteEl) quoteEl.innerHTML = '<span style="color:var(--fg-muted)">Finding best route...</span>';
+    btn.textContent = 'Buy ' + _tradeSide.toUpperCase();
+    btn.disabled = true;
+    _quoteTimer = setTimeout(() => fetchRoutedBuyQuote(input.value.trim()), 500);
+    return;
+  }
+
+  // Instant local estimate (collateral path)
   const rYes = BigInt($('app').dataset.ammYesReserve || '0');
   const rNo = BigInt($('app').dataset.ammNoReserve || '0');
   const amountWei = ethers.parseEther(val.toString());
@@ -3522,6 +4211,218 @@ async function fetchOnchainQuote(amountWei) {
   }
 }
 
+
+// ==================== ROUTED BUY (any token → collateral → shares) ====================
+
+async function getRoutedBuyQuote(inputAmountStr, marketId, buyYes) {
+  const payData = getSelectedPayTokenData();
+  const collateral = $('app').dataset.collateral;
+  const isETHCollateral = !collateral || collateral === ethers.ZeroAddress;
+  const collateralAddr = isETHCollateral ? ZERO_ADDRESS : collateral;
+  const amountIn = safeParseUnits(inputAmountStr, payData.decimals);
+  const ethIn = payData.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+  return await withRPC(async (rpc) => {
+    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, ZQUOTER_IFACE, rpc);
+    const pammQuoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
+
+    // First leg: swap payToken → collateral via quoter
+    let firstLegCalls = [];
+    let collateralAmount;
+    let msgValue = ethIn ? amountIn : 0n;
+
+    if (ethIn && isETHCollateral) {
+      // ETH → ETH: no swap needed (shouldn't reach here, but handle gracefully)
+      collateralAmount = amountIn;
+    } else if (ethIn && !isETHCollateral) {
+      // ETH → ERC20 collateral
+      const r = await quoter.buildBestSwapViaETHMulticall(
+        ZROUTER_ADDRESS, _connectedAddress, false,
+        ZERO_ADDRESS, collateralAddr,
+        amountIn, 100n, deadline, 0, 0, ZERO_ADDRESS,
+        { gasLimit: 5000000 }
+      );
+      const isTwoHop = r.b.amountOut > 0n;
+      collateralAmount = isTwoHop ? r.b.amountOut : r.a.amountOut;
+      firstLegCalls = Array.from(r.calls);
+      msgValue = r.msgValue > 0n ? r.msgValue : amountIn;
+    } else {
+      // ERC20 → collateral (via ETH intermediate)
+      const r = await quoter.buildBestSwapViaETHMulticall(
+        ZROUTER_ADDRESS, _connectedAddress, false,
+        payData.address, collateralAddr,
+        amountIn, 100n, deadline, 0, 0, ZERO_ADDRESS,
+        { gasLimit: 5000000 }
+      );
+      const isTwoHop = r.b.amountOut > 0n;
+      collateralAmount = isTwoHop ? r.b.amountOut : r.a.amountOut;
+      firstLegCalls = Array.from(r.calls);
+      msgValue = 0n;
+    }
+
+    if (collateralAmount <= 0n) throw new Error('Swap quote returned zero');
+
+    // For routed swaps (non-direct ETH), the actual swap output may be slightly less
+    // than quoted due to slippage. Use a reduced amount for the second leg to avoid
+    // trying to send more ETH/collateral than the router actually received.
+    const hasSwapLeg = firstLegCalls.length > 0;
+    const collateralForBuy = hasSwapLeg ? collateralAmount * 99n / 100n : collateralAmount;
+
+    // Second leg: PAMM quote — collateral → shares
+    const pammResult = await pammQuoter.quoteBuyWithSweep(marketId, buyYes, collateralForBuy, 9999, { gasLimit: 5000000 });
+    const sharesOut = BigInt(pammResult.totalSharesOut);
+    if (sharesOut <= 0n) throw new Error('PAMM quote returned zero shares');
+    const _routedSlipBps = BigInt(Math.round(_tradeSlippage * 100));
+    const minSharesOut = sharesOut * (10000n - _routedSlipBps) / 10000n;
+
+    // Build second leg calldata: buyWithSweep via MasterRouter
+    const buyCalldata = MASTER_ROUTER_IFACE.encodeFunctionData('buyWithSweep', [
+      marketId, buyYes, collateralForBuy, minSharesOut, 9999,
+      _connectedAddress, deadline
+    ]);
+
+    // Build multicall
+    const calls = [];
+    for (const c of firstLegCalls) calls.push(c);
+
+    // execute(MASTER_ROUTER, ethValue, buyCalldata) — for ETH-collateral, pass ETH value
+    const execEthValue = isETHCollateral ? collateralForBuy : 0n;
+    calls.push(ZROUTER_IFACE.encodeFunctionData('execute', [
+      CONTRACTS.MASTER_ROUTER, execEthValue, buyCalldata
+    ]));
+
+    // Sweep leftovers back to user
+    calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress]));
+    if (!isETHCollateral) {
+      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [collateralAddr, 0, 0, _connectedAddress]));
+    }
+    if (!ethIn) {
+      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [payData.address, 0, 0, _connectedAddress]));
+    }
+
+    const multicall = ZROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+    return {
+      sharesOut, minSharesOut, collateralAmount,
+      multicall, calls, msgValue,
+      payToken: payData, isRouted: true,
+      marketId, dir: 'buy', side: _tradeSide,
+      amount: amountIn, expectedOut: sharesOut,
+      ts: Date.now()
+    };
+  });
+}
+
+async function getRoutedExactOutBuyQuote(desiredSharesStr, marketId, buyYes) {
+  const payData = getSelectedPayTokenData();
+  const collateral = $('app').dataset.collateral;
+  const isETHCollateral = !collateral || collateral === ethers.ZeroAddress;
+  const collateralAddr = isETHCollateral ? ZERO_ADDRESS : collateral;
+  const desiredShares = ethers.parseEther(desiredSharesStr);
+  const ethIn = payData.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+  return await withRPC(async (rpc) => {
+    const pammQuoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
+    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, ZQUOTER_IFACE, rpc);
+
+    // Iteratively find collateralNeeded
+    let c = desiredShares; // initial guess
+    for (let i = 0; i < 3; i++) {
+      const result = await pammQuoter.quoteBuyWithSweep(marketId, buyYes, c, 9999, { gasLimit: 5000000 });
+      const s = BigInt(result.totalSharesOut);
+      if (s <= 0n) throw new Error('PAMM quote returned zero');
+      if (s >= desiredShares) break;
+      c = c * desiredShares / s;
+    }
+    // Add 2% buffer
+    const collateralNeeded = c * 102n / 100n;
+
+    // First leg: exactOut swap — need exactly collateralNeeded of collateral
+    let firstLegCalls = [];
+    let msgValue = 0n;
+
+    if (ethIn && isETHCollateral) {
+      msgValue = collateralNeeded;
+    } else {
+      const r = await quoter.buildBestSwapViaETHMulticall(
+        ZROUTER_ADDRESS, _connectedAddress, true,
+        ethIn ? ZERO_ADDRESS : payData.address, collateralAddr,
+        collateralNeeded, 100n, deadline, 0, 0, ZERO_ADDRESS,
+        { gasLimit: 5000000 }
+      );
+      firstLegCalls = Array.from(r.calls);
+      msgValue = r.msgValue;
+    }
+
+    // Second leg — reduce collateral passed to buy to account for swap slippage
+    const hasSwapLeg2 = firstLegCalls.length > 0;
+    const collateralForBuy2 = hasSwapLeg2 ? collateralNeeded * 99n / 100n : collateralNeeded;
+    const _routedSlipBps2 = BigInt(Math.round(_tradeSlippage * 100));
+    const minSharesOut = desiredShares * (10000n - _routedSlipBps2) / 10000n;
+    const buyCalldata = MASTER_ROUTER_IFACE.encodeFunctionData('buyWithSweep', [
+      marketId, buyYes, collateralForBuy2, minSharesOut, 9999,
+      _connectedAddress, deadline
+    ]);
+
+    const calls = [];
+    for (const c2 of firstLegCalls) calls.push(c2);
+
+    const execEthValue = isETHCollateral ? collateralForBuy2 : 0n;
+    calls.push(ZROUTER_IFACE.encodeFunctionData('execute', [
+      CONTRACTS.MASTER_ROUTER, execEthValue, buyCalldata
+    ]));
+
+    calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress]));
+    if (!isETHCollateral) {
+      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [collateralAddr, 0, 0, _connectedAddress]));
+    }
+    if (!ethIn) {
+      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [payData.address, 0, 0, _connectedAddress]));
+    }
+
+    const multicall = ZROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+    return {
+      sharesOut: desiredShares, minSharesOut, collateralAmount: collateralNeeded,
+      multicall, calls, msgValue,
+      payToken: payData, isRouted: true,
+      marketId, dir: 'buy', side: _tradeSide,
+      expectedOut: desiredShares,
+      ts: Date.now()
+    };
+  });
+}
+
+async function fetchRoutedBuyQuote(inputAmountStr) {
+  const quoteEl = $('tradeQuote');
+  const btn = $('tradeBtn');
+  const marketId = $('app').dataset.marketId;
+  if (!marketId || !quoteEl) return;
+
+  try {
+    const buyYes = _tradeSide === 'yes';
+    const quote = await getRoutedBuyQuote(inputAmountStr, marketId, buyYes);
+    const payData = quote.payToken;
+    const collateral = $('app').dataset.collateral;
+    const collSym = getCollateralSymbol(collateral);
+
+    quoteEl.innerHTML = Number(ethers.formatEther(quote.sharesOut)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares' +
+      '<br><span style="font-size:11px;color:var(--fg-muted)">' + payData.symbol + ' → ' + collSym + ' → shares (routed via zRouter)</span>';
+    _lastQuote = quote;
+
+    if (btn) {
+      btn.textContent = 'Buy ' + _tradeSide.toUpperCase();
+      btn.disabled = false;
+    }
+  } catch (e) {
+    console.warn('Routed quote failed:', e.message);
+    if (quoteEl) quoteEl.textContent = 'Route not found: ' + (e.message || '').slice(0, 60);
+    _lastQuote = null;
+  }
+}
+
 // ==================== EXECUTE TRADE ====================
 
 async function executeTrade() {
@@ -3551,6 +4452,100 @@ async function executeTrade() {
   const isLabeled = $('app').dataset.isLabeled === '1';
 
   try {
+    // ---- ROUTED BUY (any token → collateral → shares via zRouter) ----
+    if (_tradeDir === 'buy' && _lastQuote?.isRouted) {
+      if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+        throw new Error('Quote expired — please re-enter amount to get a fresh quote');
+      }
+
+      const payData = _lastQuote.payToken;
+      const ethIn = payData.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+
+      // Resolve token approval: permit → permit2 → approve fallback
+      let permitPrefix = null; // encoded call to prepend to multicall, or null
+      if (!ethIn) {
+        btn.textContent = 'Checking approval...';
+        const token = new ethers.Contract(payData.address, ERC20_ABI, s);
+        const allowance = await token.allowance(_connectedAddress, ZROUTER_ADDRESS);
+        const needed = _lastQuote.amount || safeParseUnits(input.value.trim(), payData.decimals);
+
+        if (allowance < needed) {
+          // Try 1: EIP-2612 permit (gasless signature, single tx)
+          let permitDone = false;
+          try {
+            const permitCfg = await predictGetPermitConfig(payData.address);
+            if (permitCfg) {
+              btn.textContent = 'Sign permit...';
+              const permitData = await predictSignPermit(permitCfg, payData.address);
+              permitPrefix = predictBuildPermitCall(permitData);
+              permitDone = true;
+            }
+          } catch (permitErr) {
+            const msg = String(permitErr?.message || '');
+            if (/user rejected|user denied|user cancelled/i.test(msg)) throw permitErr;
+            console.warn('Permit failed, trying permit2:', permitErr);
+            _predictPermitCache.set(payData.address.toLowerCase(), null);
+          }
+
+          // Try 2: Permit2 (gasless signature if already approved to Permit2)
+          if (!permitDone) {
+            try {
+              const p2Allowance = await predictCheckPermit2Allowance(payData.address);
+              if (p2Allowance >= needed) {
+                btn.textContent = 'Sign Permit2...';
+                const p2Data = await predictSignPermit2(payData.address, needed);
+                permitPrefix = predictBuildPermit2Call(p2Data);
+                permitDone = true;
+              }
+            } catch (p2Err) {
+              const msg = String(p2Err?.message || '');
+              if (/user rejected|user denied|user cancelled/i.test(msg)) throw p2Err;
+              console.warn('Permit2 failed, falling back to approve:', p2Err);
+            }
+          }
+
+          // Try 3: Classic approve (separate tx)
+          if (!permitDone) {
+            if (allowance > 0n) {
+              btn.textContent = 'Resetting allowance...';
+              const resetTx = await token.approve(ZROUTER_ADDRESS, 0);
+              await resetTx.wait();
+            }
+            btn.textContent = 'Approve in wallet...';
+            const approveTx = await token.approve(ZROUTER_ADDRESS, ethers.MaxUint256);
+            btn.textContent = 'Confirming approval...';
+            await approveTx.wait();
+          }
+        }
+      }
+
+      // Re-fetch fresh quote right before tx
+      btn.textContent = 'Refreshing quote...';
+      const buyYesFresh = _tradeSide === 'yes';
+      const freshQuote = await getRoutedBuyQuote(input.value.trim(), marketId, buyYesFresh);
+
+      // If we have a permit call, prepend it to the multicall
+      let txData = freshQuote.multicall;
+      if (permitPrefix) {
+        txData = ZROUTER_IFACE.encodeFunctionData('multicall', [[permitPrefix, ...freshQuote.calls]]);
+      }
+
+      btn.textContent = 'Confirm in wallet...';
+      const tx = await s.sendTransaction({
+        to: ZROUTER_ADDRESS,
+        data: txData,
+        value: freshQuote.msgValue
+      });
+      btn.textContent = 'Confirming...';
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+      await tx.wait();
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+      input.value = '';
+
+      setTimeout(() => renderMarketPage(marketId), 2000);
+      return;
+    }
+
     const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
 
     if (isLabeled) {
@@ -3561,7 +4556,8 @@ async function executeTrade() {
         if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
-        const minSharesOut = _lastQuote.expectedOut * 99n / 100n;
+        const _buySlipBps = BigInt(Math.round(_tradeSlippage * 100));
+        const minSharesOut = _lastQuote.expectedOut * (10000n - _buySlipBps) / 10000n;
 
         if (!isETH) {
           btn.textContent = 'Checking approval...';
@@ -3591,7 +4587,8 @@ async function executeTrade() {
         if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
-        const minCollOut = _lastQuote.expectedOut * 95n / 100n; // 5% slippage buffer for sell
+        const slipBps = BigInt(Math.round(_tradeSlippage * 100));
+        const minCollOut = _lastQuote.expectedOut * (10000n - slipBps) / 10000n;
         btn.textContent = 'Checking approval...';
         const isOp = await pamm.isOperator(_connectedAddress, CONTRACTS.MASTER_ROUTER);
         if (!isOp) {
@@ -3622,7 +4619,8 @@ async function executeTrade() {
         if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
-        const minSharesOut = _lastQuote.expectedOut * 99n / 100n;
+        const _legBuySlipBps = BigInt(Math.round(_tradeSlippage * 100));
+        const minSharesOut = _lastQuote.expectedOut * (10000n - _legBuySlipBps) / 10000n;
 
         if (!isETH) {
           btn.textContent = 'Checking approval...';
@@ -3652,7 +4650,8 @@ async function executeTrade() {
         if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
-        const minCollOut = _lastQuote.expectedOut * 95n / 100n;
+        const _legSellSlipBps = BigInt(Math.round(_tradeSlippage * 100));
+        const minCollOut = _lastQuote.expectedOut * (10000n - _legSellSlipBps) / 10000n;
         btn.textContent = 'Checking approval...';
         const isOp = await pamm.isOperator(_connectedAddress, CONTRACTS.PM_ROUTER);
         if (!isOp) {
@@ -3681,7 +4680,7 @@ async function executeTrade() {
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Trade failed:', e);
-      if (quoteEl) quoteEl.textContent = 'Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 80);
+      if (quoteEl) quoteEl.textContent = 'Failed: ' + decodeError(e);
     }
   } finally {
     btn.textContent = origText;
@@ -3974,9 +4973,9 @@ async function resolveMarket(marketId) {
     const resolverAbi = isOurResolver ? RESOLVER_ABI : LEGACY_RESOLVER_ABI;
     const resolver = new ethers.Contract(resolverAddr, resolverAbi, s);
     const tx = await resolver.resolveMarket(marketId);
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
-    btn.textContent = 'Resolved!';
+    btn.innerHTML = `Resolved! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
     if (!isUserRejection(e)) btn.textContent = 'Failed';
@@ -4024,18 +5023,35 @@ async function resolveCustomMarket(marketId, outcomeYes) {
   const otherBtn = $(otherId);
   if (otherBtn) otherBtn.disabled = true;
   try {
-    // For custom EOA resolvers, call PAMM.resolve directly
-    // The PAMM allows the resolver address to call resolve(marketId, outcome)
-    const pamm = new ethers.Contract(CONTRACTS.PAMM, [
-      'function resolve(uint256 marketId, bool outcome)'
-    ], s);
-    const tx = await pamm.resolve(BigInt(marketId), outcomeYes);
-    btn.textContent = 'Confirming...';
+    // For custom EOA resolvers: if market hasn't reached close time yet,
+    // call closeMarket first (requires canClose=true), then resolve
+    const pammIface = new ethers.Interface([
+      'function resolve(uint256 marketId, bool outcome)',
+      'function closeMarket(uint256 marketId)',
+      'function multicall(bytes[] calldata data) returns (bytes[])',
+      'function markets(uint256) view returns (address resolver, bool resolved, bool outcome, bool canClose, uint64 close, address collateral, uint256 collateralLocked)'
+    ]);
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, pammIface, s);
+    const mktData = await pamm.markets(BigInt(marketId));
+    const closeTime = Number(mktData.close);
+    const now = Math.floor(Date.now() / 1000);
+    let tx;
+    if (closeTime > now) {
+      // Market not yet closed — multicall closeMarket + resolve in one tx
+      btn.textContent = 'Closing & resolving...';
+      const closeData = pammIface.encodeFunctionData('closeMarket', [BigInt(marketId)]);
+      const resolveData = pammIface.encodeFunctionData('resolve', [BigInt(marketId), outcomeYes]);
+      tx = await pamm.multicall([closeData, resolveData]);
+    } else {
+      btn.textContent = 'Resolving...';
+      tx = await pamm.resolve(BigInt(marketId), outcomeYes);
+    }
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
-    btn.textContent = outcomeYes ? 'Resolved YES!' : 'Resolved NO!';
+    btn.innerHTML = `${outcomeYes ? 'Resolved YES!' : 'Resolved NO!'} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     setTimeout(() => renderMarketPage(marketId), 2000);
   } catch (e) {
-    if (!isUserRejection(e)) btn.textContent = 'Failed: ' + (e.shortMessage || e.reason || '').slice(0, 40);
+    if (!isUserRejection(e)) btn.textContent = 'Failed: ' + decodeError(e).slice(0, 50);
     setTimeout(() => { btn.textContent = origText; btn.disabled = false; if (otherBtn) otherBtn.disabled = false; }, 3000);
   }
 }
@@ -4049,6 +5065,8 @@ function openCreateModal() {
   if (location.hash.replace('#','').trim() !== 'create') {
     history.replaceState(null, '', location.pathname + '#create');
   }
+  setDatePreset(30, 'closeDate');
+  updateCreateBtn();
   updateCreateDeeplink();
 }
 function closeCreateModal() {
@@ -4066,6 +5084,9 @@ function switchMarketType(type) {
   const formId = { price: 'priceForm', balance: 'balanceForm', supply: 'supplyForm', custom: 'customForm' }[type];
   const form = $(formId);
   if (form) form.classList.add('active');
+  const hints = { price: 'Will an asset hit a target price?', balance: 'Will a wallet hold a minimum balance?', supply: "Will a token\u2019s supply cross a threshold?", custom: 'Create a custom yes/no market' };
+  const h = $('tabHint'); if (h) h.textContent = hints[type] || '';
+  updateCreateBtn();
   updateCreateDeeplink();
 }
 
@@ -4122,6 +5143,7 @@ function setPricePreset(pct) {
   const target = pct === 0 ? Math.round(_currentEthPrice) : Math.round(_currentEthPrice * (1 + pct / 100));
   $('targetPrice').value = target.toLocaleString();
   updatePricePreview();
+  updateCreateBtn();
 }
 
 function updatePricePreview() {
@@ -4143,6 +5165,51 @@ function setDatePreset(days, inputId) {
   d.setHours(23, 59, 0, 0);
   el.value = d.toISOString().slice(0, 16);
   el.dispatchEvent(new Event('input'));
+  updateDateHint(inputId);
+}
+
+function updateDateHint(inputId) {
+  const el = $(inputId);
+  const hint = $(inputId + 'Hint');
+  if (!el || !hint) return;
+  const v = el.value;
+  if (!v) { hint.textContent = ''; return; }
+  const d = new Date(v);
+  const now = new Date();
+  const diff = Math.round((d - now) / 86400000);
+  const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  hint.textContent = diff > 0 ? fmt + ' \u2014 ' + diff + ' day' + (diff !== 1 ? 's' : '') + ' from now' : fmt;
+}
+
+function updateCreateBtn() {
+  const btn = $('createBtn');
+  if (!btn) return;
+  const type = _currentMarketType || 'price';
+  let missing = '';
+  if (type === 'price') {
+    const tp = ($('targetPrice').value || '').replace(/[^0-9]/g, '');
+    if (!tp) missing = 'Enter target price';
+    else if (!$('closeDate').value) missing = 'Set resolution date';
+  } else if (type === 'balance') {
+    if (!($('balWalletAddr').value || '').trim()) missing = 'Enter wallet address';
+    else if (!$('balThreshold').value) missing = 'Enter minimum balance';
+    else if (!$('balCloseDate').value) missing = 'Set resolution date';
+  } else if (type === 'supply') {
+    if (!($('supplyTokenAddr').value || '').trim()) missing = 'Enter token address';
+    else if (!$('supplyThreshold').value) missing = 'Enter threshold';
+    else if (!$('supplyCloseDate').value) missing = 'Set resolution date';
+  } else if (type === 'custom') {
+    if (!($('customQuestion').value || '').trim()) missing = 'Enter question';
+    else if (!($('customResolver').value || '').trim()) missing = 'Enter resolver address';
+    else if (!$('customCloseDate').value) missing = 'Set resolution date';
+  }
+  if (missing) {
+    btn.textContent = missing;
+    btn.disabled = true;
+  } else {
+    btn.textContent = 'Create Market';
+    btn.disabled = false;
+  }
 }
 
 function setBalanceType(type) {
@@ -4155,6 +5222,13 @@ function setBalanceType(type) {
     document.querySelector('.balance-type-btn:last-child').classList.add('active');
     $('balTokenGroup').style.display = '';
   }
+  updateBalPreview();
+}
+
+function setBalanceDir(dir) {
+  _balanceDir = dir;
+  const btns = $('balanceDirection').querySelectorAll('button');
+  btns.forEach(b => b.classList.toggle('active', b.dataset.dir === dir));
   updateBalPreview();
 }
 
@@ -4177,13 +5251,16 @@ async function loadBalTokenInfo() {
 function updateBalPreview() {
   const el = $('balancePreview');
   if (!el) return;
-  const addr = ($('balWalletAddr').value || '').trim();
-  const short = addr.length >= 42 ? addr.slice(0, 6) + '...' + addr.slice(-4) : 'address';
+  const raw = ($('balWalletAddr').value || '').trim();
+  const resolved = getBalWalletAddress();
+  const short = resolved ? resolved.slice(0, 6) + '...' + resolved.slice(-4)
+    : (raw.endsWith('.wei') || raw.endsWith('.eth')) ? raw : (raw.length >= 42 ? raw.slice(0, 6) + '...' + raw.slice(-4) : 'address');
   const threshold = $('balThreshold').value || '___';
   const asset = _balanceAssetType === 'eth' ? 'ETH' : (_balTokenData.symbol || 'tokens');
   const dateStr = $('balCloseDate').value;
   const date = dateStr ? fmtDate(Math.floor(new Date(dateStr).getTime() / 1000)) : '___';
-  el.innerHTML = `Will <b>${short}</b> hold &ge; <b>${threshold} ${asset}</b> by <b>${date}</b>?`;
+  const op = _balanceDir === 'below' ? '&le;' : '&ge;';
+  el.innerHTML = `Will <b>${short}</b> hold ${op} <b>${threshold} ${asset}</b> by <b>${date}</b>?`;
   updateCreateDeeplink();
 }
 
@@ -4234,6 +5311,47 @@ function setLiqPreset(val) {
 
 function isUserRejection(e) {
   return e.code === 'ACTION_REJECTED' || e.code === 4001 || /user rejected/i.test(e.message || '');
+}
+
+// Decode known custom error selectors into human-readable messages
+const KNOWN_ERRORS = {
+  '0x7c7f7bb9': 'Swap failed — try a smaller amount or increase slippage',
+  '0xfb30d03a': 'Price impact too high — try a smaller amount or increase slippage',
+  '0x7db1be50': 'Market not found',
+  '0x8baa579f': 'Insufficient output — increase slippage tolerance',
+  '0xfb8f41b2': 'Insufficient liquidity',
+  '0x4e487b71': 'Arithmetic error',
+  '0x1f2a2005': 'Deadline expired — please retry',
+  '0xe450d38c': 'Insufficient balance',
+  '0x59c896be': 'Insufficient balance for transfer',
+  '0xbb2875c3': 'Insufficient output — increase slippage tolerance',
+  '0xbb55fd27': 'Insufficient liquidity in pool',
+  '0x1ab7da6b': 'Deadline expired — please retry',
+  '0xba2a9fc2': 'Only the designated resolver can resolve this market',
+  '0x55e8cb5f': 'Market is already resolved',
+  '0x2e96c726': 'Market is not yet resolved — cannot claim',
+  '0x82b42900': 'Unauthorized',
+  '0x2c5211c6': 'Invalid amount',
+  '0x8199f5f3': 'Slippage exceeded — increase slippage tolerance',
+  '0x0b5f6bf0': 'Market is closed — no more trading',
+  '0xa8a9eb69': 'Market is not closed yet',
+};
+function decodeError(e) {
+  // Try to find error data in various ethers.js error structures
+  const data = e.data || e.error?.data || e.info?.error?.data;
+  if (data && typeof data === 'string' && data.startsWith('0x') && data.length >= 10) {
+    const sel = data.slice(0, 10).toLowerCase();
+    if (KNOWN_ERRORS[sel]) return KNOWN_ERRORS[sel];
+  }
+  // Check shortMessage for "unknown custom error" and try to extract selector
+  const msg = e.shortMessage || e.message || '';
+  const match = msg.match(/data="(0x[0-9a-f]{8,})"/i);
+  if (match) {
+    const sel = match[1].slice(0, 10).toLowerCase();
+    if (KNOWN_ERRORS[sel]) return KNOWN_ERRORS[sel];
+  }
+  // Fallback to existing message
+  return e.reason || e.shortMessage || e.message || 'Unknown error';
 }
 
 function parseMarketIdFromReceipt(receipt) {
@@ -4310,7 +5428,7 @@ async function createPriceMarket(collateralForLP, deadline) {
       { value: collateralForLP }
     );
 
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     const receipt = await tx.wait();
     const marketId = parseMarketIdFromReceipt(receipt);
     closeCreateModal();
@@ -4322,18 +5440,18 @@ async function createPriceMarket(collateralForLP, deadline) {
       // silently reset
     } else {
       console.error('Create market failed:', e);
-      alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Failed: ' + decodeError(e));
     }
     btn.disabled = false; btn.textContent = 'Create Market';
   }
 }
 
 async function createBalanceMarket(collateralForLP, deadline) {
-  const walletAddr = ($('balWalletAddr').value || '').trim();
+  const walletAddr = getBalWalletAddress();
   const threshold = parseFloat($('balThreshold').value);
   const closeDateStr = $('balCloseDate').value;
 
-  if (!walletAddr || !ethers.isAddress(walletAddr)) { alert('Enter a valid wallet address'); return; }
+  if (!walletAddr) { alert('Enter a valid wallet address (0x, name.wei, or name.eth)'); return; }
   if (!threshold || threshold <= 0) { alert('Enter a valid threshold'); return; }
   if (!closeDateStr) { alert('Select a close date'); return; }
 
@@ -4347,12 +5465,15 @@ async function createBalanceMarket(collateralForLP, deadline) {
     const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
     let tx;
 
+    const opCode = _balanceDir === 'below' ? OP.LTE : OP.GTE;
+    const opNum = _balanceDir === 'below' ? 2 : 3;
+
     if (_balanceAssetType === 'eth') {
       const thresholdWei = ethers.parseEther(threshold.toString());
-      const description = `ETHBAL|${walletAddr}|3|${threshold}|${closeTimestamp}`;
+      const description = `ETHBAL|${walletAddr}|${opNum}|${threshold}|${closeTimestamp}`;
       tx = await bootstrapper.bootstrapETHBalanceMarket(
         description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline, walletAddr, OP.GTE, thresholdWei,
+        collateralForLP, _connectedAddress, deadline, walletAddr, opCode, thresholdWei,
         { value: collateralForLP }
       );
     } else {
@@ -4360,15 +5481,15 @@ async function createBalanceMarket(collateralForLP, deadline) {
       if (!tokenAddr || !ethers.isAddress(tokenAddr)) { alert('Enter a valid token address'); btn.disabled = false; btn.textContent = 'Create Market'; return; }
       const decimals = _balTokenData.decimals || 18;
       const thresholdUnits = ethers.parseUnits(threshold.toString(), decimals);
-      const description = `TOKBAL|${tokenAddr}|${walletAddr}|3|${threshold}|${closeTimestamp}`;
+      const description = `TOKBAL|${tokenAddr}|${walletAddr}|${opNum}|${threshold}|${closeTimestamp}`;
       tx = await bootstrapper.bootstrapTokenBalanceMarket(
         description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, OP.GTE, thresholdUnits,
+        collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, opCode, thresholdUnits,
         { value: collateralForLP }
       );
     }
 
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     const receipt = await tx.wait();
     const marketId = parseMarketIdFromReceipt(receipt);
     closeCreateModal();
@@ -4380,7 +5501,7 @@ async function createBalanceMarket(collateralForLP, deadline) {
       // silently reset
     } else {
       console.error('Create market failed:', e);
-      alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Failed: ' + decodeError(e));
     }
     btn.disabled = false; btn.textContent = 'Create Market';
   }
@@ -4420,7 +5541,7 @@ async function createSupplyMarket(collateralForLP, deadline) {
       { value: collateralForLP }
     );
 
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     const receipt = await tx.wait();
     const marketId = parseMarketIdFromReceipt(receipt);
     closeCreateModal();
@@ -4432,7 +5553,7 @@ async function createSupplyMarket(collateralForLP, deadline) {
       // silently reset
     } else {
       console.error('Create market failed:', e);
-      alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Failed: ' + decodeError(e));
     }
     btn.disabled = false; btn.textContent = 'Create Market';
   }
@@ -4459,6 +5580,15 @@ let _resolvedResolver = null;
 let _resolverResolveSeq = 0;
 let _resolverDebounce = null;
 
+async function showResolverVerification(addr, el, prefix) {
+  const seq = _resolverResolveSeq;
+  const [verified, weiName, feeBps] = await Promise.all([checkResolverVerified(addr), reverseResolveWei(addr), getResolverFeeBps(addr)]);
+  if (seq !== _resolverResolveSeq) return;
+  let display = prefix || addr;
+  if (!prefix && weiName) display = weiName + ' \u2192 ' + addr.slice(0, 6) + '...' + addr.slice(-4);
+  el.innerHTML = display + (verified ? ' ' + VERIFIED_BADGE : '') + (feeBps > 0 ? ` <span style="opacity:0.6">(${(feeBps / 100).toFixed(2)}% resolver fee)</span>` : '');
+}
+
 function onResolverInput() {
   clearTimeout(_resolverDebounce);
   const v = ($('customResolver')?.value || '').trim();
@@ -4467,9 +5597,11 @@ function onResolverInput() {
   if (!v) { el.style.display = 'none'; return; }
   if (ethers.isAddress(v)) {
     _resolvedResolver = ethers.getAddress(v);
+    ++_resolverResolveSeq;
     el.style.display = 'block';
     el.style.color = 'var(--fg-muted)';
     el.textContent = ethers.getAddress(v);
+    showResolverVerification(ethers.getAddress(v), el);
     return;
   }
   if (v.endsWith('.wei') || v.endsWith('.eth')) {
@@ -4505,6 +5637,7 @@ async function resolveResolverName(name) {
       _resolvedResolver = resolved;
       el.style.color = 'var(--fg-muted)';
       el.textContent = resolved;
+      showResolverVerification(resolved, el, name + ' \u2192 ' + resolved.slice(0, 6) + '...' + resolved.slice(-4));
     } else {
       el.style.color = 'var(--remove-fg, #c0392b)';
       el.textContent = 'Name not found';
@@ -4520,6 +5653,112 @@ document.addEventListener('DOMContentLoaded', () => {
   const ri = $('customResolver');
   if (ri) ri.addEventListener('input', onResolverInput);
 });
+
+// ---- Resolver fee registration ----
+function updateResolverFeeSection() {
+  const sec = $('resolverFeeSection');
+  if (!sec) return;
+  if (_connectedAddress) {
+    sec.style.display = 'block';
+    getResolverFeeBps(_connectedAddress).then(bps => {
+      const lbl = $('resolverFeeCurrentLabel');
+      if (lbl) lbl.textContent = bps > 0 ? `Your current fee: ${(bps / 100).toFixed(2)}%` : 'No fee set';
+    });
+  } else {
+    sec.style.display = 'none';
+  }
+}
+
+async function submitResolverFee() {
+  if (!_signer) { alert('Connect wallet first'); return; }
+  const input = $('walletResolverFeeInput') || $('resolverFeeInput');
+  const pct = parseFloat(input?.value);
+  if (isNaN(pct) || pct < 0 || pct > 10) { alert('Fee must be between 0% and 10%'); return; }
+  const bps = Math.round(pct * 100);
+  try {
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, _signer);
+    const tx = await pamm.setResolverFeeBps(bps);
+    if (input) input.disabled = true;
+    await tx.wait();
+    const feeText = bps > 0 ? 'Current fee: ' + (bps / 100).toFixed(2) + '%' : 'No fee set';
+    const lbl1 = $('walletResolverFeeLabel'); if (lbl1) lbl1.textContent = feeText;
+    const lbl2 = $('resolverFeeCurrentLabel'); if (lbl2) lbl2.textContent = feeText;
+  } catch (e) {
+    if (!isUserRejection(e)) alert('Failed to set fee: ' + (e.shortMessage || e.message));
+  }
+}
+
+// ---- Balance wallet name resolution ----
+let _resolvedBalWallet = null;
+let _balWalletResolveSeq = 0;
+let _balWalletDebounce = null;
+
+function onBalWalletInput() {
+  clearTimeout(_balWalletDebounce);
+  const v = ($('balWalletAddr')?.value || '').trim();
+  const el = $('balWalletResolved');
+  _resolvedBalWallet = null;
+  if (!v) { el.style.display = 'none'; updateBalPreview(); updateCreateBtn(); return; }
+  if (ethers.isAddress(v)) {
+    _resolvedBalWallet = ethers.getAddress(v);
+    el.style.display = 'block';
+    el.style.color = 'var(--fg-muted)';
+    el.textContent = ethers.getAddress(v);
+    updateBalPreview(); updateCreateBtn();
+    return;
+  }
+  if (v.endsWith('.wei') || v.endsWith('.eth')) {
+    el.style.display = 'block';
+    el.style.color = 'var(--fg-muted)';
+    el.textContent = 'Resolving ' + v + '...';
+    _balWalletDebounce = setTimeout(() => resolveBalWalletName(v), 350);
+  } else {
+    el.style.display = 'block';
+    el.style.color = 'var(--remove-fg, #c0392b)';
+    el.textContent = 'Enter 0x address, name.wei, or name.eth';
+  }
+  updateBalPreview(); updateCreateBtn();
+}
+
+async function resolveBalWalletName(name) {
+  const seq = ++_balWalletResolveSeq;
+  const el = $('balWalletResolved');
+  try {
+    let resolved = null;
+    if (name.endsWith('.wei')) {
+      resolved = await withRPC(async (rpc) => {
+        const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+        const tokenId = await ns.computeId(name);
+        const owner = await ns.ownerOf(tokenId).catch(() => null);
+        if (!owner || owner === ethers.ZeroAddress) return null;
+        return ethers.getAddress(owner);
+      });
+    } else if (name.endsWith('.eth')) {
+      resolved = await withRPC(async (rpc) => rpc.resolveName(name));
+    }
+    if (seq !== _balWalletResolveSeq) return;
+    if (resolved && resolved !== ethers.ZeroAddress) {
+      _resolvedBalWallet = resolved;
+      el.style.color = 'var(--fg-muted)';
+      el.textContent = resolved;
+    } else {
+      el.style.color = 'var(--remove-fg, #c0392b)';
+      el.textContent = 'Name not found';
+    }
+  } catch {
+    if (seq !== _balWalletResolveSeq) return;
+    el.style.color = 'var(--remove-fg, #c0392b)';
+    el.textContent = 'Failed to resolve ' + name;
+  }
+  updateBalPreview(); updateCreateBtn();
+}
+
+function getBalWalletAddress() {
+  const v = ($('balWalletAddr')?.value || '').trim();
+  if (ethers.isAddress(v)) return ethers.getAddress(v);
+  if (_resolvedBalWallet) return _resolvedBalWallet;
+  return null;
+}
 
 function getResolverAddress() {
   const v = ($('customResolver')?.value || '').trim();
@@ -4554,7 +5793,7 @@ async function createCustomMarket(collateralForLP, deadline) {
       { value: collateralForLP }
     );
 
-    btn.textContent = 'Confirming...';
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     const receipt = await tx.wait();
     const marketId = parseMarketIdFromReceipt(receipt);
     closeCreateModal();
@@ -4566,7 +5805,7 @@ async function createCustomMarket(collateralForLP, deadline) {
       // silently reset
     } else {
       console.error('Create market failed:', e);
-      alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Failed: ' + decodeError(e));
     }
     btn.disabled = false; btn.textContent = 'Create Market';
   }
@@ -4627,7 +5866,7 @@ async function provideLiquidity() {
       BigInt(marketId), amountWei, feeOrHook, 0, 0, 0, _connectedAddress, deadline,
       isETH ? { value: amountWei } : {}
     );
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
 
     closeLPModal();
@@ -4637,7 +5876,7 @@ async function provideLiquidity() {
     if (!isUserRejection(e)) {
       console.error('LP failed:', e);
       btn.textContent = 'Failed';
-      alert('Failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Failed: ' + decodeError(e));
     }
   } finally {
     setTimeout(() => { btn.disabled = false; btn.textContent = 'Provide Liquidity'; }, 2000);
@@ -4655,14 +5894,14 @@ async function updateTWAP(marketId) {
   try {
     const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
     const tx = await hookRouter.updateTWAPObservation(marketId);
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     alert('TWAP updated!');
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('TWAP update failed:', e);
-      alert('TWAP update failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('TWAP update failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'Update TWAP';
@@ -4679,14 +5918,14 @@ async function rebalanceVault(marketId) {
     const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
     const deadline = Math.floor(Date.now() / 1000) + 3600;
     const tx = await hookRouter.rebalanceBootstrapVault(marketId, deadline);
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     alert('Vault rebalanced!');
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Rebalance failed:', e);
-      alert('Rebalance failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Rebalance failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'Rebalance';
@@ -4702,14 +5941,14 @@ async function settleBudget(marketId) {
   try {
     const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
     const tx = await hookRouter.settleRebalanceBudget(marketId);
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     alert('Budget settled!');
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Settle budget failed:', e);
-      alert('Settle budget failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Settle budget failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'Settle';
@@ -4725,14 +5964,14 @@ async function harvestFees(marketId, isYes) {
   try {
     const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
     const tx = await hookRouter.harvestVaultFees(marketId, isYes);
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     alert('Fees harvested!');
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Harvest fees failed:', e);
-      alert('Harvest failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Harvest failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'HARVEST';
@@ -4748,14 +5987,14 @@ async function finalizeMarket(marketId) {
   try {
     const hookRouter = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, s);
     const tx = await hookRouter.finalizeMarket(marketId);
-    btn.textContent = 'Pending...';
+    btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     alert('Market finalized!');
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Finalize failed:', e);
-      alert('Finalize failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Finalize failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'Finalize';
@@ -4786,7 +6025,7 @@ async function withdrawVault(isYes) {
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Withdraw vault failed:', e);
-      alert('Withdraw failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Withdraw failed: ' + decodeError(e));
     }
     btn.disabled = false;
     btn.textContent = 'WITHDRAW';
@@ -4825,13 +6064,13 @@ async function withdrawAmmLP(pct) {
     if (btn) btn.textContent = 'Confirm...';
     const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
     const tx = await pamm.removeLiquidityToCollateral(marketId, feeOrHook, withdrawAmt, 0, 0, 0, _connectedAddress, deadline);
-    if (btn) btn.textContent = 'Pending...';
+    if (btn) btn.innerHTML = `Pending... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     await tx.wait();
     renderMarketPage(marketId);
   } catch (e) {
     if (!isUserRejection(e)) {
       console.error('Withdraw AMM LP failed:', e);
-      alert('Withdraw failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120));
+      alert('Withdraw failed: ' + decodeError(e));
     }
     if (btn) { btn.disabled = false; btn.textContent = 'WITHDRAW'; }
   }

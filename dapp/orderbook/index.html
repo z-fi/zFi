@@ -199,7 +199,8 @@ body.modal-open { overflow:hidden; }
   transition:background 0.1s;
 }
 .book-row:hover { background:var(--surface-hover); z-index:1; }
-.book-row .price { font-weight:600; }
+.book-row .price { font-weight:600; cursor:pointer; }
+.book-row .price:hover { text-decoration:underline; }
 .book-row .total { text-align:right; color:var(--fg-muted); }
 .book-row .depth {
   position:absolute; top:0; right:0; bottom:0;
@@ -504,11 +505,11 @@ body.modal-open { overflow:hidden; }
   </button>
   <div class="z-nav-menu">
     <a href="../">Swap</a>
-    <a href="../coin/">Coins</a>
+    <a href="../coin/">Coin</a>
     <a href="../predict/">Predict</a>
     <a href="./" class="active">Orderbook</a>
     <a href="../lp/">Liquidity</a>
-    <a href="../domains/">Domains</a>
+    <a href="../domains/">Domain</a>
     <a href="../dao/">DAO</a>
     <div class="z-nav-sep"></div>
     <a href="../about/">About</a>
@@ -1376,7 +1377,7 @@ function renderBook() {
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
       html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
         <span class="depth" style="width:${depth}%"></span>
-        <span class="price">${fmtCompact(price)}</span>
+        <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'buy')" title="Trade at this price">${fmtCompact(price)}</span>
         <span class="size">${fmt(o.amtIn)}${aon}</span>
         <span class="total">${fmt(o.amtOut)}</span>
       </div>`;
@@ -1410,13 +1411,22 @@ function renderBook() {
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
       html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
         <span class="depth" style="width:${depth}%"></span>
-        <span class="price">${fmtCompact(price)}</span>
+        <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'sell')" title="Trade at this price">${fmtCompact(price)}</span>
         <span class="size">${fmt(o.amtOut)}${aon}</span>
         <span class="total">${fmt(o.amtIn)}</span>
       </div>`;
     }
     $('bidsSection').innerHTML = html;
   }
+}
+
+function bookToTrade(price, side) {
+  if (!Number.isFinite(price)) return;
+  setSide(side);
+  $('orderPrice').value = price;
+  $('orderAmt').focus();
+  updateOrderTotal();
+  switchTab('make');
 }
 
 // ---- Order side toggle ----

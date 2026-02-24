@@ -174,11 +174,11 @@ h1 {
   </button>
   <div class="z-nav-menu">
     <a href="../">Swap</a>
-    <a href="../coin/">Coins</a>
+    <a href="../coin/">Coin</a>
     <a href="../predict/">Predict</a>
     <a id="navOrderbook" href="../orderbook/">Orderbook</a>
     <a href="../lp/">Liquidity</a>
-    <a href="../domains/">Domains</a>
+    <a href="../domains/">Domain</a>
     <a href="../dao/">DAO</a>
     <div class="z-nav-sep"></div>
     <a href="../about/">About</a>
@@ -286,7 +286,17 @@ function render() {
   _currentPoolId = poolId;
 
   var navOb = document.getElementById('navOrderbook');
-  if (navOb) navOb.href = '../orderbook/#/' + poolId;
+  if (navOb) {
+    var sp = new URLSearchParams(location.search);
+    var t0 = sp.get('token0'), t1 = sp.get('token1');
+    if (t0 && t1) {
+      navOb.href = '../orderbook/?token0=' + encodeURIComponent(t0) + '&token1=' + encodeURIComponent(t1)
+        + (sp.get('label0') ? '&label0=' + encodeURIComponent(sp.get('label0')) : '')
+        + (sp.get('label1') ? '&label1=' + encodeURIComponent(sp.get('label1')) : '');
+    } else {
+      navOb.href = '../orderbook/';
+    }
+  }
 
   poolIdDisplay.textContent = 'Pool ID: ' + poolId;
   container.replaceChildren();
