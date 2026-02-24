@@ -307,7 +307,7 @@ body.modal-open { overflow:hidden; }
   background:var(--modal-bg);border:1px solid var(--modal-border);
   width:100%;max-width:380px;padding:20px;position:relative;
   max-height:calc(100vh - 80px);max-height:calc(100dvh - 80px);
-  display:flex;flex-direction:column;overflow:hidden;
+  display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;
 }
 .modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-shrink:0; }
 .modal-title { font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase; }
@@ -407,7 +407,7 @@ select.form-input { border-radius:0;-webkit-appearance:none;appearance:none;curs
 .form-section.active { display:block; }
 .form-toggle-row { display:flex;align-items:center;gap:8px;margin-bottom:10px; }
 .form-toggle-row label { font-size:11px;color:var(--fg-muted);cursor:pointer;user-select:none;margin:0;text-transform:none;letter-spacing:0; }
-.form-toggle-row input[type="checkbox"] { accent-color:var(--fg);width:14px;height:14px; }
+.form-toggle-row input[type="checkbox"] { accent-color:var(--fg);width:18px;height:18px;min-width:18px;cursor:pointer; }
 .balance-type-toggle { display:flex;gap:6px; }
 .balance-type-btn {
   flex:1;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.05em;
