@@ -1456,7 +1456,7 @@ return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0xbe105E9E7f7F392318BFf1f7651E024d96008e86";
+const ZQUOTER_ADDRESS = "0x9909861aa515afbce9d36c532eae7e0ebf804034";
 const ZQUOTER_BASE_ADDRESS = "0x658bF1A6608210FDE7310760f391AD4eC8006A5F";
 const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -5825,7 +5825,10 @@ async function executeSwap() {
     if (quote.isParaswap) {
       swapBtn.textContent = "Fetching ParaSwap route...";
       const toData = tokens[toSnap];
-      const psQ = await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, slippageBps);
+      // BUY-side: slippage increases maxSrcAmount in the calldata, but we only send
+      // the indicative srcAmount to Parasol. Use slippage=0 so Augustus pulls exactly srcAmount.
+      const psBuildSlippage = quote.exactOut ? 0 : slippageBps;
+      const psQ = await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, psBuildSlippage);
       if (!psQ || !psQ.data) {
         if (!quote.multicall) throw new Error("ParaSwap quote unavailable and no on-chain route");
         quote.isParaswap = false;
@@ -5951,7 +5954,12 @@ async function executeSwap() {
           if (p2Allowance >= amountIn) {
             try {
               swapBtn.textContent = "Sign Permit2...";
-              const permit2Data = await signPermit2(fromData.address, amountIn);
+              // snwap's amountIn=0 path sends bal-1 to the executor (keeps 1 wei for gas).
+              // Aggregator routers (KyberSwap) do strict transferFrom for the exact quoted amount,
+              // so we permit +1 wei to compensate for the deficit.
+              const isAggSnwap = quote.is0x || quote.isParaswap || quote.isKyber;
+              const p2Amt = isAggSnwap ? amountIn + 1n : amountIn;
+              const permit2Data = await signPermit2(fromData.address, p2Amt);
               let innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
               // For 0x/snwap: permit2TransferFrom moves tokens to router,
               // so snwap needs amountIn=0 to read router balance instead of pulling from user
@@ -6042,7 +6050,8 @@ async function executeSwap() {
             }
           } else if (fresh.isParaswap) {
             const toData = tokens[toSnap];
-            const psQ = await getParaswapQuote(fresh.psPriceRoute, fromData.address, toData.address, slippageBps);
+            const psBuildSlippage2 = fresh.exactOut ? 0 : slippageBps;
+            const psQ = await getParaswapQuote(fresh.psPriceRoute, fromData.address, toData.address, psBuildSlippage2);
             if (psQ && psQ.data) {
               const isEthIn = fromData.address === ZERO_ADDRESS;
               const receiver = getReceiver();

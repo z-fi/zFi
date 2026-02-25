@@ -44,7 +44,6 @@ contract zQuoter {
     {
         (best, quotes) = zQuoter(address(_BASE)).getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
         // Reject exact-out V3 best if round-trip proves phantom liquidity.
-        // Reject exact-out V3 best if round-trip proves phantom liquidity.
         // Only neuter the specific fee tier that failed — other V3 tiers (e.g. 30bp) may be healthy.
         while (exactOut && best.source == AMM.UNI_V3 && best.amountIn > 0) {
             (, uint256 rt) = _BASE.quoteV3(false, tokenIn, tokenOut, uint24(best.feeBps * 100), best.amountIn);
@@ -318,25 +317,12 @@ contract zQuoter {
         view
         returns (bool ok, uint256 amountIn, uint256 amountOut, bool usedStable, bool usedUnderlying)
     {
+        // underlying=true means pool coins are wrapped (aTokens, cTokens, etc.).
+        // Skip: exchange() expects wrapped tokens the user doesn't have, and
+        // exchange_underlying (st=2) is not reliably supported by the router.
+        // The direct-coin pool (e.g. 3pool) will be found instead.
+        if (underlying) return (false, 0, 0, false, false);
         bytes4 selD = exactOut ? ICurveStableLike.get_dx.selector : ICurveStableLike.get_dy.selector;
-        if (underlying) {
-            bytes4 selU =
-                exactOut ? ICurveStableLike.get_dx_underlying.selector : ICurveStableLike.get_dy_underlying.selector;
-            (bool su, bytes memory ru) = pool.staticcall(abi.encodeWithSelector(selU, i, j, amt));
-            if (su && ru.length >= 32) {
-                uint256 qu = abi.decode(ru, (uint256));
-                // Also try direct: if direct gives more conservative quote, prefer exchange()
-                // over exchange_underlying() — avoids pools that lack exchange_underlying.
-                (bool sd2, bytes memory rd2) = pool.staticcall(abi.encodeWithSelector(selD, i, j, amt));
-                if (sd2 && rd2.length >= 32) {
-                    uint256 qd = abi.decode(rd2, (uint256));
-                    if (exactOut ? qd >= qu : qd <= qu) {
-                        return exactOut ? (true, qd, amt, true, false) : (true, amt, qd, true, false);
-                    }
-                }
-                return exactOut ? (true, qu, amt, true, true) : (true, amt, qu, true, true);
-            }
-        }
         // Try crypto (uint256) first — pools that support both get_dy signatures
         // may only have exchange(uint256,...), so crypto classification is safer.
         uint256 ui = uint256(int256(i));
