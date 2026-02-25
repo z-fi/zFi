@@ -896,6 +896,7 @@ body.modal-open { overflow: hidden; }
     <a href="./dao/">DAO</a>
     <div class="z-nav-sep"></div>
     <a href="./about/">About</a>
+    <a href="./api/">API</a>
     <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
   </div>
 </div>
@@ -1480,6 +1481,14 @@ const OX_CHAIN_ID = 1;
 const OX_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const MATCHA_IFACE = new ethers.Interface([
   "function swap(address settler, address tokenIn, address tokenOut, address recipient, bytes data)",
+]);
+// 1inch integration
+const ONEINCH_ADDRESS = "0x0000000000000000000000000000000000000000"; // wrapper contract TBD
+const ONEINCH_API_BASE = "https://zfi-pin.rosscampbell9.workers.dev/1inch";
+const ONEINCH_CHAIN_ID = 1;
+const ONEINCH_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const ONEINCH_IFACE = new ethers.Interface([
+  "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
 // V4 USDC/PNKSTR hookless pool params (fee=10000, tickSpacing=200)
 const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
@@ -4207,6 +4216,36 @@ async function get0xQuote(sellToken, buyToken, sellAmount, slippageBps) {
   return resp.json();
 }
 
+// ---- 1inch API helpers ----
+function inch1Token(addr) {
+  return addr === ZERO_ADDRESS ? ONEINCH_ETH_SENTINEL : addr;
+}
+async function get1inchPrice(sellToken, buyToken, sellAmount) {
+  if (ONEINCH_ADDRESS === ZERO_ADDRESS) return null;
+  const params = new URLSearchParams({
+    src: inch1Token(sellToken),
+    dst: inch1Token(buyToken),
+    amount: sellAmount.toString(),
+  });
+  const resp = await fetch(`${ONEINCH_API_BASE}/swap/v6.0/${ONEINCH_CHAIN_ID}/quote?${params}`);
+  if (!resp.ok) return null;
+  return resp.json();
+}
+async function get1inchQuote(sellToken, buyToken, sellAmount, slippageBps) {
+  if (ONEINCH_ADDRESS === ZERO_ADDRESS) return null;
+  const params = new URLSearchParams({
+    src: inch1Token(sellToken),
+    dst: inch1Token(buyToken),
+    amount: sellAmount.toString(),
+    from: ONEINCH_ADDRESS,
+    slippage: String(slippageBps / 100), // bps → percentage
+    disableEstimate: 'true',
+  });
+  const resp = await fetch(`${ONEINCH_API_BASE}/swap/v6.0/${ONEINCH_CHAIN_ID}/swap?${params}`);
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
 async function getQuote(fromAmountStr, fromSym, toSym) {
   if (!connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
@@ -4336,8 +4375,9 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ]) });
     }
     } // end !_skipSplitRoutes
-    // Fire 0x price in parallel with Multicall3 batches
+    // Fire 0x + 1inch prices in parallel with Multicall3 batches
     const ox0xPriceP = get0xPrice(fromData.address, toData.address, amountIn).catch(() => null);
+    const inch1PriceP = get1inchPrice(fromData.address, toData.address, amountIn).catch(() => null);
     const allCalls = [
       mc3ViewBatch(rpc, heavyEntries),
       mc3ViewBatch(rpc, mc3Entries),
@@ -4691,6 +4731,26 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         result.is0x = true;
         result.ox = oxPrice;
         result.sourceA = "0x";
+        result.sourceB = null;
+        result.isTwoHop = false;
+        result.isSplit = false;
+        result.splitLegs = null;
+      }
+    }
+
+    // 1inch: compare against all sources
+    const inch1Price = await inch1PriceP;
+    if (inch1Price && inch1Price.dstAmount) {
+      const inch1Out = BigInt(inch1Price.dstAmount);
+      if (result.allQuotes) {
+        result.allQuotes.push({ source: "1inch", sourceId: -3, feeBps: 0n, amountIn, amountOut: inch1Out });
+      }
+      if (inch1Out > result.expectedOutput) {
+        result.expectedOutput = inch1Out;
+        result.is1inch = true;
+        result.is0x = false;
+        result.inch1 = inch1Price;
+        result.sourceA = "1inch";
         result.sourceB = null;
         result.isTwoHop = false;
         result.isSplit = false;
@@ -5608,6 +5668,43 @@ async function executeSwap() {
       }
     }
 
+    // 1inch execution: fetch firm quote and build snwap multicall
+    if (quote.is1inch) {
+      swapBtn.textContent = "Fetching 1inch route...";
+      const toData = tokens[toSnap];
+      const inch1Q = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
+      if (!inch1Q || !inch1Q.tx) {
+        if (!quote.multicall) throw new Error("1inch quote unavailable and no on-chain route");
+        quote.is1inch = false;
+      } else {
+        const isEthIn = fromData.address === ZERO_ADDRESS;
+        const receiver = getReceiver();
+        const inch1Data = ONEINCH_IFACE.encodeFunctionData('swap', [
+          inch1Q.tx.to,
+          fromData.address,
+          toData.address,
+          receiver,
+          inch1Q.tx.data,
+        ]);
+        const minOut = BigInt(inch1Q.dstAmount) * BigInt(10000 - slippageBps) / 10000n;
+        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+          fromData.address,
+          isEthIn ? 0n : amountIn,
+          receiver,
+          toData.address,
+          minOut,
+          ONEINCH_ADDRESS,
+          inch1Data,
+        ]);
+        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+        quote.multicall = txData;
+        quote.calls = [snwapCall];
+        quote.msgValue = isEthIn ? amountIn : 0n;
+        quote._inch1MinBuy = minOut.toString();
+        quote._inch1Data = inch1Data;
+      }
+    }
+
     // ERC20 approval (use cache from updateBalances, fresh read only if stale)
     if (fromData.address !== ZERO_ADDRESS) {
       let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
@@ -5671,6 +5768,14 @@ async function executeSwap() {
                   BigInt(quote._oxMinBuy), MATCHA_ADDRESS, quote._oxMatchaData,
                 ]);
                 innerCalls = [snwapCall0];
+              } else if (quote.is1inch) {
+                const toData = tokens[toSnap];
+                const receiver = getReceiver();
+                const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
+                  fromData.address, 0n, receiver, toData.address,
+                  BigInt(quote._inch1MinBuy), ONEINCH_ADDRESS, quote._inch1Data,
+                ]);
+                innerCalls = [snwapCall0];
               }
               txData = buildPermit2Multicall(innerCalls, permit2Data);
               approved = true;
@@ -5723,6 +5828,26 @@ async function executeSwap() {
               const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
                 fromData.address, isEthIn ? 0n : amountIn, receiver, toData.address,
                 BigInt(oxQ.minBuyAmount), MATCHA_ADDRESS, matchaData,
+              ]);
+              txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+              quote.msgValue = isEthIn ? amountIn : 0n;
+            } else {
+              txData = fresh.multicall;
+              quote.msgValue = fresh.msgValue;
+            }
+          } else if (fresh.is1inch) {
+            const toData = tokens[toSnap];
+            const inch1Q = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
+            if (inch1Q && inch1Q.tx) {
+              const isEthIn = fromData.address === ZERO_ADDRESS;
+              const receiver = getReceiver();
+              const inch1Data = ONEINCH_IFACE.encodeFunctionData('swap', [
+                inch1Q.tx.to, fromData.address, toData.address, receiver, inch1Q.tx.data,
+              ]);
+              const minOut = BigInt(inch1Q.dstAmount) * BigInt(10000 - slippageBps) / 10000n;
+              const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+                fromData.address, isEthIn ? 0n : amountIn, receiver, toData.address,
+                minOut, ONEINCH_ADDRESS, inch1Data,
               ]);
               txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
               quote.msgValue = isEthIn ? amountIn : 0n;

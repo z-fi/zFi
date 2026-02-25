@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>API</title>
+<meta property="og:title" content="zFi On-Chain API">
+<meta property="og:description" content="Free, public, fully on-chain DEX aggregator API. No keys, no servers, no tracking.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="zFi On-Chain API">
+<meta name="twitter:description" content="Free, public, fully on-chain DEX aggregator API. No keys, no servers, no tracking.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+:root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;
+  --surface:#f9f9f9;--surface-hover:#f5f5f5;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --link-fg:inherit;
+  --code-bg:#f4f4f4;--code-border:#e0e0e0;
+}
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
+  --border:#333;--border-muted:#333;
+  --surface:#111;--surface-hover:#151515;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --link-fg:#e8e8e0;
+  --code-bg:#141414;--code-border:#222;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family:Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--fg);
+  min-height:100vh;padding:60px 20px 40px;
+  max-width:600px;margin:0 auto;
+}
+a { color:var(--link-fg); }
+h1 {
+  font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
+  margin-bottom:24px;
+}
+.lead {
+  font-size:15px;line-height:1.6;margin-bottom:32px;
+}
+.section {
+  margin-bottom:28px;
+}
+.section h2 {
+  font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-muted);margin-bottom:8px;
+}
+.section h3 {
+  font-size:13px;font-weight:600;margin-bottom:6px;margin-top:16px;
+}
+.section p, .section li {
+  font-size:13px;line-height:1.6;color:var(--fg);
+}
+.section ul {
+  list-style:none;margin:8px 0;
+}
+.section li::before {
+  content:"";display:inline-block;width:4px;height:4px;
+  background:var(--fg-muted);border-radius:50%;margin-right:8px;
+  vertical-align:middle;
+}
+.section a {
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;
+}
+.section a:hover {
+  text-decoration-style:solid;
+}
+.addr {
+  font-size:11px;word-break:break-all;color:var(--fg-muted);letter-spacing:0.01em;
+}
+pre {
+  background:var(--code-bg);border:1px solid var(--code-border);
+  padding:14px;margin:10px 0 14px;overflow-x:auto;
+  font-size:12px;line-height:1.55;border-radius:2px;
+  font-family:'SF Mono',Monaco,Menlo,Consolas,monospace;
+  -webkit-overflow-scrolling:touch;
+}
+code {
+  font-family:'SF Mono',Monaco,Menlo,Consolas,monospace;
+  font-size:12px;
+}
+p code, li code {
+  background:var(--code-bg);padding:1px 5px;border-radius:2px;
+}
+.sig {
+  font-size:12px;line-height:1.5;color:var(--fg-muted);
+  margin:6px 0 8px;word-break:break-all;
+  font-family:'SF Mono',Monaco,Menlo,Consolas,monospace;
+}
+.divider {
+  border:none;border-top:1px solid var(--border-muted);margin:28px 0;
+}
+.pill {
+  display:inline-block;font-size:10px;font-weight:600;letter-spacing:0.05em;
+  text-transform:uppercase;padding:2px 7px;border-radius:2px;
+  background:var(--surface);border:1px solid var(--code-border);
+  color:var(--fg-muted);vertical-align:middle;margin-left:6px;
+}
+.dark-toggle {
+  position:fixed;bottom:max(20px, env(safe-area-inset-bottom, 0px));right:max(20px, env(safe-area-inset-right, 0px));
+  border:none;cursor:pointer;padding:13px;margin:-13px;opacity:0.5;transition:opacity 0.2s;z-index:100;
+  background:#000;border-radius:50%;width:40px;height:40px;background-clip:content-box;
+}
+:root.dark .dark-toggle { background:#fff; }
+.dark-toggle:hover { opacity:1; }
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
+.z-nav { position:fixed; top:max(16px, env(safe-area-inset-top)); left:max(16px, env(safe-area-inset-left)); z-index:200; }
+.z-nav-btn { background:none; border:none; cursor:pointer; opacity:0.5; transition:opacity 0.2s; padding:6px; margin:-6px; line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none; position:absolute; top:36px; left:0; background:var(--bg); border:1px solid var(--border); padding:8px 0; min-width:140px; max-height:calc(100vh - 60px); overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block; padding:6px 16px; font-size:13px; color:var(--fg); text-decoration:none; letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35; pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
+@media (max-width:600px) {
+  body { padding:60px 16px 32px; }
+  .dark-toggle { bottom:16px; right:16px; }
+  .z-nav { top:14px; left:14px; }
+  .z-nav-btn { padding:4px; margin:-4px; }
+  .z-nav-menu a { padding:10px 16px; }
+  h1 { font-size:13px; margin-bottom:16px; }
+  .lead { font-size:14px; margin-bottom:24px; }
+  .section { margin-bottom:22px; }
+  .section p { font-size:13px; }
+  pre { font-size:11px; padding:12px; }
+}
+@media (max-width:380px) {
+  body { padding:60px 12px 24px; }
+  h1 { font-size:12px; }
+  .lead { font-size:13px; }
+  .section h2 { font-size:10px; }
+  .section p { font-size:12px; }
+  .addr { font-size:10px; }
+  pre { font-size:10px; padding:10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coin</a>
+    <a href="../predict/">Predict</a>
+    <a href="../orderbook/">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="../domains/">Domain</a>
+    <a href="../dao/">DAO</a>
+    <div class="z-nav-sep"></div>
+    <a href="../about/">About</a>
+    <a href="./" class="active">API</a>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
+
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
+
+<h1>On-Chain API</h1>
+
+<p class="lead">A free, public DEX aggregator that lives entirely on-chain. No API keys, no servers, no tracking. Call the contracts from any Ethereum RPC, or use the REST API for a single HTTP call.</p>
+
+<div class="section">
+  <h2>REST API</h2>
+  <p>One HTTP call returns the best quote + ready-to-send calldata. No SDK, no ABI encoding, no Multicall3 batching. The worker queries zQuoter on-chain and compares all route strategies for you.</p>
+
+  <h3>GET /quote</h3>
+  <p>Returns the optimal swap route and transaction calldata.</p>
+
+  <p style="margin-top:10px"><strong>Parameters</strong></p>
+  <ul>
+    <li><code>tokenIn</code> &mdash; ERC20 address or <code>0x0000...0000</code> for ETH <em>(required)</em></li>
+    <li><code>tokenOut</code> &mdash; ERC20 address or <code>0x0000...0000</code> for ETH <em>(required)</em></li>
+    <li><code>amount</code> &mdash; raw integer in tokenIn's smallest unit (or tokenOut's if <code>exactOut=true</code>) <em>(required)</em></li>
+    <li><code>to</code> &mdash; recipient address. Required for executable calldata; without it the quote is still valid but <code>tx.data</code> will target <code>address(0)</code> <em>(optional)</em></li>
+    <li><code>slippage</code> &mdash; basis points, default 50 (0.5%) <em>(optional)</em></li>
+    <li><code>exactOut</code> &mdash; <code>true</code> for exact output mode <em>(optional)</em></li>
+  </ul>
+
+  <p style="margin-top:10px"><strong>Example &mdash; swap 1 ETH for USDC:</strong></p>
+<pre>curl "https://api.zfi.wei.is/quote?tokenIn=0x0000000000000000000000000000000000000000&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amount=1000000000000000000"</pre>
+
+  <p style="margin-top:10px"><strong>Response:</strong></p>
+<pre>{
+  "bestRoute": {
+    "expectedOutput": "1850000000",
+    "source": "Uniswap V3",
+    "isTwoHop": false,
+    "isSplit": false
+  },
+  "tx": {
+    "to": "0x000000000000FB114709235f1ccBFfb925F600e4",
+    "data": "0x...",
+    "value": "1000000000000000000"
+  },
+  "allQuotes": [
+    { "source": "Uniswap V3", "amountOut": "1850000000" },
+    { "source": "Uniswap V2", "amountOut": "1845000000" }
+  ]
+}</pre>
+
+  <p style="margin-top:10px"><strong>Execute the swap:</strong></p>
+<pre>const quote = await fetch("https://api.zfi.wei.is/quote?...").then(r => r.json());
+
+await signer.sendTransaction({
+  to: quote.tx.to,
+  data: quote.tx.data,
+  value: quote.tx.value
+});</pre>
+
+  <p style="margin-top:10px"><strong>Other endpoints:</strong></p>
+  <ul>
+    <li><code>GET /health</code> &mdash; returns <code>{"status":"ok"}</code></li>
+  </ul>
+
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Open to all origins, no API keys required. Rate limited by Cloudflare Workers (100k req/day free tier).</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Contracts</h2>
+  <p><strong>zQuoter</strong> &mdash; read-only route discovery and calldata builder.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef" target="_blank" rel="noopener">0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef</a></p>
+  <p style="margin-top:10px"><strong>zRouter</strong> &mdash; swap executor. Send the calldata built by zQuoter here.</p>
+  <p class="addr"><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4" target="_blank" rel="noopener">0x000000000000FB114709235f1ccBFfb925F600e4</a></p>
+  <p style="margin-top:10px;font-size:12px;color:var(--fg-muted)">Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido. Zero protocol fees.</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>How It Works</h2>
+  <p>All routing is deterministic and happens on-chain via <code>view</code> functions. The REST API above handles this for you, but you can also call the contracts directly. The pattern is two steps:</p>
+  <ul>
+    <li><strong>Quote</strong> &mdash; call zQuoter (view) to discover the best route and get ready-to-send calldata</li>
+    <li><strong>Execute</strong> &mdash; send the returned calldata to zRouter as a transaction</li>
+  </ul>
+  <p style="margin-top:8px">No solvers, no relay infrastructure. Just an RPC call to get calldata, then a transaction to execute it.</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Quick Start</h2>
+  <p>Swap 1 ETH for USDC using ethers.js:</p>
+<pre>import { ethers } from "ethers";
+
+const ZQUOTER = "0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef";
+const ZROUTER = "0x000000000000FB114709235f1ccBFfb925F600e4";
+
+const quoterAbi = [
+  "function buildBestSwapViaETHMulticall(address to, address refundTo, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline, uint24 hookPoolFee, int24 hookTickSpacing, address hookAddress) view returns (tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) a, tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)"
+];
+
+const provider = new ethers.JsonRpcProvider("https://eth.llamarpc.com");
+const signer = /* your wallet signer */;
+const me = await signer.getAddress();
+
+const quoter = new ethers.Contract(ZQUOTER, quoterAbi, provider);
+
+const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const ETH  = "0x0000000000000000000000000000000000000000";
+const oneETH = ethers.parseEther("1");
+const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+
+// 1. Quote (view call — free, no gas)
+const result = await quoter.buildBestSwapViaETHMulticall(
+  me,             // to: recipient
+  me,             // refundTo: excess ETH refund
+  false,          // exactOut: false = exact input
+  ETH,            // tokenIn
+  USDC,           // tokenOut
+  oneETH,         // swapAmount: 1 ETH
+  50n,            // slippageBps: 0.5%
+  deadline,
+  0, 0, ETH       // hookPoolFee, hookTickSpacing, hookAddress (unused)
+);
+
+const isTwoHop = result.b.amountOut > 0n;
+const output = isTwoHop ? result.b.amountOut : result.a.amountOut;
+console.log("Expected USDC out:", ethers.formatUnits(output, 6));
+
+// 2. Execute (send transaction)
+const tx = await signer.sendTransaction({
+  to: ZROUTER,
+  data: result.multicall,
+  value: result.msgValue
+});
+
+console.log("Tx:", tx.hash);</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>ERC20 Swaps</h2>
+  <p>For ERC20 &rarr; ERC20 or ERC20 &rarr; ETH swaps, the user must first approve zRouter to spend their tokens.</p>
+<pre>// Approve zRouter to spend your USDC
+const token = new ethers.Contract(USDC, [
+  "function approve(address,uint256) returns (bool)"
+], signer);
+await token.approve(ZROUTER, ethers.MaxUint256);
+
+// Then quote and execute as before, with tokenIn = USDC
+const result = await quoter.buildBestSwapViaETHMulticall(
+  me, me, false,
+  USDC,           // tokenIn: USDC
+  ETH,            // tokenOut: ETH
+  ethers.parseUnits("1000", 6),  // 1000 USDC
+  50n, deadline,
+  0, 0, ETH
+);
+
+const tx = await signer.sendTransaction({
+  to: ZROUTER,
+  data: result.multicall,
+  value: result.msgValue  // 0 for ERC20 input
+});</pre>
+  <p>zRouter also supports <code>permit</code> and <code>permit2TransferFrom</code> for gasless approvals. These can be batched into a <code>multicall</code> alongside the swap calls.</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>zQuoter Functions</h2>
+
+  <h3>buildBestSwapViaETHMulticall<span class="pill">primary</span></h3>
+  <p>The main entry point. Discovers the optimal route across all supported AMMs (single-hop, 2-hop via hub tokens, or hooked V4 pools) and returns ready-to-execute calldata for zRouter.</p>
+  <div class="sig">buildBestSwapViaETHMulticall(address to, address refundTo, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline, uint24 hookPoolFee, int24 hookTickSpacing, address hookAddress) &rarr; (Quote a, Quote b, bytes[] calls, bytes multicall, uint256 msgValue)</div>
+  <ul>
+    <li><code>to</code> &mdash; recipient of output tokens</li>
+    <li><code>refundTo</code> &mdash; address for excess ETH refunds (usually <code>msg.sender</code>)</li>
+    <li><code>exactOut</code> &mdash; <code>false</code> for exact input, <code>true</code> for exact output</li>
+    <li><code>tokenIn</code> / <code>tokenOut</code> &mdash; ERC20 address, or <code>address(0)</code> for ETH</li>
+    <li><code>swapAmount</code> &mdash; amount of <code>tokenIn</code> (exact-in) or desired <code>tokenOut</code> (exact-out)</li>
+    <li><code>slippageBps</code> &mdash; per-leg slippage tolerance in basis points (50 = 0.5%)</li>
+    <li><code>deadline</code> &mdash; unix timestamp after which the swap reverts</li>
+    <li><code>hookPoolFee</code>, <code>hookTickSpacing</code>, <code>hookAddress</code> &mdash; set to 0/0/address(0) unless targeting a specific V4 hooked pool</li>
+  </ul>
+  <p>Returns:</p>
+  <ul>
+    <li><code>a</code>, <code>b</code> &mdash; Quote structs for leg A and leg B (b is empty for single-hop)</li>
+    <li><code>calls</code> &mdash; individual call bytes for each leg (useful for prepending permit calls)</li>
+    <li><code>multicall</code> &mdash; encoded <code>multicall(bytes[])</code> calldata, ready to send to zRouter</li>
+    <li><code>msgValue</code> &mdash; ETH value to attach to the transaction</li>
+  </ul>
+
+  <h3>buildSplitSwap</h3>
+  <p>Splits liquidity across two AMMs in parallel for better execution on large trades.</p>
+  <div class="sig">buildSplitSwap(address to, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote[2] legs, bytes multicall, uint256 msgValue)</div>
+
+  <h3>buildHybridSplit</h3>
+  <p>Combines a single-hop and a 2-hop route in parallel. Captures cases where splitting across route depths beats any single strategy.</p>
+  <div class="sig">buildHybridSplit(address to, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote[2] legs, bytes multicall, uint256 msgValue)</div>
+
+  <h3>build3HopMulticall</h3>
+  <p>Three-hop routing through two hub tokens for exotic pairs.</p>
+  <div class="sig">build3HopMulticall(address to, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote a, Quote b, Quote c, bytes[] calls, bytes multicall, uint256 msgValue)</div>
+
+  <h3>getQuotes<span class="pill">view</span></h3>
+  <p>Returns the best single-hop quote and all individual AMM quotes (V2, Sushi, zAMM, V3, V4). Useful for displaying price comparison across venues.</p>
+  <div class="sig">getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount) &rarr; (Quote best, Quote[] quotes)</div>
+
+  <h3>quoteCurve<span class="pill">view</span></h3>
+  <p>Auto-discovers Curve pools via MetaRegistry and returns the best Curve-only quote.</p>
+  <div class="sig">quoteCurve(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 maxCandidates) &rarr; (uint256 amountIn, uint256 amountOut, address bestPool, bool usedUnderlying, bool usedStable, uint8 iIndex, uint8 jIndex)</div>
+
+  <h3>quoteLido<span class="pill">view</span></h3>
+  <p>Direct Lido staking quote for ETH &rarr; stETH or wstETH.</p>
+  <div class="sig">quoteLido(bool exactOut, address tokenOut, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
+
+  <h3>Individual AMM Quotes<span class="pill">view</span></h3>
+  <p>Low-level quoting for specific venues.</p>
+  <div class="sig">quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi) &rarr; (uint256 amountIn, uint256 amountOut)</div>
+  <div class="sig">quoteV3(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
+  <div class="sig">quoteV4(bool exactOut, address tokenIn, address tokenOut, uint24 fee, int24 tickSpacing, address hooks, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
+  <div class="sig">quoteZAMM(bool exactOut, uint256 feeOrHook, address tokenIn, address tokenOut, uint256 idIn, uint256 idOut, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
+
+  <h3>limit<span class="pill">pure</span></h3>
+  <p>Utility to calculate slippage-adjusted amount limits.</p>
+  <div class="sig">limit(bool exactOut, uint256 quoted, uint256 bps) &rarr; uint256</div>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Quote Struct</h2>
+<pre>struct Quote {
+    AMM source;       // 0=V2, 1=Sushi, 2=zAMM, 3=V3, 4=V4,
+                      // 5=Curve, 6=Lido, 7=WETH_WRAP, 8=V4_HOOKED
+    uint256 feeBps;   // pool fee in basis points
+    uint256 amountIn;
+    uint256 amountOut;
+}</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Best Quote Selection</h2>
+  <p>For maximum output, compare multiple route strategies and take the best. This is what the <a href="../">swap page</a> does:</p>
+<pre>const [best, split, hybrid] = await Promise.allSettled([
+  quoter.buildBestSwapViaETHMulticall(
+    me, me, false, tokenIn, tokenOut,
+    amountIn, 50n, deadline, 0, 0, ETH),
+  quoter.buildSplitSwap(
+    me, tokenIn, tokenOut,
+    amountIn, 50n, deadline),
+  quoter.buildHybridSplit(
+    me, tokenIn, tokenOut,
+    amountIn, 50n, deadline)
+]);
+
+// Pick the best output across all strategies
+function outputOf(r) {
+  // buildBest/3hop: b is final leg (0 for single-hop)
+  if (r.a) return r.b?.amountOut > 0n ? r.b.amountOut : r.a.amountOut;
+  // split/hybrid: sum both legs (same output token)
+  return r.legs[0].amountOut + r.legs[1].amountOut;
+}
+
+let winner = best.value;
+let winnerOut = outputOf(winner);
+
+for (const r of [split, hybrid]) {
+  if (r.status === "fulfilled" && outputOf(r.value) > winnerOut) {
+    winner = r.value;
+    winnerOut = outputOf(winner);
+  }
+}
+
+// Send the winning route
+await signer.sendTransaction({
+  to: ZROUTER,
+  data: winner.multicall,
+  value: winner.msgValue
+});</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Prepending Permit Calls</h2>
+  <p>For gasless approvals, build a <code>multicall</code> that includes a permit call before the swap legs:</p>
+<pre>const routerAbi = [
+  "function multicall(bytes[]) payable returns (bytes[])",
+  "function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
+  "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)"
+];
+const routerIface = new ethers.Interface(routerAbi);
+
+// Sign EIP-2612 permit off-chain, then:
+const permitCall = routerIface.encodeFunctionData("permit", [
+  tokenAddress, ethers.MaxUint256, permitDeadline, v, r, s
+]);
+
+const tx = await signer.sendTransaction({
+  to: ZROUTER,
+  data: routerIface.encodeFunctionData("multicall", [
+    [permitCall, ...result.calls]
+  ]),
+  value: result.msgValue
+});</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>zRouter Functions</h2>
+  <p>You generally don't call these directly &mdash; zQuoter builds the calldata for you. Listed here for reference.</p>
+
+  <h3>multicall</h3>
+  <p>Batches multiple calls atomically. Each call is <code>delegatecall</code>'d in sequence. If any sub-call reverts, the entire batch reverts.</p>
+  <div class="sig">multicall(bytes[] data) payable &rarr; bytes[] results</div>
+
+  <h3>Swap Functions</h3>
+  <div class="sig">swapV2(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable</div>
+  <div class="sig">swapV3(address to, bool exactOut, uint24 swapFee, address tokenIn, address tokenOut, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable</div>
+  <div class="sig">swapV4(address to, bool exactOut, uint24 swapFee, int24 tickSpace, address tokenIn, address tokenOut, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable</div>
+  <div class="sig">swapVZ(address to, bool exactOut, uint256 feeOrHook, address tokenIn, address tokenOut, uint256 idIn, uint256 idOut, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable</div>
+  <div class="sig">swapCurve(address to, bool exactOut, address[11] route, uint256[4][5] swapParams, address tokenIn, address tokenOut, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable</div>
+
+  <h3>Helpers</h3>
+  <div class="sig">deposit(address token, uint256 id, uint256 amount) payable</div>
+  <p style="margin-bottom:4px;font-size:12px;color:var(--fg-muted)">Transfers tokens into the router and marks them in transient storage for multi-leg chaining.</p>
+  <div class="sig">sweep(address token, uint256 id, uint256 amount, address to) payable</div>
+  <p style="margin-bottom:4px;font-size:12px;color:var(--fg-muted)">Sends tokens from the router to a recipient. Pass <code>amount=0</code> to sweep full balance.</p>
+  <div class="sig">wrap(uint256 amount) payable</div>
+  <p style="margin-bottom:4px;font-size:12px;color:var(--fg-muted)">ETH &rarr; WETH. Pass <code>amount=0</code> to wrap full ETH balance.</p>
+  <div class="sig">unwrap(uint256 amount) payable</div>
+  <p style="margin-bottom:4px;font-size:12px;color:var(--fg-muted)">WETH &rarr; ETH.</p>
+  <div class="sig">exactETHToSTETH(address to) payable &rarr; uint256 shares</div>
+  <div class="sig">exactETHToWSTETH(address to) payable &rarr; uint256 wstOut</div>
+  <p style="margin-bottom:4px;font-size:12px;color:var(--fg-muted)">Direct Lido staking via <code>msg.value</code>.</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Hub Tokens</h2>
+  <p>For 2-hop and 3-hop routes, zQuoter automatically routes through the most liquid hub:</p>
+<pre>WETH   0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+USDC   0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+USDT   0xdAC17F958D2ee523a2206206994597C13D831ec7
+DAI    0x6B175474E89094C44Da98b954EedeAC495271d0F
+WBTC   0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599
+wstETH 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Common Addresses</h2>
+<pre>ETH (native)   address(0)
+WETH           0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+USDC           0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+USDT           0xdAC17F958D2ee523a2206206994597C13D831ec7
+DAI            0x6B175474E89094C44Da98b954EedeAC495271d0F
+WBTC           0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599
+stETH          0xae7ab96520DE3A18E5e111B5eaAb095312D7fE84
+wstETH         0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0</pre>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Notes</h2>
+  <ul>
+    <li>All zQuoter functions are <code>view</code> &mdash; they cost no gas and can be called from any RPC</li>
+    <li>Use <code>address(0)</code> for native ETH in both <code>tokenIn</code> and <code>tokenOut</code></li>
+    <li>Slippage is applied per-leg, not globally. For a 2-hop route with <code>50 bps</code>, each leg tolerates 0.5% independently</li>
+    <li>The <code>deadline</code> parameter is a unix timestamp. Set it to <code>now + 300</code> (5 minutes) for typical swaps</li>
+    <li>For SushiSwap V2 pools, pass <code>deadline = type(uint256).max</code> to swapV2</li>
+    <li>Batch quote calls using <a href="https://etherscan.io/address/0xcA11bde05977b3631167028862bE2a173976CA11" target="_blank" rel="noopener">Multicall3</a> to reduce RPC round-trips</li>
+    <li>zRouter uses transient storage (EIP-1153) for chaining multi-leg swaps atomically</li>
+    <li>Zero protocol fees &mdash; you only pay AMM pool fees and gas</li>
+    <li>Certain legacy pools (e.g. older Curve ETH/stETH) use non-standard ABIs that zQuoter's built-in <code>swapCurve</code> calldata may not target optimally. For these, you can get a better rate by using <code>quoteCurve</code> for the quote, then building your own calldata via zRouter's <code>execute</code> or <code>snwap</code> functions to call the pool directly. This pattern works as a general escape hatch for any external protocol or pool with a custom interface</li>
+    <li>For split and multi-hop routes, consider widening slippage (e.g. 3x your base setting, capped at ~500 bps) since per-leg slippage compounds and the first leg's price impact affects the second</li>
+  </ul>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Advanced: Custom Zaps via execute / snwap</h2>
+  <p>zRouter's <code>snwap</code> and <code>execute</code> functions let you route through any external contract &mdash; useful for legacy pools, staking protocols, or any on-chain action that isn't natively supported by the swap functions.</p>
+<pre>// Example: direct ETH→stETH via legacy Curve pool
+const CURVE_POOL = "0xDC24316b9AE028F1497c275EB9192a3Ea0f67022";
+const exchangeData = curveIface.encodeFunctionData(
+  "exchange", [0, 1, amountIn, minOut]  // int128 indices
+);
+
+const routerIface = new ethers.Interface([
+  "function multicall(bytes[]) payable returns (bytes[])",
+  "function snwap(address tokenIn, uint256 amountIn, address recipient, address tokenOut, uint256 amountOutMin, address executor, bytes executorData) payable returns (uint256 amountOut)"
+]);
+
+// snwap: executes arbitrary calldata with slippage protection
+const tx = await signer.sendTransaction({
+  to: ZROUTER,
+  data: routerIface.encodeFunctionData("snwap", [
+    ETH,            // tokenIn
+    amountIn,       // amountIn
+    me,             // recipient
+    STETH,          // tokenOut
+    minOut,         // amountOutMin (enforced by router)
+    CURVE_POOL,     // executor (target contract)
+    exchangeData    // calldata forwarded to executor
+  ]),
+  value: amountIn
+});</pre>
+  <p><code>snwap</code> measures the recipient's balance change and reverts if <code>amountOutMin</code> isn't met &mdash; so you get slippage protection regardless of the external contract's interface.</p>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <h2>Source</h2>
+  <ul>
+    <li><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="https://etherscan.io/address/0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef#code" target="_blank" rel="noopener">zQuoter verified source</a></li>
+    <li><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code" target="_blank" rel="noopener">zRouter verified source</a></li>
+  </ul>
+</div>
+
+<script>
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
+}
+</script>
+</body>
+</html>
