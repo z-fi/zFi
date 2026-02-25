@@ -6,7 +6,14 @@
 // Disabling the Yul optimizer with via_ir keeps contract under EIP-170 (24,576 bytes).
 pragma solidity ^0.8.33;
 
-zQuoter constant ZQUOTER_BASE = zQuoter(0x658bF1A6608210FDE7310760f391AD4eC8006A5F);
+interface IZQuoterBase {
+    function quoteV2(bool, address, address, uint256, bool) external view returns (uint256, uint256);
+    function quoteV3(bool, address, address, uint24, uint256) external view returns (uint256, uint256);
+    function quoteV4(bool, address, address, uint24, int24, address, uint256) external view returns (uint256, uint256);
+    function quoteZAMM(bool, uint256, address, address, uint256, uint256, uint256) external view returns (uint256, uint256);
+}
+
+IZQuoterBase constant _BASE = IZQuoterBase(0x658bF1A6608210FDE7310760f391AD4eC8006A5F);
 
 contract zQuoter {
     enum AMM {
@@ -35,68 +42,23 @@ contract zQuoter {
         view
         returns (Quote memory best, Quote[] memory quotes)
     {
-        (best, quotes) = ZQUOTER_BASE.getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
-        // Sanity: reject exact-out best that is >5x cheaper than V2.
-        // Catches bogus results from low-liquidity pools (e.g. DAI/WETH V3 1bp).
-        if (exactOut && best.amountIn > 0) {
-            (uint256 v2In,) = quoteV2(true, tokenIn, tokenOut, swapAmount, false);
-            if (v2In > 0 && best.amountIn * 5 < v2In) {
-                // Also neuter bogus entries in the quotes array so split routing
-                // doesn't pick them up as candidates.
-                for (uint256 i; i < quotes.length; ++i) {
-                    if (quotes[i].amountIn > 0 && quotes[i].amountIn * 5 < v2In) {
-                        quotes[i].amountIn = 0;
-                        quotes[i].amountOut = 0;
-                    }
-                }
-                best = Quote(AMM.UNI_V2, 30, v2In, swapAmount);
+        (best, quotes) = zQuoter(address(_BASE)).getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        // Reject exact-out V3 best if round-trip proves phantom liquidity.
+        // Reject exact-out V3 best if round-trip proves phantom liquidity.
+        // Only neuter the specific fee tier that failed — other V3 tiers (e.g. 30bp) may be healthy.
+        while (exactOut && best.source == AMM.UNI_V3 && best.amountIn > 0) {
+            (, uint256 rt) = _BASE.quoteV3(false, tokenIn, tokenOut, uint24(best.feeBps * 100), best.amountIn);
+            if (rt * 10 >= swapAmount * 9) break; // healthy — keep it
+            uint256 badFee = best.feeBps;
+            best = Quote(AMM.UNI_V2, 0, 0, 0);
+            for (uint256 i; i < quotes.length; ++i) {
+                if (quotes[i].source == AMM.UNI_V3 && quotes[i].feeBps == badFee) { quotes[i].amountIn = 0; quotes[i].amountOut = 0; continue; }
+                if (quotes[i].amountIn > 0 && (best.amountIn == 0 || quotes[i].amountIn < best.amountIn)) best = quotes[i];
             }
+            // Loop: if new best is also V3, round-trip check it too
         }
     }
 
-    function quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi)
-        public
-        view
-        returns (uint256 amountIn, uint256 amountOut)
-    {
-        return ZQUOTER_BASE.quoteV2(exactOut, tokenIn, tokenOut, swapAmount, sushi);
-    }
-
-    function quoteV3(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount)
-        public
-        view
-        returns (uint256 amountIn, uint256 amountOut)
-    {
-        return ZQUOTER_BASE.quoteV3(exactOut, tokenIn, tokenOut, fee, swapAmount);
-    }
-
-    function quoteV4(
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint24 fee,
-        int24 tickSpacing,
-        address hooks,
-        uint256 swapAmount
-    ) public view returns (uint256 amountIn, uint256 amountOut) {
-        return ZQUOTER_BASE.quoteV4(exactOut, tokenIn, tokenOut, fee, tickSpacing, hooks, swapAmount);
-    }
-
-    function quoteZAMM(
-        bool exactOut,
-        uint256 feeOrHook,
-        address tokenIn,
-        address tokenOut,
-        uint256 idIn,
-        uint256 idOut,
-        uint256 swapAmount
-    ) public view returns (uint256 amountIn, uint256 amountOut) {
-        return ZQUOTER_BASE.quoteZAMM(exactOut, feeOrHook, tokenIn, tokenOut, idIn, idOut, swapAmount);
-    }
-
-    function limit(bool exactOut, uint256 quoted, uint256 bps) public pure returns (uint256) {
-        return SlippageLib.limit(exactOut, quoted, bps);
-    }
 
     function _asQuote(AMM source, uint256 amountIn, uint256 amountOut) internal pure returns (Quote memory q) {
         q.source = source;
@@ -281,8 +243,7 @@ contract zQuoter {
             if (fromSet2) {
                 bool dup;
                 for (uint256 d; d < pools1.length; ++d) {
-                    if (pools1[d] == pool) dup = true;
-                    break;
+                    if (pools1[d] == pool) { dup = true; break; }
                 }
                 if (dup) continue;
             }
@@ -670,6 +631,13 @@ contract zQuoter {
             }
 
             // ---------- FAST PATH #2: direct single-hop (may be Curve/V2/V3/V4/zAMM/V4_HOOKED) ----------
+            // We always try hub routing too and compare, because low-liquidity pools
+            // (e.g. V3 1bp) can return tiny dust outputs that technically "succeed" but
+            // produce reverts at execution or give users effectively nothing.
+            bool _singleOk;
+            Quote memory _singleBest;
+            bytes memory _singleCallData;
+            uint256 _singleMsgValue;
             {
                 (bool ok, Quote memory best, bytes memory callData,, uint256 val) =
                     _bestSingleHop(to, exactOut, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
@@ -697,13 +665,10 @@ contract zQuoter {
                 }
 
                 if (ok) {
-                    calls = new bytes[](1);
-                    calls[0] = callData;
-                    a = best;
-                    b = Quote(AMM.UNI_V2, 0, 0, 0);
-                    msgValue = val;
-                    multicall = _mc(calls);
-                    return (a, b, calls, multicall, msgValue);
+                    _singleOk = true;
+                    _singleBest = best;
+                    _singleCallData = callData;
+                    _singleMsgValue = val;
                 }
             }
 
@@ -774,9 +739,32 @@ contract zQuoter {
                 }
             }
 
-            if (!plan.found) revert NoRoute();
+            // ---------- pick winner: single-hop vs hub routing ----------
+            // exactOut: prefer direct (reliability > marginal savings). Hub only if no direct.
+            // exactIn: hub must be >2% better to justify multi-leg complexity.
+            if (plan.found) {
+                bool hubBetter;
+                if (exactOut) {
+                    hubBetter = !_singleOk;
+                } else {
+                    hubBetter = !_singleOk || plan.scoreOut * 49 > _singleBest.amountOut * 50;
+                }
+                if (!hubBetter) plan.found = false;
+            }
 
-            // ---------- materialize the chosen plan into calls ----------
+            if (!plan.found) {
+                // Use single-hop (or revert if neither worked)
+                if (!_singleOk) revert NoRoute();
+                calls = new bytes[](1);
+                calls[0] = _singleCallData;
+                a = _singleBest;
+                b = Quote(AMM.UNI_V2, 0, 0, 0);
+                msgValue = _singleMsgValue;
+                multicall = _mc(calls);
+                return (a, b, calls, multicall, msgValue);
+            }
+
+            // ---------- materialize the chosen hub plan into calls ----------
             if (!plan.isExactOut) {
                 // exactIn path: two calls, no sweeps
                 calls = new bytes[](2);
@@ -1280,7 +1268,7 @@ contract zQuoter {
         view
         returns (uint256 out)
     {
-        try this.quoteV4(false, tokenIn, tokenOut, fee, tick, hook, amount) returns (uint256, uint256 o) {
+        try _BASE.quoteV4(false, tokenIn, tokenOut, fee, tick, hook, amount) returns (uint256, uint256 o) {
             out = o;
         } catch {
             return 0;
@@ -1558,16 +1546,16 @@ contract zQuoter {
         uint256 ai;
         uint256 ao;
         if (src == AMM.UNI_V2 || src == AMM.SUSHI) {
-            (ai, ao) = quoteV2(exactOut, tokenIn, tokenOut, amount, src == AMM.SUSHI);
+            (ai, ao) = _BASE.quoteV2(exactOut, tokenIn, tokenOut, amount, src == AMM.SUSHI);
             fee = 30;
         } else if (src == AMM.UNI_V3) {
-            (ai, ao) = quoteV3(exactOut, tokenIn, tokenOut, uint24(fee * 100), amount);
+            (ai, ao) = _BASE.quoteV3(exactOut, tokenIn, tokenOut, uint24(fee * 100), amount);
         } else if (src == AMM.UNI_V4) {
-            (ai, ao) = quoteV4(
+            (ai, ao) = _BASE.quoteV4(
                 exactOut, tokenIn, tokenOut, uint24(fee * 100), _spacingFromBps(uint16(fee)), address(0), amount
             );
         } else if (src == AMM.ZAMM) {
-            (ai, ao) = quoteZAMM(exactOut, fee, tokenIn, tokenOut, 0, 0, amount);
+            (ai, ao) = _BASE.quoteZAMM(exactOut, fee, tokenIn, tokenOut, 0, 0, amount);
         } else if (src == AMM.CURVE) {
             (uint256 cin, uint256 cout, address pool,,,,) = quoteCurve(exactOut, tokenIn, tokenOut, amount, 8);
             if (pool == address(0)) return q;

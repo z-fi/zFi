@@ -1,14 +1,13 @@
-// Cloudflare Worker: IPFS pinning proxy for Pinata + 0x swap API proxy + 1inch proxy
+// Cloudflare Worker: IPFS pinning proxy for Pinata + 0x swap API proxy
 // Deploy: wrangler deploy
-// Secrets: wrangler secret put PINATA_KEY / PINATA_SECRET / OX_API_KEY / ONEINCH_API_KEY
+// Secrets: wrangler secret put PINATA_KEY / PINATA_SECRET / OX_API_KEY
 
 const PINATA = 'https://api.pinata.cloud';
 const OX_API = 'https://api.0x.org';
-const ONEINCH_API = 'https://api.1inch.dev';
 const MAX_IMAGE = 5 * 1024 * 1024; // 5MB
 const MAX_JSON = 64 * 1024; // 64KB
 
-const ALLOWED_ORIGINS = ['https://zfi.wei.is'];
+const ALLOWED_ORIGINS = ['https://zfi.wei.is', 'http://localhost:8080'];
 
 function cors(request) {
   const origin = request.headers.get('Origin') || '';
@@ -50,21 +49,6 @@ export default {
       const oxUrl = `${OX_API}${oxPath}?${url.searchParams}`;
       const res = await fetch(oxUrl, {
         headers: { '0x-api-key': env.OX_API_KEY, '0x-version': 'v2' },
-      });
-      return new Response(res.body, {
-        status: res.status,
-        headers: { ...cors(request), 'Content-Type': 'application/json' },
-      });
-    }
-
-    // GET /1inch/*  — proxy to 1inch Swap API
-    if (url.pathname.startsWith('/1inch/')) {
-      if (request.method !== 'GET') return json(request, { error: 'GET only' }, 405);
-      const inchPath = url.pathname.slice(6); // strip "/1inch" prefix
-      if (!inchPath.startsWith('/swap/v6.0/')) return json(request, { error: 'forbidden path' }, 403);
-      const inchUrl = `${ONEINCH_API}${inchPath}?${url.searchParams}`;
-      const res = await fetch(inchUrl, {
-        headers: { 'Authorization': `Bearer ${env.ONEINCH_API_KEY}` },
       });
       return new Response(res.body, {
         status: res.status,

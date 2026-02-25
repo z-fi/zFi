@@ -1456,7 +1456,8 @@ return `<svg width="${s}" height="${s}" viewBox="0 0 400 400" xmlns="http://www.
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef";
+const ZQUOTER_ADDRESS = "0xbe105E9E7f7F392318BFf1f7651E024d96008e86";
+const ZQUOTER_BASE_ADDRESS = "0x658bF1A6608210FDE7310760f391AD4eC8006A5F";
 const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -1482,12 +1483,17 @@ const OX_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const MATCHA_IFACE = new ethers.Interface([
   "function swap(address settler, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
-// 1inch integration
-const ONEINCH_ADDRESS = "0x0000000000000000000000000000000000000000"; // wrapper contract TBD
-const ONEINCH_API_BASE = "https://zfi-pin.rosscampbell9.workers.dev/1inch";
-const ONEINCH_CHAIN_ID = 1;
-const ONEINCH_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const ONEINCH_IFACE = new ethers.Interface([
+// ParaSwap / Parasol integration
+const PARASOL_ADDRESS = "0xAC3EAF97bbDfb7611C9489D0662FfE7F517E17E6";
+const PS_API = "https://api.paraswap.io";
+const PS_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const PARASOL_IFACE = new ethers.Interface([
+  "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
+]);
+const KYBEROL_ADDRESS = "0x087735D470Fd040661d8C48935e2d665Ea682FC5";
+const KS_API = "https://aggregator-api.kyberswap.com";
+const KS_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const KYBEROL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
 // V4 USDC/PNKSTR hookless pool params (fee=10000, tickSpacing=200)
@@ -3132,16 +3138,23 @@ async function updateBalances() {
 
 // ---- AMM names ----
 const AMM_NAMES = {
-  0: "Uniswap V2", 1: "SushiSwap", 2: "zAMM",
-  3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve",
-  6: "Lido", 7: "WETH Wrap", 8: "V4 Hooked",
+  0: "zFi (Uniswap V2)", 1: "zFi (SushiSwap)", 2: "zFi (zAMM)",
+  3: "zFi (Uniswap V3)", 4: "zFi (Uniswap V4)", 5: "zFi (Curve)",
+  6: "Lido", 7: "WETH Wrap", 8: "zFi (V4 Hooked)",
 };
 // Rocket Pool direct deposit (dapp-side quoting via rETH contract)
 const ROCKET_DEPOSIT_POOL = "0xCE15294273CFb9D9b628F4D61636623decDF4fdC";
+const ROCKET_MIN_DEPOSIT = 10000000000000000n; // 0.01 ETH — Rocket Pool minimum deposit
 const ROCKET_DEPOSIT_ABI = ["function getMaximumDepositAmount() view returns (uint256)"];
 const RETH_RATE_ABI = ["function getRethValue(uint256) view returns (uint256)", "function getEthValue(uint256) view returns (uint256)"];
 const ROCKET_DEPOSIT_IFACE = new ethers.Interface(ROCKET_DEPOSIT_ABI);
 const RETH_RATE_IFACE = new ethers.Interface(RETH_RATE_ABI);
+
+// ---- Curve exchange ABI helpers (avoid re-parsing per call) ----
+const CURVE_CRYPTO_EXCHANGE_IFACE = new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"]);
+const CURVE_STABLE_EXCHANGE_IFACE = new ethers.Interface(["function exchange(int128,int128,uint256,uint256) payable"]);
+const CURVE_STABLE_UNDERLYING_IFACE = new ethers.Interface(["function exchange_underlying(int128,int128,uint256,uint256) payable"]);
+const CURVE_GET_DY_IFACE = new ethers.Interface(["function get_dy(uint256,uint256,uint256) view returns (uint256)"]);
 
 // ---- Hoisted ABIs / Interfaces (avoid re-parsing per call) ----
 const QUOTER_IFACE = new ethers.Interface([
@@ -3149,9 +3162,7 @@ const QUOTER_IFACE = new ethers.Interface([
   "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
   "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
-  "function quoteV4(bool,address,address,uint24,int24,address,uint256) view returns (uint256 amountIn, uint256 amountOut)",
   "function buildSplitSwapHooked(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
-  "function quoteZAMM(bool exactOut,uint256 feeOrHook,address tokenIn,address tokenOut,uint256 idIn,uint256 idOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
   "function build3HopMulticall(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) c, bytes[] calls, bytes multicall, uint256 msgValue)",
   "function buildHybridSplit(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function quoteLido(bool exactOut,address tokenOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
@@ -3170,6 +3181,7 @@ const ROUTER_IFACE = new ethers.Interface([
   "function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)",
   "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
   "function snwap(address tokenIn, uint256 amountIn, address recipient, address tokenOut, uint256 amountOutMin, address executor, bytes executorData) payable returns (uint256 amountOut)",
+  "function swapCurve(address to, bool exactOut, address[11] route, uint256[4][5] swapParams, address[5] basePools, uint256 swapAmount, uint256 amountLimit, uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
 ]);
 const ZORG_BUYSHARES_IFACE = new ethers.Interface([
   "function buyShares(address payToken, uint256 shareAmount, uint256 maxPay)",
@@ -3182,11 +3194,6 @@ const ZORG_RAGEQUIT_IFACE = new ethers.Interface([
 // ---- Hoisted ERC20 approve ABI (avoid re-parsing per approval tx) ----
 const ERC20_APPROVE_ABI = ["function approve(address,uint256) returns (bool)"];
 
-// ---- Hoisted Curve exchange interfaces (avoid re-parsing per quote) ----
-const CURVE_CRYPTO_EXCHANGE_IFACE = new ethers.Interface(["function exchange(uint256,uint256,uint256,uint256) payable"]);
-const CURVE_STABLE_EXCHANGE_IFACE = new ethers.Interface(["function exchange(int128,int128,uint256,uint256) payable"]);
-const CURVE_STABLE_UNDERLYING_IFACE = new ethers.Interface(["function exchange_underlying(int128,int128,uint256,uint256) payable"]);
-const CURVE_GET_DY_IFACE = new ethers.Interface(["function get_dy(uint256,uint256,uint256) view returns (uint256)"]);
 
 // ---- Quote refresh timer ----
 let _refreshTimer = null;
@@ -3708,6 +3715,10 @@ function _getCached(rpc, addr, abi) {
   return c;
 }
 function getQuoterContract(rpc) { return _getCached(rpc, ZQUOTER_ADDRESS, QUOTER_IFACE); }
+const QUOTER_BASE_IFACE = new ethers.Interface([
+  "function quoteZAMM(bool exactOut,uint256 feeOrHook,address tokenIn,address tokenOut,uint256 idIn,uint256 idOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
+]);
+function getQuoterBaseContract(rpc) { return _getCached(rpc, ZQUOTER_BASE_ADDRESS, QUOTER_BASE_IFACE); }
 function getWeinsContract(rpc) { return _getCached(rpc, WEINS_ADDRESS, WEINS_ABI); }
 
 // ---- zOrg swap+stake helpers ----
@@ -3753,8 +3764,8 @@ async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
   const fee = BigInt(toData._feeOrHook);
 
   return await quoteRPC.call(async (rpc) => {
-    const quoter = getQuoterContract(rpc);
-    const result = await quoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, amountIn, { blockTag: "latest" });
+    const baseQuoter = getQuoterBaseContract(rpc);
+    const result = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, amountIn, { blockTag: "latest" });
     const amountOut = result.amountOut;
     const slipOut = amountOut * (10000n - BigInt(slippageBps)) / 10000n;
 
@@ -3776,7 +3787,7 @@ async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
     const refAmount = 10n ** 16n; // 0.01 ETH
     let spotOut = 0n;
     try {
-      const spot = await quoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, { blockTag: "latest" });
+      const spot = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, { blockTag: "latest" });
       spotOut = spot.amountOut;
     } catch {}
 
@@ -4184,22 +4195,39 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
   });
 }
 
+// ---- External API price cache (5s TTL, prevents re-fetch on rapid re-quotes) ----
+const _extPriceCache = new Map();
+const _extPriceTTL = 5000;
+function cachedFetch(key, fetchFn) {
+  const cached = _extPriceCache.get(key);
+  if (cached && Date.now() - cached.t < _extPriceTTL) return Promise.resolve(cached.v);
+  return fetchFn().then(v => {
+    _extPriceCache.set(key, { v, t: Date.now() });
+    if (_extPriceCache.size > 50) _extPriceCache.delete(_extPriceCache.keys().next().value);
+    return v;
+  });
+}
+
 // ---- 0x / Matcha API helpers ----
 function ox0xToken(addr) {
   return addr === ZERO_ADDRESS ? OX_ETH_SENTINEL : addr;
 }
 async function get0xPrice(sellToken, buyToken, sellAmount) {
   if (MATCHA_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    chainId: String(OX_CHAIN_ID),
-    sellToken: ox0xToken(sellToken),
-    buyToken: ox0xToken(buyToken),
-    taker: MATCHA_ADDRESS,
-    sellAmount: sellAmount.toString(),
-  });
-  const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/price?${params}`);
-  if (!resp.ok) return null;
-  return resp.json();
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 3000);
+  try {
+    const params = new URLSearchParams({
+      chainId: String(OX_CHAIN_ID),
+      sellToken: ox0xToken(sellToken),
+      buyToken: ox0xToken(buyToken),
+      taker: MATCHA_ADDRESS,
+      sellAmount: sellAmount.toString(),
+    });
+    const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/price?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    return resp.json();
+  } finally { clearTimeout(tid); }
 }
 async function get0xQuote(sellToken, buyToken, sellAmount, slippageBps) {
   if (MATCHA_ADDRESS === ZERO_ADDRESS) return null;
@@ -4216,34 +4244,88 @@ async function get0xQuote(sellToken, buyToken, sellAmount, slippageBps) {
   return resp.json();
 }
 
-// ---- 1inch API helpers ----
-function inch1Token(addr) {
-  return addr === ZERO_ADDRESS ? ONEINCH_ETH_SENTINEL : addr;
+// ParaSwap API helpers
+function psToken(addr) {
+  return addr === ZERO_ADDRESS ? PS_ETH_SENTINEL : addr;
 }
-async function get1inchPrice(sellToken, buyToken, sellAmount) {
-  if (ONEINCH_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    src: inch1Token(sellToken),
-    dst: inch1Token(buyToken),
-    amount: sellAmount.toString(),
+async function getParaswapPrice(sellToken, buyToken, amount, srcDecimals, destDecimals, exactOut = false) {
+  if (PARASOL_ADDRESS === ZERO_ADDRESS) return null;
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 3000);
+  try {
+    const side = exactOut ? "BUY" : "SELL";
+    const params = new URLSearchParams({
+      srcToken: psToken(sellToken),
+      destToken: psToken(buyToken),
+      amount: amount.toString(),
+      srcDecimals: String(srcDecimals),
+      destDecimals: String(destDecimals),
+      side,
+      network: "1",
+      version: "6.2",
+    });
+    const resp = await fetch(`${PS_API}/prices?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json.priceRoute || null;
+  } finally { clearTimeout(tid); }
+}
+async function getParaswapQuote(priceRoute, sellToken, buyToken, slippageBps) {
+  if (PARASOL_ADDRESS === ZERO_ADDRESS) return null;
+  const body = {
+    srcToken: psToken(sellToken),
+    destToken: psToken(buyToken),
+    srcDecimals: priceRoute.srcDecimals,
+    destDecimals: priceRoute.destDecimals,
+    priceRoute,
+    userAddress: PARASOL_ADDRESS,
+    partner: "zFi",
+    slippage: slippageBps,
+  };
+  const resp = await fetch(`${PS_API}/transactions/1?ignoreChecks=true`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
-  const resp = await fetch(`${ONEINCH_API_BASE}/swap/v6.0/${ONEINCH_CHAIN_ID}/quote?${params}`);
   if (!resp.ok) return null;
   return resp.json();
 }
-async function get1inchQuote(sellToken, buyToken, sellAmount, slippageBps) {
-  if (ONEINCH_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    src: inch1Token(sellToken),
-    dst: inch1Token(buyToken),
-    amount: sellAmount.toString(),
-    from: ONEINCH_ADDRESS,
-    slippage: String(slippageBps / 100), // bps → percentage
-    disableEstimate: 'true',
+
+// KyberSwap API helpers
+function ksToken(addr) {
+  return addr === ZERO_ADDRESS ? KS_ETH_SENTINEL : addr;
+}
+async function getKyberPrice(sellToken, buyToken, sellAmount) {
+  if (KYBEROL_ADDRESS === ZERO_ADDRESS) return null;
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 3000);
+  try {
+    const params = new URLSearchParams({
+      tokenIn: ksToken(sellToken),
+      tokenOut: ksToken(buyToken),
+      amountIn: sellAmount.toString(),
+    });
+    const resp = await fetch(`${KS_API}/ethereum/api/v1/routes?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json.data?.routeSummary || null;
+  } finally { clearTimeout(tid); }
+}
+async function getKyberQuote(routeSummary, slippageBps) {
+  if (KYBEROL_ADDRESS === ZERO_ADDRESS) return null;
+  const resp = await fetch(`${KS_API}/ethereum/api/v1/route/build`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      routeSummary,
+      sender: KYBEROL_ADDRESS,
+      recipient: KYBEROL_ADDRESS,
+      slippageTolerance: slippageBps,
+    }),
   });
-  const resp = await fetch(`${ONEINCH_API_BASE}/swap/v6.0/${ONEINCH_CHAIN_ID}/swap?${params}`);
   if (!resp.ok) return null;
-  return resp.json();
+  const json = await resp.json();
+  return json.data || null;
 }
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
@@ -4375,17 +4457,28 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ]) });
     }
     } // end !_skipSplitRoutes
-    // Fire 0x + 1inch prices in parallel with Multicall3 batches
-    const ox0xPriceP = get0xPrice(fromData.address, toData.address, amountIn).catch(() => null);
-    const inch1PriceP = get1inchPrice(fromData.address, toData.address, amountIn).catch(() => null);
-    const allCalls = [
-      mc3ViewBatch(rpc, heavyEntries),
-      mc3ViewBatch(rpc, mc3Entries),
-    ];
-    const settled = await Promise.allSettled(allCalls);
-    const [heavyMc3Result, mc3Result] = settled;
+    // Fire 0x + ParaSwap + KyberSwap prices in parallel with Multicall3 batch
+    const _cacheKey = `${fromData.address}-${toData.address}-${amountIn}`;
+    const ox0xPriceP = cachedFetch(`0x:${_cacheKey}`, () => get0xPrice(fromData.address, toData.address, amountIn)).catch(() => null);
+    const psPriceP = cachedFetch(`ps:${_cacheKey}`, () => getParaswapPrice(fromData.address, toData.address, amountIn, fromData.decimals, toData.decimals, false)).catch(() => null);
+    const ksPriceP = cachedFetch(`ks:${_cacheKey}`, () => getKyberPrice(fromData.address, toData.address, amountIn)).catch(() => null);
+    // Merge light + heavy entries into a single Multicall3 batch (1 RPC call instead of 2)
+    const heavyOffset = mc3Entries.length;
+    const allEntries = [...mc3Entries, ...heavyEntries];
+    let mc3All = null;
+    try { mc3All = await mc3ViewBatch(rpc, allEntries); } catch (_) {}
+    let mc3 = mc3All ? mc3All.slice(0, heavyOffset) : null;
+    let heavyMc3 = mc3All ? mc3All.slice(heavyOffset) : null;
+    // Fallback: if merged batch failed (RPC gas limit), retry as two separate calls
+    if (!mc3All) {
+      const settled = await Promise.allSettled([
+        mc3ViewBatch(rpc, heavyEntries),
+        mc3ViewBatch(rpc, mc3Entries),
+      ]);
+      heavyMc3 = settled[0].status === 'fulfilled' ? settled[0].value : null;
+      mc3 = settled[1].status === 'fulfilled' ? settled[1].value : null;
+    }
     // Decode heavy batch
-    const heavyMc3 = heavyMc3Result.status === 'fulfilled' ? heavyMc3Result.value : null;
     let bestResult = mc3AsSettled(heavyMc3, _heavyBestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
     // Fallback: if heavy batch failed entirely (RPC gas/compute limit), retry the
     // essential buildBestSwapViaETHMulticall as a standalone call.
@@ -4405,7 +4498,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const hybridSplitResult = mc3AsSettled(heavyMc3, _heavyHybridIdx, QUOTER_IFACE, "buildHybridSplit");
     const v4SplitResult = isPNKSTR ? mc3AsSettled(heavyMc3, _heavyV4SplitIdx, QUOTER_IFACE, "buildSplitSwapHooked") : undefined;
     // Decode light Multicall3 batch into settled-style objects
-    const mc3 = mc3Result.status === 'fulfilled' ? mc3Result.value : null;
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     let curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
     // Fallback: if mc3 failed, try direct quoteCurve call
@@ -4414,6 +4506,20 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         const cq = await quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts);
         if (cq.amountOut > 0n) curveResult = { status: 'fulfilled', value: cq };
       } catch (_) {}
+    }
+    // Fire Curve get_dy probe speculatively (don't await until Curve override block)
+    let curveProbeP = null;
+    if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
+      const c = curveResult.value;
+      if (c.bestPool !== ZERO_ADDRESS && c.amountOut > 0n) {
+        curveProbeP = (async () => {
+          try {
+            const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
+            const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), amountIn, callOpts);
+            return probeOut > 0n;
+          } catch (_) { return false; }
+        })();
+      }
     }
     let lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
     // Fallback: if mc3 failed but Lido is eligible, we know ETH→stETH is 1:1
@@ -4433,7 +4539,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       const maxDec = mc3Decode(mc3, mc3RocketMaxIdx, ROCKET_DEPOSIT_IFACE, "getMaximumDepositAmount");
       if (rethDec && maxDec) {
         const rethOut = rethDec[0], maxDeposit = maxDec[0];
-        rocketQuoteResult = (amountIn <= maxDeposit && rethOut > 0n)
+        rocketQuoteResult = (amountIn >= ROCKET_MIN_DEPOSIT && amountIn <= maxDeposit && rethOut > 0n)
           ? { status: 'fulfilled', value: { amountIn, amountOut: rethOut } }
           : { status: 'fulfilled', value: { amountIn: 0n, amountOut: 0n } };
       }
@@ -4488,12 +4594,11 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       allQuotes: null,
     };
 
-    // Check if split beats best (skip if a Curve leg would embed broken swapCurve for native-ETH pool)
+    // Check if split beats best
     if (splitResult.status === 'fulfilled') {
       const s = splitResult.value;
       const splitTotal = s.legs[0].amountOut + s.legs[1].amountOut;
-      const splitHasCurve = fromData.address === ZERO_ADDRESS && (Number(s.legs[0].source) === 5 || Number(s.legs[1].source) === 5);
-      if (splitTotal > bestOutput && s.legs[0].amountOut > 0n && s.legs[1].amountOut > 0n && !splitHasCurve) {
+      if (splitTotal > bestOutput && s.legs[0].amountOut > 0n && s.legs[1].amountOut > 0n) {
         result.expectedOutput = splitTotal;
         result.multicall = s.multicall;
         result.msgValue = s.msgValue ?? 0n;
@@ -4528,7 +4633,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     if (curveResult?.status === 'fulfilled') {
       const c = curveResult.value;
       if (c.amountOut > 0n) {
-        result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        result.allQuotes.push({ source: "zFi (Curve)", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
       }
     }
     // Merge Lido quote if available
@@ -4550,8 +4655,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     if (threeHopResult?.status === 'fulfilled' && threeHopResult.value) {
       const h3 = threeHopResult.value;
       const h3Output = h3.c.amountOut;
-      const h3HasCurve = fromData.address === ZERO_ADDRESS && (Number(h3.a.source) === 5 || Number(h3.b.source) === 5 || Number(h3.c.source) === 5);
-      if (h3Output > result.expectedOutput && h3Output > 0n && !h3HasCurve) {
+      if (h3Output > result.expectedOutput && h3Output > 0n) {
         result.expectedOutput = h3Output;
         result.multicall = h3.multicall;
         result.calls = h3.calls;
@@ -4569,8 +4673,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       const hs = hybridSplitResult.value;
       const hsTotal = hs.legs[0].amountOut + hs.legs[1].amountOut;
       const isTrueSplit = hs.legs[0].amountOut > 0n && hs.legs[1].amountOut > 0n;
-      const hsHasCurve = fromData.address === ZERO_ADDRESS && (Number(hs.legs[0].source) === 5 || Number(hs.legs[1].source) === 5);
-      if (hsTotal > result.expectedOutput && hsTotal > 0n && !hsHasCurve) {
+      if (hsTotal > result.expectedOutput && hsTotal > 0n) {
         result.expectedOutput = hsTotal;
         result.multicall = hs.multicall;
         result.msgValue = hs.msgValue ?? 0n;
@@ -4607,12 +4710,11 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       if (result.allQuotes && isTrueSplit && hsTotal > 0n) {
         const hookedLeg = Number(hs.legs[0].source) === 8 ? hs.legs[0] : (Number(hs.legs[1].source) === 8 ? hs.legs[1] : null);
         if (hookedLeg) {
-          result.allQuotes.push({ source: "V4 Hooked (split)", sourceId: 8, feeBps: hookedLeg.feeBps, amountIn, amountOut: hsTotal });
+          result.allQuotes.push({ source: "zFi (V4 Hooked split)", sourceId: 8, feeBps: hookedLeg.feeBps, amountIn, amountOut: hsTotal });
         }
       }
 
-      const v4HasCurve = fromData.address === ZERO_ADDRESS && (Number(hs.legs[0].source) === 5 || Number(hs.legs[1].source) === 5);
-      if (hsTotal > result.expectedOutput && hsTotal > 0n && !v4HasCurve) {
+      if (hsTotal > result.expectedOutput && hsTotal > 0n) {
         result.expectedOutput = hsTotal;
         result.multicall = hs.multicall;
         result.msgValue = hs.msgValue ?? 0n;
@@ -4683,44 +4785,42 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
-    // ETH→Curve: bypass swapCurve (which may misclassify pool ABI) and use
-    // execute to forward native ETH directly. Independently probe the pool to
-    // determine the correct exchange ABI (crypto uint256 vs stable int128).
+    // ETH→Curve: legacy native-ETH pools (stETH/ETH) need execute to forward
+    // msg.value directly. Modern WETH pools are left to the quoter's swapCurve
+    // which wraps ETH→WETH correctly. We probe get_dy(uint256) to detect crypto
+    // pools — if it succeeds the pool uses WETH and swapCurve handles it fine.
     if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
       const c = curveResult.value;
       if (c.bestPool !== ZERO_ADDRESS && c.amountOut > 0n && c.amountOut >= result.expectedOutput) {
-        // Probe: try crypto get_dy(uint256,uint256,uint256) to determine true pool type
-        let isCrypto = false;
-        try {
-          const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
-          const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), amountIn, callOpts);
-          isCrypto = probeOut > 0n;
-        } catch (_) {}
-        const useUnderlying = c.usedUnderlying && !isCrypto;
-        const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
-        const exchangeIface = isCrypto
-          ? CURVE_CRYPTO_EXCHANGE_IFACE
-          : useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
-        const minOut = c.amountOut * (10000n - BigInt(slippageBps)) / 10000n;
-        const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, amountIn, minOut]);
-        const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, amountIn, exchangeData]);
-        const sweepOut = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
-        const calls = [executeCall, sweepOut];
-        const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
-        result.expectedOutput = c.amountOut;
-        result.multicall = multicall;
-        result.calls = calls;
-        result.msgValue = amountIn;
-        result.isTwoHop = false;
-        result.isSplit = false;
-        result.splitLegs = null;
-        result.sourceA = "Curve";
-        result.sourceB = null;
+        const isCrypto = curveProbeP ? await curveProbeP : false;
+        // Skip override for crypto/WETH pools — swapCurve handles them correctly
+        if (!isCrypto) {
+          const useUnderlying = c.usedUnderlying;
+          const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
+          const exchangeIface = useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
+          const minOut = c.amountOut * (10000n - BigInt(slippageBps)) / 10000n;
+          const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, amountIn, minOut]);
+          const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, amountIn, exchangeData]);
+          const sweepOut = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
+          const calls = [executeCall, sweepOut];
+          const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+          result.expectedOutput = c.amountOut;
+          result.multicall = multicall;
+          result.calls = calls;
+          result.msgValue = amountIn;
+          result.isTwoHop = false;
+          result.isSplit = false;
+          result.splitLegs = null;
+          result.sourceA = "zFi (Curve)";
+          result.sourceB = null;
+        }
       }
     }
 
+    // External APIs: resolve all in parallel
+    const [oxPrice, psPrice, ksPrice] = await Promise.all([ox0xPriceP, psPriceP, ksPriceP]);
+
     // 0x / Matcha: compare against all sources
-    const oxPrice = await ox0xPriceP;
     if (oxPrice && oxPrice.buyAmount) {
       const oxOut = BigInt(oxPrice.buyAmount);
       if (result.allQuotes) {
@@ -4729,6 +4829,8 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       if (oxOut > result.expectedOutput) {
         result.expectedOutput = oxOut;
         result.is0x = true;
+        result.isParaswap = false;
+        result.isKyber = false;
         result.ox = oxPrice;
         result.sourceA = "0x";
         result.sourceB = null;
@@ -4738,19 +4840,39 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
-    // 1inch: compare against all sources
-    const inch1Price = await inch1PriceP;
-    if (inch1Price && inch1Price.dstAmount) {
-      const inch1Out = BigInt(inch1Price.dstAmount);
+    // ParaSwap: compare against all sources
+    if (psPrice && psPrice.destAmount) {
+      const psOut = BigInt(psPrice.destAmount);
       if (result.allQuotes) {
-        result.allQuotes.push({ source: "1inch", sourceId: -3, feeBps: 0n, amountIn, amountOut: inch1Out });
+        result.allQuotes.push({ source: "ParaSwap", sourceId: -3, feeBps: 0n, amountIn, amountOut: psOut });
       }
-      if (inch1Out > result.expectedOutput) {
-        result.expectedOutput = inch1Out;
-        result.is1inch = true;
+      if (psOut > result.expectedOutput) {
+        result.expectedOutput = psOut;
+        result.isParaswap = true;
         result.is0x = false;
-        result.inch1 = inch1Price;
-        result.sourceA = "1inch";
+        result.isKyber = false;
+        result.psPriceRoute = psPrice;
+        result.sourceA = "ParaSwap";
+        result.sourceB = null;
+        result.isTwoHop = false;
+        result.isSplit = false;
+        result.splitLegs = null;
+      }
+    }
+
+    // KyberSwap: compare against all sources
+    if (ksPrice && ksPrice.amountOut) {
+      const ksOut = BigInt(ksPrice.amountOut);
+      if (result.allQuotes) {
+        result.allQuotes.push({ source: "KyberSwap", sourceId: -4, feeBps: 0n, amountIn, amountOut: ksOut });
+      }
+      if (ksOut > result.expectedOutput) {
+        result.expectedOutput = ksOut;
+        result.isKyber = true;
+        result.is0x = false;
+        result.isParaswap = false;
+        result.ksRouteSummary = ksPrice;
+        result.sourceA = "KyberSwap";
         result.sourceB = null;
         result.isTwoHop = false;
         result.isSplit = false;
@@ -4822,6 +4944,8 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       hookFee, hookTick, hookAddr
     ]) });
     // 0x Swap API v2 does not support exact-out (no buyAmount param)
+    // ParaSwap supports exact-out (side=BUY)
+    const psPriceP = cachedFetch(`ps-out:${fromData.address}-${toData.address}-${amountOut}`, () => getParaswapPrice(fromData.address, toData.address, amountOut, fromData.decimals, toData.decimals, true)).catch(() => null);
     let mc3 = null;
     try { mc3 = await mc3ViewBatch(rpc, mc3Entries); } catch (_) {}
     let bestResult = mc3AsSettled(mc3, _mc3BestIdx, QUOTER_IFACE, "buildBestSwapViaETHMulticall");
@@ -4839,6 +4963,20 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     }
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     const curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
+    // Fire Curve get_dy probe speculatively (don't await until Curve override block)
+    let curveProbeP = null;
+    if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
+      const c = curveResult.value;
+      if (c.bestPool !== ZERO_ADDRESS && c.amountIn > 0n) {
+        curveProbeP = (async () => {
+          try {
+            const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
+            const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), c.amountIn, callOpts);
+            return probeOut > 0n;
+          } catch (_) { return false; }
+        })();
+      }
+    }
     const lidoQuoteResult = mc3LidoIdx >= 0 ? mc3AsSettled(mc3, mc3LidoIdx, QUOTER_IFACE, "quoteLido") : undefined;
     let rocketQuoteResult;
     if (isRocketEligible) {
@@ -4846,7 +4984,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       const maxDec = mc3Decode(mc3, mc3RocketMaxIdx, ROCKET_DEPOSIT_IFACE, "getMaximumDepositAmount");
       if (rethDec && maxDec) {
         const ethNeeded = rethDec[0], maxDeposit = maxDec[0];
-        rocketQuoteResult = (ethNeeded <= maxDeposit && ethNeeded > 0n)
+        rocketQuoteResult = (ethNeeded >= ROCKET_MIN_DEPOSIT && ethNeeded <= maxDeposit && ethNeeded > 0n)
           ? { status: 'fulfilled', value: { amountIn: ethNeeded, amountOut } }
           : { status: 'fulfilled', value: { amountIn: 0n, amountOut: 0n } };
       }
@@ -4919,7 +5057,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     if (curveResult?.status === 'fulfilled') {
       const c = curveResult.value;
       if (c.amountIn > 0n) {
-        result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        result.allQuotes.push({ source: "zFi (Curve)", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
       }
     }
     if (lidoQuoteResult?.status === 'fulfilled') {
@@ -4981,38 +5119,53 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       }
     }
 
-    // ETH→Curve exact-out: bypass swapCurve and use execute with correct ABI.
+    // ETH→Curve exact-out: same guard — only override for legacy native-ETH pools.
     if (fromData.address === ZERO_ADDRESS && curveResult?.status === 'fulfilled') {
       const c = curveResult.value;
       if (c.bestPool !== ZERO_ADDRESS && c.amountIn > 0n && c.amountIn <= result.requiredInput) {
-        // Probe: try crypto get_dy(uint256,uint256,uint256) to determine true pool type
-        let isCrypto = false;
-        try {
-          const probePool = new ethers.Contract(c.bestPool, CURVE_GET_DY_IFACE, rpc);
-          const probeOut = await probePool.get_dy(BigInt(c.iIndex), BigInt(c.jIndex), c.amountIn, callOpts);
-          isCrypto = probeOut > 0n;
-        } catch (_) {}
-        const useUnderlying = c.usedUnderlying && !isCrypto;
-        const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
-        const exchangeIface = isCrypto
-          ? CURVE_CRYPTO_EXCHANGE_IFACE
-          : useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
-        // For exact-out: swap c.amountIn input, require at least amountOut output
-        const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, c.amountIn, amountOut]);
-        const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, c.amountIn, exchangeData]);
-        const sweepOut = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
-        const calls = [executeCall, sweepOut];
-        const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
-        result.requiredInput = c.amountIn;
-        result.expectedOutput = c.amountOut;
-        result.multicall = multicall;
-        result.calls = calls;
-        result.msgValue = c.amountIn;
+        const isCrypto = curveProbeP ? await curveProbeP : false;
+        if (!isCrypto) {
+          const useUnderlying = c.usedUnderlying;
+          const fnName = useUnderlying ? 'exchange_underlying' : 'exchange';
+          const exchangeIface = useUnderlying ? CURVE_STABLE_UNDERLYING_IFACE : CURVE_STABLE_EXCHANGE_IFACE;
+          const exchangeData = exchangeIface.encodeFunctionData(fnName, [c.iIndex, c.jIndex, c.amountIn, amountOut]);
+          const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [c.bestPool, c.amountIn, exchangeData]);
+          const sweepOut = ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]);
+          const calls = [executeCall, sweepOut];
+          const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+          result.requiredInput = c.amountIn;
+          result.expectedOutput = c.amountOut;
+          result.multicall = multicall;
+          result.calls = calls;
+          result.msgValue = c.amountIn;
+          result.isTwoHop = false;
+          result.isSplit = false;
+          result.splitLegs = null;
+          result.sourceA = "zFi (Curve)";
+          result.sourceB = null;
+        }
+      }
+    }
+
+    // ParaSwap exact-out: compare srcAmount (lower wins)
+    const psPrice = await psPriceP;
+    if (psPrice && psPrice.srcAmount) {
+      const psIn = BigInt(psPrice.srcAmount);
+      if (result.allQuotes) {
+        result.allQuotes.push({ source: "ParaSwap", sourceId: -3, feeBps: 0n, amountIn: psIn, amountOut });
+      }
+      if (psIn > 0n && psIn < result.requiredInput) {
+        result.requiredInput = psIn;
+        result.expectedOutput = BigInt(psPrice.destAmount);
+        result.isParaswap = true;
+        result.is0x = false;
+        result.isKyber = false;
+        result.psPriceRoute = psPrice;
+        result.sourceA = "ParaSwap";
+        result.sourceB = null;
         result.isTwoHop = false;
         result.isSplit = false;
         result.splitLegs = null;
-        result.sourceA = "Curve";
-        result.sourceB = null;
       }
     }
 
@@ -5668,40 +5821,82 @@ async function executeSwap() {
       }
     }
 
-    // 1inch execution: fetch firm quote and build snwap multicall
-    if (quote.is1inch) {
-      swapBtn.textContent = "Fetching 1inch route...";
+    // ParaSwap / Parasol execution: fetch firm quote and build snwap multicall
+    if (quote.isParaswap) {
+      swapBtn.textContent = "Fetching ParaSwap route...";
       const toData = tokens[toSnap];
-      const inch1Q = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!inch1Q || !inch1Q.tx) {
-        if (!quote.multicall) throw new Error("1inch quote unavailable and no on-chain route");
-        quote.is1inch = false;
+      const psQ = await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, slippageBps);
+      if (!psQ || !psQ.data) {
+        if (!quote.multicall) throw new Error("ParaSwap quote unavailable and no on-chain route");
+        quote.isParaswap = false;
       } else {
         const isEthIn = fromData.address === ZERO_ADDRESS;
         const receiver = getReceiver();
-        const inch1Data = ONEINCH_IFACE.encodeFunctionData('swap', [
-          inch1Q.tx.to,
+        const parasolData = PARASOL_IFACE.encodeFunctionData('swap', [
+          psQ.to,
           fromData.address,
           toData.address,
           receiver,
-          inch1Q.tx.data,
+          psQ.data,
         ]);
-        const minOut = BigInt(inch1Q.dstAmount) * BigInt(10000 - slippageBps) / 10000n;
+        const psAmountIn = quote.exactOut ? BigInt(quote.psPriceRoute.srcAmount) : amountIn;
+        const psMinBuy = quote.exactOut
+          ? BigInt(quote.psPriceRoute.destAmount)
+          : BigInt(quote.psPriceRoute.destAmount) * (10000n - BigInt(slippageBps)) / 10000n;
+        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+          fromData.address,
+          isEthIn ? 0n : psAmountIn,
+          receiver,
+          toData.address,
+          psMinBuy,
+          PARASOL_ADDRESS,
+          parasolData,
+        ]);
+        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+        quote.multicall = txData;
+        quote.calls = [snwapCall];
+        quote.msgValue = isEthIn ? psAmountIn : 0n;
+        // Stash for permit2 rebuild (needs amountIn=0 variant)
+        quote._psMinBuy = psMinBuy;
+        quote._psParasolData = parasolData;
+      }
+    }
+
+    // KyberSwap / Kyberol execution: fetch firm quote and build snwap multicall
+    if (quote.isKyber) {
+      swapBtn.textContent = "Fetching KyberSwap route...";
+      const toData = tokens[toSnap];
+      const ksQ = await getKyberQuote(quote.ksRouteSummary, slippageBps);
+      if (!ksQ || !ksQ.data) {
+        if (!quote.multicall) throw new Error("KyberSwap quote unavailable and no on-chain route");
+        quote.isKyber = false;
+      } else {
+        const isEthIn = fromData.address === ZERO_ADDRESS;
+        const receiver = getReceiver();
+        const kyberolData = KYBEROL_IFACE.encodeFunctionData('swap', [
+          ksQ.routerAddress,
+          fromData.address,
+          toData.address,
+          receiver,
+          ksQ.data,
+        ]);
+        const ksMinBuy = BigInt(quote.ksRouteSummary.amountOut) * (10000n - BigInt(slippageBps)) / 10000n;
         const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
           fromData.address,
           isEthIn ? 0n : amountIn,
           receiver,
           toData.address,
-          minOut,
-          ONEINCH_ADDRESS,
-          inch1Data,
+          ksMinBuy,
+          KYBEROL_ADDRESS,
+          kyberolData,
         ]);
         txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
         quote.multicall = txData;
         quote.calls = [snwapCall];
         quote.msgValue = isEthIn ? amountIn : 0n;
-        quote._inch1MinBuy = minOut.toString();
-        quote._inch1Data = inch1Data;
+        // Stash for permit2 rebuild (needs amountIn=0 variant)
+        quote._ksMinBuy = ksMinBuy;
+        quote._ksKyberolData = kyberolData;
       }
     }
 
@@ -5768,12 +5963,22 @@ async function executeSwap() {
                   BigInt(quote._oxMinBuy), MATCHA_ADDRESS, quote._oxMatchaData,
                 ]);
                 innerCalls = [snwapCall0];
-              } else if (quote.is1inch) {
+              }
+              else if (quote.isParaswap) {
                 const toData = tokens[toSnap];
                 const receiver = getReceiver();
                 const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
                   fromData.address, 0n, receiver, toData.address,
-                  BigInt(quote._inch1MinBuy), ONEINCH_ADDRESS, quote._inch1Data,
+                  quote._psMinBuy, PARASOL_ADDRESS, quote._psParasolData,
+                ]);
+                innerCalls = [snwapCall0];
+              }
+              else if (quote.isKyber) {
+                const toData = tokens[toSnap];
+                const receiver = getReceiver();
+                const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
+                  fromData.address, 0n, receiver, toData.address,
+                  quote._ksMinBuy, KYBEROL_ADDRESS, quote._ksKyberolData,
                 ]);
                 innerCalls = [snwapCall0];
               }
@@ -5835,19 +6040,42 @@ async function executeSwap() {
               txData = fresh.multicall;
               quote.msgValue = fresh.msgValue;
             }
-          } else if (fresh.is1inch) {
+          } else if (fresh.isParaswap) {
             const toData = tokens[toSnap];
-            const inch1Q = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
-            if (inch1Q && inch1Q.tx) {
+            const psQ = await getParaswapQuote(fresh.psPriceRoute, fromData.address, toData.address, slippageBps);
+            if (psQ && psQ.data) {
               const isEthIn = fromData.address === ZERO_ADDRESS;
               const receiver = getReceiver();
-              const inch1Data = ONEINCH_IFACE.encodeFunctionData('swap', [
-                inch1Q.tx.to, fromData.address, toData.address, receiver, inch1Q.tx.data,
+              const parasolData = PARASOL_IFACE.encodeFunctionData('swap', [
+                psQ.to, fromData.address, toData.address, receiver, psQ.data,
               ]);
-              const minOut = BigInt(inch1Q.dstAmount) * BigInt(10000 - slippageBps) / 10000n;
+              const psAmountIn = fresh.exactOut ? BigInt(fresh.psPriceRoute.srcAmount) : amountIn;
+              const psMinBuy = fresh.exactOut
+                ? BigInt(fresh.psPriceRoute.destAmount)
+                : BigInt(fresh.psPriceRoute.destAmount) * (10000n - BigInt(slippageBps)) / 10000n;
+              const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+                fromData.address, isEthIn ? 0n : psAmountIn, receiver, toData.address,
+                psMinBuy, PARASOL_ADDRESS, parasolData,
+              ]);
+              txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+              quote.msgValue = isEthIn ? psAmountIn : 0n;
+            } else {
+              txData = fresh.multicall;
+              quote.msgValue = fresh.msgValue;
+            }
+          } else if (fresh.isKyber) {
+            const toData = tokens[toSnap];
+            const ksQ = await getKyberQuote(fresh.ksRouteSummary, slippageBps);
+            if (ksQ && ksQ.data) {
+              const isEthIn = fromData.address === ZERO_ADDRESS;
+              const receiver = getReceiver();
+              const kyberolData = KYBEROL_IFACE.encodeFunctionData('swap', [
+                ksQ.routerAddress, fromData.address, toData.address, receiver, ksQ.data,
+              ]);
+              const ksMinBuy = BigInt(fresh.ksRouteSummary.amountOut) * (10000n - BigInt(slippageBps)) / 10000n;
               const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
                 fromData.address, isEthIn ? 0n : amountIn, receiver, toData.address,
-                minOut, ONEINCH_ADDRESS, inch1Data,
+                ksMinBuy, KYBEROL_ADDRESS, kyberolData,
               ]);
               txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
               quote.msgValue = isEthIn ? amountIn : 0n;

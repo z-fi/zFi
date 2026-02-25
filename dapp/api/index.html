@@ -233,7 +233,7 @@ await signer.sendTransaction({
 <div class="section">
   <h2>Contracts</h2>
   <p><strong>zQuoter</strong> &mdash; read-only route discovery and calldata builder.</p>
-  <p class="addr"><a href="https://etherscan.io/address/0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef" target="_blank" rel="noopener">0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef</a></p>
+  <p class="addr"><a href="https://etherscan.io/address/0xbe105E9E7f7F392318BFf1f7651E024d96008e86" target="_blank" rel="noopener">0xbe105E9E7f7F392318BFf1f7651E024d96008e86</a></p>
   <p style="margin-top:10px"><strong>zRouter</strong> &mdash; swap executor. Send the calldata built by zQuoter here.</p>
   <p class="addr"><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4" target="_blank" rel="noopener">0x000000000000FB114709235f1ccBFfb925F600e4</a></p>
   <p style="margin-top:10px;font-size:12px;color:var(--fg-muted)">Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido. Zero protocol fees.</p>
@@ -258,7 +258,7 @@ await signer.sendTransaction({
   <p>Swap 1 ETH for USDC using ethers.js:</p>
 <pre>import { ethers } from "ethers";
 
-const ZQUOTER = "0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef";
+const ZQUOTER = "0xbe105E9E7f7F392318BFf1f7651E024d96008e86";
 const ZROUTER = "0x000000000000FB114709235f1ccBFfb925F600e4";
 
 const quoterAbi = [
@@ -383,15 +383,11 @@ const tx = await signer.sendTransaction({
   <div class="sig">quoteLido(bool exactOut, address tokenOut, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
 
   <h3>Individual AMM Quotes<span class="pill">view</span></h3>
-  <p>Low-level quoting for specific venues.</p>
+  <p>Low-level quoting for specific venues. Available on the base quoter at <code>0x658bF1A6608210FDE7310760f391AD4eC8006A5F</code>.</p>
   <div class="sig">quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV3(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV4(bool exactOut, address tokenIn, address tokenOut, uint24 fee, int24 tickSpacing, address hooks, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteZAMM(bool exactOut, uint256 feeOrHook, address tokenIn, address tokenOut, uint256 idIn, uint256 idOut, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
-
-  <h3>limit<span class="pill">pure</span></h3>
-  <p>Utility to calculate slippage-adjusted amount limits.</p>
-  <div class="sig">limit(bool exactOut, uint256 quoted, uint256 bps) &rarr; uint256</div>
 </div>
 
 <hr class="divider">
@@ -591,7 +587,7 @@ const tx = await signer.sendTransaction({
   <h2>Source</h2>
   <ul>
     <li><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a></li>
-    <li><a href="https://etherscan.io/address/0x10D7e794518b45ced364FF38C0D48dfdC586f0Ef#code" target="_blank" rel="noopener">zQuoter verified source</a></li>
+    <li><a href="https://etherscan.io/address/0xbe105E9E7f7F392318BFf1f7651E024d96008e86#code" target="_blank" rel="noopener">zQuoter verified source</a></li>
     <li><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code" target="_blank" rel="noopener">zRouter verified source</a></li>
   </ul>
 </div>

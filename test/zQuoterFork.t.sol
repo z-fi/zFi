@@ -93,6 +93,43 @@ contract zQuoterForkTest is Test {
         assertEq(best.amountOut, amount);
     }
 
+    /// @notice 3 DAI exact-out: tiny amount must still produce a sane ETH quote
+    ///         and the multicall builder must not revert.
+    function test_getQuotes_exactOut_ETH_to_DAI_small() public {
+        uint256 amount = 3e18; // 3 DAI
+        (zQuoter.Quote memory best, zQuoter.Quote[] memory quotes) = quoter.getQuotes(true, ETH, _DAI, amount);
+        assertGt(best.amountIn, 0, "must have a route");
+        // V2 reference: 3 DAI should cost roughly same order-of-magnitude as (3/100) of 100 DAI
+        (uint256 v2In,) = _BASE.quoteV2(true, ETH, _DAI, amount, false);
+        if (v2In > 0) {
+            // best should not be >5x cheaper than V2 (catches bogus V3 1bp)
+            assertGe(best.amountIn * 5, v2In, "best amountIn suspiciously low vs V2");
+        }
+        // Verify none of the individual quotes are bogus dust
+        for (uint256 i; i < quotes.length; i++) {
+            if (quotes[i].amountIn > 0 && v2In > 0) {
+                // Any neutered quote should have amountIn == 0
+                assertTrue(
+                    quotes[i].amountIn * 5 >= v2In || quotes[i].amountIn == 0,
+                    "individual quote should be neutered if bogus"
+                );
+            }
+        }
+    }
+
+    /// @notice 3 DAI exact-out via multicall: hub routing should beat any dust
+    ///         single-hop and produce valid calldata.
+    function test_multicall_exactOut_ETH_to_DAI_small() public {
+        uint256 amount = 3e18; // 3 DAI
+        (zQuoter.Quote memory qa,,,, uint256 mv) = quoter.buildBestSwapViaETHMulticall(
+            USER, USER, true, ETH, _DAI, amount, SLIPPAGE, DEADLINE, 0, 0, address(0)
+        );
+        assertGt(qa.amountIn, 0, "must find a route");
+        assertGt(mv, 0, "ETH input requires msg.value");
+        // Sanity: 3 DAI ≈ $3, ETH ≈ $2000+, so amountIn should be < 0.01 ETH
+        assertLt(qa.amountIn, 1e16, "3 DAI should cost well under 0.01 ETH");
+    }
+
     function test_getQuotes_exactOut_ETH_to_USDC() public {
         (zQuoter.Quote memory best,) = quoter.getQuotes(true, ETH, _USDC, 100e6);
         assertGt(best.amountIn, 1e16);
@@ -700,36 +737,36 @@ contract zQuoterForkTest is Test {
 
     function test_slippage_exactIn_limit() public view {
         // exactIn: minOut = floor(quoted * (10000 - bps) / 10000)
-        uint256 lim = quoter.limit(false, 1000e6, 100); // 1% slippage
+        uint256 lim = SlippageLib.limit(false, 1000e6, 100); // 1% slippage
         assertEq(lim, 990e6, "1% slippage on 1000 = 990 minOut");
     }
 
     function test_slippage_exactOut_limit() public view {
         // exactOut: maxIn = ceil(quoted * (10000 + bps) / 10000)
-        uint256 lim = quoter.limit(true, 1000e6, 100); // 1% slippage
+        uint256 lim = SlippageLib.limit(true, 1000e6, 100); // 1% slippage
         assertEq(lim, 1010e6, "1% slippage on 1000 = 1010 maxIn");
     }
 
     function test_slippage_zero_bps() public view {
-        assertEq(quoter.limit(false, 1000e6, 0), 1000e6, "0 bps: no change");
-        assertEq(quoter.limit(true, 1000e6, 0), 1000e6, "0 bps: no change");
+        assertEq(SlippageLib.limit(false, 1000e6, 0), 1000e6, "0 bps: no change");
+        assertEq(SlippageLib.limit(true, 1000e6, 0), 1000e6, "0 bps: no change");
     }
 
     function test_slippage_max_bps_reverts() public {
         vm.expectRevert();
-        quoter.limit(false, 1000e6, 10000); // 100% = BPS, should revert
+        SlippageLib.limit(false, 1000e6, 10000); // 100% = BPS, should revert
     }
 
     function test_slippage_high_bps() public view {
         // 50% slippage (5000 bps)
-        uint256 lim = quoter.limit(false, 1000e6, 5000);
+        uint256 lim = SlippageLib.limit(false, 1000e6, 5000);
         assertEq(lim, 500e6);
     }
 
     function test_slippage_exactOut_ceiling() public view {
         // Verify ceiling division: 1 wei quoted with 1 bps
         // maxIn = ceil(1 * 10001 / 10000) = ceil(1.0001) = 2
-        uint256 lim = quoter.limit(true, 1, 1);
+        uint256 lim = SlippageLib.limit(true, 1, 1);
         assertEq(lim, 1, "1 * 10001 / 10000 = 1 (no extra needed at this scale)");
     }
 
@@ -849,12 +886,12 @@ contract zQuoterForkTest is Test {
     // ================================================================
 
     function test_quoteV2_exactIn_ETH_USDC() public view {
-        (, uint256 ao) = quoter.quoteV2(false, ETH, _USDC, 1e18, false);
+        (, uint256 ao) = _BASE.quoteV2(false, ETH, _USDC, 1e18, false);
         assertGt(ao, 0, "V2 ETH->USDC: must have output");
     }
 
     function test_quoteV2_exactIn_sushi_ETH_USDC() public view {
-        (, uint256 ao) = quoter.quoteV2(false, ETH, _USDC, 1e18, true);
+        (, uint256 ao) = _BASE.quoteV2(false, ETH, _USDC, 1e18, true);
         // Sushi may or may not have liquidity, just check it doesn't revert
         if (ao > 0) {
             assertGt(ao, 100e6);
@@ -862,19 +899,19 @@ contract zQuoterForkTest is Test {
     }
 
     function test_quoteV2_exactOut_ETH_USDC() public view {
-        (uint256 ai,) = quoter.quoteV2(true, ETH, _USDC, 1000e6, false);
+        (uint256 ai,) = _BASE.quoteV2(true, ETH, _USDC, 1000e6, false);
         if (ai > 0) {
             assertGt(ai, 0);
         }
     }
 
     function test_quoteV3_exactIn_ETH_USDC_500() public view {
-        (, uint256 ao) = quoter.quoteV3(false, ETH, _USDC, 500, 1e18);
+        (, uint256 ao) = _BASE.quoteV3(false, ETH, _USDC, 500, 1e18);
         assertGt(ao, 0, "V3 500bp ETH->USDC");
     }
 
     function test_quoteV3_exactIn_ETH_USDC_3000() public view {
-        (, uint256 ao) = quoter.quoteV3(false, ETH, _USDC, 3000, 1e18);
+        (, uint256 ao) = _BASE.quoteV3(false, ETH, _USDC, 3000, 1e18);
         assertGt(ao, 0, "V3 3000bp ETH->USDC");
     }
 }
