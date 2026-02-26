@@ -344,7 +344,7 @@ contract FundingWorksMinter {
             sellLoot: false,
             lpBps: 1000,
             maxSlipBps: 100,
-            feeOrHook: 0
+            feeOrHook: 30 // 0.3% swap fee
         });
     }
 

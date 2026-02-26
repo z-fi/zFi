@@ -1162,7 +1162,9 @@ async function renderGallery() {
       '0xd77F85a19D242391CeEf95e2D7fe35E251593f28',
       '0x816f6f801a525eef715BF015704C2672A0abf018',
       '0x729B47e8e4fBE54268E70a169398E7a5DCA579d1',
-      '0xC455Dc876E1cF371cFf6ef5af85dA7675E3d2281'
+      '0xC455Dc876E1cF371cFf6ef5af85dA7675E3d2281',
+      '0x7dDECc13905448159d5462bF49ac7C48f348d18C',
+      '0xF792394938E553eA4cdbFa984509550A5fe335e5'
     ].map(a => a.toLowerCase()));
     const filtered = daicos.filter(d => !EXCLUDED_COINS.has(d.dao.toLowerCase()));
 
@@ -1238,12 +1240,13 @@ async function renderGallery() {
           poolR1 = decoded[1];
         } catch(e) {}
       }
+      const coinTotalSupply = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
       const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
-      const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - teamLocked;
+      const circulating = coinTotalSupply - unsold - teamLocked;
       // Price: pool spot if sale ended or pool is deep, else sale price
       const lpTokens = Number(ethers.formatEther(poolR1));
       const hasPool = poolR0 > 0n && poolR1 > 0n;
-      const poolDeep = hasPool && lpTokens > Number(COIN_SUPPLY_TOTAL) * 0.01;
+      const poolDeep = hasPool && lpTokens > coinTotalSupply * 0.01;
       const usePool = hasPool && (!saleActive || poolDeep);
       if (circulating > 0) {
         if (usePool) {
@@ -1280,12 +1283,14 @@ async function renderGallery() {
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
-      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest });
+      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam });
     }
 
-    // Group by name|symbol, stack duplicates
+    // Group by name|symbol, stack duplicates (exclude spam from grouping)
     const groups = new Map();
+    const spamCards = [];
     for (const c of cards) {
+      if (c.isSpam) { spamCards.push(c); continue; }
       if (!groups.has(c.key)) groups.set(c.key, []);
       groups.get(c.key).push(c);
     }
@@ -1317,6 +1322,8 @@ async function renderGallery() {
         grid += `</div>`;
       }
     }
+    // Append spam cards individually (hidden by CSS, no stacking)
+    for (const c of spamCards) grid += c.html;
 
     app.innerHTML = `
       <div class="header">
@@ -1481,12 +1488,13 @@ async function renderCoinPage(daoAddr) {
     // Compute market cap (circulating): price * circulating supply
     // Circulating = total - unsold - team locked
     const detailTeamBps = metadata && metadata.teamBps ? metadata.teamBps : 0;
-    const detailTeamLocked = detailTeamBps > 0 ? Number(COIN_SUPPLY_TOTAL) * detailTeamBps / 10000 : 0;
+    const detailTotalSupply = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
+    const detailTeamLocked = detailTeamBps > 0 ? detailTotalSupply * detailTeamBps / 10000 : 0;
     const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
     const inLp = Number(ethers.formatEther(reserve1));
-    const circulating = Number(COIN_SUPPLY_TOTAL) - unsold - detailTeamLocked;
+    const circulating = detailTotalSupply - unsold - detailTeamLocked;
     // Price: pool spot if sale ended or pool is deep, else sale price
-    const poolDeep = hasPool && reserve1 > 0n && inLp > Number(COIN_SUPPLY_TOTAL) * 0.01;
+    const poolDeep = hasPool && reserve1 > 0n && inLp > detailTotalSupply * 0.01;
     const usePool = hasPool && (!saleActive || poolDeep);
     if (circulating > 0) {
       if (usePool) {
@@ -1550,7 +1558,7 @@ async function renderCoinPage(daoAddr) {
     }
 
     // FW S02 Collector DAO special section
-    const FW_COLLECTOR_DAO = '0xF792394938E553eA4cdbFa984509550A5fe335e5';
+    const FW_COLLECTOR_DAO = '0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853';
     if (daoAddr.toLowerCase() === FW_COLLECTOR_DAO.toLowerCase()) {
       const minterAddr = tap ? tap.ops : null;
       html += `
@@ -1579,9 +1587,10 @@ async function renderCoinPage(daoAddr) {
             const [nftCount, lockedEth, mintable] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), mc.mintableFromTap()]);
             const el = document.getElementById('fwCollectorInfo');
             if (el) {
+              const hasNFTs = Number(nftCount) > 0;
               el.innerHTML = `
-                <div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${Number(nftCount)}</span></div>
-                <div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtETH(lockedEth)} ${ethIco}</span></div>
+                ${hasNFTs ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${Number(nftCount)}</span></div>` : ''}
+                ${hasNFTs ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtETH(lockedEth)} ${ethIco}</span></div>` : ''}
                 ${Number(mintable) > 0 ? `<div class="stat-row"><span class="stat-label">Mintable</span><span class="stat-value">${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''}</span></div>` : ''}
               `;
             }
@@ -1915,6 +1924,7 @@ async function renderCoinPage(daoAddr) {
     _saleData = sale;
     _lpSubMode = 'zap';
     _tradeMode = defaultMode;
+    updateModeButton();
 
     // Update nav orderbook link to point at this coin's ETH pair
     const _navOb = $('navOrderbook');
