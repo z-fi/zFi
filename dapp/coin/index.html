@@ -138,6 +138,18 @@ input {
   background:var(--surface);border:1px solid var(--border-muted);
   opacity:1;color:var(--fg-muted);
 }
+.coin-card-collector {
+  position:relative;overflow:hidden;
+}
+.coin-card-collector::before {
+  content:'';position:absolute;inset:0;
+  background:url('https://content.wrappr.wtf/ipfs/bafybeiermzs5bmf3tcbkgzeygmlstfku5oybuhyskizaaxn7armzqly42m') top center / cover no-repeat;
+  opacity:0.25;
+  mask-image:linear-gradient(to bottom, #000 0%, transparent 85%);
+  -webkit-mask-image:linear-gradient(to bottom, #000 0%, transparent 85%);
+  pointer-events:none;
+}
+.coin-card-collector:hover::before { opacity:0.32; }
 
 /* Stacked duplicates */
 .coin-stack { position:relative;padding-bottom:4px;padding-right:4px; }
@@ -1267,9 +1279,10 @@ async function renderGallery() {
       const isSpam = _spamSet.has(cardAddr);
       if (isSpam) spamCount++;
       const spamBtnHTML = _userIsVerified && !isSpam ? `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${cardAddr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+      const isCollector = md && md.type === 'fw-collector';
 
       const cardHTML = `
-        <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+        <a href="#${d.dao}" class="coin-card${isCollector ? ' coin-card-collector' : ''}${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
           ${spamBtnHTML}
           <div class="coin-card-head">
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
@@ -1283,7 +1296,7 @@ async function renderGallery() {
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
-      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam });
+      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam, isCollector });
     }
 
     // Group by name|symbol, stack duplicates (exclude spam from grouping)
@@ -1298,9 +1311,10 @@ async function renderGallery() {
     let grid = '';
     const sortedGroups = [...groups.values()];
     for (const group of sortedGroups) group.sort((a, b) => b.mcap - a.mcap);
-    // Finalized coins (sale ended) first sorted by liquidity, then in-sale coins by mcap
+    // Collector DAOs first, then finalized by liquidity, then in-sale by mcap
     sortedGroups.sort((a, b) => {
       const aTop = a[0], bTop = b[0];
+      if (aTop.isCollector !== bTop.isCollector) return aTop.isCollector ? -1 : 1;
       const aFinalized = !aTop.saleActive;
       const bFinalized = !bTop.saleActive;
       if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
