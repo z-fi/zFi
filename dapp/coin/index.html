@@ -1475,6 +1475,8 @@ async function renderCoinPage(daoAddr) {
 
     // FW S02 Collector DAO
     const FW_COLLECTOR_DAO = '0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853';
+    const FW_ADMIN = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20';
+    const isAdmin = _connectedAddress && _connectedAddress.toLowerCase() === FW_ADMIN;
     const isFWCollector = daoAddr.toLowerCase() === FW_COLLECTOR_DAO.toLowerCase();
 
     // Banner + OG meta for social sharing
@@ -1656,7 +1658,7 @@ async function renderCoinPage(daoAddr) {
 
     // Sale section (drawer if ended, full card if live)
     const saleContent = `
-        <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value">${fmtShares(sold)} / ${fmtShares(totalSale)}</span></div>
+        <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
         ${pctBar(salePct, 'var(--green)')}
         ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
@@ -1786,9 +1788,9 @@ async function renderCoinPage(daoAddr) {
       <div class="section-card swap-tile">
         <div class="swap-mode-tabs">
           ${saleActive ? `<button id="modeTabSale" class="${defaultMode==='sale'?'active':''}" onclick="setTradeMode('sale')">Sale</button>` : ''}
-          <button id="modeTabSwap" class="${defaultMode==='swap'?'active':''}" onclick="setTradeMode('swap')">Swap</button>
+          ${isFWCollector && saleActive && !isAdmin ? `<button id="modeTabSwap" disabled style="opacity:0.4;cursor:default" title="Swap available after sale ends">Swap <span style="font-size:9px;opacity:0.7">seeding LP</span></button>` : `<button id="modeTabSwap" class="${defaultMode==='swap'?'active':''}" onclick="setTradeMode('swap')">Swap</button>`}
           ${isFWCollector && sale && sale.remainingSupply > 0n ? '' : `<button id="modeTabRagequit" onclick="setTradeMode('ragequit')">Ragequit</button>`}
-          ${hasPool ? `<button id="modeTabLp" onclick="setTradeMode('lp')">LP</button>` : ''}
+          ${hasPool && !(isFWCollector && saleActive && !isAdmin) ? `<button id="modeTabLp" onclick="setTradeMode('lp')">LP</button>` : ''}
         </div>
 
         <!-- SALE MODE -->
@@ -1997,6 +1999,7 @@ async function renderCoinPage(daoAddr) {
     _lpSubMode = 'zap';
     _tradeMode = defaultMode;
     updateModeButton();
+    loadBalances();
 
     // Update nav orderbook link to point at this coin's ETH pair
     const _navOb = $('navOrderbook');
@@ -2007,8 +2010,8 @@ async function renderCoinPage(daoAddr) {
       _navOb.href = _obHref;
     }
 
-    // Show chart drawer only if pool has trading activity
-    if (hasPool) {
+    // Show chart drawer only if pool has trading activity (hide during FW Collector sale)
+    if (hasPool && !(isFWCollector && saleActive)) {
       const _chartPoolId = poolId.toString();
       fetch(`${INDEXER}/api/events?poolId=${_chartPoolId}&limit=1`)
         .then(r => r.json())
