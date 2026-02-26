@@ -1954,7 +1954,7 @@ async function renderCoinPage(daoAddr) {
           </button>
           <div class="chart-body"></div>
         </div>
-        <div class="drawer" id="activityDrawer" data-pool-id="${poolId}">
+        ${isFWCollector && saleActive ? '' : `<div class="drawer" id="activityDrawer" data-pool-id="${poolId}">
           <button class="drawer-toggle" onclick="toggleActivity()">
             <span>Pool Activity</span>
             <span class="arrow">&#9660;</span>
@@ -1971,7 +1971,7 @@ async function renderCoinPage(daoAddr) {
           <div class="activity-body">
             <div id="lpListContent"><div class="activity-empty">Click to load</div></div>
           </div>
-        </div>
+        </div>`}
       `;
     }
 
