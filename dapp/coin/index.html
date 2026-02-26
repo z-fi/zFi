@@ -336,6 +336,17 @@ input {
 }
 .activity-more:hover { color:var(--fg);background:var(--surface); }
 .activity-empty { padding:16px;text-align:center;font-size:12px;color:var(--fg-muted); }
+.holder-row { display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border-muted);font-size:12px; }
+.holder-row:last-child { border-bottom:none; }
+.holder-addr { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.holder-addr a { color:var(--fg-muted);text-decoration:none; }
+.holder-addr a:hover { color:var(--fg); }
+.holder-tag { font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap; }
+.holder-tag-pool { background:rgba(59,130,246,0.15);color:#60a5fa; }
+.holder-tag-dao { background:rgba(168,85,247,0.15);color:#c084fc; }
+.holder-tag-badge { background:rgba(234,179,8,0.15);color:#facc15; }
+.holder-shares { font-weight:600;white-space:nowrap; }
+.holder-pct { color:var(--fg-muted);font-size:11px;white-space:nowrap; }
 
 .desc-text { font-size:13px;line-height:1.6;color:var(--fg);white-space:pre-wrap;word-break:break-word; }
 .socials-row { display:flex;gap:14px;flex-wrap:wrap;font-size:12px; }
@@ -556,6 +567,9 @@ const SCAN_ABI = [
 ];
 const GET_DAICO_ABI = [
   'function getDAICO(address dao, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap))'
+];
+const GET_DAO_FULL_ABI = [
+  'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256 sharesTotalSupply, uint256 lootTotalSupply, uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address account, uint256 shares, uint256 loot, uint16 seatId, uint256 votingPower, address[], uint32[])[] members, tuple(uint256,address,uint8,uint48,uint64,uint64,uint64,uint256,uint256,uint256,bytes)[] proposals, tuple(uint256,address,string,uint64)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
 ];
 const QUOTE_ABI = [
   'function quoteZAMM(bool exactOut, uint256 feeOrHook, address tokenIn, address tokenOut, uint256 idIn, uint256 idOut, uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)'
@@ -1069,6 +1083,127 @@ function renderLpTable(providers) {
   </table>`;
 }
 
+// ==================== SHAREHOLDERS ====================
+
+function toggleHolders() {
+  const el = $('holdersDrawer');
+  if (!el) return;
+  el.classList.toggle('open');
+  if (el.classList.contains('open') && !el.dataset.loaded) {
+    el.dataset.loaded = '1';
+    loadHolders(el.dataset.dao);
+  }
+}
+
+async function loadHolders(daoAddr) {
+  const content = $('holdersContent');
+  if (!content) return;
+  content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
+  try {
+    const result = await withRPC(async rpc => {
+      const helper = new ethers.Contract(VIEW_HELPER, GET_DAO_FULL_ABI, rpc);
+      return await helper.getDAOWithDAICO(daoAddr, 0, 0, 0, 0, [], [ZERO]);
+    });
+    const members = result.base.members;
+    if (!members || members.length === 0) {
+      content.innerHTML = '<div class="activity-empty">No shareholders yet</div>';
+      return;
+    }
+    const totalSupply = result.base.supplies.sharesTotalSupply + result.base.supplies.lootTotalSupply;
+    const zammLower = ZAMM.toLowerCase();
+    const daoLower = daoAddr.toLowerCase();
+
+    // Sort by shares descending, filter zero balances
+    const sorted = [...members]
+      .filter(m => (m.shares || 0n) + (m.loot || 0n) > 0n)
+      .sort((a, b) => {
+        const aTotal = (a.shares || 0n) + (a.loot || 0n);
+        const bTotal = (b.shares || 0n) + (b.loot || 0n);
+        return bTotal > aTotal ? 1 : bTotal < aTotal ? -1 : 0;
+      });
+
+    if (sorted.length === 0) {
+      content.innerHTML = '<div class="activity-empty">No shareholders yet</div>';
+      return;
+    }
+
+    // Render immediately with short addresses
+    function renderHolders(names) {
+      let html = '';
+      sorted.forEach((m, i) => {
+        const addr = m.account;
+        const addrLower = addr.toLowerCase();
+        const total = (m.shares || 0n) + (m.loot || 0n);
+        const pctNum = totalSupply > 0n ? Number(total * 10000n / totalSupply) / 100 : 0;
+        const pct = pctNum.toFixed(1);
+        const short = addr.slice(0, 6) + '\u2026' + addr.slice(-4);
+        const displayName = names[i] || short;
+
+        let tag = '';
+        if (addrLower === zammLower) tag = '<span class="holder-tag holder-tag-pool">Pool</span>';
+        else if (addrLower === daoLower) tag = '<span class="holder-tag holder-tag-dao">DAO</span>';
+
+        const pctColor = pctNum >= 10 ? 'var(--green)' : pctNum >= 1 ? 'var(--fg)' : 'var(--fg-muted)';
+
+        html += `<div class="holder-row">
+          <div class="holder-addr"><a href="https://etherscan.io/address/${addr}" target="_blank" title="${addr}">${escText(displayName)}</a></div>
+          ${tag}
+          <div class="holder-shares">${fmtShares(total)}</div>
+          <div class="holder-pct" style="color:${pctColor}">${pct}%</div>
+        </div>`;
+      });
+      content.innerHTML = html;
+    }
+
+    // Show immediately with addresses
+    const names = new Array(sorted.length).fill('');
+    renderHolders(names);
+
+    // Batch resolve .wei names via multicall
+    try {
+      const weinsIface = new ethers.Interface(WEINS_ABI);
+      const calls = sorted.map(m => ({
+        target: WEINS, allowFailure: true,
+        callData: weinsIface.encodeFunctionData('reverseResolve', [m.account])
+      }));
+      const results = await withRPC(async rpc => {
+        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+        return await mc.aggregate3(calls);
+      });
+      const needENS = [];
+      for (let i = 0; i < sorted.length; i++) {
+        if (results[i].success) {
+          try {
+            const decoded = weinsIface.decodeFunctionResult('reverseResolve', results[i].returnData);
+            if (decoded[0]) { names[i] = decoded[0].toLowerCase(); continue; }
+          } catch {}
+        }
+        needENS.push(i);
+      }
+      renderHolders(names);
+
+      // Backfill ENS for addresses without .wei names
+      if (needENS.length > 0) {
+        const ensProvider = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+        const ensPromises = needENS.map(i =>
+          ensProvider.lookupAddress(sorted[i].account).catch(() => null)
+        );
+        const ensResults = await Promise.all(ensPromises);
+        let changed = false;
+        ensResults.forEach((name, j) => {
+          if (name) { names[needENS[j]] = name; changed = true; }
+        });
+        if (changed) renderHolders(names);
+      }
+    } catch (e) {
+      console.warn('Name resolution failed:', e);
+    }
+  } catch (e) {
+    console.error('loadHolders error:', e);
+    content.innerHTML = '<div class="activity-empty">Failed to load shareholders</div>';
+  }
+}
+
 function pctBar(pct, color) {
   color = color || 'var(--green)';
   return `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100).toFixed(1)}%;background:${color}"></div></div>`;
@@ -1125,9 +1260,43 @@ async function getEthUsd() {
 // ==================== ROUTER ====================
 
 let _renderGen = 0;
+let _saleRefreshInterval = null;
+let _saleCountdownInterval = null;
+
+async function refreshSaleStats() {
+  const daoAddr = $('app')?.dataset?.dao;
+  if (!daoAddr || !_coinData) return;
+  const gen = _renderGen;
+  try {
+    const data = await withRPC(async rpc => {
+      const helper = new ethers.Contract(VIEW_HELPER, GET_DAICO_ABI, rpc);
+      return await helper.getDAICO(daoAddr, [ZERO]);
+    });
+    if (gen !== _renderGen) return; // navigated away
+    const sale = data.sales && data.sales.length > 0 ? data.sales[0] : null;
+    if (!sale) return;
+    _coinData = data;
+    _saleData = sale;
+    const totalSale = sale.totalSupply;
+    const sold = totalSale - sale.remainingSupply;
+    const salePct = totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0;
+    const treasuryETH = sale.treasuryBalance;
+    const ethIco = `<svg width="10" height="10" viewBox="0 0 256 417" fill="currentColor" opacity="0.5" style="vertical-align:-1px"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg>`;
+    const soldEl = $('saleSoldVal');
+    if (soldEl) soldEl.innerHTML = `${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span>`;
+    const barEl = $('salePctBar');
+    if (barEl) barEl.innerHTML = pctBar(salePct, 'var(--green)');
+    const tEl = $('saleTreasuryRow');
+    if (tEl) tEl.innerHTML = treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : '';
+    loadBalances();
+    updateSaleBtnState();
+  } catch {}
+}
 
 function route() {
   if (_activityInterval) { clearInterval(_activityInterval); _activityInterval = null; }
+  if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
+  if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   const hash = location.hash.replace('#','').trim();
   if (hash && hash.startsWith('0x') && hash.length === 42) {
     renderCoinPage(hash);
@@ -1467,7 +1636,7 @@ async function renderCoinPage(daoAddr) {
     let priceDisplay = '';
     if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
       const pricePer1M = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt)) * 1e6;
-      priceDisplay = pricePer1M >= 1 ? pricePer1M.toFixed(4) : pricePer1M >= 0.001 ? pricePer1M.toFixed(6) : pricePer1M.toExponential(2);
+      priceDisplay = pricePer1M >= 1 ? parseFloat(pricePer1M.toFixed(2)).toString() : pricePer1M >= 0.001 ? parseFloat(pricePer1M.toFixed(4)).toString() : pricePer1M.toExponential(2);
     }
 
     // Market cap (pool price preferred, fallback to sale price)
@@ -1658,11 +1827,12 @@ async function renderCoinPage(daoAddr) {
 
     // Sale section (drawer if ended, full card if live)
     const saleContent = `
-        <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
-        ${pctBar(salePct, 'var(--green)')}
-        ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+        <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value" id="saleSoldVal">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
+        <div id="salePctBar">${pctBar(salePct, 'var(--green)')}</div>
+        <div id="saleTreasuryRow">${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}</div>
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
-        ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}`
+        ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
+        ${sale && sale.deadline > 0n ? `<div id="saleDeadlineRow"></div>` : ''}`
     if (saleActive) {
       html += `
         <div class="section-card">
@@ -1670,6 +1840,33 @@ async function renderCoinPage(daoAddr) {
           ${saleContent}
         </div>
       `;
+      // Sale deadline countdown
+      if (sale && sale.deadline > 0n) {
+        const _saleDl = Number(sale.deadline);
+        setTimeout(() => {
+          const dlEl = $('saleDeadlineRow');
+          if (!dlEl) return;
+          const dlDate = new Date(_saleDl * 1000);
+          const dlStr = dlDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          function updateSaleCd() {
+            const rem = _saleDl - Math.floor(Date.now() / 1000);
+            if (rem <= 0) {
+              dlEl.innerHTML = `<div class="stat-row"><span class="stat-label">Deadline</span><span class="stat-value">${dlStr} (ended)</span></div>`;
+              return;
+            }
+            const d = Math.floor(rem / 86400);
+            const h = Math.floor((rem % 86400) / 3600);
+            const m = Math.floor((rem % 3600) / 60);
+            const s = rem % 60;
+            const timer = d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+            dlEl.innerHTML = `<div class="stat-row"><span class="stat-label">Deadline</span><span class="stat-value">${dlStr}</span></div><div style="font-size:14px;font-weight:600;letter-spacing:0.05em;text-align:center;padding:4px 0;color:var(--fg-muted)">${timer} remaining</div>`;
+          }
+          updateSaleCd();
+          _saleCountdownInterval = setInterval(updateSaleCd, 1000);
+        }, 0);
+      }
+      // Auto-refresh sale stats every 20s while sale is live
+      _saleRefreshInterval = setInterval(refreshSaleStats, 20000);
     } else {
       html += `
         <div class="drawer" id="saleDrawer">
@@ -1803,6 +2000,7 @@ async function renderCoinPage(daoAddr) {
               <span class="swap-token-tag">${ethSvg} ETH</span>
             </div>
             <input type="text" id="salePayInput" placeholder="0.0" oninput="onSalePayInput()" autocomplete="off">
+            <div id="saleUsdEstimate" style="font-size:11px;color:var(--fg-dim);margin-top:2px;min-height:14px"></div>
             <div class="swap-pct-row">
               <button class="swap-pct-btn" onclick="fillPct(25)">25%</button>
               <button class="swap-pct-btn" onclick="fillPct(50)">50%</button>
@@ -1824,6 +2022,7 @@ async function renderCoinPage(daoAddr) {
           <div class="swap-quote" id="saleQuote">${priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : ''}</div>
           <button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>
           <button id="saleBuyBtn" class="action-btn" onclick="onSaleBuyBtn()">Connect Wallet</button>
+          <button id="saleCopyLink" class="swap-pct-btn" onclick="copySaleLink()" style="width:100%;margin-top:6px;font-size:11px;padding:5px">Copy share link</button>
         </div>
         ` : ''}
 
@@ -1974,6 +2173,19 @@ async function renderCoinPage(daoAddr) {
         </div>`}
       `;
     }
+
+    // Shareholders drawer
+    html += `
+      <div class="drawer" id="holdersDrawer" data-dao="${daoAddr}">
+        <button class="drawer-toggle" onclick="toggleHolders()">
+          <span>Shareholders</span>
+          <span class="arrow">&#9660;</span>
+        </button>
+        <div class="activity-body">
+          <div id="holdersContent"><div class="activity-empty">Click to load</div></div>
+        </div>
+      </div>
+    `;
 
     // Links
     html += `
@@ -2538,13 +2750,60 @@ function fillPct(pct) {
 
 // ==================== SALE BUY ====================
 
+function updateSaleBtnState() {
+  const btn = $('saleBuyBtn');
+  if (!btn || !_signer) return;
+  const raw = ($('salePayInput').value || '').trim();
+  if (!raw || isNaN(raw) || Number(raw) <= 0) {
+    btn.textContent = 'Buy';
+    btn.disabled = false;
+    return;
+  }
+  try {
+    const payAmt = ethers.parseEther(raw);
+    if (payAmt > _ethBalance) {
+      btn.textContent = 'Insufficient ETH';
+      btn.disabled = true;
+      return;
+    }
+    if (_saleData && _saleData.remainingSupply <= 0n) {
+      btn.textContent = 'Sale ended';
+      btn.disabled = true;
+      return;
+    }
+    if (_saleData) {
+      const gross = payAmt * _saleData.forAmt / _saleData.tribAmt;
+      if (gross > _saleData.remainingSupply) {
+        btn.textContent = 'Exceeds remaining';
+        btn.disabled = true;
+        return;
+      }
+    }
+  } catch {}
+  btn.textContent = 'Buy';
+  btn.disabled = false;
+}
+
+function updateSaleUsd() {
+  const el = $('saleUsdEstimate');
+  if (!el) return;
+  const raw = ($('salePayInput').value || '').trim();
+  if (!raw || isNaN(raw) || Number(raw) <= 0 || _ethUsdPrice <= 0) {
+    el.textContent = '';
+    return;
+  }
+  el.textContent = '~' + fmtUsd(Number(raw) * _ethUsdPrice);
+}
+
 function onSalePayInput() {
   _saleExactOut = false;
+  updateSaleUsd();
   if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt) return;
   const raw = ($('salePayInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('saleReceiveInput').value = '';
     $('saleLpNote').textContent = '';
+    updateSaleBtnState();
     return;
   }
   const payAmt = ethers.parseEther(raw);
@@ -2558,6 +2817,7 @@ function onSalePayInput() {
   } else {
     $('saleLpNote').textContent = '';
   }
+  updateSaleBtnState();
 }
 
 function onSaleReceiveInput() {
@@ -2566,6 +2826,7 @@ function onSaleReceiveInput() {
   const raw = ($('saleReceiveInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('salePayInput').value = '';
+    updateSaleUsd();
     $('saleLpNote').textContent = '';
     return;
   }
@@ -2578,11 +2839,13 @@ function onSaleReceiveInput() {
   // payNeeded = ceil(grossNeeded * tribAmt / forAmt)
   const payNeeded = (grossNeeded * _saleData.tribAmt + _saleData.forAmt - 1n) / _saleData.forAmt;
   $('salePayInput').value = ethers.formatEther(payNeeded);
+  updateSaleUsd();
   if (lpBps > 0n) {
     $('saleLpNote').textContent = `~${fmtShares(buyAmt)} shares (${Number(lpBps)/100}% to LP)`;
   } else {
     $('saleLpNote').textContent = '';
   }
+  updateSaleBtnState();
 }
 
 function fillSweep() {
@@ -2594,12 +2857,27 @@ function fillSweep() {
   const payNeeded = (_saleData.remainingSupply * _saleData.tribAmt + _saleData.forAmt - 1n) / _saleData.forAmt;
   $('saleReceiveInput').value = ethers.formatEther(net);
   $('salePayInput').value = ethers.formatEther(payNeeded);
+  updateSaleUsd();
   _saleExactOut = false;
   if (lpBps > 0n) {
     $('saleLpNote').textContent = `~${fmtShares(net)} shares (${Number(lpBps)/100}% to LP)`;
   } else {
     $('saleLpNote').textContent = '';
   }
+}
+
+function copySaleLink() {
+  const amt = ($('salePayInput').value || '').trim();
+  const dao = $('app')?.dataset?.dao;
+  if (!dao) return;
+  const base = location.origin + location.pathname;
+  const url = amt && Number(amt) > 0
+    ? `${base}?amt=${amt}#${dao}`
+    : `${base}#${dao}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = $('saleCopyLink');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy share link'; }, 1500); }
+  }).catch(() => {});
 }
 
 async function onSaleBuyBtn() {
@@ -2650,11 +2928,19 @@ async function executeSaleBuy() {
     const adEl = $('activityDrawer');
     if (adEl && adEl.dataset.loaded) setTimeout(() => refreshActivity(adEl.dataset.poolId), 4000);
   } catch(e) {
+    console.error('Sale buy error:', e);
     const quoteEl = $('saleQuote');
     if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
       if (quoteEl) quoteEl.textContent = 'Cancelled';
     } else {
-      if (quoteEl) quoteEl.textContent = 'Buy failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 80);
+      const raw = (e.shortMessage || e.reason || e.message || '').split('\n')[0];
+      let msg = raw;
+      if (/insufficient funds/i.test(raw)) msg = 'Insufficient ETH balance (including gas)';
+      else if (/exceeds balance/i.test(raw)) msg = 'Amount exceeds your ETH balance';
+      else if (/allowance|supply/i.test(raw)) msg = 'Exceeds remaining sale supply';
+      else if (/deadline|expired/i.test(raw)) msg = 'Sale has ended';
+      else if (/slippage|amount/i.test(raw)) msg = 'Price moved — try again';
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--red)">Buy failed:</span> ${escText(msg)}`;
     }
   } finally {
     btn.textContent = 'Buy';
