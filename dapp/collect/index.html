@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>COLLECT</title>
+<meta property="og:title" content="COLLECT">
+<meta property="og:description" content="FundingWorks S02 Collector DAO">
+<meta property="og:type" content="website">
+<meta property="og:url" content="">
+<meta property="og:image" content="">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="COLLECT">
+<meta name="twitter:description" content="FundingWorks S02 Collector DAO">
+<meta name="twitter:image" content="">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+.zorg-bg{fill:#fff}.zorg-fg{fill:#000}
+.dark .zorg-bg{fill:#000}.dark .zorg-fg{fill:#fff}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --bg:#fff;--fg:#000;--fg-muted:#666;--fg-dim:#999;
+  --border:#000;--border-muted:#ddd;
+  --surface:#f9f9f9;--surface-hover:#f5f5f5;
+  --btn-bg:#000;--btn-fg:#fff;--btn-hover:#333;
+  --btn-dis-bg:transparent;--btn-dis-border:#ccc;--btn-dis-fg:#999;
+  --status-error:#fff0f0;--status-success:#f0fff0;
+  --link-fg:inherit;
+  --modal-overlay:rgba(0,0,0,0.8);--modal-bg:#fff;--modal-border:#000;
+  --green:#22c55e;
+}
+.dark {
+  --bg:#0a0a0a;--fg:#e8e8e0;--fg-muted:#888;--fg-dim:#666;
+  --border:#333;--border-muted:#333;
+  --surface:#111;--surface-hover:#151515;
+  --btn-bg:#e8e8e0;--btn-fg:#0a0a0a;--btn-hover:#ccc;
+  --btn-dis-bg:transparent;--btn-dis-border:#444;--btn-dis-fg:#666;
+  --status-error:#1a0000;--status-success:#001a00;
+  --link-fg:#e8e8e0;
+  --modal-overlay:rgba(0,0,0,0.85);--modal-bg:#111;--modal-border:#333;
+  --green:#22c55e;
+}
+body {
+  font-family:Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--fg);
+  min-height:100vh;padding:60px 20px 20px;
+  max-width:480px;margin:0 auto;
+  overflow-x:hidden;
+}
+a { color:var(--link-fg); }
+button {
+  display:inline-block;font-family:inherit;cursor:pointer;
+  border:1px solid var(--btn-bg);border-radius:0;
+  background:var(--btn-bg);color:var(--btn-fg);
+  padding:12px 24px;font-size:12px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  transition:background 0.2s, border-color 0.2s, color 0.2s;
+}
+button:hover { background:var(--btn-hover); }
+button:disabled { background:var(--btn-dis-bg);border:1px solid var(--btn-dis-border);color:var(--btn-dis-fg);cursor:not-allowed; }
+input, textarea {
+  font-family:inherit;font-size:14px;background:transparent;color:var(--fg);
+  border:none;border-bottom:1.5px solid var(--border);outline:none;
+  padding:8px 0;width:100%;
+}
+textarea { resize:vertical;min-height:40px; }
+.header {
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;
+}
+.header h1 {
+  font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
+}
+
+/* Wallet */
+.wallet {
+  position:fixed;
+  top:max(20px, env(safe-area-inset-top, 0px));
+  right:max(20px, env(safe-area-inset-right, 0px));
+  font-size:11px;text-transform:uppercase;letter-spacing:0.05em;
+  z-index:100;
+}
+.wallet button { margin:0;padding:8px 16px;text-transform:none; }
+
+/* Wallet options */
+.wallet-option {
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  background:var(--modal-bg);border:1px solid var(--border);color:var(--fg);
+  cursor:pointer;margin-bottom:8px;transition:background 0.15s, color 0.15s;
+}
+.wallet-option:hover { background:var(--btn-bg);color:var(--btn-fg); }
+.wallet-option:active { opacity:0.7; }
+.wallet-option-icon { font-size:1.5rem; }
+.wallet-option-name { font-weight:600;font-size:14px; }
+.wallet-option.disconnect { border-color:#f00;color:#f00;justify-content:center;margin-top:4px; }
+.wallet-option.disconnect:hover { background:#f00;color:#fff; }
+
+/* Dark toggle */
+.dark-toggle {
+  position:fixed;bottom:max(20px, env(safe-area-inset-bottom, 0px));right:max(20px, env(safe-area-inset-right, 0px));
+  border:none;cursor:pointer;padding:13px;margin:-13px;opacity:0.5;transition:opacity 0.2s;
+  z-index:100;background:#000;border-radius:50%;width:40px;height:40px;background-clip:content-box;
+}
+:root.dark .dark-toggle { background:#fff; }
+.dark-toggle:hover { opacity:1; }
+
+.z-nav { position:fixed;top:max(16px, env(safe-area-inset-top));left:max(16px, env(safe-area-inset-left));z-index:200; }
+.z-nav-btn { background:none;border:none;cursor:pointer;opacity:0.5;transition:opacity 0.2s;padding:6px;margin:-6px;line-height:0; }
+.z-nav-btn:hover, .z-nav.open .z-nav-btn { opacity:1; }
+.z-nav-menu { display:none;position:absolute;top:36px;left:0;background:var(--bg);border:1px solid var(--border);padding:8px 0;min-width:140px;max-height:calc(100vh - 60px);overflow-y:auto; }
+.z-nav.open .z-nav-menu { display:block; }
+.z-nav-menu a { display:block;padding:6px 16px;font-size:13px;color:var(--fg);text-decoration:none;letter-spacing:0.05em; }
+.z-nav-menu a:hover { background:var(--surface); }
+.z-nav-menu a.active { opacity:0.35;pointer-events:none; }
+.z-nav-menu .z-nav-sep { border-top:1px solid var(--border);margin:6px 0; }
+
+/* Modal */
+.modal-overlay {
+  display:none;position:fixed;inset:0;background:var(--modal-overlay);backdrop-filter:blur(4px);z-index:2000;
+  justify-content:center;align-items:flex-start;padding:20px;padding-top:max(60px, env(safe-area-inset-top, 60px));
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.modal-overlay.active { display:flex; }
+body.modal-open { overflow:hidden; }
+.modal {
+  background:var(--modal-bg);border:1px solid var(--modal-border);
+  width:100%;max-width:380px;padding:20px;position:relative;
+  max-height:calc(100vh - 80px);max-height:calc(100dvh - 80px);
+  display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-shrink:0; }
+.modal-title { font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase; }
+.modal-close {
+  background:none;border:none;font-size:24px;color:var(--fg);cursor:pointer;line-height:1;
+  padding:8px;margin:-8px;opacity:0.4;transition:opacity 0.15s;
+}
+.modal-close:hover { opacity:1; }
+
+/* Form */
+.form-section { margin-bottom:16px; }
+.form-section label {
+  display:block;font-size:10px;font-weight:600;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--fg-dim);margin-bottom:4px;
+}
+.form-hint {
+  font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5;
+}
+
+/* Status */
+.status-message {
+  font-size:12px;line-height:1.6;padding:12px;margin-bottom:16px;
+  border:1px solid var(--border-muted);word-break:break-word;
+}
+.status-message.error { background:var(--status-error);border-color:#f00; }
+.status-message.success { background:var(--status-success);border-color:#0a0; }
+.status-message a { color:var(--link-fg);text-decoration:underline; }
+
+/* Info */
+.info-card {
+  border:1px solid var(--border-muted);padding:14px;margin-bottom:16px;
+}
+.info-row { display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px; }
+.info-label { color:var(--fg-dim); }
+.info-value { font-weight:500;color:var(--fg-muted); }
+
+/* Progress bar */
+.sale-bar { height:6px;background:var(--border-muted);margin:8px 0; }
+.sale-bar-fill { height:100%;background:var(--green);transition:width 0.3s; }
+
+/* Action button */
+.action-btn {
+  width:100%;padding:14px 24px;font-size:13px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;
+}
+
+/* Mobile */
+@media (max-width: 700px) {
+  body { padding:80px 16px 20px; }
+  .wallet { top:16px;right:16px; }
+  .wallet button { padding:10px 14px;font-size:11px; }
+  .z-nav { top:14px;left:14px; }
+  .z-nav-btn { padding:4px;margin:-4px; }
+  .z-nav-menu a { padding:10px 16px; }
+  input, textarea { font-size:16px; }
+}
+@media (max-width: 380px) {
+  body { padding:70px 12px 20px; }
+  input, textarea { font-size:16px; }
+}
+</style>
+</head>
+<body>
+<div class="z-nav">
+  <button class="z-nav-btn" onclick="this.parentElement.classList.toggle('open')" title="Menu">
+    <svg width="28" height="28" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><rect class="zorg-bg" width="400" height="400"/><clipPath id="zh"><rect width="400" height="400"/></clipPath><g clip-path="url(#zh)"><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
+  </button>
+  <div class="z-nav-menu">
+    <a href="../">Swap</a>
+    <a href="../coin/">Coin</a>
+    <a href="../predict/">Predict</a>
+    <a href="../orderbook/">Orderbook</a>
+    <a href="../lp/">Liquidity</a>
+    <a href="../domains/">Domain</a>
+    <a href="../dao/">DAO</a>
+    <a href="./" class="active">Collect</a>
+    <div class="z-nav-sep"></div>
+    <a href="../about/">About</a>
+    <a href="../api/">API</a>
+    <a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div>
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
+
+<div class="wallet">
+  <button id="walletBtn" onclick="toggleWallet()">connect</button>
+</div>
+
+<div class="modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Connect Wallet</div>
+      <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="walletOptions"></div>
+  </div>
+</div>
+
+<div class="header">
+  <h1>FW S02 Collector DAO</h1>
+</div>
+
+<div class="form-hint">
+  Collector DAO for <a href="https://etherscan.io/address/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6" target="_blank">FundingWorks S02</a>.
+  Buy shares to crowdfund 1 ETH and mint an NFT. 10% seeds LP on zAMM. Ragequittable. Unsold shares burned after the mint deadline.
+</div>
+
+<!-- Dashboard (shown when DAO is deployed) -->
+<div id="dashboard" style="display:none">
+  <div class="info-card">
+    <div class="info-row"><span class="info-label">Sale</span><span class="info-value" id="saleStatus">loading...</span></div>
+    <div class="sale-bar"><div class="sale-bar-fill" id="saleBar" style="width:0%"></div></div>
+    <div class="info-row"><span class="info-label">Shares sold</span><span class="info-value" id="sharesSold">-</span></div>
+    <div class="info-row"><span class="info-label">ETH raised</span><span class="info-value" id="ethRaised">-</span></div>
+    <div class="info-row"><span class="info-label">Treasury</span><span class="info-value" id="treasury">-</span></div>
+    <div class="info-row"><span class="info-label">Deadline</span><span class="info-value" id="fwDeadline">-</span></div>
+  </div>
+
+  <div class="info-card" id="userCard" style="display:none">
+    <div class="info-row"><span class="info-label">Your shares</span><span class="info-value" id="userShares">-</span></div>
+    <div class="info-row"><span class="info-label">Your % of supply</span><span class="info-value" id="userPct">-</span></div>
+  </div>
+
+  <div class="info-card">
+    <div class="info-row"><span class="info-label">NFTs in vault</span><span class="info-value" id="nftCount">-</span></div>
+    <div class="info-row"><span class="info-label">Locked ETH</span><span class="info-value" id="lockedEth">-</span></div>
+    <div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value" id="mintable">-</span></div>
+  </div>
+
+  <!-- Buy shares -->
+  <div id="buySection">
+    <div class="form-section">
+      <label>Buy Shares (ETH)</label>
+      <input type="text" id="buyAmount" placeholder="0.1" inputmode="decimal">
+    </div>
+    <button class="action-btn" id="buyBtn" onclick="buyShares()">Buy Shares</button>
+  </div>
+
+  <!-- Mint from tap -->
+  <button class="action-btn" id="mintBtn" onclick="mintFromTap()" style="display:none">Mint NFT from Tap</button>
+
+  <!-- Close sale -->
+  <button class="action-btn" id="closeBtn" onclick="closeSale()" style="display:none">Close Sale &amp; Burn Unsold</button>
+
+  <div id="statusArea"></div>
+
+  <div style="font-size:11px;color:var(--fg-dim);margin-top:12px">
+    <a href="" id="daoLink" target="_blank" style="color:var(--fg-dim)">DAO</a>
+    &middot; <a href="" id="minterLink" target="_blank" style="color:var(--fg-dim)">Minter</a>
+    &middot; <a href="" id="manageLink" style="color:var(--fg-dim)">Manage DAO</a>
+  </div>
+</div>
+
+<!-- Deploy (shown when DAO not yet deployed) -->
+<div id="deploySection">
+  <div class="info-card" id="fwInfo">
+    <div class="info-row"><span class="info-label">NFT mint price</span><span class="info-value">1 ETH</span></div>
+    <div class="info-row"><span class="info-label">Sale target</span><span class="info-value">~1.11 ETH (1 ETH to mint + 10% LP)</span></div>
+    <div class="info-row"><span class="info-label">Mint deadline</span><span class="info-value" id="fwDeadlineDeploy">loading...</span></div>
+    <div class="info-row"><span class="info-label">Quorum</span><span class="info-value">15%</span></div>
+    <div class="info-row"><span class="info-label">Voting / Timelock</span><span class="info-value">12h / 12h</span></div>
+    <div class="info-row"><span class="info-label">LP seed</span><span class="info-value">10% of buys</span></div>
+    <div class="info-row"><span class="info-label">Tap vesting</span><span class="info-value">Instant</span></div>
+  </div>
+
+  <div class="form-section">
+    <label>DAO Name</label>
+    <input type="text" id="daoName" placeholder="FW S02 Collectors" value="FW S02 Collectors" maxlength="50">
+  </div>
+
+  <div class="form-section">
+    <label>DAO Symbol</label>
+    <input type="text" id="daoSymbol" placeholder="FWC" value="FWC" maxlength="10">
+  </div>
+
+  <div class="form-section">
+    <label>Description (optional)</label>
+    <textarea id="daoDescription" placeholder="Collector DAO for FundingWorks Season 02 NFTs" rows="2"></textarea>
+  </div>
+
+  <div id="deployStatusArea"></div>
+
+  <button class="action-btn" id="deployBtn" onclick="deploy()">Deploy Collector DAO</button>
+</div>
+
+<script src="../ethers.min.js"></script>
+<script src="../walletconnect.min.js"></script>
+<script>
+document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
+function toggleDark() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dark', document.documentElement.classList.contains('dark') ? '1' : '0');
+}
+
+// ==================== HELPERS ====================
+
+const $ = id => document.getElementById(id);
+const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
+function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function fmtETH(wei) { const e = Number(ethers.formatEther(wei)); return e < 0.001 && e > 0 ? '<0.001' : e.toFixed(e < 1 ? 4 : 3); }
+function fmtShares(n) { const m = Number(n) / 1e18 / 1e6; return m >= 0.01 ? m.toFixed(2) + 'M' : (Number(n) / 1e18 / 1e3).toFixed(1) + 'K'; }
+
+function showStatus(id, msg, isError) {
+  const el = $(id);
+  const cls = isError ? 'status-message error' : msg.includes('success') || msg.includes('Success') || msg.includes('Deployed') ? 'status-message success' : 'status-message';
+  el.innerHTML = '<div class="' + cls + '">' + msg + '</div>';
+}
+function clearStatus(id) { $(id).innerHTML = ''; }
+
+// ==================== CONFIG ====================
+
+const RPCS = [
+  'https://ethereum.publicnode.com',
+  'https://1rpc.io/eth',
+  'https://eth.drpc.org',
+  'https://eth.llamarpc.com'
+];
+let rpcIdx = Math.floor(Math.random() * RPCS.length);
+function getRPC() { return new ethers.JsonRpcProvider(RPCS[rpcIdx % RPCS.length], 1, { staticNetwork: true }); }
+
+const PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
+
+const FW_ADDRESS = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
+const FW_ABI = [
+  'function MINT_PRICE() view returns (uint256)',
+  'function MINT_PERIOD() view returns (uint256)',
+  'function mintStartTime() view returns (uint256)'
+];
+
+// Predicted addresses (salt = keccak256("fw-s02-collect"))
+const DEPLOY_SALT = '0x232b7413e7b1e086aefb5f57d1dbe88461fb1655de7fc0c697798389f83e28f9';
+const DAO_ADDRESS = '0xF792394938E553eA4cdbFa984509550A5fe335e5';
+const SHARES_ADDRESS = '0x3CF7f1189eAD9649c45EdE6deF259A269d1c0D9C';
+
+const DAICO_ADDR = '0x000000000033e92DB97B4B3beCD2c255126C60aC';
+const VIEW_HELPER = '0x00000000006631040967E58e3430e4B77921a2db';
+
+const WEINS = '0x0000000000696760E15f265e828DB644A0c242EB';
+const WEINS_ABI = ['function reverseResolve(address) view returns (string)'];
+
+const MINTER_ABI = [
+  'constructor(string,string,string,bytes32)',
+  'function dao() view returns (address)',
+  'function burner() view returns (address)',
+  'function shares() view returns (address)',
+  'function deadline() view returns (uint256)',
+  'function mintFromTap(uint256) returns (uint256[])',
+  'function mintFromBalance(uint256) returns (uint256[])',
+  'function closeSale()',
+  'function mintableFromTap() view returns (uint256)',
+  'function mintableFromBalance() view returns (uint256)',
+  'function allNftIds() view returns (uint256[])',
+  'function nftCount() view returns (uint256)',
+  'function totalLockedEth() view returns (uint256)'
+];
+
+const GET_DAICO_ABI = [
+  'function getDAICO(address dao, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap))'
+];
+
+const DAICO_BUY_ABI = [
+  'function buy(address dao, address tribTkn, uint256 payAmt, uint256 minBuyAmt) payable'
+];
+
+const SHARES_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function totalSupply() view returns (uint256)'
+];
+
+let _minterAddress = null; // discovered from tap.ops
+
+// ==================== WALLET ====================
+
+let _walletProvider = null;
+let _signer = null;
+let _connectedAddress = null;
+let _connectedWalletProvider = null;
+let _walletConnectProvider = null;
+let _isConnecting = false;
+let _walletEventHandlers = null;
+let _isWalletConnect = false;
+let _wcDeepLink = null;
+
+const eip6963Providers = new Map();
+window.addEventListener('eip6963:announceProvider', (event) => {
+  try {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid && provider) eip6963Providers.set(info.uuid, { info, provider });
+  } catch (e) {}
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+function findProvider(checkFn) {
+  if (window.ethereum?.providers?.length) {
+    for (const p of window.ethereum.providers) { if (checkFn(p)) return p; }
+  }
+  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
+  return null;
+}
+
+const WALLET_CONFIG = {
+  metamask: { name: 'MetaMask', icon: '&#129418;', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
+  coinbase: { name: 'Coinbase', icon: '&#128309;', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
+  rabby: { name: 'Rabby', icon: '&#128048;', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
+  rainbow: { name: 'Rainbow', icon: '&#127752;', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
+  walletconnect: { name: 'WalletConnect', icon: '&#128241;' }
+};
+
+function detectWallets() {
+  const detected = [];
+  const seenNames = new Set();
+  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
+    const name = info?.name || 'Unknown';
+    if (!seenNames.has(name.toLowerCase())) {
+      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
+      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
+      detected.push({ key: `eip6963_${uuid}`, name, icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '&#128268;', getProvider: () => provider });
+      seenNames.add(name.toLowerCase());
+    }
+  }
+  if (window.ethereum?.providers?.length) {
+    for (let i = 0; i < window.ethereum.providers.length; i++) {
+      const p = window.ethereum.providers[i];
+      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
+      if (name && !seenNames.has(name.toLowerCase())) { detected.push({ key: `provider_${i}`, name, icon: '&#128279;', getProvider: () => p }); seenNames.add(name.toLowerCase()); }
+    }
+  }
+  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
+    if (key === 'walletconnect') continue;
+    try { if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) { detected.push({ key, ...config }); seenNames.add(config.name.toLowerCase()); } } catch (e) {}
+  }
+  if (detected.length === 0 && window.ethereum) detected.push({ key: 'injected', name: 'Browser Wallet', icon: '&#128279;', getProvider: () => window.ethereum });
+  const wcModule = globalThis['@walletconnect/ethereum-provider'];
+  if (wcModule?.EthereumProvider) detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '&#128241;' });
+  return detected;
+}
+
+function showWalletModal() {
+  $('walletModal').classList.add('active');
+  document.body.classList.add('modal-open');
+  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  const doDetect = (attempt = 1) => {
+    const wallets = detectWallets();
+    if (!wallets.some(w => w.key !== 'walletconnect') && attempt < 2) setTimeout(() => doDetect(attempt + 1), 250);
+    else renderWalletModal(wallets);
+  };
+  setTimeout(() => doDetect(), 150);
+}
+
+function renderWalletModal(wallets) {
+  const container = $('walletOptions');
+  if (_connectedAddress) {
+    const displayName = $('walletBtn').textContent;
+    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
+    container.innerHTML = `<div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">Connected</div>${showName ? `<div style="font-size:16px;margin-bottom:4px;">${escText(displayName)}</div>` : ''}<div style="font-size:12px;word-break:break-all;opacity:0.6;">${escText(_connectedAddress)}</div></div><div class="wallet-option disconnect" onclick="disconnectWallet()"><span class="wallet-option-name">Disconnect</span></div>`;
+  } else {
+    container.innerHTML = wallets.length > 0 ? wallets.map(w => `<div class="wallet-option" data-wallet-key="${escAttr(w.key)}"><span class="wallet-option-icon">${w.icon}</span><span class="wallet-option-name">${escText(w.name)}</span></div>`).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
+    container.querySelectorAll('[data-wallet-key]').forEach(el => { el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey)); });
+  }
+}
+
+function closeWalletModal() { $('walletModal').classList.remove('active'); document.body.classList.remove('modal-open'); }
+function toggleWallet() { showWalletModal(); }
+
+async function connectWithWallet(walletKey) {
+  if (_isConnecting) return;
+  _isConnecting = true;
+  try {
+    closeWalletModal();
+    let walletProvider;
+    if (walletKey === 'walletconnect') {
+      const wcModule = globalThis['@walletconnect/ethereum-provider'];
+      const WCProvider = wcModule?.EthereumProvider;
+      if (!WCProvider?.init) throw new Error('WalletConnect not available');
+      if (_walletConnectProvider) { try { await _walletConnectProvider.disconnect?.(); } catch (e) {} _walletConnectProvider = null; }
+      _walletConnectProvider = await WCProvider.init({ projectId: '1e8390ef1c1d8a185e035912a1409749', chains: [1], showQrModal: true, rpcMap: { 1: 'https://1rpc.io/eth' }, metadata: { name: 'zFi Collect', description: 'FW S02 Collector DAO', url: window.location.origin, icons: [] } });
+      _walletConnectProvider.on('display_uri', () => { try { const s = _walletConnectProvider.session?.peer?.metadata; if (s?.redirect?.native && /^https?:\/\//i.test(s.redirect.native)) _wcDeepLink = s.redirect.native; else if (s?.redirect?.universal && /^https?:\/\//i.test(s.redirect.universal)) _wcDeepLink = s.redirect.universal; } catch (e) {} });
+      await _walletConnectProvider.enable();
+      walletProvider = _walletConnectProvider;
+      _isWalletConnect = true;
+    } else if (walletKey.startsWith('eip6963_')) {
+      const uuid = walletKey.replace('eip6963_', '');
+      walletProvider = eip6963Providers.get(uuid)?.provider;
+      if (!walletProvider) { const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase(); if (savedName) { for (const [, { info, provider }] of eip6963Providers) { if (info?.name?.toLowerCase() === savedName) { walletProvider = provider; break; } } } }
+      _isWalletConnect = false; _wcDeepLink = null;
+    } else {
+      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
+      _isWalletConnect = false; _wcDeepLink = null;
+    }
+    if (!walletProvider) throw new Error('Wallet not found');
+    if (walletKey !== 'walletconnect') await walletProvider.request({ method: 'eth_requestAccounts' });
+    const chainId = await walletProvider.request({ method: 'eth_chainId' });
+    if (BigInt(chainId) !== 1n) {
+      try { await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); const nc = await walletProvider.request({ method: 'eth_chainId' }); if (BigInt(nc) !== 1n) throw new Error('Chain switch failed'); }
+      catch (switchErr) { console.error('Chain switch failed:', switchErr); $('walletBtn').textContent = 'connect'; if (walletKey === 'walletconnect') { try { _walletConnectProvider?.disconnect(); } catch (e) {} _walletConnectProvider = null; } _isWalletConnect = false; _wcDeepLink = null; return; }
+    }
+    _walletProvider = new ethers.BrowserProvider(walletProvider);
+    _signer = await _walletProvider.getSigner();
+    _connectedAddress = await _signer.getAddress();
+    const oldWP = _connectedWalletProvider;
+    _connectedWalletProvider = walletProvider;
+    $('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
+    resolveWeiName(_connectedAddress);
+    if (oldWP && _walletEventHandlers) { try { oldWP.removeListener('accountsChanged', _walletEventHandlers.accountsChanged); oldWP.removeListener('chainChanged', _walletEventHandlers.chainChanged); } catch (e) {} }
+    _walletEventHandlers = { accountsChanged: () => window.location.reload(), chainChanged: () => window.location.reload() };
+    walletProvider.on('accountsChanged', _walletEventHandlers.accountsChanged);
+    walletProvider.on('chainChanged', _walletEventHandlers.chainChanged);
+    try { localStorage.setItem('zfi_wallet', walletKey); if (walletKey.startsWith('eip6963_')) { const uuid = walletKey.replace('eip6963_', ''); const name = eip6963Providers.get(uuid)?.info?.name; if (name) localStorage.setItem('zfi_wallet_name', name); } } catch (e) {}
+    // Refresh dashboard with user data
+    if (_daoDeployed) loadDashboard();
+  } catch (error) {
+    if (!((error.message || '').toLowerCase().includes('user rejected') || error.code === 'ACTION_REJECTED')) {
+      console.error('Wallet connect error:', error);
+    }
+    $('walletBtn').textContent = 'connect';
+  } finally { _isConnecting = false; }
+}
+
+function disconnectWallet() {
+  if (_connectedWalletProvider && _walletEventHandlers) { try { _connectedWalletProvider.removeListener('accountsChanged', _walletEventHandlers.accountsChanged); _connectedWalletProvider.removeListener('chainChanged', _walletEventHandlers.chainChanged); } catch (e) {} }
+  _walletEventHandlers = null;
+  if (_walletConnectProvider) { try { _walletConnectProvider.disconnect(); } catch (e) {} _walletConnectProvider = null; }
+  _walletProvider = null; _signer = null; _connectedAddress = null; _connectedWalletProvider = null; _isWalletConnect = false; _wcDeepLink = null;
+  $('walletBtn').textContent = 'connect';
+  closeWalletModal();
+  try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
+  $('userCard').style.display = 'none';
+}
+
+async function connectWallet() {
+  if (_signer) return _signer;
+  showWalletModal();
+  return null;
+}
+
+function resolveWeiName(addr) {
+  try {
+    const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+    const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+    ns.reverseResolve(addr).then(name => { if (name && _connectedAddress === addr) $('walletBtn').textContent = name.toLowerCase(); }).catch(() => {});
+  } catch (e) {}
+}
+
+async function tryAutoConnect() {
+  const savedWallet = localStorage.getItem('zfi_wallet');
+  if (!savedWallet) return;
+  $('walletBtn').textContent = '...';
+  setTimeout(async () => {
+    try {
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise(r => setTimeout(r, 300));
+      let probe;
+      if (savedWallet.startsWith('eip6963_')) {
+        const uuid = savedWallet.replace('eip6963_', '');
+        probe = eip6963Providers.get(uuid)?.provider;
+        if (!probe) {
+          const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
+          if (savedName) { for (const [, { info, provider }] of eip6963Providers) { if (info?.name?.toLowerCase() === savedName) { probe = provider; break; } } }
+        }
+      } else if (savedWallet !== 'walletconnect') {
+        probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
+      }
+      if (probe) {
+        const accts = await probe.request({ method: 'eth_accounts' });
+        if (!accts || accts.length === 0) { $('walletBtn').textContent = 'connect'; return; }
+      }
+      await connectWithWallet(savedWallet);
+    } catch (e) {
+      console.error('Auto-reconnect failed:', e);
+      $('walletBtn').textContent = 'connect';
+    }
+  }, 100);
+}
+
+// ==================== DASHBOARD ====================
+
+let _daoDeployed = false;
+
+async function loadDashboard() {
+  try {
+    const rpc = getRPC();
+    const helper = new ethers.Contract(VIEW_HELPER, GET_DAICO_ABI, rpc);
+    const data = await helper.getDAICO(DAO_ADDRESS, [ethers.ZeroAddress]);
+
+    _minterAddress = data.tap.ops;
+    const sale = data.sales[0];
+    const sold = sale.totalSupply - sale.remainingSupply;
+    const totalSale = sale.totalSupply;
+    const salePct = Number(sold) / Number(totalSale) * 100;
+    const deadline = Number(sale.deadline);
+    const now = Date.now() / 1000;
+    const saleActive = now < deadline && sale.remainingSupply > 0n;
+    const pastDeadline = now > deadline;
+
+    // Sale status
+    if (saleActive) {
+      $('saleStatus').innerHTML = '<span style="color:var(--green)">Live</span>';
+    } else if (sale.remainingSupply === 0n) {
+      $('saleStatus').textContent = 'Sold Out';
+    } else {
+      $('saleStatus').textContent = 'Ended';
+    }
+
+    $('saleBar').style.width = Math.min(salePct, 100).toFixed(1) + '%';
+    $('sharesSold').textContent = fmtShares(sold) + ' / ' + fmtShares(totalSale);
+
+    // ETH raised = (sold / forAmt) * tribAmt, but simpler: sold shares / 1M per ETH
+    const ethSold = Number(sold) / 1e18 / 1e6;
+    $('ethRaised').textContent = ethSold.toFixed(4) + ' ETH';
+    $('treasury').textContent = fmtETH(data.tap.treasuryBalance) + ' ETH';
+
+    // Deadline
+    const d = new Date(deadline * 1000);
+    let dlText = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (pastDeadline) dlText += ' (ended)';
+    else if (deadline - now < 86400) dlText += ' (' + Math.floor((deadline - now) / 3600) + 'h left)';
+    else dlText += ' (' + Math.floor((deadline - now) / 86400) + 'd left)';
+    $('fwDeadline').textContent = dlText;
+
+    // Minter data
+    if (_minterAddress && _minterAddress !== ethers.ZeroAddress) {
+      const minter = new ethers.Contract(_minterAddress, MINTER_ABI, rpc);
+      const [nftCount, lockedEth, mintable] = await Promise.all([
+        minter.nftCount(),
+        minter.totalLockedEth(),
+        minter.mintableFromTap()
+      ]);
+      $('nftCount').textContent = Number(nftCount);
+      $('lockedEth').textContent = fmtETH(lockedEth) + ' ETH';
+      $('mintable').textContent = Number(mintable);
+
+      if (Number(mintable) > 0) {
+        $('mintBtn').style.display = '';
+        $('mintBtn').textContent = `Mint ${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''} from Tap`;
+      }
+
+      // Close sale button
+      if (pastDeadline && sale.remainingSupply > 0n) {
+        // Check if DAO still holds shares (not yet closed)
+        const shares = new ethers.Contract(SHARES_ADDRESS, SHARES_ABI, rpc);
+        const daoBal = await shares.balanceOf(DAO_ADDRESS);
+        if (daoBal > 0n) {
+          $('closeBtn').style.display = '';
+        }
+      }
+
+      // Links
+      $('daoLink').href = 'https://etherscan.io/address/' + DAO_ADDRESS;
+      $('minterLink').href = 'https://etherscan.io/address/' + _minterAddress;
+      $('manageLink').href = '../dao/#/dao/1/' + DAO_ADDRESS;
+    }
+
+    // Buy section
+    if (!saleActive) {
+      $('buySection').style.display = 'none';
+    }
+
+    // User balance
+    if (_connectedAddress) {
+      const shares = new ethers.Contract(SHARES_ADDRESS, SHARES_ABI, rpc);
+      const [userBal, totalSupply] = await Promise.all([
+        shares.balanceOf(_connectedAddress),
+        shares.totalSupply()
+      ]);
+      if (userBal > 0n) {
+        $('userCard').style.display = '';
+        $('userShares').textContent = fmtShares(userBal);
+        const pct = totalSupply > 0n ? (Number(userBal) / Number(totalSupply) * 100).toFixed(2) : '0';
+        $('userPct').textContent = pct + '%';
+      }
+    }
+  } catch (e) {
+    console.error('Dashboard load failed:', e);
+  }
+}
+
+// ==================== ACTIONS ====================
+
+async function buyShares() {
+  if (!_signer) { toggleWallet(); return; }
+  const amt = $('buyAmount').value.trim();
+  if (!amt || isNaN(amt) || Number(amt) <= 0) { showStatus('statusArea', 'Enter a valid ETH amount', true); return; }
+
+  $('buyBtn').disabled = true;
+  try {
+    showStatus('statusArea', 'Confirm in wallet...');
+    const daico = new ethers.Contract(DAICO_ADDR, DAICO_BUY_ABI, _signer);
+    const value = ethers.parseEther(amt);
+    const tx = await daico.buy(DAO_ADDRESS, ethers.ZeroAddress, value, 0, { value });
+    showStatus('statusArea', `Tx submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a>`);
+    await tx.wait();
+    showStatus('statusArea', `Success! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>`);
+    loadDashboard();
+  } catch (e) {
+    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      clearStatus('statusArea');
+    } else {
+      showStatus('statusArea', escText((e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120)), true);
+    }
+  } finally { $('buyBtn').disabled = false; }
+}
+
+async function mintFromTap() {
+  if (!_signer) { toggleWallet(); return; }
+  if (!_minterAddress) return;
+  $('mintBtn').disabled = true;
+  try {
+    showStatus('statusArea', 'Confirm in wallet...');
+    const minter = new ethers.Contract(_minterAddress, MINTER_ABI, _signer);
+    const tx = await minter.mintFromTap(0);
+    showStatus('statusArea', `Tx submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a>`);
+    await tx.wait();
+    showStatus('statusArea', `NFT minted! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>`);
+    loadDashboard();
+  } catch (e) {
+    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      clearStatus('statusArea');
+    } else {
+      showStatus('statusArea', escText((e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120)), true);
+    }
+  } finally { $('mintBtn').disabled = false; }
+}
+
+async function closeSale() {
+  if (!_signer) { toggleWallet(); return; }
+  if (!_minterAddress) return;
+  $('closeBtn').disabled = true;
+  try {
+    showStatus('statusArea', 'Confirm in wallet...');
+    const minter = new ethers.Contract(_minterAddress, MINTER_ABI, _signer);
+    const tx = await minter.closeSale();
+    showStatus('statusArea', `Tx submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a>`);
+    await tx.wait();
+    showStatus('statusArea', `Sale closed, unsold shares burned! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>`);
+    $('closeBtn').style.display = 'none';
+    loadDashboard();
+  } catch (e) {
+    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      clearStatus('statusArea');
+    } else {
+      showStatus('statusArea', escText((e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120)), true);
+    }
+  } finally { $('closeBtn').disabled = false; }
+}
+
+// ==================== DEPLOY ====================
+
+let _deploying = false;
+let MINTER_BYTECODE = null;
+
+async function loadBytecode() {
+  if (MINTER_BYTECODE) return MINTER_BYTECODE;
+  try {
+    const res = await fetch('./FundingWorksMinter.json');
+    if (res.ok) {
+      const artifact = await res.json();
+      MINTER_BYTECODE = artifact.bytecode?.object || artifact.bytecode;
+      if (MINTER_BYTECODE && !MINTER_BYTECODE.startsWith('0x')) MINTER_BYTECODE = '0x' + MINTER_BYTECODE;
+      return MINTER_BYTECODE;
+    }
+  } catch (e) {}
+  throw new Error('Contract bytecode not found. Place FundingWorksMinter.json in the collect/ directory.');
+}
+
+async function deploy() {
+  if (_deploying) return;
+  if (!_signer) { toggleWallet(); return; }
+
+  const name = $('daoName').value.trim();
+  const symbol = $('daoSymbol').value.trim();
+  const desc = $('daoDescription').value.trim();
+
+  if (!name || name.length < 2) { showStatus('deployStatusArea', 'Enter a DAO name (at least 2 characters)', true); return; }
+  if (!symbol || symbol.length < 1) { showStatus('deployStatusArea', 'Enter a DAO symbol', true); return; }
+
+  _deploying = true;
+  $('deployBtn').disabled = true;
+
+  try {
+    showStatus('deployStatusArea', 'Loading contract bytecode...');
+    const bytecode = await loadBytecode();
+
+    const metadata = { name, symbol };
+    if (desc) metadata.description = desc;
+    metadata.type = 'fw-collector';
+
+    showStatus('deployStatusArea', 'Pinning metadata to IPFS...');
+    const orgURI = await pinMetadata(metadata);
+
+    showStatus('deployStatusArea', 'Please confirm the transaction in your wallet...');
+    const factory = new ethers.ContractFactory(MINTER_ABI, bytecode, _signer);
+    const tx = await factory.deploy(name, symbol, orgURI, DEPLOY_SALT);
+
+    const minterAddress = await tx.getAddress();
+    showStatus('deployStatusArea',
+      `Transaction submitted. <a href="https://etherscan.io/tx/${tx.deploymentTransaction().hash}" target="_blank">${tx.deploymentTransaction().hash.slice(0,10)}...</a> Waiting for confirmation...`
+    );
+
+    await tx.waitForDeployment();
+
+    showStatus('deployStatusArea',
+      `<strong>Deployed!</strong><br>` +
+      `Minter: <a href="https://etherscan.io/address/${minterAddress}" target="_blank">${minterAddress}</a><br>` +
+      `DAO: <a href="https://etherscan.io/address/${DAO_ADDRESS}" target="_blank">${DAO_ADDRESS}</a>`
+    );
+
+    // Switch to dashboard
+    setTimeout(() => {
+      $('deploySection').style.display = 'none';
+      $('dashboard').style.display = '';
+      _daoDeployed = true;
+      loadDashboard();
+    }, 2000);
+  } catch (e) {
+    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      showStatus('deployStatusArea', 'Deploy cancelled', false);
+    } else {
+      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
+      showStatus('deployStatusArea', escText(msg.length < 120 ? msg : 'Deploy failed'), true);
+      console.error('Deploy error:', e);
+    }
+  } finally {
+    _deploying = false;
+    $('deployBtn').disabled = false;
+  }
+}
+
+async function pinMetadata(metadata) {
+  if (!PIN_URL) return 'data:application/json;utf8,' + JSON.stringify(metadata);
+  const res = await fetch(PIN_URL + '/pin-json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(metadata),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Metadata pin failed');
+  return 'ipfs://' + data.cid;
+}
+
+// ==================== FW INFO (for deploy section) ====================
+
+async function loadFWInfo() {
+  try {
+    const rpc = getRPC();
+    const fw = new ethers.Contract(FW_ADDRESS, FW_ABI, rpc);
+    const [mintStart, mintPeriod] = await Promise.all([
+      fw.mintStartTime(),
+      fw.MINT_PERIOD()
+    ]);
+    const deadline = Number(mintStart) + Number(mintPeriod);
+    const d = new Date(deadline * 1000);
+    const now = Date.now() / 1000;
+    const remaining = deadline - now;
+    let text = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (remaining <= 0) text += ' (ended)';
+    else if (remaining < 86400) text += ' (' + Math.floor(remaining / 3600) + 'h left)';
+    else text += ' (' + Math.floor(remaining / 86400) + 'd left)';
+    $('fwDeadlineDeploy').textContent = text;
+  } catch (e) {
+    $('fwDeadlineDeploy').textContent = 'error';
+  }
+}
+
+// ==================== INIT ====================
+
+async function init() {
+  const rpc = getRPC();
+  // Check if DAO is deployed
+  const code = await rpc.getCode(DAO_ADDRESS);
+  if (code && code !== '0x') {
+    _daoDeployed = true;
+    $('deploySection').style.display = 'none';
+    $('dashboard').style.display = '';
+    loadDashboard();
+  } else {
+    loadFWInfo();
+  }
+}
+
+init();
+tryAutoConnect();
+</script>
+</body>
+</html>

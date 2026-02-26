@@ -878,6 +878,66 @@ async function fetchAllEvents(poolId) {
   return all.reverse(); // chronological order
 }
 
+// ==================== PNL TRACKING (localStorage) ====================
+// Tracks cost basis per market/side/wallet. Records are updated on each trade
+// that confirms through our UI. Key format: pnl:{wallet}:{marketId}:{side}
+// Value: JSON { totalCost: number, totalShares: number } (collateral units)
+
+function _pnlKey(wallet, marketId, side) {
+  return `pnl:${wallet.toLowerCase()}:${marketId}:${side}`;
+}
+
+function recordTrade(wallet, marketId, side, dir, collateral, shares) {
+  // collateral/shares in human-readable numbers (not wei)
+  const key = _pnlKey(wallet, marketId, side);
+  let rec = { totalCost: 0, totalShares: 0 };
+  try { rec = JSON.parse(localStorage.getItem(key)) || rec; } catch {}
+
+  if (dir === 'buy') {
+    rec.totalCost += collateral;
+    rec.totalShares += shares;
+  } else {
+    // Sell: reduce position proportionally (FIFO-style avg cost)
+    const avgCost = rec.totalShares > 0 ? rec.totalCost / rec.totalShares : 0;
+    const soldShares = Math.min(shares, rec.totalShares);
+    rec.totalCost -= avgCost * soldShares;
+    rec.totalShares -= soldShares;
+    if (rec.totalShares < 0.00001) { rec.totalCost = 0; rec.totalShares = 0; }
+  }
+  localStorage.setItem(key, JSON.stringify(rec));
+}
+
+function getUserPNL(wallet, marketId, side) {
+  const key = _pnlKey(wallet, marketId, side);
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+
+function renderPNL(marketId, wallet, yPct, nPct, collSym) {
+  const pnlEl = $('posPNL');
+  if (!pnlEl || !wallet) return;
+
+  let pnlHtml = '';
+  for (const side of ['yes', 'no']) {
+    const rec = getUserPNL(wallet, marketId, side);
+    if (!rec || rec.totalShares < 0.0001) continue;
+
+    const spotPct = side === 'yes' ? yPct : nPct;
+    const avgEntry = Math.round((rec.totalCost / rec.totalShares) * 100);
+    const currentVal = rec.totalShares * spotPct / 100;
+    const pnl = currentVal - rec.totalCost;
+    const pnlPct = rec.totalCost > 0 ? ((pnl / rec.totalCost) * 100).toFixed(1) : '0';
+    const pnlColor = pnl >= 0 ? 'var(--yes)' : 'var(--no)';
+    const pnlSign = pnl >= 0 ? '+' : '';
+    const pnlFmt = Math.abs(pnl) >= 1 ? pnl.toFixed(2) : pnl.toFixed(4);
+    const sideLabel = side.toUpperCase();
+    pnlHtml += `<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0">
+      <span style="color:var(--fg-muted)">${sideLabel} avg entry <b style="color:var(--fg)">${avgEntry}%</b> → now ${spotPct}%</span>
+      <span style="color:${pnlColor}">${pnlSign}${pnlFmt} ${collSym} (${pnlSign}${pnlPct}%)</span>
+    </div>`;
+  }
+  if (pnlHtml) pnlEl.innerHTML = pnlHtml;
+}
+
 // roundRect polyfill for older browsers
 if (!CanvasRenderingContext2D.prototype.roundRect) {
   CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
@@ -2364,9 +2424,10 @@ let _connectedAddress = null;
 let _tradeDir = 'buy';
 let _tradeSide = 'yes';
 let _quoteTimer = null;
+let _quoteAgeTimer = null;
 let _lastQuote = null;
 let _isTrading = false;
-let _tradeSlippage = 5; // default 5% slippage tolerance
+let _tradeSlippage = 15; // default 15% slippage tolerance (high due to thin AMM liquidity; excess goes to vault depth via buyWithSweep)
 let _galleryFilter = 'active'; // 'active' | 'resolved' | 'all'
 let _currentMarketType = 'price'; // 'price' | 'balance' | 'supply'
 let _balanceAssetType = 'eth'; // 'eth' | 'token'
@@ -3430,8 +3491,17 @@ async function renderMarketPage(marketId) {
         <div class="drawer-body" style="padding:0 0 8px">`;
       if (hasTradePos) {
         posHtml += `<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-dim);margin-bottom:4px">Outcome Tokens</div>`;
-        if (userYes > 0n) posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${Number(ethers.formatEther(userYes)).toFixed(4)}</span></div>`;
-        if (userNo > 0n) posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${Number(ethers.formatEther(userNo)).toFixed(4)}</span></div>`;
+        if (userYes > 0n) {
+          const _yAmt = Number(ethers.formatEther(userYes));
+          const _yVal = _yAmt * yPct / 100;
+          posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${_yAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">≈${_yVal >= 1 ? _yVal.toFixed(2) : _yVal.toFixed(4)} ${collSym} (${yPct}%)</span></span></div>`;
+        }
+        if (userNo > 0n) {
+          const _nAmt = Number(ethers.formatEther(userNo));
+          const _nVal = _nAmt * nPct / 100;
+          posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${_nAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">≈${_nVal >= 1 ? _nVal.toFixed(2) : _nVal.toFixed(4)} ${collSym} (${nPct}%)</span></span></div>`;
+        }
+        posHtml += `<div id="posPNL" style="margin-top:4px"></div>`;
       }
       if (hasLPPos) {
         if (hasTradePos) posHtml += `<div style="border-top:1px solid var(--border-muted);margin:8px 0"></div>`;
@@ -3512,11 +3582,12 @@ async function renderMarketPage(marketId) {
             </div>
           </div>
           <div class="trade-quote" id="tradeQuote"></div>
+          <div id="quoteAge" style="font-size:10px;min-height:14px;margin-bottom:2px"></div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--fg-muted)">
             <span>Slippage</span>
             <span style="display:flex;gap:4px;align-items:center" id="slippageRow">
-              ${[1,3,5,10].map(v => `<button onclick="setSlippage(${v})" class="trade-pct-btn" style="font-size:10px;padding:2px 6px;min-width:0;${_tradeSlippage===v?'color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg)':''}" data-slip="${v}">${v}%</button>`).join('')}
-              <input type="number" id="slippageCustom" min="0.1" max="50" step="0.1" style="width:44px;padding:2px 4px;font-size:10px;background:var(--surface);border:1px solid ${![1,3,5,10].includes(_tradeSlippage)?'var(--btn-bg)':'var(--border-muted)'};color:var(--fg);text-align:center;border-radius:3px" value="${_tradeSlippage}" onfocus="clearSlippagePresets()" oninput="setSlippage(parseFloat(this.value)||5,true)">
+              ${[3,5,10,15].map(v => `<button onclick="setSlippage(${v})" class="trade-pct-btn" style="font-size:10px;padding:2px 6px;min-width:0;${_tradeSlippage===v?'color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg)':''}" data-slip="${v}">${v}%</button>`).join('')}
+              <input type="number" id="slippageCustom" min="0.1" max="50" step="0.1" style="width:44px;padding:2px 4px;font-size:10px;background:var(--surface);border:1px solid ${![3,5,10,15].includes(_tradeSlippage)?'var(--btn-bg)':'var(--border-muted)'};color:var(--fg);text-align:center;border-radius:3px" value="${_tradeSlippage}" onfocus="clearSlippagePresets()" oninput="setSlippage(parseFloat(this.value)||15,true)">
               <span style="font-size:10px">%</span>
             </span>
           </div>
@@ -3632,6 +3703,11 @@ async function renderMarketPage(marketId) {
       }
     }).catch(() => {});
 
+    // Render user PNL from localStorage
+    if (_connectedAddress && hasTradePos) {
+      renderPNL(marketId, _connectedAddress, yPct, nPct, collSym);
+    }
+
     // Update page title and meta tags for sharing
     const plainQ = parsed.question.replace(/<[^>]*>/g, '');
     document.title = plainQ + ' — PREDICT';
@@ -3743,7 +3819,7 @@ function setSlippage(pct, fromCustom) {
   _tradeSlippage = pct;
   const row = $('slippageRow');
   if (row) {
-    const isPreset = [1,3,5,10].includes(pct);
+    const isPreset = [3,5,10,15].includes(pct);
     row.querySelectorAll('button[data-slip]').forEach(b => {
       const v = Number(b.dataset.slip);
       if (v === pct && !fromCustom) { b.style.color = 'var(--btn-fg)'; b.style.background = 'var(--btn-bg)'; b.style.borderColor = 'var(--btn-bg)'; }
@@ -4098,8 +4174,29 @@ function setPct(pct) {
   onTradeInput();
 }
 
+function startQuoteAgeTimer() {
+  clearInterval(_quoteAgeTimer);
+  const ageEl = $('quoteAge');
+  if (ageEl) { ageEl.textContent = 'just now'; ageEl.style.color = 'var(--fg-dim)'; }
+  _quoteAgeTimer = setInterval(() => {
+    if (!_lastQuote) { clearInterval(_quoteAgeTimer); return; }
+    const age = Math.floor((Date.now() - _lastQuote.ts) / 1000);
+    const el = $('quoteAge');
+    if (!el) { clearInterval(_quoteAgeTimer); return; }
+    if (age < 5) { el.textContent = 'just now'; el.style.color = 'var(--fg-dim)'; }
+    else if (age < 30) { el.textContent = age + 's ago'; el.style.color = 'var(--fg-dim)'; }
+    else { el.textContent = age + 's — quote stale'; el.style.color = 'var(--no)'; }
+  }, 1000);
+}
+function clearQuoteAge() {
+  clearInterval(_quoteAgeTimer);
+  const el = $('quoteAge');
+  if (el) el.textContent = '';
+}
+
 function onTradeInput() {
   clearTimeout(_quoteTimer);
+  clearQuoteAge();
   const input = $('tradeInput');
   const btn = $('tradeBtn');
   const quoteEl = $('tradeQuote');
@@ -4132,14 +4229,27 @@ function onTradeInput() {
   if (_tradeDir === 'buy') {
     estimated = _tradeSide === 'yes' ? quoteBuyYes(amountWei, rYes, rNo) : quoteBuyNo(amountWei, rYes, rNo);
     if (quoteEl && estimated > 0n) {
-      quoteEl.textContent = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares';
+      const _avgPct = Math.round((val / Number(ethers.formatEther(estimated))) * 100);
+      const _spot = rYes + rNo > 0n ? Math.round(Number(_tradeSide === 'yes' ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
+      const _impact = _spot > 0 ? Math.round(((_avgPct - _spot) / _spot) * 100) : 0;
+      let _quoteExtra = '';
+      if (_impact > _tradeSlippage) {
+        _quoteExtra = `<br><span style="font-size:11px;color:var(--no)">⚠ ${_impact}% price impact — may revert or increase slippage</span>`;
+      }
+      quoteEl.innerHTML = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
+        + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`
+        + _quoteExtra;
     }
   } else {
     estimated = _tradeSide === 'yes' ? quoteSellYes(amountWei, rYes, rNo) : quoteSellNo(amountWei, rYes, rNo);
     const collateral = $('app').dataset.collateral;
     const collSym = getCollateralSymbol(collateral);
+
     if (quoteEl && estimated > 0n) {
-      quoteEl.textContent = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + collSym;
+      const _avgPct = Math.round((Number(ethers.formatEther(estimated)) / Number(ethers.formatEther(amountWei))) * 100);
+      const _spot = rYes + rNo > 0n ? Math.round(Number(_tradeSide === 'yes' ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
+      quoteEl.innerHTML = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + collSym
+        + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% per share` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`;
     }
   }
 
@@ -4168,7 +4278,13 @@ async function fetchOnchainQuote(amountWei) {
           const result = await quoter.quoteBuyWithSweep(marketId, buyYes, amountWei, 9999, { gasLimit: 5000000 });
           const shares = BigInt(result.totalSharesOut);
           const pmShares = BigInt(result.pmSharesOut);
-          let quoteHtml = Number(ethers.formatEther(shares)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares';
+          const _sharesF = Number(ethers.formatEther(shares));
+          const _collF = Number(ethers.formatEther(amountWei));
+          const _avgPct = _sharesF > 0 ? Math.round((_collF / _sharesF) * 100) : 0;
+          const _rY = BigInt($('app').dataset.ammYesReserve || '0'), _rN = BigInt($('app').dataset.ammNoReserve || '0');
+          const _spot = _rY + _rN > 0n ? Math.round(Number(_tradeSide === 'yes' ? _rN : _rY) * 100 / Number(_rY + _rN)) : 0;
+          let quoteHtml = _sharesF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
+            + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`;
           if (pmShares > 0n) {
             const oppSide = buyYes ? 'NO' : 'YES';
             quoteHtml += `<br><span style="font-size:11px;color:var(--fg-muted)">~${Number(ethers.formatEther(pmShares)).toFixed(4)} ${oppSide} minted to vault (withdrawal cooldown)</span>`;
@@ -4180,7 +4296,13 @@ async function fetchOnchainQuote(amountWei) {
           const collOut = BigInt(result.totalCollateralOut);
           const collateral = $('app').dataset.collateral;
           const collSym = getCollateralSymbol(collateral);
-          quoteEl.textContent = Number(ethers.formatEther(collOut)).toFixed(4) + ' ' + collSym;
+          const _collF = Number(ethers.formatEther(collOut));
+          const _sharesF = Number(ethers.formatEther(amountWei));
+          const _avgPct = _sharesF > 0 ? Math.round((_collF / _sharesF) * 100) : 0;
+          const _rY2 = BigInt($('app').dataset.ammYesReserve || '0'), _rN2 = BigInt($('app').dataset.ammNoReserve || '0');
+          const _spot2 = _rY2 + _rN2 > 0n ? Math.round(Number(_tradeSide === 'yes' ? _rN2 : _rY2) * 100 / Number(_rY2 + _rN2)) : 0;
+          quoteEl.innerHTML = _collF.toFixed(4) + ' ' + collSym
+            + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% per share` + (_avgPct !== _spot2 ? ` (spot ${_spot2}%)` : '') + `</span>`;
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: collOut, ts: Date.now() };
         }
         return true;
@@ -4204,11 +4326,25 @@ async function fetchOnchainQuote(amountWei) {
         const collSym = getCollateralSymbol(collateral);
         if (_tradeDir === 'buy') {
           const shares = buyYes ? quoteBuyYes(amountWei, rYes, rNo, LEGACY_FEE_BPS) : quoteBuyNo(amountWei, rYes, rNo, LEGACY_FEE_BPS);
-          if (quoteEl && shares > 0n) quoteEl.textContent = Number(ethers.formatEther(shares)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares';
+          if (quoteEl && shares > 0n) {
+            const _sF = Number(ethers.formatEther(shares));
+            const _cF = Number(ethers.formatEther(amountWei));
+            const _avgPct = _sF > 0 ? Math.round((_cF / _sF) * 100) : 0;
+            const _spotL = rYes + rNo > 0n ? Math.round(Number(buyYes ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
+            quoteEl.innerHTML = _sF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
+              + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spotL ? ` (spot ${_spotL}%)` : '') + `</span>`;
+          }
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: shares, ts: Date.now() };
         } else {
           const collOut = buyYes ? quoteSellYes(amountWei, rYes, rNo, LEGACY_FEE_BPS) : quoteSellNo(amountWei, rYes, rNo, LEGACY_FEE_BPS);
-          if (quoteEl && collOut > 0n) quoteEl.textContent = Number(ethers.formatEther(collOut)).toFixed(4) + ' ' + collSym;
+          if (quoteEl && collOut > 0n) {
+            const _cF = Number(ethers.formatEther(collOut));
+            const _sF = Number(ethers.formatEther(amountWei));
+            const _avgPct = _sF > 0 ? Math.round((_cF / _sF) * 100) : 0;
+            const _spotL2 = rYes + rNo > 0n ? Math.round(Number(buyYes ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
+            quoteEl.innerHTML = _cF.toFixed(4) + ' ' + collSym
+              + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% per share` + (_avgPct !== _spotL2 ? ` (spot ${_spotL2}%)` : '') + `</span>`;
+          }
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: collOut, ts: Date.now() };
         }
         return true;
@@ -4219,10 +4355,16 @@ async function fetchOnchainQuote(amountWei) {
       btn.textContent = _tradeDir === 'buy' ? 'Buy ' + _tradeSide.toUpperCase() : 'Sell ' + _tradeSide.toUpperCase();
       btn.disabled = false;
     }
+    startQuoteAgeTimer();
   } catch (e) {
     console.warn('Quote failed:', e.message);
-    if (quoteEl) quoteEl.textContent = 'Quote failed';
+    const errMsg = decodeError(e);
+
+    if (quoteEl) {
+      quoteEl.textContent = 'Quote failed: ' + errMsg;
+    }
     _lastQuote = null;
+    clearQuoteAge();
   }
 }
 
@@ -4423,18 +4565,26 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
     const collateral = $('app').dataset.collateral;
     const collSym = getCollateralSymbol(collateral);
 
-    quoteEl.innerHTML = Number(ethers.formatEther(quote.sharesOut)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares' +
-      '<br><span style="font-size:11px;color:var(--fg-muted)">' + payData.symbol + ' → ' + collSym + ' → shares (routed via zRouter)</span>';
+    const _rSharesF = Number(ethers.formatEther(quote.sharesOut));
+    const _rCollF = Number(ethers.formatEther(quote.collateralAmount));
+    const _rAvgPct = _rSharesF > 0 ? Math.round((_rCollF / _rSharesF) * 100) : 0;
+    const _rY3 = BigInt($('app').dataset.ammYesReserve || '0'), _rN3 = BigInt($('app').dataset.ammNoReserve || '0');
+    const _rSpot = _rY3 + _rN3 > 0n ? Math.round(Number(buyYes ? _rN3 : _rY3) * 100 / Number(_rY3 + _rN3)) : 0;
+    quoteEl.innerHTML = _rSharesF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
+      + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_rAvgPct}% avg` + (_rAvgPct !== _rSpot ? ` (spot ${_rSpot}%)` : '') + `</span>`
+      + '<br><span style="font-size:11px;color:var(--fg-muted)">' + payData.symbol + ' → ' + collSym + ' → shares (routed via zRouter)</span>';
     _lastQuote = quote;
 
     if (btn) {
       btn.textContent = 'Buy ' + _tradeSide.toUpperCase();
       btn.disabled = false;
     }
+    startQuoteAgeTimer();
   } catch (e) {
     console.warn('Routed quote failed:', e.message);
     if (quoteEl) quoteEl.textContent = 'Route not found: ' + (e.message || '').slice(0, 60);
     _lastQuote = null;
+    clearQuoteAge();
   }
 }
 
@@ -4463,13 +4613,14 @@ async function executeTrade() {
 
   _isTrading = true;
   btn.disabled = true;
+  clearQuoteAge();
 
   const isLabeled = $('app').dataset.isLabeled === '1';
 
   try {
     // ---- ROUTED BUY (any token → collateral → shares via zRouter) ----
     if (_tradeDir === 'buy' && _lastQuote?.isRouted) {
-      if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+      if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || _lastQuote.side !== _tradeSide || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
         throw new Error('Quote expired — please re-enter amount to get a fresh quote');
       }
 
@@ -4551,10 +4702,12 @@ async function executeTrade() {
         data: txData,
         value: freshQuote.msgValue
       });
-      btn.textContent = 'Confirming...';
-      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+      btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:inherit;text-decoration:underline" onclick="event.stopPropagation()">View tx</a>`;
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span>`;
       await tx.wait();
+      btn.textContent = 'Buy confirmed!';
       if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+      recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', Number(ethers.formatEther(freshQuote.collateralAmount)), Number(ethers.formatEther(freshQuote.sharesOut)));
       input.value = '';
 
       setTimeout(() => renderMarketPage(marketId), 2000);
@@ -4568,7 +4721,7 @@ async function executeTrade() {
       const router = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
 
       if (_tradeDir === 'buy') {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || _lastQuote.side !== _tradeSide || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
         const _buySlipBps = BigInt(Math.round(_tradeSlippage * 100));
@@ -4592,14 +4745,16 @@ async function executeTrade() {
           _connectedAddress, deadline,
           { value: isETH ? amountWei : 0n }
         );
-        btn.textContent = 'Confirming...';
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+        btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:inherit;text-decoration:underline" onclick="event.stopPropagation()">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span>`;
         await tx.wait();
+        btn.textContent = 'Buy confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(ethers.formatEther(_lastQuote.expectedOut)));
         input.value = '';
 
       } else {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || _lastQuote.side !== _tradeSide || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
         const slipBps = BigInt(Math.round(_tradeSlippage * 100));
@@ -4614,15 +4769,54 @@ async function executeTrade() {
           // Wait for state propagation after operator approval
           await new Promise(r => setTimeout(r, 1000));
         }
+        // Validate via estimateGas — the quoter can succeed while the actual contract overflows
+        let sellAmt = _lastQuote.amount || amountWei;
+        let sellMinColl = minCollOut;
+        btn.textContent = 'Validating...';
+        for (let _try = 0; _try < 15; _try++) {
+          try {
+            await router.sellWithSweep.estimateGas(
+              marketId, buyYes, sellAmt, 0, 1,
+              _connectedAddress, deadline
+            );
+            break; // estimateGas passed — this amount works
+          } catch {
+            sellAmt = sellAmt * 90n / 100n;
+            if (sellAmt === 0n) throw new Error('Cannot sell — pool arithmetic overflow');
+            try {
+              const newQuoteResult = await withRPC(async (rpc2) => {
+                const q = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc2);
+                return q.quoteSellWithSweep(marketId, buyYes, sellAmt, 1, { gasLimit: 5000000 });
+              });
+              sellMinColl = BigInt(newQuoteResult.totalCollateralOut) * (10000n - slipBps) / 10000n;
+            } catch {
+              sellMinColl = 0n; // let slippage handle it
+            }
+          }
+        }
+        // Update input + quote to reflect adjusted amount
+        if (sellAmt !== (_lastQuote.amount || amountWei)) {
+          const adjF = Number(ethers.formatEther(sellAmt));
+          input.value = adjF >= 1 ? adjF.toFixed(4) : adjF.toFixed(6);
+          if (quoteEl) {
+            const collSym = getCollateralSymbol(collateral);
+            const collF = sellMinColl > 0n ? Number(ethers.formatEther(sellMinColl * 10000n / (10000n - slipBps))) : 0;
+            quoteEl.innerHTML = '~' + collF.toFixed(4) + ' ' + collSym
+              + `<br><span style="font-size:11px;color:var(--fg-muted)">Adjusted to max — pool overflow at higher amounts</span>`;
+          }
+        }
         btn.textContent = 'Confirm in wallet...';
         const tx = await router.sellWithSweep(
-          marketId, buyYes, amountWei, minCollOut, 1,
+          marketId, buyYes, sellAmt, sellMinColl, 1,
           _connectedAddress, deadline
         );
-        btn.textContent = 'Confirming...';
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+        btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:inherit;text-decoration:underline" onclick="event.stopPropagation()">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span>`;
         await tx.wait();
+        btn.textContent = 'Sell confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+        const sellValF = Number(ethers.formatEther(sellAmt));
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'sell', sellValF, sellValF);
         input.value = '';
       }
 
@@ -4631,7 +4825,7 @@ async function executeTrade() {
       const pmRouter = new ethers.Contract(CONTRACTS.PM_ROUTER, PM_ROUTER_ABI, s);
 
       if (_tradeDir === 'buy') {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'buy' || _lastQuote.side !== _tradeSide || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
         const _legBuySlipBps = BigInt(Math.round(_tradeSlippage * 100));
@@ -4655,14 +4849,16 @@ async function executeTrade() {
           LEGACY_FEE_BPS, _connectedAddress, deadline,
           { value: isETH ? amountWei : 0n }
         );
-        btn.textContent = 'Confirming...';
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+        btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:inherit;text-decoration:underline" onclick="event.stopPropagation()">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span>`;
         await tx.wait();
+        btn.textContent = 'Buy confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(ethers.formatEther(_lastQuote.expectedOut)));
         input.value = '';
 
       } else {
-        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
+        if (!_lastQuote || _lastQuote.marketId !== marketId || _lastQuote.dir !== 'sell' || _lastQuote.side !== _tradeSide || (Date.now() - _lastQuote.ts) >= 30000 || _lastQuote.expectedOut <= 0n) {
           throw new Error('Quote expired — please re-enter amount to get a fresh quote');
         }
         const _legSellSlipBps = BigInt(Math.round(_tradeSlippage * 100));
@@ -4681,10 +4877,12 @@ async function executeTrade() {
           BigInt(marketId), buyYes, amountWei, minCollOut,
           LEGACY_FEE_BPS, _connectedAddress, deadline
         );
-        btn.textContent = 'Confirming...';
-        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View on Etherscan</a>`;
+        btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:inherit;text-decoration:underline" onclick="event.stopPropagation()">View tx</a>`;
+        if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--fg-muted)">Pending...</span>`;
         await tx.wait();
+        btn.textContent = 'Sell confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'sell', val, val);
         input.value = '';
       }
     }
@@ -4693,14 +4891,24 @@ async function executeTrade() {
     setTimeout(() => renderMarketPage(marketId), 2000);
 
   } catch (e) {
-    if (!isUserRejection(e)) {
+    if (isUserRejection(e)) {
+      if (quoteEl) {
+        quoteEl.innerHTML = '<span style="color:var(--fg-muted)">Cancelled</span>';
+        setTimeout(() => { if (quoteEl.textContent === 'Cancelled') quoteEl.textContent = ''; }, 2000);
+      }
+    } else {
       console.error('Trade failed:', e);
       if (quoteEl) quoteEl.textContent = 'Failed: ' + decodeError(e);
     }
   } finally {
-    btn.textContent = origText;
-    btn.disabled = false;
     _isTrading = false;
+    if (btn.textContent.includes('confirmed')) {
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+    } else {
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
   }
 }
 
@@ -5335,7 +5543,7 @@ const KNOWN_ERRORS = {
   '0x7db1be50': 'Market not found',
   '0x8baa579f': 'Insufficient output — increase slippage tolerance',
   '0xfb8f41b2': 'Insufficient liquidity',
-  '0x4e487b71': 'Arithmetic error',
+  '0x4e487b71': 'Amount too large for pool liquidity — try a smaller amount',
   '0x1f2a2005': 'Deadline expired — please retry',
   '0xe450d38c': 'Insufficient balance',
   '0x59c896be': 'Insufficient balance for transfer',
