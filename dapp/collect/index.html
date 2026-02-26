@@ -252,11 +252,7 @@ body.modal-open { overflow:hidden; }
     <div class="info-row"><span class="info-label">Your % of supply</span><span class="info-value" id="userPct">-</span></div>
   </div>
 
-  <div class="info-card">
-    <div class="info-row"><span class="info-label">NFTs in vault</span><span class="info-value" id="nftCount">-</span></div>
-    <div class="info-row"><span class="info-label">Locked ETH</span><span class="info-value" id="lockedEth">-</span></div>
-    <div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value" id="mintable">-</span></div>
-  </div>
+  <div class="info-card" id="nftCard"></div>
 
   <!-- Buy shares -->
   <div id="buySection">
@@ -276,7 +272,8 @@ body.modal-open { overflow:hidden; }
   <div id="statusArea"></div>
 
   <div style="font-size:11px;color:var(--fg-dim);margin-top:12px">
-    <a href="" id="daoLink" target="_blank" style="color:var(--fg-dim)">DAO</a>
+    <a href="" id="tradeLink" style="color:var(--fg-dim)">Trade</a>
+    &middot; <a href="" id="daoLink" target="_blank" style="color:var(--fg-dim)">DAO</a>
     &middot; <a href="" id="minterLink" target="_blank" style="color:var(--fg-dim)">Minter</a>
     &middot; <a href="" id="manageLink" style="color:var(--fg-dim)">Manage DAO</a>
   </div>
@@ -658,13 +655,33 @@ async function loadDashboard() {
         minter.totalLockedEth(),
         minter.mintableFromTap()
       ]);
-      $('nftCount').textContent = Number(nftCount);
-      $('lockedEth').textContent = fmtETH(lockedEth) + ' ETH';
-      $('mintable').textContent = Number(mintable);
+      const nftCard = $('nftCard');
+      const nc = Number(nftCount);
+      const mt = Number(mintable);
+      if (nc > 0) {
+        nftCard.innerHTML = `
+          <div class="info-row"><span class="info-label">NFTs in vault</span><span class="info-value">${nc}</span></div>
+          <div class="info-row"><span class="info-label">Locked ETH</span><span class="info-value">${fmtETH(lockedEth)} ETH</span></div>
+          ${mt > 0 ? `<div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value">${mt}</span></div>` : ''}
+        `;
+      } else if (mt > 0) {
+        nftCard.innerHTML = `
+          <div class="info-row"><span class="info-label">Ready to mint</span><span class="info-value" style="color:var(--green)">${mt} NFT${mt > 1 ? 's' : ''}</span></div>
+        `;
+      } else {
+        // Show progress toward next NFT
+        const treasuryWei = data.tap.treasuryBalance;
+        const pct = Math.min(Number(treasuryWei) * 100 / 1e18, 100);
+        nftCard.innerHTML = `
+          <div class="info-row"><span class="info-label">Progress to 1st NFT</span><span class="info-value">${fmtETH(treasuryWei)} / 1.0 ETH</span></div>
+          <div class="sale-bar"><div class="sale-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-top:4px">Treasury needs 1 ETH to mint a FundingWorks S02 NFT</div>
+        `;
+      }
 
-      if (Number(mintable) > 0) {
+      if (mt > 0) {
         $('mintBtn').style.display = '';
-        $('mintBtn').textContent = `Mint ${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''} from Tap`;
+        $('mintBtn').textContent = `Mint ${mt} NFT${mt > 1 ? 's' : ''} from Tap`;
       }
 
       // Close sale button
@@ -678,6 +695,7 @@ async function loadDashboard() {
       }
 
       // Links
+      $('tradeLink').href = '../coin/#' + DAO_ADDRESS;
       $('daoLink').href = 'https://etherscan.io/address/' + DAO_ADDRESS;
       $('minterLink').href = 'https://etherscan.io/address/' + _minterAddress;
       $('manageLink').href = '../dao/#/dao/1/' + DAO_ADDRESS;
