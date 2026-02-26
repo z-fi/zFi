@@ -1227,8 +1227,6 @@ async function renderGallery() {
 
       // Market cap (circulating): price * circulating supply
       // Circulating = total - unsold - team locked
-      const teamBps = md && md.teamBps ? md.teamBps : 0;
-      const teamLocked = teamBps > 0 ? Number(COIN_SUPPLY_TOTAL) * teamBps / 10000 : 0;
       let mcapETH = 0;
       let poolR0 = 0n;
       let poolR1 = 0n;
@@ -1241,6 +1239,8 @@ async function renderGallery() {
         } catch(e) {}
       }
       const coinTotalSupply = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
+      const teamBps = md && md.teamBps ? md.teamBps : 0;
+      const teamLocked = teamBps > 0 ? coinTotalSupply * teamBps / 10000 : 0;
       const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
       const circulating = coinTotalSupply - unsold - teamLocked;
       // Price: pool spot if sale ended or pool is deep, else sale price
