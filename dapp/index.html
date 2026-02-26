@@ -811,6 +811,23 @@ body.modal-open { overflow: hidden; }
 #coinStatus .status-message.error { background: var(--status-error); }
 #coinStatus .status-message.success { background: var(--status-success); }
 
+/* Live sale banner */
+.live-sales { margin-top:16px; }
+.live-sale-card {
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border:1px solid var(--border);background:var(--bg);
+  text-decoration:none;color:var(--fg);transition:border-color 0.15s;cursor:pointer;
+}
+.live-sale-card:hover { border-color:var(--fg-muted); }
+.live-sale-logo { width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface);flex-shrink:0; }
+.live-sale-logo-ph { width:28px;height:28px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--fg-muted);flex-shrink:0; }
+.live-sale-info { flex:1;min-width:0; }
+.live-sale-name { font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.live-sale-meta { font-size:11px;color:var(--fg-muted);margin-top:1px; }
+.live-sale-pct { font-size:12px;font-weight:600;color:var(--green);white-space:nowrap; }
+.live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;flex-shrink:0; }
+.live-sale-bar-fill { height:100%;background:var(--green);border-radius:2px; }
+
 /* Swap card container */
 .swap-card {
   border: 1px solid var(--border);
@@ -1049,6 +1066,8 @@ body.modal-open { overflow: hidden; }
 </div><!-- end swap-card -->
 
 </div><!-- end swapTab -->
+
+<div id="liveSalesSection" class="live-sales" style="display:none"></div>
 
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
@@ -1538,14 +1557,27 @@ const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
 const DAICO_SCAN_ABI = ["function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"];
 let _daicoCoinsCache = null; // [{symbol, address, decimals, feeOrHook, dao}]
 let _daicoScanBusy = false;
+let _daicoRawCache = null; // raw scanDAICOs result
+let _daicoRawPromise = null; // in-flight scan promise
 const DAICO_IPFS_GW = "https://content.wrappr.wtf/ipfs/";
+
+async function fetchDaicoScan() {
+  if (_daicoRawCache) return _daicoRawCache;
+  if (_daicoRawPromise) return _daicoRawPromise;
+  _daicoRawPromise = (async () => {
+    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
+    const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
+    _daicoRawCache = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+    return _daicoRawCache;
+  })();
+  return _daicoRawPromise;
+}
+
 async function searchDaicoCoins() {
   if (_daicoCoinsCache || _daicoScanBusy) return _daicoCoinsCache;
   _daicoScanBusy = true;
   try {
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-    const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
-    const daicos = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+    const daicos = await fetchDaicoScan();
     const graduated = [];
     for (const d of daicos) {
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
@@ -1585,6 +1617,72 @@ async function searchDaicoCoins() {
   } catch (e) { console.warn('DAICO scan failed:', e); _daicoCoinsCache = []; return []; }
   finally { _daicoScanBusy = false; }
 }
+
+// ---- Live sale banner (most recent active sale) ----
+async function loadLiveSale() {
+  try {
+    const daicos = await fetchDaicoScan();
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    // Find most recent active sale (highest index = newest)
+    let s = null;
+    for (let i = daicos.length - 1; i >= 0; i--) {
+      const d = daicos[i];
+      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+      if (!sale) continue;
+      if (sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline))) {
+        const totalSale = sale.totalSupply;
+        const sold = totalSale - sale.remainingSupply;
+        const raisedETH = sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0;
+        s = {
+          dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
+          contractURI: d.meta.contractURI,
+          pct: totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0,
+          raisedETH
+        };
+        break;
+      }
+    }
+    if (!s) return;
+    // Fetch logo + name from metadata
+    if (s.contractURI) {
+      try {
+        let url = s.contractURI;
+        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
+        else if (url.startsWith('data:')) {
+          const j = url.split(',').slice(1).join(',');
+          const m = JSON.parse(decodeURIComponent(j));
+          if (m.image) s.icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+          if (m.name) s.name = m.name;
+        }
+        if (!s.icon) {
+          const res = await fetch(url);
+          const m = await res.json();
+          if (m.image) s.icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+          if (m.name) s.name = m.name;
+        }
+      } catch {}
+    }
+    const el = $('liveSalesSection');
+    if (!el) return;
+    const logo = s.icon
+      ? `<img class="live-sale-logo" src="${esc(s.icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${esc(s.symbol?.[0]||'?')}</div>'">`
+      : `<div class="live-sale-logo-ph">${esc(s.symbol?.[0] || '?')}</div>`;
+    const displayName = s.name && s.name.length > 1 ? s.name : s.symbol || '???';
+    const ethFmt = s.raisedETH >= 1 ? s.raisedETH.toFixed(1) : s.raisedETH >= 0.01 ? s.raisedETH.toFixed(2) : s.raisedETH.toFixed(3);
+    el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daicos</div><a class="live-sale-card" href="coin/#${s.dao}">
+      ${logo}
+      <div class="live-sale-info">
+        <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
+        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : 'Sale live'}</div>
+      </div>
+      <div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
+      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>
+    </a>`;
+    el.style.display = '';
+  } catch (e) { console.warn('Live sale load failed:', e); }
+}
+// Load live sales on page init (non-blocking)
+setTimeout(loadLiveSale, 500);
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -8324,6 +8422,8 @@ function switchTab(tab) {
   _activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
+  const lsEl = $('liveSalesSection');
+  if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   $('sendTab').style.display = tab === 'send' ? '' : 'none';
