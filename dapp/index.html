@@ -9114,7 +9114,9 @@ function ppwUpdateRecipientHint() {
   const hintEl = $('ppwRecipientHint');
   if (!hintEl) return;
   if (_ppwMode === 'direct') {
-    hintEl.textContent = '— direct mode: must match connected wallet';
+    hintEl.textContent = connectedAddress
+      ? '— direct mode: must match connected wallet'
+      : '— direct mode: connect wallet first (recipient = signer)';
     return;
   }
   hintEl.textContent = connectedAddress
