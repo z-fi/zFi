@@ -8115,8 +8115,8 @@ body.modal-open { overflow: hidden; }
             `;
           }
 
-          // Render Tap info if active
-          if (tapInfo && tapInfo.ops !== ethers.ZeroAddress) {
+          // Render Tap info if active and has claimable funds (hide when sale finished and nothing to claim)
+          if (tapInfo && tapInfo.ops !== ethers.ZeroAddress && claimableTap > 0n) {
             // Find the tap's payment token info
             const tapToken = allTokens.find(t => t.address.toLowerCase() === tapInfo.tribTkn.toLowerCase()) || { symbol: 'Unknown', decimals: 18 };
             const ratePerMonth = parseFloat(ethers.formatUnits(tapInfo.ratePerSec * 2629746n, tapToken.decimals));
@@ -16417,6 +16417,7 @@ body.modal-open { overflow: hidden; }
           const functionSelector = calldata.slice(0, 10).toLowerCase();
           const abiCoder = new ethers.AbiCoder();
           let translation = '';
+          let autoDescription = '';
 
           // setAutoFutarchy(uint256 param, uint256 cap) - 0x92a023a9 (for DAO self-calls)
           if (isDaoSelfCall && functionSelector === '0x92a023a9' && calldata.length >= 138) {
@@ -16432,6 +16433,7 @@ body.modal-open { overflow: hidden; }
               futarchyDesc = `${paramPercent}% of supply, ${capFormatted} LOOT cap`;
             }
 
+            autoDescription = `Configure auto-futarchy: ${futarchyDesc}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Configure Auto-Futarchy</div>
               <div>Set voter rewards: <strong>${futarchyDesc}</strong></div>
@@ -16444,6 +16446,7 @@ body.modal-open { overflow: hidden; }
             const bps = Number(decoded[0]);
             const percent = (bps / 100).toFixed(2);
 
+            autoDescription = `Change quorum to ${percent}%`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Change Quorum</div>
               <div>Set quorum to: <strong>${percent}%</strong></div>
@@ -16456,6 +16459,7 @@ body.modal-open { overflow: hidden; }
             const enabled = decoded[0];
             const status = enabled ? 'Enable' : 'Disable';
 
+            autoDescription = `${status} ragequit`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Toggle Ragequit</div>
               <div><strong>${status}</strong> ragequit functionality</div>
@@ -16471,6 +16475,7 @@ body.modal-open { overflow: hidden; }
             const sharesStatus = sharesLocked ? 'Locked (non-transferable)' : 'Unlocked (transferable)';
             const lootStatus = lootLocked ? 'Locked (non-transferable)' : 'Unlocked (transferable)';
 
+            autoDescription = `Set transfers: Shares ${sharesLocked ? 'locked' : 'unlocked'}, Loot ${lootLocked ? 'locked' : 'unlocked'}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Configure Transferability</div>
               <div style="margin-bottom: 0.25rem;"><strong>Shares:</strong> ${sharesStatus}</div>
@@ -16484,6 +16489,7 @@ body.modal-open { overflow: hidden; }
             const ttlSeconds = Number(decoded[0]);
             const ttlFormatted = formatDuration(ttlSeconds);
 
+            autoDescription = `Change proposal TTL to ${ttlFormatted}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Change Proposal TTL</div>
               <div>Set proposal expiration to: <strong>${ttlFormatted}</strong></div>
@@ -16496,6 +16502,7 @@ body.modal-open { overflow: hidden; }
             const delaySeconds = Number(decoded[0]);
             const delayFormatted = formatDuration(delaySeconds);
 
+            autoDescription = `Change timelock delay to ${delayFormatted}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Change Timelock Delay</div>
               <div>Set execution delay to: <strong>${delayFormatted}</strong></div>
@@ -16508,6 +16515,7 @@ body.modal-open { overflow: hidden; }
             const thresholdWei = decoded[0];
             const thresholdFormatted = parseFloat(ethers.formatUnits(thresholdWei, 18)).toFixed(2);
 
+            autoDescription = `Change proposal threshold to ${thresholdFormatted} shares`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Change Proposal Threshold</div>
               <div>Set minimum shares to: <strong>${thresholdFormatted}</strong></div>
@@ -16562,6 +16570,7 @@ body.modal-open { overflow: hidden; }
             const capText = cap > 0n ? `${ethers.formatEther(cap)} cap` : 'unlimited';
             const sourceText = minting ? 'mint new' : 'from treasury';
 
+            autoDescription = `${statusText} ${tokenType} sale: ${price}:1 ${tokenName}, ${sourceText}, ${capText}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Configure ${tokenType} Sale</div>
               <div>${statusText}: <strong>${price}:1 ratio</strong> (${price} ${tokenName} per ${tokenType} token)</div>
@@ -16573,6 +16582,7 @@ body.modal-open { overflow: hidden; }
             const decoded = abiCoder.decode(['address'], '0x' + calldata.slice(10));
             const newRenderer = decoded[0];
 
+            autoDescription = `Change renderer to ${newRenderer.slice(0, 6)}...${newRenderer.slice(-4)}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">Change Renderer</div>
               <div>Set renderer to:</div>
@@ -16582,6 +16592,7 @@ body.modal-open { overflow: hidden; }
           }
           // bumpConfig() - 0x7ec924db
           else if (isDaoSelfCall && functionSelector === '0x7ec924db') {
+            autoDescription = `Emergency: bump config counter (invalidates all pending proposals and permits)`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem; color: var(--red);">🚨 Emergency Action</div>
               <div><strong>Bump Config Counter</strong></div>
@@ -16604,6 +16615,7 @@ body.modal-open { overflow: hidden; }
             const action = count === 0 ? 'Revoke' : (count === 1 ? 'Grant 1 permit' : `Grant ${count} permits`);
             const usesText = count === 0 ? 'Revoke all permits' : (count === 1 ? '1 use' : `${count} uses`);
 
+            autoDescription = `${action} for ${spender.slice(0, 6)}...${spender.slice(-4)} (${opType} to ${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}, ${usesText})`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem; color: var(--red);">⚡ ${action}</div>
               <div style="margin-bottom: 0.25rem;"><strong>To:</strong> ${spender.slice(0, 6)}...${spender.slice(-4)}</div>
@@ -16623,6 +16635,7 @@ body.modal-open { overflow: hidden; }
 
             const opType = op === 0 ? 'call' : 'delegatecall';
 
+            autoDescription = `Use permit: ${opType} to ${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}`;
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem; color: var(--red);">⚡ Use Permit</div>
               <div style="margin-bottom: 0.25rem;"><strong>Execute:</strong> ${opType} to ${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}</div>
@@ -16656,9 +16669,16 @@ body.modal-open { overflow: hidden; }
               }
             }
 
+            // Add DAO address as special "mint shares" token
+            if (currentDAO && currentDAO.dao && currentDAO.dao.dao) {
+              tokenNames[currentDAO.dao.dao.toLowerCase()] = { name: 'Shares (mint)', decimals: 18 };
+            }
+
             const tokenInfo = tokenNames[tokenAddr.toLowerCase()] || { name: 'Unknown', decimals: 18 };
             const formattedAmount = ethers.formatUnits(amount, tokenInfo.decimals);
             const action = amount === 0n ? 'Revoke' : 'Set';
+
+            autoDescription = `${action} ${tokenInfo.name} spending allowance for ${spender.slice(0, 6)}...${spender.slice(-4)}${amount > 0n ? ` (${parseFloat(formattedAmount).toLocaleString()} ${tokenInfo.name})` : ''}`;
 
             translation = `
               <div style="opacity: 0.8; margin-bottom: 0.35rem; font-size: 0.8rem;">${action} Spending Allowance</div>
@@ -16725,6 +16745,15 @@ body.modal-open { overflow: hidden; }
           if (translation) {
             translationDiv.innerHTML = translation;
             translationDiv.style.display = 'block';
+
+            // Auto-populate description for recognized DAO self-calls when pasting calldata manually
+            if (isDaoSelfCall && autoDescription) {
+              const descField = getEl('proposalDescription');
+              const fullDescField = document.getElementById('proposalDescriptionFull');
+              if (descField && !descField.value && (!fullDescField || !fullDescField.value)) {
+                setLockedProposalDescription(autoDescription);
+              }
+            }
           } else {
             translationDiv.style.display = 'none';
           }

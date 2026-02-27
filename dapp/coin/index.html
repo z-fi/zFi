@@ -2270,7 +2270,7 @@ async function renderCoinPage(daoAddr) {
           if (!el || el.dataset.poolId !== _chartPoolId) return; // stale
           if (json.data && json.data.length) {
             el.style.display = '';
-            if (!saleActive) {
+            if (!saleActive && !isFWCollector) {
               el.classList.add('open');
               el.dataset.loaded = '1';
               const body = el.querySelector('.chart-body');
