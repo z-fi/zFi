@@ -243,7 +243,8 @@ body.modal-open { overflow:hidden; }
     <div class="sale-bar"><div class="sale-bar-fill" id="saleBar" style="width:0%"></div></div>
     <div class="info-row"><span class="info-label">Shares sold</span><span class="info-value" id="sharesSold">-</span></div>
     <div class="info-row"><span class="info-label">ETH raised</span><span class="info-value" id="ethRaised">-</span></div>
-    <div class="info-row"><span class="info-label">Treasury</span><span class="info-value" id="treasury">-</span></div>
+    <div class="info-row" id="treasuryRow" style="display:none"><span class="info-label">DAO treasury</span><span class="info-value" id="treasury">-</span></div>
+    <div class="info-row"><span class="info-label"><a id="minterLabel" href="#" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="info-value" id="minterBalance">-</span></div>
     <div class="info-row"><span class="info-label">Deadline</span><span class="info-value" id="fwDeadline">-</span></div>
   </div>
 
@@ -634,10 +635,13 @@ async function loadDashboard() {
     $('saleBar').style.width = Math.min(salePct, 100).toFixed(1) + '%';
     $('sharesSold').textContent = fmtShares(sold) + ' / ' + fmtShares(totalSale);
 
-    // ETH raised = (sold / forAmt) * tribAmt, but simpler: sold shares / 1M per ETH
-    const ethSold = Number(sold) / 1e18 / 1e6;
-    $('ethRaised').textContent = ethSold.toFixed(4) + ' ETH';
-    $('treasury').textContent = fmtETH(data.tap.treasuryBalance) + ' ETH';
+    // ETH raised from sale = sold * tribAmt / forAmt
+    const ethRaisedWei = sale.forAmt > 0n ? sold * sale.tribAmt / sale.forAmt : 0n;
+    $('ethRaised').textContent = fmtETH(ethRaisedWei) + ' ETH';
+    if (data.tap.treasuryBalance > 0n) {
+      $('treasuryRow').style.display = '';
+      $('treasury').textContent = fmtETH(data.tap.treasuryBalance) + ' ETH';
+    }
 
     // Deadline
     const d = new Date(deadline * 1000);
@@ -650,32 +654,43 @@ async function loadDashboard() {
     // Minter data
     if (_minterAddress && _minterAddress !== ethers.ZeroAddress) {
       const minter = new ethers.Contract(_minterAddress, MINTER_ABI, rpc);
-      const [nftCount, lockedEth, mintable] = await Promise.all([
+      const [nftCount, lockedEth, mintable, minterBal] = await Promise.all([
         minter.nftCount(),
         minter.totalLockedEth(),
-        minter.mintableFromTap()
+        minter.mintableFromTap(),
+        rpc.getBalance(_minterAddress)
       ]);
+      $('minterBalance').textContent = fmtETH(minterBal) + ' ETH';
+      $('minterLabel').href = 'https://etherscan.io/address/' + _minterAddress;
       const nftCard = $('nftCard');
       const nc = Number(nftCount);
       const mt = Number(mintable);
+      // Available ETH toward next mint = minter balance + treasury - already locked
+      const availableWei = minterBal + data.tap.treasuryBalance - lockedEth;
+      const progressWei = availableWei > 0n ? availableWei : 0n;
+      const MINT_PRICE = ethers.parseEther('1');
       if (nc > 0) {
+        const nextN = nc + 1;
+        const pct = Math.min(Number(progressWei * 10000n / MINT_PRICE) / 100, 100);
         nftCard.innerHTML = `
           <div class="info-row"><span class="info-label">NFTs in vault</span><span class="info-value">${nc}</span></div>
           <div class="info-row"><span class="info-label">Locked ETH</span><span class="info-value">${fmtETH(lockedEth)} ETH</span></div>
-          ${mt > 0 ? `<div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value">${mt}</span></div>` : ''}
+          ${mt > 0 ? `<div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value" style="color:var(--green)">${mt}</span></div>` : ''}
+          <div class="info-row" style="margin-top:8px"><span class="info-label">Progress to NFT #${nextN}</span><span class="info-value">${fmtETH(progressWei)} / 1.0 ETH</span></div>
+          <div class="sale-bar"><div class="sale-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
         `;
       } else if (mt > 0) {
         nftCard.innerHTML = `
           <div class="info-row"><span class="info-label">Ready to mint</span><span class="info-value" style="color:var(--green)">${mt} NFT${mt > 1 ? 's' : ''}</span></div>
         `;
       } else {
-        // Show progress toward next NFT
-        const treasuryWei = data.tap.treasuryBalance;
-        const pct = Math.min(Number(treasuryWei) * 100 / 1e18, 100);
+        // Show progress toward first NFT using minter balance (not treasury which is 0 due to instant tap)
+        const nextN = 1;
+        const pct = Math.min(Number(progressWei * 10000n / MINT_PRICE) / 100, 100);
         nftCard.innerHTML = `
-          <div class="info-row"><span class="info-label">Progress to 1st NFT</span><span class="info-value">${fmtETH(treasuryWei)} / 1.0 ETH</span></div>
+          <div class="info-row"><span class="info-label">Progress to NFT #${nextN}</span><span class="info-value" style="color:var(--green)">${fmtETH(progressWei)} / 1.0 ETH</span></div>
           <div class="sale-bar"><div class="sale-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
-          <div style="font-size:11px;color:var(--fg-dim);margin-top:4px">Treasury needs 1 ETH to mint a FundingWorks S02 NFT</div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-top:4px">${fmtETH(minterBal)} ETH in <a href="https://etherscan.io/address/${_minterAddress}" target="_blank" style="color:inherit;text-decoration:underline">minter</a> &mdash; each 1 ETH mints a FW S02 NFT</div>
         `;
       }
 

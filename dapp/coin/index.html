@@ -1281,13 +1281,55 @@ async function refreshSaleStats() {
     const sold = totalSale - sale.remainingSupply;
     const salePct = totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0;
     const treasuryETH = sale.treasuryBalance;
+    const ethRaised = sale.forAmt > 0n ? sold * sale.tribAmt / sale.forAmt : 0n;
     const ethIco = `<svg width="10" height="10" viewBox="0 0 256 417" fill="currentColor" opacity="0.5" style="vertical-align:-1px"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg>`;
     const soldEl = $('saleSoldVal');
     if (soldEl) soldEl.innerHTML = `${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span>`;
     const barEl = $('salePctBar');
     if (barEl) barEl.innerHTML = pctBar(salePct, 'var(--green)');
-    const tEl = $('saleTreasuryRow');
-    if (tEl) tEl.innerHTML = treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : '';
+    const rEl = $('saleRaisedRow');
+    if (rEl) rEl.innerHTML = ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : '';
+    // Refresh mint progress for FW Collector
+    const tap = data.tap;
+    const minterAddr = tap && tap.ops && tap.ops !== ZERO ? tap.ops : null;
+    if (minterAddr) {
+      try {
+        const rpc = getRPC();
+        const mABI = ['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)'];
+        const mc = new ethers.Contract(minterAddr, mABI, rpc);
+        const [nftCount, lockedEth, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), rpc.getBalance(minterAddr)]);
+        if (gen !== _renderGen) return;
+        const mintProgress = $('saleMintProgress');
+        if (mintProgress) {
+          const MINT_PRICE = ethers.parseEther('1');
+          const available = minterBal + treasuryETH - lockedEth;
+          const progressETH = available > 0n ? available : 0n;
+          const progressPct = Number(progressETH * 10000n / MINT_PRICE) / 100;
+          const nfts = Number(nftCount);
+          const nextN = nfts + 1;
+          mintProgress.innerHTML = `
+            <div style="margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--surface-raised, var(--surface))">
+              <div class="stat-row"><span class="stat-label" style="font-size:12px">Progress to NFT #${nextN}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(progressETH)} / ${ethers.formatEther(MINT_PRICE)} ${ethIco}</span></div>
+              ${pctBar(Math.min(progressPct, 100), 'var(--green)')}
+              <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
+            </div>`;
+        }
+        // Update FW collector info + treasury display
+        const fwEl = $('fwCollectorInfo');
+        if (fwEl) {
+          const nfts = Number(nftCount);
+          const mBal = Number(ethers.formatEther(minterBal));
+          const lEth = Number(ethers.formatEther(lockedEth));
+          fwEl.innerHTML = `
+            <div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="stat-value">${fmtNum(mBal)} ${ethIco}</span></div>
+            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${nfts}</span></div>` : ''}
+            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
+          `;
+        }
+        const tmEl = $('treasuryMinterBal');
+        if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
+      } catch (e) { console.error('Mint progress refresh failed:', e); }
+    }
     loadBalances();
     updateSaleBtnState();
   } catch {}
@@ -1609,12 +1651,13 @@ async function renderCoinPage(daoAddr) {
 
     // Sale stats
     const lpBps = sale ? Number(sale.lpBps) : 0;
-    let salePct = 0, sold = 0n, totalSale = 0n, treasuryETH = 0n, saleActive = false;
+    let salePct = 0, sold = 0n, totalSale = 0n, treasuryETH = 0n, saleActive = false, ethRaised = 0n;
     if (sale) {
       totalSale = sale.totalSupply;
       sold = totalSale - sale.remainingSupply;
       if (totalSale > 0n) salePct = Number((sold * 10000n) / totalSale) / 100;
       treasuryETH = sale.treasuryBalance;
+      if (sale.forAmt > 0n) ethRaised = sold * sale.tribAmt / sale.forAmt;
       const now = BigInt(Math.floor(Date.now() / 1000));
       saleActive = sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
     }
@@ -1655,7 +1698,7 @@ async function renderCoinPage(daoAddr) {
     const coinSymbol = data.meta.symbol || '???';
     const ogDesc = metadata.description
       ? metadata.description.slice(0, 200)
-      : `$${coinSymbol} on zFi${saleActive ? ' — sale live' : ''} — ${fmtETH(treasuryETH)} treasury`;
+      : `$${coinSymbol} on zFi${saleActive ? ' — sale live' : ''}${ethRaised > 0n ? ` — ${fmtETH(ethRaised)} raised` : ''}`;
     updateOGMeta(
       `$${coinSymbol} — ${coinName}`,
       ogDesc,
@@ -1788,7 +1831,26 @@ async function renderCoinPage(daoAddr) {
             const minter = await withRPC(async rpc => new ethers.Contract(minterAddr, minterABI, rpc));
             const rpc = getRPC();
             const mc = new ethers.Contract(minterAddr, minterABI, rpc);
-            const [nftCount, lockedEth, mintable, deadlineTs] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), mc.mintableFromTap(), mc.deadline()]);
+            const [nftCount, lockedEth, mintable, deadlineTs, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), mc.mintableFromTap(), mc.deadline(), rpc.getBalance(minterAddr)]);
+            // Update treasury minter balance
+            const tmEl = $('treasuryMinterBal');
+            if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
+            // Mint progress bar in sale section
+            const mintProgress = $('saleMintProgress');
+            if (mintProgress) {
+              const MINT_PRICE = ethers.parseEther('1');
+              const available = minterBal + treasuryETH - lockedEth; // ETH available toward next mint
+              const progressETH = available > 0n ? available : 0n;
+              const progressPct = Number(progressETH * 10000n / MINT_PRICE) / 100;
+              const nfts = Number(nftCount);
+              const nextN = nfts + 1;
+              mintProgress.innerHTML = `
+                <div style="margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--surface-raised, var(--surface))">
+                  <div class="stat-row"><span class="stat-label" style="font-size:12px">Progress to NFT #${nextN}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(progressETH)} / ${ethers.formatEther(MINT_PRICE)} ${ethIco}</span></div>
+                  ${pctBar(Math.min(progressPct, 100), 'var(--green)')}
+                  <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
+                </div>`;
+            }
             // Deadline display with live countdown
             const dlEl = document.getElementById('fwDeadlineRow');
             if (dlEl) {
@@ -1816,11 +1878,14 @@ async function renderCoinPage(daoAddr) {
             // NFT info
             const el = document.getElementById('fwCollectorInfo');
             if (el) {
-              const hasNFTs = Number(nftCount) > 0;
+              const nfts = Number(nftCount);
+              const mBal = Number(ethers.formatEther(minterBal));
+              const lEth = Number(ethers.formatEther(lockedEth));
               el.innerHTML = `
-                ${hasNFTs ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${Number(nftCount)}</span></div>` : ''}
-                ${hasNFTs ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtETH(lockedEth)} ${ethIco}</span></div>` : ''}
-                ${Number(mintable) > 0 ? `<div class="stat-row"><span class="stat-label">Mintable</span><span class="stat-value">${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''}</span></div>` : ''}
+                <div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="stat-value">${fmtNum(mBal)} ${ethIco}</span></div>
+                ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${nfts}</span></div>` : ''}
+                ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
+                ${Number(mintable) > 0 ? `<div class="stat-row"><span class="stat-label">Mintable now</span><span class="stat-value" style="color:var(--green);font-weight:600">${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''}</span></div>` : ''}
               `;
             }
           } catch (e) { console.error('FW collector info load failed:', e); }
@@ -1832,7 +1897,8 @@ async function renderCoinPage(daoAddr) {
     const saleContent = `
         <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value" id="saleSoldVal">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
         <div id="salePctBar">${pctBar(salePct, 'var(--green)')}</div>
-        <div id="saleTreasuryRow">${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">Treasury</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}</div>
+        <div id="saleRaisedRow">${ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : ''}</div>
+        <div id="saleMintProgress"></div>
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
         ${sale && sale.deadline > 0n ? `<div id="saleDeadlineRow"></div>` : ''}`
@@ -1885,11 +1951,13 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Treasury + Pool reserves
-    if (treasuryETH > 0n || hasPool) {
+    if (treasuryETH > 0n || hasPool || (isFWCollector && ethRaised > 0n)) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
-          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${isFWCollector ? `${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco} <span style="font-size:10px;opacity:0.6">(instant tap)</span></span></div>` : ''}
+          <div class="stat-row"><span class="stat-label">${ethIco} <a href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a></span><span class="stat-value" id="treasuryMinterBal">loading...</span></div>` :
+          (treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : '')}
           ${hasPool ? `
             <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
