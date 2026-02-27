@@ -3029,7 +3029,14 @@ function renderGalleryUI() {
           <span>${tvlDisplay} ${getCollateralSymbol(m.collateral)}</span>
           ${resolverTag}
           <span>${timeDisplay}</span>
-        </div>
+        </div>${isActive && m.oddsLoaded && yPct > 0 && yPct < 100 ? (() => {
+          const cheapPct = Math.min(yPct, nPct);
+          const cheapSide = yPct <= nPct ? 'YES' : 'NO';
+          const betAmt = 0.01;
+          const payout = betAmt / (cheapPct / 100);
+          const mult = (payout / betAmt).toFixed(1);
+          return `<div style="font-size:10px;color:var(--fg-muted);margin-top:4px">0.01 ETH &rarr; ${payout.toFixed(3)} ETH if ${cheapSide} <span style="color:var(--yes)">(${mult}x)</span></div>`;
+        })() : ''}
       </a>
     `;
   }
@@ -4194,6 +4201,15 @@ function clearQuoteAge() {
   if (el) el.textContent = '';
 }
 
+function payoutPreviewHtml(sharesOutF, amountInF, side, collSym) {
+  if (sharesOutF <= 0 || amountInF <= 0) return '';
+  const profit = sharesOutF - amountInF;
+  if (profit <= 0) return '';
+  const mult = (sharesOutF / amountInF).toFixed(2);
+  return `<br><span style="font-size:11px;color:var(--fg-muted)">Pays ${sharesOutF.toFixed(4)} ${collSym} if ${side.toUpperCase()} `
+    + `(+${profit.toFixed(4)}, <span style="color:var(--yes)">${mult}x</span>)</span>`;
+}
+
 function onTradeInput() {
   clearTimeout(_quoteTimer);
   clearQuoteAge();
@@ -4236,9 +4252,11 @@ function onTradeInput() {
       if (_impact > _tradeSlippage) {
         _quoteExtra = `<br><span style="font-size:11px;color:var(--no)">⚠ ${_impact}% price impact — may revert or increase slippage</span>`;
       }
+      const _collSym0 = getCollateralSymbol($('app').dataset.collateral);
       quoteEl.innerHTML = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
         + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`
-        + _quoteExtra;
+        + _quoteExtra
+        + payoutPreviewHtml(Number(ethers.formatEther(estimated)), val, _tradeSide, _collSym0);
     }
   } else {
     estimated = _tradeSide === 'yes' ? quoteSellYes(amountWei, rYes, rNo) : quoteSellNo(amountWei, rYes, rNo);
@@ -4289,7 +4307,8 @@ async function fetchOnchainQuote(amountWei) {
             const oppSide = buyYes ? 'NO' : 'YES';
             quoteHtml += `<br><span style="font-size:11px;color:var(--fg-muted)">~${Number(ethers.formatEther(pmShares)).toFixed(4)} ${oppSide} minted to vault (withdrawal cooldown)</span>`;
           }
-          quoteEl.innerHTML = quoteHtml;
+          const _collSymL = getCollateralSymbol($('app').dataset.collateral);
+          quoteEl.innerHTML = quoteHtml + payoutPreviewHtml(_sharesF, _collF, _tradeSide, _collSymL);
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: shares, ts: Date.now() };
         } else {
           const result = await quoter.quoteSellWithSweep(marketId, buyYes, amountWei, 1, { gasLimit: 5000000 });
@@ -4332,7 +4351,8 @@ async function fetchOnchainQuote(amountWei) {
             const _avgPct = _sF > 0 ? Math.round((_cF / _sF) * 100) : 0;
             const _spotL = rYes + rNo > 0n ? Math.round(Number(buyYes ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
             quoteEl.innerHTML = _sF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
-              + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spotL ? ` (spot ${_spotL}%)` : '') + `</span>`;
+              + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spotL ? ` (spot ${_spotL}%)` : '') + `</span>`
+              + payoutPreviewHtml(_sF, _cF, _tradeSide, collSym);
           }
           _lastQuote = { marketId, dir: _tradeDir, side: _tradeSide, amount: amountWei, expectedOut: shares, ts: Date.now() };
         } else {
@@ -4572,7 +4592,8 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
     const _rSpot = _rY3 + _rN3 > 0n ? Math.round(Number(buyYes ? _rN3 : _rY3) * 100 / Number(_rY3 + _rN3)) : 0;
     quoteEl.innerHTML = _rSharesF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
       + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_rAvgPct}% avg` + (_rAvgPct !== _rSpot ? ` (spot ${_rSpot}%)` : '') + `</span>`
-      + '<br><span style="font-size:11px;color:var(--fg-muted)">' + payData.symbol + ' → ' + collSym + ' → shares (routed via zRouter)</span>';
+      + '<br><span style="font-size:11px;color:var(--fg-muted)">' + payData.symbol + ' → ' + collSym + ' → shares (routed via zRouter)</span>'
+      + payoutPreviewHtml(_rSharesF, _rCollF, _tradeSide, collSym);
     _lastQuote = quote;
 
     if (btn) {

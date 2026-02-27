@@ -824,9 +824,12 @@ body.modal-open { overflow: hidden; }
 .live-sale-info { flex:1;min-width:0; }
 .live-sale-name { font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .live-sale-meta { font-size:11px;color:var(--fg-muted);margin-top:1px; }
-.live-sale-pct { font-size:12px;font-weight:600;color:var(--green);white-space:nowrap; }
+.live-sale-pct { font-size:12px;font-weight:600;color:var(--green, #22c55e);white-space:nowrap; }
 .live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;flex-shrink:0; }
-.live-sale-bar-fill { height:100%;background:var(--green);border-radius:2px; }
+.live-sale-bar-fill { height:100%;background:var(--green, #22c55e);border-radius:2px; }
+.pm-odds-bar { height:4px;display:flex;border-radius:2px;overflow:hidden;width:100%;margin-top:4px; }
+.pm-odds-yes { background:var(--green, #22c55e); }
+.pm-odds-no { background:var(--red, #ef4444); }
 
 /* Swap card container */
 .swap-card {
@@ -1068,6 +1071,7 @@ body.modal-open { overflow: hidden; }
 </div><!-- end swapTab -->
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
+<div id="featuredPmSection" class="live-sales" style="display:none"></div>
 
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
@@ -1681,8 +1685,52 @@ async function loadLiveSale() {
     el.style.display = '';
   } catch (e) { console.warn('Live sale load failed:', e); }
 }
-// Load live sales on page init (non-blocking)
+// ---- Featured prediction market (top active ETH market by TVL, from predict cache) ----
+function renderFeaturedPm(m) {
+  const el = $('featuredPmSection');
+  if (!el) return;
+  const yRaw = typeof m.y === 'number' ? m.y : 50;
+  const yPct = Math.max(1, Math.min(99, Math.round(yRaw))), nPct = 100 - yPct;
+  const cheapPct = Math.min(yPct, nPct);
+  const cheapSide = yPct <= nPct ? 'YES' : 'NO';
+  const payout = cheapPct > 0 ? 0.01 / (cheapPct / 100) : 0;
+  const mult = payout > 0 ? (payout / 0.01).toFixed(1) : '?';
+  const hintHtml = payout > 0 ? `<div style="font-size:10px;color:var(--fg-muted);margin-top:3px">0.01 ETH &rarr; ${payout.toFixed(3)} ETH if ${cheapSide} <span style="color:var(--green, #22c55e)">(${mult}x)</span></div>` : '';
+  const tvlFmt = m.tvl >= 1 ? m.tvl.toFixed(2) : m.tvl.toFixed(4);
+  const collSym = (!m.collateral || m.collateral === ZERO_ADDRESS) ? 'ETH' : 'TOKEN';
+  const question = (m.question || 'Prediction market').replace(/<[^>]*>/g, '');
+  el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">predictions</div><a class="live-sale-card" href="predict/#${m.marketId}">
+    <div class="live-sale-info">
+      <div class="live-sale-name" style="white-space:normal;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${esc(question)}</div>
+      <div class="live-sale-meta">${tvlFmt} ${collSym} locked</div>
+      <div class="pm-odds-bar"><div class="pm-odds-yes" style="width:${yPct}%"></div><div class="pm-odds-no" style="flex:1"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px"><span style="color:var(--green, #22c55e)">YES ${yPct}%</span><span style="color:var(--red, #ef4444)">NO ${nPct}%</span></div>
+      ${hintHtml}
+    </div>
+  </a>`;
+  el.style.display = '';
+}
+
+function loadFeaturedPm() {
+  // Use predict gallery's localStorage cache — instant, no RPC needed
+  try {
+    const raw = localStorage.getItem('zfi_predict_markets');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed.data || !parsed.data.length) return;
+    const now = Math.floor(Date.now() / 1000);
+    const active = parsed.data.filter(m => !m.resolved && m.close > now && (m.tvl || 0) >= 0.01
+      && (!m.collateral || m.collateral === ZERO_ADDRESS)
+      && m.oddsLoaded && m.y > 0 && m.y < 100);
+    if (!active.length) return;
+    active.sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
+    renderFeaturedPm(active[0]);
+  } catch (e) { console.warn('Featured PM failed:', e); }
+}
+
+// Load live sales + featured PM on page init (non-blocking)
 setTimeout(loadLiveSale, 500);
+setTimeout(loadFeaturedPm, 100);
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -8424,6 +8472,8 @@ function switchTab(tab) {
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
   const lsEl = $('liveSalesSection');
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
+  const pmEl = $('featuredPmSection');
+  if (pmEl && pmEl.innerHTML) pmEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   $('sendTab').style.display = tab === 'send' ? '' : 'none';
