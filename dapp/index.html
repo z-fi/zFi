@@ -1019,7 +1019,7 @@ body.modal-open { overflow: hidden; }
     <button onclick="ppSwapDownloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
   </div>
   <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-    Withdraw directly below, or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
+    Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
   </p>
   <button onclick="setShown('ppSwapNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
 </div>
@@ -1073,7 +1073,7 @@ body.modal-open { overflow: hidden; }
       <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
     </div>
     <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-      Withdraw directly below, or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
+      Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
     </p>
     <button onclick="setShown('ppNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
   </div>
@@ -1086,7 +1086,7 @@ body.modal-open { overflow: hidden; }
 
 <div class="swap-card" style="margin-top:16px">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Withdraw from Privacy Pool</h2>
-  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Paste or upload your deposit note to withdraw. You can also manually fill in values from Etherscan logs. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Paste or upload your deposit note to withdraw. Relayed withdrawal is the default and recommended flow; direct on-chain withdrawal remains available as an advanced option. You can also manually fill in values from Etherscan logs. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
 
   <div class="section" style="margin-bottom:12px">
     <label style="margin:0;font-size:12px">Note JSON</label>
@@ -1153,14 +1153,15 @@ body.modal-open { overflow: hidden; }
     <div class="section" style="margin-bottom:12px">
       <label style="margin:0;font-size:11px">Withdrawal Mode</label>
       <div style="display:flex;gap:8px;margin-top:4px">
-        <button id="ppwModeDirect" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppwSetMode('direct')">Direct</button>
-        <button id="ppwModeRelay" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppwSetMode('relay')">Relay</button>
+        <button id="ppwModeRelay" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppwSetMode('relay')">Relay (Recommended)</button>
+        <button id="ppwModeDirect" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppwSetMode('direct')">Direct (Advanced)</button>
       </div>
+      <div id="ppwDirectModeHint" style="display:none;font-size:11px;color:orange;margin-top:6px">Direct mode is an advanced flow. It requires a connected wallet and submits the withdrawal directly on-chain.</div>
     </div>
 
     <div class="section" style="margin-bottom:12px">
-      <label style="margin:0;font-size:11px">Recipient Address <span id="ppwRecipientHint" style="opacity:0.5">— defaults to connected wallet (direct mode)</span></label>
-      <input type="text" id="ppwRecipient" class="amount-input" placeholder="0x... (default: connected wallet)" style="font-size:12px">
+      <label style="margin:0;font-size:11px">Recipient Address <span id="ppwRecipientHint" style="opacity:0.5">— optional (defaults to connected wallet in relay mode)</span></label>
+      <input type="text" id="ppwRecipient" class="amount-input" placeholder="0x... (optional in relay mode)" style="font-size:12px">
     </div>
 
     <div id="ppwExtraGasWrap" style="display:none;margin-bottom:12px;font-size:11px">
@@ -1205,6 +1206,7 @@ body.modal-open { overflow: hidden; }
     <div id="ppwChangeWarning" style="display:none;margin-bottom:12px;padding:8px;border:1px solid orange;background:var(--surface);font-size:11px;color:orange;line-height:1.4">
       This is a partial withdrawal. Your old note will be fully spent and a new change note will be created. <b>Back up the change note immediately</b> — it is the only way to access remaining funds.
     </div>
+    <div id="ppwRelayMinWarning" style="display:none;margin-bottom:12px;padding:8px;border:1px solid #f39c12;background:var(--surface);font-size:11px;color:#f39c12;line-height:1.4"></div>
 
     <button id="ppwWithdrawBtn" class="swap-btn" disabled onclick="ppwWithdraw()">Withdraw</button>
 
@@ -7297,14 +7299,43 @@ function ppDeriveWithdrawalKeys(masterNullifier, masterSecret, label, withdrawal
   return { nullifier, secret, precommitment };
 }
 
-function ppGetWithdrawalIndex(address, label) {
-  const key = `pp_withdraw_idx_${address.toLowerCase()}_${label}`;
-  return parseInt(localStorage.getItem(key) || '0', 10);
+function ppParseNonNegativeInt(raw) {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return null;
+  return n;
 }
 
-function ppSetWithdrawalIndex(address, label, index) {
-  const key = `pp_withdraw_idx_${address.toLowerCase()}_${label}`;
-  localStorage.setItem(key, index.toString());
+const PP_MAX_INDEX_INFERENCE_SCAN = 4096;
+
+function ppInferWithdrawalNoteIndex(masterNullifier, label, noteNullifier, maxIndex = PP_MAX_INDEX_INFERENCE_SCAN) {
+  for (let i = 0; i <= maxIndex; i++) {
+    if (poseidon3([masterNullifier, label, BigInt(i)]) === noteNullifier) return i;
+  }
+  return null;
+}
+
+function ppInferDepositNoteIndex(masterNullifier, scope, noteNullifier, maxIndex = PP_MAX_INDEX_INFERENCE_SCAN) {
+  for (let i = 0; i <= maxIndex; i++) {
+    if (poseidon3([masterNullifier, scope, BigInt(i)]) === noteNullifier) return i;
+  }
+  return null;
+}
+
+function ppResolveNextWithdrawalIndex(masterNullifier, scope, label, noteNullifier, noteWithdrawalIndex) {
+  const explicitIdx = ppParseNonNegativeInt(noteWithdrawalIndex);
+  if (explicitIdx != null) {
+    return { nextIndex: explicitIdx + 1, source: 'note', currentIndex: explicitIdx };
+  }
+  const inferredWithdrawalCurrent = ppInferWithdrawalNoteIndex(masterNullifier, label, noteNullifier);
+  if (inferredWithdrawalCurrent != null) {
+    return { nextIndex: inferredWithdrawalCurrent + 1, source: 'inferred-withdrawal', currentIndex: inferredWithdrawalCurrent };
+  }
+  const inferredDepositIndex = ppInferDepositNoteIndex(masterNullifier, scope, noteNullifier);
+  if (inferredDepositIndex != null) {
+    return { nextIndex: 0, source: 'deposit', currentIndex: null, depositIndex: inferredDepositIndex };
+  }
+  return { nextIndex: null, source: 'unknown', currentIndex: null, depositIndex: null };
 }
 
 async function ppEnsureMasterKeys() {
@@ -8821,6 +8852,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const _ppwValEl = $('ppwValue');
   if (_ppwValEl) _ppwValEl.addEventListener('input', ppwUpdatePreview);
 
+  // Keep withdrawal mode UI and behavior in sync with relay-first default.
+  ppwSetMode(_ppwMode);
+
   // Init saved notes count
   renderPPNotes();
   // Auto-refresh note statuses (spent, ASP) when user opens the saved notes panel
@@ -8832,9 +8866,13 @@ const PP_POOL_ABI = [
   "function withdraw(tuple(address,bytes),tuple(uint256[2],uint256[2][2],uint256[2],uint256[8]))",
   "function SCOPE() view returns (uint256)",
   "function currentRoot() view returns (uint256)",
+  "function WITHDRAWAL_VERIFIER() view returns (address)",
   "function nullifierHashes(uint256) view returns (bool)",
   "event LeafInserted(uint256 _index, uint256 _leaf, uint256 _root)",
   "event Deposited(address indexed _depositor, uint256 _commitment, uint256 _label, uint256 _value, uint256 _precommitmentHash)"
+];
+const PP_VERIFIER_ABI = [
+  "function verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[8]) returns (bool)"
 ];
 const PP_POOL_DEPLOY_BLOCK = 22100000; // before first pool deposit (pool creation may predate entrypoint)
 const PP_MAX_TREE_DEPTH = 32;
@@ -8842,11 +8880,13 @@ const PP_WITHDRAW_WASM = "https://privacypools.com/artifacts/withdraw.wasm";
 const PP_WITHDRAW_ZKEY = "https://privacypools.com/artifacts/withdraw.zkey";
 
 let _ppwNote = null;
-let _ppwMode = 'direct'; // 'direct' or 'relay'
+let _ppwMode = 'relay'; // 'direct' or 'relay'
 let _ppwRelayExpiryTimer = null;
 let _ppArtifactCache = null; // cached {wasmUrl, zkeyUrl} blob URLs
 let _ppwAnonTimer = null;
 let _ppwAnonReqId = 0;
+let _ppwRelayerMinReqId = 0;
+const _ppwRelayerMinByAsset = Object.create(null); // asset -> bigint | null | Promise<bigint|null>
 
 function ppwClearAnonymityHint() {
   if (_ppwAnonTimer) { clearTimeout(_ppwAnonTimer); _ppwAnonTimer = null; }
@@ -8882,6 +8922,106 @@ function ppwSetWithdrawPercent(pct) {
     $('ppwWithdrawAmt').value = ppFormatAmountWei(amt, asset);
     ppwUpdatePreview();
   } catch {}
+}
+
+function ppwRelayAssetAddress(asset) {
+  if (asset === 'BOLD') return BOLD_ADDRESS;
+  if (asset === 'wstETH') return WSTETH_ADDRESS;
+  return PP_ETH_ASSET;
+}
+
+async function ppEnsureAssetConfig(asset) {
+  const cached = ppGetAssetConfig(asset);
+  if (cached && cached.maxRelayFeeBPS != null) return cached;
+  try {
+    const rpc = await quoteRPC.call(r => r);
+    const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
+    const c = await ep.assetConfig(ppwRelayAssetAddress(asset));
+    const cfg = {
+      pool: c.pool,
+      minimumDepositAmount: c.minimumDepositAmount,
+      vettingFeeBPS: c.vettingFeeBPS,
+      maxRelayFeeBPS: c.maxRelayFeeBPS
+    };
+    if (asset === 'wstETH') _ppConfigWstETH = cfg;
+    else if (asset === 'BOLD') _ppConfigBold = cfg;
+    else _ppConfig = cfg;
+    return cfg;
+  } catch {
+    return ppGetAssetConfig(asset);
+  }
+}
+
+function ppwDecodeRelayFeeBps(withdrawalData) {
+  try {
+    const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+      ['address', 'address', 'uint256'],
+      withdrawalData
+    );
+    return Number(decoded[2]);
+  } catch {
+    return null;
+  }
+}
+
+async function ppwGetRelayerMinWithdrawAmount(asset) {
+  const key = asset || 'ETH';
+  const cached = _ppwRelayerMinByAsset[key];
+  if (typeof cached === 'bigint' || cached === null) return cached;
+  if (cached && typeof cached.then === 'function') return cached;
+  const pending = (async () => {
+    try {
+      const details = await ppwRelayerDetails(1, ppwRelayAssetAddress(asset));
+      const minAmount = details?.minWithdrawAmount ? BigInt(details.minWithdrawAmount) : null;
+      _ppwRelayerMinByAsset[key] = minAmount;
+      return minAmount;
+    } catch {
+      _ppwRelayerMinByAsset[key] = null;
+      return null;
+    }
+  })();
+  _ppwRelayerMinByAsset[key] = pending;
+  return pending;
+}
+
+function ppwRenderRelayMinWarning(changeValue, asset) {
+  const warnEl = $('ppwRelayMinWarning');
+  if (!warnEl) return;
+  if (_ppwMode !== 'relay' || changeValue <= 0n) {
+    setShown(warnEl, false);
+    return;
+  }
+
+  const key = asset || 'ETH';
+  const renderFromMin = (minAmount) => {
+    if (typeof minAmount === 'bigint' && changeValue < minAmount) {
+      setHTML(warnEl,
+        'Remaining change after this partial withdrawal would be <b>' +
+        escText(fmt(ppFormatAmountWei(changeValue, asset)) + ' ' + asset) +
+        '</b>, which is below the current relayer minimum of <b>' +
+        escText(fmt(ppFormatAmountWei(minAmount, asset)) + ' ' + asset) +
+        '</b>. You can still withdraw it later in Direct mode.'
+      );
+      setShown(warnEl, true);
+    } else {
+      setShown(warnEl, false);
+    }
+  };
+
+  const cached = _ppwRelayerMinByAsset[key];
+  if (typeof cached === 'bigint' || cached === null) {
+    renderFromMin(cached);
+    return;
+  }
+
+  const reqId = ++_ppwRelayerMinReqId;
+  ppwGetRelayerMinWithdrawAmount(asset).then(minAmount => {
+    if (reqId !== _ppwRelayerMinReqId) return;
+    renderFromMin(minAmount);
+  }).catch(() => {
+    if (reqId !== _ppwRelayerMinReqId) return;
+    setShown(warnEl, false);
+  });
 }
 
 function ppwRenderRoundedSuggestions(withdrawnValue, value, asset) {
@@ -8970,6 +9110,18 @@ function ppwScheduleAnonymityHint(withdrawnValue, asset) {
   }, 500);
 }
 
+function ppwUpdateRecipientHint() {
+  const hintEl = $('ppwRecipientHint');
+  if (!hintEl) return;
+  if (_ppwMode === 'direct') {
+    hintEl.textContent = '— direct mode: must match connected wallet';
+    return;
+  }
+  hintEl.textContent = connectedAddress
+    ? '— optional (defaults to connected wallet in relay mode)'
+    : '— required in relay mode when wallet is not connected';
+}
+
 function ppwSetMode(mode) {
   _ppwMode = mode;
   if (_ppwRelayExpiryTimer) { clearInterval(_ppwRelayExpiryTimer); _ppwRelayExpiryTimer = null; }
@@ -8982,7 +9134,8 @@ function ppwSetMode(mode) {
   relayBtn.style.borderColor = isDirect ? 'transparent' : 'var(--btn-bg)';
   relayBtn.style.background = isDirect ? 'var(--surface)' : 'var(--btn-bg)';
   relayBtn.style.color = isDirect ? 'var(--fg-muted)' : 'var(--btn-fg)';
-  $('ppwRecipientHint').textContent = isDirect ? '— defaults to connected wallet' : '— enter address (no wallet needed for full relay withdrawal)';
+  ppwUpdateRecipientHint();
+  setShown('ppwDirectModeHint', isDirect);
   setShown('ppwExtraGasWrap', !isDirect);
   // For native ETH, relayer forces extraGas=false — disable the toggle
   const noteAsset = _ppwNote?.asset || 'ETH';
@@ -8990,15 +9143,18 @@ function ppwSetMode(mode) {
   if (noteAsset === 'ETH') { extraGasEl.checked = false; extraGasEl.disabled = true; }
   else { extraGasEl.disabled = false; }
   setShown('ppwRelayFeePanel', false);
+  setShown('ppwRelayMinWarning', false);
   ppwUpdatePreview();
 }
 
 function ppwUpdatePreview() {
   const previewEl = $('ppwPreview');
   const warningEl = $('ppwChangeWarning');
+  const relayMinWarningEl = $('ppwRelayMinWarning');
   if (!_ppwNote || !$('ppwValue').value) {
     setShown(previewEl, false);
     setShown(warningEl, false);
+    setShown(relayMinWarningEl, false);
     ppwUpdateAmountSection(null, _ppwNote?.asset || 'ETH');
     ppwClearAnonymityHint();
     return;
@@ -9010,6 +9166,7 @@ function ppwUpdatePreview() {
     if (value === 0n) {
       setShown(previewEl, false);
       setShown(warningEl, false);
+      setShown(relayMinWarningEl, false);
       ppwClearAnonymityHint();
       return;
     }
@@ -9018,6 +9175,7 @@ function ppwUpdatePreview() {
     if (withdrawnValue > value || withdrawnValue === 0n) {
       setShown(previewEl, false);
       setShown(warningEl, false);
+      setShown(relayMinWarningEl, false);
       ppwClearAnonymityHint();
       return;
     }
@@ -9032,11 +9190,13 @@ function ppwUpdatePreview() {
     $('ppwPreviewContent').innerHTML = html;
     setShown(previewEl, true);
     setShown(warningEl, isPartial);
+    ppwRenderRelayMinWarning(changeValue, asset);
     ppwScheduleAnonymityHint(withdrawnValue, asset);
     ppwRenderRoundedSuggestions(withdrawnValue, value, asset);
   } catch {
     setShown(previewEl, false);
     setShown(warningEl, false);
+    setShown(relayMinWarningEl, false);
     ppwClearAnonymityHint();
   }
 }
@@ -9160,7 +9320,11 @@ function ppwParseNote() {
   if (note.asset && rawAssetUpper !== 'ETH' && rawAssetUpper !== 'BOLD' && rawAssetUpper !== 'WSTETH') {
     showStatus('Unrecognized note asset "' + escText(note.asset) + '", defaulting to ETH.', 'error');
   }
-  _ppwNote = { nullifier, secret, precommitment, asset: noteAsset };
+  const noteWithdrawalIndex = ppParseNonNegativeInt(note.withdrawalIndex);
+  if (note.withdrawalIndex != null && noteWithdrawalIndex == null) {
+    console.warn('Ignoring invalid note withdrawalIndex:', note.withdrawalIndex);
+  }
+  _ppwNote = { nullifier, secret, precommitment, asset: noteAsset, withdrawalIndex: noteWithdrawalIndex };
 
   setText('ppwNullifier', note.nullifier);
   setText('ppwSecret', note.secret);
@@ -9243,7 +9407,10 @@ async function ppwWithdraw() {
       }
     }
     const recipient = isRelayMode ? (customRecipient ? ethers.getAddress(customRecipient) : _connectedAddress) : _connectedAddress;
-    if (!recipient) { showStatus('Connect wallet first', 'error'); return; }
+    if (!recipient) {
+      showStatus(isRelayMode ? 'Enter a recipient address or connect wallet for relay withdrawal.' : 'Connect wallet first', 'error');
+      return;
+    }
     if (!isRelayMode && !_signer) { connectWallet(); return; }
 
     log('Validating inputs...');
@@ -9473,8 +9640,15 @@ async function ppwWithdraw() {
       if (runPreflight && !relayPreflightDone) {
         const details = await ppwRelayerDetails(relayChainId, relayAssetAddr);
         if (!details || details.error) throw new Error(details?.error || 'Relayer does not support this asset');
-        if (details.minWithdrawAmount && withdrawnValue < BigInt(details.minWithdrawAmount)) {
-          throw new Error('Withdraw amount below relayer minimum (' + fmt(ppFormatAmountWei(BigInt(details.minWithdrawAmount), wAsset)) + ' ' + wAsset + ').');
+        const minWithdrawAmount = details.minWithdrawAmount ? BigInt(details.minWithdrawAmount) : null;
+        _ppwRelayerMinByAsset[wAsset] = minWithdrawAmount;
+        if (minWithdrawAmount && withdrawnValue < minWithdrawAmount) {
+          throw new Error('Withdraw amount below relayer minimum (' + fmt(ppFormatAmountWei(minWithdrawAmount, wAsset)) + ' ' + wAsset + ').');
+        }
+        const remainingChange = value - withdrawnValue;
+        if (minWithdrawAmount && remainingChange > 0n && remainingChange < minWithdrawAmount) {
+          log('<b>Warning:</b> Remaining change would be ' + fmt(ppFormatAmountWei(remainingChange, wAsset)) + ' ' + wAsset + ', below relayer minimum (' + fmt(ppFormatAmountWei(minWithdrawAmount, wAsset)) + ' ' + wAsset + ').');
+          log('Remainder can still be withdrawn later via Direct mode.');
         }
         relayPreflightDone = true;
         log('Relayer supports ' + wAsset + ' on chain ' + relayChainId + '.');
@@ -9483,19 +9657,33 @@ async function ppwWithdraw() {
       const quote = await ppwRelayerQuote(relayChainId, withdrawnValue, relayAssetAddr, recipient, relayExtraGas);
       if (!quote || !quote.feeCommitment) throw new Error('Invalid quote response');
 
-      // Validate fee against on-chain maxRelayFeeBPS
-      const localQuotedFeeBPS = quote.feeBPS || quote.feeCommitment?.feeBPS;
-      const wConfig = wIsWSTETH ? _ppConfigWstETH : (wIsBOLD ? _ppConfigBold : _ppConfig);
-      if (wConfig?.maxRelayFeeBPS && localQuotedFeeBPS > Number(wConfig.maxRelayFeeBPS)) {
-        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + wConfig.maxRelayFeeBPS + ' bps).');
+      // Validate fee against on-chain maxRelayFeeBPS (fail-closed).
+      const feeField = quote.feeBPS ?? quote.feeCommitment?.feeBPS;
+      const decodedFeeBps = ppwDecodeRelayFeeBps(quote.feeCommitment.withdrawalData);
+      const localQuotedFeeBPS = feeField != null ? Number(feeField) : decodedFeeBps;
+      if (!Number.isFinite(localQuotedFeeBPS) || localQuotedFeeBPS < 0) {
+        throw new Error('Relayer returned invalid feeBPS.');
       }
 
-      quotedFeeBPS = localQuotedFeeBPS || null;
+      const wConfig = await ppEnsureAssetConfig(wAsset);
+      if (!wConfig || wConfig.maxRelayFeeBPS == null) {
+        throw new Error('Could not load on-chain max relay fee for this asset. Aborting relay withdrawal for safety.');
+      }
+      const maxRelayFeeBpsNum = Number(wConfig.maxRelayFeeBPS);
+      if (!Number.isFinite(maxRelayFeeBpsNum) || maxRelayFeeBpsNum < 0) {
+        throw new Error('Invalid on-chain max relay fee configuration.');
+      }
+      if (localQuotedFeeBPS > maxRelayFeeBpsNum) {
+        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + maxRelayFeeBpsNum + ' bps).');
+      }
+
+      const hasQuotedFeeBps = Number.isFinite(localQuotedFeeBPS);
+      quotedFeeBPS = hasQuotedFeeBps ? localQuotedFeeBPS : null;
 
       // Display fee info — compute from feeBPS if fee field absent
       let feeAmt = quote.feeCommitment?.fee || quote.fee;
-      if (!feeAmt && localQuotedFeeBPS) feeAmt = (withdrawnValue * BigInt(localQuotedFeeBPS) / 10000n).toString();
-      setText('ppwRelayFeeBps', (localQuotedFeeBPS || '--') + ' bps');
+      if (!feeAmt && hasQuotedFeeBps) feeAmt = (withdrawnValue * BigInt(localQuotedFeeBPS) / 10000n).toString();
+      setText('ppwRelayFeeBps', hasQuotedFeeBps ? (localQuotedFeeBPS + ' bps') : '--');
       setText('ppwRelayFeeAmt', feeAmt ? fmt(ppFormatAmountWei(BigInt(feeAmt), wAsset)) + ' ' + wAsset : '--');
       setShown('ppwRelayFeePanel', true);
       if (quote.feeCommitment?.expiration) ppwStartExpiryCountdown(Number(quote.feeCommitment.expiration));
@@ -9511,21 +9699,33 @@ async function ppwWithdraw() {
         showStatus('Relay quote failed: ' + escText(quoteErr.message), 'error');
         return;
       }
-      log('Relay quote received: fee=' + (quotedFeeBPS || '?') + 'bps, expires=' + (relayQuote.feeCommitment?.expiration || '?'));
+      log('Relay quote received: fee=' + (quotedFeeBPS ?? '?') + 'bps, expires=' + (relayQuote.feeCommitment?.expiration || '?'));
     }
 
     // Prepare circuit inputs
     log('Preparing circuit inputs...');
     const isPartial = withdrawnValue < value;
     const changeValue = value - withdrawnValue;
-    let newNullifier, newSecret;
+    let newNullifier, newSecret, changeIdx = null;
     if (isPartial && _signer && _connectedAddress) {
       // H-4: Use label-based derivation for change commitments (SDK-compatible)
       const mk = await ppEnsureMasterKeys();
-      const changeIdx = ppGetWithdrawalIndex(_connectedAddress, label.toString());
+      const idxResolution = ppResolveNextWithdrawalIndex(mk.masterNullifier, SCOPE, label, _ppwNote.nullifier, _ppwNote.withdrawalIndex);
+      if (idxResolution.nextIndex == null) {
+        showStatus('Could not determine this note\'s withdrawal index lineage. To avoid unsafe nullifier reuse, partial withdrawal is blocked. Use full withdrawal, or provide note.withdrawalIndex from the previous change note.', 'error');
+        return;
+      }
+      changeIdx = idxResolution.nextIndex;
       const changeKeys = ppDeriveWithdrawalKeys(mk.masterNullifier, mk.masterSecret, label, changeIdx);
       newNullifier = changeKeys.nullifier;
       newSecret = changeKeys.secret;
+      if (idxResolution.source === 'note') {
+        log('Using note withdrawalIndex=' + idxResolution.currentIndex + ' → next change index=' + changeIdx + '.');
+      } else if (idxResolution.source === 'inferred-withdrawal') {
+        log('Inferred current withdrawal index=' + idxResolution.currentIndex + ' from note nullifier → next change index=' + changeIdx + '.');
+      } else {
+        log('Detected original deposit note (deposit index=' + idxResolution.depositIndex + '). Using first change index=0.');
+      }
     } else {
       newNullifier = randomFieldElement();
       newSecret = randomFieldElement();
@@ -9661,6 +9861,42 @@ async function ppwWithdraw() {
     ];
     const pC = [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])];
     const pubSigs = publicSignals.map(s => BigInt(s));
+    if (pubSigs.length !== 8) {
+      showStatus('Unexpected proof output (invalid public signal length).', 'error');
+      return;
+    }
+
+    // Local proof sanity check before submission.
+    log('Verifying proof locally against pool verifier...');
+    try {
+      const rpc = await quoteRPC.call(r => r);
+      const poolRO = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+      const verifierAddress = await poolRO.WITHDRAWAL_VERIFIER();
+      const verifier = new ethers.Contract(verifierAddress, PP_VERIFIER_ABI, rpc);
+      const isProofValid = await verifier.verifyProof.staticCall(pA, pB, pC, pubSigs);
+      if (!isProofValid) {
+        showStatus('Proof failed local verifier check. Retry withdrawal.', 'error');
+        return;
+      }
+      log('Local verifier check passed.');
+    } catch (verifyErr) {
+      const verifyMsg = String(verifyErr?.message || verifyErr || '');
+      const verifyMsgLc = verifyMsg.toLowerCase();
+      const likelyVerifierRevert = verifyMsgLc.includes('execution reverted') ||
+        verifyMsgLc.includes('revert') ||
+        verifyMsgLc.includes('call exception');
+      if (likelyVerifierRevert) {
+        log('<b>Error:</b> Local verifier call reverted (' + escText(verifyMsg) + ').');
+        showStatus('Proof failed local verifier check. Retry withdrawal.', 'error');
+        return;
+      }
+      log('<b>Warning:</b> Could not run local verifier check due to RPC/network issue (' + escText(verifyMsg) + ').');
+      if (!window.confirm('Could not run local proof verification due to RPC/network issues.\n\nProceed anyway?')) {
+        showStatus('Withdrawal cancelled — local proof verification did not run.', 'error');
+        return;
+      }
+      log('User chose to proceed without local verifier check.');
+    }
 
     // Submit withdrawal
     let txHash, receipt;
@@ -9696,7 +9932,7 @@ async function ppwWithdraw() {
         // PP-03: Offer self-submit fallback with explicit cost warning
         log('<b>Relayer submission failed:</b> ' + escText(relayErr.message));
         if (_signer) {
-          if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit on-chain, but you will pay gas AND the relay fee (' + (quotedFeeBPS || '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
+          if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit on-chain, but you will pay gas AND the relay fee (' + (quotedFeeBPS ?? '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
             showStatus('Relay failed. Proof data shown below for manual submission.', 'error');
             setShown('ppwResult', true);
             $('ppwResultText').value = JSON.stringify({ proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
@@ -9806,6 +10042,7 @@ async function ppwWithdraw() {
           secret: '0x' + newSecret.toString(16).padStart(64, '0'),
           value: changeValue.toString(),
           label: '0x' + label.toString(16).padStart(64, '0'),
+          withdrawalIndex: changeIdx,
           leafIndex: changeLeafIndex,
           commitment: changeCommitment,
           asset: wAsset !== 'ETH' ? wAsset : undefined
@@ -9821,8 +10058,6 @@ async function ppwWithdraw() {
         } catch (_) {
           alert("CRITICAL: Could not save change note to browser storage. Copy it NOW — you need it to withdraw remaining funds.");
         }
-        // H-4/M-7: Use withdrawal-specific index counter keyed by label
-        if (_connectedAddress) ppSetWithdrawalIndex(_connectedAddress, label.toString(), ppGetWithdrawalIndex(_connectedAddress, label.toString()) + 1);
         renderPPNotes();
         log('<b style="color:orange">CHANGE NOTE SAVED</b> — ' + fmt(ppFormatAmountWei(changeValue, wAsset)) + ' ' + assetUnit + ' remaining. The change note has been saved to your browser. <b>Copy and back it up now</b> — losing it means losing the remaining funds.');
         // Also show in result textarea for easy copying + change note actions
