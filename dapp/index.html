@@ -7194,6 +7194,8 @@ walletInit({
     if (preAmt) handleAmountChange();
     if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
     if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); }
+    if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
+    if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
   }],
   onDisconnect: [() => {
     setText('swapBtn', 'Connect Wallet');
@@ -7207,6 +7209,8 @@ walletInit({
     _balanceCache.clear();
     _allowCache.clear();
     _ppMasterKeys = null;
+    if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
+    if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
     updatePPButton(); setText('ppBalance', '');
   }]
 });
@@ -8851,6 +8855,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (_ppwAmtEl) _ppwAmtEl.addEventListener('input', ppwUpdatePreview);
   const _ppwValEl = $('ppwValue');
   if (_ppwValEl) _ppwValEl.addEventListener('input', ppwUpdatePreview);
+  const _ppwRecipientEl = $('ppwRecipient');
+  if (_ppwRecipientEl) _ppwRecipientEl.addEventListener('input', ppwUpdatePreview);
 
   // Keep withdrawal mode UI and behavior in sync with relay-first default.
   ppwSetMode(_ppwMode);
@@ -9124,6 +9130,24 @@ function ppwUpdateRecipientHint() {
     : '— required in relay mode when wallet is not connected';
 }
 
+function ppwCanSubmitWithdrawal() {
+  if (!_ppwNote) return false;
+  const customRecipient = ($('ppwRecipient')?.value || '').trim();
+  if (_ppwMode === 'relay') {
+    if (customRecipient) return ethers.isAddress(customRecipient);
+    return !!connectedAddress;
+  }
+  if (!connectedAddress || !signer) return false;
+  if (customRecipient && customRecipient.toLowerCase() !== connectedAddress.toLowerCase()) return false;
+  return true;
+}
+
+function ppwSyncWithdrawButtonState() {
+  const btn = $('ppwWithdrawBtn');
+  if (!btn) return;
+  setDisabled(btn, !ppwCanSubmitWithdrawal());
+}
+
 function ppwSetMode(mode) {
   _ppwMode = mode;
   if (_ppwRelayExpiryTimer) { clearInterval(_ppwRelayExpiryTimer); _ppwRelayExpiryTimer = null; }
@@ -9147,6 +9171,7 @@ function ppwSetMode(mode) {
   setShown('ppwRelayFeePanel', false);
   setShown('ppwRelayMinWarning', false);
   ppwUpdatePreview();
+  ppwSyncWithdrawButtonState();
 }
 
 function ppwUpdatePreview() {
@@ -9159,6 +9184,7 @@ function ppwUpdatePreview() {
     setShown(relayMinWarningEl, false);
     ppwUpdateAmountSection(null, _ppwNote?.asset || 'ETH');
     ppwClearAnonymityHint();
+    ppwSyncWithdrawButtonState();
     return;
   }
   try {
@@ -9170,6 +9196,7 @@ function ppwUpdatePreview() {
       setShown(warningEl, false);
       setShown(relayMinWarningEl, false);
       ppwClearAnonymityHint();
+      ppwSyncWithdrawButtonState();
       return;
     }
     const withdrawAmtRaw = $('ppwWithdrawAmt').value.trim();
@@ -9179,6 +9206,7 @@ function ppwUpdatePreview() {
       setShown(warningEl, false);
       setShown(relayMinWarningEl, false);
       ppwClearAnonymityHint();
+      ppwSyncWithdrawButtonState();
       return;
     }
     const changeValue = value - withdrawnValue;
@@ -9195,11 +9223,13 @@ function ppwUpdatePreview() {
     ppwRenderRelayMinWarning(changeValue, asset);
     ppwScheduleAnonymityHint(withdrawnValue, asset);
     ppwRenderRoundedSuggestions(withdrawnValue, value, asset);
+    ppwSyncWithdrawButtonState();
   } catch {
     setShown(previewEl, false);
     setShown(warningEl, false);
     setShown(relayMinWarningEl, false);
     ppwClearAnonymityHint();
+    ppwSyncWithdrawButtonState();
   }
 }
 
@@ -9338,7 +9368,7 @@ function ppwParseNote() {
   if (note.commitment != null) $('ppwCommitment').value = note.commitment;
 
   setShown('ppwParsed', true);
-  setDisabled('ppwWithdrawBtn', false);
+  ppwSyncWithdrawButtonState();
   // Update extraGas toggle state for parsed note asset (only relevant for non-native-ETH assets)
   if (_ppwMode === 'relay') {
     const egEl = $('ppwExtraGas');
@@ -9676,7 +9706,7 @@ async function ppwWithdraw() {
         throw new Error('Invalid on-chain max relay fee configuration.');
       }
       if (localQuotedFeeBPS > maxRelayFeeBpsNum) {
-        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + maxRelayFeeBpsNum + ' bps).');
+        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + maxRelayFeeBpsNum + ' bps). Try a larger withdrawal amount, disable Extra gas, or use Direct mode.');
       }
 
       const hasQuotedFeeBps = Number.isFinite(localQuotedFeeBPS);
@@ -10109,7 +10139,7 @@ async function ppwWithdraw() {
     handleError(e);
   } finally {
     setText(btn, 'Withdraw');
-    setDisabled(btn, !_ppwNote);
+    ppwSyncWithdrawButtonState();
   }
 }
 
