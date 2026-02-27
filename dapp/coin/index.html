@@ -99,6 +99,7 @@ input {
   font-size:9px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
   color:var(--red);background:var(--status-error);padding:2px 6px;
 }
+.coin-inactive { display:none; }
 .spam-toggle {
   cursor:pointer;text-decoration:underline;text-decoration-style:dotted;
   text-underline-offset:2px;
@@ -720,6 +721,12 @@ function toggleSpamCoins() {
   });
 }
 
+function toggleInactiveCoins() {
+  const cards = document.querySelectorAll('#coinGrid .coin-inactive');
+  const showing = cards.length > 0 && cards[0].style.display === 'block';
+  cards.forEach(c => { c.style.display = showing ? 'none' : 'block'; });
+}
+
 let rpcIdx = 0;
 function getRPC() {
   return new ethers.JsonRpcProvider(RPCS[rpcIdx % RPCS.length], 1, { staticNetwork: true });
@@ -1277,8 +1284,9 @@ async function refreshSaleStats() {
     if (!sale) return;
     _coinData = data;
     _saleData = sale;
-    const totalSale = sale.totalSupply;
-    const sold = totalSale - sale.remainingSupply;
+    const refTeamBps = _coinMeta && _coinMeta.teamBps ? BigInt(_coinMeta.teamBps) : 0n;
+    const totalSale = refTeamBps > 0n ? sale.totalSupply * (10000n - refTeamBps) / 10000n : sale.totalSupply;
+    const sold = totalSale > sale.remainingSupply ? totalSale - sale.remainingSupply : 0n;
     const salePct = totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0;
     const treasuryETH = sale.treasuryBalance;
     const ethRaised = sale.forAmt > 0n ? sold * sale.tribAmt / sale.forAmt : 0n;
@@ -1410,14 +1418,55 @@ async function renderGallery() {
       poolCalls.push({ target: ZORG_TOKEN, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
     }
 
-    const [allMetadata, mcResults, ethUsd] = await Promise.all([
+    // Build activity map from cache or prepare to fetch in parallel
+    const INACTIVE_DAYS = 3;
+    const INACTIVE_MS = INACTIVE_DAYS * 86400 * 1000;
+    const ACTIVITY_CACHE_KEY = 'zfi_activity_cache';
+    const ACTIVITY_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+    let activityMap = {}; // token address (lowercase) -> updatedAt (ms)
+    let activityCached = false;
+    try {
+      const cached = JSON.parse(localStorage.getItem(ACTIVITY_CACHE_KEY) || '{}');
+      if (cached._ts && (Date.now() - cached._ts) < ACTIVITY_CACHE_TTL) {
+        activityMap = cached;
+        activityCached = true;
+      }
+    } catch {}
+
+    // Fetch metadata, pool reserves, ETH/USD price, and pool activity in parallel
+    const activityPromise = activityCached ? Promise.resolve(null) :
+      fetch(INDEXER + '/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '{ pools(limit: 1000) { items { token0 token1 updatedAt } } }' })
+      }).then(r => r.json()).catch(() => null);
+
+    const [allMetadata, mcResults, ethUsd, activityGql] = await Promise.all([
       Promise.all(filtered.map(d => fetchMetadata(d.meta.contractURI))),
       withRPC(async rpc => {
         const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
         return await mc.aggregate3(poolCalls);
       }).catch(() => poolCalls.map(() => ({ success: false }))),
-      getEthUsd()
+      getEthUsd(),
+      activityPromise
     ]);
+
+    // Process activity results if freshly fetched
+    if (activityGql && !activityCached) {
+      const pools = activityGql?.data?.pools?.items || [];
+      for (const p of pools) {
+        const token = (p.token1 && p.token1 !== '0x0000000000000000000000000000000000000000') ? p.token1
+                    : (p.token0 && p.token0 !== '0x0000000000000000000000000000000000000000') ? p.token0
+                    : null;
+        if (!token) continue;
+        const key = token.toLowerCase();
+        const ts = Number(p.updatedAt);
+        if (!activityMap[key] || ts > activityMap[key]) activityMap[key] = ts;
+      }
+      activityMap._ts = Date.now();
+      try { localStorage.setItem(ACTIVITY_CACHE_KEY, JSON.stringify(activityMap)); } catch {}
+    }
+
     // Extract pool results (first N entries) and ZORG balance (last entry if wallet connected)
     const poolResults = mcResults.slice(0, filtered.length);
     if (_connectedAddress && mcResults.length > filtered.length) {
@@ -1433,6 +1482,7 @@ async function renderGallery() {
     let testCount = 0;
     let lowMcapCount = 0;
     let spamCount = 0;
+    let inactiveCount = 0;
     for (let i = 0; i < filtered.length; i++) {
       const d = filtered[i];
       const md = allMetadata[i];
@@ -1440,8 +1490,10 @@ async function renderGallery() {
 
       let salePct = 0;
       if (sale && sale.totalSupply > 0n) {
-        const soldShares = sale.totalSupply - sale.remainingSupply;
-        if (sale.totalSupply > 0n) salePct = Number((soldShares * 10000n) / sale.totalSupply) / 100;
+        const saleTeamBps = md && md.teamBps ? BigInt(md.teamBps) : 0n;
+        const saleAlloc = saleTeamBps > 0n ? sale.totalSupply * (10000n - saleTeamBps) / 10000n : sale.totalSupply;
+        const soldShares = saleAlloc > sale.remainingSupply ? saleAlloc - sale.remainingSupply : 0n;
+        if (saleAlloc > 0n) salePct = Number((soldShares * 10000n) / saleAlloc) / 100;
       }
 
       const now = BigInt(Math.floor(Date.now() / 1000));
@@ -1491,8 +1543,20 @@ async function renderGallery() {
       const spamBtnHTML = _userIsVerified && !isSpam ? `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${cardAddr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
       const isCollector = md && md.type === 'fw-collector';
 
+      // Determine if coin is inactive (no trades in last 3 days)
+      let isInactive = false;
+      if (hasPool && !isSpam) {
+        const tokenKey = d.meta.sharesToken.toLowerCase();
+        const updatedAtMs = activityMap[tokenKey];
+        // Only mark inactive if we have a real updatedAt that's older than 3 days
+        if (typeof updatedAtMs === 'number' && updatedAtMs > 0 && (Date.now() - updatedAtMs) > INACTIVE_MS) {
+          isInactive = true;
+          inactiveCount++;
+        }
+      }
+
       const cardHTML = `
-        <a href="#${d.dao}" class="coin-card${isCollector ? ' coin-card-collector' : ''}${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+        <a href="#${d.dao}" class="coin-card${isCollector ? ' coin-card-collector' : ''}${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isInactive ? ' coin-inactive' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
           ${spamBtnHTML}
           <div class="coin-card-head">
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
@@ -1506,14 +1570,16 @@ async function renderGallery() {
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
-      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam, isCollector });
+      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam, isInactive, isCollector });
     }
 
-    // Group by name|symbol, stack duplicates (exclude spam from grouping)
+    // Group by name|symbol, stack duplicates (exclude spam/inactive from grouping)
     const groups = new Map();
     const spamCards = [];
+    const inactiveCards = [];
     for (const c of cards) {
       if (c.isSpam) { spamCards.push(c); continue; }
+      if (c.isInactive) { inactiveCards.push(c); continue; }
       if (!groups.has(c.key)) groups.set(c.key, []);
       groups.get(c.key).push(c);
     }
@@ -1546,6 +1612,8 @@ async function renderGallery() {
         grid += `</div>`;
       }
     }
+    // Append inactive cards individually (hidden by CSS, no stacking)
+    for (const c of inactiveCards) grid += c.html;
     // Append spam cards individually (hidden by CSS, no stacking)
     for (const c of spamCards) grid += c.html;
 
@@ -1556,6 +1624,7 @@ async function renderGallery() {
       </div>
       <input type="text" class="coin-search" id="coinSearch" placeholder="Search by name, symbol, or address..." oninput="filterCoins()">
       <div class="coin-grid" id="coinGrid">${grid}</div>
+      ${inactiveCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleInactiveCoins()">${inactiveCount} inactive coin${inactiveCount > 1 ? 's' : ''} hidden</span></div>` : ''}
       ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
       ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
@@ -1652,8 +1721,9 @@ async function renderCoinPage(daoAddr) {
     const lpBps = sale ? Number(sale.lpBps) : 0;
     let salePct = 0, sold = 0n, totalSale = 0n, treasuryETH = 0n, saleActive = false, ethRaised = 0n;
     if (sale) {
-      totalSale = sale.totalSupply;
-      sold = totalSale - sale.remainingSupply;
+      const detTeamBps = metadata && metadata.teamBps ? BigInt(metadata.teamBps) : 0n;
+      totalSale = detTeamBps > 0n ? sale.totalSupply * (10000n - detTeamBps) / 10000n : sale.totalSupply;
+      sold = totalSale > sale.remainingSupply ? totalSale - sale.remainingSupply : 0n;
       if (totalSale > 0n) salePct = Number((sold * 10000n) / totalSale) / 100;
       treasuryETH = sale.treasuryBalance;
       if (sale.forAmt > 0n) ethRaised = sold * sale.tribAmt / sale.forAmt;
