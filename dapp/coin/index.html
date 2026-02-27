@@ -1438,11 +1438,10 @@ async function renderGallery() {
       const md = allMetadata[i];
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
 
-      let salePct = 0, treasuryDisplay = '0';
+      let salePct = 0;
       if (sale && sale.totalSupply > 0n) {
         const soldShares = sale.totalSupply - sale.remainingSupply;
         if (sale.totalSupply > 0n) salePct = Number((soldShares * 10000n) / sale.totalSupply) / 100;
-        treasuryDisplay = fmtETH(sale.treasuryBalance || 0n);
       }
 
       const now = BigInt(Math.floor(Date.now() / 1000));
@@ -1503,7 +1502,7 @@ async function renderGallery() {
             </div>
           </div>
           <div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}${(sale && sale.treasuryBalance > 0n) ? ` &middot; ${treasuryDisplay} treasury` : ''}</div>
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1687,8 +1686,6 @@ async function renderCoinPage(daoAddr) {
 
     // FW S02 Collector DAO
     const FW_COLLECTOR_DAO = '0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853';
-    const FW_ADMIN = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20';
-    const isAdmin = _connectedAddress && _connectedAddress.toLowerCase() === FW_ADMIN;
     const isFWCollector = daoAddr.toLowerCase() === FW_COLLECTOR_DAO.toLowerCase();
 
     // Banner + OG meta for social sharing
@@ -1756,6 +1753,7 @@ async function renderCoinPage(daoAddr) {
         </div>
       </div>
       ${mcapDisplay ? `<div class="coin-mcap-row">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
+      ${isFWCollector && !saleActive ? `<div style="margin:12px 0 4px;padding:8px 12px;border-radius:8px;background:var(--green-bg,rgba(34,197,94,0.08));color:var(--green);font-size:13px;font-weight:600">Sale complete &mdash; NFT collected &mdash; trading active</div>` : ''}
     `;
 
     // Description + socials
@@ -1795,96 +1793,65 @@ async function renderCoinPage(daoAddr) {
 
     if (isFWCollector) {
       const minterAddr = tap ? tap.ops : null;
+      const FW_CONTRACT = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
+      const FW_TOKEN_ID = 156;
       html += `
-        <div class="section-card" style="background:var(--surface)">
-          <div class="section-title">FW S02 Collector</div>
-          <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-            Crowdsale to collectively mint <a href="https://www.s02.works/mint" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks S02</a> NFTs
-          </div>
-          <div id="fwDeadlineRow" style="margin-top:8px"></div>
-          <div id="fwCollectorInfo" style="margin-top:8px"></div>
-          ${minterAddr && minterAddr !== ZERO ? `
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-muted);font-size:11px;line-height:1.7;color:var(--fg-dim)">
-            <div style="margin-bottom:6px"><strong style="color:var(--fg-muted)">How it works</strong></div>
-            Each 1 ETH raised mints 1 NFT held by the <a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:underline">minter contract</a>.
-            Share holders govern the NFT via the DAO &mdash; vote to burn it and recover locked ETH, or hold it.
-            Shareholders can also vote to continue raising to purchase more NFTs before the deadline. Or continue buying whatever as a DAO. It's up to you.
-            10% of buys seed a secondary market on zAMM.
-            ${sale && sale.remainingSupply > 0n ? `<br><span style="opacity:0.7">Ragequit refunds available after sale ends and unsold shares are burned via closeSale()</span>` : `Ragequit your shares anytime for proportional ETH from treasury.`}
-          </div>
-          ` : ''}
-          <div style="margin-top:8px;font-size:11px">
-            <a href="../collect/" style="color:var(--fg-muted);text-decoration:underline">Dashboard</a>
+        <div class="drawer" id="fwCollectorDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>FW S02 Collector</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="drawer-body">
+            <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
+              Collective <a href="https://www.s02.works/mint" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks S02</a> NFT vault
+            </div>
+            <a href="https://etherscan.io/nft/${FW_CONTRACT}/${FW_TOKEN_ID}" target="_blank" style="display:block;margin-top:12px;border-radius:12px;overflow:hidden;text-decoration:none">
+              <div id="fwNftMedia" style="aspect-ratio:1;background:var(--surface-raised,var(--surface));display:flex;align-items:center;justify-content:center;border-radius:12px;overflow:hidden">
+                <div style="font-size:11px;color:var(--fg-dim)">Loading NFT...</div>
+              </div>
+              <div style="padding:10px 2px 0;display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:13px;font-weight:600;color:var(--fg)">FundingWorks S02 #${FW_TOKEN_ID}</span>
+                <span style="font-size:11px;color:var(--fg-dim)">held by DAO</span>
+              </div>
+            </a>
+            <div id="fwCollectorInfo" style="margin-top:12px"></div>
+            ${minterAddr && minterAddr !== ZERO ? `
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-muted);font-size:11px;line-height:1.7;color:var(--fg-dim)">
+              Share holders govern the NFT via the DAO &mdash; burn to recover locked ETH, or hold. Swap on zAMM.
+            </div>
+            ` : ''}
+            <div style="margin-top:8px;font-size:11px">
+              <a href="../collect/" style="color:var(--fg-muted);text-decoration:underline">Dashboard</a>
+            </div>
           </div>
         </div>
       `;
-      // Async load minter data
+      // Async load minter data + NFT media
       if (minterAddr && minterAddr !== ZERO) {
         (async () => {
           try {
             const minterABI = [
               'function nftCount() view returns (uint256)',
               'function totalLockedEth() view returns (uint256)',
-              'function mintableFromTap() view returns (uint256)',
-              'function deadline() view returns (uint256)'
+              'function mintableFromTap() view returns (uint256)'
             ];
-            const minter = await withRPC(async rpc => new ethers.Contract(minterAddr, minterABI, rpc));
             const rpc = getRPC();
             const mc = new ethers.Contract(minterAddr, minterABI, rpc);
-            const [nftCount, lockedEth, mintable, deadlineTs, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), mc.mintableFromTap(), mc.deadline(), rpc.getBalance(minterAddr)]);
-            // Update treasury minter balance
+            const [nftCount, lockedEth, mintable, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), mc.mintableFromTap(), rpc.getBalance(minterAddr)]);
+            // Update treasury minter balance (hide row if 0)
             const tmEl = $('treasuryMinterBal');
-            if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
-            // Mint progress bar in sale section
-            const mintProgress = $('saleMintProgress');
-            if (mintProgress) {
-              const MINT_PRICE = ethers.parseEther('1');
-              const available = minterBal + treasuryETH - lockedEth; // ETH available toward next mint
-              const progressETH = available > 0n ? available : 0n;
-              const progressPct = Number(progressETH * 10000n / MINT_PRICE) / 100;
-              const nfts = Number(nftCount);
-              const nextN = nfts + 1;
-              mintProgress.innerHTML = `
-                <div style="margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--surface-raised, var(--surface))">
-                  <div class="stat-row"><span class="stat-label" style="font-size:12px">Progress to NFT #${nextN}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(progressETH)} / ${ethers.formatEther(MINT_PRICE)} ${ethIco}</span></div>
-                  ${pctBar(Math.min(progressPct, 100), 'var(--green)')}
-                  <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
-                </div>`;
-            }
-            // Deadline display with live countdown
-            const dlEl = document.getElementById('fwDeadlineRow');
-            if (dlEl) {
-              const dl = Number(deadlineTs);
-              const dlDate = new Date(dl * 1000);
-              const dlStr = dlDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-              function updateCountdown() {
-                const rem = dl - Math.floor(Date.now() / 1000);
-                if (rem <= 0) {
-                  dlEl.innerHTML = `<div class="stat-row"><span class="stat-label">Mint deadline</span><span class="stat-value" style="font-weight:600">${dlStr} (ended)</span></div>`;
-                  return;
-                }
-                const d = Math.floor(rem / 86400);
-                const h = Math.floor((rem % 86400) / 3600);
-                const m = Math.floor((rem % 3600) / 60);
-                const s = rem % 60;
-                const timer = d > 0 ? `${d}d ${h}h ${m}m ${s}s` : h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
-                dlEl.innerHTML = `<div class="stat-row"><span class="stat-label">Mint deadline</span><span class="stat-value" style="font-weight:600">${dlStr}</span></div><div style="font-size:16px;font-weight:600;letter-spacing:0.05em;text-align:center;padding:8px 0;color:var(--fg)">${timer}</div>`;
-              }
-              updateCountdown();
-              const _cdInterval = setInterval(updateCountdown, 1000);
-              // Clean up on navigation
-              window.addEventListener('hashchange', () => clearInterval(_cdInterval), { once: true });
+            if (tmEl) {
+              if (minterBal === 0n) tmEl.closest('.stat-row').style.display = 'none';
+              else tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
             }
             // NFT info
             const el = document.getElementById('fwCollectorInfo');
             if (el) {
               const nfts = Number(nftCount);
-              const mBal = Number(ethers.formatEther(minterBal));
               const lEth = Number(ethers.formatEther(lockedEth));
               el.innerHTML = `
-                <div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="stat-value">${fmtNum(mBal)} ${ethIco}</span></div>
                 ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${nfts}</span></div>` : ''}
-                ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
+                ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Redeemable ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
                 ${Number(mintable) > 0 ? `<div class="stat-row"><span class="stat-label">Mintable now</span><span class="stat-value" style="color:var(--green);font-weight:600">${Number(mintable)} NFT${Number(mintable) > 1 ? 's' : ''}</span></div>` : ''}
               `;
             }
@@ -1951,13 +1918,11 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Treasury + Pool reserves
-    if (treasuryETH > 0n || hasPool || (isFWCollector && ethRaised > 0n)) {
+    if (!isFWCollector && (treasuryETH > 0n || hasPool)) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
-          ${isFWCollector ? `${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco} <span style="font-size:10px;opacity:0.6">(instant tap)</span></span></div>` : ''}
-          <div class="stat-row"><span class="stat-label">${ethIco} <a href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a></span><span class="stat-value" id="treasuryMinterBal">loading...</span></div>` :
-          (treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : '')}
+          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
           ${hasPool ? `
             <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
@@ -1967,24 +1932,9 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Tap drawer (collapsed) — simplified for collector DAO (instant tap to minter)
-    if (tapActive) {
+    if (tapActive && !isFWCollector) {
       const claimableETH = Number(ethers.formatEther(tap.claimable || 0n));
-      if (isFWCollector) {
-        html += `
-          <div class="drawer" id="tapDrawer">
-            <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-              <span>Treasury Tap</span>
-              <span class="arrow">&#9660;</span>
-            </button>
-            <div class="drawer-body">
-              <div class="stat-row"><span class="stat-label">Mode</span><span class="stat-value">Instant (no vesting)</span></div>
-              <div class="stat-row"><span class="stat-label">Claimable</span><span class="stat-value">${fmtNum(claimableETH)} ${ethIco}</span></div>
-              <div class="stat-row"><span class="stat-label">Recipient</span><span class="stat-value" style="font-size:11px"><a class="ops-addr-link" href="https://etherscan.io/address/${tap.ops}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter contract</a></span></div>
-              <div style="font-size:11px;color:var(--fg-dim);margin-top:6px">Treasury flows to the minter contract via mintFromTap() to purchase FW NFTs</div>
-            </div>
-          </div>
-        `;
-      } else {
+      {
         html += `
           <div class="drawer" id="tapDrawer">
             <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
@@ -2056,9 +2006,9 @@ async function renderCoinPage(daoAddr) {
       <div class="section-card swap-tile">
         <div class="swap-mode-tabs">
           ${saleActive ? `<button id="modeTabSale" class="${defaultMode==='sale'?'active':''}" onclick="setTradeMode('sale')">Sale</button>` : ''}
-          ${isFWCollector && saleActive && !isAdmin ? `<button id="modeTabSwap" disabled style="opacity:0.4;cursor:default" title="Swap available after sale ends">Swap <span style="font-size:9px;opacity:0.7">seeding LP</span></button>` : `<button id="modeTabSwap" class="${defaultMode==='swap'?'active':''}" onclick="setTradeMode('swap')">Swap</button>`}
-          ${isFWCollector && sale && sale.remainingSupply > 0n ? '' : `<button id="modeTabRagequit" onclick="setTradeMode('ragequit')">Ragequit</button>`}
-          ${hasPool && !(isFWCollector && saleActive && !isAdmin) ? `<button id="modeTabLp" onclick="setTradeMode('lp')">LP</button>` : ''}
+          <button id="modeTabSwap" class="${defaultMode==='swap'?'active':''}" onclick="setTradeMode('swap')">Swap</button>
+          ${isFWCollector ? '' : `<button id="modeTabRagequit" onclick="setTradeMode('ragequit')">Ragequit</button>`}
+          ${hasPool ? `<button id="modeTabLp" onclick="setTradeMode('lp')">LP</button>` : ''}
         </div>
 
         <!-- SALE MODE -->
@@ -2270,6 +2220,23 @@ async function renderCoinPage(daoAddr) {
 
     // Store data for swap
     app.innerHTML = html;
+
+    // Load NFT media (hardcoded onchain tokenURI for #156)
+    {
+      const nftEl = document.getElementById('fwNftMedia');
+      if (nftEl) {
+        const tokenURI = 'data:application/json;base64,eyJuYW1lIjoiVG9rZW5Xb3JrcyBTMDIgIzE1NiIsImRlc2NyaXB0aW9uIjoiVG9rZW5Xb3JrcyBTMDIgUGF0cm9uIE5GVCB3aXRoIGFydCBkZXNpZ25lZCBieSBUZXRvLiIsImltYWdlIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBuYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNuSUhacFpYZENiM2c5SnpBZ01DQXpNREFnTkRBd0p6NDhjbVZqZENCM2FXUjBhRDBuTXpBd0p5Qm9aV2xuYUhROUp6UXdNQ2NnY25nOUp6RTJKeUJtYVd4c1BTY2pNa1F5UkRKRUp5OCtQR2NnZEhKaGJuTm1iM0p0UFNkMGNtRnVjMnhoZEdVb01UVXdJREkwT1NrZ2NtOTBZWFJsS0RBcElITmpZV3hsS0RBdU5Ta25QanhuSUhSeVlXNXpabTl5YlQwbmRISmhibk5zWVhSbEtDMDBNREFnTFRNd01Da25QanhrWldaelBqeHdZWFJvSUdsa1BTZGhKeUJtYVd4c1BTZHViMjVsSnlCemRISnZhMlU5SnlNMllqWTJOalluSUhOMGNtOXJaUzEzYVdSMGFEMG5NU2NnWkQwblRUWXpNeTQzT1NBeU9Ea3VPRGhETkRRd0xqa3pJREk0Tmk0MU55QTBPVEV1T1RNZ01pQXpNVFl1T1RRZ01sTXhPVEF1TVRNZ01qZ3hMamMwTGpBNUlESTRPUzQ0T0NjZ2RISmhibk5tYjNKdFBTZDBjbUZ1YzJ4aGRHVW9MVE14Tmk0NU1UVWdMVEUwTlM0NU5Da25JSFpsWTNSdmNpMWxabVpsWTNROUoyNXZiaTF6WTJGc2FXNW5MWE4wY205clpTYytQQzl3WVhSb1Bqd3ZaR1ZtY3o0OGRYTmxJR2h5WldZOUp5TmhKeUIwY21GdWMyWnZjbTA5SjIxaGRISnBlQ2d1TlNBd0lEQWdMalVnTkRBd0lETXdNQ2tuUGp3dmRYTmxQangxYzJVZ2FISmxaajBuSTJFbklIUnlZVzV6Wm05eWJUMG5iV0YwY21sNEtDNDFNalVnTUNBd0lDNHlOU0EwTURBZ016WTFLU2MrUEM5MWMyVStQSFZ6WlNCb2NtVm1QU2NqWVNjZ2RISmhibk5tYjNKdFBTZHRZWFJ5YVhnb0xqVTFNVEkxSURBZ01DQXVNVEkxSURRd01DQXpPVGN1TlNrblBqd3ZkWE5sUGp4MWMyVWdhSEpsWmowbkkyRW5JSFJ5WVc1elptOXliVDBuYldGMGNtbDRLQzQxTnpnNE1TQXdJREFnTGpBMk1qVWdOREF3SURReE15NDROU2tuUGp3dmRYTmxQangxYzJVZ2FISmxaajBuSTJFbklIUnlZVzV6Wm05eWJUMG5iV0YwY21sNEtDNDJNRGMzTlNBd0lEQWdMakF6TVRJMUlEUXdNQ0EwTWpFdU9EYzFLU2MrUEM5MWMyVStQSFZ6WlNCb2NtVm1QU2NqWVNjZ2RISmhibk5tYjNKdFBTZHRZWFJ5YVhnb0xqWXpPREUwSURBZ01DQXVNREUxTmpNZ05EQXdJRFF5TlM0NU16Z3BKejQ4TDNWelpUNDhkWE5sSUdoeVpXWTlKeU5oSnlCMGNtRnVjMlp2Y20wOUoyMWhkSEpwZUNndU5qY3dNRFVnTUNBd0lDNHdNRGM0TVNBME1EQWdOREkzTGprMk9Ta25Qand2ZFhObFBqeDFjMlVnYUhKbFpqMG5JMkVuSUhSeVlXNXpabTl5YlQwbmJXRjBjbWw0S0M0M01ETTFPU0F3SURBZ0xqQXdNemtnTkRBd0lEUXlPQzQ1T0RRcEp6NDhMM1Z6WlQ0OEwyYytQQzluUGp4bklHWnZiblF0Wm1GdGFXeDVQU2RCY21saGJDeHpZVzV6TFhObGNtbG1KejQ4ZEdWNGRDQjRQU2N4TmljZ2VUMG5NamduSUdadmJuUXRjMmw2WlQwbk1UTW5JR1pwYkd3OUp5Tm1abVluUGxSdmEyVnVWMjl5YTNNZ1V6QXlJRHgwYzNCaGJpQm1hV3hzUFNjak9EQTRNRGd3Sno0ak1UVTJQQzkwYzNCaGJqNDhMM1JsZUhRK1BIUmxlSFFnZUQwbk1UWW5JSGs5SnpRNEp5Qm1iMjUwTFhOcGVtVTlKekV6SnlCbWFXeHNQU2NqT0RBNE1EZ3dKejVXWlhOMGFXNW5JRzV2ZENCemRHRnlkR1ZrUEM5MFpYaDBQangwWlhoMElIZzlKekUySnlCNVBTYzJPQ2NnWm05dWRDMXphWHBsUFNjeE5TY2dabWxzYkQwbkkyWm1aaWMrTUZnM1JqaEZQQzkwWlhoMFBqeDBaWGgwSUhnOUp6RTJKeUI1UFNjNE9DY2dabTl1ZEMxemFYcGxQU2N4TlNjZ1ptbHNiRDBuSTJabVppYytNQzQ0TURET25qd3ZkR1Y0ZEQ0OEwyYytQR2NnZEhKaGJuTm1iM0p0UFNkMGNtRnVjMnhoZEdVb01qVXdJREUwS1NCelkyRnNaU2d3TGpBM01pa25Qanh3WVhSb0lHWnBiR3d0Y25Wc1pUMG5aWFpsYm05a1pDY2dZMnhwY0MxeWRXeGxQU2RsZG1WdWIyUmtKeUJrUFNkTk1qVXdJREJETVRFeExqa3lPU0F3SURBZ01URXhMamt5T1NBd0lESTFNRU13SURNNE9DNHdOekVnTVRFeExqa3lPU0ExTURBZ01qVXdJRFV3TUVNek9EZ3VNRGN4SURVd01DQTFNREFnTXpnNExqQTNNU0ExTURBZ01qVXdRelV3TUNBeE1URXVPVEk1SURNNE9DNHdOekVnTUNBeU5UQWdNRnBOTkRBMExqQTVNU0EwTURRdU1Ea3hRek0zTkM0NU16WWdORE16TGpJME5pQXpNekF1TWprM0lEUXpNeTR5TkRZZ01qVXdJRFF6TXk0eU5EWkRNVFk1TGpjd015QTBNek11TWpRMklERXlOUzR3TmpRZ05ETXpMakkwTmlBNU5TNDVNRGtnTkRBMExqQTVNVU0yTmk0M05UUWdNemMwTGprek5pQTJOaTQzTlRRZ016TXdMakkwTnlBMk5pNDNOVFFnTWpVd1F6WTJMamMxTkNBeE5qa3VOekF6SURZMkxqYzFOQ0F4TWpVdU1EWTBJRGsxTGprd09TQTVOUzQ1TURsRE1USTFMakEyTkNBMk5pNDNOVFFnTVRZNUxqY3dNeUEyTmk0M05UUWdNalV3SURZMkxqYzFORU16TXpBdU1qazNJRFkyTGpjMU5DQXpOelF1T1RNMklEWTJMamMxTkNBME1EUXVNRGt4SURrMUxqa3dPVU0wTXpNdU1qUTJJREV5TlM0d05qUWdORE16TGpJME5pQXhOamt1TnpBeklEUXpNeTR5TkRZZ01qVXdRelF6TXk0eU5EWWdNek13TGpJNU55QTBNek11TWpRMklETTNOQzQ1TXpZZ05EQTBMakE1TVNBME1EUXVNRGt4V2ljZ1ptbHNiRDBuSTBZeVJqSkdNaWN2UGp4d1lYUm9JR1E5SjAweU16a3VNakU1SURJd015NDNNMVl4TXpBdU5EZzJTREkxT0M0eE5UbFdNakF6TGpjelNESXpPUzR5TVRsYVRUSXhNUzQxTWpnZ01UTXlMalF3TkZZeE1UWXVNelF4U0RJNE5TNDJNVll4TXpJdU5EQTBTREl4TVM0MU1qaGFUVE13TVM0ME16Z2dNakF6TGpjelRESTNOaTQ1T0RRZ01URTJMak0wTVVneU9UWXVNamcwVERNeE1pNHpORGNnTVRnekxqRXhNVWd6TVRBdU56ZzVURE15Tnk0Mk9URWdNVEUyTGpNME1VZ3pORFV1TnpreVRETTJNaTQwTlRVZ01UZ3pMakV4TVVnek5qRXVNREUyVERNM055NHlJREV4Tmk0ek5ERklNemsyTGpjek9Vd3pOekV1T0RBMUlESXdNeTQzTTBnek5URXVNekEzVERNek5TNDVOaklnTVRReUxqUTNORWd6TXpjdU5qUXhURE15TWk0eE56Y2dNakF6TGpjelNETXdNUzQwTXpoYUp5Qm1hV3hzUFNjalJqSkdNa1l5Snk4K1BDOW5Qand2YzNablBnPT0ifQ==';
+        const meta = JSON.parse(atob(tokenURI.split(',')[1]));
+        const imgSrc = meta.image;
+        const svgObj = document.createElement('object');
+        svgObj.type = 'image/svg+xml';
+        svgObj.data = imgSrc;
+        svgObj.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none';
+        svgObj.setAttribute('aria-label', 'FW S02 #156');
+        nftEl.replaceChildren(svgObj);
+      }
+    }
+
     app.dataset.dao = daoAddr;
     app.dataset.shares = sharesAddr;
     app.dataset.feeOrHook = feeOrHook.toString();

@@ -1071,6 +1071,7 @@ body.modal-open { overflow: hidden; }
 </div><!-- end swapTab -->
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
+<div id="fwDaicoSection" class="live-sales" style="display:none"></div>
 <div id="featuredPmSection" class="live-sales" style="display:none"></div>
 
 <div id="privacyTab" style="display:none">
@@ -1731,6 +1732,52 @@ function loadFeaturedPm() {
 // Load featured PM on page init (non-blocking)
 // setTimeout(loadLiveSale, 500); // DAICO banner hidden for now
 setTimeout(loadFeaturedPm, 100);
+
+// FW DAICO — sale complete, now trading
+setTimeout(async () => {
+  const FW_DAO = '0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853';
+  const el = $('fwDaicoSection');
+  if (!el) return;
+  try {
+    const daicos = await fetchDaicoScan();
+    const fw = daicos.find(d => d.dao.toLowerCase() === FW_DAO.toLowerCase());
+    if (!fw) return;
+    let icon = null, name = fw.meta.name || 'FW';
+    if (fw.meta.contractURI) {
+      try {
+        let url = fw.meta.contractURI;
+        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
+        else if (url.startsWith('data:')) {
+          const j = url.split(',').slice(1).join(',');
+          const m = JSON.parse(decodeURIComponent(j));
+          if (m.image) icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+          if (m.name) name = m.name;
+        }
+        if (!icon) {
+          const res = await fetch(url);
+          const m = await res.json();
+          if (m.image) icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+          if (m.name) name = m.name;
+        }
+      } catch {}
+    }
+    const sym = fw.meta.symbol || 'FW';
+    const logo = icon
+      ? `<img class="live-sale-logo" src="${esc(icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${esc(sym[0]||'?')}</div>'">`
+      : `<div class="live-sale-logo-ph">${esc(sym[0] || '?')}</div>`;
+    const displayName = name && name.length > 1 ? name : sym;
+    el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daico</div><a class="live-sale-card" href="coin/#${FW_DAO}">
+      ${logo}
+      <div class="live-sale-info">
+        <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
+        <div class="live-sale-meta" style="color:var(--green,#22c55e);font-weight:600">Sale complete &mdash; now trading</div>
+      </div>
+      <div class="live-sale-pct">100%</div>
+      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:100%"></div></div>
+    </a>`;
+    el.style.display = '';
+  } catch (e) { console.warn('FW DAICO section failed:', e); }
+}, 50);
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -8472,6 +8519,8 @@ function switchTab(tab) {
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
   const lsEl = $('liveSalesSection');
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
+  const fwEl = $('fwDaicoSection');
+  if (fwEl && fwEl.innerHTML) fwEl.style.display = tab === 'swap' ? '' : 'none';
   const pmEl = $('featuredPmSection');
   if (pmEl && pmEl.innerHTML) pmEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
