@@ -228,55 +228,66 @@ body.modal-open { overflow:hidden; }
 </div>
 
 <div class="header">
-  <h1>FW S02 Collector DAO</h1>
+  <h1>FW S02 Collector</h1>
 </div>
 
 <div class="form-hint">
   Collector DAO for <a href="https://etherscan.io/address/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6" target="_blank">FundingWorks S02</a>.
-  Buy shares to crowdfund 1 ETH and mint an NFT. 10% seeds LP on zAMM. Ragequittable. Unsold shares burned after the mint deadline.
+  Phase 2: buy shares via <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" style="color:inherit;text-decoration:underline">coin page</a> &mdash; ETH goes to minter &mdash; mint NFTs when 1 ETH accumulates.
 </div>
 
 <!-- Dashboard (shown when DAO is deployed) -->
 <div id="dashboard" style="display:none">
-  <div class="info-card">
-    <div class="info-row"><span class="info-label">Sale</span><span class="info-value" id="saleStatus">loading...</span></div>
-    <div class="sale-bar"><div class="sale-bar-fill" id="saleBar" style="width:0%"></div></div>
-    <div class="info-row"><span class="info-label">Shares sold</span><span class="info-value" id="sharesSold">-</span></div>
-    <div class="info-row"><span class="info-label">ETH raised</span><span class="info-value" id="ethRaised">-</span></div>
-    <div class="info-row" id="treasuryRow" style="display:none"><span class="info-label">DAO treasury</span><span class="info-value" id="treasury">-</span></div>
+  <!-- Phase 2 Sale -->
+  <div class="info-card" id="phase2Card">
+    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:8px">Phase 2 Sale</div>
+    <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="p2Status">loading...</span></div>
+    <div class="sale-bar"><div class="sale-bar-fill" id="p2Bar" style="width:0%"></div></div>
+    <div class="info-row"><span class="info-label">Shares remaining</span><span class="info-value" id="p2Remaining">-</span></div>
     <div class="info-row"><span class="info-label"><a id="minterLabel" href="#" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="info-value" id="minterBalance">-</span></div>
     <div class="info-row"><span class="info-label">Deadline</span><span class="info-value" id="fwDeadline">-</span></div>
   </div>
 
-  <div class="info-card" id="userCard" style="display:none">
-    <div class="info-row"><span class="info-label">Your shares</span><span class="info-value" id="userShares">-</span></div>
-    <div class="info-row"><span class="info-label">Your % of supply</span><span class="info-value" id="userPct">-</span></div>
-  </div>
-
+  <!-- NFT Progress -->
   <div class="info-card" id="nftCard"></div>
 
-  <!-- Buy shares -->
+  <!-- Buy shares (Phase 2 — via coin page) -->
   <div id="buySection">
-    <div class="form-section">
-      <label>Buy Shares (ETH)</label>
-      <input type="text" id="buyAmount" placeholder="0.1" inputmode="decimal">
-    </div>
-    <button class="action-btn" id="buyBtn" onclick="buyShares()">Buy Shares</button>
+    <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" class="action-btn" style="display:block;text-align:center;text-decoration:none;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);padding:14px 24px">Buy Shares (Phase 2 Sale)</a>
   </div>
 
-  <!-- Mint from tap -->
-  <button class="action-btn" id="mintBtn" onclick="mintFromTap()" style="display:none">Mint NFT from Tap</button>
+  <!-- Mint from balance -->
+  <button class="action-btn" id="mintBtn" onclick="mintFromBalance()" style="display:none">Mint NFT from Balance</button>
 
   <!-- Close sale -->
   <button class="action-btn" id="closeBtn" onclick="closeSale()" style="display:none">Close Sale &amp; Burn Unsold</button>
 
   <div id="statusArea"></div>
 
+  <!-- User holdings -->
+  <div class="info-card" id="userCard" style="display:none">
+    <div class="info-row"><span class="info-label">Your shares</span><span class="info-value" id="userShares">-</span></div>
+    <div class="info-row"><span class="info-label">Your % of supply</span><span class="info-value" id="userPct">-</span></div>
+  </div>
+
+  <!-- Phase 1 (collapsed) -->
+  <details style="margin-top:12px;font-size:12px;color:var(--fg-muted)">
+    <summary style="cursor:pointer;user-select:none">Phase 1 Sale (Ended)</summary>
+    <div class="info-card" style="margin-top:8px">
+      <div class="info-row"><span class="info-label">Sale</span><span class="info-value" id="saleStatus">-</span></div>
+      <div class="sale-bar"><div class="sale-bar-fill" id="saleBar" style="width:0%"></div></div>
+      <div class="info-row"><span class="info-label">Shares sold</span><span class="info-value" id="sharesSold">-</span></div>
+      <div class="info-row"><span class="info-label">ETH raised</span><span class="info-value" id="ethRaised">-</span></div>
+      <div class="info-row" id="treasuryRow" style="display:none"><span class="info-label">DAO treasury</span><span class="info-value" id="treasury">-</span></div>
+    </div>
+  </details>
+
   <div style="font-size:11px;color:var(--fg-dim);margin-top:12px">
     <a href="" id="tradeLink" style="color:var(--fg-dim)">Trade</a>
     &middot; <a href="" id="daoLink" target="_blank" style="color:var(--fg-dim)">DAO</a>
     &middot; <a href="" id="minterLink" target="_blank" style="color:var(--fg-dim)">Minter</a>
     &middot; <a href="" id="manageLink" style="color:var(--fg-dim)">Manage DAO</a>
+    &middot; <a href="https://etherscan.io/address/0x5D03BeE003859d250c1AB868490d09D90F10C8E8" target="_blank" style="color:var(--fg-dim)">Phase 2 Sale Contract</a>
   </div>
 </div>
 
@@ -396,6 +407,11 @@ const SHARES_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function totalSupply() view returns (uint256)'
 ];
+
+const FOLLOW_ON_SALE = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
+const P2_CAP = 9_000_000n * 10n**18n; // 9M shares
+const MOLOCH_ABI = ['function allowance(address token, address spender) view returns (uint256)'];
+const FOLLOW_ON_ABI = ['function paused() view returns (bool)', 'function deadline() view returns (uint256)'];
 
 let _minterAddress = null; // discovered from tap.ops
 
@@ -618,24 +634,20 @@ async function loadDashboard() {
     const sold = sale.totalSupply - sale.remainingSupply;
     const totalSale = sale.totalSupply;
     const salePct = Number(sold) / Number(totalSale) * 100;
-    const deadline = Number(sale.deadline);
+    const p1deadline = Number(sale.deadline);
     const now = Date.now() / 1000;
-    const saleActive = now < deadline && sale.remainingSupply > 0n;
-    const pastDeadline = now > deadline;
+    const p1Active = now < p1deadline && sale.remainingSupply > 0n;
 
-    // Sale status
-    if (saleActive) {
+    // Phase 1 (collapsed)
+    if (p1Active) {
       $('saleStatus').innerHTML = '<span style="color:var(--green)">Live</span>';
     } else if (sale.remainingSupply === 0n) {
       $('saleStatus').textContent = 'Sold Out';
     } else {
       $('saleStatus').textContent = 'Ended';
     }
-
     $('saleBar').style.width = Math.min(salePct, 100).toFixed(1) + '%';
     $('sharesSold').textContent = fmtShares(sold) + ' / ' + fmtShares(totalSale);
-
-    // ETH raised from sale = sold * tribAmt / forAmt
     const ethRaisedWei = sale.forAmt > 0n ? sold * sale.tribAmt / sale.forAmt : 0n;
     $('ethRaised').textContent = fmtETH(ethRaisedWei) + ' ETH';
     if (data.tap.treasuryBalance > 0n) {
@@ -643,37 +655,66 @@ async function loadDashboard() {
       $('treasury').textContent = fmtETH(data.tap.treasuryBalance) + ' ETH';
     }
 
-    // Deadline
-    const d = new Date(deadline * 1000);
+    // Phase 2 sale data
+    const moloch = new ethers.Contract(DAO_ADDRESS, MOLOCH_ABI, rpc);
+    const followOn = new ethers.Contract(FOLLOW_ON_SALE, FOLLOW_ON_ABI, rpc);
+    const [p2Allowance, p2Paused, p2DeadlineBN] = await Promise.all([
+      moloch.allowance(DAO_ADDRESS, FOLLOW_ON_SALE),
+      followOn.paused(),
+      followOn.deadline()
+    ]);
+    const p2Deadline = Number(p2DeadlineBN);
+    const p2Remaining = p2Allowance;
+    const p2Sold = P2_CAP - p2Remaining;
+    const p2Pct = Number(p2Sold * 10000n / P2_CAP) / 100;
+    const p2Ended = now > p2Deadline;
+
+    if (p2Paused) {
+      $('p2Status').innerHTML = '<span style="color:var(--fg-muted)">Paused</span>';
+    } else if (p2Ended) {
+      $('p2Status').textContent = 'Ended';
+    } else if (p2Remaining === 0n) {
+      $('p2Status').textContent = 'Sold Out';
+    } else {
+      $('p2Status').innerHTML = '<span style="color:var(--green)">Live</span>';
+    }
+    $('p2Bar').style.width = Math.min(p2Pct, 100).toFixed(2) + '%';
+    $('p2Remaining').textContent = fmtShares(p2Remaining) + ' / ' + fmtShares(P2_CAP);
+
+    // Deadline (use Phase 2 deadline)
+    const d = new Date(p2Deadline * 1000);
     let dlText = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    if (pastDeadline) dlText += ' (ended)';
-    else if (deadline - now < 86400) dlText += ' (' + Math.floor((deadline - now) / 3600) + 'h left)';
-    else dlText += ' (' + Math.floor((deadline - now) / 86400) + 'd left)';
+    if (p2Ended) dlText += ' (ended)';
+    else if (p2Deadline - now < 86400) dlText += ' (' + Math.floor((p2Deadline - now) / 3600) + 'h left)';
+    else dlText += ' (' + Math.floor((p2Deadline - now) / 86400) + 'd left)';
     $('fwDeadline').textContent = dlText;
 
     // Minter data
     if (_minterAddress && _minterAddress !== ethers.ZeroAddress) {
       const minter = new ethers.Contract(_minterAddress, MINTER_ABI, rpc);
-      const [nftCount, lockedEth, mintable, minterBal] = await Promise.all([
+      const [nftCount, lockedEth, mintableFromBal, mintableFromTapN, minterBal] = await Promise.all([
         minter.nftCount(),
         minter.totalLockedEth(),
+        minter.mintableFromBalance(),
         minter.mintableFromTap(),
         rpc.getBalance(_minterAddress)
       ]);
+      const mintable = mintableFromBal > mintableFromTapN ? mintableFromBal : mintableFromTapN;
+      const useMintFromBalance = mintableFromBal > 0n;
       $('minterBalance').textContent = fmtETH(minterBal) + ' ETH';
       $('minterLabel').href = 'https://etherscan.io/address/' + _minterAddress;
       const nftCard = $('nftCard');
       const nc = Number(nftCount);
       const mt = Number(mintable);
-      // Available ETH toward next mint = minter balance + treasury - already locked
-      const availableWei = minterBal + data.tap.treasuryBalance - lockedEth;
+      // Available ETH = minter balance - already locked (Phase 2 ETH goes directly to minter)
+      const availableWei = minterBal - lockedEth;
       const progressWei = availableWei > 0n ? availableWei : 0n;
       const MINT_PRICE = ethers.parseEther('1');
       if (nc > 0) {
         const nextN = nc + 1;
         const pct = Math.min(Number(progressWei * 10000n / MINT_PRICE) / 100, 100);
         nftCard.innerHTML = `
-          <div class="info-row"><span class="info-label">NFTs in vault</span><span class="info-value">${nc}</span></div>
+          <div class="info-row"><span class="info-label">NFTs in <a href="https://opensea.io/0xb3b3f4f1535305c5f40f9c0d6bcaf38032bf7f8e" target="_blank" style="color:inherit;text-decoration:underline">vault</a></span><span class="info-value">${nc}</span></div>
           <div class="info-row"><span class="info-label">Locked ETH</span><span class="info-value">${fmtETH(lockedEth)} ETH</span></div>
           ${mt > 0 ? `<div class="info-row"><span class="info-label">Mintable NFTs</span><span class="info-value" style="color:var(--green)">${mt}</span></div>` : ''}
           <div class="info-row" style="margin-top:8px"><span class="info-label">Progress to NFT #${nextN}</span><span class="info-value">${fmtETH(progressWei)} / 1.0 ETH</span></div>
@@ -684,8 +725,8 @@ async function loadDashboard() {
           <div class="info-row"><span class="info-label">Ready to mint</span><span class="info-value" style="color:var(--green)">${mt} NFT${mt > 1 ? 's' : ''}</span></div>
         `;
       } else {
-        // Show progress toward first NFT using minter balance (not treasury which is 0 due to instant tap)
-        const nextN = 1;
+        // Show progress toward next NFT
+        const nextN = nc + 1;
         const pct = Math.min(Number(progressWei * 10000n / MINT_PRICE) / 100, 100);
         nftCard.innerHTML = `
           <div class="info-row"><span class="info-label">Progress to NFT #${nextN}</span><span class="info-value" style="color:var(--green)">${fmtETH(progressWei)} / 1.0 ETH</span></div>
@@ -696,11 +737,14 @@ async function loadDashboard() {
 
       if (mt > 0) {
         $('mintBtn').style.display = '';
-        $('mintBtn').textContent = `Mint ${mt} NFT${mt > 1 ? 's' : ''} from Tap`;
+        $('mintBtn').textContent = `Mint ${mt} NFT${mt > 1 ? 's' : ''}`;
+        $('mintBtn').dataset.useBalance = useMintFromBalance ? '1' : '';
+      } else {
+        $('mintBtn').style.display = 'none';
       }
 
       // Close sale button
-      if (pastDeadline && sale.remainingSupply > 0n) {
+      if (now > p1deadline && sale.remainingSupply > 0n) {
         // Check if DAO still holds shares (not yet closed)
         const shares = new ethers.Contract(SHARES_ADDRESS, SHARES_ABI, rpc);
         const daoBal = await shares.balanceOf(DAO_ADDRESS);
@@ -716,10 +760,7 @@ async function loadDashboard() {
       $('manageLink').href = '../dao/#/dao/1/' + DAO_ADDRESS;
     }
 
-    // Buy section
-    if (!saleActive) {
-      $('buySection').style.display = 'none';
-    }
+    // Buy section — always show (Phase 2 link to coin page)
 
     // User balance
     if (_connectedAddress) {
@@ -742,38 +783,15 @@ async function loadDashboard() {
 
 // ==================== ACTIONS ====================
 
-async function buyShares() {
-  if (!_signer) { toggleWallet(); return; }
-  const amt = $('buyAmount').value.trim();
-  if (!amt || isNaN(amt) || Number(amt) <= 0) { showStatus('statusArea', 'Enter a valid ETH amount', true); return; }
-
-  $('buyBtn').disabled = true;
-  try {
-    showStatus('statusArea', 'Confirm in wallet...');
-    const daico = new ethers.Contract(DAICO_ADDR, DAICO_BUY_ABI, _signer);
-    const value = ethers.parseEther(amt);
-    const tx = await daico.buy(DAO_ADDRESS, ethers.ZeroAddress, value, 0, { value });
-    showStatus('statusArea', `Tx submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a>`);
-    await tx.wait();
-    showStatus('statusArea', `Success! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>`);
-    loadDashboard();
-  } catch (e) {
-    if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      clearStatus('statusArea');
-    } else {
-      showStatus('statusArea', escText((e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 120)), true);
-    }
-  } finally { $('buyBtn').disabled = false; }
-}
-
-async function mintFromTap() {
+async function mintFromBalance() {
   if (!_signer) { toggleWallet(); return; }
   if (!_minterAddress) return;
   $('mintBtn').disabled = true;
   try {
     showStatus('statusArea', 'Confirm in wallet...');
     const minter = new ethers.Contract(_minterAddress, MINTER_ABI, _signer);
-    const tx = await minter.mintFromTap(0);
+    const useBalance = $('mintBtn').dataset.useBalance === '1';
+    const tx = useBalance ? await minter.mintFromBalance(1) : await minter.mintFromTap(0);
     showStatus('statusArea', `Tx submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a>`);
     await tx.wait();
     showStatus('statusArea', `NFT minted! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>`);

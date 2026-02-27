@@ -357,6 +357,26 @@ input {
 .links-row a { color:var(--fg-muted); }
 .links-row a:hover { color:var(--fg); }
 
+/* Proposals */
+.prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
+.prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
+.prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word; }
+.prop-state { font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;font-weight:600; }
+.prop-state.executed { border-color:var(--fg-dim);color:var(--fg-dim);background:var(--surface-hover); }
+.prop-state.active { border-color:var(--green);color:var(--green);background:var(--status-success); }
+.prop-state.succeeded,.prop-state.queued { border-color:var(--green);color:var(--green);background:var(--status-success); }
+.prop-state.defeated,.prop-state.expired { border-color:var(--red);color:var(--red);background:var(--status-error); }
+.prop-state.unopened { border-color:var(--fg-dim);color:var(--fg-dim); }
+.prop-votes { display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--fg-muted); }
+.prop-votes .for { color:var(--green); }
+.prop-votes .against { color:var(--red); }
+.prop-bar { height:4px;border-radius:2px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
+.prop-bar-for { background:var(--green); }
+.prop-bar-against { background:var(--red); }
+.prop-bar-abstain { background:var(--fg-dim); }
+.prop-meta { font-size:10px;color:var(--fg-dim);margin-top:4px; }
+.prop-meta a { color:var(--fg-dim); }
+
 .loading { text-align:center;padding:40px;color:var(--fg-muted);font-size:13px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .spinner {
@@ -570,7 +590,7 @@ const GET_DAICO_ABI = [
   'function getDAICO(address dao, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap))'
 ];
 const GET_DAO_FULL_ABI = [
-  'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256 sharesTotalSupply, uint256 lootTotalSupply, uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address account, uint256 shares, uint256 loot, uint16 seatId, uint256 votingPower, address[], uint32[])[] members, tuple(uint256,address,uint8,uint48,uint64,uint64,uint64,uint256,uint256,uint256,bytes)[] proposals, tuple(uint256,address,string,uint64)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
+  'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256 sharesTotalSupply, uint256 lootTotalSupply, uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address account, uint256 shares, uint256 loot, uint16 seatId, uint256 votingPower, address[], uint32[])[] members, tuple(uint256,address,uint8,uint48,uint64,uint64,uint256,uint96,uint96,uint96,tuple(bool,address,uint256,bool,uint8,uint256,uint256),tuple(address,uint8,uint256)[])[] proposals, tuple(uint256,string)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
 ];
 const QUOTE_ABI = [
   'function quoteZAMM(bool exactOut, uint256 feeOrHook, address tokenIn, address tokenOut, uint256 idIn, uint256 idOut, uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)'
@@ -1211,6 +1231,129 @@ async function loadHolders(daoAddr) {
   }
 }
 
+function toggleProposals() {
+  const el = $('proposalsDrawer');
+  if (!el) return;
+  el.classList.toggle('open');
+  if (el.classList.contains('open') && !el.dataset.loaded) {
+    el.dataset.loaded = '1';
+    loadProposals(el.dataset.dao);
+  }
+}
+
+async function loadProposals(daoAddr) {
+  const content = $('proposalsContent');
+  if (!content) return;
+  content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
+  try {
+    const PROP_ABI = [
+      'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string,string,string,address,address,address,address) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256,uint256,uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address,uint256,uint256,uint16,uint256,address[],uint32[])[] members, tuple(uint256 id, address proposer, uint8 state, uint48 snapshotBlock, uint64 createdAt, uint64 queuedAt, uint256 supplySnapshot, uint96 forVotes, uint96 againstVotes, uint96 abstainVotes, tuple(bool,address,uint256,bool,uint8,uint256,uint256) futarchy, tuple(address,uint8,uint256)[] voters)[] proposals, tuple(uint256 index, string text)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
+    ];
+    const [result, daoConfig] = await withRPC(async rpc => {
+      const helper = new ethers.Contract(VIEW_HELPER, PROP_ABI, rpc);
+      const moloch = new ethers.Contract(daoAddr, ['function config() view returns (uint64)'], rpc);
+      return Promise.all([
+        helper.getDAOWithDAICO(daoAddr, 0, 50, 0, 200, [], [ZERO]),
+        moloch.config()
+      ]);
+    });
+    const proposals = result.base.proposals || [];
+    const messages = result.base.messages || [];
+    const currentConfig = Number(daoConfig);
+
+    if (proposals.length === 0) {
+      content.innerHTML = '<div class="activity-empty">No proposals yet</div>';
+      return;
+    }
+
+    // Decode proposal messages to get descriptions
+    function decodePropMsg(text) {
+      const m = text.match(/<<<PROPOSAL_DATA\n([\s\S]*?)\nPROPOSAL_DATA>>>/);
+      if (!m) return null;
+      try {
+        const d = JSON.parse(m[1]);
+        if (d.type === 'PROPOSAL' && /^0x[0-9a-fA-F]{64}$/.test(d.nonce)) return d;
+      } catch {}
+      return null;
+    }
+
+    function computePropId(op, to, value, data, nonce, cfg) {
+      const ac = new ethers.AbiCoder();
+      const dh = ethers.keccak256(data);
+      const enc = ac.encode(
+        ['address','uint8','address','uint256','bytes32','bytes32','uint256'],
+        [daoAddr, op, to, value, dh, nonce, cfg]
+      );
+      return BigInt(ethers.keccak256(enc));
+    }
+
+    // Build verification map
+    const verMap = new Map();
+    for (const msg of messages) {
+      const pd = decodePropMsg(msg.text);
+      if (!pd) continue;
+      try {
+        for (let c = currentConfig; c >= 0; c--) {
+          const id = computePropId(pd.op, pd.to, BigInt(pd.value), pd.data, pd.nonce, BigInt(c));
+          if (!verMap.has(id.toString())) verMap.set(id.toString(), pd.description);
+        }
+      } catch {}
+    }
+
+    const STATES = ['Unopened','Active','Queued','Succeeded','Defeated','Expired','Executed'];
+    // Reverse to show newest first
+    const sorted = [...proposals].reverse();
+
+    let html = '';
+    for (const p of sorted) {
+      const id = p.id;
+      const proposer = p.proposer;
+      const state = Number(p.state);
+      const forV = p.forVotes;
+      const againstV = p.againstVotes;
+      const abstainV = p.abstainVotes;
+
+      const stateText = STATES[state] || `State ${state}`;
+      const stateClass = stateText.toLowerCase();
+      const desc = verMap.get(id.toString()) || `Proposal`;
+      const shortId = id.toString().slice(0, 10) + '...';
+
+      const forF = parseFloat(ethers.formatUnits(forV, 18));
+      const againstF = parseFloat(ethers.formatUnits(againstV, 18));
+      const abstainF = parseFloat(ethers.formatUnits(abstainV, 18));
+      const total = forF + againstF + abstainF;
+      const forPct = total > 0 ? forF / total * 100 : 0;
+      const againstPct = total > 0 ? againstF / total * 100 : 0;
+      const abstainPct = total > 0 ? abstainF / total * 100 : 0;
+
+      const proposerShort = proposer ? `${proposer.slice(0,6)}...${proposer.slice(-4)}` : '';
+
+      html += `<div class="prop-item">
+        <div class="prop-head">
+          <div class="prop-desc">${escText(desc)}</div>
+          <span class="prop-state ${stateClass}">${stateText}</span>
+        </div>
+        ${total > 0 ? `<div class="prop-bar"><div class="prop-bar-for" style="width:${forPct}%"></div><div class="prop-bar-against" style="width:${againstPct}%"></div><div class="prop-bar-abstain" style="width:${abstainPct}%"></div></div>` : ''}
+        <div class="prop-votes">
+          <span><span class="for">For</span> ${forF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+          <span><span class="against">Against</span> ${againstF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+          <span>Abstain ${abstainF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+        </div>
+        <div class="prop-meta">
+          <span title="${id.toString()}">${shortId}</span>
+          ${proposerShort ? ` &middot; <a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>` : ''}
+        </div>
+      </div>`;
+    }
+
+    html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote & manage proposals in DAO page</a></div>`;
+    content.innerHTML = html;
+  } catch (e) {
+    console.error('loadProposals error:', e);
+    content.innerHTML = '<div class="activity-empty">Failed to load proposals</div>';
+  }
+}
+
 function pctBar(pct, color) {
   color = color || 'var(--green)';
   return `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100).toFixed(1)}%;background:${color}"></div></div>`;
@@ -1566,7 +1709,7 @@ async function renderGallery() {
             </div>
           </div>
           <div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Phase 2 sale live</span>' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1823,7 +1966,7 @@ async function renderCoinPage(daoAddr) {
         </div>
       </div>
       ${mcapDisplay ? `<div class="coin-mcap-row">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
-      ${isFWCollector && !saleActive ? `<div style="margin:12px 0 4px;padding:8px 12px;border-radius:8px;background:var(--green-bg,rgba(34,197,94,0.08));color:var(--green);font-size:13px;font-weight:600">Sale complete &mdash; NFT collected &mdash; trading active</div>` : ''}
+      ${isFWCollector && !saleActive ? `<div style="margin:12px 0 4px;padding:8px 12px;border-radius:8px;background:var(--green-bg,rgba(34,197,94,0.08));color:var(--green);font-size:13px;font-weight:600">Phase 1 complete &mdash; <a href="https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156" target="_blank" style="color:inherit;text-decoration:underline">1 NFT collected</a> &mdash; Phase 2 sale live &mdash; 9 more NFTs</div>` : ''}
     `;
 
     // Description + socials
@@ -1873,9 +2016,9 @@ async function renderCoinPage(daoAddr) {
           </button>
           <div class="drawer-body">
             <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-              Collective <a href="https://www.s02.works/mint" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks S02</a> NFT vault
+              Collective <a href="https://www.s02.works/mint" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks S02</a> NFT <a href="https://opensea.io/0xb3b3f4f1535305c5f40f9c0d6bcaf38032bf7f8e" target="_blank" style="color:inherit;text-decoration:underline">vault</a>
             </div>
-            <a href="https://etherscan.io/nft/${FW_CONTRACT}/${FW_TOKEN_ID}" target="_blank" style="display:block;margin-top:12px;border-radius:12px;overflow:hidden;text-decoration:none">
+            <a href="https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156" target="_blank" style="display:block;margin-top:12px;border-radius:12px;overflow:hidden;text-decoration:none">
               <div id="fwNftMedia" style="aspect-ratio:1;background:var(--surface-raised,var(--surface));display:flex;align-items:center;justify-content:center;border-radius:12px;overflow:hidden">
                 <div style="font-size:11px;color:var(--fg-dim)">Loading NFT...</div>
               </div>
@@ -1977,7 +2120,7 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="drawer" id="saleDrawer">
           <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>Sale (Ended)</span>
+            <span>${isFWCollector ? 'Phase 1 Sale (Ended)' : 'Sale (Ended)'}</span>
             <span class="arrow">&#9660;</span>
           </button>
           <div class="drawer-body">
@@ -2071,6 +2214,140 @@ async function renderCoinPage(daoAddr) {
     const ethSvg = `<span class="eth-icon"><svg width="14" height="14" viewBox="0 0 256 417" fill="currentColor" opacity="0.6"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg></span>`;
 
     const defaultMode = saleActive ? 'sale' : 'swap';
+
+    // Phase 2 Follow-On Sale (FW Collector only)
+    const FW_FOLLOW_ON_SALE = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
+    if (isFWCollector && !saleActive) {
+      html += `
+        <div class="section-card" id="phase2SaleCard" style="position:relative;overflow:hidden">
+          <div style="position:absolute;top:8px;right:8px;opacity:0.6;pointer-events:none;line-height:0">${zfiLoadingSVG(28).replace('margin:0 auto 8px','margin:0')}</div>
+          <div class="section-title">Phase 2 Sale</div>
+          <div style="font-size:12px;color:var(--fg-muted);margin-bottom:10px">1 ETH = 1M shares &mdash; ETH goes to <a href="https://etherscan.io/address/0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e" target="_blank" style="color:inherit;text-decoration:underline">minter</a> for up to 9 more NFTs</div>
+          <div id="phase2Stats" style="margin-bottom:10px">
+            <div style="font-size:11px;color:var(--fg-dim)">Loading...</div>
+          </div>
+          <div id="phase2Deadline"></div>
+          <div id="phase2BuySection">
+            <div class="swap-section">
+              <div class="swap-section-head">
+                <label>Pay</label>
+                <span id="phase2Bal" class="swap-balance"></span>
+                <span class="swap-token-tag">${ethSvg} ETH</span>
+              </div>
+              <input type="text" id="phase2PayInput" placeholder="0.0" oninput="onPhase2Input()" autocomplete="off">
+              <div class="swap-pct-row">
+                <button class="swap-pct-btn" onclick="fillPhase2Pct(25)">25%</button>
+                <button class="swap-pct-btn" onclick="fillPhase2Pct(50)">50%</button>
+                <button class="swap-pct-btn" onclick="fillPhase2Pct(75)">75%</button>
+                <button class="swap-pct-btn" onclick="fillPhase2Pct(100)">100%</button>
+              </div>
+            </div>
+            <div class="swap-section" style="margin-top:6px">
+              <div class="swap-section-head">
+                <label>Receive</label>
+                <span class="swap-token-tag">${coinLogoTag} $${sym}</span>
+              </div>
+              <input type="text" id="phase2ReceiveInput" placeholder="0.0" readonly style="color:var(--fg-muted)">
+            </div>
+            <div class="swap-quote" id="phase2Quote">1 ETH = 1,000,000 shares</div>
+            <button id="phase2BuyBtn" class="action-btn" onclick="onPhase2BuyBtn()">Connect Wallet</button>
+            <div style="text-align:center;margin-top:8px"><a href="../collect/" style="font-size:11px;color:var(--fg-muted)">Collector Dashboard &mdash; mint NFTs when ready</a></div>
+          </div>
+        </div>
+      `;
+
+      // Async: load phase 2 sale data
+      if (window._p2CdInterval) { clearInterval(window._p2CdInterval); window._p2CdInterval = null; }
+      (async () => {
+        try {
+          const rpc = getRPC();
+          const saleContract = new ethers.Contract(FW_FOLLOW_ON_SALE, [
+            'function deadline() view returns (uint256)',
+            'function paused() view returns (bool)',
+            'function minter() view returns (address)'
+          ], rpc);
+          const moloch = new ethers.Contract(daoAddr, [
+            'function allowance(address token, address spender) view returns (uint256)'
+          ], rpc);
+
+          const [deadline, paused, minterAddr, allowance] = await Promise.all([
+            saleContract.deadline(),
+            saleContract.paused(),
+            saleContract.minter(),
+            moloch.allowance(daoAddr, FW_FOLLOW_ON_SALE)
+          ]);
+          const minterBal = await rpc.getBalance(minterAddr);
+
+          const now = Math.floor(Date.now() / 1000);
+          const dl = Number(deadline);
+          const expired = now > dl;
+          const sharesRemaining = allowance;
+          const ethRemaining = sharesRemaining / 1_000_000n;
+          const ethInMinter = minterBal;
+          const mintProgress = Number(ethers.formatEther(ethInMinter));
+          const mintGoal = 1; // 1 ETH per FW NFT
+          const mintPct = Math.min(100, (mintProgress / mintGoal) * 100);
+
+          // Update stats
+          const statsEl = document.getElementById('phase2Stats');
+          if (statsEl) {
+            statsEl.innerHTML = `
+              <div class="stat-row"><span class="stat-label">Phase 2 Shares remaining</span><span class="stat-value">${parseFloat(ethers.formatUnits(sharesRemaining, 18)).toLocaleString()} shares</span></div>
+              <div class="stat-row"><span class="stat-label">Minter balance</span><span class="stat-value">${fmtETH(ethInMinter)} ${ethIco}</span></div>
+              <div class="stat-row"><span class="stat-label">Next NFT progress</span><span class="stat-value" style="color:${mintPct >= 100 ? 'var(--green)' : 'var(--fg)'}; font-weight:600">${mintProgress.toFixed(4)} / ${mintGoal} ${ethIco}</span></div>
+              ${pctBar(mintPct, 'var(--green)')}
+              ${mintPct >= 100 ? '<div style="font-size:11px;color:var(--green);text-align:center;margin-top:4px;font-weight:600">Ready to mint! Anyone can call mintFromBalance()</div>' : ''}
+            `;
+          }
+
+          // Deadline countdown
+          const dlEl = document.getElementById('phase2Deadline');
+          if (dlEl) {
+            if (expired) {
+              dlEl.innerHTML = '<div style="font-size:12px;color:var(--red);text-align:center;padding:6px 0;font-weight:600">Sale ended</div>';
+              const buySection = document.getElementById('phase2BuySection');
+              if (buySection) buySection.style.display = 'none';
+            } else if (paused) {
+              dlEl.innerHTML = '<div style="font-size:12px;color:var(--amber);text-align:center;padding:6px 0;font-weight:600">Sale paused</div>';
+              const buySection = document.getElementById('phase2BuySection');
+              if (buySection) buySection.style.display = 'none';
+            } else {
+              function updateP2Cd() {
+                const rem = dl - Math.floor(Date.now() / 1000);
+                if (rem <= 0) { dlEl.innerHTML = '<div style="font-size:12px;color:var(--red);text-align:center;padding:6px 0">Sale ended</div>'; return; }
+                const d = Math.floor(rem / 86400);
+                const h = Math.floor((rem % 86400) / 3600);
+                const m = Math.floor((rem % 3600) / 60);
+                const s = rem % 60;
+                const timer = d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+                dlEl.innerHTML = `<div style="font-size:13px;font-weight:600;letter-spacing:0.05em;text-align:center;padding:4px 0;color:var(--fg-muted);margin-bottom:8px">${timer} remaining</div>`;
+              }
+              updateP2Cd();
+              window._p2CdInterval = setInterval(updateP2Cd, 1000);
+            }
+          }
+
+          // Store for buy logic
+          window._phase2 = { deadline: dl, paused, expired, sharesRemaining, sale: FW_FOLLOW_ON_SALE };
+        } catch (e) {
+          console.error('Phase 2 sale data load failed:', e);
+          const statsEl = document.getElementById('phase2Stats');
+          if (statsEl) statsEl.innerHTML = '<div style="font-size:11px;color:var(--red)">Failed to load sale data</div>';
+        }
+      })();
+    }
+
+    // For FW Collector with Phase 2 sale, wrap swap tile in a closed drawer
+    if (isFWCollector && !saleActive) {
+      html += `
+        <div class="drawer" id="secondaryDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>Secondary Market</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="activity-body">
+      `;
+    }
 
     html += `
       <div class="section-card swap-tile">
@@ -2232,6 +2509,11 @@ async function renderCoinPage(daoAddr) {
       </div>
     `;
 
+    // Close secondary market drawer wrapper for FW Collector
+    if (isFWCollector && !saleActive) {
+      html += `</div></div>`;
+    }
+
     // Chart drawer (only if pool has reserves; hidden until activity confirmed)
     const dark = document.documentElement.classList.contains('dark');
     const chartTheme = dark ? 'dark' : 'light';
@@ -2278,6 +2560,19 @@ async function renderCoinPage(daoAddr) {
       </div>
     `;
 
+    // Proposals drawer (lazy-loaded)
+    html += `
+      <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
+        <button class="drawer-toggle" onclick="toggleProposals()">
+          <span>Proposals</span>
+          <span class="arrow">&#9660;</span>
+        </button>
+        <div class="activity-body">
+          <div id="proposalsContent"><div class="activity-empty">Click to load</div></div>
+        </div>
+      </div>
+    `;
+
     // Links
     html += `
       <div class="links-row" style="margin-top:16px;margin-bottom:24px">
@@ -2303,7 +2598,12 @@ async function renderCoinPage(daoAddr) {
         svgObj.data = imgSrc;
         svgObj.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none';
         svgObj.setAttribute('aria-label', 'FW S02 #156');
-        nftEl.replaceChildren(svgObj);
+        const link = document.createElement('a');
+        link.href = 'https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156';
+        link.target = '_blank';
+        link.style.cssText = 'display:block;width:100%;height:100%';
+        link.appendChild(svgObj);
+        nftEl.replaceChildren(link);
       }
     }
 
@@ -2422,6 +2722,9 @@ function updateModeButton() {
     if (zapBtn) zapBtn.textContent = connected ? 'Zap Liquidity' : 'Connect Wallet';
     if (pairBtn) pairBtn.textContent = connected ? 'Add Liquidity' : 'Connect Wallet';
   }
+  // Phase 2 sale button (always visible if present)
+  const p2Btn = $('phase2BuyBtn');
+  if (p2Btn) p2Btn.textContent = connected ? 'Buy Shares' : 'Connect Wallet';
 }
 
 function setSwapDir(dir) {
@@ -2805,6 +3108,13 @@ async function loadBalances() {
       salePayEl.onclick = () => fillPct(100);
     }
 
+    // Phase 2 sale balance (ETH)
+    const phase2BalEl = $('phase2Bal');
+    if (phase2BalEl) {
+      phase2BalEl.textContent = Number(ethers.formatEther(ethBal)).toLocaleString(undefined, {maximumFractionDigits:6}) + ' ETH';
+      phase2BalEl.onclick = () => fillPhase2Pct(100);
+    }
+
     // Ragequit mode balance (shares)
     const rqEl = $('rqSharesBal');
     if (rqEl) {
@@ -2820,7 +3130,7 @@ async function loadBalances() {
     const lpPairEthBal = $('lpPairEthBal');
     if (lpPairEthBal) { lpPairEthBal.textContent = ethFmt; lpPairEthBal.onclick = () => fillLpPct(100); }
     const lpPairTokenBal = $('lpPairTokenBal');
-    if (lpPairTokenBal) { lpPairTokenBal.textContent = tokenFmtLp; }
+    if (lpPairTokenBal) { lpPairTokenBal.textContent = tokenFmtLp; lpPairTokenBal.onclick = () => fillLpPairTokenMax(); }
 
     // Store treasury balance for ragequit estimate
     _coinData._treasuryEthBal = treasuryBal;
@@ -3056,6 +3366,79 @@ async function executeSaleBuy() {
   }
 }
 
+// ==================== PHASE 2 SALE ====================
+
+function onPhase2Input() {
+  const raw = ($('phase2PayInput').value || '').trim();
+  const recvEl = $('phase2ReceiveInput');
+  if (!raw || isNaN(raw) || Number(raw) <= 0) {
+    if (recvEl) recvEl.value = '';
+    return;
+  }
+  const shares = Number(raw) * 1_000_000;
+  if (recvEl) recvEl.value = shares.toLocaleString();
+}
+
+function fillPhase2Pct(pct) {
+  if (!_signer || _ethBalance <= 0n) return;
+  const amt = _ethBalance * BigInt(pct) / 100n;
+  const input = $('phase2PayInput');
+  if (input) {
+    input.value = ethers.formatEther(amt);
+    onPhase2Input();
+  }
+}
+
+async function onPhase2BuyBtn() {
+  if (!_signer) { await connectWallet(); return; }
+  executePhase2Buy();
+}
+
+async function executePhase2Buy() {
+  const s = await connectWallet();
+  if (!s) return;
+
+  const payRaw = ($('phase2PayInput').value || '').trim();
+  if (!payRaw || isNaN(payRaw) || Number(payRaw) <= 0) return;
+
+  const btn = $('phase2BuyBtn');
+  const quoteEl = $('phase2Quote');
+  btn.textContent = 'Confirm in wallet...';
+  btn.disabled = true;
+
+  try {
+    const sale = new ethers.Contract(window._phase2.sale, ['function buy() payable'], s);
+    const payAmt = ethers.parseEther(payRaw);
+
+    const tx = await sale.buy({ value: payAmt });
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+    await tx.wait();
+
+    if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Purchase confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+    $('phase2PayInput').value = '';
+    $('phase2ReceiveInput').value = '';
+
+    const daoAddr = $('app').dataset.dao;
+    setTimeout(() => renderCoinPage(daoAddr), 2000);
+  } catch(e) {
+    console.error('Phase 2 buy error:', e);
+    if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
+      if (quoteEl) quoteEl.textContent = 'Cancelled';
+    } else {
+      const raw = (e.shortMessage || e.reason || e.message || '').split('\n')[0];
+      let msg = raw;
+      if (/insufficient funds/i.test(raw)) msg = 'Insufficient ETH balance';
+      else if (/Expired/i.test(raw)) msg = 'Sale has ended';
+      else if (/Paused/i.test(raw)) msg = 'Sale is paused';
+      else if (raw.length > 80) msg = 'Transaction failed';
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--red)">Buy failed:</span> ${escText(msg)}`;
+    }
+  } finally {
+    btn.textContent = 'Buy Shares';
+    btn.disabled = false;
+  }
+}
+
 // ==================== RAGEQUIT ====================
 
 function onRagequitInput() {
@@ -3201,6 +3584,12 @@ function onLpEthInput() {
     if (quoteEl) quoteEl.textContent = `${approx}~${halfFmt} ETH + ~${tokFmt} $${sym} → LP`;
     if (btn && _signer) btn.disabled = false;
   }
+}
+
+function fillLpPairTokenMax() {
+  if (_tokenBalance <= 0n || _poolReserve0 === 0n || _poolReserve1 === 0n) return;
+  $('lpPairTokenInput').value = ethers.formatEther(_tokenBalance);
+  onLpPairTokenInput();
 }
 
 function onLpPairEthInput() {
