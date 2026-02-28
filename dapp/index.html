@@ -861,6 +861,31 @@ body.modal-open { overflow: hidden; }
 }
 .timelock-claim button:hover { background:var(--btn-hover); }
 .timelock-claim button:disabled { background:var(--btn-dis-bg); border-color:var(--btn-dis-border); color:var(--btn-dis-fg); cursor:not-allowed; }
+
+/* Privacy tab details/summary — match receiver-toggle pattern */
+#privacyTab details { margin-bottom: 12px; font-size: 12px; }
+#privacyTab summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  list-style: none;
+  padding: 4px 0;
+}
+#privacyTab summary::-webkit-details-marker { display: none; }
+#privacyTab summary::before {
+  content: '\25B6';
+  font-size: 9px;
+  transition: transform 0.2s ease;
+}
+#privacyTab details[open] > summary::before {
+  transform: rotate(90deg);
+}
 </style>
 </head>
 <body>
@@ -1034,7 +1059,7 @@ body.modal-open { overflow: hidden; }
 
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
-  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Deposit to Privacy Pool</h2>
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Deposit to Privacy Pool</h2>
   <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH, BOLD, or wstETH into <a href="https://privacypools.com" target="_blank" rel="noopener">Privacy Pools</a> (0xbow). Save the note you receive. Withdraw below or at <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a> with the same wallet.</p>
 
   <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -1050,7 +1075,7 @@ body.modal-open { overflow: hidden; }
       <label style="margin:0"><span id="ppAmountLabel">Amount (ETH)</span></label>
     </div>
     <input type="number" id="ppAmount" class="amount-input" placeholder="0.0" min="0" step="any">
-    <div class="balance"><span id="ppBalance"></span> <span style="color:var(--fg-dim)">&middot;</span> <button class="max-btn" type="button" onclick="setPPPercentBalance(25)">25%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(50)">50%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(75)">75%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(100)">100%</button></div>
+    <div class="balance"><span id="ppBalance">Balance: --</span> <span style="color:var(--fg-dim)">&middot;</span> <button class="max-btn" type="button" onclick="setPPPercentBalance(25)">25%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(50)">50%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(75)">75%</button> <button class="max-btn" type="button" onclick="setPPPercentBalance(100)">100%</button></div>
     <div id="ppZapEstimate" style="display:none;font-size:12px;color:var(--fg-muted);margin-top:4px">&#9889; Est. deposit: <span id="ppZapEstAmt">--</span> wstETH</div>
   </div>
 
@@ -1073,19 +1098,19 @@ body.modal-open { overflow: hidden; }
       <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Download</button>
     </div>
     <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-      Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a>. Same wallet works on both.
+      Withdraw below (relay is default), or via <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a>. Same wallet works on both.
     </p>
     <button onclick="setShown('ppNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
   </div>
 
-  <details id="ppNotesDetails" style="margin-top:12px;font-size:12px">
-    <summary style="cursor:pointer;opacity:0.6">Saved notes (<span id="ppNoteCount">0</span>)</summary>
+  <details id="ppNotesDetails" style="margin-top:12px">
+    <summary>Saved notes (<span id="ppNoteCount">0</span>)</summary>
     <div id="ppNotesList" style="margin-top:8px"></div>
   </details>
 </div>
 
 <div class="swap-card" style="margin-top:16px">
-  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Withdraw from Privacy Pool</h2>
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Withdraw from Privacy Pool</h2>
   <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Scan your wallet to find deposits, or paste a note manually. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
 
   <div class="section" style="margin-bottom:12px">
@@ -1095,8 +1120,8 @@ body.modal-open { overflow: hidden; }
 
   <div id="ppwScanResults" style="display:none;margin-bottom:12px"></div>
 
-  <details style="margin-bottom:12px;font-size:12px">
-    <summary style="cursor:pointer;opacity:0.6">Manual note entry</summary>
+  <details>
+    <summary>Manual note entry</summary>
     <div class="section" style="margin-top:8px;margin-bottom:0">
       <label style="margin:0">Note JSON</label>
       <textarea id="ppwNote" rows="3" placeholder='{"nullifier":"0x...","secret":"0x...",...}' class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical;margin-top:4px"></textarea>
@@ -1108,8 +1133,8 @@ body.modal-open { overflow: hidden; }
   </details>
 
   <div id="ppwParsed" style="display:none">
-    <details style="margin-bottom:12px;font-size:12px">
-      <summary style="cursor:pointer;opacity:0.6">Parsed note details</summary>
+    <details>
+      <summary>Parsed note details</summary>
       <div style="display:grid;gap:6px;font-size:11px;margin-top:8px;margin-bottom:8px">
         <div><label style="color:var(--fg-muted);margin:0">Nullifier</label><div id="ppwNullifier" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
         <div><label style="color:var(--fg-muted);margin:0">Secret</label><div id="ppwSecret" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
@@ -1117,8 +1142,8 @@ body.modal-open { overflow: hidden; }
       </div>
     </details>
 
-    <details style="margin-bottom:12px;font-size:12px">
-      <summary style="cursor:pointer;opacity:0.6">Onchain values (from logs)</summary>
+    <details>
+      <summary>Onchain values (from logs)</summary>
       <div style="display:grid;gap:8px;margin-top:8px">
         <div class="section" style="margin:0">
           <label style="margin:0;font-size:11px">Leaf Index</label>
@@ -1211,9 +1236,9 @@ body.modal-open { overflow: hidden; }
       <div id="ppwChangeActions" style="display:none;margin-top:8px">
         <div style="font-size:12px;color:orange;font-weight:600;margin-bottom:6px">Change Note Actions</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="ppwCopyChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Copy change note</button>
-          <button onclick="ppwDownloadChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Download change note</button>
-          <button onclick="ppwUseChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Use change note now</button>
+          <button onclick="ppwCopyChangeNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Copy change note</button>
+          <button onclick="ppwDownloadChangeNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Download change note</button>
+          <button onclick="ppwUseChangeNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Use change note now</button>
         </div>
       </div>
     </div>
@@ -1379,7 +1404,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div style="margin-top:24px">
-  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Timelocks</h2>
+  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Timelocks</h2>
   <div id="timelockList" style="font-size:12px;color:var(--fg-muted)">Connect wallet to view timelocks</div>
 </div>
 </div><!-- end sendTab -->
@@ -7206,7 +7231,7 @@ walletInit({
     _ppMasterKeys = null;
     if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
     if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
-    updatePPButton(); setText('ppBalance', '');
+    updatePPButton(); setText('ppBalance', 'Balance: --');
   }]
 });
 
@@ -8212,7 +8237,7 @@ async function loadPPConfig() {
 let _ppBalanceRaw = null;
 
 function updatePPBalance() {
-  if (!_connectedAddress) { setText('ppBalance', ''); _ppBalanceRaw = null; return; }
+  if (!_connectedAddress) { setText('ppBalance', 'Balance: --'); _ppBalanceRaw = null; return; }
   const asset = _ppSelectedAsset;
   // In zap mode, user sends ETH (balance shown is ETH)
   const balAsset = _ppZapMode ? 'ETH' : asset;
