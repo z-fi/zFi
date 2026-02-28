@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>WNS</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="../wallet.css">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@adraffy/ens-normalize@1.11.0/+esm" integrity="sha384-wZEz5bl83QiQdUg5m/tIOQtZl9ncAoDleaNxEJNoNRmYLBpEprsT4si9P2xOvSbx" crossorigin="anonymous">
 <script>
 // Prevent dark-mode FOUC: apply class before first paint
@@ -157,15 +158,6 @@ button.secondary:hover { background: var(--surface-hover); }
 .z-nav-menu a:hover { background:var(--surface); }
 .z-nav-menu a.active { opacity:0.35; pointer-events:none; }
 .z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
-.wallet {
-  position: fixed;
-  top: max(20px, env(safe-area-inset-top, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
 .fee {
   font-size: 12px;
   color: var(--fg-muted);
@@ -359,31 +351,6 @@ body.modal-open { overflow: hidden; }
 }
 .modal-close:hover { opacity: 1; }
 .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.wallet-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--modal-bg);
-  border: 1px solid var(--modal-border);
-  cursor: pointer;
-  margin-bottom: 8px;
-  transition: background 0.15s, color 0.15s;
-}
-.wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
-.wallet-option:active { opacity: 0.7; }
-.wallet-option-icon { font-size: 1.5rem; }
-.wallet-option-name { font-weight: 600; font-size: 14px; }
-.wallet-option.disconnect {
-  border-color: #f00;
-  color: #f00;
-  justify-content: center;
-  margin-top: 4px;
-}
-.wallet-option.disconnect:hover {
-  background: #f00;
-  color: #fff;
-}
 
 /* Manage section */
 .manage {
@@ -493,8 +460,6 @@ body.modal-open { overflow: hidden; }
   .z-nav-btn { padding: 4px; margin: -4px; }
   .z-nav-menu a { padding: 10px 16px; }
   body { padding: 80px 16px 100px; }
-  .wallet { top: 16px; right: 16px; }
-  .wallet button { padding: 10px 14px; font-size: 11px; }
   h1 { margin-bottom: 40px; font-size: 13px; }
   input { font-size: 20px; padding: 14px 0; }
   .suffix { font-size: 20px; bottom: 14px; }
@@ -506,7 +471,6 @@ body.modal-open { overflow: hidden; }
   .pending .actions button { flex: 1; }
   .modal-overlay { padding: 0; padding-top: 0; align-items: flex-end; }
   .modal { max-width: 100%; margin: 0; border-left: none; border-right: none; border-bottom: none; max-height: 85vh; max-height: 85dvh; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-  .wallet-option { padding: 14px 16px; }
   .send-form { padding: 14px; }
   .send-form button { width: auto; display: inline-block; }
   .manage-form button { width: auto; display: inline-block; }
@@ -683,10 +647,6 @@ body.modal-open { overflow: hidden; }
   </div>
 </div>
 
-<div class="wallet">
-  <button id="walletBtn" onclick="toggleWallet()">connect</button>
-</div>
-
 <h1>wei name service</h1>
 
 <div class="section">
@@ -776,19 +736,9 @@ body.modal-open { overflow: hidden; }
 
 <div id="status" class="status"></div>
 
-<!-- Wallet Modal -->
-<div class="modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Connect Wallet</div>
-      <button class="modal-close" onclick="closeWalletModal()">&times;</button>
-    </div>
-    <div class="modal-body" id="walletOptions"></div>
-  </div>
-</div>
-
 <script src="../ethers.min.js"></script>
 <script src="../walletconnect.min.js"></script>
+<script src="../wallet.js"></script>
 <script>
 // ---- Dark mode ----
 document.addEventListener('click', e => { if (!e.target.closest('.z-nav')) document.querySelector('.z-nav')?.classList.remove('open'); });
@@ -926,7 +876,7 @@ async function waitForTx(tx, timeoutMs = 90000) {
   }
 
   // For WalletConnect, always use polling (tx.wait() is unreliable)
-  if (isWalletConnect) {
+  if (_isWalletConnect) {
     const receipt = await pollReceipt();
     if (receipt) return receipt;
     throw new Error('Transaction confirmation timeout');
@@ -1010,28 +960,11 @@ async function multicall(calls) {
   });
 }
 
-// Wallet state
-let provider = null;
-let signer = null;
-let connectedAddress = null;
-let connectedWalletProvider = null;
-let walletConnectProvider = null;
-let isConnecting = false;
 let contract = null;
-let walletEventHandlers = null;
-let isWalletConnect = false;
-let wcDeepLink = null;
-function sanitizeDeepLink(url) {
-  if (!url) return null;
-  try { const u = new URL(url); if (u.protocol === 'https:' || u.protocol === 'wc:') return url; } catch {}
-  return null;
-}
-
-const eip6963Providers = new Map();
 
 // WalletConnect transaction helper - shows notification and handles deep links
 async function wcTransaction(txPromise, message = 'Confirm in your wallet app') {
-  if (!isWalletConnect) return txPromise;
+  if (!_isWalletConnect) return txPromise;
 
   // Show persistent notification
   const notif = document.createElement('div');
@@ -1040,7 +973,7 @@ async function wcTransaction(txPromise, message = 'Confirm in your wallet app') 
     <div style="position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:16px;text-align:center;z-index:10000;font-size:14px;">
       <div style="margin-bottom:8px;">📱 ${message}</div>
       <div style="font-size:12px;opacity:0.7;">Open your wallet app to approve the transaction</div>
-      ${wcDeepLink ? `<a href="${wcDeepLink}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:0;text-decoration:none;">Open Wallet</a>` : ''}
+      ${_wcDeepLink ? `<a href="${_wcDeepLink}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:0;text-decoration:none;">Open Wallet</a>` : ''}
     </div>
   `;
   document.body.appendChild(notif);
@@ -1051,379 +984,6 @@ async function wcTransaction(txPromise, message = 'Confirm in your wallet app') 
   } finally {
     notif.remove();
   }
-}
-
-// EIP-6963 listener
-if (typeof window !== 'undefined') {
-  window.addEventListener('eip6963:announceProvider', (event) => {
-    try {
-      const { info, provider } = event.detail || {};
-      if (info?.uuid && provider) {
-        eip6963Providers.set(info.uuid, { info, provider });
-      }
-    } catch (e) {}
-  });
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-}
-
-// Helper to find specific provider from providers array or window.ethereum
-function findProvider(checkFn) {
-  // First check providers array (standard multi-wallet setup)
-  if (window.ethereum?.providers?.length) {
-    for (const p of window.ethereum.providers) {
-      if (checkFn(p)) return p;
-    }
-  }
-  // Fallback to window.ethereum if it matches
-  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
-  return null;
-}
-
-const WALLET_CONFIG = {
-  metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
-  coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
-  rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
-  rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
-  walletconnect: { name: 'WalletConnect', icon: '📱' }
-};
-
-function detectWallets() {
-  const detected = [];
-  const seenNames = new Set();
-
-  // 1. EIP-6963 providers first (modern standard, gives us the actual provider directly)
-  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
-    const name = info?.name || 'Unknown';
-    if (!seenNames.has(name.toLowerCase())) {
-      const safeName = name.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
-      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
-      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
-      detected.push({
-        key: `eip6963_${uuid}`,
-        name: safeName,
-        icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
-        getProvider: () => provider
-      });
-      seenNames.add(name.toLowerCase());
-    }
-  }
-
-  // 2. Check window.ethereum.providers array (multi-wallet setup)
-  if (window.ethereum?.providers?.length) {
-    for (let i = 0; i < window.ethereum.providers.length; i++) {
-      const p = window.ethereum.providers[i];
-      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
-      if (name && !seenNames.has(name.toLowerCase())) {
-        detected.push({ key: `provider_${i}`, name, icon: '🔗', getProvider: () => p });
-        seenNames.add(name.toLowerCase());
-      }
-    }
-  }
-
-  // 3. Legacy WALLET_CONFIG detection (fallback for wallets not supporting EIP-6963)
-  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
-    if (key === 'walletconnect') continue;
-    try {
-      if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) {
-        detected.push({ key, ...config });
-        seenNames.add(config.name.toLowerCase());
-      }
-    } catch (e) {}
-  }
-
-  // 4. Fallback: if nothing detected but window.ethereum exists
-  if (detected.length === 0 && window.ethereum) {
-    detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum });
-  }
-
-  // 5. WalletConnect as mobile/cross-device option
-  const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
-  if (wcModule?.EthereumProvider) {
-    detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
-  }
-
-  return detected;
-}
-
-function showWalletModal() {
-  $('walletModal').classList.add('active');
-  document.body.classList.add('modal-open');
-  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
-
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-
-  const doDetect = (attempt = 1) => {
-    const wallets = detectWallets();
-    const hasBrowserWallet = wallets.some(w => w.key !== 'walletconnect');
-    if (!hasBrowserWallet && attempt < 2) {
-      setTimeout(() => doDetect(attempt + 1), 250);
-    } else {
-      renderWalletModal(wallets);
-    }
-  };
-
-  setTimeout(() => doDetect(), 150);
-}
-
-function renderWalletModal(wallets) {
-  const container = $('walletOptions');
-
-  if (connectedAddress) {
-    const displayName = $('walletBtn').textContent;
-    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
-    container.innerHTML = `
-      <div style="padding: 12px; border: 1px solid #000; margin-bottom: 12px;">
-        <div style="font-weight: 600; margin-bottom: 6px;">Connected</div>
-        ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escapeHtml(displayName)}</div>` : ''}
-        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${connectedAddress}</div>
-      </div>
-      <div class="wallet-option disconnect" onclick="disconnectWallet()">
-        <span class="wallet-option-name">Disconnect</span>
-      </div>
-    `;
-  } else {
-    container.innerHTML = wallets.length > 0 ? wallets.map(w => `
-      <div class="wallet-option" onclick='connectWithWallet(${JSON.stringify(w.key)})'>
-        <span class="wallet-option-icon">${w.icon}</span>
-        <span class="wallet-option-name">${escapeHtml(w.name)}</span>
-      </div>
-    `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
-  }
-}
-
-function closeWalletModal() {
-  $('walletModal').classList.remove('active');
-  document.body.classList.remove('modal-open');
-}
-
-function toggleWallet() {
-  showWalletModal();
-}
-
-async function connectWithWallet(walletKey) {
-  if (isConnecting) return;
-  isConnecting = true;
-
-  try {
-    closeWalletModal();
-    let walletProvider;
-
-    if (walletKey === 'walletconnect') {
-      const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
-      const WCProvider = wcModule?.EthereumProvider;
-
-      if (!WCProvider?.init) throw new Error('WalletConnect not available');
-
-      if (walletConnectProvider) {
-        try { await walletConnectProvider.disconnect?.(); } catch (e) {}
-        walletConnectProvider = null;
-      }
-
-      walletConnectProvider = await WCProvider.init({
-        projectId: '1e8390ef1c1d8a185e035912a1409749',
-        chains: [1],
-        showQrModal: true,
-        rpcMap: { 1: 'https://1rpc.io/eth' },
-        metadata: {
-          name: 'Wei Name Service',
-          description: 'Register .wei names',
-          url: window.location.origin,
-          icons: []
-        }
-      });
-
-      // Listen for display_uri to capture deep link for mobile
-      walletConnectProvider.on('display_uri', (uri) => {
-        // Extract wallet deep link if available
-        try {
-          const session = walletConnectProvider.session;
-          const peerMeta = session?.peer?.metadata;
-          if (peerMeta?.redirect?.native) {
-            wcDeepLink = sanitizeDeepLink(peerMeta.redirect.native);
-          } else if (peerMeta?.redirect?.universal) {
-            wcDeepLink = sanitizeDeepLink(peerMeta.redirect.universal);
-          }
-        } catch (e) {}
-      });
-
-      await walletConnectProvider.enable();
-      walletProvider = walletConnectProvider;
-      isWalletConnect = true;
-
-      // Try to get deep link from connected session
-      try {
-        const session = walletConnectProvider.session;
-        const peerMeta = session?.peer?.metadata;
-        if (peerMeta?.redirect?.native) {
-          wcDeepLink = sanitizeDeepLink(peerMeta.redirect.native);
-        } else if (peerMeta?.redirect?.universal) {
-          wcDeepLink = sanitizeDeepLink(peerMeta.redirect.universal);
-        }
-      } catch (e) {}
-    } else if (walletKey.startsWith('eip6963_')) {
-      const uuid = walletKey.replace('eip6963_', '');
-      walletProvider = eip6963Providers.get(uuid)?.provider;
-      // UUID changes per session - fall back to matching by saved name
-      if (!walletProvider) {
-        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
-        if (savedName) {
-          for (const [, { info, provider }] of eip6963Providers) {
-            if (info?.name?.toLowerCase() === savedName) {
-              walletProvider = provider;
-              break;
-            }
-          }
-        }
-      }
-      isWalletConnect = false;
-      wcDeepLink = null;
-    } else {
-      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
-      isWalletConnect = false;
-      wcDeepLink = null;
-    }
-
-    if (!walletProvider) throw new Error('Wallet not found');
-
-    if (walletKey !== 'walletconnect') {
-      await walletProvider.request({ method: 'eth_requestAccounts' });
-    }
-
-    // Check/switch chain BEFORE setting globals
-    const chainId = await walletProvider.request({ method: 'eth_chainId' });
-    // Handle both hex string ('0x1') and number (1) formats from different wallets
-    if (BigInt(chainId) !== 1n) {
-      try {
-        await walletProvider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x1' }]
-        });
-        // Verify chain actually switched (some wallets claim success without switching)
-        const newChainId = await walletProvider.request({ method: 'eth_chainId' });
-        if (BigInt(newChainId) !== 1n) {
-          throw new Error('Chain switch failed');
-        }
-      } catch (switchErr) {
-        showStatus('Please switch to Ethereum Mainnet', 'error');
-        // Reset wallet state uniformly on chain-switch failure
-        if (walletKey === 'walletconnect') {
-          try { walletConnectProvider?.disconnect(); } catch (e) {}
-          walletConnectProvider = null;
-        }
-        isWalletConnect = false;
-        wcDeepLink = null;
-        return; // Don't set globals if wrong chain
-      }
-    }
-
-    // Now safe to initialize globals
-    provider = new ethers.BrowserProvider(walletProvider);
-    signer = await provider.getSigner();
-    connectedAddress = await signer.getAddress();
-    connectedWalletProvider = walletProvider;
-    contract = new ethers.Contract(CONTRACT, ABI, signer);
-    updateWalletDisplay();
-
-    // Store handlers for cleanup on disconnect
-    walletEventHandlers = {
-      accountsChanged: () => window.location.reload(),
-      chainChanged: () => window.location.reload()
-    };
-    walletProvider.on('accountsChanged', walletEventHandlers.accountsChanged);
-    walletProvider.on('chainChanged', walletEventHandlers.chainChanged);
-
-    try {
-      localStorage.setItem('zfi_wallet', walletKey);
-      // Save wallet name for EIP-6963 reconnect (UUIDs change per session)
-      if (walletKey.startsWith('eip6963_')) {
-        const uuid = walletKey.replace('eip6963_', '');
-        const name = eip6963Providers.get(uuid)?.info?.name;
-        if (name) localStorage.setItem('zfi_wallet_name', name);
-      }
-    } catch (e) {}
-
-    await initPending();
-    doCheckName();
-
-  } catch (error) {
-    handleError(error);
-  } finally {
-    isConnecting = false;
-  }
-}
-
-function updateWcBanner() {
-  const existing = $('wcBanner');
-  if (existing) existing.remove();
-
-  if (isWalletConnect && connectedAddress) {
-    const banner = document.createElement('div');
-    banner.id = 'wcBanner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
-    banner.innerHTML = `
-      <span>📱 Connected via WalletConnect</span>
-      <button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>
-    `;
-    document.body.prepend(banner);
-    document.body.style.paddingTop = '54px';
-  } else {
-    document.body.style.paddingTop = '';
-  }
-}
-
-async function updateWalletDisplay() {
-  if (!connectedAddress) {
-    $('walletBtn').textContent = 'connect';
-    updateWcBanner();
-    return;
-  }
-
-  // Show address initially
-  $('walletBtn').textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-  updateWcBanner();
-
-  // Try to resolve display name
-  try {
-    const rc = readContract || contract;
-    if (rc) {
-      const displayName = await rc.reverseResolve(connectedAddress);
-      if (displayName) {
-        $('walletBtn').textContent = displayName.toLowerCase();
-      }
-    }
-  } catch (e) {
-    // Keep showing address on error
-  }
-}
-
-function disconnectWallet() {
-  // Remove event listeners
-  if (connectedWalletProvider && walletEventHandlers) {
-    try {
-      connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-      connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
-    } catch (e) {}
-  }
-  walletEventHandlers = null;
-
-  if (walletConnectProvider) {
-    try { walletConnectProvider.disconnect(); } catch (e) {}
-    walletConnectProvider = null;
-  }
-  provider = null;
-  signer = null;
-  connectedAddress = null;
-  connectedWalletProvider = null;
-  contract = null;
-  isWalletConnect = false;
-  wcDeepLink = null;
-  $('walletBtn').textContent = 'connect';
-  updateWcBanner();
-  closeWalletModal();
-  try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
-  $('commitBtn').disabled = true;
-  hideManage();
-  doCheckName();
 }
 
 function byteLength(str) {
@@ -1685,7 +1245,7 @@ async function doCheckName() {
               pendingMintInfo = { parentId, subLabel, parentName, feeToken: cfgFeeToken, price: cfgPrice, decimals: tokenDecimals, symbol: tokenSymbol };
               feeEl.innerHTML = 'Price: ' + escapeHtml(priceDisplay) +
                 '<br><button onclick="doMintSubdomain()" style="margin-top:8px;"' +
-                (!signer ? ' disabled' : '') + '>Mint ' + escaped + '.wei</button>';
+                (!_signer ? ' disabled' : '') + '>Mint ' + escaped + '.wei</button>';
             } else if (!cfgEnabled) {
               feeEl.textContent = 'Subdomain sales are not enabled for this name';
             } else {
@@ -1766,7 +1326,7 @@ async function doCheckName() {
         '<div class="view-link"><a href="#" onclick="copyShareLink();return false;">Copy link →</a></div>';
       // Enable commit only if: available + no pending + wallet connected
       commitBtn.style.display = '';
-      commitBtn.disabled = hasPending || !signer;
+      commitBtn.disabled = hasPending || !_signer;
       hideManage();
 
       let feeText = ethers.formatEther(fee) + ' ETH';
@@ -1801,7 +1361,7 @@ async function doCheckName() {
 
 async function doCommit() {
   const name = normalizeLabel($('nameInput').value);
-  if (!name || !signer) return;
+  if (!name || !_signer) return;
 
   // Disable immediately to prevent double-clicks
   $('commitBtn').disabled = true;
@@ -1810,7 +1370,7 @@ async function doCommit() {
     showStatus('Creating commitment...', '');
 
     const innerSecret = ethers.hexlify(ethers.randomBytes(32));
-    const userAddr = await signer.getAddress();
+    const userAddr = await _signer.getAddress();
     const secret = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'address'], [innerSecret, userAddr]));
     const rc = readContract || contract;
     const commitment = await rc.makeCommitment(name, ZROUTER, secret);
@@ -1889,12 +1449,12 @@ function doRevealSelected() {
 
 async function doReveal() {
   const pending = loadPending();
-  if (!pending || !signer) return;
+  if (!pending || !_signer) return;
 
   try {
     // Verify same wallet that committed
-    if (pending.owner && connectedAddress &&
-        pending.owner.toLowerCase() !== connectedAddress.toLowerCase()) {
+    if (pending.owner && _connectedAddress &&
+        pending.owner.toLowerCase() !== _connectedAddress.toLowerCase()) {
       showStatus(`Connect the wallet used to commit: ${pending.owner.slice(0,6)}...${pending.owner.slice(-4)}`, 'error');
       return;
     }
@@ -1936,10 +1496,10 @@ async function doReveal() {
         'function sweep(address token, uint256 id, uint256 amount, address to)',
         'function multicall(bytes[] data) payable returns (bytes[])'
       ]);
-      const router = new ethers.Contract(ZROUTER, rIface, signer);
+      const router = new ethers.Contract(ZROUTER, rIface, _signer);
       tx = await wcTransaction(router.multicall([
-        rIface.encodeFunctionData('revealName', [pending.name, pending.secret, connectedAddress]),
-        rIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, connectedAddress])
+        rIface.encodeFunctionData('revealName', [pending.name, pending.secret, _connectedAddress]),
+        rIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, _connectedAddress])
       ], { value: total }), 'Approve registration');
     } else {
       tx = await wcTransaction(contract.reveal(pending.name, pending.secret, { value: total }), 'Approve registration');
@@ -1997,7 +1557,7 @@ const DAI_REVEAL = {
 
 async function doRevealWithToken(tk) {
   const pending = loadPending();
-  if (!pending || !signer) return;
+  if (!pending || !_signer) return;
 
   try {
     if (!pending.commitOwner || pending.commitOwner !== ZROUTER) {
@@ -2005,8 +1565,8 @@ async function doRevealWithToken(tk) {
       return;
     }
 
-    if (pending.owner && connectedAddress &&
-        pending.owner.toLowerCase() !== connectedAddress.toLowerCase()) {
+    if (pending.owner && _connectedAddress &&
+        pending.owner.toLowerCase() !== _connectedAddress.toLowerCase()) {
       showStatus(`Connect the wallet used to commit: ${pending.owner.slice(0,6)}...${pending.owner.slice(-4)}`, 'error');
       return;
     }
@@ -2053,8 +1613,8 @@ async function doRevealWithToken(tk) {
     if (quote.best.amountIn === 0n) throw new Error(`Could not get ${tk.name} quote`);
 
     const [balRes, nonceRes] = await Promise.all([
-      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('balanceOf', [connectedAddress]) }),
-      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('nonces', [connectedAddress]) })
+      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('balanceOf', [_connectedAddress]) }),
+      rpc.call({ to: tk.addr, data: erc20BalNonceIface.encodeFunctionData('nonces', [_connectedAddress]) })
     ]);
     const balance = erc20BalNonceIface.decodeFunctionResult('balanceOf', balRes)[0];
     const nonce = erc20BalNonceIface.decodeFunctionResult('nonces', nonceRes)[0];
@@ -2068,8 +1628,8 @@ async function doRevealWithToken(tk) {
     showStatus(`Sign permit for ~${displayAmount} ${tk.name}...`, '');
 
     const sig = await wcTransaction(
-      signer.signTypedData(tk.permitDomain, tk.permitTypes,
-        tk.permitValue(connectedAddress, maxAmount, nonce, deadline)),
+      _signer.signTypedData(tk.permitDomain, tk.permitTypes,
+        tk.permitValue(_connectedAddress, maxAmount, nonce, deadline)),
       `Sign ${tk.name} permit in your wallet`
     );
 
@@ -2079,10 +1639,10 @@ async function doRevealWithToken(tk) {
 
     const routerIface = new ethers.Interface(tk.routerAbi);
     const permitCall = tk.encodePermit(routerIface, maxAmount, deadline, nonce, v, r, s);
-    const revealCall = routerIface.encodeFunctionData('revealName', [pending.name, pending.secret, connectedAddress]);
-    const sweepCall = routerIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, connectedAddress]);
+    const revealCall = routerIface.encodeFunctionData('revealName', [pending.name, pending.secret, _connectedAddress]);
+    const sweepCall = routerIface.encodeFunctionData('sweep', [ethers.ZeroAddress, 0, 0, _connectedAddress]);
 
-    const router = new ethers.Contract(ZROUTER, routerIface, signer);
+    const router = new ethers.Contract(ZROUTER, routerIface, _signer);
     const tx = await wcTransaction(router.multicall([permitCall, quote.callData, revealCall, sweepCall]), `Approve ${tk.name} registration`);
     const txHash = tx.hash;
     showStatus('Waiting for confirmation...', '', txHash);
@@ -2243,7 +1803,7 @@ async function updateTimer(timerId) {
     const hrs = Math.floor(expires / 3600);
     const mins = Math.floor((expires % 3600) / 60);
     timerEl.textContent = 'Ready to reveal. Expires in ' + hrs + 'h ' + mins + 'm';
-    revealBtn.disabled = !signer;
+    revealBtn.disabled = !_signer;
   } else {
     timerEl.textContent = 'Expired';
     revealBtn.disabled = true;
@@ -2328,7 +1888,7 @@ async function showManage(tokenId, name) {
 
     if (!owner) { hideManage(); return; }
 
-    const isOwner = connectedAddress && owner.toLowerCase() === connectedAddress.toLowerCase();
+    const isOwner = _connectedAddress && owner.toLowerCase() === _connectedAddress.toLowerCase();
     const expiryDate = record?.expiresAt ? new Date(Number(record.expiresAt) * 1000).toLocaleDateString() : null;
     const isTopLevel = record?.parent === 0n;
 
@@ -2552,7 +2112,7 @@ async function doTransfer() {
       return;
     }
     showStatus('Transferring to ' + displayTo + '...', '');
-    const tx = await wcTransaction(contract.transferFrom(connectedAddress, to, currentTokenId), 'Approve transfer');
+    const tx = await wcTransaction(contract.transferFrom(_connectedAddress, to, currentTokenId), 'Approve transfer');
     showStatus('Waiting for confirmation...', '', tx.hash);
     await waitForTx(tx);
     showStatus('Transferred!', 'success', tx.hash);
@@ -2567,7 +2127,7 @@ async function doTransfer() {
 
 async function doSetAddr() {
   if (isProcessing || !contract || !currentTokenId) return;
-  const addr = $('resolveAddr').value.trim() || connectedAddress;
+  const addr = $('resolveAddr').value.trim() || _connectedAddress;
   if (!ethers.isAddress(addr)) { showStatus('Invalid address', 'error'); return; }
 
   isProcessing = true;
@@ -2801,7 +2361,7 @@ async function doSetPrimary() {
     showStatus('Waiting for confirmation...', '', tx.hash);
     await waitForTx(tx);
     showStatus(currentTokenName + '.wei is now your display name!', 'success', tx.hash);
-    updateWalletDisplay();
+    $('walletBtn').textContent = currentTokenName + '.wei';
   } catch (e) {
     handleError(e);
   } finally {
@@ -2897,8 +2457,8 @@ async function showSubSalesForm() {
     const rpc = await getRpc();
     const [cfgRes, approvedRes, balRes] = await Promise.all([
       rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [currentTokenId]) }),
-      rpc.call({ to: CONTRACT, data: approvalIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR]) }),
-      rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('ethBalance', [connectedAddress]) })
+      rpc.call({ to: CONTRACT, data: approvalIface.encodeFunctionData('isApprovedForAll', [_connectedAddress, SUBDOMAIN_REGISTRAR]) }),
+      rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('ethBalance', [_connectedAddress]) })
     ]);
 
     const cfg = regIface.decodeFunctionResult('config', cfgRes);
@@ -2908,7 +2468,7 @@ async function showSubSalesForm() {
     const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice, , , cfgPayout] = cfg;
 
     const isConfigured = cfgController !== ethers.ZeroAddress &&
-                         cfgController.toLowerCase() === connectedAddress.toLowerCase();
+                         cfgController.toLowerCase() === _connectedAddress.toLowerCase();
     const hasActiveConfig = isConfigured && cfgEnabled;
 
     // Pre-fill from existing config
@@ -2938,7 +2498,7 @@ async function showSubSalesForm() {
           currentPriceStr = cfgPrice.toString();
         }
       }
-      if (cfgPayout !== ethers.ZeroAddress && cfgPayout.toLowerCase() !== connectedAddress.toLowerCase()) {
+      if (cfgPayout !== ethers.ZeroAddress && cfgPayout.toLowerCase() !== _connectedAddress.toLowerCase()) {
         currentPayoutStr = cfgPayout;
       }
     }
@@ -2999,7 +2559,7 @@ async function showSubSalesForm() {
 }
 
 async function doConfigureSubSales() {
-  if (isProcessing || !signer || !currentTokenId) return;
+  if (isProcessing || !_signer || !currentTokenId) return;
   isProcessing = true;
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
@@ -3036,7 +2596,7 @@ async function doConfigureSubSales() {
     const rpc = await getRpc();
     const approvedRes = await rpc.call({
       to: CONTRACT,
-      data: approvalIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR])
+      data: approvalIface.encodeFunctionData('isApprovedForAll', [_connectedAddress, SUBDOMAIN_REGISTRAR])
     });
     const isApproved = approvalIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
 
@@ -3044,7 +2604,7 @@ async function doConfigureSubSales() {
       showStatus('Approving registrar...', '');
       const nftContract = new ethers.Contract(CONTRACT, [
         'function setApprovalForAll(address operator, bool approved)'
-      ], signer);
+      ], _signer);
       const approveTx = await wcTransaction(
         nftContract.setApprovalForAll(SUBDOMAIN_REGISTRAR, true),
         'Approve registrar'
@@ -3054,7 +2614,7 @@ async function doConfigureSubSales() {
     }
 
     showStatus('Configuring subdomain sales...', '');
-    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, _signer);
     const tx = await wcTransaction(
       registrar.configure(currentTokenId, payoutAddr, feeToken, price, true, ethers.ZeroAddress, 0),
       'Approve configuration'
@@ -3073,13 +2633,13 @@ async function doConfigureSubSales() {
 }
 
 async function doDisableSubSales() {
-  if (isProcessing || !signer || !currentTokenId) return;
+  if (isProcessing || !_signer || !currentTokenId) return;
   isProcessing = true;
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     showStatus('Disabling subdomain sales...', '');
-    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, _signer);
     const tx = await wcTransaction(
       registrar.disable(currentTokenId),
       'Approve disable'
@@ -3098,13 +2658,13 @@ async function doDisableSubSales() {
 }
 
 async function doWithdrawRegFees() {
-  if (isProcessing || !signer) return;
+  if (isProcessing || !_signer) return;
   isProcessing = true;
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
   try {
     showStatus('Withdrawing fees...', '');
-    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, _signer);
     const tx = await wcTransaction(
       registrar.withdrawETH(ethers.ZeroAddress),
       'Approve withdrawal'
@@ -3156,7 +2716,7 @@ async function doFreeMint() {
 
   try {
     // Ensure wallet
-    if (!signer) {
+    if (!_signer) {
       showFreeStatus('Connect your wallet first', '');
       toggleWallet();
       btn.disabled = false;
@@ -3206,7 +2766,7 @@ async function doFreeMint() {
     showFreeStatus('Minting ' + label + '.id.wei...', '');
     const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, [
       'function register(uint256 parentId, string label) payable returns (uint256)'
-    ], signer);
+    ], _signer);
     const tx = await wcTransaction(
       registrar.register(ID_WEI_PARENT, label, { value: 0n }),
       'Approve mint'
@@ -3230,7 +2790,7 @@ async function doFreeMint() {
 }
 
 async function doMintSubdomain() {
-  if (!signer || !pendingMintInfo) return;
+  if (!_signer || !pendingMintInfo) return;
   const { parentId, subLabel, feeToken, price, symbol } = pendingMintInfo;
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
 
@@ -3252,7 +2812,7 @@ async function doMintSubdomain() {
     if (price > 0n) {
       const rpc = await getRpc();
       if (feeToken === ethers.ZeroAddress) {
-        const bal = await rpc.getBalance(connectedAddress);
+        const bal = await rpc.getBalance(_connectedAddress);
         if (bal < price) {
           showStatus('Insufficient ETH — need ' + ethers.formatEther(price) + ' ETH', 'error');
           if (btn) btn.disabled = false;
@@ -3260,7 +2820,7 @@ async function doMintSubdomain() {
         }
       } else {
         const balIface = new ethers.Interface(['function balanceOf(address) view returns (uint256)']);
-        const balRes = await rpc.call({ to: feeToken, data: balIface.encodeFunctionData('balanceOf', [connectedAddress]) });
+        const balRes = await rpc.call({ to: feeToken, data: balIface.encodeFunctionData('balanceOf', [_connectedAddress]) });
         const bal = balIface.decodeFunctionResult('balanceOf', balRes)[0];
         if (bal < price) {
           showStatus('Insufficient ' + (symbol || 'token') + ' balance', 'error');
@@ -3278,7 +2838,7 @@ async function doMintSubdomain() {
       ]);
       const allowanceRes = await rpc.call({
         to: feeToken,
-        data: erc20Iface.encodeFunctionData('allowance', [connectedAddress, SUBDOMAIN_REGISTRAR])
+        data: erc20Iface.encodeFunctionData('allowance', [_connectedAddress, SUBDOMAIN_REGISTRAR])
       });
       const currentAllowance = erc20Iface.decodeFunctionResult('allowance', allowanceRes)[0];
 
@@ -3286,7 +2846,7 @@ async function doMintSubdomain() {
         showStatus('Approving ' + (symbol || 'token') + '...', '');
         const tokenContract = new ethers.Contract(feeToken, [
           'function approve(address spender, uint256 amount) returns (bool)'
-        ], signer);
+        ], _signer);
         const approveTx = await wcTransaction(
           tokenContract.approve(SUBDOMAIN_REGISTRAR, price),
           'Approve token spend'
@@ -3300,7 +2860,7 @@ async function doMintSubdomain() {
     showStatus('Minting subdomain...', '');
     const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, [
       'function register(uint256 parentId, string label) payable returns (uint256)'
-    ], signer);
+    ], _signer);
     const value = feeToken === ethers.ZeroAddress ? price : 0n;
     const tx = await wcTransaction(
       registrar.register(parentId, subLabel, { value }),
@@ -3403,7 +2963,7 @@ const BASE_PORTAL_ABI = [
 ];
 
 async function doSendEth() {
-  if (!signer) {
+  if (!_signer) {
     showStatus('Connect wallet first', 'error');
     return;
   }
@@ -3429,7 +2989,7 @@ async function doSendEth() {
     // Resolve recipient (or self if empty for Base)
     let to, displayTo;
     if (!input) {
-      to = connectedAddress;
+      to = _connectedAddress;
       displayTo = 'yourself';
     } else {
       showStatus('Resolving recipient...', '');
@@ -3447,7 +3007,7 @@ async function doSendEth() {
     if (sendNetwork === 'base') {
       // Bridge to Base via OptimismPortal
       showStatus('Bridging ' + amountStr + ' ETH to ' + displayTo + ' on Base...', '');
-      const portal = new ethers.Contract(BASE_PORTAL, BASE_PORTAL_ABI, signer);
+      const portal = new ethers.Contract(BASE_PORTAL, BASE_PORTAL_ABI, _signer);
       const tx = await portal.depositTransaction(
         to,           // recipient on Base
         amount,       // value to receive on Base
@@ -3462,7 +3022,7 @@ async function doSendEth() {
     } else {
       // Direct mainnet transfer
       showStatus('Sending ' + amountStr + ' ETH to ' + displayTo + '...', '');
-      const tx = await wcTransaction(signer.sendTransaction({ to, value: amount }), 'Approve transfer');
+      const tx = await wcTransaction(_signer.sendTransaction({ to, value: amount }), 'Approve transfer');
       showStatus('Waiting for confirmation...', '', tx.hash);
       await waitForTx(tx);
       showStatus('Sent ' + amountStr + ' ETH to ' + displayTo + '!', 'success', tx.hash);
@@ -3631,42 +3191,6 @@ async function doVerifyNow() {
 // Check for pending commit on page load (before wallet connects)
 initPending();
 
-// Auto-reconnect
-try {
-  const savedWallet = localStorage.getItem('zfi_wallet');
-  if (savedWallet) {
-    setTimeout(async () => {
-      try {
-        window.dispatchEvent(new Event('eip6963:requestProvider'));
-        await new Promise(r => setTimeout(r, 300));
-        // Silent check: only auto-connect if wallet already unlocked
-        let probe;
-        if (savedWallet.startsWith('eip6963_')) {
-          const uuid = savedWallet.replace('eip6963_', '');
-          probe = eip6963Providers.get(uuid)?.provider;
-          if (!probe) {
-            const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
-            if (savedName) {
-              for (const [, { info, provider }] of eip6963Providers) {
-                if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
-              }
-            }
-          }
-        } else if (savedWallet !== 'walletconnect') {
-          probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
-        }
-        if (probe) {
-          const accts = await probe.request({ method: 'eth_accounts' });
-          if (!accts || accts.length === 0) return;
-        }
-        await connectWithWallet(savedWallet);
-      } catch (e) {
-        console.error('Auto-reconnect failed:', e);
-      }
-    }, 100);
-  }
-} catch (e) {}
-
 // URL hash support: wei.domains/#name auto-fills and checks that name
 // Supports both top-level (wei.domains/#name) and subdomains (wei.domains/#sub.name)
 function initFromHash() {
@@ -3709,6 +3233,12 @@ initFromHash();
 
 // Listen for hash changes (back/forward navigation)
 window.addEventListener('hashchange', initFromHash);
+
+walletInit({
+  appName: 'zFi Domains',
+  onConnect: [() => { contract = new ethers.Contract(CONTRACT, ABI, _signer); }, initPending, doCheckName],
+  onDisconnect: [() => { contract = null; $('commitBtn').disabled = true; }, hideManage, doCheckName]
+});
 
 </script>
 

@@ -14,6 +14,7 @@
 <meta name="twitter:description" content="Swap tokens on zFi - the most secure-by-default exchange">
 <meta name="twitter:image" content="">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="./wallet.css">
 <script>
 // Prevent dark-mode FOUC: apply class before first paint
 try{var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(_){}
@@ -129,18 +130,6 @@ button.secondary {
   border-color: var(--sec-border);
 }
 button.secondary:hover { background: var(--surface-hover); }
-
-.wallet {
-  position: fixed;
-  top: max(20px, env(safe-area-inset-top, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  z-index: 100;
-}
-.wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
-
 
 .token-select {
   display: inline-flex;
@@ -486,30 +475,6 @@ body.modal-open { overflow: hidden; }
 }
 .modal-close:hover { opacity: 1; }
 
-/* Wallet modal options */
-.wallet-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--modal-bg);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  cursor: pointer;
-  margin-bottom: 8px;
-  transition: background 0.15s, color 0.15s;
-}
-.wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
-.wallet-option:active { opacity: 0.7; }
-.wallet-option-icon { font-size: 1.5rem; }
-.wallet-option-name { font-weight: 600; font-size: 14px; }
-.wallet-option.disconnect {
-  border-color: #f00;
-  color: #f00;
-  justify-content: center;
-  margin-top: 4px;
-}
-.wallet-option.disconnect:hover { background: #f00; color: #fff; }
 .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 /* Token list in modal */
@@ -611,8 +576,6 @@ body.modal-open { overflow: hidden; }
 /* Responsive */
 @media (max-width: 700px) {
   body { padding: 80px 16px 20px; }
-  .wallet { top: 16px; right: 16px; }
-  .wallet button { padding: 10px 14px; font-size: 11px; }
   h1 { margin-bottom: 30px; font-size: 13px; }
   input[type="number"], input[type="text"] { font-size: 20px; padding: 8px 0; }
   .amount-input { font-size: 20px; }
@@ -922,11 +885,6 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode"></button>
-
-<!-- Wallet button (fixed top-right) -->
-<div class="wallet">
-  <button id="walletBtn" onclick="toggleWallet()">connect</button>
-</div>
 
 <div class="tab-bar">
   <button class="tab active" data-tab="swap" onclick="switchTab('swap')">Swap</button>
@@ -1432,17 +1390,6 @@ body.modal-open { overflow: hidden; }
 <!-- Status -->
 <div id="status" class="status"></div>
 
-<!-- Wallet Modal -->
-<div class="modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">Connect Wallet</div>
-      <button class="modal-close" onclick="closeWalletModal()">&times;</button>
-    </div>
-    <div class="modal-body" id="walletOptions"></div>
-  </div>
-</div>
-
 <!-- Token Modal -->
 <div class="modal-overlay" id="tokenModal" onclick="if(event.target===this)closeTokenModal()">
   <div class="modal">
@@ -1463,6 +1410,7 @@ body.modal-open { overflow: hidden; }
 
 <script src="./ethers.min.js"></script>
 <script src="./walletconnect.min.js"></script>
+<script src="./wallet.js"></script>
 <script src="./poseidon2.min.js"></script>
 <script src="./poseidon1.min.js"></script>
 <script src="./poseidon3.min.js"></script>
@@ -1830,164 +1778,10 @@ function debounce(fn, wait) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
 }
 
-// ---- Wallet state ----
-let provider = null;
-let signer = null;
-let connectedAddress = null;
-let connectedWalletProvider = null;
-let walletConnectProvider = null;
-let isConnecting = false;
-let walletEventHandlers = null;
-let isWalletConnect = false;
-let wcDeepLink = null;
-
-const eip6963Providers = new Map();
-
-window.addEventListener('eip6963:announceProvider', (event) => {
-  try {
-    const { info, provider } = event.detail || {};
-    if (info?.uuid && provider) {
-      eip6963Providers.set(info.uuid, { info, provider });
-    }
-  } catch (e) {}
-});
-window.dispatchEvent(new Event('eip6963:requestProvider'));
-
-// ---- Wallet helpers ----
-function findProvider(checkFn) {
-  if (window.ethereum?.providers?.length) {
-    for (const p of window.ethereum.providers) {
-      if (checkFn(p)) return p;
-    }
-  }
-  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
-  return null;
-}
-
-const WALLET_CONFIG = {
-  metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
-  coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
-  rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
-  rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
-  walletconnect: { name: 'WalletConnect', icon: '📱' }
-};
-
-function detectWallets() {
-  const detected = [];
-  const seenNames = new Set();
-
-  // 1. EIP-6963 providers first
-  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
-    const name = info?.name || 'Unknown';
-    if (!seenNames.has(name.toLowerCase())) {
-      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
-      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
-      detected.push({
-        key: `eip6963_${uuid}`,
-        name: name,
-        icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
-        getProvider: () => provider
-      });
-      seenNames.add(name.toLowerCase());
-    }
-  }
-
-  // 2. Check window.ethereum.providers array
-  if (window.ethereum?.providers?.length) {
-    for (let i = 0; i < window.ethereum.providers.length; i++) {
-      const p = window.ethereum.providers[i];
-      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
-      if (name && !seenNames.has(name.toLowerCase())) {
-        detected.push({ key: `provider_${i}`, name, icon: '🔗', getProvider: () => p });
-        seenNames.add(name.toLowerCase());
-      }
-    }
-  }
-
-  // 3. Legacy WALLET_CONFIG detection
-  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
-    if (key === 'walletconnect') continue;
-    try {
-      if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) {
-        detected.push({ key, ...config });
-        seenNames.add(config.name.toLowerCase());
-      }
-    } catch (e) {}
-  }
-
-  // 4. Fallback: if nothing detected but window.ethereum exists
-  if (detected.length === 0 && window.ethereum) {
-    detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum });
-  }
-
-  // 5. WalletConnect
-  const wcModule = globalThis['@walletconnect/ethereum-provider'];
-  if (wcModule?.EthereumProvider) {
-    detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
-  }
-
-  return detected;
-}
-
-function showWalletModal() {
-  $('walletModal').classList.add('active');
-  document.body.classList.add('modal-open');
-  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
-
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-
-  const doDetect = (attempt = 1) => {
-    const wallets = detectWallets();
-    const hasBrowserWallet = wallets.some(w => w.key !== 'walletconnect');
-    if (!hasBrowserWallet && attempt < 2) {
-      setTimeout(() => doDetect(attempt + 1), 250);
-    } else {
-      renderWalletModal(wallets);
-    }
-  };
-
-  setTimeout(() => doDetect(), 150);
-}
-
-function renderWalletModal(wallets) {
-  const container = $('walletOptions');
-
-  if (connectedAddress) {
-    const displayName = $('walletBtn').textContent;
-    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
-    container.innerHTML = `
-      <div style="padding: 12px; border: 1px solid currentColor; margin-bottom: 12px;">
-        <div style="font-weight: 600; margin-bottom: 6px;">Connected</div>
-        ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escText(displayName)}</div>` : ''}
-        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${escText(connectedAddress)}</div>
-      </div>
-      <div class="wallet-option disconnect" onclick="disconnectWallet()">
-        <span class="wallet-option-name">Disconnect</span>
-      </div>
-    `;
-  } else {
-    container.innerHTML = wallets.length > 0 ? wallets.map(w => `
-      <div class="wallet-option" data-wallet-key="${escAttr(w.key)}">
-        <span class="wallet-option-icon">${w.icon}</span>
-        <span class="wallet-option-name">${escText(w.name)}</span>
-      </div>
-    `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
-    container.querySelectorAll('[data-wallet-key]').forEach(el => {
-      el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey));
-    });
-  }
-}
-
-function closeWalletModal() {
-  $('walletModal').classList.remove('active');
-  document.body.classList.remove('modal-open');
-}
-
-function toggleWallet() { showWalletModal(); }
 
 // ---- WalletConnect transaction helper ----
 async function wcTransaction(txPromise, message = 'Confirm in your wallet app') {
-  if (!isWalletConnect) return txPromise;
+  if (!_isWalletConnect) return txPromise;
 
   const notif = document.createElement('div');
   notif.id = 'wcNotif';
@@ -1995,7 +1789,7 @@ async function wcTransaction(txPromise, message = 'Confirm in your wallet app') 
     <div style="position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:16px;text-align:center;z-index:10000;font-size:14px;">
       <div style="margin-bottom:8px;">📱 ${escText(message)}</div>
       <div style="font-size:12px;opacity:0.7;">Open your wallet app to approve the transaction</div>
-      ${wcDeepLink && /^https?:\/\//i.test(wcDeepLink) ? `<a href="${escAttr(wcDeepLink)}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:0;text-decoration:none;">Open Wallet</a>` : ''}
+      ${_wcDeepLink && /^https?:\/\//i.test(_wcDeepLink) ? `<a href="${escAttr(_wcDeepLink)}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:0;text-decoration:none;">Open Wallet</a>` : ''}
     </div>
   `;
   document.body.appendChild(notif);
@@ -2013,7 +1807,7 @@ async function waitForTx(tx, timeoutMs = 90000) {
   const txHash = tx.hash;
 
   async function pollReceipt(maxAttempts = 45) {
-    const p = quoteRPC ? await quoteRPC.call(rpc => rpc) : provider;
+    const p = quoteRPC ? await quoteRPC.call(rpc => rpc) : _walletProvider;
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const receipt = await p.getTransactionReceipt(txHash);
@@ -2030,7 +1824,7 @@ async function waitForTx(tx, timeoutMs = 90000) {
   }
 
   // For WalletConnect, always use polling
-  if (isWalletConnect) {
+  if (_isWalletConnect) {
     const receipt = await pollReceipt();
     if (receipt) return receipt;
     throw new Error('Transaction confirmation timeout');
@@ -2064,241 +1858,6 @@ async function waitForTx(tx, timeoutMs = 90000) {
   throw waitError || new Error('Transaction confirmation timeout');
 }
 
-// ---- Connect with wallet ----
-async function connectWithWallet(walletKey) {
-  if (isConnecting) return;
-  isConnecting = true;
-
-  try {
-    closeWalletModal();
-    let walletProvider;
-
-    if (walletKey === 'walletconnect') {
-      const wcModule = globalThis['@walletconnect/ethereum-provider'];
-      const WCProvider = wcModule?.EthereumProvider;
-
-      if (!WCProvider?.init) throw new Error('WalletConnect not available');
-
-      if (walletConnectProvider) {
-        try { await walletConnectProvider.disconnect?.(); } catch (e) {}
-        walletConnectProvider = null;
-      }
-
-      walletConnectProvider = await WCProvider.init({
-        projectId: '1e8390ef1c1d8a185e035912a1409749',
-        chains: [1],
-        showQrModal: true,
-        rpcMap: { 1: 'https://1rpc.io/eth' },
-        metadata: {
-          name: 'ETH Swap by zAMM',
-          description: 'Onchain DEX aggregator',
-          url: window.location.origin,
-          icons: []
-        }
-      });
-
-      walletConnectProvider.on('display_uri', (uri) => {
-        try {
-          const session = walletConnectProvider.session;
-          const peerMeta = session?.peer?.metadata;
-          if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) wcDeepLink = peerMeta.redirect.native;
-          else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) wcDeepLink = peerMeta.redirect.universal;
-        } catch (e) {}
-      });
-
-      await walletConnectProvider.enable();
-      walletProvider = walletConnectProvider;
-      isWalletConnect = true;
-
-      try {
-        const session = walletConnectProvider.session;
-        const peerMeta = session?.peer?.metadata;
-        if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) wcDeepLink = peerMeta.redirect.native;
-        else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) wcDeepLink = peerMeta.redirect.universal;
-      } catch (e) {}
-    } else if (walletKey.startsWith('eip6963_')) {
-      const uuid = walletKey.replace('eip6963_', '');
-      walletProvider = eip6963Providers.get(uuid)?.provider;
-      if (!walletProvider) {
-        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
-        if (savedName) {
-          for (const [, { info, provider }] of eip6963Providers) {
-            if (info?.name?.toLowerCase() === savedName) {
-              walletProvider = provider;
-              break;
-            }
-          }
-        }
-      }
-      isWalletConnect = false;
-      wcDeepLink = null;
-    } else {
-      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
-      isWalletConnect = false;
-      wcDeepLink = null;
-    }
-
-    if (!walletProvider) throw new Error('Wallet not found');
-
-    if (walletKey !== 'walletconnect') {
-      await walletProvider.request({ method: 'eth_requestAccounts' });
-    }
-
-    // Check/switch chain
-    const chainId = await walletProvider.request({ method: 'eth_chainId' });
-    if (BigInt(chainId) !== 1n) {
-      try {
-        await walletProvider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x1' }]
-        });
-        const newChainId = await walletProvider.request({ method: 'eth_chainId' });
-        if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
-      } catch (switchErr) {
-        showStatus('Please switch to Ethereum Mainnet', 'error');
-        if (walletKey === 'walletconnect') {
-          try { walletConnectProvider?.disconnect(); } catch (e) {}
-          walletConnectProvider = null;
-        }
-        isWalletConnect = false;
-        wcDeepLink = null;
-        return;
-      }
-    }
-
-    // Initialize globals
-    provider = new ethers.BrowserProvider(walletProvider);
-    signer = await provider.getSigner();
-    connectedAddress = await signer.getAddress();
-    const oldWalletProvider = connectedWalletProvider;
-    connectedWalletProvider = walletProvider;
-    updateWalletDisplay();
-
-    if (oldWalletProvider && walletEventHandlers) {
-      try {
-        oldWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-        oldWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
-      } catch (e) {}
-    }
-    walletEventHandlers = {
-      accountsChanged: () => window.location.reload(),
-      chainChanged: () => window.location.reload()
-    };
-    walletProvider.on('accountsChanged', walletEventHandlers.accountsChanged);
-    walletProvider.on('chainChanged', walletEventHandlers.chainChanged);
-
-    try {
-      localStorage.setItem('zfi_wallet', walletKey);
-      if (walletKey.startsWith('eip6963_')) {
-        const uuid = walletKey.replace('eip6963_', '');
-        const name = eip6963Providers.get(uuid)?.info?.name;
-        if (name) localStorage.setItem('zfi_wallet_name', name);
-      }
-    } catch (e) {}
-
-    // Clear caches (provider changed)
-    _erc20Read.clear();
-    _balanceCache.clear();
-    _allowCache.clear();
-
-    // Update swap UI
-    setText('swapBtn', 'Enter an amount');
-    setDisabled('swapBtn', true);
-    updateBalances();
-    updateWcBanner();
-
-    const preAmt = _inputMode === 'exactOut' ? $('toAmount')?.value?.trim() : $('fromAmount')?.value?.trim();
-    if (preAmt) handleAmountChange();
-
-    // Update Privacy tab if visible
-    if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
-
-    // Update Send tab if visible
-    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); }
-
-  } catch (error) {
-    handleError(error);
-  } finally {
-    isConnecting = false;
-  }
-}
-
-function updateWcBanner() {
-  const existing = $('wcBanner');
-  if (existing) existing.remove();
-
-  if (isWalletConnect && connectedAddress) {
-    const banner = document.createElement('div');
-    banner.id = 'wcBanner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
-    banner.innerHTML = `
-      <span>📱 Connected via WalletConnect</span>
-      <button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>
-    `;
-    document.body.prepend(banner);
-    document.body.style.paddingTop = '54px';
-  } else {
-    document.body.style.paddingTop = '';
-  }
-}
-
-function updateWalletDisplay() {
-  if (!connectedAddress) {
-    $('walletBtn').textContent = 'connect';
-    updateWcBanner();
-    return;
-  }
-  $('walletBtn').textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
-  updateWcBanner();
-  // Resolve .wei name in background
-  const _capturedAddr = connectedAddress;
-  quoteRPC.call(async (rpc) => {
-    const ns = getWeinsContract(rpc);
-    const name = await ns.reverseResolve(_capturedAddr);
-    if (name && connectedAddress === _capturedAddr) $('walletBtn').textContent = name.toLowerCase();
-  }).catch(() => {});
-}
-
-function disconnectWallet() {
-  if (connectedWalletProvider && walletEventHandlers) {
-    try {
-      connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-      connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
-    } catch (e) {}
-  }
-  walletEventHandlers = null;
-
-  if (walletConnectProvider) {
-    try { walletConnectProvider.disconnect(); } catch (e) {}
-    walletConnectProvider = null;
-  }
-  provider = null;
-  signer = null;
-  connectedAddress = null;
-  connectedWalletProvider = null;
-  isWalletConnect = false;
-  wcDeepLink = null;
-  $('walletBtn').textContent = 'connect';
-  updateWcBanner();
-  closeWalletModal();
-  try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
-
-  // Reset swap UI
-  setText('swapBtn', 'Connect Wallet');
-  setDisabled('swapBtn', false);
-  setText('fromBalance', 'Balance: --');
-  setText('toBalance', 'Balance: --');
-  setShown('quoteInfo', false);
-  stopQuoteRefresh();
-  $('toAmount').value = '';
-  _erc20Read.clear();
-  _balanceCache.clear();
-  _allowCache.clear();
-  _ppMasterKeys = null;
-
-  // Update Privacy tab
-  updatePPButton(); setText('ppBalance', '');
-}
 
 function showStatus(msg, type) {
   const el = $('status');
@@ -2608,7 +2167,7 @@ function renderTokenList(filter) {
     nameSpan.textContent = symbol;
     const balSpan = document.createElement('span');
     balSpan.className = 'token-balance';
-    if (connectedAddress && t) {
+    if (_connectedAddress && t) {
       const cached = getCachedBalance(t.address);
       if (cached != null && cached > 0n) {
         const formatted = t.address === ZERO_ADDRESS
@@ -2997,7 +2556,7 @@ async function multicallRead(calls) {
   const calldata = MULTICALL3_IFACE.encodeFunctionData("aggregate3", [
     calls.map(c => [c.target, c.allowFailure, c.callData])
   ]);
-  const rpc = provider || await quoteRPC.call(r => r);
+  const rpc = _walletProvider || await quoteRPC.call(r => r);
   const raw = await rpc.call({ to: MULTICALL3_ADDRESS, data: calldata });
   return MULTICALL3_IFACE.decodeFunctionResult("aggregate3", raw)[0];
 }
@@ -3023,15 +2582,15 @@ function mc3AsSettled(mc3, idx, iface, fn) {
 }
 
 async function fetchModalBalances() {
-  if (!connectedAddress) return;
+  if (!_connectedAddress) return;
   const allTokens = Object.values(tokens);
   const calls = [];
   const meta = [];
-  const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
+  const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [_connectedAddress]);
 
   // ETH balance
   calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
-    callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
+    callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [_connectedAddress]) });
   meta.push({ type: 'eth' });
 
   // All ERC-20 balances
@@ -3170,7 +2729,7 @@ async function getPermitConfig(tokenAddress) {
 
 async function signPermit(config, tokenAddress) {
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
-  const owner = connectedAddress;
+  const owner = _connectedAddress;
   const spender = ZROUTER_ADDRESS;
 
   // Fetch nonce from token contract
@@ -3203,7 +2762,7 @@ async function signPermit(config, tokenAddress) {
     values = { owner, spender, value: ethers.MaxUint256, nonce, deadline };
   }
 
-  const sig = await signer.signTypedData(config.domain, types, values);
+  const sig = await _signer.signTypedData(config.domain, types, values);
   const { v, r, s } = ethers.Signature.from(sig);
   return { v, r, s, nonce, deadline, config };
 }
@@ -3243,11 +2802,11 @@ const PERMIT2_TYPES = {
 };
 
 async function checkPermit2Allowance(tokenAddress) {
-  let a = cacheGetAllowance(tokenAddress, connectedAddress, PERMIT2_ADDRESS);
+  let a = cacheGetAllowance(tokenAddress, _connectedAddress, PERMIT2_ADDRESS);
   if (a != null) return a;
   const r = erc20Read(tokenAddress);
-  a = await r.allowance(connectedAddress, PERMIT2_ADDRESS);
-  cacheSetAllowance(tokenAddress, connectedAddress, PERMIT2_ADDRESS, a);
+  a = await r.allowance(_connectedAddress, PERMIT2_ADDRESS);
+  cacheSetAllowance(tokenAddress, _connectedAddress, PERMIT2_ADDRESS, a);
   return a;
 }
 
@@ -3261,7 +2820,7 @@ async function signPermit2(tokenAddress, amount) {
     nonce,
     deadline,
   };
-  const sig = await signer.signTypedData(PERMIT2_DOMAIN, PERMIT2_TYPES, values);
+  const sig = await _signer.signTypedData(PERMIT2_DOMAIN, PERMIT2_TYPES, values);
   return { signature: sig, nonce, deadline, token: tokenAddress, amount };
 }
 
@@ -3274,14 +2833,14 @@ function buildPermit2Multicall(calls, p2) {
 const _erc20Read = new Map();
 let _erc20ReadProvider = null;
 function erc20Read(address) {
-  if (!provider) throw new Error("No provider");
-  if (_erc20ReadProvider !== provider) { _erc20Read.clear(); _erc20ReadProvider = provider; }
+  if (!_walletProvider) throw new Error("No provider");
+  if (_erc20ReadProvider !== _walletProvider) { _erc20Read.clear(); _erc20ReadProvider = _walletProvider; }
   const k = address.toLowerCase();
   if (!_erc20Read.has(k)) {
     _erc20Read.set(k, new ethers.Contract(
       address,
       ["function allowance(address,address) view returns (uint256)", "function balanceOf(address) view returns (uint256)"],
-      provider
+      _walletProvider
     ));
   }
   return _erc20Read.get(k);
@@ -3289,7 +2848,7 @@ function erc20Read(address) {
 
 // ---- Balance updates (Multicall3 batched) ----
 async function updateBalances() {
-  if (!provider || !connectedAddress) return;
+  if (!_walletProvider || !_connectedAddress) return;
 
   const seq = ++_balSeq;
   const fromSnap = fromToken, toSnap = toToken;
@@ -3300,11 +2859,11 @@ async function updateBalances() {
   try {
     const calls = [];
     const meta = [];
-    const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
+    const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [_connectedAddress]);
 
     // ETH balance via getEthBalance (always — needed for PP deposit)
     calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
-      callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
+      callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [_connectedAddress]) });
     meta.push({ type: 'eth' });
 
     const _addedErc20 = new Set();
@@ -3332,10 +2891,10 @@ async function updateBalances() {
     // Batch allowance reads for from token (saves RPCs during quote/swap)
     if (!fromIsEth) {
       calls.push({ target: f.address, allowFailure: true,
-        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [connectedAddress, ZROUTER_ADDRESS]) });
+        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [_connectedAddress, ZROUTER_ADDRESS]) });
       meta.push({ type: 'allow', token: f.address, spender: ZROUTER_ADDRESS });
       calls.push({ target: f.address, allowFailure: true,
-        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [connectedAddress, PERMIT2_ADDRESS]) });
+        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [_connectedAddress, PERMIT2_ADDRESS]) });
       meta.push({ type: 'allow', token: f.address, spender: PERMIT2_ADDRESS });
     }
 
@@ -3354,7 +2913,7 @@ async function updateBalances() {
           balances[m.key] = MC_BAL_IFACE.decodeFunctionResult("balanceOf", r.returnData)[0];
           setCachedBalance(m.key, balances[m.key]);
         } else if (m.type === 'allow') {
-          cacheSetAllowance(m.token, connectedAddress, m.spender,
+          cacheSetAllowance(m.token, _connectedAddress, m.spender,
             MC_BAL_IFACE.decodeFunctionResult("allowance", r.returnData)[0]);
         }
       } catch {}
@@ -3474,7 +3033,7 @@ async function handleAmountChange() {
   const dstEl = isExactOut ? $("fromAmount") : $("toAmount");
   const quoteInfoEl = $("quoteInfo");
 
-  if (!connectedAddress) {
+  if (!_connectedAddress) {
     setText(swapBtn, "Connect Wallet");
     setDisabled(swapBtn, false);
     setShown(quoteInfoEl, false);
@@ -3508,14 +3067,14 @@ async function handleAmountChange() {
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
     setText(swapBtn, `Deposit ${fromToken} to Privacy Pool`);
-    setDisabled(swapBtn, !connectedAddress);
+    setDisabled(swapBtn, !_connectedAddress);
     return;
   }
 
   // ETH ↔ WETH wrap/unwrap: 1:1, no DEX needed (only when sending to self)
   const _receiverRaw = ($("receiverAddress")?.value || "").trim();
   const _resolvedAddr = getReceiver();
-  const _hasCustomReceiver = _receiverRaw && (isReceiverPending() || (_resolvedAddr && _resolvedAddr !== connectedAddress));
+  const _hasCustomReceiver = _receiverRaw && (isReceiverPending() || (_resolvedAddr && _resolvedAddr !== _connectedAddress));
   const wrapDir = !_hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
   if (wrapDir) {
     const fromData = tokens[fromToken];
@@ -3536,7 +3095,7 @@ async function handleAmountChange() {
       updateCalldataLink(null);
       stopQuoteRefresh(); // No refresh needed for 1:1
       setText(swapBtn, wrapDir === 'wrap' ? 'Wrap' : 'Unwrap');
-      setDisabled(swapBtn, !connectedAddress);
+      setDisabled(swapBtn, !_connectedAddress);
     } catch (e) {
       dstEl.value = "";
       setShown(quoteInfoEl, false);
@@ -3555,7 +3114,7 @@ async function handleAmountChange() {
     return;
   }
 
-  if (!provider) return;
+  if (!_walletProvider) return;
 
   const seq = ++_quoteSeq;
   const fromSnap = fromToken, toSnap = toToken;
@@ -3578,7 +3137,7 @@ async function handleAmountChange() {
 
     // Pre-warm permit caches in parallel with the quote (fire-and-forget)
     const _fromAddr = tokens[fromSnap]?.address;
-    if (_fromAddr && _fromAddr !== ZERO_ADDRESS && connectedAddress) {
+    if (_fromAddr && _fromAddr !== ZERO_ADDRESS && _connectedAddress) {
       getPermitConfig(_fromAddr).catch(() => {});
       checkPermit2Allowance(_fromAddr).catch(() => {});
     }
@@ -3701,11 +3260,11 @@ async function handleAmountChange() {
       const amountIn = isExactOut ? quote.requiredInput : safeParseUnits(amtStr, fromData.decimals);
       if (isDirectStake) {
         // Check allowance against zOrg DAO for direct stake
-        let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZORG_DAO);
+        let allowance = cacheGetAllowance(fromData.address, _connectedAddress, ZORG_DAO);
         if (allowance == null) {
           const r = erc20Read(fromData.address);
-          allowance = await r.allowance(connectedAddress, ZORG_DAO);
-          cacheSetAllowance(fromData.address, connectedAddress, ZORG_DAO, allowance);
+          allowance = await r.allowance(_connectedAddress, ZORG_DAO);
+          cacheSetAllowance(fromData.address, _connectedAddress, ZORG_DAO, allowance);
         }
         if (allowance < amountIn) btnLabel = "Approve & " + btnLabel;
       } else if (isRagequit) {
@@ -3713,19 +3272,19 @@ async function handleAmountChange() {
       } else if (isZOrgSell) {
         // Ragequit doesn't need approval, but second step (ZAMM sell) might
         // Check ZAMM allowance against router for the sell leg
-        let allowance = cacheGetAllowance(ZORG_PAY_TOKEN, connectedAddress, ZROUTER_ADDRESS);
+        let allowance = cacheGetAllowance(ZORG_PAY_TOKEN, _connectedAddress, ZROUTER_ADDRESS);
         if (allowance == null) {
           const r = erc20Read(ZORG_PAY_TOKEN);
-          allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-          cacheSetAllowance(ZORG_PAY_TOKEN, connectedAddress, ZROUTER_ADDRESS, allowance);
+          allowance = await r.allowance(_connectedAddress, ZROUTER_ADDRESS);
+          cacheSetAllowance(ZORG_PAY_TOKEN, _connectedAddress, ZROUTER_ADDRESS, allowance);
         }
         // Don't add "Approve &" prefix — handled in-flow during two-step execution
       } else {
-        let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
+        let allowance = cacheGetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS);
         if (allowance == null) {
           const r = erc20Read(fromData.address);
-          allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-          cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+          allowance = await r.allowance(_connectedAddress, ZROUTER_ADDRESS);
+          cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, allowance);
         }
         if (allowance < amountIn) {
           const [permitCfg, p2Allowance] = await Promise.all([
@@ -3760,8 +3319,8 @@ async function handleAmountChange() {
 
 async function setPercentBalance(pct) {
   try {
-    if (!provider || !connectedAddress) {
-      toggleWallet();
+    if (!_walletProvider || !_connectedAddress) {
+      connectWallet();
       return;
     }
 
@@ -3770,10 +3329,10 @@ async function setPercentBalance(pct) {
 
     if (raw == null) {
       if (f.address === ZERO_ADDRESS) {
-        raw = await provider.getBalance(connectedAddress);
+        raw = await _walletProvider.getBalance(_connectedAddress);
       } else {
-        const balData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
-        const balRaw = await provider.call({ to: f.address, data: balData });
+        const balData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [_connectedAddress]);
+        const balRaw = await _walletProvider.call({ to: f.address, data: balData });
         raw = MC_BAL_IFACE.decodeFunctionResult("balanceOf", balRaw)[0];
       }
       setCachedBalance(f.address, raw);
@@ -3851,12 +3410,12 @@ let _resolvedReceiver = null; // { input, address } or null
 let _receiverResolveSeq = 0;
 
 function getReceiver() {
-  if (!connectedAddress) return null;
+  if (!_connectedAddress) return null;
   const v = ($("receiverAddress")?.value || "").trim();
-  if (!v) return connectedAddress;
+  if (!v) return _connectedAddress;
   if (ethers.isAddress(v) && v !== ZERO_ADDRESS) return ethers.getAddress(v);
   if (_resolvedReceiver && _resolvedReceiver.input === v && _resolvedReceiver.address) return _resolvedReceiver.address;
-  return connectedAddress;
+  return _connectedAddress;
 }
 
 function isReceiverPending() {
@@ -4194,7 +3753,7 @@ async function getZammSellQuote(fromAmountStr, fromSym, toSym) {
     const quoter = getQuoterContract(rpc);
     const splitSlip = BigInt(Math.min(Math.max(slippageBps * 3, 150), 500));
     const r = await quoter.buildBestSwapViaETHMulticall(
-      receiver, connectedAddress, false,
+      receiver, _connectedAddress, false,
       ZERO_ADDRESS, toData.address,
       ethOut, splitSlip, deadline, 0, 0, ZERO_ADDRESS, callOpts
     );
@@ -4250,7 +3809,7 @@ async function getZammBuyQuote(fromAmountStr, fromSym, toSym) {
     // Non-ETH input: route tokenIn → ETH first via quoter (output stays in router)
     if (!ethIn) {
       const r = await quoter.buildBestSwapViaETHMulticall(
-        ZROUTER_ADDRESS, connectedAddress, false,
+        ZROUTER_ADDRESS, _connectedAddress, false,
         fromData.address, ZERO_ADDRESS,
         amountIn, BigInt(slippageBps), deadline, 0, 0, ZERO_ADDRESS, callOpts
       );
@@ -4356,7 +3915,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
     // Non-ETH input: route tokenIn → ETH first via quoter (output stays in router)
     if (!ethIn) {
       const r = await quoter.buildBestSwapViaETHMulticall(
-        ZROUTER_ADDRESS, connectedAddress, false,
+        ZROUTER_ADDRESS, _connectedAddress, false,
         fromData.address, ZERO_ADDRESS,
         amountIn, BigInt(slippageBps), deadline, 0, 0, ZERO_ADDRESS, callOpts
       );
@@ -4671,7 +4230,7 @@ async function postCowOrder(q) {
 }
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
-  if (!connectedAddress) throw new Error("Connect wallet to get a quote");
+  if (!_connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
   if (!fromData || !toData) throw new Error("Unknown token");
   if (fromData.address === toData.address) throw new Error("Same token");
@@ -4768,7 +4327,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const heavyEntries = [];
     const _heavyBestIdx = heavyEntries.length;
     heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
-      receiver, connectedAddress, false,
+      receiver, _connectedAddress, false,
       fromData.address, toData.address,
       amountIn, BigInt(slippageBps), deadline,
       hookFee, hookTick, hookAddr
@@ -4828,7 +4387,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     if (bestResult.status !== 'fulfilled') {
       try {
         const fb = await quoter.buildBestSwapViaETHMulticall(
-          receiver, connectedAddress, false,
+          receiver, _connectedAddress, false,
           fromData.address, toData.address,
           amountIn, BigInt(slippageBps), deadline,
           hookFee, hookTick, hookAddr, callOpts
@@ -5253,7 +4812,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
 
 // ---- Exact-out quoting ----
 async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
-  if (!connectedAddress) throw new Error("Connect wallet to get a quote");
+  if (!_connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
   if (!fromData || !toData) throw new Error("Unknown token");
   if (fromData.address === toData.address) throw new Error("Same token");
@@ -5305,7 +4864,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     // Merge heavy buildBestSwap into the mc3 batch (1 eth_call instead of 2)
     const _mc3BestIdx = mc3Entries.length;
     mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
-      receiver, connectedAddress, true,
+      receiver, _connectedAddress, true,
       fromData.address, toData.address,
       amountOut, BigInt(slippageBps), deadline,
       hookFee, hookTick, hookAddr
@@ -5320,7 +4879,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     if (bestResult.status !== 'fulfilled') {
       try {
         const fb = await quoter.buildBestSwapViaETHMulticall(
-          receiver, connectedAddress, true,
+          receiver, _connectedAddress, true,
           fromData.address, toData.address,
           amountOut, BigInt(slippageBps), deadline,
           hookFee, hookTick, hookAddr, callOpts
@@ -5801,8 +5360,8 @@ async function executeSwap() {
 
   const swapBtn = $("swapBtn");
   try {
-    if (!signer || !connectedAddress) {
-      toggleWallet();
+    if (!_signer || !_connectedAddress) {
+      connectWallet();
       return;
     }
 
@@ -5844,12 +5403,12 @@ async function executeSwap() {
 
     // ETH ↔ WETH wrap/unwrap: direct contract call, no DEX (only when sending to self)
     const resolvedAddr = getReceiver();
-    const hasCustomReceiver = receiverRaw && (isReceiverPending() || (resolvedAddr && resolvedAddr !== connectedAddress));
+    const hasCustomReceiver = receiverRaw && (isReceiverPending() || (resolvedAddr && resolvedAddr !== _connectedAddress));
     const wrapDir = !hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
     if (wrapDir) {
       const fromData = tokens[fromToken];
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
-      const wethContract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, signer);
+      const wethContract = new ethers.Contract(WETH_ADDRESS, WETH_ABI, _signer);
 
       if (wrapDir === 'wrap') {
         swapBtn.textContent = "Wrapping...";
@@ -5903,14 +5462,14 @@ async function executeSwap() {
       // Check allowance to zOrg DAO (not the router)
       const zamm = erc20Read(fromData.address);
       swapBtn.textContent = "Checking allowance...";
-      let allowance = await zamm.allowance(connectedAddress, ZORG_DAO);
+      let allowance = await zamm.allowance(_connectedAddress, ZORG_DAO);
 
       if (allowance < amountIn) {
         swapBtn.textContent = "Approving ZAMM for DAO...";
         const erc20W = new ethers.Contract(
           fromData.address,
           ERC20_APPROVE_ABI,
-          signer
+          _signer
         );
         // Reset stale non-zero allowance first (safety for non-standard tokens)
         if (allowance > 0n) {
@@ -5934,7 +5493,7 @@ async function executeSwap() {
       // Call buyShares directly on the zOrg DAO
       swapBtn.textContent = "Staking...";
       const stakeTx = await wcTransaction(
-        signer.sendTransaction({
+        _signer.sendTransaction({
           to: ZORG_DAO,
           data: quote.daoCalldata,
           value: 0n,
@@ -5971,7 +5530,7 @@ async function executeSwap() {
       // No approval needed — ragequit burns msg.sender's shares directly
       swapBtn.textContent = "Ragequitting...";
       const rqTx = await wcTransaction(
-        signer.sendTransaction({
+        _signer.sendTransaction({
           to: ZORG_DAO,
           data: quote.daoCalldata,
           value: 0n,
@@ -6013,7 +5572,7 @@ async function executeSwap() {
       // Step 1: Ragequit (burns zOrg shares, receive ZAMM 1:1)
       swapBtn.textContent = "Step 1/2: Ragequitting...";
       const rqTx = await wcTransaction(
-        signer.sendTransaction({
+        _signer.sendTransaction({
           to: ZORG_DAO,
           data: quote.ragequitData,
           value: 0n,
@@ -6035,16 +5594,16 @@ async function executeSwap() {
         let txData = freshQuote.multicall;
         const zammAddr = ZORG_PAY_TOKEN;
         const r = erc20Read(zammAddr);
-        let allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-        cacheSetAllowance(zammAddr, connectedAddress, ZROUTER_ADDRESS, allowance);
+        let allowance = await r.allowance(_connectedAddress, ZROUTER_ADDRESS);
+        cacheSetAllowance(zammAddr, _connectedAddress, ZROUTER_ADDRESS, allowance);
 
         if (allowance < amountIn) {
           let approved = false;
           // Try Permit2
-          let p2Allowance = cacheGetAllowance(zammAddr, connectedAddress, PERMIT2_ADDRESS);
+          let p2Allowance = cacheGetAllowance(zammAddr, _connectedAddress, PERMIT2_ADDRESS);
           if (p2Allowance == null) {
-            p2Allowance = await r.allowance(connectedAddress, PERMIT2_ADDRESS);
-            cacheSetAllowance(zammAddr, connectedAddress, PERMIT2_ADDRESS, p2Allowance);
+            p2Allowance = await r.allowance(_connectedAddress, PERMIT2_ADDRESS);
+            cacheSetAllowance(zammAddr, _connectedAddress, PERMIT2_ADDRESS, p2Allowance);
           }
           if (p2Allowance >= amountIn) {
             try {
@@ -6061,7 +5620,7 @@ async function executeSwap() {
           }
           if (!approved) {
             swapBtn.textContent = "Approving ZAMM...";
-            const erc20W = new ethers.Contract(zammAddr, ERC20_APPROVE_ABI, signer);
+            const erc20W = new ethers.Contract(zammAddr, ERC20_APPROVE_ABI, _signer);
             if (allowance > 0n) {
               const resetTx = await wcTransaction(erc20W.approve(ZROUTER_ADDRESS, 0), 'Reset allowance');
               await waitForTx(resetTx);
@@ -6070,13 +5629,13 @@ async function executeSwap() {
             swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
             const rc = await waitForTx(approveTx);
             if (rc.status === 0) throw new Error("Approval failed");
-            cacheSetAllowance(zammAddr, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+            cacheSetAllowance(zammAddr, _connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
           }
         }
 
         swapBtn.textContent = "Step 2/2: Swapping...";
         const swapTx = await wcTransaction(
-          signer.sendTransaction({
+          _signer.sendTransaction({
             to: ZROUTER_ADDRESS,
             data: txData,
             value: 0n,
@@ -6134,8 +5693,8 @@ async function executeSwap() {
     let tokenBal = getCachedBalance(fromData.address);
     if (tokenBal == null) {
       tokenBal = fromData.address === ZERO_ADDRESS
-        ? await provider.getBalance(connectedAddress)
-        : await erc20Read(fromData.address).balanceOf(connectedAddress);
+        ? await _walletProvider.getBalance(_connectedAddress)
+        : await erc20Read(fromData.address).balanceOf(_connectedAddress);
       setCachedBalance(fromData.address, tokenBal);
     }
     if (tokenBal < amountIn) {
@@ -6317,12 +5876,12 @@ async function executeSwap() {
     // ERC20 approval (use cache from updateBalances, fresh read only if stale)
     let approved = false;
     if (fromData.address !== ZERO_ADDRESS) {
-      let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
+      let allowance = cacheGetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS);
       if (allowance == null) {
         const r = erc20Read(fromData.address);
         swapBtn.textContent = "Checking allowance...";
-        allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-        cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+        allowance = await r.allowance(_connectedAddress, ZROUTER_ADDRESS);
+        cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, allowance);
       }
 
       if (allowance < amountIn) {
@@ -6388,8 +5947,8 @@ async function executeSwap() {
             }
             const permitTxData = buildPermitMulticall(permitInnerCalls, permitData);
             // Pre-flight: catch on-chain permit failures (e.g. InvalidShortString)
-            await provider.estimateGas({
-              from: connectedAddress,
+            await _walletProvider.estimateGas({
+              from: _connectedAddress,
               to: ZROUTER_ADDRESS,
               data: permitTxData,
               value: quote.msgValue ?? 0n,
@@ -6409,12 +5968,12 @@ async function executeSwap() {
 
         // --- Try 2: Permit2 (single tx, sign-only) ---
         if (!approved) {
-          let p2Allowance = cacheGetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS);
+          let p2Allowance = cacheGetAllowance(fromData.address, _connectedAddress, PERMIT2_ADDRESS);
           if (p2Allowance == null) {
             swapBtn.textContent = "Checking Permit2...";
             const r2 = erc20Read(fromData.address);
-            p2Allowance = await r2.allowance(connectedAddress, PERMIT2_ADDRESS);
-            cacheSetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS, p2Allowance);
+            p2Allowance = await r2.allowance(_connectedAddress, PERMIT2_ADDRESS);
+            cacheSetAllowance(fromData.address, _connectedAddress, PERMIT2_ADDRESS, p2Allowance);
           }
           // For aggregator swaps, permit2 path needs +1 wei (snwap keeps 1 wei in router).
           // Skip permit2 for full-balance swaps where the user can't spare the extra wei.
@@ -6519,7 +6078,7 @@ async function executeSwap() {
           const erc20W = new ethers.Contract(
             fromData.address,
             ERC20_APPROVE_ABI,
-            signer
+            _signer
           );
           // WBTC/USDT revert on approve(spender, newVal) when current != 0
           // Reset to zero first if there's a stale non-zero allowance
@@ -6630,7 +6189,7 @@ async function executeSwap() {
             txData = fresh.multicall;
             quote.msgValue = fresh.msgValue;
           }
-          cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+          cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
         }
       }
     }
@@ -6659,7 +6218,7 @@ async function executeSwap() {
           withRetry(() => quoteRPC.call(async (rpc) => {
             const quoter = getQuoterContract(rpc);
             return quoter.buildBestSwapViaETHMulticall(
-              ZROUTER_ADDRESS, connectedAddress, false,
+              ZROUTER_ADDRESS, _connectedAddress, false,
               fromData.address, WSTETH_ADDRESS,
               amountIn, BigInt(slippageBps), deadline,
               0, 0, ZERO_ADDRESS, { blockTag: "latest" }
@@ -6695,14 +6254,14 @@ async function executeSwap() {
             const toData = tokens[toSnap];
             const exactOutputAmt = safeParseUnits(amtStr, toData.decimals);
             return quoter.buildBestSwapViaETHMulticall(
-              ZROUTER_ADDRESS, connectedAddress, true,
+              ZROUTER_ADDRESS, _connectedAddress, true,
               fromData.address, _ppTokenOut,
               exactOutputAmt, BigInt(slippageBps), deadline,
               0, 0, ZERO_ADDRESS, { blockTag: "latest" }
             );
           }
           return quoter.buildBestSwapViaETHMulticall(
-            ZROUTER_ADDRESS, connectedAddress, false,
+            ZROUTER_ADDRESS, _connectedAddress, false,
             fromData.address, _ppTokenOut,
             amountIn, BigInt(slippageBps), deadline,
             0, 0, ZERO_ADDRESS, { blockTag: "latest" }
@@ -6729,7 +6288,7 @@ async function executeSwap() {
       swapBtn.textContent = "Deriving keys...";
       const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
       const _ppScope = ppComputeScope(ppAsset);
-      const _ppDepositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, _ppScope, ppGetDepositIndex(connectedAddress, _ppScope));
+      const _ppDepositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, _ppScope, ppGetDepositIndex(_connectedAddress, _ppScope));
       const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, _ppScope, _ppDepositIdx);
 
       // Build multicall: [permit?] + swap calls + execute(PP deposit) + sweep excess
@@ -6748,14 +6307,14 @@ async function executeSwap() {
         depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [ppTokenAddr, depositAmount, precommitment]);
         executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, depositCalldata]);
         sweepCalls = [
-          ROUTER_IFACE.encodeFunctionData('sweep', [ppTokenAddr, 0, 0, connectedAddress]),
-          ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]),
+          ROUTER_IFACE.encodeFunctionData('sweep', [ppTokenAddr, 0, 0, _connectedAddress]),
+          ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress]),
         ];
       } else {
         // ETH deposit: deposit(uint256 precommitment) payable, value=depositAmount
         depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(uint256)', [precommitment]);
         executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, depositAmount, depositCalldata]);
-        sweepCalls = [ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress])];
+        sweepCalls = [ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress])];
       }
 
       // If the approval flow embedded a permit/permit2 call in txData, extract it
@@ -6777,7 +6336,7 @@ async function executeSwap() {
       swapBtn.textContent = "Confirm in wallet...";
 
       const swapTx = await wcTransaction(
-        signer.sendTransaction({
+        _signer.sendTransaction({
           to: ZROUTER_ADDRESS,
           data: ppMulticall,
           value: ppTxValue,
@@ -6785,7 +6344,7 @@ async function executeSwap() {
         `Confirm swap & ${ppAsset} privacy deposit`
       );
       // Increment index immediately after tx submitted to prevent reuse if tab closes
-      ppSetDepositIndex(connectedAddress, _ppScope, _ppDepositIdx + 1);
+      ppSetDepositIndex(_connectedAddress, _ppScope, _ppDepositIdx + 1);
 
       // Show partial note immediately (nullifier+secret)
       const partialNote = buildPPNote(nullifier, secret, null, ppAsset);
@@ -6844,8 +6403,8 @@ async function executeSwap() {
     for (let simTry = 0; simTry < maxSimRetries; simTry++) {
       swapBtn.textContent = simTry === 0 ? "Simulating..." : "Retrying with fresh quote...";
       try {
-        estimatedGas = await provider.estimateGas({
-          from: connectedAddress,
+        estimatedGas = await _walletProvider.estimateGas({
+          from: _connectedAddress,
           to: ZROUTER_ADDRESS,
           data: txData,
           value: txValue,
@@ -6858,8 +6417,8 @@ async function executeSwap() {
           swapBtn.textContent = "Verifying route...";
           await new Promise(r => setTimeout(r, 1500));
           try {
-            estimatedGas = await provider.estimateGas({
-              from: connectedAddress,
+            estimatedGas = await _walletProvider.estimateGas({
+              from: _connectedAddress,
               to: ZROUTER_ADDRESS,
               data: txData,
               value: txValue,
@@ -6968,7 +6527,7 @@ async function executeSwap() {
     // warnings from stale RFQ orders that expire between our estimation and MetaMask's).
     const gasLimit = estimatedGas ? estimatedGas * 130n / 100n : undefined;
     const swapTx = await wcTransaction(
-      signer.sendTransaction({
+      _signer.sendTransaction({
         to: ZROUTER_ADDRESS,
         data: txData,
         value: txValue,
@@ -7301,7 +6860,7 @@ function openTokenModal(side) {
   document.body.classList.add('modal-open');
   if (searchInput) searchInput.focus();
   // Batch-fetch all token balances via Multicall3 (single RPC)
-  if (connectedAddress) fetchModalBalances();
+  if (_connectedAddress) fetchModalBalances();
 }
 
 function closeTokenModal() {
@@ -7394,7 +6953,7 @@ async function addCustomToken() {
   if (address === ZERO_ADDRESS) { showStatus("Zero address is not a valid ERC-20", "error"); return; }
 
   try {
-    const rpc = provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
+    const rpc = _walletProvider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
     try {
       const code = await rpc.getCode(address);
       if (!code || code === "0x") { showStatus("That address has no contract code on Ethereum", "error"); return; }
@@ -7589,7 +7148,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!_dlTo && _dlToRaw.startsWith('0x') && _dlToRaw.length === 42) {
     (async () => {
       try {
-        const rpc = provider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
+        const rpc = _walletProvider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
         const erc20 = new ethers.Contract(_dlToRaw, ["function symbol() view returns (string)", "function decimals() view returns (uint8)"], rpc);
         const [sym, dec] = await Promise.all([erc20.symbol(), erc20.decimals()]);
         const symbol = String(sym || '').trim().slice(0, 24) || 'TKN';
@@ -7634,49 +7193,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Swap button click
 $("swapBtn").addEventListener("click", () => {
-  if (!connectedAddress) { showWalletModal(); return; }
+  if (!_connectedAddress) { connectWallet(); return; }
   executeSwap();
 });
 
-// ---- Auto-reconnect (non-blocking) ----
-window.addEventListener("load", () => {
-  const savedWallet = localStorage.getItem('zfi_wallet');
-  if (!savedWallet) return;
-  setText('walletBtn', '...');
-  // Fire-and-forget: don't block page interactivity
-  setTimeout(async () => {
-    try {
-      window.dispatchEvent(new Event('eip6963:requestProvider'));
-      await new Promise(r => setTimeout(r, 300));
-      // Silent check: only auto-connect if wallet already unlocked
-      let probe;
-      if (savedWallet.startsWith('eip6963_')) {
-        const uuid = savedWallet.replace('eip6963_', '');
-        probe = eip6963Providers.get(uuid)?.provider;
-        if (!probe) {
-          const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
-          if (savedName) {
-            for (const [, { info, provider }] of eip6963Providers) {
-              if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
-            }
-          }
-        }
-      } else if (savedWallet !== 'walletconnect') {
-        probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
-      }
-      if (probe) {
-        const accts = await probe.request({ method: 'eth_accounts' });
-        if (!accts || accts.length === 0) {
-          setText('walletBtn', 'connect');
-          return;
-        }
-      }
-      await connectWithWallet(savedWallet);
-    } catch (e) {
-      console.error("Auto-reconnect failed:", e);
-      setText('walletBtn', 'connect');
-    }
-  }, 100);
+walletInit({
+  appName: 'zFi',
+  onConnect: [() => {
+    updateBalances();
+    const preAmt = _inputMode === 'exactOut' ? $('toAmount')?.value?.trim() : $('fromAmount')?.value?.trim();
+    if (preAmt) handleAmountChange();
+    if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
+    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); }
+  }],
+  onDisconnect: [() => {
+    setText('swapBtn', 'Connect Wallet');
+    setDisabled('swapBtn', false);
+    setText('fromBalance', 'Balance: --');
+    setText('toBalance', 'Balance: --');
+    setShown('quoteInfo', false);
+    stopQuoteRefresh();
+    $('toAmount').value = '';
+    _erc20Read.clear();
+    _balanceCache.clear();
+    _allowCache.clear();
+    _ppMasterKeys = null;
+    updatePPButton(); setText('ppBalance', '');
+  }]
 });
 
 const PP_ENTRYPOINT = "0x6818809eefce719e480a7526d76bd3e561526b46";
@@ -7704,7 +7247,7 @@ const SNARK_FIELD = 218882428718392752222464057452572750885483644004160343436982
 
 let _ppMasterKeys = null; // { masterNullifier, masterSecret, address }
 
-async function ppDeriveWalletSeed(signer, address) {
+async function ppDeriveWalletSeed(_signer, address) {
   const domain = { name: 'Privacy Pools', version: '1' };
   const types = {
     DeriveSeed: [
@@ -7718,7 +7261,7 @@ async function ppDeriveWalletSeed(signer, address) {
     context: 'privacy-pools/wallet-seed:v2',
     addressHash: ethers.keccak256(address),
   };
-  const sig = await signer.signTypedData(domain, types, message);
+  const sig = await _signer.signTypedData(domain, types, message);
   const sigBytes = ethers.getBytes(sig);
   const r = sigBytes.slice(0, 32);
 
@@ -7778,10 +7321,10 @@ function ppSetWithdrawalIndex(address, label, index) {
 }
 
 async function ppEnsureMasterKeys() {
-  if (_ppMasterKeys && _ppMasterKeys.address === connectedAddress) return _ppMasterKeys;
-  const mnemonic = await ppDeriveWalletSeed(signer, connectedAddress);
+  if (_ppMasterKeys && _ppMasterKeys.address === _connectedAddress) return _ppMasterKeys;
+  const mnemonic = await ppDeriveWalletSeed(_signer, _connectedAddress);
   const keys = ppDeriveMasterKeys(mnemonic);
-  _ppMasterKeys = { ...keys, address: connectedAddress };
+  _ppMasterKeys = { ...keys, address: _connectedAddress };
   return _ppMasterKeys;
 }
 
@@ -8232,20 +7775,20 @@ function sendUpdateTokenDisplay() {
 
 async function sendUpdateBalance() {
   const balEl = $('sendBalanceText');
-  if (!connectedAddress) { balEl.textContent = 'Balance: --'; return; }
+  if (!_connectedAddress) { balEl.textContent = 'Balance: --'; return; }
   const sym = _sendToken;
   const t = tokens[sym];
   if (!t) { balEl.textContent = 'Balance: --'; return; }
   try {
     const rpc = await quoteRPC.call(r => r);
     if (t.address === ZERO_ADDRESS) {
-      const bal = await rpc.getBalance(connectedAddress);
+      const bal = await rpc.getBalance(_connectedAddress);
       _sendTokenBal = bal;
       _sendTokenDec = 18;
       balEl.textContent = 'Balance: ' + (+ethers.formatEther(bal)).toFixed(5) + ' ' + sym;
     } else {
       const c = new ethers.Contract(t.address, ERC20_TRANSFER_ABI, rpc);
-      const [bal, dec] = await Promise.all([c.balanceOf(connectedAddress), c.decimals().catch(() => t.decimals || 18)]);
+      const [bal, dec] = await Promise.all([c.balanceOf(_connectedAddress), c.decimals().catch(() => t.decimals || 18)]);
       _sendTokenBal = bal;
       _sendTokenDec = Number(dec);
       balEl.textContent = 'Balance: ' + (+ethers.formatUnits(bal, _sendTokenDec)).toFixed(5) + ' ' + sym;
@@ -8264,7 +7807,7 @@ function sendSetMax() {
 
 function sendUpdateButton() {
   const btn = $('sendBtn');
-  if (!connectedAddress) { btn.disabled = true; btn.textContent = 'Connect Wallet'; return; }
+  if (!_connectedAddress) { btn.disabled = true; btn.textContent = 'Connect Wallet'; return; }
   btn.disabled = false;
   btn.textContent = $('sendUnlockTime').value ? 'Create Timelock' : 'Send';
 }
@@ -8330,7 +7873,7 @@ async function sendResolveName(name) {
 }
 
 async function doSendOrLock() {
-  if (!connectedAddress) { toggleWallet(); return; }
+  if (!_connectedAddress) { connectWallet(); return; }
   const sym = _sendToken;
   const amtStr = $('sendAmount').value;
   const toRaw = $('sendTo').value.trim();
@@ -8362,14 +7905,14 @@ async function doSendOrLock() {
         statusEl.className = 'status show error';
         return;
       }
-      const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
+      const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, _signer);
 
       // Approve ERC20 if needed
       if (!isETH) {
         statusEl.textContent = 'Checking approval...';
         statusEl.className = 'status show';
-        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
-        const allowance = await erc20.allowance(connectedAddress, COOKBOOK_ADDRESS);
+        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, _signer);
+        const allowance = await erc20.allowance(_connectedAddress, COOKBOOK_ADDRESS);
         if (allowance < amount) {
           statusEl.textContent = 'Approving token...'; statusEl.className = 'status show';
           const approveTx = await erc20.approve(COOKBOOK_ADDRESS, ethers.MaxUint256);
@@ -8397,9 +7940,9 @@ async function doSendOrLock() {
       statusEl.className = 'status show';
       let tx;
       if (isETH) {
-        tx = await signer.sendTransaction({ to: toAddr, value: amount });
+        tx = await _signer.sendTransaction({ to: toAddr, value: amount });
       } else {
-        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, signer);
+        const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, _signer);
         tx = await erc20.transfer(toAddr, amount);
       }
       statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
@@ -8419,7 +7962,7 @@ async function doSendOrLock() {
 // ---- Timelocks ----
 async function sendLoadTimelocks() {
   const el = $('timelockList');
-  if (!connectedAddress) { el.textContent = 'Connect wallet to view timelocks'; return; }
+  if (!_connectedAddress) { el.textContent = 'Connect wallet to view timelocks'; return; }
   el.innerHTML = '<div style="color:var(--fg-dim);font-size:12px">Loading...</div>';
   try {
     const res = await fetch(INDEXER_BASE + "/graphql", {
@@ -8432,7 +7975,7 @@ async function sendLoadTimelocks() {
             lockupReceived { items { id token coinId sender to amount unlockTime createdAt txHash coin { name symbol decimals } } }
           }
         }`,
-        variables: { address: connectedAddress }
+        variables: { address: _connectedAddress }
       })
     });
     const { data } = await res.json();
@@ -8507,11 +8050,11 @@ async function sendLoadTimelocks() {
 }
 
 async function claimTimelock(token, to, coinId, amount, unlockTime, btn) {
-  if (!signer) { toggleWallet(); return; }
+  if (!_signer) { connectWallet(); return; }
   btn.disabled = true;
   btn.textContent = 'Claiming...';
   try {
-    const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, signer);
+    const cookbook = new ethers.Contract(COOKBOOK_ADDRESS, COOKBOOK_LOCK_ABI, _signer);
     const tx = await cookbook.unlock(token, to, BigInt(coinId), BigInt(amount), BigInt(unlockTime));
     btn.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>';
     await tx.wait();
@@ -8598,7 +8141,7 @@ async function loadPPConfig() {
 let _ppBalanceRaw = null;
 
 function updatePPBalance() {
-  if (!connectedAddress) { setText('ppBalance', ''); _ppBalanceRaw = null; return; }
+  if (!_connectedAddress) { setText('ppBalance', ''); _ppBalanceRaw = null; return; }
   const asset = _ppSelectedAsset;
   // In zap mode, user sends ETH (balance shown is ETH)
   const balAsset = _ppZapMode ? 'ETH' : asset;
@@ -8614,7 +8157,7 @@ function updatePPBalance() {
 }
 
 function setPPPercentBalance(pct) {
-  if (!connectedAddress) { showWalletModal(); return; }
+  if (!_connectedAddress) { connectWallet(); return; }
   if (_ppBalanceRaw == null) return;
   const balAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
   const amount = _ppBalanceRaw * BigInt(pct) / 100n;
@@ -8658,7 +8201,7 @@ function ppRequestZapEstimate() {
         quoteRPC.call(async (rpc) => {
           const quoter = getQuoterContract(rpc);
           return quoter.buildBestSwapViaETHMulticall(
-            ZROUTER_ADDRESS, connectedAddress || ZERO_ADDRESS, false,
+            ZROUTER_ADDRESS, _connectedAddress || ZERO_ADDRESS, false,
             ZERO_ADDRESS, WSTETH_ADDRESS,
             wei, 50n, deadline,
             0, 0, ZERO_ADDRESS, { blockTag: "latest" }
@@ -8689,10 +8232,10 @@ function updatePPButton() {
   const btn = $('ppDepositBtn');
   if (!btn) return;
   ppRenderDepositRoundedSuggestions();
-  if (!connectedAddress) {
+  if (!_connectedAddress) {
     setText(btn, 'Connect Wallet');
     setDisabled(btn, false);
-    btn.onclick = () => showWalletModal();
+    btn.onclick = () => connectWallet();
     return;
   }
   const amt = $('ppAmount')?.value;
@@ -8744,11 +8287,11 @@ async function ppDeposit() {
     // Zap mode: ETH → wstETH → PP deposit in one tx
     if (_ppZapMode) {
       const zapCfg = _ppConfigWstETH;
-      if (!signer) { showWalletModal(); return; }
+      if (!_signer) { connectWallet(); return; }
       // Balance pre-check (ETH for zap)
       try {
         const rpcBal = await quoteRPC.call(r => r);
-        const bal = await rpcBal.getBalance(connectedAddress);
+        const bal = await rpcBal.getBalance(_connectedAddress);
         if (bal < amount) { showStatus('Insufficient ETH — need ' + fmt(ethers.formatEther(amount)) + ' ETH', 'error'); return; }
       } catch (_) {}
       setText(btn, 'Quoting ETH \u2192 wstETH...');
@@ -8765,7 +8308,7 @@ async function ppDeposit() {
         withRetry(() => quoteRPC.call(async (rpc) => {
           const quoter = getQuoterContract(rpc);
           return quoter.buildBestSwapViaETHMulticall(
-            ZROUTER_ADDRESS, connectedAddress, false,
+            ZROUTER_ADDRESS, _connectedAddress, false,
             ZERO_ADDRESS, WSTETH_ADDRESS,
             amount, BigInt(slippageBps), deadline,
             0, 0, ZERO_ADDRESS, { blockTag: "latest" }
@@ -8806,23 +8349,23 @@ async function ppDeposit() {
       setText(btn, 'Deriving keys...');
       const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
       const scope = ppComputeScope('wstETH');
-      const depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, ppGetDepositIndex(connectedAddress, scope));
+      const depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, ppGetDepositIndex(_connectedAddress, scope));
       const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx);
 
       const depositCalldata = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [WSTETH_ADDRESS, depositAmount, precommitment]);
       const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, depositCalldata]);
       const sweepCalls = [
-        ROUTER_IFACE.encodeFunctionData('sweep', [WSTETH_ADDRESS, 0, 0, connectedAddress]),
-        ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, connectedAddress]),
+        ROUTER_IFACE.encodeFunctionData('sweep', [WSTETH_ADDRESS, 0, 0, _connectedAddress]),
+        ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress]),
       ];
       const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...zapSwapCalls, executeCall, ...sweepCalls]]);
 
       setText(btn, 'Confirm in wallet...');
       const tx = await wcTransaction(
-        signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: amount }),
+        _signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: amount }),
         'Confirm ETH \u2192 wstETH \u2192 Privacy Pool deposit'
       );
-      ppSetDepositIndex(connectedAddress, scope, depositIdx + 1);
+      ppSetDepositIndex(_connectedAddress, scope, depositIdx + 1);
 
       const zapAsset = 'wstETH';
       const partialNote = buildPPNote(nullifier, secret, null, zapAsset);
@@ -8871,7 +8414,7 @@ async function ppDeposit() {
       return;
     }
 
-    if (!signer) { showWalletModal(); return; }
+    if (!_signer) { connectWallet(); return; }
 
     // Balance pre-check
     try {
@@ -8879,11 +8422,11 @@ async function ppDeposit() {
       if (isERC20PP) {
         const tokenAddr = isWSTETH ? WSTETH_ADDRESS : BOLD_ADDRESS;
         const balIface = new ethers.Interface(['function balanceOf(address) view returns (uint256)']);
-        const balRes = await rpcBal.call({ to: tokenAddr, data: balIface.encodeFunctionData('balanceOf', [connectedAddress]) });
+        const balRes = await rpcBal.call({ to: tokenAddr, data: balIface.encodeFunctionData('balanceOf', [_connectedAddress]) });
         const bal = balIface.decodeFunctionResult('balanceOf', balRes)[0];
         if (bal < amount) { showStatus('Insufficient ' + _ppSelectedAsset + ' balance', 'error'); return; }
       } else {
-        const bal = await rpcBal.getBalance(connectedAddress);
+        const bal = await rpcBal.getBalance(_connectedAddress);
         if (bal < amount) { showStatus('Insufficient ETH — need ' + fmt(ethers.formatEther(amount)) + ' ETH', 'error'); return; }
       }
     } catch (_) {}
@@ -8893,7 +8436,7 @@ async function ppDeposit() {
 
     const { masterNullifier, masterSecret } = await ppEnsureMasterKeys();
     const scope = ppComputeScope(_ppSelectedAsset);
-    const depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, ppGetDepositIndex(connectedAddress, scope));
+    const depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, ppGetDepositIndex(_connectedAddress, scope));
     const { nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx);
 
     let tx;
@@ -8905,7 +8448,7 @@ async function ppDeposit() {
       const ppDepositData = PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [tokenAddr, amount, precommitment]);
       const routerPull = ROUTER_IFACE.encodeFunctionData('deposit', [tokenAddr, 0, amount]);
       const executeCall = ROUTER_IFACE.encodeFunctionData('execute', [PP_ENTRYPOINT, 0, ppDepositData]);
-      const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [tokenAddr, 0, 0, connectedAddress]);
+      const sweepCall = ROUTER_IFACE.encodeFunctionData('sweep', [tokenAddr, 0, 0, _connectedAddress]);
 
       let permitPrefix = [];
       let approved = false;
@@ -8913,7 +8456,7 @@ async function ppDeposit() {
       // Check existing router allowance
       const rpc = await quoteRPC.call(r => r);
       const tokenRead = new ethers.Contract(tokenAddr, ['function allowance(address,address) view returns (uint256)'], rpc);
-      const routerAllowance = await tokenRead.allowance(connectedAddress, ZROUTER_ADDRESS);
+      const routerAllowance = await tokenRead.allowance(_connectedAddress, ZROUTER_ADDRESS);
       if (routerAllowance >= amount) approved = true;
 
       // Try EIP-2612 permit (gasless signature, single tx)
@@ -8936,13 +8479,13 @@ async function ppDeposit() {
       // Try Permit2 fallback
       if (!approved) {
         try {
-          const p2Allowance = cacheGetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS);
+          const p2Allowance = cacheGetAllowance(tokenAddr, _connectedAddress, PERMIT2_ADDRESS);
           if (p2Allowance == null || p2Allowance < amount) {
             setText(btn, `Approve ${tokenLabel} for Permit2...`);
-            const erc20W = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, signer);
+            const erc20W = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, _signer);
             const p2ApproveTx = await wcTransaction(erc20W.approve(PERMIT2_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} for Permit2`);
             await waitForTx(p2ApproveTx);
-            cacheSetAllowance(tokenAddr, connectedAddress, PERMIT2_ADDRESS, ethers.MaxUint256);
+            cacheSetAllowance(tokenAddr, _connectedAddress, PERMIT2_ADDRESS, ethers.MaxUint256);
           }
           setText(btn, 'Sign Permit2...');
           const permit2Data = await signPermit2(tokenAddr, amount);
@@ -8958,7 +8501,7 @@ async function ppDeposit() {
       // Fallback: traditional approve (separate tx)
       if (!approved) {
         setText(btn, `Approve ${tokenLabel}...`);
-        const tokenW = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, signer);
+        const tokenW = new ethers.Contract(tokenAddr, ERC20_APPROVE_ABI, _signer);
         const approveTx = await wcTransaction(tokenW.approve(ZROUTER_ADDRESS, ethers.MaxUint256), `Approve ${tokenLabel} spending`);
         await waitForTx(approveTx);
       }
@@ -8975,11 +8518,11 @@ async function ppDeposit() {
       setText(btn, 'Confirm in wallet...');
       const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, routerPull, executeCall, sweepCall]]);
       tx = await wcTransaction(
-        signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: 0n }),
+        _signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: 0n }),
         `Confirm ${tokenLabel} Privacy Pool deposit`
       );
     } else {
-      const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, signer);
+      const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, _signer);
       setText(btn, 'Confirm in wallet...');
       tx = await wcTransaction(
         ep['deposit(uint256)'](precommitment, { value: amount }),
@@ -8987,7 +8530,7 @@ async function ppDeposit() {
       );
     }
     // Increment index immediately after tx submitted (before confirmation) to prevent reuse if tab closes
-    ppSetDepositIndex(connectedAddress, scope, depositIdx + 1);
+    ppSetDepositIndex(_connectedAddress, scope, depositIdx + 1);
 
     // Show partial note immediately (nullifier+secret) — user must save before anything else
     const partialNote = buildPPNote(nullifier, secret, null, _ppSelectedAsset);
@@ -9694,7 +9237,7 @@ async function ppwWithdraw() {
     if (withdrawnValue > value) { showStatus('Withdraw amount exceeds deposit value', 'error'); return; }
     if (withdrawnValue === 0n) { showStatus('Withdraw amount must be > 0', 'error'); return; }
     const isPartialRequested = withdrawnValue < value;
-    if (isPartialRequested && (!signer || !connectedAddress)) {
+    if (isPartialRequested && (!_signer || !_connectedAddress)) {
       showStatus('Partial withdrawals require a connected wallet for deterministic change-note derivation.', 'error');
       return;
     }
@@ -9707,14 +9250,14 @@ async function ppwWithdraw() {
       if (customRecipient && !ethers.isAddress(customRecipient)) { showStatus('Invalid recipient address.', 'error'); return; }
     } else {
       // Direct mode: recipient must be connected wallet
-      if (customRecipient && customRecipient.toLowerCase() !== connectedAddress?.toLowerCase()) {
+      if (customRecipient && customRecipient.toLowerCase() !== _connectedAddress?.toLowerCase()) {
         showStatus('Direct withdrawal requires recipient = connected wallet. Switch to Relay mode for custom recipients.', 'error');
         return;
       }
     }
-    const recipient = isRelayMode ? (customRecipient ? ethers.getAddress(customRecipient) : connectedAddress) : connectedAddress;
+    const recipient = isRelayMode ? (customRecipient ? ethers.getAddress(customRecipient) : _connectedAddress) : _connectedAddress;
     if (!recipient) { showStatus('Connect wallet first', 'error'); return; }
-    if (!isRelayMode && !signer) { showWalletModal(); return; }
+    if (!isRelayMode && !_signer) { connectWallet(); return; }
 
     log('Validating inputs...');
 
@@ -9989,10 +9532,10 @@ async function ppwWithdraw() {
     const isPartial = withdrawnValue < value;
     const changeValue = value - withdrawnValue;
     let newNullifier, newSecret;
-    if (isPartial && signer && connectedAddress) {
+    if (isPartial && _signer && _connectedAddress) {
       // H-4: Use label-based derivation for change commitments (SDK-compatible)
       const mk = await ppEnsureMasterKeys();
-      const changeIdx = ppGetWithdrawalIndex(connectedAddress, label.toString());
+      const changeIdx = ppGetWithdrawalIndex(_connectedAddress, label.toString());
       const changeKeys = ppDeriveWithdrawalKeys(mk.masterNullifier, mk.masterSecret, label, changeIdx);
       newNullifier = changeKeys.nullifier;
       newSecret = changeKeys.secret;
@@ -10165,7 +9708,7 @@ async function ppwWithdraw() {
       } catch (relayErr) {
         // PP-03: Offer self-submit fallback with explicit cost warning
         log('<b>Relayer submission failed:</b> ' + escText(relayErr.message));
-        if (signer) {
+        if (_signer) {
           if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit on-chain, but you will pay gas AND the relay fee (' + (quotedFeeBPS || '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
             showStatus('Relay failed. Proof data shown below for manual submission.', 'error');
             setShown('ppwResult', true);
@@ -10174,7 +9717,7 @@ async function ppwWithdraw() {
           }
           try {
             log('Self-submitting via entrypoint contract...');
-            const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, signer);
+            const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, _signer);
             const fallbackTx = await wcTransaction(
               ep.relay([withdrawalProcessooor, withdrawalData], [pA, pB, pC, pubSigs], SCOPE),
               'Confirm relay fallback via entrypoint'
@@ -10220,7 +9763,7 @@ async function ppwWithdraw() {
     } else {
       // Direct withdrawal to pool contract
       log('Submitting withdrawal transaction...');
-      const poolSigner = new ethers.Contract(poolAddress, PP_POOL_ABI, signer);
+      const poolSigner = new ethers.Contract(poolAddress, PP_POOL_ABI, _signer);
       const tx = await wcTransaction(
         poolSigner.withdraw([recipient, withdrawalData], [pA, pB, pC, pubSigs]),
         'Confirm Privacy Pool withdrawal'
@@ -10292,7 +9835,7 @@ async function ppwWithdraw() {
           alert("CRITICAL: Could not save change note to browser storage. Copy it NOW — you need it to withdraw remaining funds.");
         }
         // H-4/M-7: Use withdrawal-specific index counter keyed by label
-        if (connectedAddress) ppSetWithdrawalIndex(connectedAddress, label.toString(), ppGetWithdrawalIndex(connectedAddress, label.toString()) + 1);
+        if (_connectedAddress) ppSetWithdrawalIndex(_connectedAddress, label.toString(), ppGetWithdrawalIndex(_connectedAddress, label.toString()) + 1);
         renderPPNotes();
         log('<b style="color:orange">CHANGE NOTE SAVED</b> — ' + fmt(ppFormatAmountWei(changeValue, wAsset)) + ' ' + assetUnit + ' remaining. The change note has been saved to your browser. <b>Copy and back it up now</b> — losing it means losing the remaining funds.');
         // Also show in result textarea for easy copying + change note actions
@@ -10802,7 +10345,7 @@ const COIN_IFACES = {
 
 async function coinLaunch() {
   if (_coinLaunching) return;
-  if (!signer) { toggleWallet(); return; }
+  if (!_signer) { connectWallet(); return; }
 
   const name = $('coinName').value.trim();
   const symbol = $('coinSymbol').value.trim();
@@ -10823,7 +10366,7 @@ async function coinLaunch() {
   setDisabled('coinLaunchBtn', true);
 
   try {
-    const address = await signer.getAddress();
+    const address = await _signer.getAddress();
     coinShowStatus('Preparing coin launch...');
 
     const c = _coinCfg;
@@ -10910,7 +10453,7 @@ async function coinLaunch() {
     };
 
     coinShowStatus('Please confirm the transaction in your wallet...');
-    const daico = new ethers.Contract(COIN_DAICO, COIN_DAICO_ABI, signer);
+    const daico = new ethers.Contract(COIN_DAICO, COIN_DAICO_ABI, _signer);
     let tx;
 
     if (_coinLaunchType === 'simple') {

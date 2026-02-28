@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>DAO</title>
+<link rel="stylesheet" href="../wallet.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <script>
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
@@ -126,18 +127,6 @@ button.secondary {
 }
 button.secondary:hover { background: var(--surface-hover); }
 
-/* Wallet */
-.wallet {
-  position: fixed;
-  top: max(20px, env(safe-area-inset-top, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  z-index: 100;
-}
-.wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
-
 /* Dark toggle */
 .dark-toggle {
   position:fixed;
@@ -161,11 +150,6 @@ button.secondary:hover { background: var(--surface-hover); }
 .z-nav-menu .z-nav-sep { border-top:1px solid var(--border); margin:6px 0; }
 
 /* Dark mode — semantic color overrides (elements not using CSS vars) */
-.dark .wallet-option:hover { background:var(--btn-bg); color:var(--btn-fg); }
-.dark .wallet-connected-info { background:var(--surface); border-color:var(--border-muted); }
-.dark .wallet-connected-addr { color:var(--fg-dim); }
-.dark .wallet-disconnect { background:var(--surface); border-color:var(--border-muted); }
-.dark .wallet-status.installed { color:var(--green); }
 .dark .proposal-state.active { border-color:var(--green); background:var(--status-success); }
 .dark .proposal-state.succeeded { border-color:var(--green); background:var(--status-success); }
 .dark .proposal-state.queued { border-color:var(--amber); background:var(--status-warning); }
@@ -295,36 +279,6 @@ body.modal-open { overflow: hidden; }
 }
 .wallet-modal-close:hover, .modal-close:hover { opacity: 1; }
 .modal-body, .wallet-modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-
-/* Wallet modal options */
-.wallet-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--modal-bg);
-  border: 1px solid var(--modal-border);
-  cursor: pointer;
-  margin-bottom: 8px;
-  transition: background 0.15s, color 0.15s;
-}
-.wallet-option:hover { background: var(--btn-bg); color: var(--btn-fg); }
-.wallet-option:active { opacity: 0.7; }
-.wallet-icon { font-size: 1.5rem; }
-.wallet-name { font-weight: 600; }
-.wallet-status { font-size: 11px; color: var(--fg-dim); }
-.wallet-status.installed { color: var(--green); }
-.wallet-option.disconnect {
-  border-color: var(--red);
-  color: var(--red);
-  justify-content: center;
-}
-.wallet-option.disconnect:hover { background: var(--red); color: var(--btn-fg); }
-.wallet-connected-info {
-  padding: 1rem; background: var(--surface); border: 1px solid var(--border-muted); margin-bottom: 1rem;
-}
-.wallet-connected-addr { color: var(--fg); font-size: 0.9rem; word-break: break-all; }
-.wallet-disconnect { background: var(--surface); border-color: var(--border-muted); justify-content: center; }
 
 /* Info box (replaces purple tint boxes) */
 .info-box {
@@ -1838,8 +1792,6 @@ body.modal-open { overflow: hidden; }
   .z-nav { top: 14px; left: 14px; }
   .z-nav-btn { padding: 4px; margin: -4px; }
   .z-nav-menu a { padding: 10px 16px; }
-  .wallet { top: 16px; right: 16px; }
-  .wallet button { padding: 10px 14px; font-size: 11px; }
   h1 { font-size: 13px; margin-bottom: 16px; }
   .dao-tiles { grid-template-columns: 1fr; }
   .dao-view-toggle { width: 100%; }
@@ -1849,7 +1801,6 @@ body.modal-open { overflow: hidden; }
   .nft-modal-attributes { grid-template-columns: 1fr; }
   .wallet-modal-overlay, .modal-overlay { padding: 0; padding-top: 0; align-items: flex-end; }
   .modal, .wallet-modal { max-width: 100%; margin: 0; border-left: none; border-right: none; border-bottom: none; max-height: 85vh; max-height: 85dvh; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-  .wallet-option { padding: 14px 16px; }
   button { padding: 14px 20px; }
   .member-item {
     grid-template-columns: 1fr 1fr;
@@ -1908,11 +1859,6 @@ body.modal-open { overflow: hidden; }
 <!-- Toast Notifications -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- Wallet & Network -->
-<div class="wallet">
-  <button id="walletBtn" onclick="connectWallet()">connect</button>
-</div>
-
 <h1>DAO</h1>
 
 <div class="nav-links">
@@ -1925,17 +1871,6 @@ body.modal-open { overflow: hidden; }
 
 <div id="fireHero">
   <canvas id="fireCanvas"></canvas>
-</div>
-
-<!-- Wallet Selection Modal -->
-<div class="wallet-modal-overlay" id="walletModal">
-  <div class="wallet-modal">
-    <div class="wallet-modal-header">
-      <h2 class="wallet-modal-title">Connect Wallet</h2>
-      <button class="wallet-modal-close" onclick="closeWalletModal()">&times;</button>
-    </div>
-    <div id="walletOptions"></div>
-  </div>
 </div>
 
 <!-- TRANSFER RECEIPT MODAL -->
@@ -3019,6 +2954,7 @@ body.modal-open { overflow: hidden; }
 
     <script src="../ethers.min.js"></script>
     <script src="../walletconnect.min.js"></script>
+    <script src="../wallet.js"></script>
     <!-- Web3 Integration Script -->
     <script>
       function isDark() { return document.documentElement.classList.contains('dark'); }
@@ -3047,7 +2983,6 @@ body.modal-open { overflow: hidden; }
           this.daoAddressText = document.getElementById('daoAddressText');
           this.proposalsList = document.getElementById('proposalsList');
           this.chatroomMessages = document.getElementById('chatroomMessages');
-          this.walletModal = document.getElementById('walletModal');
           this.nftModal = document.getElementById('nftModal');
           this.purchaseModal = document.getElementById('purchaseModal');
           this.ragequitModal = document.getElementById('ragequitModal');
@@ -4973,9 +4908,9 @@ body.modal-open { overflow: hidden; }
         const network = getNetwork();
 
         // Try connected wallet provider first (if not WalletConnect - its RPCs are unreliable)
-        if (provider && !walletConnectProvider) {
+        if (_walletProvider && !_isWalletConnect) {
           try {
-            return await fn(provider);
+            return await fn(_walletProvider);
           } catch (e) {
             logger.warn('Connected provider failed, trying public RPCs:', e.message);
           }
@@ -4997,19 +4932,13 @@ body.modal-open { overflow: hidden; }
 
       // Get transaction overrides for WalletConnect (skips unreliable local gas estimation)
       function getWalletConnectTxOverrides(baseOptions = {}) {
-        if (walletConnectProvider) {
+        if (_isWalletConnect) {
           return { ...baseOptions, gasLimit: 1_000_000n };
         }
         return baseOptions;
       }
 
       let readOnlyProvider = null;
-      let provider = null;
-      let signer = null;
-      let connectedWallet = null;
-      let connectedAddress = null;
-      let connectedWalletProvider = null; // Raw wallet provider for network switching
-      let walletConnectProvider = null; // WalletConnect provider instance
       let userDAOs = [];
       let allDAOs = [];
       let allDAOsLoaded = false; // Track if All DAOs gallery has been loaded
@@ -5019,10 +4948,6 @@ body.modal-open { overflow: hidden; }
       let currentDAICO = null; // Cached DAICO data (sales, tap) for current DAO
       let currentDaoTributes = [];
       let tributeRefreshTimestamp = 0;
-
-      // Connection state management
-      let isConnecting = false;
-      let eip6963Providers = new Map();
 
       // Transaction state management (prevent double-submission race conditions)
       let isSendingMessage = false;
@@ -5056,7 +4981,7 @@ body.modal-open { overflow: hidden; }
             const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
             return await ns.reverseResolve(address);
           }),
-          provider ? provider.lookupAddress(address) : Promise.resolve(null)
+          _walletProvider ? _walletProvider.lookupAddress(address) : Promise.resolve(null)
         ]);
 
         if (weiResult.status === 'fulfilled' && weiResult.value) {
@@ -5069,9 +4994,6 @@ body.modal-open { overflow: hidden; }
         nameCache.set(key, { name: resolvedName, timestamp: now });
         return resolvedName;
       }
-
-      // Event listener cleanup
-      let walletEventHandlers = null;
 
       // Utility function to check if error is user rejection
       function isUserRejection(error) {
@@ -5109,602 +5031,9 @@ body.modal-open { overflow: hidden; }
         return false;
       }
 
-      // Reliable multi-provider detection
-      function findProvider(checkFn) {
-        if (window.ethereum?.providers?.length) {
-          for (const p of window.ethereum.providers) {
-            if (checkFn(p)) return p;
-          }
-        }
-        if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
-        return null;
-      }
+      // (wallet functions moved to wallet.js)
 
-      // Wallet detection configuration
-      const WALLET_CONFIG = {
-        metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
-        coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
-        rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
-        rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
-        walletconnect: { name: 'WalletConnect', icon: '📱' }
-      };
 
-      // EIP-6963: Multi-injector wallet detection
-      function initEIP6963() {
-        if (typeof window === 'undefined') return;
-
-        window.addEventListener('eip6963:announceProvider', (event) => {
-          const { info, provider } = event.detail;
-          eip6963Providers.set(info.uuid, { info, provider });
-        });
-
-        window.dispatchEvent(new Event('eip6963:requestProvider'));
-      }
-
-      function detectWallets() {
-        const detected = [];
-        const seenNames = new Set();
-
-        // First, detect legacy injected wallets (skip walletconnect - handled separately below)
-        for (const [key, wallet] of Object.entries(WALLET_CONFIG)) {
-          if (key === 'walletconnect') continue;
-          if (wallet.detect()) {
-            detected.push({ key, ...wallet });
-            seenNames.add(wallet.name.toLowerCase());
-          }
-        }
-
-        // Then, add EIP-6963 detected wallets that weren't already found
-        for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
-          const nameLower = info.name.toLowerCase();
-          if (!seenNames.has(nameLower)) {
-            // Sanitize wallet metadata to prevent XSS from malicious wallet extensions
-            const safeName = escapeHtml(info.name);
-            const safeIconUrl = sanitizeUrl(info.icon);
-            const safeIcon = safeIconUrl ? `<img src="${escapeHtml(safeIconUrl)}" style="width: 1.2rem; height: 1.2rem;" alt="${safeName}"/>` : '🔌';
-
-            detected.push({
-              key: `eip6963_${uuid}`,
-              name: safeName,
-              icon: safeIcon,
-              detect: () => true,
-              getProvider: () => provider,
-              isEIP6963: true
-            });
-            seenNames.add(nameLower);
-          }
-        }
-
-        // Always add WalletConnect as an option (for mobile QR scanning)
-        const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
-        if (wcModule?.EthereumProvider) {
-          detected.push({
-            key: 'walletconnect',
-            name: 'WalletConnect',
-            icon: '📱',
-            isWalletConnect: true
-          });
-        }
-
-        // Also detect via window.ethereum.providers (legacy multi-provider, like coin page does)
-        if (window.ethereum?.providers?.length) {
-          for (let i = 0; i < window.ethereum.providers.length; i++) {
-            const p = window.ethereum.providers[i];
-            const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
-            if (name && !seenNames.has(name.toLowerCase())) {
-              detected.push({ key: `provider_${i}`, name, icon: '🔗', detect: () => true, getProvider: () => p });
-              seenNames.add(name.toLowerCase());
-            }
-          }
-        }
-
-        // Fallback: generic injected wallet
-        if (detected.length === 0 && window.ethereum) {
-          detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', detect: () => true, getProvider: () => window.ethereum });
-        }
-
-        return detected;
-      }
-
-      // LocalStorage helpers
-      function saveWalletPreference(walletKey, walletName) {
-        try {
-          localStorage.setItem('zfi_wallet', walletKey);
-          if (walletName) localStorage.setItem('zfi_wallet_name', walletName);
-          else if (walletKey.startsWith('eip6963_')) {
-            const uuid = walletKey.replace('eip6963_', '');
-            const name = eip6963Providers.get(uuid)?.info?.name;
-            if (name) localStorage.setItem('zfi_wallet_name', name);
-          }
-        } catch (e) {
-          logger.warn('Failed to save wallet preference:', e);
-        }
-      }
-
-      function getWalletPreference() {
-        try {
-          return localStorage.getItem('zfi_wallet') || null;
-        } catch (e) {
-          logger.warn('Failed to get wallet preference:', e);
-          return null;
-        }
-      }
-
-      function clearWalletPreference() {
-        try {
-          localStorage.removeItem('zfi_wallet');
-          localStorage.removeItem('zfi_wallet_name');
-        } catch (e) {
-          logger.warn('Failed to clear wallet preference:', e);
-        }
-      }
-
-      function showWalletModal() {
-        const modalOverlay = getEl('walletModal');
-        const walletOptions = document.getElementById('walletOptions');
-
-        // If not connected, re-dispatch EIP-6963 for reliable detection
-        if (!connectedWallet || !connectedAddress) {
-          window.dispatchEvent(new Event('eip6963:requestProvider'));
-        }
-
-        // If already connected, show disconnect option
-        if (connectedWallet && connectedAddress) {
-          // Get wallet info - support both legacy and EIP-6963 wallets
-          let wallet;
-          if (connectedWallet.startsWith('eip6963_')) {
-            const uuid = connectedWallet.replace('eip6963_', '');
-            const eip6963Wallet = eip6963Providers.get(uuid);
-            if (eip6963Wallet) {
-              // Sanitize wallet metadata to prevent XSS from malicious wallet extensions
-              const safeName = escapeHtml(eip6963Wallet.info.name);
-              const safeIconUrl = sanitizeUrl(eip6963Wallet.info.icon);
-              const safeIcon = safeIconUrl ? `<img src="${escapeHtml(safeIconUrl)}" style="width: 1.2rem; height: 1.2rem;" alt="${safeName}"/>` : '🔌';
-
-              wallet = {
-                name: safeName,
-                icon: safeIcon
-              };
-            }
-          } else if (connectedWallet.startsWith('provider_') || connectedWallet === 'injected') {
-            wallet = { name: localStorage.getItem('zfi_wallet_name') || 'Wallet', icon: '🔗' };
-          } else {
-            wallet = WALLET_CONFIG[connectedWallet];
-          }
-
-          if (wallet) {
-            walletOptions.innerHTML = `
-              <div class="wallet-connected-info">
-                <div style="display: flex; align-items: center; margin-bottom: 0.75rem;">
-                  <div class="wallet-icon" style="margin-right: 1rem;">${wallet.icon}</div>
-                  <div>
-                    <div class="wallet-name">${wallet.name}</div>
-                    <div class="wallet-status installed">Connected</div>
-                  </div>
-                </div>
-                <div class="wallet-connected-addr">
-                  ${connectedAddress}
-                </div>
-              </div>
-              <div class="wallet-option wallet-disconnect" onclick="disconnectWallet()">
-                <div class="wallet-name" style="margin: 0;">Disconnect Wallet</div>
-              </div>
-            `;
-          }
-        } else {
-          // Show loading state while detecting wallets
-          walletOptions.innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
-          modalOverlay.classList.add('active');
-          document.body.classList.add('modal-open');
-
-          // Retry detection to handle competing wallet extensions and EIP-6963 timing
-          const renderWalletList = (attempt = 1) => {
-            const wallets = detectWallets();
-            // If no non-WC wallets found and first attempt, retry after delay
-            if (!wallets.some(w => w.key !== 'walletconnect') && attempt < 3) {
-              setTimeout(() => renderWalletList(attempt + 1), 200);
-              return;
-            }
-
-            if (wallets.length === 0) {
-              walletOptions.innerHTML = `
-                <div class="wallet-option" onclick="window.open('https://metamask.io/download/', '_blank')">
-                  <div class="wallet-icon">🦊</div>
-                  <div class="wallet-info">
-                    <div class="wallet-name">Install MetaMask</div>
-                    <div class="wallet-status">No wallet detected</div>
-                  </div>
-                </div>
-                <div class="wallet-option" onclick="window.open('https://www.coinbase.com/wallet/downloads', '_blank')">
-                  <div class="wallet-icon">🔵</div>
-                  <div class="wallet-info">
-                    <div class="wallet-name">Install Coinbase Wallet</div>
-                    <div class="wallet-status">Browser extension</div>
-                  </div>
-                </div>
-                <div class="wallet-option" onclick="window.open('https://rainbow.me/download', '_blank')">
-                  <div class="wallet-icon">🌈</div>
-                  <div class="wallet-info">
-                    <div class="wallet-name">Install Rainbow</div>
-                    <div class="wallet-status">Browser extension</div>
-                  </div>
-                </div>
-              `;
-            } else {
-              walletOptions.innerHTML = wallets.map(wallet => `
-                <div class="wallet-option" onclick="connectWithWallet('${escapeHtml(wallet.key)}')">
-                  <div class="wallet-icon">${wallet.icon}</div>
-                  <div class="wallet-info">
-                    <div class="wallet-name">${wallet.name}</div>
-                    <div class="wallet-status installed">${wallet.isWalletConnect ? 'QR Code' : 'Detected'}</div>
-                  </div>
-                </div>
-              `).join('');
-            }
-          };
-          setTimeout(() => renderWalletList(), 150);
-          return; // Early return since modal is already shown above
-        }
-
-        modalOverlay.classList.add('active');
-        document.body.classList.add('modal-open');
-      }
-
-      function closeWalletModal() {
-        getEl('walletModal').classList.remove('active');
-        document.body.classList.remove('modal-open');
-      }
-
-      // Close modal when clicking outside
-      document.addEventListener('DOMContentLoaded', () => {
-        const modalOverlay = getEl('walletModal');
-        modalOverlay.addEventListener('click', (e) => {
-          if (e.target === modalOverlay) {
-            closeWalletModal();
-          }
-        });
-      });
-
-      async function connectWithWallet(walletKey) {
-        if (isConnecting) return;
-        isConnecting = true;
-
-        try {
-          closeWalletModal();
-          let wallet;
-          let walletProvider;
-
-          if (walletKey === 'walletconnect') {
-            wallet = WALLET_CONFIG.walletconnect;
-            const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
-            const WCProvider = wcModule?.EthereumProvider;
-            if (!WCProvider?.init) {
-              showStatus('WalletConnect provider not available. Please refresh the page.', true);
-              return;
-            }
-
-            if (walletConnectProvider) {
-              try { await walletConnectProvider.disconnect?.(); } catch (e) {}
-              walletConnectProvider = null;
-            }
-
-            walletConnectProvider = await WCProvider.init({
-              projectId: '1e8390ef1c1d8a185e035912a1409749',
-              chains: [1],
-              showQrModal: true,
-              rpcMap: { 1: 'https://1rpc.io/eth' },
-              metadata: {
-                name: 'MAJ·DAO',
-                description: 'Summon and manage DAOs',
-                url: window.location.origin,
-                icons: ['https://daico.wtf/icon.png']
-              }
-            });
-
-            await walletConnectProvider.enable();
-            walletProvider = walletConnectProvider;
-          } else if (walletKey.startsWith('eip6963_')) {
-            const uuid = walletKey.replace('eip6963_', '');
-            const eip6963Wallet = eip6963Providers.get(uuid);
-            if (eip6963Wallet) {
-              wallet = {
-                name: eip6963Wallet.info.name,
-                icon: (() => { const u = sanitizeUrl(eip6963Wallet.info.icon); return u ? `<img src="${escapeHtml(u)}" style="width: 1.2rem; height: 1.2rem;"/>` : '🔌'; })(),
-                getProvider: () => eip6963Wallet.provider
-              };
-            }
-            // Name-based fallback: UUID may differ across pages, match by wallet name
-            if (!wallet) {
-              const savedName = (localStorage.getItem('zfi_wallet_name') || '').toLowerCase();
-              if (savedName) {
-                for (const [, { info, provider }] of eip6963Providers) {
-                  if (info?.name?.toLowerCase() === savedName) {
-                    wallet = { name: info.name, icon: '🔌', getProvider: () => provider };
-                    break;
-                  }
-                }
-              }
-            }
-            if (!wallet) { logger.error('Unknown wallet:', walletKey); return; }
-            walletProvider = wallet.getProvider();
-            if (!walletProvider) { showStatus(`${wallet.name} not found`, true); return; }
-            await walletProvider.request({ method: 'eth_requestAccounts' });
-          } else if (walletKey.startsWith('provider_')) {
-            // Legacy provider_N keys from coin page — resolve via window.ethereum.providers
-            const idx = parseInt(walletKey.replace('provider_', ''), 10);
-            if (window.ethereum?.providers?.length > idx) {
-              const p = window.ethereum.providers[idx];
-              const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : 'Wallet';
-              wallet = { name, icon: '🔗', getProvider: () => p };
-            }
-            if (!wallet) { wallet = { name: 'Wallet', icon: '🔗', getProvider: () => window.ethereum }; }
-            walletProvider = wallet.getProvider();
-            if (!walletProvider) { showStatus('Wallet not found', true); return; }
-            await walletProvider.request({ method: 'eth_requestAccounts' });
-          } else if (walletKey === 'injected') {
-            // Generic injected wallet fallback
-            wallet = { name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum };
-            walletProvider = window.ethereum;
-            if (!walletProvider) { showStatus('No wallet detected', true); return; }
-            await walletProvider.request({ method: 'eth_requestAccounts' });
-          } else {
-            wallet = WALLET_CONFIG[walletKey];
-            if (!wallet) {
-              // Last resort: try to find any available provider
-              if (window.ethereum) {
-                wallet = { name: 'Wallet', icon: '🔗', getProvider: () => window.ethereum };
-              } else {
-                logger.error('Unknown wallet:', walletKey); return;
-              }
-            }
-            walletProvider = wallet.getProvider();
-            if (!walletProvider) { showStatus(`${wallet.name} not found`, true); return; }
-            await walletProvider.request({ method: 'eth_requestAccounts' });
-          }
-
-          // Enforce Ethereum mainnet (chain 1)
-          const chainIdHex = await walletProvider.request({ method: 'eth_chainId' });
-          if (BigInt(chainIdHex) !== 1n) {
-            try {
-              await walletProvider.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x1' }]
-              });
-              const newChainId = await walletProvider.request({ method: 'eth_chainId' });
-              if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
-            } catch (switchErr) {
-              showStatus('Please switch to Ethereum Mainnet', true);
-              if (walletKey === 'walletconnect') {
-                try { walletConnectProvider?.disconnect(); } catch (e) {}
-                walletConnectProvider = null;
-              }
-              return;
-            }
-          }
-
-          // ethers v6 setup
-          provider = new ethers.BrowserProvider(walletProvider);
-          signer = await provider.getSigner();
-          const address = await signer.getAddress();
-
-          // Clean up old event listeners BEFORE updating state
-          const oldWalletProvider = connectedWalletProvider;
-          if (oldWalletProvider && walletEventHandlers) {
-            try {
-              oldWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-              oldWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
-            } catch (e) {}
-          }
-
-          // Store connected wallet info
-          connectedWallet = walletKey;
-          connectedAddress = address;
-          connectedWalletProvider = walletProvider;
-          saveWalletPreference(walletKey, wallet?.name);
-
-          // Update UI
-          const walletBtn = getEl('walletBtn');
-          if (walletBtn) {
-            walletBtn.textContent = address.slice(0, 6) + '...' + address.slice(-4);
-            walletBtn.classList.add('connected');
-            lookupENS(address).then(name => {
-              if (name && connectedAddress === address) walletBtn.textContent = name;
-            }).catch(() => {});
-          }
-          updateWcBanner();
-          const summonBtn = getEl('summonBtn');
-          if (summonBtn) {
-            summonBtn.disabled = false;
-            summonBtn.textContent = 'SUMMON DAO';
-          }
-
-          // Initialize first member with connected wallet
-          const foundingMembersList = getEl('foundingMembersList');
-          if (foundingMembersList && foundingMembersList.children.length === 0) {
-            const memberRow = createMemberRow(address, '1', true);
-            foundingMembersList.appendChild(memberRow);
-            updateLootInputs();
-          }
-
-          // Setup new event listeners
-          walletEventHandlers = {
-            accountsChanged: () => window.location.reload(),
-            chainChanged: () => window.location.reload()
-          };
-          walletProvider.on('accountsChanged', walletEventHandlers.accountsChanged);
-          walletProvider.on('chainChanged', walletEventHandlers.chainChanged);
-
-          // Fetch user's DAOs
-          showStatus('Fetching your DAOs...', false);
-          await fetchUserDAOs();
-
-          const deepLink = parseDAODeepLink();
-          if (userDAOs.length > 0) {
-            hideHeroFire();
-            renderDAOGallery();
-          }
-
-          if (deepLink) {
-            if (currentDAO && currentDAO.dao.dao.toLowerCase() === deepLink.address.toLowerCase()) {
-              // DAO was loaded read-only via deep link — upgrade to full userDAOs data if available
-              const userDaoEntry = userDAOs.find(ud => ud.dao.dao.toLowerCase() === deepLink.address.toLowerCase());
-              if (userDaoEntry) {
-                currentDAO = userDaoEntry;
-              }
-              // Re-render with fresh data (messages, proposals, membership)
-              renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
-              renderDaoStats();
-              const daoAddress = currentDAO.dao.dao;
-              const userAddr = signer ? await signer.getAddress() : null;
-              let batchData;
-              try {
-                batchData = await batchDashboardData(daoAddress, userAddr);
-              } catch (e) {
-                batchData = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined };
-              }
-              renderGovernanceInfo(batchData).catch(e => logger.error('renderGovernanceInfo failed:', e));
-              await Promise.all([
-                renderProposals(batchData.config),
-                renderSalesInfo(batchData.sales),
-                renderTributes(batchData.tributes),
-                renderAllowances(batchData.allowances),
-                renderDAOEmblem(daoAddress, batchData.contractURI)
-              ]);
-              await renderTreasury();
-              // Show/hide membership tab
-              const membershipBtn = document.getElementById('viewToggleMembership');
-              if (currentDAO.member) {
-                membershipBtn.style.display = 'block';
-              } else {
-                membershipBtn.style.display = 'none';
-                switchDaoView('dao');
-              }
-            } else {
-              showStatus('Opening linked DAO...', false);
-              const opened = await openDAOByAddress(deepLink.address);
-              if (opened) {
-                requestAnimationFrame(() => {
-                  setTimeout(() => {
-                    const dashboard = document.getElementById('daoDashboard');
-                    if (dashboard) dashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 100);
-                });
-              }
-            }
-          } else {
-            showStatus(`Connected to ${wallet?.name || 'wallet'}`, false);
-            if (userDAOs.length > 0) {
-              setTimeout(() => {
-                const daoGallery = document.getElementById('daoGallery');
-                if (daoGallery) daoGallery.scrollIntoView({ behavior: 'smooth' });
-              }, 100);
-            } else {
-              setTimeout(() => {
-                const summoner = document.getElementById('summoner');
-                if (summoner) summoner.scrollIntoView({ behavior: 'smooth' });
-              }, 100);
-            }
-          }
-        } catch (error) {
-          if (isUserRejection(error)) {
-            showStatus('', false);
-            return;
-          }
-          logger.error(error);
-          const walletName = wallet?.name || 'wallet';
-          let errorMessage = `Failed to connect ${walletName}`;
-          if (error.code === -32002) {
-            errorMessage = `Please check ${walletName} - a connection request is pending`;
-          } else if (error.shortMessage) {
-            errorMessage = error.shortMessage;
-          } else if (error.message) {
-            const msg = error.message.split('\n')[0];
-            if (msg.length < 100) errorMessage = msg;
-          }
-          showStatus(errorMessage, true);
-        } finally {
-          isConnecting = false;
-        }
-      }
-
-      async function connectWallet() {
-        showWalletModal();
-      }
-
-      function updateWcBanner() {
-        const existing = document.getElementById('wcBanner');
-        if (existing) existing.remove();
-        if (connectedWallet === 'walletconnect' && connectedAddress) {
-          const banner = document.createElement('div');
-          banner.id = 'wcBanner';
-          banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--surface);color:var(--fg);border-bottom:1px solid var(--border-muted);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
-          banner.innerHTML = '<span>📱 Connected via WalletConnect</span><button onclick="disconnectWallet()" style="background:var(--bg);color:var(--fg);border:none;padding:6px 12px;border-radius:0;cursor:pointer;font-size:12px;">Disconnect</button>';
-          document.body.prepend(banner);
-          document.body.style.paddingTop = '54px';
-        } else {
-          document.body.style.paddingTop = '';
-        }
-      }
-
-      function disconnectWallet() {
-        // Clean up event listeners
-        if (connectedWalletProvider && walletEventHandlers) {
-          try {
-            connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
-            connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
-          } catch (e) {}
-        }
-        walletEventHandlers = null;
-
-        // Disconnect WalletConnect session if active
-        if (walletConnectProvider) {
-          try { walletConnectProvider.disconnect(); } catch (e) {}
-          walletConnectProvider = null;
-        }
-
-        // Clear state
-        provider = null;
-        signer = null;
-        connectedWallet = null;
-        connectedAddress = null;
-        connectedWalletProvider = null;
-        isConnecting = false;
-        userDAOs = [];
-        currentDAO = null;
-        currentDAICO = null;
-
-        clearWalletPreference();
-
-        // Reset UI
-        const walletBtn = getEl('walletBtn');
-        if (walletBtn) {
-          walletBtn.textContent = 'connect';
-          walletBtn.classList.remove('connected');
-        }
-        updateWcBanner();
-
-        const summonBtn = getEl('summonBtn');
-        if (summonBtn) {
-          summonBtn.disabled = true;
-          summonBtn.textContent = 'CONNECT WALLET TO SUMMON';
-        }
-
-        // Hide DAO galleries and dashboard
-        const daoGallery = getEl('daoGallery');
-        if (daoGallery) daoGallery.classList.remove('show');
-        const allDaosGallery = getEl('allDaosGallery');
-        if (allDaosGallery) allDaosGallery.classList.remove('show');
-        const daoDashboard = getEl('daoDashboard');
-        if (daoDashboard) daoDashboard.classList.remove('show');
-
-        // Show hero fire again
-        const fireEl = document.getElementById('fireHero');
-        if (fireEl) fireEl.classList.remove('hide');
-        if (heroFire) { heroFire.start(); }
-
-        closeWalletModal();
-        showStatus('Wallet disconnected', false);
-      }
 
       // Ragequit modal functions
       // Store custom tokens for ragequit (cleared on modal open)
@@ -5754,7 +5083,7 @@ body.modal-open { overflow: hidden; }
             if (existingAddrs.has(customToken.address.toLowerCase())) continue;
             if (existingSymbols.has(customToken.symbol.toLowerCase())) continue;
             try {
-              const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, provider);
+              const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, _walletProvider);
               const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
               tokens.push({
                 symbol: customToken.symbol,
@@ -5880,7 +5209,7 @@ body.modal-open { overflow: hidden; }
         try {
           showStatus('Fetching token info...', false);
 
-          const tokenContract = new ethers.Contract(normalizedAddress, ERC20_ABI, provider);
+          const tokenContract = new ethers.Contract(normalizedAddress, ERC20_ABI, _walletProvider);
 
           // Fetch token info
           const [symbol, decimals, balance] = await Promise.all([
@@ -5985,7 +5314,7 @@ body.modal-open { overflow: hidden; }
 
       async function executeRagequit() {
         try {
-          if (!signer || !currentDAO) {
+          if (!_signer || !currentDAO) {
             showStatus('No wallet connected or DAO selected', true);
             return;
           }
@@ -6026,7 +5355,7 @@ body.modal-open { overflow: hidden; }
           });
 
           // Execute ragequit
-          const daoContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const daoContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           showStatus('Executing ragequit...', false);
           const tx = await daoContract.ragequit(tokenAddresses, sharesToBurn, lootToBurn, getWalletConnectTxOverrides());
@@ -6084,7 +5413,7 @@ body.modal-open { overflow: hidden; }
       let currentTransferReceipt = null;
 
       function openTransferReceiptModal(receipt) {
-        if (!currentDAO || !connectedAddress) {
+        if (!currentDAO || !_connectedAddress) {
           showStatus('No wallet connected or DAO selected', true);
           return;
         }
@@ -6187,7 +5516,7 @@ body.modal-open { overflow: hidden; }
 
       async function executeReceiptTransfer() {
         try {
-          if (!signer || !currentDAO || !currentTransferReceipt) {
+          if (!_signer || !currentDAO || !currentTransferReceipt) {
             showStatus('No wallet connected or DAO selected', true);
             return;
           }
@@ -6218,7 +5547,7 @@ body.modal-open { overflow: hidden; }
           try {
             if (recipientInput.endsWith('.eth')) {
               showStatus('Resolving ENS name...', false);
-              recipientAddress = await provider.resolveName(recipientInput);
+              recipientAddress = await _walletProvider.resolveName(recipientInput);
               if (!recipientAddress) {
                 showStatus('ENS name not found', true);
                 return;
@@ -6237,7 +5566,7 @@ body.modal-open { overflow: hidden; }
           }
 
           // Execute transfer using ERC6909 transfer function
-          const daoContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const daoContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Use hex receipt ID for contract call (ethers accepts hex strings)
           const receiptIdHex = currentTransferReceipt.receiptId;
@@ -6291,7 +5620,7 @@ body.modal-open { overflow: hidden; }
       let selectedDepositAssetIndex = null;
 
       async function openDepositModal() {
-        if (!signer || !currentDAO) {
+        if (!_signer || !currentDAO) {
           showStatus('Please connect wallet and select a DAO first', true);
           return;
         }
@@ -6398,12 +5727,12 @@ body.modal-open { overflow: hidden; }
         const asset = depositAssets[selectedDepositAssetIndex];
 
         try {
-          const addr = await signer.getAddress();
+          const addr = await _signer.getAddress();
           let balance;
           if (asset.address === ethers.ZeroAddress) {
-            balance = await provider.getBalance(addr);
+            balance = await _walletProvider.getBalance(addr);
           } else {
-            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, provider);
+            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, _walletProvider);
             balance = await tokenContract.balanceOf(addr);
           }
 
@@ -6445,7 +5774,7 @@ body.modal-open { overflow: hidden; }
 
       async function executeDeposit() {
         try {
-          if (!signer || !currentDAO) {
+          if (!_signer || !currentDAO) {
             showStatus('No wallet connected or DAO selected', true);
             return;
           }
@@ -6479,7 +5808,7 @@ body.modal-open { overflow: hidden; }
           if (asset.address === ethers.ZeroAddress) {
             // ETH deposit - simple transfer
             showStatus('Depositing ETH...', false);
-            const tx = await signer.sendTransaction(getWalletConnectTxOverrides({
+            const tx = await _signer.sendTransaction(getWalletConnectTxOverrides({
               to: daoAddress,
               value: amount
             }));
@@ -6490,7 +5819,7 @@ body.modal-open { overflow: hidden; }
             showStatus(`✨ Deposited ${amountInput} ETH successfully! <a href="${getNetwork().explorer}/tx/${tx.hash}" target="_blank" rel="noopener" style="color: var(--fg); text-decoration: underline;">View transaction</a>`, false);
           } else {
             // ERC20 deposit - transfer to DAO
-            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, signer);
+            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, _signer);
 
             showStatus(`Depositing ${asset.symbol}...`, false);
             const tx = await tokenContract.transfer(daoAddress, amount, getWalletConnectTxOverrides());
@@ -6542,7 +5871,7 @@ body.modal-open { overflow: hidden; }
       let selectedRequestAssetIndex = null;
 
       async function openTributeModal() {
-        if (!signer || !currentDAO) {
+        if (!_signer || !currentDAO) {
           showStatus('Please connect wallet and select a DAO first', true);
           return;
         }
@@ -6676,12 +6005,12 @@ body.modal-open { overflow: hidden; }
         const asset = tributeAssets[selectedTributeAssetIndex];
 
         try {
-          const addr = await signer.getAddress();
+          const addr = await _signer.getAddress();
           let balance;
           if (asset.address === ethers.ZeroAddress) {
-            balance = await provider.getBalance(addr);
+            balance = await _walletProvider.getBalance(addr);
           } else {
-            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, provider);
+            const tokenContract = new ethers.Contract(asset.address, ERC20_ABI, _walletProvider);
             balance = await tokenContract.balanceOf(addr);
           }
 
@@ -6700,7 +6029,7 @@ body.modal-open { overflow: hidden; }
 
       async function executeTribute() {
         try {
-          if (!signer || !currentDAO) {
+          if (!_signer || !currentDAO) {
             showStatus('No wallet connected or DAO selected', true);
             return;
           }
@@ -6734,7 +6063,7 @@ body.modal-open { overflow: hidden; }
           const tribAmt = ethers.parseUnits(tribAmountInput, tribAsset.decimals);
           const forAmt = ethers.parseUnits(reqAmountInput, reqAsset.decimals);
 
-          const tributeContract = new ethers.Contract(TRIBUTE_ADDRESS, TRIBUTE_ABI, signer);
+          const tributeContract = new ethers.Contract(TRIBUTE_ADDRESS, TRIBUTE_ABI, _signer);
           const daoAddress = currentDAO.dao.dao;
 
           showStatus('Creating tribute offer...', false);
@@ -6752,8 +6081,8 @@ body.modal-open { overflow: hidden; }
             );
           } else {
             // ERC20 tribute - check allowance and approve if needed
-            const tokenContract = new ethers.Contract(tribAsset.address, ERC20_ABI, signer);
-            const userAddress = await signer.getAddress();
+            const tokenContract = new ethers.Contract(tribAsset.address, ERC20_ABI, _signer);
+            const userAddress = await _signer.getAddress();
             const allowance = await tokenContract.allowance(userAddress, TRIBUTE_ADDRESS);
 
             if (allowance < tribAmt) {
@@ -6808,7 +6137,7 @@ body.modal-open { overflow: hidden; }
 
       // Accept tribute - populate proposal form with batchCalls to claim tribute
       async function acceptTributeProposal(index) {
-        if (!signer || !currentDAO) {
+        if (!_signer || !currentDAO) {
           showStatus('Please connect wallet', true);
           return;
         }
@@ -6981,7 +6310,7 @@ body.modal-open { overflow: hidden; }
 
       // Cancel a tribute offer
       async function cancelTributeOffer(index) {
-        if (!signer || !currentDAO) {
+        if (!_signer || !currentDAO) {
           showStatus('Please connect wallet', true);
           return;
         }
@@ -6990,7 +6319,7 @@ body.modal-open { overflow: hidden; }
         if (!tribute) return;
 
         try {
-          const userAddress = await signer.getAddress();
+          const userAddress = await _signer.getAddress();
           if (tribute.proposer.toLowerCase() !== userAddress.toLowerCase()) {
             showStatus('You can only cancel your own tributes', true);
             return;
@@ -6998,7 +6327,7 @@ body.modal-open { overflow: hidden; }
 
           showStatus('Canceling tribute...', false);
 
-          const tributeContract = new ethers.Contract(TRIBUTE_ADDRESS, TRIBUTE_ABI, signer);
+          const tributeContract = new ethers.Contract(TRIBUTE_ADDRESS, TRIBUTE_ABI, _signer);
           const tx = await tributeContract.cancelTribute(currentDAO.dao.dao, tribute.tribTkn, getWalletConnectTxOverrides());
 
           showStatus(`Transaction submitted. <a href="${getNetwork().explorer}/tx/${tx.hash}" target="_blank" rel="noopener" style="color: var(--fg); text-decoration: underline;">View on Explorer</a>`, false);
@@ -7116,10 +6445,10 @@ body.modal-open { overflow: hidden; }
 
       // Fetch user's DAOs from View Helper
       async function fetchUserDAOs() {
-        if (!connectedAddress) return [];
+        if (!_connectedAddress) return [];
 
         const treasuryTokens = getNetwork().treasuryTokens;
-        const userAddr = connectedAddress; // Capture in case it changes
+        const userAddr = _connectedAddress; // Capture in case it changes
 
         try {
           // Use RPC fallback for reliability (especially important for WalletConnect)
@@ -7957,7 +7286,7 @@ body.modal-open { overflow: hidden; }
             let daoBalance = '';
             if (sale.token.isCustom) {
               try {
-                const tokenContract = new ethers.Contract(sale.token.address, ERC20_ABI, provider);
+                const tokenContract = new ethers.Contract(sale.token.address, ERC20_ABI, _walletProvider);
                 const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
                 const balanceFormatted = parseFloat(ethers.formatUnits(balance, sale.token.decimals)).toFixed(2);
                 daoBalance = `<div style="font-size: 0.75rem; color: var(--fg-dim); margin-top: 0.25rem;">DAO Balance: ${balanceFormatted} ${sale.token.symbol}</div>`;
@@ -8202,7 +7531,7 @@ body.modal-open { overflow: hidden; }
           );
           const balanceResults = await Promise.all(newTokens.map(async (customToken) => {
             try {
-              const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, provider);
+              const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, _walletProvider);
               const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
               return {
                 symbol: customToken.symbol,
@@ -8332,7 +7661,7 @@ body.modal-open { overflow: hidden; }
             card.className = 'tribute-card';
 
             // Check if this is the user's own tribute and if they're a member
-            const userAddress = signer ? await signer.getAddress() : null;
+            const userAddress = _signer ? await _signer.getAddress() : null;
             const isOwnTribute = userAddress && tribute.proposer.toLowerCase() === userAddress.toLowerCase();
             const isMember = currentDAO.member && (BigInt(currentDAO.member.shares || 0) > 0n || BigInt(currentDAO.member.loot || 0) > 0n);
 
@@ -8780,7 +8109,7 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
-          if (!provider) {
+          if (!_walletProvider) {
             infoDiv.innerHTML = '<span style="color: var(--red);">Wallet not connected</span>';
             actionsDiv.style.display = 'none';
             showStatus('Please connect your wallet first', true);
@@ -8790,7 +8119,7 @@ body.modal-open { overflow: hidden; }
           infoDiv.innerHTML = 'Fetching token info...';
           actionsDiv.style.display = 'none';
 
-          const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, provider);
+          const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, _walletProvider);
 
           // Fetch token info with individual error handling for better diagnostics
           let name, symbol, decimals, daoBalance;
@@ -8942,12 +8271,12 @@ body.modal-open { overflow: hidden; }
           // Resolve ENS if needed
           let recipientAddress = recipientInput;
           if (recipientInput.endsWith('.eth') || !recipientInput.startsWith('0x')) {
-            if (!provider) {
+            if (!_walletProvider) {
               showStatus('Provider not available for ENS resolution', true);
               return;
             }
             try {
-              const resolved = await provider.resolveName(recipientInput);
+              const resolved = await _walletProvider.resolveName(recipientInput);
               if (!resolved) {
                 showStatus('Could not resolve ENS name', true);
                 return;
@@ -9113,12 +8442,12 @@ body.modal-open { overflow: hidden; }
           // Resolve ENS if needed
           let recipientAddress = recipientInput;
           if (recipientInput.endsWith('.eth') || !recipientInput.startsWith('0x')) {
-            if (!provider) {
+            if (!_walletProvider) {
               showStatus('Provider not available for ENS resolution', true);
               return;
             }
             try {
-              const resolved = await provider.resolveName(recipientInput);
+              const resolved = await _walletProvider.resolveName(recipientInput);
               if (!resolved) {
                 showStatus('Could not resolve ENS name', true);
                 return;
@@ -9905,7 +9234,7 @@ body.modal-open { overflow: hidden; }
         // Check for active DAICO sales that sell voting shares
         let daicoSharesAvailable = 0n;
         try {
-          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, provider);
+          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, _walletProvider);
           const sharesAddress = dao.meta.sharesToken;
 
           // Query DAICO for sales with common payment tokens
@@ -9926,7 +9255,7 @@ body.modal-open { overflow: hidden; }
               const isExpired = sale.deadline > 0 && Number(sale.deadline) < now;
               if (sale.tribAmt > 0n && sale.forAmt > 0n && sale.forTkn.toLowerCase() === sharesAddress.toLowerCase() && !isExpired) {
                 // This is a DAICO sale selling voting shares - get available allowance
-                const sharesContract = new ethers.Contract(sharesAddress, ERC20_ABI, provider);
+                const sharesContract = new ethers.Contract(sharesAddress, ERC20_ABI, _walletProvider);
                 const allowance = await sharesContract.allowance(daoAddress, DAICO_ADDRESS);
                 daicoSharesAvailable += allowance;
               }
@@ -10349,17 +9678,17 @@ body.modal-open { overflow: hidden; }
         // Calculate the emergency permit ID
         const bumpConfigCalldata = INTERFACES.bumpConfig.encodeFunctionData('bumpConfig', []);
         const emergencyNonce = ethers.id("EMERGENCY_CONFIG_BUMP"); // Consistent nonce for this permit type
-        const config = await (new ethers.Contract(daoAddress, MOLOCH_ABI, provider)).config();
+        const config = await (new ethers.Contract(daoAddress, MOLOCH_ABI, _walletProvider)).config();
         const permitId = computeProposalId(daoAddress, 0, daoAddress, 0, bumpConfigCalldata, emergencyNonce, config);
 
         // Check current permit balance for connected user
         let currentBalance = 0;
         let currentHolderAddress = '';
-        if (signer) {
-          const userAddress = await signer.getAddress();
+        if (_signer) {
+          const userAddress = await _signer.getAddress();
           currentHolderAddress = userAddress;
           try {
-            const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, provider);
+            const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, _walletProvider);
             currentBalance = Number(await molochContract.balanceOf(userAddress, permitId));
           } catch (e) {
             logger.error('Error fetching permit balance:', e);
@@ -10490,7 +9819,7 @@ body.modal-open { overflow: hidden; }
 
       // Purchase modal functions
       async function openPurchaseModal(payToken, tokenSymbol, tokenDecimals, isLoot) {
-        if (!signer) {
+        if (!_signer) {
           showStatus('Please connect wallet first', true);
           return;
         }
@@ -10513,15 +9842,15 @@ body.modal-open { overflow: hidden; }
 
         try {
           // Fetch user balance and sale info
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, provider);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _walletProvider);
           const sale = await molochContract.sales(payToken);
 
           let userBalance = 0n;
           if (payToken === ethers.ZeroAddress) {
-            userBalance = await provider.getBalance(connectedAddress);
+            userBalance = await _walletProvider.getBalance(_connectedAddress);
           } else {
-            const tokenContract = new ethers.Contract(payToken, ERC20_ABI, provider);
-            userBalance = await tokenContract.balanceOf(connectedAddress);
+            const tokenContract = new ethers.Contract(payToken, ERC20_ABI, _walletProvider);
+            userBalance = await tokenContract.balanceOf(_connectedAddress);
           }
 
           const balanceFormatted = parseFloat(ethers.formatUnits(userBalance, tokenDecimals)).toFixed(6);
@@ -10598,7 +9927,7 @@ body.modal-open { overflow: hidden; }
           }
 
           const shareAmount = ethers.parseEther(amountInput);
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
           const sale = await molochContract.sales(payToken);
 
           if (!sale.active) {
@@ -10616,17 +9945,17 @@ body.modal-open { overflow: hidden; }
           if (payToken !== ethers.ZeroAddress) {
             showStatus('Checking token allowance...', false);
 
-            const tokenContract = new ethers.Contract(payToken, ERC20_ABI, signer);
+            const tokenContract = new ethers.Contract(payToken, ERC20_ABI, _signer);
 
             // Check user balance
-            const userBalance = await tokenContract.balanceOf(connectedAddress);
+            const userBalance = await tokenContract.balanceOf(_connectedAddress);
             if (userBalance < cost) {
               showStatus(`Insufficient balance. Need ${ethers.formatUnits(cost, tokenDecimals)} tokens`, true);
               return;
             }
 
             // Check allowance
-            const currentAllowance = await tokenContract.allowance(connectedAddress, currentDAO.dao.dao);
+            const currentAllowance = await tokenContract.allowance(_connectedAddress, currentDAO.dao.dao);
 
             if (currentAllowance < cost) {
               showStatus('Approving token spend... Please confirm in wallet', false);
@@ -10689,7 +10018,7 @@ body.modal-open { overflow: hidden; }
       // DAICO Purchase Modal - for external OTC sales
       async function openDaicoPurchaseModal(tribToken, tokenSymbol, tokenDecimals, isLoot, tribAmt, forAmt, lpBps) {
         lpBps = lpBps || 0;
-        if (!signer) {
+        if (!_signer) {
           showStatus('Please connect wallet first', true);
           return;
         }
@@ -10714,10 +10043,10 @@ body.modal-open { overflow: hidden; }
           // Fetch user balance
           let userBalance = 0n;
           if (tribToken === ethers.ZeroAddress) {
-            userBalance = await provider.getBalance(connectedAddress);
+            userBalance = await _walletProvider.getBalance(_connectedAddress);
           } else {
-            const tokenContract = new ethers.Contract(tribToken, ERC20_ABI, provider);
-            userBalance = await tokenContract.balanceOf(connectedAddress);
+            const tokenContract = new ethers.Contract(tribToken, ERC20_ABI, _walletProvider);
+            userBalance = await tokenContract.balanceOf(_connectedAddress);
           }
 
           const balanceFormatted = parseFloat(ethers.formatUnits(userBalance, tokenDecimals)).toFixed(6);
@@ -10875,24 +10204,24 @@ body.modal-open { overflow: hidden; }
           // minBuyAmt = 95% of expected net (5% slippage tolerance)
           const minBuyAmt = net * 95n / 100n;
 
-          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, signer);
+          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, _signer);
           const daoAddress = currentDAO.dao.dao;
 
           // For ERC20 payments, check allowance and approve if needed
           if (tribToken !== ethers.ZeroAddress) {
             showStatus('Checking token allowance...', false);
 
-            const tokenContract = new ethers.Contract(tribToken, ERC20_ABI, signer);
+            const tokenContract = new ethers.Contract(tribToken, ERC20_ABI, _signer);
 
             // Check user balance
-            const userBalance = await tokenContract.balanceOf(connectedAddress);
+            const userBalance = await tokenContract.balanceOf(_connectedAddress);
             if (userBalance < payAmt) {
               showStatus(`Insufficient balance. Need ${ethers.formatUnits(payAmt, tokenDecimals)} tokens`, true);
               return;
             }
 
             // Check allowance to DAICO contract
-            const currentAllowance = await tokenContract.allowance(connectedAddress, DAICO_ADDRESS);
+            const currentAllowance = await tokenContract.allowance(_connectedAddress, DAICO_ADDRESS);
 
             if (currentAllowance < payAmt) {
               showStatus('Approving token spend... Please confirm in wallet', false);
@@ -10957,14 +10286,14 @@ body.modal-open { overflow: hidden; }
       // Claim DAICO tap funds
       async function claimDaicoTap(daoAddress) {
         try {
-          if (!signer) {
+          if (!_signer) {
             showStatus('Please connect wallet first', true);
             return;
           }
 
           showStatus('Claiming tap funds...', false);
 
-          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, signer);
+          const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, _signer);
 
           const tx = await daicoContract.claimTap(daoAddress, getWalletConnectTxOverrides());
 
@@ -11809,7 +11138,7 @@ body.modal-open { overflow: hidden; }
 
         try {
           infoDiv.innerHTML = '<span style="color: var(--fg-dim);">Checking...</span>';
-          const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, provider);
+          const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, _walletProvider);
           const [symbol, decimals] = await Promise.all([
             tokenContract.symbol(),
             tokenContract.decimals()
@@ -12054,7 +11383,7 @@ body.modal-open { overflow: hidden; }
           if (opsInput.endsWith('.eth')) {
             try {
               showStatus('Resolving ENS name...', false);
-              newOps = await provider.resolveName(opsInput);
+              newOps = await _walletProvider.resolveName(opsInput);
               if (!newOps) {
                 showStatus('Could not resolve ENS name', true);
                 return;
@@ -12727,13 +12056,13 @@ body.modal-open { overflow: hidden; }
       async function renderAllowances(prefetchedAllowances) {
         const allowancesInfo = document.getElementById('allowancesInfo');
         const allowancesSection = document.getElementById('allowancesSection');
-        if (!allowancesInfo || !allowancesSection || !currentDAO || !signer) {
+        if (!allowancesInfo || !allowancesSection || !currentDAO || !_signer) {
           if (allowancesSection) allowancesSection.style.display = 'none';
           return;
         }
 
         try {
-          const userAddress = await signer.getAddress();
+          const userAddress = await _signer.getAddress();
 
           let results;
           if (prefetchedAllowances && prefetchedAllowances.length > 0) {
@@ -12741,7 +12070,7 @@ body.modal-open { overflow: hidden; }
             results = prefetchedAllowances;
           } else {
             // Fallback: fetch individually
-            const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, provider);
+            const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _walletProvider);
 
             const tokens = [
               { symbol: 'ETH', address: ethers.ZeroAddress, decimals: 18, icon: TOKEN_ICONS.eth },
@@ -12867,7 +12196,7 @@ body.modal-open { overflow: hidden; }
       }
 
       async function executeSpendAllowance(tokenAddress, decimals, maxAllowance) {
-        if (!signer || !currentDAO) {
+        if (!_signer || !currentDAO) {
           showStatus('Please connect your wallet first', true);
           return;
         }
@@ -12896,7 +12225,7 @@ body.modal-open { overflow: hidden; }
           }
 
           // Call spendAllowance(address token, uint256 amount)
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
           const tx = await molochContract.spendAllowance(tokenAddress, amount, getWalletConnectTxOverrides());
 
           showStatus('Transaction submitted, waiting for confirmation...', false);
@@ -13045,7 +12374,7 @@ body.modal-open { overflow: hidden; }
 
             // Fetch token info
             try {
-              const tokenContract = new ethers.Contract(customTokenAddress, ERC20_ABI, provider);
+              const tokenContract = new ethers.Contract(customTokenAddress, ERC20_ABI, _walletProvider);
               tokenName = await tokenContract.symbol().catch(() => 'TOKEN');
               decimals = await tokenContract.decimals().catch(() => 18);
 
@@ -13282,7 +12611,7 @@ body.modal-open { overflow: hidden; }
         renderDaoStats();
 
         // Batch all view calls into one RPC round-trip via Multicall3
-        const userAddr = signer ? await signer.getAddress() : null;
+        const userAddr = _signer ? await _signer.getAddress() : null;
         let batchData;
         try {
           batchData = await batchDashboardData(daoAddress, userAddr);
@@ -13452,13 +12781,13 @@ body.modal-open { overflow: hidden; }
           const badgesAddress = predictions.badges;
 
           // Use the correct badges contract from the DAO
-          const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, provider);
+          const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, _walletProvider);
           const badgesAddr = await molochContract.badges();
 
           const badgesABI = [
             'function tokenURI(uint256) view returns (string)',
           ];
-          const badgesContract = new ethers.Contract(badgesAddr, badgesABI, provider);
+          const badgesContract = new ethers.Contract(badgesAddr, badgesABI, _walletProvider);
 
           const tokenURI = await badgesContract.tokenURI(seatId);
 
@@ -13520,7 +12849,7 @@ body.modal-open { overflow: hidden; }
       // Render vote receipts collection
       async function renderVoteReceipts() {
         const receiptsGrid = document.getElementById('receiptsGrid');
-        if (!currentDAO || !connectedAddress) {
+        if (!currentDAO || !_connectedAddress) {
           receiptsGrid.innerHTML = '';
           receiptsGrid.appendChild(createEmptyState(
             '🔌',
@@ -13536,16 +12865,16 @@ body.modal-open { overflow: hidden; }
         showLoadingState(receiptsGrid, 3, 'card');
 
         const receipts = [];
-        const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, provider);
+        const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _walletProvider);
 
         // Use voters data from view helper to find user's votes (no hasVoted RPC calls!)
         const userVotedProposals = currentDAO.dao.proposals.filter(proposal => {
-          return proposal.voters?.some(v => v.voter?.toLowerCase() === connectedAddress.toLowerCase());
+          return proposal.voters?.some(v => v.voter?.toLowerCase() === _connectedAddress.toLowerCase());
         });
 
         // Pre-compute receipt IDs and vote data
         const voteData = userVotedProposals.map(proposal => {
-          const userVote = proposal.voters.find(v => v.voter?.toLowerCase() === connectedAddress.toLowerCase());
+          const userVote = proposal.voters.find(v => v.voter?.toLowerCase() === _connectedAddress.toLowerCase());
           const support = Number(userVote.support); // 0=Against, 1=For, 2=Abstain
           const receiptId = ethers.solidityPackedKeccak256(
             ['string', 'uint256', 'uint8'],
@@ -13561,7 +12890,7 @@ body.modal-open { overflow: hidden; }
             const calls = voteData.map(({ receiptId }) => ({
               target: currentDAO.dao.dao,
               allowFailure: true,
-              callData: molochIface.encodeFunctionData('balanceOf', [connectedAddress, receiptId])
+              callData: molochIface.encodeFunctionData('balanceOf', [_connectedAddress, receiptId])
             }));
 
             const mcResults = await withRpcFallback(async (activeProvider) => {
@@ -13765,7 +13094,7 @@ body.modal-open { overflow: hidden; }
           const config = await molochContract.config();
           const permitId = computeProposalId(currentDAO.dao.dao, 0, currentDAO.dao.dao, 0, bumpConfigCalldata, emergencyNonce, config);
 
-          const permitBalance = await molochContract.balanceOf(connectedAddress, permitId);
+          const permitBalance = await molochContract.balanceOf(_connectedAddress, permitId);
 
           if (permitBalance > 0n) {
             // Fetch tokenURI for emergency permit
@@ -13932,14 +13261,14 @@ body.modal-open { overflow: hidden; }
 
       // Use emergency permit to bump config
       async function useEmergencyPermit(permitIdStr) {
-        if (!signer) {
+        if (!_signer) {
           showStatus('Please connect your wallet first', true);
           return;
         }
 
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
-          const userAddress = await signer.getAddress();
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
+          const userAddress = await _signer.getAddress();
 
           // Recalculate the permit parameters and ID to ensure consistency
           const bumpConfigCalldata = INTERFACES.bumpConfig.encodeFunctionData('bumpConfig', []);
@@ -14014,7 +13343,7 @@ body.modal-open { overflow: hidden; }
         const totalVotesDisplay = document.getElementById('totalVotesDisplay');
         const votingPowerBreakdown = document.getElementById('votingPowerBreakdown');
 
-        if (!currentDAO || !connectedAddress) {
+        if (!currentDAO || !_connectedAddress) {
           statusDisplay.innerHTML = '<span class="delegation-muted">Not connected</span>';
           ownedSharesDisplay.textContent = '0';
           totalVotesDisplay.textContent = '0';
@@ -14031,13 +13360,13 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
-          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, provider);
+          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, _walletProvider);
 
           // Load voting power data
           const [ownedShares, totalVotes, [delegates, bps]] = await Promise.all([
-            sharesContract.balanceOf(connectedAddress),
-            sharesContract.getVotes(connectedAddress),
-            sharesContract.splitDelegationOf(connectedAddress)
+            sharesContract.balanceOf(_connectedAddress),
+            sharesContract.getVotes(_connectedAddress),
+            sharesContract.splitDelegationOf(_connectedAddress)
           ]);
 
           // Display voting power
@@ -14060,7 +13389,7 @@ body.modal-open { overflow: hidden; }
 
           // Resolve ENS names for all delegates in parallel
           const delegateInfoPromises = delegates.map(async (addr) => {
-            const isSelf = addr.toLowerCase() === connectedAddress.toLowerCase();
+            const isSelf = addr.toLowerCase() === _connectedAddress.toLowerCase();
             const ensName = isSelf ? null : await lookupENS(addr);
             return { address: addr, ensName, isSelf };
           });
@@ -14128,7 +13457,7 @@ body.modal-open { overflow: hidden; }
 
       // Load and display delegations received from others
       async function loadReceivedDelegations(sharesContract, badgesAddress) {
-        if (!currentDAO || !connectedAddress) return;
+        if (!currentDAO || !_connectedAddress) return;
 
         const receivedContainer = document.getElementById('receivedDelegationsContainer');
         const receivedList = document.getElementById('receivedDelegationsList');
@@ -14146,7 +13475,7 @@ body.modal-open { overflow: hidden; }
           }
 
           const delegatorsToMe = [];
-          const connectedLower = connectedAddress.toLowerCase();
+          const connectedLower = _connectedAddress.toLowerCase();
 
           // Batch check delegations - limit concurrency to avoid overwhelming RPC
           const BATCH_SIZE = 10;
@@ -14463,7 +13792,7 @@ body.modal-open { overflow: hidden; }
 
       // Submit delegation
       async function submitDelegation() {
-        if (!currentDAO || !connectedAddress) {
+        if (!currentDAO || !_connectedAddress) {
           showStatus('Please connect your wallet first', true);
           return;
         }
@@ -14479,8 +13808,8 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
-          const signer = await provider.getSigner();
-          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, signer);
+          const _signer = await _walletProvider.getSigner();
+          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, _signer);
 
           if (type === 'single') {
             // Single delegation
@@ -14488,14 +13817,14 @@ body.modal-open { overflow: hidden; }
 
             if (!addressInput) {
               // Empty means self-delegate
-              addressInput = connectedAddress;
+              addressInput = _connectedAddress;
             }
 
             // Resolve ENS if needed
             let address;
             if (addressInput.endsWith('.eth')) {
               showStatus('Resolving ENS name...', false);
-              address = await provider.resolveName(addressInput);
+              address = await _walletProvider.resolveName(addressInput);
               if (!address) {
                 showStatus(`Could not resolve ENS name: ${addressInput}`, true);
                 return;
@@ -14552,7 +13881,7 @@ body.modal-open { overflow: hidden; }
             const addresses = await Promise.all(
               addressInputs.map(async (addrInput) => {
                 if (addrInput.endsWith('.eth')) {
-                  const resolved = await provider.resolveName(addrInput);
+                  const resolved = await _walletProvider.resolveName(addrInput);
                   if (!resolved) {
                     throw new Error(`Could not resolve ENS name: ${addrInput}`);
                   }
@@ -14593,7 +13922,7 @@ body.modal-open { overflow: hidden; }
               }
 
               // Add user's own address with remaining percentage
-              finalAddresses.push(connectedAddress);
+              finalAddresses.push(_connectedAddress);
               finalWeights.push(remaining);
 
               showStatus(`Auto-adding ${remaining.toFixed(2)}% self-delegation...`, false);
@@ -14629,7 +13958,7 @@ body.modal-open { overflow: hidden; }
 
       // Clear delegation and revert to self-delegation
       async function clearDelegation() {
-        if (!currentDAO || !connectedAddress) {
+        if (!currentDAO || !_connectedAddress) {
           showStatus('Please connect your wallet first', true);
           return;
         }
@@ -14647,8 +13976,8 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
-          const signer = await provider.getSigner();
-          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, signer);
+          const _signer = await _walletProvider.getSigner();
+          const sharesContract = new ethers.Contract(sharesAddress, SHARES_DELEGATION_ABI, _signer);
 
           showStatus('Clearing delegation...', false);
           const tx = await sharesContract.clearSplitDelegation(getWalletConnectTxOverrides());
@@ -14882,7 +14211,7 @@ body.modal-open { overflow: hidden; }
           // Clear any previous styling classes
           emblem.classList.remove('url-image', 'description-only');
 
-          const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, provider);
+          const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, _walletProvider);
           const contractURI = await molochContract.contractURI();
 
           if (!contractURI) return;
@@ -15157,7 +14486,7 @@ body.modal-open { overflow: hidden; }
         modal.classList.add('active');
 
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, provider);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _walletProvider);
           const molochIface = new ethers.Interface(MOLOCH_ABI);
           const collectibles = [];
 
@@ -15658,7 +14987,7 @@ body.modal-open { overflow: hidden; }
 
       // Send chat message
       async function sendChatMessage() {
-        if (!currentDAO || !signer) return;
+        if (!currentDAO || !_signer) return;
 
         // Prevent race condition: set flag immediately before any async work
         if (isSendingMessage) return;
@@ -15672,7 +15001,7 @@ body.modal-open { overflow: hidden; }
           return;
         }
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           chatInput.value = 'Sending...';
           chatInput.disabled = true;
@@ -15779,11 +15108,11 @@ body.modal-open { overflow: hidden; }
         // Check if user has voted on any proposals (use voters data from view helper - no RPC calls!)
         const userVoteStatus = {};
 
-        if (connectedAddress) {
+        if (_connectedAddress) {
           proposalsReversed.forEach(proposal => {
             // Check if user is in the voters array (already provided by view helper)
             const userVote = proposal.voters?.find(v =>
-              v.voter?.toLowerCase() === connectedAddress.toLowerCase()
+              v.voter?.toLowerCase() === _connectedAddress.toLowerCase()
             );
             // userVoteStatus: 0 = not voted, 1 = Against, 2 = For, 3 = Abstain
             userVoteStatus[proposal.id.toString()] = userVote ? (Number(userVote.support) + 1) : 0;
@@ -15949,7 +15278,7 @@ body.modal-open { overflow: hidden; }
 
           // Check futarchy state and user receipts
           let futarchyUI = '';
-          if (proposal.futarchy && proposal.futarchy.enabled && connectedAddress) {
+          if (proposal.futarchy && proposal.futarchy.enabled && _connectedAddress) {
             const futarchy = proposal.futarchy;
             const isResolved = futarchy.resolved;
 
@@ -15972,7 +15301,7 @@ body.modal-open { overflow: hidden; }
                 try {
                   const userReceiptBalance = await withRpcFallback(async (rpcProvider) => {
                     const mc = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, rpcProvider);
-                    return await mc.balanceOf(connectedAddress, receiptId);
+                    return await mc.balanceOf(_connectedAddress, receiptId);
                   });
                   const infoDiv = document.getElementById(`futarchy-info-${proposal.id.toString()}`);
                   const boxDiv = document.getElementById(`futarchy-${proposal.id.toString()}`);
@@ -16080,7 +15409,7 @@ body.modal-open { overflow: hidden; }
 
       // Vote on proposal
       async function voteOnProposal(proposalId, support) {
-        if (!currentDAO || !signer) {
+        if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
           return;
         }
@@ -16096,7 +15425,7 @@ body.modal-open { overflow: hidden; }
           return;
         }
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Convert string to BigInt (passed as string to avoid overflow in onclick)
           const proposalIdBigInt = BigInt(proposalId);
@@ -16149,7 +15478,7 @@ body.modal-open { overflow: hidden; }
 
       // Cancel vote on proposal
       async function cancelVoteOnProposal(proposalId) {
-        if (!currentDAO || !signer) {
+        if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
           return;
         }
@@ -16169,7 +15498,7 @@ body.modal-open { overflow: hidden; }
           return;
         }
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Convert string to BigInt (passed as string to avoid overflow in onclick)
           const proposalIdBigInt = BigInt(proposalId);
@@ -16218,7 +15547,7 @@ body.modal-open { overflow: hidden; }
 
       // Claim futarchy rewards
       async function claimFutarchyReward(proposalId, amountStr) {
-        if (!currentDAO || !signer) {
+        if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
           return;
         }
@@ -16234,7 +15563,7 @@ body.modal-open { overflow: hidden; }
         }
 
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Convert string to BigInt
           const proposalIdBigInt = BigInt(proposalId);
@@ -16834,7 +16163,7 @@ body.modal-open { overflow: hidden; }
 
       // Create and publish proposal
       async function createProposal() {
-        if (!currentDAO || !signer) {
+        if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
           return;
         }
@@ -16877,7 +16206,7 @@ body.modal-open { overflow: hidden; }
 
         isCreatingProposal = true;
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Get config from DAO
           const config = await molochContract.config();
@@ -16960,7 +16289,7 @@ body.modal-open { overflow: hidden; }
 
       // Queue a proposal (start timelock countdown)
       async function queueProposal(proposalId) {
-        if (!currentDAO || !signer) {
+        if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
           return;
         }
@@ -16975,7 +16304,7 @@ body.modal-open { overflow: hidden; }
         const proposalIdBigInt = BigInt(proposalId);
 
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           showStatus('Queueing proposal...', false);
           const tx = await molochContract.queue(proposalIdBigInt, getWalletConnectTxOverrides());
@@ -17028,7 +16357,7 @@ body.modal-open { overflow: hidden; }
 
         isExecutingProposal = true;
         try {
-          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, signer);
+          const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
           const currentConfig = await molochContract.config();
 
           // Find the proposal data from messages by matching the proposal ID
@@ -17125,7 +16454,7 @@ body.modal-open { overflow: hidden; }
 
       // Refresh current DAO data
       async function refreshCurrentDAO(showLoading = false) {
-        if (!currentDAO || !provider || !connectedAddress) return;
+        if (!currentDAO || !_walletProvider || !_connectedAddress) return;
 
         try {
           if (showLoading) {
@@ -17138,7 +16467,7 @@ body.modal-open { overflow: hidden; }
           const updatedDAOs = await withRpcFallback(async (activeProvider) => {
             const viewHelper = new ethers.Contract(VIEW_HELPER_ADDRESS, VIEW_HELPER_ABI, activeProvider);
             return await viewHelper.getUserDAOsFullState(
-              connectedAddress,
+              _connectedAddress,
               0,  // daoStart
               50, // daoCount
               0,  // proposalStart
@@ -17211,7 +16540,7 @@ body.modal-open { overflow: hidden; }
           // Re-render all views using multicall batching (mirrors openDAO pattern)
           renderDaoStats();
           const daoAddress = currentDAO.dao.dao;
-          const userAddr = signer ? await signer.getAddress() : null;
+          const userAddr = _signer ? await _signer.getAddress() : null;
 
           // Fire-and-forget (no downstream dependencies)
           renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
@@ -17961,7 +17290,7 @@ body.modal-open { overflow: hidden; }
 
         // Debounce the validation
         customPaymentTokenTimeout = setTimeout(async () => {
-          if (!provider) {
+          if (!_walletProvider) {
             infoDiv.innerHTML = '<span style="color: var(--red);">Connect wallet to validate token</span>';
             return;
           }
@@ -17970,7 +17299,7 @@ body.modal-open { overflow: hidden; }
 
           try {
             const checksummedAddress = ethers.getAddress(tokenAddress);
-            const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, provider);
+            const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, _walletProvider);
 
             // Fetch token info
             let name = 'Unknown', symbol = 'TOKEN', decimals = 18;
@@ -18023,7 +17352,7 @@ body.modal-open { overflow: hidden; }
           // Normalize to checksummed address
           const checksummedAddress = ethers.getAddress(tokenAddress);
 
-          if (!provider) {
+          if (!_walletProvider) {
             infoDiv.innerHTML = '<span style="color: var(--red);">Wallet not connected</span>';
             showStatus('Please connect your wallet first', true);
             return;
@@ -18031,7 +17360,7 @@ body.modal-open { overflow: hidden; }
 
           infoDiv.innerHTML = 'Validating token...';
 
-          const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, provider);
+          const tokenContract = new ethers.Contract(checksummedAddress, ERC20_ABI, _walletProvider);
 
           // Fetch token info with individual error handling
           let name, symbol, decimals;
@@ -18470,9 +17799,9 @@ body.modal-open { overflow: hidden; }
       document.getElementById('summonForm').addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        if (!signer) {
+        if (!_signer) {
           await connectWallet();
-          if (!signer) return;
+          if (!_signer) return;
         }
 
         const summonBtn = document.getElementById('summonBtn');
@@ -18481,17 +17810,17 @@ body.modal-open { overflow: hidden; }
 
         try {
           // Check network
-          if (!connectedWalletProvider) {
+          if (!_connectedWalletProvider) {
             throw new Error('Wallet not connected');
           }
-          const walletChainIdHex = await connectedWalletProvider.request({ method: 'eth_chainId' });
+          const walletChainIdHex = await _connectedWalletProvider.request({ method: 'eth_chainId' });
           if (BigInt(walletChainIdHex) !== 1n) {
             throw new Error('Please switch to Ethereum Mainnet');
           }
 
           // Recreate provider/signer to ensure we're on the correct network
-          provider = new ethers.BrowserProvider(connectedWalletProvider);
-          signer = await provider.getSigner();
+          _walletProvider = new ethers.BrowserProvider(_connectedWalletProvider);
+          _signer = await _walletProvider.getSigner();
 
           // Gather form data
           const daoName = getEl('daoName').value;
@@ -18587,7 +17916,7 @@ body.modal-open { overflow: hidden; }
 
 
           // Connect to summoner
-          const summoner = new ethers.Contract(SUMMONER_ADDRESS, SUMMONER_ABI, signer);
+          const summoner = new ethers.Contract(SUMMONER_ADDRESS, SUMMONER_ABI, _signer);
 
           // Ensure initShares are BigInt for consistent encoding
           const initSharesForPrediction = initShares.map(s => BigInt(s.toString()));
@@ -18823,7 +18152,7 @@ body.modal-open { overflow: hidden; }
               // Always fetch decimals from the token contract for accuracy
               try {
                 showStatus('Verifying token decimals...');
-                const tokenContract = new ethers.Contract(customTokenAddress, ['function decimals() view returns (uint8)'], provider);
+                const tokenContract = new ethers.Contract(customTokenAddress, ['function decimals() view returns (uint8)'], _walletProvider);
                 tribDecimals = await tokenContract.decimals();
                 tribDecimals = Number(tribDecimals);
               } catch (decErr) {
@@ -19001,7 +18330,7 @@ body.modal-open { overflow: hidden; }
 
           // For WalletConnect, skip local gas estimation (use generous limit, wallet will refine)
           const txOptions = { value: initialEthDeposit };
-          if (walletConnectProvider) {
+          if (_isWalletConnect) {
             txOptions.gasLimit = 2_000_000n;
           }
 
@@ -19039,7 +18368,7 @@ body.modal-open { overflow: hidden; }
           showStatus(`✨ DAO summoned successfully at: <a href="${getNetwork().explorer}/address/${daoAddress}" target="_blank" rel="noopener" style="color: var(--fg); text-decoration: underline;">${daoAddress}</a> | <a href="${getNetwork().explorer}/tx/${tx.hash}" target="_blank" rel="noopener" style="color: var(--fg); text-decoration: underline;">View transaction</a>`);
 
           // Refresh DAO list to include newly summoned DAO
-          if (connectedAddress) {
+          if (_connectedAddress) {
             await fetchUserDAOs();
             if (userDAOs.length > 0) renderDAOGallery();
           }
@@ -19047,7 +18376,7 @@ body.modal-open { overflow: hidden; }
           // Reset form
           document.getElementById('summonForm').reset();
           document.getElementById('foundingMembersList').innerHTML = '';
-          const memberRow = createMemberRow(await signer.getAddress(), '1', true);
+          const memberRow = createMemberRow(await _signer.getAddress(), '1', true);
           document.getElementById('foundingMembersList').appendChild(memberRow);
 
           // Reset time units to defaults
@@ -19134,9 +18463,6 @@ body.modal-open { overflow: hidden; }
           }
         });
 
-        // Initialize EIP-6963 support for modern wallet detection
-        initEIP6963();
-
         // Initialize read-only provider for deep links and browsing without wallet
         try {
           readOnlyProvider = new ethers.JsonRpcProvider(getNetwork().rpcs[0]);
@@ -19150,52 +18476,95 @@ body.modal-open { overflow: hidden; }
           try {
             showStatus('Loading DAO...', false);
             await openDAOByAddress(deepLink.address);
-            // Note: Scroll is handled after auto-reconnect check below
           } catch (error) {
             logger.error('Failed to load deep-linked DAO:', error);
             showStatus('Failed to load DAO. Please try connecting your wallet.', true);
           }
         }
 
-        // Auto-reconnect: only if user previously connected on this page
-        const savedWallet = getWalletPreference();
-        let autoReconnected = false;
-        if (savedWallet && savedWallet !== 'walletconnect') {
-          try {
-            window.dispatchEvent(new Event('eip6963:requestProvider'));
-            await new Promise(r => setTimeout(r, 300));
-            // Silent check: only auto-connect if wallet already unlocked
-            let probe;
-            if (savedWallet.startsWith('eip6963_')) {
-              const uuid = savedWallet.replace('eip6963_', '');
-              probe = eip6963Providers.get(uuid)?.provider;
-              if (!probe) {
-                const savedName = (localStorage.getItem('zfi_wallet_name') || '').toLowerCase();
-                if (savedName) {
-                  for (const [, { info, provider }] of eip6963Providers) {
-                    if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
+        // Initialize shared wallet (handles auto-reconnect, UI injection, EIP-6963)
+        walletInit({
+          appName: 'MAJ\u00B7DAO',
+          onConnect: [async () => {
+            try {
+              showStatus('Fetching your DAOs...', false);
+              await fetchUserDAOs();
+              const dl = parseDAODeepLink();
+              if (userDAOs.length > 0) {
+                hideHeroFire();
+                renderDAOGallery();
+              }
+              if (dl) {
+                if (currentDAO && currentDAO.dao.dao.toLowerCase() === dl.address.toLowerCase()) {
+                  const userDaoEntry = userDAOs.find(ud => ud.dao.dao.toLowerCase() === dl.address.toLowerCase());
+                  if (userDaoEntry) currentDAO = userDaoEntry;
+                  renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
+                  renderDaoStats();
+                  const daoAddress = currentDAO.dao.dao;
+                  const userAddr = _signer ? await _signer.getAddress() : null;
+                  let batchData;
+                  try { batchData = await batchDashboardData(daoAddress, userAddr); }
+                  catch (e) { batchData = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined }; }
+                  renderGovernanceInfo(batchData).catch(e => logger.error('renderGovernanceInfo failed:', e));
+                  await Promise.all([
+                    renderProposals(batchData.config),
+                    renderSalesInfo(batchData.sales),
+                    renderTributes(batchData.tributes),
+                    renderAllowances(batchData.allowances),
+                    renderDAOEmblem(daoAddress, batchData.contractURI)
+                  ]);
+                  await renderTreasury();
+                  const membershipBtn = document.getElementById('viewToggleMembership');
+                  if (currentDAO.member) { membershipBtn.style.display = 'block'; }
+                  else { membershipBtn.style.display = 'none'; switchDaoView('dao'); }
+                } else {
+                  showStatus('Opening linked DAO...', false);
+                  const opened = await openDAOByAddress(dl.address);
+                  if (opened) {
+                    requestAnimationFrame(() => {
+                      setTimeout(() => {
+                        const dashboard = document.getElementById('daoDashboard');
+                        if (dashboard) dashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    });
                   }
                 }
-              }
-            } else {
-              probe = WALLET_CONFIG[savedWallet]?.getProvider?.() || window.ethereum;
-            }
-            if (probe) {
-              const accts = await probe.request({ method: 'eth_accounts' });
-              if (!accts || accts.length === 0) {
-                autoReconnected = false;
               } else {
-                await connectWithWallet(savedWallet);
-                autoReconnected = !!connectedAddress;
+                showStatus('Connected', false);
+                if (userDAOs.length > 0) {
+                  setTimeout(() => { const g = document.getElementById('daoGallery'); if (g) g.scrollIntoView({ behavior: 'smooth' }); }, 100);
+                } else {
+                  setTimeout(() => { const s = document.getElementById('summoner'); if (s) s.scrollIntoView({ behavior: 'smooth' }); }, 100);
+                }
               }
-            } else {
-              await connectWithWallet(savedWallet);
-              autoReconnected = !!connectedAddress;
-            }
-          } catch (e) {
-            logger.error('Auto-reconnect failed:', e);
-          }
-        }
+              // Enable summon button
+              const summonBtn = getEl('summonBtn');
+              if (summonBtn) { summonBtn.disabled = false; summonBtn.textContent = 'SUMMON DAO'; }
+              // Initialize first member with connected wallet
+              const foundingMembersList = getEl('foundingMembersList');
+              if (foundingMembersList && foundingMembersList.children.length === 0 && _connectedAddress) {
+                const memberRow = createMemberRow(_connectedAddress, '1', true);
+                foundingMembersList.appendChild(memberRow);
+                updateLootInputs();
+              }
+            } catch(e) { logger.error('Post-connect error:', e); }
+          }],
+          onDisconnect: [() => {
+            userDAOs = []; currentDAO = null; currentDAICO = null;
+            const summonBtn = getEl('summonBtn');
+            if (summonBtn) { summonBtn.disabled = true; summonBtn.textContent = 'CONNECT WALLET TO SUMMON'; }
+            const daoGal = getEl('daoGallery');
+            if (daoGal) daoGal.classList.remove('show');
+            const allGal = getEl('allDaosGallery');
+            if (allGal) allGal.classList.remove('show');
+            const dash = getEl('daoDashboard');
+            if (dash) dash.classList.remove('show');
+            const fireEl = document.getElementById('fireHero');
+            if (fireEl) fireEl.classList.remove('hide');
+            if (heroFire) { heroFire.start(); }
+            showStatus('Wallet disconnected', false);
+          }]
+        });
 
         // If we have a deep link and a DAO was loaded, scroll to the dashboard
         if (deepLink && currentDAO) {
@@ -19205,7 +18574,7 @@ body.modal-open { overflow: hidden; }
               if (dashboard) {
                 dashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }
-            }, autoReconnected ? 500 : 100);
+            }, 300);
           });
         }
       });
