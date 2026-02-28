@@ -9958,6 +9958,10 @@ async function ppwWithdraw() {
     }
 
     // Base circuit inputs. context is set per proving attempt from withdrawalData.
+    // Tree depths MUST match the Privacy Pools circuit compile-time constants
+    // (privacy-pools-core/circuits/src/withdraw.circom: STATE_TREE_DEPTH=32,
+    //  ASP_TREE_DEPTH=32).  Changing these without a matching circuit rebuild
+    // will produce invalid proofs.
     const circuitInputsBase = {
       withdrawnValue: withdrawnValue.toString(),
       stateRoot: stateTree.root.toString(),

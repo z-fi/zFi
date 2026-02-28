@@ -28,8 +28,6 @@ contract FollowOnSaleTest is Test {
     address buyer;
 
     function setUp() public {
-        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum-rpc.publicnode.com")));
-
         deadline = IMinter(MINTER).deadline();
         vm.warp(deadline - 30 days);
 

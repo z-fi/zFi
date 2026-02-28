@@ -44,8 +44,6 @@ contract FundingWorksMinterTest is Test {
     FundingWorksMinter minter;
 
     function setUp() public {
-        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum-rpc.publicnode.com")));
-
         deployer = address(uint160(uint256(keccak256("fw_deployer"))));
         buyer1 = address(uint160(uint256(keccak256("fw_buyer1"))));
         buyer2 = address(uint160(uint256(keccak256("fw_buyer2"))));
