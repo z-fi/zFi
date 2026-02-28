@@ -1776,19 +1776,16 @@ setTimeout(async () => {
       <div class="live-sale-bar"><div class="live-sale-bar-fill" id="fwP2Bar" style="width:0%"></div></div>
     </a>`;
     el.style.display = '';
-    // Load Phase 2 progress (allowance used out of 9M)
+    // Load Phase 2 progress (minter balance toward next NFT)
     try {
-      const FOLLOW_ON_SALE = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
-      const P2_CAP = 9_000_000n * 10n**18n;
+      const MINTER = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
       const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
-      const moloch = new ethers.Contract(FW_DAO, ['function allowance(address,address) view returns (uint256)'], rpc);
-      const remaining = await moloch.allowance(FW_DAO, FOLLOW_ON_SALE);
-      const sold = P2_CAP - remaining;
-      const pct = Number(sold * 1000000n / P2_CAP) / 10000;
+      const minterBal = await rpc.getBalance(MINTER);
+      const pct = Math.min(Number(minterBal * 10000n / ethers.parseEther('1')) / 100, 100);
       const pctEl = document.getElementById('fwP2Pct');
       const barEl = document.getElementById('fwP2Bar');
-      if (pctEl) pctEl.textContent = pct.toFixed(2) + '%';
-      if (barEl) barEl.style.width = pct.toFixed(2) + '%';
+      if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
+      if (barEl) barEl.style.width = pct.toFixed(1) + '%';
     } catch {}
   } catch (e) { console.warn('FW DAICO section failed:', e); }
 }, 50);

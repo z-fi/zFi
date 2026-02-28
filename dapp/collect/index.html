@@ -245,6 +245,7 @@ body.modal-open { overflow:hidden; }
     <div class="sale-bar"><div class="sale-bar-fill" id="p2Bar" style="width:0%"></div></div>
     <div class="info-row"><span class="info-label">Shares remaining</span><span class="info-value" id="p2Remaining">-</span></div>
     <div class="info-row"><span class="info-label"><a id="minterLabel" href="#" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="info-value" id="minterBalance">-</span></div>
+    <div class="info-row"><span class="info-label">Next NFT progress</span><span class="info-value" id="p2NftPct">-</span></div>
     <div class="info-row"><span class="info-label">Deadline</span><span class="info-value" id="fwDeadline">-</span></div>
   </div>
 
@@ -702,13 +703,14 @@ async function loadDashboard() {
       const mintable = mintableFromBal > mintableFromTapN ? mintableFromBal : mintableFromTapN;
       const useMintFromBalance = mintableFromBal > 0n;
       $('minterBalance').textContent = fmtETH(minterBal) + ' ETH';
+      const nftPct = Math.min(Number(minterBal * 10000n / ethers.parseEther('1')) / 100, 100);
+      $('p2NftPct').innerHTML = `<span style="color:var(--green);font-weight:600">${nftPct.toFixed(1)}%</span>`;
       $('minterLabel').href = 'https://etherscan.io/address/' + _minterAddress;
       const nftCard = $('nftCard');
       const nc = Number(nftCount);
       const mt = Number(mintable);
-      // Available ETH = minter balance - already locked (Phase 2 ETH goes directly to minter)
-      const availableWei = minterBal - lockedEth;
-      const progressWei = availableWei > 0n ? availableWei : 0n;
+      // Progress = minter balance (ETH leaves minter when spent on FW mint)
+      const progressWei = minterBal;
       const MINT_PRICE = ethers.parseEther('1');
       if (nc > 0) {
         const nextN = nc + 1;

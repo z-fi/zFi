@@ -1708,8 +1708,8 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.type === 'fw-collector' ? `<span class="coin-tpl-badge coin-tpl-simple" title="FW S02 collector DAO &middot; NFT vault &middot; ragequitable">collect</span>` : md && (md.launchType === 'ez' || md.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
-          <div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Phase 2 sale live</span>' : 'Sale ended'}</div>
+          <div class="coin-card-bar"><div class="coin-card-bar-fill" ${isCollector && !saleActive ? 'id="fwcMintBar" ' : ''}style="width:${isCollector && !saleActive ? '0' : Math.min(salePct,100).toFixed(1)}%"></div></div>
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Phase 2 sale live</span> <span id="fwcMintPct" style="color:var(--fg-muted)"></span>' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1771,6 +1771,16 @@ async function renderGallery() {
       ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
       ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
+    // Async: load FWC minter progress % into collector card
+    const fwcPctEl = document.getElementById('fwcMintPct');
+    if (fwcPctEl) {
+      withRPC(rpc => rpc.getBalance('0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e')).then(bal => {
+        const pct = Math.min(Number(bal * 10000n / ethers.parseEther('1')) / 100, 100);
+        fwcPctEl.textContent = '— ' + pct.toFixed(1) + '% to next NFT';
+        const barEl = document.getElementById('fwcMintBar');
+        if (barEl) barEl.style.width = pct.toFixed(1) + '%';
+      }).catch(() => {});
+    }
   } catch(e) {
     app.innerHTML = `
       <div class="header">
@@ -1958,7 +1968,7 @@ async function renderCoinPage(daoAddr) {
       <div class="coin-detail-head">
         <div class="coin-detail-logo">${logoHTML(data.meta, metadata, 64)}</div>
         <div class="coin-detail-title" style="flex:1">
-          <h2>${escText(metadata.name || data.meta.name || 'Unnamed')}</h2>
+          <h2>${escText(metadata.name || data.meta.name || 'Unnamed')}${isFWCollector ? ' <span style="font-size:11px;font-weight:400;color:var(--fg-dim);letter-spacing:0.05em">Collector DAO</span>' : ''}</h2>
           <div class="coin-symbol-row">
             <span>$${escText(metadata.symbol || data.meta.symbol || '???')}${(metadata.launchType === 'ez' || metadata.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${metadata.lpBps ? (metadata.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : metadata.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : metadata.template ? `<span class="coin-tpl-badge" title="${escText(metadata.template)} template"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</span>
             <div id="coinUserBalance" class="coin-user-balance" style="display:none"></div>
@@ -1971,9 +1981,11 @@ async function renderCoinPage(daoAddr) {
 
     // Description + socials
     const hasSocials = metadata.twitter || metadata.telegram || metadata.discord;
-    if (metadata.description || hasSocials) {
+    if (isFWCollector || metadata.description || hasSocials) {
       html += `<div class="section-card">`;
-      if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
+      if (isFWCollector) {
+        html += `<div style="font-size:11px;line-height:1.6;color:var(--fg-dim)">Tokenworks is selling S02 of its <a href="https://www.s02.works/" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks NFTs</a>. One of the most experimental teams in crypto, owning NFTs via FWC tokens provides exposure to their success. FWC can continue to collect other onchain valuables over time. It is up to FWC shareholders. Become one by buying tokens from the sale or secondary market below. And even if you have the ETH for a full mint, the NFTs are nontransferable, so FWC provides transferability of your ownership, immediate liquidity, as well as additional upside through collective action.</div>`;
+      } else if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
       if (hasSocials) {
         html += `<div class="socials-row"${metadata.description ? ' style="margin-top:10px"' : ''}>`;
         if (metadata.twitter) {
@@ -2011,7 +2023,7 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="drawer" id="fwCollectorDrawer">
           <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>FW S02 Collector</span>
+            <span>Collection</span>
             <span class="arrow">&#9660;</span>
           </button>
           <div class="drawer-body">
@@ -2294,7 +2306,7 @@ async function renderCoinPage(daoAddr) {
             statsEl.innerHTML = `
               <div class="stat-row"><span class="stat-label">Phase 2 Shares remaining</span><span class="stat-value">${parseFloat(ethers.formatUnits(sharesRemaining, 18)).toLocaleString()} shares</span></div>
               <div class="stat-row"><span class="stat-label">Minter balance</span><span class="stat-value">${fmtETH(ethInMinter)} ${ethIco}</span></div>
-              <div class="stat-row"><span class="stat-label">Next NFT progress</span><span class="stat-value" style="color:${mintPct >= 100 ? 'var(--green)' : 'var(--fg)'}; font-weight:600">${mintProgress.toFixed(4)} / ${mintGoal} ${ethIco}</span></div>
+              <div class="stat-row"><span class="stat-label">Next NFT progress</span><span class="stat-value" style="color:${mintPct >= 100 ? 'var(--green)' : 'var(--fg)'}; font-weight:600">${mintProgress.toFixed(4)} / ${mintGoal} ${ethIco} <span style="color:var(--green)">${mintPct.toFixed(1)}%</span></span></div>
               ${pctBar(mintPct, 'var(--green)')}
               ${mintPct >= 100 ? '<div style="font-size:11px;color:var(--green);text-align:center;margin-top:4px;font-weight:600">Ready to mint! Anyone can call mintFromBalance()</div>' : ''}
             `;
@@ -2509,24 +2521,12 @@ async function renderCoinPage(daoAddr) {
       </div>
     `;
 
-    // Close secondary market drawer wrapper for FW Collector
-    if (isFWCollector && !saleActive) {
-      html += `</div></div>`;
-    }
-
     // Chart drawer (only if pool has reserves; hidden until activity confirmed)
     const dark = document.documentElement.classList.contains('dark');
     const chartTheme = dark ? 'dark' : 'light';
-    if (hasPool) {
-      html += `
-        <div class="drawer" id="chartDrawer" data-pool-id="${poolId}" style="display:none">
-          <button class="drawer-toggle" onclick="toggleChart()">
-            <span>Price Chart</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="chart-body"></div>
-        </div>
-        ${isFWCollector && saleActive ? '' : `<div class="drawer" id="activityDrawer" data-pool-id="${poolId}">
+    const _fwcHide = isFWCollector && !saleActive ? ' style="display:none"' : '';
+    const _activityLpHTML = hasPool && !(isFWCollector && saleActive) ? `
+        <div class="drawer" id="activityDrawer" data-pool-id="${poolId}"${_fwcHide}>
           <button class="drawer-toggle" onclick="toggleActivity()">
             <span>Pool Activity</span>
             <span class="arrow">&#9660;</span>
@@ -2535,7 +2535,7 @@ async function renderCoinPage(daoAddr) {
             <div id="activityContent"><div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div></div>
           </div>
         </div>
-        <div class="drawer" id="lpDrawer" data-pool-id="${poolId}">
+        <div class="drawer" id="lpDrawer" data-pool-id="${poolId}"${_fwcHide}>
           <button class="drawer-toggle" onclick="toggleLpList()">
             <span>Liquidity Providers</span>
             <span class="arrow">&#9660;</span>
@@ -2543,8 +2543,23 @@ async function renderCoinPage(daoAddr) {
           <div class="activity-body">
             <div id="lpListContent"><div class="activity-empty">Click to load</div></div>
           </div>
-        </div>`}
-      `;
+        </div>` : '';
+
+    const _chartHTML = hasPool ? `
+        <div class="drawer" id="chartDrawer" data-pool-id="${poolId}" style="display:none">
+          <button class="drawer-toggle" onclick="toggleChart()">
+            <span>Price Chart</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="chart-body"></div>
+        </div>` : '';
+
+    // For FW Collector: nest chart, activity, LP inside secondary market drawer
+    if (isFWCollector && !saleActive) {
+      html += _chartHTML + _activityLpHTML;
+      html += `</div></div>`;
+    } else {
+      html += _chartHTML + _activityLpHTML;
     }
 
     // Shareholders drawer
@@ -2639,6 +2654,16 @@ async function renderCoinPage(daoAddr) {
           const el = $('chartDrawer');
           if (!el || el.dataset.poolId !== _chartPoolId) return; // stale
           if (json.data && json.data.length) {
+            // Hide chart for collector DAO if no swaps in last 12h
+            if (isFWCollector) {
+              const latest = json.data[0];
+              const ts = latest.timestamp || latest.blockTimestamp || 0;
+              const stale = ts && (Date.now() / 1000 - Number(ts)) > 12 * 3600;
+              if (stale) { el.remove(); return; }
+              // Recent activity — show activity/LP drawers too
+              const ad = $('activityDrawer'); if (ad) ad.style.display = '';
+              const ld = $('lpDrawer'); if (ld) ld.style.display = '';
+            }
             el.style.display = '';
             if (!saleActive && !isFWCollector) {
               el.classList.add('open');
