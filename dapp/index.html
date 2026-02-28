@@ -7260,9 +7260,21 @@ async function ppDeriveWalletSeed(_signer, address) {
     { name: 'HKDF', hash: 'SHA-256', salt: ethers.getBytes(address), info: new TextEncoder().encode('privacy-pools/wallet-seed:v2') },
     ikm, 256
   );
-  return ethers.Mnemonic.fromEntropy(new Uint8Array(hkdfBits));
+  const entropy = new Uint8Array(hkdfBits);
+  const mnemonic = ethers.Mnemonic.fromEntropy(entropy);
+
+  // Zero sensitive keying material after use (mirrors PP website security practice)
+  r.fill(0);
+  sigBytes.fill(0);
+  entropy.fill(0);
+
+  return mnemonic;
 }
 
+// NOTE: The Number() truncation below is intentional — it matches the PP SDK's
+// bytesToNumber() behavior in AccountService._initializeAccount(), which also
+// truncates 256-bit HD keys to ~53-bit JS Numbers before passing to poseidon.
+// This ensures cross-compatibility with privacypools.com for the same wallet.
 function ppDeriveMasterKeys(mnemonic) {
   const key1 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/60'/0'/0/0").privateKey;
   const key2 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/60'/1'/0/0").privateKey;
@@ -9949,9 +9961,9 @@ async function ppwWithdraw() {
     const circuitInputsBase = {
       withdrawnValue: withdrawnValue.toString(),
       stateRoot: stateTree.root.toString(),
-      stateTreeDepth: stateTree.depth.toString(),
+      stateTreeDepth: '32',
       ASPRoot: aspTree.root.toString(),
-      ASPTreeDepth: aspTree.depth.toString(),
+      ASPTreeDepth: '32',
       label: label.toString(),
       existingValue: value.toString(),
       existingNullifier: _ppwNote.nullifier.toString(),
