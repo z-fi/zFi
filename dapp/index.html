@@ -993,7 +993,7 @@ body.modal-open { overflow: hidden; }
   </div>
   <div id="ppSwapWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted);cursor:pointer;margin-bottom:0;text-transform:none;letter-spacing:0">
-      <input type="checkbox" id="ppSwapToggle" onchange="onPPSwapToggle()"> Deposit swap output into <a href="https://privacypools.com" target="_blank" style="color:var(--link-fg)">Privacy Pools</a>
+      <input type="checkbox" id="ppSwapToggle" onchange="onPPSwapToggle()"> Deposit swap output into <a href="https://privacypools.com" target="_blank" rel="noopener" style="color:var(--link-fg)">Privacy Pools</a>
     </label>
     <div id="ppSwapAssetWrap" style="display:none;margin-top:6px">
       <div style="display:flex;gap:6px;align-items:center">
@@ -1002,7 +1002,7 @@ body.modal-open { overflow: hidden; }
         <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
         <button id="ppSwapAssetWSTETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('wstETH')"><span class="pp-icon-16" data-icon="wstETH"></span>wstETH</button>
       </div>
-      <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note &mdash; withdraw via the Privacy tab or <a href="https://privacypools.com" target="_blank" style="color:var(--link-fg)">privacypools.com</a>.</div>
+      <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You&#39;ll receive a note &mdash; withdraw via the Privacy tab or <a href="https://privacypools.com" target="_blank" rel="noopener" style="color:var(--link-fg)">privacypools.com</a>.</div>
     </div>
   </div>
 </div>
@@ -1015,11 +1015,11 @@ body.modal-open { overflow: hidden; }
   <div style="font-weight:600;color:var(--remove-fg, #c0392b);margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
   <textarea id="ppSwapNoteText" readonly rows="3" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
   <div style="display:flex;gap:8px;margin-top:8px">
-    <button onclick="navigator.clipboard.writeText($('ppSwapNoteText').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
-    <button onclick="ppSwapDownloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
+    <button onclick="navigator.clipboard.writeText($('ppSwapNoteText').value)" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Copy</button>
+    <button onclick="ppSwapDownloadNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Download</button>
   </div>
   <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-    Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
+    Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a>. Same wallet works on both.
   </p>
   <button onclick="setShown('ppSwapNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
 </div>
@@ -1035,7 +1035,7 @@ body.modal-open { overflow: hidden; }
 <div id="privacyTab" style="display:none">
 <div class="swap-card">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Deposit to Privacy Pool</h2>
-  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH, BOLD, or wstETH into <a href="https://privacypools.com" target="_blank">Privacy Pools</a> (0xbow). Save the note you receive &mdash; withdraw below or at <a href="https://privacypools.com" target="_blank">privacypools.com</a> with the same wallet.</p>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Deposit ETH, BOLD, or wstETH into <a href="https://privacypools.com" target="_blank" rel="noopener">Privacy Pools</a> (0xbow). Save the note you receive. Withdraw below or at <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a> with the same wallet.</p>
 
   <div style="display:flex;gap:8px;margin-bottom:12px">
     <button id="ppAssetETH" class="swap-btn pp-asset-btn active" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSelectAsset('ETH')"><span class="pp-icon-18" data-icon="ETH"></span>ETH</button>
@@ -1043,7 +1043,7 @@ body.modal-open { overflow: hidden; }
     <button id="ppAssetWSTETH" class="swap-btn pp-asset-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('wstETH')"><span class="pp-icon-18" data-icon="wstETH"></span>wstETH</button>
     <button id="ppZapBtn" class="swap-btn pp-asset-btn" style="flex:none;width:36px;padding:6px 0;font-size:14px;display:inline-flex;align-items:center;justify-content:center;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted);cursor:pointer" onclick="ppToggleZap()" title="Zap: Stake ETH &rarr; wstETH &rarr; Privacy Pool in one tx">&#9889;</button>
   </div>
-  <div id="ppZapInfo" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:10px;padding:6px 8px;background:var(--surface);border:1px solid var(--border-muted)">&#9889; <b>Zap mode:</b> Send ETH &rarr; auto-stake to wstETH (best rate) &rarr; deposit into Privacy Pool, all in one transaction.</div>
+  <div id="ppZapInfo" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:12px;padding:8px;background:var(--surface);border:1px solid var(--border-muted)">&#9889; <b>Zap mode:</b> Send ETH &rarr; auto-stake to wstETH (best rate) &rarr; deposit into Privacy Pool, all in one transaction.</div>
 
   <div class="section token-section">
     <div class="token-header">
@@ -1069,11 +1069,11 @@ body.modal-open { overflow: hidden; }
     <div style="font-weight:600;color:var(--remove-fg, #c0392b);margin-bottom:8px">Warning: Save this note! You need it to withdraw.</div>
     <textarea id="ppNote" readonly rows="3" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button onclick="navigator.clipboard.writeText($('ppNote').value)" class="swap-btn" style="flex:1;padding:6px">Copy</button>
-      <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px">Download</button>
+      <button onclick="navigator.clipboard.writeText($('ppNote').value)" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Copy</button>
+      <button onclick="downloadNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Download</button>
     </div>
     <p style="font-size:11px;margin-top:8px;color:var(--fg-muted)">
-      Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank">privacypools.com</a>. Same wallet works on both.
+      Withdraw via the Privacy tab below (relay is default), or via <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a>. Same wallet works on both.
     </p>
     <button onclick="setShown('ppNoteBox',false)" class="swap-btn" style="margin-top:6px;padding:4px 12px;font-size:11px;opacity:0.6">Dismiss</button>
   </div>
@@ -1086,27 +1086,39 @@ body.modal-open { overflow: hidden; }
 
 <div class="swap-card" style="margin-top:16px">
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">Withdraw from Privacy Pool</h2>
-  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Paste or upload your deposit note to withdraw. Relayed withdrawal is the default and recommended flow; direct on-chain withdrawal remains available as an advanced option. You can also manually fill in values from Etherscan logs. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
+  <p style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Scan your wallet to find deposits, or paste a note manually. Check <a href="https://wenwithdraw.xyz/" target="_blank" rel="noopener">wenwithdraw.xyz</a> for optimal withdrawal timing.</p>
 
   <div class="section" style="margin-bottom:12px">
-    <label style="margin:0;font-size:12px">Note JSON</label>
-    <textarea id="ppwNote" rows="3" placeholder='{"nullifier":"0x...","secret":"0x...",...}' class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical;margin-top:4px"></textarea>
-    <div style="display:flex;gap:8px;margin-top:6px">
-      <button onclick="ppwParseNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Parse Note</button>
-      <button class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0" onclick="this.querySelector('input').click()">Upload JSON<input type="file" accept=".json" onchange="ppwUploadNote(event)" style="display:none"></button>
-    </div>
+    <button id="ppwScanBtn" class="swap-btn" style="width:100%;padding:8px;font-size:12px;margin:0" onclick="ppwScanDeposits()">Scan My Deposits</button>
+    <div style="font-size:11px;color:var(--fg-muted);margin-top:4px">Connect wallet and sign to find your deposits onchain</div>
   </div>
 
-  <div id="ppwParsed" style="display:none">
-    <div style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;font-weight:600">Parsed Note</div>
-    <div style="display:grid;gap:6px;font-size:11px;margin-bottom:12px">
-      <div><label style="color:var(--fg-muted);margin:0">Nullifier</label><div id="ppwNullifier" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
-      <div><label style="color:var(--fg-muted);margin:0">Secret</label><div id="ppwSecret" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
-      <div><label style="color:var(--fg-muted);margin:0">Precommitment (computed)</label><div id="ppwPrecommitment" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+  <div id="ppwScanResults" style="display:none;margin-bottom:12px"></div>
+
+  <details style="margin-bottom:12px;font-size:12px">
+    <summary style="cursor:pointer;opacity:0.6">Manual note entry</summary>
+    <div class="section" style="margin-top:8px;margin-bottom:0">
+      <label style="margin:0">Note JSON</label>
+      <textarea id="ppwNote" rows="3" placeholder='{"nullifier":"0x...","secret":"0x...",...}' class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical;margin-top:4px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button onclick="ppwParseNote()" class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0">Parse Note</button>
+        <button class="swap-btn" style="flex:1;padding:6px;font-size:11px;margin:0" onclick="this.querySelector('input').click()">Upload JSON<input type="file" accept=".json" onchange="ppwUploadNote(event)" style="display:none"></button>
+      </div>
     </div>
+  </details>
+
+  <div id="ppwParsed" style="display:none">
+    <details style="margin-bottom:12px;font-size:12px">
+      <summary style="cursor:pointer;opacity:0.6">Parsed note details</summary>
+      <div style="display:grid;gap:6px;font-size:11px;margin-top:8px;margin-bottom:8px">
+        <div><label style="color:var(--fg-muted);margin:0">Nullifier</label><div id="ppwNullifier" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+        <div><label style="color:var(--fg-muted);margin:0">Secret</label><div id="ppwSecret" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+        <div><label style="color:var(--fg-muted);margin:0">Precommitment (computed)</label><div id="ppwPrecommitment" style="font-family:monospace;word-break:break-all;opacity:0.7">--</div></div>
+      </div>
+    </details>
 
     <details style="margin-bottom:12px;font-size:12px">
-      <summary style="cursor:pointer;opacity:0.6">On-chain values (from logs)</summary>
+      <summary style="cursor:pointer;opacity:0.6">Onchain values (from logs)</summary>
       <div style="display:grid;gap:8px;margin-top:8px">
         <div class="section" style="margin:0">
           <label style="margin:0;font-size:11px">Leaf Index</label>
@@ -1132,17 +1144,9 @@ body.modal-open { overflow: hidden; }
     </details>
 
     <div class="section" style="margin-bottom:12px">
-      <label id="ppwWithdrawAmtLabel" style="margin:0;font-size:11px">Withdraw Amount (ETH) <span style="opacity:0.5">— leave blank for full withdrawal</span></label>
-      <input type="text" id="ppwWithdrawAmt" class="amount-input" placeholder="Leave blank for full withdrawal" style="font-size:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
-        <span id="ppwWithdrawBalanceHint" style="font-size:11px;color:var(--fg-muted)">Balance: --</span>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button type="button" onclick="ppwSetWithdrawPercent(25)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">25%</button>
-          <button type="button" onclick="ppwSetWithdrawPercent(50)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">50%</button>
-          <button type="button" onclick="ppwSetWithdrawPercent(75)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">75%</button>
-          <button type="button" onclick="ppwSetWithdrawPercent(100)" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0">100%</button>
-        </div>
-      </div>
+      <label id="ppwWithdrawAmtLabel" style="margin:0">Withdraw Amount (ETH)</label>
+      <input type="text" id="ppwWithdrawAmt" class="amount-input" placeholder="Full withdrawal">
+      <div class="balance"><span id="ppwWithdrawBalanceHint">Balance: --</span> <span style="color:var(--fg-dim)">&middot;</span> <button class="max-btn" type="button" onclick="ppwSetWithdrawPercent(25)">25%</button> <button class="max-btn" type="button" onclick="ppwSetWithdrawPercent(50)">50%</button> <button class="max-btn" type="button" onclick="ppwSetWithdrawPercent(75)">75%</button> <button class="max-btn" type="button" onclick="ppwSetWithdrawPercent(100)">100%</button></div>
       <div id="ppwAnonHint" style="display:none;font-size:11px;color:var(--fg-muted);margin-top:6px"></div>
       <div id="ppwSuggestWrap" style="display:none;font-size:11px;color:var(--fg-muted);margin-top:6px">
         Try rounded:
@@ -1151,22 +1155,22 @@ body.modal-open { overflow: hidden; }
     </div>
 
     <div class="section" style="margin-bottom:12px">
-      <label style="margin:0;font-size:11px">Withdrawal Mode</label>
+      <label style="margin:0">Withdrawal Mode</label>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button id="ppwModeRelay" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppwSetMode('relay')">Relay (Recommended)</button>
         <button id="ppwModeDirect" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppwSetMode('direct')">Direct (Advanced)</button>
       </div>
-      <div id="ppwDirectModeHint" style="display:none;font-size:11px;color:orange;margin-top:6px">Direct mode is an advanced flow. It requires a connected wallet and submits the withdrawal directly on-chain.</div>
+      <div id="ppwDirectModeHint" style="display:none;font-size:11px;color:orange;margin-top:6px">Direct mode requires a connected wallet and is less privacy preserving.</div>
     </div>
 
     <div class="section" style="margin-bottom:12px">
-      <label style="margin:0;font-size:11px">Recipient Address <span id="ppwRecipientHint" style="opacity:0.5">— optional (defaults to connected wallet in relay mode)</span></label>
-      <input type="text" id="ppwRecipient" class="amount-input" placeholder="0x... (optional in relay mode)" style="font-size:12px">
+      <label style="margin:0">Recipient Address</label>
+      <input type="text" id="ppwRecipient" class="amount-input" placeholder="0x... or connect wallet" style="font-size:16px">
     </div>
 
-    <div id="ppwExtraGasWrap" style="display:none;margin-bottom:12px;font-size:11px">
-      <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="ppwExtraGas"> Extra gas <span style="color:var(--fg-dim)">(for contract recipients)</span>
+    <div id="ppwExtraGasWrap" style="display:none;margin-bottom:12px;font-size:12px">
+      <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0">
+        <input type="checkbox" id="ppwExtraGas"> Receive some gas token
       </label>
     </div>
 
@@ -1185,40 +1189,31 @@ body.modal-open { overflow: hidden; }
       </div>
     </div>
 
-    <details style="margin-bottom:12px;font-size:12px">
-      <summary style="cursor:pointer;opacity:0.6">Etherscan API Key (for fetching tree data)</summary>
-      <div style="margin-top:6px">
-        <input type="text" id="ppwEtherscanKey" class="amount-input" placeholder="Your etherscan.io API key" style="font-size:11px"
-          oninput="localStorage.setItem('pp_etherscan_key',this.value.trim())">
-        <div style="font-size:10px;color:var(--fg-muted);margin-top:4px">Free to create. Stored in your browser only.</div>
-      </div>
-    </details>
-
     <div id="ppwVerify" style="display:none;margin-bottom:12px;font-size:11px;padding:8px;border:1px solid var(--border-muted);background:var(--surface);overflow-x:auto;word-break:break-word">
       <div id="ppwVerifyStatus"></div>
     </div>
 
     <div id="ppwPreview" style="display:none;margin-bottom:12px;padding:8px;border:1px solid var(--border-muted);background:var(--surface);font-size:11px">
-      <div style="font-weight:600;margin-bottom:4px">Withdrawal Preview</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Withdrawal Preview</div>
       <div id="ppwPreviewContent"></div>
     </div>
 
     <div id="ppwChangeWarning" style="display:none;margin-bottom:12px;padding:8px;border:1px solid orange;background:var(--surface);font-size:11px;color:orange;line-height:1.4">
-      This is a partial withdrawal. Your old note will be fully spent and a new change note will be created. <b>Back up the change note immediately</b> — it is the only way to access remaining funds.
+      This is a partial withdrawal. Your old note will be fully spent and a new change note will be created. <b>Back up the change note immediately.</b> It is the only way to access remaining funds.
     </div>
     <div id="ppwRelayMinWarning" style="display:none;margin-bottom:12px;padding:8px;border:1px solid #f39c12;background:var(--surface);font-size:11px;color:#f39c12;line-height:1.4"></div>
 
     <button id="ppwWithdrawBtn" class="swap-btn" disabled onclick="ppwWithdraw()">Withdraw</button>
 
     <div id="ppwResult" style="display:none;margin-top:12px" class="quote-info">
-      <div style="font-size:11px;font-weight:600;margin-bottom:6px">Withdrawal Data</div>
-      <textarea id="ppwResultText" readonly rows="6" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:10px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Withdrawal Data</div>
+      <textarea id="ppwResultText" readonly rows="6" class="pp-note-area" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted);padding:8px;resize:vertical"></textarea>
       <div id="ppwChangeActions" style="display:none;margin-top:8px">
-        <div style="font-size:11px;color:orange;font-weight:600;margin-bottom:6px">Change Note Actions</div>
+        <div style="font-size:12px;color:orange;font-weight:600;margin-bottom:6px">Change Note Actions</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="ppwCopyChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0">Copy change note</button>
-          <button onclick="ppwDownloadChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0">Download change note</button>
-          <button onclick="ppwUseChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0">Use change note now</button>
+          <button onclick="ppwCopyChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Copy change note</button>
+          <button onclick="ppwDownloadChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Download change note</button>
+          <button onclick="ppwUseChangeNote()" style="font-size:10px;padding:4px 8px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Use change note now</button>
         </div>
       </div>
     </div>
@@ -1332,7 +1327,7 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
-  <button id="coinLaunchBtn" disabled style="width:100%;padding:14px 24px;font-size:13px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
+  <button id="coinLaunchBtn" class="swap-btn" disabled style="letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
 
   <div id="coinStatus"></div>
 </div>
@@ -7237,6 +7232,7 @@ const PP_POOL_EVENTS = new ethers.Interface([
   "event LeafInserted(uint256 _index, uint256 _leaf, uint256 _root)"
 ]);
 const SNARK_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+const PP_DEPLOYMENT_BLOCKS = { ETH: 22153714, BOLD: 24433029, wstETH: 23039970 };
 
 let _ppMasterKeys = null; // { masterNullifier, masterSecret, address }
 
@@ -7365,16 +7361,46 @@ const PP_ETH_ASSET = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const PP_BOLD_POOL = '0xb4b5Fd38Fd4788071d7287e3cB52948e0d10b23E';
 const PP_WSTETH_POOL = '0x1A604E9DFa0EFDC7FFda378AF16Cb81243b61633';
 
+function ppGetPoolAddress(asset) {
+  if (asset === 'wstETH') return _ppConfigWstETH?.pool || PP_WSTETH_POOL;
+  if (asset === 'BOLD') return _ppConfigBold?.pool || PP_BOLD_POOL;
+  return _ppConfig?.pool || PP_ETH_POOL;
+}
+
 function ppComputeScope(asset) {
+  const poolAddress = ppGetPoolAddress(asset);
   const isETH = (!asset || asset === 'ETH');
   const isWSTETH = (asset === 'wstETH');
-  const poolAddress = isWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (isETH ? (_ppConfig?.pool || PP_ETH_POOL) : (_ppConfigBold?.pool || PP_BOLD_POOL));
   const assetAddress = isWSTETH ? WSTETH_ADDRESS : (isETH ? PP_ETH_ASSET : BOLD_ADDRESS);
   return BigInt(ethers.keccak256('0x' +
     poolAddress.slice(2).toLowerCase() +
     '0000000000000000000000000000000000000000000000000000000000000001' +
     assetAddress.slice(2).toLowerCase()
   )) % SNARK_FIELD;
+}
+
+async function ppGetLogsChunked(provider, filter, fromBlock, toBlock, chunkSize = 1250000) {
+  try {
+    return await provider.getLogs({ ...filter, fromBlock, toBlock });
+  } catch (e) {
+    const msg = (e.message || '').toLowerCase();
+    if (!msg.includes('range') && !msg.includes('limit') && !msg.includes('10000') && !msg.includes('too many')) throw e;
+    const logs = [];
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, toBlock);
+      try {
+        logs.push(...await provider.getLogs({ ...filter, fromBlock: start, toBlock: end }));
+      } catch (chunkErr) {
+        // Retry with smaller sub-chunks
+        const sub = Math.floor(chunkSize / 4) || 1;
+        for (let s2 = start; s2 <= end; s2 += sub) {
+          const e2 = Math.min(s2 + sub - 1, end);
+          logs.push(...await provider.getLogs({ ...filter, fromBlock: s2, toBlock: e2 }));
+        }
+      }
+    }
+    return logs;
+  }
 }
 
 let _ppConfig = null; // { pool, minimumDepositAmount, vettingFeeBPS }
@@ -7593,6 +7619,7 @@ const PP_DEPOSIT_IFACE = new ethers.Interface([
 
 function parsePPDepositReceipt(receipt) {
   let value, label, commitment, leafIndex, root;
+  // First pass: extract Deposited event to get commitment
   for (const log of receipt.logs) {
     try {
       const parsed = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
@@ -7600,11 +7627,21 @@ function parsePPDepositReceipt(receipt) {
         commitment = parsed.args._commitment;
         label = parsed.args._label;
         value = parsed.args._value;
-      } else if (parsed.name === 'LeafInserted') {
-        leafIndex = parsed.args._index;
-        root = parsed.args._root;
       }
     } catch {}
+  }
+  // Second pass: match LeafInserted by commitment value to handle batch txs
+  if (commitment != null) {
+    for (const log of receipt.logs) {
+      try {
+        const parsed = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
+        if (parsed.name === 'LeafInserted' && BigInt(parsed.args._leaf) === BigInt(commitment)) {
+          leafIndex = parsed.args._index;
+          root = parsed.args._root;
+          break;
+        }
+      } catch {}
+    }
   }
   return { value, label, commitment, leafIndex, root };
 }
@@ -8668,8 +8705,8 @@ function renderPPNotes() {
           ${statusHtml ? '<div style="margin-top:2px">' + statusHtml + '</div>' : ''}
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
-          <button onclick="ppUseNote(${i})" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0" title="Load into withdraw form">Use</button>
-          <button onclick="navigator.clipboard.writeText(ppGetNote(${i}))" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--border);border-radius:0">Copy</button>
+          <button onclick="ppUseNote(${i})" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0" title="Load into withdraw form">Use</button>
+          <button onclick="navigator.clipboard.writeText(ppGetNote(${i}))" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Copy</button>
           <button onclick="ppDeleteNote(${i})" style="font-size:10px;padding:2px 6px;cursor:pointer;background:none;color:var(--remove-fg);border:1px solid var(--border-muted);border-radius:0">Del</button>
         </div>
       </div>
@@ -8730,10 +8767,8 @@ async function ppRefreshNoteStatuses() {
         try {
           const nullHash = poseidon1([BigInt(note.nullifier)]);
           const asset = (note.asset || saved[i].asset || 'ETH').toUpperCase();
-          const isBOLD = asset === 'BOLD';
-          const isWSTETH = asset === 'WSTETH';
-          const pool = isWSTETH ? (_ppConfigWstETH?.pool || PP_WSTETH_POOL) : (isBOLD ? (_ppConfigBold?.pool || PP_BOLD_POOL) : (_ppConfig?.pool || PP_ETH_POOL));
-          spentChecks.push({ index: i, nullifierHash: nullHash, poolAddress: pool });
+          const canonAsset = asset === 'WSTETH' ? 'wstETH' : asset;
+          spentChecks.push({ index: i, nullifierHash: nullHash, poolAddress: ppGetPoolAddress(canonAsset) });
         } catch {}
       }
       if (!note.label || !note.value) continue;
@@ -8841,10 +8876,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (icon) el.innerHTML = icon;
   });
 
-  // Restore saved Etherscan API key
-  const _savedEsKey = localStorage.getItem('pp_etherscan_key');
-  if (_savedEsKey && $('ppwEtherscanKey')) $('ppwEtherscanKey').value = _savedEsKey;
-
   // Deeplink: ?tab=privacy or #privacy (skip if already on the right tab via PP deep link)
   const _urlp2 = new URLSearchParams(window.location.search);
   if (_activeTab !== 'privacy' && (_urlp2.get('tab') === 'privacy' || window.location.hash === '#privacy')) switchTab('privacy');
@@ -8880,7 +8911,6 @@ const PP_POOL_ABI = [
 const PP_VERIFIER_ABI = [
   "function verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[8]) returns (bool)"
 ];
-const PP_POOL_DEPLOY_BLOCK = 22100000; // before first pool deposit (pool creation may predate entrypoint)
 const PP_MAX_TREE_DEPTH = 32;
 const PP_WITHDRAW_WASM = "https://privacypools.com/artifacts/withdraw.wasm";
 const PP_WITHDRAW_ZKEY = "https://privacypools.com/artifacts/withdraw.zkey";
@@ -8905,7 +8935,7 @@ function ppwClearAnonymityHint() {
 
 function ppwUpdateAmountSection(value, asset) {
   const lbl = $('ppwWithdrawAmtLabel');
-  if (lbl) lbl.innerHTML = `Withdraw Amount (${escText(asset)}) <span style="opacity:0.5">— leave blank for full withdrawal</span>`;
+  if (lbl) lbl.textContent = `Withdraw Amount (${asset})`;
   if (value == null || value <= 0n) {
     setText('ppwWithdrawBalanceHint', 'Balance: --');
     return;
@@ -9117,17 +9147,17 @@ function ppwScheduleAnonymityHint(withdrawnValue, asset) {
 }
 
 function ppwUpdateRecipientHint() {
-  const hintEl = $('ppwRecipientHint');
-  if (!hintEl) return;
+  const inputEl = $('ppwRecipient');
+  if (!inputEl) return;
   if (_ppwMode === 'direct') {
-    hintEl.textContent = connectedAddress
-      ? '— direct mode: must match connected wallet'
-      : '— direct mode: connect wallet first (recipient = signer)';
+    inputEl.placeholder = _connectedAddress
+      ? _connectedAddress.slice(0, 10) + '...'
+      : '0x... (connect wallet)';
     return;
   }
-  hintEl.textContent = connectedAddress
-    ? '— optional (defaults to connected wallet in relay mode)'
-    : '— required in relay mode when wallet is not connected';
+  inputEl.placeholder = _connectedAddress
+    ? _connectedAddress.slice(0, 10) + '... (or enter custom)'
+    : '0x... or connect wallet';
 }
 
 function ppwCanSubmitWithdrawal() {
@@ -9135,10 +9165,10 @@ function ppwCanSubmitWithdrawal() {
   const customRecipient = ($('ppwRecipient')?.value || '').trim();
   if (_ppwMode === 'relay') {
     if (customRecipient) return ethers.isAddress(customRecipient);
-    return !!connectedAddress;
+    return !!_connectedAddress;
   }
-  if (!connectedAddress || !signer) return false;
-  if (customRecipient && customRecipient.toLowerCase() !== connectedAddress.toLowerCase()) return false;
+  if (!_connectedAddress || !_signer) return false;
+  if (customRecipient && customRecipient.toLowerCase() !== _connectedAddress.toLowerCase()) return false;
   return true;
 }
 
@@ -9212,8 +9242,8 @@ function ppwUpdatePreview() {
     const changeValue = value - withdrawnValue;
     const isPartial = changeValue > 0n;
     let html = '<div style="display:grid;gap:2px">';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Committed</span><span>' + fmt(ppFormatAmountWei(value, asset)) + ' ' + escText(asset) + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Withdraw</span><span>' + fmt(ppFormatAmountWei(withdrawnValue, asset)) + ' ' + escText(asset) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Available</span><span>' + fmt(ppFormatAmountWei(value, asset)) + ' ' + escText(asset) + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Withdrawal</span><span>' + fmt(ppFormatAmountWei(withdrawnValue, asset)) + ' ' + escText(asset) + '</span></div>';
     if (isPartial) html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Change</span><span style="color:orange">' + fmt(ppFormatAmountWei(changeValue, asset)) + ' ' + escText(asset) + '</span></div>';
     html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Mode</span><span>' + (_ppwMode === 'relay' ? 'Relay' : 'Direct') + '</span></div>';
     html += '</div>';
@@ -9362,10 +9392,18 @@ function ppwParseNote() {
   setText('ppwSecret', note.secret);
   setText('ppwPrecommitment', '0x' + precommitment.toString(16).padStart(64, '0'));
 
+  // Clear all onchain fields first to prevent stale data from a previously loaded note
+  $('ppwLeafIndex').value = '';
+  $('ppwValue').value = '';
+  $('ppwLabel').value = '';
+  $('ppwCommitment').value = '';
+  $('ppwRoot').value = '';
+
   if (note.leafIndex != null) $('ppwLeafIndex').value = note.leafIndex;
   if (note.value != null) $('ppwValue').value = note.value;
   if (note.label != null) $('ppwLabel').value = note.label;
   if (note.commitment != null) $('ppwCommitment').value = note.commitment;
+  if (note.root != null) $('ppwRoot').value = note.root;
 
   setShown('ppwParsed', true);
   ppwSyncWithdrawButtonState();
@@ -9385,6 +9423,224 @@ function ppwUploadNote(event) {
   const reader = new FileReader();
   reader.onload = e => { $('ppwNote').value = e.target.result; ppwParseNote(); };
   reader.readAsText(file);
+}
+
+// ── Scan My Deposits ────────────────────────────────────────────────
+let _ppwScanAbort = null;
+let _ppwScanResults = [];
+
+async function ppwScanDeposits() {
+  const btn = $('ppwScanBtn');
+  const resultsEl = $('ppwScanResults');
+
+  // If scan in progress, abort it
+  if (_ppwScanAbort) { _ppwScanAbort.abort(); return; }
+
+  // Guard: wallet required
+  if (!_signer || !_connectedAddress) {
+    showStatus('Connect wallet to scan for deposits', 'error');
+    return;
+  }
+
+  // UI: scanning state
+  const origText = btn.textContent;
+  const origOnclick = btn.getAttribute('onclick');
+  btn.textContent = 'Scanning... (Cancel)';
+  setDisabled(btn, false);
+  _ppwScanAbort = new AbortController();
+  _ppwScanResults = [];
+  setShown(resultsEl, false);
+  resultsEl.innerHTML = '';
+
+  try {
+    // Step 1: derive master keys (triggers EIP-712 signature if not cached)
+    const keys = await ppEnsureMasterKeys();
+    if (_ppwScanAbort.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    const rpc = await quoteRPC.call(r => r);
+    const latestBlock = await rpc.getBlockNumber();
+    const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
+    const assets = ['ETH', 'BOLD', 'wstETH'];
+
+    // Step 2: for each asset, fetch all Deposited events and match by precommitment
+    for (const asset of assets) {
+      if (_ppwScanAbort.signal.aborted) break;
+
+      const scope = ppComputeScope(asset);
+      const poolAddress = ppGetPoolAddress(asset);
+      const fromBlock = PP_DEPLOYMENT_BLOCKS[asset] || PP_DEPLOYMENT_BLOCKS.ETH;
+
+      btn.textContent = `Scanning ${asset}... (Cancel)`;
+
+      // Fetch all Deposited events for this pool
+      let depositEvents;
+      try {
+        const filter = { address: poolAddress, topics: [PP_POOL_EVENTS.getEvent('Deposited').topicHash], fromBlock, toBlock: latestBlock };
+        const rawLogs = await ppGetLogsChunked(rpc, filter, fromBlock, latestBlock);
+        depositEvents = new Map();
+        for (const log of rawLogs) {
+          try {
+            const parsed = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
+            if (parsed.name === 'Deposited') {
+              const pch = '0x' + BigInt(parsed.args._precommitmentHash).toString(16).padStart(64, '0');
+              depositEvents.set(pch, {
+                commitment: parsed.args._commitment,
+                label: parsed.args._label,
+                value: parsed.args._value,
+                txHash: log.transactionHash,
+                blockNumber: log.blockNumber,
+              });
+            }
+          } catch (parseErr) { console.warn('Scan: failed to parse event log', parseErr); }
+        }
+      } catch (e) {
+        console.warn(`Scan: failed to fetch ${asset} events:`, e);
+        continue; // skip this asset, try next
+      }
+
+      if (_ppwScanAbort.signal.aborted) break;
+
+      // Iterate deposit indices, match precommitments against event map
+      let consecutiveMisses = 0;
+      for (let index = 0; consecutiveMisses < 10; index++) {
+        if (_ppwScanAbort.signal.aborted) break;
+
+        const dk = ppDeriveDepositKeys(keys.masterNullifier, keys.masterSecret, scope, index);
+        const pch = '0x' + dk.precommitment.toString(16).padStart(64, '0');
+        const ev = depositEvents.get(pch);
+
+        if (!ev) { consecutiveMisses++; continue; }
+        consecutiveMisses = 0;
+
+        // Found a deposit — check spent status
+        let spent = false;
+        try {
+          const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+          const nullHash = poseidon1([dk.nullifier]);
+          spent = await pool.nullifierHashes(nullHash);
+        } catch { /* assume not spent if check fails */ }
+
+        // Get leafIndex from tx receipt (matches parsePPDepositReceipt pattern)
+        let leafIndex = null, root = null;
+        try {
+          const receipt = await rpc.getTransactionReceipt(ev.txHash);
+          if (receipt) {
+            for (const log of receipt.logs) {
+              if (log.address.toLowerCase() !== poolAddress.toLowerCase()) continue;
+              try {
+                const p = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
+                if (p.name === 'LeafInserted' && BigInt(p.args._leaf) === BigInt(ev.commitment)) { leafIndex = p.args._index; root = p.args._root; break; }
+              } catch {}
+            }
+          }
+        } catch {}
+
+        _ppwScanResults.push({
+          asset, index, spent, poolAddress,
+          nullifier: dk.nullifier, secret: dk.secret, precommitment: dk.precommitment,
+          value: ev.value, label: ev.label, commitment: ev.commitment,
+          leafIndex, root, txHash: ev.txHash, blockNumber: ev.blockNumber,
+        });
+      }
+    }
+
+    ppwRenderScanResults();
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      // Show partial results on cancel
+      ppwRenderScanResults();
+    } else if (e.code === 'ACTION_REJECTED' || e.message?.includes('rejected') || e.message?.includes('denied')) {
+      showStatus('Signature required to derive deposit keys', 'error');
+    } else {
+      console.error('Scan error:', e);
+      showStatus('Scan failed: ' + (e.shortMessage || e.message), 'error');
+      ppwRenderScanResults(); // show partial results
+    }
+  } finally {
+    _ppwScanAbort = null;
+    btn.textContent = origText || 'Scan My Deposits';
+    btn.setAttribute('onclick', origOnclick || 'ppwScanDeposits()');
+    setDisabled(btn, false);
+  }
+}
+
+function ppwRenderScanResults() {
+  const el = $('ppwScanResults');
+  if (!el) return;
+
+  if (_ppwScanResults.length === 0) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px;border:1px solid var(--border-muted);background:var(--surface)">No deposits found for this wallet</div>';
+    setShown(el, true);
+    return;
+  }
+
+  let html = '<div style="border:1px solid var(--border-muted);background:var(--surface);padding:0 8px">';
+  html += '<div style="font-size:12px;font-weight:600;margin:8px 0 6px">Found Deposits</div>';
+  for (let i = 0; i < _ppwScanResults.length; i++) {
+    const r = _ppwScanResults[i];
+    const amtStr = r.value ? escText(fmt(ppFormatAmountWei(BigInt(r.value), r.asset))) + ' ' + escText(r.asset) : escText(r.asset);
+    const statusBadge = r.spent
+      ? '<span style="font-size:10px;color:#e74c3c;font-weight:600">Spent</span>'
+      : '<span style="font-size:10px;color:#27ae60;font-weight:600">Available</span>';
+    const txLink = r.txHash ? ` <a href="https://etherscan.io/tx/${escAttr(r.txHash)}" target="_blank" rel="noopener" style="font-size:10px">tx</a>` : '';
+    const indexWarn = (!r.spent && r.leafIndex == null) ? ' <span style="font-size:10px;color:var(--fg-muted)" title="Leaf index could not be fetched; you may need to enter it manually">(index missing)</span>' : '';
+    const useBtn = r.spent ? '' : `<button onclick="ppwUseScanResult(${i})" style="font-size:10px;padding:2px 6px;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0">Use</button>`;
+
+    html += `<div style="padding:6px 0;${i < _ppwScanResults.length - 1 ? 'border-bottom:1px solid var(--border-muted)' : ''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-size:11px">${amtStr} <span style="color:var(--fg-dim)">&middot;</span> ${statusBadge}${indexWarn}${txLink}</div>
+        <div style="flex-shrink:0">${useBtn}</div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+  setShown(el, true);
+}
+
+function ppwUseScanResult(index) {
+  const r = _ppwScanResults[index];
+  if (!r) return;
+
+  // Build note JSON
+  const depositInfo = {};
+  if (r.value != null) depositInfo.value = r.value;
+  if (r.label != null) depositInfo.label = r.label;
+  if (r.leafIndex != null) depositInfo.leafIndex = r.leafIndex;
+  if (r.commitment != null) depositInfo.commitment = r.commitment;
+  if (r.root != null) depositInfo.root = r.root;
+
+  const noteJSON = buildPPNote(r.nullifier, r.secret, depositInfo, r.asset);
+
+  // Populate textarea and parse
+  $('ppwNote').value = noteJSON;
+  ppwParseNote();
+
+  // Auto-save to localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('pp_notes') || '[]');
+    // Check for duplicate (same nullifier)
+    const noteObj = JSON.parse(noteJSON);
+    const isDupe = saved.some(s => {
+      try { return JSON.parse(s.note).nullifier === noteObj.nullifier; } catch { return false; }
+    });
+    if (!isDupe) {
+      saved.push({
+        note: noteJSON,
+        asset: r.asset,
+        amount: r.value?.toString(),
+        timestamp: Date.now(),
+        txHash: r.txHash,
+        isChange: false,
+      });
+      localStorage.setItem('pp_notes', JSON.stringify(saved));
+      renderPPNotes();
+    }
+  } catch (e) { console.warn('ppwUseScanResult: failed to auto-save note', e); }
+
+  // Scroll to withdrawal form
+  const card = $('ppwWithdrawBtn')?.closest('.swap-card');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function ppwWithdraw() {
@@ -9461,7 +9717,7 @@ async function ppwWithdraw() {
       const nullHash = poseidon1([_ppwNote.nullifier]);
       const isSpent = await pool.nullifierHashes(nullHash);
       if (isSpent) {
-        showStatus('This note has already been withdrawn (nullifier spent on-chain).', 'error');
+        showStatus('This note has already been withdrawn (nullifier spent onchain).', 'error');
         log('<b>Note already spent.</b> Nullifier hash 0x' + nullHash.toString(16).slice(0, 16) + '... is marked as used.');
         return;
       }
@@ -9470,108 +9726,30 @@ async function ppwWithdraw() {
       log('Warning: Could not verify spent status (' + escText(spentErr.message) + '). Proceeding.');
     }
 
-    // Fetch state tree + ASP leaves from 0xbow API (primary), Etherscan fallback for state tree
+    // Fetch state tree + ASP leaves from 0xbow API
     log('Fetching tree data from 0xbow API...');
     let treeLeaves, aspLeaves;
-    let aspFromAPI = false;
     try {
-      const aspResp = await fetch('https://api.0xbow.io/1/public/mt-leaves', {
+      const apiResp = await fetch('https://api.0xbow.io/1/public/mt-leaves', {
         headers: { 'X-Pool-Scope': SCOPE.toString() }
       });
-      if (!aspResp.ok) throw new Error('HTTP ' + aspResp.status);
-      const aspData = await aspResp.json();
-      if (!aspData.aspLeaves || !Array.isArray(aspData.aspLeaves) || aspData.aspLeaves.length === 0) {
+      if (!apiResp.ok) throw new Error('HTTP ' + apiResp.status);
+      const apiData = await apiResp.json();
+      if (!apiData.aspLeaves || !Array.isArray(apiData.aspLeaves) || apiData.aspLeaves.length === 0) {
         throw new Error('No ASP leaves returned');
       }
-      aspLeaves = aspData.aspLeaves.map(l => BigInt(l));
-      // Use stateTreeLeaves from the same API response if available
-      if (aspData.stateTreeLeaves && Array.isArray(aspData.stateTreeLeaves) && aspData.stateTreeLeaves.length > 0) {
-        treeLeaves = aspData.stateTreeLeaves.map(l => BigInt(l));
-        aspFromAPI = true;
-        log('Fetched ' + treeLeaves.length + ' state leaves + ' + aspLeaves.length + ' ASP leaves from 0xbow API.');
-      } else {
-        log('Fetched ' + aspLeaves.length + ' ASP leaves (no state tree in API response — falling back to Etherscan).');
+      if (!apiData.stateTreeLeaves || !Array.isArray(apiData.stateTreeLeaves) || apiData.stateTreeLeaves.length === 0) {
+        throw new Error('No state tree leaves returned');
       }
-    } catch (aspErr) {
-      showStatus('Failed to fetch data from 0xbow API: ' + aspErr.message + '. The API may be unavailable.', 'error');
+      aspLeaves = apiData.aspLeaves.map(l => BigInt(l));
+      treeLeaves = apiData.stateTreeLeaves.map(l => BigInt(l));
+      log('Fetched ' + treeLeaves.length + ' state leaves + ' + aspLeaves.length + ' ASP leaves from 0xbow API.');
+    } catch (apiErr) {
+      showStatus('Failed to fetch tree data from 0xbow API: ' + apiErr.message + '. The API may be unavailable — try again in a few minutes.', 'error');
       return;
     }
 
-    // Etherscan fallback: only if API didn't provide state tree leaves
-    let esShifted = false;
-    if (!treeLeaves) {
-      const esKey = ($('ppwEtherscanKey')?.value || '').trim() || localStorage.getItem('pp_etherscan_key') || '';
-      if (!esKey) { showStatus('Etherscan API key required for state tree fallback — expand the field above and paste your free key from etherscan.io/myapikey', 'error'); return; }
-      log('Fetching state tree leaves via Etherscan (fallback)...');
-      const leaves = [];
-      let lastEventRoot = null;
-      const LEAF_TOPIC = '0xcb249c8292372bd11f567786635483fca9e635030baafca55ff1a8940141d221';
-      let esFrom = PP_POOL_DEPLOY_BLOCK;
-      let batch = 0;
-
-      const ES_MAX_BATCHES = 200; // safety cap (~200k leaves)
-      while (batch < ES_MAX_BATCHES) {
-        batch++;
-        const url = 'https://api.etherscan.io/v2/api?chainid=1&module=logs&action=getLogs' +
-          '&address=' + poolAddress +
-          '&topic0=' + LEAF_TOPIC +
-          '&fromBlock=' + esFrom + '&toBlock=latest' +
-          '&page=1&offset=1000' +
-          '&apikey=' + esKey;
-        let json;
-        for (let attempt = 0; attempt < 10; attempt++) {
-          logReplace('Fetching leaves batch ' + batch + (attempt ? ' (retry ' + attempt + ')' : '') +
-            '... (' + leaves.length + ' so far, from block ' + esFrom + ')');
-          try {
-            const resp = await fetch(url);
-            json = await resp.json();
-          } catch (fetchErr) {
-            log('Network error, retrying in 8s... (' + fetchErr.message + ')');
-            await new Promise(r => setTimeout(r, 8000));
-            continue;
-          }
-          if (json.status === '1' && Array.isArray(json.result)) break;
-          const errMsg = typeof json.result === 'string' ? json.result : json.message || 'unknown error';
-          log('Etherscan: ' + errMsg + ', retrying in 8s...');
-          json = null;
-          await new Promise(r => setTimeout(r, 8000));
-        }
-        if (!json || json.status !== '1' || !Array.isArray(json.result) || json.result.length === 0) break;
-        for (const entry of json.result) {
-          const d = entry.data.slice(2);
-          leaves[parseInt(d.slice(0, 64), 16)] = BigInt('0x' + d.slice(64, 128));
-          lastEventRoot = BigInt('0x' + d.slice(128, 192));
-        }
-        if (json.result.length < 1000) break;
-        const lastBlockHex = json.result[json.result.length - 1].blockNumber;
-        esFrom = parseInt(lastBlockHex, 16) + 1;
-        await new Promise(r => setTimeout(r, 5500));
-      }
-      if (leaves.length === 0) { showStatus('Failed to fetch leaves from Etherscan. Check your API key and try again.', 'error'); return; }
-      // Check for gaps in sparse array
-      for (let i = 0; i < leaves.length; i++) {
-        if (leaves[i] === undefined) leaves[i] = 0n;
-      }
-      // If only gap is index 0, the contract may 1-index events
-      if (leaves[0] === 0n && leaves.length > 1 && leaves[1] !== 0n) {
-        const leavesShifted = leaves.slice(1);
-        const treeShifted = leanIMTBuild(leavesShifted);
-        if (lastEventRoot && treeShifted.root === lastEventRoot) {
-          log('Contract uses 1-based leaf indexing. Adjusting (index ' + leafIndex + ' → position ' + (leafIndex - 1) + ').');
-          treeLeaves = leavesShifted;
-          esShifted = true;
-        }
-      }
-      if (!treeLeaves) treeLeaves = leaves;
-      log('Fetched ' + treeLeaves.length + ' state leaves via Etherscan (fallback).');
-    }
-
-    // Determine correct tree position. Contract may use 1-based leaf indexing
-    // while the tree array is 0-indexed. Try the stated index first, then index-1.
     let adjustedLeafIndex = leafIndex;
-    if (typeof esShifted !== 'undefined' && esShifted) {
-      adjustedLeafIndex = leafIndex - 1;
-    }
 
     // commitment = poseidon3([value, label, precommitment]) per protocol circuit
     const expectedCommitment = poseidon3([value, label, _ppwNote.precommitment]);
@@ -9616,14 +9794,14 @@ async function ppwWithdraw() {
       if (stateTree.root !== onChainStateRoot) {
         // R-4: Protocol accepts a window of recent roots, not only currentRoot().
         // Warn but allow proceed — the on-chain verifier will reject if truly invalid.
-        log('<b>Warning:</b> State tree root differs from on-chain currentRoot (local 0x' + stateTree.root.toString(16).slice(0, 16) + '... vs on-chain 0x' + onChainStateRoot.toString(16).slice(0, 16) + '...). This may still be accepted if within the recent root window.');
-        showStatus('State root differs from latest on-chain root. Proceeding — withdrawal may still succeed if root is within accepted window. If it fails, retry in a few minutes.', 'error');
+        log('<b>Warning:</b> State tree root differs from onchain currentRoot (local 0x' + stateTree.root.toString(16).slice(0, 16) + '... vs onchain 0x' + onChainStateRoot.toString(16).slice(0, 16) + '...). This may still be accepted if within the recent root window.');
+        showStatus('State root differs from latest onchain root. Proceeding — withdrawal may still succeed if root is within accepted window. If it fails, retry in a few minutes.', 'error');
       } else {
-        log('State root verified against on-chain pool.currentRoot().');
+        log('State root verified against onchain pool.currentRoot().');
       }
     } catch (stateRootErr) {
-      log('<b>Warning:</b> Could not verify state root on-chain (' + escText(stateRootErr.message) + '). Proceeding — tx may revert if state is stale.');
-      showStatus('Could not verify state root on-chain (RPC issue). Withdrawal will proceed but may revert. Consider retrying if it fails.', 'error');
+      log('<b>Warning:</b> Could not verify state root onchain (' + escText(stateRootErr.message) + '). Proceeding — tx may revert if state is stale.');
+      showStatus('Could not verify state root onchain (RPC issue). Withdrawal will proceed but may revert. Consider retrying if it fails.', 'error');
     }
 
     // Find our label in ASP leaves
@@ -9640,19 +9818,19 @@ async function ppwWithdraw() {
     log('ASP tree depth=' + aspTree.depth + ' root=0x' + aspTree.root.toString(16).slice(0, 16) + '...');
 
     // H-3: Verify ASP root matches on-chain latestRoot before proving
-    log('Verifying ASP root against on-chain latestRoot...');
+    log('Verifying ASP root against onchain latestRoot...');
     try {
       const rpc = await quoteRPC.call(r => r);
       const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
       const onChainASPRoot = await ep.latestRoot();
       if (aspTree.root !== onChainASPRoot) {
-        showStatus('ASP root mismatch: local 0x' + aspTree.root.toString(16).slice(0, 16) + '... vs on-chain 0x' + onChainASPRoot.toString(16).slice(0, 16) + '... — API data is stale. Retry in a few minutes.', 'error');
+        showStatus('ASP root mismatch: local 0x' + aspTree.root.toString(16).slice(0, 16) + '... vs onchain 0x' + onChainASPRoot.toString(16).slice(0, 16) + '... — API data is stale. Retry in a few minutes.', 'error');
         return;
       }
-      log('ASP root verified against on-chain.');
+      log('ASP root verified against onchain.');
     } catch (aspRootErr) {
-      log('<b>Warning:</b> Could not verify ASP root on-chain (' + escText(aspRootErr.message) + ').');
-      if (!window.confirm('Could not verify ASP root on-chain (RPC issue). Proving may be wasted if the root is stale.\n\nProceed anyway?')) {
+      log('<b>Warning:</b> Could not verify ASP root onchain (' + escText(aspRootErr.message) + ').');
+      if (!window.confirm('Could not verify ASP root onchain (RPC issue). Proving may be wasted if the root is stale.\n\nProceed anyway?')) {
         showStatus('Withdrawal cancelled — ASP root could not be verified.', 'error');
         return;
       }
@@ -9683,7 +9861,7 @@ async function ppwWithdraw() {
           log('Remainder can still be withdrawn later via Direct mode.');
         }
         relayPreflightDone = true;
-        log('Relayer supports ' + wAsset + ' on chain ' + relayChainId + '.');
+        log('Relayer supports ' + wAsset + ' on chain=' + relayChainId + '.');
       }
 
       const quote = await ppwRelayerQuote(relayChainId, withdrawnValue, relayAssetAddr, recipient, relayExtraGas);
@@ -9699,14 +9877,14 @@ async function ppwWithdraw() {
 
       const wConfig = await ppEnsureAssetConfig(wAsset);
       if (!wConfig || wConfig.maxRelayFeeBPS == null) {
-        throw new Error('Could not load on-chain max relay fee for this asset. Aborting relay withdrawal for safety.');
+        throw new Error('Could not load onchain max relay fee for this asset. Aborting relay withdrawal for safety.');
       }
       const maxRelayFeeBpsNum = Number(wConfig.maxRelayFeeBPS);
       if (!Number.isFinite(maxRelayFeeBpsNum) || maxRelayFeeBpsNum < 0) {
-        throw new Error('Invalid on-chain max relay fee configuration.');
+        throw new Error('Invalid onchain max relay fee configuration.');
       }
       if (localQuotedFeeBPS > maxRelayFeeBpsNum) {
-        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds on-chain max (' + maxRelayFeeBpsNum + ' bps). Try a larger withdrawal amount, disable Extra gas, or use Direct mode.');
+        throw new Error('Relay fee (' + localQuotedFeeBPS + ' bps) exceeds onchain max (' + maxRelayFeeBpsNum + ' bps). Try a larger withdrawal amount, disable Extra gas, or use Direct mode.');
       }
 
       const hasQuotedFeeBps = Number.isFinite(localQuotedFeeBPS);
@@ -9964,7 +10142,7 @@ async function ppwWithdraw() {
         // PP-03: Offer self-submit fallback with explicit cost warning
         log('<b>Relayer submission failed:</b> ' + escText(relayErr.message));
         if (_signer) {
-          if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit on-chain, but you will pay gas AND the relay fee (' + (quotedFeeBPS ?? '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
+          if (!window.confirm('Relayer submission failed: ' + relayErr.message + '\n\nYou can self-submit onchain, but you will pay gas AND the relay fee (' + (quotedFeeBPS ?? '?') + ' bps) will still be deducted.\n\nProceed with self-submit?')) {
             showStatus('Relay failed. Proof data shown below for manual submission.', 'error');
             setShown('ppwResult', true);
             $('ppwResultText').value = JSON.stringify({ proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
@@ -9983,7 +10161,7 @@ async function ppwWithdraw() {
             receipt = await waitForTx(fallbackTx);
           } catch (fbErr) {
             log('<b>Fallback also failed:</b> ' + escText(fbErr.message || fbErr));
-            showStatus('Both relayer and on-chain fallback failed.', 'error');
+            showStatus('Both relayer and onchain fallback failed.', 'error');
             setShown('ppwResult', true);
             $('ppwResultText').value = JSON.stringify({ proof, publicSignals, withdrawal: { processooor: withdrawalProcessooor, data: withdrawalData }, scope: SCOPE.toString() }, null, 2);
             return;
@@ -10035,21 +10213,24 @@ async function ppwWithdraw() {
       // For partial withdrawals, save the change note
       if (isPartial) {
         // Parse LeafInserted event from receipt to get the new leaf index
+        // Match by expected commitment to handle batch txs / relay receipts with multiple events
         let changeLeafIndex, changeCommitment;
+        const newPrecom = poseidon2([newNullifier, newSecret]);
+        const expectedChangeCommitment = poseidon3([changeValue, label, newPrecom]);
         for (const rlog of receipt.logs) {
           try {
+            if (rlog.address.toLowerCase() !== poolAddress.toLowerCase()) continue;
             const parsed = PP_POOL_EVENTS.parseLog({ topics: rlog.topics, data: rlog.data });
-            if (parsed.name === 'LeafInserted') {
+            if (parsed.name === 'LeafInserted' && BigInt(parsed.args._leaf) === expectedChangeCommitment) {
               changeLeafIndex = Number(parsed.args._index);
-              changeCommitment = '0x' + BigInt(parsed.args._leaf).toString(16).padStart(64, '0');
+              changeCommitment = '0x' + expectedChangeCommitment.toString(16).padStart(64, '0');
+              break;
             }
           } catch {}
         }
         // C6 fallback: if receipt didn't yield leafIndex, derive from stateTreeLeaves
         if (changeLeafIndex == null) {
           try {
-            const newPrecom = poseidon2([newNullifier, newSecret]);
-            const expectedChangeCommitment = poseidon3([changeValue, label, newPrecom]);
             changeCommitment = '0x' + expectedChangeCommitment.toString(16).padStart(64, '0');
             log('Receipt missing LeafInserted — attempting stateTreeLeaves fallback...');
             const fallbackResp = await fetch('https://api.0xbow.io/1/public/mt-leaves', {
@@ -10106,8 +10287,8 @@ async function ppwWithdraw() {
       showStatus('Withdrawal successful!', 'success');
     } else {
       if (receipt && receipt.status === 0) {
-        log('<b>Transaction reverted on-chain.</b> tx: ' + (txHash || '?') + '. This may indicate the note was already spent, the proof was invalid, or the fee commitment expired.');
-        showStatus('Transaction reverted on-chain. The note may have been already spent or the relay quote may have expired.', 'error');
+        log('<b>Transaction reverted onchain.</b> tx: ' + (txHash || '?') + '. This may indicate the note was already spent, the proof was invalid, or the fee commitment expired.');
+        showStatus('Transaction reverted onchain. The note may have been already spent or the relay quote may have expired.', 'error');
       } else if (!receipt) {
         log('<b>Transaction not confirmed</b> within polling window. tx: ' + (txHash || '?'));
         showStatus('Transaction submitted but not yet confirmed. Check Etherscan for tx: ' + (txHash || '?'), 'error');
