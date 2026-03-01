@@ -1714,27 +1714,46 @@ setTimeout(async () => {
       ? `<img class="live-sale-logo" src="${esc(icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${esc(sym[0]||'?')}</div>'">`
       : `<div class="live-sale-logo-ph">${esc(sym[0] || '?')}</div>`;
     const displayName = name && name.length > 1 ? name : sym;
-    el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daico</div><a class="live-sale-card" href="coin/#${FW_DAO}">
-      ${logo}
-      <div class="live-sale-info">
-        <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
-        <div class="live-sale-meta" style="color:var(--green,#22c55e);font-weight:600">Phase 2 sale live</div>
-      </div>
-      <div class="live-sale-pct" id="fwP2Pct">...</div>
-      <div class="live-sale-bar"><div class="live-sale-bar-fill" id="fwP2Bar" style="width:0%"></div></div>
-    </a>`;
-    el.style.display = '';
-    // Load Phase 2 progress (minter balance toward next NFT)
+    // Check Phase 2 deadline
+    const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+    const FW_FOLLOW_ON = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
+    let p2Finalized = false;
     try {
-      const MINTER = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
-      const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
-      const minterBal = await rpc.getBalance(MINTER);
-      const pct = Math.min(Number(minterBal * 10000n / ethers.parseEther('1')) / 100, 100);
-      const pctEl = document.getElementById('fwP2Pct');
-      const barEl = document.getElementById('fwP2Bar');
-      if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
-      if (barEl) barEl.style.width = pct.toFixed(1) + '%';
+      const p2Sale = new ethers.Contract(FW_FOLLOW_ON, ['function deadline() view returns (uint256)'], rpc);
+      const dl = Number(await p2Sale.deadline());
+      p2Finalized = Math.floor(Date.now() / 1000) > dl;
     } catch {}
+
+    if (p2Finalized) {
+      el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daico</div><a class="live-sale-card" href="coin/#${FW_DAO}">
+        ${logo}
+        <div class="live-sale-info">
+          <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
+          <div class="live-sale-meta" style="color:var(--fg-muted)">Sale finalized</div>
+        </div>
+      </a>`;
+    } else {
+      el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daico</div><a class="live-sale-card" href="coin/#${FW_DAO}">
+        ${logo}
+        <div class="live-sale-info">
+          <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
+          <div class="live-sale-meta" style="color:var(--green,#22c55e);font-weight:600">Phase 2 sale live</div>
+        </div>
+        <div class="live-sale-pct" id="fwP2Pct">...</div>
+        <div class="live-sale-bar"><div class="live-sale-bar-fill" id="fwP2Bar" style="width:0%"></div></div>
+      </a>`;
+      // Load Phase 2 progress (minter balance toward next NFT)
+      try {
+        const MINTER = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
+        const minterBal = await rpc.getBalance(MINTER);
+        const pct = Math.min(Number(minterBal * 10000n / ethers.parseEther('1')) / 100, 100);
+        const pctEl = document.getElementById('fwP2Pct');
+        const barEl = document.getElementById('fwP2Bar');
+        if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
+        if (barEl) barEl.style.width = pct.toFixed(1) + '%';
+      } catch {}
+    }
+    el.style.display = '';
   } catch (e) { console.warn('FW DAICO section failed:', e); }
 }, 50);
 

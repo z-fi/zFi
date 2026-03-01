@@ -429,7 +429,8 @@ async function loadDashboard() {
     if (p2Paused) {
       $('p2Status').innerHTML = '<span style="color:var(--fg-muted)">Paused</span>';
     } else if (p2Ended) {
-      $('p2Status').textContent = 'Ended';
+      $('p2Status').textContent = 'Finalized';
+      $('buySection').style.display = 'none';
     } else if (p2Remaining === 0n) {
       $('p2Status').textContent = 'Sold Out';
     } else {

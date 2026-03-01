@@ -1647,8 +1647,8 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.type === 'fw-collector' ? `<span class="coin-tpl-badge coin-tpl-simple" title="FW S02 collector DAO &middot; NFT vault &middot; ragequitable">collect</span>` : md && (md.launchType === 'ez' || md.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
-          <div class="coin-card-bar"><div class="coin-card-bar-fill" ${isCollector && !saleActive ? 'id="fwcMintBar" ' : ''}style="width:${isCollector && !saleActive ? '0' : Math.min(salePct,100).toFixed(1)}%"></div></div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Phase 2 sale live</span> <span id="fwcMintPct" style="color:var(--fg-muted)"></span>' : 'Sale ended'}</div>
+          ${isCollector && !saleActive ? '' : `<div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>`}
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? 'Sale finalized' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1710,16 +1710,6 @@ async function renderGallery() {
       ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
       ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
-    // Async: load FWC minter progress % into collector card
-    const fwcPctEl = document.getElementById('fwcMintPct');
-    if (fwcPctEl) {
-      withRPC(rpc => rpc.getBalance('0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e')).then(bal => {
-        const pct = Math.min(Number(bal * 10000n / ethers.parseEther('1')) / 100, 100);
-        fwcPctEl.textContent = '— ' + pct.toFixed(1) + '% to next NFT';
-        const barEl = document.getElementById('fwcMintBar');
-        if (barEl) barEl.style.width = pct.toFixed(1) + '%';
-      }).catch(() => {});
-    }
   } catch(e) {
     app.innerHTML = `
       <div class="header">
@@ -1913,7 +1903,6 @@ async function renderCoinPage(daoAddr) {
         </div>
       </div>
       ${mcapDisplay ? `<div class="coin-mcap-row">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
-      ${isFWCollector && !saleActive ? `<div style="margin:12px 0 4px;padding:8px 12px;border-radius:8px;background:var(--green-bg,rgba(34,197,94,0.08));color:var(--green);font-size:13px;font-weight:600">Phase 1 complete &mdash; <a href="https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156" target="_blank" style="color:inherit;text-decoration:underline">1 NFT collected</a> &mdash; Phase 2 sale live &mdash; 9 more NFTs</div>` : ''}
     `;
 
     // Description + socials
@@ -2080,7 +2069,20 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Treasury + Pool reserves
-    if (!isFWCollector && (treasuryETH > 0n || hasPool)) {
+    if (isFWCollector) {
+      const minterAddr = tap ? tap.ops : null;
+      html += `
+        <div class="section-card">
+          <div class="section-title">Treasury</div>
+          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">DAO ${ethIco}</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${minterAddr && minterAddr !== ZERO ? `<div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> ${ethIco}</span><span class="stat-value" id="treasuryMinterBal">...</span></div>` : ''}
+          ${hasPool ? `
+            <div class="stat-row"><span class="stat-label">Pool ${ethIco}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
+          ` : ''}
+        </div>
+      `;
+    } else if (treasuryETH > 0n || hasPool) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
@@ -2253,9 +2255,9 @@ async function renderCoinPage(daoAddr) {
           const dlEl = document.getElementById('phase2Deadline');
           if (dlEl) {
             if (expired) {
-              dlEl.innerHTML = '<div style="font-size:12px;color:var(--red);text-align:center;padding:6px 0;font-weight:600">Sale ended</div>';
-              const buySection = document.getElementById('phase2BuySection');
-              if (buySection) buySection.style.display = 'none';
+              // Hide the entire Phase 2 sale card when finalized
+              const p2Card = document.getElementById('phase2SaleCard');
+              if (p2Card) p2Card.style.display = 'none';
             } else if (paused) {
               dlEl.innerHTML = '<div style="font-size:12px;color:var(--amber);text-align:center;padding:6px 0;font-weight:600">Sale paused</div>';
               const buySection = document.getElementById('phase2BuySection');
@@ -2286,15 +2288,11 @@ async function renderCoinPage(daoAddr) {
       })();
     }
 
-    // For FW Collector with Phase 2 sale, wrap swap tile in a closed drawer
+    // For FW Collector, show secondary market section (open by default now that sales are finalized)
     if (isFWCollector && !saleActive) {
       html += `
-        <div class="drawer" id="secondaryDrawer">
-          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>Secondary Market</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="activity-body">
+        <div class="section-card" id="secondaryDrawer" style="padding:0">
+          <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);padding:16px 16px 0">Secondary Market</div>
       `;
     }
 
@@ -2461,7 +2459,7 @@ async function renderCoinPage(daoAddr) {
     // Chart drawer (only if pool has reserves; hidden until activity confirmed)
     const dark = document.documentElement.classList.contains('dark');
     const chartTheme = dark ? 'dark' : 'light';
-    const _fwcHide = isFWCollector && !saleActive ? ' style="display:none"' : '';
+    const _fwcHide = '';
     const _activityLpHTML = hasPool && !(isFWCollector && saleActive) ? `
         <div class="drawer" id="activityDrawer" data-pool-id="${poolId}"${_fwcHide}>
           <button class="drawer-toggle" onclick="toggleActivity()">
@@ -2491,10 +2489,10 @@ async function renderCoinPage(daoAddr) {
           <div class="chart-body"></div>
         </div>` : '';
 
-    // For FW Collector: nest chart, activity, LP inside secondary market drawer
+    // For FW Collector: nest chart, activity, LP inside secondary market section
     if (isFWCollector && !saleActive) {
       html += _chartHTML + _activityLpHTML;
-      html += `</div></div>`;
+      html += `</div>`;
     } else {
       html += _chartHTML + _activityLpHTML;
     }
