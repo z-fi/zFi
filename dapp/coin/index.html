@@ -1647,8 +1647,8 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.type === 'fw-collector' ? `<span class="coin-tpl-badge coin-tpl-simple" title="FW S02 collector DAO &middot; NFT vault &middot; ragequitable">collect</span>` : md && (md.launchType === 'ez' || md.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
-          <div ${isCollector && !saleActive ? 'id="fwcMintBarWrap" ' : ''}class="coin-card-bar"><div class="coin-card-bar-fill" ${isCollector && !saleActive ? 'id="fwcMintBar" ' : ''}style="width:${isCollector && !saleActive ? '0' : Math.min(salePct,100).toFixed(1)}%"></div></div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Sale open</span> <span id="fwcMintPct" style="color:var(--fg-muted)"></span>' : 'Sale ended'}</div>
+          ${isCollector && !saleActive ? '' : `<div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>`}
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span id="fwcMintPct" style="color:var(--fg-muted)">Sale open</span>' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1715,9 +1715,7 @@ async function renderGallery() {
     if (fwcPctEl) {
       withRPC(rpc => rpc.getBalance('0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e')).then(bal => {
         const pct = Math.min(Number(bal * 10000n / ethers.parseEther('1')) / 100, 100);
-        fwcPctEl.textContent = '— ' + pct.toFixed(1) + '% to next mint';
-        const barEl = document.getElementById('fwcMintBar');
-        if (barEl) barEl.style.width = pct.toFixed(1) + '%';
+        fwcPctEl.textContent = pct.toFixed(1) + '% to next mint';
       }).catch(() => {});
     }
   } catch(e) {
@@ -2188,7 +2186,6 @@ async function renderCoinPage(daoAddr) {
           <div id="phase2Stats" style="margin-bottom:10px">
             <div style="font-size:11px;color:var(--fg-dim)">Loading...</div>
           </div>
-          <div id="phase2Deadline"></div>
           <div id="phase2BuySection">
             <div class="swap-section">
               <div class="swap-section-head">
@@ -2219,12 +2216,10 @@ async function renderCoinPage(daoAddr) {
       `;
 
       // Async: load phase 2 sale data
-      if (window._p2CdInterval) { clearInterval(window._p2CdInterval); window._p2CdInterval = null; }
       (async () => {
         try {
           const rpc = getRPC();
           const saleContract = new ethers.Contract(FW_FOLLOW_ON_SALE, [
-            'function deadline() view returns (uint256)',
             'function paused() view returns (bool)',
             'function minter() view returns (address)'
           ], rpc);
@@ -2232,19 +2227,14 @@ async function renderCoinPage(daoAddr) {
             'function allowance(address token, address spender) view returns (uint256)'
           ], rpc);
 
-          const [deadline, paused, minterAddr, allowance] = await Promise.all([
-            saleContract.deadline(),
+          const [paused, minterAddr, allowance] = await Promise.all([
             saleContract.paused(),
             saleContract.minter(),
             moloch.allowance(daoAddr, FW_FOLLOW_ON_SALE)
           ]);
           const minterBal = await rpc.getBalance(minterAddr);
 
-          const now = Math.floor(Date.now() / 1000);
-          const dl = Number(deadline);
-          const expired = now > dl;
           const sharesRemaining = allowance;
-          const ethRemaining = sharesRemaining / 1_000_000n;
           const ethInMinter = minterBal;
           const mintProgress = Number(ethers.formatEther(ethInMinter));
           const mintGoal = 1; // 1 ETH per FW NFT
@@ -2262,18 +2252,15 @@ async function renderCoinPage(daoAddr) {
             `;
           }
 
-          // Deadline countdown
-          const dlEl = document.getElementById('phase2Deadline');
-          if (dlEl) {
-            if (paused) {
-              dlEl.innerHTML = '<div style="font-size:12px;color:var(--amber);text-align:center;padding:6px 0;font-weight:600">Sale paused</div>';
-              const buySection = document.getElementById('phase2BuySection');
-              if (buySection) buySection.style.display = 'none';
-            }
+          if (paused) {
+            const buySection = document.getElementById('phase2BuySection');
+            if (buySection) buySection.style.display = 'none';
+            const statsEl2 = document.getElementById('phase2Stats');
+            if (statsEl2) statsEl2.insertAdjacentHTML('afterend', '<div style="font-size:12px;color:var(--amber);text-align:center;padding:6px 0;font-weight:600">Sale paused</div>');
           }
 
           // Store for buy logic
-          window._phase2 = { deadline: dl, paused, expired, sharesRemaining, sale: FW_FOLLOW_ON_SALE };
+          window._phase2 = { paused, sharesRemaining, sale: FW_FOLLOW_ON_SALE };
         } catch (e) {
           console.error('Phase 2 sale data load failed:', e);
           const statsEl = document.getElementById('phase2Stats');
@@ -3319,8 +3306,8 @@ function onLpEthInput() {
 }
 
 function fillLpPairTokenMax() {
-  if (_tokenBalance <= 0n || _poolReserve0 === 0n || _poolReserve1 === 0n) return;
-  $('lpPairTokenInput').value = ethers.formatEther(_tokenBalance);
+  if (!_sharesBalance || _sharesBalance <= 0n || _poolReserve0 === 0n || _poolReserve1 === 0n) return;
+  $('lpPairTokenInput').value = ethers.formatEther(_sharesBalance);
   onLpPairTokenInput();
 }
 

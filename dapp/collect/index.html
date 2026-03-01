@@ -371,7 +371,7 @@ const SHARES_ABI = [
 const FOLLOW_ON_SALE = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
 const P2_CAP = 9_000_000n * 10n**18n; // 9M shares
 const MOLOCH_ABI = ['function allowance(address token, address spender) view returns (uint256)'];
-const FOLLOW_ON_ABI = ['function paused() view returns (bool)', 'function deadline() view returns (uint256)'];
+const FOLLOW_ON_ABI = ['function paused() view returns (bool)'];
 
 let _minterAddress = null; // discovered from tap.ops
 
@@ -414,16 +414,13 @@ async function loadDashboard() {
     // Phase 2 sale data
     const moloch = new ethers.Contract(DAO_ADDRESS, MOLOCH_ABI, rpc);
     const followOn = new ethers.Contract(FOLLOW_ON_SALE, FOLLOW_ON_ABI, rpc);
-    const [p2Allowance, p2Paused, p2DeadlineBN] = await Promise.all([
+    const [p2Allowance, p2Paused] = await Promise.all([
       moloch.allowance(DAO_ADDRESS, FOLLOW_ON_SALE),
-      followOn.paused(),
-      followOn.deadline()
+      followOn.paused()
     ]);
-    const p2Deadline = Number(p2DeadlineBN);
     const p2Remaining = p2Allowance;
     const p2Sold = P2_CAP - p2Remaining;
     const p2Pct = Number(p2Sold * 10000n / P2_CAP) / 100;
-    const p2Ended = now > p2Deadline;
 
     if (p2Paused) {
       $('p2Status').innerHTML = '<span style="color:var(--fg-muted)">Paused</span>';
