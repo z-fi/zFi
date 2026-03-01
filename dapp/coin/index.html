@@ -1647,8 +1647,8 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.type === 'fw-collector' ? `<span class="coin-tpl-badge coin-tpl-simple" title="FW S02 collector DAO &middot; NFT vault &middot; ragequitable">collect</span>` : md && (md.launchType === 'ez' || md.launchType === 'simple') ? `<span class="coin-tpl-badge coin-tpl-simple" title="ez launch &middot; ${md.lpBps ? (md.lpBps/100) + '% LP' : '80% LP'} &middot; ragequitable treasury &middot; no ops &middot; no tap">ez</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
-          ${isCollector && !saleActive ? '' : `<div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>`}
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? 'Sale finalized' : 'Sale ended'}</div>
+          <div ${isCollector && !saleActive ? 'id="fwcMintBarWrap" ' : ''}class="coin-card-bar"><div class="coin-card-bar-fill" ${isCollector && !saleActive ? 'id="fwcMintBar" ' : ''}style="width:${isCollector && !saleActive ? '0' : Math.min(salePct,100).toFixed(1)}%"></div></div>
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--green);font-weight:600">Sale open</span> <span id="fwcMintPct" style="color:var(--fg-muted)"></span>' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1710,6 +1710,16 @@ async function renderGallery() {
       ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
       ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
+    // Async: load mint progress into collector card
+    const fwcPctEl = document.getElementById('fwcMintPct');
+    if (fwcPctEl) {
+      withRPC(rpc => rpc.getBalance('0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e')).then(bal => {
+        const pct = Math.min(Number(bal * 10000n / ethers.parseEther('1')) / 100, 100);
+        fwcPctEl.textContent = '— ' + pct.toFixed(1) + '% to next mint';
+        const barEl = document.getElementById('fwcMintBar');
+        if (barEl) barEl.style.width = pct.toFixed(1) + '%';
+      }).catch(() => {});
+    }
   } catch(e) {
     app.innerHTML = `
       <div class="header">
@@ -1910,7 +1920,8 @@ async function renderCoinPage(daoAddr) {
     if (isFWCollector || metadata.description || hasSocials) {
       html += `<div class="section-card">`;
       if (isFWCollector) {
-        html += `<div style="font-size:11px;line-height:1.6;color:var(--fg-dim)">Tokenworks is selling S02 of its <a href="https://www.s02.works/" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks NFTs</a>. One of the most experimental teams in crypto, owning NFTs via FWC tokens provides exposure to their success. FWC can continue to collect other onchain valuables over time. It is up to FWC shareholders. Become one by buying tokens from the sale or secondary market below. And even if you have the ETH for a full mint, the NFTs are nontransferable, so FWC provides transferability of your ownership, immediate liquidity, as well as additional upside through collective action.</div>`;
+        html += `<div style="font-size:11px;line-height:1.6;color:var(--fg-dim)">Tokenworks is selling S02 of its <a href="https://www.s02.works/" target="_blank" style="color:inherit;text-decoration:underline">FundingWorks NFTs</a>. One of the most experimental teams in crypto, owning NFTs via FWC tokens provides exposure to their success. FWC can continue to collect other onchain valuables over time. It is up to FWC shareholders. Become one by buying tokens from the sale or secondary market below. And even if you have the ETH for a full mint, the NFTs are nontransferable, so FWC provides transferability of your ownership, immediate liquidity, as well as additional upside through collective action.</div>
+        <div style="font-size:10px;line-height:1.5;color:var(--fg-dim);margin-top:8px;opacity:0.7">* While the original mint deadline has closed, FWC holders can continue to fund and fill open spots to increase holdings &mdash; or use that ETH to fund anything else FWC shareholders approve.</div>`;
       } else if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
       if (hasSocials) {
         html += `<div class="socials-row"${metadata.description ? ' style="margin-top:10px"' : ''}>`;
@@ -2058,7 +2069,7 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="drawer" id="saleDrawer">
           <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>${isFWCollector ? 'Phase 1 Sale (Ended)' : 'Sale (Ended)'}</span>
+            <span>${isFWCollector ? 'Initial Sale (Ended)' : 'Sale (Ended)'}</span>
             <span class="arrow">&#9660;</span>
           </button>
           <div class="drawer-body">
@@ -2166,14 +2177,14 @@ async function renderCoinPage(daoAddr) {
 
     const defaultMode = saleActive ? 'sale' : 'swap';
 
-    // Phase 2 Follow-On Sale (FW Collector only)
+    // Continuous Sale (FW Collector only)
     const FW_FOLLOW_ON_SALE = '0x5D03BeE003859d250c1AB868490d09D90F10C8E8';
     if (isFWCollector && !saleActive) {
       html += `
         <div class="section-card" id="phase2SaleCard" style="position:relative;overflow:hidden">
           <div style="position:absolute;top:8px;right:8px;opacity:0.6;pointer-events:none;line-height:0">${zfiLoadingSVG(28).replace('margin:0 auto 8px','margin:0')}</div>
-          <div class="section-title">Phase 2 Sale</div>
-          <div style="font-size:12px;color:var(--fg-muted);margin-bottom:10px">1 ETH = 1M shares &mdash; ETH goes to <a href="https://etherscan.io/address/0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e" target="_blank" style="color:inherit;text-decoration:underline">minter</a> for up to 9 more NFTs</div>
+          <div class="section-title">Sale</div>
+          <div style="font-size:12px;color:var(--fg-muted);margin-bottom:10px">1 ETH = 1M shares &mdash; ETH goes to <a href="https://etherscan.io/address/0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e" target="_blank" style="color:inherit;text-decoration:underline">minter</a> &mdash; mint open NFT slot when 1 ETH accumulates</div>
           <div id="phase2Stats" style="margin-bottom:10px">
             <div style="font-size:11px;color:var(--fg-dim)">Loading...</div>
           </div>
@@ -2243,7 +2254,7 @@ async function renderCoinPage(daoAddr) {
           const statsEl = document.getElementById('phase2Stats');
           if (statsEl) {
             statsEl.innerHTML = `
-              <div class="stat-row"><span class="stat-label">Phase 2 Shares remaining</span><span class="stat-value">${parseFloat(ethers.formatUnits(sharesRemaining, 18)).toLocaleString()} shares</span></div>
+              <div class="stat-row"><span class="stat-label">Shares remaining</span><span class="stat-value">${parseFloat(ethers.formatUnits(sharesRemaining, 18)).toLocaleString()} shares</span></div>
               <div class="stat-row"><span class="stat-label">Minter balance</span><span class="stat-value">${fmtETH(ethInMinter)} ${ethIco}</span></div>
               <div class="stat-row"><span class="stat-label">Next NFT progress</span><span class="stat-value" style="color:${mintPct >= 100 ? 'var(--green)' : 'var(--fg)'}; font-weight:600">${mintProgress.toFixed(4)} / ${mintGoal} ${ethIco} <span style="color:var(--green)">${mintPct.toFixed(1)}%</span></span></div>
               ${pctBar(mintPct, 'var(--green)')}
@@ -2254,27 +2265,10 @@ async function renderCoinPage(daoAddr) {
           // Deadline countdown
           const dlEl = document.getElementById('phase2Deadline');
           if (dlEl) {
-            if (expired) {
-              // Hide the entire Phase 2 sale card when finalized
-              const p2Card = document.getElementById('phase2SaleCard');
-              if (p2Card) p2Card.style.display = 'none';
-            } else if (paused) {
+            if (paused) {
               dlEl.innerHTML = '<div style="font-size:12px;color:var(--amber);text-align:center;padding:6px 0;font-weight:600">Sale paused</div>';
               const buySection = document.getElementById('phase2BuySection');
               if (buySection) buySection.style.display = 'none';
-            } else {
-              function updateP2Cd() {
-                const rem = dl - Math.floor(Date.now() / 1000);
-                if (rem <= 0) { dlEl.innerHTML = '<div style="font-size:12px;color:var(--red);text-align:center;padding:6px 0">Sale ended</div>'; return; }
-                const d = Math.floor(rem / 86400);
-                const h = Math.floor((rem % 86400) / 3600);
-                const m = Math.floor((rem % 3600) / 60);
-                const s = rem % 60;
-                const timer = d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
-                dlEl.innerHTML = `<div style="font-size:13px;font-weight:600;letter-spacing:0.05em;text-align:center;padding:4px 0;color:var(--fg-muted);margin-bottom:8px">${timer} remaining</div>`;
-              }
-              updateP2Cd();
-              window._p2CdInterval = setInterval(updateP2Cd, 1000);
             }
           }
 
@@ -2288,11 +2282,15 @@ async function renderCoinPage(daoAddr) {
       })();
     }
 
-    // For FW Collector, show secondary market section (open by default now that sales are finalized)
+    // For FW Collector, wrap swap/chart/activity in a closed drawer
     if (isFWCollector && !saleActive) {
       html += `
-        <div class="section-card" id="secondaryDrawer" style="padding:0">
-          <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);padding:16px 16px 0">Secondary Market</div>
+        <div class="drawer" id="secondaryDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>Secondary Market</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="activity-body">
       `;
     }
 
@@ -2489,10 +2487,10 @@ async function renderCoinPage(daoAddr) {
           <div class="chart-body"></div>
         </div>` : '';
 
-    // For FW Collector: nest chart, activity, LP inside secondary market section
+    // For FW Collector: nest chart, activity, LP inside secondary market drawer
     if (isFWCollector && !saleActive) {
       html += _chartHTML + _activityLpHTML;
-      html += `</div>`;
+      html += `</div></div>`;
     } else {
       html += _chartHTML + _activityLpHTML;
     }

@@ -195,28 +195,27 @@ body.modal-open { overflow:hidden; }
 
 <div class="form-hint">
   Collector DAO for <a href="https://etherscan.io/address/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6" target="_blank">FundingWorks S02</a>.
-  Phase 2: buy shares via <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" style="color:inherit;text-decoration:underline">coin page</a> &mdash; ETH goes to minter &mdash; mint NFTs when 1 ETH accumulates.
+  Buy shares via <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" style="color:inherit;text-decoration:underline">coin page</a> &mdash; ETH goes to minter &mdash; mint open NFT slot when 1 ETH accumulates.
 </div>
 
 <!-- Dashboard (shown when DAO is deployed) -->
 <div id="dashboard" style="display:none">
-  <!-- Phase 2 Sale -->
+  <!-- Sale -->
   <div class="info-card" id="phase2Card">
-    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:8px">Phase 2 Sale</div>
+    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:8px">Sale</div>
     <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="p2Status">loading...</span></div>
     <div class="sale-bar"><div class="sale-bar-fill" id="p2Bar" style="width:0%"></div></div>
     <div class="info-row"><span class="info-label">Shares remaining</span><span class="info-value" id="p2Remaining">-</span></div>
     <div class="info-row"><span class="info-label"><a id="minterLabel" href="#" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="info-value" id="minterBalance">-</span></div>
     <div class="info-row"><span class="info-label">Next NFT progress</span><span class="info-value" id="p2NftPct">-</span></div>
-    <div class="info-row"><span class="info-label">Deadline</span><span class="info-value" id="fwDeadline">-</span></div>
   </div>
 
   <!-- NFT Progress -->
   <div class="info-card" id="nftCard"></div>
 
-  <!-- Buy shares (Phase 2 — via coin page) -->
+  <!-- Buy shares (via coin page) -->
   <div id="buySection">
-    <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" class="action-btn" style="display:block;text-align:center;text-decoration:none;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);padding:14px 24px">Buy Shares (Phase 2 Sale)</a>
+    <a href="../coin/#0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853" class="action-btn" style="display:block;text-align:center;text-decoration:none;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);padding:14px 24px">Buy Shares</a>
   </div>
 
   <!-- Mint from balance -->
@@ -235,7 +234,7 @@ body.modal-open { overflow:hidden; }
 
   <!-- Phase 1 (collapsed) -->
   <details style="margin-top:12px;font-size:12px;color:var(--fg-muted)">
-    <summary style="cursor:pointer;user-select:none">Phase 1 Sale (Ended)</summary>
+    <summary style="cursor:pointer;user-select:none">Initial Sale (Ended)</summary>
     <div class="info-card" style="margin-top:8px">
       <div class="info-row"><span class="info-label">Sale</span><span class="info-value" id="saleStatus">-</span></div>
       <div class="sale-bar"><div class="sale-bar-fill" id="saleBar" style="width:0%"></div></div>
@@ -250,7 +249,7 @@ body.modal-open { overflow:hidden; }
     &middot; <a href="" id="daoLink" target="_blank" style="color:var(--fg-dim)">DAO</a>
     &middot; <a href="" id="minterLink" target="_blank" style="color:var(--fg-dim)">Minter</a>
     &middot; <a href="" id="manageLink" style="color:var(--fg-dim)">Manage DAO</a>
-    &middot; <a href="https://etherscan.io/address/0x5D03BeE003859d250c1AB868490d09D90F10C8E8" target="_blank" style="color:var(--fg-dim)">Phase 2 Sale Contract</a>
+    &middot; <a href="https://etherscan.io/address/0x5D03BeE003859d250c1AB868490d09D90F10C8E8" target="_blank" style="color:var(--fg-dim)">Sale Contract</a>
   </div>
 </div>
 
@@ -428,24 +427,14 @@ async function loadDashboard() {
 
     if (p2Paused) {
       $('p2Status').innerHTML = '<span style="color:var(--fg-muted)">Paused</span>';
-    } else if (p2Ended) {
-      $('p2Status').textContent = 'Finalized';
-      $('buySection').style.display = 'none';
     } else if (p2Remaining === 0n) {
       $('p2Status').textContent = 'Sold Out';
     } else {
-      $('p2Status').innerHTML = '<span style="color:var(--green)">Live</span>';
+      $('p2Status').innerHTML = '<span style="color:var(--green)">Open</span>';
     }
     $('p2Bar').style.width = Math.min(p2Pct, 100).toFixed(2) + '%';
     $('p2Remaining').textContent = fmtShares(p2Remaining) + ' / ' + fmtShares(P2_CAP);
 
-    // Deadline (use Phase 2 deadline)
-    const d = new Date(p2Deadline * 1000);
-    let dlText = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    if (p2Ended) dlText += ' (ended)';
-    else if (p2Deadline - now < 86400) dlText += ' (' + Math.floor((p2Deadline - now) / 3600) + 'h left)';
-    else dlText += ' (' + Math.floor((p2Deadline - now) / 86400) + 'd left)';
-    $('fwDeadline').textContent = dlText;
 
     // Minter data
     if (_minterAddress && _minterAddress !== ethers.ZeroAddress) {
