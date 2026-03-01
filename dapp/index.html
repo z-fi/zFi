@@ -1718,23 +1718,10 @@ setTimeout(async () => {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
-        <div class="live-sale-meta" style="color:var(--green,#22c55e);font-weight:600">Sale open</div>
+        <div class="live-sale-meta" style="color:var(--fg-muted)">Collector DAO</div>
       </div>
-      <div class="live-sale-pct" id="fwP2Pct">...</div>
-      <div class="live-sale-bar"><div class="live-sale-bar-fill" id="fwP2Bar" style="width:0%"></div></div>
     </a>`;
     el.style.display = '';
-    // Load mint progress (minter balance toward next NFT)
-    try {
-      const MINTER = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
-      const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
-      const minterBal = await rpc.getBalance(MINTER);
-      const pct = Math.min(Number(minterBal * 10000n / ethers.parseEther('1')) / 100, 100);
-      const pctEl = document.getElementById('fwP2Pct');
-      const barEl = document.getElementById('fwP2Bar');
-      if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
-      if (barEl) barEl.style.width = pct.toFixed(1) + '%';
-    } catch {}
   } catch (e) { console.warn('FW DAICO section failed:', e); }
 }, 50);
 

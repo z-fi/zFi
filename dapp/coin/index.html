@@ -1648,7 +1648,7 @@ async function renderGallery() {
             </div>
           </div>
           ${isCollector && !saleActive ? '' : `<div class="coin-card-bar"><div class="coin-card-bar-fill" style="width:${Math.min(salePct,100).toFixed(1)}%"></div></div>`}
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span id="fwcMintPct" style="color:var(--fg-muted)">Sale open</span>' : 'Sale ended'}</div>
+          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : isCollector ? '<span style="color:var(--fg-muted)">Collector DAO</span>' : 'Sale ended'}</div>
           ${mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
       `;
@@ -1710,14 +1710,6 @@ async function renderGallery() {
       ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
       ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</div>` : ''}
     `;
-    // Async: load mint progress into collector card
-    const fwcPctEl = document.getElementById('fwcMintPct');
-    if (fwcPctEl) {
-      withRPC(rpc => rpc.getBalance('0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e')).then(bal => {
-        const pct = Math.min(Number(bal * 10000n / ethers.parseEther('1')) / 100, 100);
-        fwcPctEl.textContent = pct.toFixed(1) + '% to next mint';
-      }).catch(() => {});
-    }
   } catch(e) {
     app.innerHTML = `
       <div class="header">
@@ -2186,32 +2178,7 @@ async function renderCoinPage(daoAddr) {
           <div id="phase2Stats" style="margin-bottom:10px">
             <div style="font-size:11px;color:var(--fg-dim)">Loading...</div>
           </div>
-          <div id="phase2BuySection">
-            <div class="swap-section">
-              <div class="swap-section-head">
-                <label>Pay</label>
-                <span id="phase2Bal" class="swap-balance"></span>
-                <span class="swap-token-tag">${ethSvg} ETH</span>
-              </div>
-              <input type="text" id="phase2PayInput" placeholder="0.0" oninput="onPhase2Input()" autocomplete="off">
-              <div class="swap-pct-row">
-                <button class="swap-pct-btn" onclick="fillPhase2Pct(25)">25%</button>
-                <button class="swap-pct-btn" onclick="fillPhase2Pct(50)">50%</button>
-                <button class="swap-pct-btn" onclick="fillPhase2Pct(75)">75%</button>
-                <button class="swap-pct-btn" onclick="fillPhase2Pct(100)">100%</button>
-              </div>
-            </div>
-            <div class="swap-section" style="margin-top:6px">
-              <div class="swap-section-head">
-                <label>Receive</label>
-                <span class="swap-token-tag">${coinLogoTag} $${sym}</span>
-              </div>
-              <input type="text" id="phase2ReceiveInput" placeholder="0.0" readonly style="color:var(--fg-muted)">
-            </div>
-            <div class="swap-quote" id="phase2Quote">1 ETH = 1,000,000 shares</div>
-            <button id="phase2BuyBtn" class="action-btn" onclick="onPhase2BuyBtn()">Connect Wallet</button>
-            <div style="text-align:center;margin-top:8px"><a href="../collect/" style="font-size:11px;color:var(--fg-muted)">Collector Dashboard &mdash; mint NFTs when ready</a></div>
-          </div>
+          <div style="font-size:12px;color:var(--fg-muted);text-align:center;padding:12px 0;border-top:1px solid var(--border-muted)">Pending governance to continue sale</div>
         </div>
       `;
 
@@ -2269,15 +2236,11 @@ async function renderCoinPage(daoAddr) {
       })();
     }
 
-    // For FW Collector, wrap swap/chart/activity in a closed drawer
+    // For FW Collector, show secondary market section (open)
     if (isFWCollector && !saleActive) {
       html += `
-        <div class="drawer" id="secondaryDrawer">
-          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>Secondary Market</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="activity-body">
+        <div class="section-card" id="secondaryDrawer" style="padding:0">
+          <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);padding:16px 16px 0">Secondary Market</div>
       `;
     }
 
@@ -2474,10 +2437,10 @@ async function renderCoinPage(daoAddr) {
           <div class="chart-body"></div>
         </div>` : '';
 
-    // For FW Collector: nest chart, activity, LP inside secondary market drawer
+    // For FW Collector: nest chart, activity, LP inside secondary market section
     if (isFWCollector && !saleActive) {
       html += _chartHTML + _activityLpHTML;
-      html += `</div></div>`;
+      html += `</div>`;
     } else {
       html += _chartHTML + _activityLpHTML;
     }
