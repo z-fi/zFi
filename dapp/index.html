@@ -1093,14 +1093,14 @@ body.modal-open { overflow: hidden; }
   <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">My Pools</h2>
   <p id="ppMyPoolsDesc" style="font-size:12px;color:var(--fg-muted);margin-bottom:16px;line-height:1.5">Connect your wallet and sign to view your pool balances and withdraw. You can also view your balances at <a href="https://privacypools.com" target="_blank" rel="noopener">privacypools.com</a> with the same wallet.</p>
 
-  <div id="ppwScanDisconnected" class="section" style="margin-bottom:0">
-    <button id="ppwScanBtn" class="swap-btn" style="width:100%;margin:0" onclick="connectWallet()">Connect Wallet</button>
+  <div id="ppwLoadDisconnected" class="section" style="margin-bottom:0">
+    <button id="ppwLoadBtn" class="swap-btn" style="width:100%;margin:0" onclick="connectWallet()">Connect Wallet</button>
   </div>
 
-  <div id="ppwScanConnected" style="display:none">
-    <div id="ppwScanResults"></div>
-    <div id="ppwScanRefresh" style="display:none;margin-top:8px;text-align:right">
-      <a href="#" id="ppwRefreshLink" onclick="ppwScanDeposits();return false" style="font-size:10px;color:var(--fg-muted);text-decoration:none">&#x21bb; Refresh</a>
+  <div id="ppwLoadConnected" style="display:none">
+    <div id="ppwLoadResults"></div>
+    <div id="ppwLoadRefresh" style="display:none;margin-top:8px;text-align:right">
+      <a href="#" id="ppwRefreshLink" onclick="ppwLoadDeposits();return false" style="font-size:10px;color:var(--fg-muted);text-decoration:none">&#x21bb; Refresh</a>
     </div>
   </div>
 
@@ -1170,7 +1170,7 @@ body.modal-open { overflow: hidden; }
     <div id="ppwResult" style="display:none;margin-top:12px" class="quote-info">
       <div id="ppwResultSummary" style="font-size:12px;font-weight:600;margin-bottom:6px">Withdrawal Complete</div>
       <div id="ppwResultBackWrap" style="display:none;margin-bottom:8px">
-        <button onclick="ppwCloseWithdrawForm();ppwScanDeposits()" class="swap-btn" style="width:100%;margin:0">Done</button>
+        <button onclick="ppwCloseWithdrawForm();ppwLoadDeposits()" class="swap-btn" style="width:100%;margin:0">Done</button>
       </div>
       <details id="ppwResultDetails" style="display:none">
         <summary style="font-size:11px;color:var(--fg-muted);cursor:pointer">Recovery data (proof & inputs for manual submission)</summary>
@@ -7126,10 +7126,10 @@ walletInit({
     if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
     if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
     ppUpdateDescriptions(true);
-    // Show connected My Pools UI and auto-scan
-    setShown('ppwScanDisconnected', false);
-    setShown('ppwScanConnected', true);
-    ppwScanDeposits();
+    // Show connected My Pools UI and auto-load
+    setShown('ppwLoadDisconnected', false);
+    setShown('ppwLoadConnected', true);
+    ppwLoadDeposits();
   }],
   onDisconnect: [() => {
     setText('swapBtn', 'Connect Wallet');
@@ -7148,12 +7148,12 @@ walletInit({
     updatePPButton(); setText('ppBalance', 'Balance: --');
     ppUpdateDescriptions(false);
     // Reset My Pools to disconnected state
-    if (_ppwScanAbort) { _ppwScanAbort.abort(); _ppwScanAbort = null; }
-    _ppwScanResults = [];
-    setShown('ppwScanConnected', false);
-    setShown('ppwScanDisconnected', true);
-    const sr = $('ppwScanResults'); if (sr) sr.innerHTML = '';
-    setShown('ppwScanRefresh', false);
+    if (_ppwLoadAbort) { _ppwLoadAbort.abort(); _ppwLoadAbort = null; }
+    _ppwLoadResults = [];
+    setShown('ppwLoadConnected', false);
+    setShown('ppwLoadDisconnected', true);
+    const sr = $('ppwLoadResults'); if (sr) sr.innerHTML = '';
+    setShown('ppwLoadRefresh', false);
   }]
 });
 
@@ -7242,13 +7242,13 @@ async function ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, st
   const rpc = await quoteRPC.call(r => r);
   const ep = new ethers.Contract(PP_ENTRYPOINT, PP_ENTRYPOINT_ABI, rpc);
   let idx = startIndex;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 50; i++) {
     const keys = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, idx);
     const used = await ep.usedPrecommitments(keys.precommitment);
     if (!used) return idx;
     idx++;
   }
-  throw new Error('Could not find unused deposit index after 20 attempts');
+  throw new Error('Could not find unused deposit index after 50 attempts');
 }
 
 // H-4: Label-based withdrawal key derivation (SDK-compatible for change commitments)
@@ -9050,34 +9050,34 @@ function ppwStartExpiryCountdown(expiration) {
   _ppwRelayExpiryTimer = setInterval(update, 1000);
 }
 
-// ── Scan Deposits / My Pools ────────────────────────────────────────
-let _ppwScanAbort = null;
-let _ppwScanResults = [];
+// ── Load Deposits / My Pools ────────────────────────────────────────
+let _ppwLoadAbort = null;
+let _ppwLoadResults = [];
 
-async function ppwScanDeposits() {
-  const resultsEl = $('ppwScanResults');
+async function ppwLoadDeposits() {
+  const resultsEl = $('ppwLoadResults');
   const refreshLink = $('ppwRefreshLink');
 
-  // If scan in progress, abort it
-  if (_ppwScanAbort) { _ppwScanAbort.abort(); return; }
+  // If load in progress, abort it
+  if (_ppwLoadAbort) { _ppwLoadAbort.abort(); return; }
 
   // Guard: wallet required
   if (!_signer || !_connectedAddress) {
-    showStatus('Connect wallet to scan for deposits', 'error');
+    showStatus('Connect wallet to load deposits', 'error');
     return;
   }
 
-  // UI: scanning state
-  if (refreshLink) { refreshLink.textContent = 'Scanning\u2026 (Cancel)'; refreshLink.onclick = () => { if (_ppwScanAbort) _ppwScanAbort.abort(); return false; }; }
-  _ppwScanAbort = new AbortController();
-  _ppwScanResults = [];
-  if (!resultsEl.innerHTML) resultsEl.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px">Scanning\u2026</div>';
-  setShown('ppwScanRefresh', true);
+  // UI: loading state
+  if (refreshLink) { refreshLink.textContent = 'Loading\u2026 (Cancel)'; refreshLink.onclick = () => { if (_ppwLoadAbort) _ppwLoadAbort.abort(); return false; }; }
+  _ppwLoadAbort = new AbortController();
+  _ppwLoadResults = [];
+  if (!resultsEl.innerHTML) resultsEl.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px">Loading\u2026</div>';
+  setShown('ppwLoadRefresh', true);
 
   try {
     // Step 1: derive master keys (triggers EIP-712 signature if not cached)
     const keys = await ppEnsureMasterKeys();
-    if (_ppwScanAbort.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (_ppwLoadAbort.signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     const rpc = await quoteRPC.call(r => r);
     const latestBlock = await rpc.getBlockNumber();
@@ -9086,13 +9086,13 @@ async function ppwScanDeposits() {
 
     // Step 2: for each asset, fetch Deposited + Withdrawn events and build Pool Accounts
     for (const asset of assets) {
-      if (_ppwScanAbort.signal.aborted) break;
+      if (_ppwLoadAbort.signal.aborted) break;
 
       const scope = ppComputeScope(asset);
       const poolAddress = ppGetPoolAddress(asset);
       const fromBlock = PP_DEPLOYMENT_BLOCKS[asset] || PP_DEPLOYMENT_BLOCKS.ETH;
 
-      btn.textContent = `Scanning ${asset}... (Cancel)`;
+      if (refreshLink) refreshLink.textContent = `Loading ${asset}\u2026 (Cancel)`;
 
       // Fetch all Deposited events for this pool
       let depositEvents;
@@ -9113,14 +9113,14 @@ async function ppwScanDeposits() {
                 blockNumber: log.blockNumber,
               });
             }
-          } catch (parseErr) { console.warn('Scan: failed to parse event log', parseErr); }
+          } catch (parseErr) { console.warn('Load: failed to parse event log', parseErr); }
         }
       } catch (e) {
-        console.warn(`Scan: failed to fetch ${asset} deposit events:`, e);
+        console.warn(`Load: failed to fetch ${asset} deposit events:`, e);
         continue;
       }
 
-      if (_ppwScanAbort.signal.aborted) break;
+      if (_ppwLoadAbort.signal.aborted) break;
 
       // Fetch all Withdrawn events for this pool (for chain-following)
       const withdrawnMap = new Map(); // spentNullifierHash → { value, newCommitment, txHash, blockNumber }
@@ -9139,19 +9139,19 @@ async function ppwScanDeposits() {
                 blockNumber: log.blockNumber,
               });
             }
-          } catch (parseErr) { console.warn('Scan: failed to parse withdrawal log', parseErr); }
+          } catch (parseErr) { console.warn('Load: failed to parse withdrawal log', parseErr); }
         }
       } catch (e) {
-        console.warn(`Scan: failed to fetch ${asset} withdrawal events:`, e);
+        console.warn(`Load: failed to fetch ${asset} withdrawal events:`, e);
         // Continue without withdrawal data — deposits will show but chain following won't work
       }
 
-      if (_ppwScanAbort.signal.aborted) break;
+      if (_ppwLoadAbort.signal.aborted) break;
 
       // Iterate deposit indices, match precommitments against event map
       let consecutiveMisses = 0;
-      for (let index = 0; consecutiveMisses < 10; index++) {
-        if (_ppwScanAbort.signal.aborted) break;
+      for (let index = 0; consecutiveMisses < 25; index++) {
+        if (_ppwLoadAbort.signal.aborted) break;
 
         const dk = ppDeriveDepositKeys(keys.masterNullifier, keys.masterSecret, scope, index);
         const pch = '0x' + dk.precommitment.toString(16).padStart(64, '0');
@@ -9186,7 +9186,7 @@ async function ppwScanDeposits() {
           // Verify reconstruction matches onchain _newCommitment
           const expectedCommitment = poseidon3([changeValue, BigInt(current.label), changeKeys.precommitment]);
           if (w.newCommitment && expectedCommitment !== BigInt(w.newCommitment)) {
-            console.warn('Scan: change commitment mismatch at withdrawal index ' + wIdx + ' — skipping chain');
+            console.warn('Load: change commitment mismatch at withdrawal index ' + wIdx + ' — skipping chain');
             current = null; break;
           }
           // Advance to the change commitment
@@ -9202,7 +9202,7 @@ async function ppwScanDeposits() {
         }
 
         if (current) {
-          _ppwScanResults.push({
+          _ppwLoadResults.push({
             asset, depositIndex: index, poolAddress, ...current,
           });
         }
@@ -9217,22 +9217,22 @@ async function ppwScanDeposits() {
     } else if (e.code === 'ACTION_REJECTED' || e.message?.includes('rejected') || e.message?.includes('denied')) {
       showStatus('Signature required to derive deposit keys', 'error');
     } else {
-      console.error('Scan error:', e);
-      showStatus('Scan failed: ' + (e.shortMessage || e.message), 'error');
+      console.error('Load error:', e);
+      showStatus('Failed to load deposits: ' + (e.shortMessage || e.message), 'error');
       ppwRenderPoolAccounts(); // show partial results
     }
   } finally {
-    _ppwScanAbort = null;
-    if (refreshLink) { refreshLink.textContent = '\u21bb Refresh'; refreshLink.onclick = () => { ppwScanDeposits(); return false; }; }
-    setShown('ppwScanRefresh', true);
+    _ppwLoadAbort = null;
+    if (refreshLink) { refreshLink.textContent = '\u21bb Refresh'; refreshLink.onclick = () => { ppwLoadDeposits(); return false; }; }
+    setShown('ppwLoadRefresh', true);
   }
 }
 
 function ppwRenderPoolAccounts() {
-  const el = $('ppwScanResults');
+  const el = $('ppwLoadResults');
   if (!el) return;
 
-  if (_ppwScanResults.length === 0) {
+  if (_ppwLoadResults.length === 0) {
     el.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px;border:1px solid var(--border-muted);background:var(--surface)">No pool accounts found for this wallet.</div>';
     setShown(el, true);
     return;
@@ -9240,7 +9240,7 @@ function ppwRenderPoolAccounts() {
 
   // Compute total balances per asset
   const totals = {};
-  for (const r of _ppwScanResults) {
+  for (const r of _ppwLoadResults) {
     if (r.value) {
       const amt = BigInt(r.value);
       totals[r.asset] = (totals[r.asset] || 0n) + amt;
@@ -9254,13 +9254,13 @@ function ppwRenderPoolAccounts() {
   if (totalStr) html += '<div style="font-size:11px;color:var(--fg-muted)">Total: ' + totalStr + '</div>';
   html += '</div>';
 
-  for (let i = 0; i < _ppwScanResults.length; i++) {
-    const r = _ppwScanResults[i];
+  for (let i = 0; i < _ppwLoadResults.length; i++) {
+    const r = _ppwLoadResults[i];
     const paLabel = 'PA-' + (i + 1);
     const spent = r.source === 'spent';
     const depositTx = r.depositTxHash || r.txHash;
     const txLink = depositTx ? ` <span style="color:var(--fg-dim)">&middot;</span> <a href="https://etherscan.io/tx/${escAttr(depositTx)}" target="_blank" rel="noopener" style="font-size:10px">deposit tx</a>` : '';
-    const border = i < _ppwScanResults.length - 1 ? 'border-bottom:1px solid var(--border-muted);' : '';
+    const border = i < _ppwLoadResults.length - 1 ? 'border-bottom:1px solid var(--border-muted);' : '';
 
     if (spent) {
       const origStr = r.originalValue ? escText(fmt(ppFormatAmountWei(BigInt(r.originalValue), r.asset))) + ' ' + escText(r.asset) : escText(r.asset);
@@ -9294,11 +9294,11 @@ function ppwRenderPoolAccounts() {
 let _ppwSelectedAccountLabel = null;
 
 function ppwSelectAccount(index) {
-  const r = _ppwScanResults[index];
+  const r = _ppwLoadResults[index];
   if (!r) return;
   _ppwSelectedAccountLabel = 'PA-' + (index + 1);
 
-  // Populate _ppwNote directly from scan data (no sensitive data written to DOM)
+  // Populate _ppwNote directly from loaded data (no sensitive data written to DOM)
   const noteAsset = r.asset || 'ETH';
   const precommitment = poseidon2([r.nullifier, r.secret]);
   _ppwNote = {
@@ -9340,7 +9340,7 @@ function ppwCloseWithdrawForm() {
   $('ppwRecipient').value = '';
   setDisabled('ppwWithdrawBtn', true);
   // Scroll to Pool Accounts list
-  const el = $('ppwScanResults') || $('ppwScanBtn');
+  const el = $('ppwLoadResults') || $('ppwLoadBtn');
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -9363,7 +9363,6 @@ async function ppwWithdraw() {
     const value = _ppwNote.value || 0n;
     const label = _ppwNote.label || 0n;
     const wAsset = _ppwNote.asset || 'ETH';
-    if (leafIndex == null || isNaN(leafIndex)) { showStatus('Leaf index required', 'error'); return; }
     if (value === 0n) { showStatus('Deposit value required', 'error'); return; }
     if (label === 0n) { showStatus('Deposit label required', 'error'); return; }
     const withdrawAmtRaw = $('ppwWithdrawAmt').value.trim();
@@ -9455,6 +9454,18 @@ async function ppwWithdraw() {
     // commitment = poseidon3([value, label, precommitment]) per protocol circuit
     const expectedCommitment = poseidon3([value, label, _ppwNote.precommitment]);
 
+    // Auto-resolve leafIndex when not available (e.g. loaded from on-chain events)
+    if (adjustedLeafIndex == null || isNaN(adjustedLeafIndex)) {
+      const resolved = treeLeaves.indexOf(expectedCommitment);
+      if (resolved >= 0) {
+        adjustedLeafIndex = resolved;
+        log('Resolved leaf index ' + resolved + ' from state tree.');
+      } else {
+        showStatus('Could not find commitment in state tree. The deposit may not be finalized yet — try again shortly.', 'error');
+        return;
+      }
+    }
+
     // L-10: Verify commitment at position, with 1-based fallback
     let treeLeaf = (adjustedLeafIndex >= 0 && adjustedLeafIndex < treeLeaves.length) ? treeLeaves[adjustedLeafIndex] : null;
     if (treeLeaf !== expectedCommitment && adjustedLeafIndex > 0) {
@@ -9468,7 +9479,7 @@ async function ppwWithdraw() {
     }
 
     if (adjustedLeafIndex < 0 || adjustedLeafIndex >= treeLeaves.length) {
-      showStatus('Leaf index ' + leafIndex + ' out of range (tree has ' + treeLeaves.length + ' leaves)', 'error');
+      showStatus('Leaf index ' + adjustedLeafIndex + ' out of range (tree has ' + treeLeaves.length + ' leaves)', 'error');
       return;
     }
     if (treeLeaf == null || treeLeaf === 0n) {
@@ -9569,12 +9580,16 @@ async function ppwWithdraw() {
       if (!quote || !quote.feeCommitment) throw new Error('Invalid quote response');
 
       // Validate fee against on-chain maxRelayFeeBPS (fail-closed).
-      const feeField = quote.feeBPS ?? quote.feeCommitment?.feeBPS;
+      // Use decoded fee from signed withdrawalData as the authoritative source.
       const decodedFeeBps = ppwDecodeRelayFeeBps(quote.feeCommitment.withdrawalData);
-      const localQuotedFeeBPS = feeField != null ? Number(feeField) : decodedFeeBps;
-      if (!Number.isFinite(localQuotedFeeBPS) || localQuotedFeeBPS < 0) {
-        throw new Error('Relayer returned invalid feeBPS.');
+      const advertisedFeeBps = quote.feeBPS ?? quote.feeCommitment?.feeBPS;
+      if (decodedFeeBps == null || !Number.isFinite(decodedFeeBps) || decodedFeeBps < 0) {
+        throw new Error('Could not decode fee from relay withdrawalData.');
       }
+      if (advertisedFeeBps != null && Number(advertisedFeeBps) !== decodedFeeBps) {
+        throw new Error('Relay fee mismatch: advertised ' + advertisedFeeBps + ' bps but withdrawalData encodes ' + decodedFeeBps + ' bps. Aborting.');
+      }
+      const localQuotedFeeBPS = decodedFeeBps;
 
       const wConfig = await ppEnsureAssetConfig(wAsset);
       if (!wConfig || wConfig.maxRelayFeeBPS == null) {
@@ -9953,7 +9968,7 @@ async function ppwWithdraw() {
                   changeLeafIndex = idx;
                   log('Resolved change leafIndex=' + idx + ' from stateTreeLeaves.');
                 } else {
-                  log('Change commitment not yet in stateTreeLeaves — leafIndex will be resolved on next scan.');
+                  log('Change commitment not yet in stateTreeLeaves — leafIndex will be resolved on next load.');
                 }
               }
             }
