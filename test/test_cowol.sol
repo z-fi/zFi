@@ -23,6 +23,7 @@ contract TestCowol is Test {
     address constant VAULT_RELAYER = 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110;
     address constant SETTLEMENT = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41;
     address constant USDC_WHALE = 0x37305B1cD40574E4C5Ce33f8e8306Be057fD7341;
+    address constant SAFE_EXECUTOR = 0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db;
 
     // Mirror the contract's constants for digest computation
     bytes32 constant ORDER_TYPE_HASH = keccak256(
@@ -63,7 +64,8 @@ contract TestCowol is Test {
         // Encode data as the contract expects
         bytes memory data = abi.encode(WETH, receiver, sellAmount, uint256(0.3 ether), validTo, appData, feeAmount);
 
-        // Call swap
+        // Call swap (must come from SafeExecutor)
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data);
 
         // Compute expected digest
@@ -101,6 +103,7 @@ contract TestCowol is Test {
             WETH, address(0xBEEF), sellAmount, uint256(0.3 ether), uint32(block.timestamp + 300), bytes32(0), feeAmount
         );
 
+        vm.prank(SAFE_EXECUTOR);
         vm.expectRevert();
         cowol.swap(address(0), USDC, address(0), address(0), data);
     }
@@ -119,6 +122,7 @@ contract TestCowol is Test {
             uint256(1e6)
         );
 
+        vm.prank(SAFE_EXECUTOR);
         vm.expectRevert();
         cowol.swap(address(0), USDC, address(0), address(0), data);
     }
@@ -142,6 +146,7 @@ contract TestCowol is Test {
         // Legitimate user calls swap
         bytes memory legData =
             abi.encode(WETH, legitimateReceiver, sellAmount, uint256(0.3 ether), validTo, appData, feeAmount);
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), legData);
 
         // Legitimate digest is approved
@@ -171,6 +176,7 @@ contract TestCowol is Test {
         // condition documented as MEDIUM risk.
         bytes memory atkData =
             abi.encode(WETH, attackerReceiver, sellAmount, uint256(0.3 ether), validTo, appData, feeAmount);
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), atkData);
         assertTrue(cowol.validDigests(attackDigest), "attacker CAN approve digest when balance still present");
     }
@@ -214,6 +220,7 @@ contract TestCowol is Test {
             bytes32(0),
             uint256(1e6)
         );
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data1);
 
         // Simulate settlement draining tokens
@@ -232,6 +239,7 @@ contract TestCowol is Test {
             bytes32(0),
             uint256(1e6)
         );
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data2);
 
         bytes32 digest2 = _computeDigest(
@@ -253,6 +261,7 @@ contract TestCowol is Test {
         bytes memory data =
             abi.encode(WETH, address(0xBEEF), sellAmount, uint256(0.3 ether), validTo, bytes32(0), feeAmount);
 
+        vm.prank(SAFE_EXECUTOR);
         vm.expectRevert();
         cowol.swap(address(0), USDC, address(0), address(0), data);
     }
@@ -269,6 +278,7 @@ contract TestCowol is Test {
 
         _fundCowol(USDC, total);
         bytes memory data = abi.encode(WETH, receiver, sellAmount, uint256(0.3 ether), validTo, bytes32(0), feeAmount);
+        vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data);
 
         // Before expiry: recover should revert
