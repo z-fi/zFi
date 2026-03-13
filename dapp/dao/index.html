@@ -2783,13 +2783,13 @@ body.modal-open { overflow: hidden; }
 
       // Chain mismatch guard — call before any transactional flow
       async function ensureCorrectChain() {
-        if (!_walletProvider) throw new Error('Wallet not connected');
+        if (!_connectedWalletProvider) throw new Error('Wallet not connected');
         const expectedChainId = getNetwork().chainId;
-        const currentChainId = BigInt(await _walletProvider.request({ method: 'eth_chainId' }));
+        const currentChainId = BigInt(await _connectedWalletProvider.request({ method: 'eth_chainId' }));
         if (currentChainId !== expectedChainId) {
           try {
-            await _walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: getNetwork().chainIdHex }] });
-            const newChainId = BigInt(await _walletProvider.request({ method: 'eth_chainId' }));
+            await _connectedWalletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: getNetwork().chainIdHex }] });
+            const newChainId = BigInt(await _connectedWalletProvider.request({ method: 'eth_chainId' }));
             if (newChainId !== expectedChainId) throw new Error('Chain switch failed');
           } catch (e) {
             throw new Error(`Wrong network. Please switch to ${getNetwork().name || 'Ethereum'} (chain ${expectedChainId}) and try again.`);
