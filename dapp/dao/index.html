@@ -3007,6 +3007,42 @@ body.modal-open { overflow: hidden; }
           .replace(/'/g, '&#039;');
       }
 
+      // Create a safe <img> element via DOM API (prevents XSS from crafted URLs)
+      function createSafeImg(url, alt, className) {
+        const validScheme = /^(https?:|ipfs:|data:image\/)/i.test(url);
+        if (!validScheme) return null;
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = alt || '';
+        if (className) img.className = className;
+        return img;
+      }
+
+      // Set an element's image safely via DOM API instead of innerHTML
+      function setSafeImgHTML(el, url, alt, className) {
+        const img = createSafeImg(url, alt, className);
+        if (!img) return false;
+        el.innerHTML = '';
+        el.appendChild(img);
+        return true;
+      }
+
+      // Chain mismatch guard — call before any transactional flow
+      async function ensureCorrectChain() {
+        if (!_walletProvider) throw new Error('Wallet not connected');
+        const expectedChainId = getNetwork().chainId;
+        const currentChainId = BigInt(await _walletProvider.request({ method: 'eth_chainId' }));
+        if (currentChainId !== expectedChainId) {
+          try {
+            await _walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: getNetwork().chainIdHex }] });
+            const newChainId = BigInt(await _walletProvider.request({ method: 'eth_chainId' }));
+            if (newChainId !== expectedChainId) throw new Error('Chain switch failed');
+          } catch (e) {
+            throw new Error(`Wrong network. Please switch to ${getNetwork().name || 'Ethereum'} (chain ${expectedChainId}) and try again.`);
+          }
+        }
+      }
+
       // Sanitize URLs to prevent XSS via data: URIs and javascript: protocols
       function sanitizeUrl(url) {
         if (!url || typeof url !== 'string') return '';
@@ -5319,6 +5355,7 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
+          await ensureCorrectChain();
           // Get input values
           const sharesInput = getEl('ragequitSharesInput').value.trim();
           const lootInput = getEl('ragequitLootInput').value.trim();
@@ -5779,6 +5816,7 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
+          await ensureCorrectChain();
           if (selectedDepositAssetIndex === null) {
             showStatus('Please select an asset', true);
             return;
@@ -6034,6 +6072,7 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
+          await ensureCorrectChain();
           if (selectedTributeAssetIndex === null) {
             showStatus('Please select an asset to offer', true);
             return;
@@ -7093,7 +7132,7 @@ body.modal-open { overflow: hidden; }
 
               const saleMatch = textToSearch.match(/<<<SALE\s+token="([^"]+)"\s+price="([^"]+)"\s+decimals="(\d+)"\s+symbol="([^"]+)"\s+SALE>>>/);
               if (saleMatch) {
-                const [, tokenAddress, price, decimals, symbol] = saleMatch;
+                const [, tokenAddress, price, chatDecimals, chatSymbol] = saleMatch;
 
                 // Normalize address for comparison
                 const normalizedAddress = tokenAddress.toLowerCase();
@@ -7102,19 +7141,35 @@ body.modal-open { overflow: hidden; }
                 if (!tokens.find(t => t.address.toLowerCase() === normalizedAddress) &&
                     !customTokens.find(t => t.address.toLowerCase() === normalizedAddress)) {
 
+                  // Resolve decimals and symbol from the actual token contract
+                  // Never trust chat-derived values for calldata (decimal poisoning defense)
+                  let resolvedDecimals = parseInt(chatDecimals);
+                  let resolvedSymbol = escapeHtml(chatSymbol);
+                  try {
+                    const saleTokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, _walletProvider || await withRpcFallback(p => p));
+                    const [onChainDecimals, onChainSymbol] = await Promise.all([
+                      saleTokenContract.decimals().catch(() => parseInt(chatDecimals)),
+                      saleTokenContract.symbol().catch(() => chatSymbol)
+                    ]);
+                    resolvedDecimals = Number(onChainDecimals);
+                    resolvedSymbol = escapeHtml(String(onChainSymbol));
+                  } catch (e) {
+                    logger.warn('Failed to resolve SALE tag token on-chain, using chat values:', e);
+                  }
+
                   customTokens.push({
-                    symbol,
+                    symbol: resolvedSymbol,
                     address: tokenAddress,
-                    decimals: parseInt(decimals),
+                    decimals: resolvedDecimals,
                     isCustom: true
                   });
 
                   // Cache for other functions that might need it
                   if (!customTokenCache[normalizedAddress]) {
                     customTokenCache[normalizedAddress] = {
-                      symbol,
-                      decimals: parseInt(decimals),
-                      name: symbol
+                      symbol: resolvedSymbol,
+                      decimals: resolvedDecimals,
+                      name: resolvedSymbol
                     };
                   }
                 }
@@ -7209,6 +7264,8 @@ body.modal-open { overflow: hidden; }
               if (sale.tribAmt > 0n && sale.forAmt > 0n && sale.forTkn !== ethers.ZeroAddress && !isExpired && !soldOut) {
                 const forTknLower = sale.forTkn.toLowerCase();
                 const isLoot = forTknLower === lootAddress;
+                const isShares = forTknLower === sharesAddress;
+                const isUnverifiedERC20 = !isLoot && !isShares;
 
                 // Find token info for the tribute token
                 const token = allTokens.find(t => t.address.toLowerCase() === sale.tribTkn.toLowerCase()) || {
@@ -7234,6 +7291,7 @@ body.modal-open { overflow: hidden; }
                   forAmt: sale.forAmt,
                   deadline: sale.deadline,
                   isLoot: isLoot,
+                  isUnverifiedERC20: isUnverifiedERC20,
                   available: sale.allowance, // Already fetched by view helper
                   remainingSupply: sale.remainingSupply,
                   totalSupply: sale.totalSupply,
@@ -7345,8 +7403,8 @@ body.modal-open { overflow: hidden; }
 
           // Render DAICO sales
           for (const sale of activeDaicoSales) {
-            const tokenType = sale.isLoot ? 'LOOT' : 'SHARES';
-            const tokenSymbol = sale.isLoot ? `${currentDAO.dao.meta.symbol}-LOOT` : currentDAO.dao.meta.symbol;
+            const tokenType = sale.isUnverifiedERC20 ? `UNVERIFIED ERC20 (${sale.forTkn.slice(0, 10)}…)` : (sale.isLoot ? 'LOOT' : 'SHARES');
+            const tokenSymbol = sale.isUnverifiedERC20 ? sale.forTkn.slice(0, 10) + '…' : (sale.isLoot ? `${currentDAO.dao.meta.symbol}-LOOT` : currentDAO.dao.meta.symbol);
 
             // Format the ratio: tribAmt of payment token -> forAmt of shares/loot
             // Example: 1 ETH for 1000 shares = "0.001 ETH per token" or "1 ETH : 1000 tokens"
@@ -8159,7 +8217,7 @@ body.modal-open { overflow: hidden; }
 
           infoDiv.innerHTML = `
             <div style="padding: 0.5rem; background: var(--surface); border-left: 3px solid var(--border); ">
-              <div><strong>${name}</strong> (${symbol})</div>
+              <div><strong>${escapeHtml(name)}</strong> (${escapeHtml(symbol)})</div>
               <div style="font-size: 0.7rem; opacity: 0.8; margin-top: 0.25rem;">${decimals} decimals • DAO Balance: ${balanceFormatted}</div>
               <div style="font-size: 0.65rem; opacity: 0.6; margin-top: 0.25rem; font-family: monospace;">${checksummedAddress}</div>
             </div>
@@ -8219,7 +8277,7 @@ body.modal-open { overflow: hidden; }
           }
 
           if (infoDiv) {
-            infoDiv.innerHTML = `<span style="color: var(--red);">${errorMsg}</span>`;
+            infoDiv.innerHTML = `<span style="color: var(--red);">${escapeHtml(errorMsg)}</span>`;
           }
           if (actionsDiv) {
             actionsDiv.style.display = 'none';
@@ -9920,6 +9978,7 @@ body.modal-open { overflow: hidden; }
 
       async function executePurchase(payToken, tokenDecimals, isLoot) {
         try {
+          await ensureCorrectChain();
           const amountInput = getEl('purchaseAmount').value.trim();
           if (!amountInput || isNaN(parseFloat(amountInput)) || parseFloat(amountInput) <= 0) {
             showStatus('Please enter a valid amount', true);
@@ -10185,6 +10244,7 @@ body.modal-open { overflow: hidden; }
       async function executeDaicoPurchase(tribToken, tokenDecimals, isLoot, tribAmt, forAmt, lpBps) {
         lpBps = lpBps || 0;
         try {
+          await ensureCorrectChain();
           const amountInput = getEl('purchaseAmount').value.trim();
           if (!amountInput || isNaN(parseFloat(amountInput)) || parseFloat(amountInput) <= 0) {
             showStatus('Please enter a valid amount', true);
@@ -10291,6 +10351,7 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
+          await ensureCorrectChain();
           showStatus('Claiming tap funds...', false);
 
           const daicoContract = new ethers.Contract(DAICO_ADDRESS, DAICO_ABI, _signer);
@@ -11145,9 +11206,9 @@ body.modal-open { overflow: hidden; }
           ]);
 
           if (decimals !== 18n) {
-            infoDiv.innerHTML = `<span style="color: var(--red);">${symbol} has ${decimals} decimals (must be 18)</span>`;
+            infoDiv.innerHTML = `<span style="color: var(--red);">${escapeHtml(symbol)} has ${decimals} decimals (must be 18)</span>`;
           } else {
-            infoDiv.innerHTML = `<span style="color: var(--green);">✓ ${symbol} (18 decimals)</span>`;
+            infoDiv.innerHTML = `<span style="color: var(--green);">✓ ${escapeHtml(symbol)} (18 decimals)</span>`;
             // Update preview
             const previewDiv = document.getElementById('internalSalePreview');
             const tokenType = document.getElementById('internalSaleTokenType')?.value || 'shares';
@@ -11155,8 +11216,8 @@ body.modal-open { overflow: hidden; }
             const tokenSymbol = tokenType === 'loot' ? `${daoSymbol}-LOOT` : daoSymbol;
             if (previewDiv && document.getElementById('internalSaleType')?.value !== 'custom') {
               previewDiv.innerHTML = `
-                <div>1 ${symbol} = 1 ${tokenSymbol}</div>
-                <div style="font-size: 0.7rem; color: var(--fg-dim);">Users can ragequit to reclaim their ${symbol}</div>
+                <div>1 ${escapeHtml(symbol)} = 1 ${escapeHtml(tokenSymbol)}</div>
+                <div style="font-size: 0.7rem; color: var(--fg-dim);">Users can ragequit to reclaim their ${escapeHtml(symbol)}</div>
               `;
             }
           }
@@ -14029,7 +14090,7 @@ body.modal-open { overflow: hidden; }
           // If it's a direct image URL, use it directly
           if (isDirectImageURL) {
             const imageUrl = toGatewayUrl(contractURI);
-            emblem.innerHTML = `<img src="${imageUrl}" alt="DAO Emblem" />`;
+            if (!setSafeImgHTML(emblem, imageUrl, 'DAO Emblem')) return;
             emblem.classList.add('url-image');
             emblem.style.display = 'block';
             emblem.onclick = () => openNFTModal({ image: imageUrl }, 'DAO Contract');
@@ -14086,7 +14147,7 @@ body.modal-open { overflow: hidden; }
 
           if (metadata && metadata.image) {
             const imageUrl = toGatewayUrl(metadata.image);
-            emblem.innerHTML = `<img src="${imageUrl}" alt="DAO Emblem" />`;
+            if (!setSafeImgHTML(emblem, imageUrl, 'DAO Emblem')) { emblem.style.display = 'none'; return; }
             // Check if image URL is external (not data URI)
             if (!metadata.image.startsWith('data:')) {
               emblem.classList.add('url-image');
@@ -14123,7 +14184,8 @@ body.modal-open { overflow: hidden; }
           // Convert IPFS URLs to gateway URLs and add url-image class for external URLs
           const imageUrl = toGatewayUrl(metadata.image);
           const urlImageClass = imageUrl.startsWith('data:') ? '' : ' url-image';
-          imageHTML = `<img src="${imageUrl}" class="nft-modal-image${urlImageClass}" alt="${title}" />`;
+          const safeImg = createSafeImg(imageUrl, escapeHtml(title), `nft-modal-image${urlImageClass}`);
+          if (safeImg) imageHTML = safeImg.outerHTML;
         }
 
         let attributesHTML = '';
@@ -14222,7 +14284,7 @@ body.modal-open { overflow: hidden; }
           // If it's a direct image URL, use it directly
           if (isDirectImageURL) {
             const imageUrl = toGatewayUrl(contractURI);
-            emblem.innerHTML = `<img src="${imageUrl}" alt="DAO Emblem" />`;
+            if (!setSafeImgHTML(emblem, imageUrl, 'DAO Emblem')) return;
             emblem.classList.add('url-image');
             return;
           }
@@ -14273,10 +14335,11 @@ body.modal-open { overflow: hidden; }
 
           if (metadata && metadata.image) {
             const imageUrl = toGatewayUrl(metadata.image);
-            emblem.innerHTML = `<img src="${imageUrl}" alt="DAO Emblem" />`;
-            // Check if image URL is external (not data URI)
-            if (!metadata.image.startsWith('data:')) {
-              emblem.classList.add('url-image');
+            if (setSafeImgHTML(emblem, imageUrl, 'DAO Emblem')) {
+              // Check if image URL is external (not data URI)
+              if (!metadata.image.startsWith('data:')) {
+                emblem.classList.add('url-image');
+              }
             }
           } else if (metadata && metadata.description) {
             // No image but has description - show truncated description in tile
@@ -14993,6 +15056,7 @@ body.modal-open { overflow: hidden; }
         if (isSendingMessage) return;
         isSendingMessage = true;
 
+        try { await ensureCorrectChain(); } catch (e) { isSendingMessage = false; showStatus(e.message, true); return; }
         const chatInput = document.getElementById('chatInput');
         const message = chatInput.value.trim();
 
@@ -15425,6 +15489,7 @@ body.modal-open { overflow: hidden; }
           return;
         }
         try {
+          await ensureCorrectChain();
           const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
 
           // Convert string to BigInt (passed as string to avoid overflow in onclick)
@@ -16433,6 +16498,7 @@ body.modal-open { overflow: hidden; }
 
         isExecutingProposal = true;
         try {
+          await ensureCorrectChain();
           const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _signer);
           const currentConfig = await molochContract.config();
 
@@ -17396,7 +17462,7 @@ body.modal-open { overflow: hidden; }
               decimalsInput.value = decimals;
             }
 
-            infoDiv.innerHTML = `<span style="color: var(--fg);">✓ ${name} (${symbol})</span> <span style="opacity: 0.6;">• ${decimals} decimals</span>`;
+            infoDiv.innerHTML = `<span style="color: var(--fg);">✓ ${escapeHtml(name)} (${escapeHtml(symbol)})</span> <span style="opacity: 0.6;">• ${decimals} decimals</span>`;
           } catch (err) {
             logger.error('Token validation error:', err);
             infoDiv.innerHTML = '<span style="color: var(--red);">Failed to validate token. Ensure it\'s a valid ERC20.</span>';
@@ -17473,7 +17539,7 @@ body.modal-open { overflow: hidden; }
           // Success - show token info
           infoDiv.innerHTML = `
             <div style="padding: 0.5rem; background: var(--status-success); border-left: 3px solid var(--green); ">
-              <div>✓ <strong>${name}</strong> (${symbol})</div>
+              <div>✓ <strong>${escapeHtml(name)}</strong> (${escapeHtml(symbol)})</div>
               <div style="font-size: 0.7rem; opacity: 0.8; margin-top: 0.25rem;">${decimals} decimals - Valid for sale</div>
               <div style="font-size: 0.65rem; opacity: 0.6; margin-top: 0.25rem; font-family: monospace;">${checksummedAddress}</div>
             </div>
@@ -17498,7 +17564,7 @@ body.modal-open { overflow: hidden; }
           }
 
           if (infoDiv) {
-            infoDiv.innerHTML = `<span style="color: var(--red);">${errorMsg}</span>`;
+            infoDiv.innerHTML = `<span style="color: var(--red);">${escapeHtml(errorMsg)}</span>`;
           }
         }
       }
@@ -18402,6 +18468,7 @@ body.modal-open { overflow: hidden; }
             : 0n;
 
           // Call summon
+          await ensureCorrectChain();
           showStatus('Please confirm the transaction in your wallet...');
 
           // For WalletConnect, skip local gas estimation (use generous limit, wallet will refine)

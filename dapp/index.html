@@ -6004,6 +6004,13 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
       el.className = '';
       if (qBox) qBox.classList.remove('impact-high');
     }
+
+    // Block swap execution when slippage exceeds 30%
+    const swapBtn = $("swapBtn");
+    if (displayImpact > 30 && seq === _quoteSeq && swapBtn) {
+      setText(swapBtn, `Price impact too high (${displayImpact.toFixed(1)}%)`);
+      setDisabled(swapBtn, true);
+    }
   } catch (e) {
     el.textContent = '--';
     el.className = '';
