@@ -799,74 +799,61 @@ test('empty string asset: defaults to ETH and is recognized', () => {
 //  Recipient resolution (direct vs relay mode)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// Mirrors the recipient-resolution logic in ppwWithdraw (index.html lines 9709-9726).
-// In direct mode, the recipient MUST be the connected wallet (funds go there).
-// In relay mode, a custom recipient is allowed; it falls back to the connected wallet.
+// Mirrors the current relay/direct recipient rules in ppwWithdraw:
+// - direct mode always sends to the signing wallet
+// - relay mode requires an explicit, already-resolved recipient
 
-function resolveRecipient(isRelayMode, customRecipient, connectedAddress) {
-  // Simulate ethers.isAddress: 0x + 40 hex chars
-  const isAddress = (a) => /^0x[0-9a-fA-F]{40}$/.test(a);
-  // Simulate ethers.getAddress: just return checksummed (identity here)
-  const getAddress = (a) => a;
-
-  if (isRelayMode) {
-    if (customRecipient && !isAddress(customRecipient)) {
-      return { error: 'invalid-address' };
-    }
-  } else {
-    if (customRecipient && customRecipient.toLowerCase() !== connectedAddress?.toLowerCase()) {
-      return { error: 'direct-mode-recipient-mismatch' };
-    }
+function resolveRecipient(isRelayMode, customRecipient, resolvedRecipient, connectedAddress) {
+  const recipient = isRelayMode ? resolvedRecipient : connectedAddress;
+  if (isRelayMode && (!customRecipient || !resolvedRecipient)) {
+    return { error: 'missing-or-unresolved-recipient' };
   }
-  const recipient = isRelayMode
-    ? (customRecipient ? getAddress(customRecipient) : connectedAddress)
-    : connectedAddress;
   if (!recipient) {
-    return { error: isRelayMode ? 'no-recipient-or-wallet' : 'no-wallet' };
+    return { error: isRelayMode ? 'no-recipient' : 'no-wallet' };
   }
   return { recipient };
 }
 
 test('direct mode: connected wallet is the recipient', () => {
-  const r = resolveRecipient(false, '', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+  const r = resolveRecipient(false, '', null, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
   assert.equal(r.recipient, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
   assert.equal(r.error, undefined);
 });
 
-test('direct mode: rejects custom recipient != connected wallet', () => {
-  const r = resolveRecipient(false, '0x1111111111111111111111111111111111111111', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
-  assert.equal(r.error, 'direct-mode-recipient-mismatch');
-});
-
-test('direct mode: allows custom recipient == connected wallet (case insensitive)', () => {
-  const r = resolveRecipient(false, '0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+test('direct mode: ignores any custom recipient input and still uses connected wallet', () => {
+  const r = resolveRecipient(false, '0x1111111111111111111111111111111111111111', '0x1111111111111111111111111111111111111111', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
   assert.equal(r.recipient, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
   assert.equal(r.error, undefined);
 });
 
 test('direct mode: no wallet connected returns error', () => {
-  const r = resolveRecipient(false, '', null);
+  const r = resolveRecipient(false, '', null, null);
   assert.equal(r.error, 'no-wallet');
 });
 
 test('relay mode: custom recipient is used', () => {
-  const r = resolveRecipient(true, '0x1111111111111111111111111111111111111111', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+  const r = resolveRecipient(true, 'vitalik.eth', '0x1111111111111111111111111111111111111111', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
   assert.equal(r.recipient, '0x1111111111111111111111111111111111111111');
 });
 
-test('relay mode: falls back to connected wallet when no custom recipient', () => {
-  const r = resolveRecipient(true, '', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
-  assert.equal(r.recipient, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+test('relay mode: explicit recipient stays required even when wallet is connected', () => {
+  const r = resolveRecipient(true, '', null, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+  assert.equal(r.error, 'missing-or-unresolved-recipient');
 });
 
-test('relay mode: rejects invalid custom address', () => {
-  const r = resolveRecipient(true, 'not-an-address', '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
-  assert.equal(r.error, 'invalid-address');
+test('relay mode: unresolved name is rejected before submission', () => {
+  const r = resolveRecipient(true, 'not-found.eth', null, '0xABCDabcdABCDabcdABCDabcdABCDabcdABCDabcd');
+  assert.equal(r.error, 'missing-or-unresolved-recipient');
 });
 
-test('relay mode: no wallet and no custom recipient returns error', () => {
-  const r = resolveRecipient(true, '', null);
-  assert.equal(r.error, 'no-recipient-or-wallet');
+test('relay mode: valid resolved recipient works without a connected wallet', () => {
+  const r = resolveRecipient(true, 'alice.wei', '0x1111111111111111111111111111111111111111', null);
+  assert.equal(r.recipient, '0x1111111111111111111111111111111111111111');
+});
+
+test('relay mode: no wallet and no recipient returns error', () => {
+  const r = resolveRecipient(true, '', null, null);
+  assert.equal(r.error, 'missing-or-unresolved-recipient');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -892,10 +879,10 @@ test('context hash: relay vs direct produce different contexts (distinct process
   assert.notEqual(entrypoint.toLowerCase(), recipient.toLowerCase());
 });
 
-test('context hash: different recipients produce different contexts in direct mode', () => {
+test('context hash: different signing wallets produce different contexts in direct mode', () => {
   const r1 = '0x1111111111111111111111111111111111111111';
   const r2 = '0x2222222222222222222222222222222222222222';
-  assert.notEqual(r1, r2, 'different recipients = different circuit context');
+  assert.notEqual(r1, r2, 'different signers = different circuit context');
 });
 
 test('context hash: SNARK_FIELD modular reduction keeps context in-range', () => {

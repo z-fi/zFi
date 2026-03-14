@@ -941,6 +941,26 @@ body.modal-open { overflow: hidden; }
 #privacyTab details[open] > summary::before {
   transform: rotate(90deg);
 }
+.ppw-recipient-note {
+  margin-top:8px;
+  padding:8px;
+  border:1px solid var(--border-muted);
+  background:var(--surface);
+  font-size:11px;
+  color:var(--fg-muted);
+  line-height:1.4;
+}
+.ppw-recipient-note .ppw-wallet-addr {
+  margin-top:6px;
+  color:var(--fg);
+  word-break:break-all;
+}
+.ppw-recipient-help {
+  font-size:11px;
+  color:var(--fg-muted);
+  margin-top:6px;
+  line-height:1.4;
+}
 </style>
 </head>
 <body>
@@ -1198,15 +1218,27 @@ body.modal-open { overflow: hidden; }
     <div class="section" style="margin-bottom:16px">
       <label style="margin:0">Withdrawal Mode</label>
       <div style="display:flex;gap:8px;margin-top:4px">
-        <button id="ppwModeRelay" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppwSetMode('relay')">Relay (Recommended)</button>
-        <button id="ppwModeDirect" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppwSetMode('direct')">Direct (Not Recommended)</button>
+        <button id="ppwModeRelay" class="swap-btn pp-wmode-btn" style="flex:1.15;padding:6px;font-size:12px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg);display:inline-flex;align-items:center;justify-content:center;gap:6px" onclick="ppwSetMode('relay')">
+          <span>Relay</span>
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.78">Recommended</span>
+        </button>
+        <button id="ppwModeDirect" class="swap-btn pp-wmode-btn" style="flex:1;padding:6px;font-size:12px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppwSetMode('direct')">Direct</button>
       </div>
-      <div id="ppwDirectModeHint" style="display:none;font-size:11px;color:orange;margin-top:6px">Direct mode requires withdrawing to your connected wallet and is not private.</div>
+      <div id="ppwModeSummary" style="font-size:11px;color:var(--fg-muted);margin-top:6px;line-height:1.4">The relayer submits your withdrawal and pays gas, breaking the onchain link between your deposit and withdrawal addresses.</div>
+      <div id="ppwDirectModeHint" style="display:none;margin-top:8px;padding:8px;border:1px solid #e67e22;background:var(--surface);font-size:11px;color:#e67e22;line-height:1.4">Your connected wallet submits the transaction and receives the funds. You will not gain any privacy. Only use this as a last resort.</div>
     </div>
 
     <div class="section" style="margin-bottom:16px">
-      <label style="margin:0">Recipient Address</label>
-      <input type="text" id="ppwRecipient" placeholder="0x..." style="font-size:16px;padding:8px 0">
+      <label id="ppwRecipientLabel" style="margin:0">Recipient</label>
+      <div id="ppwRelayRecipientWrap">
+        <input type="text" id="ppwRecipient" placeholder="0x address, name.wei, or name.eth" style="font-size:16px;padding:8px 0">
+        <div id="ppwRecipientResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
+        <div class="ppw-recipient-help">Required for relay withdrawals. For best privacy, use a fresh recipient address rather than your deposit wallet.</div>
+      </div>
+      <div id="ppwDirectRecipientNote" class="ppw-recipient-note" style="display:none">
+        Direct withdrawals always send funds to the signing wallet.
+        <div id="ppwDirectWalletLine" class="ppw-wallet-addr"></div>
+      </div>
     </div>
 
     <div id="ppwExtraGasWrap" style="display:none;margin-bottom:16px;font-size:12px">
@@ -8903,7 +8935,7 @@ walletInit({
     handleAmountChange();
     if ($('privacyTab')?.style.display !== 'none') { updatePPBalance(); updatePPButton(); }
     if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); }
-    if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
+    if ($('ppwRecipient')) ppwUpdateRecipientHint();
     if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
     ppUpdateDescriptions(true);
     // Show connected My Pools UI and auto-load only if privacy tab is visible
@@ -8927,7 +8959,7 @@ walletInit({
     _ppMasterKeys = null;
     _ppwEventCache = {};
     _ppConfigCache = null; _ppConfigCacheTs = 0;
-    if ($('ppwRecipientHint')) ppwUpdateRecipientHint();
+    if ($('ppwRecipient')) ppwUpdateRecipientHint();
     if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
     updatePPButton(); setText('ppBalance', 'Balance: --');
     ppUpdateDescriptions(false);
@@ -10410,7 +10442,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const _ppwAmtEl = $('ppwWithdrawAmt');
   if (_ppwAmtEl) _ppwAmtEl.addEventListener('input', ppwUpdatePreview);
   const _ppwRecipientEl = $('ppwRecipient');
-  if (_ppwRecipientEl) _ppwRecipientEl.addEventListener('input', ppwUpdatePreview);
+  if (_ppwRecipientEl) _ppwRecipientEl.addEventListener('input', ppwOnRecipientInput);
 
   // Keep withdrawal mode UI and behavior in sync with relay-first default.
   ppwSetMode(_ppwMode);
@@ -10667,30 +10699,63 @@ function ppwScheduleAnonymityHint(withdrawnValue, asset) {
 function ppwUpdateRecipientHint() {
   const inputEl = $('ppwRecipient');
   if (!inputEl) return;
-  if (_ppwMode === 'direct') {
-    inputEl.value = _connectedAddress || '';
-    inputEl.readOnly = true;
-    inputEl.style.opacity = '0.6';
+  const labelEl = $('ppwRecipientLabel');
+  const relayWrap = $('ppwRelayRecipientWrap');
+  const directNote = $('ppwDirectRecipientNote');
+  const directWalletLine = $('ppwDirectWalletLine');
+  const resolvedEl = $('ppwRecipientResolved');
+
+  const isDirect = _ppwMode === 'direct';
+  inputEl.readOnly = false;
+  inputEl.style.opacity = '';
+  inputEl.placeholder = '0x address, name.wei, or name.eth';
+  if (labelEl) setText(labelEl, isDirect ? 'Signing Wallet' : 'Recipient');
+  setShown(relayWrap, !isDirect);
+  setShown(directNote, isDirect);
+  if (isDirect) {
+    if (resolvedEl) resolvedEl.style.display = 'none';
+    if (directWalletLine) {
+      setText(
+        directWalletLine,
+        _connectedAddress
+          ? 'Signing wallet: ' + _connectedAddress
+          : 'Connect the wallet that should submit and receive this withdrawal.'
+      );
+    }
+    ppwUpdatePreview();
     return;
   }
-  if (inputEl.readOnly) {
-    inputEl.value = '';
-    inputEl.readOnly = false;
-    inputEl.style.opacity = '';
+  if (directWalletLine) setText(directWalletLine, '');
+  ppwOnRecipientInput();
+}
+
+function ppwGetRecipientAddress() {
+  const customRecipient = ($('ppwRecipient')?.value || '').trim();
+  if (!customRecipient) return null;
+  if (ethers.isAddress(customRecipient) && customRecipient !== ZERO_ADDRESS) return ethers.getAddress(customRecipient);
+  return coinGetResolved('ppwRecipient');
+}
+
+function ppwOnRecipientInput() {
+  const inputEl = $('ppwRecipient');
+  if (!inputEl) return;
+  if (_ppwMode === 'direct') {
+    const resolvedEl = $('ppwRecipientResolved');
+    if (resolvedEl) resolvedEl.style.display = 'none';
+    ppwUpdatePreview();
+    return;
   }
-  inputEl.placeholder = '0x...';
+  onCoinAddressInput('ppwRecipient', 'ppwRecipientResolved', ppwUpdatePreview);
+  // Hide redundant resolved echo for raw addresses — only show for name resolution
+  const v = ($('ppwRecipient')?.value || '').trim();
+  if (ethers.isAddress(v)) $('ppwRecipientResolved').style.display = 'none';
 }
 
 function ppwCanSubmitWithdrawal() {
   if (!_ppwNote) return false;
-  const customRecipient = ($('ppwRecipient')?.value || '').trim();
-  if (_ppwMode === 'relay') {
-    if (customRecipient) return ethers.isAddress(customRecipient);
-    return !!_connectedAddress;
-  }
-  if (!_connectedAddress || !_signer) return false;
-  if (customRecipient && customRecipient.toLowerCase() !== _connectedAddress.toLowerCase()) return false;
-  return true;
+  const resolvedRecipient = ppwGetRecipientAddress();
+  if (_ppwMode === 'relay') return !!resolvedRecipient;
+  return !!_connectedAddress && !!_signer;
 }
 
 function ppwSyncWithdrawButtonState() {
@@ -10712,6 +10777,7 @@ function ppwSetMode(mode) {
   relayBtn.style.background = isDirect ? 'var(--surface)' : 'var(--btn-bg)';
   relayBtn.style.color = isDirect ? 'var(--fg-muted)' : 'var(--btn-fg)';
   ppwUpdateRecipientHint();
+  setShown('ppwModeSummary', !isDirect);
   setShown('ppwDirectModeHint', isDirect);
   setShown('ppwExtraGasWrap', !isDirect);
   // For native ETH, relayer forces extraGas=false — disable the toggle
@@ -10762,12 +10828,21 @@ function ppwUpdatePreview() {
     }
     const changeValue = value - withdrawnValue;
     const isPartial = changeValue > 0n;
-    let html = '<div style="display:grid;gap:2px">';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Available</span><span>' + fmt(ppFormatAmountWei(value, asset)) + ' ' + escText(asset) + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Withdrawal</span><span>' + fmt(ppFormatAmountWei(withdrawnValue, asset)) + ' ' + escText(asset) + '</span></div>';
-    if (isPartial) html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Remaining</span><span style="color:orange">' + fmt(ppFormatAmountWei(changeValue, asset)) + ' ' + escText(asset) + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between"><span style="color:var(--fg-muted)">Mode</span><span>' + (_ppwMode === 'relay' ? 'Relay' : 'Direct') + '</span></div>';
-    html += '</div>';
+    const relayRecipientInput = ($('ppwRecipient')?.value || '').trim();
+    const previewRecipient = _ppwMode === 'relay' ? ppwGetRecipientAddress() : _connectedAddress;
+    let html = '';
+    html += '<div class="quote-row"><span>Available</span><span>' + fmt(ppFormatAmountWei(value, asset)) + ' ' + escText(asset) + '</span></div>';
+    html += '<div class="quote-row"><span>Withdrawal</span><span>' + fmt(ppFormatAmountWei(withdrawnValue, asset)) + ' ' + escText(asset) + '</span></div>';
+    if (isPartial) html += '<div class="quote-row"><span>Remaining</span><span style="color:#e67e22">' + fmt(ppFormatAmountWei(changeValue, asset)) + ' ' + escText(asset) + '</span></div>';
+    html += '<div class="quote-row"><span>Mode</span><span>' + (_ppwMode === 'relay' ? 'Relay' : 'Direct') + '</span></div>';
+    if (_ppwMode === 'relay') {
+      const recipientStatus = previewRecipient
+        ? escText(previewRecipient.slice(0, 6) + '\u2026' + previewRecipient.slice(-4))
+        : (relayRecipientInput ? '<span style="color:var(--fg-muted)">Pending</span>' : '<span style="color:#e67e22">Required</span>');
+      html += '<div class="quote-row"><span>Recipient</span><span>' + recipientStatus + '</span></div>';
+    } else if (previewRecipient) {
+      html += '<div class="quote-row"><span>Signing wallet</span><span>' + escText(previewRecipient.slice(0, 6) + '\u2026' + previewRecipient.slice(-4)) + '</span></div>';
+    }
     $('ppwPreviewContent').innerHTML = html;
     setShown(previewEl, true);
     if (isPartial) {
@@ -11139,7 +11214,7 @@ function ppwRenderPoolAccounts() {
             <div style="font-size:12px"><span style="font-weight:600">${escText(paLabel)}</span> <span style="color:var(--fg-dim)">&middot;</span> ${amtStr}${txLink}</div>
             <div style="font-size:10px;color:var(--green, #22c55e);font-weight:600;margin-top:2px">Available${sourceHint}</div>
           </div>
-          <button onclick="ppwSelectAccount(${i})" style="flex-shrink:0;font-size:11px;padding:4px 12px;font-weight:600;margin:0;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-bg);border-radius:0;width:auto">Withdraw</button>
+          <button class="swap-btn" onclick="ppwSelectAccount(${i})" style="flex-shrink:0;font-size:11px;padding:4px 12px;margin:0;width:auto">Withdraw</button>
         </div>
       </div>`;
     }
@@ -11150,6 +11225,22 @@ function ppwRenderPoolAccounts() {
 }
 
 let _ppwSelectedAccountLabel = null;
+
+function ppwResetDraftState() {
+  $('ppwWithdrawAmt').value = '';
+  $('ppwRecipient').value = '';
+  setShown('ppwRecipientResolved', false);
+  setText('ppwDirectWalletLine', '');
+  setShown('ppwVerify', false);
+  setShown('ppwPreview', false);
+  setShown('ppwResult', false);
+  setShown('ppwResultDetails', false);
+  setShown('ppwChangeWarning', false);
+  setShown('ppwRelayFeePanel', false);
+  setText('ppwVerifyStatus', '');
+  if ($('ppwResultText')) $('ppwResultText').value = '';
+  ppwClearAnonymityHint();
+}
 
 function ppwSelectAccount(index) {
   const r = _ppwLoadResults[index];
@@ -11167,6 +11258,9 @@ function ppwSelectAccount(index) {
     label: r.label != null ? BigInt(r.label) : null,
     commitment: r.commitment ?? null,
   };
+  ppwResetDraftState();
+  // Start each withdrawal flow from the relay-first default.
+  ppwSetMode('relay');
 
   // Show withdrawal form with selected account label
   const valStr = _ppwNote.value != null ? ppFormatAmountWei(_ppwNote.value, noteAsset) : '';
@@ -11259,12 +11353,9 @@ function ppwCloseWithdrawForm() {
   _ppwSelectedAccountLabel = null;
   _ppwNote = null;
   setShown('ppwParsed', false);
-  setShown('ppwResult', false);
-  setShown('ppwPreview', false);
-  setShown('ppwChangeWarning', false);
   // Clear form state
-  $('ppwWithdrawAmt').value = '';
-  $('ppwRecipient').value = '';
+  ppwResetDraftState();
+  ppwSetMode('relay');
   setDisabled('ppwWithdrawBtn', true);
   // Scroll to Pool Accounts list
   const el = $('ppwLoadResults') || $('ppwLoadBtn');
@@ -11310,18 +11401,15 @@ async function ppwWithdraw() {
 
     const customRecipient = $('ppwRecipient').value.trim();
     const isRelayMode = _ppwMode === 'relay';
+    const resolvedRecipient = ppwGetRecipientAddress();
 
     if (isRelayMode) {
-      // Relay mode: use custom recipient or fall back to connected wallet
-      if (customRecipient && !ethers.isAddress(customRecipient)) { showStatus('Invalid recipient address.', 'error'); return; }
-    } else {
-      // Direct mode: recipient must be connected wallet
-      if (customRecipient && customRecipient.toLowerCase() !== _connectedAddress?.toLowerCase()) {
-        showStatus('Direct withdrawal requires recipient = connected wallet. Switch to Relay mode for custom recipients.', 'error');
+      if (!customRecipient || !resolvedRecipient) {
+        showStatus('Enter a recipient address, name.wei, or name.eth for relay withdrawal.', 'error');
         return;
       }
     }
-    const recipient = isRelayMode ? (customRecipient ? ethers.getAddress(customRecipient) : _connectedAddress) : _connectedAddress;
+    const recipient = isRelayMode ? resolvedRecipient : _connectedAddress;
     if (!recipient) {
       showStatus(isRelayMode ? 'Enter a recipient address or connect wallet for relay withdrawal.' : 'Connect wallet first', 'error');
       return;
