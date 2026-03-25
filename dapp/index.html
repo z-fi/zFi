@@ -815,10 +815,8 @@ body.modal-open { overflow: hidden; }
 .coin-slider-row .coin-slider-val svg { vertical-align:middle;flex-shrink:0; }
 .coin-sliders.locked input[type="range"] { pointer-events:none;opacity:0.4; }
 .coin-drawer-body { display:none;padding-top:4px; }
-#coinSocialsWrap.open .coin-drawer-body,
-#coinSettingsWrap.open .coin-drawer-body { display:block; }
-#coinSocialsWrap.open .coin-drawer-arrow,
-#coinSettingsWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
+#coinSocialsWrap.open .coin-drawer-body { display:block; }
+#coinSocialsWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
 .coin-tpl-badge {
   display:inline-flex;align-items:center;vertical-align:middle;margin-left:4px;
   color:var(--fg);opacity:0.7;
@@ -1274,131 +1272,76 @@ body.modal-open { overflow: hidden; }
 
 <div id="coinTab" style="display:none">
 <div class="swap-card">
-  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Launch a Coin</h2>
-  <div style="padding:40px 0;text-align:center">
-    <div style="font-size:13px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted)">Pending Upgrade</div>
-    <div style="font-size:12px;color:var(--fg-dim);margin-top:8px">New coin launches are temporarily paused.</div>
-  </div>
-</div>
-<div style="margin-top:14px;text-align:center">
-  <a href="./coin/" style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);text-decoration:none">Browse coins &rarr;</a>
-</div>
-</div><!-- end coinTab -->
-
-<div id="_coinFormPaused" style="display:none">
-<!-- original coin creation form - restore from git history -->
-<div class="swap-card">
   <div class="coin-tpl-toggle" style="margin-bottom:4px">
-    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('simple')">ez</button>
-    <button class="coin-tpl-btn" onclick="coinSetLaunchType('advanced')">Fund</button>
-    <button class="coin-tpl-btn" onclick="coinSetLaunchType('collect')">Collect</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>ez</strong> — memecoin-style launch. 80% of ETH raised seeds liquidity, 20% goes to a ragequitable treasury. No ops allocation, no vesting, no tap. Buyers can always exit at the treasury-backed floor price. Best for community tokens, memes, and experiments.<br><br><strong>fund</strong> — structured fundraise (DAICO). Includes an ops allocation with lockup, tap vesting that drips treasury ETH to ops over time, and full governance. Buyers fund a project and the DAO controls how funds are spent. Best for projects, protocols, and teams that need operating capital.<br><br><strong>collect</strong> — collector DAO. Pool ETH to mint NFTs or place open bids for tokens. Bare Moloch with ragequitable vault. Share sale via vault.buy(). Best for group buys, mint pools, and bounties.</span></span>
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Coin</button>
+    <button class="coin-tpl-btn" onclick="coinSetLaunchType('cause')">Cause</button>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>coin</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.</span></span>
   </div>
-  <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">80% liquidity &middot; 20% treasury &middot; no ops</div>
+  <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">bonding curve &middot; ~5.33 ETH graduation &middot; permanent LP</div>
 
-  <!-- ez illustration -->
-  <div id="coinEzIllustration" style="margin-bottom:14px;padding:10px 0">
+  <!-- coin illustration (bonding curve) -->
+  <div id="coinCurveIllustration" style="margin-bottom:14px;padding:10px 0">
     <svg viewBox="0 0 280 56" width="100%" style="display:block;max-width:320px;margin:0 auto">
       <style>
-        @keyframes ezFill { 0%{width:0} 50%{width:220px} 100%{width:220px} }
-        @keyframes ezSplit { 0%,50%{opacity:0} 60%,100%{opacity:1} }
-        @keyframes ezBar { 0%,50%{opacity:1} 60%,100%{opacity:0} }
+        @keyframes curveDraw { 0%{stroke-dashoffset:200} 50%{stroke-dashoffset:0} 100%{stroke-dashoffset:0} }
+        @keyframes curveGrad { 0%,50%{opacity:0} 60%,100%{opacity:1} }
+        @keyframes curveLine { 0%,50%{opacity:1} 60%,100%{opacity:0} }
       </style>
-      <!-- Track -->
-      <rect x="30" y="4" width="220" height="14" rx="7" fill="var(--border-muted)" opacity="0.5"/>
-      <!-- Fill bar (fades out after fill) -->
-      <foreignObject x="30" y="4" width="220" height="14">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="height:14px;border-radius:7px;background:var(--fg);opacity:0.7;animation:ezFill 5s ease-in-out infinite,ezBar 5s ease-in-out infinite"></div>
-      </foreignObject>
-      <!-- Split: LP 80% -->
-      <g style="animation:ezSplit 5s ease-in-out infinite">
-        <rect x="30" y="4" width="176" height="14" rx="7" fill="var(--fg)" opacity="0.8"/>
-        <text x="118" y="14" font-size="8" font-weight="600" fill="var(--bg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" letter-spacing="0.05em">80% LP</text>
-      </g>
-      <!-- Split: Treasury 20% -->
-      <g style="animation:ezSplit 5s ease-in-out infinite">
-        <rect x="210" y="4" width="40" height="14" rx="7" fill="var(--fg)" opacity="0.4"/>
-        <text x="230" y="14" font-size="7" font-weight="600" fill="var(--fg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" letter-spacing="0.03em" opacity="0.8">20%</text>
+      <!-- Axes -->
+      <line x1="30" y1="4" x2="30" y2="48" stroke="var(--border-muted)" stroke-width="1" opacity="0.5"/>
+      <line x1="30" y1="48" x2="250" y2="48" stroke="var(--border-muted)" stroke-width="1" opacity="0.5"/>
+      <!-- Curve -->
+      <path d="M30,46 Q80,44 130,38 T200,16 T240,6" fill="none" stroke="var(--fg)" stroke-width="2" opacity="0.8" stroke-dasharray="200" style="animation:curveDraw 5s ease-in-out infinite"/>
+      <!-- Graduation line -->
+      <g style="animation:curveGrad 5s ease-in-out infinite">
+        <line x1="200" y1="4" x2="200" y2="48" stroke="var(--green,#22c55e)" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        <text x="200" y="56" font-size="7" fill="var(--green,#22c55e)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.8">graduate</text>
       </g>
       <!-- Labels -->
-      <g style="animation:ezSplit 5s ease-in-out infinite">
-        <text x="118" y="32" font-size="9" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">zAMM liquidity</text>
-        <text x="230" y="32" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">treasury</text>
-      </g>
+      <text x="30" y="56" font-size="7" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif">start</text>
+      <text x="250" y="56" font-size="7" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif" text-anchor="end">16x</text>
+      <text x="140" y="56" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">price &rarr;</text>
     </svg>
   </div>
 
-  <!-- fund illustration -->
-  <div id="coinFundIllustration" style="display:none;margin-bottom:14px;padding:10px 0">
-    <svg viewBox="0 0 280 56" width="100%" style="display:block;max-width:320px;margin:0 auto">
+  <!-- cause illustration (DAICO fundraise) -->
+  <div id="coinCauseIllustration" style="display:none;margin-bottom:14px;padding:10px 0">
+    <svg viewBox="0 0 280 64" width="100%" style="display:block;max-width:320px;margin:0 auto">
       <style>
-        @keyframes fundFill { 0%{width:0} 50%{width:220px} 100%{width:220px} }
-        @keyframes fundSplit { 0%,50%{opacity:0} 60%,100%{opacity:1} }
-        @keyframes fundBar { 0%,50%{opacity:1} 60%,100%{opacity:0} }
-        @keyframes fundDrip { 0%,60%{opacity:0} 70%{opacity:0.6} 80%{opacity:0} 90%{opacity:0.6} 100%{opacity:0} }
+        @keyframes causeFill { 0%{width:0} 60%{width:180px} 100%{width:180px} }
+        @keyframes causeBar { 0%,55%{opacity:1} 60%,100%{opacity:0} }
+        @keyframes causeSplit { 0%,55%{opacity:0} 60%,100%{opacity:1} }
+        @keyframes causeDrip { 0%,65%{opacity:0} 72%{opacity:0.7} 79%{opacity:0} 86%{opacity:0.7} 93%{opacity:0} 100%{opacity:0} }
       </style>
+      <!-- ETH flowing in -->
+      <g opacity="0.4" style="animation:causeBar 5s ease-in-out infinite">
+        <text x="8" y="18" font-size="10" fill="var(--fg)">+</text>
+        <text x="18" y="18" font-size="10" fill="var(--fg)">+</text>
+      </g>
       <!-- Track -->
-      <rect x="30" y="4" width="220" height="14" rx="7" fill="var(--border-muted)" opacity="0.5"/>
+      <rect x="30" y="6" width="180" height="14" rx="7" fill="var(--border-muted)" opacity="0.5"/>
       <!-- Fill bar -->
-      <foreignObject x="30" y="4" width="220" height="14">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="height:14px;border-radius:7px;background:var(--fg);opacity:0.7;animation:fundFill 6s ease-in-out infinite,fundBar 6s ease-in-out infinite"></div>
+      <foreignObject x="30" y="6" width="180" height="14">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="height:14px;border-radius:7px;background:var(--fg);opacity:0.7;animation:causeFill 5s ease-in-out infinite,causeBar 5s ease-in-out infinite"></div>
       </foreignObject>
-      <!-- Split: LP -->
-      <g style="animation:fundSplit 6s ease-in-out infinite">
-        <rect x="30" y="4" width="73" height="14" rx="7" fill="var(--fg)" opacity="0.8"/>
-        <text x="66" y="14" font-size="7" font-weight="600" fill="var(--bg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">LP</text>
+      <!-- Split: treasury -->
+      <g style="animation:causeSplit 5s ease-in-out infinite">
+        <rect x="30" y="6" width="180" height="14" rx="7" fill="var(--fg)" opacity="0.5"/>
+        <text x="120" y="16" font-size="7" font-weight="600" fill="var(--bg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">treasury</text>
       </g>
-      <!-- Split: Treasury -->
-      <g style="animation:fundSplit 6s ease-in-out infinite">
-        <rect x="107" y="4" width="100" height="14" rx="7" fill="var(--fg)" opacity="0.4"/>
-        <text x="157" y="14" font-size="7" font-weight="600" fill="var(--fg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.8">treasury</text>
-        <!-- Drip dots -->
-        <circle cx="157" cy="24" r="1.5" fill="var(--fg)" style="animation:fundDrip 6s ease-in-out infinite"/>
-        <circle cx="157" cy="30" r="1" fill="var(--fg)" opacity="0.5" style="animation:fundDrip 6s 0.3s ease-in-out infinite"/>
-      </g>
-      <!-- Split: Ops locked -->
-      <g style="animation:fundSplit 6s ease-in-out infinite">
-        <rect x="211" y="4" width="39" height="14" rx="7" fill="var(--fg)" opacity="0.25"/>
-        <text x="230" y="14" font-size="7" font-weight="600" fill="var(--fg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.6">ops</text>
-        <!-- Lock icon -->
-        <text x="230" y="30" font-size="10" text-anchor="middle" opacity="0.4">&#128274;</text>
+      <!-- Ragequit arrow -->
+      <g style="animation:causeSplit 5s ease-in-out infinite">
+        <text x="225" y="16" font-size="9" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif" opacity="0.6">ragequit &#8594;</text>
       </g>
       <!-- Labels -->
-      <g style="animation:fundSplit 6s ease-in-out infinite">
-        <text x="66" y="32" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">zAMM</text>
-        <text x="157" y="44" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">tap &#8595; ops</text>
-        <text x="230" y="44" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">locked</text>
+      <g style="animation:causeSplit 5s ease-in-out infinite">
+        <text x="30" y="34" font-size="8" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif">share sale</text>
+        <!-- Tap drip (optional) -->
+        <line x1="120" y1="24" x2="120" y2="42" stroke="var(--fg)" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.3"/>
+        <circle cx="120" cy="36" r="1.5" fill="var(--fg)" opacity="0.6" style="animation:causeDrip 5s ease-in-out infinite"/>
+        <circle cx="120" cy="42" r="1" fill="var(--fg)" opacity="0.4" style="animation:causeDrip 5s 0.2s ease-in-out infinite"/>
+        <text x="120" y="56" font-size="7" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.7">tap vesting</text>
       </g>
-    </svg>
-  </div>
-
-  <!-- collect illustration -->
-  <div id="coinCollectIllustration" style="display:none;margin-bottom:14px;padding:10px 0">
-    <svg viewBox="0 0 280 56" width="100%" style="display:block;max-width:320px;margin:0 auto">
-      <style>
-        @keyframes collectFill { 0%{width:0} 70%{width:220px} 85%{width:220px} 100%{width:220px} }
-        @keyframes collectPulse { 0%,70%{opacity:0.15} 35%{opacity:0.3} }
-        @keyframes collectCheck { 0%,84%{opacity:0} 85%{opacity:1} }
-        @keyframes collectDots { 0%,70%{opacity:1} 85%,100%{opacity:0} }
-      </style>
-      <!-- Track -->
-      <rect x="30" y="12" width="220" height="14" rx="7" fill="var(--border-muted)" opacity="0.5"/>
-      <!-- Fill bar -->
-      <foreignObject x="30" y="12" width="220" height="14">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="height:14px;border-radius:7px;background:var(--fg);opacity:0.8;animation:collectFill 4s ease-in-out infinite"></div>
-      </foreignObject>
-      <!-- ETH icons flowing in -->
-      <g opacity="0.4" style="animation:collectDots 4s ease-in-out infinite">
-        <text x="6" y="23" font-size="12" fill="var(--fg)">+</text>
-        <text x="16" y="23" font-size="12" fill="var(--fg)">+</text>
-      </g>
-      <!-- Pulsing glow on bar -->
-      <rect x="30" y="12" width="220" height="14" rx="7" fill="var(--fg)" style="animation:collectPulse 4s ease-in-out infinite"/>
-      <!-- "tx sent" label -->
-      <text x="140" y="40" font-size="10" font-weight="600" fill="var(--green, #22c55e)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" letter-spacing="0.08em" style="animation:collectCheck 4s ease-in-out infinite;text-transform:uppercase">target met &middot; tx sent</text>
-      <!-- Labels -->
-      <text x="30" y="52" font-size="9" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif">pool ETH</text>
-      <text x="250" y="52" font-size="9" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif" text-anchor="end">100%</text>
     </svg>
   </div>
 
@@ -1408,8 +1351,8 @@ body.modal-open { overflow: hidden; }
   </div>
 
   <div class="section" style="margin-bottom:14px">
-    <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional)</span></label>
-    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px" oninput="syncCoinURL()"></textarea>
+    <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional, max 280 chars)</span></label>
+    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:14px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px" maxlength="280" oninput="syncCoinURL()"></textarea>
   </div>
 
   <div class="coin-upload-row">
@@ -1430,154 +1373,48 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
-  <div id="coinCollectWrap" style="display:none;margin-bottom:14px">
-    <!-- Mode toggle -->
-    <div class="coin-tpl-toggle" style="margin-bottom:0">
-      <button class="coin-tpl-btn active" id="collectModeMint" onclick="coinSetCollectMode(0)">Call Raise</button>
-      <button class="coin-tpl-btn" id="collectModeBounty" onclick="coinSetCollectMode(1)">Bounty Raise</button>
-    </div>
-    <div id="collectModeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">Pool ETH to call a contract repeatedly (e.g. mint NFTs)</div>
-
-    <!-- Mode 0: Mint -->
-    <div id="collectMode0">
-      <div class="section" style="margin-bottom:10px">
-        <label>Target Contract</label>
-        <input type="text" id="collectTarget" placeholder="0x address, name.wei, or name.eth" style="font-size:14px" oninput="onCoinAddressInput('collectTarget','collectTargetResolved')">
-        <div id="collectTargetResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
-      </div>
-
-      <label style="margin-bottom:6px">Action</label>
-      <div class="coin-tpl-toggle" style="margin-bottom:0">
-        <button class="coin-tpl-btn active" id="collectCallEth" onclick="coinSetCallTemplate('eth')">Send ETH</button>
-        <button class="coin-tpl-btn" id="collectCallCustom" onclick="coinSetCallTemplate('custom')">Custom Call</button>
-      </div>
-      <div id="collectCallHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:12px">Plain ETH send &mdash; fundraiser, grants, or contracts that mint on receive</div>
-
-      <div id="collectCustomPayloadWrap" style="display:none;margin-bottom:10px">
-        <label>Calldata (hex)</label>
-        <input type="text" id="collectPayload" placeholder="0x..." style="font-size:13px;font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,monospace">
-      </div>
-
-      <div style="display:flex;gap:12px">
-        <div style="flex:1"><label>ETH per Call</label>
-          <input type="text" id="collectEthPerCall" placeholder="0.08" inputmode="decimal" style="font-size:14px"></div>
-        <div style="flex:1"><label>Max Calls</label>
-          <input type="text" id="collectMaxCalls" placeholder="&#8734; (0)" inputmode="numeric" style="font-size:14px"></div>
-      </div>
-    </div>
-
-    <!-- Mode 1: Bounty -->
-    <div id="collectMode1" style="display:none">
-      <div class="coin-tpl-toggle" style="margin-bottom:12px">
-        <button class="coin-tpl-btn active" id="collectTypeERC20" onclick="coinSetCollectTokenType(false)">ERC-20</button>
-        <button class="coin-tpl-btn" id="collectTypeERC721" onclick="coinSetCollectTokenType(true)">ERC-721</button>
-      </div>
-
-      <div class="section" style="margin-bottom:10px">
-        <label id="collectTokenLabel">Token Address</label>
-        <input type="text" id="collectToken" placeholder="e.g. 0x5Af0D9827E0c53E4799BB226655A1de152A425a5" style="font-size:14px" oninput="onCoinAddressInput('collectToken','collectTokenResolved');collectScheduleNftPreview()">
-        <div id="collectTokenResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
-      </div>
-      <div style="display:flex;gap:12px">
-        <div style="flex:1">
-          <label id="collectMinBalanceLabel">Min Amount</label>
-          <input type="text" id="collectMinBalance" placeholder="100.0" inputmode="decimal" style="font-size:14px" oninput="collectScheduleNftPreview()">
-        </div>
-        <div id="collectDecimalsWrap" style="flex:0 0 80px">
-          <label>Decimals</label>
-          <input type="text" id="collectDecimals" placeholder="18" inputmode="numeric" style="font-size:14px" value="18">
-        </div>
-      </div>
-      <div id="collectBountyHint" style="font-size:11px;color:var(--fg-dim);margin-top:6px">Bounty: someone delivers this token, claims the pooled ETH</div>
-      <div id="collectNftPreview" style="display:none;margin-top:12px;text-align:center">
-        <div id="collectNftLoading" style="display:none;font-size:12px;color:var(--fg-dim)">Loading NFT...</div>
-        <div id="collectNftError" style="display:none;font-size:12px;color:var(--remove-fg,#c0392b)"></div>
-        <div id="collectNftCard" style="display:none;border:1px solid var(--border-muted);border-radius:10px;overflow:hidden;max-width:240px;margin:0 auto">
-          <img id="collectNftImg" alt="NFT" style="width:100%;display:block" onerror="if(typeof collectNftImgError==='function')collectNftImgError()">
-          <div id="collectNftMeta" style="padding:8px;font-size:12px;text-align:left;line-height:1.5"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Shared: Raise + Deadline -->
-    <div style="border-top:1px solid var(--border-muted);margin-top:14px;padding-top:14px;display:flex;gap:12px">
+  <div id="coinCauseWrap" style="display:none;margin-bottom:14px">
+    <div style="display:flex;gap:12px;margin-bottom:10px">
       <div style="flex:1"><label>Raise (ETH)</label>
-        <input type="text" id="collectRaise" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" oninput="coinUpdatePreview()"></div>
-      <div style="flex:1"><label>Deadline (days)</label>
-        <input type="text" id="collectDeadline" placeholder="7" inputmode="numeric" style="font-size:14px" value="7" oninput="coinUpdatePreview()"></div>
+        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:14px" value="10" oninput="coinUpdatePreview()"></div>
+      <div style="flex:1"><label>Minimum Buy (ETH)</label>
+        <input type="text" id="causePrice" placeholder="0.01" inputmode="decimal" style="font-size:14px" value="0.01" oninput="coinUpdatePreview()"></div>
     </div>
-  </div>
-
-  <div id="coinOpsWrap" style="display:none;margin-bottom:14px">
-    <div class="receiver-toggle" onclick="const w=document.getElementById('coinOpsInnerWrap');const open=w.style.maxHeight==='0px';w.style.maxHeight=open?'80px':'0px';w.style.opacity=open?'1':'0';this.querySelector('.chevron').textContent=open?'\u25BC':'\u25B6'">
-      <span class="chevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
-      <label style="margin:0;cursor:pointer;pointer-events:none">Ops Wallet</label>
+    <div style="margin-bottom:10px">
+      <label>Sale Deadline (days)</label>
+      <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:14px" value="30" oninput="coinUpdatePreview()">
     </div>
-    <div id="coinOpsInnerWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:8px">
-      <input type="text" id="coinOpsAddress" placeholder="0x address, name.wei, or name.eth" style="font-size:14px;padding:8px 0" oninput="onCoinOpsInput()">
-      <div id="coinOpsResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
-    </div>
-  </div>
-
-  <div id="coinSettingsWrap" style="display:none;margin-bottom:14px">
-    <button onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit"><span>Settings</span><span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span></button>
-    <div class="coin-drawer-body">
-      <div class="section" style="margin-bottom:14px">
-        <label>Configuration</label>
-        <div class="coin-tpl-toggle" style="margin-top:4px">
-          <button class="coin-tpl-btn active" onclick="coinSetTemplate('standard')">Standard</button>
-          <button class="coin-tpl-btn" onclick="coinSetTemplate('custom')">Custom</button>
+    <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="causeTapEnabled" onchange="causeTapToggle()">
+        <span>Tap Vesting</span>
+        <span style="font-size:11px;color:var(--fg-dim)">(optional &mdash; drip treasury ETH to a beneficiary)</span>
+      </label>
+      <div id="causeTapFields" style="display:none">
+        <div class="section" style="margin-bottom:10px">
+          <label>Beneficiary Wallet</label>
+          <input type="text" id="causeTapBeneficiary" placeholder="0x address, name.wei, or name.eth" style="font-size:14px" oninput="onCoinAddressInput('causeTapBeneficiary','causeTapBeneficiaryResolved')">
+          <div id="causeTapBeneficiaryResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         </div>
-        <div id="coinSliders" class="coin-sliders locked">
-          <div class="coin-slider-row">
-            <label>Raise</label>
-            <input type="range" id="coinSliderRaise" min="1" max="100" step="1" value="5" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValRaise" style="cursor:pointer" title="Click to enter custom amount" onclick="coinCustomRaise()">5 ETH</span>
-          </div>
-          <div class="coin-slider-row">
-            <label>Ops Alloc</label>
-            <input type="range" id="coinSliderTeam" min="5" max="50" step="1" value="15" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValTeam">15%</span>
-          </div>
-          <div class="coin-slider-row">
-            <label>Ops Lockup</label>
-            <input type="range" id="coinSliderLock" min="1" max="24" step="1" value="6" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValLock">6 mo</span>
-          </div>
-          <div class="coin-slider-row">
-            <label>Tap Vesting</label>
-            <input type="range" id="coinSliderTap" min="1" max="12" step="1" value="3" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValTap">3 mo</span>
-          </div>
-          <div class="coin-slider-row">
-            <label>LP Allocation</label>
-            <input type="range" id="coinSliderLP" min="10" max="50" step="1" value="33" oninput="coinSliderChanged()">
-            <span class="coin-slider-val" id="coinValLP">33%</span>
-          </div>
+        <div style="margin-bottom:10px">
+          <label>Vesting Duration (months)</label>
+          <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" oninput="coinUpdatePreview()">
         </div>
       </div>
-
     </div>
   </div>
 
-  <div id="coinPreviewWrap" style="display:none;margin-bottom:14px">
+  <div id="coinCurvePreviewWrap" style="display:none;margin-bottom:14px">
     <div style="border-top:1px solid var(--border-muted);padding-top:12px">
       <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
-      <div id="coinPreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
+      <div id="coinCurvePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
     </div>
   </div>
 
-  <div id="coinSimplePreviewWrap" style="display:none;margin-bottom:14px">
+  <div id="coinCausePreviewWrap" style="display:none;margin-bottom:14px">
     <div style="border-top:1px solid var(--border-muted);padding-top:12px">
       <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
-      <div id="coinSimplePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
-    </div>
-  </div>
-
-  <div id="coinCollectPreviewWrap" style="display:none;margin-bottom:14px">
-    <div style="border-top:1px solid var(--border-muted);padding-top:12px">
-      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
-      <div id="coinCollectPreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
+      <div id="coinCausePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
     </div>
   </div>
 
@@ -1589,7 +1426,8 @@ body.modal-open { overflow: hidden; }
 <div style="margin-top:14px;text-align:center">
   <a href="./coin/" style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);text-decoration:none">Browse coins &rarr;</a>
 </div>
-</div><!-- end _coinFormPaused -->
+</div><!-- end coinTab -->
+
 
 <div id="sendTab" style="display:none">
 <div class="swap-card">
@@ -8476,7 +8314,7 @@ function syncCoinURL() {
   if (_cn) _sp.set('name', _cn);
   if (_cs) _sp.set('symbol', _cs);
   if (_cd) _sp.set('desc', _cd);
-  if (_coinLaunchType === 'advanced') _sp.set('mode', 'fund');
+  if (_coinLaunchType === 'cause') _sp.set('mode', 'cause');
   const qs = _sp.toString();
   history.replaceState(null, '', (qs ? '?' + qs : window.location.pathname) + '#coin');
 }
@@ -8759,28 +8597,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_dlName) $('coinName').value = _dlName;
       if (_dlSymbol) $('coinSymbol').value = _dlSymbol;
       if (_dlDesc) $('coinDescription').value = _dlDesc;
-      if (_dlMode === 'fund') coinSetLaunchType('advanced');
-      else if (_dlMode === 'collect') {
-        coinSetLaunchType('collect');
-        const _dlCM = _sp.get('cmode');
-        if (_dlCM === 'bounty' || _dlCM === '1') coinSetCollectMode(1);
-        else if (_dlCM === 'mint' || _dlCM === '0') coinSetCollectMode(0);
-        const _dlNft = _sp.get('nft');
-        if (_dlNft === '1' || _dlNft === 'true') coinSetCollectTokenType(true);
-        else if (_dlNft === '0' || _dlNft === 'false') coinSetCollectTokenType(false);
-        const _dlToken = _sp.get('token');
-        if (_dlToken && ethers.isAddress(_dlToken)) {
-          if (_coinCollectMode === 1) { $('collectToken').value = _dlToken; onCoinAddressInput('collectToken','collectTokenResolved'); }
-          else { $('collectTarget').value = _dlToken; onCoinAddressInput('collectTarget','collectTargetResolved'); }
-        }
-        const _dlTokenId = _sp.get('tokenid');
-        if (_dlTokenId) { $('collectMinBalance').value = _dlTokenId; collectScheduleNftPreview(); }
-        const _dlRaise = _sp.get('raise');
-        if (_dlRaise) $('collectRaise').value = _dlRaise;
-        const _dlDays = _sp.get('days');
-        if (_dlDays) $('collectDeadline').value = _dlDays;
-        coinUpdatePreview();
-      }
+      if (_dlMode === 'cause') coinSetLaunchType('cause');
       // Update OG meta for social sharing
       let _ogCoinTitle = 'Launch';
       if (_dlName) _ogCoinTitle += ' ' + _dlName;
@@ -12004,9 +11821,7 @@ async function ppwWithdraw() {
 
 // ==================== COIN TAB ====================
 const COIN_SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
-const COIN_DAICO = '0x000000000033e92DB97B4B3beCD2c255126C60aC';
 const COIN_RENDERER = '0x000000000011C799980827F52d3137b4abD6E654';
-const COIN_ZAMM = '0x000000000000040470635EB91b7CE4D132D616eD';
 const COIN_IMPLS = {
   moloch: '0x643A45B599D81be3f3A68F37EB3De55fF10673C1',
   shares: '0x71E9b38d301b5A58cb998C1295045FE276Acf600',
@@ -12016,29 +11831,112 @@ const COIN_CLONE_PREFIX = '0x602d5f8160095f39f35f5f365f5f37365f73';
 const COIN_CLONE_SUFFIX = '0x5af43d5f5f3e6029573d5ffd5b3d5ff3';
 
 const COIN_SUPPLY = 1_000_000_000n;
-const COIN_FEE = 30;
-const COIN_QUORUM_BPS = 1500;
-const COIN_EZ_QUORUM_BPS = 500;
-const COIN_VOTING_DAYS = 7;
-const COIN_TIMELOCK_DAYS = 3;
 const COIN_SEC_PER_MONTH = 2_629_746n;
-const COIN_SALE_DAYS = 30;
-const COIN_BURN_DELAY_DAYS = 0;
 const COIN_SHARE_BURNER = '0x000000000040084694F7B6fb2846D067B4c3Aa9f';
 
 const COIN_PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
 
-const COIN_DEFAULTS = { raise: 5, teamBps: 1500, lockMonths: 6, tapMonths: 3, lpBps: 3300 };
-const COIN_SIMPLE_DEFAULTS = { raise: 1, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 8000 };
-const COIN_COLLECTOR_DEFAULTS = { raise: 1, teamBps: 0, lockMonths: 0, tapMonths: 0, lpBps: 0 };
-const COIN_COLLECTOR_QUORUM_BPS = 500;
-const COIN_VAULT_FACTORY = '0x0000000000Bb32e4f5b60041F0682d12119283f7';
-let _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
-let _coinTemplate = 'ez';
-let _coinLaunchType = 'simple';
+// DB proxy — writes go through the worker which holds the Supabase service_role key
+// and enforces origin checks + source tagging server-side
+const COIN_DB_URL = COIN_PIN_URL; // same worker, /db/ routes
+
+async function coinDbInsert(table, row) {
+  if (!COIN_DB_URL) return;
+  try {
+    await fetch(`${COIN_DB_URL}/db/${table}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row)
+    });
+  } catch (e) {
+    console.warn('DB insert failed:', table, e);
+  }
+}
+
+async function coinDbUpdate(table, match, updates) {
+  if (!COIN_DB_URL) return;
+  try {
+    const params = Object.entries(match).map(([k,v]) => `${k}=eq.${encodeURIComponent(v)}`).join('&');
+    await fetch(`${COIN_DB_URL}/db/${table}?${params}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+  } catch (e) {
+    console.warn('DB update failed:', table, e);
+  }
+}
+
+async function coinDbFetch(table, params) {
+  if (!COIN_DB_URL) return [];
+  try {
+    const res = await fetch(`${COIN_DB_URL}/db/${table}?${params}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('DB fetch failed:', table, e);
+    return [];
+  }
+}
+
+function coinGenId() {
+  return crypto.randomUUID().slice(0, 12);
+}
+
+// ClassicalCurveSale deployment
+const CLASSICAL_CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
+const CLASSICAL_TOKEN_IMPL = '0xC54843C7419B3B7813d4C1065dA7f88104cdb047';
+const CLASSICAL_LAUNCH_ABI = [
+  'function launch(address,string,string,string,uint256,bytes32,uint256,uint256,uint256,uint16,uint256,uint256,address,uint16,uint16,uint16,uint16,tuple(address,uint16,uint16,bool,bool),uint40,uint40) returns (address)'
+];
+
+const SAFE_SUMMONER = '0x00000000004473e1f31C8266612e7FD5504e6f2a';
+const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
+const TAP_VEST = '0x0000000060cdD33cbE020fAE696E70E7507bF56D';
+const SAFE_SUMMONER_ABI = [{
+  inputs: [
+    { type: 'string', name: 'orgName' },
+    { type: 'string', name: 'orgSymbol' },
+    { type: 'string', name: 'orgURI' },
+    { type: 'bytes32', name: 'salt' },
+    { type: 'address[]', name: 'initHolders' },
+    { type: 'uint256[]', name: 'initShares' },
+    { type: 'bool', name: 'lockShares' },
+    { components: [
+      { type: 'address', name: 'singleton' },
+      { type: 'address', name: 'payToken' },
+      { type: 'uint40', name: 'deadline' },
+      { type: 'uint256', name: 'price' },
+      { type: 'uint256', name: 'cap' },
+      { type: 'bool', name: 'sellLoot' },
+      { type: 'bool', name: 'minting' }
+    ], type: 'tuple', name: 'sale' },
+    { components: [
+      { type: 'address', name: 'singleton' },
+      { type: 'address', name: 'token' },
+      { type: 'uint256', name: 'budget' },
+      { type: 'address', name: 'beneficiary' },
+      { type: 'uint128', name: 'ratePerSec' }
+    ], type: 'tuple', name: 'tap' },
+    { components: [
+      { type: 'address', name: 'singleton' },
+      { type: 'address', name: 'tokenA' },
+      { type: 'uint128', name: 'amountA' },
+      { type: 'address', name: 'tokenB' },
+      { type: 'uint128', name: 'amountB' },
+      { type: 'uint40', name: 'deadline' },
+      { type: 'bool', name: 'gateBySale' },
+      { type: 'uint128', name: 'minSupply' }
+    ], type: 'tuple', name: 'seed' }
+  ],
+  name: 'summonStandardDAICO',
+  outputs: [{ type: 'address' }],
+  stateMutability: 'payable',
+  type: 'function'
+}];
+
+let _coinTemplate = null;
+let _coinLaunchType = 'coin';
 let _coinLaunching = false;
-let _coinCollectMode = 0;      // 0 = mint, 1 = bounty
-let _coinSpecificId = false;   // ERC721 flag for mode 1
 let _coinImageCID = null;
 let _coinImageFile = null;
 let _coinBannerCID = null;
@@ -12131,419 +12029,77 @@ async function coinResolveName(inputId, resolvedId, name, onResolved) {
   }
 }
 
-// ---- Coin ops wallet name resolution (legacy wrappers) ----
-let _resolvedCoinOps = null; // { input, address } or null
-let _coinOpsResolveSeq = 0;
-let _coinOpsDebounce = null;
-
-function getCoinOpsAddress() {
-  const v = ($("coinOpsAddress")?.value || "").trim();
-  if (!v) return null; // caller should default to connected wallet
-  if (ethers.isAddress(v) && v !== ZERO_ADDRESS) return ethers.getAddress(v);
-  if (_resolvedCoinOps && _resolvedCoinOps.input === v && _resolvedCoinOps.address) return _resolvedCoinOps.address;
-  return null;
-}
-
-function onCoinOpsInput() {
-  clearTimeout(_coinOpsDebounce);
-  const v = ($("coinOpsAddress")?.value || "").trim();
-  const el = $("coinOpsResolved");
-  _resolvedCoinOps = null;
-  syncCoinURL();
-  if (!v) { el.style.display = "none"; return; }
-  if (ethers.isAddress(v)) {
-    el.style.display = "block";
-    el.style.color = "var(--fg-muted)";
-    el.textContent = ethers.getAddress(v);
-    _resolvedCoinOps = { input: v, address: ethers.getAddress(v) };
-    return;
-  }
-  if (v.endsWith(".wei") || v.endsWith(".eth")) {
-    el.style.display = "block";
-    el.style.color = "var(--fg-muted)";
-    el.textContent = "Resolving " + v + "...";
-    _coinOpsDebounce = setTimeout(() => resolveCoinOpsName(v), 350);
-  } else {
-    el.style.display = "block";
-    el.style.color = "var(--remove-fg, #c0392b)";
-    el.textContent = "Enter 0x address, name.wei, or name.eth";
-  }
-}
-
-async function resolveCoinOpsName(name) {
-  const seq = ++_coinOpsResolveSeq;
-  const el = $("coinOpsResolved");
-  try {
-    let resolved = null;
-    if (name.endsWith(".wei")) {
-      resolved = await quoteRPC.call(async (rpc) => {
-        const ns = getWeinsContract(rpc);
-        const tokenId = await ns.computeId(name);
-        const owner = await ns.ownerOf(tokenId).catch(() => null);
-        if (!owner || owner === ZERO_ADDRESS) return null;
-        return ethers.getAddress(owner);
-      });
-    } else if (name.endsWith(".eth")) {
-      resolved = await quoteRPC.call(async (rpc) => {
-        return await rpc.resolveName(name);
-      });
-    }
-    if (seq !== _coinOpsResolveSeq) return;
-    if (resolved && resolved !== ZERO_ADDRESS) {
-      _resolvedCoinOps = { input: name, address: resolved };
-      el.style.color = "var(--fg-muted)";
-      el.textContent = resolved;
-    } else {
-      _resolvedCoinOps = null;
-      el.style.color = "var(--remove-fg, #c0392b)";
-      el.textContent = "Name not found";
-    }
-  } catch (e) {
-    if (seq !== _coinOpsResolveSeq) return;
-    _resolvedCoinOps = null;
-    el.style.color = "var(--remove-fg, #c0392b)";
-    el.textContent = "Failed to resolve " + name;
-  }
-}
-
-function coinSetTemplate(mode) {
-  _coinTemplate = mode === 'standard' ? 'fund' : null;
-  $('coinSettingsWrap').querySelectorAll('.coin-tpl-btn').forEach((b, i) => {
-    b.classList.toggle('active', i === (mode === 'standard' ? 0 : 1));
-  });
-  const sl = $('coinSliders');
-  if (mode === 'standard') {
-    sl.classList.add('locked');
-    _coinCfg = { ...COIN_DEFAULTS };
-    coinSyncSliders();
-  } else {
-    sl.classList.remove('locked');
-  }
-  coinUpdatePreview();
-}
-
 function coinSetLaunchType(type) {
   _coinLaunchType = type;
   const btns = document.querySelectorAll('#coinTab > .swap-card > .coin-tpl-toggle > .coin-tpl-btn');
-  btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'simple' ? 0 : type === 'advanced' ? 1 : 2)));
-  const isSimple = type === 'simple';
-  const isCollect = type === 'collect';
-  $('coinSettingsWrap').style.display = (!isSimple && !isCollect) ? '' : 'none';
-  $('coinOpsWrap').style.display = (!isSimple && !isCollect) ? '' : 'none';
-  $('coinCollectWrap').style.display = isCollect ? '' : 'none';
-  $('coinEzIllustration').style.display = isSimple ? '' : 'none';
-  $('coinFundIllustration').style.display = (!isSimple && !isCollect) ? '' : 'none';
-  $('coinCollectIllustration').style.display = isCollect ? '' : 'none';
-  $('coinSimplePreviewWrap').style.display = 'none';
-  $('coinPreviewWrap').style.display = 'none';
-  $('coinCollectPreviewWrap').style.display = 'none';
-  $('coinSocialsWrap').style.display = isSimple ? 'none' : '';
-  if (isSimple) { $('coinTwitter').value = ''; $('coinTelegram').value = ''; $('coinDiscord').value = ''; }
+  btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'coin' ? 0 : 1)));
+  const isCoin = type === 'coin';
+  $('coinCauseWrap').style.display = isCoin ? 'none' : '';
+  $('coinCurveIllustration').style.display = isCoin ? '' : 'none';
+  $('coinCauseIllustration').style.display = isCoin ? 'none' : '';
+  $('coinCurvePreviewWrap').style.display = 'none';
+  $('coinCausePreviewWrap').style.display = 'none';
+  $('coinSocialsWrap').style.display = '';
   setDisabled('coinLaunchBtn', true);
-  $('coinLaunchTypeHint').textContent = isSimple
-    ? '80% liquidity \u00b7 20% treasury \u00b7 no ops'
-    : isCollect
-    ? 'pool ETH to mint or acquire tokens/NFTs'
-    : 'ops allocation \u00b7 tap vesting \u00b7 team lockup';
-  if (isSimple) {
-    _coinCfg = { ...COIN_SIMPLE_DEFAULTS };
-    _coinTemplate = 'ez';
-  } else if (isCollect) {
-    _coinCfg = { ...COIN_COLLECTOR_DEFAULTS };
-    _coinTemplate = 'collect';
-  } else {
-    _coinCfg = { ...COIN_DEFAULTS };
-    _coinTemplate = 'fund';
-    coinSyncSliders();
-    coinSetTemplate('standard');
-  }
+  $('coinLaunchTypeHint').textContent = isCoin
+    ? 'bonding curve \u00b7 ~5.33 ETH graduation \u00b7 permanent LP'
+    : 'DAICO fundraise \u00b7 fixed-price share sale \u00b7 ragequittable';
+  _coinTemplate = isCoin ? null : 'cause';
   coinUpdatePreview();
   syncCoinURL();
 }
 
 
-let _coinCallTemplate = 'eth';
-
-function coinSetCallTemplate(tpl) {
-  _coinCallTemplate = tpl;
-  $('collectCallEth').classList.toggle('active', tpl === 'eth');
-  $('collectCallCustom').classList.toggle('active', tpl === 'custom');
-  $('collectCustomPayloadWrap').style.display = tpl === 'custom' ? '' : 'none';
-  $('collectCallHint').textContent = tpl === 'custom'
-    ? 'Raw hex calldata \u2014 any function signature'
-    : 'Plain ETH send \u2014 fundraiser, grants, or contracts that mint on receive';
-  if (tpl === 'eth') $('collectPayload').value = '';
-}
-
-function coinSetCollectMode(mode) {
-  _coinCollectMode = mode;
-  $('collectMode0').style.display = mode === 0 ? '' : 'none';
-  $('collectMode1').style.display = mode === 1 ? '' : 'none';
-  $('collectModeMint').classList.toggle('active', mode === 0);
-  $('collectModeBounty').classList.toggle('active', mode === 1);
-  $('collectModeHint').textContent = mode === 0
-    ? 'Pool ETH to call a contract repeatedly (e.g. mint NFTs)'
-    : 'Pool ETH as an open bid \u2014 someone delivers a token, claims the pot';
-  if (mode === 1) {
-    // Default to ERC-721 with Milady example
-    coinSetCollectTokenType(true);
-    if (!$('collectToken').value.trim()) {
-      $('collectToken').value = '0x5Af0D9827E0c53E4799BB226655A1de152A425a5';
-      $('collectMinBalance').value = '42';
-      collectScheduleNftPreview();
-    }
-  }
+function causeTapToggle() {
+  $('causeTapFields').style.display = $('causeTapEnabled').checked ? '' : 'none';
   coinUpdatePreview();
-}
-
-function coinSetCollectTokenType(isNFT) {
-  _coinSpecificId = isNFT;
-  $('collectTypeERC20').classList.toggle('active', !isNFT);
-  $('collectTypeERC721').classList.toggle('active', isNFT);
-  $('collectTokenLabel').textContent = isNFT ? 'NFT Contract Address' : 'Token Address';
-  $('collectToken').placeholder = isNFT ? '0x... ERC-721 contract' : '0x... ERC-20 contract';
-  $('collectMinBalanceLabel').textContent = isNFT ? 'Token ID' : 'Min Amount';
-  $('collectMinBalance').placeholder = isNFT ? '42' : '100.0';
-  $('collectMinBalance').inputMode = isNFT ? 'numeric' : 'decimal';
-  $('collectDecimalsWrap').style.display = isNFT ? 'none' : '';
-  $('collectBountyHint').textContent = isNFT
-    ? 'Bounty claimant must own this specific NFT to claim the pot'
-    : 'Bounty claimant must hold this token balance to claim the pot';
-  collectScheduleNftPreview();
-  coinUpdatePreview();
-}
-
-// ---- NFT preview for bounty ERC-721 mode ----
-let _collectNftSeq = 0;
-let _collectNftDebounce = null;
-
-function collectScheduleNftPreview() {
-  clearTimeout(_collectNftDebounce);
-  if (!_coinSpecificId) { $('collectNftPreview').style.display = 'none'; return; }
-  _collectNftDebounce = setTimeout(collectFetchNftPreview, 500);
-}
-
-async function collectFetchJson(url) {
-  try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
-  } catch {}
-  // CORS fallback — local proxy or origin proxy
-  const proxyBase = location.origin + '/proxy?url=';
-  const r = await fetch(proxyBase + encodeURIComponent(url));
-  if (r.ok) return await r.json();
-  throw new Error('Fetch failed');
-}
-
-async function collectFetchNftPreview() {
-  const wrap = $('collectNftPreview');
-  const loading = $('collectNftLoading');
-  const errEl = $('collectNftError');
-  const card = $('collectNftCard');
-  const addr = coinGetResolved('collectToken');
-  const tokenId = ($('collectMinBalance').value || '').trim();
-
-  // Hide if not ready
-  if (!addr || !tokenId || !_coinSpecificId) {
-    wrap.style.display = 'none';
-    return;
-  }
-
-  const seq = ++_collectNftSeq;
-  wrap.style.display = '';
-  loading.style.display = '';
-  errEl.style.display = 'none';
-  card.style.display = 'none';
-
-  try {
-    // Call tokenURI(uint256)
-    const iface = new ethers.Interface(['function tokenURI(uint256) view returns (string)']);
-    const data = iface.encodeFunctionData('tokenURI', [BigInt(tokenId)]);
-    const raw = await quoteRPC.call(rpc => rpc.call({ to: addr, data }));
-    if (seq !== _collectNftSeq) return;
-    const [uri] = iface.decodeFunctionResult('tokenURI', raw);
-
-    // Resolve URI
-    let metaUrl = uri;
-    if (metaUrl.startsWith('ipfs://')) metaUrl = DAICO_IPFS_GW + metaUrl.slice(7);
-    else if (metaUrl.startsWith('data:application/json;base64,')) {
-      const json = atob(metaUrl.slice('data:application/json;base64,'.length));
-      return collectRenderNft(seq, JSON.parse(json), tokenId);
-    } else if (metaUrl.startsWith('data:')) {
-      const json = decodeURIComponent(metaUrl.split(',').slice(1).join(','));
-      return collectRenderNft(seq, JSON.parse(json), tokenId);
-    }
-
-    const meta = await collectFetchJson(metaUrl);
-    if (seq !== _collectNftSeq) return;
-    collectRenderNft(seq, meta, tokenId);
-  } catch (e) {
-    if (seq !== _collectNftSeq) return;
-    loading.style.display = 'none';
-    errEl.style.display = '';
-    errEl.textContent = 'Could not load NFT #' + tokenId;
-  }
-}
-
-function collectRenderNft(seq, meta, tokenId) {
-  if (seq !== _collectNftSeq) return;
-  const loading = $('collectNftLoading');
-  const card = $('collectNftCard');
-  const img = $('collectNftImg');
-  const metaDiv = $('collectNftMeta');
-
-  let imageUrl = meta.image || meta.image_url || '';
-  if (imageUrl.startsWith('ipfs://')) imageUrl = DAICO_IPFS_GW + imageUrl.slice(7);
-
-  if (!imageUrl) {
-    loading.style.display = 'none';
-    $('collectNftError').style.display = '';
-    $('collectNftError').textContent = 'No image in metadata';
-    return;
-  }
-
-  img.src = imageUrl;
-  img.onload = () => { if (seq === _collectNftSeq) { loading.style.display = 'none'; card.style.display = ''; } };
-  metaDiv.innerHTML = '<div style="font-weight:600">' + esc(meta.name || '#' + tokenId) + '</div>';
-}
-
-function collectNftImgError() {
-  $('collectNftCard').style.display = 'none';
-  $('collectNftLoading').style.display = 'none';
-  $('collectNftError').style.display = '';
-  $('collectNftError').textContent = 'Failed to load NFT image';
-}
-
-function coinCustomRaise() {
-  const v = prompt('Raise amount (ETH):', _coinCfg.raise);
-  if (v === null) return;
-  const n = parseFloat(v);
-  if (isNaN(n) || n <= 0) return;
-  _coinCfg.raise = n;
-  $('coinSliderRaise').value = Math.min(Math.max(Math.round(n), 1), 100);
-  coinUpdateSliderLabels();
-  coinUpdatePreview();
-}
-
-function coinSliderChanged() {
-  _coinCfg.raise = +$('coinSliderRaise').value;
-  _coinCfg.teamBps = +$('coinSliderTeam').value * 100;
-  _coinCfg.lockMonths = +$('coinSliderLock').value;
-  _coinCfg.tapMonths = +$('coinSliderTap').value;
-  _coinCfg.lpBps = +$('coinSliderLP').value * 100;
-  coinUpdateSliderLabels();
-  coinUpdatePreview();
-}
-
-function coinSyncSliders() {
-  $('coinSliderRaise').value = _coinCfg.raise;
-  $('coinSliderTeam').value = _coinCfg.teamBps / 100;
-  $('coinSliderLock').value = _coinCfg.lockMonths;
-  $('coinSliderTap').value = _coinCfg.tapMonths;
-  $('coinSliderLP').value = _coinCfg.lpBps / 100;
-  coinUpdateSliderLabels();
-}
-
-function coinUpdateSliderLabels() {
-  $('coinValRaise').innerHTML = _coinCfg.raise + ' ' + ETH_ICON.replace('width="24" height="24"', 'width="13" height="13"');
-  $('coinValTeam').textContent = (_coinCfg.teamBps / 100) + '%';
-  $('coinValLock').textContent = _coinCfg.lockMonths + ' mo';
-  $('coinValTap').textContent = _coinCfg.tapMonths + ' mo';
-  $('coinValLP').textContent = (_coinCfg.lpBps / 100) + '%';
 }
 
 function coinUpdatePreview() {
-  const c = _coinCfg;
   const ethMini = ETH_ICON.replace('width="24" height="24"', 'width="12" height="12"');
-  const saleBps = 10000 - c.teamBps;
-  const saleSupply = (COIN_SUPPLY * BigInt(saleBps)) / 10000n - 1n; // -1 for deployer share
-  const lpPct = c.lpBps / 100;
-  const treasuryPct = 100 - lpPct;
-  const pricePerShare = Number(c.raise) / Number(saleSupply);
-  const pricePerM = (pricePerShare * 1e6).toPrecision(3);
-  const saleNum = Number(saleSupply);
-  const saleFmt = saleNum >= 999e6 ? (saleNum / 1e9).toFixed(saleNum % 1e9 === 0 ? 0 : 1) + 'B' : (saleNum / 1e6).toFixed(0) + 'M';
 
-  if (_coinLaunchType === 'collect') {
-    const raise = parseFloat($('collectRaise').value) || 1;
-    const days = parseInt($('collectDeadline').value) || 7;
-    const collectSaleSupply = BigInt(Math.round(raise * 1_000_000));
-    const collectSaleFmt = Number(collectSaleSupply) >= 999e6
-      ? (Number(collectSaleSupply) / 1e9).toFixed(0) + 'B'
-      : Number(collectSaleSupply) >= 1e6
-      ? (Number(collectSaleSupply) / 1e6).toFixed(0) + 'M'
-      : Number(collectSaleSupply).toLocaleString();
-    const modeLabel = _coinCollectMode === 0 ? 'Mint' : 'Bounty';
-    let targetLine = '';
-    if (_coinCollectMode === 0) {
-      const target = coinGetResolved('collectTarget') || ($('collectTarget').value || '').trim();
-      const price = $('collectEthPerCall').value || '?';
-      const max = $('collectMaxCalls').value || '0';
-      const callLabels = { eth: 'Send ETH', custom: 'Custom Call' };
-      targetLine = `<dt>Target</dt><dd>${target ? target.slice(0,6) + '...' + target.slice(-4) : '—'}</dd>` +
-        `<dt>Call</dt><dd>${callLabels[_coinCallTemplate] || 'Send ETH'}</dd>` +
-        `<dt>ETH/Call</dt><dd>${price} ${ethMini}</dd>` +
-        `<dt>Max Calls</dt><dd>${max === '0' || !max ? 'unlimited' : max}</dd>`;
-    } else {
-      const token = coinGetResolved('collectToken') || ($('collectToken').value || '').trim();
-      const minBal = $('collectMinBalance').value || '1';
-      const tokenType = _coinSpecificId ? 'ERC-721' : 'ERC-20';
-      const decimals = parseInt($('collectDecimals')?.value) || 18;
-      targetLine = `<dt>${tokenType}</dt><dd>${token ? token.slice(0,6) + '...' + token.slice(-4) : '—'}</dd>` +
-        (_coinSpecificId
-          ? `<dt>Token ID</dt><dd>#${minBal}</dd>`
-          : `<dt>Min Balance</dt><dd>${minBal} (${decimals}d)</dd>`);
-    }
-    const p = $('coinCollectPreview');
+  if (_coinLaunchType === 'cause') {
+    const raise = parseFloat($('causeRaise').value) || 10;
+    const minBuy = parseFloat($('causePrice').value) || 0.01;
+    const days = parseInt($('causeDeadline').value) || 30;
+    const sharesPerBuy = 100;
+    const pricePerShare = minBuy / sharesPerBuy;
+    const totalShares = Math.floor(raise / minBuy) * sharesPerBuy;
+    const tapOn = $('causeTapEnabled').checked;
+    const tapMonths = parseInt($('causeTapMonths').value) || 12;
+    const ratePerDay = tapOn ? (raise / (tapMonths * 30.44)) : 0;
+    const p = $('coinCausePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
-      `<dt>Mode</dt><dd>${modeLabel}</dd>` +
-      targetLine +
       `<dt>Raise</dt><dd>${raise} ${ethMini}</dd>` +
-      `<dt>Shares</dt><dd>1M per ${ethMini} &rarr; ${collectSaleFmt} total</dd>` +
+      `<dt>Min Buy</dt><dd>${minBuy} ${ethMini} &rarr; ${sharesPerBuy} shares</dd>` +
+      `<dt>Total Shares</dt><dd>${totalShares.toLocaleString()}</dd>` +
       `<dt>Deadline</dt><dd>${days} days</dd>` +
+      (tapOn ? `<dt>Tap</dt><dd>~${ratePerDay.toFixed(4)} ${ethMini}/day over ${tapMonths}mo</dd>` : '') +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">5% quorum &middot; ${days}d voting &middot; ${days}d timelock &middot; ragequit</div>`;
-    $('coinCollectPreviewWrap').style.display = '';
-    $('coinSimplePreviewWrap').style.display = 'none';
-    $('coinPreviewWrap').style.display = 'none';
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>`;
+    $('coinCausePreviewWrap').style.display = '';
+    $('coinCurvePreviewWrap').style.display = 'none';
     setDisabled('coinLaunchBtn', false);
     return;
   }
 
-  if (_coinLaunchType === 'simple') {
-    const p = $('coinSimplePreview');
+  if (_coinLaunchType === 'coin') {
+    const p = $('coinCurvePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
-      `<dt>Sale</dt><dd>${saleFmt} (100%)</dd>` +
-      `<dt>Raise</dt><dd><span style="cursor:pointer;border-bottom:1px dashed var(--fg-dim)" title="Click to edit" onclick="coinCustomRaise()">${c.raise}</span> ${ethMini}</dd>` +
-      `<dt>LP</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
-      `<dt>Treasury</dt><dd>${treasuryPct}% &rarr; ragequitable</dd>` +
-      `<dt>Price</dt><dd>${pricePerM} ${ethMini} / 1M</dd>` +
+      `<dt>Supply</dt><dd>1B tokens (18 decimals)</dd>` +
+      `<dt>Curve</dt><dd>800M on bonding curve</dd>` +
+      `<dt>LP Seed</dt><dd>200M tokens at graduation</dd>` +
+      `<dt>Graduation</dt><dd>~5.33 ${ethMini} raised &rarr; LP seeded</dd>` +
+      `<dt>Price Range</dt><dd>16x from start to graduation</dd>` +
+      `<dt>Trade Fee</dt><dd>1% &rarr; creator</dd>` +
+      `<dt>Sniper Fee</dt><dd>5% first 5 min (decays to 1%)</dd>` +
+      `<dt>Max Buy</dt><dd>10% per tx</dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury &middot; no ops &middot; no tap &middot; unsold supply burns after sale &middot; coin holders own initial LP</div>`;
-    $('coinSimplePreviewWrap').style.display = '';
-    $('coinPreviewWrap').style.display = 'none';
-    $('coinCollectPreviewWrap').style.display = 'none';
-  } else {
-    const teamSupply = (COIN_SUPPLY * BigInt(c.teamBps)) / 10000n;
-    const teamPct = c.teamBps / 100;
-    const salePct = 100 - teamPct;
-    const tapBudget = Number(c.raise) * (treasuryPct / 100);
-    const p = $('coinPreview');
-    p.innerHTML =
-      `<dl class="coin-summary">` +
-      `<dt>Sale</dt><dd>${saleFmt} (${salePct}%)</dd>` +
-      `<dt>Raise</dt><dd>${c.raise} ${ethMini}</dd>` +
-      `<dt>LP Seed</dt><dd>${lpPct}% &rarr; zAMM</dd>` +
-      `<dt>Ops</dt><dd>${teamPct}% (locked ${c.lockMonths}mo)</dd>` +
-      `<dt>Tap</dt><dd>${tapBudget.toFixed(2)} ${ethMini} / ${c.tapMonths}mo</dd>` +
-      `<dt>Price</dt><dd>${pricePerM} ${ethMini} / 1M</dd>` +
-      `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">15% quorum &middot; 7d voting &middot; 3d timelock &middot; ragequit &middot; coin holders own initial LP</div>`;
-    $('coinPreviewWrap').style.display = '';
-    $('coinSimplePreviewWrap').style.display = 'none';
-    $('coinCollectPreviewWrap').style.display = 'none';
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">LP tokens burned (permanent liquidity) &middot; 0.25% pool fee post-graduation &middot; 0.05% creator fee post-graduation</div>`;
+    $('coinCurvePreviewWrap').style.display = '';
+    $('coinCausePreviewWrap').style.display = 'none';
   }
   setDisabled('coinLaunchBtn', false);
 }
@@ -12627,206 +12183,12 @@ function coinPredict(initHolders, initShares, salt) {
   return { dao, shares, loot };
 }
 
-function coinPredictCollector(salt) {
-  const abiCoder = new ethers.AbiCoder();
-  const summonerSalt = ethers.keccak256(abiCoder.encode(['address[]','uint256[]','bytes32'], [[], [], salt]));
-  const dao = coinCreate2(COIN_SUMMONER, summonerSalt, COIN_IMPLS.moloch);
-  const childSalt = '0x' + dao.toLowerCase().replace('0x','') + '000000000000000000000000';
-  const shares = coinCreate2(dao, childSalt, COIN_IMPLS.shares);
-  return { dao, shares };
-}
-
-const VAULT_FACTORY_ABI = [{
-  name: 'deployAndSummon',
-  type: 'function',
-  stateMutability: 'nonpayable',
-  inputs: [
-    { name: 'vp', type: 'tuple', components: [
-      { name: 'mode', type: 'uint8' },
-      { name: 'target', type: 'address' },
-      { name: 'ethPerCall', type: 'uint256' },
-      { name: 'maxCalls', type: 'uint256' },
-      { name: 'payload', type: 'bytes' },
-      { name: 'token', type: 'address' },
-      { name: 'minBalance', type: 'uint256' },
-      { name: 'specificId', type: 'bool' }
-    ]},
-    { name: 'dp', type: 'tuple', components: [
-      { name: 'tribTkn', type: 'address' },
-      { name: 'tribAmt', type: 'uint256' },
-      { name: 'saleSupply', type: 'uint256' },
-      { name: 'forAmt', type: 'uint256' },
-      { name: 'deadline', type: 'uint40' },
-      { name: 'sellLoot', type: 'bool' },
-      { name: 'lpBps', type: 'uint16' },
-      { name: 'maxSlipBps', type: 'uint16' },
-      { name: 'feeOrHook', type: 'uint256' },
-      { name: 'ratePerSec', type: 'uint128' },
-      { name: 'tapAllowance', type: 'uint256' },
-      { name: 'quorumBps', type: 'uint16' },
-      { name: 'votingSecs', type: 'uint64' },
-      { name: 'timelockSecs', type: 'uint64' },
-      { name: 'orgName', type: 'string' },
-      { name: 'orgSymbol', type: 'string' },
-      { name: 'orgURI', type: 'string' }
-    ]},
-    { name: 'salt', type: 'bytes32' }
-  ],
-  outputs: [
-    { name: 'dao', type: 'address' },
-    { name: 'vault', type: 'address' }
-  ]
-}, {
-  name: 'predictDAO',
-  type: 'function',
-  stateMutability: 'pure',
-  inputs: [{ name: 'salt', type: 'bytes32' }],
-  outputs: [{ name: '', type: 'address' }]
-}, {
-  name: 'predictVault',
-  type: 'function',
-  stateMutability: 'view',
-  inputs: [{ name: 'salt', type: 'bytes32' }],
-  outputs: [{ name: '', type: 'address' }]
-}];
-
 function coinShowStatus(msg, isError) {
   const el = $('coinStatus');
   const cls = isError ? 'status-message error' : msg.includes('Launch') ? 'status-message success' : 'status-message';
   const spinner = msg.includes('...') && !isError && !msg.includes('Launch') ? zfiLoadingSVG(14) : '';
   el.innerHTML = `<div class="${cls}">${spinner}${msg}</div>`;
 }
-
-const COIN_DAICO_ABI = [{
-  inputs: [
-    { components: [
-      { name: 'summoner', type: 'address' },
-      { name: 'molochImpl', type: 'address' },
-      { name: 'sharesImpl', type: 'address' },
-      { name: 'lootImpl', type: 'address' }
-    ], name: 'summonConfig', type: 'tuple' },
-    { name: 'orgName', type: 'string' },
-    { name: 'orgSymbol', type: 'string' },
-    { name: 'orgURI', type: 'string' },
-    { name: 'quorumBps', type: 'uint16' },
-    { name: 'ragequittable', type: 'bool' },
-    { name: 'renderer', type: 'address' },
-    { name: 'salt', type: 'bytes32' },
-    { name: 'initHolders', type: 'address[]' },
-    { name: 'initShares', type: 'uint256[]' },
-    { name: 'sharesLocked', type: 'bool' },
-    { name: 'lootLocked', type: 'bool' },
-    { components: [
-      { name: 'tribTkn', type: 'address' },
-      { name: 'tribAmt', type: 'uint256' },
-      { name: 'saleSupply', type: 'uint256' },
-      { name: 'forAmt', type: 'uint256' },
-      { name: 'deadline', type: 'uint40' },
-      { name: 'sellLoot', type: 'bool' },
-      { name: 'lpBps', type: 'uint16' },
-      { name: 'maxSlipBps', type: 'uint16' },
-      { name: 'feeOrHook', type: 'uint256' }
-    ], name: 'daicoConfig', type: 'tuple' },
-    { components: [
-      { name: 'ops', type: 'address' },
-      { name: 'ratePerSec', type: 'uint128' },
-      { name: 'tapAllowance', type: 'uint256' }
-    ], name: 'tapConfig', type: 'tuple' },
-    { components: [
-      { name: 'target', type: 'address' },
-      { name: 'value', type: 'uint256' },
-      { name: 'data', type: 'bytes' }
-    ], name: 'customCalls', type: 'tuple[]' }
-  ],
-  name: 'summonDAICOWithTapCustom',
-  outputs: [{ name: 'dao', type: 'address' }],
-  stateMutability: 'payable',
-  type: 'function'
-}, {
-  inputs: [
-    { components: [
-      { name: 'summoner', type: 'address' },
-      { name: 'molochImpl', type: 'address' },
-      { name: 'sharesImpl', type: 'address' },
-      { name: 'lootImpl', type: 'address' }
-    ], name: 'summonConfig', type: 'tuple' },
-    { name: 'orgName', type: 'string' },
-    { name: 'orgSymbol', type: 'string' },
-    { name: 'orgURI', type: 'string' },
-    { name: 'quorumBps', type: 'uint16' },
-    { name: 'ragequittable', type: 'bool' },
-    { name: 'renderer', type: 'address' },
-    { name: 'salt', type: 'bytes32' },
-    { name: 'initHolders', type: 'address[]' },
-    { name: 'initShares', type: 'uint256[]' },
-    { name: 'sharesLocked', type: 'bool' },
-    { name: 'lootLocked', type: 'bool' },
-    { components: [
-      { name: 'tribTkn', type: 'address' },
-      { name: 'tribAmt', type: 'uint256' },
-      { name: 'saleSupply', type: 'uint256' },
-      { name: 'forAmt', type: 'uint256' },
-      { name: 'deadline', type: 'uint40' },
-      { name: 'sellLoot', type: 'bool' },
-      { name: 'lpBps', type: 'uint16' },
-      { name: 'maxSlipBps', type: 'uint16' },
-      { name: 'feeOrHook', type: 'uint256' }
-    ], name: 'daicoConfig', type: 'tuple' }
-  ],
-  name: 'summonDAICO',
-  outputs: [{ name: 'dao', type: 'address' }],
-  stateMutability: 'payable',
-  type: 'function'
-}, {
-  inputs: [
-    { components: [
-      { name: 'summoner', type: 'address' },
-      { name: 'molochImpl', type: 'address' },
-      { name: 'sharesImpl', type: 'address' },
-      { name: 'lootImpl', type: 'address' }
-    ], name: 'summonConfig', type: 'tuple' },
-    { name: 'orgName', type: 'string' },
-    { name: 'orgSymbol', type: 'string' },
-    { name: 'orgURI', type: 'string' },
-    { name: 'quorumBps', type: 'uint16' },
-    { name: 'ragequittable', type: 'bool' },
-    { name: 'renderer', type: 'address' },
-    { name: 'salt', type: 'bytes32' },
-    { name: 'initHolders', type: 'address[]' },
-    { name: 'initShares', type: 'uint256[]' },
-    { name: 'sharesLocked', type: 'bool' },
-    { name: 'lootLocked', type: 'bool' },
-    { components: [
-      { name: 'tribTkn', type: 'address' },
-      { name: 'tribAmt', type: 'uint256' },
-      { name: 'saleSupply', type: 'uint256' },
-      { name: 'forAmt', type: 'uint256' },
-      { name: 'deadline', type: 'uint40' },
-      { name: 'sellLoot', type: 'bool' },
-      { name: 'lpBps', type: 'uint16' },
-      { name: 'maxSlipBps', type: 'uint16' },
-      { name: 'feeOrHook', type: 'uint256' }
-    ], name: 'daicoConfig', type: 'tuple' },
-    { components: [
-      { name: 'target', type: 'address' },
-      { name: 'value', type: 'uint256' },
-      { name: 'data', type: 'bytes' }
-    ], name: 'customCalls', type: 'tuple[]' }
-  ],
-  name: 'summonDAICOCustom',
-  outputs: [{ name: 'dao', type: 'address' }],
-  stateMutability: 'payable',
-  type: 'function'
-}];
-
-const COIN_IFACES = {
-  setProposalTTL: new ethers.Interface(['function setProposalTTL(uint64)']),
-  setTimelockDelay: new ethers.Interface(['function setTimelockDelay(uint64)']),
-  mintFromMoloch: new ethers.Interface(['function mintFromMoloch(address,uint256)']),
-  approve: new ethers.Interface(['function approve(address,uint256)']),
-  lockup: new ethers.Interface(['function lockup(address,address,uint256,uint256,uint256)']),
-  setPermit: new ethers.Interface(['function setPermit(uint8,address,uint256,bytes,bytes32,address,uint256)'])
-};
 
 async function coinLaunch() {
   if (_coinLaunching) return;
@@ -12838,32 +12200,12 @@ async function coinLaunch() {
   if (!name || name.length < 2) { coinShowStatus('Enter a name (at least 2 characters)', true); return; }
   if (!symbol || symbol.length < 1) { coinShowStatus('Enter a symbol', true); return; }
 
-  // Validate ops wallet if user typed something but it hasn't resolved
-  if (_coinLaunchType === 'advanced') {
-    const opsInput = ($('coinOpsAddress')?.value || '').trim();
-    if (opsInput && !getCoinOpsAddress()) {
-      coinShowStatus('Ops wallet address is invalid or still resolving', true);
-      return;
-    }
-  }
-
   _coinLaunching = true;
   setDisabled('coinLaunchBtn', true);
 
   try {
     const address = await _signer.getAddress();
     coinShowStatus('Preparing coin launch...');
-
-    const c = _coinCfg;
-    const saleBps = BigInt(10000 - c.teamBps);
-    const saleSupply = (COIN_SUPPLY * saleBps) / 10000n - 1n; // -1 for deployer share
-    const saleSupplyWei = ethers.parseEther(saleSupply.toString());
-
-    // Sale rate: 1 ETH base unit → (saleSupply / raiseETH) shares
-    // Use wei-level math to support decimal raise amounts (e.g. 0.01 ETH)
-    const tribAmt = ethers.parseEther('1');
-    const raiseWei = ethers.parseEther(String(c.raise));
-    const forAmt = (saleSupplyWei * tribAmt) / raiseWei;
 
     // Pin images + metadata to IPFS (or fallback to data URI)
     const metadata = { name, symbol };
@@ -12875,18 +12217,13 @@ async function coinLaunch() {
     if (telegram) metadata.telegram = telegram;
     if (discord) metadata.discord = discord;
     if (_coinTemplate) metadata.template = _coinTemplate;
-    if (_coinLaunchType === 'simple') {
-      metadata.launchType = 'ez';
-    } else if (_coinLaunchType === 'collect') {
-      metadata.launchType = 'collector';
-      metadata.type = 'collector';
-      metadata.collectMode = _coinCollectMode;
+    if (_coinLaunchType === 'coin') {
+      metadata.launchType = 'curve';
+      metadata.creator = '';
+      metadata.creatorWallet = address;
     } else {
-      metadata.launchType = 'fund';
-      metadata.teamBps = c.teamBps;
-      metadata.lockMonths = c.lockMonths;
+      metadata.launchType = 'cause';
     }
-    metadata.lpBps = c.lpBps;
     if (_coinImageFile) {
       coinShowStatus('Uploading logo to IPFS...');
       _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
@@ -12920,243 +12257,244 @@ async function coinLaunch() {
 
     const salt = ethers.hexlify(ethers.randomBytes(32));
 
-    // --- Collector path: factory.deployAndSummon ---
-    if (_coinLaunchType === 'collect') {
-      const raise = parseFloat($('collectRaise').value) || 1;
-      const days = parseInt($('collectDeadline').value) || 7;
-      if (raise <= 0) { coinShowStatus('Raise must be greater than 0', true); _coinLaunching = false; setDisabled('coinLaunchBtn', false); return; }
-      if (days <= 0) { coinShowStatus('Deadline must be at least 1 day', true); _coinLaunching = false; setDisabled('coinLaunchBtn', false); return; }
-      const saleSupplyCollect = BigInt(Math.round(raise * 1_000_000));
-      const saleSupplyWei = ethers.parseEther(saleSupplyCollect.toString());
-      const tribAmt = ethers.parseEther('1');
-      const forAmt = ethers.parseEther('1000000'); // 1M shares per ETH
-      const deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days * 86400);
-
-      // Build VaultParams
-      const _bail = (msg) => { coinShowStatus(msg, true); _coinLaunching = false; setDisabled('coinLaunchBtn', false); };
-      let vp;
-      if (_coinCollectMode === 0) {
-        const target = coinGetResolved('collectTarget');
-        if (!target) { _bail('Enter a valid contract address or name'); return; }
-        const ethPerCallRaw = ($('collectEthPerCall').value || '').trim();
-        if (!ethPerCallRaw || isNaN(ethPerCallRaw) || Number(ethPerCallRaw) < 0) { _bail('Enter a valid ETH per call amount'); return; }
-        const ethPerCall = ethers.parseEther(ethPerCallRaw);
-        const maxCalls = BigInt($('collectMaxCalls').value || '0');
-        const payload = ($('collectPayload')?.value || '').trim() || '0x';
-        if (payload !== '0x' && !/^0x[0-9a-fA-F]*$/.test(payload)) { _bail('Calldata must be valid hex (0x...)'); return; }
-        vp = { mode: 0, target, ethPerCall, maxCalls, payload, token: ZERO_ADDRESS, minBalance: 0n, specificId: false };
-      } else {
-        const token = coinGetResolved('collectToken');
-        if (!token) { _bail('Enter a valid token address or name'); return; }
-        const minBalRaw = ($('collectMinBalance').value || '').trim();
-        let minBalance;
-        if (_coinSpecificId) {
-          // ERC-721: token ID as raw uint256
-          if (!minBalRaw || isNaN(minBalRaw)) { _bail('Enter a valid token ID'); return; }
-          minBalance = BigInt(minBalRaw);
-        } else {
-          // ERC-20: parse human-readable amount with decimals
-          if (!minBalRaw || isNaN(minBalRaw) || Number(minBalRaw) <= 0) { _bail('Enter a valid minimum token amount'); return; }
-          const decimals = parseInt($('collectDecimals').value) || 18;
-          minBalance = ethers.parseUnits(minBalRaw, decimals);
-        }
-        vp = { mode: 1, target: ZERO_ADDRESS, ethPerCall: 0n, maxCalls: 0n, payload: '0x', token, minBalance, specificId: _coinSpecificId };
+    // --- Cause DAICO path (SafeSummoner.summonStandardDAICO) ---
+    if (_coinLaunchType === 'cause') {
+      const raise = parseFloat($('causeRaise').value) || 10;
+      const minBuy = parseFloat($('causePrice').value) || 0.01;
+      const days = parseInt($('causeDeadline').value) || 30;
+      if (raise <= 0 || minBuy <= 0 || days <= 0) {
+        coinShowStatus('Enter valid raise, min buy, and deadline', true);
+        _coinLaunching = false; setDisabled('coinLaunchBtn', false); return;
       }
 
-      // Build DAICOParams (bare Moloch path: lpBps = 0)
-      const dp = {
-        tribTkn: ZERO_ADDRESS,
-        tribAmt,
-        saleSupply: saleSupplyWei,
-        forAmt,
-        deadline,
-        sellLoot: false,
-        lpBps: 0,
-        maxSlipBps: 0,
-        feeOrHook: 0n,
-        ratePerSec: 0n,
-        tapAllowance: 0n,
-        quorumBps: COIN_COLLECTOR_QUORUM_BPS,
-        votingSecs: days * 86400,
-        timelockSecs: days * 86400,
-        orgName: name,
-        orgSymbol: symbol,
-        orgURI
+      // 100 shares per minBuy unit (e.g. 0.01 ETH = 100 shares)
+      const sharesPerBuy = 100;
+      const pricePerShare = minBuy / sharesPerBuy;
+      const priceWei = ethers.parseEther(String(pricePerShare));
+      const totalShares = Math.floor(raise / minBuy) * sharesPerBuy;
+      const capShares = ethers.parseEther(String(totalShares));
+      const deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days * 86400);
+
+      const tapEnabled = $('causeTapEnabled').checked;
+      let tapModule = {
+        singleton: ZERO_ADDRESS, token: ZERO_ADDRESS, budget: 0n,
+        beneficiary: ZERO_ADDRESS, ratePerSec: 0n
+      };
+      if (tapEnabled) {
+        const beneficiary = coinGetResolved('causeTapBeneficiary') || address;
+        const tapMonths = parseInt($('causeTapMonths').value) || 12;
+        const budgetWei = ethers.parseEther(String(raise));
+        const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
+        let rate = budgetWei / totalSec;
+        if (rate === 0n && budgetWei > 0n) rate = 1n;
+        tapModule = {
+          singleton: TAP_VEST, token: ZERO_ADDRESS, budget: budgetWei,
+          beneficiary, ratePerSec: rate
+        };
+      }
+
+      const saleModule = {
+        singleton: SHARE_SALE, payToken: ZERO_ADDRESS, deadline,
+        price: priceWei, cap: capShares, sellLoot: false, minting: true
+      };
+      const seedModule = {
+        singleton: ZERO_ADDRESS, tokenA: ZERO_ADDRESS, amountA: 0n,
+        tokenB: ZERO_ADDRESS, amountB: 0n, deadline: 0n,
+        gateBySale: false, minSupply: 0n
       };
 
+      const initHolders = [address];
+      const initShares = [ethers.parseEther('1')]; // creator gets 1 share
+
       coinShowStatus('Please confirm the transaction in your wallet...');
-      const factory = new ethers.Contract(COIN_VAULT_FACTORY, VAULT_FACTORY_ABI, _signer);
-      const tx = await factory.deployAndSummon(vp, dp, salt);
+      const safeSummoner = new ethers.Contract(SAFE_SUMMONER, SAFE_SUMMONER_ABI, _signer);
+      const tx = await safeSummoner.summonStandardDAICO(
+        name, symbol, orgURI, salt,
+        initHolders, initShares, false, // shares transferable
+        saleModule, tapModule, seedModule
+      );
 
       coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
       const receipt = await tx.wait();
 
-      const predicted = coinPredictCollector(salt);
+      const predicted = coinPredict(initHolders, initShares, salt);
       const daoAddress = predicted.dao;
-      const modeLabel = _coinCollectMode === 0 ? 'Mint' : 'Bounty';
+      const capFmt = Number(ethers.formatEther(capShares)).toLocaleString();
+
+      // Register in Supabase
+      if (daoAddress && COIN_DB_URL) {
+        const now = new Date().toISOString();
+        const tokenId = coinGenId();
+        const roomId = coinGenId();
+        (async () => {
+          try {
+            await coinDbInsert('gated_rooms', {
+              id: roomId, name: '$' + symbol.toUpperCase(),
+              creator: address.toLowerCase(),
+              token_address: predicted.shares.toLowerCase(),
+              token_type: 'ERC20', min_balance: ethers.parseEther('1').toString(),
+              avatar: metadata.image || null, description: desc || null,
+              created_at: now
+            });
+            await coinDbInsert('gated_room_members', {
+              room_id: roomId, user_name: address.toLowerCase(),
+              wallet_address: address.toLowerCase(), joined_at: now
+            });
+            await coinDbInsert('launched_tokens', {
+              id: tokenId, creator: address.toLowerCase(),
+              token_address: predicted.shares.toLowerCase(),
+              name: name.slice(0, 50), symbol: symbol.toUpperCase().slice(0, 10),
+              image: null, room_id: roomId,
+              description: desc ? desc.slice(0, 280) : null,
+              tx_hash: tx.hash, created_at: now
+            });
+          } catch (e) { console.warn('Supabase registration failed:', e); }
+        })();
+      }
+
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
-        `Mode: ${modeLabel} &middot; Raise: ${raise} ETH &middot; ${days}d deadline<br>` +
-        `Share rate: 1M per ETH<br><br>` +
-        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
+        `Sale: ${raise} ETH &middot; ${minBuy} ETH = 100 shares &middot; ${capFmt} total &middot; ${days}d<br>` +
+        (tapEnabled ? `Tap: ~${(raise / (parseInt($('causeTapMonths').value) * 30.44)).toFixed(4)} ETH/day<br>` : '') +
+        `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
         ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
       );
       return;
     }
 
-    const initHolders = [address];
-    const initShares = [ethers.parseEther('1')];
-    const predicted = coinPredict(initHolders, initShares, salt);
+    // --- ClassicalCurveSale path ---
+    if (_coinLaunchType === 'coin') {
+      // onchain contractURI = IPFS pointer (immutable, content-addressed)
+      // Falls back to inline JSON if IPFS pinning is unavailable
+      const metadataUri = orgURI.startsWith('ipfs://') ? orgURI : JSON.stringify({
+        name, symbol, creator: '', creatorWallet: address,
+        image: metadata.image || '', description: desc.slice(0, 280)
+      });
 
-    const summonConfig = {
-      summoner: COIN_SUMMONER,
-      molochImpl: COIN_IMPLS.moloch,
-      sharesImpl: COIN_IMPLS.shares,
-      lootImpl: COIN_IMPLS.loot
-    };
-    const saleDeadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(COIN_SALE_DAYS * 86400);
-    const burnDeadline = saleDeadline + BigInt(COIN_BURN_DELAY_DAYS * 86400);
+      const launchIface = new ethers.Interface(CLASSICAL_LAUNCH_ABI);
 
-    const daicoConfig = {
-      tribTkn: ZERO_ADDRESS,
-      tribAmt,
-      saleSupply: saleSupplyWei,
-      forAmt,
-      deadline: saleDeadline,
-      sellLoot: false,
-      lpBps: c.lpBps,
-      maxSlipBps: 100,
-      feeOrHook: COIN_FEE
-    };
+      // CREATE2 prediction: salt = keccak256(abi.encode(sender, name, symbol, salt))
+      // Init code = PUSH0 minimal proxy (same pattern as coinMinimalProxy)
+      const abiCoder = new ethers.AbiCoder();
 
-    // ShareBurner permit: burn unsold shares 7 days after sale deadline
-    // burnData = abi.encodeWithSignature("burnUnsold(address,uint256)", shares, burnDeadline)
-    const burnUnsoldSel = ethers.id('burnUnsold(address,uint256)').slice(0, 10);
-    const burnPayload = burnUnsoldSel + ethers.AbiCoder.defaultAbiCoder().encode(
-      ['address', 'uint256'], [predicted.shares, burnDeadline]
-    ).slice(2);
-    const shareBurnerPermit = {
-      target: predicted.dao, value: 0n,
-      data: COIN_IFACES.setPermit.encodeFunctionData('setPermit', [
-        1,                            // op = delegatecall
-        COIN_SHARE_BURNER,            // target = ShareBurner singleton
-        0,                            // value = 0
-        burnPayload,                  // encoded burnUnsold(shares, burnDeadline)
-        salt,                         // nonce
-        COIN_SHARE_BURNER,            // spender = ShareBurner (self-spending)
-        1                             // count = 1 (one-shot)
-      ])
-    };
+      // Mine for vanity address starting with 0x00 (~2000 attempts, ~99.96% chance)
+      // Yield every 200 iterations to keep UI responsive
+      coinShowStatus('Mining vanity address...');
+      let bestSalt = salt;
+      let bestAddr = null;
+      const VANITY_ATTEMPTS = 2000;
+      for (let i = 0; i < VANITY_ATTEMPTS; i++) {
+        if (i > 0 && i % 200 === 0) await new Promise(r => setTimeout(r, 0));
+        const trySalt = ethers.hexlify(ethers.randomBytes(32));
+        const create2Salt = ethers.keccak256(abiCoder.encode(
+          ['address', 'string', 'string', 'bytes32'],
+          [address, name, symbol, trySalt]
+        ));
+        const addr = coinCreate2(CLASSICAL_CURVE_SALE, create2Salt, CLASSICAL_TOKEN_IMPL);
+        if (addr.startsWith('0x00')) {
+          bestSalt = trySalt;
+          bestAddr = addr;
+          break;
+        }
+        bestSalt = trySalt;
+        bestAddr = addr;
+      }
 
-    coinShowStatus('Please confirm the transaction in your wallet...');
-    const daico = new ethers.Contract(COIN_DAICO, COIN_DAICO_ABI, _signer);
-    let tx;
+      coinShowStatus('Please confirm the transaction in your wallet...');
+      const data = launchIface.encodeFunctionData('launch', [
+        address,                                    // creator
+        name,                                       // name
+        symbol,                                     // symbol
+        metadataUri,                                // uri (IPFS pointer or inline JSON fallback)
+        '1000000000000000000000000000',             // supply: 1B tokens
+        bestSalt,                                   // salt
+        '800000000000000000000000000',              // cap: 800M
+        '1666666667',                               // startPrice
+        '26666666672',                              // endPrice
+        100,                                        // feeBps: 1%
+        '0',                                        // graduationTarget: sell full cap
+        '200000000000000000000000000',              // lpTokens: 200M
+        ethers.ZeroAddress,                         // lpRecipient: burn (permanent LP)
+        25,                                         // poolFeeBps: 0.25%
+        500,                                        // sniperFeeBps: 5%
+        300,                                        // sniperDuration: 5 min
+        1000,                                       // maxBuyBps: 10%
+        [address, 5, 5, true, false],               // creatorFee tuple
+        0,                                          // vestCliff
+        0                                           // vestDuration
+      ]);
 
-    if (_coinLaunchType === 'simple') {
-      // Simple mode: no tap, no team, but set governance params for safety
-      const ezGovCalls = [
-        { target: predicted.dao, value: 0n,
-          data: COIN_IFACES.setProposalTTL.encodeFunctionData('setProposalTTL', [COIN_VOTING_DAYS * 86400]) },
-        { target: predicted.dao, value: 0n,
-          data: COIN_IFACES.setTimelockDelay.encodeFunctionData('setTimelockDelay', [COIN_TIMELOCK_DAYS * 86400]) },
-        shareBurnerPermit
-      ];
-      tx = await daico.summonDAICOCustom(
-        summonConfig,
-        name, symbol, orgURI,
-        COIN_EZ_QUORUM_BPS,
-        true, // ragequittable
-        COIN_RENDERER,
-        salt,
-        initHolders, initShares,
-        false, false, // shares/loot not locked
-        daicoConfig,
-        ezGovCalls
-      );
-    } else {
-      // Advanced mode: tap + team lockup + governance custom calls
-      const opsAddr = getCoinOpsAddress() || address; // custom ops wallet or connected wallet
-      const teamBps = BigInt(c.teamBps);
-      const teamSupply = (COIN_SUPPLY * teamBps) / 10000n;
-      const teamSupplyWei = ethers.parseEther(teamSupply.toString());
+      const tx = await _signer.sendTransaction({ to: CLASSICAL_CURVE_SALE, data });
+      coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
+      const receipt = await tx.wait();
 
-      const treasuryBps = 10000n - BigInt(c.lpBps);
-      const expectedTreasury = (ethers.parseEther(c.raise.toString()) * treasuryBps) / 10000n;
-      const tapBudget = expectedTreasury;
-      const totalTapSec = COIN_SEC_PER_MONTH * BigInt(c.tapMonths);
-      let tapRate = tapBudget / totalTapSec;
-      if (tapRate === 0n && tapBudget > 0n) tapRate = 1n;
+      // Token address: use predicted address or parse from TokenCreated event
+      let tokenAddress = bestAddr;
+      const tokenCreatedTopic = ethers.id('TokenCreated(address,address)');
+      for (const log of receipt.logs) {
+        if (log.topics[0] === tokenCreatedTopic && log.address.toLowerCase() === CLASSICAL_CURVE_SALE.toLowerCase()) {
+          tokenAddress = ethers.getAddress('0x' + log.topics[2].slice(26));
+          break;
+        }
+      }
 
-      const lockDuration = BigInt(c.lockMonths) * COIN_SEC_PER_MONTH;
-      const unlockTime = BigInt(Math.floor(Date.now() / 1000)) + lockDuration;
-
-      const customCalls = [
-        { target: predicted.dao, value: 0n,
-          data: COIN_IFACES.setProposalTTL.encodeFunctionData('setProposalTTL', [COIN_VOTING_DAYS * 86400]) },
-        { target: predicted.dao, value: 0n,
-          data: COIN_IFACES.setTimelockDelay.encodeFunctionData('setTimelockDelay', [COIN_TIMELOCK_DAYS * 86400]) },
-        { target: predicted.shares, value: 0n,
-          data: COIN_IFACES.mintFromMoloch.encodeFunctionData('mintFromMoloch', [predicted.dao, teamSupplyWei]) },
-        { target: predicted.shares, value: 0n,
-          data: COIN_IFACES.approve.encodeFunctionData('approve', [COIN_ZAMM, teamSupplyWei]) },
-        { target: COIN_ZAMM, value: 0n,
-          data: COIN_IFACES.lockup.encodeFunctionData('lockup', [predicted.shares, opsAddr, 0, teamSupplyWei, unlockTime]) },
-        shareBurnerPermit
-      ];
-
-      tx = await daico.summonDAICOWithTapCustom(
-        summonConfig,
-        name, symbol, orgURI,
-        COIN_QUORUM_BPS,
-        true, // ragequittable
-        COIN_RENDERER,
-        salt,
-        initHolders, initShares,
-        false, false, // shares/loot not locked
-        daicoConfig,
-        { ops: opsAddr, ratePerSec: tapRate, tapAllowance: tapBudget },
-        customCalls
-      );
-    }
-
-    coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
-
-    const receipt = await tx.wait();
-    const daoAddress = predicted.dao;
-    const fmtBM = n => n >= 999e6 ? (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M' : n.toLocaleString();
-    const saleSupplyFmt = fmtBM(Number(saleSupply));
-    const lpPct = c.lpBps / 100;
-
-    if (_coinLaunchType === 'simple') {
-      const treasuryPct = 100 - lpPct;
-      coinShowStatus(
-        `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
-        `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
-        `Sale: ${c.raise} ETH &rarr; ${saleSupplyFmt} shares<br>` +
-        `${lpPct}% LP &middot; ${treasuryPct}% ragequitable treasury<br><br>` +
-        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
-        ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
-        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
-      );
-    } else {
-      const teamSupplyFmt = fmtBM(Number((COIN_SUPPLY * BigInt(c.teamBps)) / 10000n));
-      const salePct = (10000 - c.teamBps) / 100;
-      const treasuryBps = 10000n - BigInt(c.lpBps);
-      const tapBudget = (ethers.parseEther(c.raise.toString()) * treasuryBps) / 10000n;
-      const dailyTap = (Number(ethers.formatEther(tapBudget)) / (c.tapMonths * 30.44));
+      // Register in Supabase for discoverability
+      if (tokenAddress && COIN_DB_URL) {
+        const now = new Date().toISOString();
+        const tokenId = coinGenId();
+        const roomId = coinGenId();
+        // Fire-and-forget: don't block success display on DB writes
+        (async () => {
+          try {
+            // 1. Create gated room
+            await coinDbInsert('gated_rooms', {
+              id: roomId,
+              name: '$' + symbol.toUpperCase(),
+              creator: address.toLowerCase(),
+              token_address: tokenAddress.toLowerCase(),
+              token_type: 'ERC20',
+              min_balance: '1000000000000000000', // 1 token (18 decimals)
+              avatar: metadata.image || null,
+              description: desc || null,
+              created_at: now
+            });
+            // 2. Add creator as first room member
+            await coinDbInsert('gated_room_members', {
+              room_id: roomId,
+              user_name: address.toLowerCase(),
+              wallet_address: address.toLowerCase(),
+              joined_at: now
+            });
+            // 3. Insert token record with tx_hash (confirmed)
+            await coinDbInsert('launched_tokens', {
+              id: tokenId,
+              creator: address.toLowerCase(),
+              token_address: tokenAddress.toLowerCase(),
+              name: name.slice(0, 50),
+              symbol: symbol.toUpperCase().slice(0, 10),
+              image: null,
+              room_id: roomId,
+              description: desc ? desc.slice(0, 280) : null,
+              tx_hash: tx.hash,
+              created_at: now
+            });
+          } catch (e) {
+            console.warn('Supabase registration failed:', e);
+          }
+        })();
+      }
 
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
-        `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
-        `Sale: ${c.raise} ETH &rarr; ${saleSupplyFmt} shares (${salePct}%)<br>` +
-        `Ops: ${teamSupplyFmt} shares locked ${c.lockMonths}mo<br>` +
-        `LP: ${lpPct}% of buys &rarr; zAMM &middot; Tap: &asymp;${dailyTap.toFixed(4)} ETH/day<br><br>` +
+        (tokenAddress ? `Token: <a href="https://etherscan.io/address/${tokenAddress}" target="_blank">${tokenAddress}</a><br>` : '') +
+        `Supply: 1B &middot; Curve: 800M &middot; LP: 200M<br>` +
+        `16x price range &middot; ~5.33 ETH graduation<br><br>` +
         `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
-        ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
-        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
+        (tokenAddress ? ` &middot; <a href="./coin/#${tokenAddress}">View Coin</a>` : '')
       );
+      return;
     }
   } catch (e) {
     if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {

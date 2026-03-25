@@ -15,8 +15,8 @@ function cors(request) {
   const origin = request.headers.get('Origin') || '';
   return {
     'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : '',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Prefer',
   };
 }
 
@@ -102,6 +102,76 @@ export default {
         status: res.status,
         headers: { ...cors(request), 'Content-Type': 'application/json' },
       });
+    }
+
+    // POST /db/:table  — Supabase insert proxy (hides credentials, enforces origin + source)
+    // GET  /db/:table  — Supabase read proxy
+    // PATCH /db/:table — Supabase update proxy
+    // DELETE /db/:table — Supabase delete proxy
+    if (url.pathname.startsWith('/db/')) {
+      const table = url.pathname.slice(4).split('?')[0]; // e.g. "launched_tokens"
+      const ALLOWED_TABLES = ['launched_tokens', 'token_trades', 'gated_rooms', 'gated_room_members', 'gated_room_messages'];
+      if (!ALLOWED_TABLES.includes(table)) return json(request, { error: 'invalid table' }, 400);
+
+      const supabaseUrl = env.SUPABASE_URL;    // e.g. https://xyz.supabase.co
+      const supabaseKey = env.SUPABASE_KEY;     // service_role key (server-side only)
+      if (!supabaseUrl || !supabaseKey) return json(request, { error: 'db not configured' }, 500);
+
+      const SOURCE = 'zfi';
+      const qs = url.search || '';
+      const target = `${supabaseUrl}/rest/v1/${table}${qs}`;
+      const headers = {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': request.headers.get('Prefer') || 'return=minimal',
+      };
+
+      if (request.method === 'GET') {
+        const res = await fetch(target, { headers });
+        return new Response(res.body, {
+          status: res.status,
+          headers: { ...cors(request), 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (request.method === 'POST') {
+        const body = await request.text();
+        if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
+        let row;
+        try { row = JSON.parse(body); } catch { return json(request, { error: 'invalid JSON' }, 400); }
+        // Force source tag
+        row.source = SOURCE;
+        const res = await fetch(target, { method: 'POST', headers, body: JSON.stringify(row) });
+        return new Response(res.body, {
+          status: res.status,
+          headers: { ...cors(request), 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (request.method === 'PATCH') {
+        const body = await request.text();
+        if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
+        // Only allow updating own-source rows
+        const patchTarget = target.includes('source=eq.') ? target : `${target}${qs ? '&' : '?'}source=eq.${SOURCE}`;
+        const res = await fetch(patchTarget, { method: 'PATCH', headers, body });
+        return new Response(res.body, {
+          status: res.status,
+          headers: { ...cors(request), 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (request.method === 'DELETE') {
+        // Only allow deleting own-source rows
+        const delTarget = target.includes('source=eq.') ? target : `${target}${qs ? '&' : '?'}source=eq.${SOURCE}`;
+        const res = await fetch(delTarget, { method: 'DELETE', headers });
+        return new Response(res.body, {
+          status: res.status,
+          headers: { ...cors(request), 'Content-Type': 'application/json' },
+        });
+      }
+
+      return json(request, { error: 'method not allowed' }, 405);
     }
 
     if (request.method !== 'POST') return json(request, { error: 'method not allowed' }, 405);
