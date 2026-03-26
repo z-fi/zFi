@@ -1091,7 +1091,7 @@ body.modal-open { overflow: hidden; }
 <div>
   <div class="receiver-toggle" onclick="togglePPSwap()">
     <span class="chevron" id="ppSwapChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
-    <label style="margin:0;cursor:pointer;pointer-events:none">Privacy Pool Deposit</label>
+    <label style="margin:0;cursor:pointer;pointer-events:none">Deposit to Privacy Pools</label>
   </div>
   <div id="ppSwapWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted);cursor:pointer;margin-bottom:0;text-transform:none;letter-spacing:0">
@@ -1139,9 +1139,9 @@ body.modal-open { overflow: hidden; }
     <button id="ppAssetETH" class="swap-btn pp-asset-btn active" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSelectAsset('ETH')"><span class="pp-icon-18" data-icon="ETH"></span>ETH</button>
     <button id="ppAssetBOLD" class="swap-btn pp-asset-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('BOLD')"><span class="pp-icon-18" data-icon="BOLD"></span>BOLD</button>
     <button id="ppAssetWSTETH" class="swap-btn pp-asset-btn" style="flex:1;padding:6px;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted)" onclick="ppSelectAsset('wstETH')"><span class="pp-icon-18" data-icon="wstETH"></span>wstETH</button>
-    <button id="ppZapBtn" class="swap-btn pp-asset-btn" style="flex:none;width:36px;padding:6px 0;font-size:14px;display:inline-flex;align-items:center;justify-content:center;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted);cursor:pointer" onclick="ppToggleZap()" title="Zap: Stake ETH &rarr; wstETH &rarr; Privacy Pool in one tx">&#9889;</button>
+    <button id="ppZapBtn" class="swap-btn pp-asset-btn" style="flex:none;width:36px;padding:6px 0;font-size:14px;display:inline-flex;align-items:center;justify-content:center;border-radius:0;border:2px solid transparent;background:var(--surface);color:var(--fg-muted);cursor:pointer" onclick="ppToggleZap()" title="Zap: Stake ETH &rarr; wstETH &rarr; Privacy Pools in one tx">&#9889;</button>
   </div>
-  <div id="ppZapInfo" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:12px;padding:8px;background:var(--surface);border:1px solid var(--border-muted)">&#9889; <b>Zap mode:</b> Send ETH &rarr; auto-stake to wstETH (best rate) &rarr; deposit into Privacy Pool, all in one transaction.</div>
+  <div id="ppZapInfo" style="display:none;font-size:11px;color:var(--fg-muted);margin-bottom:12px;padding:8px;background:var(--surface);border:1px solid var(--border-muted)">&#9889; <b>Zap mode:</b> Send ETH &rarr; auto-stake to wstETH (best rate) &rarr; deposit into Privacy Pools, all in one transaction.</div>
 
   <div class="section token-section">
     <div class="token-header">
@@ -3185,7 +3185,7 @@ async function handleAmountChange() {
     dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, `Deposit ${fromToken} to Privacy Pool`);
+    setText(swapBtn, `Deposit ${fromToken} to Privacy Pools`);
     setDisabled(swapBtn, !_connectedAddress);
     return;
   }
@@ -6373,7 +6373,7 @@ async function executeSwap() {
 
     // WETH→ETH + PP: quoter can't route a pure unwrap — user should unwrap first
     if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
-      showStatus("Unwrap WETH to ETH first, then deposit into Privacy Pool", "error");
+      showStatus("Unwrap WETH to ETH first, then deposit into Privacy Pools", "error");
       return;
     }
 
@@ -6485,7 +6485,7 @@ async function executeSwap() {
     // ---- zOrg → token sell: two-step (ragequit then ZAMM swap) ----
     if (isZOrgSellPath(fromToken, toToken)) {
       if (_ppSwapEnabled) {
-        showStatus("Privacy Pool deposit not supported for zOrg sells — sell zOrg first, then deposit the output", "error");
+        showStatus("Privacy Pools deposit not supported for zOrg sells — sell zOrg first, then deposit the output", "error");
         return;
       }
       swapBtn.innerHTML = `${zfiLoadingSVG(14)} Preparing sell...`;
@@ -8153,8 +8153,7 @@ async function executeSwap() {
     else if (/7939f424/.test(s)) msg = `Insufficient ${fromToken} balance or approval`;
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
     else if (/PrecommitmentAlreadyUsed/i.test(s)) msg = "Precommitment already used. Try again.";
-    else if (/Previous Privacy Pool deposit is still pending confirmation/i.test(s)) msg = "A previous Privacy Pool deposit is still pending. Wait for confirmation before depositing again.";
-    else if (/Could not recover safe deposit index/i.test(s)) msg = "Could not sync your Privacy Pool account history yet. Retry before depositing.";
+    else if (/Could not load Privacy Pools account/i.test(s)) msg = "Could not load your Privacy Pools account. Try again.";
     else if (/InsufficientAllowance/i.test(s)) msg = "Insufficient token allowance.";
     else if (/InsufficientBalance/i.test(s)) msg = "Insufficient balance for deposit.";
 
@@ -8169,7 +8168,7 @@ async function executeSwap() {
 // ---- Token swap direction ----
 function swapTokens() {
   if (fromToken === toToken) return;
-  if (_ppSwapEnabled) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pool deposit`, "error"); return; }
+  if (_ppSwapEnabled) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
   const prevFrom = fromToken, prevTo = toToken;
   const fAmt = $("fromAmount").value;
   const tAmt = $("toAmount").value;
@@ -8487,7 +8486,7 @@ function selectToken(symbol) {
       ppSyncAssetUI(alt);
     }
   } else {
-    if (_ppSwapEnabled) { closeTokenModal(); showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pool deposit`, "error"); return; }
+    if (_ppSwapEnabled) { closeTokenModal(); showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
     if (symbol === fromToken) fromToken = toToken;
     toToken = symbol;
   }
@@ -8664,7 +8663,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
   const _dlAmt = _urlp.get('amt');
   const _dlOutAmt = _urlp.get('outamt');
-  // Deeplink: ?pp=eth or ?pp=bold — Privacy Pool deposit
+  // Deeplink: ?pp=eth or ?pp=bold — Privacy Pools deposit
   // Direct deposit: ?pp=eth&amt=1 (no from → go straight to privacy tab)
   // Swap+deposit: ?from=eth&pp=bold&amt=1.5 (explicit from → swap into pp asset)
   // Exact-out: ?from=usdc&to=eth&outamt=1 (exact output mode)
@@ -8739,10 +8738,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Update OG meta for swap / privacy pool social cards
   if (_dlPP === 'ZAP' || (_isPPAsset(_dlPP) && _ppIsDirect)) {
     const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
-    updateOGMeta('Deposit ' + _ogAmt2 + (_dlPP === 'ZAP' ? 'ZAP' : _dlPP), 'Privacy pool deposit on zFi');
+    updateOGMeta('Deposit ' + _ogAmt2 + (_dlPP === 'ZAP' ? 'ZAP' : _dlPP), 'Privacy Pools deposit on zFi');
   } else if (_isPPAsset(_dlPP)) {
     const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
-    updateOGMeta('Swap ' + _ogAmt2 + fromToken + ' → ' + _dlPP + ' (PP)', 'Swap and deposit into privacy pool on zFi');
+    updateOGMeta('Swap ' + _ogAmt2 + fromToken + ' → ' + _dlPP + ' (PP)', 'Swap and deposit into Privacy Pools on zFi');
   } else {
     const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : (_dlOutAmt && +_dlOutAmt > 0) ? '' : '';
     const _ogOut = (_dlOutAmt && +_dlOutAmt > 0) ? _dlOutAmt + ' ' : '';
@@ -8802,6 +8801,8 @@ walletInit({
     _ppMasterKeys = null;
     _ppwEventCache = {};
     _ppConfigCache = null; _ppConfigCacheTs = 0;
+    // Close any open withdrawal form and clear selected account
+    ppwCloseWithdrawForm();
     if ($('ppwRecipient')) ppwUpdateRecipientHint();
     if ($('ppwWithdrawBtn')) ppwSyncWithdrawButtonState();
     updatePPButton(); setText('ppBalance', 'Balance: --');
@@ -8809,6 +8810,7 @@ walletInit({
     // Reset My Pools to disconnected state
     if (_ppwLoadAbort) { _ppwLoadAbort.abort(); _ppwLoadAbort = null; }
     _ppwLoadResults = [];
+    _ppwLoadWarnings = [];
     setShown('ppwLoadConnected', false);
     setShown('ppwLoadDisconnected', true);
     const sr = $('ppwLoadResults'); if (sr) sr.innerHTML = '';
@@ -9084,9 +9086,6 @@ function ppResolveReservedSafeDepositIndex(recoveredIndex, reservations) {
   while (true) {
     const reservation = byIndex.get(nextIndex);
     if (!reservation) return { nextIndex, pendingIndex: null };
-    if (reservation.status !== 'confirmed') {
-      return { nextIndex, pendingIndex: nextIndex };
-    }
     nextIndex++;
   }
 }
@@ -9310,11 +9309,14 @@ function ppCollectWalletAccountsForDerivation({
     const currentCommitment = current.commitment == null
       ? null
       : (typeof current.commitment === 'string' ? current.commitment : ppHashHex(current.commitment));
-    const pending = current.source === 'deposit' && currentCommitment && !insertedLeaves.has(currentCommitment);
+    const currentCommitmentInserted = !!currentCommitment && insertedLeaves.has(currentCommitment);
+    const pending = current.source !== 'spent' && currentCommitment && !currentCommitmentInserted;
     results.push({
       asset,
       depositIndex: index,
       poolAddress,
+      currentCommitment,
+      currentCommitmentInserted,
       pending,
       ...current,
     });
@@ -9429,22 +9431,26 @@ async function ppFetchPoolEventLogs(asset, includeLeaves = false) {
     : Promise.resolve([]);
 
   const [newDLogs, newWLogs, newRLogs, newLLogs] = await Promise.all([...basePromises, leafPromise]);
-  const depositLogs = cached ? cached.depositLogs.concat(newDLogs) : newDLogs;
-  const withdrawnLogs = cached ? cached.withdrawnLogs.concat(newWLogs) : newWLogs;
-  const ragequitLogs = cached ? (cached.ragequitLogs || []).concat(newRLogs) : newRLogs;
+  // Re-read cache after await to avoid overwriting concurrent writes (e.g. leaf data from a parallel call)
+  const live = _ppwEventCache[asset];
+  const depositLogs = (live || cached) ? ((live || cached).depositLogs || []).concat(newDLogs) : newDLogs;
+  const withdrawnLogs = (live || cached) ? ((live || cached).withdrawnLogs || []).concat(newWLogs) : newWLogs;
+  const ragequitLogs = (live || cached) ? ((live || cached).ragequitLogs || []).concat(newRLogs) : newRLogs;
+  // For leafLogs: when this call includes leaves, merge new fetched leaves onto the live cache;
+  // when it does NOT include leaves, preserve whatever leafLogs the live cache already has.
   const leafLogs = includeLeaves
-    ? ((cached?.leafLogs || []).concat(newLLogs))
-    : (cached?.leafLogs || []);
+    ? ((live?.leafLogs || cached?.leafLogs || []).concat(newLLogs))
+    : (live?.leafLogs || cached?.leafLogs || []);
 
   _ppwEventCache[asset] = {
     depositLogs,
     withdrawnLogs,
     ragequitLogs,
     leafLogs,
-    upToBlock: needsBaseFetch ? latestBlock : (cached?.upToBlock ?? latestBlock),
+    upToBlock: needsBaseFetch ? latestBlock : (live?.upToBlock ?? cached?.upToBlock ?? latestBlock),
     leafUpToBlock: includeLeaves
-      ? (needsLeafFetch ? latestBlock : (leafUpToBlock ?? latestBlock))
-      : (leafUpToBlock ?? null),
+      ? (needsLeafFetch ? latestBlock : (live?.leafUpToBlock ?? leafUpToBlock ?? latestBlock))
+      : (live?.leafUpToBlock ?? leafUpToBlock ?? null),
   };
   return { depositLogs, withdrawnLogs, ragequitLogs, leafLogs: includeLeaves ? leafLogs : [] };
 }
@@ -9486,15 +9492,11 @@ async function ppResolveNextSafeDepositIndex(asset, scope, keys, address = _conn
     });
     const recoveredIndex = legacyScan.migratedCount + safeScan.results.length;
     const reservationState = await ppResolvePendingDepositReservations(address, scope, recoveredIndex);
-    if (reservationState.pendingIndex != null) {
-      throw new Error('Previous Privacy Pool deposit is still pending confirmation');
-    }
     return reservationState.nextIndex;
   } catch (err) {
-    if (/pending confirmation/i.test(String(err?.message || err || ''))) throw err;
     console.warn('Privacy: failed to recover safe deposit index', err);
     const details = err?.message ? ': ' + err.message : '';
-    throw new Error('Could not recover safe deposit index' + details);
+    throw new Error('Could not load Privacy Pools account' + details);
   }
 }
 
@@ -9544,7 +9546,7 @@ function ppResolveNextWithdrawalIndex(masterNullifier, scope, label, noteNullifi
 async function ppEnsureMasterKeys() {
   if (_ppMasterKeys && (!_connectedAddress || _ppMasterKeys.address === _connectedAddress)) return _ppMasterKeys;
   if (!_signer || !_connectedAddress) {
-    throw new Error('Connect wallet to derive Privacy Pool keys.');
+    throw new Error('Connect wallet and sign to access your Privacy Pools account.');
   }
   const mnemonic = await ppDeriveWalletSeed(_signer, _connectedAddress);
   _ppMasterKeys = {
@@ -10659,7 +10661,7 @@ async function ppDeposit() {
         return await wstPF.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
       });
       if (routerToEPAllow < depositAmount) {
-        showStatus('Router lacks wstETH allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.', 'error');
+        showStatus('Router lacks wstETH allowance to the Privacy Pools entrypoint. Contact the zFi team to configure router approval.', 'error');
         return;
       }
 
@@ -10688,7 +10690,7 @@ async function ppDeposit() {
         setText(btn, 'Confirm in wallet...');
         tx = await wcTransaction(
           _signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: amount }),
-          'Confirm ETH \u2192 wstETH \u2192 Privacy Pool deposit'
+          'Confirm ETH \u2192 wstETH \u2192 Privacy Pools deposit'
         );
       } catch (err) {
         ppClearPendingDepositIndex(_connectedAddress, scope, depositIdx);
@@ -10713,7 +10715,7 @@ async function ppDeposit() {
       if (receipt && receipt.status === 1) {
         ppConfirmPendingDepositIndex(_connectedAddress, scope, depositIdx, tx.hash);
         const routeLabel = useLido ? 'Lido' : 'DEX';
-        showStatus(`Zap complete! ETH staked via ${routeLabel} \u2192 wstETH deposited to Privacy Pool.`, 'success');
+        showStatus(`Zap complete! ETH staked via ${routeLabel} \u2192 wstETH deposited to Privacy Pools.`, 'success');
       } else if (receipt && receipt.status === 0) {
         ppClearPendingDepositIndex(_connectedAddress, scope, depositIdx);
         showStatus('Transaction may have failed. Check Etherscan.', 'error');
@@ -10829,7 +10831,7 @@ async function ppDeposit() {
         return await tokenPreflight.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
       });
       if (routerToEPAllowance < amount) {
-        showStatus(`Router lacks ${tokenLabel} allowance to Privacy Pool entrypoint. Contact the zFi team to configure router approval.`, 'error');
+        showStatus(`Router lacks ${tokenLabel} allowance to the Privacy Pools entrypoint. Contact the zFi team to configure router approval.`, 'error');
         return;
       }
 
@@ -10849,7 +10851,7 @@ async function ppDeposit() {
         const ppMulticall = ROUTER_IFACE.encodeFunctionData('multicall', [[...permitPrefix, routerPull, executeCall, sweepCall]]);
         tx = await wcTransaction(
           _signer.sendTransaction({ to: ZROUTER_ADDRESS, data: ppMulticall, value: 0n }),
-          `Confirm ${tokenLabel} Privacy Pool deposit`
+          `Confirm ${tokenLabel} Privacy Pools deposit`
         );
       } catch (err) {
         ppClearPendingDepositIndex(_connectedAddress, scope, depositIdx);
@@ -10867,7 +10869,7 @@ async function ppDeposit() {
         setText(btn, 'Confirm in wallet...');
         tx = await wcTransaction(
           ep['deposit(uint256)'](precommitment, { value: amount }),
-          'Confirm Privacy Pool deposit'
+          'Confirm Privacy Pools deposit'
         );
       } catch (err) {
         ppClearPendingDepositIndex(_connectedAddress, scope, depositIdx);
@@ -10910,8 +10912,7 @@ async function ppDeposit() {
       'PrecommitmentAlreadyUsed': 'This precommitment has already been used. Try a new deposit.',
       'InsufficientAllowance': 'Insufficient token allowance. Please approve spending first.',
       'InsufficientBalance': 'Insufficient balance for this deposit amount.',
-      'Previous Privacy Pool deposit is still pending confirmation': 'A previous Privacy Pool deposit is still pending. Wait for confirmation before depositing again.',
-      'Could not recover safe deposit index': 'Could not sync your Privacy Pool account history yet. Retry before depositing.',
+      'Could not load Privacy Pools account': 'Could not load your Privacy Pools account. Try again.',
     };
     let decoded = false;
     for (const [key, msg] of Object.entries(ppDepositErrors)) {
@@ -10974,9 +10975,19 @@ const PP_VERIFIER_ABI = [
 const PP_MAX_TREE_DEPTH = 32;
 const PP_WITHDRAW_WASM = "https://privacypools.com/artifacts/withdraw.wasm";
 const PP_WITHDRAW_ZKEY = "https://privacypools.com/artifacts/withdraw.zkey";
-const PP_MT_LEAVES_API = 'https://api.0xbow.io/1/public/mt-leaves';
+const PP_ASP_API_BASE = 'https://api.0xbow.io/1/public';
+const PP_MT_LEAVES_API = PP_ASP_API_BASE + '/mt-leaves';
+const PP_DEPOSITS_BY_LABEL_API = PP_ASP_API_BASE + '/deposits-by-label';
 const PP_MT_LEAVES_CACHE_TTL_MS = 30_000;
 const PP_RELAYER_DETAILS_CACHE_TTL_MS = 60_000;
+const PP_REVIEW_STATUS = Object.freeze({
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DECLINED: 'declined',
+  EXITED: 'exited',
+  SPENT: 'spent',
+  POI_REQUIRED: 'poi_required',
+});
 
 let _ppwNote = null;
 let _ppwMode = 'relay'; // 'direct' or 'relay'
@@ -11057,6 +11068,189 @@ async function ppFetchMtLeaves(scope, forceRefresh = false) {
     }
     throw err;
   }
+}
+
+async function ppFetchDepositsByLabel(scope, labels) {
+  const scopeKey = String(scope);
+  const uniqueLabels = Array.from(new Set((Array.isArray(labels) ? labels : [])
+    .filter(label => label != null)
+    .map(label => String(label))));
+  if (!uniqueLabels.length) return [];
+
+  const resp = await fetch(PP_DEPOSITS_BY_LABEL_API, {
+    headers: {
+      'X-Pool-Scope': scopeKey,
+      'X-Labels': uniqueLabels.join(','),
+    }
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const apiData = await resp.json();
+  if (!Array.isArray(apiData)) {
+    throw new Error('Invalid deposits-by-label response');
+  }
+  return apiData;
+}
+
+function ppNormalizeReviewStatus(status) {
+  switch (String(status || '').toLowerCase()) {
+    case PP_REVIEW_STATUS.APPROVED:
+      return PP_REVIEW_STATUS.APPROVED;
+    case PP_REVIEW_STATUS.DECLINED:
+      return PP_REVIEW_STATUS.DECLINED;
+    case PP_REVIEW_STATUS.EXITED:
+      return PP_REVIEW_STATUS.EXITED;
+    case PP_REVIEW_STATUS.SPENT:
+      return PP_REVIEW_STATUS.SPENT;
+    case PP_REVIEW_STATUS.POI_REQUIRED:
+      return PP_REVIEW_STATUS.POI_REQUIRED;
+    case PP_REVIEW_STATUS.PENDING:
+    default:
+      return PP_REVIEW_STATUS.PENDING;
+  }
+}
+
+function ppLoadedAccountLabelKey(label) {
+  return label == null ? null : BigInt(label).toString();
+}
+
+function ppApplyLoadedAccountReviewStatuses(rows, aspLeaves, depositsByLabel, { statusFetchFailed = false } = {}) {
+  const aspLeafSet = new Set((Array.isArray(aspLeaves) ? aspLeaves : []).map(leaf => BigInt(leaf).toString()));
+  const depositMap = new Map();
+  for (const deposit of Array.isArray(depositsByLabel) ? depositsByLabel : []) {
+    if (deposit?.label == null) continue;
+    depositMap.set(String(deposit.label), deposit);
+  }
+
+  const missingLabels = new Set();
+  const nextRows = (Array.isArray(rows) ? rows : []).map((row) => {
+    const labelKey = ppLoadedAccountLabelKey(row.label);
+    const deposit = labelKey ? depositMap.get(labelKey) : null;
+    const timestamp = deposit?.timestamp ?? null;
+
+    if (row.ragequit) {
+      return {
+        ...row,
+        pending: false,
+        reviewStatus: PP_REVIEW_STATUS.EXITED,
+        isValid: false,
+        isWithdrawable: false,
+        timestamp,
+      };
+    }
+
+    if (row.source === 'spent') {
+      return {
+        ...row,
+        pending: false,
+        reviewStatus: PP_REVIEW_STATUS.SPENT,
+        isValid: false,
+        isWithdrawable: false,
+        timestamp,
+      };
+    }
+
+    let reviewStatus = PP_REVIEW_STATUS.PENDING;
+    if (row.currentCommitmentInserted !== true) {
+      reviewStatus = PP_REVIEW_STATUS.PENDING;
+    } else if (statusFetchFailed) {
+      reviewStatus = PP_REVIEW_STATUS.PENDING;
+    } else if (!deposit) {
+      if (labelKey) missingLabels.add(labelKey);
+      reviewStatus = PP_REVIEW_STATUS.PENDING;
+    } else {
+      reviewStatus = ppNormalizeReviewStatus(deposit.reviewStatus);
+      if (reviewStatus === PP_REVIEW_STATUS.APPROVED && (!labelKey || !aspLeafSet.has(labelKey))) {
+        reviewStatus = PP_REVIEW_STATUS.PENDING;
+      }
+    }
+
+    const amount = row.value != null ? BigInt(row.value) : 0n;
+    const isValid = reviewStatus === PP_REVIEW_STATUS.APPROVED;
+    return {
+      ...row,
+      pending: reviewStatus === PP_REVIEW_STATUS.PENDING,
+      reviewStatus,
+      isValid,
+      isWithdrawable: isValid && amount > 0n,
+      timestamp,
+    };
+  });
+
+  return { rows: nextRows, missingLabels: Array.from(missingLabels) };
+}
+
+function ppGetLoadedAccountStatusLabel(status) {
+  switch (ppNormalizeReviewStatus(status)) {
+    case PP_REVIEW_STATUS.APPROVED:
+      return 'Approved';
+    case PP_REVIEW_STATUS.DECLINED:
+      return 'Declined';
+    case PP_REVIEW_STATUS.EXITED:
+      return 'Exited';
+    case PP_REVIEW_STATUS.SPENT:
+      return 'Spent';
+    case PP_REVIEW_STATUS.POI_REQUIRED:
+      return 'POA Needed';
+    case PP_REVIEW_STATUS.PENDING:
+    default:
+      return 'Pending';
+  }
+}
+
+function ppGetLoadedAccountStatusColor(status) {
+  switch (ppNormalizeReviewStatus(status)) {
+    case PP_REVIEW_STATUS.APPROVED:
+      return 'var(--green, #22c55e)';
+    case PP_REVIEW_STATUS.DECLINED:
+      return 'var(--remove-fg, #c0392b)';
+    case PP_REVIEW_STATUS.EXITED:
+      return '#e67e22';
+    case PP_REVIEW_STATUS.SPENT:
+      return 'var(--fg-muted)';
+    case PP_REVIEW_STATUS.POI_REQUIRED:
+      return 'var(--remove-fg, #c0392b)';
+    case PP_REVIEW_STATUS.PENDING:
+    default:
+      return 'var(--fg-muted)';
+  }
+}
+
+function ppGetLoadedAccountStatusHintHtml(row) {
+  const status = ppNormalizeReviewStatus(row?.reviewStatus);
+  if (status === PP_REVIEW_STATUS.POI_REQUIRED) {
+    return 'Proof of Association required. Continue at <a href="https://tornado.0xbow.io" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">tornado.0xbow.io</a>.';
+  }
+  if (status === PP_REVIEW_STATUS.PENDING) {
+    return row?.currentCommitmentInserted === true
+      ? 'Waiting for ASP review / inclusion.'
+      : 'Waiting for pool inclusion.';
+  }
+  if (status === PP_REVIEW_STATUS.DECLINED) {
+    return 'This Pool Account is not withdrawable.';
+  }
+  return '';
+}
+
+function ppGetLoadedAccountBlockedReason(row) {
+  const status = ppNormalizeReviewStatus(row?.reviewStatus);
+  if (status === PP_REVIEW_STATUS.POI_REQUIRED) {
+    return 'This Pool Account requires Proof of Association before withdrawal. Visit tornado.0xbow.io to continue.';
+  }
+  if (status === PP_REVIEW_STATUS.DECLINED) {
+    return 'This Pool Account was declined and cannot be withdrawn.';
+  }
+  if (status === PP_REVIEW_STATUS.PENDING) {
+    return row?.currentCommitmentInserted === true
+      ? 'This Pool Account is still pending ASP review / inclusion.'
+      : 'This Pool Account is still pending pool inclusion.';
+  }
+  if (status === PP_REVIEW_STATUS.EXITED) {
+    return 'This Pool Account has already been exited.';
+  }
+  if (status === PP_REVIEW_STATUS.SPENT) {
+    return 'This Pool Account has already been spent.';
+  }
+  return 'This Pool Account is not available for withdrawal.';
 }
 
 async function ppEnsureSnarkjsLoaded() {
@@ -11206,13 +11400,13 @@ async function ppEnsureAssetConfig(asset) {
   }
 }
 
-function ppwDecodeRelayFeeBps(withdrawalData) {
+function ppwDecodeRelayWithdrawalData(withdrawalData) {
   try {
     const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
       ['address', 'address', 'uint256'],
       withdrawalData
     );
-    return Number(decoded[2]);
+    return { recipient: decoded[0], relayer: decoded[1], feeBps: Number(decoded[2]) };
   } catch {
     return null;
   }
@@ -11417,7 +11611,7 @@ function ppwOnRecipientInput() {
 }
 
 function ppwCanSubmitWithdrawal() {
-  if (!_ppwNote) return false;
+  if (!_ppwNote || _ppwNote.isWithdrawable !== true || ppNormalizeReviewStatus(_ppwNote.reviewStatus) !== PP_REVIEW_STATUS.APPROVED) return false;
   const resolvedRecipient = ppwGetRecipientAddress();
   if (_ppwMode === 'relay') return !!resolvedRecipient;
   return !!_connectedAddress && !!_signer;
@@ -11672,7 +11866,7 @@ async function ppwLoadDeposits() {
 
   // Guard: wallet required
   if (!_signer || !_connectedAddress) {
-    showStatus('Connect wallet to load deposits', 'error');
+    showStatus('Connect wallet and sign to access your Privacy Pools account.', 'error');
     return;
   }
 
@@ -11715,11 +11909,6 @@ async function ppwLoadDeposits() {
     const allEvents = await Promise.all(eventPromises);
     if (_ppwLoadAbort.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     _ppwLoadWarnings = allEvents.filter(x => x.loadWarning).map(x => x.loadWarning);
-    if (_ppwLoadWarnings.length) {
-      const warningAssets = _ppwLoadWarnings.map(w => w.asset).join(', ');
-      showStatus('Privacy Pool history may be incomplete right now for ' + warningAssets + '. Retry to refresh.', 'error');
-    }
-
     // Step 3: process each asset's events and build Pool Accounts
     for (const { asset, depositLogs, withdrawnLogs, ragequitLogs, leafLogs } of allEvents) {
       if (_ppwLoadAbort.signal.aborted) break;
@@ -11777,7 +11966,39 @@ async function ppwLoadDeposits() {
         abortSignal: _ppwLoadAbort.signal,
       });
 
-      _ppwLoadResults.push(...legacyScan.results, ...safeScan.results);
+      let assetResults = [...legacyScan.results, ...safeScan.results];
+      if (assetResults.length) {
+        const labels = Array.from(new Set(assetResults
+          .map(row => ppLoadedAccountLabelKey(row.label))
+          .filter(Boolean)));
+        let aspLeaves = [];
+        let depositsByLabel = [];
+        let statusFetchFailed = false;
+
+        try {
+          if (labels.length) {
+            const [mtData, depositData] = await Promise.all([
+              ppFetchMtLeaves(scope),
+              ppFetchDepositsByLabel(scope, labels),
+            ]);
+            aspLeaves = mtData?.aspLeaves || [];
+            depositsByLabel = Array.isArray(depositData) ? depositData : [];
+          }
+        } catch (statusErr) {
+          statusFetchFailed = true;
+          _ppwLoadWarnings.push({ asset, kind: 'review-status' });
+          console.warn(`Load: failed to fetch ${asset} review status data:`, statusErr);
+        }
+
+        const statusApplied = ppApplyLoadedAccountReviewStatuses(assetResults, aspLeaves, depositsByLabel, { statusFetchFailed });
+        if (!statusFetchFailed && statusApplied.missingLabels.length) {
+          _ppwLoadWarnings.push({ asset, kind: 'review-status-missing' });
+          console.warn(`Load: missing ${asset} review status for labels:`, statusApplied.missingLabels);
+        }
+        assetResults = statusApplied.rows;
+      }
+
+      _ppwLoadResults.push(...assetResults);
     }
 
     _ppwLoadResults.sort(ppCompareLoadedAccounts);
@@ -11807,8 +12028,7 @@ function ppwRenderPoolAccounts() {
 
   if (_ppwLoadResults.length === 0) {
     if (_ppwLoadWarnings.length) {
-      const warningAssets = _ppwLoadWarnings.map(w => escText(w.asset)).join(', ');
-      el.innerHTML = '<div style="font-size:11px;color:#e67e22;padding:8px;border:1px solid var(--border-muted);background:var(--surface)">Could not fully refresh Privacy Pool history for ' + warningAssets + '. Results may be incomplete — retry.</div>';
+      el.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px;border:1px solid var(--border-muted);background:var(--surface)">Could not load your Privacy Pools activity. Try again.</div>';
     } else {
       el.innerHTML = '<div style="font-size:11px;color:var(--fg-muted);padding:8px;border:1px solid var(--border-muted);background:var(--surface)">No pool accounts found for this wallet.</div>';
     }
@@ -11820,11 +12040,12 @@ function ppwRenderPoolAccounts() {
   const totals = {};
   const pendingTotals = {};
   for (const r of _ppwLoadResults) {
+    const status = ppNormalizeReviewStatus(r.reviewStatus);
     if (r.value && r.source !== 'spent') {
       const amt = BigInt(r.value);
-      if (r.pending) {
+      if (status === PP_REVIEW_STATUS.PENDING) {
         pendingTotals[r.asset] = (pendingTotals[r.asset] || 0n) + amt;
-      } else {
+      } else if (status === PP_REVIEW_STATUS.APPROVED) {
         totals[r.asset] = (totals[r.asset] || 0n) + amt;
       }
     }
@@ -11833,10 +12054,6 @@ function ppwRenderPoolAccounts() {
   const pendingStr = Object.entries(pendingTotals).map(([a, v]) => escText(fmt(ppFormatAmountWei(v, a))) + ' ' + escText(a)).join(', ');
 
   let html = '<div style="border:1px solid var(--border-muted);background:var(--surface);padding:8px">';
-  if (_ppwLoadWarnings.length) {
-    const warningAssets = _ppwLoadWarnings.map(w => escText(w.asset)).join(', ');
-    html += '<div style="font-size:10px;color:#e67e22;margin-bottom:6px">History may be incomplete right now for ' + warningAssets + '. Retry to refresh.</div>';
-  }
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
   html += '<div style="font-size:12px;font-weight:600">Pool Accounts</div>';
   let summaryParts = [];
@@ -11848,6 +12065,7 @@ function ppwRenderPoolAccounts() {
   for (let i = 0; i < _ppwLoadResults.length; i++) {
     const r = _ppwLoadResults[i];
     const paLabel = 'PA-' + (i + 1);
+    const status = ppNormalizeReviewStatus(r.reviewStatus);
     const spent = r.source === 'spent';
     const depositTx = r.depositTxHash || r.txHash;
     const txLink = depositTx ? ` <span style="color:var(--fg-dim)">&middot;</span> <a href="https://etherscan.io/tx/${escAttr(depositTx)}" target="_blank" rel="noopener" style="font-size:10px">deposit tx</a>` : '';
@@ -11855,20 +12073,11 @@ function ppwRenderPoolAccounts() {
 
     if (spent) {
       const origStr = r.originalValue ? escText(fmt(ppFormatAmountWei(BigInt(r.originalValue), r.asset))) + ' ' + escText(r.asset) : escText(r.asset);
+      const spentLabel = ppGetLoadedAccountStatusLabel(status);
       html += `<div style="padding:8px 0;opacity:0.5;${border}">
         <div>
           <div style="font-size:12px"><span style="font-weight:600">${escText(paLabel)}</span> <span style="color:var(--fg-dim)">&middot;</span> ${origStr}${txLink}</div>
-          <div style="font-size:10px;color:var(--fg-muted);font-weight:600;margin-top:2px">Spent</div>
-        </div>
-      </div>`;
-    } else if (r.pending) {
-      const amtStr = r.value ? escText(fmt(ppFormatAmountWei(BigInt(r.value), r.asset))) + ' ' + escText(r.asset) : escText(r.asset);
-      html += `<div style="padding:8px 0;${border}">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div style="min-width:0">
-            <div style="font-size:12px"><span style="font-weight:600">${escText(paLabel)}</span> <span style="color:var(--fg-dim)">&middot;</span> ${amtStr}${txLink}</div>
-            <div style="font-size:10px;color:var(--fg-muted);font-weight:600;margin-top:2px">Pending\u2026</div>
-          </div>
+          <div style="font-size:10px;color:${ppGetLoadedAccountStatusColor(status)};font-weight:600;margin-top:2px">${spentLabel}</div>
         </div>
       </div>`;
     } else {
@@ -11876,22 +12085,35 @@ function ppwRenderPoolAccounts() {
       const sourceHint = r.source === 'change'
         ? ' <span style="font-size:10px;color:var(--fg-muted)">from partial withdrawal</span>'
         : '';
+      const statusLabel = ppGetLoadedAccountStatusLabel(status);
+      const statusHint = ppGetLoadedAccountStatusHintHtml(r);
+      const actionHint = statusHint
+        ? `<div style="font-size:10px;color:var(--fg-muted);margin-top:4px">${statusHint}</div>`
+        : '';
+      const actionBtn = r.isWithdrawable
+        ? `<button class="swap-btn" onclick="ppwSelectAccount(${i})" style="flex-shrink:0;font-size:11px;padding:4px 12px;margin:0;width:auto">Withdraw</button>`
+        : '';
       html += `<div style="padding:8px 0;${border}">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div style="min-width:0">
             <div style="font-size:12px"><span style="font-weight:600">${escText(paLabel)}</span> <span style="color:var(--fg-dim)">&middot;</span> ${amtStr}${txLink}</div>
-            <div style="font-size:10px;color:var(--green, #22c55e);font-weight:600;margin-top:2px">Available${sourceHint}</div>
+            <div style="font-size:10px;color:${ppGetLoadedAccountStatusColor(status)};font-weight:600;margin-top:2px">${statusLabel}${sourceHint}</div>
+            ${actionHint}
           </div>
-          <button class="swap-btn" onclick="ppwSelectAccount(${i})" style="flex-shrink:0;font-size:11px;padding:4px 12px;margin:0;width:auto">Withdraw</button>
+          ${actionBtn}
         </div>
       </div>`;
     }
   }
   html += '</div>';
+  if (_ppwLoadWarnings.length) {
+    const warningAssets = Array.from(new Set(_ppwLoadWarnings.map(w => w.asset))).join(', ');
+    html += '<div style="font-size:11px;color:#e67e22;padding:6px 8px;margin-top:8px;border:1px solid #e67e22;background:var(--surface)">Some pool data could not be loaded (' + escText(warningAssets) + '). Balances and statuses may be incomplete.</div>';
+  }
   el.innerHTML = html;
   setShown(el, true);
 
-  if (_ppwLoadResults.some(r => r && r.source !== 'spent' && !r.pending)) {
+  if (_ppwLoadResults.some(r => r && r.isWithdrawable)) {
     ppScheduleWithdrawPreload();
   }
 }
@@ -11917,6 +12139,10 @@ function ppwResetDraftState() {
 function ppwSelectAccount(index) {
   const r = _ppwLoadResults[index];
   if (!r) return;
+  if (!r.isWithdrawable) {
+    showStatus(ppGetLoadedAccountBlockedReason(r), 'error');
+    return;
+  }
   _ppwSelectedAccountLabel = 'PA-' + (index + 1);
 
   // Populate _ppwNote directly from loaded data (no sensitive data written to DOM)
@@ -11931,6 +12157,10 @@ function ppwSelectAccount(index) {
     value: r.value != null ? BigInt(r.value) : null,
     label: r.label != null ? BigInt(r.label) : null,
     commitment: r.commitment ?? null,
+    reviewStatus: ppNormalizeReviewStatus(r.reviewStatus),
+    isValid: !!r.isValid,
+    isWithdrawable: !!r.isWithdrawable,
+    timestamp: r.timestamp ?? null,
   };
 
   ppwResetDraftState();
@@ -11989,6 +12219,10 @@ async function ppwWithdraw() {
 
     // Validate inputs
     if (!_ppwNote) { showStatus('Select a Pool Account first', 'error'); return; }
+    if (_ppwNote.isWithdrawable !== true || ppNormalizeReviewStatus(_ppwNote.reviewStatus) !== PP_REVIEW_STATUS.APPROVED) {
+      showStatus(ppGetLoadedAccountBlockedReason(_ppwNote), 'error');
+      return;
+    }
     const leafIndex = _ppwNote.leafIndex;
     const value = _ppwNote.value || 0n;
     const label = _ppwNote.label || 0n;
@@ -12008,7 +12242,7 @@ async function ppwWithdraw() {
     const isPartialRequested = withdrawnValue < value;
     const canDeriveDeterministicKeys = (_ppMasterKeys && (!_connectedAddress || _ppMasterKeys.address === _connectedAddress)) || (_signer && _connectedAddress);
     if (isPartialRequested && !canDeriveDeterministicKeys) {
-      showStatus('Connect wallet to derive deterministic withdrawal keys.', 'error');
+      showStatus('Connect wallet and sign to access your Privacy Pools account.', 'error');
       return;
     }
 
@@ -12127,7 +12361,7 @@ async function ppwWithdraw() {
         // R-4: Protocol accepts a window of recent roots, not only currentRoot().
         // Warn but allow proceed — the on-chain verifier will reject if truly invalid.
         log('<b>Warning:</b> State tree root differs from onchain currentRoot (local 0x' + stateTree.root.toString(16).slice(0, 16) + '... vs onchain 0x' + onChainStateRoot.toString(16).slice(0, 16) + '...). This may still be accepted if within the recent root window.');
-        showStatus('State root differs from latest onchain root. Proceeding — withdrawal may still succeed if root is within accepted window. If it fails, retry in a few minutes.', 'error');
+        showStatus('State root slightly behind onchain. This is normal — withdrawal will likely succeed. If not, retry in a few minutes.', 'error');
       } else {
         log('State root verified against onchain pool.currentRoot().');
       }
@@ -12200,12 +12434,20 @@ async function ppwWithdraw() {
       const quote = await ppwRelayerQuote(relayChainId, withdrawnValue, relayAssetAddr, recipient, relayExtraGas);
       if (!quote || !quote.feeCommitment) throw new Error('Invalid quote response');
 
-      // Validate fee against on-chain maxRelayFeeBPS (fail-closed).
-      // Use decoded fee from signed withdrawalData as the authoritative source.
-      const decodedFeeBps = ppwDecodeRelayFeeBps(quote.feeCommitment.withdrawalData);
+      // Validate withdrawalData payload against local inputs (fail-closed).
+      // Decode recipient, relayer, and fee from the signed withdrawalData.
+      const decoded = ppwDecodeRelayWithdrawalData(quote.feeCommitment.withdrawalData);
+      if (!decoded) {
+        throw new Error('Could not decode relay withdrawalData.');
+      }
+      // Verify recipient in withdrawalData matches our locally resolved recipient
+      if (decoded.recipient.toLowerCase() !== recipient.toLowerCase()) {
+        throw new Error('Relay withdrawalData recipient mismatch: expected ' + recipient.slice(0, 10) + '... but got ' + decoded.recipient.slice(0, 10) + '.... Aborting for safety.');
+      }
+      const decodedFeeBps = decoded.feeBps;
       const advertisedFeeBps = quote.feeBPS ?? quote.feeCommitment?.feeBPS;
-      if (decodedFeeBps == null || !Number.isFinite(decodedFeeBps) || decodedFeeBps < 0) {
-        throw new Error('Could not decode fee from relay withdrawalData.');
+      if (!Number.isFinite(decodedFeeBps) || decodedFeeBps < 0) {
+        throw new Error('Invalid fee in relay withdrawalData.');
       }
       if (advertisedFeeBps != null && Number(advertisedFeeBps) !== decodedFeeBps) {
         throw new Error('Relay fee mismatch: advertised ' + advertisedFeeBps + ' bps but withdrawalData encodes ' + decodedFeeBps + ' bps. Aborting.');
@@ -12266,7 +12508,8 @@ async function ppwWithdraw() {
         _ppwNote.depositIndex
       );
       if (idxResolution.nextIndex == null) {
-        showStatus('Could not determine withdrawal index lineage. To avoid unsafe nullifier reuse, partial withdrawal is blocked. Reconnect the original wallet and try again.', 'error');
+        console.error('Privacy: loaded account is missing partial-withdraw metadata', { note: _ppwNote, idxResolution });
+        showStatus('Could not prepare withdrawal. Refresh My Pools and try again.', 'error');
         return;
       }
       changeIdx = idxResolution.nextIndex;
@@ -12525,7 +12768,7 @@ async function ppwWithdraw() {
       const poolSigner = new ethers.Contract(poolAddress, PP_POOL_ABI, _signer);
       const tx = await wcTransaction(
         poolSigner.withdraw([recipient, withdrawalData], [pA, pB, pC, pubSigs]),
-        'Confirm Privacy Pool withdrawal'
+        'Confirm Privacy Pools withdrawal'
       );
       txHash = tx.hash;
       log('Transaction submitted: ' + txHash);

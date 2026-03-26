@@ -1033,6 +1033,152 @@ test('change note: missing leafIndex is null (not undefined)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  Relay withdrawalData recipient validation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+console.log('\n── Relay withdrawalData validation ──');
+
+// Re-implement the decode function matching dapp/index.html ppwDecodeRelayWithdrawalData
+function ppwDecodeRelayWithdrawalData(withdrawalDataHex) {
+  try {
+    // ABI decode: (address recipient, address relayer, uint256 feeBps)
+    // Each field is 32 bytes: address is left-padded, uint256 is right-padded
+    const hex = withdrawalDataHex.startsWith('0x') ? withdrawalDataHex.slice(2) : withdrawalDataHex;
+    if (hex.length < 192) return null; // 3 x 64 hex chars
+    const recipient = '0x' + hex.slice(24, 64); // first 32 bytes, take last 20
+    const relayer = '0x' + hex.slice(88, 128);  // second 32 bytes, take last 20
+    const feeBps = Number(BigInt('0x' + hex.slice(128, 192)));
+    return { recipient, relayer, feeBps };
+  } catch {
+    return null;
+  }
+}
+
+function encodeWithdrawalData(recipient, relayer, feeBps) {
+  const pad = (addr) => addr.slice(2).toLowerCase().padStart(64, '0');
+  const feeHex = BigInt(feeBps).toString(16).padStart(64, '0');
+  return '0x' + pad(recipient) + pad(relayer) + feeHex;
+}
+
+test('relay decode: extracts recipient, relayer, and feeBps correctly', () => {
+  const recipient = '0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa';
+  const relayer = '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB';
+  const data = encodeWithdrawalData(recipient, relayer, 50);
+  const decoded = ppwDecodeRelayWithdrawalData(data);
+  assert.ok(decoded);
+  assert.equal(decoded.recipient.toLowerCase(), recipient.toLowerCase());
+  assert.equal(decoded.relayer.toLowerCase(), relayer.toLowerCase());
+  assert.equal(decoded.feeBps, 50);
+});
+
+test('relay decode: returns null on truncated data', () => {
+  assert.equal(ppwDecodeRelayWithdrawalData('0x1234'), null);
+});
+
+test('relay validate: mismatched recipient is caught', () => {
+  const localRecipient = '0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa';
+  const attackerRecipient = '0xdEaDbEeFdEaDbEeFdEaDbEeFdEaDbEeFdEaDbEeF';
+  const data = encodeWithdrawalData(attackerRecipient, '0x' + '00'.repeat(20), 50);
+  const decoded = ppwDecodeRelayWithdrawalData(data);
+  assert.ok(decoded);
+  // This is the validation the dapp now performs before proving
+  const recipientMatches = decoded.recipient.toLowerCase() === localRecipient.toLowerCase();
+  assert.equal(recipientMatches, false, 'should reject mismatched recipient');
+});
+
+test('relay validate: matching recipient passes', () => {
+  const localRecipient = '0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa';
+  const data = encodeWithdrawalData(localRecipient, '0x' + '00'.repeat(20), 100);
+  const decoded = ppwDecodeRelayWithdrawalData(data);
+  assert.ok(decoded);
+  const recipientMatches = decoded.recipient.toLowerCase() === localRecipient.toLowerCase();
+  assert.equal(recipientMatches, true, 'should accept matching recipient');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Wallet disconnect clears withdrawal state
+// ═══════════════════════════════════════════════════════════════════════════════
+
+console.log('\n── Wallet disconnect safety ──');
+
+const PP_REVIEW_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DECLINED: 'declined',
+  POI_REQUIRED: 'poi_required',
+};
+
+function ppwCanSubmitWithdrawal(ppwNote, ppwMode, resolvedRecipient, connectedAddress, signer) {
+  if (!ppwNote || ppwNote.isWithdrawable !== true || ppwNote.reviewStatus !== PP_REVIEW_STATUS.APPROVED) return false;
+  if (ppwMode === 'relay') return !!resolvedRecipient;
+  return !!connectedAddress && !!signer;
+}
+
+test('approved account can submit in relay mode with a resolved recipient', () => {
+  assert.equal(
+    ppwCanSubmitWithdrawal(
+      { value: 1n, reviewStatus: PP_REVIEW_STATUS.APPROVED, isWithdrawable: true },
+      'relay',
+      '0xabc',
+      null,
+      null,
+    ),
+    true,
+  );
+});
+
+test('pending account is blocked before submission', () => {
+  assert.equal(
+    ppwCanSubmitWithdrawal(
+      { value: 1n, reviewStatus: PP_REVIEW_STATUS.PENDING, isWithdrawable: false },
+      'relay',
+      '0xabc',
+      null,
+      null,
+    ),
+    false,
+  );
+});
+
+test('declined and poi-required accounts are blocked before submission', () => {
+  assert.equal(
+    ppwCanSubmitWithdrawal(
+      { value: 1n, reviewStatus: PP_REVIEW_STATUS.DECLINED, isWithdrawable: false },
+      'relay',
+      '0xabc',
+      null,
+      null,
+    ),
+    false,
+  );
+  assert.equal(
+    ppwCanSubmitWithdrawal(
+      { value: 1n, reviewStatus: PP_REVIEW_STATUS.POI_REQUIRED, isWithdrawable: false },
+      'relay',
+      '0xabc',
+      null,
+      null,
+    ),
+    false,
+  );
+});
+
+test('disconnect: ppwCanSubmitWithdrawal requires _ppwNote', () => {
+  // With note set (pre-disconnect): relay mode can submit with just a recipient
+  assert.equal(ppwCanSubmitWithdrawal({ value: 1n, reviewStatus: PP_REVIEW_STATUS.APPROVED, isWithdrawable: true }, 'relay', '0xabc', null, null), true);
+  // After disconnect clears note: cannot submit
+  assert.equal(ppwCanSubmitWithdrawal(null, 'relay', '0xabc', null, null), false);
+});
+
+test('disconnect: relay mode blocked without note even with resolved recipient', () => {
+  assert.equal(ppwCanSubmitWithdrawal(null, 'relay', '0xdeadbeef', null, null), false);
+});
+
+test('disconnect: direct mode blocked without note even with new wallet', () => {
+  assert.equal(ppwCanSubmitWithdrawal(null, 'direct', null, '0xnewwallet', {}), false);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  Summary
 // ═══════════════════════════════════════════════════════════════════════════════
 
