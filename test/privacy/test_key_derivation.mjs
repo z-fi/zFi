@@ -53,9 +53,15 @@ function ppDeriveWithdrawalKeys(masterNullifier, masterSecret, label, withdrawal
   return { nullifier, secret, precommitment };
 }
 
-// Master key derivation truncation step (same as dapp + SDK's bytesToNumber())
-function truncateHdKey(hexKey) {
-  return BigInt(Number(BigInt(hexKey)));
+function deriveHdSeed(hexKey, mode = 'safe') {
+  const hdKey = BigInt(hexKey);
+  return mode === 'legacy' ? BigInt(Number(hdKey)) : hdKey;
+}
+
+function deriveMasterKeysFromHdKeys(key1, key2, mode = 'safe') {
+  const masterNullifier = poseidon1([deriveHdSeed(key1, mode)]);
+  const masterSecret = poseidon1([deriveHdSeed(key2, mode)]);
+  return { masterNullifier, masterSecret };
 }
 
 // ── BN254 scalar field ───────────────────────────────────────────────────────
@@ -289,37 +295,50 @@ test('deposit scope (pool address) != withdrawal label (commitment hash) guarant
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  6. HD key truncation (Number() lossy conversion)
+//  6. HD key derivation compatibility
 // ═══════════════════════════════════════════════════════════════════════════════
 
-console.log('\n── HD key truncation (SDK compatibility) ──');
+console.log('\n── HD key derivation (SDK v1.2.0 compatibility) ──');
 
-test('truncateHdKey loses precision for 256-bit keys (matches SDK Number() behavior)', () => {
-  // Simulate a 256-bit HD private key
+test('safe hd seed keeps full 256-bit precision', () => {
   const fakeKey = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
-  const result = truncateHdKey(fakeKey);
-  // The truncated value should be much smaller than the original (~53-bit vs ~256-bit)
-  assert(result < BigInt(fakeKey), 'truncation reduces magnitude');
-  // Truncation should be stable — running poseidon1 on the result should produce a valid field element
-  const master = poseidon1([result]);
-  assert(master > 0n && master < SNARK_SCALAR_FIELD, 'master key in BN254 field');
+  const safeSeed = deriveHdSeed(fakeKey, 'safe');
+  assert.equal(safeSeed, BigInt(fakeKey));
+  assert(safeSeed > BigInt(Number(BigInt(fakeKey))), 'safe seed preserves more precision than legacy truncation');
 });
 
-test('truncated key fed to poseidon1 is deterministic', () => {
+test('legacy hd seed still truncates like bytesToNumber for old accounts', () => {
   const fakeKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-  const truncated = truncateHdKey(fakeKey);
-  const ref = poseidon1([truncated]);
+  const legacySeed = deriveHdSeed(fakeKey, 'legacy');
+  assert.equal(legacySeed, BigInt(Number(BigInt(fakeKey))));
+  const ref = poseidon1([legacySeed]);
   for (let i = 0; i < 50; i++) {
-    assert.equal(poseidon1([truncateHdKey(fakeKey)]), ref);
+    assert.equal(poseidon1([deriveHdSeed(fakeKey, 'legacy')]), ref);
   }
 });
 
-test('different HD keys produce different master keys after truncation', () => {
-  const keyA = '0x1111111111111111111111111111111111111111111111111111111111111111';
-  const keyB = '0x2222222222222222222222222222222222222222222222222222222222222222';
-  const masterA = poseidon1([truncateHdKey(keyA)]);
-  const masterB = poseidon1([truncateHdKey(keyB)]);
-  assert.notEqual(masterA, masterB);
+test('safe and legacy master keys diverge for 256-bit hd keys', () => {
+  const key1 = '0x1111111111111111111111111111111111111111111111111111111111111111';
+  const key2 = '0x2222222222222222222222222222222222222222222222222222222222222222';
+  const safe = deriveMasterKeysFromHdKeys(key1, key2, 'safe');
+  const legacy = deriveMasterKeysFromHdKeys(key1, key2, 'legacy');
+  assert.notEqual(safe.masterNullifier, legacy.masterNullifier);
+  assert.notEqual(safe.masterSecret, legacy.masterSecret);
+  assert(safe.masterNullifier > 0n && safe.masterNullifier < SNARK_SCALAR_FIELD);
+  assert(safe.masterSecret > 0n && safe.masterSecret < SNARK_SCALAR_FIELD);
+  assert(legacy.masterNullifier > 0n && legacy.masterNullifier < SNARK_SCALAR_FIELD);
+  assert(legacy.masterSecret > 0n && legacy.masterSecret < SNARK_SCALAR_FIELD);
+});
+
+test('safe master key derivation is deterministic', () => {
+  const key1 = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const key2 = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const ref = deriveMasterKeysFromHdKeys(key1, key2, 'safe');
+  for (let i = 0; i < 50; i++) {
+    const keys = deriveMasterKeysFromHdKeys(key1, key2, 'safe');
+    assert.equal(keys.masterNullifier, ref.masterNullifier);
+    assert.equal(keys.masterSecret, ref.masterSecret);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -329,6 +348,7 @@ test('different HD keys produce different master keys after truncation', () => {
 console.log('\n── Full pipeline regression ──');
 
 // Hardcoded regression vectors for the full deposit→withdrawal pipeline.
+// These vectors are independent of the HD key derivation mode.
 // masterKeys = poseidon1([42]), poseidon1([43])
 // scope = 0xF241d57C6DebAe225c0F2e6eA1529373C9A9C9fB (ETH pool)
 const PIPELINE = {
