@@ -10860,7 +10860,6 @@ async function ppDeposit() {
     if (hasPendingDepositReservation && depositScope != null && depositIdx != null && !tx?.hash) {
       ppClearPendingDepositIndex(_connectedAddress, depositScope, depositIdx);
     }
-    console.error('ppDeposit error:', e);
     const errStr = String(e?.data || e?.message || e?.reason || e || '');
     const _ppInputAsset = _ppZapMode ? 'ETH' : _ppSelectedAsset;
     const ppDepositErrors = {
@@ -11964,7 +11963,6 @@ async function ppwLoadDeposits() {
     } else if (e.code === 'ACTION_REJECTED' || e.message?.includes('rejected') || e.message?.includes('denied')) {
       showStatus('Signature required to derive deposit keys', 'error');
     } else {
-      console.error('Load error:', e);
       showStatus('Failed to load deposits: ' + (e.shortMessage || e.message), 'error');
       ppwRenderPoolAccounts(); // show partial results
     }
@@ -12793,7 +12791,6 @@ async function ppwWithdraw() {
     }
 
   } catch (e) {
-    console.error('ppwWithdraw error:', e);
     const errStr = String(e?.data || e?.message || e?.reason || e || '');
     const ppErrors = {
       'PrecommitmentAlreadyUsed': 'This deposit has already been used. The precommitment was already spent.',
