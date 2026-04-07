@@ -791,14 +791,14 @@ body.modal-open { overflow: hidden; }
 .coin-summary dd { font-weight:600;margin:0;grid-column:2; }
 .coin-summary dd svg { vertical-align:-1px; }
 
-.coin-tpl-toggle { display:flex;gap:6px;margin-bottom:14px; }
+.coin-tpl-toggle { display:flex;gap:0;margin-bottom:14px; }
 .coin-tpl-btn {
-  flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
-  border:none;border-bottom:2px solid transparent;border-radius:0;
-  background:transparent;color:var(--fg-muted);
-  cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;
+  background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
+  padding:6px 16px;font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-muted);cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;
 }
 .coin-tpl-btn.active { color:var(--fg);border-bottom-color:var(--fg); }
+.coin-tpl-btn:hover:not(.active) { color:var(--fg); }
 .coin-slider-row {
   display:flex;align-items:center;gap:12px;margin-bottom:10px;
 }
@@ -1270,82 +1270,16 @@ body.modal-open { overflow: hidden; }
 
 <div id="coinTab" style="display:none">
 <div class="swap-card">
-  <div class="coin-tpl-toggle" style="margin-bottom:4px">
-    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Coin</button>
+  <div class="coin-tpl-toggle">
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Curve</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('cause')">Cause</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>coin</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.</span></span>
-  </div>
-  <div id="coinLaunchTypeHint" style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">bonding curve &middot; ~5.33 ETH graduation &middot; permanent LP</div>
-
-  <!-- coin illustration (bonding curve) -->
-  <div id="coinCurveIllustration" style="margin-bottom:14px;padding:10px 0">
-    <svg viewBox="0 0 280 56" width="100%" style="display:block;max-width:320px;margin:0 auto">
-      <style>
-        @keyframes curveDraw { 0%{stroke-dashoffset:200} 50%{stroke-dashoffset:0} 100%{stroke-dashoffset:0} }
-        @keyframes curveGrad { 0%,50%{opacity:0} 60%,100%{opacity:1} }
-        @keyframes curveLine { 0%,50%{opacity:1} 60%,100%{opacity:0} }
-      </style>
-      <!-- Axes -->
-      <line x1="30" y1="4" x2="30" y2="48" stroke="var(--border-muted)" stroke-width="1" opacity="0.5"/>
-      <line x1="30" y1="48" x2="250" y2="48" stroke="var(--border-muted)" stroke-width="1" opacity="0.5"/>
-      <!-- Curve -->
-      <path d="M30,46 Q80,44 130,38 T200,16 T240,6" fill="none" stroke="var(--fg)" stroke-width="2" opacity="0.8" stroke-dasharray="200" style="animation:curveDraw 5s ease-in-out infinite"/>
-      <!-- Graduation line -->
-      <g style="animation:curveGrad 5s ease-in-out infinite">
-        <line x1="200" y1="4" x2="200" y2="48" stroke="var(--green,#22c55e)" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
-        <text x="200" y="56" font-size="7" fill="var(--green,#22c55e)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.8">graduate</text>
-      </g>
-      <!-- Labels -->
-      <text x="30" y="56" font-size="7" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif">start</text>
-      <text x="250" y="56" font-size="7" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif" text-anchor="end">16x</text>
-      <text x="140" y="56" font-size="8" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">price &rarr;</text>
-    </svg>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>curve</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.</span></span>
   </div>
 
-  <!-- cause illustration (DAICO fundraise) -->
-  <div id="coinCauseIllustration" style="display:none;margin-bottom:14px;padding:10px 0">
-    <svg viewBox="0 0 280 64" width="100%" style="display:block;max-width:320px;margin:0 auto">
-      <style>
-        @keyframes causeFill { 0%{width:0} 60%{width:180px} 100%{width:180px} }
-        @keyframes causeBar { 0%,55%{opacity:1} 60%,100%{opacity:0} }
-        @keyframes causeSplit { 0%,55%{opacity:0} 60%,100%{opacity:1} }
-        @keyframes causeDrip { 0%,65%{opacity:0} 72%{opacity:0.7} 79%{opacity:0} 86%{opacity:0.7} 93%{opacity:0} 100%{opacity:0} }
-      </style>
-      <!-- ETH flowing in -->
-      <g opacity="0.4" style="animation:causeBar 5s ease-in-out infinite">
-        <text x="8" y="18" font-size="10" fill="var(--fg)">+</text>
-        <text x="18" y="18" font-size="10" fill="var(--fg)">+</text>
-      </g>
-      <!-- Track -->
-      <rect x="30" y="6" width="180" height="14" rx="7" fill="var(--border-muted)" opacity="0.5"/>
-      <!-- Fill bar -->
-      <foreignObject x="30" y="6" width="180" height="14">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="height:14px;border-radius:7px;background:var(--fg);opacity:0.7;animation:causeFill 5s ease-in-out infinite,causeBar 5s ease-in-out infinite"></div>
-      </foreignObject>
-      <!-- Split: treasury -->
-      <g style="animation:causeSplit 5s ease-in-out infinite">
-        <rect x="30" y="6" width="180" height="14" rx="7" fill="var(--fg)" opacity="0.5"/>
-        <text x="120" y="16" font-size="7" font-weight="600" fill="var(--bg)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif">treasury</text>
-      </g>
-      <!-- Ragequit arrow -->
-      <g style="animation:causeSplit 5s ease-in-out infinite">
-        <text x="225" y="16" font-size="9" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif" opacity="0.6">ragequit &#8594;</text>
-      </g>
-      <!-- Labels -->
-      <g style="animation:causeSplit 5s ease-in-out infinite">
-        <text x="30" y="34" font-size="8" fill="var(--fg-dim)" font-family="Helvetica,Arial,sans-serif">share sale</text>
-        <!-- Tap drip (optional) -->
-        <line x1="120" y1="24" x2="120" y2="42" stroke="var(--fg)" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.3"/>
-        <circle cx="120" cy="36" r="1.5" fill="var(--fg)" opacity="0.6" style="animation:causeDrip 5s ease-in-out infinite"/>
-        <circle cx="120" cy="42" r="1" fill="var(--fg)" opacity="0.4" style="animation:causeDrip 5s 0.2s ease-in-out infinite"/>
-        <text x="120" y="56" font-size="7" fill="var(--fg-dim)" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" opacity="0.7">tap vesting</text>
-      </g>
-    </svg>
-  </div>
 
   <div class="coin-name-row">
-    <div class="section"><label>Name</label><input type="text" id="coinName" class="amount-input" placeholder="coin" maxlength="50" style="font-size:16px" oninput="syncCoinURL()"></div>
-    <div class="section"><label>Symbol</label><input type="text" id="coinSymbol" class="amount-input" placeholder="coin" maxlength="10" style="font-size:16px" oninput="syncCoinURL()"></div>
+    <div class="section"><input type="text" id="coinName" class="amount-input" placeholder="Name" maxlength="50" style="font-size:16px" oninput="syncCoinURL()"></div>
+    <div class="section"><input type="text" id="coinSymbol" class="amount-input" placeholder="Symbol" maxlength="10" style="font-size:16px" oninput="syncCoinURL()"></div>
   </div>
 
   <div class="section" style="margin-bottom:14px">
@@ -1372,15 +1306,18 @@ body.modal-open { overflow: hidden; }
   </div>
 
   <div id="coinCauseWrap" style="display:none;margin-bottom:14px">
-    <div style="display:flex;gap:12px;margin-bottom:10px">
-      <div style="flex:1"><label>Raise (ETH)</label>
-        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:14px" value="10" oninput="coinUpdatePreview()"></div>
-      <div style="flex:1"><label>Minimum Buy (ETH)</label>
-        <input type="text" id="causePrice" placeholder="0.01" inputmode="decimal" style="font-size:14px" value="0.01" oninput="coinUpdatePreview()"></div>
+    <div id="causeRaiseWrap" style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:6px">Raise (ETH)
+        <span id="causeOpenLink" style="font-size:11px;color:var(--fg-dim);cursor:pointer;text-decoration:underline;text-transform:none;font-weight:normal" onclick="causeSetOngoing(true)">or open-ended</span>
+      </label>
+      <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:14px" value="10" oninput="coinUpdatePreview()">
     </div>
-    <div style="margin-bottom:10px">
-      <label>Sale Deadline (days)</label>
+    <div id="causeDeadlineWrap" style="margin-bottom:10px">
+      <label>Deadline (days)</label>
       <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:14px" value="30" oninput="coinUpdatePreview()">
+    </div>
+    <div id="causeOngoingWrap" style="display:none;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--fg-dim);line-height:1.5">Open-ended fundraise. No target, no deadline. Anyone can contribute ETH for shares at any time. <span style="text-decoration:underline;cursor:pointer" onclick="causeSetOngoing(false)">Set a target instead</span></div>
     </div>
     <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
@@ -13029,20 +12966,24 @@ function coinSetLaunchType(type) {
   btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'coin' ? 0 : 1)));
   const isCoin = type === 'coin';
   $('coinCauseWrap').style.display = isCoin ? 'none' : '';
-  $('coinCurveIllustration').style.display = isCoin ? '' : 'none';
-  $('coinCauseIllustration').style.display = isCoin ? 'none' : '';
   $('coinCurvePreviewWrap').style.display = 'none';
   $('coinCausePreviewWrap').style.display = 'none';
   $('coinSocialsWrap').style.display = '';
   setDisabled('coinLaunchBtn', true);
-  $('coinLaunchTypeHint').textContent = isCoin
-    ? 'bonding curve \u00b7 ~5.33 ETH graduation \u00b7 permanent LP'
-    : 'DAICO fundraise \u00b7 fixed-price share sale \u00b7 ragequittable';
   _coinTemplate = isCoin ? null : 'cause';
   coinUpdatePreview();
   syncCoinURL();
 }
 
+
+let _causeOngoing = false;
+function causeSetOngoing(on) {
+  _causeOngoing = on;
+  $('causeRaiseWrap').style.display = on ? 'none' : '';
+  $('causeDeadlineWrap').style.display = on ? 'none' : '';
+  $('causeOngoingWrap').style.display = on ? '' : 'none';
+  coinUpdatePreview();
+}
 
 function causeTapToggle() {
   $('causeTapFields').style.display = $('causeTapEnabled').checked ? '' : 'none';
@@ -13054,22 +12995,22 @@ function coinUpdatePreview() {
 
   if (_coinLaunchType === 'cause') {
     const raise = parseFloat($('causeRaise').value) || 10;
-    const minBuy = parseFloat($('causePrice').value) || 0.01;
     const days = parseInt($('causeDeadline').value) || 30;
-    const sharesPerBuy = 100;
-    const pricePerShare = minBuy / sharesPerBuy;
-    const totalShares = Math.floor(raise / minBuy) * sharesPerBuy;
+    const ongoing = _causeOngoing;
+    const totalShares = ongoing ? 'unlimited' : '10M';
     const tapOn = $('causeTapEnabled').checked;
     const tapMonths = parseInt($('causeTapMonths').value) || 12;
-    const ratePerDay = tapOn ? (raise / (tapMonths * 30.44)) : 0;
+    const tapBudget = ongoing ? 'governance-controlled' : `${raise} ${ethMini}`;
+    const ratePerDay = tapOn && !ongoing ? (raise / (tapMonths * 30.44)) : 0;
     const p = $('coinCausePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
-      `<dt>Raise</dt><dd>${raise} ${ethMini}</dd>` +
-      `<dt>Min Buy</dt><dd>${minBuy} ${ethMini} &rarr; ${sharesPerBuy} shares</dd>` +
-      `<dt>Total Shares</dt><dd>${totalShares.toLocaleString()}</dd>` +
-      `<dt>Deadline</dt><dd>${days} days</dd>` +
-      (tapOn ? `<dt>Tap</dt><dd>~${ratePerDay.toFixed(4)} ${ethMini}/day over ${tapMonths}mo</dd>` : '') +
+      (ongoing
+        ? `<dt>Mode</dt><dd>Ongoing (no cap, no deadline)</dd>`
+        : `<dt>Raise</dt><dd>${raise} ${ethMini}</dd>`) +
+      `<dt>Shares</dt><dd>${totalShares} (proportional to ETH contributed)</dd>` +
+      (ongoing ? '' : `<dt>Deadline</dt><dd>${days} days</dd>`) +
+      (tapOn ? `<dt>Tap</dt><dd>${ongoing ? 'Enabled' : `~${ratePerDay.toFixed(4)} ${ethMini}/day over ${tapMonths}mo`}</dd>` : '') +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>`;
     $('coinCausePreviewWrap').style.display = '';
@@ -13254,27 +13195,34 @@ async function coinLaunch() {
     // --- Cause DAICO path (SafeSummoner.summonStandardDAICO) ---
     if (_coinLaunchType === 'cause') {
       const raise = parseFloat($('causeRaise').value) || 10;
-      const minBuy = parseFloat($('causePrice').value) || 0.01;
       const days = parseInt($('causeDeadline').value) || 30;
-      if (raise <= 0 || minBuy <= 0 || days <= 0) {
-        coinShowStatus('Enter valid raise, min buy, and deadline', true);
+      const ongoing = _causeOngoing;
+      if (!ongoing && (raise <= 0 || days <= 0)) {
+        coinShowStatus('Enter valid raise and deadline', true);
         _coinLaunching = false; setDisabled('coinLaunchBtn', false); return;
       }
 
-      // 100 shares per minBuy unit (e.g. 0.01 ETH = 100 shares)
-      const sharesPerBuy = 100;
-      const pricePerShare = minBuy / sharesPerBuy;
-      const priceWei = ethers.parseEther(String(pricePerShare));
-      const totalShares = Math.floor(raise / minBuy) * sharesPerBuy;
-      const capShares = ethers.parseEther(String(totalShares));
-      const deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days * 86400);
+      let priceWei, capShares, deadline;
+      if (ongoing) {
+        // Ongoing: 1 ETH = 1M shares, no cap, no deadline
+        priceWei = ethers.parseEther('0.000001'); // 1e-6 ETH per share
+        capShares = ethers.MaxUint256;
+        deadline = 0n;
+      } else {
+        // Fixed 10M shares, price derived from raise
+        const totalShares = 10_000_000;
+        const pricePerShare = raise / totalShares;
+        priceWei = ethers.parseEther(String(pricePerShare));
+        capShares = ethers.parseEther(String(totalShares));
+        deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days * 86400);
+      }
 
       const tapEnabled = $('causeTapEnabled').checked;
       let tapModule = {
         singleton: ZERO_ADDRESS, token: ZERO_ADDRESS, budget: 0n,
         beneficiary: ZERO_ADDRESS, ratePerSec: 0n
       };
-      if (tapEnabled) {
+      if (tapEnabled && !ongoing) {
         const beneficiary = coinGetResolved('causeTapBeneficiary') || address;
         const tapMonths = parseInt($('causeTapMonths').value) || 12;
         const budgetWei = ethers.parseEther(String(raise));
@@ -13349,8 +13297,10 @@ async function coinLaunch() {
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
-        `Sale: ${raise} ETH &middot; ${minBuy} ETH = 100 shares &middot; ${capFmt} total &middot; ${days}d<br>` +
-        (tapEnabled ? `Tap: ~${(raise / (parseInt($('causeTapMonths').value) * 30.44)).toFixed(4)} ETH/day<br>` : '') +
+        (ongoing
+          ? `Sale: Ongoing &middot; 1 ETH = 1M shares<br>`
+          : `Sale: ${raise} ETH &middot; 10M shares &middot; ${days}d<br>`) +
+        (tapEnabled && !ongoing ? `Tap: ~${(raise / (parseInt($('causeTapMonths').value) * 30.44)).toFixed(4)} ETH/day<br>` : '') +
         `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
         ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`

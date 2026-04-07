@@ -48,20 +48,12 @@ contract ClassicalCurveSale {
         uint256 graduationTarget,
         uint256 lpTokens
     );
-    event Purchase(
-        address indexed token, address indexed buyer, uint256 amount, uint256 cost, uint256 fee
-    );
-    event Sold(
-        address indexed token, address indexed seller, uint256 amount, uint256 proceeds, uint256 fee
-    );
-    event GraduationComplete(
-        address indexed token, uint256 ethSeeded, uint256 tokensSeeded, uint256 liquidity
-    );
+    event Purchase(address indexed token, address indexed buyer, uint256 amount, uint256 cost, uint256 fee);
+    event Sold(address indexed token, address indexed seller, uint256 amount, uint256 proceeds, uint256 fee);
+    event GraduationComplete(address indexed token, uint256 ethSeeded, uint256 tokensSeeded, uint256 liquidity);
     event CreatorUpdated(address indexed token, address indexed newCreator);
     event LpRecipientUpdated(address indexed token, address indexed newRecipient);
-    event CreatorFeeUpdated(
-        address indexed token, address beneficiary, uint16 buyBps, uint16 sellBps
-    );
+    event CreatorFeeUpdated(address indexed token, address beneficiary, uint16 buyBps, uint16 sellBps);
     event VestingClaimed(address indexed token, address indexed creator, uint256 amount);
 
     /// @dev Packed into 6 storage slots (down from 11) for gas-efficient trades.
@@ -402,26 +394,17 @@ contract ClassicalCurveSale {
 
         // Set creator fee if provided
         if (creatorFee.beneficiary != address(0) || (creatorFee.buyBps | creatorFee.sellBps) != 0) {
-            if (creatorFee.buyBps > MAX_CREATOR_FEE_BPS || creatorFee.sellBps > MAX_CREATOR_FEE_BPS)
-            {
+            if (creatorFee.buyBps > MAX_CREATOR_FEE_BPS || creatorFee.sellBps > MAX_CREATOR_FEE_BPS) {
                 revert InvalidParams();
             }
-            if (
-                creatorFee.beneficiary == address(0)
-                    && (creatorFee.buyBps | creatorFee.sellBps) != 0
-            ) {
+            if (creatorFee.beneficiary == address(0) && (creatorFee.buyBps | creatorFee.sellBps) != 0) {
                 revert InvalidParams();
             }
-            if (
-                creatorFee.beneficiary != address(0)
-                    && (creatorFee.buyBps | creatorFee.sellBps) == 0
-            ) {
+            if (creatorFee.beneficiary != address(0) && (creatorFee.buyBps | creatorFee.sellBps) == 0) {
                 revert InvalidParams();
             }
             creatorFees[token] = creatorFee;
-            emit CreatorFeeUpdated(
-                token, creatorFee.beneficiary, creatorFee.buyBps, creatorFee.sellBps
-            );
+            emit CreatorFeeUpdated(token, creatorFee.beneficiary, creatorFee.buyBps, creatorFee.sellBps);
         }
 
         emit Configured(creator, token, cap, startPrice, endPrice, graduationTarget, lpTokens);
@@ -515,14 +498,8 @@ contract ClassicalCurveSale {
     }
 
     /// @notice Derive the ZAMM PoolKey and pool ID for a token's graduated pool.
-    function poolKeyOf(address token)
-        public
-        view
-        returns (IZAMM.PoolKey memory key, uint256 poolId)
-    {
-        key = IZAMM.PoolKey({
-            id0: 0, id1: 0, token0: address(0), token1: token, feeOrHook: hookFeeOrHook()
-        });
+    function poolKeyOf(address token) public view returns (IZAMM.PoolKey memory key, uint256 poolId) {
+        key = IZAMM.PoolKey({id0: 0, id1: 0, token0: address(0), token1: token, feeOrHook: hookFeeOrHook()});
         poolId = uint256(keccak256(abi.encode(key)));
     }
 
@@ -537,11 +514,7 @@ contract ClassicalCurveSale {
     /// @param token The token to query
     /// @param from  Start index (inclusive)
     /// @param to    End index (exclusive, capped to length)
-    function observe(address token, uint256 from, uint256 to)
-        public
-        view
-        returns (uint256[] memory obs)
-    {
+    function observe(address token, uint256 from, uint256 to) public view returns (uint256[] memory obs) {
         uint256[] storage arr = _observations[token];
         uint256 len = arr.length;
         if (to > len) to = len;
@@ -569,8 +542,8 @@ contract ClassicalCurveSale {
         unchecked {
             uint256 price = cost * 1e18 / amount;
             _observations[token].push(
-                (price << 128) | (uint256(uint80(cost)) << 48)
-                    | (uint256(uint40(block.timestamp)) << 8) | (isSell ? 1 : 0)
+                (price << 128) | (uint256(uint80(cost)) << 48) | (uint256(uint40(block.timestamp)) << 8)
+                    | (isSell ? 1 : 0)
             );
         }
     }
@@ -583,11 +556,7 @@ contract ClassicalCurveSale {
     /// @param amount    Max tokens to buy (capped to remaining)
     /// @param minAmount Minimum tokens to receive (slippage protection)
     /// @param deadline  Transaction deadline (block.timestamp)
-    function buy(address token, uint256 amount, uint256 minAmount, uint256 deadline)
-        public
-        payable
-        lock
-    {
+    function buy(address token, uint256 amount, uint256 minAmount, uint256 deadline) public payable lock {
         if (block.timestamp > deadline) revert DeadlineExpired();
         if (amount == 0) revert ZeroAmount();
         CurveConfig storage c = _curves[token];
@@ -766,10 +735,7 @@ contract ClassicalCurveSale {
     /// @param amount     Tokens to sell
     /// @param minProceeds Minimum net ETH to receive (slippage protection)
     /// @param deadline    Transaction deadline (block.timestamp)
-    function sell(address token, uint256 amount, uint256 minProceeds, uint256 deadline)
-        public
-        lock
-    {
+    function sell(address token, uint256 amount, uint256 minProceeds, uint256 deadline) public lock {
         if (block.timestamp > deadline) revert DeadlineExpired();
         if (amount == 0) revert ZeroAmount();
         CurveConfig storage c = _curves[token];
@@ -813,10 +779,7 @@ contract ClassicalCurveSale {
     /// @param token     The token to sell
     /// @param ethOut    Exact ETH to receive after fees
     /// @param maxTokens Maximum tokens to sell (slippage protection)
-    function sellExactOut(address token, uint256 ethOut, uint256 maxTokens, uint256 deadline)
-        public
-        lock
-    {
+    function sellExactOut(address token, uint256 ethOut, uint256 maxTokens, uint256 deadline) public lock {
         if (block.timestamp > deadline) revert DeadlineExpired();
         if (ethOut == 0) revert ZeroAmount();
         CurveConfig storage c = _curves[token];
@@ -936,8 +899,7 @@ contract ClassicalCurveSale {
                     rem = c.virtualReserve - c.sold; // safe: vr > cap >= sold
                 }
                 // P(x) = P₀ · T₀² / (T₀ − x)² — 1e18 scaled like startPrice
-                finalPrice =
-                    mulDiv(c.startPrice, uint256(c.virtualReserve) * c.virtualReserve, rem * rem);
+                finalPrice = mulDiv(c.startPrice, uint256(c.virtualReserve) * c.virtualReserve, rem * rem);
             }
             tokensForLP = mulDiv(ethForLP, 1e18, finalPrice);
             if (tokensForLP > maxTokensForLP) {
@@ -974,9 +936,8 @@ contract ClassicalCurveSale {
             tstore(SEEDING_SLOT, add(poolId, 1))
         }
         // ZAMM first-mint (supply==0) consumes exact desired amounts: used0 == ethForLP
-        (uint256 used0, uint256 used1, uint256 liq) = ZAMM.addLiquidity{value: ethForLP}(
-            key, ethForLP, tokensForLP, 0, 0, recipient, block.timestamp
-        );
+        (uint256 used0, uint256 used1, uint256 liq) =
+            ZAMM.addLiquidity{value: ethForLP}(key, ethForLP, tokensForLP, 0, 0, recipient, block.timestamp);
         assembly ("memory-safe") {
             tstore(SEEDING_SLOT, 0)
         }
@@ -1011,10 +972,7 @@ contract ClassicalCurveSale {
         address token = poolToken[poolId];
 
         // LP operations (addLiquidity / removeLiquidity)
-        if (
-            sig != IZAMM.swapExactIn.selector && sig != IZAMM.swapExactOut.selector
-                && sig != IZAMM.swap.selector
-        ) {
+        if (sig != IZAMM.swapExactIn.selector && sig != IZAMM.swapExactOut.selector && sig != IZAMM.swap.selector) {
             // Pre-seed: only allow from graduate() via transient bypass (scoped to exact poolId)
             if (token == address(0)) {
                 bool seeding;
@@ -1189,12 +1147,9 @@ contract ClassicalCurveSale {
                 uint256 tax = (amountIn * bps) / 10_000;
                 uint256 net = amountIn - tax;
                 if (tax != 0) safeTransferETH(ben, tax);
-                amountOut =
-                    ZAMM.swapExactIn{value: net}(poolKey, net, amountOutMin, true, to, deadline);
+                amountOut = ZAMM.swapExactIn{value: net}(poolKey, net, amountOutMin, true, to, deadline);
             } else {
-                amountOut = ZAMM.swapExactIn{value: amountIn}(
-                    poolKey, amountIn, 0, true, address(this), deadline
-                );
+                amountOut = ZAMM.swapExactIn{value: amountIn}(poolKey, amountIn, 0, true, address(this), deadline);
                 uint256 tax = (amountOut * bps) / 10_000;
                 uint256 net = amountOut - tax;
                 if (net < amountOutMin) revert Slippage();
@@ -1251,9 +1206,7 @@ contract ClassicalCurveSale {
             amountInMax = msg.value;
             if (onInput) {
                 uint256 netMax = (amountInMax * (10_000 - bps)) / 10_000;
-                amountIn = ZAMM.swapExactOut{value: netMax}(
-                    poolKey, amountOut, netMax, true, to, deadline
-                );
+                amountIn = ZAMM.swapExactOut{value: netMax}(poolKey, amountOut, netMax, true, to, deadline);
                 uint256 tax = (amountIn * bps) / (10_000 - bps);
                 uint256 spent = amountIn + tax;
                 if (tax != 0) safeTransferETH(ben, tax);
@@ -1261,12 +1214,9 @@ contract ClassicalCurveSale {
                 if (refund != 0) safeTransferETH(msg.sender, refund);
                 amountIn = spent;
             } else {
-                uint256 gross = bps != 0
-                    ? (amountOut * 10_000 + (10_000 - bps) - 1) / (10_000 - bps)
-                    : amountOut;
-                amountIn = ZAMM.swapExactOut{value: amountInMax}(
-                    poolKey, gross, amountInMax, true, address(this), deadline
-                );
+                uint256 gross = bps != 0 ? (amountOut * 10_000 + (10_000 - bps) - 1) / (10_000 - bps) : amountOut;
+                amountIn =
+                    ZAMM.swapExactOut{value: amountInMax}(poolKey, gross, amountInMax, true, address(this), deadline);
                 uint256 refund = amountInMax - amountIn;
                 if (refund != 0) safeTransferETH(msg.sender, refund);
                 uint256 tax = gross - amountOut;
@@ -1287,11 +1237,8 @@ contract ClassicalCurveSale {
                 if (refund != 0) safeTransfer(token, msg.sender, refund);
                 amountIn = amountIn + tax;
             } else {
-                uint256 gross = bps != 0
-                    ? (amountOut * 10_000 + (10_000 - bps) - 1) / (10_000 - bps)
-                    : amountOut;
-                amountIn =
-                    ZAMM.swapExactOut(poolKey, gross, amountInMax, false, address(this), deadline);
+                uint256 gross = bps != 0 ? (amountOut * 10_000 + (10_000 - bps) - 1) / (10_000 - bps) : amountOut;
+                amountIn = ZAMM.swapExactOut(poolKey, gross, amountInMax, false, address(this), deadline);
                 uint256 refund = amountInMax - amountIn;
                 if (refund != 0) safeTransfer(token, msg.sender, refund);
                 uint256 tax = gross - amountOut;
@@ -1341,13 +1288,11 @@ contract ClassicalCurveSale {
     ///      Pure with stack params to avoid redundant SLOADs — callers cache from storage once.
     ///      Integral: P₀ · T₀² · amount / ((T₀ − sold) · (T₀ − sold − amount))
     ///      Rounded up to prevent dust.
-    function _cost(
-        uint256 startPrice,
-        uint256 endPrice,
-        uint256 virtualReserve,
-        uint256 sold,
-        uint256 amount
-    ) internal pure returns (uint256) {
+    function _cost(uint256 startPrice, uint256 endPrice, uint256 virtualReserve, uint256 sold, uint256 amount)
+        internal
+        pure
+        returns (uint256)
+    {
         // Flat curve shortcut
         if (endPrice == startPrice) {
             return (amount * startPrice + 1e18 - 1) / 1e18;
@@ -1421,13 +1366,8 @@ interface IZAMM {
         uint256 deadline
     ) external payable returns (uint256 amountIn);
 
-    function swap(
-        PoolKey calldata poolKey,
-        uint256 amount0Out,
-        uint256 amount1Out,
-        address to,
-        bytes calldata data
-    ) external;
+    function swap(PoolKey calldata poolKey, uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data)
+        external;
 }
 
 IZAMM constant ZAMM = IZAMM(0x000000000000040470635EB91b7CE4D132D616eD);
@@ -1593,13 +1533,10 @@ contract ERC20 {
     error InvalidInit();
     error Initialized();
 
-    function init(
-        string calldata _name,
-        string calldata _symbol,
-        string calldata _uri,
-        uint256 supply,
-        address to
-    ) public payable {
+    function init(string calldata _name, string calldata _symbol, string calldata _uri, uint256 supply, address to)
+        public
+        payable
+    {
         require(supply != 0, InvalidInit());
         require(totalSupply == 0, Initialized());
         (name, symbol, contractURI) = (_name, _symbol, _uri);
