@@ -754,7 +754,7 @@ async function loadSpamListFresh() {
 async function flagCoinAsSpam(coinAddr) {
   const s = await connectWallet();
   if (!s) return;
-  if (!_userIsVerified) { alert('You need 100k+ ZORG shares to flag coins.'); return; }
+  if (!_userIsVerified) { const t = document.createElement('div'); t.textContent = 'You need 100k+ ZORG shares to flag coins.'; Object.assign(t.style, {position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',background:'var(--surface)',color:'var(--red)',padding:'8px 16px',fontSize:'12px',borderRadius:'6px',border:'1px solid var(--border-muted)',zIndex:'9999'}); document.body.appendChild(t); setTimeout(() => t.remove(), 3000); return; }
   if (!confirm(`Flag ${coinAddr} as spam in the ZORG DAO chat?`)) return;
   try {
     const dao = new ethers.Contract(ZORG_DAO, ZORG_CHAT_ABI, s);
@@ -2286,7 +2286,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
         <h2>${escText(tokenName)} <span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(tokenSymbol)}</span>
-          ${tokenBalance > 0n ? `<div class="coin-user-balance">${balFmt} tokens</div>` : ''}
+          ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} tokens</div>` : ''}
         </div>
         <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${curve.creator}" target="_blank" style="color:inherit">${curve.creator.slice(0,6)}&hellip;${curve.creator.slice(-4)}</a></div>
       </div>
@@ -2341,13 +2341,14 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   if (!graduated) {
     html += `
       <div class="section-card">
+        <div class="section-title">Trade</div>
         <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="curveBuyBtn" onclick="curveSwitchSide('buy')" style="flex:1;padding:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Buy</button>
+          <button id="curveBuyBtn" onclick="curveSwitchSide('buy')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Buy</button>
           <button id="curveSellBtn" onclick="curveSwitchSide('sell')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">Sell</button>
         </div>
         <div id="curveBuyWrap">
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveBuyAmount" type="text" inputmode="decimal" placeholder="0.00" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateBuyQuote()">
+            <input id="curveBuyAmount" type="text" inputmode="decimal" placeholder="0.00" aria-label="ETH amount to buy" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateBuyQuote()">
             <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">ETH</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -2356,12 +2357,12 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
             <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.05)" style="font-size:10px;padding:4px 8px">.05</button>
             <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.1)" style="font-size:10px;padding:4px 8px">.1</button>
           </div>
-          <div id="curveBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
-          <button class="swap-btn" style="width:100%;font-size:13px" onclick="curveBuy()">Buy</button>
+          <div id="curveBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
+          <button class="swap-btn" style="width:100%;font-size:13px" onclick="curveBuy()">${_connectedAddress ? 'Buy Tokens' : 'Connect Wallet'}</button>
         </div>
         <div id="curveSellWrap" style="display:none">
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveSellAmount" type="text" inputmode="decimal" placeholder="0" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateSellQuote()">
+            <input id="curveSellAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateSellQuote()">
             <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">tokens</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -2370,11 +2371,11 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
             <button class="coin-tpl-btn" onclick="curveSetSellPct(75)" style="font-size:10px;padding:4px 8px">75%</button>
             <button class="coin-tpl-btn" onclick="curveSetSellPct(100)" style="font-size:10px;padding:4px 8px">Max</button>
           </div>
-          <div id="curveSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
-          <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveSell()">Sell</button>
+          <div id="curveSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
+          <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveSell()">${_connectedAddress ? 'Sell' : 'Connect Wallet'}</button>
         </div>
         <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-          <span style="font-size:10px;color:var(--fg-dim)">Slippage</span>
+          <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
           <button class="coin-tpl-btn" onclick="curveSetSlippage(1,this)" style="font-size:9px;padding:3px 6px">1%</button>
           <button class="coin-tpl-btn active" onclick="curveSetSlippage(3,this)" style="font-size:9px;padding:3px 6px">3%</button>
           <button class="coin-tpl-btn" onclick="curveSetSlippage(5,this)" style="font-size:9px;padding:3px 6px">5%</button>
@@ -2391,7 +2392,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       <div style="margin-bottom:14px">
         <button class="swap-btn" style="width:100%;background:#FF9800;color:#fff;font-size:13px" onclick="curveGraduate()">Graduate to zAMM</button>
         <div style="font-size:10px;color:var(--fg-dim);text-align:center;margin-top:4px">Anyone can trigger graduation once 100% of curve supply is sold</div>
-        <div id="curveTradeStatus" style="margin-top:8px"></div>
+        <div id="curveGradStatus" style="margin-top:8px"></div>
       </div>
     `;
   }
@@ -2399,14 +2400,16 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   // zAMM swap panel (post-graduation)
   if (seeded) {
     html += `
+      <div style="margin-bottom:12px;padding:8px 12px;background:var(--surface);border-radius:6px;font-size:11px;color:var(--fg-dim)">Graduated &mdash; liquidity is now on zAMM. Trade below.</div>
       <div class="section-card">
+        <div class="section-title">Trade</div>
         <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="curveZammBuyBtn" onclick="curveZammSide('buy')" style="flex:1;padding:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Buy</button>
+          <button id="curveZammBuyBtn" onclick="curveZammSide('buy')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Buy</button>
           <button id="curveZammSellBtn" onclick="curveZammSide('sell')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">Sell</button>
         </div>
         <div id="curveZammBuyWrap">
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveZammBuyInput" type="text" inputmode="decimal" placeholder="0.00" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('buy')">
+            <input id="curveZammBuyInput" type="text" inputmode="decimal" placeholder="0.00" aria-label="ETH amount to buy" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('buy')">
             <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">ETH</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -2415,12 +2418,12 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
             <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.05';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.05</button>
             <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.1';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.1</button>
           </div>
-          <div id="curveZammBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
+          <div id="curveZammBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
           <button class="swap-btn" style="width:100%;font-size:13px" onclick="curveZammSwap('buy')">Buy</button>
         </div>
         <div id="curveZammSellWrap" style="display:none">
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveZammSellInput" type="text" inputmode="decimal" placeholder="0" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('sell')">
+            <input id="curveZammSellInput" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('sell')">
             <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">tokens</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -2429,11 +2432,11 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
             <button class="coin-tpl-btn" onclick="curveZammSellPct(75)" style="font-size:10px;padding:4px 8px">75%</button>
             <button class="coin-tpl-btn" onclick="curveZammSellPct(100)" style="font-size:10px;padding:4px 8px">100%</button>
           </div>
-          <div id="curveZammSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
+          <div id="curveZammSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
           <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveZammSwap('sell')">Sell</button>
         </div>
         <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-          <span style="font-size:10px;color:var(--fg-dim)">Slippage</span>
+          <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
           <button class="coin-tpl-btn" onclick="curveSetSlippage(1,this)" style="font-size:9px;padding:3px 6px">1%</button>
           <button class="coin-tpl-btn active" onclick="curveSetSlippage(3,this)" style="font-size:9px;padding:3px 6px">3%</button>
           <button class="coin-tpl-btn" onclick="curveSetSlippage(5,this)" style="font-size:9px;padding:3px 6px">5%</button>
@@ -2492,14 +2495,15 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       `token_address=eq.${tokenAddr.toLowerCase()}&limit=1`);
     if (Array.isArray(rooms) && rooms.length > 0) {
       _curveRoomId = rooms[0].id;
+      const chatDisabled = !tokenBalance || tokenBalance === 0n;
       html += `
         <div class="curve-chat">
           <div class="section-title" style="margin-bottom:6px">Chat</div>
           <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">Loading...</div></div>
           <div class="curve-chat-input">
-            <input type="text" id="curveChatInput" placeholder="Hold tokens to chat" maxlength="500"
-              onkeydown="if(event.key==='Enter')curveSendChat()">
-            <button onclick="curveSendChat()">Send</button>
+            <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold tokens to chat' : 'Message...'}" maxlength="500"
+              ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
+            <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
           </div>
         </div>
       `;
@@ -2677,8 +2681,8 @@ function drawCurveChart(canvas, observations) {
 // ---- Trade helpers ----
 function curveSwitchSide(side) {
   const buyBtn = $('curveBuyBtn'), sellBtn = $('curveSellBtn');
-  buyBtn.style.background = side === 'buy' ? 'var(--green)' : 'transparent';
-  buyBtn.style.color = side === 'buy' ? '#fff' : 'var(--fg-muted)';
+  buyBtn.style.background = side === 'buy' ? 'var(--btn-bg)' : 'transparent';
+  buyBtn.style.color = side === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)';
   sellBtn.style.background = side === 'sell' ? 'var(--red)' : 'transparent';
   sellBtn.style.color = side === 'sell' ? '#fff' : 'var(--fg-muted)';
   $('curveBuyWrap').style.display = side === 'buy' ? '' : 'none';
@@ -2737,7 +2741,7 @@ function curveUpdateBuyQuote() {
   const el = $('curveBuyQuote');
   if (!el || !_curveData) return;
   const v = parseFloat($('curveBuyAmount')?.value || '0');
-  if (!v || v <= 0) { el.textContent = ''; return; }
+  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
   el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
   if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
   _curveQuoteTimer = setTimeout(async () => {
@@ -2790,7 +2794,7 @@ function curveUpdateSellQuote() {
   const el = $('curveSellQuote');
   if (!el || !_curveData) return;
   const v = parseFloat($('curveSellAmount')?.value || '0');
-  if (!v || v <= 0) { el.textContent = ''; return; }
+  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
   el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
   if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
   _curveQuoteTimer = setTimeout(async () => {
@@ -3136,16 +3140,16 @@ async function curveGraduate() {
   try {
     const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
     const tx = await cs.graduate(_curveTokenAddr);
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Graduating... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
+    $('curveGradStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Graduating... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Graduated! LP seeded on zAMM.</div>`;
+    $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Graduated! LP seeded on zAMM.</div>`;
     setTimeout(() => renderCoinPage(_curveTokenAddr), 3000);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
+      $('curveGradStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
       const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Graduation failed')}</div>`;
+      $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Graduation failed')}</div>`;
     }
   } finally {
     _graduating = false;
@@ -3160,8 +3164,8 @@ let _curveZammQuoteTimer = null;
 
 function curveZammSide(side) {
   const buyBtn = $('curveZammBuyBtn'), sellBtn = $('curveZammSellBtn');
-  buyBtn.style.background = side === 'buy' ? 'var(--green)' : 'transparent';
-  buyBtn.style.color = side === 'buy' ? '#fff' : 'var(--fg-muted)';
+  buyBtn.style.background = side === 'buy' ? 'var(--btn-bg)' : 'transparent';
+  buyBtn.style.color = side === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)';
   sellBtn.style.background = side === 'sell' ? 'var(--red)' : 'transparent';
   sellBtn.style.color = side === 'sell' ? '#fff' : 'var(--fg-muted)';
   $('curveZammBuyWrap').style.display = side === 'buy' ? '' : 'none';
@@ -3181,7 +3185,7 @@ function curveZammQuote(side) {
   if (!el) return;
   const raw = $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput')?.value || '';
   const v = parseFloat(raw);
-  if (!v || v <= 0) { el.textContent = ''; return; }
+  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
   el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
   if (_curveZammQuoteTimer) clearTimeout(_curveZammQuoteTimer);
   _curveZammQuoteTimer = setTimeout(async () => {
@@ -3369,7 +3373,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const tapElapsed = hasTap && tapLastClaim > 0 ? BigInt(Math.floor(Date.now() / 1000) - tapLastClaim) : 0n;
   const tapPending = hasTap ? tapRate * tapElapsed : 0n; // ETH owed since last claim
   const tapClaimed = 0n; // not tracked on-chain; display remaining budget instead
-  const tapInstant = tapRate >= (1n << 100n); // very high rate = instant mode
+  const tapInstant = tapRate >= ethers.parseEther('0.001'); // >= 0.001 ETH/sec (~86 ETH/day) = effectively instant
   const tapOpenBudget = tapBudget >= 2n ** 128n;
   const tapRatePerDay = (hasTap && !tapInstant) ? Number(tapRate) * 86400 / 1e18 : 0;
 
@@ -3390,7 +3394,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         <h2>${escText(coinName)} <span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(coinSymbol)}</span>
-          ${userBalance > 0n ? `<div class="coin-user-balance">${balFmt} shares</div>` : ''}
+          ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} shares</div>` : ''}
         </div>
         ${metadata.creatorWallet ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${metadata.creatorWallet}" target="_blank" style="color:inherit">${metadata.creatorWallet.slice(0,6)}&hellip;${metadata.creatorWallet.slice(-4)}</a></div>` : ''}
       </div>
@@ -3462,7 +3466,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <button id="causeModeEth" onclick="causeSwitchMode('eth')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">ETH</button>
         </div>
         <div style="display:flex;gap:4px;margin-bottom:6px">
-          <input id="causeBuyAmount" type="text" inputmode="decimal" placeholder="0" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="causeUpdateBuyQuote()">
+          <input id="causeBuyAmount" type="text" inputmode="decimal" placeholder="0.00" aria-label="Buy amount" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="causeUpdateBuyQuote()">
           <span id="causeBuyUnit" style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">shares</span>
         </div>
         <div id="causeBuyPresets" class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -3477,8 +3481,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <button class="coin-tpl-btn" onclick="causeSetBuyEth(0.1)" style="font-size:10px;padding:4px 8px">.1</button>
           <button class="coin-tpl-btn" onclick="causeSetBuyEth(0.5)" style="font-size:10px;padding:4px 8px">.5</button>
         </div>
-        <div id="causeBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
-        <button class="swap-btn" id="causeBuyBtn" style="width:100%;font-size:13px" onclick="causeBuy('${daoAddr}')">Buy Shares</button>
+        <div id="causeBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
+        <button class="swap-btn" id="causeBuyBtn" style="width:100%;font-size:13px" onclick="causeBuy('${daoAddr}')">${_connectedAddress ? 'Buy Shares' : 'Connect Wallet'}</button>
         <div id="causeTradeStatus" style="margin-top:8px"></div>
       </div>
     `;
@@ -3495,7 +3499,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
           <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Ragequit burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury.</div>
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
+            <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Shares to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
             <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">shares</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
@@ -3504,7 +3508,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
             <button class="coin-tpl-btn" onclick="causeSetRqPct(75)" style="font-size:9px;padding:3px 6px">75%</button>
             <button class="coin-tpl-btn" onclick="causeSetRqPct(100)" style="font-size:9px;padding:3px 6px">100%</button>
           </div>
-          <div id="causeRqQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px"></div>
+          <div id="causeRqQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter shares to see redemption value</div>
           <button class="swap-btn" style="width:100%;font-size:12px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeRagequit('${daoAddr}')">Redeem</button>
           <div id="causeRqStatus" style="margin-top:8px"></div>
         </div>
@@ -3566,14 +3570,15 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       `token_address=eq.${sharesAddr.toLowerCase()}&limit=1`);
     if (Array.isArray(rooms) && rooms.length > 0) {
       _curveRoomId = rooms[0].id;
+      const chatDisabled = !userBalance || userBalance === 0n;
       html += `
         <div class="curve-chat">
           <div class="section-title" style="margin-bottom:6px">Chat</div>
           <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">Loading...</div></div>
           <div class="curve-chat-input">
-            <input type="text" id="curveChatInput" placeholder="Hold tokens to chat" maxlength="500"
-              onkeydown="if(event.key==='Enter')curveSendChat()">
-            <button onclick="curveSendChat()">Send</button>
+            <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold shares to chat' : 'Message...'}" maxlength="500"
+              ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
+            <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
           </div>
         </div>
       `;
@@ -3669,7 +3674,7 @@ function causeUpdateBuyQuote() {
   if (!el) return;
   const amt = parseFloat($('causeBuyAmount')?.value || '0');
   const priceStr = $('app')?.dataset.price;
-  if (!amt || amt <= 0) { el.textContent = ''; return; }
+  if (!amt || amt <= 0) { el.textContent = 'Enter amount to see quote'; return; }
   if (!priceStr) { el.textContent = 'Sale data not loaded'; return; }
   const price = BigInt(priceStr);
   if (_causeBuyMode === 'eth') {
@@ -3698,7 +3703,7 @@ async function causeBuy(daoAddr) {
   }
   const priceStr = $('app')?.dataset.price;
   if (!priceStr) {
-    $('causeTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Sale data not loaded — try refreshing</div>';
+    $('causeTradeStatus').innerHTML = `<div style="color:var(--red);font-size:12px">Sale data not loaded <button onclick="renderCoinPage('${escAttr(daoAddr)}')" style="color:var(--fg);background:var(--surface);border:1px solid var(--border-muted);padding:2px 8px;font-size:11px;cursor:pointer;margin-left:4px">Retry</button></div>`;
     return;
   }
   const price = BigInt(priceStr);
@@ -3796,7 +3801,7 @@ function causeUpdateRqQuote() {
   const el = $('causeRqQuote');
   if (!el) return;
   const raw = ($('causeRqAmount')?.value || '').trim();
-  if (!raw || isNaN(raw) || Number(raw) <= 0) { el.textContent = ''; return; }
+  if (!raw || isNaN(raw) || Number(raw) <= 0) { el.textContent = 'Enter shares to see redemption value'; return; }
   const sharesToBurn = ethers.parseEther(raw);
   const treasury = BigInt($('app')?.dataset.treasury || '0');
   const totalSupply = BigInt($('app')?.dataset.totalSupply || '0');
@@ -3813,6 +3818,8 @@ async function causeRagequit(daoAddr) {
     return;
   }
   const sharesToBurn = ethers.parseEther(raw);
+  const rqQuoteText = $('causeRqQuote')?.textContent || '';
+  if (!confirm(`Redeem ${raw} shares? This will permanently burn them.${rqQuoteText ? '\n' + rqQuoteText : ''}`)) return;
   const statusEl = $('causeRqStatus');
   statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming...</div>`;
   try {

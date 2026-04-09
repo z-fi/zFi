@@ -13524,10 +13524,36 @@ const SAFE_SUMMONER_ABI = [{
     { type: 'string', name: 'orgName' },
     { type: 'string', name: 'orgSymbol' },
     { type: 'string', name: 'orgURI' },
+    { type: 'uint16', name: 'quorumBps' },
+    { type: 'bool', name: 'ragequittable' },
+    { type: 'address', name: 'renderer' },
     { type: 'bytes32', name: 'salt' },
     { type: 'address[]', name: 'initHolders' },
     { type: 'uint256[]', name: 'initShares' },
-    { type: 'bool', name: 'lockShares' },
+    { type: 'uint256[]', name: 'initLoot' },
+    { components: [
+      { type: 'uint96', name: 'proposalThreshold' },
+      { type: 'uint64', name: 'proposalTTL' },
+      { type: 'uint64', name: 'timelockDelay' },
+      { type: 'uint96', name: 'quorumAbsolute' },
+      { type: 'uint96', name: 'minYesVotes' },
+      { type: 'bool', name: 'lockShares' },
+      { type: 'bool', name: 'lockLoot' },
+      { type: 'uint256', name: 'autoFutarchyParam' },
+      { type: 'uint256', name: 'autoFutarchyCap' },
+      { type: 'address', name: 'futarchyRewardToken' },
+      { type: 'bool', name: 'saleActive' },
+      { type: 'address', name: 'salePayToken' },
+      { type: 'uint256', name: 'salePricePerShare' },
+      { type: 'uint256', name: 'saleCap' },
+      { type: 'bool', name: 'saleMinting' },
+      { type: 'bool', name: 'saleIsLoot' },
+      { type: 'address', name: 'burnSingleton' },
+      { type: 'uint256', name: 'saleBurnDeadline' },
+      { type: 'address', name: 'rollbackGuardian' },
+      { type: 'address', name: 'rollbackSingleton' },
+      { type: 'uint40', name: 'rollbackExpiry' }
+    ], type: 'tuple', name: 'config' },
     { components: [
       { type: 'address', name: 'singleton' },
       { type: 'address', name: 'payToken' },
@@ -13553,9 +13579,14 @@ const SAFE_SUMMONER_ABI = [{
       { type: 'uint40', name: 'deadline' },
       { type: 'bool', name: 'gateBySale' },
       { type: 'uint128', name: 'minSupply' }
-    ], type: 'tuple', name: 'seed' }
+    ], type: 'tuple', name: 'seed' },
+    { type: 'tuple[]', name: 'extraCalls', components: [
+      { type: 'address', name: 'target' },
+      { type: 'uint256', name: 'value' },
+      { type: 'bytes', name: 'data' }
+    ]}
   ],
-  name: 'summonStandardDAICO',
+  name: 'safeSummonDAICO',
   outputs: [{ type: 'address' }],
   stateMutability: 'payable',
   type: 'function'
@@ -13956,7 +13987,7 @@ async function coinLaunch() {
 
     const salt = ethers.hexlify(ethers.randomBytes(32));
 
-    // --- Cause DAICO path (SafeSummoner.summonStandardDAICO) ---
+    // --- Cause DAICO path (SafeSummoner.safeSummonDAICO) ---
     if (_coinLaunchType === 'cause') {
       const raise = parseFloat($('causeRaise').value) || 10;
       const days = parseInt($('causeDeadline').value) || 30;
@@ -13991,9 +14022,11 @@ async function coinLaunch() {
         const beneficiary = coinGetResolved('causeTapBeneficiary') || address;
         let budgetWei, rate;
         if (tapInstant) {
-          // All funds flow directly to beneficiary
+          // All funds flow directly to beneficiary — use raise/sec rate so entire
+          // treasury drains in 1 second. TapVest requires advance = claimed/rate >= 1,
+          // so rate must be <= expected treasury to avoid NothingToClaim revert.
           budgetWei = ongoing ? ethers.MaxUint256 : ethers.parseEther(String(raise));
-          rate = MAX_UINT128;
+          rate = ongoing ? ethers.parseEther('1000') : ethers.parseEther(String(raise)); // raise ETH/sec
         } else if (ongoing) {
           // Ongoing: user-specified ETH/month rate, unlimited budget
           const ethPerMonth = parseFloat($('causeTapEthRate').value) || 1;
@@ -14028,12 +14061,46 @@ async function coinLaunch() {
       const initHolders = [address];
       const initShares = [ethers.parseEther('1')]; // creator gets 1 share
 
+      // SafeConfig: standard DAICO governance with quorumAbsolute for minting sale (KF#2)
+      const PROPOSAL_THRESHOLD = ethers.parseEther('1'); // 1 share minimum to propose
+      const safeConfig = {
+        proposalThreshold: PROPOSAL_THRESHOLD,
+        proposalTTL: BigInt(7 * 86400), // 7 days
+        timelockDelay: BigInt(2 * 86400), // 2 days
+        quorumAbsolute: PROPOSAL_THRESHOLD, // floor for minting sale safety
+        minYesVotes: 0n,
+        lockShares: false,
+        lockLoot: false,
+        autoFutarchyParam: 0n,
+        autoFutarchyCap: 0n,
+        futarchyRewardToken: ZERO_ADDRESS,
+        saleActive: false,
+        salePayToken: ZERO_ADDRESS,
+        salePricePerShare: 0n,
+        saleCap: 0n,
+        saleMinting: false,
+        saleIsLoot: false,
+        burnSingleton: ZERO_ADDRESS,
+        saleBurnDeadline: 0n,
+        rollbackGuardian: ZERO_ADDRESS,
+        rollbackSingleton: ZERO_ADDRESS,
+        rollbackExpiry: 0n
+      };
+
       coinShowStatus('Please confirm the transaction in your wallet...');
       const safeSummoner = new ethers.Contract(SAFE_SUMMONER, SAFE_SUMMONER_ABI, _signer);
-      const tx = await safeSummoner.summonStandardDAICO(
-        name, symbol, orgURI, salt,
-        initHolders, initShares, false, // shares transferable
-        saleModule, tapModule, seedModule
+      const tx = await safeSummoner.safeSummonDAICO(
+        name, symbol, orgURI,
+        1000, // quorumBps: 10%
+        true, // ragequittable
+        '0x000000000011C799980827F52d3137b4abD6E654', // RENDERER
+        salt,
+        initHolders, initShares,
+        [], // initLoot
+        safeConfig,
+        saleModule, tapModule, seedModule,
+        [], // extraCalls
+        { value: priceWei } // creator pays for their 1 share — full ragequit symmetry
       );
 
       coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
