@@ -3410,13 +3410,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     html += `</div>`;
   }
 
-  // Raised / price header
+  // Raised / treasury header
   const raisedUsd = ethUsd ? ' ($' + (raisedEth * ethUsd).toFixed(2) + ')' : '';
+  const treasuryEth = Number(ethers.formatEther(treasuryETH));
+  const treasuryUsd = ethUsd ? ' ($' + (treasuryEth * ethUsd).toFixed(2) + ')' : '';
+  const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
   html += `
     <div style="margin-bottom:10px">
       <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(4)} ETH</span>
       <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised</span>
       <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
+      ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(4)} ETH treasury${treasuryUsd}</div>` : ''}
     </div>
   `;
 
