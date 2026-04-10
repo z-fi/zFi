@@ -648,11 +648,12 @@ const COIN_DB_URL = 'https://zfi-pin.rosscampbell9.workers.dev'; // same worker,
 async function coinDbInsert(table, row) {
   if (!COIN_DB_URL) return;
   try {
-    await fetch(`${COIN_DB_URL}/db/${table}`, {
+    const res = await fetch(`${COIN_DB_URL}/db/${table}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(row)
     });
+    if (!res.ok) console.warn('DB insert failed:', table, res.status, await res.text());
   } catch (e) {
     console.warn('DB insert failed:', table, e);
   }
@@ -2559,7 +2560,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     </div>
   `;
 
-  // Chat — room lookup from Supabase, messages via Socket.IO
+  // Chat — room lookup from Supabase, messages via Socket.IO (collapsed by default, lazy-connect)
   _curveRoomId = null;
   if (COIN_DB_URL) {
     const rooms = await coinDbFetch('gated_rooms',
@@ -2568,13 +2569,15 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       _curveRoomId = rooms[0].id;
       const chatDisabled = !tokenBalance || tokenBalance === 0n;
       html += `
-        <div class="curve-chat">
-          <div class="section-title" style="margin-bottom:6px">Chat</div>
-          <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">Loading...</div></div>
-          <div class="curve-chat-input">
-            <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold tokens to chat' : 'Message...'}" maxlength="500"
-              ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
-            <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
+        <div class="curve-chat" id="causeChatWrap">
+          <div class="section-title" style="margin-bottom:6px;cursor:pointer;user-select:none" onclick="toggleCauseChat()">Chat <span id="causeChatChevron" style="font-size:10px">&#9654;</span></div>
+          <div id="causeChatBody" style="display:none">
+            <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">No messages yet</div></div>
+            <div class="curve-chat-input">
+              <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold tokens to chat' : 'Message...'}" maxlength="500"
+                ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
+              <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
+            </div>
           </div>
         </div>
       `;
@@ -2595,10 +2598,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   // Draw price chart
   drawCurveChart($('curveChart'), observations);
 
-  // Connect to gated room chat via Socket.IO (real-time, token-gated)
-  if (_curveRoomId) {
-    coinRoomConnect(_curveRoomId);
-  }
+  // Chat socket is lazy-connected when user opens the chat panel
 }
 
 // ---- Chart ----
@@ -2903,9 +2903,11 @@ let _coinSocket = null;
 let _coinRoomJoined = false;
 
 function _coinChatMsg(m) {
-  const sender = m.sender_name || m.name || (m.sender ? m.sender.slice(0, 6) + '\u2026' + m.sender.slice(-4) : '???');
-  const age = m.created_at ? fmtAge(Math.floor(new Date(m.created_at).getTime() / 1000)) : 'now';
-  return `<div class="curve-chat-msg"><span class="curve-chat-sender" title="${escAttr(m.sender || '')}">${escText(sender)}</span><span class="curve-chat-time">${age}</span><div class="curve-chat-text">${escText(m.text || '')}</div></div>`;
+  const rawSender = m.sender_name || m.name || m.sender || '???';
+  const sender = rawSender.startsWith('0x') && rawSender.length > 16 ? rawSender.slice(0, 6) + '\u2026' + rawSender.slice(-4) : rawSender;
+  const ts = m.ts || m.created_at || m.createdAt;
+  const age = ts ? fmtAge(Math.floor((typeof ts === 'number' ? ts : new Date(ts).getTime()) / 1000)) : 'now';
+  return `<div class="curve-chat-msg"><span class="curve-chat-sender" title="${escAttr(m.sender || '')}">${escText(sender)}</span> <span class="curve-chat-time">&middot; ${age}</span><div class="curve-chat-text">${escText(m.text || '')}</div></div>`;
 }
 
 async function coinRoomConnect(roomId) {
@@ -2959,12 +2961,15 @@ function coinRoomDisconnect() {
   _coinRoomJoined = false;
 }
 
+let _chatSending = false;
 async function curveSendChat() {
+  if (_chatSending) return;
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
   if (!_curveRoomId || !_coinSocket) return;
   const input = $('curveChatInput');
   const text = (input?.value || '').trim();
   if (!text || text.length > 500) return;
+  _chatSending = true;
 
   // Join room with wallet proof on first send (deferred auth, like trollbox)
   if (!_coinRoomJoined) {
@@ -3004,17 +3009,20 @@ async function curveSendChat() {
         if (msgsEl) msgsEl.insertAdjacentHTML('beforeend', `<div class="curve-chat-msg" style="color:var(--fg-dim);font-style:italic">Hold tokens to chat</div>`);
         const chatInput = $('curveChatInput');
         if (chatInput) { chatInput.disabled = true; chatInput.placeholder = 'Hold tokens to chat'; }
+        _chatSending = false;
         return;
       }
       _coinRoomJoined = true;
     } catch (e) {
       console.warn('Chat auth failed:', e);
+      _chatSending = false;
       return;
     }
   }
 
   _coinSocket.emit('gated-room-chat', { roomId: _curveRoomId, text });
   input.value = '';
+  setTimeout(() => { _chatSending = false; }, 1000);
 }
 
 // Auto-join room after buy, auto-boot after sell (if Supabase configured)
@@ -3422,15 +3430,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const creatorShares = ethers.parseEther('1');
   const sold = sharesTotalSupply > creatorShares ? sharesTotalSupply - creatorShares : 0n;
   // Cap = sold + remaining allowance to ShareSale
+  // SafeSummoner DAOs may not use DAO-level allowance — if allowance is 0 but sale
+  // has a price and no expired deadline, treat as open-ended
   const cap = sold + saleAllowance;
-  const isOpenCap = cap >= 2n ** 128n; // ongoing causes use MaxUint256
   const saleDeadline = saleData ? Number(saleData.deadline) : 0;
+  const now = Math.floor(Date.now() / 1000);
+  const saleActive = saleDeadline === 0 || now < saleDeadline;
+  const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
   const salePct = (!isOpenCap && cap > 0n) ? Number(sold * 10000n / cap) / 100 : 0;
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
-  const now = Math.floor(Date.now() / 1000);
-  const saleActive = saleDeadline === 0 || now < saleDeadline;
   const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
 
   // Tap state — rate/beneficiary from TapVest.taps(), budget from DAO allowance
@@ -3487,11 +3497,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const treasuryUsd = ethUsd ? ' ($' + (treasuryEth * ethUsd).toFixed(2) + ')' : '';
   const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
   html += `
-    <div style="margin-bottom:10px">
-      <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(4)} ETH</span>
+    <div id="causeRaisedRow" style="margin-bottom:10px">
+      <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
       <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised</span>
       <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
-      ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(4)} ETH treasury${treasuryUsd}</div>` : ''}
+      ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
     </div>
   `;
 
@@ -3499,7 +3509,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const capFmt = isOpenCap ? 'Open' : (cap > 0n ? Number(ethers.formatEther(cap)).toLocaleString(undefined, {maximumFractionDigits: 0}) : 'Open');
   const soldFmt = Number(ethers.formatEther(sold)).toLocaleString(undefined, {maximumFractionDigits: 0});
   html += `
-    <div class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
+    <div id="causeStatsGrid" class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Price</div>
         <div style="font-weight:600">${fmtNum(priceEth)} ETH</div>
@@ -3507,12 +3517,12 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Sold</div>
-        <div style="font-weight:600">${soldFmt}</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${(isOpenCap || cap === 0n) ? 'shares' : 'of ' + capFmt}</div>
+        <div id="causeSoldVal" style="font-weight:600">${soldFmt}</div>
+        <div id="causeSoldCap" style="font-size:9px;color:var(--fg-dim)">${(isOpenCap || cap === 0n) ? 'shares' : 'of ' + capFmt}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
-        <div style="font-weight:600;color:${saleEnded ? 'var(--fg-muted)' : 'var(--green)'}">${saleEnded ? 'Ended' : 'Active'}</div>
+        <div id="causeStatusVal" style="font-weight:600;color:${saleEnded ? 'var(--fg-muted)' : 'var(--green)'}">${saleEnded ? 'Ended' : 'Active'}</div>
         <div style="font-size:9px;color:var(--fg-dim)">${saleDeadline > 0 ? fmtAge(saleDeadline) : 'no deadline'}</div>
       </div>
     </div>
@@ -3521,12 +3531,12 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Progress bar (skip for open/unlimited cap)
   if (!isOpenCap && cap > 0n) {
     html += `
-      <div style="margin-bottom:14px;font-family:monospace">
+      <div id="causeProgressBar" style="margin-bottom:14px;font-family:monospace">
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
           <span>funded</span>
-          <span>${salePct.toFixed(1)}%</span>
+          <span id="causePctLabel">${salePct.toFixed(1)}%</span>
         </div>
-        <div style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
+        <div id="causePctBar" style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
       </div>
     `;
   }
@@ -3638,7 +3648,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     </div>
   `;
 
-  // Chat — room lookup from Supabase, messages via Socket.IO
+  // Chat — room lookup from Supabase, messages via Socket.IO (collapsed by default, lazy-connect)
   _curveRoomId = null;
   if (COIN_DB_URL) {
     const rooms = await coinDbFetch('gated_rooms',
@@ -3647,13 +3657,15 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       _curveRoomId = rooms[0].id;
       const chatDisabled = !userBalance || userBalance === 0n;
       html += `
-        <div class="curve-chat">
-          <div class="section-title" style="margin-bottom:6px">Chat</div>
-          <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">Loading...</div></div>
-          <div class="curve-chat-input">
-            <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold shares to chat' : 'Message...'}" maxlength="500"
-              ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
-            <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
+        <div class="curve-chat" id="causeChatWrap">
+          <div class="section-title" style="margin-bottom:6px;cursor:pointer;user-select:none" onclick="toggleCauseChat()">Chat <span id="causeChatChevron" style="font-size:10px">&#9654;</span></div>
+          <div id="causeChatBody" style="display:none">
+            <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">No messages yet</div></div>
+            <div class="curve-chat-input">
+              <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold shares to chat' : 'Message...'}" maxlength="500"
+                ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
+              <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
+            </div>
           </div>
         </div>
       `;
@@ -3672,10 +3684,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   app.innerHTML = html;
 
-  // Connect to gated room chat via Socket.IO
-  if (_curveRoomId) {
-    coinRoomConnect(_curveRoomId);
-  }
+  // Chat socket is lazy-connected when user opens the chat panel
 
   // Store for buy/ragequit functions
   app.dataset.dao = daoAddr;
@@ -3685,18 +3694,130 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.totalSupply = (sharesTotalSupply + lootTotalSupply).toString();
   app.dataset.userBalance = userBalance.toString();
 
-  // Auto-refresh sale data every 30s
+  // Auto-refresh sale stats every 30s (partial update, preserves chat/inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
   _causeRefreshTimer = setInterval(() => {
     if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); return; }
-    const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-    renderCoinPage(daoAddr);
+    refreshCauseStats(daoAddr, metadata);
   }, 30000);
 }
 
 let _causeRefreshTimer = null;
 let _causeBuyMode = 'shares'; // 'shares' or 'eth'
+let _causeChatOpen = false;
+
+function toggleCauseChat() {
+  _causeChatOpen = !_causeChatOpen;
+  const body = $('causeChatBody');
+  const chevron = $('causeChatChevron');
+  if (body) body.style.display = _causeChatOpen ? '' : 'none';
+  if (chevron) chevron.innerHTML = _causeChatOpen ? '&#9660;' : '&#9654;';
+  if (_causeChatOpen && _curveRoomId && !_coinSocket) {
+    const msgsEl = $('curveChatMsgs');
+    if (msgsEl) msgsEl.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(14)} Loading...</div>`;
+    coinRoomConnect(_curveRoomId);
+    // Fallback if history never arrives
+    setTimeout(() => {
+      const el = $('curveChatMsgs');
+      if (el && el.querySelector('.activity-empty')) el.innerHTML = '<div class="activity-empty">No messages yet</div>';
+    }, 8000);
+  }
+}
+
+async function refreshCauseStats(daoAddr, metadata) {
+  const gen = _renderGen;
+  try {
+    const sharesAddr = $('app')?.dataset?.shares;
+    if (!sharesAddr) return;
+    const ssIface = new ethers.Interface(SHARE_SALE_ABI);
+    const erc20I = new ethers.Interface(ERC20_ABI);
+    const daoI = new ethers.Interface(['function allowance(address spender, address token) view returns (uint256)']);
+    const mc3Calls = [
+      { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
+      { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [daoAddr]) },
+      { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
+      { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
+    ];
+    if (_connectedAddress) {
+      mc3Calls.push({ target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
+    }
+    const mcRes = await withRPC(async rpc => {
+      const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+      return await mc.aggregate3(mc3Calls);
+    }).catch(() => []);
+    if (gen !== _renderGen) return;
+
+    let saleData = null, treasuryETH = 0n, sharesTotalSupply = 0n, saleAllowance = 0n, userBalance = 0n;
+    if (mcRes[0]?.success) try { saleData = ssIface.decodeFunctionResult('sales', mcRes[0].returnData); } catch {}
+    if (mcRes[1]?.success) try { treasuryETH = new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
+    if (mcRes[2]?.success) try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[2].returnData)[0]; } catch {}
+    if (mcRes[3]?.success) try { saleAllowance = daoI.decodeFunctionResult('allowance', mcRes[3].returnData)[0]; } catch {}
+    if (_connectedAddress && mcRes[4]?.success) try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[4].returnData)[0]; } catch {}
+
+    const price = saleData ? BigInt(saleData.price) : 0n;
+    const creatorShares = ethers.parseEther('1');
+    const sold = sharesTotalSupply > creatorShares ? sharesTotalSupply - creatorShares : 0n;
+    const cap = sold + saleAllowance;
+    const saleDeadline = saleData ? Number(saleData.deadline) : 0;
+    const now = Math.floor(Date.now() / 1000);
+    const saleActive = saleDeadline === 0 || now < saleDeadline;
+    const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
+    const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
+    const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
+    const raisedEth = Number(ethers.formatEther(raisedWei));
+    const treasuryEth = Number(ethers.formatEther(treasuryETH));
+    const ethUsd = _ethUsdPrice || 0;
+
+    // Update raised row
+    const raisedEl = $('causeRaisedRow');
+    if (raisedEl) {
+      const raisedUsd = ethUsd ? ' ($' + (raisedEth * ethUsd).toFixed(2) + ')' : '';
+      const treasuryUsd = ethUsd ? ' ($' + (treasuryEth * ethUsd).toFixed(2) + ')' : '';
+      const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
+      raisedEl.innerHTML = `
+        <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
+        <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised</span>
+        <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
+        ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
+      `;
+    }
+
+    // Update sold count
+    const soldEl = $('causeSoldVal');
+    if (soldEl) soldEl.textContent = Number(ethers.formatEther(sold)).toLocaleString(undefined, {maximumFractionDigits: 0});
+    const capEl = $('causeSoldCap');
+    if (capEl) {
+      const capFmt = isOpenCap ? 'Open' : (cap > 0n ? Number(ethers.formatEther(cap)).toLocaleString(undefined, {maximumFractionDigits: 0}) : 'Open');
+      capEl.textContent = (isOpenCap || cap === 0n) ? 'shares' : 'of ' + capFmt;
+    }
+
+    // Update status
+    const statusEl = $('causeStatusVal');
+    if (statusEl) {
+      statusEl.textContent = saleEnded ? 'Ended' : 'Active';
+      statusEl.style.color = saleEnded ? 'var(--fg-muted)' : 'var(--green)';
+    }
+
+    // Update user balance
+    if (_connectedAddress) {
+      const balEl = document.querySelector('.coin-user-balance');
+      if (balEl) balEl.textContent = (userBalance > 0n ? fmtTokenAmount(userBalance.toString()) : '0') + ' shares';
+    }
+
+    // Update progress bar (capped sales only)
+    if (!isOpenCap && cap > 0n) {
+      const salePct = Number(sold * 10000n / cap) / 100;
+      const pctLabel = $('causePctLabel');
+      if (pctLabel) pctLabel.textContent = salePct.toFixed(1) + '%';
+      const pctBar = $('causePctBar');
+      if (pctBar) pctBar.innerHTML = `<span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span>`;
+    }
+
+    // Update stored data
+    $('app').dataset.treasury = treasuryETH.toString();
+    $('app').dataset.userBalance = userBalance.toString();
+  } catch (e) { console.warn('Cause stats refresh failed:', e); }
+}
 
 function causeSwitchMode(mode) {
   _causeBuyMode = mode;
@@ -3831,7 +3952,7 @@ async function causeBuy(daoAddr) {
 
     statusEl.innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${Number(ethers.formatEther(shareAmt)).toLocaleString()} shares! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('causeBuyAmount').value = '';
-    setTimeout(() => renderCoinPage(daoAddr), 3000);
+    setTimeout(() => refreshCauseStats(daoAddr, null), 2000);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('causeTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
@@ -3924,6 +4045,8 @@ async function causeRagequit(daoAddr) {
 // ==================== DAICO COIN PAGE ====================
 async function renderCoinPage(daoAddr) {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
+  _causeChatOpen = false;
+  coinRoomDisconnect();
   const gen = ++_renderGen;
   const app = $('app');
   app.innerHTML = `
