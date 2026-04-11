@@ -3524,7 +3524,7 @@ async function handleAmountChange() {
       quote._simP.then(resolvedSim => {
         if (_simSeq !== _quoteSeq) return; // stale
         if (!quote._simP) return; // cleared by manual route selection
-        if (isDirectPath) { setShown('simRow', false); return; }
+        if (isDirectPath && !(quote.directDAO && quote.daoCalldata)) { setShown('simRow', false); return; }
         const s = quote._sim; // populated by the promise handler
         if (!s) { setShown('simRow', false); return; }
         if (s.ok) {
@@ -3554,6 +3554,8 @@ async function handleAmountChange() {
         // Fire non-blocking Tenderly for on-chain route
         if (quote.multicall && _connectedAddress) {
           _fireTenderlySimulation(_connectedAddress, ZROUTER_ADDRESS, quote.multicall, String(quote.msgValue || '0'), _simSeq);
+        } else if (quote.directDAO && quote.daoCalldata && _connectedAddress) {
+          _fireTenderlySimulation(_connectedAddress, ZORG_DAO, quote.daoCalldata, String(quote.msgValue || '0'), _simSeq);
         }
       });
     }
@@ -3585,7 +3587,15 @@ async function handleAmountChange() {
       // Fire non-blocking Tenderly simulation for on-chain routes
       if (quote.multicall && _connectedAddress) {
         _fireTenderlySimulation(_connectedAddress, ZROUTER_ADDRESS, quote.multicall, String(quote.msgValue || '0'), seq);
+      } else if (quote.directDAO && quote.daoCalldata && _connectedAddress) {
+        _fireTenderlySimulation(_connectedAddress, ZORG_DAO, quote.daoCalldata, String(quote.msgValue || '0'), seq);
       }
+    } else if (isDirectPath && quote.directDAO && quote.daoCalldata && _connectedAddress) {
+      // Direct DAO paths (stake/ragequit): no on-chain sim, but fire Tenderly
+      setShown('simRow', true);
+      simEl.textContent = '';
+      simEl.className = '';
+      _fireTenderlySimulation(_connectedAddress, ZORG_DAO, quote.daoCalldata, String(quote.msgValue || '0'), seq);
     } else if (sim && isDirectPath) {
       setShown('simRow', false);
     } else if (!_simPending) {
@@ -7491,12 +7501,13 @@ async function executeSwap() {
               data: ERC20_APPROVE_IFACE.encodeFunctionData('approve', [ZROUTER_ADDRESS, ethers.MaxUint256]),
             });
             const batchMsgValue = quote.msgValue ?? 0n;
-            const batchId = await _connectedWalletProvider.request({
+            const batchRaw = await _connectedWalletProvider.request({
               method: 'wallet_sendCalls',
               params: [{
                 version: '1',
                 from: _connectedAddress,
                 chainId: '0x1',
+                atomicRequired: true,
                 calls: [...approveCalls, {
                   to: ZROUTER_ADDRESS,
                   data: txData,
@@ -7504,6 +7515,8 @@ async function executeSwap() {
                 }],
               }],
             });
+            // Extract batch ID (spec returns {id}, some wallets return bare string)
+            const batchId = typeof batchRaw === 'object' && batchRaw?.id ? batchRaw.id : batchRaw;
             // Poll wallet_getCallsStatus for completion
             swapBtn.textContent = "Confirming batch...";
             let batchResult;
@@ -7513,10 +7526,12 @@ async function executeSwap() {
                 method: 'wallet_getCallsStatus',
                 params: [batchId],
               });
-              if (batchResult.status === 'CONFIRMED' || batchResult.status === 'confirmed'
-                  || batchResult.status === 200 || batchResult.status === 'REVERTED') break;
+              const s = batchResult.status;
+              if (s === 200 || s === 'CONFIRMED' || s === 'confirmed'
+                  || s >= 400 || s === 'REVERTED') break;
             }
-            if (batchResult?.status === 'CONFIRMED' || batchResult?.status === 'confirmed' || batchResult?.status === 200) {
+            const bs = batchResult?.status;
+            if (bs === 200 || bs === 'CONFIRMED' || bs === 'confirmed') {
               const batchHash = batchResult.receipts?.[batchResult.receipts.length - 1]?.transactionHash;
               cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
               // CoW Protocol: post signed order after on-chain deposit
@@ -7544,7 +7559,7 @@ async function executeSwap() {
               }, 3000);
               return;
             }
-            throw new Error("Batch " + (batchResult?.status || "failed"));
+            throw new Error("Batch " + (bs === 500 ? "reverted" : bs === 600 ? "partially reverted" : bs || "failed"));
           } catch (e5792) {
             const msg = String(e5792?.message || '');
             if (/user rejected|user denied|user cancelled/i.test(msg)) throw e5792;

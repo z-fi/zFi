@@ -184,7 +184,7 @@ async function connectWithWallet(walletKey) {
     // ERC-5792: probe wallet_sendCalls support (non-blocking, no delay to connect)
     _walletSendCalls = false;
     walletProvider.request({ method: 'wallet_getCapabilities', params: [_connectedAddress] }).then(caps => {
-      if (caps && (caps['0x1']?.atomicBatch?.supported || caps['0x1']?.['atomic-batch']?.supported)) _walletSendCalls = true;
+      if (caps) { const c = caps['0x1']; if (c?.atomicBatch?.supported || c?.['atomic-batch']?.supported || c?.atomic?.status === 'supported' || c?.atomic?.status === 'ready') _walletSendCalls = true; }
     }).catch(() => {});
     if (oldWP && _walletEventHandlers) { try { oldWP.removeListener('accountsChanged', _walletEventHandlers.accountsChanged); oldWP.removeListener('chainChanged', _walletEventHandlers.chainChanged); } catch (e) {} }
     _walletEventHandlers = { accountsChanged: () => window.location.reload(), chainChanged: () => window.location.reload() };
