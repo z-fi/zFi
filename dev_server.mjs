@@ -53,6 +53,11 @@ function serveStatic(req, res) {
   const u = new URL(req.url, `http://localhost:${PORT}`);
   let filePath = path.join(__dirname, decodeURIComponent(u.pathname));
 
+  if (!filePath.startsWith(__dirname + path.sep) && filePath !== __dirname) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    return res.end('Forbidden');
+  }
+
   if (filePath.endsWith('/') || !path.extname(filePath)) {
     const asDir = filePath.endsWith('/') ? filePath : filePath + '/';
     const idx = path.join(asDir, 'index.html');
