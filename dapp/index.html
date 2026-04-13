@@ -1583,7 +1583,6 @@ const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
 const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
-const V4_ROUTER_ADDRESS = "0x00000000000044a361Ae3cAc094c9D1b14Eece97";
 // 0x / Matcha integration
 const MATCHA_ADDRESS = "0xBB11c36FBF566B5fad265218bCdB4F528d14E0b5";
 const OX_API_BASE = "https://zfi-pin.rosscampbell9.workers.dev/0x";
@@ -1633,23 +1632,6 @@ const COW_SETTLEMENT = "0x9008D19f58AAbD9eD0D60971565AA8510560ab41";
 const COWOL_IFACE = new ethers.Interface([
   "function swap(address, address tokenIn, address, address, bytes data)",
 ]);
-const COW_DOMAIN = { name: "Gnosis Protocol", version: "v2", chainId: 1, verifyingContract: COW_SETTLEMENT };
-const COW_ORDER_TYPE = {
-  Order: [
-    { name: "sellToken", type: "address" },
-    { name: "buyToken", type: "address" },
-    { name: "receiver", type: "address" },
-    { name: "sellAmount", type: "uint256" },
-    { name: "buyAmount", type: "uint256" },
-    { name: "validTo", type: "uint32" },
-    { name: "appData", type: "bytes32" },
-    { name: "feeAmount", type: "uint256" },
-    { name: "kind", type: "string" },
-    { name: "partiallyFillable", type: "bool" },
-    { name: "sellTokenBalance", type: "string" },
-    { name: "buyTokenBalance", type: "string" },
-  ]
-};
 // Bebop integration (JAM + PMM settlement)
 const BEBOPOL_ADDRESS = "0x2b07AA3a1F98Bc31D9bbE9EB0DE1CA37715751af";
 const BEBOP_API = "https://api.bebop.xyz/router/ethereum/v1";
@@ -1704,10 +1686,15 @@ async function fetchDaicoScan() {
   if (_daicoRawCache) return _daicoRawCache;
   if (_daicoRawPromise) return _daicoRawPromise;
   _daicoRawPromise = (async () => {
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-    const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
-    _daicoRawCache = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
-    return _daicoRawCache;
+    try {
+      const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
+      const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
+      _daicoRawCache = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+      return _daicoRawCache;
+    } catch (e) {
+      _daicoRawPromise = null;
+      throw e;
+    }
   })();
   return _daicoRawPromise;
 }
@@ -4513,17 +4500,21 @@ async function get0xPrice(sellToken, buyToken, sellAmount) {
 }
 async function get0xQuote(sellToken, buyToken, sellAmount, slippageBps) {
   if (MATCHA_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    chainId: String(OX_CHAIN_ID),
-    sellToken: ox0xToken(sellToken),
-    buyToken: ox0xToken(buyToken),
-    taker: MATCHA_ADDRESS,
-    slippageBps: String(slippageBps),
-    sellAmount: sellAmount.toString(),
-  });
-  const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/quote?${params}`);
-  if (!resp.ok) return null;
-  return resp.json();
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const params = new URLSearchParams({
+      chainId: String(OX_CHAIN_ID),
+      sellToken: ox0xToken(sellToken),
+      buyToken: ox0xToken(buyToken),
+      taker: MATCHA_ADDRESS,
+      slippageBps: String(slippageBps),
+      sellAmount: sellAmount.toString(),
+    });
+    const resp = await fetch(`${OX_API_BASE}/swap/allowance-holder/quote?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // ParaSwap API helpers
@@ -4554,23 +4545,28 @@ async function getParaswapPrice(sellToken, buyToken, amount, srcDecimals, destDe
 }
 async function getParaswapQuote(priceRoute, sellToken, buyToken, slippageBps) {
   if (PARASOL_ADDRESS === ZERO_ADDRESS) return null;
-  const body = {
-    srcToken: psToken(sellToken),
-    destToken: psToken(buyToken),
-    srcDecimals: priceRoute.srcDecimals,
-    destDecimals: priceRoute.destDecimals,
-    priceRoute,
-    userAddress: PARASOL_ADDRESS,
-    partner: "zFi",
-    slippage: slippageBps,
-  };
-  const resp = await fetch(`${PS_API}/transactions/1?ignoreChecks=true`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) return null;
-  return resp.json();
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const body = {
+      srcToken: psToken(sellToken),
+      destToken: psToken(buyToken),
+      srcDecimals: priceRoute.srcDecimals,
+      destDecimals: priceRoute.destDecimals,
+      priceRoute,
+      userAddress: PARASOL_ADDRESS,
+      partner: "zFi",
+      slippage: slippageBps,
+    };
+    const resp = await fetch(`${PS_API}/transactions/1?ignoreChecks=true`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ac.signal,
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // KyberSwap API helpers
@@ -4595,19 +4591,24 @@ async function getKyberPrice(sellToken, buyToken, sellAmount) {
 }
 async function getKyberQuote(routeSummary, slippageBps) {
   if (KYBEROL_ADDRESS === ZERO_ADDRESS) return null;
-  const resp = await fetch(`${KS_API}/ethereum/api/v1/route/build`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      routeSummary,
-      sender: KYBEROL_ADDRESS,
-      recipient: KYBEROL_ADDRESS,
-      slippageTolerance: slippageBps,
-    }),
-  });
-  if (!resp.ok) return null;
-  const json = await resp.json();
-  return json.data || null;
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const resp = await fetch(`${KS_API}/ethereum/api/v1/route/build`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routeSummary,
+        sender: KYBEROL_ADDRESS,
+        recipient: KYBEROL_ADDRESS,
+        slippageTolerance: slippageBps,
+      }),
+      signal: ac.signal,
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    return json.data || null;
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // 1inch API helpers
@@ -4632,17 +4633,21 @@ async function get1inchPrice(sellToken, buyToken, sellAmount) {
 }
 async function get1inchQuote(sellToken, buyToken, sellAmount, slippageBps) {
   if (ONEINCHOL_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    src: inchToken(sellToken),
-    dst: inchToken(buyToken),
-    amount: sellAmount.toString(),
-    from: ONEINCHOL_ADDRESS,
-    slippage: (Number(slippageBps) / 100).toString(),
-    disableEstimate: 'true',
-  });
-  const resp = await fetch(`${INCH_API_BASE}/swap/v6.0/1/swap?${params}`);
-  if (!resp.ok) return null;
-  return resp.json();
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const params = new URLSearchParams({
+      src: inchToken(sellToken),
+      dst: inchToken(buyToken),
+      amount: sellAmount.toString(),
+      from: ONEINCHOL_ADDRESS,
+      slippage: (Number(slippageBps) / 100).toString(),
+      disableEstimate: 'true',
+    });
+    const resp = await fetch(`${INCH_API_BASE}/swap/v6.0/1/swap?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // Odos API helpers
@@ -4675,17 +4680,22 @@ async function getOdosPrice(sellToken, buyToken, sellAmount) {
 }
 async function getOdosQuote(pathId, slippageBps) {
   if (ODOSOL_ADDRESS === ZERO_ADDRESS) return null;
-  const resp = await fetch(`${ODOS_API}/sor/assemble`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userAddr: ODOSOL_ADDRESS,
-      pathId,
-      simulate: false,
-    }),
-  });
-  if (!resp.ok) return null;
-  return resp.json();
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const resp = await fetch(`${ODOS_API}/sor/assemble`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userAddr: ODOSOL_ADDRESS,
+        pathId,
+        simulate: false,
+      }),
+      signal: ac.signal,
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // OKX DEX API helpers
@@ -4713,20 +4723,24 @@ async function getOkxPrice(sellToken, buyToken, sellAmount) {
 }
 async function getOkxQuote(sellToken, buyToken, sellAmount, slippageBps) {
   if (OKXOL_ADDRESS === ZERO_ADDRESS) return null;
-  const params = new URLSearchParams({
-    chainIndex: '1',
-    fromTokenAddress: okxToken(sellToken),
-    toTokenAddress: okxToken(buyToken),
-    amount: sellAmount.toString(),
-    slippagePercent: (Number(slippageBps) / 100).toString(),
-    userWalletAddress: OKXOL_ADDRESS,
-    swapMode: 'exactIn',
-  });
-  const resp = await fetch(`${OKX_API_BASE}/dex/aggregator/swap?${params}`);
-  if (!resp.ok) return null;
-  const json = await resp.json();
-  if (json.code !== '0' || !json.data || !json.data[0]) return null;
-  return json.data[0];
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const params = new URLSearchParams({
+      chainIndex: '1',
+      fromTokenAddress: okxToken(sellToken),
+      toTokenAddress: okxToken(buyToken),
+      amount: sellAmount.toString(),
+      slippagePercent: (Number(slippageBps) / 100).toString(),
+      userWalletAddress: OKXOL_ADDRESS,
+      swapMode: 'exactIn',
+    });
+    const resp = await fetch(`${OKX_API_BASE}/dex/aggregator/swap?${params}`, { signal: ac.signal });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    if (json.code !== '0' || !json.data || !json.data[0]) return null;
+    return json.data[0];
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
 // Bitget API helpers (HMAC-SHA256 signed requests)
@@ -4926,41 +4940,30 @@ async function getCowPrice(sellToken, buyToken, sellAmount) {
 }
 async function getCowQuote(sellToken, buyToken, sellAmount, receiver) {
   if (COWOL_ADDRESS === ZERO_ADDRESS) return null;
-  const resp = await fetch(`${COW_API}/quote`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sellToken: cowToken(sellToken),
-      buyToken,
-      sellAmountBeforeFee: sellAmount.toString(),
-      from: COWOL_ADDRESS,
-      receiver,
-      kind: "sell",
-      signingScheme: "eip1271",
-      appData: ethers.ZeroHash,
-      partiallyFillable: false,
-      sellTokenBalance: "erc20",
-      buyTokenBalance: "erc20",
-    }),
-  });
-  if (!resp.ok) return null;
-  return resp.json();
-}
-function cowOrderDigest(q) {
-  return ethers.TypedDataEncoder.hash(COW_DOMAIN, COW_ORDER_TYPE, {
-    sellToken: q.sellToken,
-    buyToken: q.buyToken,
-    receiver: q.receiver,
-    sellAmount: BigInt(q.sellAmount),
-    buyAmount: BigInt(q.buyAmount),
-    validTo: q.validTo,
-    appData: q.appData,
-    feeAmount: BigInt(q.feeAmount),
-    kind: q.kind,
-    partiallyFillable: q.partiallyFillable,
-    sellTokenBalance: q.sellTokenBalance,
-    buyTokenBalance: q.buyTokenBalance,
-  });
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 8000);
+  try {
+    const resp = await fetch(`${COW_API}/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sellToken: cowToken(sellToken),
+        buyToken,
+        sellAmountBeforeFee: sellAmount.toString(),
+        from: COWOL_ADDRESS,
+        receiver,
+        kind: "sell",
+        signingScheme: "eip1271",
+        appData: ethers.ZeroHash,
+        partiallyFillable: false,
+        sellTokenBalance: "erc20",
+        buyTokenBalance: "erc20",
+      }),
+      signal: ac.signal,
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 function cowOrderData(q) {
   // abi.encode(buyToken, receiver, sellAmount, buyAmount, validTo, appData, feeAmount)
@@ -6106,13 +6109,8 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       if (psIn > 0n && psIn < result.requiredInput) {
         result.requiredInput = psIn;
         result.expectedOutput = BigInt(psPrice.destAmount);
+        _resetExtFlags(result);
         result.isParaswap = true;
-        result.is0x = false;
-        result.isKyber = false;
-        result.is1inch = false;
-        result.isOdos = false;
-        result.isOkx = false;
-        result.isCow = false;
         result.psPriceRoute = psPrice;
         result.sourceA = "ParaSwap";
         result.sourceB = null;
@@ -6762,11 +6760,6 @@ async function executeSwap() {
     }
     const receiverRaw = ($("receiverAddress")?.value || "").trim();
     if (receiverRaw && !ethers.isAddress(receiverRaw)) {
-      if (isReceiverPending()) {
-        showStatus("Receiver name still resolving...", "error");
-        _swapBusy = false;
-        return;
-      }
       if (!_resolvedReceiver || _resolvedReceiver.input !== receiverRaw || !_resolvedReceiver.address) {
         showStatus("Could not resolve receiver name", "error");
         _swapBusy = false;
@@ -7081,408 +7074,36 @@ async function executeSwap() {
 
     let txData = quote.multicall;
     // Preserve the on-chain route before aggregator fetches overwrite quote.multicall/msgValue
-    const onChainMulticall = quote.multicall;
-    const onChainMsgValue = quote.msgValue;
+    let onChainMulticall = quote.multicall;
+    let onChainMsgValue = quote.msgValue;
 
-    // 0x / Matcha execution: fetch firm quote and build snwap multicall
-    if (quote.is0x) {
-      swapBtn.textContent = "Fetching 0x route...";
-      const toData = tokens[toSnap];
-      const oxQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await get0xQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!oxQ || !oxQ.transaction) {
-        if (!quote.multicall) throw new Error("0x quote unavailable and no on-chain route");
-        quote.is0x = false;
-      } else {
-
-      const isEthIn = fromData.address === ZERO_ADDRESS;
-      const receiver = getReceiver();
-      const matchaData = MATCHA_IFACE.encodeFunctionData('swap', [
-        oxQ.transaction.to,
-        fromData.address,
-        toData.address,
-        receiver,
-        oxQ.transaction.data,
-      ]);
-      const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-        fromData.address,
-        isEthIn ? 0n : amountIn,
-        receiver,
-        toData.address,
-        BigInt(oxQ.minBuyAmount),
-        MATCHA_ADDRESS,
-        matchaData,
-      ]);
-      txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-      quote.multicall = txData;
-      quote.calls = [snwapCall];
-      quote.msgValue = isEthIn ? amountIn : 0n;
-      // Stash for permit2 rebuild (needs amountIn=0 variant)
-      quote._oxMinBuy = oxQ.minBuyAmount;
-      quote._oxMatchaData = matchaData;
-      }
-    }
-
-    // ParaSwap / Parasol execution: fetch firm quote and build snwap multicall
-    if (quote.isParaswap) {
-      swapBtn.textContent = "Fetching ParaSwap route...";
-      const toData = tokens[toSnap];
-      // BUY-side: slippage increases maxSrcAmount in the calldata, but we only send
-      // the indicative srcAmount to Parasol. Use slippage=0 so Augustus pulls exactly srcAmount.
-      const psBuildSlippage = quote.exactOut ? 0 : slippageBps;
-      const psQ = (quote._firmQuoteP && quote._firmSlippage === psBuildSlippage)
-        ? await quote._firmQuoteP
-        : await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, psBuildSlippage);
-      if (!psQ || !psQ.data) {
-        if (!quote.multicall) throw new Error("ParaSwap quote unavailable and no on-chain route");
-        quote.isParaswap = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
+    // Aggregator execution: fetch firm quote and build snwap multicall via _AGG_DEFS
+    {
+      const _aggDef = _AGG_DEFS.find(d => quote[d.flag]);
+      if (_aggDef) {
+        swapBtn.textContent = `Fetching ${quote.sourceA} route...`;
+        const toData = tokens[toSnap];
         const receiver = getReceiver();
-        const parasolData = PARASOL_IFACE.encodeFunctionData('swap', [
-          psQ.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          psQ.data,
-        ]);
-        const psAmountIn = quote.exactOut ? BigInt(quote.psPriceRoute.srcAmount) : amountIn;
-        const psMinBuy = quote.exactOut
-          ? BigInt(quote.psPriceRoute.destAmount)
-          : BigInt(quote.psPriceRoute.destAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : psAmountIn,
-          receiver,
-          toData.address,
-          psMinBuy,
-          PARASOL_ADDRESS,
-          parasolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? psAmountIn : 0n;
-        // Stash for permit2 rebuild (needs amountIn=0 variant)
-        quote._psMinBuy = psMinBuy;
-        quote._psParasolData = parasolData;
-      }
-    }
-
-    // KyberSwap / Kyberol execution: fetch firm quote and build snwap multicall
-    if (quote.isKyber) {
-      swapBtn.textContent = "Fetching KyberSwap route...";
-      const toData = tokens[toSnap];
-      const ksQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getKyberQuote(quote.ksRouteSummary, slippageBps);
-      if (!ksQ || !ksQ.data) {
-        if (!quote.multicall) throw new Error("KyberSwap quote unavailable and no on-chain route");
-        quote.isKyber = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const kyberolData = KYBEROL_IFACE.encodeFunctionData('swap', [
-          ksQ.routerAddress,
-          fromData.address,
-          toData.address,
-          receiver,
-          ksQ.data,
-        ]);
-        const ksMinBuy = BigInt(quote.ksRouteSummary.amountOut) * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          ksMinBuy,
-          KYBEROL_ADDRESS,
-          kyberolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        // Stash for permit2 rebuild (needs amountIn=0 variant)
-        quote._ksMinBuy = ksMinBuy;
-        quote._ksKyberolData = kyberolData;
-      }
-    }
-
-    // 1inch / OneInchol execution: fetch firm quote and build snwap multicall
-    if (quote.is1inch) {
-      swapBtn.textContent = "Fetching 1inch route...";
-      const toData = tokens[toSnap];
-      const inchQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!inchQ || !inchQ.tx) {
-        if (!quote.multicall) throw new Error("1inch quote unavailable and no on-chain route");
-        quote.is1inch = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const oneincholData = ONEINCHOL_IFACE.encodeFunctionData('swap', [
-          inchQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          inchQ.tx.data,
-        ]);
-        const inchMinBuy = BigInt(inchQ.dstAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          inchMinBuy,
-          ONEINCHOL_ADDRESS,
-          oneincholData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        // Stash for permit2 rebuild (needs amountIn=0 variant)
-        quote._inchMinBuy = inchMinBuy;
-        quote._inchOneincholData = oneincholData;
-      }
-    }
-
-    // Odos / Odosol execution: fetch firm quote and build snwap multicall
-    if (quote.isOdos) {
-      swapBtn.textContent = "Fetching Odos route...";
-      const toData = tokens[toSnap];
-      const odosQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getOdosQuote(quote.odosPathId, slippageBps);
-      if (!odosQ || !odosQ.transaction) {
-        if (!quote.multicall) throw new Error("Odos quote unavailable and no on-chain route");
-        quote.isOdos = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const odosolData = ODOSOL_IFACE.encodeFunctionData('swap', [
-          odosQ.transaction.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          odosQ.transaction.data,
-        ]);
-        const odosMinBuy = quote.odosOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          odosMinBuy,
-          ODOSOL_ADDRESS,
-          odosolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        // Stash for permit2 rebuild (needs amountIn=0 variant)
-        quote._odosMinBuy = odosMinBuy;
-        quote._odosOdosolData = odosolData;
-      }
-    }
-
-    // OKX / OKXol execution: fetch firm quote and build snwap multicall
-    if (quote.isOkx) {
-      swapBtn.textContent = "Fetching OKX route...";
-      const toData = tokens[toSnap];
-      const okxQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getOkxQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!okxQ || !okxQ.tx) {
-        if (!quote.multicall) throw new Error("OKX quote unavailable and no on-chain route");
-        quote.isOkx = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const okxolData = OKXOL_IFACE.encodeFunctionData('swap', [
-          okxQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          okxQ.tx.data,
-        ]);
-        const okxMinBuy = quote.okxOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          okxMinBuy,
-          OKXOL_ADDRESS,
-          okxolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        // Stash for permit2 rebuild (needs amountIn=0 variant)
-        quote._okxMinBuy = okxMinBuy;
-        quote._okxOkxolData = okxolData;
-      }
-    }
-
-    // Bitget / Bitgetol execution: fetch firm quote and build snwap multicall
-    if (quote.isBitget) {
-      swapBtn.textContent = "Fetching Bitget route...";
-      const toData = tokens[toSnap];
-      const bitgetQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getBitgetQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!bitgetQ || !bitgetQ.tx) {
-        if (!quote.multicall) throw new Error("Bitget quote unavailable and no on-chain route");
-        quote.isBitget = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const bitgetolData = BITGETOL_IFACE.encodeFunctionData('swap', [
-          bitgetQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          bitgetQ.tx.data,
-        ]);
-        const bitgetMinBuy = quote.bitgetOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          bitgetMinBuy,
-          BITGETOL_ADDRESS,
-          bitgetolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        quote._bitgetMinBuy = bitgetMinBuy;
-        quote._bitgetBitgetolData = bitgetolData;
-      }
-    }
-
-    // Bebop / Bebopol execution: fetch firm quote and build snwap multicall
-    if (quote.isBebop) {
-      swapBtn.textContent = "Fetching Bebop route...";
-      const toData = tokens[toSnap];
-      const bebopQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getBebopQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!bebopQ || !bebopQ.tx) {
-        if (!quote.multicall) throw new Error("Bebop quote unavailable and no on-chain route");
-        quote.isBebop = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const bebopolData = BEBOPOL_IFACE.encodeFunctionData('swap', [
-          bebopQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          bebopQ.tx.data,
-        ]);
-        const bebopMinBuy = quote.bebopOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          bebopMinBuy,
-          BEBOPOL_ADDRESS,
-          bebopolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        quote._bebopMinBuy = bebopMinBuy;
-        quote._bebopBebopolData = bebopolData;
-      }
-    }
-
-    // Enso / Ensol execution: fetch firm quote and build snwap multicall
-    if (quote.isEnso) {
-      swapBtn.textContent = "Fetching Enso route...";
-      const toData = tokens[toSnap];
-      const ensoQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getEnsoQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!ensoQ || !ensoQ.tx) {
-        if (!quote.multicall) throw new Error("Enso quote unavailable and no on-chain route");
-        quote.isEnso = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const ensolData = ENSOL_IFACE.encodeFunctionData('swap', [
-          ensoQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          ensoQ.tx.data,
-        ]);
-        const ensoMinBuy = quote.ensoOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          ensoMinBuy,
-          ENSOL_ADDRESS,
-          ensolData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        quote._ensoMinBuy = ensoMinBuy;
-        quote._ensoEnsolData = ensolData;
-      }
-    }
-
-    // OpenOcean / OpenOceanol execution: fetch firm quote and build snwap multicall
-    if (quote.isOpenOcean) {
-      swapBtn.textContent = "Fetching OpenOcean route...";
-      const toData = tokens[toSnap];
-      const ooQ = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
-        ? await quote._firmQuoteP
-        : await getOpenOceanQuote(fromData.address, toData.address, amountIn, slippageBps);
-      if (!ooQ || !ooQ.tx) {
-        if (!quote.multicall) throw new Error("OpenOcean quote unavailable and no on-chain route");
-        quote.isOpenOcean = false;
-      } else {
-        const isEthIn = fromData.address === ZERO_ADDRESS;
-        const receiver = getReceiver();
-        const openoceanlData = OPENOCEANOL_IFACE.encodeFunctionData('swap', [
-          ooQ.tx.to,
-          fromData.address,
-          toData.address,
-          receiver,
-          ooQ.tx.data,
-        ]);
-        const ooMinBuy = quote.ooOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-        const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-          fromData.address,
-          isEthIn ? 0n : amountIn,
-          receiver,
-          toData.address,
-          ooMinBuy,
-          OPENOCEANOL_ADDRESS,
-          openoceanlData,
-        ]);
-        txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
-        quote.multicall = txData;
-        quote.calls = [snwapCall];
-        quote.msgValue = isEthIn ? amountIn : 0n;
-        quote._ooMinBuy = ooMinBuy;
-        quote._ooOpenoceanlData = openoceanlData;
+        // Use prefetched firm quote if slippage hasn't changed, otherwise fetch fresh
+        const firmQuote = (quote._firmQuoteP && quote._firmSlippage === slippageBps)
+          ? await quote._firmQuoteP
+          : await _aggDef.fetch(quote, fromData.address, toData.address, amountIn, slippageBps);
+        if (!_aggDef.ok(firmQuote)) {
+          if (!quote.multicall) throw new Error(`${quote.sourceA} quote unavailable and no on-chain route`);
+          quote[_aggDef.flag] = false;
+        } else {
+          const { olData, minBuy, olAddr, overrideAmtIn } = _aggDef.build(firmQuote, quote, fromData.address, toData.address, receiver, slippageBps);
+          const isEthIn = fromData.address === ZERO_ADDRESS;
+          const effectiveAmtIn = overrideAmtIn != null ? (isEthIn ? 0n : overrideAmtIn) : (isEthIn ? 0n : amountIn);
+          const snwapCall = ROUTER_IFACE.encodeFunctionData('snwap', [
+            fromData.address, effectiveAmtIn, receiver, toData.address, minBuy, olAddr, olData,
+          ]);
+          txData = ROUTER_IFACE.encodeFunctionData('multicall', [[snwapCall]]);
+          quote.multicall = txData;
+          quote.calls = [snwapCall];
+          quote.msgValue = isEthIn ? (overrideAmtIn ?? amountIn) : 0n;
+          quote._aggStash = { olData, minBuy, olAddr };
+        }
       }
     }
 
@@ -7555,6 +7176,7 @@ async function executeSwap() {
         // --- Try 0: ERC-5792 wallet_sendCalls (batch approve+swap, single confirmation) ---
         // Skip for Privacy Pools swaps — they build a separate deposit tx after approval
         if (_walletSendCalls && !(_ppSwapEnabled && _isPPAsset(toSnap))) {
+          let _batchSubmitted = false;
           try {
             swapBtn.textContent = "Batching approve + swap...";
             const approveCalls = [];
@@ -7585,22 +7207,34 @@ async function executeSwap() {
             // Extract batch ID (spec returns {id}, some wallets return bare string)
             const batchId = typeof batchRaw === 'object' && batchRaw?.id ? batchRaw.id : batchRaw;
             // Poll wallet_getCallsStatus for completion
+            // Once the batch is submitted, we must NOT fall through to permit/approve
+            // paths — that would race with the on-chain batch and confuse the user.
             swapBtn.textContent = "Confirming batch...";
             let batchResult;
+            _batchSubmitted = true;
             for (let i = 0; i < 180; i++) {
               await new Promise(r => setTimeout(r, 2000));
-              batchResult = await _connectedWalletProvider.request({
-                method: 'wallet_getCallsStatus',
-                params: [batchId],
-              });
-              const s = batchResult.status;
-              const sn = typeof s === 'string' ? parseInt(s, 10) : s;
-              if (sn === 200 || s === 'CONFIRMED' || s === 'confirmed'
-                  || sn >= 400 || s === 'REVERTED') break;
+              try {
+                batchResult = await _connectedWalletProvider.request({
+                  method: 'wallet_getCallsStatus',
+                  params: [batchId],
+                });
+              } catch (_pollErr) {
+                // Wallet disconnected or RPC error — batch is still on-chain,
+                // show a non-fatal message and stop (don't race with fallback).
+                console.warn("Batch poll failed:", _pollErr);
+                swapBtn.textContent = "Batch submitted — check wallet for status";
+                _swapResetTimer = setTimeout(() => { updateBalances(); handleAmountChange(); }, 5000);
+                return;
+              }
+              const s = String(batchResult?.status ?? '').toLowerCase();
+              const sn = parseInt(s, 10);
+              if (sn === 200 || s === 'confirmed'
+                  || sn >= 400 || s === 'reverted') break;
             }
             const bs = batchResult?.status;
             const bsn = typeof bs === 'string' ? parseInt(bs, 10) : bs;
-            if (bsn === 200 || bs === 'CONFIRMED' || bs === 'confirmed') {
+            if (bsn === 200 || String(bs).toLowerCase() === 'confirmed') {
               const batchHash = batchResult.receipts?.[batchResult.receipts.length - 1]?.transactionHash;
               cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, 0n);
               // CoW Protocol: post signed order after on-chain deposit
@@ -7628,10 +7262,20 @@ async function executeSwap() {
               }, 3000);
               return;
             }
-            throw new Error("Batch " + (bsn === 500 ? "reverted" : bsn === 600 ? "partially reverted" : bs || "failed"));
+            // Batch was submitted but not confirmed — could be timeout (still pending)
+            // or an on-chain revert. Either way, don't fall through to permit/approve.
+            const _batchReason = bsn === 500 ? "reverted" : bsn === 600 ? "partially reverted"
+              : (!batchResult || bsn < 400) ? "timed out — check wallet for status" : (bs || "failed");
+            throw new Error("Batch " + _batchReason);
           } catch (e5792) {
             const msg = String(e5792?.message || '');
             if (/user rejected|user denied|user cancelled/i.test(msg)) throw e5792;
+            // If batch was already submitted on-chain, don't fall through to
+            // permit/approve — that would race with the pending batch.
+            if (_batchSubmitted) {
+              console.warn("ERC-5792 batch submitted but polling failed:", e5792);
+              throw e5792;
+            }
             console.warn("ERC-5792 batch failed, falling back:", e5792);
           }
         }
@@ -7645,136 +7289,11 @@ async function executeSwap() {
             let permitInnerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
             // For aggregator swaps, re-fetch firm quote after signing (user may have
             // spent time in wallet popup, expiring the baked-in aggregator calldata).
-            const isAggQuote = _isAggWinner(quote);
-            if (isAggQuote) {
+            if (_isAggWinner(quote)) {
               try {
-                const toData = tokens[toSnap];
-                const receiver = getReceiver();
-                let freshAggCall = null;
-                if (quote.is0x) {
-                  const oxQ = await get0xQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (oxQ && oxQ.transaction) {
-                    const matchaData = MATCHA_IFACE.encodeFunctionData('swap', [
-                      oxQ.transaction.to, fromData.address, toData.address, receiver, oxQ.transaction.data,
-                    ]);
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, BigInt(oxQ.minBuyAmount), MATCHA_ADDRESS, matchaData,
-                    ]);
-                  }
-                } else if (quote.isParaswap) {
-                  const psBuildSlippage = quote.exactOut ? 0 : slippageBps;
-                  const psQ = await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, psBuildSlippage);
-                  if (psQ && psQ.data) {
-                    const parasolData = PARASOL_IFACE.encodeFunctionData('swap', [
-                      psQ.to, fromData.address, toData.address, receiver, psQ.data,
-                    ]);
-                    const psMinBuy = quote.exactOut
-                      ? BigInt(quote.psPriceRoute.destAmount)
-                      : BigInt(quote.psPriceRoute.destAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, psMinBuy, PARASOL_ADDRESS, parasolData,
-                    ]);
-                  }
-                } else if (quote.isKyber) {
-                  const ksQ = await getKyberQuote(quote.ksRouteSummary, slippageBps);
-                  if (ksQ && ksQ.data) {
-                    const kyberolData = KYBEROL_IFACE.encodeFunctionData('swap', [
-                      ksQ.routerAddress, fromData.address, toData.address, receiver, ksQ.data,
-                    ]);
-                    const ksMinBuy = BigInt(quote.ksRouteSummary.amountOut) * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, ksMinBuy, KYBEROL_ADDRESS, kyberolData,
-                    ]);
-                  }
-                } else if (quote.is1inch) {
-                  const inchQ = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (inchQ && inchQ.tx) {
-                    const oneincholData = ONEINCHOL_IFACE.encodeFunctionData('swap', [
-                      inchQ.tx.to, fromData.address, toData.address, receiver, inchQ.tx.data,
-                    ]);
-                    const inchMinBuy = BigInt(inchQ.dstAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, inchMinBuy, ONEINCHOL_ADDRESS, oneincholData,
-                    ]);
-                  }
-                } else if (quote.isOdos) {
-                  const odosQ = await getOdosQuote(quote.odosPathId, slippageBps);
-                  if (odosQ && odosQ.transaction) {
-                    const odosolData = ODOSOL_IFACE.encodeFunctionData('swap', [
-                      odosQ.transaction.to, fromData.address, toData.address, receiver, odosQ.transaction.data,
-                    ]);
-                    const odosMinBuy = quote.odosOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, odosMinBuy, ODOSOL_ADDRESS, odosolData,
-                    ]);
-                  }
-                } else if (quote.isOkx) {
-                  const okxQ = await getOkxQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (okxQ && okxQ.tx) {
-                    const okxolData = OKXOL_IFACE.encodeFunctionData('swap', [
-                      okxQ.tx.to, fromData.address, toData.address, receiver, okxQ.tx.data,
-                    ]);
-                    const okxMinBuy = quote.okxOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, okxMinBuy, OKXOL_ADDRESS, okxolData,
-                    ]);
-                  }
-                } else if (quote.isBitget) {
-                  const bitgetQ = await getBitgetQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (bitgetQ && bitgetQ.tx) {
-                    const bitgetolData = BITGETOL_IFACE.encodeFunctionData('swap', [
-                      bitgetQ.tx.to, fromData.address, toData.address, receiver, bitgetQ.tx.data,
-                    ]);
-                    const bitgetMinBuy = quote.bitgetOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, bitgetMinBuy, BITGETOL_ADDRESS, bitgetolData,
-                    ]);
-                  }
-                } else if (quote.isBebop) {
-                  const bebopQ = await getBebopQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (bebopQ && bebopQ.tx) {
-                    const bebopolData = BEBOPOL_IFACE.encodeFunctionData('swap', [
-                      bebopQ.tx.to, fromData.address, toData.address, receiver, bebopQ.tx.data,
-                    ]);
-                    const bebopMinBuy = quote.bebopOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, bebopMinBuy, BEBOPOL_ADDRESS, bebopolData,
-                    ]);
-                  }
-                } else if (quote.isEnso) {
-                  const ensoQ = await getEnsoQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (ensoQ && ensoQ.tx) {
-                    const ensolData = ENSOL_IFACE.encodeFunctionData('swap', [
-                      ensoQ.tx.to, fromData.address, toData.address, receiver, ensoQ.tx.data,
-                    ]);
-                    const ensoMinBuy = quote.ensoOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, ensoMinBuy, ENSOL_ADDRESS, ensolData,
-                    ]);
-                  }
-                } else if (quote.isOpenOcean) {
-                  const ooQ = await getOpenOceanQuote(fromData.address, toData.address, amountIn, slippageBps);
-                  if (ooQ && ooQ.tx) {
-                    const openoceanlData = OPENOCEANOL_IFACE.encodeFunctionData('swap', [
-                      ooQ.tx.to, fromData.address, toData.address, receiver, ooQ.tx.data,
-                    ]);
-                    const ooMinBuy = quote.ooOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                    freshAggCall = ROUTER_IFACE.encodeFunctionData('snwap', [
-                      fromData.address, fromData.address === ZERO_ADDRESS ? 0n : amountIn,
-                      receiver, toData.address, ooMinBuy, OPENOCEANOL_ADDRESS, openoceanlData,
-                    ]);
-                  }
-                }
-                if (freshAggCall) permitInnerCalls = [freshAggCall];
+                swapBtn.textContent = "Refreshing route...";
+                const aggResult = await _buildAggSnwapCall(quote, fromData.address, tokens[toSnap].address, amountIn, undefined, getReceiver(), slippageBps);
+                if (aggResult) permitInnerCalls = [aggResult.snwapCall];
               } catch (aggErr) {
                 console.warn("Permit: fresh agg quote failed, using stashed:", aggErr);
               }
@@ -7821,213 +7340,26 @@ async function executeSwap() {
               let innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
               // Re-fetch firm quotes after permit2 signing to avoid stale calldata.
               // The user may have spent 10-30s in the wallet popup, expiring the original quote.
+              // Permit2 transfers tokens via permit2TransferFrom, so snwap amountIn must be 0n.
               const toData = tokens[toSnap];
               const receiver = getReceiver();
-              if (quote.is0x) {
-                swapBtn.textContent = "Refreshing 0x route...";
-                const oxQ = await get0xQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (oxQ && oxQ.transaction) {
-                  const matchaData = MATCHA_IFACE.encodeFunctionData('swap', [
-                    oxQ.transaction.to, fromData.address, toData.address, receiver, oxQ.transaction.data,
-                  ]);
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    BigInt(oxQ.minBuyAmount), MATCHA_ADDRESS, matchaData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    BigInt(quote._oxMinBuy), MATCHA_ADDRESS, quote._oxMatchaData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.isParaswap) {
-                swapBtn.textContent = "Refreshing ParaSwap route...";
-                const psBuildSlippage = quote.exactOut ? 0 : slippageBps;
-                const psQ = await getParaswapQuote(quote.psPriceRoute, fromData.address, toData.address, psBuildSlippage);
-                if (psQ && psQ.data) {
-                  const parasolData = PARASOL_IFACE.encodeFunctionData('swap', [
-                    psQ.to, fromData.address, toData.address, receiver, psQ.data,
-                  ]);
-                  const psMinBuy = quote.exactOut
-                    ? BigInt(quote.psPriceRoute.destAmount)
-                    : BigInt(quote.psPriceRoute.destAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    psMinBuy, PARASOL_ADDRESS, parasolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._psMinBuy, PARASOL_ADDRESS, quote._psParasolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.isKyber) {
-                swapBtn.textContent = "Refreshing KyberSwap route...";
-                const ksQ = await getKyberQuote(quote.ksRouteSummary, slippageBps);
-                if (ksQ && ksQ.data) {
-                  const kyberolData = KYBEROL_IFACE.encodeFunctionData('swap', [
-                    ksQ.routerAddress, fromData.address, toData.address, receiver, ksQ.data,
-                  ]);
-                  const ksMinBuy = BigInt(quote.ksRouteSummary.amountOut) * (10000n - BigInt(slippageBps)) / 10000n;
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    ksMinBuy, KYBEROL_ADDRESS, kyberolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._ksMinBuy, KYBEROL_ADDRESS, quote._ksKyberolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.is1inch) {
-                swapBtn.textContent = "Refreshing 1inch route...";
-                const inchQ = await get1inchQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (inchQ && inchQ.tx) {
-                  const oneincholData = ONEINCHOL_IFACE.encodeFunctionData('swap', [
-                    inchQ.tx.to, fromData.address, toData.address, receiver, inchQ.tx.data,
-                  ]);
-                  const inchMinBuy = BigInt(inchQ.dstAmount) * (10000n - BigInt(slippageBps)) / 10000n;
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    inchMinBuy, ONEINCHOL_ADDRESS, oneincholData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._inchMinBuy, ONEINCHOL_ADDRESS, quote._inchOneincholData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.isOdos) {
-                swapBtn.textContent = "Refreshing Odos route...";
-                const odosQ = await getOdosQuote(quote.odosPathId, slippageBps);
-                if (odosQ && odosQ.transaction) {
-                  const odosolData = ODOSOL_IFACE.encodeFunctionData('swap', [
-                    odosQ.transaction.to, fromData.address, toData.address, receiver, odosQ.transaction.data,
-                  ]);
-                  const odosMinBuy = quote.odosOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    odosMinBuy, ODOSOL_ADDRESS, odosolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._odosMinBuy, ODOSOL_ADDRESS, quote._odosOdosolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.isOkx) {
-                swapBtn.textContent = "Refreshing OKX route...";
-                const okxQ = await getOkxQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (okxQ && okxQ.tx) {
-                  const okxolData = OKXOL_IFACE.encodeFunctionData('swap', [
-                    okxQ.tx.to, fromData.address, toData.address, receiver, okxQ.tx.data,
-                  ]);
-                  const okxMinBuy = quote.okxOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    okxMinBuy, OKXOL_ADDRESS, okxolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                } else {
-                  const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._okxMinBuy, OKXOL_ADDRESS, quote._okxOkxolData,
-                  ]);
-                  innerCalls = [snwapCall0];
-                }
-              }
-              else if (quote.isBitget) {
-                swapBtn.textContent = "Refreshing Bitget route...";
-                const bitgetQ = await getBitgetQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (bitgetQ && bitgetQ.tx) {
-                  const bitgetolData = BITGETOL_IFACE.encodeFunctionData('swap', [
-                    bitgetQ.tx.to, fromData.address, toData.address, receiver, bitgetQ.tx.data,
-                  ]);
-                  const bitgetMinBuy = quote.bitgetOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
+              if (_isAggWinner(quote)) {
+                swapBtn.textContent = "Refreshing route...";
+                let freshSnwap = null;
+                try {
+                  const aggResult = await _buildAggSnwapCall(quote, fromData.address, toData.address, amountIn, 0n, receiver, slippageBps);
+                  if (aggResult) freshSnwap = aggResult.snwapCall;
+                } catch (_) {}
+                if (freshSnwap) {
+                  innerCalls = [freshSnwap];
+                } else if (quote._aggStash) {
+                  // Fresh fetch failed — rebuild from stashed data with amountIn=0n for permit2
+                  const s = quote._aggStash;
                   innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    bitgetMinBuy, BITGETOL_ADDRESS, bitgetolData,
-                  ])];
-                } else {
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._bitgetMinBuy, BITGETOL_ADDRESS, quote._bitgetBitgetolData,
+                    fromData.address, 0n, receiver, toData.address, s.minBuy, s.olAddr, s.olData,
                   ])];
                 }
-              }
-              else if (quote.isBebop) {
-                swapBtn.textContent = "Refreshing Bebop route...";
-                const bebopQ = await getBebopQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (bebopQ && bebopQ.tx) {
-                  const bebopolData = BEBOPOL_IFACE.encodeFunctionData('swap', [
-                    bebopQ.tx.to, fromData.address, toData.address, receiver, bebopQ.tx.data,
-                  ]);
-                  const bebopMinBuy = quote.bebopOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    bebopMinBuy, BEBOPOL_ADDRESS, bebopolData,
-                  ])];
-                } else {
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._bebopMinBuy, BEBOPOL_ADDRESS, quote._bebopBebopolData,
-                  ])];
-                }
-              }
-              else if (quote.isEnso) {
-                swapBtn.textContent = "Refreshing Enso route...";
-                const ensoQ = await getEnsoQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (ensoQ && ensoQ.tx) {
-                  const ensolData = ENSOL_IFACE.encodeFunctionData('swap', [
-                    ensoQ.tx.to, fromData.address, toData.address, receiver, ensoQ.tx.data,
-                  ]);
-                  const ensoMinBuy = quote.ensoOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    ensoMinBuy, ENSOL_ADDRESS, ensolData,
-                  ])];
-                } else {
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._ensoMinBuy, ENSOL_ADDRESS, quote._ensoEnsolData,
-                  ])];
-                }
-              }
-              else if (quote.isOpenOcean) {
-                swapBtn.textContent = "Refreshing OpenOcean route...";
-                const ooQ = await getOpenOceanQuote(fromData.address, toData.address, amountIn, slippageBps);
-                if (ooQ && ooQ.tx) {
-                  const openoceanlData = OPENOCEANOL_IFACE.encodeFunctionData('swap', [
-                    ooQ.tx.to, fromData.address, toData.address, receiver, ooQ.tx.data,
-                  ]);
-                  const ooMinBuy = quote.ooOutAmount * (10000n - BigInt(slippageBps)) / 10000n;
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    ooMinBuy, OPENOCEANOL_ADDRESS, openoceanlData,
-                  ])];
-                } else {
-                  innerCalls = [ROUTER_IFACE.encodeFunctionData('snwap', [
-                    fromData.address, 0n, receiver, toData.address,
-                    quote._ooMinBuy, OPENOCEANOL_ADDRESS, quote._ooOpenoceanlData,
-                  ])];
-                }
-              }
-              else if (quote.isCow) {
+              } else if (quote.isCow) {
                 const cst = quote._cowSellToken || fromData.address;
                 const snwapCall0 = ROUTER_IFACE.encodeFunctionData('snwap', [
                   cst, 0n, COWOL_ADDRESS, cst,
@@ -8078,6 +7410,17 @@ async function executeSwap() {
           const rc = await waitForTx(approveTx);
           if (rc.status === 0) throw new Error("Approval transaction failed");
           const fresh = _isExactOut ? await getExactOutQuote(amtStr, fromSnap, toSnap) : await getQuote(amtStr, fromSnap, toSnap);
+          // Sync quote state from fresh re-quote so downstream checks (isAggSwap,
+          // isLidoExec, actionLabel, simulation retries) reflect the new route.
+          quote.sourceA = fresh.sourceA; quote.sourceB = fresh.sourceB;
+          quote.isSplit = fresh.isSplit; quote.isTwoHop = fresh.isTwoHop;
+          quote.splitLegs = fresh.splitLegs;
+          _resetExtFlags(quote); // clear all agg flags + isCow
+          for (const d of _AGG_DEFS) { if (fresh[d.flag]) quote[d.flag] = true; }
+          if (fresh.isCow) quote.isCow = true;
+          // Update on-chain fallback route from the fresh quote
+          onChainMulticall = fresh.multicall;
+          onChainMsgValue = fresh.msgValue;
           // Rebuild snwap multicall for whichever aggregator won the re-quote
           {
             const receiver = getReceiver();
@@ -8115,7 +7458,10 @@ async function executeSwap() {
               quote.msgValue = fresh.msgValue;
             }
           }
-          cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, 0n);
+          // Cache the post-approve allowance (amountIn, not 0) so that if the
+          // swap fails, the next attempt sees the remaining allowance and skips
+          // a redundant approve. The swap's success path updates balances anyway.
+          cacheSetAllowance(fromData.address, _connectedAddress, ZROUTER_ADDRESS, amountIn);
         }
       }
     }
@@ -8208,6 +7554,7 @@ async function executeSwap() {
 
       if (ppCfg && depositAmount < ppCfg.minimumDepositAmount) {
         showStatus(`Output below PP minimum deposit of ${fmt(ppFormatAmountWei(ppCfg.minimumDepositAmount, ppAsset))} ${ppAsset}`, "error");
+        handleAmountChange();
         return;
       }
 
@@ -8227,6 +7574,7 @@ async function executeSwap() {
         });
         if (routerToEPAllow < depositAmount) {
           showStatus(`Router lacks ${ppAsset} allowance to the Privacy Pools entrypoint. Contact the zFi team to configure router approval.`, 'error');
+          handleAmountChange();
           return;
         }
       }
@@ -8837,25 +8185,6 @@ function selectToken(symbol) {
   if (_srcField && _srcField.value) reQuoteDebounced();
 }
 
-function setupDirectZammStake() {
-  fromToken = "ZAMM";
-  toToken = "zOrg";
-  updateTokenDisplay();
-  updateBalances();
-  const amt = $("fromAmount");
-  if (amt) amt.focus();
-  if (amt && amt.value) reQuoteDebounced();
-}
-
-function setupRagequit() {
-  fromToken = "zOrg";
-  toToken = "ZAMM";
-  updateTokenDisplay();
-  updateBalances();
-  const amt = $("fromAmount");
-  if (amt) amt.focus();
-  if (amt && amt.value) reQuoteDebounced();
-}
 
 async function addCustomToken() {
   let address = $("customTokenAddress").value.trim();
@@ -9117,8 +8446,6 @@ document.addEventListener("DOMContentLoaded", () => {
     toEl.addEventListener("input", debounce(() => { _inputMode = 'exactOut'; handleAmountChange(); }, 400));
     toEl.addEventListener("blur", () => { if (toEl.value && !isNaN(toEl.value)) toEl.value = +toEl.value; });
   }
-  // Defer heavy localStorage parsing until after first render
-  (window.requestIdleCallback || setTimeout)(() => loadWeiLists());
 });
 
 // Swap button click
@@ -9148,7 +8475,7 @@ $("swapBtn").addEventListener("click", () => {
     });
   }
 
-  function tbEsc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function tbEsc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
   function tbLinkify(t) { return t.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--link-fg,#7B8CFF)">$1</a>'); }
   function tbColor(s) { let h=0; for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${h%360},70%,60%)`; }
 
@@ -9172,7 +8499,7 @@ $("swapBtn").addEventListener("click", () => {
     const color = tbColor(msg.name);
     const d = new Date(msg.ts);
     const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0');
-    el.innerHTML = `<div class="tb-avatar" style="background:${msg.avatar?`url(${tbEsc(msg.avatar)}) center/cover`:color}">
+    el.innerHTML = `<div class="tb-avatar" style="background:${msg.avatar?`url('${tbEsc(msg.avatar)}') center/cover`:color}">
       ${msg.avatar?'':`<span>${tbEsc(msg.name.slice(0,2).toUpperCase())}</span>`}
     </div><div style="min-width:0">
       <span class="tb-name" style="color:${color}">${tbEsc(msg.name)}</span>
@@ -10762,7 +10089,7 @@ async function doSendOrLock() {
         { value: isETH ? amount : 0n }
       );
       statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
-      const receipt = await tx.wait();
+      await waitForTx(tx);
       statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
       statusEl.className = 'status show success';
       $('sendAmount').value = '';
@@ -10780,7 +10107,7 @@ async function doSendOrLock() {
         tx = await erc20.transfer(toAddr, amount);
       }
       statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
-      const receipt = await tx.wait();
+      await waitForTx(tx);
       statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + tx.hash + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
       statusEl.className = 'status show success';
       $('sendAmount').value = '';
