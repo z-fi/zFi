@@ -7578,29 +7578,9 @@ async function executeSwap() {
       const _ppScope = ppComputeScope(ppAsset);
       let _ppDepositIdx, nullifier, secret, precommitment;
 
-      // Build multicall: [permit?] + swap calls + execute(PP deposit) + sweep excess
-      if (swapCalls.length === 0) throw new Error("PP swap routing failed — no swap calls generated");
-      let depositCalldata, executeCall, sweepCalls;
-      if (ppIsERC20) {
-        // Preflight check: router must have token allowance to the Privacy Pools entrypoint
-        const routerToEPAllow = await ppReadWithRpc(async (rpc) => {
-          const tokenPF = new ethers.Contract(ppTokenAddr, ['function allowance(address,address) view returns (uint256)'], rpc);
-          return await tokenPF.allowance(ZROUTER_ADDRESS, PP_ENTRYPOINT);
-        });
-        if (routerToEPAllow < depositAmount) {
-          showStatus(`Router lacks ${ppAsset} allowance to the Privacy Pools entrypoint. Contact the zFi team to configure router approval.`, 'error');
-          handleAmountChange();
-          return;
-        }
-      }
-
-      swapBtn.textContent = "Deriving keys...";
-      await ppWithPendingDepositLock(_connectedAddress, _ppScope, async () => {
-        const _ppStartDepositIdx = await ppResolveNextSafeDepositIndex(ppAsset, _ppScope, ppKeys, _connectedAddress);
-        _ppDepositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, _ppScope, _ppStartDepositIdx);
-        ({ nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, _ppScope, _ppDepositIdx));
-        ppReservePendingDepositIndex(_connectedAddress, _ppScope, _ppDepositIdx);
-      });
+      // Two-step flow: (1) swap via router, sweep output to user wallet;
+      // (2) user deposits to PP directly so msg.sender = user (ragequit-eligible).
+      if (swapCalls.length === 0) throw new Error("PP swap routing failed: no swap calls generated");
 
       // Build swap-only multicall: [permit?] + swap calls + sweep to user
       const _permitSelectors = new Set([
@@ -11121,25 +11101,21 @@ async function doSendOrLock() {
         }
       }
 
-      statusEl.textContent = 'Creating timelock...';                                               
-        statusEl.className = 'status show';
-        const tx = await cookbook.lockup(                                                      
-          isETH ? ZERO_ADDRESS : tokenAddr,
-          toAddr, 0, amount, unlockTime,                                                       
-          { value: isETH ? amount : 0n }                                                       
-        );
-        statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' +               
-  escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx
-   &#8599;</a>'; statusEl.className = 'status show';
-        await waitForTx(tx);                                                                   
-        statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' +
-  escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx
-   &#8599;</a>';
-        statusEl.className = 'status show success';                                            
-        $('sendAmount').value = '';                                                            
-        sendUpdateBalance();
-        setTimeout(sendLoadTimelocks, 3000);                                                   
-      } else { 
+      statusEl.textContent = 'Creating timelock...';
+      statusEl.className = 'status show';
+      const tx = await cookbook.lockup(
+        isETH ? ZERO_ADDRESS : tokenAddr,
+        toAddr, 0, amount, unlockTime,
+        { value: isETH ? amount : 0n }
+      );
+      statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
+      await waitForTx(tx);
+      statusEl.innerHTML = 'Timelock created! <a href="https://etherscan.io/tx/' + escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
+      statusEl.className = 'status show success';
+      $('sendAmount').value = '';
+      sendUpdateBalance();
+      setTimeout(sendLoadTimelocks, 3000);
+    } else {
       // Direct send
       statusEl.textContent = 'Sending...';
       statusEl.className = 'status show';
@@ -11150,15 +11126,12 @@ async function doSendOrLock() {
         const erc20 = new ethers.Contract(tokenAddr, ERC20_TRANSFER_ABI, _signer);
         tx = await erc20.transfer(toAddr, amount);
       }
-      statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + escAttr(tx.hash) +
-  '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';     
-  statusEl.className = 'status show';                                                          
-        await waitForTx(tx);
-        statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + escAttr(tx.hash) + '" 
-  target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';        
-        statusEl.className = 'status show success';                                            
-        $('sendAmount').value = '';                                                            
-        sendUpdateBalance();
+      statusEl.innerHTML = 'Confirming... <a href="https://etherscan.io/tx/' + escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>'; statusEl.className = 'status show';
+      await waitForTx(tx);
+      statusEl.innerHTML = 'Sent! <a href="https://etherscan.io/tx/' + escAttr(tx.hash) + '" target="_blank" style="color:inherit;text-decoration:underline">view tx &#8599;</a>';
+      statusEl.className = 'status show success';
+      $('sendAmount').value = '';
+      sendUpdateBalance();
     }
   } catch (e) {
     console.error(e);
