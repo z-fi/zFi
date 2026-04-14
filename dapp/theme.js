@@ -24,7 +24,7 @@ function _zfiRenderNav() {
   const b = isRoot || !cur ? './' : '../';
   const items = [
     ['', 'Swap'], ['coin/', 'Coin'], ['predict/', 'Predict'],
-    ['orderbook/', 'Orderbook', 'navOrderbook'], ['lp/', 'Liquidity'],
+    ['orderbook/', 'Orderbook', 'navOrderbook'], ['liquidity/', 'Liquidity'],
     ['!https://multisig.wei.is/', 'Multisig'],
     ['domains/', 'Domain'], ['dao/', 'DAO'],
     ['---'],

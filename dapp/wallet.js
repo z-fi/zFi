@@ -168,7 +168,20 @@ async function connectWithWallet(walletKey, options = {}) {
     } else if (walletKey.startsWith('eip6963_')) {
       const uuid = walletKey.replace('eip6963_', '');
       walletProvider = eip6963Providers.get(uuid)?.provider;
-      if (!walletProvider) { const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase(); if (savedName) { for (const [, { info, provider }] of eip6963Providers) { if (info?.name?.toLowerCase() === savedName) { walletProvider = provider; break; } } } }
+      if (!walletProvider) {
+        // UUID changed (new page load) — fall back to matching by wallet name
+        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
+        if (savedName) {
+          for (const [newUuid, { info, provider }] of eip6963Providers) {
+            if (info?.name?.toLowerCase() === savedName) {
+              walletProvider = provider;
+              // Update walletKey so localStorage gets the current UUID
+              walletKey = `eip6963_${newUuid}`;
+              break;
+            }
+          }
+        }
+      }
       _isWalletConnect = false; _wcDeepLink = null;
     } else {
       walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
@@ -179,7 +192,7 @@ async function connectWithWallet(walletKey, options = {}) {
     const chainId = await walletProvider.request({ method: 'eth_chainId' });
     if (BigInt(chainId) !== 1n) {
       try { await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); const nc = await walletProvider.request({ method: 'eth_chainId' }); if (BigInt(nc) !== 1n) throw new Error('Chain switch failed'); }
-      catch (switchErr) { if (!silent) console.error('Chain switch failed:', switchErr); document.getElementById('walletBtn').textContent = 'connect'; if (!silent && typeof showStatus === 'function') showStatus('Please switch to Ethereum mainnet in your wallet.', 'error'); if (walletKey === 'walletconnect') { try { _walletConnectProvider?.disconnect(); } catch (e) {} _walletConnectProvider = null; } _isWalletConnect = false; _wcDeepLink = null; if (silent) { try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (_) {} } return; }
+      catch (switchErr) { if (!silent) console.error('Chain switch failed:', switchErr); document.getElementById('walletBtn').textContent = 'connect'; if (!silent && typeof showStatus === 'function') showStatus('Please switch to Ethereum mainnet in your wallet.', 'error'); if (walletKey === 'walletconnect') { try { _walletConnectProvider?.disconnect(); } catch (e) {} _walletConnectProvider = null; } _isWalletConnect = false; _wcDeepLink = null; return; }
     }
     _walletProvider = new ethers.BrowserProvider(walletProvider);
     _signer = await _walletProvider.getSigner();
@@ -198,7 +211,17 @@ async function connectWithWallet(walletKey, options = {}) {
     if (oldWP && _walletEventHandlers) { try { oldWP.removeListener('accountsChanged', _walletEventHandlers.accountsChanged); oldWP.removeListener('chainChanged', _walletEventHandlers.chainChanged); } catch (e) {} }
     _walletEventHandlers = {
       accountsChanged: (accts) => {
-        if (!accts || accts.length === 0) { window.disconnectWallet(); return; }
+        if (!accts || accts.length === 0) {
+          // Some wallets emit empty accounts transiently during page transitions.
+          // Wait briefly and re-check before disconnecting.
+          setTimeout(async () => {
+            try {
+              const recheck = await _connectedWalletProvider?.request({ method: 'eth_accounts' });
+              if (!recheck || recheck.length === 0) window.disconnectWallet();
+            } catch { window.disconnectWallet(); }
+          }, 500);
+          return;
+        }
         // Clear previous session state (PP keys, loaded notes, proof workers)
         // before re-deriving, so the old account's data is never accessible.
         for (const fn of _onDisconnectCallbacks) { try { fn(); } catch (e) { console.error('onDisconnect callback error:', e); } }
@@ -215,11 +238,12 @@ async function connectWithWallet(walletKey, options = {}) {
         })();
       },
       chainChanged: (chainId) => {
-        if (BigInt(chainId) !== 1n) {
-          // Wrong chain — disconnect cleanly instead of reloading
-          window.disconnectWallet();
-          if (typeof showStatus === 'function') showStatus('Switched to an unsupported chain. Please reconnect on Ethereum mainnet.', 'error');
-        }
+        try {
+          if (BigInt(chainId) !== 1n) {
+            window.disconnectWallet();
+            if (typeof showStatus === 'function') showStatus('Switched to an unsupported chain. Please reconnect on Ethereum mainnet.', 'error');
+          }
+        } catch {}
       },
     };
     walletProvider.on('accountsChanged', _walletEventHandlers.accountsChanged);
@@ -283,10 +307,15 @@ window.connectWallet = async function() {
   return null;
 };
 
+let _rpcProvider = null;
+function getRpcProvider() {
+  if (!_rpcProvider) _rpcProvider = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+  return _rpcProvider;
+}
+
 function resolveWeiName(addr) {
   try {
-    const rpc = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
-    const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
+    const ns = new ethers.Contract(WEINS, WEINS_ABI, getRpcProvider());
     ns.reverseResolve(addr).then(name => { if (name && _connectedAddress === addr) document.getElementById('walletBtn').textContent = name.toLowerCase(); }).catch(() => {});
   } catch (e) {}
 }
@@ -308,53 +337,40 @@ function updateWcBanner() {
 }
 window.updateWcBanner = updateWcBanner;
 
+let _autoConnectRan = false;
 async function tryAutoConnect() {
+  if (_autoConnectRan) return;
+  _autoConnectRan = true;
   const savedWallet = localStorage.getItem('zfi_wallet');
   if (!savedWallet) return;
-  document.getElementById('walletBtn').textContent = '...';
+  const btn = document.getElementById('walletBtn');
+  if (btn && !_connectedAddress) btn.textContent = '...';
   setTimeout(async () => {
     try {
-      window.dispatchEvent(new Event('eip6963:requestProvider'));
-      await new Promise(r => setTimeout(r, 300));
-      let probe;
+      if (_isConnecting || _connectedAddress) return;
+      // For EIP-6963 wallets, wait for the provider to announce
       if (savedWallet.startsWith('eip6963_')) {
-        const uuid = savedWallet.replace('eip6963_', '');
-        probe = eip6963Providers.get(uuid)?.provider;
-        if (!probe) {
-          const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
-          if (savedName) {
-            for (const [, { info, provider }] of eip6963Providers) {
-              if (info?.name?.toLowerCase() === savedName) { probe = provider; break; }
-            }
-          }
-        }
-      } else if (savedWallet === 'walletconnect') {
-        // Delegate entirely to connectWithWallet in silent mode.
-        // This avoids a separate probe flow that races with manual connects.
-        // _isConnecting serializes all access — if the user clicked WalletConnect
-        // manually before this fires, connectWithWallet returns immediately.
-        // If a manual connect already finished, leave the live session alone.
-        // If silent enable() fails (stale session), connectWithWallet cleans up
-        // the provider and clears localStorage without showing UI errors.
-        if (_isConnecting || _connectedAddress) return;
-        await connectWithWallet('walletconnect', { silent: true });
-        return;
-      } else {
-        probe = WALLET_CONFIG[savedWallet]?.getProvider() || window.ethereum;
+        window.dispatchEvent(new Event('eip6963:requestProvider'));
+        const savedName = localStorage.getItem('zfi_wallet_name')?.toLowerCase();
+        await new Promise(resolve => {
+          const check = () => {
+            const uuid = savedWallet.replace('eip6963_', '');
+            if (eip6963Providers.has(uuid)) return true;
+            if (savedName) { for (const [, { info }] of eip6963Providers) { if (info?.name?.toLowerCase() === savedName) return true; } }
+            return false;
+          };
+          if (check()) { resolve(); return; }
+          const handler = () => { if (check()) { window.removeEventListener('eip6963:announceProvider', handler); resolve(); } };
+          window.addEventListener('eip6963:announceProvider', handler);
+          setTimeout(() => { window.removeEventListener('eip6963:announceProvider', handler); resolve(); }, 2000);
+        });
       }
-      if (probe) {
-        const accts = await probe.request({ method: 'eth_accounts' });
-        if (!accts || accts.length === 0) {
-          document.getElementById('walletBtn').textContent = 'connect';
-          return;
-        }
-      }
+      // Connect directly — eth_requestAccounts won't prompt if site is already authorized
       await connectWithWallet(savedWallet, { silent: true });
     } catch (e) {
-      console.error('Auto-reconnect failed:', e);
-      document.getElementById('walletBtn').textContent = 'connect';
+      if (btn && btn.textContent === '...') btn.textContent = 'connect';
     }
-  }, 100);
+  }, 50);
 }
 
 // __WALLET_TEST_API__ is a gated test-only seam for PP wallet tests.

@@ -883,6 +883,26 @@ body.modal-open { overflow: hidden; }
 .pm-odds-yes { background:var(--green, #22c55e); }
 .pm-odds-no { background:var(--red, #ef4444); }
 
+/* OTC order ticker */
+.otc-order {
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border:1px solid var(--border-muted);background:var(--bg);
+  text-decoration:none;color:var(--fg);transition:border-color 0.15s;cursor:pointer;
+  margin-bottom:-1px;
+}
+.otc-order:first-child { border-top:1px solid var(--border-muted); }
+.otc-order:hover { border-color:var(--fg-muted);z-index:1;position:relative; }
+.otc-icons { display:flex;align-items:center;flex-shrink:0; }
+.otc-icons svg, .otc-icons img { width:18px;height:18px; }
+.otc-icons .otc-ic1 { margin-left:-5px; }
+.otc-info { flex:1;min-width:0; }
+.otc-pair { font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.otc-meta { font-size:10px;color:var(--fg-muted);margin-top:1px; }
+.otc-src { font-size:7px;font-weight:700;letter-spacing:.4px;padding:1px 3px;border-radius:3px;text-transform:uppercase;flex-shrink:0; }
+.otc-src.zamm { background:rgba(22,163,74,0.1);color:var(--green, #16a34a); }
+.otc-src.otc { background:rgba(99,145,255,0.12);color:#6391ff; }
+.dark .otc-src.otc { color:#8ab4ff; }
+
 /* Trollbox */
 .trollbox { border:1px solid var(--border); background:var(--bg); margin-top:12px; display:flex; flex-direction:column; font-size:13px; border-radius:4px; }
 .trollbox-header { padding:12px 14px; border-bottom:1px solid var(--card-border); font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; -webkit-tap-highlight-color:transparent; }
@@ -1154,9 +1174,20 @@ body.modal-open { overflow: hidden; }
 
 </div><!-- end swap-card -->
 
+<!-- Recent OTC orders -->
+<div id="otcTicker" style="display:none;margin-top:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-dim);font-weight:600">Recent Orders</span>
+    <a href="./orderbook/" style="font-size:10px;color:var(--fg-dim);text-decoration:none;opacity:0.7;transition:opacity 0.15s;letter-spacing:0.03em" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">VIEW ALL &rarr;</a>
+  </div>
+  <div id="otcTickerList"></div>
+</div>
+
 </div><!-- end swapTab -->
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
+<div id="fwDaicoSection" class="live-sales" style="display:none"></div>
+<div id="featuredPmSection" class="live-sales" style="display:none"></div>
 <!-- Chat (MiniMeet) — lazy-loads on first open -->
 <div id="trollbox" class="trollbox collapsed">
   <div class="trollbox-header" onclick="tbToggle()">
@@ -1169,8 +1200,6 @@ body.modal-open { overflow: hidden; }
     <button onclick="tbSend()">Send</button>
   </div>
 </div>
-<div id="fwDaicoSection" class="live-sales" style="display:none"></div>
-<div id="featuredPmSection" class="live-sales" style="display:none"></div>
 
 <div id="privacyTab" style="display:none">
 <div id="ppWalletSeedBackupNotice" class="pp-notice" style="display:none;margin-bottom:16px"></div>
@@ -1491,12 +1520,12 @@ body.modal-open { overflow: hidden; }
 </div>
 
 
-<script src="./ethers.min.js"></script>
-<script src="./walletconnect.min.js"></script>
+<script src="./vendor/ethers.min.js"></script>
+<script src="./vendor/walletconnect.min.js"></script>
 <script src="./wallet.js"></script>
-<script defer src="./poseidon2.min.js"></script>
-<script defer src="./poseidon1.min.js"></script>
-<script defer src="./poseidon3.min.js"></script>
+<script defer src="./vendor/poseidon2.min.js"></script>
+<script defer src="./vendor/poseidon1.min.js"></script>
+<script defer src="./vendor/poseidon3.min.js"></script>
 <script src="./theme.js"></script>
 <script>
 
@@ -1892,6 +1921,7 @@ setTimeout(async () => {
         }
       } catch {}
     }
+    if (!icon) icon = 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico';
     const sym = fw.meta.symbol || 'FW';
     const logo = icon
       ? `<img class="live-sale-logo" src="${esc(icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${esc(sym[0]||'?')}</div>'">`
@@ -1901,7 +1931,7 @@ setTimeout(async () => {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
-        <div class="live-sale-meta" style="color:var(--fg-muted)">Collector DAO</div>
+        <div class="live-sale-meta" style="color:var(--fg-muted)">Collector DAO &middot; continuous sale</div>
       </div>
     </a>`;
     if (_activeTab === 'swap') el.style.display = '';
@@ -4383,7 +4413,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
 }
 
 </script>
-<script src="./aggregators.js"></script>
+<script src="./modules/aggregators.js"></script>
 <script>
 
 // ---- Simulation helper: decode swap output from multicall return ----
@@ -7398,7 +7428,7 @@ function updateLpLink(quote) {
   const link = $("lpLink");
   const { hasZamm, poolId } = getZammPoolInfo(quote);
   if (hasZamm) {
-    link.href = "./lp/#/" + poolId.toString();
+    link.href = "./liquidity/#/" + poolId.toString();
     link.style.display = "inline-flex";
     return;
   }
@@ -8159,8 +8189,8 @@ walletInit({
 });
 
 </script>
-<script src="./privacy-pools.js"></script>
-<script src="./send.js"></script>
+<script src="./modules/privacy-pools.js"></script>
+<script src="./modules/send.js"></script>
 <script>
 
 function switchTab(tab) {
@@ -8203,7 +8233,7 @@ function switchTab(tab) {
 }
 
 </script>
-<script src="./coin.js"></script>
+<script src="./modules/coin.js"></script>
 <script>
 
 // ---- Footer: show live IPFS contenthash for zfi.wei ----
@@ -8224,6 +8254,127 @@ function switchTab(tab) {
       el.parentElement.style.display = '';
     }
   } catch {}
+})();
+
+// ---- OTC order ticker (lazy, non-blocking) ----
+(function() {
+  const OTC_COOKBOOK_BASE = "https://coinchan-indexer-production.up.railway.app";
+  const OTC_SB_SUBGRAPH = "https://api.goldsky.com/api/public/project_cmmkvehnce9da01u17d657vdt/subgraphs/Swapboard/1.0.0/gn";
+  const OTC_WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+  const OTC_KNOWN = {
+    "0x0000000000000000000000000000000000000000": { s: "ETH", d: 18 },
+    [OTC_WETH]: { s: "WETH", d: 18 },
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": { s: "USDC", d: 6 },
+    "0xdac17f958d2ee523a2206206994597c13d831ec7": { s: "USDT", d: 6 },
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": { s: "WBTC", d: 8 },
+    "0x6b175474e89094c44da98b954eedeac495271d0f": { s: "DAI", d: 18 },
+  };
+
+  function otcSym(addr, fallback) {
+    const k = OTC_KNOWN[addr.toLowerCase()];
+    return k ? k.s : (fallback || addr.slice(0, 6));
+  }
+  function otcDec(addr) {
+    const k = OTC_KNOWN[addr.toLowerCase()];
+    return k ? k.d : 18;
+  }
+  function otcFmt(wei, dec) {
+    if (!wei || wei === "0") return "0";
+    const n = BigInt(wei), d = BigInt(dec);
+    const whole = n / (10n ** d);
+    const frac = (n % (10n ** d)).toString().padStart(Number(d), '0').slice(0, 4).replace(/0+$/, '');
+    const w = whole.toLocaleString ? Number(whole).toLocaleString() : whole.toString();
+    return w + (frac ? '.' + frac : '');
+  }
+  function otcIcon(sym) {
+    // Reuse swap page icon infrastructure (18px for ticker)
+    if (typeof iconForSymbol === 'function') {
+      const html = iconForSymbol(sym);
+      return html.replace(/width="24"/g, 'width="18"').replace(/height="24"/g, 'height="18"');
+    }
+    return '';
+  }
+
+  async function loadOtcTicker() {
+    try {
+      const [cbRes, sbRes] = await Promise.all([
+        fetch(OTC_COOKBOOK_BASE + "/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 5, where: { status: "ACTIVE" }) { items { tokenIn idIn amtIn tokenOut idOut amtOut } } }` })
+        }).then(r => r.json()).catch(() => null),
+        fetch(OTC_SB_SUBGRAPH, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: `{ orders(first: 5, orderBy: orderId, orderDirection: desc, where: { active: true }) { orderId amountA amountB tokenA { address symbol decimals } tokenB { address symbol decimals } } }` })
+        }).then(r => r.json()).catch(() => null),
+      ]);
+
+      const orders = [];
+      // Cookbook orders
+      const cbItems = cbRes?.data?.orders?.items || [];
+      for (const o of cbItems.slice(0, 3)) {
+        const symIn = otcSym(o.tokenIn);
+        const symOut = otcSym(o.tokenOut);
+        const decIn = otcDec(o.tokenIn);
+        const decOut = otcDec(o.tokenOut);
+        orders.push({
+          symIn, symOut,
+          amtIn: otcFmt(o.amtIn, decIn), amtOut: otcFmt(o.amtOut, decOut),
+          src: 'zamm',
+          href: './orderbook/?token0=' + encodeURIComponent(o.tokenIn) + '&token1=' + encodeURIComponent(o.tokenOut) + '&label0=' + encodeURIComponent(symIn) + '&label1=' + encodeURIComponent(symOut) + '&fill=' + encodeURIComponent(o.id),
+        });
+      }
+      // Swapboard orders
+      const sbItems = sbRes?.data?.orders || [];
+      for (const o of sbItems.slice(0, 3)) {
+        const symA = o.tokenA.address.toLowerCase() === OTC_WETH ? 'ETH' : o.tokenA.symbol;
+        const symB = o.tokenB.address.toLowerCase() === OTC_WETH ? 'ETH' : o.tokenB.symbol;
+        const decA = Number(o.tokenA.decimals);
+        const decB = Number(o.tokenB.decimals);
+        orders.push({
+          symIn: symA, symOut: symB,
+          amtIn: otcFmt(o.amountA, decA), amtOut: otcFmt(o.amountB, decB),
+          src: 'otc',
+          href: './orderbook/?token0=' + encodeURIComponent(o.tokenA.address) + '&token1=' + encodeURIComponent(o.tokenB.address) + '&label0=' + encodeURIComponent(symA) + '&label1=' + encodeURIComponent(symB) + '&fill=sb-' + o.orderId,
+        });
+      }
+
+      if (orders.length === 0) return;
+
+      // Interleave: alternate cookbook/swapboard, show max 4
+      const cb = orders.filter(o => o.src === 'zamm');
+      const sb = orders.filter(o => o.src === 'otc');
+      const mixed = [];
+      const max = Math.max(cb.length, sb.length);
+      for (let i = 0; i < max && mixed.length < 4; i++) {
+        if (cb[i]) mixed.push(cb[i]);
+        if (sb[i] && mixed.length < 4) mixed.push(sb[i]);
+      }
+
+      // Cache for orderbook page
+      try { sessionStorage.setItem('zfi_otc_preview', JSON.stringify(mixed)); } catch {}
+
+      // Render
+      const el = document.getElementById('otcTickerList');
+      if (!el) return;
+      let html = '';
+      for (const o of mixed) {
+        html += `<a class="otc-order" href="${o.href}">
+          <span class="otc-icons">${otcIcon(o.symIn)}<span class="otc-ic1">${otcIcon(o.symOut)}</span></span>
+          <div class="otc-info">
+            <div class="otc-pair">${o.amtIn} ${o.symIn} &rarr; ${o.amtOut} ${o.symOut}</div>
+          </div>
+          <span class="otc-src ${o.src}">${o.src === 'zamm' ? 'ZAMM' : 'OTC'}</span>
+        </a>`;
+      }
+      el.innerHTML = html;
+      document.getElementById('otcTicker').style.display = '';
+    } catch {}
+  }
+
+  // Load after a short delay to not block swap page init
+  setTimeout(loadOtcTicker, 1500);
 })();
 
 </script>

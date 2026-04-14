@@ -382,7 +382,7 @@ input {
 
 /* Mobile */
 @media (max-width: 600px) {
-  body { padding:80px 16px 20px; }
+  body { padding:80px 16px max(40px, env(safe-area-inset-bottom, 40px)); }
   .header h1 { font-size:13px; }
   .coin-grid { grid-template-columns:1fr 1fr;gap:10px; }
   .coin-card { padding:12px; }
@@ -453,8 +453,8 @@ input {
 
 
 <div id="app"></div>
-<script src="../ethers.min.js"></script>
-<script src="../walletconnect.min.js"></script>
+<script src="../vendor/ethers.min.js"></script>
+<script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
 <script>
 // Extend shared toggleDark to also update chart iframe theme
@@ -483,6 +483,18 @@ const WEINS_ABI = ["function reverseResolve(address) view returns (string)"];
 
 const VIEW_HELPER = '0x00000000006631040967E58e3430e4B77921a2db';
 const DAICO_ADDR = '0x000000000033e92DB97B4B3beCD2c255126C60aC';
+// Continuous Sale contracts — keyed by DAO address (lowercase)
+const CONTINUOUS_SALES = {
+  '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853': {
+    sale: '0x824d11a46F32cd16cdF46380314343e9697e2491',
+    vault: '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e',
+    icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
+  },
+};
+const CONTINUOUS_SALE_ABI = [
+  'function buy() payable',
+  'function paused() view returns (bool)',
+];
 const SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
 const ZAMM = '0x000000000000040470635EB91b7CE4D132D616eD';
 const ZQUOTER = '0x658bF1A6608210FDE7310760f391AD4eC8006A5F'; // base quoter (has quoteZAMM)
@@ -721,8 +733,10 @@ async function flagCoinAsSpam(coinAddr) {
     if (countEl) {
       const cur = parseInt(countEl.dataset.count || '0') + 1;
       countEl.dataset.count = cur;
-      countEl.innerHTML = `<span class="spam-toggle" onclick="toggleSpamCoins()">${cur} community-flagged coin${cur > 1 ? 's' : ''} hidden</span>`;
-      countEl.style.display = '';
+      const label = document.getElementById('spamCountLabel');
+      if (label) {
+        label.textContent = cur + ' flagged';
+      }
     }
   } catch(e) {
     if (e.code !== 'ACTION_REJECTED' && !(e.message||'').includes('user rejected')) {
@@ -1809,6 +1823,8 @@ async function renderGallery() {
     for (let i = 0; i < filtered.length; i++) {
       const d = filtered[i];
       const md = allMetadata[i];
+      const _cs = CONTINUOUS_SALES[d.dao.toLowerCase()];
+      if (_cs?.icon && md && !md.image) md.image = _cs.icon;
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
 
       let salePct = 0;
@@ -1820,7 +1836,9 @@ async function renderGallery() {
       }
 
       const now = BigInt(Math.floor(Date.now() / 1000));
-      const saleActive = sale && sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
+      const contSaleConfig = CONTINUOUS_SALES[d.dao.toLowerCase()];
+      const hasContSale = !!contSaleConfig;
+      const saleActive = hasContSale || (sale && sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline)));
 
       // Market cap (circulating): price * circulating supply
       // Circulating = total - unsold - team locked
@@ -1847,7 +1865,10 @@ async function renderGallery() {
       const poolDeep = hasPool && lpTokens > coinTotalSupply * 0.01;
       const usePool = hasPool && (!saleActive || poolDeep);
       if (circulating > 0) {
-        if (usePool) {
+        if (hasContSale && treasuryETH > 0n) {
+          // Collector DAO: treasury-backed valuation (ragequittable ETH)
+          mcapETH = Number(ethers.formatEther(treasuryETH));
+        } else if (usePool) {
           mcapETH = (Number(ethers.formatEther(poolR0)) / lpTokens) * circulating;
         } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
           mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
@@ -1896,9 +1917,13 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.launchType === 'cause' ? `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span>` : md && md.launchType === 'curve' ? `<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span>` : md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector') ? `<span class="coin-tpl-badge coin-tpl-simple" title="collector DAO">collect</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
-          <div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(salePct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(salePct,100) / 10))}</div>
-          <div class="coin-card-stat">${saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>
-          ${isCollect && treasuryETH > 0n
+          ${isCause && md.description
+            ? `<div class="coin-card-stat" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escText(md.description)}</div>`
+            : `<div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(salePct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(salePct,100) / 10))}</div>
+          <div class="coin-card-stat">${hasContSale ? 'Continuous sale' : saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>`}
+          ${hasContSale
+            ? `<div class="coin-card-mcap" style="color:var(--fg-muted);font-weight:400">Collector DAO</div>`
+            : (isCollect && treasuryETH > 0n)
             ? `<div class="coin-card-mcap">Treasury ${fmtMcap(Number(ethers.formatEther(treasuryETH)))}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)}</span>` : ''}</div>`
             : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
         </a>
@@ -2011,8 +2036,10 @@ async function renderGallery() {
               <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span></div>
             </div>
           </div>
-          <div class="coin-card-bar">░░░░░░░░░░</div>
-          <div class="coin-card-stat">New</div>
+          ${row.description
+            ? `<div class="coin-card-stat" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escText(row.description)}</div>`
+            : `<div class="coin-card-bar">░░░░░░░░░░</div>
+          <div class="coin-card-stat">New</div>`}
         </a>
       `;
       cards.push({ html: causeCardHTML, key: cCardName + '|' + cCardSym, mcap: 0, r0: 0n, poolDeep: false, saleActive: true, isTest: false, isSpam, isInactive: false, isLegacy: false, isLowMcap: false, isCause: true });
@@ -2069,15 +2096,22 @@ async function renderGallery() {
 
     app.innerHTML = `
       <div class="header">
-        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${cards.length - testCount - spamCount - inactiveCount - legacyCount - lowMcapCount})</span></h1>
+        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${[...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0)})</span></h1>
         <div><a href="../#coin" class="nav-link">Launch</a><span class="nav-sep">&middot;</span><a href="../" class="nav-link">Swap</a><span class="nav-sep">&middot;</span><a href="../dao/" class="nav-link">DAO</a></div>
       </div>
       <input type="text" class="coin-search" id="coinSearch" placeholder="Search by name, symbol, or address..." oninput="filterCoins()">
       <div class="coin-grid" id="coinGrid">${grid}</div>
-      ${legacyCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleLegacyCoins()">${legacyCount} legacy coin${legacyCount > 1 ? 's' : ''} hidden</span></div>` : ''}
-      ${inactiveCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleInactiveCoins()">${inactiveCount} inactive coin${inactiveCount > 1 ? 's' : ''} hidden</span></div>` : ''}
-      ${spamCount > 0 ? `<div id="spamCount" data-count="${spamCount}" style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleSpamCoins()">${spamCount} community-flagged coin${spamCount > 1 ? 's' : ''} hidden</span></div>` : `<div id="spamCount" data-count="0" style="display:none;text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"></div>`}
-      ${lowMcapCount > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px"><span class="spam-toggle" onclick="toggleLowMcapCoins()">${lowMcapCount} low-liquidity coin${lowMcapCount > 1 ? 's' : ''} hidden</span></div>` : ''}
+      ${(() => {
+        const parts = [];
+        if (legacyCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleLegacyCoins()">${legacyCount} legacy</span>`);
+        if (inactiveCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleInactiveCoins()">${inactiveCount} inactive</span>`);
+        if (spamCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleSpamCoins()" id="spamCountLabel">${spamCount} flagged</span>`);
+        if (lowMcapCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleLowMcapCoins()">${lowMcapCount} low-liquidity</span>`);
+        const total = legacyCount + inactiveCount + spamCount + lowMcapCount;
+        return total > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${total} coins hidden (${parts.join(' · ')})</div>` : '';
+      })()}
+      <div id="spamCount" data-count="${spamCount}" style="display:none"></div>
+      <div style="text-align:center;font-size:10px;color:var(--fg-dim);margin-top:20px;padding-top:12px;border-top:1px solid var(--border-muted)">100k <a href="https://zfi.wei.is/?from=eth&to=zorg" target="_blank" style="color:inherit;text-decoration:underline">$zOrg</a> holders can flag spam</div>
     `;
   } catch(e) {
     app.innerHTML = `
@@ -3323,6 +3357,13 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   if (_connectedAddress) {
     mc3Calls.push({ target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
   }
+  // Check for Continuous Sale contract
+  const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+  const contSaleAddr = contSaleConfig?.sale;
+  if (contSaleAddr) {
+    const csI = new ethers.Interface(CONTINUOUS_SALE_ABI);
+    mc3Calls.push({ target: contSaleAddr, allowFailure: true, callData: csI.encodeFunctionData('paused', []) });
+  }
 
   const mcRes = await withRPC(async rpc => {
     const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
@@ -3355,6 +3396,16 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   if (_connectedAddress && mcRes[7]?.success) {
     try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[7].returnData)[0]; } catch {}
   }
+  // Continuous Sale state
+  let contSaleActive = false;
+  const contSaleIdx = contSaleAddr ? (_connectedAddress ? 8 : 7) : -1;
+  if (contSaleAddr && contSaleIdx >= 0 && mcRes[contSaleIdx]?.success) {
+    try {
+      const csI = new ethers.Interface(CONTINUOUS_SALE_ABI);
+      const paused = csI.decodeFunctionResult('paused', mcRes[contSaleIdx].returnData)[0];
+      contSaleActive = !paused;
+    } catch {}
+  }
 
   // Sale state — price/deadline from ShareSale.sales(), cap/sold from DAO allowance + totalSupply
   const price = saleData ? BigInt(saleData.price) : 0n;
@@ -3367,13 +3418,14 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const cap = sold + saleAllowance;
   const saleDeadline = saleData ? Number(saleData.deadline) : 0;
   const now = Math.floor(Date.now() / 1000);
-  const saleActive = saleDeadline === 0 || now < saleDeadline;
-  const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
+  const daicoSaleActive = saleDeadline === 0 || now < saleDeadline;
+  const saleActive = daicoSaleActive || contSaleActive;
+  const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && daicoSaleActive) || contSaleActive;
   const salePct = (!isOpenCap && cap > 0n) ? Number(sold * 10000n / cap) / 100 : 0;
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
-  const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
+  const saleEnded = !saleActive || (!isOpenCap && !contSaleActive && cap > 0n && sold >= cap);
 
   // Tap state — rate/beneficiary from TapVest.taps(), budget from DAO allowance
   const hasTap = tapData && BigInt(tapData.ratePerSec) > 0n;
@@ -3416,10 +3468,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Description + socials
   const causeSocials = metadata.twitter || metadata.telegram || metadata.discord;
-  if (metadata.description || causeSocials) {
+  if (metadata.description || causeSocials || contSaleActive) {
     html += `<div class="section-card">`;
     if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
-    if (causeSocials) html += renderSocials(metadata, !!metadata.description);
+    if (contSaleActive) html += `<div class="desc-text" style="${metadata.description ? 'margin-top:8px;padding-top:8px;border-top:1px solid var(--border-muted)' : ''}font-size:12px;color:var(--fg-muted)">Continuous sale active &mdash; buy shares with ETH to fund <a href="https://etherscan.io/address/${escAttr(contSaleAddr)}" target="_blank" style="color:inherit;text-decoration:underline">TokenWorks NFT</a> acquisitions for this collector DAO. Shares are ragequittable for a pro-rata refund at any time.</div>`;
+    if (causeSocials) html += renderSocials(metadata, !!(metadata.description || contSaleActive));
     html += `</div>`;
   }
 
@@ -3621,6 +3674,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Store for buy/ragequit functions
   app.dataset.dao = daoAddr;
   app.dataset.shares = sharesAddr;
+  app.dataset.contSale = contSaleActive ? contSaleAddr : '';
   app.dataset.price = price.toString();
   app.dataset.treasury = treasuryETH.toString();
   app.dataset.totalSupply = (sharesTotalSupply + lootTotalSupply).toString();
@@ -4030,6 +4084,9 @@ async function renderCoinPage(daoAddr) {
       getEthUsd()
     ]);
     if (gen !== _renderGen) return;
+    // Override icon for DAOs with configured Continuous Sale icons
+    const _csConf = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+    if (_csConf?.icon && metadata && !metadata.image) metadata.image = _csConf.icon;
     _coinMeta = metadata;
 
     // Cause coin detection — render simplified sale page
@@ -4055,6 +4112,22 @@ async function renderCoinPage(daoAddr) {
       if (sale.forAmt > 0n) ethRaised = sold * sale.tribAmt / sale.forAmt;
       const now = BigInt(Math.floor(Date.now() / 1000));
       saleActive = sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline));
+    }
+
+    // Continuous Sale: override saleActive if a continuous sale contract is active
+    const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+    const contSaleAddr = contSaleConfig?.sale;
+    const contVaultAddr = contSaleConfig?.vault;
+    let contSaleActive = false;
+    if (contSaleAddr) {
+      try {
+        const csPaused = await withRPC(async rpc => {
+          const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
+          return await cs.paused();
+        });
+        contSaleActive = !csPaused;
+      } catch {}
+      if (contSaleActive) saleActive = true;
     }
 
     // Tap stats
@@ -4142,7 +4215,9 @@ async function renderCoinPage(daoAddr) {
           </div>
         </div>
       </div>
-      ${isCollect && treasuryETH > 0n
+      ${contSaleActive
+        ? `<div class="coin-mcap-row" style="color:var(--fg-dim)">Collector DAO &middot; continuous sale</div>`
+        : isCollect && treasuryETH > 0n
         ? `<div class="coin-mcap-row">Treasury: ${fmtETH(treasuryETH)} ETH${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)})</span>` : ''}</div>`
         : mcapDisplay ? `<div class="coin-mcap-row">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
     `;
@@ -4190,7 +4265,17 @@ async function renderCoinPage(daoAddr) {
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
         ${sale && sale.deadline > 0n ? `<div id="saleDeadlineRow"></div>` : ''}`
-    if (saleActive && hasDaicoSale) {
+    if (contSaleActive) {
+      html += `
+        <div class="section-card">
+          <div class="section-title">Continuous Sale (Live)</div>
+          <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
+          <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
+          ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. Shares are ragequittable for a pro-rata treasury refund.</div>
+        </div>
+      `;
+    } else if (saleActive && hasDaicoSale) {
       html += `
         <div class="section-card">
           <div class="section-title">Sale (Live)</div>
@@ -4238,22 +4323,43 @@ async function renderCoinPage(daoAddr) {
       `;
     }
 
-    // Treasury + Pool reserves
-    if (treasuryETH > 0n || hasPool) {
+    // Treasury + Pool reserves + Vault
+    if (treasuryETH > 0n || hasPool || contSaleActive) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
-          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">${ethIco} Vault</span><span class="stat-value"><span id="vaultEthBal">Loading...</span> <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="font-size:10px;color:var(--fg-muted);text-decoration:underline;margin-left:4px">view</a></span></div>
+          <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>` : ''}
           ${hasPool ? `
-            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
           ` : ''}
         </div>
       `;
+      // Fetch vault balances async
+      if (contVaultAddr) {
+        (async () => {
+          try {
+            const vaultBal = await withRPC(async rpc => {
+              const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+              const res = await mc.aggregate3([
+                { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
+              ]);
+              return res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n;
+            });
+            const el = $('vaultEthBal');
+            if (el) el.textContent = fmtETH(vaultBal);
+          } catch { const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
+          // Hardcoded NFT count for FWC vault (1 FundingWorks NFT currently held)
+          const nftEl = $('vaultNftBal');
+          if (nftEl) nftEl.innerHTML = '<a href="https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156" target="_blank" style="color:inherit;text-decoration:underline">1 TokenWorks NFT</a>';
+        })();
+      }
     }
 
     // Tap drawer (collapsed)
-    if (tapActive) {
+    if (tapActive && !contSaleActive) {
       const claimableETH = Number(ethers.formatEther(tap.claimable || 0n));
       {
         html += `
@@ -4276,7 +4382,7 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Ops Allocation drawer (only for fund launches with lockup data)
-    if (tapActive && opsLockup) {
+    if (tapActive && opsLockup && !contSaleActive) {
       const lockAmt = BigInt(opsLockup.amount || '0');
       const lockUnlockTime = Number(opsLockup.unlockTime || '0');
       const lockCoinId = opsLockup.coinId || '0';
@@ -4361,8 +4467,8 @@ async function renderCoinPage(daoAddr) {
             <input type="text" id="saleReceiveInput" placeholder="0.0" oninput="onSaleReceiveInput()" autocomplete="off">
             <div class="sale-lp-note" id="saleLpNote"></div>
           </div>
-          <div class="swap-quote" id="saleQuote">${priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : ''}</div>
-          <button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>
+          <div class="swap-quote" id="saleQuote">${contSaleActive ? 'Continuous sale: 1 ETH = 1M shares' : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
+          ${!contSaleActive ? `<button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>` : ''}
           <button id="saleBuyBtn" class="action-btn" onclick="onSaleBuyBtn()">Connect Wallet</button>
           <button id="saleCopyLink" class="swap-pct-btn" onclick="copySaleLink()" style="width:100%;margin-top:6px;font-size:11px;padding:5px">Copy share link</button>
         </div>
@@ -4558,6 +4664,7 @@ async function renderCoinPage(daoAddr) {
 
     app.dataset.dao = daoAddr;
     app.dataset.shares = sharesAddr;
+    app.dataset.contSale = contSaleActive ? contSaleAddr : '';
     app.dataset.feeOrHook = feeOrHook.toString();
     app.dataset.poolId = poolId.toString();
     app.dataset.hasPool = hasPool ? '1' : '';
@@ -4898,12 +5005,13 @@ function updateSaleBtnState() {
       btn.disabled = true;
       return;
     }
-    if (_saleData && _saleData.remainingSupply <= 0n) {
+    const isContSale = !!$('app')?.dataset?.contSale;
+    if (!isContSale && _saleData && _saleData.remainingSupply <= 0n) {
       btn.textContent = 'Sale ended';
       btn.disabled = true;
       return;
     }
-    if (_saleData) {
+    if (!isContSale && _saleData) {
       const gross = payAmt * _saleData.forAmt / _saleData.tribAmt;
       if (gross > _saleData.remainingSupply) {
         btn.textContent = 'Exceeds remaining';
@@ -4930,15 +5038,25 @@ function updateSaleUsd() {
 function onSalePayInput() {
   _saleExactOut = false;
   updateSaleUsd();
-  if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt) return;
   const raw = ($('salePayInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('saleReceiveInput').value = '';
-    $('saleLpNote').textContent = '';
+    const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
     updateSaleBtnState();
     return;
   }
   const payAmt = ethers.parseEther(raw);
+
+  // Continuous Sale: fixed rate (1 ETH = 1M shares)
+  if ($('app').dataset.contSale) {
+    const shares = payAmt * 1000000n;
+    $('saleReceiveInput').value = ethers.formatEther(shares);
+    const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
+    updateSaleBtnState();
+    return;
+  }
+
+  if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt) return;
   const gross = payAmt * _saleData.forAmt / _saleData.tribAmt;
   const lpBps = BigInt(_saleData.lpBps);
   const lpShares = gross * lpBps / 10000n;
@@ -4954,14 +5072,25 @@ function onSalePayInput() {
 
 function onSaleReceiveInput() {
   _saleExactOut = true;
-  if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt) return;
   const raw = ($('saleReceiveInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('salePayInput').value = '';
     updateSaleUsd();
-    $('saleLpNote').textContent = '';
+    const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
     return;
   }
+
+  // Continuous Sale: fixed rate (1M shares per ETH)
+  if ($('app').dataset.contSale) {
+    const shares = ethers.parseEther(raw);
+    const ethNeeded = shares / 1000000n;
+    $('salePayInput').value = ethers.formatEther(ethNeeded);
+    updateSaleUsd();
+    updateSaleBtnState();
+    return;
+  }
+
+  if (!_saleData || !_saleData.forAmt || !_saleData.tribAmt) return;
   const buyAmt = ethers.parseEther(raw);
   const lpBps = BigInt(_saleData.lpBps);
   // grossNeeded = ceil(buyAmt * 10000 / (10000 - lpBps))
@@ -5020,21 +5149,40 @@ async function onSaleBuyBtn() {
 async function executeSaleBuy() {
   const s = await connectWallet();
   if (!s) return;
-  if (!_saleData) return;
 
   const payRaw = ($('salePayInput').value || '').trim();
   const recvRaw = ($('saleReceiveInput').value || '').trim();
   if (!payRaw || isNaN(payRaw) || Number(payRaw) <= 0) return;
-  if (!recvRaw || isNaN(recvRaw) || Number(recvRaw) <= 0) return;
 
   const daoAddr = $('app').dataset.dao;
+  const contSaleAddr = $('app').dataset.contSale;
   const btn = $('saleBuyBtn');
   btn.textContent = 'Confirm in wallet...';
   btn.disabled = true;
 
   try {
-    const daico = new ethers.Contract(DAICO_ADDR, DAICO_BUY_ABI, s);
     const payAmt = ethers.parseEther(payRaw);
+
+    // Route to Continuous Sale if available
+    if (contSaleAddr) {
+      const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, s);
+      const tx = await cs.buy({ value: payAmt });
+      btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+      await tx.wait();
+      const quoteEl = $('saleQuote');
+      if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Purchase confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+      $('salePayInput').value = '';
+      if ($('saleReceiveInput')) $('saleReceiveInput').value = '';
+      btn.textContent = 'Buy';
+      btn.disabled = false;
+      setTimeout(() => renderCoinPage(daoAddr), 2000);
+      return;
+    }
+
+    if (!_saleData) return;
+    if (!recvRaw || isNaN(recvRaw) || Number(recvRaw) <= 0) return;
+
+    const daico = new ethers.Contract(DAICO_ADDR, DAICO_BUY_ABI, s);
     const netShares = ethers.parseEther(recvRaw);
 
     let tx;

@@ -150,6 +150,14 @@ body.modal-open { overflow:hidden; }
 .ask-row .price { color:var(--red); }
 .ask-row .depth { background:var(--red-bg); }
 .aon-tag { font-size:8px; font-family:sans-serif; font-weight:700; letter-spacing:.3px; padding:1px 3px; border-radius:3px; background:var(--fg-muted); color:var(--bg); opacity:.7; vertical-align:middle; margin-left:3px; }
+.src-tag { font-size:7px; font-family:sans-serif; font-weight:700; letter-spacing:.4px; padding:1px 3px; border-radius:3px; vertical-align:middle; margin-left:3px; opacity:.8; text-transform:uppercase; }
+.src-tag.cookbook { background:rgba(99,215,125,0.15); color:var(--green); }
+.src-tag.swapboard { background:rgba(99,145,255,0.15); color:#6391ff; }
+.dark .src-tag.swapboard { color:#8ab4ff; }
+.yours-tag { font-size:7px; font-family:sans-serif; font-weight:700; letter-spacing:.4px; padding:1px 3px; border-radius:3px; vertical-align:middle; margin-left:3px; opacity:.8; text-transform:uppercase; background:rgba(255,180,50,0.15); color:#e6a020; }
+.dark .yours-tag { color:#ffcc55; }
+.global-order-item.is-mine { border-left:2px solid #e6a020; }
+.dark .global-order-item.is-mine { border-left-color:#ffcc55; }
 
 /* Spread row */
 .spread-row {
@@ -225,6 +233,24 @@ body.modal-open { overflow:hidden; }
 }
 .field-row-between .label { color:var(--fg-muted); }
 .field-row-between .value { font-family:monospace; }
+.venue-row {
+  display:flex; align-items:center; gap:0; margin-bottom:16px;
+  border:1px solid var(--border-muted); overflow:hidden;
+}
+.venue-btn {
+  flex:1; padding:8px 12px; text-align:center;
+  font-family:inherit; font-size:10px; font-weight:600;
+  letter-spacing:0.06em; text-transform:uppercase;
+  cursor:pointer; border:none; background:transparent;
+  color:var(--fg-muted); transition:all 0.15s; border-radius:0;
+}
+.venue-btn:hover { color:var(--fg); }
+.venue-btn.active { background:var(--fg); color:var(--bg); }
+.venue-btn:disabled { opacity:0.3; cursor:not-allowed; }
+.venue-hint {
+  font-size:10px; color:var(--fg-dim); margin-bottom:12px;
+  line-height:1.4;
+}
 .order-opts {
   display:flex; align-items:center; gap:16px; margin-bottom:16px;
 }
@@ -402,6 +428,54 @@ body.modal-open { overflow:hidden; }
 .fill-amt-row .max-btn:hover { text-decoration:underline; }
 
 
+/* Token picker */
+.token-select {
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--surface); border:1px solid var(--border);
+  padding:8px 12px; font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; color:var(--fg); transition:border-color 0.15s; border-radius:0;
+  white-space:nowrap;
+}
+.token-select:hover { border-color:var(--fg-muted); }
+.token-select .token-icon { display:flex; align-items:center; }
+.token-select .token-icon svg, .token-select .token-icon img { width:20px; height:20px; }
+.token-chevron { font-size:10px; opacity:0.5; }
+.token-list-item {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; cursor:pointer; transition:background 0.12s;
+}
+.token-list-item:hover { background:var(--surface-hover); }
+.token-list-item.highlight { background:var(--surface); outline:1px solid var(--border); outline-offset:-1px; }
+.token-list-item .token-icon { display:flex; align-items:center; }
+.token-list-item .token-icon svg, .token-list-item .token-icon img { width:24px; height:24px; }
+.token-list-item .token-symbol { font-size:13px; font-weight:500; }
+.token-search {
+  width:100%; padding:12px 0; border:none; border-bottom:1px solid var(--border);
+  font-size:15px; font-family:inherit; outline:none;
+  background:transparent; color:var(--fg); flex-shrink:0;
+}
+.token-search:focus { border-bottom-color:var(--fg); }
+.token-search-status { font-size:11px; color:var(--fg-dim); margin:4px 0 6px; min-height:14px; flex-shrink:0; }
+.token-search-status.error { color:#e74c3c; }
+.token-group-label {
+  font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--fg-dim); padding:10px 16px 4px; margin-top:4px;
+  border-top:1px solid var(--border-muted);
+  display:flex; justify-content:space-between; align-items:center; opacity:0.6;
+}
+.wei-list-remove {
+  background:none; border:none; color:var(--fg-dim); font-size:14px;
+  cursor:pointer; padding:0 4px; margin:0; line-height:1;
+}
+.wei-list-remove:hover { color:#e74c3c; }
+.custom-token-input {
+  width:100%; padding:8px 0; border:none; border-bottom:1px solid var(--border);
+  font-size:12px; font-family:inherit; outline:none;
+  background:transparent; color:var(--fg); flex:1;
+}
+.custom-token-input:focus { border-bottom-color:var(--fg); }
+#obTokenList { scrollbar-width:thin; max-height:260px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+
 /* Responsive */
 @media (max-width:600px) {
   body { padding:60px 12px 12px; }
@@ -444,6 +518,7 @@ body.modal-open { overflow:hidden; }
     <div class="sub-links">
       <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Chart</a>
       <a class="sub-link" id="lpLink" href="#" title="Manage LP" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v12M6 12h12"/></svg>LP</a>
+      <a class="sub-link" id="allOrdersLink" href="./" title="All orders"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>All</a>
       <a class="sub-link" id="swapLink" href="../" title="Swap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Swap</a>
     </div>
   </div>
@@ -512,7 +587,12 @@ body.modal-open { overflow:hidden; }
         <span class="label">Total</span>
         <span class="value" id="orderTotal">--</span>
       </div>
-      <div class="order-opts">
+      <div class="venue-row">
+        <button class="venue-btn active" id="venueCookbook" onclick="setVenue('cookbook')">ZAMM</button>
+        <button class="venue-btn" id="venueSwapboard" onclick="setVenue('swapboard')">OTC</button>
+      </div>
+      <div class="venue-hint" id="venueHint">Partial fills &middot; custom expiry</div>
+      <div class="order-opts" id="cookbookOpts">
         <label class="order-opt">
           <span>Expires</span>
           <select id="orderExpiry">
@@ -557,6 +637,71 @@ body.modal-open { overflow:hidden; }
     <span id="globalOrderCount">0 orders</span>
     <span id="globalRefreshCountdown"></span>
   </div>
+  <button class="submit-btn buy" id="newOrderBtn" onclick="showNewOrderModal()" style="width:100%;margin-top:16px">New Order</button>
+</div>
+
+<!-- New order modal (global view) -->
+<div class="modal-overlay" id="newOrderModal" onclick="if(event.target===this)closeNewOrderModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">New Order</div>
+      <button class="modal-close" onclick="closeNewOrderModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="venue-row" style="margin-bottom:12px">
+        <button class="venue-btn active" id="newVenueCookbook" onclick="setNewOrderVenue('cookbook')">ZAMM</button>
+        <button class="venue-btn" id="newVenueSwapboard" onclick="setNewOrderVenue('swapboard')">OTC</button>
+      </div>
+      <div class="venue-hint" id="newVenueHint" style="margin-bottom:14px">Partial fills &middot; custom expiry</div>
+      <div class="field" style="margin-bottom:14px">
+        <div class="field-label">You send</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="token-select" id="newTokenABtn" onclick="openOrderTokenModal('A')">ETH &#9662;</button>
+          <input class="field-input" id="newAmountA" type="number" step="any" min="0" placeholder="0.0" style="font-size:16px;flex:1">
+        </div>
+      </div>
+      <div style="text-align:center;color:var(--fg-dim);font-size:16px;margin-bottom:8px">&darr;</div>
+      <div class="field" style="margin-bottom:14px">
+        <div class="field-label">You receive</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="token-select" id="newTokenBBtn" onclick="openOrderTokenModal('B')">USDC &#9662;</button>
+          <input class="field-input" id="newAmountB" type="number" step="any" min="0" placeholder="0.0" style="font-size:16px;flex:1">
+        </div>
+      </div>
+      <div class="order-opts" id="newCookbookOpts">
+        <label class="order-opt">
+          <span>Expires</span>
+          <select id="newOrderExpiry">
+            <option value="3600">1h</option>
+            <option value="86400">1d</option>
+            <option value="172800" selected>2d</option>
+            <option value="604800">1w</option>
+            <option value="2592000">1mo</option>
+          </select>
+        </label>
+        <label class="order-opt"><input type="checkbox" id="newOrderPartial" checked> Partial fill</label>
+      </div>
+      <button class="submit-btn buy" id="newOrderSubmitBtn" onclick="doNewOrder()" style="width:100%">Create Order</button>
+      <div class="status-msg" id="newOrderStatus" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Token picker modal -->
+<div class="modal-overlay" id="obTokenModal" onclick="if(event.target===this)closeOrderTokenModal()" style="z-index:2100">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Select Token</div>
+      <button class="modal-close" onclick="closeOrderTokenModal()">&times;</button>
+    </div>
+    <input type="text" id="obTokenSearch" class="token-search" placeholder="Search or enter token-list.wei" autocomplete="off">
+    <div id="obTokenSearchStatus" class="token-search-status"></div>
+    <div id="obTokenList"></div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;display:flex;gap:8px;align-items:center;flex-shrink:0">
+      <input type="text" id="obCustomTokenAddr" class="custom-token-input" placeholder="Paste token address" style="flex:1">
+      <button style="white-space:nowrap;font-size:12px;padding:8px 14px" onclick="obAddCustomToken()">Add</button>
+    </div>
+  </div>
 </div>
 
 <!-- Fill confirmation modal -->
@@ -571,8 +716,8 @@ body.modal-open { overflow:hidden; }
 </div>
 
 
-<script src="../ethers.min.js"></script>
-<script src="../walletconnect.min.js"></script>
+<script src="../vendor/ethers.min.js"></script>
+<script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
 <script>
 // ---- Constants ----
@@ -581,11 +726,25 @@ const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
 const ZERO    = "0x0000000000000000000000000000000000000000";
 const BASE    = "https://coinchan-indexer-production.up.railway.app";
 
+const SWAPBOARD = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+const SWAPBOARD_WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+const SWAPBOARD_SUBGRAPH = "https://api.goldsky.com/api/public/project_cmmkvehnce9da01u17d657vdt/subgraphs/Swapboard/1.0.0/gn";
+
 const COOKBOOK_ABI = [
   "function makeOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill) payable returns (bytes32)",
   "function fillOrder(address maker, address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill, uint96 fillPart) payable",
   "function cancelOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill)",
   "function orders(bytes32) view returns (bool partialFill, uint56 deadline, uint96 inDone, uint96 outDone)"
+];
+
+const SWAPBOARD_ABI = [
+  "function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB) returns (uint256)",
+  "function createOrderWithEth(address tokenB, uint256 amountB) payable returns (uint256)",
+  "function fillOrder(uint256 orderId, uint256 deadline)",
+  "function fillOrderWithEth(uint256 orderId, uint256 deadline) payable",
+  "function fillOrderUnwrap(uint256 orderId, uint256 deadline)",
+  "function cancelOrder(uint256 orderId)",
+  "function cancelOrderUnwrap(uint256 orderId)",
 ];
 
 const COINS_ABI = [
@@ -600,6 +759,398 @@ const ERC20_ABI = [
 
 const MAX_UINT96 = (1n << 96n) - 1n;
 
+// ---- Token registry (shared with swap page via localStorage) ----
+const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
+const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)"];
+const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
+const RPC_URL = "https://ethereum.publicnode.com";
+
+// ---- Known tokens (from swap page) ----
+const KNOWN_TOKENS = {
+  "0x0000000000000000000000000000000000000000": { symbol: "ETH", decimals: 18 },
+  "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": { symbol: "WETH", decimals: 18 },
+  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": { symbol: "USDC", decimals: 6 },
+  "0xdac17f958d2ee523a2206206994597c13d831ec7": { symbol: "USDT", decimals: 6 },
+  "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": { symbol: "WBTC", decimals: 8 },
+  "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": { symbol: "wstETH", decimals: 18 },
+  "0xae78736cd615f374d3085123a210448e74fc6393": { symbol: "rETH", decimals: 18 },
+  "0x6b175474e89094c44da98b954eedeac495271d0f": { symbol: "DAI", decimals: 18 },
+  "0x6440f144b7e50d6a8439336510312d2f54beb01d": { symbol: "BOLD", decimals: 18 },
+  "0x5f98805a4e8be255a32880fdec7f6728c6568ba0": { symbol: "LUSD", decimals: 18 },
+  "0xc50673edb3a7b94e8cad8a7d4e0cd68864e33edf": { symbol: "PNKSTR", decimals: 18 },
+  "0x00a6ba94bbb5474725515de88fe04f854f2dcb12": { symbol: "zOrg", decimals: 18 },
+  "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed": { symbol: "ZAMM", decimals: 18 },
+};
+
+const _obTokens = {};
+// Bootstrap from KNOWN_TOKENS
+for (const [addr, info] of Object.entries(KNOWN_TOKENS)) {
+  const sym = info.symbol;
+  _obTokens[sym] = { address: addr === ZERO ? ZERO : ethers.getAddress(addr), symbol: sym, decimals: info.decimals };
+}
+
+const BUILTIN_SYMS = new Set(Object.keys(_obTokens));
+
+// Load custom tokens from localStorage (shared with swap page)
+try {
+  for (const t of JSON.parse(localStorage.getItem('zswap_custom_tokens') || '[]')) {
+    if (t.address && t.symbol && t.decimals != null && !_obTokens[t.symbol])
+      _obTokens[t.symbol] = { address: t.address, symbol: t.symbol, decimals: t.decimals };
+  }
+} catch (_) {}
+
+// .wei list state
+const _obWeiLists = new Map();
+const _obWeiListSrc = new Map();
+let _obTokenListAutoLoaded = false;
+
+function _obSaveCustomTokens() {
+  try {
+    const custom = Object.values(_obTokens).filter(t => !BUILTIN_SYMS.has(t.symbol) && !_obWeiListSrc.has(t.symbol));
+    localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
+  } catch (_) {}
+}
+
+function _obSaveWeiLists() {
+  try {
+    const obj = {};
+    for (const [n, d] of _obWeiLists) obj[n] = d;
+    localStorage.setItem('zswap_wei_lists', JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function _obValidateTokenList(arr) {
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set(), out = [];
+  for (const e of arr) {
+    if (!e || typeof e !== 'object') continue;
+    const { address, symbol, decimals } = e;
+    if (!address || !symbol || decimals == null) continue;
+    const a = String(address).trim().toLowerCase();
+    if (!ethers.isAddress(a)) continue;
+    const cs = ethers.getAddress(a);
+    if (cs === ZERO || seen.has(a)) continue;
+    const sym = String(symbol).trim();
+    if (!sym || sym.length > 24 || !/^[A-Za-z0-9.$_-]+$/.test(sym)) continue;
+    const dec = Number(decimals);
+    if (!Number.isInteger(dec) || dec < 0 || dec > 36) continue;
+    seen.add(a);
+    const item = { address: cs, symbol: sym, decimals: dec };
+    if (e.icon && typeof e.icon === 'string') {
+      const url = e.icon.trim();
+      if (url.startsWith('https://') || url.startsWith('data:image/')) item.icon = url;
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+function _obMergeWeiList(listName, validated) {
+  for (const t of validated) {
+    if (BUILTIN_SYMS.has(t.symbol) || Object.values(_obTokens).some(x => BUILTIN_SYMS.has(x.symbol) && x.address.toLowerCase() === t.address.toLowerCase())) continue;
+    let sym = t.symbol;
+    if (_obTokens[sym] && _obTokens[sym].address.toLowerCase() !== t.address.toLowerCase())
+      sym = sym + '.' + listName.replace(/\.wei$/, '');
+    if (!_obTokens[sym]) {
+      _obTokens[sym] = { address: t.address, symbol: sym, decimals: t.decimals };
+      if (t.icon) _obTokens[sym].icon = t.icon;
+    }
+    _obWeiListSrc.set(sym, listName);
+  }
+}
+
+// Load saved .wei lists
+try {
+  for (const [name, data] of Object.entries(JSON.parse(localStorage.getItem('zswap_wei_lists') || '{}'))) {
+    if (data && Array.isArray(data.tokens)) {
+      _obWeiLists.set(name, data);
+      _obMergeWeiList(name, data.tokens);
+    }
+  }
+} catch (_) {}
+
+// ENSIP-7 contenthash → IPFS CID decoder
+const _B32 = 'abcdefghijklmnopqrstuvwxyz234567';
+function _bytesToB32(bytes) {
+  let bits = 0, val = 0, out = '';
+  for (const b of bytes) { val = (val << 8) | b; bits += 8; while (bits >= 5) { bits -= 5; out += _B32[(val >> bits) & 31]; } }
+  if (bits > 0) out += _B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function _decodeContenthash(hex) {
+  try {
+    const b = ethers.getBytes(hex);
+    if (b.length < 3) return null;
+    let proto = 0, shift = 0, off = 0;
+    for (; off < b.length; off++) { proto |= (b[off] & 0x7f) << shift; shift += 7; if (!(b[off] & 0x80)) { off++; break; } }
+    if (proto !== 0xe3) return null;
+    const cid = b.slice(off);
+    return cid[0] === 0x01 ? 'b' + _bytesToB32(cid) : null;
+  } catch { return null; }
+}
+async function _fetchIPFS(cid) {
+  let err;
+  for (const gw of IPFS_GATEWAYS) {
+    try { const r = await fetch(gw + cid); if (!r.ok) throw new Error(r.status); return await r.text(); } catch (e) { err = e; }
+  }
+  throw new Error('IPFS failed: ' + err?.message);
+}
+
+let _obWeiSeq = 0, _obWeiResolving = false;
+async function _obResolveWeiList(nameInput) {
+  let name = nameInput.toLowerCase().trim();
+  if (name.endsWith('.wei')) name = name.slice(0, -4);
+  if (!name) return;
+  const fullName = name + '.wei';
+  if (_obWeiLists.has(fullName)) { $('obTokenSearchStatus').textContent = fullName + ' already loaded'; return; }
+
+  const seq = ++_obWeiSeq;
+  _obWeiResolving = true;
+  const st = $('obTokenSearchStatus');
+  st.className = 'token-search-status';
+  st.textContent = 'Loading ' + fullName + '...';
+
+  try {
+    const rpc = new ethers.JsonRpcProvider(RPC_URL);
+    const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
+    const tokenId = await ns.computeId(fullName);
+    const [ch, txt] = await Promise.all([ns.contenthash(tokenId).catch(() => '0x'), ns.text(tokenId, 'tokens').catch(() => '')]);
+    if (seq !== _obWeiSeq) { _obWeiResolving = false; return; }
+
+    let raw = null;
+    if (ch && ch !== '0x' && ch.length > 2) {
+      const cid = _decodeContenthash(ch);
+      if (cid) { st.textContent = 'Fetching from IPFS...'; raw = await _fetchIPFS(cid); if (seq !== _obWeiSeq) { _obWeiResolving = false; return; } }
+    }
+    if (!raw || !raw.trim()) raw = txt;
+    if (!raw || !raw.trim()) { st.className = 'token-search-status error'; st.textContent = 'No token list found on ' + fullName; _obWeiResolving = false; return; }
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { st.className = 'token-search-status error'; st.textContent = 'Invalid JSON from ' + fullName; _obWeiResolving = false; return; }
+
+    const validated = _obValidateTokenList(parsed);
+    if (!validated.length) { st.className = 'token-search-status error'; st.textContent = 'No valid tokens in ' + fullName; _obWeiResolving = false; return; }
+
+    _obWeiLists.set(fullName, { tokens: validated, loadedAt: Date.now() });
+    _obMergeWeiList(fullName, validated);
+    _obSaveWeiLists();
+    st.textContent = 'Loaded ' + validated.length + ' tokens from ' + fullName;
+    _obWeiResolving = false;
+    _obRenderTokenList($('obTokenSearch')?.value || '');
+  } catch (e) {
+    _obWeiResolving = false;
+    if (seq !== _obWeiSeq) return;
+    st.className = 'token-search-status error';
+    st.textContent = 'Failed to resolve ' + fullName;
+    console.error('.wei resolve error:', e);
+  }
+}
+
+function _obRemoveWeiList(listName) {
+  if (!_obWeiLists.has(listName)) return;
+  const toRemove = [];
+  for (const [sym, src] of _obWeiListSrc) { if (src === listName) toRemove.push(sym); }
+  for (const sym of toRemove) { delete _obTokens[sym]; _obWeiListSrc.delete(sym); }
+  _obWeiLists.delete(listName);
+  _obSaveWeiLists();
+  if (listName === 'token-list.wei') _obTokenListAutoLoaded = false;
+}
+
+// ---- Token picker UI ----
+let _obTokenModalSide = null; // 'A' or 'B'
+let _newTokenA = 'ETH', _newTokenB = 'USDC';
+
+function _obRenderTokenList(filter) {
+  const list = $('obTokenList');
+  if (!list) return;
+  list.textContent = '';
+  const frag = document.createDocumentFragment();
+  const q = (filter || '').toLowerCase().trim();
+
+  function matches(sym, addr) {
+    if (!q) return true;
+    return sym.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
+  }
+
+  function makeRow(symbol) {
+    const t = _obTokens[symbol];
+    const row = document.createElement('div');
+    row.className = 'token-list-item';
+    row.setAttribute('data-symbol', symbol);
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'token-icon';
+    if (t.icon) {
+      iconSpan.innerHTML = '<img src="' + escAttr(t.icon) + '" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon(\'' + escAttr(symbol) + '\')">';
+    } else {
+      iconSpan.innerHTML = iconForSymbol(symbol);
+    }
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'token-symbol';
+    nameSpan.textContent = symbol;
+    row.append(iconSpan, nameSpan);
+    return row;
+  }
+
+  // Built-in tokens first
+  let hasAny = false;
+  for (const sym of Object.keys(_obTokens)) {
+    if (!BUILTIN_SYMS.has(sym)) continue;
+    if (!matches(sym, _obTokens[sym].address)) continue;
+    frag.appendChild(makeRow(sym));
+    hasAny = true;
+  }
+
+  // .wei list groups
+  const weiByList = new Map();
+  for (const [sym, src] of _obWeiListSrc) {
+    if (!_obTokens[sym]) continue;
+    if (!weiByList.has(src)) weiByList.set(src, []);
+    weiByList.get(src).push(sym);
+  }
+  for (const [listName] of _obWeiLists) {
+    const syms = (weiByList.get(listName) || []).filter(s => matches(s, _obTokens[s].address));
+    if (!syms.length) continue;
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
+    frag.appendChild(label);
+    for (const s of syms) frag.appendChild(makeRow(s));
+    hasAny = true;
+  }
+
+  // Custom tokens
+  const custom = Object.keys(_obTokens).filter(s => !BUILTIN_SYMS.has(s) && !_obWeiListSrc.has(s) && matches(s, _obTokens[s].address));
+  if (custom.length) {
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    label.textContent = 'Custom';
+    frag.appendChild(label);
+    for (const s of custom) frag.appendChild(makeRow(s));
+    hasAny = true;
+  }
+
+  if (!hasAny) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:16px 12px;color:var(--fg-dim);font-size:13px;text-align:center';
+    if (q && !_obTokenListAutoLoaded && !_obWeiLists.has('token-list.wei') && !q.endsWith('.wei')) {
+      _obTokenListAutoLoaded = true;
+      empty.textContent = 'Searching extended token list\u2026';
+      frag.appendChild(empty);
+      _obResolveWeiList('token-list.wei');
+    } else if (q && _obWeiResolving) {
+      empty.textContent = 'Searching\u2026';
+      frag.appendChild(empty);
+    } else {
+      empty.textContent = q ? 'No tokens match \u201c' + q + '\u201d' : 'No tokens';
+      frag.appendChild(empty);
+    }
+  }
+
+  list.appendChild(frag);
+
+  // Highlight best match
+  if (q && q.length >= 2) {
+    let best = null;
+    for (const row of list.querySelectorAll('.token-list-item')) {
+      const sym = (row.getAttribute('data-symbol') || '').toLowerCase();
+      const t = _obTokens[row.getAttribute('data-symbol')];
+      if (sym === q || (t && t.address.toLowerCase() === q)) { best = row; break; }
+      if (!best && (sym.includes(q) || (t && t.address.toLowerCase().includes(q)))) best = row;
+    }
+    if (best) { best.classList.add('highlight'); best.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  }
+}
+
+function openOrderTokenModal(side) {
+  _obTokenModalSide = side;
+  const si = $('obTokenSearch');
+  if (si) si.value = '';
+  const st = $('obTokenSearchStatus');
+  if (st) { st.textContent = ''; st.className = 'token-search-status'; }
+  _obRenderTokenList('');
+  $('obTokenModal').classList.add('active');
+  document.body.classList.add('modal-open');
+  if (si) si.focus();
+}
+
+function closeOrderTokenModal() {
+  $('obTokenModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+  $('obCustomTokenAddr').value = '';
+}
+
+function _obSelectToken(symbol) {
+  if (!_obTokens[symbol]) return;
+  if (_obTokenModalSide === 'A') {
+    _newTokenA = symbol;
+    _obUpdateTokenBtn('newTokenABtn', symbol);
+  } else {
+    _newTokenB = symbol;
+    _obUpdateTokenBtn('newTokenBBtn', symbol);
+  }
+  closeOrderTokenModal();
+}
+
+// Token list click handler
+(function() {
+  const list = $('obTokenList');
+  if (!list) return;
+  list.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.wei-list-remove');
+    if (removeBtn) { const ln = removeBtn.getAttribute('data-list'); if (ln) { _obRemoveWeiList(ln); _obRenderTokenList($('obTokenSearch')?.value || ''); } return; }
+    const row = e.target.closest('.token-list-item');
+    if (row) { const sym = row.getAttribute('data-symbol'); if (sym) _obSelectToken(sym); }
+  });
+})();
+
+// Search input handler
+(function() {
+  const input = $('obTokenSearch');
+  if (!input) return;
+  let _debounce = null, _weiDebounce = null;
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    clearTimeout(_debounce);
+    _debounce = setTimeout(() => _obRenderTokenList(val), 150);
+    clearTimeout(_weiDebounce);
+    if (val.endsWith('.wei') && val.length > 4) {
+      _weiDebounce = setTimeout(() => _obResolveWeiList(val), 800);
+    }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = input.value.trim();
+      if (val.endsWith('.wei') && val.length > 4) { clearTimeout(_weiDebounce); _obResolveWeiList(val); }
+    }
+  });
+})();
+
+// Custom token add
+async function obAddCustomToken() {
+  let address = $('obCustomTokenAddr').value.trim();
+  if (!ethers.isAddress(address)) { $('obTokenSearchStatus').textContent = 'Invalid address'; $('obTokenSearchStatus').className = 'token-search-status error'; return; }
+  address = ethers.getAddress(address);
+  if (address === ZERO) { $('obTokenSearchStatus').textContent = 'Use ETH from the list'; $('obTokenSearchStatus').className = 'token-search-status error'; return; }
+  try {
+    const rpc = _walletProvider || new ethers.JsonRpcProvider(RPC_URL);
+    const erc20 = new ethers.Contract(address, ["function symbol() view returns (string)", "function decimals() view returns (uint8)"], rpc);
+    const [rawSym, rawDec] = await Promise.all([erc20.symbol(), erc20.decimals()]);
+    const symbol = String(rawSym || '').trim().slice(0, 24) || 'TKN';
+    const decimals = Number.isInteger(Number(rawDec)) && Number(rawDec) >= 0 && Number(rawDec) <= 36 ? Number(rawDec) : 18;
+    if (_obTokens[symbol] && _obTokens[symbol].address.toLowerCase() !== address.toLowerCase()) {
+      $('obTokenSearchStatus').textContent = 'Symbol ' + symbol + ' already exists for a different address';
+      $('obTokenSearchStatus').className = 'token-search-status error';
+      return;
+    }
+    _obTokens[symbol] = { address, symbol, decimals };
+    _obSaveCustomTokens();
+    _obSelectToken(symbol);
+  } catch (e) {
+    $('obTokenSearchStatus').textContent = 'Failed to add token';
+    $('obTokenSearchStatus').className = 'token-search-status error';
+  }
+}
+
 // Multiply two decimal strings precisely using BigInt (18-decimal fixed-point)
 function mulDecimals(a, b, decimals) {
   const d = BigInt(decimals || 18);
@@ -609,32 +1160,12 @@ function mulDecimals(a, b, decimals) {
   return (aw * bw) / BASE;
 }
 
-// ---- Known tokens (from swap page) ----
-const KNOWN_TOKENS = {
-  "0x0000000000000000000000000000000000000000": { symbol: "ETH", decimals: 18 },
-  "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": { symbol: "WETH", decimals: 18 },
-  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": { symbol: "USDC", decimals: 6 },
-  "0xdac17f958d2ee523a2206206994597c13d831ec7": { symbol: "USDT", decimals: 6 },
-  "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": { symbol: "WBTC", decimals: 8 },
-  "0xae7ab96520de3a18e5e111b5eaab095312d7fe84": { symbol: "stETH", decimals: 18 },
-  "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0": { symbol: "wstETH", decimals: 18 },
-  "0xae78736cd615f374d3085123a210448e74fc6393": { symbol: "rETH", decimals: 18 },
-  "0x6b175474e89094c44da98b954eedeac495271d0f": { symbol: "DAI", decimals: 18 },
-  "0x6440f144b7e50d6a8439336510312d2f54beb01d": { symbol: "BOLD", decimals: 18 },
-  "0x5f98805a4e8be255a32880fdec7f6728c6568ba0": { symbol: "LUSD", decimals: 18 },
-  "0xc50673edb3a7b94e8cad8a7d4e0cd68864e33edf": { symbol: "PNKSTR", decimals: 18 },
-  "0x00a6ba94bbb5474725515de88fe04f854f2dcb12": { symbol: "zOrg", decimals: 18 },
-  "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed": { symbol: "ZAMM", decimals: 18 },
-  "0x000000000044bfe6c2bbfed8862973e0612f07c0": { symbol: "PAMM", decimals: 18, erc6909: true },
-};
-
 // ---- Token Icons ----
 const ETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>`;
 const WETH_ICON = `<svg width="24" height="24" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="17" fill="none" stroke="#90CAF9" stroke-width="1.5" stroke-dasharray="4 2.5"/><g transform="translate(2,2)"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></g></svg>`;
 const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
 const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
 const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
-const STETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path d="M10.35 14.864c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 2.061 0 4.122-.832 5.683-2.353 2.637-2.571 3.082-6.727 1.034-9.824L16.067 18.611 10.35 14.864z" fill="#FFF" opacity=".6"/></g></svg>`;
 const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
 const RETH_ICON = `<svg width="24" height="24" viewBox="0 0 33 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#rc)"><circle cx="16.5" cy="16" r="16" fill="url(#rg)"/><path d="M16.476 19.452L10.389 15.851 16.476 5.753 22.558 15.851Z" fill="white"/><path d="M16.476 25.584L10.389 17.01 16.476 20.605 22.564 17.01Z" fill="white"/></g><defs><radialGradient id="rg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10.95 7.65) rotate(54.17) scale(26.51)"><stop stop-color="#FFD794"/><stop offset="1" stop-color="#ED5A37"/></radialGradient><clipPath id="rc"><rect width="32" height="32" fill="white" transform="translate(.5)"/></clipPath></defs></svg>`;
 const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
@@ -642,29 +1173,27 @@ const BOLD_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" fill="none" x
 const LUSD_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><circle cx="128" cy="132" r="102" fill="#29C9EB"/><rect x="110" y="4" width="36" height="32" rx="9" fill="#29C9EB"/><rect x="110" y="228" width="36" height="24" rx="9" fill="#29C9EB"/><path d="M128 30A102 102 0 01128 234Z" fill="#7B6AD6"/><path d="M128 4h9q9 0 9 9v23h-18Z" fill="#7B6AD6"/><path d="M128 228h18v15q0 9-9 9h-9Z" fill="#7B6AD6"/><g fill="none" stroke="white" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"><path d="M154 90c-8-12-20-18-34-16-22 4-38 20-38 38 0 20 16 30 46 38s46 20 46 36c0 20-16 32-38 34-16 2-30-4-38-16"/><line x1="128" y1="74" x2="128" y2="15"/><line x1="128" y1="220" x2="128" y2="241"/></g></svg>`;
 const ZORG_ICON = `<svg width="24" height="24" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><clipPath id="zc"><circle cx="200" cy="200" r="200"/></clipPath><g clip-path="url(#zc)"><rect width="400" height="400" fill="#0a0a0a"/><path fill="#e8e8e0" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>`;
 const ZAMM_ICON = `<svg width="24" height="24" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="99" fill="#fff"/><circle cx="100" cy="100" r="93" fill="none" stroke="#000" stroke-width="1.2"/><path d="M69 65L96 64 97 65 98 64 120 64 121 65 122 64 130 64 130 70 117 85 118 86 104 100 105 101 91 115 92 116 78 130 96 130 97 131 98 130 120 130 121 131 122 130 132 131 120 136 119 135 118 136 96 136 95 135 94 136 71 136 71 130 84 115 83 114 97 100 96 99 110 85 109 84 123 70 105 70 104 69 103 70 83 70 82 69 81 70 69 69Z" fill="#000"/></svg>`;
-const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="12" font-weight="bold">?</text></svg>`;
-
 const TOKEN_ICONS = {
   ETH: ETH_ICON, WETH: WETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
-  stETH: STETH_ICON, wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, BOLD: BOLD_ICON,
+  wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, BOLD: BOLD_ICON,
   LUSD: LUSD_ICON, zOrg: ZORG_ICON, ZAMM: ZAMM_ICON,
 };
 
 function makeLetterIcon(sym) {
   const full = String(sym ?? '').trim();
   const clean = full.replace(/[^A-Za-z0-9]/g, '') || '?';
-  const show = clean.length <= 7 ? clean : clean.slice(0, 6) + '\u2026';
+  // Show max 3-4 chars for readability at small sizes (20px display)
+  const show = clean.length <= 4 ? clean : clean.slice(0, 3);
   const L = show.length;
-  const fontSize = L <= 1 ? 10 : L === 2 ? 8.5 : L === 3 ? 7.2 : L === 4 ? 6 : L === 5 ? 5.2 : L === 6 ? 4.6 : 4;
+  const fontSize = L <= 1 ? 12 : L === 2 ? 10 : L === 3 ? 8.5 : 7;
   let hash = 0;
   for (let i = 0; i < clean.length; i++) hash = ((hash << 5) - hash + clean.charCodeAt(i)) | 0;
   const hue = ((hash % 360) + 360) % 360;
-  const tl = L >= 5 ? ` textLength="${L >= 7 ? 19 : 18}" lengthAdjust="spacingAndGlyphs"` : '';
   return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">` +
     `<circle cx="12" cy="12" r="11" fill="hsl(${hue},50%,50%)" stroke="hsl(${hue},35%,38%)" stroke-width="1"/>` +
-    `<text x="12" y="12.3" text-anchor="middle" dominant-baseline="middle"` +
+    `<text x="12" y="12.5" text-anchor="middle" dominant-baseline="middle"` +
     ` font-family="Helvetica,Arial,sans-serif"` +
-    ` font-size="${fontSize}" font-weight="700" fill="#fff"${tl}>${escText(show)}</text></svg>`;
+    ` font-size="${fontSize}" font-weight="700" fill="#fff">${escText(show)}</text></svg>`;
 }
 
 const _obLetterIconCache = new Map();
@@ -678,12 +1207,13 @@ function iconForSymbol(sym) {
 }
 
 // ---- State ----
-let _cookbook = null, _coins = null;
+let _cookbook = null, _coins = null, _swapboard = null;
 let _poolData = null;
 let _allOrders = [];
 let _refreshCountdown = 30;
 let _activeTab = 'book';
 let _orderSide = 'buy';
+let _orderVenue = 'cookbook';
 let _globalMode = false;
 let _coinLabelCache = new Map();
 
@@ -692,6 +1222,7 @@ function esc(s) { const d = document.createElement('span'); d.textContent = s; r
 const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
 function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function srcTag(o) { return o._source === 'swapboard' ? '<span class="src-tag swapboard">OTC</span>' : '<span class="src-tag cookbook">ZAMM</span>'; }
 
 // ---- Pool ID from hash ----
 function getPoolId() {
@@ -764,28 +1295,99 @@ async function fetchPool(poolId) {
 }
 
 // ---- Fetch orders ----
-async function fetchOrders() {
+async function fetchCookbookOrders() {
   try {
     const res = await fetch(BASE + "/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 500) {
+        query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 500, where: { status: "ACTIVE" }) {
           items { id maker tokenIn idIn amtIn tokenOut idOut amtOut deadline partialFill inDone outDone status txHash }
         }}`
       })
     });
     const { data } = await res.json();
     const items = data ? data.orders.items : [];
-    console.log('[orderbook] fetched', items.length, 'orders from indexer');
+    items.forEach(o => o._source = 'cookbook');
     return items;
   } catch (e) {
-    console.error('[orderbook] fetchOrders failed:', e);
+    console.error('[orderbook] fetchCookbookOrders failed:', e);
     return [];
   }
 }
 
+async function fetchSwapboardOrders() {
+  try {
+    const res = await fetch(SWAPBOARD_SUBGRAPH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `{ orders(first: 500, orderBy: orderId, orderDirection: desc, where: { active: true }) {
+          orderId maker amountA amountB createdAt createdTx
+          tokenA { address symbol decimals }
+          tokenB { address symbol decimals }
+        }}`
+      })
+    });
+    const { data } = await res.json();
+    const raw = data ? data.orders : [];
+    const wethLower = SWAPBOARD_WETH.toLowerCase();
+    const items = raw.map(o => {
+      const decA = Number(o.tokenA.decimals);
+      const decB = Number(o.tokenB.decimals);
+      const addrA = o.tokenA.address.toLowerCase();
+      const addrB = o.tokenB.address.toLowerCase();
+      if (!KNOWN_TOKENS[addrA] && o.tokenA.symbol) KNOWN_TOKENS[addrA] = { symbol: o.tokenA.symbol, decimals: decA };
+      if (!KNOWN_TOKENS[addrB] && o.tokenB.symbol) KNOWN_TOKENS[addrB] = { symbol: o.tokenB.symbol, decimals: decB };
+      const symA = addrA === wethLower ? 'ETH' : o.tokenA.symbol;
+      const symB = addrB === wethLower ? 'ETH' : o.tokenB.symbol;
+      return {
+        id: 'sb-' + o.orderId,
+        _source: 'swapboard',
+        _orderId: o.orderId,
+        maker: o.maker,
+        tokenIn: o.tokenA.address,
+        idIn: "0",
+        amtIn: o.amountA,
+        tokenOut: o.tokenB.address,
+        idOut: "0",
+        amtOut: o.amountB,
+        deadline: "9999999999", // Swapboard orders never expire
+        partialFill: false,    // Swapboard is all-or-nothing
+        inDone: "0",
+        outDone: "0",
+        status: "ACTIVE",
+        txHash: o.createdTx,
+        _decIn: decA,
+        _decOut: decB,
+        _symIn: symA,
+        _symOut: symB,
+      };
+    });
+    return items;
+  } catch (e) {
+    console.error('[orderbook] fetchSwapboardOrders failed:', e);
+    return [];
+  }
+}
+
+async function fetchOrders() {
+  const [cookbook, swapboard] = await Promise.all([fetchCookbookOrders(), fetchSwapboardOrders(), loadCoinMap()]);
+  return [...cookbook, ...swapboard];
+}
+
 // ---- Filter orders by pool pair ----
+// For Swapboard orders, ETH pools match WETH since Swapboard uses WETH internally
+function _tokMatch(orderAddr, poolAddr) {
+  const o = orderAddr.toLowerCase(), p = poolAddr.toLowerCase();
+  if (o === p) return true;
+  const weth = SWAPBOARD_WETH.toLowerCase();
+  // ETH in pool matches WETH in Swapboard orders
+  if (p === ZERO && o === weth) return true;
+  if (o === ZERO && p === weth) return true;
+  return false;
+}
+
 function filterOrdersForPool(orders, pool) {
   if (!pool) return [];
   const now = Math.floor(Date.now() / 1000);
@@ -798,36 +1400,44 @@ function filterOrdersForPool(orders, pool) {
     if (o.status !== "ACTIVE") return false;
     if (Number(o.deadline) <= now) return false;
     const oti = o.tokenIn.toLowerCase(), oto = o.tokenOut.toLowerCase();
+
+    if (o._source === 'swapboard') {
+      return (_tokMatch(oti, t0) && _tokMatch(oto, t1))
+          || (_tokMatch(oti, t1) && _tokMatch(oto, t0));
+    }
+
+    // Cookbook: match by address (with ETH/WETH equivalence) + coin id
     const oii = o.idIn, oio = o.idOut;
-    return (oti === t0 && oii === id0 && oto === t1 && oio === id1)
-        || (oti === t1 && oii === id1 && oto === t0 && oio === id0);
+    return (_tokMatch(oti, t0) && oii === id0 && _tokMatch(oto, t1) && oio === id1)
+        || (_tokMatch(oti, t1) && oii === id1 && _tokMatch(oto, t0) && oio === id0);
   });
-  console.log('[orderbook] filtered', filtered.length, 'orders for pool pair',
-    't0=' + t0.slice(0,10), 'id0=' + id0,
-    't1=' + t1.slice(0,10), 'id1=' + id1);
   return filtered;
 }
 
 // ---- Classify bids and asks ----
+// Classify orders as bids (buy base) or asks (sell base).
+// Convention: token0=base, token1=quote. Prices in quote/base.
+// Bid = maker deposited token1 (quote) to buy token0 (base).
+// Ask = maker deposited token0 (base) to sell for token1 (quote).
 function classifyOrders(orders, pool) {
   if (!pool) return { bids: [], asks: [] };
-  const t0 = pool.token0.toLowerCase();
   const id0 = pool.coin0 ? pool.coin0.id : "0";
   const bids = [], asks = [];
   for (const o of orders) {
-    if (o.tokenIn.toLowerCase() === t0 && o.idIn === id0) {
-      bids.push(o);
+    if (_tokMatch(o.tokenIn, pool.token0) && (o._source === 'swapboard' || o.idIn === id0)) {
+      asks.push(o); // depositing base → selling base → ask
     } else {
-      asks.push(o);
+      bids.push(o); // depositing quote → buying base → bid
     }
   }
+  // Price in quote/base: for bids, price = amtIn(quote)/amtOut(base); for asks, price = amtOut(quote)/amtIn(base)
   const price = (o, isBid) => {
     const inAmt = BigInt(o.amtIn), outAmt = BigInt(o.amtOut);
     if (isBid) return outAmt > 0n ? Number(inAmt * 10000n / outAmt) / 10000 : 0;
     return inAmt > 0n ? Number(outAmt * 10000n / inAmt) / 10000 : 0;
   };
-  bids.sort((a, b) => price(b, true) - price(a, true));
-  asks.sort((a, b) => price(a, false) - price(b, false));
+  bids.sort((a, b) => price(b, true) - price(a, true)); // highest bid first
+  asks.sort((a, b) => price(a, false) - price(b, false)); // lowest ask first
   return { bids, asks };
 }
 
@@ -880,17 +1490,37 @@ function renderBook() {
   const { bids, asks } = classifyOrders(filtered, _poolData);
   const label0 = tokenLabel(_poolData, 0);
   const label1 = tokenLabel(_poolData, 1);
+  const dec0 = _poolData.coin0?.decimals || 18;
+  const dec1 = _poolData.coin1?.decimals || 18;
 
-  $('hdrPrice').textContent = 'Price (' + label0 + ')';
-  $('hdrSize').textContent = 'Size (' + label1 + ')';
-  $('hdrTotal').textContent = 'Total (' + label0 + ')';
+  // Convention: token0=base, token1=quote. Prices in quote/base.
+  // Asks: maker deposited token0(base), wants token1(quote) → tokenIn=token0, tokenOut=token1
+  // Bids: maker deposited token1(quote), wants token0(base) → tokenIn=token1, tokenOut=token0
+
+  // base/quote decimals for an order
+  function baseDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return o._source === 'swapboard' ? (isInBase ? (o._decIn||18) : (o._decOut||18)) : dec0; }
+  function quoteDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return o._source === 'swapboard' ? (isInBase ? (o._decOut||18) : (o._decIn||18)) : dec1; }
+  // base/quote amounts: for asks tokenIn=base, for bids tokenOut=base
+  function baseAmt(o, isBid) { return isBid ? o.amtOut : o.amtIn; }
+  function quoteAmt(o, isBid) { return isBid ? o.amtIn : o.amtOut; }
+
+  $('hdrPrice').textContent = 'Price (' + label1 + ')';
+  $('hdrSize').textContent = 'Size (' + label0 + ')';
+  $('hdrTotal').textContent = 'Total (' + label1 + ')';
   $('orderCount').textContent = (bids.length + asks.length) + ' orders';
 
-  // Compute max sizes for depth bars
-  const bidSizes = bids.map(o => Number(BigInt(o.amtOut)));
-  const askSizes = asks.map(o => Number(BigInt(o.amtIn)));
-  const maxBid = Math.max(...bidSizes, 1);
-  const maxAsk = Math.max(...askSizes, 1);
+  function orderPrice(o, isBid) {
+    const bd = baseDec(o), qd = quoteDec(o);
+    const base = Number(BigInt(baseAmt(o, isBid))) / (10 ** bd);
+    const quote = Number(BigInt(quoteAmt(o, isBid))) / (10 ** qd);
+    return base > 0 ? quote / base : 0; // quote per base
+  }
+
+  // Depth bars based on base size
+  const bidBaseSizes = bids.map(o => Number(BigInt(baseAmt(o, true))) / (10 ** baseDec(o)));
+  const askBaseSizes = asks.map(o => Number(BigInt(baseAmt(o, false))) / (10 ** baseDec(o)));
+  const maxBid = Math.max(...bidBaseSizes, 0.0001);
+  const maxAsk = Math.max(...askBaseSizes, 0.0001);
 
   // Asks (reversed: lowest ask at bottom, closest to spread)
   const displayAsks = asks.slice(0, 12).reverse();
@@ -899,15 +1529,16 @@ function renderBook() {
   } else {
     let html = '';
     for (const o of displayAsks) {
-      const price = BigInt(o.amtIn) > 0n ? Number(BigInt(o.amtOut)) / Number(BigInt(o.amtIn)) : 0;
-      const size = Number(BigInt(o.amtIn));
-      const depth = (size / maxAsk * 100).toFixed(1);
+      const price = orderPrice(o, false);
+      const bd = baseDec(o), qd = quoteDec(o);
+      const baseSize = Number(BigInt(baseAmt(o, false))) / (10 ** bd);
+      const depth = (baseSize / maxAsk * 100).toFixed(1);
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
+      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o._source === 'swapboard' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'buy')" title="Trade at this price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(o.amtIn)}${aon}</span>
-        <span class="total">${fmt(o.amtOut)}</span>
+        <span class="size">${fmt(baseAmt(o, false), bd)}${aon}${srcTag(o)}</span>
+        <span class="total">${fmt(quoteAmt(o, false), qd)}</span>
       </div>`;
     }
     $('asksSection').innerHTML = html;
@@ -915,8 +1546,8 @@ function renderBook() {
 
   // Spread
   if (bids.length > 0 && asks.length > 0) {
-    const bestBidPrice = BigInt(bids[0].amtOut) > 0n ? Number(BigInt(bids[0].amtIn)) / Number(BigInt(bids[0].amtOut)) : 0;
-    const bestAskPrice = BigInt(asks[0].amtIn) > 0n ? Number(BigInt(asks[0].amtOut)) / Number(BigInt(asks[0].amtIn)) : 0;
+    const bestBidPrice = orderPrice(bids[0], true);
+    const bestAskPrice = orderPrice(asks[0], false);
     const mid = (bestBidPrice + bestAskPrice) / 2;
     const spreadPct = mid > 0 ? ((bestAskPrice - bestBidPrice) / mid * 100).toFixed(2) : '0';
     $('spreadPrice').textContent = fmtCompact(mid);
@@ -933,15 +1564,16 @@ function renderBook() {
   } else {
     let html = '';
     for (const o of displayBids) {
-      const price = BigInt(o.amtOut) > 0n ? Number(BigInt(o.amtIn)) / Number(BigInt(o.amtOut)) : 0;
-      const size = Number(BigInt(o.amtOut));
-      const depth = (size / maxBid * 100).toFixed(1);
+      const price = orderPrice(o, true);
+      const bd = baseDec(o), qd = quoteDec(o);
+      const baseSize = Number(BigInt(baseAmt(o, true))) / (10 ** bd);
+      const depth = (baseSize / maxBid * 100).toFixed(1);
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'}">
+      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o._source === 'swapboard' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'sell')" title="Trade at this price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(o.amtOut)}${aon}</span>
-        <span class="total">${fmt(o.amtIn)}</span>
+        <span class="size">${fmt(baseAmt(o, true), bd)}${aon}${srcTag(o)}</span>
+        <span class="total">${fmt(quoteAmt(o, true), qd)}</span>
       </div>`;
     }
     $('bidsSection').innerHTML = html;
@@ -949,9 +1581,10 @@ function renderBook() {
 }
 
 function bookToTrade(price, side) {
-  if (!Number.isFinite(price)) return;
+  if (!Number.isFinite(price) || price <= 0) return;
   setSide(side);
-  $('orderPrice').value = price;
+  // Avoid scientific notation (e.g. "1e-7") which ethers.parseUnits rejects
+  $('orderPrice').value = price >= 1 ? price.toPrecision(6) : price.toFixed(18).replace(/0+$/, '').replace(/\.$/, '.0');
   $('orderAmt').focus();
   updateOrderTotal();
   switchTab('make');
@@ -960,20 +1593,51 @@ function bookToTrade(price, side) {
 // ---- Order side toggle ----
 function setSide(side) {
   _orderSide = side;
-  const label1 = _poolData ? tokenLabel(_poolData, 1) : 'token';
-  const label0 = _poolData ? tokenLabel(_poolData, 0) : 'ETH';
+  const base = _poolData ? tokenLabel(_poolData, 0) : 'ETH';
+  const quote = _poolData ? tokenLabel(_poolData, 1) : 'USD';
 
   $('sideBuy').className = 'side-tab' + (side === 'buy' ? ' active-buy' : '');
   $('sideSell').className = 'side-tab' + (side === 'sell' ? ' active-sell' : '');
 
-  $('orderAmtUnit').textContent = label1;
-  $('orderPriceUnit').textContent = label0 + '/' + label1;
+  $('orderAmtUnit').textContent = base;
+  $('orderPriceUnit').textContent = quote + '/' + base;
 
   const btn = $('makeOrderBtn');
   btn.className = 'submit-btn ' + side;
-  btn.textContent = side === 'buy' ? 'Buy ' + label1 : 'Sell ' + label1;
+  btn.textContent = side === 'buy' ? 'Buy ' + base : 'Sell ' + base;
 
+  updateVenueButtons();
   updateOrderTotal();
+}
+
+// ---- Venue toggle ----
+function _isErc6909Pair() {
+  if (!_poolData) return false;
+  const id0 = _poolData.coin0 ? BigInt(_poolData.coin0.id) : 0n;
+  const id1 = _poolData.coin1 ? BigInt(_poolData.coin1.id) : 0n;
+  return id0 >= 1000000n || id1 >= 1000000n;
+}
+
+function updateVenueButtons() {
+  const sbBtn = $('venueSwapboard');
+  if (!sbBtn) return;
+  const erc6909 = _isErc6909Pair();
+  sbBtn.disabled = erc6909;
+  sbBtn.title = erc6909 ? 'Swapboard does not support ERC6909 tokens' : '';
+  if (erc6909 && _orderVenue === 'swapboard') setVenue('cookbook');
+}
+
+function setVenue(v) {
+  _orderVenue = v;
+  $('venueCookbook').classList.toggle('active', v === 'cookbook');
+  $('venueSwapboard').classList.toggle('active', v === 'swapboard');
+  if (v === 'swapboard') {
+    $('cookbookOpts').style.display = 'none';
+    $('venueHint').textContent = 'All-or-nothing \u00b7 no expiry \u00b7 ERC20/ETH only';
+  } else {
+    $('cookbookOpts').style.display = '';
+    $('venueHint').textContent = 'Partial fills \u00b7 custom expiry';
+  }
 }
 
 // ---- Render my orders ----
@@ -993,21 +1657,31 @@ async function renderMyOrders() {
     return;
   }
 
-  const t0 = _poolData.token0.toLowerCase();
   const id0 = _poolData.coin0 ? _poolData.coin0.id : "0";
+  const dec0 = _poolData.coin0?.decimals || 18;
+  const dec1 = _poolData.coin1?.decimals || 18;
+  const base = label0, quote = label1;
   let html = '';
   for (const o of mine) {
-    const isBid = o.tokenIn.toLowerCase() === t0 && o.idIn === id0;
-    const price = isBid
-      ? (BigInt(o.amtOut) > 0n ? Number(BigInt(o.amtIn)) / Number(BigInt(o.amtOut)) : 0)
-      : (BigInt(o.amtIn) > 0n ? Number(BigInt(o.amtOut)) / Number(BigInt(o.amtIn)) : 0);
+    // Bid = deposited quote(token1) to buy base(token0); Ask = deposited base(token0) to sell
+    const isAsk = _tokMatch(o.tokenIn, _poolData.token0) && (o._source === 'swapboard' || o.idIn === id0);
+    const isBid = !isAsk;
+    const isInBase = _tokMatch(o.tokenIn, _poolData.token0);
+    const bDec = o._source === 'swapboard' ? (isInBase ? (o._decIn||18) : (o._decOut||18)) : dec0;
+    const qDec = o._source === 'swapboard' ? (isInBase ? (o._decOut||18) : (o._decIn||18)) : dec1;
+    const baseWei = isBid ? o.amtOut : o.amtIn;
+    const quoteWei = isBid ? o.amtIn : o.amtOut;
+    const normBase = Number(BigInt(baseWei)) / (10 ** bDec);
+    const normQuote = Number(BigInt(quoteWei)) / (10 ** qDec);
+    const price = normBase > 0 ? normQuote / normBase : 0;
     const pct = fillPct(o);
-    const size = isBid ? fmt(o.amtOut) : fmt(o.amtIn);
+    const size = fmt(baseWei, bDec);
+    const expiryText = o._source === 'swapboard' ? 'No expiry' : 'Expires ' + timeLeft(o.deadline);
     html += `<div class="my-order-item">
       <span class="my-order-side ${isBid ? 'bid' : 'ask'}">${isBid ? 'BID' : 'ASK'}</span>
       <div class="my-order-details">
-        <div>${fmtCompact(price)} ${esc(label0)}/${esc(label1)} &middot; ${size} ${esc(label1)}</div>
-        <div class="line2">Expires ${timeLeft(o.deadline)} &middot; <a href="https://etherscan.io/tx/${o.txHash}" target="_blank" rel="noopener" style="color:inherit">${o.txHash.slice(0,10)}...</a></div>
+        <div>${fmtCompact(price)} ${esc(quote)}/${esc(base)} &middot; ${size} ${esc(base)}${srcTag(o)}</div>
+        <div class="line2">${expiryText} &middot; <a href="https://etherscan.io/tx/${o.txHash}" target="_blank" rel="noopener" style="color:inherit">${o.txHash.slice(0,10)}...</a></div>
       </div>
       <div class="my-order-fill"><span class="pct">${pct}%</span> filled</div>
       <button class="cancel-btn" onclick="doCancelOrder('${o.id}')">Cancel</button>
@@ -1020,9 +1694,9 @@ async function renderMyOrders() {
 function updateOrderTotal() {
   const amt = parseFloat($('orderAmt').value) || 0;
   const price = parseFloat($('orderPrice').value) || 0;
-  const label0 = _poolData ? tokenLabel(_poolData, 0) : 'ETH';
+  const quote = _poolData ? tokenLabel(_poolData, 1) : 'USD';
   const total = amt * price;
-  $('orderTotal').textContent = total > 0 ? total.toPrecision(6) + ' ' + label0 : '--';
+  $('orderTotal').textContent = total > 0 ? total.toPrecision(6) + ' ' + quote : '--';
 }
 
 $('orderAmt').addEventListener('input', updateOrderTotal);
@@ -1046,34 +1720,45 @@ async function doMakeOrder() {
     return;
   }
 
+  if (_orderVenue === 'swapboard') {
+    return doMakeSwapboardOrder(showStatus);
+  }
+
   const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
   const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
-  const totalWei = mulDecimals(amt, price, dec0);
+  // amt = base (token0) amount, price = quote/base (token1/token0), total = quote (token1)
+  const totalWei = mulDecimals(amt, price, dec1);
   const expiry = Math.floor(Date.now() / 1000) + Number($('orderExpiry').value);
   const partial = $('orderPartial').checked;
 
   let tokenIn, idIn, amtIn, tokenOut, idOut, amtOut, value;
 
   if (side === 'buy') {
-    tokenIn = _poolData.token0;
-    idIn = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
-    amtIn = totalWei;
-    tokenOut = _poolData.token1;
-    idOut = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtOut = ethers.parseUnits(amt, dec1);
-    value = tokenIn === ZERO ? amtIn : 0n;
-  } else {
+    // Buy base: deposit quote (token1) to get base (token0)
     tokenIn = _poolData.token1;
     idIn = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtIn = ethers.parseUnits(amt, dec1);
+    amtIn = totalWei;
     tokenOut = _poolData.token0;
     idOut = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
+    amtOut = ethers.parseUnits(amt, dec0);
+    value = tokenIn === ZERO ? amtIn : 0n;
+  } else {
+    // Sell base: deposit base (token0) to get quote (token1)
+    tokenIn = _poolData.token0;
+    idIn = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
+    amtIn = ethers.parseUnits(amt, dec0);
+    tokenOut = _poolData.token1;
+    idOut = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
     amtOut = totalWei;
     value = tokenIn === ZERO ? amtIn : 0n;
   }
 
+  if (amtIn === 0n || amtOut === 0n) {
+    showStatus('Amount too small', 'error');
+    return;
+  }
   if (amtIn > MAX_UINT96 || amtOut > MAX_UINT96) {
-    showStatus('Amount too large', 'error');
+    showStatus('Amount too large (use OTC for larger orders)', 'error');
     return;
   }
 
@@ -1116,15 +1801,246 @@ async function doMakeOrder() {
   }
 }
 
+// ---- Make Swapboard order ----
+async function doMakeSwapboardOrder(showStatus) {
+  const side = _orderSide;
+  const amt = $('orderAmt').value;
+  const price = $('orderPrice').value;
+
+  const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
+  const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
+  // amt = base (token0) amount, price = quote/base, total = quote (token1)
+  const totalWei = mulDecimals(amt, price, dec1);
+
+  // Swapboard uses WETH internally — map ETH zero address to WETH
+  const t0 = _poolData.token0 === ZERO ? SWAPBOARD_WETH : _poolData.token0;
+  const t1 = _poolData.token1 === ZERO ? SWAPBOARD_WETH : _poolData.token1;
+
+  let tokenA, amountA, tokenB, amountB, isPayingEth;
+
+  if (side === 'buy') {
+    // Buy base: deposit quote (token1) to get base (token0)
+    tokenA = t1; amountA = totalWei;
+    tokenB = t0; amountB = ethers.parseUnits(amt, dec0);
+    isPayingEth = _poolData.token1 === ZERO;
+  } else {
+    // Sell base: deposit base (token0) to get quote (token1)
+    tokenA = t0; amountA = ethers.parseUnits(amt, dec0);
+    tokenB = t1; amountB = totalWei;
+    isPayingEth = _poolData.token0 === ZERO;
+  }
+
+  if (amountA === 0n || amountB === 0n) {
+    showStatus('Amount too small', 'error');
+    $('makeOrderBtn').disabled = false;
+    return;
+  }
+
+  try {
+    $('makeOrderBtn').disabled = true;
+    showStatus('Preparing transaction...', 'info');
+
+    if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+    const addr = await _signer.getAddress();
+
+    if (isPayingEth) {
+      showStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboard.createOrderWithEth(tokenB, amountB, { value: amountA });
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else {
+      const token = new ethers.Contract(tokenA, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD);
+      if (allowance < amountA) {
+        showStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      showStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboard.createOrder(tokenA, amountA, tokenB, amountB);
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    }
+
+    showStatus('Order created!', 'success');
+    $('orderAmt').value = '';
+    $('orderPrice').value = '';
+    $('orderTotal').textContent = '--';
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+  } finally {
+    $('makeOrderBtn').disabled = false;
+  }
+}
+
+// ---- New order modal (global view) ----
+let _newOrderVenue = 'cookbook';
+
+function _obUpdateTokenBtn(id, symbol) {
+  const t = _obTokens[symbol];
+  if (!t) return;
+  const icon = t.icon ? '<img src="' + escAttr(t.icon) + '" width="20" height="20" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon(\'' + escAttr(symbol) + '\')">' : iconForSymbol(symbol);
+  $(id).innerHTML = '<span class="token-icon">' + icon + '</span> ' + escText(symbol) + ' <span class="token-chevron">&#9662;</span>';
+}
+
+function showNewOrderModal() {
+  _obUpdateTokenBtn('newTokenABtn', _newTokenA);
+  _obUpdateTokenBtn('newTokenBBtn', _newTokenB);
+  $('newOrderModal').classList.add('active');
+  document.body.classList.add('modal-open');
+}
+
+function closeNewOrderModal() {
+  $('newOrderModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+}
+
+function setNewOrderVenue(v) {
+  _newOrderVenue = v;
+  $('newVenueCookbook').classList.toggle('active', v === 'cookbook');
+  $('newVenueSwapboard').classList.toggle('active', v === 'swapboard');
+  if (v === 'swapboard') {
+    $('newCookbookOpts').style.display = 'none';
+    $('newVenueHint').textContent = 'All-or-nothing \u00b7 no expiry \u00b7 ERC20/ETH only';
+  } else {
+    $('newCookbookOpts').style.display = '';
+    $('newVenueHint').textContent = 'Partial fills \u00b7 custom expiry';
+  }
+}
+
+async function doNewOrder() {
+  const statusEl = $('newOrderStatus');
+  function showStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status-msg show ' + type;
+  }
+
+  if (!_signer) { showWalletModal(); return; }
+
+  const tA = _obTokens[_newTokenA];
+  const tB = _obTokens[_newTokenB];
+  if (!tA) { showStatus('Select a token to send', 'error'); return; }
+  if (!tB) { showStatus('Select a token to receive', 'error'); return; }
+
+  const rawA = $('newAmountA').value;
+  const rawB = $('newAmountB').value;
+  if (!rawA || !rawB || parseFloat(rawA) <= 0 || parseFloat(rawB) <= 0) {
+    showStatus('Enter valid amounts', 'error'); return;
+  }
+
+  const amountA = ethers.parseUnits(rawA, tA.decimals);
+  const amountB = ethers.parseUnits(rawB, tB.decimals);
+  if (amountA === 0n || amountB === 0n) { showStatus('Amount too small', 'error'); return; }
+
+  // Same-token check (for Swapboard, compare after ETH→WETH mapping)
+  const effA = tA.address === ZERO ? SWAPBOARD_WETH.toLowerCase() : tA.address.toLowerCase();
+  const effB = tB.address === ZERO ? SWAPBOARD_WETH.toLowerCase() : tB.address.toLowerCase();
+  if (_newOrderVenue === 'swapboard' && effA === effB) {
+    showStatus('Cannot create order with the same token on both sides', 'error'); return;
+  }
+  if (tA.address.toLowerCase() === tB.address.toLowerCase()) {
+    showStatus('Cannot create order with the same token on both sides', 'error'); return;
+  }
+
+  const btn = $('newOrderSubmitBtn');
+
+  if (_newOrderVenue === 'swapboard') {
+    // Swapboard: map ETH→WETH for contract address, use createOrderWithEth for ETH
+    const isPayingEth = tA.address === ZERO;
+    const contractA = tA.address === ZERO ? SWAPBOARD_WETH : tA.address;
+    const contractB = tB.address === ZERO ? SWAPBOARD_WETH : tB.address;
+
+    try {
+      btn.disabled = true;
+      showStatus('Preparing transaction...', 'info');
+      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+      const addr = await _signer.getAddress();
+
+      if (isPayingEth) {
+        showStatus('Confirm in wallet...', 'info');
+        const tx = await _swapboard.createOrderWithEth(contractB, amountB, { value: amountA });
+        showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+        await tx.wait();
+      } else {
+        const token = new ethers.Contract(contractA, ERC20_ABI, _signer);
+        const allowance = await token.allowance(addr, SWAPBOARD);
+        if (allowance < amountA) {
+          showStatus('Approving token spend...', 'info');
+          const approveTx = await token.approve(SWAPBOARD, ethers.MaxUint256);
+          await approveTx.wait();
+        }
+        showStatus('Confirm in wallet...', 'info');
+        const tx = await _swapboard.createOrder(contractA, amountA, contractB, amountB);
+        showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+        await tx.wait();
+      }
+      showStatus('Order created!', 'success');
+      setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
+    } catch (e) {
+      showStatus(e.reason || e.message || 'Transaction failed', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  } else {
+    // Cookbook
+    if (amountA > MAX_UINT96 || amountB > MAX_UINT96) {
+      showStatus('Amount too large (use OTC for larger orders)', 'error'); return;
+    }
+    const expiry = Math.floor(Date.now() / 1000) + Number($('newOrderExpiry').value);
+    const partial = $('newOrderPartial').checked;
+    const value = tA.address === ZERO ? amountA : 0n;
+
+    try {
+      btn.disabled = true;
+      showStatus('Preparing transaction...', 'info');
+      if (!_cookbook) { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); }
+      const addr = await _signer.getAddress();
+
+      if (tA.address !== ZERO) {
+        const token = new ethers.Contract(tA.address, ERC20_ABI, _signer);
+        const allowance = await token.allowance(addr, COOKBOOK);
+        if (allowance < amountA) {
+          showStatus('Approving token spend...', 'info');
+          const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
+          await approveTx.wait();
+        }
+      }
+
+      showStatus('Confirm in wallet...', 'info');
+      const tx = await _cookbook.makeOrder(tA.address, 0n, amountA, tB.address, 0n, amountB, expiry, partial, { value });
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+      showStatus('Order created!', 'success');
+      setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
+    } catch (e) {
+      showStatus(e.reason || e.message || 'Transaction failed', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+}
+
 // ---- Fill order ----
+function _fillStatus(msg, type) {
+  const el = $('fillStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status-msg show ' + type;
+}
+
 async function doFillOrder(orderId) {
   if (!_signer) { showWalletModal(); return; }
 
   const o = _allOrders.find(x => x.id === orderId);
-  if (!o) { alert('Order not found'); return; }
+  if (!o) { _fillStatus('Order not found', 'error'); return; }
+
+  if (o._source === 'swapboard') {
+    return doFillSwapboardOrder(o);
+  }
 
   const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
-  if (remaining <= 0n) { alert('Order already filled'); return; }
+  if (remaining <= 0n) { _fillStatus('Order already filled', 'error'); return; }
 
   const isPayingEth = o.tokenOut === ZERO;
   const outDec = coinLabel(o.tokenOut, o.idOut).decimals;
@@ -1133,16 +2049,20 @@ async function doFillOrder(orderId) {
   const fillInput = $('fillAmtInput');
   if (o.partialFill && fillInput && fillInput.value) {
     const parsed = ethers.parseUnits(fillInput.value, outDec);
-    if (parsed <= 0n) { alert('Enter a valid fill amount'); return; }
+    if (parsed <= 0n) { _fillStatus('Enter a valid fill amount', 'error'); return; }
     fillPart = parsed > remaining ? remaining : parsed;
   }
 
+  const btn = $('fillOrderBtn');
   try {
+    if (btn) btn.disabled = true;
+    _fillStatus('Preparing...', 'info');
     const addr = await _signer.getAddress();
     if (!isPayingEth && BigInt(o.idOut) >= 1000000n) {
       const erc6909 = new ethers.Contract(o.tokenOut, COINS_ABI, _signer);
       const isOp = await erc6909.isOperator(addr, COOKBOOK);
       if (!isOp) {
+        _fillStatus('Approving operator...', 'info');
         const approveTx = await erc6909.setOperator(COOKBOOK, true);
         await approveTx.wait();
       }
@@ -1150,11 +2070,13 @@ async function doFillOrder(orderId) {
       const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
       const allowance = await token.allowance(addr, COOKBOOK);
       if (allowance < fillPart) {
+        _fillStatus('Approving token spend...', 'info');
         const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
         await approveTx.wait();
       }
     }
 
+    _fillStatus('Confirm in wallet...', 'info');
     const tx = await _cookbook.fillOrder(
       o.maker,
       o.tokenIn,
@@ -1168,10 +2090,70 @@ async function doFillOrder(orderId) {
       fillPart,
       { value: isPayingEth ? fillPart : 0n }
     );
+    _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
     await tx.wait();
+    closeFillModal();
     setTimeout(refresh, 4000);
   } catch (e) {
-    alert(e.reason || e.message || 'Fill failed');
+    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ---- Fill Swapboard order ----
+async function doFillSwapboardOrder(o) {
+  if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+  const oid = BigInt(o._orderId);
+  const wethLower = SWAPBOARD_WETH.toLowerCase();
+  const tokenB = o.tokenOut.toLowerCase(); // tokenB is what the filler pays
+  const tokenA = o.tokenIn.toLowerCase();  // tokenA is what the filler receives
+  const isPayingEth = tokenB === wethLower;
+  const isReceivingEth = tokenA === wethLower;
+  const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min, matches official dapp
+
+  const btn = $('fillOrderBtn');
+  try {
+    if (btn) btn.disabled = true;
+    _fillStatus('Preparing...', 'info');
+    const addr = await _signer.getAddress();
+
+    if (isPayingEth) {
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboard.fillOrderWithEth(oid, deadline, { value: BigInt(o.amtOut) });
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else if (isReceivingEth) {
+      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD);
+      if (allowance < BigInt(o.amtOut)) {
+        _fillStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboard.fillOrderUnwrap(oid, deadline);
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else {
+      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD);
+      if (allowance < BigInt(o.amtOut)) {
+        _fillStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboard.fillOrder(oid, deadline);
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    }
+    closeFillModal();
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1190,22 +2172,74 @@ async function doCancelOrder(orderId) {
 
   try {
     showStatus('Confirm in wallet...', 'info');
-    const tx = await _cookbook.cancelOrder(
-      o.tokenIn,
-      BigInt(o.idIn),
-      BigInt(o.amtIn),
-      o.tokenOut,
-      BigInt(o.idOut),
-      BigInt(o.amtOut),
-      BigInt(o.deadline),
-      o.partialFill
-    );
+    let tx;
+    if (o._source === 'swapboard') {
+      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+      const oid = BigInt(o._orderId);
+      const tokenA = o.tokenIn.toLowerCase();
+      if (tokenA === SWAPBOARD_WETH.toLowerCase()) {
+        tx = await _swapboard.cancelOrderUnwrap(oid);
+      } else {
+        tx = await _swapboard.cancelOrder(oid);
+      }
+    } else {
+      tx = await _cookbook.cancelOrder(
+        o.tokenIn,
+        BigInt(o.idIn),
+        BigInt(o.amtIn),
+        o.tokenOut,
+        BigInt(o.idOut),
+        BigInt(o.amtOut),
+        BigInt(o.deadline),
+        o.partialFill
+      );
+    }
     showStatus('Tx sent...', 'info');
     await tx.wait();
     showStatus('Order cancelled!', 'success');
     setTimeout(refresh, 4000);
   } catch (e) {
     showStatus(e.reason || e.message || 'Cancel failed', 'error');
+  }
+}
+
+// Cancel from fill modal — uses fillStatus for feedback, closes modal on success
+async function doCancelOrderFromModal(orderId) {
+  if (!_signer) { showWalletModal(); return; }
+
+  const o = _allOrders.find(x => x.id === orderId);
+  if (!o) { _fillStatus('Order not found', 'error'); return; }
+
+  const btn = $('fillOrderBtn');
+  try {
+    if (btn) btn.disabled = true;
+    _fillStatus('Confirm in wallet...', 'info');
+    let tx;
+    if (o._source === 'swapboard') {
+      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+      const oid = BigInt(o._orderId);
+      const tokenA = o.tokenIn.toLowerCase();
+      if (tokenA === SWAPBOARD_WETH.toLowerCase()) {
+        tx = await _swapboard.cancelOrderUnwrap(oid);
+      } else {
+        tx = await _swapboard.cancelOrder(oid);
+      }
+    } else {
+      if (!_cookbook) { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); }
+      tx = await _cookbook.cancelOrder(
+        o.tokenIn, BigInt(o.idIn), BigInt(o.amtIn),
+        o.tokenOut, BigInt(o.idOut), BigInt(o.amtOut),
+        BigInt(o.deadline), o.partialFill
+      );
+    }
+    _fillStatus('Tx sent...', 'info');
+    await tx.wait();
+    closeFillModal();
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    _fillStatus(e.reason || e.message || 'Cancel failed', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1232,6 +2266,18 @@ async function loadCoinMap() {
   }
 }
 
+// Display-aware label: for Swapboard orders, shows WETH as ETH
+function coinLabelForOrder(o, field) {
+  const token = field === 'in' ? o.tokenIn : o.tokenOut;
+  const id = field === 'in' ? o.idIn : o.idOut;
+  if (o._source === 'swapboard') {
+    const sym = field === 'in' ? o._symIn : o._symOut;
+    const dec = field === 'in' ? o._decIn : o._decOut;
+    if (sym) return { symbol: sym, decimals: dec || 18 };
+  }
+  return coinLabel(token, id);
+}
+
 function coinLabel(token, id) {
   if (token === ZERO) return { symbol: 'ETH', decimals: 18 };
   // Known ERC20 tokens by address
@@ -1251,10 +2297,13 @@ function coinLabel(token, id) {
   return { symbol: shortAddr(token), decimals: 18 };
 }
 
-function iconForToken(token, id) {
-  const label = coinLabel(token, id);
+function iconForToken(token, id, order) {
+  // Use order-aware label for Swapboard (shows WETH as ETH etc)
+  const label = order ? coinLabelForOrder(order, token === order.tokenIn ? 'in' : 'out') : coinLabel(token, id);
   // Built-in SVG icons for known tokens
-  if (TOKEN_ICONS[label.symbol]) return TOKEN_ICONS[label.symbol];
+  if (TOKEN_ICONS[label.symbol]) {
+    return TOKEN_ICONS[label.symbol];
+  }
   // Logo URL from synthetic pool data (passed via URL params)
   const _t = token.toLowerCase();
   const poolCoin = _poolData
@@ -1264,8 +2313,8 @@ function iconForToken(token, id) {
   if (poolCoin?.logoUrl) {
     return `<img src="${escAttr(poolCoin.logoUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
   }
-  // Indexer imageUrl for ZAMM/Cookbook coins (skip if poolData already identified this token — id may collide)
-  if (!poolCoin) {
+  // Indexer imageUrl for ZAMM/Cookbook coins (skip for Swapboard — they don't use coin IDs, so id "0" would collide)
+  if (!poolCoin && order?._source !== 'swapboard') {
     const cached = _coinLabelCache.get(id);
     if (cached?.imageUrl) {
       return `<img src="${escAttr(cached.imageUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
@@ -1278,32 +2327,36 @@ function iconForToken(token, id) {
 let _renderedGlobalOrders = []; // cached for filtering
 let _activePairFilter = null;
 
+function _normAddr(addr) {
+  // Normalize WETH to ETH zero address for grouping
+  const a = addr.toLowerCase();
+  return a === SWAPBOARD_WETH.toLowerCase() ? ZERO : a;
+}
+
 function orderPairKey(o) {
-  const a = o.tokenIn.toLowerCase(), b = o.tokenOut.toLowerCase();
+  const a = _normAddr(o.tokenIn), b = _normAddr(o.tokenOut);
   return a < b ? a + ':' + b : b + ':' + a;
 }
 
 function orderPairLabel(o) {
-  const a = o.tokenIn.toLowerCase(), b = o.tokenOut.toLowerCase();
-  const la = coinLabel(o.tokenIn, o.idIn).symbol;
-  const lb = coinLabel(o.tokenOut, o.idOut).symbol;
+  const a = _normAddr(o.tokenIn), b = _normAddr(o.tokenOut);
+  const la = coinLabelForOrder(o, 'in').symbol;
+  const lb = coinLabelForOrder(o, 'out').symbol;
   return a < b ? la + '/' + lb : lb + '/' + la;
 }
 
 function orderRate(o) {
-  const inL = coinLabel(o.tokenIn, o.idIn);
-  const outL = coinLabel(o.tokenOut, o.idOut);
+  const inL = coinLabelForOrder(o, 'in');
+  const outL = coinLabelForOrder(o, 'out');
   const inAmt = Number(BigInt(o.amtIn)) / (10 ** (inL.decimals || 18));
   const outAmt = Number(BigInt(o.amtOut)) / (10 ** (outL.decimals || 18));
   if (inAmt <= 0) return 0;
   return outAmt / inAmt;
 }
 
-async function renderGlobalOrders() {
+function renderGlobalOrders() {
   const now = Math.floor(Date.now() / 1000);
   _renderedGlobalOrders = _allOrders.filter(o => o.status === "ACTIVE" && Number(o.deadline) > now);
-
-  await loadCoinMap();
 
   // Build pair filter chips
   const pairCounts = new Map();
@@ -1350,15 +2403,16 @@ function filterGlobalOrders() {
   // Text search
   if (q) {
     orders = orders.filter(o => {
-      const inL = coinLabel(o.tokenIn, o.idIn);
-      const outL = coinLabel(o.tokenOut, o.idOut);
+      const inL = coinLabelForOrder(o, 'in');
+      const outL = coinLabelForOrder(o, 'out');
       const inC = _coinLabelCache.get(o.idIn);
       const outC = _coinLabelCache.get(o.idOut);
       const searchable = [
         inL.symbol, outL.symbol,
         inC?.name, outC?.name,
         o.tokenIn, o.tokenOut,
-        o.maker
+        o.maker, o._source,
+        o._source === 'swapboard' ? 'otc' : 'zamm'
       ].filter(Boolean).join(' ').toLowerCase();
       return searchable.includes(q);
     });
@@ -1369,8 +2423,10 @@ function filterGlobalOrders() {
     orders = [...orders].sort((a, b) => Number(a.deadline) - Number(b.deadline));
   } else if (sort === 'largest') {
     orders = [...orders].sort((a, b) => {
-      const aIn = Number(BigInt(a.amtIn));
-      const bIn = Number(BigInt(b.amtIn));
+      const aD = coinLabelForOrder(a, 'in').decimals || 18;
+      const bD = coinLabelForOrder(b, 'in').decimals || 18;
+      const aIn = Number(BigInt(a.amtIn)) / (10 ** aD);
+      const bIn = Number(BigInt(b.amtIn)) / (10 ** bD);
       return bIn - aIn;
     });
   }
@@ -1385,26 +2441,30 @@ function filterGlobalOrders() {
     return;
   }
 
+  const userAddr = _connectedAddress?.toLowerCase() || '';
   let html = '';
   for (const o of orders) {
-    const inL = coinLabel(o.tokenIn, o.idIn);
-    const outL = coinLabel(o.tokenOut, o.idOut);
+    const inL = coinLabelForOrder(o, 'in');
+    const outL = coinLabelForOrder(o, 'out');
     const pct = fillPct(o);
     const tl = timeLeft(o.deadline);
-    const inIcon = iconForToken(o.tokenIn, o.idIn);
-    const outIcon = iconForToken(o.tokenOut, o.idOut);
+    const inIcon = iconForToken(o.tokenIn, o.idIn, o);
+    const outIcon = iconForToken(o.tokenOut, o.idOut, o);
     const rate = orderRate(o);
     const rateStr = rate > 0 ? fmtCompact(rate) + ' ' + escText(outL.symbol) + '/' + escText(inL.symbol) : '';
     const aon = o.partialFill ? '' : ' <span class="aon-tag" title="All-or-nothing">AON</span>';
-    html += `<div class="global-order-item" onclick="showFillModal('${escAttr(o.id)}')">
+    const isMine = userAddr && o.maker.toLowerCase() === userAddr;
+    const yoursTag = isMine ? ' <span class="yours-tag">Yours</span>' : '';
+    const expiry = o._source === 'swapboard' ? 'no expiry' : escText(tl) + ' left';
+    html += `<div class="global-order-item${isMine ? ' is-mine' : ''}" onclick="showFillModal('${escAttr(o.id)}')">
       <div class="order-token-pair">
         <span class="token-icon">${inIcon}</span>
         <span class="order-arrow">&rarr;</span>
         <span class="token-icon">${outIcon}</span>
       </div>
       <div class="order-info">
-        <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}${aon}</div>
-        <div class="meta">${rateStr}${rateStr ? ' &middot; ' : ''}${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${escText(tl)} left</div>
+        <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}${aon}${srcTag(o)}${yoursTag}</div>
+        <div class="meta">${rateStr}${rateStr ? ' &middot; ' : ''}${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${expiry}</div>
       </div>
       <div class="order-fill-badge"><span class="pct">${pct}%</span><br>filled</div>
     </div>`;
@@ -1420,12 +2480,13 @@ function showFillModal(orderId) {
   const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
   if (remaining <= 0n) { alert('Order already filled'); return; }
 
-  const inL = coinLabel(o.tokenIn, o.idIn);
-  const outL = coinLabel(o.tokenOut, o.idOut);
-  const inIcon = iconForToken(o.tokenIn, o.idIn);
-  const outIcon = iconForToken(o.tokenOut, o.idOut);
+  const inL = coinLabelForOrder(o, 'in');
+  const outL = coinLabelForOrder(o, 'out');
+  const inIcon = iconForToken(o.tokenIn, o.idIn, o);
+  const outIcon = iconForToken(o.tokenOut, o.idOut, o);
   const pct = fillPct(o);
   const tl = timeLeft(o.deadline);
+  const isMine = _connectedAddress && o.maker.toLowerCase() === _connectedAddress.toLowerCase();
 
   // What the filler pays (tokenOut side) and receives (tokenIn side)
   const remainingIn = BigInt(o.amtIn) - BigInt(o.inDone);
@@ -1437,39 +2498,44 @@ function showFillModal(orderId) {
   const remainingStr = ethers.formatUnits(remaining, outL.decimals);
 
   body.innerHTML = `
+    ${isMine ? '<div style="padding:8px 12px;margin-bottom:10px;background:rgba(255,180,50,0.1);border:1px solid rgba(255,180,50,0.3);font-size:12px;text-align:center">This is your order</div>' : ''}
     <div class="fill-modal-pair">
       <div class="fill-modal-token">
-        <span class="sym">You pay</span>
-        <span class="icon">${outIcon}</span>
-        <span class="amt" id="fillPayAmt">${escText(youPay)}</span>
-        <span class="sym">${escText(outL.symbol)}</span>
+        <span class="sym">${isMine ? 'Deposited' : 'You pay'}</span>
+        <span class="icon">${isMine ? inIcon : outIcon}</span>
+        <span class="amt" id="fillPayAmt">${escText(isMine ? fmt(remainingIn.toString(), inL.decimals) : youPay)}</span>
+        <span class="sym">${escText(isMine ? inL.symbol : outL.symbol)}</span>
       </div>
       <span class="fill-modal-arrow">&rarr;</span>
       <div class="fill-modal-token">
-        <span class="sym">You get</span>
-        <span class="icon">${inIcon}</span>
-        <span class="amt" id="fillGetAmt">${escText(youGet)}</span>
-        <span class="sym">${escText(inL.symbol)}</span>
+        <span class="sym">${isMine ? 'Requesting' : 'You get'}</span>
+        <span class="icon">${isMine ? outIcon : inIcon}</span>
+        <span class="amt" id="fillGetAmt">${escText(isMine ? fmt(remaining.toString(), outL.decimals) : youGet)}</span>
+        <span class="sym">${escText(isMine ? outL.symbol : inL.symbol)}</span>
       </div>
     </div>
-    ${canPartial ? `
+    ${!isMine && canPartial ? `
     <div class="fill-amt-row">
       <input type="number" id="fillAmtInput" step="any" min="0" placeholder="Amount to fill (${escAttr(outL.symbol)})" value="${escAttr(remainingStr)}">
       <button class="max-btn" onclick="document.getElementById('fillAmtInput').value='${escAttr(remainingStr)}';updateFillPreview()">MAX</button>
     </div>` : ''}
     <div class="fill-modal-details">
-      <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}</span></div>
+      <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}${isMine ? ' (you)' : ''}</span></div>
       <div class="row"><span class="label">Filled</span><span class="value">${pct}%</span></div>
-      <div class="row"><span class="label">Expires</span><span class="value">${escText(tl)}</span></div>
+      <div class="row"><span class="label">Source</span><span class="value">${o._source === 'swapboard' ? 'Swapboard OTC' : 'ZAMM Cookbook'}</span></div>
       <div class="row"><span class="label">Partial fill</span><span class="value">${o.partialFill ? 'Yes' : 'No'}</span></div>
+      <div class="row"><span class="label">Expires</span><span class="value">${o._source === 'swapboard' ? 'Never' : escText(tl)}</span></div>
       <div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>
     </div>
-    <div class="fill-modal-note">${canPartial ? 'Enter amount or use MAX for full fill' : 'Full remaining amount will be filled'}</div>
-    <button class="submit-btn buy" id="fillOrderBtn" onclick="closeFillModal();doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>
+    ${_globalMode && !isMine ? `<a href="?token0=${encodeURIComponent(o.tokenIn)}&token1=${encodeURIComponent(o.tokenOut)}&id0=${encodeURIComponent(o.idIn)}&id1=${encodeURIComponent(o.idOut)}&label0=${encodeURIComponent(inL.symbol)}&label1=${encodeURIComponent(outL.symbol)}" style="display:block;text-align:center;font-size:11px;color:var(--fg-muted);margin-bottom:10px;text-decoration:underline">View ${escText(inL.symbol)}/${escText(outL.symbol)} orderbook &rarr;</a>` : ''}
+    ${isMine
+      ? `<button class="submit-btn" id="fillOrderBtn" onclick="doCancelOrderFromModal('${escAttr(o.id)}')" style="width:100%;background:var(--red-bg);color:var(--red);border:1px solid var(--red)">Cancel Order</button>`
+      : `<div class="fill-modal-note">${canPartial ? 'Enter amount or use MAX for full fill' : 'Full remaining amount will be filled'}</div>
+         <button class="submit-btn buy" id="fillOrderBtn" onclick="doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>`}
     <div class="status-msg" id="fillStatus" style="margin-top:8px"></div>
   `;
 
-  if (canPartial) {
+  if (!isMine && canPartial) {
     // Store order data for the preview updater
     window._fillOrder = { remaining, remainingIn, outDecimals: outL.decimals, inDecimals: inL.decimals };
     $('fillAmtInput').addEventListener('input', updateFillPreview);
@@ -1502,14 +2568,22 @@ function closeFillModal() {
 }
 
 // ---- Refresh loop ----
+let _pendingFill = new URLSearchParams(location.search).get('fill');
+
 async function refresh() {
   try {
     _allOrders = await fetchOrders();
     if (_globalMode) {
-      await renderGlobalOrders();
+      renderGlobalOrders();
     } else {
       renderBook();
       if (_activeTab === 'mine') renderMyOrders();
+    }
+    // Auto-open fill modal if deep-linked
+    if (_pendingFill) {
+      const id = _pendingFill;
+      _pendingFill = null;
+      if (_allOrders.find(o => o.id === id)) showFillModal(id);
     }
   } catch (e) {
     console.error('Refresh failed:', e);
@@ -1529,8 +2603,10 @@ function startRefreshLoop() {
 
 // ---- Build synthetic pool data from token addresses ----
 function buildSyntheticPool(token0, token1, id0, id1, labelHint0, labelHint1, logoHint0, logoHint1) {
-  const t0 = token0.toLowerCase();
-  const t1 = token1.toLowerCase();
+  // Normalize WETH address to ETH zero address for Cookbook compatibility
+  const wethLower = SWAPBOARD_WETH.toLowerCase();
+  const t0 = token0.toLowerCase() === wethLower ? ZERO : token0.toLowerCase();
+  const t1 = token1.toLowerCase() === wethLower ? ZERO : token1.toLowerCase();
   const k0 = KNOWN_TOKENS[t0];
   const k1 = KNOWN_TOKENS[t1];
   const dec0 = k0 ? k0.decimals : 18;
@@ -1561,21 +2637,22 @@ async function init() {
   if (!poolId && !tokenParams) {
     _globalMode = true;
     $('pairName').textContent = 'Orderbook';
-    $('poolMeta').innerHTML = 'All active orders &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>';
+    $('poolMeta').innerHTML = 'All active orders &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a> &middot; <a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a>';
     document.title = 'ORDER';
+    $('allOrdersLink').style.display = 'none';
     document.querySelector('.tab-row').style.display = 'none';
     $('tab-book').style.display = 'none';
     $('priceBanner').style.display = 'none';
     $('globalView').style.display = '';
     startRefreshLoop();
-    walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; renderMyOrders(); }] });
+    walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; _swapboard = null; renderMyOrders(); }] });
     return;
   }
 
   if (poolId) {
     $('chartLink').href = '../chart/#/' + poolId;
     $('chartLink').style.display = 'inline-flex';
-    $('lpLink').href = '../lp/#/' + poolId;
+    $('lpLink').href = '../liquidity/#/' + poolId;
     $('lpLink').style.display = 'inline-flex';
 
     try {
@@ -1602,19 +2679,20 @@ async function init() {
     $('pairIcons').innerHTML = '<span class="icon-0">' + icon0 + '</span><span class="icon-1">' + icon1 + '</span>';
     $('pairName').textContent = label0 + ' / ' + label1;
     $('poolMeta').innerHTML = (poolId ? 'Pool ' + poolId.slice(0, 16) + '... &middot; ' : '')
-      + '<a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>';
+      + '<a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>'
+      + ' &middot; <a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a>';
     document.title = label0 + '/' + label1 + ' ORDER';
 
-    // Show AMM price computed from reserves (token0 per token1, matching book prices)
-    if (_poolData.reserve0 && _poolData.reserve1 && BigInt(_poolData.reserve1) > 0n) {
+    // Show AMM price in quote/base (token1 per token0), matching book convention
+    if (_poolData.reserve0 && _poolData.reserve1 && BigInt(_poolData.reserve0) > 0n) {
       const d0 = _poolData.coin0?.decimals || 18;
       const d1 = _poolData.coin1?.decimals || 18;
       const r0 = Number(BigInt(_poolData.reserve0)) / (10 ** d0);
       const r1 = Number(BigInt(_poolData.reserve1)) / (10 ** d1);
-      if (r1 > 0) {
-        const ammPx = r0 / r1;
+      if (r0 > 0) {
+        const ammPx = r1 / r0;
         $('ammPrice').textContent = fmtCompact(ammPx);
-        $('ammPriceLabel').textContent = label0 + ' per ' + label1 + ' (AMM)';
+        $('ammPriceLabel').textContent = label1 + ' per ' + label0 + ' (AMM)';
         $('priceBanner').style.display = '';
       }
       $('ammReserves').innerHTML = fmt(_poolData.reserve0, d0) + ' ' + esc(label0) + '<br>' + fmt(_poolData.reserve1, d1) + ' ' + esc(label1);
@@ -1635,8 +2713,16 @@ async function init() {
   }
 
   startRefreshLoop();
-  walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; renderMyOrders(); }] });
+  walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; _swapboard = null; renderMyOrders(); }] });
 }
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if ($('obTokenModal').classList.contains('active')) closeOrderTokenModal();
+    else if ($('fillModal').classList.contains('active')) closeFillModal();
+    else if ($('newOrderModal').classList.contains('active')) closeNewOrderModal();
+  }
+});
 
 window.addEventListener('hashchange', () => location.reload());
 init();
