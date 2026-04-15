@@ -74,4 +74,4 @@ The highest-volume pairs are known, their properties are stable, and account abs
 
 ---
 
-*Contracts: [github.com/z0r0z/zFi/src/pools](https://github.com/z0r0z/zFi/tree/main/src/pools)*
+*Contracts: [github.com/z-fi/zFi/src/pools](https://github.com/z-fi/zFi/tree/main/src/pools)*
