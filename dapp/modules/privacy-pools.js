@@ -2943,11 +2943,15 @@ async function ppEstimateNativeDepositGasReserve(intent, {
 } = {}) {
   try {
     const gasPrice = await ppReadDepositGasPrice({ readWithRpc });
+    // Use actual deposit amount and a plausible precommitment so the simulation
+    // doesn't revert on minimum-deposit or used-precommitment checks.
+    const simValue = intent?.amount > 0n ? intent.amount : 1n;
+    const simPrecommitment = BigInt(ethers.keccak256(ethers.toUtf8Bytes('zfi-gas-estimate'))) % SNARK_FIELD;
     const gasEstimate = await ppEstimateDepositGas({
       from: connectedAddress,
       to: PP_ENTRYPOINT,
-      value: 1n,
-      data: PP_DEPOSIT_IFACE.encodeFunctionData('deposit(uint256)', [1n]),
+      value: simValue,
+      data: PP_DEPOSIT_IFACE.encodeFunctionData('deposit(uint256)', [simPrecommitment]),
     }, { provider });
     if (gasEstimate == null || gasPrice <= 0n) return PP_DEPOSIT_NATIVE_FALLBACK_GAS_RESERVE;
     return ppBuildDepositGasReserveFromEstimate(gasEstimate, gasPrice, { includeDust: true });
@@ -2987,7 +2991,7 @@ async function ppEstimateErc20DepositGasReserve(intent, {
     const depositGas = await ppEstimateDepositGas({
       from: connectedAddress,
       to: PP_ENTRYPOINT,
-      data: PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [tokenAddr, depositAmount, 1n]),
+      data: PP_DEPOSIT_IFACE.encodeFunctionData('deposit(address,uint256,uint256)', [tokenAddr, depositAmount, BigInt(ethers.keccak256(ethers.toUtf8Bytes('zfi-gas-estimate'))) % SNARK_FIELD]),
     }, { provider });
     if (depositGas == null) return PP_DEPOSIT_ERC20_FALLBACK_GAS_RESERVE;
     totalGas += depositGas;
@@ -4796,32 +4800,7 @@ function ppwScheduleAnonymityHint(withdrawnValue, asset) {
   const hint = $('ppwAnonHint');
   if (!hint) return;
   if (_ppwAnonTimer) clearTimeout(_ppwAnonTimer);
-  // Anonymity set hint removed from UI to reduce clutter
   setShown(hint, false);
-  return;
-  const reqId = ++_ppwAnonReqId;
-  setText(hint, 'Loading anonymity set...');
-  setShown(hint, true);
-  _ppwAnonTimer = setTimeout(async () => {
-    try {
-      const scope = ppComputeScope(asset);
-      const data = await ppFetchJson(PP_DEPOSITS_LARGER_THAN_API + '?amount=' + withdrawnValue.toString(), {
-        headers: { 'X-Pool-Scope': scope.toString() },
-      });
-      if (reqId !== _ppwAnonReqId) return;
-      if (typeof data.eligibleDeposits === 'number') {
-        setText(hint, 'Your anonymity set is ' + data.eligibleDeposits);
-        setShown(hint, true);
-      } else {
-        setShown(hint, false);
-      }
-    } catch (e) {
-      if (reqId !== _ppwAnonReqId) return;
-      console.warn('Withdrawal anonymity hint unavailable:', e);
-      setText(hint, 'Anonymity set unavailable');
-      setShown(hint, true);
-    }
-  }, 500);
 }
 
 function ppwIsRagequitAction(actionKind = _ppwActionKind) {
@@ -4836,7 +4815,7 @@ function ppwGetActionKindResultLabel(actionKind = _ppwActionKind) {
   return ppwIsRagequitAction(actionKind) ? 'Ragequit Complete' : 'Withdrawal Complete';
 }
 
-function ppwGetActionProgressSubLabel(mode = _ppwMode, actionKind = _ppwActionKind) {
+function ppwGetActionProgressSubLabel(actionKind = _ppwActionKind) {
   if (ppwIsRagequitAction(actionKind)) return 'Ragequit';
   return 'Relay withdrawal';
 }
@@ -5343,7 +5322,7 @@ function ppwUpdatePreview() {
   ppwRenderPreviewState(ppwBuildPreviewState());
 }
 
-function ppwUpdatePreviewWithQuote(intent, feeAmt, feePctLabel, expirationMs) {
+function ppwUpdatePreviewWithQuote(intent, feeAmt, feePctLabel) {
   const previewEl = $('ppwPreview');
   const contentEl = $('ppwPreviewContent');
   if (!previewEl || !contentEl) return;
@@ -6478,7 +6457,7 @@ function ppwBuildProgressState(stageKey, mode = 'relay') {
   return {
     label: stageKey === 'complete' && ppwIsRagequitAction() ? actionLabel + ' confirmed.' : stage.label,
     progress: stage.progress,
-    subLabel: ppwGetActionProgressSubLabel(mode)
+    subLabel: ppwGetActionProgressSubLabel()
   };
 }
 
@@ -6514,11 +6493,11 @@ function ppwSetProgressStage(stageKey, mode = _ppwMode, options = {}) {
   if (bar) { bar.style.width = `${Math.round(progress * 100)}%`; bar.setAttribute('aria-valuenow', String(Math.round(progress * 100))); }
 }
 
-function ppwSetProgressStoppedState(mode = _ppwMode, label = (ppwIsRagequitAction() ? 'Ragequit not completed.' : 'Withdrawal not completed.')) {
+function ppwSetProgressStoppedState(label = (ppwIsRagequitAction() ? 'Ragequit not completed.' : 'Withdrawal not completed.')) {
   setShown('ppwVerify', true);
   setShown('ppwProgressWrap', true);
   setText('ppwProgressLabel', label);
-  setText('ppwProgressSub', ppwGetActionProgressSubLabel(mode));
+  setText('ppwProgressSub', ppwGetActionProgressSubLabel());
   setShown('ppwProgressSub', true);
   const bar = $('ppwProgressBar');
   if (bar) { bar.style.width = `${Math.round(_ppwProgressValue * 100)}%`; bar.setAttribute('aria-valuenow', String(Math.round(_ppwProgressValue * 100))); }
@@ -6781,7 +6760,7 @@ function ppwCreateWithdrawRun(options = {}) {
     },
     stopIfNeeded(successful = false, mode = _ppwMode) {
       if (progressStarted && !successful) {
-        ppwSetProgressStoppedState(mode);
+        ppwSetProgressStoppedState();
       }
       if (_ppwDraftPhase === 'running') {
         const nextPhase = !successful && mode === 'relay' && _ppwReviewedRelayQuote ? 'review' : 'editing';
@@ -7197,7 +7176,7 @@ async function ppwRefreshRelayQuote(quoteState, intent, run, runPreflight = fals
   }
   // Merge quote into the Withdrawal Preview instead of showing a separate panel
   setShown('ppwRelayFeePanel', false);
-  ppwUpdatePreviewWithQuote(intent, feeAmt, feePctLabel, expirationMs);
+  ppwUpdatePreviewWithQuote(intent, feeAmt, feePctLabel);
   ppwStartExpiryCountdown(expirationMs);
   _ppwDisplayedRelayQuoteKey = ppwBuildRelayQuoteDisplayKey({
     show: true,
@@ -7211,7 +7190,7 @@ async function ppwRefreshRelayQuote(quoteState, intent, run, runPreflight = fals
   return quoteState;
 }
 
-async function ppwPrepareRelayQuote(intent, state, run) {
+async function ppwPrepareRelayQuote(intent, _state, run) {
   const quoteState = ppwCreateRelayQuoteState(intent);
   if (!intent.isRelayMode) return quoteState;
   run.setProgressStage('fetchingRelayQuote', _ppwMode);
@@ -7460,7 +7439,7 @@ async function ppwGenerateAndVerifyProof(job, quoteState, run) {
   };
 }
 
-async function ppwRevalidateBeforeSubmit(job, proofState, quoteState, run) {
+async function ppwRevalidateBeforeSubmit(job, _proofState, quoteState, run) {
   run.log('Re-checking onchain roots before submission...');
   const rootCheck = await ppEnsureWithdrawalRootsCurrent(job.intent.poolAddress, job.state.stateTree.root, job.state.aspTree.root);
   if (!rootCheck.ok) {
@@ -7530,7 +7509,7 @@ async function ppwSubmitWithdrawal(job, proofState, quoteState, run) {
   return { txHash, receipt, relayResult };
 }
 
-async function ppwFinalizeWithdrawalSuccess(receipt, job, proofState, submission, run) {
+async function ppwFinalizeWithdrawalSuccess(receipt, job, _proofState, submission, run) {
   run.setProgressStage('complete', _ppwMode);
   run.logHtml('<b>Withdrawal confirmed!</b> ' + ppwEscapeStatusLogText(fmt(ppFormatAmountWei(job.intent.withdrawnValue, job.intent.wAsset))) + ' ' + ppwEscapeStatusLogText(job.assetUnit) + ' sent to ' + ppwEscapeStatusLogText(job.intent.recipient.slice(0, 10)) + '... (via relay)');
   _ppwReviewedRelayQuote = null;
@@ -7748,7 +7727,7 @@ async function ppwSubmitRagequit(job, proofState, run) {
   return { txHash, receipt, tx };
 }
 
-async function ppwFinalizeRagequitSuccess(receipt, job, submission, run) {
+async function ppwFinalizeRagequitSuccess(_receipt, job, submission, run) {
   run.setProgressStage('complete', 'direct');
   run.logHtml('<b>Ragequit confirmed!</b> ' + ppwEscapeStatusLogText(fmt(ppFormatAmountWei(job.intent.value, job.intent.wAsset))) + ' ' + ppwEscapeStatusLogText(job.assetUnit) + ' returned publicly to your deposit address.');
   _ppwReviewedRelayQuote = null;

@@ -1810,9 +1810,33 @@ async function showManage(tokenId, name) {
     const expiryDate = record?.expiresAt ? new Date(Number(record.expiresAt) * 1000).toLocaleDateString() : null;
     const isTopLevel = record?.parent === 0n;
 
+    // Subdomain staleness: if parent has been re-registered, record.parentEpoch won't
+    // match records(parent).epoch. Contract's _isActive returns false → write actions
+    // revert with Expired. Detect here so the UI hides action buttons instead of
+    // offering signatures that will fail on-chain.
+    let isStaleSubdomain = false;
+    if (record && record.parent !== 0n) {
+      try {
+        const parentResults = await multicall([
+          { fn: 'records', args: [record.parent], allowFailure: true }
+        ]);
+        if (thisManageVersion !== manageVersion) return;
+        const parentRecord = parentResults[0] || null;
+        if (parentRecord && parentRecord.epoch !== record.parentEpoch) {
+          isStaleSubdomain = true;
+        }
+      } catch (_) {
+        // Best-effort: on read failure, don't block the user
+      }
+    }
+
     // Build info section
     const addrLink = (addr) => `<a href="https://etherscan.io/address/${addr}" target="_blank" rel="noopener" style="color:inherit;">${addr.slice(0, 8)}...${addr.slice(-6)}</a>`;
-    let infoHtml = `<div><span>Owner:</span>${addrLink(owner)}</div>`;
+    let infoHtml = '';
+    if (isStaleSubdomain) {
+      infoHtml += `<div style="padding:10px;background:var(--status-warning,#fff3cd);color:#7a4f00;margin-bottom:12px;font-size:12px;border-radius:4px;">This subdomain is expired — its parent has been re-registered since. On-chain updates (website, records, transfer) will revert.</div>`;
+    }
+    infoHtml += `<div><span>Owner:</span>${addrLink(owner)}</div>`;
     if (resolved && resolved !== ethers.ZeroAddress) {
       infoHtml += `<div><span>Resolves to:</span>${addrLink(resolved)}</div>`;
     }
@@ -1851,8 +1875,8 @@ async function showManage(tokenId, name) {
     }
     $('manageInfo').innerHTML = infoHtml;
 
-    // Build actions if owner
-    if (isOwner) {
+    // Build actions if owner (suppress for stale subdomains — writes would revert)
+    if (isOwner && !isStaleSubdomain) {
       let actionsHtml = `
         <button onclick="showManageForm('transfer')">Transfer</button>
         <button onclick="showManageForm('setAddr')">Set Recipient</button>
@@ -1866,6 +1890,8 @@ async function showManage(tokenId, name) {
         actionsHtml += `<button onclick="showManageForm('renew')">Renew</button>`;
       }
       $('manageActions').innerHTML = actionsHtml;
+    } else if (isStaleSubdomain) {
+      $('manageActions').innerHTML = '';
     } else {
       $('manageActions').innerHTML = '<span style="font-size:12px;opacity:0.5;">Connect as owner to manage</span>';
     }
@@ -2292,6 +2318,8 @@ async function doSubdomain() {
   if (isProcessing || !contract || !currentTokenId) return;
   const label = normalizeLabel($('subLabel').value);
   if (!label) { showStatus('Invalid subdomain label', 'error'); return; }
+  // Capture parent name before the tx so we can navigate into the new subdomain afterward
+  const parentName = currentTokenName;
 
   isProcessing = true;
   const btn = (typeof event !== 'undefined' && event?.target) || null; if (btn) btn.disabled = true;
@@ -2300,8 +2328,14 @@ async function doSubdomain() {
     const tx = await wcTransaction(contract.registerSubdomain(label, currentTokenId), 'Approve subdomain');
     showStatus('Waiting for confirmation...', '', tx.hash);
     await waitForTx(tx);
-    showStatus(label + '.' + currentTokenName + '.wei registered!', 'success', tx.hash);
+    const fullName = label + '.' + parentName;
+    showStatus(fullName + '.wei registered!', 'success', tx.hash);
     $('manageForm').classList.remove('show');
+    // Navigate the manage view to the new subdomain so follow-up actions
+    // (Set Website, Set Text, etc.) target the subdomain, not the parent.
+    $('nameInput').value = fullName;
+    updateHash(fullName);
+    doCheckName();
   } catch (e) {
     handleError(e);
   } finally {

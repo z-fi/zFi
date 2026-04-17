@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
-import {ShareBurner, IMoloch, IShares} from "../src/ShareBurner.sol";
+import {ShareBurner, IMoloch, IShares} from "../src/dao/ShareBurner.sol";
 
 /*//////////////////////////////////////////////////////////////
                         MOCK CONTRACTS

@@ -151,7 +151,6 @@ body.modal-open { overflow:hidden; }
 .ask-row .depth { background:var(--red-bg); }
 .aon-tag { font-size:8px; font-family:sans-serif; font-weight:700; letter-spacing:.3px; padding:1px 3px; border-radius:3px; background:var(--fg-muted); color:var(--bg); opacity:.7; vertical-align:middle; margin-left:3px; }
 .src-tag { font-size:7px; font-family:sans-serif; font-weight:700; letter-spacing:.4px; padding:1px 3px; border-radius:3px; vertical-align:middle; margin-left:3px; opacity:.8; text-transform:uppercase; }
-.src-tag.cookbook { background:rgba(99,215,125,0.15); color:var(--green); }
 .src-tag.swapboard { background:rgba(99,145,255,0.15); color:#6391ff; }
 .dark .src-tag.swapboard { color:#8ab4ff; }
 .yours-tag { font-size:7px; font-family:sans-serif; font-weight:700; letter-spacing:.4px; padding:1px 3px; border-radius:3px; vertical-align:middle; margin-left:3px; opacity:.8; text-transform:uppercase; background:rgba(255,180,50,0.15); color:#e6a020; }
@@ -234,36 +233,22 @@ body.modal-open { overflow:hidden; }
 .field-row-between .label { color:var(--fg-muted); }
 .field-row-between .value { font-family:monospace; }
 .venue-row {
-  display:flex; align-items:center; gap:0; margin-bottom:16px;
+  display:flex; align-items:center; gap:0; margin-bottom:8px;
   border:1px solid var(--border-muted); overflow:hidden;
 }
 .venue-btn {
-  flex:1; padding:8px 12px; text-align:center;
+  flex:1; padding:10px 12px; text-align:center;
   font-family:inherit; font-size:10px; font-weight:600;
   letter-spacing:0.06em; text-transform:uppercase;
   cursor:pointer; border:none; background:transparent;
   color:var(--fg-muted); transition:all 0.15s; border-radius:0;
 }
-.venue-btn:hover { color:var(--fg); }
+.venue-btn:hover { color:var(--fg); background:var(--surface); }
 .venue-btn.active { background:var(--fg); color:var(--bg); }
 .venue-btn:disabled { opacity:0.3; cursor:not-allowed; }
 .venue-hint {
-  font-size:10px; color:var(--fg-dim); margin-bottom:12px;
-  line-height:1.4;
-}
-.order-opts {
-  display:flex; align-items:center; gap:16px; margin-bottom:16px;
-}
-.order-opt {
-  display:flex; align-items:center; gap:5px;
-  font-size:11px; color:var(--fg-muted); cursor:pointer;
-  letter-spacing:0.02em;
-}
-.order-opt input { cursor:pointer; }
-.order-opt select {
-  font-family:inherit; font-size:11px; padding:4px 6px;
-  border:1px solid var(--border-muted); border-radius:0;
-  background:var(--bg); color:var(--fg); cursor:pointer;
+  font-size:10px; color:var(--fg-dim); margin-bottom:14px;
+  line-height:1.4; text-align:center;
 }
 .submit-btn {
   width:100%; padding:14px 24px; border:1px solid transparent;
@@ -350,82 +335,89 @@ body.modal-open { overflow:hidden; }
 }
 .pair-chip:hover { border-color:var(--fg-muted); }
 .pair-chip.active { background:var(--fg); color:var(--bg); border-color:var(--fg); }
-.order-side-tag {
-  font-size:9px; font-weight:700; letter-spacing:.3px; padding:2px 5px;
-  border-radius:0; flex-shrink:0; min-width:28px; text-align:center;
-}
-.order-side-tag.bid { background:var(--green-bg); color:var(--green); }
-.order-side-tag.ask { background:var(--red-bg); color:var(--red); }
 .global-order-item {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px;
-  border:1px solid var(--border); border-radius:0;
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px;
+  border:1px solid var(--border-muted); border-radius:0;
   margin-bottom:0; border-bottom:none; font-size:12px;
-  cursor:pointer; transition:background 0.1s;
+  cursor:pointer; transition:background 0.1s, border-color 0.15s;
 }
-.global-order-item:first-child { border-top:1px solid var(--border); }
-.global-order-item:last-child { border-bottom:1px solid var(--border); }
-.global-order-item:hover { background:var(--surface-hover); }
+.global-order-item:first-child { border-top:1px solid var(--border-muted); }
+.global-order-item:last-child { border-bottom:1px solid var(--border-muted); }
+.global-order-item:hover { background:var(--surface-hover); border-color:var(--fg-muted); z-index:1; position:relative; }
 .order-token-pair {
-  display:flex; align-items:center; gap:6px; flex-shrink:0;
+  display:flex; align-items:center; gap:4px; flex-shrink:0;
 }
 .order-token-pair .token-icon { display:flex; align-items:center; }
-.order-token-pair .token-icon svg, .order-token-pair .token-icon img { width:20px; height:20px; }
-.order-arrow { color:var(--fg-dim); font-size:14px; margin:0 2px; }
+.order-token-pair .token-icon svg, .order-token-pair .token-icon img { width:22px; height:22px; }
+.order-arrow { color:var(--fg-dim); font-size:12px; margin:0 1px; }
 .order-info {
   flex:1; min-width:0;
 }
 .order-info .amounts {
-  font-family:monospace; font-size:11px; font-weight:500;
+  font-family:monospace; font-size:12px; font-weight:500;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .order-info .meta {
-  color:var(--fg-muted); font-size:10px; margin-top:2px;
+  color:var(--fg-muted); font-size:10px; margin-top:3px;
 }
 .order-fill-badge {
   font-size:10px; color:var(--fg-muted); text-align:right; flex-shrink:0;
+  line-height:1.3;
 }
 .order-fill-badge .pct { font-weight:600; }
 
 /* Fill confirmation modal */
 .fill-modal-pair {
   display:flex; align-items:center; justify-content:center;
-  gap:12px; padding:20px 0; margin-bottom:16px;
+  gap:16px; padding:24px 0 20px; margin-bottom:16px;
   border-bottom:1px solid var(--border-muted);
 }
 .fill-modal-token {
-  display:flex; flex-direction:column; align-items:center; gap:6px; min-width:80px;
+  display:flex; flex-direction:column; align-items:center; gap:8px; min-width:90px;
 }
 .fill-modal-token .icon { display:flex; align-items:center; }
-.fill-modal-token .icon svg, .fill-modal-token .icon img { width:32px; height:32px; }
-.fill-modal-token .amt { font-family:monospace; font-size:14px; font-weight:600; text-align:center; }
-.fill-modal-token .sym { font-size:11px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:0.04em; }
-.fill-modal-arrow { font-size:20px; color:var(--fg-dim); }
+.fill-modal-token .icon svg, .fill-modal-token .icon img { width:36px; height:36px; }
+.fill-modal-token .amt {
+  font-family:monospace; font-size:16px; font-weight:600; text-align:center;
+  word-break:break-all; max-width:140px;
+}
+.fill-modal-token .sym { font-size:10px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
+.fill-modal-arrow { font-size:22px; color:var(--fg-dim); margin-top:14px; }
 .fill-modal-details {
   font-size:12px; margin-bottom:16px;
+  background:var(--surface); padding:10px 12px;
+  border:1px solid var(--border-muted);
 }
 .fill-modal-details .row {
-  display:flex; justify-content:space-between; padding:4px 0;
+  display:flex; justify-content:space-between; padding:5px 0;
   border-bottom:1px solid var(--border-muted);
 }
 .fill-modal-details .row:last-child { border-bottom:none; }
-.fill-modal-details .label { color:var(--fg-muted); }
-.fill-modal-details .value { font-family:monospace; }
+.fill-modal-details .label { color:var(--fg-muted); font-size:11px; }
+.fill-modal-details .value { font-family:monospace; font-size:12px; }
 .fill-modal-note {
   font-size:11px; color:var(--fg-dim); margin-bottom:14px; text-align:center;
+  padding:6px 0;
 }
 .fill-amt-row {
-  display:flex; align-items:center; gap:8px; margin-bottom:14px;
+  display:flex; align-items:center; gap:8px; margin-bottom:16px;
+  background:var(--surface); border:1px solid var(--border);
+  padding:4px 4px 4px 10px;
 }
 .fill-amt-row input {
-  flex:1; background:var(--bg-surface); border:1px solid var(--border);
-  border-radius:0; padding:6px 8px; color:var(--fg); font-family:monospace; font-size:13px;
+  flex:1; background:transparent; border:none;
+  padding:8px 0; color:var(--fg); font-family:monospace; font-size:14px;
+  outline:none;
 }
-.fill-amt-row input:focus { outline:none; border-color:var(--accent); }
+.fill-amt-row input::placeholder { color:var(--fg-dim); }
 .fill-amt-row .max-btn {
-  font-size:11px; color:var(--accent); cursor:pointer; background:none; border:none;
-  font-weight:600; letter-spacing:0.03em; padding:4px 6px;
+  font-size:10px; color:var(--fg); cursor:pointer;
+  background:var(--border-muted); border:none;
+  font-weight:700; letter-spacing:0.06em; padding:6px 10px;
+  text-transform:uppercase; transition:background 0.15s;
 }
-.fill-amt-row .max-btn:hover { text-decoration:underline; }
+.fill-amt-row .max-btn:hover { background:var(--border); }
 
 
 /* Token picker */
@@ -588,23 +580,10 @@ body.modal-open { overflow:hidden; }
         <span class="value" id="orderTotal">--</span>
       </div>
       <div class="venue-row">
-        <button class="venue-btn active" id="venueCookbook" onclick="setVenue('cookbook')">ZAMM</button>
-        <button class="venue-btn" id="venueSwapboard" onclick="setVenue('swapboard')">OTC</button>
+        <button class="venue-btn active" id="venueSwapboard" onclick="setVenue('swapboard')">All or Nothing</button>
+        <button class="venue-btn" id="venueSwapboardPF" onclick="setVenue('swapboard-pf')">Partial Fill</button>
       </div>
-      <div class="venue-hint" id="venueHint">Partial fills &middot; custom expiry</div>
-      <div class="order-opts" id="cookbookOpts">
-        <label class="order-opt">
-          <span>Expires</span>
-          <select id="orderExpiry">
-            <option value="3600">1h</option>
-            <option value="86400">1d</option>
-            <option value="172800" selected>2d</option>
-            <option value="604800">1w</option>
-            <option value="2592000">1mo</option>
-          </select>
-        </label>
-        <label class="order-opt"><input type="checkbox" id="orderPartial" checked> Partial fill</label>
-      </div>
+      <div class="venue-hint" id="venueHint">No expiry &middot; ERC20/ETH only</div>
       <button class="submit-btn buy" id="makeOrderBtn" onclick="doMakeOrder()">Buy</button>
     </div>
   </div>
@@ -649,10 +628,10 @@ body.modal-open { overflow:hidden; }
     </div>
     <div class="modal-body">
       <div class="venue-row" style="margin-bottom:12px">
-        <button class="venue-btn active" id="newVenueCookbook" onclick="setNewOrderVenue('cookbook')">ZAMM</button>
-        <button class="venue-btn" id="newVenueSwapboard" onclick="setNewOrderVenue('swapboard')">OTC</button>
+        <button class="venue-btn active" id="newVenueSwapboard" onclick="setNewOrderVenue('swapboard')">All or Nothing</button>
+        <button class="venue-btn" id="newVenueSwapboardPF" onclick="setNewOrderVenue('swapboard-pf')">Partial Fill</button>
       </div>
-      <div class="venue-hint" id="newVenueHint" style="margin-bottom:14px">Partial fills &middot; custom expiry</div>
+      <div class="venue-hint" id="newVenueHint" style="margin-bottom:14px">No expiry &middot; ERC20/ETH only</div>
       <div class="field" style="margin-bottom:14px">
         <div class="field-label">You send</div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -667,19 +646,6 @@ body.modal-open { overflow:hidden; }
           <button class="token-select" id="newTokenBBtn" onclick="openOrderTokenModal('B')">USDC &#9662;</button>
           <input class="field-input" id="newAmountB" type="number" step="any" min="0" placeholder="0.0" style="font-size:16px;flex:1">
         </div>
-      </div>
-      <div class="order-opts" id="newCookbookOpts">
-        <label class="order-opt">
-          <span>Expires</span>
-          <select id="newOrderExpiry">
-            <option value="3600">1h</option>
-            <option value="86400">1d</option>
-            <option value="172800" selected>2d</option>
-            <option value="604800">1w</option>
-            <option value="2592000">1mo</option>
-          </select>
-        </label>
-        <label class="order-opt"><input type="checkbox" id="newOrderPartial" checked> Partial fill</label>
       </div>
       <button class="submit-btn buy" id="newOrderSubmitBtn" onclick="doNewOrder()" style="width:100%">Create Order</button>
       <div class="status-msg" id="newOrderStatus" style="margin-top:8px"></div>
@@ -721,21 +687,12 @@ body.modal-open { overflow:hidden; }
 <script src="../wallet.js"></script>
 <script>
 // ---- Constants ----
-const COOKBOOK = "0x000000000000040470635EB91b7CE4D132D616eD";
-const COINS   = "0x0000000000009710cd229bF635c4500029651eE8";
 const ZERO    = "0x0000000000000000000000000000000000000000";
 const BASE    = "https://coinchan-indexer-production.up.railway.app";
 
 const SWAPBOARD = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+const SWAPBOARD_PF = "0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831";
 const SWAPBOARD_WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-const SWAPBOARD_SUBGRAPH = "https://api.goldsky.com/api/public/project_cmmkvehnce9da01u17d657vdt/subgraphs/Swapboard/1.0.0/gn";
-
-const COOKBOOK_ABI = [
-  "function makeOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill) payable returns (bytes32)",
-  "function fillOrder(address maker, address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill, uint96 fillPart) payable",
-  "function cancelOrder(address tokenIn, uint256 idIn, uint96 amtIn, address tokenOut, uint256 idOut, uint96 amtOut, uint56 deadline, bool partialFill)",
-  "function orders(bytes32) view returns (bool partialFill, uint56 deadline, uint96 inDone, uint96 outDone)"
-];
 
 const SWAPBOARD_ABI = [
   "function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB) returns (uint256)",
@@ -747,17 +704,26 @@ const SWAPBOARD_ABI = [
   "function cancelOrderUnwrap(uint256 orderId)",
 ];
 
-const COINS_ABI = [
-  "function setOperator(address operator, bool approved) returns (bool)",
-  "function isOperator(address owner, address spender) view returns (bool)"
+const SWAPBOARD_PF_ABI = [
+  "function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB, bool partialFill) returns (uint256)",
+  "function createOrderWithEth(address tokenB, uint256 amountB, bool partialFill) payable returns (uint256)",
+  "function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB) external",
+  "function fillOrderWithEth(uint256 orderId, uint256 deadline) payable",
+  "function fillOrderUnwrap(uint256 orderId, uint256 deadline, uint256 fillAmountB) external",
+  "function cancelOrder(uint256 orderId)",
+  "function cancelOrderUnwrap(uint256 orderId)",
+];
+
+// View helper for batch-reading active orders with token metadata (deploy SwapboardView.sol and set address)
+const SWAPBOARD_VIEW = "0x51B33f0dd2680ba3f8C1cF30C33aeD8BFca1DF38";
+const SWAPBOARD_VIEW_ABI = [
+  "function getAllActiveOrders(address boardV1, address boardV2) view returns (tuple(uint256 orderId, address maker, bool partialFill, address tokenA, uint256 amountA, string symbolA, uint8 decimalsA, address tokenB, uint256 amountB, string symbolB, uint8 decimalsB, address board)[])",
 ];
 
 const ERC20_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
   "function allowance(address owner, address spender) view returns (uint256)"
 ];
-
-const MAX_UINT96 = (1n << 96n) - 1n;
 
 // ---- Token registry (shared with swap page via localStorage) ----
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
@@ -777,7 +743,6 @@ const KNOWN_TOKENS = {
   "0x6b175474e89094c44da98b954eedeac495271d0f": { symbol: "DAI", decimals: 18 },
   "0x6440f144b7e50d6a8439336510312d2f54beb01d": { symbol: "BOLD", decimals: 18 },
   "0x5f98805a4e8be255a32880fdec7f6728c6568ba0": { symbol: "LUSD", decimals: 18 },
-  "0xc50673edb3a7b94e8cad8a7d4e0cd68864e33edf": { symbol: "PNKSTR", decimals: 18 },
   "0x00a6ba94bbb5474725515de88fe04f854f2dcb12": { symbol: "zOrg", decimals: 18 },
   "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed": { symbol: "ZAMM", decimals: 18 },
 };
@@ -1207,22 +1172,21 @@ function iconForSymbol(sym) {
 }
 
 // ---- State ----
-let _cookbook = null, _coins = null, _swapboard = null;
+let _swapboard = null, _swapboardPF = null;
 let _poolData = null;
 let _allOrders = [];
 let _refreshCountdown = 30;
 let _activeTab = 'book';
 let _orderSide = 'buy';
-let _orderVenue = 'cookbook';
+let _orderVenue = 'swapboard';
 let _globalMode = false;
-let _coinLabelCache = new Map();
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { const d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
 const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
 function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-function srcTag(o) { return o._source === 'swapboard' ? '<span class="src-tag swapboard">OTC</span>' : '<span class="src-tag cookbook">ZAMM</span>'; }
+function srcTag(o) { return o._source === 'swapboard-pf' ? '<span class="src-tag swapboard">PF</span>' : '<span class="src-tag swapboard">OTC</span>'; }
 
 // ---- Pool ID from hash ----
 function getPoolId() {
@@ -1264,116 +1228,70 @@ function switchTab(tab) {
   if (tab === 'mine') renderMyOrders();
 }
 
-// ---- Fetch pool data (tries both ZAMM and COOKBOOK sources) ----
+// ---- Fetch pool data ----
 async function fetchPool(poolId) {
   const query = `query ($id: BigInt!, $source: String!, $chainId: Float!) {
     pool(id: $id, source: $source, chainId: $chainId) {
       id token0 token1
       coin0 { id decimals name symbol imageUrl }
       coin1 { id decimals name symbol imageUrl }
-      reserve0 reserve1 price0 price1
+      reserve0 reserve1
     }
   }`;
-  // Try ZAMM first, then COOKBOOK
-  for (const source of ["ZAMM", "COOKBOOK"]) {
-    try {
-      const res = await fetch(BASE + "/graphql", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, variables: { id: poolId, source, chainId: 1 } })
-      });
-      const { data } = await res.json();
-      if (data && data.pool) {
-        data.pool._source = source;
-        return data.pool;
-      }
-    } catch (e) {
-      console.warn('Pool fetch failed for source=' + source, e);
-    }
-  }
-  return null;
-}
-
-// ---- Fetch orders ----
-async function fetchCookbookOrders() {
   try {
     const res = await fetch(BASE + "/graphql", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 500, where: { status: "ACTIVE" }) {
-          items { id maker tokenIn idIn amtIn tokenOut idOut amtOut deadline partialFill inDone outDone status txHash }
-        }}`
-      })
+      body: JSON.stringify({ query, variables: { id: poolId, source: "ZAMM", chainId: 1 } })
     });
     const { data } = await res.json();
-    const items = data ? data.orders.items : [];
-    items.forEach(o => o._source = 'cookbook');
-    return items;
+    if (data && data.pool) return data.pool;
   } catch (e) {
-    console.error('[orderbook] fetchCookbookOrders failed:', e);
-    return [];
+    console.warn('Pool fetch failed:', e);
   }
+  return null;
 }
 
-async function fetchSwapboardOrders() {
-  try {
-    const res = await fetch(SWAPBOARD_SUBGRAPH, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: `{ orders(first: 500, orderBy: orderId, orderDirection: desc, where: { active: true }) {
-          orderId maker amountA amountB createdAt createdTx
-          tokenA { address symbol decimals }
-          tokenB { address symbol decimals }
-        }}`
-      })
-    });
-    const { data } = await res.json();
-    const raw = data ? data.orders : [];
-    const wethLower = SWAPBOARD_WETH.toLowerCase();
-    const items = raw.map(o => {
-      const decA = Number(o.tokenA.decimals);
-      const decB = Number(o.tokenB.decimals);
-      const addrA = o.tokenA.address.toLowerCase();
-      const addrB = o.tokenB.address.toLowerCase();
-      if (!KNOWN_TOKENS[addrA] && o.tokenA.symbol) KNOWN_TOKENS[addrA] = { symbol: o.tokenA.symbol, decimals: decA };
-      if (!KNOWN_TOKENS[addrB] && o.tokenB.symbol) KNOWN_TOKENS[addrB] = { symbol: o.tokenB.symbol, decimals: decB };
-      const symA = addrA === wethLower ? 'ETH' : o.tokenA.symbol;
-      const symB = addrB === wethLower ? 'ETH' : o.tokenB.symbol;
-      return {
-        id: 'sb-' + o.orderId,
-        _source: 'swapboard',
-        _orderId: o.orderId,
-        maker: o.maker,
-        tokenIn: o.tokenA.address,
-        idIn: "0",
-        amtIn: o.amountA,
-        tokenOut: o.tokenB.address,
-        idOut: "0",
-        amtOut: o.amountB,
-        deadline: "9999999999", // Swapboard orders never expire
-        partialFill: false,    // Swapboard is all-or-nothing
-        inDone: "0",
-        outDone: "0",
-        status: "ACTIVE",
-        txHash: o.createdTx,
-        _decIn: decA,
-        _decOut: decB,
-        _symIn: symA,
-        _symOut: symB,
-      };
-    });
-    return items;
-  } catch (e) {
-    console.error('[orderbook] fetchSwapboardOrders failed:', e);
-    return [];
-  }
-}
-
+// ---- Fetch orders (via SwapboardView — single eth_call for both contracts) ----
 async function fetchOrders() {
-  const [cookbook, swapboard] = await Promise.all([fetchCookbookOrders(), fetchSwapboardOrders(), loadCoinMap()]);
-  return [...cookbook, ...swapboard];
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const view = new ethers.Contract(SWAPBOARD_VIEW, SWAPBOARD_VIEW_ABI, provider);
+  const raw = await view.getAllActiveOrders(SWAPBOARD, SWAPBOARD_PF);
+  const wethLower = SWAPBOARD_WETH.toLowerCase();
+  const sbLower = SWAPBOARD.toLowerCase();
+  return raw.map(o => {
+    const addrA = o.tokenA.toLowerCase(), addrB = o.tokenB.toLowerCase();
+    const isV1 = o.board.toLowerCase() === sbLower;
+    const source = isV1 ? 'swapboard' : 'swapboard-pf';
+    const prefix = isV1 ? 'sb-' : 'pf-';
+    const decA = Number(o.decimalsA) || 18, decB = Number(o.decimalsB) || 18;
+    const symA = addrA === wethLower ? 'ETH' : (o.symbolA || addrA.slice(0, 6));
+    const symB = addrB === wethLower ? 'ETH' : (o.symbolB || addrB.slice(0, 6));
+    if (o.symbolA && !KNOWN_TOKENS[addrA]) KNOWN_TOKENS[addrA] = { symbol: o.symbolA, decimals: decA };
+    if (o.symbolB && !KNOWN_TOKENS[addrB]) KNOWN_TOKENS[addrB] = { symbol: o.symbolB, decimals: decB };
+    return {
+      id: prefix + o.orderId.toString(),
+      _source: source,
+      _orderId: o.orderId.toString(),
+      maker: o.maker,
+      tokenIn: o.tokenA,
+      idIn: "0",
+      amtIn: o.amountA.toString(),
+      tokenOut: o.tokenB,
+      idOut: "0",
+      amtOut: o.amountB.toString(),
+      deadline: "9999999999",
+      partialFill: o.partialFill,
+      inDone: "0",
+      outDone: "0",
+      status: "ACTIVE",
+      txHash: "",
+      _decIn: decA,
+      _decOut: decB,
+      _symIn: symA,
+      _symOut: symB,
+    };
+  });
 }
 
 // ---- Filter orders by pool pair ----
@@ -1401,15 +1319,8 @@ function filterOrdersForPool(orders, pool) {
     if (Number(o.deadline) <= now) return false;
     const oti = o.tokenIn.toLowerCase(), oto = o.tokenOut.toLowerCase();
 
-    if (o._source === 'swapboard') {
-      return (_tokMatch(oti, t0) && _tokMatch(oto, t1))
-          || (_tokMatch(oti, t1) && _tokMatch(oto, t0));
-    }
-
-    // Cookbook: match by address (with ETH/WETH equivalence) + coin id
-    const oii = o.idIn, oio = o.idOut;
-    return (_tokMatch(oti, t0) && oii === id0 && _tokMatch(oto, t1) && oio === id1)
-        || (_tokMatch(oti, t1) && oii === id1 && _tokMatch(oto, t0) && oio === id0);
+    return (_tokMatch(oti, t0) && _tokMatch(oto, t1))
+        || (_tokMatch(oti, t1) && _tokMatch(oto, t0));
   });
   return filtered;
 }
@@ -1424,7 +1335,7 @@ function classifyOrders(orders, pool) {
   const id0 = pool.coin0 ? pool.coin0.id : "0";
   const bids = [], asks = [];
   for (const o of orders) {
-    if (_tokMatch(o.tokenIn, pool.token0) && (o._source === 'swapboard' || o.idIn === id0)) {
+    if (_tokMatch(o.tokenIn, pool.token0)) {
       asks.push(o); // depositing base → selling base → ask
     } else {
       bids.push(o); // depositing quote → buying base → bid
@@ -1478,9 +1389,15 @@ function tokenLabel(pool, side) {
 }
 
 function fillPct(o) {
+  // Swapboard orders return remaining amounts (inDone/outDone not tracked on-chain)
+  if (o._source === 'swapboard' || o._source === 'swapboard-pf') return -1;
   const total = BigInt(o.amtOut);
   if (total === 0n) return 0;
   return Number(BigInt(o.outDone) * 100n / total);
+}
+function fillPctLabel(o) {
+  const pct = fillPct(o);
+  return pct < 0 ? '' : pct + '%';
 }
 
 // ---- Render book (exchange-style) ----
@@ -1498,8 +1415,8 @@ function renderBook() {
   // Bids: maker deposited token1(quote), wants token0(base) → tokenIn=token1, tokenOut=token0
 
   // base/quote decimals for an order
-  function baseDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return o._source === 'swapboard' ? (isInBase ? (o._decIn||18) : (o._decOut||18)) : dec0; }
-  function quoteDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return o._source === 'swapboard' ? (isInBase ? (o._decOut||18) : (o._decIn||18)) : dec1; }
+  function baseDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return isInBase ? (o._decIn||dec0) : (o._decOut||dec0); }
+  function quoteDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return isInBase ? (o._decOut||dec1) : (o._decIn||dec1); }
   // base/quote amounts: for asks tokenIn=base, for bids tokenOut=base
   function baseAmt(o, isBid) { return isBid ? o.amtOut : o.amtIn; }
   function quoteAmt(o, isBid) { return isBid ? o.amtIn : o.amtOut; }
@@ -1534,7 +1451,7 @@ function renderBook() {
       const baseSize = Number(BigInt(baseAmt(o, false))) / (10 ** bd);
       const depth = (baseSize / maxAsk * 100).toFixed(1);
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o._source === 'swapboard' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
+      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o.deadline === '9999999999' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'buy')" title="Trade at this price">${fmtCompact(price)}</span>
         <span class="size">${fmt(baseAmt(o, false), bd)}${aon}${srcTag(o)}</span>
@@ -1569,7 +1486,7 @@ function renderBook() {
       const baseSize = Number(BigInt(baseAmt(o, true))) / (10 ** bd);
       const depth = (baseSize / maxBid * 100).toFixed(1);
       const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o._source === 'swapboard' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
+      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o.deadline === '9999999999' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
         <span class="depth" style="width:${depth}%"></span>
         <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'sell')" title="Trade at this price">${fmtCompact(price)}</span>
         <span class="size">${fmt(baseAmt(o, true), bd)}${aon}${srcTag(o)}</span>
@@ -1606,38 +1523,18 @@ function setSide(side) {
   btn.className = 'submit-btn ' + side;
   btn.textContent = side === 'buy' ? 'Buy ' + base : 'Sell ' + base;
 
-  updateVenueButtons();
   updateOrderTotal();
 }
 
 // ---- Venue toggle ----
-function _isErc6909Pair() {
-  if (!_poolData) return false;
-  const id0 = _poolData.coin0 ? BigInt(_poolData.coin0.id) : 0n;
-  const id1 = _poolData.coin1 ? BigInt(_poolData.coin1.id) : 0n;
-  return id0 >= 1000000n || id1 >= 1000000n;
-}
-
-function updateVenueButtons() {
-  const sbBtn = $('venueSwapboard');
-  if (!sbBtn) return;
-  const erc6909 = _isErc6909Pair();
-  sbBtn.disabled = erc6909;
-  sbBtn.title = erc6909 ? 'Swapboard does not support ERC6909 tokens' : '';
-  if (erc6909 && _orderVenue === 'swapboard') setVenue('cookbook');
-}
 
 function setVenue(v) {
   _orderVenue = v;
-  $('venueCookbook').classList.toggle('active', v === 'cookbook');
   $('venueSwapboard').classList.toggle('active', v === 'swapboard');
-  if (v === 'swapboard') {
-    $('cookbookOpts').style.display = 'none';
-    $('venueHint').textContent = 'All-or-nothing \u00b7 no expiry \u00b7 ERC20/ETH only';
-  } else {
-    $('cookbookOpts').style.display = '';
-    $('venueHint').textContent = 'Partial fills \u00b7 custom expiry';
-  }
+  $('venueSwapboardPF').classList.toggle('active', v === 'swapboard-pf');
+  $('venueHint').textContent = v === 'swapboard-pf'
+    ? 'Allows partial fills \u00b7 no expiry'
+    : 'No expiry \u00b7 ERC20/ETH only';
 }
 
 // ---- Render my orders ----
@@ -1664,26 +1561,26 @@ async function renderMyOrders() {
   let html = '';
   for (const o of mine) {
     // Bid = deposited quote(token1) to buy base(token0); Ask = deposited base(token0) to sell
-    const isAsk = _tokMatch(o.tokenIn, _poolData.token0) && (o._source === 'swapboard' || o.idIn === id0);
+    const isAsk = _tokMatch(o.tokenIn, _poolData.token0);
     const isBid = !isAsk;
     const isInBase = _tokMatch(o.tokenIn, _poolData.token0);
-    const bDec = o._source === 'swapboard' ? (isInBase ? (o._decIn||18) : (o._decOut||18)) : dec0;
-    const qDec = o._source === 'swapboard' ? (isInBase ? (o._decOut||18) : (o._decIn||18)) : dec1;
+    const bDec = isInBase ? (o._decIn||dec0) : (o._decOut||dec0);
+    const qDec = isInBase ? (o._decOut||dec1) : (o._decIn||dec1);
     const baseWei = isBid ? o.amtOut : o.amtIn;
     const quoteWei = isBid ? o.amtIn : o.amtOut;
     const normBase = Number(BigInt(baseWei)) / (10 ** bDec);
     const normQuote = Number(BigInt(quoteWei)) / (10 ** qDec);
     const price = normBase > 0 ? normQuote / normBase : 0;
-    const pct = fillPct(o);
+    const pctLabel = fillPctLabel(o);
     const size = fmt(baseWei, bDec);
-    const expiryText = o._source === 'swapboard' ? 'No expiry' : 'Expires ' + timeLeft(o.deadline);
+    const expiryText = o.deadline === '9999999999' ? 'No expiry' : 'Expires ' + timeLeft(o.deadline);
     html += `<div class="my-order-item">
       <span class="my-order-side ${isBid ? 'bid' : 'ask'}">${isBid ? 'BID' : 'ASK'}</span>
       <div class="my-order-details">
         <div>${fmtCompact(price)} ${esc(quote)}/${esc(base)} &middot; ${size} ${esc(base)}${srcTag(o)}</div>
-        <div class="line2">${expiryText} &middot; <a href="https://etherscan.io/tx/${o.txHash}" target="_blank" rel="noopener" style="color:inherit">${o.txHash.slice(0,10)}...</a></div>
+        <div class="line2">${expiryText}${o.txHash ? ' &middot; <a href="https://etherscan.io/tx/' + o.txHash + '" target="_blank" rel="noopener" style="color:inherit">' + o.txHash.slice(0,10) + '...</a>' : ''}</div>
       </div>
-      <div class="my-order-fill"><span class="pct">${pct}%</span> filled</div>
+      ${pctLabel ? `<div class="my-order-fill"><span class="pct">${pctLabel}</span> filled</div>` : ''}
       <button class="cancel-btn" onclick="doCancelOrder('${o.id}')">Cancel</button>
     </div>`;
   }
@@ -1723,81 +1620,8 @@ async function doMakeOrder() {
   if (_orderVenue === 'swapboard') {
     return doMakeSwapboardOrder(showStatus);
   }
-
-  const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
-  const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
-  // amt = base (token0) amount, price = quote/base (token1/token0), total = quote (token1)
-  const totalWei = mulDecimals(amt, price, dec1);
-  const expiry = Math.floor(Date.now() / 1000) + Number($('orderExpiry').value);
-  const partial = $('orderPartial').checked;
-
-  let tokenIn, idIn, amtIn, tokenOut, idOut, amtOut, value;
-
-  if (side === 'buy') {
-    // Buy base: deposit quote (token1) to get base (token0)
-    tokenIn = _poolData.token1;
-    idIn = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtIn = totalWei;
-    tokenOut = _poolData.token0;
-    idOut = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
-    amtOut = ethers.parseUnits(amt, dec0);
-    value = tokenIn === ZERO ? amtIn : 0n;
-  } else {
-    // Sell base: deposit base (token0) to get quote (token1)
-    tokenIn = _poolData.token0;
-    idIn = BigInt(_poolData.coin0 ? _poolData.coin0.id : 0);
-    amtIn = ethers.parseUnits(amt, dec0);
-    tokenOut = _poolData.token1;
-    idOut = BigInt(_poolData.coin1 ? _poolData.coin1.id : 0);
-    amtOut = totalWei;
-    value = tokenIn === ZERO ? amtIn : 0n;
-  }
-
-  if (amtIn === 0n || amtOut === 0n) {
-    showStatus('Amount too small', 'error');
-    return;
-  }
-  if (amtIn > MAX_UINT96 || amtOut > MAX_UINT96) {
-    showStatus('Amount too large (use OTC for larger orders)', 'error');
-    return;
-  }
-
-  try {
-    $('makeOrderBtn').disabled = true;
-    showStatus('Preparing transaction...', 'info');
-
-    const addr = await _signer.getAddress();
-    if (tokenIn !== ZERO && idIn >= 1000000n) {
-      const erc6909 = new ethers.Contract(tokenIn, COINS_ABI, _signer);
-      const isOp = await erc6909.isOperator(addr, COOKBOOK);
-      if (!isOp) {
-        showStatus('Approving Cookbook as operator...', 'info');
-        const approveTx = await erc6909.setOperator(COOKBOOK, true);
-        await approveTx.wait();
-      }
-    } else if (tokenIn !== ZERO && idIn < 1000000n) {
-      const token = new ethers.Contract(tokenIn, ERC20_ABI, _signer);
-      const allowance = await token.allowance(addr, COOKBOOK);
-      if (allowance < amtIn) {
-        showStatus('Approving token spend...', 'info');
-        const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
-        await approveTx.wait();
-      }
-    }
-
-    showStatus('Confirm in wallet...', 'info');
-    const tx = await _cookbook.makeOrder(tokenIn, idIn, amtIn, tokenOut, idOut, amtOut, expiry, partial, { value });
-    showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
-    await tx.wait();
-    showStatus('Order created!', 'success');
-    $('orderAmt').value = '';
-    $('orderPrice').value = '';
-    $('orderTotal').textContent = '--';
-    setTimeout(refresh, 4000);
-  } catch (e) {
-    showStatus(e.reason || e.message || 'Transaction failed', 'error');
-  } finally {
-    $('makeOrderBtn').disabled = false;
+  if (_orderVenue === 'swapboard-pf') {
+    return doMakeSwapboardPFOrder(showStatus);
   }
 }
 
@@ -1874,8 +1698,77 @@ async function doMakeSwapboardOrder(showStatus) {
   }
 }
 
+// ---- Make Swapboard PF (partial fill) order ----
+async function doMakeSwapboardPFOrder(showStatus) {
+  const side = _orderSide;
+  const amt = $('orderAmt').value;
+  const price = $('orderPrice').value;
+
+  const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
+  const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
+  const totalWei = mulDecimals(amt, price, dec1);
+
+  const t0 = _poolData.token0 === ZERO ? SWAPBOARD_WETH : _poolData.token0;
+  const t1 = _poolData.token1 === ZERO ? SWAPBOARD_WETH : _poolData.token1;
+
+  let tokenA, amountA, tokenB, amountB, isPayingEth;
+
+  if (side === 'buy') {
+    tokenA = t1; amountA = totalWei;
+    tokenB = t0; amountB = ethers.parseUnits(amt, dec0);
+    isPayingEth = _poolData.token1 === ZERO;
+  } else {
+    tokenA = t0; amountA = ethers.parseUnits(amt, dec0);
+    tokenB = t1; amountB = totalWei;
+    isPayingEth = _poolData.token0 === ZERO;
+  }
+
+  if (amountA === 0n || amountB === 0n) {
+    showStatus('Amount too small', 'error');
+    $('makeOrderBtn').disabled = false;
+    return;
+  }
+
+  try {
+    $('makeOrderBtn').disabled = true;
+    showStatus('Preparing transaction...', 'info');
+
+    if (!_swapboardPF) { _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); }
+    const addr = await _signer.getAddress();
+
+    if (isPayingEth) {
+      showStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboardPF.createOrderWithEth(tokenB, amountB, true, { value: amountA });
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else {
+      const token = new ethers.Contract(tokenA, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD_PF);
+      if (allowance < amountA) {
+        showStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD_PF, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      showStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboardPF.createOrder(tokenA, amountA, tokenB, amountB, true);
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    }
+
+    showStatus('Order created!', 'success');
+    $('orderAmt').value = '';
+    $('orderPrice').value = '';
+    $('orderTotal').textContent = '--';
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+  } finally {
+    $('makeOrderBtn').disabled = false;
+  }
+}
+
 // ---- New order modal (global view) ----
-let _newOrderVenue = 'cookbook';
+let _newOrderVenue = 'swapboard';
 
 function _obUpdateTokenBtn(id, symbol) {
   const t = _obTokens[symbol];
@@ -1898,15 +1791,11 @@ function closeNewOrderModal() {
 
 function setNewOrderVenue(v) {
   _newOrderVenue = v;
-  $('newVenueCookbook').classList.toggle('active', v === 'cookbook');
   $('newVenueSwapboard').classList.toggle('active', v === 'swapboard');
-  if (v === 'swapboard') {
-    $('newCookbookOpts').style.display = 'none';
-    $('newVenueHint').textContent = 'All-or-nothing \u00b7 no expiry \u00b7 ERC20/ETH only';
-  } else {
-    $('newCookbookOpts').style.display = '';
-    $('newVenueHint').textContent = 'Partial fills \u00b7 custom expiry';
-  }
+  $('newVenueSwapboardPF').classList.toggle('active', v === 'swapboard-pf');
+  $('newVenueHint').textContent = v === 'swapboard-pf'
+    ? 'Allows partial fills \u00b7 no expiry'
+    : 'No expiry \u00b7 ERC20/ETH only';
 }
 
 async function doNewOrder() {
@@ -1933,91 +1822,56 @@ async function doNewOrder() {
   const amountB = ethers.parseUnits(rawB, tB.decimals);
   if (amountA === 0n || amountB === 0n) { showStatus('Amount too small', 'error'); return; }
 
-  // Same-token check (for Swapboard, compare after ETH→WETH mapping)
+  // Same-token check (compare after ETH→WETH mapping)
   const effA = tA.address === ZERO ? SWAPBOARD_WETH.toLowerCase() : tA.address.toLowerCase();
   const effB = tB.address === ZERO ? SWAPBOARD_WETH.toLowerCase() : tB.address.toLowerCase();
-  if (_newOrderVenue === 'swapboard' && effA === effB) {
-    showStatus('Cannot create order with the same token on both sides', 'error'); return;
-  }
-  if (tA.address.toLowerCase() === tB.address.toLowerCase()) {
+  if (effA === effB) {
     showStatus('Cannot create order with the same token on both sides', 'error'); return;
   }
 
+  const isPayingEth = tA.address === ZERO;
+  const contractA = tA.address === ZERO ? SWAPBOARD_WETH : tA.address;
+  const contractB = tB.address === ZERO ? SWAPBOARD_WETH : tB.address;
+  const isPF = _newOrderVenue === 'swapboard-pf';
+  const contractAddr = isPF ? SWAPBOARD_PF : SWAPBOARD;
   const btn = $('newOrderSubmitBtn');
 
-  if (_newOrderVenue === 'swapboard') {
-    // Swapboard: map ETH→WETH for contract address, use createOrderWithEth for ETH
-    const isPayingEth = tA.address === ZERO;
-    const contractA = tA.address === ZERO ? SWAPBOARD_WETH : tA.address;
-    const contractB = tB.address === ZERO ? SWAPBOARD_WETH : tB.address;
+  try {
+    btn.disabled = true;
+    showStatus('Preparing transaction...', 'info');
+    const contract = isPF
+      ? (_swapboardPF || (_swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer)))
+      : (_swapboard || (_swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer)));
+    const addr = await _signer.getAddress();
 
-    try {
-      btn.disabled = true;
-      showStatus('Preparing transaction...', 'info');
-      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
-      const addr = await _signer.getAddress();
-
-      if (isPayingEth) {
-        showStatus('Confirm in wallet...', 'info');
-        const tx = await _swapboard.createOrderWithEth(contractB, amountB, { value: amountA });
-        showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
-        await tx.wait();
-      } else {
-        const token = new ethers.Contract(contractA, ERC20_ABI, _signer);
-        const allowance = await token.allowance(addr, SWAPBOARD);
-        if (allowance < amountA) {
-          showStatus('Approving token spend...', 'info');
-          const approveTx = await token.approve(SWAPBOARD, ethers.MaxUint256);
-          await approveTx.wait();
-        }
-        showStatus('Confirm in wallet...', 'info');
-        const tx = await _swapboard.createOrder(contractA, amountA, contractB, amountB);
-        showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
-        await tx.wait();
-      }
-      showStatus('Order created!', 'success');
-      setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
-    } catch (e) {
-      showStatus(e.reason || e.message || 'Transaction failed', 'error');
-    } finally {
-      btn.disabled = false;
-    }
-  } else {
-    // Cookbook
-    if (amountA > MAX_UINT96 || amountB > MAX_UINT96) {
-      showStatus('Amount too large (use OTC for larger orders)', 'error'); return;
-    }
-    const expiry = Math.floor(Date.now() / 1000) + Number($('newOrderExpiry').value);
-    const partial = $('newOrderPartial').checked;
-    const value = tA.address === ZERO ? amountA : 0n;
-
-    try {
-      btn.disabled = true;
-      showStatus('Preparing transaction...', 'info');
-      if (!_cookbook) { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); }
-      const addr = await _signer.getAddress();
-
-      if (tA.address !== ZERO) {
-        const token = new ethers.Contract(tA.address, ERC20_ABI, _signer);
-        const allowance = await token.allowance(addr, COOKBOOK);
-        if (allowance < amountA) {
-          showStatus('Approving token spend...', 'info');
-          const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
-          await approveTx.wait();
-        }
-      }
-
+    if (isPayingEth) {
       showStatus('Confirm in wallet...', 'info');
-      const tx = await _cookbook.makeOrder(tA.address, 0n, amountA, tB.address, 0n, amountB, expiry, partial, { value });
+      const tx = isPF
+        ? await contract.createOrderWithEth(contractB, amountB, true, { value: amountA })
+        : await contract.createOrderWithEth(contractB, amountB, { value: amountA });
       showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
       await tx.wait();
-      showStatus('Order created!', 'success');
-      setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
-    } catch (e) {
-      showStatus(e.reason || e.message || 'Transaction failed', 'error');
-    } finally {
-      btn.disabled = false;
+    } else {
+      const token = new ethers.Contract(contractA, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, contractAddr);
+      if (allowance < amountA) {
+        showStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(contractAddr, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      showStatus('Confirm in wallet...', 'info');
+      const tx = isPF
+        ? await contract.createOrder(contractA, amountA, contractB, amountB, true)
+        : await contract.createOrder(contractA, amountA, contractB, amountB);
+      showStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
     }
+    showStatus('Order created!', 'success');
+    setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
+  } catch (e) {
+    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -2038,79 +1892,21 @@ async function doFillOrder(orderId) {
   if (o._source === 'swapboard') {
     return doFillSwapboardOrder(o);
   }
-
-  const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
-  if (remaining <= 0n) { _fillStatus('Order already filled', 'error'); return; }
-
-  const isPayingEth = o.tokenOut === ZERO;
-  const outDec = coinLabel(o.tokenOut, o.idOut).decimals;
-  let fillPart = remaining;
-
-  const fillInput = $('fillAmtInput');
-  if (o.partialFill && fillInput && fillInput.value) {
-    const parsed = ethers.parseUnits(fillInput.value, outDec);
-    if (parsed <= 0n) { _fillStatus('Enter a valid fill amount', 'error'); return; }
-    fillPart = parsed > remaining ? remaining : parsed;
-  }
-
-  const btn = $('fillOrderBtn');
-  try {
-    if (btn) btn.disabled = true;
-    _fillStatus('Preparing...', 'info');
-    const addr = await _signer.getAddress();
-    if (!isPayingEth && BigInt(o.idOut) >= 1000000n) {
-      const erc6909 = new ethers.Contract(o.tokenOut, COINS_ABI, _signer);
-      const isOp = await erc6909.isOperator(addr, COOKBOOK);
-      if (!isOp) {
-        _fillStatus('Approving operator...', 'info');
-        const approveTx = await erc6909.setOperator(COOKBOOK, true);
-        await approveTx.wait();
-      }
-    } else if (!isPayingEth && BigInt(o.idOut) < 1000000n) {
-      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
-      const allowance = await token.allowance(addr, COOKBOOK);
-      if (allowance < fillPart) {
-        _fillStatus('Approving token spend...', 'info');
-        const approveTx = await token.approve(COOKBOOK, ethers.MaxUint256);
-        await approveTx.wait();
-      }
-    }
-
-    _fillStatus('Confirm in wallet...', 'info');
-    const tx = await _cookbook.fillOrder(
-      o.maker,
-      o.tokenIn,
-      BigInt(o.idIn),
-      BigInt(o.amtIn),
-      o.tokenOut,
-      BigInt(o.idOut),
-      BigInt(o.amtOut),
-      BigInt(o.deadline),
-      o.partialFill,
-      fillPart,
-      { value: isPayingEth ? fillPart : 0n }
-    );
-    _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
-    await tx.wait();
-    closeFillModal();
-    setTimeout(refresh, 4000);
-  } catch (e) {
-    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
-  } finally {
-    if (btn) btn.disabled = false;
+  if (o._source === 'swapboard-pf') {
+    return doFillSwapboardPFOrder(o);
   }
 }
 
-// ---- Fill Swapboard order ----
+// ---- Fill Swapboard order (all-or-nothing) ----
 async function doFillSwapboardOrder(o) {
   if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
   const oid = BigInt(o._orderId);
   const wethLower = SWAPBOARD_WETH.toLowerCase();
-  const tokenB = o.tokenOut.toLowerCase(); // tokenB is what the filler pays
-  const tokenA = o.tokenIn.toLowerCase();  // tokenA is what the filler receives
+  const tokenB = o.tokenOut.toLowerCase();
+  const tokenA = o.tokenIn.toLowerCase();
   const isPayingEth = tokenB === wethLower;
   const isReceivingEth = tokenA === wethLower;
-  const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min, matches official dapp
+  const deadline = Math.floor(Date.now() / 1000) + 300;
 
   const btn = $('fillOrderBtn');
   try {
@@ -2157,6 +1953,75 @@ async function doFillSwapboardOrder(o) {
   }
 }
 
+// ---- Fill Swapboard PF order (partial fill) ----
+async function doFillSwapboardPFOrder(o) {
+  if (!_swapboardPF) { _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); }
+  const oid = BigInt(o._orderId);
+  const wethLower = SWAPBOARD_WETH.toLowerCase();
+  const tokenB = o.tokenOut.toLowerCase();
+  const tokenA = o.tokenIn.toLowerCase();
+  const isPayingEth = tokenB === wethLower;
+  const isReceivingEth = tokenA === wethLower;
+  const deadline = Math.floor(Date.now() / 1000) + 300;
+
+  const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
+  const outDec = coinLabelForOrder(o, 'out').decimals;
+  let fillAmountB = 0n; // 0 = full fill
+
+  const fillInput = $('fillAmtInput');
+  if (o.partialFill && fillInput && fillInput.value) {
+    const parsed = ethers.parseUnits(fillInput.value, outDec);
+    if (parsed <= 0n) { _fillStatus('Enter a valid fill amount', 'error'); return; }
+    fillAmountB = parsed > remaining ? remaining : parsed;
+    if (fillAmountB >= remaining) fillAmountB = 0n; // full fill
+  }
+
+  const btn = $('fillOrderBtn');
+  try {
+    if (btn) btn.disabled = true;
+    _fillStatus('Preparing...', 'info');
+    const addr = await _signer.getAddress();
+    const payAmount = fillAmountB === 0n ? BigInt(o.amtOut) : fillAmountB;
+
+    if (isPayingEth) {
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboardPF.fillOrderWithEth(oid, deadline, { value: payAmount });
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else if (isReceivingEth) {
+      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD_PF);
+      if (allowance < payAmount) {
+        _fillStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD_PF, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboardPF.fillOrderUnwrap(oid, deadline, fillAmountB);
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    } else {
+      const token = new ethers.Contract(o.tokenOut, ERC20_ABI, _signer);
+      const allowance = await token.allowance(addr, SWAPBOARD_PF);
+      if (allowance < payAmount) {
+        _fillStatus('Approving token spend...', 'info');
+        const approveTx = await token.approve(SWAPBOARD_PF, ethers.MaxUint256);
+        await approveTx.wait();
+      }
+      _fillStatus('Confirm in wallet...', 'info');
+      const tx = await _swapboardPF.fillOrder(oid, deadline, fillAmountB);
+      _fillStatus('Tx sent: ' + tx.hash.slice(0, 10) + '...', 'info');
+      await tx.wait();
+    }
+    closeFillModal();
+    setTimeout(refresh, 4000);
+  } catch (e) {
+    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ---- Cancel order ----
 async function doCancelOrder(orderId) {
   if (!_signer) { showWalletModal(); return; }
@@ -2172,28 +2037,7 @@ async function doCancelOrder(orderId) {
 
   try {
     showStatus('Confirm in wallet...', 'info');
-    let tx;
-    if (o._source === 'swapboard') {
-      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
-      const oid = BigInt(o._orderId);
-      const tokenA = o.tokenIn.toLowerCase();
-      if (tokenA === SWAPBOARD_WETH.toLowerCase()) {
-        tx = await _swapboard.cancelOrderUnwrap(oid);
-      } else {
-        tx = await _swapboard.cancelOrder(oid);
-      }
-    } else {
-      tx = await _cookbook.cancelOrder(
-        o.tokenIn,
-        BigInt(o.idIn),
-        BigInt(o.amtIn),
-        o.tokenOut,
-        BigInt(o.idOut),
-        BigInt(o.amtOut),
-        BigInt(o.deadline),
-        o.partialFill
-      );
-    }
+    const tx = await _cancelSwapboardOrder(o);
     showStatus('Tx sent...', 'info');
     await tx.wait();
     showStatus('Order cancelled!', 'success');
@@ -2201,6 +2045,18 @@ async function doCancelOrder(orderId) {
   } catch (e) {
     showStatus(e.reason || e.message || 'Cancel failed', 'error');
   }
+}
+
+async function _cancelSwapboardOrder(o) {
+  const oid = BigInt(o._orderId);
+  const tokenA = o.tokenIn.toLowerCase();
+  const isWeth = tokenA === SWAPBOARD_WETH.toLowerCase();
+  if (o._source === 'swapboard-pf') {
+    if (!_swapboardPF) { _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); }
+    return isWeth ? _swapboardPF.cancelOrderUnwrap(oid) : _swapboardPF.cancelOrder(oid);
+  }
+  if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
+  return isWeth ? _swapboard.cancelOrderUnwrap(oid) : _swapboard.cancelOrder(oid);
 }
 
 // Cancel from fill modal — uses fillStatus for feedback, closes modal on success
@@ -2214,24 +2070,7 @@ async function doCancelOrderFromModal(orderId) {
   try {
     if (btn) btn.disabled = true;
     _fillStatus('Confirm in wallet...', 'info');
-    let tx;
-    if (o._source === 'swapboard') {
-      if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
-      const oid = BigInt(o._orderId);
-      const tokenA = o.tokenIn.toLowerCase();
-      if (tokenA === SWAPBOARD_WETH.toLowerCase()) {
-        tx = await _swapboard.cancelOrderUnwrap(oid);
-      } else {
-        tx = await _swapboard.cancelOrder(oid);
-      }
-    } else {
-      if (!_cookbook) { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); }
-      tx = await _cookbook.cancelOrder(
-        o.tokenIn, BigInt(o.idIn), BigInt(o.amtIn),
-        o.tokenOut, BigInt(o.idOut), BigInt(o.amtOut),
-        BigInt(o.deadline), o.partialFill
-      );
-    }
+    const tx = await _cancelSwapboardOrder(o);
     _fillStatus('Tx sent...', 'info');
     await tx.wait();
     closeFillModal();
@@ -2244,33 +2083,12 @@ async function doCancelOrderFromModal(orderId) {
 }
 
 // ---- Global orders view ----
-// Bulk-fetch all coin metadata from /api/coins (one request, cached)
-let _coinMapLoaded = false;
-async function loadCoinMap() {
-  if (_coinMapLoaded) return;
-  try {
-    const res = await fetch(BASE + "/api/coins");
-    const coins = await res.json();
-    for (const c of coins.data || coins) {
-      if (!c.coinId) continue;
-      _coinLabelCache.set(c.coinId, {
-        symbol: c.symbol || c.name || ('Coin#' + c.coinId.slice(0, 8)),
-        decimals: c.decimals || 18,
-        imageUrl: c.imageUrl || null,
-        name: c.name || null,
-      });
-    }
-    _coinMapLoaded = true;
-  } catch (e) {
-    console.warn('[orderbook] loadCoinMap failed:', e);
-  }
-}
 
 // Display-aware label: for Swapboard orders, shows WETH as ETH
 function coinLabelForOrder(o, field) {
   const token = field === 'in' ? o.tokenIn : o.tokenOut;
   const id = field === 'in' ? o.idIn : o.idOut;
-  if (o._source === 'swapboard') {
+  if (o._source === 'swapboard' || o._source === 'swapboard-pf') {
     const sym = field === 'in' ? o._symIn : o._symOut;
     const dec = field === 'in' ? o._decIn : o._decOut;
     if (sym) return { symbol: sym, decimals: dec || 18 };
@@ -2291,9 +2109,6 @@ function coinLabel(token, id) {
     if (_poolData.token1 === _t && _poolData.coin1 && _poolData.coin1.id === id && _poolData.coin1.symbol)
       return { symbol: _poolData.coin1.symbol, decimals: _poolData.coin1.decimals || 18 };
   }
-  // ZAMM or Cookbook coin — look up by coinId
-  const cached = _coinLabelCache.get(id);
-  if (cached) return cached;
   return { symbol: shortAddr(token), decimals: 18 };
 }
 
@@ -2312,13 +2127,6 @@ function iconForToken(token, id, order) {
     : null;
   if (poolCoin?.logoUrl) {
     return `<img src="${escAttr(poolCoin.logoUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
-  }
-  // Indexer imageUrl for ZAMM/Cookbook coins (skip for Swapboard — they don't use coin IDs, so id "0" would collide)
-  if (!poolCoin && order?._source !== 'swapboard') {
-    const cached = _coinLabelCache.get(id);
-    if (cached?.imageUrl) {
-      return `<img src="${escAttr(cached.imageUrl)}" width="24" height="24" style="border-radius:50%" onerror="this.outerHTML=makeLetterIcon('${escAttr(label.symbol)}')">`;
-    }
   }
   // Fallback: letter icon
   return iconForSymbol(label.symbol);
@@ -2405,14 +2213,10 @@ function filterGlobalOrders() {
     orders = orders.filter(o => {
       const inL = coinLabelForOrder(o, 'in');
       const outL = coinLabelForOrder(o, 'out');
-      const inC = _coinLabelCache.get(o.idIn);
-      const outC = _coinLabelCache.get(o.idOut);
       const searchable = [
         inL.symbol, outL.symbol,
-        inC?.name, outC?.name,
         o.tokenIn, o.tokenOut,
-        o.maker, o._source,
-        o._source === 'swapboard' ? 'otc' : 'zamm'
+        o.maker, o._source, 'otc'
       ].filter(Boolean).join(' ').toLowerCase();
       return searchable.includes(q);
     });
@@ -2446,7 +2250,7 @@ function filterGlobalOrders() {
   for (const o of orders) {
     const inL = coinLabelForOrder(o, 'in');
     const outL = coinLabelForOrder(o, 'out');
-    const pct = fillPct(o);
+    const pctLabel = fillPctLabel(o);
     const tl = timeLeft(o.deadline);
     const inIcon = iconForToken(o.tokenIn, o.idIn, o);
     const outIcon = iconForToken(o.tokenOut, o.idOut, o);
@@ -2455,7 +2259,7 @@ function filterGlobalOrders() {
     const aon = o.partialFill ? '' : ' <span class="aon-tag" title="All-or-nothing">AON</span>';
     const isMine = userAddr && o.maker.toLowerCase() === userAddr;
     const yoursTag = isMine ? ' <span class="yours-tag">Yours</span>' : '';
-    const expiry = o._source === 'swapboard' ? 'no expiry' : escText(tl) + ' left';
+    const expiry = o.deadline === '9999999999' ? 'no expiry' : escText(tl) + ' left';
     html += `<div class="global-order-item${isMine ? ' is-mine' : ''}" onclick="showFillModal('${escAttr(o.id)}')">
       <div class="order-token-pair">
         <span class="token-icon">${inIcon}</span>
@@ -2464,9 +2268,9 @@ function filterGlobalOrders() {
       </div>
       <div class="order-info">
         <div class="amounts">${escText(fmt(o.amtIn, inL.decimals))} ${escText(inL.symbol)} &rarr; ${escText(fmt(o.amtOut, outL.decimals))} ${escText(outL.symbol)}${aon}${srcTag(o)}${yoursTag}</div>
-        <div class="meta">${rateStr}${rateStr ? ' &middot; ' : ''}${escText(shortAddr(o.maker))} &middot; ${pct}% filled &middot; ${expiry}</div>
+        <div class="meta">${rateStr}${rateStr ? ' &middot; ' : ''}${escText(shortAddr(o.maker))}${pctLabel ? ' &middot; ' + pctLabel + ' filled' : ''} &middot; ${expiry}</div>
       </div>
-      <div class="order-fill-badge"><span class="pct">${pct}%</span><br>filled</div>
+      ${pctLabel ? `<div class="order-fill-badge"><span class="pct">${pctLabel}</span><br>filled</div>` : ''}
     </div>`;
   }
   $('globalOrdersList').innerHTML = html;
@@ -2484,7 +2288,7 @@ function showFillModal(orderId) {
   const outL = coinLabelForOrder(o, 'out');
   const inIcon = iconForToken(o.tokenIn, o.idIn, o);
   const outIcon = iconForToken(o.tokenOut, o.idOut, o);
-  const pct = fillPct(o);
+  const pctLabel = fillPctLabel(o);
   const tl = timeLeft(o.deadline);
   const isMine = _connectedAddress && o.maker.toLowerCase() === _connectedAddress.toLowerCase();
 
@@ -2497,11 +2301,17 @@ function showFillModal(orderId) {
   const canPartial = o.partialFill;
   const remainingStr = ethers.formatUnits(remaining, outL.decimals);
 
+  // Compute rate for display
+  const inAmt = Number(remainingIn) / (10 ** inL.decimals);
+  const outAmt = Number(remaining) / (10 ** outL.decimals);
+  const rate = inAmt > 0 ? outAmt / inAmt : 0;
+  const rateStr = rate > 0 ? fmtCompact(rate) + ' ' + escText(outL.symbol) + ' per ' + escText(inL.symbol) : '';
+
   body.innerHTML = `
-    ${isMine ? '<div style="padding:8px 12px;margin-bottom:10px;background:rgba(255,180,50,0.1);border:1px solid rgba(255,180,50,0.3);font-size:12px;text-align:center">This is your order</div>' : ''}
+    ${isMine ? '<div style="padding:10px 12px;margin-bottom:12px;background:rgba(255,180,50,0.08);border:1px solid rgba(255,180,50,0.25);font-size:12px;text-align:center;color:var(--fg-muted)">This is your order</div>' : ''}
     <div class="fill-modal-pair">
       <div class="fill-modal-token">
-        <span class="sym">${isMine ? 'Deposited' : 'You pay'}</span>
+        <span class="sym">${isMine ? 'Escrowed' : 'You pay'}</span>
         <span class="icon">${isMine ? inIcon : outIcon}</span>
         <span class="amt" id="fillPayAmt">${escText(isMine ? fmt(remainingIn.toString(), inL.decimals) : youPay)}</span>
         <span class="sym">${escText(isMine ? inL.symbol : outL.symbol)}</span>
@@ -2514,23 +2324,22 @@ function showFillModal(orderId) {
         <span class="sym">${escText(isMine ? outL.symbol : inL.symbol)}</span>
       </div>
     </div>
+    ${rateStr ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin:-8px 0 16px;font-family:monospace">${rateStr}</div>` : ''}
     ${!isMine && canPartial ? `
     <div class="fill-amt-row">
-      <input type="number" id="fillAmtInput" step="any" min="0" placeholder="Amount to fill (${escAttr(outL.symbol)})" value="${escAttr(remainingStr)}">
+      <input type="number" id="fillAmtInput" step="any" min="0" placeholder="Amount (${escAttr(outL.symbol)})" value="${escAttr(remainingStr)}">
       <button class="max-btn" onclick="document.getElementById('fillAmtInput').value='${escAttr(remainingStr)}';updateFillPreview()">MAX</button>
     </div>` : ''}
     <div class="fill-modal-details">
       <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}${isMine ? ' (you)' : ''}</span></div>
-      <div class="row"><span class="label">Filled</span><span class="value">${pct}%</span></div>
-      <div class="row"><span class="label">Source</span><span class="value">${o._source === 'swapboard' ? 'Swapboard OTC' : 'ZAMM Cookbook'}</span></div>
-      <div class="row"><span class="label">Partial fill</span><span class="value">${o.partialFill ? 'Yes' : 'No'}</span></div>
-      <div class="row"><span class="label">Expires</span><span class="value">${o._source === 'swapboard' ? 'Never' : escText(tl)}</span></div>
-      <div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>
+      <div class="row"><span class="label">Type</span><span class="value">${o.partialFill ? 'Partial fill' : 'All or nothing'}</span></div>
+      <div class="row"><span class="label">Expires</span><span class="value">Never</span></div>
+      ${o.txHash ? `<div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>` : ''}
     </div>
-    ${_globalMode && !isMine ? `<a href="?token0=${encodeURIComponent(o.tokenIn)}&token1=${encodeURIComponent(o.tokenOut)}&id0=${encodeURIComponent(o.idIn)}&id1=${encodeURIComponent(o.idOut)}&label0=${encodeURIComponent(inL.symbol)}&label1=${encodeURIComponent(outL.symbol)}" style="display:block;text-align:center;font-size:11px;color:var(--fg-muted);margin-bottom:10px;text-decoration:underline">View ${escText(inL.symbol)}/${escText(outL.symbol)} orderbook &rarr;</a>` : ''}
+    ${_globalMode && !isMine ? `<a href="?token0=${encodeURIComponent(o.tokenIn)}&token1=${encodeURIComponent(o.tokenOut)}&id0=${encodeURIComponent(o.idIn)}&id1=${encodeURIComponent(o.idOut)}&label0=${encodeURIComponent(inL.symbol)}&label1=${encodeURIComponent(outL.symbol)}" style="display:block;text-align:center;font-size:11px;color:var(--fg-muted);margin-bottom:12px;text-decoration:underline">View ${escText(inL.symbol)}/${escText(outL.symbol)} orderbook &rarr;</a>` : ''}
     ${isMine
       ? `<button class="submit-btn" id="fillOrderBtn" onclick="doCancelOrderFromModal('${escAttr(o.id)}')" style="width:100%;background:var(--red-bg);color:var(--red);border:1px solid var(--red)">Cancel Order</button>`
-      : `<div class="fill-modal-note">${canPartial ? 'Enter amount or use MAX for full fill' : 'Full remaining amount will be filled'}</div>
+      : `${canPartial ? '<div class="fill-modal-note">Enter amount or fill the full remaining order</div>' : ''}
          <button class="submit-btn buy" id="fillOrderBtn" onclick="doFillOrder('${escAttr(o.id)}')" style="width:100%">Fill Order</button>`}
     <div class="status-msg" id="fillStatus" style="margin-top:8px"></div>
   `;
@@ -2603,7 +2412,7 @@ function startRefreshLoop() {
 
 // ---- Build synthetic pool data from token addresses ----
 function buildSyntheticPool(token0, token1, id0, id1, labelHint0, labelHint1, logoHint0, logoHint1) {
-  // Normalize WETH address to ETH zero address for Cookbook compatibility
+  // Normalize WETH address to ETH zero address
   const wethLower = SWAPBOARD_WETH.toLowerCase();
   const t0 = token0.toLowerCase() === wethLower ? ZERO : token0.toLowerCase();
   const t1 = token1.toLowerCase() === wethLower ? ZERO : token1.toLowerCase();
@@ -2637,7 +2446,7 @@ async function init() {
   if (!poolId && !tokenParams) {
     _globalMode = true;
     $('pairName').textContent = 'Orderbook';
-    $('poolMeta').innerHTML = 'All active orders &middot; <a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a> &middot; <a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a>';
+    $('poolMeta').innerHTML = 'All active orders &middot; <a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a> &middot; <a href="https://etherscan.io/address/' + SWAPBOARD_PF + '" target="_blank" rel="noopener">Swapboard PF</a>';
     document.title = 'ORDER';
     $('allOrdersLink').style.display = 'none';
     document.querySelector('.tab-row').style.display = 'none';
@@ -2645,7 +2454,7 @@ async function init() {
     $('priceBanner').style.display = 'none';
     $('globalView').style.display = '';
     startRefreshLoop();
-    walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; _swapboard = null; renderMyOrders(); }] });
+    walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _swapboard = null; _swapboardPF = null; renderMyOrders(); }] });
     return;
   }
 
@@ -2656,7 +2465,6 @@ async function init() {
     $('lpLink').style.display = 'inline-flex';
 
     try {
-      await loadCoinMap();
       _poolData = await fetchPool(poolId);
     } catch (e) {
       console.error('Pool fetch failed:', e);
@@ -2665,7 +2473,6 @@ async function init() {
 
   // Fallback: build synthetic pool from query params
   if (!_poolData && tokenParams) {
-    await loadCoinMap();
     _poolData = buildSyntheticPool(tokenParams.token0, tokenParams.token1, tokenParams.id0, tokenParams.id1, tokenParams.label0, tokenParams.label1, tokenParams.logo0, tokenParams.logo1);
   }
 
@@ -2679,8 +2486,8 @@ async function init() {
     $('pairIcons').innerHTML = '<span class="icon-0">' + icon0 + '</span><span class="icon-1">' + icon1 + '</span>';
     $('pairName').textContent = label0 + ' / ' + label1;
     $('poolMeta').innerHTML = (poolId ? 'Pool ' + poolId.slice(0, 16) + '... &middot; ' : '')
-      + '<a href="https://etherscan.io/address/' + COOKBOOK + '" target="_blank" rel="noopener">zAMM</a>'
-      + ' &middot; <a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a>';
+      + '<a href="https://etherscan.io/address/' + SWAPBOARD + '" target="_blank" rel="noopener">Swapboard</a>'
+      + ' &middot; <a href="https://etherscan.io/address/' + SWAPBOARD_PF + '" target="_blank" rel="noopener">Swapboard PF</a>';
     document.title = label0 + '/' + label1 + ' ORDER';
 
     // Show AMM price in quote/base (token1 per token0), matching book convention
@@ -2713,7 +2520,7 @@ async function init() {
   }
 
   startRefreshLoop();
-  walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _cookbook = new ethers.Contract(COOKBOOK, COOKBOOK_ABI, _signer); _coins = new ethers.Contract(COINS, COINS_ABI, _signer); _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _cookbook = null; _coins = null; _swapboard = null; renderMyOrders(); }] });
+  walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _swapboard = null; _swapboardPF = null; renderMyOrders(); }] });
 }
 
 document.addEventListener('keydown', (e) => {

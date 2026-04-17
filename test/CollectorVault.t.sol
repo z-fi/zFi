@@ -2,8 +2,8 @@
 pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
-import {CollectorVault} from "../src/CollectorVault.sol";
-import {CollectorVaultFactory, Call, IMoloch, IShares, IShareBurner} from "../src/CollectorVaultFactory.sol";
+import {CollectorVault} from "../src/dao/CollectorVault.sol";
+import {CollectorVaultFactory, Call, IMoloch, IShares, IShareBurner} from "../src/dao/CollectorVaultFactory.sol";
 
 /*//////////////////////////////////////////////////////////////
                         MOCK CONTRACTS

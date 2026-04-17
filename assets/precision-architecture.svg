@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" font-family="monospace" font-size="13">
+  <rect width="800" height="480" fill="#000"/>
+
+  <!-- Title -->
+  <text x="400" y="32" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">Precision DeFi Architecture</text>
+
+  <!-- User layer -->
+  <rect x="310" y="55" width="180" height="36" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <text x="400" y="78" fill="#fff" font-size="13" text-anchor="middle">User / EOA</text>
+
+  <!-- Arrow down -->
+  <line x1="400" y1="91" x2="400" y2="120" stroke="#fff" stroke-width="1"/>
+  <polygon points="395,118 400,127 405,118" fill="#fff"/>
+
+  <!-- Generalization layer label -->
+  <text x="20" y="160" fill="#666" font-size="10" text-anchor="start">GENERALIZATION</text>
+
+  <!-- Smart Account + Router box -->
+  <rect x="140" y="130" width="520" height="70" rx="4" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="6,3"/>
+
+  <!-- Smart Account -->
+  <rect x="160" y="142" width="220" height="46" rx="4" fill="none" stroke="#fff" stroke-width="1"/>
+  <text x="270" y="162" fill="#fff" font-size="12" text-anchor="middle">EIP-7702 / Smart Account</text>
+  <text x="270" y="178" fill="#888" font-size="10" text-anchor="middle">atomic batch: transfer + swap</text>
+
+  <!-- zRouter -->
+  <rect x="420" y="142" width="220" height="46" rx="4" fill="none" stroke="#fff" stroke-width="1"/>
+  <text x="530" y="162" fill="#fff" font-size="12" text-anchor="middle">zRouter / zQuoter</text>
+  <text x="530" y="178" fill="#888" font-size="10" text-anchor="middle">routing, approvals, multi-hop</text>
+
+  <!-- Also routes to label -->
+  <text x="400" y="218" fill="#666" font-size="9" text-anchor="middle">also routes to Uniswap, Curve, etc.</text>
+
+  <!-- Arrows down from generalization to pools -->
+  <line x1="270" y1="200" x2="170" y2="278" stroke="#fff" stroke-width="1"/>
+  <polygon points="166,274 170,284 175,275" fill="#fff"/>
+
+  <line x1="400" y1="200" x2="400" y2="278" stroke="#fff" stroke-width="1"/>
+  <polygon points="395,276 400,285 405,276" fill="#fff"/>
+
+  <line x1="530" y1="200" x2="630" y2="278" stroke="#fff" stroke-width="1"/>
+  <polygon points="625,275 630,284 634,274" fill="#fff"/>
+
+  <!-- Precision layer label -->
+  <text x="20" y="275" fill="#666" font-size="10" text-anchor="start">PRECISION</text>
+
+  <!-- Three pool boxes -->
+  <!-- Stable Pool -->
+  <rect x="80" y="288" width="180" height="90" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <text x="170" y="310" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">StablePool</text>
+  <text x="170" y="328" fill="#888" font-size="10" text-anchor="middle">USDT/USDC</text>
+  <text x="170" y="344" fill="#888" font-size="10" text-anchor="middle">Curve invariant, A=2000</text>
+  <text x="170" y="360" fill="#888" font-size="10" text-anchor="middle">0.5 bps fee</text>
+
+  <!-- Range Pool -->
+  <rect x="310" y="288" width="180" height="90" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <text x="400" y="310" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">RangePool</text>
+  <text x="400" y="328" fill="#888" font-size="10" text-anchor="middle">ETH/USDC $2200-$3000</text>
+  <text x="400" y="344" fill="#888" font-size="10" text-anchor="middle">xy=k, virtual reserves</text>
+  <text x="400" y="360" fill="#888" font-size="10" text-anchor="middle">5 bps fee, native ETH</text>
+
+  <!-- Oracle Pool -->
+  <rect x="540" y="288" width="180" height="90" rx="4" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <text x="630" y="310" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">OraclePool</text>
+  <text x="630" y="328" fill="#888" font-size="10" text-anchor="middle">ETH/USDC</text>
+  <text x="630" y="344" fill="#888" font-size="10" text-anchor="middle">Chainlink price, no curve</text>
+  <text x="630" y="360" fill="#888" font-size="10" text-anchor="middle">1-50 bps dynamic fee</text>
+
+  <!-- Constants callout under pools -->
+  <text x="400" y="410" fill="#fff" font-size="11" text-anchor="middle">All pool parameters are compile-time constants</text>
+  <text x="400" y="428" fill="#888" font-size="10" text-anchor="middle">token addresses &#183; decimals &#183; fees &#183; curve params &#183; oracle address</text>
+  <text x="400" y="446" fill="#888" font-size="10" text-anchor="middle">ERC-20 LP tokens &#183; no admin keys &#183; immutable</text>
+
+</svg>

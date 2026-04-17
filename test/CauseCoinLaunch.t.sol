@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
-import {SafeSummoner, Call, SUMMONER, MOLOCH_IMPL, SHARES_IMPL, LOOT_IMPL, RENDERER} from "src/SafeSummoner.sol";
+import {SafeSummoner, Call, SUMMONER, MOLOCH_IMPL, SHARES_IMPL, LOOT_IMPL, RENDERER} from "src/dao/SafeSummoner.sol";
 
 /// @dev Fork test for cause coin launches via SafeSummoner.safeSummonDAICO.
 ///      Tests all 6 configurations: {fixed, ongoing} × {no tap, instant tap, vested tap}.
@@ -43,10 +43,7 @@ interface IShares {
 
 interface IShareSale {
     function buy(address dao, uint256 amount) external payable;
-    function sales(address dao)
-        external
-        view
-        returns (address token, address payToken, uint40 deadline, uint256 price);
+    function sales(address dao) external view returns (address token, address payToken, uint40 deadline, uint256 price);
 }
 
 interface ITapVest {
@@ -114,11 +111,10 @@ contract CauseCoinLaunchTest is Test {
         return SafeSummoner.SeedModule(address(0), address(0), 0, address(0), 0, 0, false, 0);
     }
 
-    function _summon(
-        SafeSummoner.SaleModule memory sale,
-        SafeSummoner.TapModule memory tap,
-        uint256 msgValue
-    ) internal returns (LaunchResult memory r) {
+    function _summon(SafeSummoner.SaleModule memory sale, SafeSummoner.TapModule memory tap, uint256 msgValue)
+        internal
+        returns (LaunchResult memory r)
+    {
         bytes32 salt = keccak256(abi.encode("cause_test", block.timestamp, msg.sig));
         address[] memory holders = new address[](1);
         holders[0] = deployer;
@@ -136,11 +132,21 @@ contract CauseCoinLaunchTest is Test {
 
         vm.prank(deployer);
         ss.safeSummonDAICO{value: msgValue}(
-            "CauseCoin", "CAUSE", "ipfs://test",
-            QUORUM_BPS, true, RENDERER, salt,
-            holders, shares_, loot_,
+            "CauseCoin",
+            "CAUSE",
+            "ipfs://test",
+            QUORUM_BPS,
+            true,
+            RENDERER,
+            salt,
+            holders,
+            shares_,
+            loot_,
             _defaultConfig(),
-            sale, tap, _zeroSeed(), extra
+            sale,
+            tap,
+            _zeroSeed(),
+            extra
         );
     }
 
@@ -152,7 +158,7 @@ contract CauseCoinLaunchTest is Test {
 
     /// @dev Buy shares via ShareSale. Amount is in 1e18 units (1 share = 1e18).
     function _buy(address dao, address buyer, uint256 shareAmount) internal {
-        (, , , uint256 price) = IShareSale(SHARE_SALE).sales(dao);
+        (,,, uint256 price) = IShareSale(SHARE_SALE).sales(dao);
         uint256 cost = (shareAmount * price + 1e18 - 1) / 1e18; // round up
         vm.prank(buyer);
         IShareSale(SHARE_SALE).buy{value: cost}(dao, shareAmount);
@@ -160,9 +166,7 @@ contract CauseCoinLaunchTest is Test {
 
     // ── Sale/Tap builders ──
 
-    function _fixedSale(uint256 raiseETH, uint256 days_)
-        internal view returns (SafeSummoner.SaleModule memory)
-    {
+    function _fixedSale(uint256 raiseETH, uint256 days_) internal view returns (SafeSummoner.SaleModule memory) {
         uint256 totalShares = 10_000_000;
         uint256 priceWei = raiseETH * 1e18 / totalShares;
         return SafeSummoner.SaleModule({
@@ -204,11 +208,7 @@ contract CauseCoinLaunchTest is Test {
 
     function _vestedTap(uint256 budget, uint128 rate) internal view returns (SafeSummoner.TapModule memory) {
         return SafeSummoner.TapModule({
-            singleton: TAP_VEST,
-            token: address(0),
-            budget: budget,
-            beneficiary: beneficiary,
-            ratePerSec: rate
+            singleton: TAP_VEST, token: address(0), budget: budget, beneficiary: beneficiary, ratePerSec: rate
         });
     }
 
@@ -238,14 +238,13 @@ contract CauseCoinLaunchTest is Test {
         assertEq(r.dao.balance, sale.price, "treasury has creator payment");
 
         // ShareSale configured
-        (, address payToken, uint40 deadline, uint256 price) =
-            IShareSale(SHARE_SALE).sales(r.dao);
+        (, address payToken, uint40 deadline, uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
         assertEq(payToken, address(0), "ETH sale");
         assertEq(price, 10 ether / 10_000_000, "price = raise / 10M");
         assertGt(deadline, block.timestamp, "deadline in future");
 
         // No tap configured
-        (, address tapBeneficiary, ,) = ITapVest(TAP_VEST).taps(r.dao);
+        (, address tapBeneficiary,,) = ITapVest(TAP_VEST).taps(r.dao);
         assertEq(tapBeneficiary, address(0), "no tap");
     }
 
@@ -412,11 +411,11 @@ contract CauseCoinLaunchTest is Test {
         assertEq(dao.proposalTTL(), PROPOSAL_TTL);
         assertEq(dao.timelockDelay(), TIMELOCK_DELAY);
 
-        (, , uint40 deadline, uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
+        (,, uint40 deadline, uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
         assertEq(deadline, 0, "no deadline");
         assertEq(price, 1e12, "1 ETH = 1M shares");
 
-        (, address tapBeneficiary, ,) = ITapVest(TAP_VEST).taps(r.dao);
+        (, address tapBeneficiary,,) = ITapVest(TAP_VEST).taps(r.dao);
         assertEq(tapBeneficiary, address(0));
     }
 
@@ -529,7 +528,7 @@ contract CauseCoinLaunchTest is Test {
 
         vm.warp(block.timestamp + 31 days);
 
-        (, , , uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
+        (,,, uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
         uint256 shareAmt = 1_000_000 * 1e18;
         uint256 cost = (shareAmt * price + 1e18 - 1) / 1e18;
 
@@ -592,7 +591,7 @@ contract CauseCoinLaunchTest is Test {
         assertEq(shares.balanceOf(buyer1), fullCap, "buyer got full cap");
 
         // Treasury should have ~10 ETH (the full raise)
-        (, , , uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
+        (,,, uint256 price) = IShareSale(SHARE_SALE).sales(r.dao);
         uint256 expectedTreasury = (fullCap * price + 1e18 - 1) / 1e18 + sale.price; // buyer + creator
         assertEq(r.dao.balance, expectedTreasury, "treasury = raise + creator");
 
@@ -792,9 +791,7 @@ contract CauseCoinLaunchTest is Test {
 
         // buyer1 (majority) proposes to kill the tap
         uint8 op = 0;
-        bytes memory data = abi.encodeWithSignature(
-            "setAllowance(address,address,uint256)", TAP_VEST, address(0), 0
-        );
+        bytes memory data = abi.encodeWithSignature("setAllowance(address,address,uint256)", TAP_VEST, address(0), 0);
         bytes32 nonce = bytes32("kill_tap");
         uint256 propId = dao.proposalId(op, r.dao, 0, data, nonce);
 
@@ -833,9 +830,7 @@ contract CauseCoinLaunchTest is Test {
         vm.roll(block.number + 2);
 
         // Propose: reconfigure TapVest with new beneficiary (buyer2)
-        bytes memory data = abi.encodeWithSignature(
-            "configure(address,address,uint128)", address(0), buyer2, rate
-        );
+        bytes memory data = abi.encodeWithSignature("configure(address,address,uint128)", address(0), buyer2, rate);
         bytes32 nonce = bytes32("new_ben");
         uint256 propId = dao.proposalId(0, TAP_VEST, 0, data, nonce);
 
@@ -847,7 +842,7 @@ contract CauseCoinLaunchTest is Test {
         assertTrue(ok, "reconfigured");
 
         // Verify new beneficiary
-        (, address newBen, ,) = ITapVest(TAP_VEST).taps(r.dao);
+        (, address newBen,,) = ITapVest(TAP_VEST).taps(r.dao);
         assertEq(newBen, buyer2, "beneficiary changed");
 
         // New beneficiary can claim
@@ -1033,13 +1028,7 @@ contract CauseCoinLaunchTest is Test {
     function test_safety_cannotBuyBeforeSaleConfigured() public {
         // Deploy with zero sale singleton (no sale module)
         SafeSummoner.SaleModule memory sale = SafeSummoner.SaleModule({
-            singleton: address(0),
-            payToken: address(0),
-            deadline: 0,
-            price: 0,
-            cap: 0,
-            sellLoot: false,
-            minting: true
+            singleton: address(0), payToken: address(0), deadline: 0, price: 0, cap: 0, sellLoot: false, minting: true
         });
         LaunchResult memory r = _summon(sale, _zeroTap(), 0);
 
@@ -1064,9 +1053,7 @@ contract CauseCoinLaunchTest is Test {
         uint256 half = b1Shares / 2;
         vm.prank(buyer1);
         // Shares is ERC20 — use transfer
-        (bool ok,) = r.sharesAddr.call(
-            abi.encodeWithSignature("transfer(address,uint256)", buyer2, half)
-        );
+        (bool ok,) = r.sharesAddr.call(abi.encodeWithSignature("transfer(address,uint256)", buyer2, half));
         assertTrue(ok, "transfer succeeded");
         assertEq(shares.balanceOf(buyer2), half, "buyer2 received shares");
 
@@ -1120,10 +1107,21 @@ contract CauseCoinLaunchTest is Test {
 
     /// @dev Creator's msg.value must exactly match what a buyer pays for 1 share via ShareSale.
     ///      Tests multiple raise amounts to ensure dynamic pricing is correct.
-    function test_creatorPrice_matches_1ETH_raise() public { _verifyCreatorPrice(1); }
-    function test_creatorPrice_matches_5ETH_raise() public { _verifyCreatorPrice(5); }
-    function test_creatorPrice_matches_10ETH_raise() public { _verifyCreatorPrice(10); }
-    function test_creatorPrice_matches_100ETH_raise() public { _verifyCreatorPrice(100); }
+    function test_creatorPrice_matches_1ETH_raise() public {
+        _verifyCreatorPrice(1);
+    }
+
+    function test_creatorPrice_matches_5ETH_raise() public {
+        _verifyCreatorPrice(5);
+    }
+
+    function test_creatorPrice_matches_10ETH_raise() public {
+        _verifyCreatorPrice(10);
+    }
+
+    function test_creatorPrice_matches_100ETH_raise() public {
+        _verifyCreatorPrice(100);
+    }
 
     function test_creatorPrice_matches_ongoing() public {
         SafeSummoner.SaleModule memory sale = _ongoingSale();

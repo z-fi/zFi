@@ -2,7 +2,7 @@
 pragma solidity ^0.8.33;
 
 import "forge-std/Test.sol";
-import {Cowol} from "../src/Cowol.sol";
+import {Cowol} from "../src/forwarders/Cowol.sol";
 
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);

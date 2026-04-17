@@ -896,9 +896,8 @@ body.modal-open { overflow: hidden; }
 .otc-icons .otc-ic1 { margin-left:-5px; }
 .otc-info { flex:1;min-width:0; }
 .otc-pair { font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.otc-meta { font-size:10px;color:var(--fg-muted);margin-top:1px; }
 .otc-src { font-size:7px;font-weight:700;letter-spacing:.4px;padding:1px 3px;border-radius:3px;text-transform:uppercase;flex-shrink:0; }
-.otc-src.zamm { background:rgba(22,163,74,0.1);color:var(--green, #16a34a); }
+.otc-src.otc { background:rgba(99,145,255,0.15);color:#6391ff; }
 .otc-src.otc { background:rgba(99,145,255,0.12);color:#6391ff; }
 .dark .otc-src.otc { color:#8ab4ff; }
 
@@ -1544,11 +1543,9 @@ const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const BOLD_ADDRESS = "0x6440f144b7e50D6a8439336510312d2F54beB01D";
 const LUSD_ADDRESS = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
-const PNKSTR_ADDRESS = "0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF";
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
-const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
 // 0x / Matcha integration
 const MATCHA_ADDRESS = "0xBB11c36FBF566B5fad265218bCdB4F528d14E0b5";
 const OX_API_BASE = "https://zfi-pin.rosscampbell9.workers.dev/0x";
@@ -1626,7 +1623,6 @@ const OO_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const OPENOCEANOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
-// V4 USDC/PNKSTR hookless pool params (fee=10000, tickSpacing=200)
 const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const ZAMM_HOOKED = "0x000000000000040470635EB91b7CE4D132D616eD";
 const ZAMM_HOOKLESS = "0x00000000000008882D72EfA6cCE4B6a40b24C860";
@@ -1638,7 +1634,7 @@ const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
-const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
 // DAICO graduated coin discovery (search-triggered only)
 const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
 const DAICO_SCAN_ABI = ["function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"];
@@ -2088,7 +2084,6 @@ const tokens = {
   stETH: { address: STETH_ADDRESS, symbol: "stETH", decimals: 18 },
   wstETH: { address: WSTETH_ADDRESS, symbol: "wstETH", decimals: 18 },
   rETH: { address: RETH_ADDRESS, symbol: "rETH", decimals: 18 },
-  PNKSTR: { address: PNKSTR_ADDRESS, symbol: "PNKSTR", decimals: 18 },
 };
 
 // Load custom tokens from localStorage
@@ -2535,13 +2530,6 @@ const RETH_ICON = `<svg width="24" height="24" viewBox="0 0 33 32" fill="none" x
 const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
 const BOLD_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_1_6)"><path d="M32 16C32 7.16406 24.8359 0 16 0C7.16406 0 0 7.16406 0 16C0 24.8359 7.16406 32 16 32C24.8359 32 32 24.8359 32 16Z" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.1719 4.56641H8.58203V26.1016H15.7617V25.2422C16.8398 25.793 18.0586 26.1055 19.3555 26.1055C23.7148 26.1055 27.25 22.5703 27.25 18.207C27.25 13.8438 23.7148 10.3086 19.3555 10.3086C18.0586 10.3086 16.8398 10.6211 15.7617 11.1719V4.56641H12.1719ZM15.7617 11.1719C13.207 12.4805 11.457 15.1406 11.457 18.207C11.457 21.2734 13.207 23.9336 15.7617 25.2422V11.1719Z" fill="#1C1D4F"/></g><defs><clipPath id="clip0_1_6"><rect width="32" height="32" fill="white"/></clipPath></defs></svg>`;
 const LUSD_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><circle cx="128" cy="132" r="102" fill="#29C9EB"/><rect x="110" y="4" width="36" height="32" rx="9" fill="#29C9EB"/><rect x="110" y="228" width="36" height="24" rx="9" fill="#29C9EB"/><path d="M 128 30 A 102 102 0 0 1 128 234 Z" fill="#7B6AD6"/><path d="M 128 4 L 137 4 Q 146 4 146 13 L 146 36 L 128 36 Z" fill="#7B6AD6"/><path d="M 128 228 L 146 228 L 146 243 Q 146 252 137 252 L 128 252 Z" fill="#7B6AD6"/><g fill="none" stroke="white" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"><path d="M 154 90 C 146 78, 134 72, 120 74 C 98 78, 82 94, 82 112 C 82 132, 98 142, 128 150 C 158 158, 174 168, 174 186 C 174 206, 158 218, 136 220 C 120 222, 106 216, 98 204"/><line x1="128" y1="74" x2="128" y2="15"/><line x1="128" y1="220" x2="128" y2="241"/></g></svg>`;
-// PNKSTR animated SVG is large (~4KB); lazy-loaded on first use
-let _pnkstrIcon = null;
-function getPNKSTRIcon() {
-  if (_pnkstrIcon) return _pnkstrIcon;
-  _pnkstrIcon = `<svg width="24" height="24" viewBox="0 0 296 296" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision" text-rendering="geometricPrecision"><style>#em3zDC0HIkr3{animation:em3zDC0HIkr3__rd 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3__rd{0%{rx:93.77px;ry:93.77px}3.125%{rx:93.77px;ry:93.77px}18.75%{rx:93.77px;ry:93.77px}34.375%{rx:93.77px;ry:93.77px}56.25%{rx:0px;ry:0px}93.75%{rx:0px;ry:0px}100%{rx:0px;ry:0px}}#em3zDC0HIkr3_to{animation:em3zDC0HIkr3_to__to 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_to__to{0%{transform:translate(180.943141px,95.15235px)}3.125%{transform:translate(180.943141px,95.15235px)}18.75%{transform:translate(180.122px,95.152354px)}34.375%{transform:translate(148.075px,148.655006px)}56.25%{transform:translate(148.5px,148.655005px)}71.875%{transform:translate(180.122px,120.865004px)}84.375%{transform:translate(180.122px,95.152352px)}93.75%{transform:translate(180.122px,95.152351px)}100%{transform:translate(180.122px,95.152351px)}}#em3zDC0HIkr3_tr{animation:em3zDC0HIkr3_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_tr__tr{0%{transform:rotate(0deg)}34.375%{transform:rotate(0deg)}42.5%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}#em3zDC0HIkr3_ts{animation:em3zDC0HIkr3_ts__ts 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_ts__ts{0%{transform:scale(0,0)}3.125%{transform:scale(0,0)}18.75%{transform:scale(0.8,0.8)}34.375%{transform:scale(1.319281,1.320365)}56.25%{transform:scale(1,1)}71.875%{transform:scale(0.697529,0.658712)}93.75%{transform:scale(0,0)}100%{transform:scale(0,0)}}#em3zDC0HIkr12_tr{animation:em3zDC0HIkr12_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr12_tr__tr{0%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}24.0625%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}31.25%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}55.3125%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}62.5%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}86.5625%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}93.75%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}100%{transform:translate(135.33781px,207.03926px) rotate(532.987013deg)}}#em3zDC0HIkr12{animation:em3zDC0HIkr12_f_p 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr12_f_p{0%{fill:#d2dbed}24.0625%{fill:#d2dbec}31.25%{fill:#d2dbed}55.3125%{fill:#d2dbec}62.5%{fill:#d2dbed}86.5625%{fill:#d2dbec}93.75%{fill:#d2dbed}100%{fill:#d2dbed}}#em3zDC0HIkr13_tr{animation:em3zDC0HIkr13_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr13_tr__tr{0%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}24.0625%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}31.25%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}55.3125%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}62.5%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}86.5625%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}93.75%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}100%{transform:translate(11.12px,29.9px) rotate(-532.987013deg)}}</style><circle r="148" transform="translate(148 148)" fill="#0d0d0d"/><g id="em3zDC0HIkr3_to" transform="translate(180.943141,95.15235)"><g id="em3zDC0HIkr3_tr" transform="rotate(0)"><g id="em3zDC0HIkr3_ts" transform="scale(0,0)"><rect id="em3zDC0HIkr3" width="187.538" height="187.538" rx="93.77" ry="93.77" transform="translate(-93.769,-93.769005)" fill="#f2f2f2"/></g></g></g><g style="mix-blend-mode:difference"><path d="M141.692,120.865v-43.1014h11.213v43.1014h-11.213ZM125.299,78.8923v-9.4526h43.857v9.4526h-43.857Zm53.228,41.9727L164.05,69.4397h11.425l9.51,39.2913h-.923l10.007-39.2913h10.716l9.864,39.2913h-.852l9.581-39.2913h11.567L220.184,120.865h-12.135l-9.084-36.0472h.994l-9.155,36.0472h-12.277Z" fill="#fff"/></g></svg>`;
-  return _pnkstrIcon;
-}
 const ZORG_ICON = `<svg width="24" height="24" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><clipPath id="zorg-clip"><circle cx="200" cy="200" r="200"/></clipPath><g clip-path="url(#zorg-clip)"><rect class="zorg-bg" width="400" height="400"/><path class="zorg-fg" d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>`;
 const ZAMM_ICON = `<svg width="24" height="24" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="99" fill="#fff"/><circle cx="100" cy="100" r="93" fill="none" stroke="#000" stroke-width="1.2"/><path d="M 69 65 L 96 64 L 97 65 L 98 64 L 120 64 L 121 65 L 122 64 L 130 64 L 130 70 L 117 85 L 118 86 L 104 100 L 105 101 L 91 115 L 92 116 L 78 130 L 96 130 L 97 131 L 98 130 L 120 130 L 121 131 L 122 130 L 132 131 L 120 136 L 119 135 L 118 136 L 96 136 L 95 135 L 94 136 L 71 136 L 71 130 L 84 115 L 83 114 L 97 100 L 96 99 L 110 85 L 109 84 L 123 70 L 105 70 L 104 69 L 103 70 L 83 70 L 82 69 L 81 70 L 69 69 Z" fill="#000"/></svg>`;
 const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="12" font-weight="bold">?</text></svg>`;
@@ -2555,7 +2543,6 @@ const _letterIconCache = new Map();
 function iconForSymbol(sym) {
   const s = String(sym);
   if (ICONS[s]) return ICONS[s];
-  if (s === 'PNKSTR') return getPNKSTRIcon();
   const t = tokens[s];
   if (t?.icon) {
     const img = document.createElement('img');
@@ -3167,7 +3154,6 @@ const QUOTER_IFACE = new ethers.Interface([
   "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
   "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
-  "function buildSplitSwapHooked(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function build3HopMulticall(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) c, bytes[] calls, bytes multicall, uint256 msgValue)",
   "function buildHybridSplit(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
   "function quoteLido(bool exactOut,address tokenOut,uint256 swapAmount) view returns (uint256 amountIn, uint256 amountOut)",
@@ -3177,6 +3163,8 @@ const ROUTER_IFACE = new ethers.Interface([
   "function execute(address,uint256,bytes) payable returns (bytes)",
   "function multicall(bytes[]) payable returns (bytes[])",
   "function sweep(address,uint256,uint256,address) payable",
+  "function swapV2(address to,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
+  "function swapV3(address to,bool exactOut,uint24 swapFee,address tokenIn,address tokenOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
   "function swapVZ(address to,bool exactOut,uint256 feeOrHook,address tokenIn,address tokenOut,uint256 idIn,uint256 idOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
   "function swapV4(address to,bool exactOut,uint24 swapFee,int24 tickSpace,address tokenIn,address tokenOut,uint256 swapAmount,uint256 amountLimit,uint256 deadline) payable returns (uint256 amountIn, uint256 amountOut)",
   "function wrap(uint256 amount) payable",
@@ -4417,6 +4405,8 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
 
 // ---- Simulation helper: decode swap output from multicall return ----
 // Selectors hoisted to module scope — avoids repeated Interface.getFunction() lookups per quote.
+const _SEL_SWAP_V2 = ROUTER_IFACE.getFunction('swapV2').selector;
+const _SEL_SWAP_V3 = ROUTER_IFACE.getFunction('swapV3').selector;
 const _SEL_SWAP_VZ = ROUTER_IFACE.getFunction('swapVZ').selector;
 const _SEL_SWAP_V4 = ROUTER_IFACE.getFunction('swapV4').selector;
 const _SEL_SNWAP = ROUTER_IFACE.getFunction('snwap').selector;
@@ -4432,7 +4422,7 @@ function _decodeSimOutput(mcReturn, calls, isSplit) {
     try {
       const sel = calls[i].slice(0, 10);
       let out = null;
-      if (sel === _SEL_SWAP_VZ || sel === _SEL_SWAP_V4 || sel === _SEL_SWAP_CURVE) {
+      if (sel === _SEL_SWAP_V2 || sel === _SEL_SWAP_V3 || sel === _SEL_SWAP_VZ || sel === _SEL_SWAP_V4 || sel === _SEL_SWAP_CURVE) {
         out = ROUTER_IFACE.decodeFunctionResult('swapVZ', mcReturn[i])[1];
       } else if (sel === _SEL_SNWAP) {
         out = ROUTER_IFACE.decodeFunctionResult('snwap', mcReturn[i])[0];
@@ -4587,15 +4577,9 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const quoter = getQuoterContract(rpc);
     const callOpts = { blockTag: "latest" };
 
-    // Fire all calls in parallel (V4 hooked only for PNKSTR swaps)
-    const isPNKSTR = fromData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase()
-      || toData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
     // Split/multi-hop routes need wider per-leg slippage to avoid intermittent reverts
     // (each leg has its own amountLimit; first leg moves price affecting the second)
     const splitSlip = BigInt(Math.min(Math.max(slippageBps * 3, 150), 500));
-    const hookFee = 0;
-    const hookTick = isPNKSTR ? 60 : 0;
-    const hookAddr = isPNKSTR ? PNKSTR_HOOK_ADDRESS : ZERO_ADDRESS;
     // Light calls (getQuotes, quoteCurve, Lido, Rocket, spot rate) → single Multicall3 aggregate3
     const mc3Entries = [];
     mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, amountIn]) });
@@ -4638,9 +4622,9 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       receiver, _connectedAddress, false,
       fromData.address, toData.address,
       amountIn, BigInt(slippageBps), deadline,
-      hookFee, hookTick, hookAddr
+      0, 0, ZERO_ADDRESS
     ]) });
-    let _heavySplitIdx = -1, _heavy3HopIdx = -1, _heavyHybridIdx = -1, _heavyV4SplitIdx = -1;
+    let _heavySplitIdx = -1, _heavy3HopIdx = -1, _heavyHybridIdx = -1;
     if (!_skipSplitRoutes) {
     _heavySplitIdx = heavyEntries.length;
     heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildSplitSwap", [
@@ -4657,14 +4641,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       receiver, fromData.address, toData.address,
       amountIn, splitSlip, deadline
     ]) });
-    if (isPNKSTR) {
-      _heavyV4SplitIdx = heavyEntries.length;
-      heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildSplitSwapHooked", [
-        receiver, fromData.address, toData.address,
-        amountIn, splitSlip, deadline,
-        0, 60, PNKSTR_HOOK_ADDRESS
-      ]) });
-    }
     } // end !_skipSplitRoutes
     // Fire 0x + ParaSwap + KyberSwap prices in parallel with Multicall3 batch
     const _cacheKey = `${fromData.address}-${toData.address}-${amountIn}`;
@@ -4697,7 +4673,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
           receiver, _connectedAddress, false,
           fromData.address, toData.address,
           amountIn, BigInt(slippageBps), deadline,
-          hookFee, hookTick, hookAddr, callOpts
+          0, 0, ZERO_ADDRESS, callOpts
         );
         bestResult = { status: 'fulfilled', value: fb };
       } catch (_) {}
@@ -4705,7 +4681,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const splitResult = mc3AsSettled(heavyMc3, _heavySplitIdx, QUOTER_IFACE, "buildSplitSwap");
     const threeHopResult = mc3AsSettled(heavyMc3, _heavy3HopIdx, QUOTER_IFACE, "build3HopMulticall");
     const hybridSplitResult = mc3AsSettled(heavyMc3, _heavyHybridIdx, QUOTER_IFACE, "buildHybridSplit");
-    const v4SplitResult = isPNKSTR ? mc3AsSettled(heavyMc3, _heavyV4SplitIdx, QUOTER_IFACE, "buildSplitSwapHooked") : undefined;
     // Decode light Multicall3 batch into settled-style objects
     const quotesResult = mc3AsSettled(mc3, 0, QUOTER_IFACE, "getQuotes");
     let curveResult = mc3AsSettled(mc3, 1, QUOTER_IFACE, "quoteCurve");
@@ -4908,45 +4883,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
-    // Check if V4 hooked split/single (contract-built calldata) beats current best
-    if (v4SplitResult?.status === 'fulfilled' && v4SplitResult.value) {
-      const hs = v4SplitResult.value;
-      const hsTotal = hs.legs[0].amountOut + hs.legs[1].amountOut;
-      const isTrueSplit = hs.legs[0].amountOut > 0n && hs.legs[1].amountOut > 0n;
-      const activeLeg = hs.legs[0].amountOut > 0n ? hs.legs[0] : hs.legs[1];
-
-      // Add V4 hooked split option to allQuotes if a hooked leg exists
-      if (result.allQuotes && isTrueSplit && hsTotal > 0n) {
-        const hookedLeg = Number(hs.legs[0].source) === 8 ? hs.legs[0] : (Number(hs.legs[1].source) === 8 ? hs.legs[1] : null);
-        if (hookedLeg) {
-          result.allQuotes.push({ source: "zFi (V4 Hooked split)", sourceId: 8, feeBps: hookedLeg.feeBps, amountIn, amountOut: hsTotal });
-        }
-      }
-
-      if (hsTotal > result.expectedOutput && hsTotal > 0n) {
-        result.expectedOutput = hsTotal;
-        result.multicall = hs.multicall;
-        result.msgValue = hs.msgValue ?? 0n;
-        result.calls = null;
-        if (isTrueSplit) {
-          result.isSplit = true;
-          result.isTwoHop = false;
-          result.sourceA = AMM_NAMES[hs.legs[0].source] || "Unknown";
-          result.sourceB = null;
-          result.splitLegs = [
-            { source: AMM_NAMES[hs.legs[0].source] || "Unknown", amountIn: hs.legs[0].amountIn, amountOut: hs.legs[0].amountOut, feeBps: hs.legs[0].feeBps },
-            { source: AMM_NAMES[hs.legs[1].source] || "Unknown", amountIn: hs.legs[1].amountIn, amountOut: hs.legs[1].amountOut, feeBps: hs.legs[1].feeBps },
-          ];
-        } else {
-          result.isSplit = false;
-          result.isTwoHop = false;
-          result.sourceA = AMM_NAMES[activeLeg.source] || "V4 Hooked";
-          result.sourceB = null;
-          result.splitLegs = null;
-        }
-      }
-    }
-
     // Use Lido for ETH→stETH/wstETH only when it gives the best rate
     if (isLidoEligible && lidoQuoteResult?.status === 'fulfilled') {
       const l = lidoQuoteResult.value;
@@ -5064,135 +5000,74 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       Object.assign(r, extra);
     }
 
-    // 0x / Matcha: compare against all sources
-    if (oxPrice && oxPrice.buyAmount) {
-      const oxOut = BigInt(oxPrice.buyAmount);
+    // Compare each external aggregator quote against the running best.
+    // Higher amountOut wins; ties keep earlier entry (first match sticks).
+    const _aggCompare = [
+      { p: oxPrice,     src: '0x',           id: -2,  flag: 'is0x',        out: p => p?.buyAmount,        extra: p => ({ ox: p }) },
+      { p: psPrice,     src: 'ParaSwap',     id: -3,  flag: 'isParaswap',  out: p => p?.destAmount,       extra: p => ({ psPriceRoute: p }) },
+      { p: ksPrice,     src: 'KyberSwap',    id: -4,  flag: 'isKyber',     out: p => p?.amountOut,        extra: p => ({ ksRouteSummary: p }) },
+      { p: cowPrice,    src: 'CoW Protocol', id: -5,  flag: 'isCow',       out: p => p?.quote?.buyAmount, extra: p => ({ cowQuote: p.quote }) },
+      { p: inchPrice,   src: '1inch',        id: -6,  flag: 'is1inch',     out: p => p?.dstAmount,        extra: p => ({ inchQuote: p }) },
+      { p: odosPrice,   src: 'Odos',         id: -7,  flag: 'isOdos',      out: p => p?.outAmounts?.[0],  extra: (p, o) => ({ odosPathId: p.pathId, odosOutAmount: o }) },
+      { p: okxPrice,    src: 'OKX',          id: -8,  flag: 'isOkx',       out: p => p?.toTokenAmount,    extra: (_p, o) => ({ okxOutAmount: o }) },
+      { p: bitgetPrice, src: 'Bitget',       id: -12, flag: 'isBitget',    out: p => p?.toAmount,         extra: (p, o) => ({ bitgetOutAmount: o, bitgetMarket: p.market }) },
+      { p: bebopPrice,  src: 'Bebop',        id: -9,  flag: 'isBebop',     out: p => p?.buyAmount,        extra: (p, o) => ({ bebopQuote: p, bebopOutAmount: o }) },
+      { p: ensoPrice,   src: 'Enso',         id: -10, flag: 'isEnso',      out: p => p?.amountOut,        extra: (p, o) => ({ ensoQuote: p, ensoOutAmount: o }) },
+      { p: ooPrice,     src: 'OpenOcean',    id: -11, flag: 'isOpenOcean', out: p => p?.outAmount,        extra: (p, o) => ({ ooQuote: p, ooOutAmount: o }) },
+    ];
+    for (const a of _aggCompare) {
+      const raw = a.out(a.p);
+      if (!raw) continue;
+      const out = BigInt(raw);
+      const extra = a.extra(a.p, out);
       if (result.allQuotes) {
-        result.allQuotes.push({ source: "0x", sourceId: -2, feeBps: 0n, amountIn, amountOut: oxOut, _winnerArgs: ['is0x', '0x', { ox: oxPrice }] });
+        result.allQuotes.push({ source: a.src, sourceId: a.id, feeBps: 0n, amountIn, amountOut: out, _winnerArgs: [a.flag, a.src, extra] });
       }
-      if (oxOut > result.expectedOutput) {
-        result.expectedOutput = oxOut;
-        _setExtWinner(result, 'is0x', '0x', { ox: oxPrice });
+      if (out > result.expectedOutput) {
+        result.expectedOutput = out;
+        _setExtWinner(result, a.flag, a.src, extra);
       }
     }
 
-    // ParaSwap: compare against all sources
-    if (psPrice && psPrice.destAmount) {
-      const psOut = BigInt(psPrice.destAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "ParaSwap", sourceId: -3, feeBps: 0n, amountIn, amountOut: psOut, _winnerArgs: ['isParaswap', 'ParaSwap', { psPriceRoute: psPrice }] });
-      }
-      if (psOut > result.expectedOutput) {
-        result.expectedOutput = psOut;
-        _setExtWinner(result, 'isParaswap', 'ParaSwap', { psPriceRoute: psPrice });
-      }
-    }
-
-    // KyberSwap: compare against all sources
-    if (ksPrice && ksPrice.amountOut) {
-      const ksOut = BigInt(ksPrice.amountOut);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "KyberSwap", sourceId: -4, feeBps: 0n, amountIn, amountOut: ksOut, _winnerArgs: ['isKyber', 'KyberSwap', { ksRouteSummary: ksPrice }] });
-      }
-      if (ksOut > result.expectedOutput) {
-        result.expectedOutput = ksOut;
-        _setExtWinner(result, 'isKyber', 'KyberSwap', { ksRouteSummary: ksPrice });
-      }
-    }
-
-    // CoW Protocol: compare against all sources (async settlement; ETH sells use WETH)
-    if (cowPrice && cowPrice.quote && cowPrice.quote.buyAmount) {
-      const cowOut = BigInt(cowPrice.quote.buyAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "CoW Protocol", sourceId: -5, feeBps: 0n, amountIn, amountOut: cowOut, _winnerArgs: ['isCow', 'CoW Protocol', { cowQuote: cowPrice.quote }] });
-      }
-      if (cowOut > result.expectedOutput) {
-        result.expectedOutput = cowOut;
-        _setExtWinner(result, 'isCow', 'CoW Protocol', { cowQuote: cowPrice.quote });
-      }
-    }
-
-    // 1inch: compare against all sources
-    if (inchPrice && inchPrice.dstAmount) {
-      const inchOut = BigInt(inchPrice.dstAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "1inch", sourceId: -6, feeBps: 0n, amountIn, amountOut: inchOut, _winnerArgs: ['is1inch', '1inch', { inchQuote: inchPrice }] });
-      }
-      if (inchOut > result.expectedOutput) {
-        result.expectedOutput = inchOut;
-        _setExtWinner(result, 'is1inch', '1inch', { inchQuote: inchPrice });
-      }
-    }
-
-    // Odos: compare against all sources
-    if (odosPrice && odosPrice.outAmounts && odosPrice.outAmounts[0]) {
-      const odosOut = BigInt(odosPrice.outAmounts[0]);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "Odos", sourceId: -7, feeBps: 0n, amountIn, amountOut: odosOut, _winnerArgs: ['isOdos', 'Odos', { odosPathId: odosPrice.pathId, odosOutAmount: odosOut }] });
-      }
-      if (odosOut > result.expectedOutput) {
-        result.expectedOutput = odosOut;
-        _setExtWinner(result, 'isOdos', 'Odos', { odosPathId: odosPrice.pathId, odosOutAmount: odosOut });
-      }
-    }
-
-    // OKX: compare against all sources
-    if (okxPrice && okxPrice.toTokenAmount) {
-      const okxOut = BigInt(okxPrice.toTokenAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "OKX", sourceId: -8, feeBps: 0n, amountIn, amountOut: okxOut, _winnerArgs: ['isOkx', 'OKX', { okxOutAmount: okxOut }] });
-      }
-      if (okxOut > result.expectedOutput) {
-        result.expectedOutput = okxOut;
-        _setExtWinner(result, 'isOkx', 'OKX', { okxOutAmount: okxOut });
-      }
-    }
-
-    // Bitget: compare against all sources
-    if (bitgetPrice && bitgetPrice.toAmount) {
-      const bitgetOut = BigInt(bitgetPrice.toAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "Bitget", sourceId: -12, feeBps: 0n, amountIn, amountOut: bitgetOut, _winnerArgs: ['isBitget', 'Bitget', { bitgetOutAmount: bitgetOut, bitgetMarket: bitgetPrice.market }] });
-      }
-      if (bitgetOut > result.expectedOutput) {
-        result.expectedOutput = bitgetOut;
-        _setExtWinner(result, 'isBitget', 'Bitget', { bitgetOutAmount: bitgetOut, bitgetMarket: bitgetPrice.market });
-      }
-    }
-
-    // Bebop: compare against all sources
-    if (bebopPrice && bebopPrice.buyAmount) {
-      const bebopOut = BigInt(bebopPrice.buyAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "Bebop", sourceId: -9, feeBps: 0n, amountIn, amountOut: bebopOut, _winnerArgs: ['isBebop', 'Bebop', { bebopQuote: bebopPrice, bebopOutAmount: bebopOut }] });
-      }
-      if (bebopOut > result.expectedOutput) {
-        result.expectedOutput = bebopOut;
-        _setExtWinner(result, 'isBebop', 'Bebop', { bebopQuote: bebopPrice, bebopOutAmount: bebopOut });
-      }
-    }
-
-    // Enso: compare against all sources
-    if (ensoPrice && ensoPrice.amountOut) {
-      const ensoOut = BigInt(ensoPrice.amountOut);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "Enso", sourceId: -10, feeBps: 0n, amountIn, amountOut: ensoOut, _winnerArgs: ['isEnso', 'Enso', { ensoQuote: ensoPrice, ensoOutAmount: ensoOut }] });
-      }
-      if (ensoOut > result.expectedOutput) {
-        result.expectedOutput = ensoOut;
-        _setExtWinner(result, 'isEnso', 'Enso', { ensoQuote: ensoPrice, ensoOutAmount: ensoOut });
-      }
-    }
-
-    // OpenOcean: compare against all sources
-    if (ooPrice && ooPrice.outAmount) {
-      const ooOut = BigInt(ooPrice.outAmount);
-      if (result.allQuotes) {
-        result.allQuotes.push({ source: "OpenOcean", sourceId: -11, feeBps: 0n, amountIn, amountOut: ooOut, _winnerArgs: ['isOpenOcean', 'OpenOcean', { ooQuote: ooPrice, ooOutAmount: ooOut }] });
-      }
-      if (ooOut > result.expectedOutput) {
-        result.expectedOutput = ooOut;
-        _setExtWinner(result, 'isOpenOcean', 'OpenOcean', { ooQuote: ooPrice, ooOutAmount: ooOut });
+    // ── Outlier filter: discard quotes wildly above the pack ──
+    // If we have ≥3 quotes, compute median output. Any quote >5× the median
+    // is almost certainly a bogus API response (e.g. 1inch returning 100M USDC
+    // for 0.001 ETH). Mark outliers and, if the current winner is one, revert
+    // to the best on-chain route.
+    if (result.allQuotes && result.allQuotes.length >= 3) {
+      const sorted = result.allQuotes.map(q => q.amountOut).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      const mid = sorted.length >> 1;
+      const median = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2n;
+      if (median > 0n) {
+        const threshold = median * 5n;
+        let winnerOutlier = false;
+        for (const q of result.allQuotes) {
+          if (q.amountOut > threshold) {
+            q._outlier = true;
+            // Check if the current winner matches this outlier quote
+            if (q.amountOut === result.expectedOutput && q._winnerArgs) {
+              winnerOutlier = true;
+            }
+          }
+        }
+        if (winnerOutlier) {
+          if (result._onChainState) {
+            // Restore on-chain winner
+            Object.assign(result, result._onChainState);
+            _resetExtFlags(result);
+          } else {
+            // No on-chain fallback captured — pick best non-outlier quote
+            let best = null;
+            for (const q of result.allQuotes) {
+              if (!q._outlier && q.amountOut > 0n && (!best || q.amountOut > best.amountOut)) best = q;
+            }
+            if (best) {
+              result.expectedOutput = best.amountOut;
+              _resetExtFlags(result);
+              if (best._winnerArgs) _setExtWinner(result, ...best._winnerArgs);
+            }
+          }
+        }
       }
     }
 
@@ -5243,11 +5118,6 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     const quoter = getQuoterContract(rpc);
     const callOpts = { blockTag: "latest" };
 
-    const isPNKSTR = fromData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase()
-      || toData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
-    const hookFee = 0;
-    const hookTick = isPNKSTR ? 60 : 0;
-    const hookAddr = isPNKSTR ? PNKSTR_HOOK_ADDRESS : ZERO_ADDRESS;
     // Light calls → single Multicall3 aggregate3 (1 eth_call)
     const mc3Entries = [];
     mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [true, fromData.address, toData.address, amountOut]) });
@@ -5284,7 +5154,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       receiver, _connectedAddress, true,
       fromData.address, toData.address,
       amountOut, BigInt(slippageBps), deadline,
-      hookFee, hookTick, hookAddr
+      0, 0, ZERO_ADDRESS
     ]) });
     // 0x Swap API v2 does not support exact-out (no buyAmount param)
     // ParaSwap supports exact-out (side=BUY)
@@ -5299,7 +5169,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
           receiver, _connectedAddress, true,
           fromData.address, toData.address,
           amountOut, BigInt(slippageBps), deadline,
-          hookFee, hookTick, hookAddr, callOpts
+          0, 0, ZERO_ADDRESS, callOpts
         );
         bestResult = { status: 'fulfilled', value: fb };
       } catch (_) {}
@@ -5514,13 +5384,15 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
       : _simulateRoute(rpc, result.multicall, result.msgValue, result.calls, result.isSplit);
 
     // ParaSwap exact-out: compare srcAmount (lower wins)
+    // Sanity floor: reject quotes <20% of on-chain required input (likely bogus API response).
     const psPrice = await psPriceP;
     if (psPrice && psPrice.srcAmount) {
       const psIn = BigInt(psPrice.srcAmount);
+      const isOutlier = result._onChainState && psIn * 5n < result._onChainState.requiredInput;
       if (result.allQuotes) {
-        result.allQuotes.push({ source: "ParaSwap", sourceId: -3, feeBps: 0n, amountIn: psIn, amountOut, _winnerArgs: ['isParaswap', 'ParaSwap', { psPriceRoute: psPrice }] });
+        result.allQuotes.push({ source: "ParaSwap", sourceId: -3, feeBps: 0n, amountIn: psIn, amountOut, _outlier: isOutlier || undefined, _winnerArgs: ['isParaswap', 'ParaSwap', { psPriceRoute: psPrice }] });
       }
-      if (psIn > 0n && psIn < result.requiredInput) {
+      if (!isOutlier && psIn > 0n && psIn < result.requiredInput) {
         result.requiredInput = psIn;
         result.expectedOutput = BigInt(psPrice.destAmount);
         _resetExtFlags(result);
@@ -5583,7 +5455,8 @@ function displayAllRoutes(quote, toSym, isExactOut = false, fromSym = null) {
   // Track which route index is currently selected (for highlighting)
   const selIdx = quote._manualIdx ?? -1;
   // Tag each quote with its original index to avoid O(n) indexOf lookups
-  const tagged = quote.allQuotes.map((q, i) => ({ q, origIdx: i }));
+  // Filter out outlier quotes (bogus API responses) from the display
+  const tagged = quote.allQuotes.map((q, i) => ({ q, origIdx: i })).filter(({ q }) => !q._outlier);
   if (isExactOut && fromSym) {
     const fromData = tokens[fromSym];
     tagged.sort((a, b) => (a.q.amountIn < b.q.amountIn ? -1 : a.q.amountIn > b.q.amountIn ? 1 : 0));
@@ -7044,7 +6917,7 @@ async function executeSwap() {
         receivedAmount = endingBalance > startingBalance ? endingBalance - startingBalance : 0n;
       } else {
         // For native ETH: balance delta is (output - gasCost), so add gas back
-        const gasCost = (swapReceipt.gasUsed ?? 0n) * (swapReceipt.gasPrice ?? swapReceipt.effectiveGasPrice ?? 0n);
+        const gasCost = (swapReceipt.gasUsed ?? 0n) * (swapReceipt.effectiveGasPrice ?? swapReceipt.gasPrice ?? 0n);
         const adjustedDelta = (endingBalance + gasCost) - startingBalance;
         receivedAmount = adjustedDelta > 0n ? adjustedDelta : 0n;
       }
@@ -7369,7 +7242,6 @@ const COINGECKO_SLUGS = {
   ETH: "ethereum", WETH: "weth", BOLD: "liquity-bold", LUSD: "liquity-usd",
   DAI: "dai", USDC: "usdc", USDT: "tether", WBTC: "wrapped-bitcoin",
   stETH: "lido-staked-ether", wstETH: "wrapped-steth", rETH: "rocket-pool-eth",
-  PNKSTR: "kleros",
 };
 
 function getZammPoolInfo(quote) {
@@ -8260,8 +8132,6 @@ function switchTab(tab) {
 
 // ---- OTC order ticker (lazy, non-blocking) ----
 (function() {
-  const OTC_COOKBOOK_BASE = "https://coinchan-indexer-production.up.railway.app";
-  const OTC_SB_SUBGRAPH = "https://api.goldsky.com/api/public/project_cmmkvehnce9da01u17d657vdt/subgraphs/Swapboard/1.0.0/gn";
   const OTC_WETH = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
   const OTC_KNOWN = {
     "0x0000000000000000000000000000000000000000": { s: "ETH", d: 18 },
@@ -8275,10 +8145,6 @@ function switchTab(tab) {
   function otcSym(addr, fallback) {
     const k = OTC_KNOWN[addr.toLowerCase()];
     return k ? k.s : (fallback || addr.slice(0, 6));
-  }
-  function otcDec(addr) {
-    const k = OTC_KNOWN[addr.toLowerCase()];
-    return k ? k.d : 18;
   }
   function otcFmt(wei, dec) {
     if (!wei || wei === "0") return "0";
@@ -8299,75 +8165,44 @@ function switchTab(tab) {
 
   async function loadOtcTicker() {
     try {
-      const [cbRes, sbRes] = await Promise.all([
-        fetch(OTC_COOKBOOK_BASE + "/graphql", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: `{ orders(orderBy: "createdAt", orderDirection: "desc", limit: 5, where: { status: "ACTIVE" }) { items { tokenIn idIn amtIn tokenOut idOut amtOut } } }` })
-        }).then(r => r.json()).catch(() => null),
-        fetch(OTC_SB_SUBGRAPH, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: `{ orders(first: 5, orderBy: orderId, orderDirection: desc, where: { active: true }) { orderId amountA amountB tokenA { address symbol decimals } tokenB { address symbol decimals } } }` })
-        }).then(r => r.json()).catch(() => null),
-      ]);
-
+      const OTC_VIEW = "0x51B33f0dd2680ba3f8C1cF30C33aeD8BFca1DF38";
+      const OTC_V1 = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+      const OTC_PF = "0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831";
       const orders = [];
-      // Cookbook orders
-      const cbItems = cbRes?.data?.orders?.items || [];
-      for (const o of cbItems.slice(0, 3)) {
-        const symIn = otcSym(o.tokenIn);
-        const symOut = otcSym(o.tokenOut);
-        const decIn = otcDec(o.tokenIn);
-        const decOut = otcDec(o.tokenOut);
-        orders.push({
-          symIn, symOut,
-          amtIn: otcFmt(o.amtIn, decIn), amtOut: otcFmt(o.amtOut, decOut),
-          src: 'zamm',
-          href: './orderbook/?token0=' + encodeURIComponent(o.tokenIn) + '&token1=' + encodeURIComponent(o.tokenOut) + '&label0=' + encodeURIComponent(symIn) + '&label1=' + encodeURIComponent(symOut) + '&fill=' + encodeURIComponent(o.id),
-        });
-      }
-      // Swapboard orders
-      const sbItems = sbRes?.data?.orders || [];
-      for (const o of sbItems.slice(0, 3)) {
-        const symA = o.tokenA.address.toLowerCase() === OTC_WETH ? 'ETH' : o.tokenA.symbol;
-        const symB = o.tokenB.address.toLowerCase() === OTC_WETH ? 'ETH' : o.tokenB.symbol;
-        const decA = Number(o.tokenA.decimals);
-        const decB = Number(o.tokenB.decimals);
+
+      const provider = new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
+      const viewAbi = ["function getAllActiveOrdersPaged(address,address,uint256,uint256,uint256,uint256) view returns (tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256,tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256)"];
+      const viewContract = new ethers.Contract(OTC_VIEW, viewAbi, provider);
+      const [v1Orders,, v2Orders] = await viewContract.getAllActiveOrdersPaged(OTC_V1, OTC_PF, 0, 0, 3, 500);
+      for (const po of [...v1Orders, ...v2Orders].slice(0, 4)) {
+        const addrA = po.tokenA.toLowerCase(), addrB = po.tokenB.toLowerCase();
+        const isV1 = po.board.toLowerCase() === OTC_V1.toLowerCase();
+        const symA = addrA === OTC_WETH ? 'ETH' : (po.symbolA || otcSym(addrA));
+        const symB = addrB === OTC_WETH ? 'ETH' : (po.symbolB || otcSym(addrB));
+        const prefix = isV1 ? 'sb-' : 'pf-';
         orders.push({
           symIn: symA, symOut: symB,
-          amtIn: otcFmt(o.amountA, decA), amtOut: otcFmt(o.amountB, decB),
+          amtIn: otcFmt(po.amountA.toString(), Number(po.decimalsA) || 18),
+          amtOut: otcFmt(po.amountB.toString(), Number(po.decimalsB) || 18),
           src: 'otc',
-          href: './orderbook/?token0=' + encodeURIComponent(o.tokenA.address) + '&token1=' + encodeURIComponent(o.tokenB.address) + '&label0=' + encodeURIComponent(symA) + '&label1=' + encodeURIComponent(symB) + '&fill=sb-' + o.orderId,
+          href: './orderbook/?token0=' + encodeURIComponent(po.tokenA) + '&token1=' + encodeURIComponent(po.tokenB) + '&label0=' + encodeURIComponent(symA) + '&label1=' + encodeURIComponent(symB) + '&fill=' + prefix + po.orderId.toString(),
         });
       }
 
       if (orders.length === 0) return;
-
-      // Interleave: alternate cookbook/swapboard, show max 4
-      const cb = orders.filter(o => o.src === 'zamm');
-      const sb = orders.filter(o => o.src === 'otc');
-      const mixed = [];
-      const max = Math.max(cb.length, sb.length);
-      for (let i = 0; i < max && mixed.length < 4; i++) {
-        if (cb[i]) mixed.push(cb[i]);
-        if (sb[i] && mixed.length < 4) mixed.push(sb[i]);
-      }
-
-      // Cache for orderbook page
-      try { sessionStorage.setItem('zfi_otc_preview', JSON.stringify(mixed)); } catch {}
+      const display = orders.slice(0, 4);
 
       // Render
       const el = document.getElementById('otcTickerList');
       if (!el) return;
       let html = '';
-      for (const o of mixed) {
+      for (const o of display) {
         html += `<a class="otc-order" href="${o.href}">
           <span class="otc-icons">${otcIcon(o.symIn)}<span class="otc-ic1">${otcIcon(o.symOut)}</span></span>
           <div class="otc-info">
             <div class="otc-pair">${o.amtIn} ${o.symIn} &rarr; ${o.amtOut} ${o.symOut}</div>
           </div>
-          <span class="otc-src ${o.src}">${o.src === 'zamm' ? 'ZAMM' : 'OTC'}</span>
+          <span class="otc-src otc">OTC</span>
         </a>`;
       }
       el.innerHTML = html;

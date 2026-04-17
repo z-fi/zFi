@@ -247,14 +247,7 @@ contract zQuoter {
             if (pool.code.length == 0) continue;
 
             // Skip duplicates: if pool already appeared in pools1, don't re-quote
-            if (fromSet2) {
-                bool dup;
-                for (uint256 d; d < pools1.length; ++d) {
-                    if (pools1[d] == pool) dup = true;
-                    break;
-                }
-                if (dup) continue;
-            }
+            if (fromSet2 && _inPools(pools1, pool)) continue;
 
             // Try coin indices with both address representations
             address qa = fromSet2 ? aWeth : aEth;
@@ -299,6 +292,13 @@ contract zQuoter {
         usedStable = acc.usedStable;
         iIndex = acc.iIdx;
         jIndex = acc.jIdx;
+    }
+
+    function _inPools(address[] memory pools, address pool) internal pure returns (bool) {
+        for (uint256 i; i < pools.length; ++i) {
+            if (pools[i] == pool) return true;
+        }
+        return false;
     }
 
     /// @dev Try to get coin indices from the MetaRegistry; returns (ok, i, j, underlying).
@@ -1255,9 +1255,8 @@ contract zQuoter {
 
     /// @dev Quote V4 hooked pool, returning 0 on failure.
     ///      quoteV4 simulates raw AMM math only — it does NOT simulate the hook's
-    ///      afterSwap callback which can modify the swap delta (e.g. protocol fees).
-    ///      We reduce the output by the hook's afterSwap fee so that slippage limits
-    ///      and venue comparisons reflect the real post-fee amount.
+    ///      afterSwap callback, so any hook that modifies the swap delta (e.g.
+    ///      protocol fees) will make the quote overstate the user-received amount.
     function _tryQuoteV4Hooked(address tokenIn, address tokenOut, uint256 amount, uint24 fee, int24 tick, address hook)
         internal
         view
@@ -1267,10 +1266,6 @@ contract zQuoter {
             out = o;
         } catch {
             return 0;
-        }
-        // Deduct hook's afterSwap fee (immutable in deployed hook).
-        if (hook == 0xfAaad5B731F52cDc9746F2414c823eca9B06E844) {
-            out = (out * 9000) / 10000; // PNKSTR: feeBips=1000 (10%)
         }
     }
 
