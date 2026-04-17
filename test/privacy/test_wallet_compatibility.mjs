@@ -759,6 +759,7 @@ function createWalletEventHarness({
   switchedAddress = OTHER_ADDRESS,
 } = {}) {
   const localStorage = createStorageStub();
+  const timers = createTimerController();
   const walletBtn = createWalletDomElement();
   const walletModal = createWalletDomElement();
   const walletOptions = createWalletDomElement();
@@ -775,9 +776,11 @@ function createWalletEventHarness({
   };
   const eventHandlers = {};
   let currentAddress = connectedAddress;
+  let providerAccounts = currentAddress ? [currentAddress] : [];
   const provider = {
     async request({ method }) {
-      if (method === 'eth_requestAccounts') return [currentAddress];
+      if (method === 'eth_requestAccounts') return providerAccounts;
+      if (method === 'eth_accounts') return providerAccounts;
       if (method === 'eth_chainId') return '0x1';
       if (method === 'wallet_getCapabilities') return {};
       return null;
@@ -792,8 +795,8 @@ function createWalletEventHarness({
     document: documentStub,
     localStorage,
     location: { origin: 'https://zfi.test', reload() {} },
-    setTimeout,
-    clearTimeout,
+    setTimeout: timers.setTimeout.bind(timers),
+    clearTimeout: timers.clearTimeout.bind(timers),
     ethers: {
       BrowserProvider: class {
         constructor() {}
@@ -822,7 +825,14 @@ function createWalletEventHarness({
     walletBtn,
     eventHandlers,
     provider,
-    switchAddress(addr) { currentAddress = addr; },
+    timers,
+    switchAddress(addr) {
+      currentAddress = addr;
+      providerAccounts = currentAddress ? [currentAddress] : [];
+    },
+    setProviderAccounts(accounts) {
+      providerAccounts = [...accounts];
+    },
     async connect() {
       await walletApi.connectWithWallet('eip6963_test-wallet');
     },
@@ -1003,8 +1013,13 @@ test('accountsChanged with empty accounts array disconnects wallet', async () =>
   await harness.connect();
   assert.equal(harness.context._connectedAddress, CONNECTED_ADDRESS);
 
+  harness.setProviderAccounts([]);
   harness.eventHandlers.accountsChanged([]);
   await flushMicrotasks();
+
+  assert.equal(harness.context._connectedAddress, CONNECTED_ADDRESS, 'transient empty event does not disconnect immediately');
+
+  await harness.timers.flushAll();
 
   assert.equal(harness.context._connectedAddress, null, 'address cleared');
   assert.equal(harness.context._signer, null, 'signer cleared');
