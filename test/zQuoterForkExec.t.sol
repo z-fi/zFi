@@ -162,13 +162,7 @@ contract zQuoterForkExecTest is Test {
     // ================================================================
     function test_2hop_ETH_to_WSTETH_via_hub() public {
         uint256 amtIn = 1 ether;
-        (
-            zQuoter.Quote memory a,
-            zQuoter.Quote memory b,
-            ,
-            bytes memory mc,
-            uint256 mv
-        ) = quoter.buildBestSwapViaETHMulticall(
+        (zQuoter.Quote memory a, zQuoter.Quote memory b,, bytes memory mc, uint256 mv) = quoter.buildBestSwapViaETHMulticall(
             address(this), address(this), false, ETH, _WSTETH, amtIn, SLIPPAGE, DEADLINE
         );
         emit log_named_string("hop1", _srcName(uint8(a.source)));
@@ -190,8 +184,8 @@ contract zQuoterForkExecTest is Test {
     function test_3hop_USDT_to_WBTC() public {
         uint256 amtIn = 1000e6;
         try quoter.build3HopMulticall(address(this), false, _USDT, _WBTC, amtIn, SLIPPAGE, DEADLINE) returns (
-            zQuoter.Quote memory /*a*/,
-            zQuoter.Quote memory /*b*/,
+            zQuoter.Quote memory, /*a*/
+            zQuoter.Quote memory, /*b*/
             zQuoter.Quote memory c,
             bytes[] memory,
             bytes memory mc,

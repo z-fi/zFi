@@ -1,5 +1,5 @@
 # Constants
-[Git Source](https://github.com/zammdefi/zFi/blob/6183adaa9032e920e34fd7d86cacdbe7b6a9d306/src/zQuoter.sol)
+[Git Source](https://github.com/zammdefi/zFi/blob/a562385b5b1c1f70a26241aeea9f4ab1325a5917/src/zQuoter.sol)
 
 ### _BASE
 
@@ -53,12 +53,6 @@ address constant STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84
 
 ```solidity
 address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4
-```
-
-### V4_ROUTER
-
-```solidity
-address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97
 ```
 
 ### CURVE_METAREGISTRY

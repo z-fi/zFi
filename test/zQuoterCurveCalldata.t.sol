@@ -19,14 +19,7 @@ contract zQuoterCurveCalldataTest is Test {
     function _decode(bytes memory cd)
         internal
         pure
-        returns (
-            address route0,
-            address route2,
-            address route3,
-            address route4,
-            uint256 sp0_st,
-            uint256 sp1_st
-        )
+        returns (address route0, address route2, address route3, address route4, uint256 sp0_st, uint256 sp1_st)
     {
         // Layout (after selector): to(32) + exactOut(32) + route[11](352) + swapParams[5][4]...
         // route[i] sits at offset 4 + 64 + 32*i

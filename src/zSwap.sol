@@ -37,7 +37,10 @@ contract zSwap {
 
     address public immutable DATA;
 
-    struct KeyValue { string key; string value; }
+    struct KeyValue {
+        string key;
+        string value;
+    }
 
     constructor() payable {
         bytes memory payload = bytes.concat(
@@ -366,8 +369,14 @@ contract zSwap {
     ///         response is byte-identical forever since the bytecode is
     ///         immutable). Path/query params are ignored — the dapp is a
     ///         single-page app served from any URL on this contract.
-    function request(string[] memory /*resource*/, KeyValue[] memory /*params*/)
-        external view returns (uint16 statusCode, string memory body, KeyValue[] memory headers)
+    function request(
+        string[] memory,
+        /*resource*/
+        KeyValue[] memory /*params*/
+    )
+        external
+        view
+        returns (uint16 statusCode, string memory body, KeyValue[] memory headers)
     {
         statusCode = 200;
         body = _html();
@@ -389,10 +398,10 @@ contract zSwap {
         assembly ("memory-safe") {
             let sz := extcodesize(d)
             s := mload(0x40)
-            mstore(s, sz)                               // string length
-            extcodecopy(d, add(s, 0x20), 0, sz)         // string data
+            mstore(s, sz) // string length
+            extcodecopy(d, add(s, 0x20), 0, sz) // string data
             let padded := and(add(sz, 0x1f), not(0x1f)) // pad to 32-byte boundary
-            mstore(0x40, add(add(s, 0x20), padded))     // bump free memory pointer
+            mstore(0x40, add(add(s, 0x20), padded)) // bump free memory pointer
         }
     }
 }

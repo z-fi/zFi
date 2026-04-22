@@ -1666,8 +1666,6 @@ const PREDICT_TOKENS = {
   LUSD:   { address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0', symbol: 'LUSD', decimals: 18 },
 };
 
-const _predictBuiltinAddrs = new Set(Object.values(PREDICT_TOKENS).map(t => t.address.toLowerCase()));
-
 // Custom tokens from swap page (shared localStorage)
 const _predictCustomTokens = {};
 try {
@@ -1928,23 +1926,6 @@ function getCollateralSymbol(addr) {
     '0x6b175474e89094c44da98b954eedeac495271d0f': 'DAI'
   };
   return known[(addr || '').toLowerCase()] || 'ERC20';
-}
-
-function isOurLabeledMarket(description) {
-  if (!description) return false;
-  if (description.startsWith('PRICE|') ||
-      description.startsWith('GAS|') ||
-      description.startsWith('TOKBAL|') ||
-      description.startsWith('NFTBAL|') ||
-      description.startsWith('ETHBAL|') ||
-      description.startsWith('SUPPLY|')) return true;
-  if (description.startsWith('V4 Protocol') ||
-      description.startsWith('UNI balance') ||
-      description.startsWith('UNI voting power') ||
-      description.startsWith('UNI totalSupply') ||
-      description.startsWith('UNI price')) return true;
-  if (description.startsWith('zOrgz')) return true;
-  return false;
 }
 
 // ==================== MARKET DESCRIPTION PARSER ====================
@@ -4138,87 +4119,6 @@ async function getRoutedBuyQuote(inputAmountStr, marketId, buyYes) {
       payToken: payData, isRouted: true,
       marketId, dir: 'buy', side: _tradeSide,
       amount: amountIn, expectedOut: sharesOut,
-      ts: Date.now()
-    };
-  });
-}
-
-async function getRoutedExactOutBuyQuote(desiredSharesStr, marketId, buyYes) {
-  const payData = getSelectedPayTokenData();
-  const collateral = $('app').dataset.collateral;
-  const isETHCollateral = !collateral || collateral === ethers.ZeroAddress;
-  const collateralAddr = isETHCollateral ? ZERO_ADDRESS : collateral;
-  const desiredShares = ethers.parseEther(desiredSharesStr);
-  const ethIn = payData.address.toLowerCase() === ZERO_ADDRESS.toLowerCase();
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-
-  return await withRPC(async (rpc) => {
-    const pammQuoter = new ethers.Contract(CONTRACTS.QUOTER, QUOTER_ABI, rpc);
-    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, ZQUOTER_IFACE, rpc);
-
-    // Iteratively find collateralNeeded
-    let c = desiredShares; // initial guess
-    for (let i = 0; i < 3; i++) {
-      const result = await pammQuoter.quoteBuyWithSweep(marketId, buyYes, c, 9999, { gasLimit: 5000000 });
-      const s = BigInt(result.totalSharesOut);
-      if (s <= 0n) throw new Error('PAMM quote returned zero');
-      if (s >= desiredShares) break;
-      c = c * desiredShares / s;
-    }
-    // Add 2% buffer
-    const collateralNeeded = c * 102n / 100n;
-
-    // First leg: exactOut swap — need exactly collateralNeeded of collateral
-    let firstLegCalls = [];
-    let msgValue = 0n;
-
-    if (ethIn && isETHCollateral) {
-      msgValue = collateralNeeded;
-    } else {
-      const r = await quoter.buildBestSwapViaETHMulticall(
-        ZROUTER_ADDRESS, _connectedAddress, true,
-        ethIn ? ZERO_ADDRESS : payData.address, collateralAddr,
-        collateralNeeded, 100n, deadline,
-        { gasLimit: 5000000 }
-      );
-      firstLegCalls = Array.from(r.calls);
-      msgValue = r.msgValue;
-    }
-
-    // Second leg — reduce collateral passed to buy to account for swap slippage
-    const hasSwapLeg2 = firstLegCalls.length > 0;
-    const collateralForBuy2 = hasSwapLeg2 ? collateralNeeded * 99n / 100n : collateralNeeded;
-    const _routedSlipBps2 = BigInt(Math.round(_tradeSlippage * 100));
-    const minSharesOut = desiredShares * (10000n - _routedSlipBps2) / 10000n;
-    const buyCalldata = MASTER_ROUTER_IFACE.encodeFunctionData('buyWithSweep', [
-      marketId, buyYes, collateralForBuy2, minSharesOut, 9999,
-      _connectedAddress, deadline
-    ]);
-
-    const calls = [];
-    for (const c2 of firstLegCalls) calls.push(c2);
-
-    const execEthValue = isETHCollateral ? collateralForBuy2 : 0n;
-    calls.push(ZROUTER_IFACE.encodeFunctionData('execute', [
-      CONTRACTS.MASTER_ROUTER, execEthValue, buyCalldata
-    ]));
-
-    calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, _connectedAddress]));
-    if (!isETHCollateral) {
-      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [collateralAddr, 0, 0, _connectedAddress]));
-    }
-    if (!ethIn) {
-      calls.push(ZROUTER_IFACE.encodeFunctionData('sweep', [payData.address, 0, 0, _connectedAddress]));
-    }
-
-    const multicall = ZROUTER_IFACE.encodeFunctionData('multicall', [calls]);
-
-    return {
-      sharesOut: desiredShares, minSharesOut, collateralAmount: collateralNeeded,
-      multicall, calls, msgValue,
-      payToken: payData, isRouted: true,
-      marketId, dir: 'buy', side: _tradeSide,
-      expectedOut: desiredShares,
       ts: Date.now()
     };
   });

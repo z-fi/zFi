@@ -32,31 +32,6 @@ async function coinDbInsert(table, row) {
   }
 }
 
-async function coinDbUpdate(table, match, updates) {
-  if (!COIN_DB_URL) return;
-  try {
-    const params = Object.entries(match).map(([k,v]) => `${k}=eq.${encodeURIComponent(v)}`).join('&');
-    await fetch(`${COIN_DB_URL}/db/${table}?${params}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
-  } catch (e) {
-    console.warn('DB update failed:', table, e);
-  }
-}
-
-async function coinDbFetch(table, params) {
-  if (!COIN_DB_URL) return [];
-  try {
-    const res = await fetch(`${COIN_DB_URL}/db/${table}?${params}`);
-    return await res.json();
-  } catch (e) {
-    console.warn('DB fetch failed:', table, e);
-    return [];
-  }
-}
-
 function coinGenId() {
   return crypto.randomUUID().slice(0, 12);
 }

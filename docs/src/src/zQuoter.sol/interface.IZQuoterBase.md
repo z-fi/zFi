@@ -1,5 +1,5 @@
 # IZQuoterBase
-[Git Source](https://github.com/zammdefi/zFi/blob/6183adaa9032e920e34fd7d86cacdbe7b6a9d306/src/zQuoter.sol)
+[Git Source](https://github.com/zammdefi/zFi/blob/a562385b5b1c1f70a26241aeea9f4ab1325a5917/src/zQuoter.sol)
 
 
 ## Functions
@@ -32,5 +32,15 @@ function quoteZAMM(bool, uint256, address, address, uint256, uint256, uint256)
     external
     view
     returns (uint256, uint256);
+```
+
+### getQuotes
+
+
+```solidity
+function getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
+    external
+    view
+    returns (zQuoter.Quote memory best, zQuoter.Quote[] memory quotes);
 ```
 

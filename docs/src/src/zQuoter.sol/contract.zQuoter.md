@@ -1,5 +1,5 @@
 # zQuoter
-[Git Source](https://github.com/zammdefi/zFi/blob/6183adaa9032e920e34fd7d86cacdbe7b6a9d306/src/zQuoter.sol)
+[Git Source](https://github.com/zammdefi/zFi/blob/a562385b5b1c1f70a26241aeea9f4ab1325a5917/src/zQuoter.sol)
 
 
 ## Functions
@@ -39,6 +39,20 @@ function _quoteBestSingleHop(bool exactOut, address tokenIn, address tokenOut, u
     returns (Quote memory best);
 ```
 
+### _bestDirectExcludingLido
+
+Best exactIn direct quote, excluding LIDO and WETH_WRAP. Used by split
+builders that can't safely use LIDO (callvalue semantics) or WETH_WRAP
+(trivial 1:1, not a real route). Considers all base-quoter sources + Curve.
+
+
+```solidity
+function _bestDirectExcludingLido(address tokenIn, address tokenOut, uint256 swapAmount)
+    internal
+    view
+    returns (Quote memory best);
+```
+
 ### _normalizeETH
 
 Normalize CURVE_ETH sentinel to address(0) so all ETH logic is consistent.
@@ -46,6 +60,20 @@ Normalize CURVE_ETH sentinel to address(0) so all ETH logic is consistent.
 
 ```solidity
 function _normalizeETH(address token) internal pure returns (address);
+```
+
+### _v2Deadline
+
+zRouter treats `deadline == type(uint256).max` on swapV2 as a sentinel that
+routes execution to the Sushi factory. Callers who pass max (e.g. "no expiry")
+would therefore silently get a Sushi pool for a quote the base quoter gave
+for the Uniswap V2 pool. Use this only on the UNI_V2 encode path — do NOT
+apply globally, because swapVZ also uses max as a sentinel (ZAMM_0 vs ZAMM)
+and the base quoter's zAMM source may depend on the caller-supplied deadline.
+
+
+```solidity
+function _v2Deadline(bool isSushi, uint256 deadline) internal view returns (uint256);
 ```
 
 ### _hubs
@@ -62,6 +90,16 @@ function _hubs() internal pure returns (address[6] memory);
 function _sweepTo(address token, address to) internal pure returns (bytes memory);
 ```
 
+### _sweepAmt
+
+Assembly-built sweep(token, 0, amount, to) calldata. Replaces four scattered
+abi.encodeWithSelector sites with one shared encoder to shrink bytecode.
+
+
+```solidity
+function _sweepAmt(address token, uint256 amount, address to) internal pure returns (bytes memory data);
+```
+
 ### _mc
 
 
@@ -74,6 +112,35 @@ function _mc(bytes[] memory c) internal pure returns (bytes memory);
 
 ```solidity
 function _mc1(bytes memory cd) internal pure returns (bytes memory);
+```
+
+### _fallbackBest
+
+Shared exactIn fallback used by split/hybrid edge cases (trivial wrap,
+no split, 100/0 or 0/100 split, 100% direct hybrid). Returns the best
+exactIn quote for the full pair, its calldata wrapped in a 1-element
+multicall envelope, and msgValue — so call sites become one expression.
+
+
+```solidity
+function _fallbackBest(address to, address tokenIn, address tokenOut, uint256 amount, uint256 bps, uint256 dl)
+    internal
+    view
+    returns (Quote memory q, bytes memory multicall, uint256 msgValue);
+```
+
+### _appendLegMaybeWrap
+
+Append a (optionally pre-wrapped) leg to calls_. Used by split/hybrid paths
+when a Curve leg with ETH input needs a WETH pre-wrap plus route[0] rewrite.
+Deduplicates 4 copies of `if (wrap) { _wrap + mstore(cd,100,WETH) } append(cd)`.
+
+
+```solidity
+function _appendLegMaybeWrap(bytes[] memory calls_, uint256 ci, bytes memory cd, bool needsWrap, uint256 amt)
+    internal
+    pure
+    returns (uint256);
 ```
 
 ### _wrap
@@ -131,6 +198,13 @@ function quoteCurve(
     );
 ```
 
+### _inPoolsPrefix
+
+
+```solidity
+function _inPoolsPrefix(address[] memory pools, uint256 prefixLen, address pool) internal pure returns (bool);
+```
+
 ### _tryCoinIndices
 
 Try to get coin indices from the MetaRegistry; returns (ok, i, j, underlying).
@@ -167,7 +241,7 @@ function _buildCurveSwapCalldata(
     uint256 slippageBps,
     uint256 deadline,
     address pool,
-    bool useUnderlying,
+    bool, /* useUnderlying — always false; filtered in _curveTryQuoteOne */
     bool isStable,
     uint8 iIndex,
     uint8 jIndex,
@@ -197,7 +271,7 @@ Build router calldata for a Lido swap (ETH → stETH or ETH → wstETH).
 function _buildLidoSwap(address to, bool exactOut, address tokenOut, uint256 swapAmount)
     internal
     pure
-    returns (bytes memory callData);
+    returns (bytes memory);
 ```
 
 ### buildBestSwap
@@ -215,21 +289,43 @@ function buildBestSwap(
 ) public view returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue);
 ```
 
+### buildSwapAuto
+
+One-call quote+build that returns the same shape as buildBestSwap.
+Cascade (NOT a head-to-head comparison across depths): single/2-hop
+first, 3-hop only as a fallback for pairs that can't build at shallower
+depth. Frontends can use this as a drop-in for buildBestSwap — no
+decoder changes — and recover every pair that has *any* on-chain path.
+Cascade:
+1. buildBestSwapViaETHMulticall — internally picks best of {single-hop, 2-hop hub}
+2. build3HopMulticall           — last-resort for exotic tokens (exactIn + exactOut)
+Note: step 1 wraps single-hop results in a 1-element multicall envelope
+(~2–3k extra gas), but guarantees we never miss a strictly-better hub
+route just because a marginal single-hop pool also happened to quote.
+For custom tokens this matters: a user's exotic token may have a
+stale V3 1bp pool that buildBestSwap would prefer, while the deep
+liquidity actually lives on a WETH-hub 2-hop path.
+The returned `best` aggregates multi-hop plans into a single Quote
+with end-to-end amounts (source = final leg's source).
+
+
+```solidity
+function buildSwapAuto(
+    address to,
+    bool exactOut,
+    address tokenIn,
+    address tokenOut,
+    uint256 swapAmount,
+    uint256 slippageBps,
+    uint256 deadline
+) public view returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue);
+```
+
 ### _spacingFromBps
 
 
 ```solidity
 function _spacingFromBps(uint16 bps) internal pure returns (int24);
-```
-
-### _requiredMsgValue
-
-
-```solidity
-function _requiredMsgValue(bool exactOut, address tokenIn, uint256 swapAmount, uint256 amountLimit)
-    internal
-    pure
-    returns (uint256);
 ```
 
 ### _bestSingleHop
@@ -259,10 +355,7 @@ function buildBestSwapViaETHMulticall(
     address tokenOut, // ERC20 or address(0) for ETH
     uint256 swapAmount, // exactIn: amount of tokenIn; exactOut: desired tokenOut
     uint256 slippageBps, // per-leg bound
-    uint256 deadline,
-    uint24 hookPoolFee,
-    int24 hookTickSpacing,
-    address hookAddress
+    uint256 deadline
 )
     public
     view
@@ -286,23 +379,54 @@ function _buildSwapFromQuote(
     uint256 amountLimit,
     uint256 deadline,
     Quote memory q
-) internal pure returns (bytes memory);
+) internal view returns (bytes memory);
+```
+
+### _discover3HopForward
+
+Enumerate every ordered (MID1, MID2) hub pair for exactIn — maximize output.
+Split from exactOut into its own helper so each version fits via-ir's stack.
+
+
+```solidity
+function _discover3HopForward(address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps)
+    internal
+    view
+    returns (Route3 memory r);
+```
+
+### _discover3HopBackward
+
+Enumerate every ordered (MID1, MID2) hub pair for exactOut — minimize input
+via a backward pass from `swapAmount` of tokenOut.
+
+
+```solidity
+function _discover3HopBackward(address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps)
+    internal
+    view
+    returns (Route3 memory r);
 ```
 
 ### build3HopMulticall
 
-Build a 3-hop exactIn multicall:
+Build a 3-hop multicall through two hub intermediates:
 tokenIn ─[Leg1]→ MID1 ─[Leg2]→ MID2 ─[Leg3]→ tokenOut
-Legs 2 & 3 use swapAmount = 0 so the router auto-consumes the
-previous leg's output via balanceOf().
-Route discovery: tries every ordered pair (MID1, MID2) from the
-hub list and picks the path that maximizes final output.
-All AMMs (V2/Sushi/V3/V4/zAMM/Curve) are considered for each leg.
+exactIn:  legs 2 & 3 pass swapAmount=0 so each router leg
+auto-consumes the previous leg's transient balance.
+exactOut: each leg has an explicit target (backward-calc'd from
+`swapAmount` of tokenOut). Hub leftovers + ETH dust
+are swept to `to` in the envelope to avoid stranding
+funds in the router.
+Discovery: tries every ordered pair (MID1, MID2) from the hub
+list. exactIn maximizes final output; exactOut minimizes required
+input. All AMMs (V2/Sushi/V3/V4/zAMM/Curve) compete per leg.
 
 
 ```solidity
 function build3HopMulticall(
     address to,
+    bool exactOut,
     address tokenIn,
     address tokenOut,
     uint256 swapAmount,
@@ -375,63 +499,6 @@ function buildHybridSplit(
     uint256 swapAmount,
     uint256 slippageBps,
     uint256 deadline
-) public view returns (Quote[2] memory legs, bytes memory multicall, uint256 msgValue);
-```
-
-### _tryQuoteV4Hooked
-
-Quote V4 hooked pool, returning 0 on failure.
-quoteV4 simulates raw AMM math only — it does NOT simulate the hook's
-afterSwap callback which can modify the swap delta (e.g. protocol fees).
-We reduce the output by the hook's afterSwap fee so that slippage limits
-and venue comparisons reflect the real post-fee amount.
-
-
-```solidity
-function _tryQuoteV4Hooked(address tokenIn, address tokenOut, uint256 amount, uint24 fee, int24 tick, address hook)
-    internal
-    view
-    returns (uint256 out);
-```
-
-### _buildV4HookedCalldata
-
-Build execute(V4_ROUTER) calldata for a V4 hooked pool swap (ETH input only).
-
-
-```solidity
-function _buildV4HookedCalldata(
-    address to,
-    address tokenIn,
-    address tokenOut,
-    uint256 swapAmount,
-    uint256 amountLimit,
-    uint256 deadline,
-    uint24 hookPoolFee,
-    int24 hookTickSpacing,
-    address hookAddress
-) internal pure returns (bytes memory);
-```
-
-### buildSplitSwapHooked
-
-Build a split swap that includes a V4 hooked pool as a candidate.
-ExactIn only. Gathers standard venues + Curve + the hooked pool,
-finds the top 2, tries splits [100/0, 75/25, 50/50, 25/75, 0/100],
-and returns the optimal multicall.
-
-
-```solidity
-function buildSplitSwapHooked(
-    address to,
-    address tokenIn,
-    address tokenOut,
-    uint256 swapAmount,
-    uint256 slippageBps,
-    uint256 deadline,
-    uint24 hookPoolFee,
-    int24 hookTickSpacing,
-    address hookAddress
 ) public view returns (Quote[2] memory legs, bytes memory multicall, uint256 msgValue);
 ```
 
@@ -522,8 +589,7 @@ enum AMM {
     UNI_V4,
     CURVE,
     LIDO,
-    WETH_WRAP,
-    V4_HOOKED
+    WETH_WRAP
 }
 ```
 

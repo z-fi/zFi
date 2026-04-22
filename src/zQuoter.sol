@@ -184,14 +184,11 @@ contract zQuoter {
     ///     no split, 100/0 or 0/100 split, 100% direct hybrid). Returns the best
     ///     exactIn quote for the full pair, its calldata wrapped in a 1-element
     ///     multicall envelope, and msgValue — so call sites become one expression.
-    function _fallbackBest(
-        address to,
-        address tokenIn,
-        address tokenOut,
-        uint256 amount,
-        uint256 bps,
-        uint256 dl
-    ) internal view returns (Quote memory q, bytes memory multicall, uint256 msgValue) {
+    function _fallbackBest(address to, address tokenIn, address tokenOut, uint256 amount, uint256 bps, uint256 dl)
+        internal
+        view
+        returns (Quote memory q, bytes memory multicall, uint256 msgValue)
+    {
         bytes memory cd;
         (q, cd,, msgValue) = buildBestSwap(to, false, tokenIn, tokenOut, amount, bps, dl);
         multicall = _mc1(cd);
@@ -201,7 +198,9 @@ contract zQuoter {
     ///     when a Curve leg with ETH input needs a WETH pre-wrap plus route[0] rewrite.
     ///     Deduplicates 4 copies of `if (wrap) { _wrap + mstore(cd,100,WETH) } append(cd)`.
     function _appendLegMaybeWrap(bytes[] memory calls_, uint256 ci, bytes memory cd, bool needsWrap, uint256 amt)
-        internal pure returns (uint256)
+        internal
+        pure
+        returns (uint256)
     {
         if (needsWrap) {
             calls_[ci++] = _wrap(amt);
@@ -728,7 +727,6 @@ contract zQuoter {
             return int24(uint24(bps));
         }
     }
-
 
     function _bestSingleHop(
         address to,

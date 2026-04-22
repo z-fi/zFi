@@ -103,8 +103,7 @@ contract zQuoterCurveExecTest is Test {
     // ------------------------------------------------------------------
     function test_curve_ETH_to_WBTC_via_tricrypto() public {
         uint256 amtIn = 10 ether;
-        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) =
-            quoter.quoteCurve(false, ETH, _WBTC, amtIn, 8);
+        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) = quoter.quoteCurve(false, ETH, _WBTC, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for ETH->WBTC");
             return;
@@ -133,8 +132,7 @@ contract zQuoterCurveExecTest is Test {
     // ------------------------------------------------------------------
     function test_curve_WBTC_to_ETH_via_tricrypto() public {
         uint256 amtIn = 0.1e8; // 0.1 WBTC
-        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) =
-            quoter.quoteCurve(false, _WBTC, ETH, amtIn, 8);
+        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) = quoter.quoteCurve(false, _WBTC, ETH, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for WBTC->ETH");
             return;
@@ -147,8 +145,7 @@ contract zQuoterCurveExecTest is Test {
         deal(_WBTC, address(this), amtIn);
         _approve(_WBTC, _ROUTER, amtIn);
 
-        (bool ok, bytes memory ret, uint256 received) =
-            _execCurveDirect(_WBTC, ETH, amtIn, pool, i, j, stable, cout, 0);
+        (bool ok, bytes memory ret, uint256 received) = _execCurveDirect(_WBTC, ETH, amtIn, pool, i, j, stable, cout, 0);
 
         if (!ok) {
             emit log_named_bytes("REVERT WBTC->ETH Curve (ETH-out bug?)", ret);
@@ -160,8 +157,7 @@ contract zQuoterCurveExecTest is Test {
 
     function test_curve_USDT_to_ETH_via_tricrypto() public {
         uint256 amtIn = 1000e6; // 1000 USDT
-        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) =
-            quoter.quoteCurve(false, _USDT, ETH, amtIn, 8);
+        (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) = quoter.quoteCurve(false, _USDT, ETH, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for USDT->ETH");
             return;
@@ -171,8 +167,7 @@ contract zQuoterCurveExecTest is Test {
         deal(_USDT, address(this), amtIn);
         _approve(_USDT, _ROUTER, amtIn);
 
-        (bool ok, bytes memory ret, uint256 received) =
-            _execCurveDirect(_USDT, ETH, amtIn, pool, i, j, stable, cout, 0);
+        (bool ok, bytes memory ret, uint256 received) = _execCurveDirect(_USDT, ETH, amtIn, pool, i, j, stable, cout, 0);
 
         if (!ok) {
             emit log_named_bytes("REVERT USDT->ETH Curve", ret);
@@ -189,8 +184,7 @@ contract zQuoterCurveExecTest is Test {
     // ------------------------------------------------------------------
     function test_curve_WBTC_to_ETH_TWO_HOP_unwrap() public {
         uint256 amtIn = 0.1e8;
-        (, uint256 cout, address pool,, , uint8 i, uint8 j) =
-            quoter.quoteCurve(false, _WBTC, ETH, amtIn, 8);
+        (, uint256 cout, address pool,,, uint8 i, uint8 j) = quoter.quoteCurve(false, _WBTC, ETH, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for WBTC->ETH");
             return;

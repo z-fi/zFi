@@ -3,6 +3,53 @@ the first onchain superdapp
 
 [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4)
 [zQuoter](https://etherscan.io/address/0x9909861aa515afbce9d36c532eae7e0ebf804034)
+[zSwap](https://etherscan.io/address/0x000000000A4A4F895734cF70700b6F84AadbcA6C)
+
+## zSwap: permanent onchain HTML dapp
+
+[zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — lives on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
+
+Deployment: [`0x000000000A4A4F895734cF70700b6F84AadbcA6C`](https://etherscan.io/address/0x000000000A4A4F895734cF70700b6F84AadbcA6C)
+
+### The permanent-HTML pattern
+
+The HTML payload (24,549 bytes) is installed as the **runtime bytecode of a separate data contract** created during `zSwap`'s constructor. The wrapper keeps a single `immutable` pointer (`DATA`) to that address. At read time, `html()` copies the payload back with `EXTCODECOPY` into an ABI-encoded `string` return — any RPC client decodes it directly.
+
+- **Why a child contract?** EIP-170 caps deployed code at 24,576 bytes. Storing HTML as runtime bytecode of a dedicated contract gives us the full 24,576-byte budget for payload without fighting the wrapper's own logic for space. zSwap's payload clears the cap with 27 bytes of headroom.
+- **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the whole blob in one op. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
+- **Why immutable?** The payload is set once in the constructor via a minimal deploy stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). Nothing in the contract can mutate it. The response is guaranteed byte-identical for the life of the chain, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
+
+### Browsing it
+
+`zSwap` implements [ERC-5219](https://eips.ethereum.org/EIPS/eip-5219) and advertises resolution mode `"5219"` per [ERC-4804](https://eips.ethereum.org/EIPS/eip-4804), so any `web3://` gateway serves it as a normal web page:
+
+- **HTTP gateway**: `https://0x000000000A4A4F895734cF70700b6F84AadbcA6C.1.w3link.io/`
+- **Native `web3://`**: wallets/browsers with web3:// protocol support (e.g. the Web3URL extension).
+- **Raw RPC**: `cast call 0x000000000A4A4F895734cF70700b6F84AadbcA6C "html()(string)" --rpc-url <rpc> > zSwap.html` then open the file locally.
+
+Path and query parameters are ignored — the contract is a single-page app served from any URL under its address.
+
+### What the dapp does
+
+Once loaded, `zSwap.html` is a self-contained swap UI that:
+
+- Connects an injected wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
+- Quotes via [zQuoter](https://etherscan.io/address/0x9909861aa515afbce9d36c532eae7e0ebf804034) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
+- Routes the swap through [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4), handling ERC-20 approvals and native ETH.
+- Displays the chosen source DEX, effective rate, and Min received / Max paid under the user's slippage setting.
+
+No JavaScript bundler, no external asset loads at runtime — icons are inlined SVG and the script speaks JSON-RPC directly to the injected provider.
+
+### Regenerating the payload
+
+`zSwap.html` at the repo root is the canonical source. To rebuild the Solidity payload after editing it:
+
+```
+node script/build-zSwap.mjs
+forge test --match-path test/zSwap.t.sol
+```
+
+The builder re-encodes the hex chunks in the constructor and refreshes the embedded source comment at the bottom of `zSwap.sol` so on-chain verification matches the repo byte-for-byte.
 
 ## Precision DeFi
 
