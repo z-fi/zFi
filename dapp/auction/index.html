@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AUCTION</title>
+<meta property="og:title" content="AUCTION">
+<meta property="og:description" content="Dutch auction — price decays linearly, first buyer wins. Settled in ETH on zFi.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="../theme.css">
+<link rel="stylesheet" href="../wallet.css">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<script src="../theme.js"></script>
+<style>
+body { max-width:560px; }
+
+.header { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
+.header h1 { font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase; }
+.back-link { font-size:12px;color:var(--fg-muted);text-decoration:none;margin-bottom:12px;display:inline-block; }
+.back-link:hover { color:var(--fg); }
+
+.auction-banner {
+  width:100%;aspect-ratio:400/220;overflow:hidden;margin-bottom:14px;position:relative;
+  background:#000;border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+}
+.auction-banner img, .auction-banner video {
+  width:100%;height:100%;object-fit:contain;background:#000;display:block;
+}
+.auction-banner .fallback-art { width:100%;height:100%;display:block; }
+
+.sold-overlay {
+  display:none;position:absolute;inset:0;background:rgba(0,0,0,0.72);
+  align-items:center;justify-content:center;color:#fff;
+  font-family:ui-monospace,Menlo,monospace;text-align:center;padding:12px;
+}
+.sold-overlay.open { display:flex; }
+.sold-badge {
+  font-size:30px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
+  border:3px solid #fff;padding:10px 22px;transform:rotate(-4deg);background:rgba(0,0,0,0.4);
+}
+.sold-sub { font-size:12px;margin-top:10px;opacity:0.85;letter-spacing:0.06em; }
+.state-ended .sold-badge { border-color:#ccc;color:#ccc; }
+.state-cancelled .sold-badge { border-color:var(--red,#ef4444);color:var(--red,#ef4444); }
+
+.auction-head {
+  display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;position:relative;z-index:1;
+}
+.auction-logo {
+  width:68px;height:68px;border:3px solid var(--bg);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;
+}
+.auction-logo img { width:100%;height:100%;object-fit:cover;display:block; }
+.auction-logo svg { width:100%;height:100%;display:block; }
+.auction-title { min-width:0;flex:1; }
+.auction-title h2 {
+  font-size:20px;font-weight:600;margin:0;letter-spacing:-0.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.auction-meta {
+  font-size:12px;color:var(--fg-muted);margin-top:3px;font-family:ui-monospace,Menlo,monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.auction-tag {
+  margin-left:auto;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 8px;border:1px solid var(--fg);color:var(--fg);background:var(--bg);flex-shrink:0;
+}
+.state-sold .auction-tag { border-color:var(--green,#22c55e);color:var(--green,#22c55e); }
+.state-ended .auction-tag { border-color:var(--fg-muted);color:var(--fg-muted); }
+.state-cancelled .auction-tag { border-color:var(--red,#ef4444);color:var(--red,#ef4444); }
+
+.section-card { border:1px solid var(--border);padding:16px;margin-bottom:14px; }
+.section-title {
+  font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--fg-muted);margin-bottom:10px;
+}
+.stat-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px;gap:8px; }
+.stat-row:last-child { margin-bottom:0; }
+.stat-label { color:var(--fg-muted); }
+.stat-value { font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums; }
+.stat-value a { color:var(--fg); }
+.mono { font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:500; }
+
+.price-card { text-align:center; }
+.price-big {
+  font-size:44px;font-weight:700;letter-spacing:-0.02em;line-height:1;
+  font-variant-numeric:tabular-nums;margin:6px 0 4px;
+}
+.price-big .unit { font-size:22px;font-weight:500;margin-left:4px;color:var(--fg-muted); }
+.price-usd { font-size:13px;color:var(--fg-muted);font-variant-numeric:tabular-nums; }
+.price-delta {
+  display:inline-block;margin-top:10px;font-size:11px;
+  padding:3px 8px;border:1px solid var(--border);
+  font-family:ui-monospace,Menlo,monospace;letter-spacing:0.04em;color:var(--fg-muted);
+}
+.state-sold .price-card .price-big { color:var(--green,#22c55e); }
+
+.time-big {
+  font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:700;
+  text-align:center;font-variant-numeric:tabular-nums;letter-spacing:0.02em;
+  margin:4px 0 10px;
+}
+.time-bar {
+  font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1;letter-spacing:1px;
+  margin-bottom:10px;color:var(--fg);word-break:break-all;
+}
+.time-bar .filled { color:var(--fg); }
+.time-bar .empty { opacity:0.25; }
+
+.curve-wrap {
+  display:grid;grid-template-columns:auto 1fr;gap:6px;
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.1;
+}
+.curve-y {
+  display:flex;flex-direction:column;justify-content:space-between;
+  color:var(--fg-muted);text-align:right;padding-right:4px;border-right:1px solid var(--border-muted);
+}
+.curve-y span { font-size:10px;white-space:nowrap; }
+.curve-plot { white-space:pre;overflow:hidden;letter-spacing:1px;color:var(--fg);font-size:12px;line-height:1; }
+.curve-plot .past { color:var(--fg); }
+.curve-plot .future { opacity:0.3; }
+.curve-plot .mark { color:var(--green,#22c55e); }
+.curve-x {
+  display:flex;justify-content:space-between;margin-top:8px;padding-left:40px;
+  font-size:10px;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;
+}
+
+.action-btn {
+  display:block;width:100%;padding:16px;font-size:14px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  background:var(--btn-bg);color:var(--btn-fg);border:none;border-radius:0;
+  cursor:pointer;font-family:inherit;margin-bottom:14px;
+}
+.action-btn:hover:not(:disabled) { background:var(--btn-hover); }
+.action-btn:disabled { opacity:0.4;cursor:not-allowed; }
+.action-btn.cancel { background:transparent;color:var(--red,#ef4444);border:1px solid var(--red,#ef4444); }
+.action-btn.cancel:hover:not(:disabled) { background:var(--red,#ef4444);color:#fff; }
+.action-btn .price { font-variant-numeric:tabular-nums; }
+
+.modal-overlay {
+  display:none;position:fixed;inset:0;background:var(--modal-overlay);
+  align-items:center;justify-content:center;z-index:500;padding:20px;
+}
+.modal-overlay.open { display:flex; }
+.modal { background:var(--modal-bg);border:1px solid var(--modal-border);max-width:380px;width:100%;padding:20px; }
+.modal h3 { font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-muted);margin:0 0 14px; }
+.modal-body { font-size:13px;line-height:1.5; }
+.modal .stat-row { border-bottom:1px dashed var(--border-muted);padding-bottom:8px; }
+.modal .modal-total { font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;padding-top:8px; }
+.modal-note { font-size:11px;color:var(--fg-muted);margin-top:10px;line-height:1.5; }
+.modal-actions { display:flex;gap:8px;margin-top:16px; }
+.modal-actions button {
+  flex:1;padding:12px;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:0;
+  cursor:pointer;font-family:inherit;
+}
+.modal-actions .confirm { background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg); }
+.modal-actions .confirm:hover { background:var(--btn-hover); }
+.modal-status { text-align:center;font-size:13px;padding:20px 0;color:var(--fg-muted); }
+.modal-status.err { color:var(--red,#ef4444); }
+.modal-status .spin { display:inline-block;animation:spin 1s linear infinite;font-size:20px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.modal-status a { color:var(--link-fg);text-decoration:underline; }
+
+.skeleton { opacity:0.5; }
+.skeleton .section-card { background:var(--surface); }
+
+.empty-state { text-align:center;padding:60px 20px;color:var(--fg-muted); }
+.empty-state h2 { font-size:16px;color:var(--fg);margin-bottom:8px; }
+
+/* Mobile tightening — the monospace curve is 42 chars wide; at 12px + 1px
+   letter-spacing it overflows ~380px. Shrink font + drop letter-spacing so
+   the whole shape fits on a 320–375px iPhone without the right-side clip. */
+@media (max-width:480px) {
+  body { padding: 70px 12px 20px; }
+  .auction-title h2 { font-size:17px; }
+  .auction-logo { width:56px;height:56px; }
+  .price-big { font-size:36px; }
+  .price-big .unit { font-size:18px; }
+  .time-big { font-size:26px; }
+  .curve-plot { font-size:10px;letter-spacing:0; }
+  .curve-y { padding-right:2px; }
+  .curve-y span { font-size:9px; }
+  .curve-x { padding-left:28px;font-size:9px; }
+  .section-card { padding:14px; }
+  .sold-badge { font-size:24px;padding:8px 18px; }
+  .modal-actions button { padding:10px;font-size:11px; }
+}
+</style>
+</head>
+<body>
+<div id="z-nav"></div>
+
+<div class="header">
+  <h1>ZFI · AUCTION</h1>
+</div>
+
+<a href="../coin/" class="back-link">← gallery</a>
+
+<div id="loadingView" style="padding:60px 0;text-align:center;color:var(--fg-muted);font-size:13px">
+  <div id="loadingIcon" style="margin-bottom:10px"></div>
+  Loading auction…
+</div>
+
+<div id="notFoundView" class="empty-state" style="display:none">
+  <h2>Auction not found</h2>
+  <p>No listing found for that id. It may never have existed.</p>
+</div>
+
+<div id="errorView" class="empty-state" style="display:none">
+  <h2>Couldn't load</h2>
+  <p id="errorText">Network error.</p>
+  <button class="action-btn" style="max-width:200px;margin:14px auto 0" onclick="init()">Retry</button>
+</div>
+
+<div id="content" style="display:none">
+  <div class="auction-banner">
+    <div id="bannerBody"></div>
+    <div class="sold-overlay" id="soldOverlay">
+      <div>
+        <div class="sold-badge" id="soldBadge">—</div>
+        <div class="sold-sub" id="soldSub"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auction-head">
+    <div class="auction-logo" id="logoBody"></div>
+    <div class="auction-title">
+      <h2 id="auctionName">—</h2>
+      <div class="auction-meta" id="auctionBy">—</div>
+    </div>
+    <div class="auction-tag" id="stateTag">—</div>
+  </div>
+
+  <div class="section-card" id="descCard" style="display:none">
+    <div class="section-title">Description</div>
+    <div id="descBody" style="font-size:13px;line-height:1.55;color:var(--fg);white-space:pre-wrap;word-wrap:break-word"></div>
+  </div>
+
+  <div class="section-card price-card">
+    <div class="section-title" id="priceLabel">Current Price</div>
+    <div class="price-big"><span id="priceEth">—</span><span class="unit">Ξ</span></div>
+    <div class="price-usd" id="priceUsdWrap" style="display:none">≈ $<span id="priceUsd">—</span></div>
+    <div class="price-delta" id="priceDelta">—</div>
+  </div>
+
+  <div class="section-card" id="timeCard">
+    <div class="section-title" id="timeTitle">Time Remaining</div>
+    <div class="time-big" id="timeBig">—</div>
+    <div class="time-bar" id="timeBar"></div>
+    <div class="stat-row"><span class="stat-label">started</span><span class="stat-value" id="startedAt">—</span></div>
+    <div class="stat-row"><span class="stat-label">duration</span><span class="stat-value" id="durationTxt">—</span></div>
+    <div class="stat-row"><span class="stat-label" id="endsLabel">ends</span><span class="stat-value" id="endsAt">—</span></div>
+  </div>
+
+  <div class="section-card" id="curveCard">
+    <div class="section-title">Price Decay</div>
+    <div class="curve-wrap">
+      <div class="curve-y" id="curveY"></div>
+      <div class="curve-plot" id="curvePlot"></div>
+    </div>
+    <div class="curve-x">
+      <span>start</span>
+      <span id="curveMid">half</span>
+      <span id="curveEnd">end</span>
+    </div>
+  </div>
+
+  <div id="actionWrap"></div>
+
+  <div class="section-card">
+    <div class="section-title">Listing</div>
+    <div class="stat-row"><span class="stat-label">seller</span><span class="stat-value mono" id="sellerCell">—</span></div>
+    <div class="stat-row"><span class="stat-label">collection</span><span class="stat-value mono" id="collectionCell">—</span></div>
+    <div class="stat-row"><span class="stat-label">token id</span><span class="stat-value" id="tokenIdCell">—</span></div>
+    <div class="stat-row"><span class="stat-label">auction id</span><span class="stat-value" id="auctionIdCell">—</span></div>
+    <div class="stat-row"><span class="stat-label">start price</span><span class="stat-value" id="startPriceCell">—</span></div>
+    <div class="stat-row"><span class="stat-label">floor price</span><span class="stat-value" id="endPriceCell">—</span></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="actionModal">
+  <div class="modal">
+    <h3 id="modalTitle">Confirm</h3>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-status" id="modalStatus" style="display:none"></div>
+  </div>
+</div>
+
+<script src="../vendor/ethers.min.js"></script>
+<script src="../vendor/walletconnect.min.js"></script>
+<script src="../wallet.js"></script>
+<script>
+// Deployed contract + worker
+const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
+const COIN_DB_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
+
+const RPCS = [
+  'https://ethereum.publicnode.com',
+  'https://1rpc.io/eth',
+  'https://eth.drpc.org',
+  'https://eth.llamarpc.com'
+];
+
+const AUCTION_ABI = [
+  'function priceOf(uint256) view returns (uint256)',
+  'function costOf(uint256,uint128) view returns (uint256)',
+  'function nextId() view returns (uint256)',
+  'function getAuction(uint256) view returns (tuple(uint256 id, address seller, address token, bool isNFT, uint40 startTime, uint40 duration, uint128 startPrice, uint128 endPrice, uint128 initial, uint128 remaining, uint256[] ids, uint256 price))',
+  'function fill(uint256,uint128) payable',
+  'function cancel(uint256)',
+  'event Filled(uint256 indexed id, address indexed seller, address indexed buyer, uint256 amount, uint256 paid)',
+  'event Cancelled(uint256 indexed id)'
+];
+
+const ERC721_ABI = [
+  'function tokenURI(uint256) view returns (string)',
+  'function name() view returns (string)',
+  'function symbol() view returns (string)'
+];
+
+const CHAINLINK_ETH_USD = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419';
+const CHAINLINK_ABI = ['function latestAnswer() view returns (int256)'];
+
+const IPFS_GW = 'https://content.wrappr.wtf/ipfs/';
+
+// ---- RPC helpers ----
+let _rpcIdx = 0;
+const _rpcProviders = RPCS.map(u => new ethers.JsonRpcProvider(u, 1, { staticNetwork: true }));
+async function withRPC(fn) {
+  for (let i = 0; i < _rpcProviders.length; i++) {
+    try {
+      const rpc = _rpcProviders[(_rpcIdx + i) % _rpcProviders.length];
+      const v = await fn(rpc);
+      _rpcIdx = (_rpcIdx + i) % _rpcProviders.length;
+      return v;
+    } catch (e) { if (i === _rpcProviders.length - 1) throw e; }
+  }
+}
+
+async function coinDbFetch(table, params) {
+  try {
+    const res = await fetch(`${COIN_DB_URL}/db/${table}?${params}`);
+    return await res.json();
+  } catch { return []; }
+}
+
+function ipfsToHttp(uri) {
+  if (!uri) return '';
+  if (uri.startsWith('ipfs://')) return IPFS_GW + uri.slice(7);
+  if (uri.startsWith('ar://'))   return 'https://arweave.net/' + uri.slice(5);
+  return uri;
+}
+
+// Metadata can come as http URL, ipfs://, ar://, or data URI (plain/base64).
+// Fast path fetches directly (IPFS gateway + CORS-friendly servers); falls back
+// to the worker proxy for CORS-blocked servers. Image URLs discovered inside
+// the JSON load via <img> tags, which don't need CORS.
+async function fetchMeta(uri) {
+  if (!uri) return {};
+  if (uri.startsWith('data:application/json')) {
+    const comma = uri.indexOf(',');
+    const body = uri.slice(comma + 1);
+    const isB64 = uri.slice(5, comma).includes('base64');
+    const s = isB64 ? atob(body) : decodeURIComponent(body);
+    try { return JSON.parse(s); } catch { return {}; }
+  }
+  const url = ipfsToHttp(uri);
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+  } catch {}
+  try {
+    const r = await fetch(`${COIN_DB_URL}/proxy-metadata?url=${encodeURIComponent(url)}`);
+    if (r.ok) return await r.json();
+  } catch {}
+  return {};
+}
+
+// ---- Formatting ----
+const $ = id => document.getElementById(id);
+function escText(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function shortAddr(a) { return a ? a.slice(0,6)+'…'+a.slice(-4) : '—'; }
+function fmtETH(v) {
+  const n = Number(ethers.formatEther(v));
+  if (n >= 10) return n.toFixed(3);
+  if (n >= 0.1) return n.toFixed(4);
+  if (n >= 0.001) return n.toFixed(5);
+  return n.toFixed(6);
+}
+function fmtUSD(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtTimeSpan(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const d = Math.floor(sec/86400);
+  const h = Math.floor((sec%86400)/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec%60;
+  if (d > 0) return `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function fmtAgo(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  if (sec < 60) return `${sec}s ago`;
+  const m = Math.floor(sec/60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ${m%60}m ago`;
+  const d = Math.floor(h/24);
+  return `${d}d ${h%24}h ago`;
+}
+function fmtIn(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  if (sec <= 0) return 'ended';
+  const m = Math.floor(sec/60);
+  if (m < 60) return `in ${m}m`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `in ${h}h ${m%60}m`;
+  const d = Math.floor(h/24);
+  return `in ${d}d ${h%24}h`;
+}
+function fmtDurationLabel(sec) {
+  sec = Number(sec);
+  if (sec % 86400 === 0) { const d = sec/86400; return `${d}d`; }
+  if (sec >= 86400) { return `${Math.floor(sec/86400)}d ${Math.floor((sec%86400)/3600)}h`; }
+  return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+}
+function renderTimeBar(pct, width=28) {
+  const filled = Math.max(0, Math.min(width, Math.round((pct/100) * width)));
+  return `<span class="filled">${'█'.repeat(filled)}</span><span class="empty">${'░'.repeat(width-filled)}</span>`;
+}
+
+// ---- Page state ----
+let _auctionId = null;
+let _auction = null;       // AuctionView tuple from getAuction
+let _closedKind = null;    // 'sold' | 'cancelled' | null — only meaningful when seller == 0
+let _closedInfo = null;    // { price, buyer, blockNumber } for sold
+let _meta = null;          // display metadata (custom override or NFT-native)
+let _ethUsd = null;
+let _priceTick = null;
+let _chainPoll = null;
+
+function showNotFound() {
+  $('loadingView').style.display = 'none';
+  $('content').style.display = 'none';
+  $('notFoundView').style.display = '';
+  $('errorView').style.display = 'none';
+}
+function showError(msg) {
+  $('loadingView').style.display = 'none';
+  $('content').style.display = 'none';
+  $('errorView').style.display = '';
+  $('notFoundView').style.display = 'none';
+  $('errorText').textContent = msg || 'Network error.';
+}
+function showContent() {
+  $('loadingView').style.display = 'none';
+  $('content').style.display = '';
+  $('errorView').style.display = 'none';
+  $('notFoundView').style.display = 'none';
+}
+
+// ---- Banner / logo ----
+// Fallback art used when no NFT image resolves — a stylized worm rendered in SVG,
+// kept in sync visually with the preview page's placeholder so the aesthetic matches.
+function fallbackBannerSvg(label) {
+  const t = escText(label || 'NFT');
+  return `<svg class="fallback-art" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    <rect width="400" height="220" fill="#000"/>
+    <g transform="translate(200 110)" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M -140 30 L -100 -10 L -60 30 L -20 -10 L 20 30 L 60 -10 L 100 30 L 140 -10"/>
+    </g>
+    <g transform="translate(340 100)" fill="#fff">
+      <rect x="-12" y="-12" width="24" height="24"/>
+      <rect x="-5" y="-4" width="4" height="4" fill="#000"/>
+      <rect x="3" y="-4" width="4" height="4" fill="#000"/>
+    </g>
+    <g transform="translate(20 28)" fill="#fff" font-family="ui-monospace,monospace" font-size="10" font-weight="700">
+      <text letter-spacing="2">${t}</text>
+    </g>
+  </svg>`;
+}
+function fallbackLogoSvg(letter) {
+  const l = escText((letter || '?').slice(0,1).toUpperCase());
+  return `<svg viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg">
+    <rect width="68" height="68" fill="#000"/>
+    <text x="34" y="46" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="32" font-weight="700" fill="#fff">${l}</text>
+  </svg>`;
+}
+
+function renderBannerAndLogo() {
+  // Stage fallbacks BEFORE injecting the <img> so the onerror handler can find them
+  // even if the image errors synchronously (e.g. immediately-broken data: URI).
+  window._auctionFallbackBanner = fallbackBannerSvg(collectionLabel());
+  window._auctionFallbackLogo = fallbackLogoSvg(logoLetter());
+
+  const img = _meta?.image ? ipfsToHttp(_meta.image) : (_meta?.banner ? ipfsToHttp(_meta.banner) : '');
+  const bannerSrc = _meta?.banner ? ipfsToHttp(_meta.banner) : img;
+  if (bannerSrc) {
+    $('bannerBody').innerHTML = `<img src="${escText(bannerSrc)}" alt="" onerror="this.outerHTML = window._auctionFallbackBanner">`;
+  } else {
+    $('bannerBody').innerHTML = window._auctionFallbackBanner;
+  }
+
+  const logoSrc = _meta?.image ? ipfsToHttp(_meta.image) : '';
+  if (logoSrc) {
+    $('logoBody').innerHTML = `<img src="${escText(logoSrc)}" alt="" onerror="this.outerHTML = window._auctionFallbackLogo">`;
+  } else {
+    $('logoBody').innerHTML = window._auctionFallbackLogo;
+  }
+}
+
+function collectionLabel() {
+  return _meta?.nftSymbol || _meta?.nftCollection || _meta?.name || 'NFT';
+}
+function logoLetter() {
+  const s = _meta?.name || _meta?.nftSymbol || _meta?.nftCollection || 'N';
+  return s.trim()[0] || 'N';
+}
+
+// ---- Curve ----
+// Grid of block chars showing the price decay. The vertical line where past
+// meets future acts as a "you are here" marker without needing a separate glyph.
+function renderCurve(elapsed, startPrice, endPrice, duration, soldAt) {
+  const W = 42, H = 10;
+  const lines = Array.from({length:H}, ()=>Array(W).fill(' '));
+  const cls   = Array.from({length:H}, ()=>Array(W).fill(''));
+  const clampedDur = Math.max(1, duration);
+  const nowCol = Math.max(0, Math.min(W-1, Math.round((elapsed/clampedDur) * (W-1))));
+  const soldCol = soldAt != null ? Math.max(0, Math.min(W-1, Math.round((soldAt/clampedDur) * (W-1)))) : null;
+
+  const sp = Number(ethers.formatEther(startPrice));
+  const ep = Number(ethers.formatEther(endPrice));
+  const range = Math.max(1e-18, sp - ep);
+
+  for (let x = 0; x < W; x++) {
+    const t = (x/(W-1)) * clampedDur;
+    const tClamp = Math.max(0, Math.min(t, clampedDur));
+    const p = sp - (sp - ep) * (tClamp/clampedDur);
+    const norm = (p - ep) / range;
+    const row = Math.max(0, Math.min(H-1, Math.round((1-norm) * (H-1))));
+    for (let y = row; y < H; y++) {
+      const past = x <= nowCol;
+      if (y === row) lines[y][x] = past ? '█' : '▀';
+      else           lines[y][x] = past ? '▓' : '░';
+      cls[y][x] = x < nowCol ? 'past' : (x === nowCol ? 'mark' : 'future');
+      if (soldCol != null && x === soldCol && y === row) { lines[y][x] = '◆'; cls[y][x] = 'mark'; }
+    }
+  }
+  const out = [];
+  for (let y = 0; y < H; y++) {
+    let html = '', cur = null, buf = '';
+    for (let x = 0; x < W; x++) {
+      const c = cls[y][x];
+      if (c !== cur) { if (buf) html += `<span class="${cur}">${buf}</span>`; buf = ''; cur = c; }
+      buf += lines[y][x];
+    }
+    if (buf) html += `<span class="${cur}">${buf}</span>`;
+    out.push(html);
+  }
+  return out.join('\n');
+}
+
+// ---- Main render ----
+function classifyState() {
+  const a = _auction;
+  if (!a) return 'unknown';
+  if (a.seller === ethers.ZeroAddress) {
+    if (_closedKind === 'sold') return 'sold';
+    if (_closedKind === 'cancelled') return 'cancelled';
+    return 'closed'; // Event scan missed (old closure); neutral state instead of guessing.
+  }
+  const now = Math.floor(Date.now()/1000);
+  const start = Number(a.startTime);
+  const end = start + Number(a.duration);
+  if (now < start) return 'pending';
+  if (now >= end) return 'ended'; // still live at floor — can be filled at endPrice
+  return 'live';
+}
+
+function setStateClass(state) {
+  document.body.classList.remove('state-live','state-sold','state-ended','state-cancelled','state-pending','state-closed');
+  document.body.classList.add('state-' + state);
+  const tag = $('stateTag');
+  const tagTxt = {
+    live: 'Live', sold: 'Sold', ended: 'Ended', cancelled: 'Cancelled', pending: 'Scheduled', closed: 'Closed'
+  }[state] || '—';
+  tag.textContent = tagTxt;
+
+  const overlay = $('soldOverlay');
+  const badge = $('soldBadge');
+  const sub = $('soldSub');
+  if (state === 'sold') {
+    overlay.classList.add('open');
+    const priceTxt = _closedInfo?.price != null ? `${fmtETH(_closedInfo.price)} Ξ` : '—';
+    badge.textContent = `SOLD · ${priceTxt}`;
+    sub.textContent = _closedInfo?.buyer ? `bought by ${shortAddr(_closedInfo.buyer)}` : '';
+  } else if (state === 'ended') {
+    overlay.classList.add('open');
+    badge.textContent = 'ENDED';
+    sub.textContent = _auction ? `floor · ${fmtETH(_auction.endPrice)} Ξ · still fillable` : '';
+  } else if (state === 'cancelled') {
+    overlay.classList.add('open');
+    badge.textContent = 'CANCELLED';
+    sub.textContent = 'seller withdrew';
+  } else if (state === 'closed') {
+    overlay.classList.add('open');
+    badge.textContent = 'CLOSED';
+    sub.textContent = 'auction settled on-chain';
+  } else {
+    overlay.classList.remove('open');
+  }
+}
+
+function renderHeader() {
+  const name = _meta?.name || (_auction && _auction.ids.length ? `${collectionLabel()} #${_auction.ids[0].toString()}` : 'NFT');
+  $('auctionName').textContent = name;
+  const sellerShort = _auction ? shortAddr(_auction.seller) : '—';
+  $('auctionBy').textContent = `by ${sellerShort}`;
+  document.title = `${name} · AUCTION`;
+
+  // Description — shown only when present (custom override or native tokenURI).
+  const desc = (_meta?.description || '').trim();
+  if (desc) {
+    $('descBody').textContent = desc;
+    $('descCard').style.display = '';
+  } else {
+    $('descCard').style.display = 'none';
+  }
+}
+
+function renderListingDetails() {
+  const a = _auction;
+  if (!a) return;
+  $('sellerCell').innerHTML = a.seller === ethers.ZeroAddress ? '—' :
+    `<a href="https://etherscan.io/address/${a.seller}" target="_blank" rel="noopener">${shortAddr(a.seller)}</a>`;
+  $('collectionCell').innerHTML =
+    `<a href="https://etherscan.io/address/${a.token}" target="_blank" rel="noopener">${shortAddr(a.token)}</a>`;
+  $('tokenIdCell').textContent = a.ids.length ? `#${a.ids[0].toString()}` : '—';
+  $('auctionIdCell').textContent = `#${_auctionId.toString()}`;
+  $('startPriceCell').textContent = `${fmtETH(a.startPrice)} Ξ`;
+  $('endPriceCell').textContent = `${fmtETH(a.endPrice)} Ξ`;
+}
+
+function renderCurveCard() {
+  const a = _auction;
+  if (!a) return;
+  const sp = fmtETH(a.startPrice);
+  const ep = fmtETH(a.endPrice);
+  const mp = fmtETH((a.startPrice + a.endPrice) / 2n);
+  $('curveY').innerHTML = `<span>${sp} Ξ</span><span>${mp} Ξ</span><span>${ep} Ξ</span>`;
+  $('curveEnd').textContent = `end · ${fmtDurationLabel(Number(a.duration))}`;
+}
+
+// Computes the auction price at a given elapsed time. Mirrors _priceOf on-chain.
+function priceAtElapsed(elapsed) {
+  const a = _auction;
+  const dur = Number(a.duration);
+  if (elapsed <= 0) return a.startPrice;
+  if (elapsed >= dur) return a.endPrice;
+  const diff = a.startPrice - a.endPrice;
+  return a.startPrice - (diff * BigInt(Math.floor(elapsed))) / BigInt(dur);
+}
+
+function renderPriceAndTime() {
+  const a = _auction;
+  if (!a) return;
+  const state = classifyState();
+  setStateClass(state);
+
+  const now = Math.floor(Date.now()/1000);
+  const start = Number(a.startTime);
+  const dur = Number(a.duration);
+  const end = start + dur;
+  const elapsed = Math.max(0, now - start);
+  const remaining = Math.max(0, end - now);
+
+  let displayPriceWei;
+  let displayElapsed = Math.min(elapsed, dur);
+  // The curve shows the decay shape; the sale price is surfaced in the SOLD
+  // overlay and the big price card, so we don't bother with a per-position
+  // marker (would require fetching block timestamps we don't otherwise need).
+  const soldCol = null;
+  if (state === 'sold' && _closedInfo?.price != null) {
+    displayPriceWei = BigInt(_closedInfo.price);
+    displayElapsed = dur;
+  } else if (state === 'closed') {
+    displayPriceWei = 0n;
+    displayElapsed = Math.min(elapsed, dur);
+  } else if (state === 'cancelled') {
+    displayPriceWei = 0n;
+    displayElapsed = Math.min(elapsed, dur);
+  } else if (state === 'pending') {
+    displayPriceWei = a.startPrice;
+    displayElapsed = 0;
+  } else if (state === 'ended') {
+    displayPriceWei = a.endPrice;
+    displayElapsed = dur;
+  } else {
+    displayPriceWei = priceAtElapsed(elapsed);
+  }
+
+  // Price
+  if (state === 'cancelled' || state === 'closed') {
+    $('priceEth').textContent = '—';
+  } else {
+    $('priceEth').textContent = fmtETH(displayPriceWei);
+  }
+  if (_ethUsd != null && state !== 'cancelled' && state !== 'closed') {
+    const usd = Number(ethers.formatEther(displayPriceWei)) * _ethUsd;
+    $('priceUsdWrap').style.display = '';
+    $('priceUsd').textContent = fmtUSD(usd);
+  } else {
+    $('priceUsdWrap').style.display = 'none';
+  }
+
+  // Delta / label
+  const priceLabel = state === 'sold' ? 'Sold At'
+    : state === 'ended' ? 'Floor Price'
+    : state === 'pending' ? 'Start Price'
+    : state === 'cancelled' ? 'Closed'
+    : state === 'closed' ? 'Closed'
+    : 'Current Price';
+  $('priceLabel').textContent = priceLabel;
+
+  if (state === 'live') {
+    const diff = Number(ethers.formatEther(a.startPrice - a.endPrice));
+    const perMin = diff / (dur/60);
+    $('priceDelta').textContent = `− ${perMin.toFixed(Math.max(4, 6 - Math.floor(Math.log10(Math.max(perMin,1e-12)))))} Ξ / min`;
+    $('priceDelta').style.display = '';
+  } else if (state === 'pending') {
+    $('priceDelta').textContent = `starts ${fmtIn(start - now)}`;
+    $('priceDelta').style.display = '';
+  } else {
+    $('priceDelta').style.display = 'none';
+  }
+
+  // Time card
+  if (state === 'pending') {
+    $('timeTitle').textContent = 'Starts In';
+    $('timeBig').textContent = fmtTimeSpan(start - now);
+    $('endsLabel').textContent = 'ends';
+    $('endsAt').textContent = new Date(end*1000).toLocaleString();
+  } else if (state === 'live') {
+    $('timeTitle').textContent = 'Time Remaining';
+    $('timeBig').textContent = fmtTimeSpan(remaining);
+    $('endsLabel').textContent = 'ends';
+    $('endsAt').textContent = fmtIn(remaining);
+  } else {
+    const titles = { sold:'Sold', cancelled:'Closed', closed:'Closed' };
+    $('timeTitle').textContent = titles[state] || 'Ended';
+    $('timeBig').textContent = state === 'sold' ? '—' : '00:00:00';
+    $('endsLabel').textContent = 'ended';
+    $('endsAt').textContent = new Date(end*1000).toLocaleString();
+  }
+
+  const pct = dur === 0 ? 100 : Math.min(100, (displayElapsed/dur) * 100);
+  $('timeBar').innerHTML = renderTimeBar(pct);
+  $('startedAt').textContent = state === 'pending' ? 'not yet' : fmtAgo(now - start);
+  $('durationTxt').textContent = fmtDurationLabel(dur);
+
+  // Curve
+  $('curvePlot').innerHTML = renderCurve(displayElapsed, a.startPrice, a.endPrice, dur, soldCol);
+}
+
+function renderActions() {
+  const wrap = $('actionWrap');
+  wrap.innerHTML = '';
+  const state = classifyState();
+  const isBuyable = state === 'live' || state === 'ended' || state === 'pending';
+  const isSeller = _signer && _auction && _auction.seller !== ethers.ZeroAddress &&
+    _connectedAddress && _connectedAddress.toLowerCase() === _auction.seller.toLowerCase();
+
+  if (isBuyable) {
+    if (state === 'pending') {
+      const btn = document.createElement('button');
+      btn.className = 'action-btn';
+      btn.disabled = true;
+      btn.textContent = 'Not started yet';
+      wrap.appendChild(btn);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'action-btn';
+      btn.innerHTML = `Buy Now · <span class="price">${fmtETH(priceAtElapsed(Math.max(0, Math.floor(Date.now()/1000) - Number(_auction.startTime))))}</span> Ξ`;
+      btn.onclick = openBuyModal;
+      wrap.appendChild(btn);
+    }
+  }
+  // Seller cancel button — always available while listing is open (seller != 0).
+  if (_auction && _auction.seller !== ethers.ZeroAddress && isSeller) {
+    const c = document.createElement('button');
+    c.className = 'action-btn cancel';
+    c.textContent = 'Cancel Listing';
+    c.onclick = openCancelModal;
+    wrap.appendChild(c);
+  }
+}
+
+function renderAll() {
+  renderBannerAndLogo();
+  renderHeader();
+  renderListingDetails();
+  renderCurveCard();
+  renderPriceAndTime();
+  renderActions();
+}
+
+// ---- Data load ----
+async function loadAuctionState() {
+  const a = await withRPC(rpc => {
+    const c = new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc);
+    return c.getAuction(_auctionId);
+  });
+  return a;
+}
+
+async function loadMetadata() {
+  // Prefer custom override from Supabase keyed by auction id + launch_type.
+  // SECURITY: auction ids are sequential uints, so Supabase rows keyed by id
+  // alone are squattable by any client that can spoof the Origin header (the
+  // worker's only authn check). Require the row's `creator` to match the
+  // on-chain seller — the attacker can't forge the chain. On mismatch we fall
+  // through to the NFT's native tokenURI, never silently serving attacker art.
+  try {
+    const rows = await coinDbFetch('launched_tokens', `id=eq.${_auctionId.toString()}&launch_type=eq.nft-auction&limit=1`);
+    if (Array.isArray(rows) && rows.length > 0 && rows[0].metadata_uri) {
+      const rowCreator  = String(rows[0].creator || '').toLowerCase();
+      const chainSeller = String(_auction?.seller || '').toLowerCase();
+      if (rowCreator && chainSeller && rowCreator === chainSeller) {
+        const md = await fetchMeta(rows[0].metadata_uri);
+        if (md && (md.name || md.image)) { _meta = md; return; }
+      }
+    }
+  } catch {}
+
+  // Fallback: native tokenURI from the NFT contract.
+  if (_auction && _auction.ids.length > 0) {
+    try {
+      const [uri, collName, collSym] = await withRPC(rpc => {
+        const nft = new ethers.Contract(_auction.token, ERC721_ABI, rpc);
+        return Promise.all([
+          nft.tokenURI(_auction.ids[0]).catch(() => ''),
+          nft.name().catch(() => ''),
+          nft.symbol().catch(() => '')
+        ]);
+      });
+      const md = await fetchMeta(uri);
+      _meta = {
+        name: md.name || `${collSym || collName || 'NFT'} #${_auction.ids[0].toString()}`,
+        description: md.description || '',
+        image: md.image || '',
+        nftCollection: collName,
+        nftSymbol: collSym
+      };
+    } catch {}
+  }
+}
+
+async function loadEthUsd() {
+  try {
+    const val = await withRPC(async rpc => {
+      const c = new ethers.Contract(CHAINLINK_ETH_USD, CHAINLINK_ABI, rpc);
+      return c.latestAnswer();
+    });
+    _ethUsd = Number(val) / 1e8;
+  } catch {}
+}
+
+// ---- Init ----
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const idStr = params.get('id');
+  if (idStr === null || idStr === '') { showNotFound(); return; }
+  try { _auctionId = BigInt(idStr); } catch { showNotFound(); return; }
+
+  $('loadingView').style.display = '';
+  $('content').style.display = 'none';
+  $('errorView').style.display = 'none';
+  $('notFoundView').style.display = 'none';
+  $('loadingIcon').innerHTML = zfiLoadingSVG ? zfiLoadingSVG(48) : '';
+
+  try {
+    _auction = await loadAuctionState();
+  } catch (e) {
+    showError(e.shortMessage || e.message || 'Failed to read chain state');
+    return;
+  }
+
+  // id must be less than nextId to be a valid listing (old or current).
+  // If nextId can't be fetched, we err toward "not found" for closed-looking
+  // structs rather than guessing — an id that was never used looks identical
+  // to a closed one in storage (both all-zero).
+  let nextIdChecked = false;
+  try {
+    const nextId = await withRPC(rpc => new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc).nextId());
+    if (_auctionId >= nextId) { showNotFound(); return; }
+    nextIdChecked = true;
+  } catch {}
+  if (_auction.seller === ethers.ZeroAddress && !nextIdChecked) { showNotFound(); return; }
+
+  // Load metadata and ETH price in parallel.
+  await Promise.all([loadMetadata(), loadEthUsd()]);
+
+  showContent();
+  renderAll();
+  startTicks();
+}
+
+// Redraw price/time every second; re-poll chain every 20s.
+function startTicks() {
+  stopTicks();
+  _priceTick = setInterval(() => {
+    if (!_auction) return;
+    renderPriceAndTime();
+    // Update the Buy-Now button price inline without a full re-render.
+    const btn = $('actionWrap').querySelector('.action-btn:not(.cancel)');
+    if (btn && _auction.seller !== ethers.ZeroAddress) {
+      const elapsed = Math.max(0, Math.floor(Date.now()/1000) - Number(_auction.startTime));
+      const span = btn.querySelector('.price');
+      if (span) span.textContent = fmtETH(priceAtElapsed(elapsed));
+    }
+  }, 1000);
+  _chainPoll = setInterval(async () => {
+    try {
+      const fresh = await loadAuctionState();
+      const justClosed = fresh.seller === ethers.ZeroAddress && _auction.seller !== ethers.ZeroAddress;
+      _auction = fresh;
+      if (justClosed) renderAll();
+    } catch {}
+  }, 20000);
+}
+function stopTicks() {
+  if (_priceTick) { clearInterval(_priceTick); _priceTick = null; }
+  if (_chainPoll) { clearInterval(_chainPoll); _chainPoll = null; }
+}
+
+// ---- Buy flow ----
+function openBuyModal() {
+  // Require a wallet before showing the confirmation — wallet.js's connectWallet
+  // returns null the moment the selector modal opens, long before the user has
+  // actually chosen a provider. If we proceeded into confirmBuy here we'd race.
+  if (!_signer) { connectWallet(); return; }
+  const a = _auction;
+  const elapsed = Math.max(0, Math.floor(Date.now()/1000) - Number(a.startTime));
+  const priceWei = priceAtElapsed(elapsed);
+  const priceStr = fmtETH(priceWei);
+  $('modalTitle').textContent = 'Confirm Purchase';
+  $('modalBody').style.display = '';
+  $('modalStatus').style.display = 'none';
+  $('modalBody').innerHTML = `
+    <div class="stat-row"><span class="stat-label">item</span><span class="stat-value">${escText(_meta?.name || 'NFT')}</span></div>
+    <div class="stat-row"><span class="stat-label">seller</span><span class="stat-value mono">${shortAddr(a.seller)}</span></div>
+    <div class="stat-row"><span class="stat-label">current price</span><span class="stat-value">${priceStr} Ξ</span></div>
+    <div class="stat-row modal-total"><span>Pay</span><span>${priceStr} Ξ</span></div>
+    <div class="modal-note">
+      Price is quoted at the moment you confirm. If the price decays further before your transaction lands, the contract refunds you the difference — you never pay more than the decayed price.
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="confirm" onclick="confirmBuy()">Confirm</button>
+    </div>
+  `;
+  $('actionModal').classList.add('open');
+}
+async function confirmBuy() {
+  // openBuyModal already ensured a signer exists; bail defensively if not.
+  if (!_signer) { closeModal(); connectWallet(); return; }
+  $('modalBody').style.display = 'none';
+  const st = $('modalStatus');
+  st.style.display = '';
+  st.classList.remove('err');
+  try {
+    // Fetch on-chain price fresh so we submit an accurate msg.value.
+    st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Quoting…</div>`;
+    const priceWei = await withRPC(rpc => new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc).priceOf(_auctionId));
+    // priceOf returns 0 for BOTH a closed listing AND a live listing that
+    // decayed to endPrice=0 (legitimate when the seller picked the 0% floor).
+    // Distinguish via seller: 0x0 means the slot was deleted; anything else
+    // is still fillable — including at msg.value = 0.
+    if (_auction.seller === ethers.ZeroAddress) throw new Error('Auction is closed');
+
+    st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Submit in your wallet…</div>`;
+    const c = new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, _signer);
+    const tx = await c.fill(_auctionId, 0, { value: priceWei });
+    st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Waiting for confirmation…</div><div style="margin-top:6px;font-size:11px"><a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener">${tx.hash.slice(0,10)}…</a></div>`;
+    const receipt = await tx.wait();
+    // Pull final paid price from Filled event to show accurate sold amount.
+    for (const log of receipt.logs) {
+      if ((log.address || '').toLowerCase() !== DUTCH_AUCTION.toLowerCase()) continue;
+      try {
+        const parsed = c.interface.parseLog(log);
+        if (parsed?.name === 'Filled') {
+          _closedKind = 'sold';
+          _closedInfo = { price: parsed.args.paid, amount: parsed.args.amount, buyer: parsed.args.buyer };
+          break;
+        }
+      } catch {}
+    }
+    _auction = await loadAuctionState();
+    renderAll();
+    st.innerHTML = `<div>Purchased!</div><div class="modal-actions" style="justify-content:center"><button onclick="closeModal()">Close</button></div>`;
+  } catch (e) {
+    st.classList.add('err');
+    st.innerHTML = `<div>${escText(e.shortMessage || e.message || 'Transaction failed')}</div><div class="modal-actions" style="justify-content:center"><button onclick="closeModal()">Close</button></div>`;
+  }
+}
+
+// ---- Cancel flow ----
+function openCancelModal() {
+  if (!_signer) { connectWallet(); return; }
+  $('modalTitle').textContent = 'Cancel Listing';
+  $('modalBody').style.display = '';
+  $('modalStatus').style.display = 'none';
+  $('modalBody').innerHTML = `
+    <div style="font-size:13px;line-height:1.5;margin-bottom:12px">
+      Withdraw your NFT and close this auction. This cannot be undone; if you want to relist, you'll need to start a new auction.
+    </div>
+    <div class="stat-row"><span class="stat-label">item</span><span class="stat-value">${escText(_meta?.name || 'NFT')}</span></div>
+    <div class="stat-row"><span class="stat-label">auction id</span><span class="stat-value">#${_auctionId.toString()}</span></div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Keep Listing</button>
+      <button class="confirm" onclick="confirmCancel()">Cancel Listing</button>
+    </div>
+  `;
+  $('actionModal').classList.add('open');
+}
+async function confirmCancel() {
+  if (!_signer) { closeModal(); connectWallet(); return; }
+  $('modalBody').style.display = 'none';
+  const st = $('modalStatus');
+  st.style.display = '';
+  st.classList.remove('err');
+  st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Submit in your wallet…</div>`;
+  try {
+    const c = new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, _signer);
+    const tx = await c.cancel(_auctionId);
+    st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Waiting for confirmation…</div>`;
+    await tx.wait();
+    _closedKind = 'cancelled';
+    _auction = await loadAuctionState();
+    renderAll();
+    st.innerHTML = `<div>Listing cancelled.</div><div class="modal-actions" style="justify-content:center"><button onclick="closeModal()">Close</button></div>`;
+  } catch (e) {
+    st.classList.add('err');
+    st.innerHTML = `<div>${escText(e.shortMessage || e.message || 'Cancel failed')}</div><div class="modal-actions" style="justify-content:center"><button onclick="closeModal()">Close</button></div>`;
+  }
+}
+
+function closeModal() { $('actionModal').classList.remove('open'); }
+$('actionModal').addEventListener('click', (e) => { if (e.target === $('actionModal')) closeModal(); });
+
+// Kick off wallet (drops connect button into the page) then page init.
+walletInit({
+  appName: 'zFi Auction',
+  onConnect: [() => renderActions()],
+  onDisconnect: [() => renderActions()]
+});
+
+// Pause the 1s price tick + 20s chain poll when the tab is hidden; resume on
+// visible. Prevents background RPC churn if the user leaves the tab open.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopTicks();
+  else if (_auction) startTicks();
+});
+window.addEventListener('beforeunload', stopTicks);
+
+init();
+</script>
+</body>
+</html>

@@ -174,6 +174,36 @@ export default {
       return json(request, { error: 'method not allowed' }, 405);
     }
 
+    // GET /proxy-metadata?url=<https-url>  — fetch NFT tokenURI JSON from servers
+    // that don't set CORS (e.g. Milady's nginx). Image URLs inside the returned JSON
+    // load directly via <img> tags (no CORS required for display), so the proxy is
+    // only ever used for the one metadata JSON roundtrip.
+    if (url.pathname === '/proxy-metadata') {
+      if (request.method !== 'GET') return json(request, { error: 'GET only' }, 405);
+      const target = url.searchParams.get('url');
+      if (!target) return json(request, { error: 'missing url' }, 400);
+      if (!target.startsWith('https://')) return json(request, { error: 'https only' }, 400);
+      try {
+        const upstream = await fetch(target, { cf: { cacheTtl: 300, cacheEverything: true } });
+        // NFT metadata is small; anything larger is abuse/misuse.
+        const MAX_META = 256 * 1024;
+        const cl = parseInt(upstream.headers.get('content-length') || '0', 10);
+        if (cl > MAX_META) return json(request, { error: 'too large' }, 413);
+        const text = await upstream.text();
+        if (text.length > MAX_META) return json(request, { error: 'too large' }, 413);
+        return new Response(text, {
+          status: upstream.status,
+          headers: {
+            ...cors(request),
+            'Content-Type': upstream.headers.get('content-type') || 'application/json',
+            'Cache-Control': 'public, max-age=300',
+          },
+        });
+      } catch (e) {
+        return json(request, { error: 'fetch failed: ' + (e.message || 'unknown') }, 502);
+      }
+    }
+
     if (request.method !== 'POST') return json(request, { error: 'method not allowed' }, 405);
 
     // POST /pin-image  — multipart image upload → pinFileToIPFS

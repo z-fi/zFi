@@ -633,6 +633,157 @@ async function fetchCauseTokenList() {
   } catch { return []; }
 }
 
+// ==================== NFT AUCTION DISCOVERY (Dutch auction listings) ====================
+// Source of truth is on-chain: getAuctions(start, end) returns the flat struct
+// snapshot for every id in [start, end). Supabase only enriches displays for
+// sellers who customized (logo/banner/description overrides); non-customized
+// listings fall back to the NFT's own tokenURI at render time.
+
+const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
+const DUTCH_AUCTION_ABI = [
+  'function nextId() view returns (uint256)',
+  'function getAuctions(uint256,uint256) view returns (tuple(uint256 id, address seller, address token, bool isNFT, uint40 startTime, uint40 duration, uint128 startPrice, uint128 endPrice, uint128 initial, uint128 remaining, uint256[] ids, uint256 price)[])'
+];
+const NFT_ERC721_ABI_MIN = [
+  'function tokenURI(uint256) view returns (string)',
+  'function name() view returns (string)',
+  'function symbol() view returns (string)'
+];
+const WORKER_PROXY = 'https://zfi-pin.rosscampbell9.workers.dev/proxy-metadata';
+
+// Fetch up to the last N auctions (cheaper than the full history) and keep
+// only live NFT listings (seller != 0 and isNFT). Closed listings are filtered
+// out so the gallery only shows buyable items.
+async function fetchNftAuctions(limit = 60) {
+  try {
+    const rows = await withRPC(async rpc => {
+      const c = new ethers.Contract(DUTCH_AUCTION, DUTCH_AUCTION_ABI, rpc);
+      const nextId = await c.nextId();
+      if (nextId === 0n) return [];
+      const start = nextId > BigInt(limit) ? nextId - BigInt(limit) : 0n;
+      return await c.getAuctions(start, nextId);
+    });
+    return rows.filter(a => a.seller !== ZERO && a.isNFT);
+  } catch (e) {
+    console.warn('fetchNftAuctions failed:', e);
+    return [];
+  }
+}
+
+// Metadata fetcher mirroring the auction detail page — direct fetch first,
+// worker proxy on CORS failure. Covers ipfs://, ar://, http(s), and data URIs.
+async function auctionFetchMeta(uri) {
+  if (!uri) return {};
+  if (uri.startsWith('data:application/json')) {
+    const comma = uri.indexOf(',');
+    const body = uri.slice(comma + 1);
+    const isB64 = uri.slice(5, comma).includes('base64');
+    const s = isB64 ? atob(body) : decodeURIComponent(body);
+    try { return JSON.parse(s); } catch { return {}; }
+  }
+  const url = uri.startsWith('ipfs://') ? IPFS_GW + uri.slice(7)
+           : uri.startsWith('ar://')   ? 'https://arweave.net/' + uri.slice(5)
+           : uri;
+  try {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+  } catch {}
+  try {
+    const r = await fetch(`${WORKER_PROXY}?url=${encodeURIComponent(url)}`);
+    if (r.ok) return await r.json();
+  } catch {}
+  return {};
+}
+
+// Enrich an on-chain auction with display metadata: prefer the seller's pinned
+// override (if any), else fall back to the NFT contract's native tokenURI.
+// SECURITY: verify the Supabase row's `creator` matches the on-chain seller
+// before trusting the override — sequential auction ids + origin-spoofable
+// worker inserts would otherwise let attackers squat future ids with fake
+// metadata. Mismatch → fall through to the native tokenURI.
+async function enrichNftAuction(a) {
+  try {
+    const rows = await coinDbFetch('launched_tokens', `id=eq.${a.id.toString()}&launch_type=eq.nft-auction&limit=1`);
+    if (Array.isArray(rows) && rows.length > 0 && rows[0].metadata_uri) {
+      const rowCreator  = String(rows[0].creator || '').toLowerCase();
+      const chainSeller = String(a.seller || '').toLowerCase();
+      if (rowCreator && chainSeller && rowCreator === chainSeller) {
+        const md = await auctionFetchMeta(rows[0].metadata_uri);
+        if (md && (md.name || md.image)) return { name: md.name, image: md.image, collName: md.nftCollection };
+      }
+    }
+  } catch {}
+  try {
+    const tokenId = a.ids[0];
+    const [uri, collName, collSym] = await withRPC(rpc => {
+      const nft = new ethers.Contract(a.token, NFT_ERC721_ABI_MIN, rpc);
+      return Promise.all([
+        nft.tokenURI(tokenId).catch(() => ''),
+        nft.name().catch(() => ''),
+        nft.symbol().catch(() => '')
+      ]);
+    });
+    const md = await auctionFetchMeta(uri);
+    return {
+      name: md.name || `${collSym || collName || 'NFT'} #${tokenId.toString()}`,
+      image: md.image || '',
+      collName
+    };
+  } catch {
+    return { name: `NFT #${a.ids[0]?.toString() || '?'}`, image: '' };
+  }
+}
+
+function _fmtAuctionDur(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec/60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ${m%60}m`;
+  const d = Math.floor(h/24);
+  return `${d}d ${h%24}h`;
+}
+
+function renderNftAuctionCard(a, meta) {
+  const now = Math.floor(Date.now()/1000);
+  const start = Number(a.startTime);
+  const end = start + Number(a.duration);
+  const remaining = Math.max(0, end - now);
+  const priceEth = Number(ethers.formatEther(a.price));
+  const priceFmt = priceEth >= 10 ? priceEth.toFixed(3) : (priceEth >= 0.1 ? priceEth.toFixed(4) : priceEth.toFixed(6));
+  let state = 'live', statusLabel = 'Live';
+  if (now < start) { state = 'pending'; statusLabel = 'Scheduled'; }
+  else if (now >= end) { state = 'ended'; statusLabel = 'At floor'; }
+  const timeStr = state === 'pending' ? `starts in ${_fmtAuctionDur(start - now)}`
+                : state === 'ended'   ? 'fillable at floor'
+                : `${_fmtAuctionDur(remaining)} left`;
+  const imgHref = meta.image
+    ? (meta.image.startsWith('ipfs://') ? IPFS_GW + meta.image.slice(7)
+     : meta.image.startsWith('ar://')   ? 'https://arweave.net/' + meta.image.slice(5)
+     : meta.image)
+    : '';
+  const name = escText(meta.name || 'NFT');
+  const coll = escText(meta.collName || '');
+  const id = a.id.toString();
+  const addrLow = a.token.toLowerCase();
+  const searchable = `${name} ${coll} dutch auction nft`.toLowerCase();
+  const logoInner = imgHref
+    ? `<img src="${escAttr(imgHref)}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='N'">`
+    : 'N';
+  return `<a href="../auction/?id=${id}" class="coin-card" data-name="${searchable}" data-symbol="nft" data-addr="${addrLow}" data-auction-id="${id}">
+      <div class="coin-card-head">
+        <div class="coin-logo">${logoInner}</div>
+        <div style="min-width:0;flex:1">
+          <div class="coin-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+          <div class="coin-card-symbol">Dutch auction &middot; ${statusLabel}</div>
+        </div>
+      </div>
+      <div class="coin-card-stat" style="font-variant-numeric:tabular-nums">${priceFmt} Ξ &middot; ${timeStr}</div>
+      <div class="coin-card-mcap" style="font-size:10px;color:var(--fg-muted);font-weight:400">Auction #${id}</div>
+    </a>`;
+}
+
 // ZORG DAO spam filtering
 const ZORG_DAO = '0x5E58BA0e06ED0F5558f83bE732a4b899a674053E';
 const ZORG_TOKEN = '0x00a6bA94BBb5474725515De88fE04F854f2dCb12';
@@ -1668,17 +1819,18 @@ async function renderGallery() {
   `;
 
   try {
-    // Fetch DAICO coins and ClassicalCurveSale coins in parallel
-    const [daicos, curveTokenAddrs, causeTokenRows] = await Promise.all([
+    // Fetch DAICOs, ClassicalCurveSale tokens, and NFT auctions in parallel.
+    const [daicos, curveTokenAddrs, causeTokenRows, nftAuctions] = await Promise.all([
       withRPC(async rpc => {
         const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
         return await helper.scanDAICOs(0, 500, [ZERO]);
       }),
       fetchCurveTokenList(),
-      fetchCauseTokenList()
+      fetchCauseTokenList(),
+      fetchNftAuctions()
     ]);
 
-    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && causeTokenRows.length === 0) {
+    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && causeTokenRows.length === 0 && nftAuctions.length === 0) {
       app.innerHTML = `
         <div class="header">
           <h1>Coins</h1>
@@ -2083,9 +2235,29 @@ async function renderGallery() {
     for (const c of inactiveCards) grid += c.html;
     for (const c of spamCards) grid += c.html;
 
+    // NFT auctions: enrich with metadata in parallel, render, and prepend so
+    // time-sensitive listings land at the top of the gallery. Failures per
+    // auction fall back to a generic "NFT #id" card rather than dropping.
+    let nftAuctionCount = 0;
+    try {
+      const enriched = await Promise.all(nftAuctions.map(async a => {
+        try { return { a, meta: await enrichNftAuction(a) }; }
+        catch { return { a, meta: { name: `NFT #${a.ids[0]?.toString() || '?'}`, image: '' } }; }
+      }));
+      // Newest first — getAuctions already returns in id order, so reverse.
+      enriched.reverse();
+      const nftHtml = enriched.map(({a, meta}) => renderNftAuctionCard(a, meta)).join('');
+      nftAuctionCount = enriched.length;
+      grid = nftHtml + grid;
+    } catch (e) { console.warn('NFT auction rendering failed:', e); }
+
+    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0);
+    const _countLabel = nftAuctionCount > 0
+      ? `${_coinTotal} coins &middot; ${nftAuctionCount} auction${nftAuctionCount === 1 ? '' : 's'}`
+      : `${_coinTotal}`;
     app.innerHTML = `
       <div class="header">
-        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${[...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0)})</span></h1>
+        <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${_countLabel})</span></h1>
         <div><a href="../#coin" class="nav-link">Launch</a><span class="nav-sep">&middot;</span><a href="../" class="nav-link">Swap</a><span class="nav-sep">&middot;</span><a href="../dao/" class="nav-link">DAO</a></div>
       </div>
       <input type="text" class="coin-search" id="coinSearch" placeholder="Search by name, symbol, or address..." oninput="filterCoins()">

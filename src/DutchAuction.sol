@@ -6,23 +6,29 @@ pragma solidity ^0.8.34;
 ///         or an ERC20 amount, settled in ETH. Partial fills are supported for
 ///         ERC20 listings (useful as a price-discovery token sale). Seller can
 ///         cancel and reclaim the unsold portion at any time.
-/// @dev    Assets are escrowed on listing. The listed `startPrice`/`endPrice`
-///         is the total ETH for the full initial lot; the price decays linearly
-///         from `startPrice` at `startTime` to `endPrice` at `startTime+duration`
-///         and is flat outside that window (`endPrice` may be 0). For ERC20
-///         partial fills, taking `take` units costs `ceil(priceOf(id) * take / initial)`
-///         (rounded up, so tiny buys can't round to 0 when `initial >> price`).
+/// @dev    Assets are escrowed on listing. `startPrice` must be >= `endPrice`;
+///         the listed `startPrice`/`endPrice` is the total ETH for the full initial
+///         lot; the price decays linearly from `startPrice` at `startTime` to
+///         `endPrice` at `startTime+duration` and is flat outside that window
+///         (`endPrice` may be 0, so a lot can decay to free). ERC20 fills cost
+///         `ceil(priceOf(id) * take / initial)` — rounded up so a buy with a
+///         positive price can't round to 0 when `initial` is much larger than
+///         the current price.
 contract DutchAuction {
     struct Auction {
+        // slot 0: seller(20) + isNFT(1) + startTime(5) + duration(5) = 31, 1 free.
+        // Packing `isNFT` and the time fields alongside `seller` lets `_priceOf` and the
+        // NFT/ERC20 discriminator hit slot 0 for free after the initial seller SLOAD.
         address seller;
-        address token;
+        bool isNFT;
         uint40 startTime;
         uint40 duration;
-        uint128 startPrice;
+        address token; // slot 1
+        uint128 startPrice; // slot 2
         uint128 endPrice;
-        uint128 initial; // ERC20 only; 0 for NFT
-        uint128 remaining; // ERC20 only; 0 for NFT
-        uint256[] ids; // NFT only; empty for ERC20
+        uint128 initial; // slot 3; ERC20 only, 0 for NFT
+        uint128 remaining; // slot 3; ERC20 only, 0 for NFT
+        uint256[] ids; // slot 4; NFT only, empty for ERC20
     }
 
     /// @dev Flattened snapshot for frontends: raw listing fields plus the current price
@@ -55,6 +61,9 @@ contract DutchAuction {
     error Reentrancy();
     error Insufficient();
 
+    /// @dev Transient-storage slot (EIP-1153) for the reentrancy guard. Requires a
+    ///      Cancun-era EVM. Arbitrary high slot chosen to avoid colliding with any
+    ///      EIP-1967-style or application-defined transient slots.
     uint256 constant _REENTRANCY_GUARD_SLOT = 0x929eee149b4bd21268;
 
     modifier nonReentrant() {
@@ -72,9 +81,10 @@ contract DutchAuction {
     }
 
     /// @notice List one or more NFTs (max 100) from a single ERC721 contract as one lot.
-    ///         Caller must approve this contract for every id in `ids`.
+    ///         Caller must have approved this contract for every id in `ids` (per-id
+    ///         `approve` or `setApprovalForAll` both work).
     ///         Pass `startTime == 0` to start immediately; any non-zero `startTime` must
-    ///         not be in the past. `startPrice` must be non-zero.
+    ///         not be in the past. `startPrice` must be non-zero and >= `endPrice`.
     function listNFT(
         address token,
         uint256[] calldata ids,
@@ -92,9 +102,10 @@ contract DutchAuction {
         }
         Auction storage a = auctions[id];
         a.seller = msg.sender;
-        a.token = token;
+        a.isNFT = true;
         a.startTime = startTime == 0 ? uint40(block.timestamp) : startTime;
         a.duration = duration;
+        a.token = token;
         a.startPrice = startPrice;
         a.endPrice = endPrice;
         a.ids = ids;
@@ -108,7 +119,7 @@ contract DutchAuction {
     ///         Caller must approve this contract for `amount`. Only plain ERC20s
     ///         are supported; fee-on-transfer and rebasing tokens are out of scope.
     ///         Pass `startTime == 0` to start immediately; any non-zero `startTime` must
-    ///         not be in the past. `startPrice` must be non-zero.
+    ///         not be in the past. `startPrice` must be non-zero and >= `endPrice`.
     function listERC20(
         address token,
         uint128 amount,
@@ -126,9 +137,9 @@ contract DutchAuction {
         }
         Auction storage a = auctions[id];
         a.seller = msg.sender;
-        a.token = token;
         a.startTime = startTime == 0 ? uint40(block.timestamp) : startTime;
         a.duration = duration;
+        a.token = token;
         a.startPrice = startPrice;
         a.endPrice = endPrice;
         a.initial = amount;
@@ -142,13 +153,17 @@ contract DutchAuction {
     function priceOf(uint256 id) public view returns (uint256) {
         Auction storage a = auctions[id];
         if (a.seller == address(0)) return 0;
+        return _priceOf(a);
+    }
+
+    /// @dev Callers must have already confirmed the slot is live (seller != 0); skipping the
+    ///      guard avoids a duplicate slot-0 SLOAD and, for internal callers, a redundant
+    ///      keccak for the mapping lookup.
+    function _priceOf(Auction storage a) internal view returns (uint256) {
         if (block.timestamp <= a.startTime) return a.startPrice;
         unchecked {
-            // block.timestamp > a.startTime (guarded above).
             uint256 elapsed = block.timestamp - a.startTime;
             if (elapsed >= a.duration) return a.endPrice;
-            // startPrice >= endPrice (enforced at listing); (diff <= 2^128) * (elapsed < 2^40) fits in uint256.
-            // Fraction < (startPrice - endPrice) since elapsed < duration, so outer subtraction cannot underflow.
             return a.startPrice - ((uint256(a.startPrice) - a.endPrice) * elapsed) / a.duration;
         }
     }
@@ -161,14 +176,14 @@ contract DutchAuction {
         Auction storage a = auctions[id];
         address seller = a.seller;
         if (seller == address(0)) revert Bad();
-        uint256 price = priceOf(id);
+        uint256 price = _priceOf(a);
         address token = a.token;
 
-        uint256 n = a.ids.length;
-        if (n != 0) {
+        if (a.isNFT) {
+            uint256[] memory ids = a.ids;
+            uint256 n = ids.length;
             if (take != 0 && take != n) revert Bad();
             if (msg.value < price) revert Insufficient();
-            uint256[] memory ids = a.ids;
             delete auctions[id];
             for (uint256 i; i < n; ++i) {
                 IERC721(token).transferFrom(address(this), msg.sender, ids[i]);
@@ -179,15 +194,18 @@ contract DutchAuction {
             }
             emit Filled(id, seller, msg.sender, n, price);
         } else {
-            if (take == 0 || take > a.remaining) revert Bad();
+            uint128 rem = a.remaining;
+            uint128 initial = a.initial;
+            if (take == 0 || take > rem) revert Bad();
             uint256 cost;
             unchecked {
-                // Ceiling division: prevents cost=0 when initial >> price.
-                cost = (price * take + a.initial - 1) / a.initial;
+                // Ceiling division: prevents a positive-price buy from rounding to cost=0
+                // when `initial` is much larger than the current price.
+                cost = (price * take + initial - 1) / initial;
             }
             if (msg.value < cost) revert Insufficient();
             unchecked {
-                uint128 newRem = a.remaining - take;
+                uint128 newRem = rem - take;
                 if (newRem == 0) delete auctions[id];
                 else a.remaining = newRem;
             }
@@ -200,12 +218,13 @@ contract DutchAuction {
         }
     }
 
-    /// @notice Seller closes the listing and reclaims the unsold portion.
+    /// @notice Seller closes the listing and reclaims escrowed assets: the full NFT
+    ///         bundle, or the unsold remainder of an ERC20 lot.
     function cancel(uint256 id) public nonReentrant {
         Auction storage a = auctions[id];
         if (a.seller != msg.sender) revert NotSeller();
         address token = a.token;
-        if (a.ids.length != 0) {
+        if (a.isNFT) {
             uint256[] memory ids = a.ids;
             delete auctions[id];
             for (uint256 i; i < ids.length; ++i) {
@@ -219,11 +238,6 @@ contract DutchAuction {
         emit Cancelled(id);
     }
 
-    /// @notice NFT ids in a listing (the public mapping getter omits dynamic arrays).
-    function idsOf(uint256 id) public view returns (uint256[] memory) {
-        return auctions[id].ids;
-    }
-
     /// @notice ETH cost to take `take` units of `id` at the current price — mirrors `fill`.
     ///         NFT bundles: pass `take == 0` or the full bundle size; returns the lot price.
     ///         ERC20: returns `ceil(priceOf(id) * take / initial)`.
@@ -232,9 +246,9 @@ contract DutchAuction {
     function costOf(uint256 id, uint128 take) public view returns (uint256) {
         Auction storage a = auctions[id];
         if (a.seller == address(0)) return 0;
-        uint256 price = priceOf(id);
-        uint256 n = a.ids.length;
-        if (n != 0) {
+        uint256 price = _priceOf(a);
+        if (a.isNFT) {
+            uint256 n = a.ids.length;
             if (take != 0 && take != n) return 0;
             return price;
         }
@@ -242,13 +256,6 @@ contract DutchAuction {
         unchecked {
             return (price * take + a.initial - 1) / a.initial;
         }
-    }
-
-    /// @notice ETH cost to sweep the entire remaining lot at the current price.
-    ///         NFT: returns the lot price. ERC20: returns `costOf(id, a.remaining)`.
-    ///         Returns 0 for closed/unknown listings.
-    function remainingCostOf(uint256 id) public view returns (uint256) {
-        return costOf(id, auctions[id].remaining);
     }
 
     /// @notice Flattened snapshot of listing `id` for a UI (listing fields + current price
@@ -259,7 +266,7 @@ contract DutchAuction {
         v.id = id;
         v.seller = a.seller;
         v.token = a.token;
-        v.isNFT = a.ids.length != 0;
+        v.isNFT = a.isNFT;
         v.startTime = a.startTime;
         v.duration = a.duration;
         v.startPrice = a.startPrice;
@@ -267,7 +274,7 @@ contract DutchAuction {
         v.initial = a.initial;
         v.remaining = a.remaining;
         v.ids = a.ids;
-        v.price = priceOf(id);
+        v.price = v.seller == address(0) ? 0 : _priceOf(a);
     }
 
     /// @notice Paginated gallery helper: returns snapshots for ids in `[start, end)`.

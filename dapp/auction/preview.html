@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AUCTION · PREVIEW</title>
+<link rel="stylesheet" href="../theme.css">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<style>
+body { max-width:560px; }
+
+.header { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
+.header h1 { font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase; }
+.back-link { font-size:12px;color:var(--fg-muted);text-decoration:none;margin-bottom:12px;display:inline-block; }
+.back-link:hover { color:var(--fg); }
+
+/* NFT artwork */
+.auction-banner {
+  width:100%;aspect-ratio:400/220;overflow:hidden;margin-bottom:14px;position:relative;
+  background:#000;border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+}
+.auction-banner svg { width:100%;height:100%;display:block; }
+.sold-overlay {
+  display:none;position:absolute;inset:0;background:rgba(0,0,0,0.7);
+  align-items:center;justify-content:center;color:#fff;
+  font-family:ui-monospace,Menlo,monospace;text-align:center;
+}
+.sold-overlay .sold-badge {
+  font-size:32px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;border:3px solid #fff;
+  padding:12px 24px;transform:rotate(-4deg);background:rgba(0,0,0,0.4);
+}
+.sold-overlay .sold-sub { font-size:12px;margin-top:10px;opacity:0.85;letter-spacing:0.06em; }
+
+.state-live .sold-overlay { display:none; }
+.state-sold .sold-overlay,
+.state-ended .sold-overlay,
+.state-cancelled .sold-overlay { display:flex; }
+.state-ended .sold-badge { border-color:#ccc;color:#ccc; }
+.state-cancelled .sold-badge { border-color:var(--red,#ef4444);color:var(--red,#ef4444); }
+
+/* Identity row */
+.auction-head {
+  display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;position:relative;z-index:1;
+}
+.auction-logo {
+  width:68px;height:68px;border:3px solid var(--bg);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;
+}
+.auction-logo svg { width:100%;height:100%;display:block; }
+.auction-title h2 { font-size:20px;font-weight:600;margin:0;letter-spacing:-0.01em; }
+.auction-meta { font-size:12px;color:var(--fg-muted);margin-top:3px;font-family:ui-monospace,Menlo,monospace; }
+.auction-tag {
+  margin-left:auto;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 8px;border:1px solid var(--fg);color:var(--fg);background:var(--bg);
+}
+.state-sold .auction-tag { border-color:var(--green,#22c55e);color:var(--green,#22c55e); }
+.state-ended .auction-tag { border-color:var(--fg-muted);color:var(--fg-muted); }
+.state-cancelled .auction-tag { border-color:var(--red,#ef4444);color:var(--red,#ef4444); }
+
+/* Cards */
+.section-card { border:1px solid var(--border);padding:16px;margin-bottom:14px; }
+.section-title {
+  font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--fg-muted);margin-bottom:10px;
+}
+.stat-row { display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px;gap:8px; }
+.stat-row:last-child { margin-bottom:0; }
+.stat-label { color:var(--fg-muted); }
+.stat-value { font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;white-space:nowrap; }
+.mono { font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:500; }
+
+/* Price display */
+.price-card { text-align:center; }
+.price-big {
+  font-size:44px;font-weight:700;letter-spacing:-0.02em;line-height:1;
+  font-variant-numeric:tabular-nums;margin:6px 0 4px;
+}
+.price-big .unit { font-size:22px;font-weight:500;margin-left:4px;color:var(--fg-muted); }
+.price-usd { font-size:13px;color:var(--fg-muted);font-variant-numeric:tabular-nums; }
+.price-delta {
+  display:inline-block;margin-top:10px;font-size:11px;
+  padding:3px 8px;border:1px solid var(--border);
+  font-family:ui-monospace,Menlo,monospace;letter-spacing:0.04em;color:var(--fg-muted);
+}
+.state-sold .price-card .price-big { color:var(--green,#22c55e); }
+
+/* Time */
+.time-big {
+  font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:700;
+  text-align:center;font-variant-numeric:tabular-nums;letter-spacing:0.02em;
+  margin:4px 0 10px;
+}
+.time-bar {
+  font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1;letter-spacing:1px;
+  margin-bottom:10px;color:var(--fg);word-break:break-all;
+}
+.time-bar .filled { color:var(--fg); }
+.time-bar .empty { opacity:0.25; }
+
+/* Curve */
+.curve-wrap {
+  display:grid;grid-template-columns:auto 1fr;gap:6px;
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.1;
+}
+.curve-y { display:flex;flex-direction:column;justify-content:space-between;color:var(--fg-muted);text-align:right;padding-right:4px;border-right:1px solid var(--border-muted); }
+.curve-y span { font-size:10px; }
+.curve-plot { white-space:pre;overflow:hidden;letter-spacing:1px;color:var(--fg);font-size:12px;line-height:1; }
+.curve-plot .past { color:var(--fg); }
+.curve-plot .future { opacity:0.3; }
+.curve-plot .mark { color:var(--green,#22c55e); }
+.curve-x {
+  display:flex;justify-content:space-between;margin-top:8px;padding-left:40px;
+  font-size:10px;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;
+}
+
+/* Buy */
+.buy-btn {
+  display:block;width:100%;padding:16px;font-size:14px;font-weight:600;
+  letter-spacing:0.1em;text-transform:uppercase;
+  background:var(--btn-bg);color:var(--btn-fg);border:none;border-radius:0;
+  cursor:pointer;font-family:inherit;margin-bottom:14px;
+}
+.buy-btn:hover:not(:disabled) { background:var(--btn-hover); }
+.buy-btn:disabled { opacity:0.4;cursor:not-allowed; }
+.buy-btn .price { font-variant-numeric:tabular-nums; }
+.state-sold .buy-btn, .state-ended .buy-btn, .state-cancelled .buy-btn { display:none; }
+
+/* Buy modal */
+.modal-overlay {
+  display:none;position:fixed;inset:0;background:var(--modal-overlay);
+  align-items:center;justify-content:center;z-index:500;padding:20px;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:var(--modal-bg);border:1px solid var(--modal-border);
+  max-width:380px;width:100%;padding:20px;
+}
+.modal h3 { font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-muted);margin:0 0 14px; }
+.modal-body { font-size:13px;line-height:1.5; }
+.modal .stat-row { border-bottom:1px dashed var(--border-muted);padding-bottom:8px; }
+.modal .modal-total { font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;padding-top:8px; }
+.modal-actions { display:flex;gap:8px;margin-top:16px; }
+.modal-actions button {
+  flex:1;padding:12px;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:0;
+  cursor:pointer;font-family:inherit;
+}
+.modal-actions .confirm { background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg); }
+.modal-actions .confirm:hover { background:var(--btn-hover); }
+.modal-status { text-align:center;font-size:13px;padding:20px 0;color:var(--fg-muted); }
+.modal-status .spin { display:inline-block;animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Sim controls */
+.sim-card { border-style:dashed;opacity:0.9; }
+.sim-row { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px; }
+.sim-chip {
+  flex:1;min-width:60px;padding:6px 8px;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  background:transparent;color:var(--fg-muted);border:1px solid var(--border-muted);border-radius:0;
+  cursor:pointer;font-family:inherit;
+}
+.sim-chip.active { background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg); }
+.sim-slider {
+  width:100%;margin:8px 0 4px;appearance:none;background:var(--border-muted);height:2px;outline:none;
+}
+.sim-slider::-webkit-slider-thumb { appearance:none;width:14px;height:14px;background:var(--fg);cursor:pointer;border-radius:0; }
+.sim-slider::-moz-range-thumb { width:14px;height:14px;background:var(--fg);cursor:pointer;border:none;border-radius:0; }
+.sim-ticks { display:flex;justify-content:space-between;font-size:10px;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;margin-top:2px; }
+
+@media (max-width:480px) {
+  body { padding: 70px 12px 20px; }
+  .auction-title h2 { font-size:17px; }
+  .auction-logo { width:56px;height:56px; }
+  .price-big { font-size:36px; }
+  .price-big .unit { font-size:18px; }
+  .time-big { font-size:26px; }
+  .curve-plot { font-size:10px;letter-spacing:0; }
+  .curve-y { padding-right:2px; }
+  .curve-y span { font-size:9px; }
+  .curve-x { padding-left:28px;font-size:9px; }
+  .section-card { padding:14px; }
+  .sold-badge { font-size:24px;padding:8px 18px; }
+  .modal-actions button { padding:10px;font-size:11px; }
+  .sim-chip { min-width:50px;font-size:9px; }
+}
+</style>
+</head>
+<body class="state-live">
+
+<div class="header">
+  <h1>ZFI · AUCTION</h1>
+</div>
+
+<a href="#" class="back-link">← gallery</a>
+
+<!-- NFT banner: procedural generative artwork -->
+<div class="auction-banner">
+  <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#111"/>
+        <stop offset="1" stop-color="#000"/>
+      </linearGradient>
+      <pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
+        <circle cx="7" cy="7" r="0.6" fill="#fff" opacity="0.12"/>
+      </pattern>
+    </defs>
+    <rect width="400" height="220" fill="url(#bg)"/>
+    <rect width="400" height="220" fill="url(#dots)"/>
+    <!-- Stylized "worm" — linked angular segments with eye -->
+    <g transform="translate(200 110)">
+      <g stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M -140 30 L -100 -10 L -60 30 L -20 -10 L 20 30 L 60 -10 L 100 30 L 140 -10"/>
+      </g>
+      <!-- Head block -->
+      <g transform="translate(140 -10)">
+        <rect x="-12" y="-12" width="24" height="24" fill="#fff"/>
+        <rect x="-5" y="-4" width="4" height="4" fill="#000"/>
+        <rect x="3" y="-4" width="4" height="4" fill="#000"/>
+      </g>
+      <!-- Tail block -->
+      <g transform="translate(-140 30)">
+        <rect x="-10" y="-10" width="20" height="20" fill="#fff" opacity="0.9"/>
+      </g>
+    </g>
+    <!-- Corner tag -->
+    <g transform="translate(20 28)" fill="#fff" font-family="ui-monospace,monospace" font-size="10" font-weight="700">
+      <text letter-spacing="2">WEI WORMS</text>
+      <text y="14" opacity="0.6">#0042</text>
+    </g>
+  </svg>
+  <!-- State overlay shown when Sold / Ended / Cancelled -->
+  <div class="sold-overlay">
+    <div>
+      <div class="sold-badge" id="soldBadge">—</div>
+      <div class="sold-sub" id="soldSub"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Identity -->
+<div class="auction-head">
+  <div class="auction-logo">
+    <svg viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg">
+      <rect width="68" height="68" fill="#000"/>
+      <g stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 8 44 L 22 30 L 34 44 L 46 30 L 60 44"/>
+      </g>
+      <rect x="52" y="22" width="10" height="10" fill="#fff"/>
+    </svg>
+  </div>
+  <div class="auction-title">
+    <h2>WEI WORM #42</h2>
+    <div class="auction-meta">by 0xa1b2…c3d4</div>
+  </div>
+  <div class="auction-tag" id="stateTag">Live</div>
+</div>
+
+<!-- Current price -->
+<div class="section-card price-card">
+  <div class="section-title" id="priceLabel">Current Price</div>
+  <div class="price-big"><span id="priceEth">—</span><span class="unit">Ξ</span></div>
+  <div class="price-usd">≈ $<span id="priceUsd">—</span></div>
+  <div class="price-delta" id="priceDelta">— / min</div>
+</div>
+
+<!-- Time remaining -->
+<div class="section-card" id="timeCard">
+  <div class="section-title">Time Remaining</div>
+  <div class="time-big" id="timeBig">00:00:00</div>
+  <div class="time-bar" id="timeBar"></div>
+  <div class="stat-row"><span class="stat-label">started</span><span class="stat-value" id="startedAgo">—</span></div>
+  <div class="stat-row"><span class="stat-label">duration</span><span class="stat-value">3d</span></div>
+  <div class="stat-row"><span class="stat-label">ends</span><span class="stat-value" id="endsIn">—</span></div>
+</div>
+
+<!-- Price curve -->
+<div class="section-card">
+  <div class="section-title">Price Decay</div>
+  <div class="curve-wrap">
+    <div class="curve-y">
+      <span>12.00 Ξ</span>
+      <span>6.06 Ξ</span>
+      <span>0.12 Ξ</span>
+    </div>
+    <div class="curve-plot" id="curvePlot"></div>
+  </div>
+  <div class="curve-x">
+    <span>start</span>
+    <span id="curveNow">now</span>
+    <span>end · 3d</span>
+  </div>
+</div>
+
+<!-- Buy -->
+<button class="buy-btn" id="buyBtn" onclick="openBuy()">
+  Buy Now · <span class="price" id="buyPrice">—</span> Ξ
+</button>
+
+<!-- Listing details -->
+<div class="section-card">
+  <div class="section-title">Listing</div>
+  <div class="stat-row"><span class="stat-label">seller</span><span class="stat-value mono">0xa1b2…c3d4</span></div>
+  <div class="stat-row"><span class="stat-label">collection</span><span class="stat-value mono">0x6942…c4f3</span></div>
+  <div class="stat-row"><span class="stat-label">token id</span><span class="stat-value">#42</span></div>
+  <div class="stat-row"><span class="stat-label">auction id</span><span class="stat-value">#17</span></div>
+  <div class="stat-row"><span class="stat-label">start price</span><span class="stat-value">12.0000 Ξ</span></div>
+  <div class="stat-row"><span class="stat-label">floor price</span><span class="stat-value">0.1200 Ξ</span></div>
+</div>
+
+<!-- Simulation controls -->
+<div class="section-card sim-card">
+  <div class="section-title">Simulation</div>
+  <div style="font-size:10px;color:var(--fg-muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">State</div>
+  <div class="sim-row">
+    <button class="sim-chip active" onclick="setState('live',this)">Live</button>
+    <button class="sim-chip" onclick="setState('sold',this)">Sold</button>
+    <button class="sim-chip" onclick="setState('ended',this)">Ended</button>
+    <button class="sim-chip" onclick="setState('cancelled',this)">Cancel</button>
+  </div>
+  <div style="font-size:10px;color:var(--fg-muted);letter-spacing:0.08em;text-transform:uppercase;margin:10px 0 4px">Time warp</div>
+  <input type="range" class="sim-slider" id="simSlider" min="0" max="259200" step="60" value="54000">
+  <div class="sim-ticks">
+    <span>0m</span>
+    <span id="simLabel">—</span>
+    <span>3d</span>
+  </div>
+</div>
+
+<!-- Buy modal -->
+<div class="modal-overlay" id="buyModal">
+  <div class="modal">
+    <h3>Confirm Purchase</h3>
+    <div class="modal-body" id="modalBody">
+      <div class="stat-row"><span class="stat-label">item</span><span class="stat-value">WEI WORM #42</span></div>
+      <div class="stat-row"><span class="stat-label">seller</span><span class="stat-value mono">0xa1b2…c3d4</span></div>
+      <div class="stat-row"><span class="stat-label">current price</span><span class="stat-value"><span id="modalPrice">—</span> Ξ</span></div>
+      <div class="stat-row modal-total"><span>Pay</span><span><span id="modalTotal">—</span> Ξ</span></div>
+      <div style="font-size:11px;color:var(--fg-muted);margin-top:10px;line-height:1.5">
+        Price is quoted at the moment you confirm. If it decays further before your tx lands, you receive the difference back as a refund — the contract never charges more than the current decayed price.
+      </div>
+      <div class="modal-actions">
+        <button onclick="closeBuy()">Cancel</button>
+        <button class="confirm" onclick="confirmBuy()">Confirm</button>
+      </div>
+    </div>
+    <div class="modal-status" id="modalStatus" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// Listing params (demo values)
+const START_PRICE = 12;
+const END_PRICE   = 0.12;
+const DURATION    = 259200; // 3d in seconds
+const ETH_USD     = 3000;
+
+const $ = id => document.getElementById(id);
+let _state = 'live';
+let _soldAt = null;     // elapsed-seconds when sale happened
+let _soldPrice = null;  // price at sale
+let _autoTick = null;
+
+function priceAt(elapsed) {
+  const t = Math.max(0, Math.min(elapsed, DURATION));
+  return START_PRICE - (START_PRICE - END_PRICE) * (t / DURATION);
+}
+function fmtETH(v) { return v >= 10 ? v.toFixed(3) : (v >= 0.1 ? v.toFixed(4) : v.toFixed(6)); }
+function fmtUSD(v) { return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const d = Math.floor(sec/86400);
+  const h = Math.floor((sec%86400)/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec%60;
+  if (d > 0) return `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function fmtAgo(sec) {
+  sec = Math.floor(sec);
+  if (sec < 60) return `${sec}s ago`;
+  const m = Math.floor(sec/60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h}h ${m%60}m ago`;
+  const d = Math.floor(h/24);
+  return `${d}d ${h%24}h ago`;
+}
+function fmtIn(sec) {
+  sec = Math.floor(sec);
+  if (sec <= 0) return 'ended';
+  const m = Math.floor(sec/60);
+  if (m < 60) return `in ${m}m`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `in ${h}h ${m%60}m`;
+  const d = Math.floor(h/24);
+  return `in ${d}d ${h%24}h`;
+}
+function renderTimeBar(pct, width=28) {
+  const filled = Math.round((pct/100) * width);
+  return `<span class="filled">${'█'.repeat(filled)}</span><span class="empty">${'░'.repeat(width-filled)}</span>`;
+}
+
+function renderCurve(elapsed, soldCol) {
+  const W = 42, H = 10;
+  const lines = Array.from({length:H}, ()=>Array(W).fill(' '));
+  const cls   = Array.from({length:H}, ()=>Array(W).fill(''));
+  const nowCol = Math.round((elapsed/DURATION)*(W-1));
+  for (let x = 0; x < W; x++) {
+    const t = (x/(W-1)) * DURATION;
+    const p = priceAt(t);
+    const norm = (p - END_PRICE) / (START_PRICE - END_PRICE);
+    const row = Math.round((1-norm) * (H-1));
+    for (let y = row; y < H; y++) {
+      if (y === row) lines[y][x] = x <= nowCol ? '█' : '▀';
+      else           lines[y][x] = x <= nowCol ? '▓' : '░';
+      cls[y][x] = x < nowCol ? 'past' : (x === nowCol ? 'mark' : 'future');
+      if (soldCol != null && x === soldCol && y === row) { lines[y][x] = '◆'; cls[y][x] = 'mark'; }
+    }
+  }
+  const out = [];
+  for (let y = 0; y < H; y++) {
+    let html = '', curClass = null, buf = '';
+    for (let x = 0; x < W; x++) {
+      const c = cls[y][x];
+      if (c !== curClass) { if (buf) html += `<span class="${curClass}">${buf}</span>`; buf = ''; curClass = c; }
+      buf += lines[y][x];
+    }
+    if (buf) html += `<span class="${curClass}">${buf}</span>`;
+    out.push(html);
+  }
+  return out.join('\n');
+}
+
+function update(elapsed) {
+  elapsed = Math.max(0, Math.min(elapsed, DURATION));
+  const remaining = DURATION - elapsed;
+
+  let displayElapsed = elapsed;
+  let displayPrice;
+  if (_state === 'sold' && _soldAt != null) { displayElapsed = _soldAt; displayPrice = _soldPrice; }
+  else if (_state === 'ended')               { displayElapsed = DURATION; displayPrice = END_PRICE; }
+  else if (_state === 'cancelled')           { displayPrice = priceAt(elapsed); }
+  else                                        { displayPrice = priceAt(elapsed); }
+
+  $('priceEth').textContent = fmtETH(displayPrice);
+  $('priceUsd').textContent = fmtUSD(displayPrice * ETH_USD);
+  $('buyPrice').textContent = fmtETH(displayPrice);
+
+  const decayPerMin = (START_PRICE - END_PRICE) / (DURATION/60);
+  $('priceDelta').textContent = _state === 'live'
+    ? `− ${decayPerMin.toFixed(4)} Ξ / min`
+    : (_state === 'sold' ? `sold @ ${fmtAgo(DURATION - displayElapsed > 0 ? (DURATION - displayElapsed) : 1)}` : `paused`);
+
+  $('timeBig').textContent = _state === 'ended' ? '00:00:00' : fmtTime(remaining);
+  $('timeBar').innerHTML   = renderTimeBar((displayElapsed/DURATION)*100);
+  $('startedAgo').textContent = fmtAgo(displayElapsed);
+  $('endsIn').textContent     = _state === 'ended' ? 'ended' : fmtIn(remaining);
+
+  const soldCol = (_state === 'sold' && _soldAt != null) ? Math.round((_soldAt/DURATION)*41) : null;
+  $('curvePlot').innerHTML = renderCurve(displayElapsed, soldCol);
+
+  $('priceLabel').textContent = _state === 'sold' ? 'Sold At' : (_state === 'ended' ? 'Final Price' : 'Current Price');
+}
+
+function setState(s, btn) {
+  _state = s;
+  document.body.classList.remove('state-live','state-sold','state-ended','state-cancelled');
+  document.body.classList.add('state-' + s);
+  document.querySelectorAll('.sim-chip').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const tag = $('stateTag');
+  const badge = $('soldBadge');
+  const sub = $('soldSub');
+  if (s === 'live') { tag.textContent = 'Live'; startAutoTick(); }
+  else              { tag.textContent = s.charAt(0).toUpperCase()+s.slice(1); stopAutoTick(); }
+
+  if (s === 'sold') {
+    const elapsed = parseInt($('simSlider').value, 10);
+    _soldAt = elapsed; _soldPrice = priceAt(elapsed);
+    badge.textContent = `SOLD · ${fmtETH(_soldPrice)} Ξ`;
+    sub.textContent = `filled at ${fmtAgo(elapsed)}`;
+  } else if (s === 'ended') {
+    badge.textContent = 'ENDED';
+    sub.textContent = `floor reached · ${fmtETH(END_PRICE)} Ξ`;
+  } else if (s === 'cancelled') {
+    badge.textContent = 'CANCELLED';
+    sub.textContent = 'seller withdrew the listing';
+  }
+  update(parseInt($('simSlider').value, 10));
+}
+
+function startAutoTick() {
+  if (_autoTick) return;
+  _autoTick = setInterval(() => {
+    const slider = $('simSlider');
+    const v = parseInt(slider.value, 10);
+    if (v < DURATION) { slider.value = v + 60; slider.dispatchEvent(new Event('input')); }
+  }, 1000);
+}
+function stopAutoTick() { if (_autoTick) { clearInterval(_autoTick); _autoTick = null; } }
+
+// Buy modal flow
+function openBuy() {
+  const elapsed = parseInt($('simSlider').value, 10);
+  const p = priceAt(elapsed);
+  $('modalPrice').textContent = fmtETH(p);
+  $('modalTotal').textContent = fmtETH(p);
+  $('modalBody').style.display = '';
+  $('modalStatus').style.display = 'none';
+  $('buyModal').classList.add('open');
+}
+function closeBuy() {
+  $('buyModal').classList.remove('open');
+}
+function confirmBuy() {
+  $('modalBody').style.display = 'none';
+  const st = $('modalStatus');
+  st.style.display = '';
+  st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Confirming in wallet…</div>`;
+  setTimeout(() => {
+    st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Submitting transaction…</div>`;
+    setTimeout(() => {
+      $('buyModal').classList.remove('open');
+      // Simulate a sale at the current time
+      const elapsed = parseInt($('simSlider').value, 10);
+      _soldAt = elapsed;
+      _soldPrice = priceAt(elapsed);
+      const soldBtn = document.querySelector('.sim-chip:nth-child(2)');
+      setState('sold', soldBtn);
+    }, 900);
+  }, 1200);
+}
+
+const slider = $('simSlider');
+slider.addEventListener('input', () => {
+  const e = parseInt(slider.value, 10);
+  const h = Math.floor(e/3600);
+  if (h >= 24) { const d = Math.floor(h/24); $('simLabel').textContent = `${d}d ${h%24}h`; }
+  else         { $('simLabel').textContent = `${h}h ${Math.floor((e%3600)/60)}m`; }
+  update(e);
+});
+slider.dispatchEvent(new Event('input'));
+startAutoTick();
+</script>
+</body>
+</html>

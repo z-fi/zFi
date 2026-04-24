@@ -9,6 +9,11 @@ eth_rpc_url = "https://1rpc.io/eth"
 fork_block_number = 24_880_000
 no_rpc_rate_limit = true
 
+fs_permissions = [
+    { access = "read", path = "./zSwap.html" },
+    { access = "read", path = "./script/zSwapRegistry-setHtmlAsTarget.calldata.txt" },
+]
+
 # zQuoter needs low runs + yul=false to stay under EIP-170 (24,576 bytes)
 [profile.zquoter]
 src = "src"

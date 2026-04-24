@@ -215,33 +215,76 @@ async function coinResolveName(inputId, resolvedId, name, onResolved) {
 }
 
 function _coinAnimSVG(type) {
-  const label = type === 'coin' ? 'just trade it' : 'just fund it';
-  const svg = type === 'coin'
-    ? `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  // Labels were dropped because they crowded the info tooltip in the top-right
+  // corner of the launch card — the icon itself is enough visual context.
+  if (type === 'coin') {
+    return `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path class="curve-line" d="M4 42 C14 40, 18 36, 24 30 C30 24, 34 18, 44 14" stroke="var(--fg)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-      </svg>`
-    : `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      </svg>`;
+  }
+  if (type === 'cause') {
+    return `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="4" y="20" width="40" height="8" rx="2" fill="var(--fg)" opacity="0.15"/>
         <rect class="cause-bar" x="4" y="20" width="32" height="8" rx="2" fill="var(--fg)"/>
       </svg>`;
-  return `<span class="coin-launch-anim-label">${label}</span>${svg}`;
+  }
+  // NFT: downward-sloping line (Dutch decay) with a midpoint "current price" dot.
+  // Classes match the draw-in animations in index.html (.nft-line, .nft-dot).
+  return `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path class="nft-line" d="M4 10 L44 38" stroke="var(--fg)" stroke-width="1.5" stroke-linecap="round"/>
+      <circle class="nft-dot" cx="24" cy="24" r="2.5" fill="var(--fg)"/>
+    </svg>`;
 }
 
 function coinSetLaunchType(type) {
   _coinLaunchType = type;
   const btns = document.querySelectorAll('#coinTab > .swap-card > .coin-tpl-toggle > .coin-tpl-btn');
-  btns.forEach((b, i) => b.classList.toggle('active', i === (type === 'coin' ? 0 : 1)));
+  const idx = type === 'coin' ? 0 : (type === 'cause' ? 1 : 2);
+  btns.forEach((b, i) => b.classList.toggle('active', i === idx));
   const isCoin = type === 'coin';
-  $('coinCauseWrap').style.display = isCoin ? 'none' : '';
+  const isNft = type === 'nft';
+  const isCause = type === 'cause';
+  $('coinCauseWrap').style.display = isCause ? '' : 'none';
+  const nftWrap = $('coinNftWrap'); if (nftWrap) nftWrap.style.display = isNft ? '' : 'none';
   $('coinCurvePreviewWrap').style.display = 'none';
   $('coinCausePreviewWrap').style.display = 'none';
-  $('coinSocialsWrap').style.display = '';
+  // Socials irrelevant for NFT auctions; symbol field too (single asset, no ticker).
+  $('coinSocialsWrap').style.display = isNft ? 'none' : '';
+  const symWrap = document.querySelector('#coinTab .coin-name-row > .section:nth-child(2)');
+  if (symWrap) symWrap.style.display = isNft ? 'none' : '';
+
+  // Reorder: for NFT mode, the NFT contract + token id should be the first thing
+  // the seller sees. Move the shared Name/Description/Upload fields into the
+  // Custom Display drawer at the bottom of the NFT wrap so they're available
+  // but out of the way. On leave, restore them to their original DOM position.
+  const nameRow = $('coinNameRow');
+  const descWrap = $('coinDescWrap');
+  const uploadRow = $('coinUploadRow');
+  const drawer = $('nftAdvancedBody');
+  const socialsWrap = $('coinSocialsWrap');
+  if (isNft) {
+    if (drawer && nameRow && !drawer.contains(nameRow)) {
+      drawer.appendChild(nameRow);
+      drawer.appendChild(descWrap);
+      drawer.appendChild(uploadRow);
+    }
+  } else if (socialsWrap?.parentElement && nameRow && drawer?.contains(nameRow)) {
+    const parent = socialsWrap.parentElement;
+    parent.insertBefore(nameRow, socialsWrap);
+    parent.insertBefore(descWrap, socialsWrap);
+    parent.insertBefore(uploadRow, socialsWrap);
+  }
+  // NFT launch button stays disabled until a valid NFT is resolved.
   setDisabled('coinLaunchBtn', true);
-  _coinTemplate = isCoin ? null : 'cause';
+  // CTA label should match the selected mode so users know what they're confirming.
+  const launchBtn = $('coinLaunchBtn');
+  if (launchBtn) launchBtn.textContent = isNft ? 'List Auction' : 'Launch Coin';
+  _coinTemplate = isCoin ? null : (isCause ? 'cause' : 'nft-auction');
   // Animate type icon
   const anim = $('coinLaunchAnim');
   if (anim) { anim.innerHTML = _coinAnimSVG(type); }
-  coinUpdatePreview();
+  if (isNft) { if (typeof auctionOnNftChange === 'function') auctionOnNftChange(); }
+  else coinUpdatePreview();
   syncCoinURL();
 }
 
@@ -444,6 +487,8 @@ function coinShowStatus(msg, isError) {
 async function coinLaunch() {
   if (_coinLaunching) return;
   if (!_signer) { connectWallet(); return; }
+  // NFT auction path is owned by auction.js — dispatch early.
+  if (_coinLaunchType === 'nft') { return auctionLaunch(); }
 
   const name = $('coinName').value.trim();
   const symbol = $('coinSymbol').value.trim();

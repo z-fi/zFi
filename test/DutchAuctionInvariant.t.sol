@@ -130,9 +130,9 @@ contract Handler is Test {
         uint256 id = liveIds[liveSeed % liveIds.length];
         address buyer = _actor(actorSeed);
 
-        (address seller, address token,,,,, uint128 initial, uint128 remaining) = auction.auctions(id);
+        (address seller,,,, address token,,, uint128 initial, uint128 remaining) = auction.auctions(id);
         if (seller == address(0)) return; // defensive — should match isLive
-        uint256[] memory idsSnap = auction.idsOf(id);
+        uint256[] memory idsSnap = auction.getAuction(id).ids;
         uint256 cost;
 
         if (idsSnap.length != 0) {
@@ -156,7 +156,7 @@ contract Handler is Test {
     function cancel(uint256 liveSeed) external {
         if (liveIds.length == 0) return;
         uint256 id = liveIds[liveSeed % liveIds.length];
-        (address seller,,,,,,,) = auction.auctions(id);
+        (address seller,,,,,,,,) = auction.auctions(id);
         if (seller == address(0)) return;
         vm.prank(seller);
         auction.cancel(id);
@@ -213,7 +213,7 @@ contract DutchAuctionInvariantTest is Test {
         uint256 n = handler.liveIdsLength();
         for (uint256 i; i < n; ++i) {
             uint256 id = handler.liveIdAt(i);
-            (,,,,,, uint128 initial, uint128 remaining) = auction.auctions(id);
+            (,,,,,,, uint128 initial, uint128 remaining) = auction.auctions(id);
             if (initial != 0) sum += remaining; // ERC20 listings have initial > 0
         }
         assertEq(tok.balanceOf(address(auction)), sum, "ERC20 escrow mismatch");
@@ -226,7 +226,7 @@ contract DutchAuctionInvariantTest is Test {
         uint256 n = handler.liveIdsLength();
         for (uint256 i; i < n; ++i) {
             uint256 id = handler.liveIdAt(i);
-            uint256[] memory bundle = auction.idsOf(id);
+            uint256[] memory bundle = auction.getAuction(id).ids;
             for (uint256 j; j < bundle.length; ++j) {
                 assertEq(nft.ownerOf(bundle[j]), address(auction), "NFT not escrowed");
                 ++total;
@@ -246,7 +246,7 @@ contract DutchAuctionInvariantTest is Test {
         uint256 n = handler.liveIdsLength();
         for (uint256 i; i < n; ++i) {
             uint256 id = handler.liveIdAt(i);
-            (,,,,,, uint128 initial, uint128 remaining) = auction.auctions(id);
+            (,,,,,,, uint128 initial, uint128 remaining) = auction.auctions(id);
             assertLe(remaining, initial, "remaining exceeds initial");
         }
     }

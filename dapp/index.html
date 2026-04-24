@@ -688,6 +688,9 @@ body.modal-open { overflow: hidden; }
   .coin-tpl-toggle .coin-tpl-btn { padding:6px 10px;font-size:12px; }
   .coin-upload-logo { width:44px;height:44px; }
   .coin-upload-banner { height:44px; }
+  /* NFT auction form tight mobile */
+  .nft-chip { font-size:11px;padding:10px 0; }
+  #nftDecayPreview pre { font-size:10px !important;letter-spacing:0 !important; }
 }
 
 /* Info tooltip */
@@ -790,6 +793,33 @@ body.modal-open { overflow: hidden; }
 }
 .coin-tpl-btn.active { color:var(--fg);border-bottom-color:var(--fg); }
 .coin-tpl-btn:hover:not(.active) { color:var(--fg); }
+.nft-chip-row { display:flex;gap:6px;margin-top:6px; }
+.nft-chip {
+  flex:1;padding:8px 0;font-size:12px;font-weight:600;letter-spacing:0.05em;
+  background:transparent;color:var(--fg-muted);
+  border:1px solid var(--border-muted);border-radius:0;
+  cursor:pointer;font-family:inherit;transition:background 0.15s,color 0.15s,border-color 0.15s;
+}
+.nft-chip.active { background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg); }
+.nft-chip:hover:not(.active) { color:var(--fg);border-color:var(--fg); }
+/* NFT collection search dropdown */
+#nftCollectionDropdown {
+  position:absolute;top:100%;left:0;right:0;margin-top:4px;z-index:20;
+  background:var(--bg);border:1px solid var(--border);
+  max-height:240px;overflow-y:auto;
+  box-shadow:0 4px 14px rgba(0,0,0,0.08);
+}
+.dark #nftCollectionDropdown { box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+.nft-dd-row {
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:8px 12px;cursor:pointer;
+  border-bottom:1px solid var(--border-muted);
+}
+.nft-dd-row:last-child { border-bottom:none; }
+.nft-dd-row:hover { background:var(--surface-hover); }
+.nft-dd-name { font-size:13px;font-weight:500;color:var(--fg); }
+.nft-dd-sym { font-size:11px;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;margin-top:1px; }
+.nft-dd-addr { font-size:10px;color:var(--fg-dim);font-family:ui-monospace,Menlo,monospace;flex-shrink:0; }
 .coin-slider-row {
   display:flex;align-items:center;gap:12px;margin-bottom:10px;
 }
@@ -806,32 +836,33 @@ body.modal-open { overflow: hidden; }
 .coin-slider-row .coin-slider-val svg { vertical-align:middle;flex-shrink:0; }
 .coin-sliders.locked input[type="range"] { pointer-events:none;opacity:0.4; }
 .coin-drawer-body { display:none;padding-top:4px; }
-#coinSocialsWrap.open .coin-drawer-body { display:block; }
-#coinSocialsWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
+#coinSocialsWrap.open .coin-drawer-body,
+#nftAdvancedWrap.open .coin-drawer-body { display:block; }
+#coinSocialsWrap.open .coin-drawer-arrow,
+#nftAdvancedWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
 .coin-tpl-badge {
   display:inline-flex;align-items:center;vertical-align:middle;margin-left:4px;
   color:var(--fg);opacity:0.7;
 }
 .coin-tpl-badge svg { display:block; }
-/* Coin launch type animation */
+/* Coin launch type animation — subtle icon in the top-right of the launch card.
+   The text label was removed (crowded the info tooltip); icon alone is enough. */
 .coin-launch-anim {
-  position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:6px;opacity:0.12;pointer-events:none;
-  transition:opacity 0.4s ease;
+  position:absolute;top:12px;right:12px;opacity:0.15;pointer-events:none;
+  transition:opacity 0.4s ease;line-height:0;
 }
-.coin-launch-anim svg { width:48px;height:48px;flex-shrink:0; }
-.coin-launch-anim-label {
-  font-size:9px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
-  color:var(--fg);white-space:nowrap;opacity:0;
-  animation:coin-label-fade 0.6s ease-out 0.6s forwards;
-}
-@keyframes coin-label-fade { from { opacity:0; } to { opacity:1; } }
+.coin-launch-anim svg { width:44px;height:44px;display:block; }
 @keyframes coin-curve-draw {
-  from { stroke-dashoffset:100; }
-  to { stroke-dashoffset:0; }
+  from { stroke-dashoffset:100; } to { stroke-dashoffset:0; }
 }
 @keyframes coin-cause-fill {
-  from { transform:scaleX(0); }
-  to { transform:scaleX(1); }
+  from { transform:scaleX(0); } to { transform:scaleX(1); }
+}
+@keyframes coin-nft-draw {
+  from { stroke-dashoffset:52; } to { stroke-dashoffset:0; }
+}
+@keyframes coin-nft-dot-fade {
+  from { opacity:0;transform:scale(0); } to { opacity:1;transform:scale(1); }
 }
 .coin-launch-anim .curve-line {
   stroke-dasharray:100;stroke-dashoffset:100;
@@ -840,6 +871,14 @@ body.modal-open { overflow: hidden; }
 .coin-launch-anim .cause-bar {
   transform-origin:left;transform:scaleX(0);
   animation:coin-cause-fill 1s ease-out forwards;
+}
+.coin-launch-anim .nft-line {
+  stroke-dasharray:52;stroke-dashoffset:52;
+  animation:coin-nft-draw 1.2s ease-out forwards;
+}
+.coin-launch-anim .nft-dot {
+  transform-origin:center;transform:scale(0);opacity:0;transform-box:fill-box;
+  animation:coin-nft-dot-fade 0.3s ease-out 0.9s forwards;
 }
 /* Launch progress bar */
 .coin-launch-progress {
@@ -1345,21 +1384,22 @@ body.modal-open { overflow: hidden; }
   <div class="coin-tpl-toggle">
     <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Curve</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('cause')">Cause</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>curve</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.</span></span>
+    <button class="coin-tpl-btn" onclick="coinSetLaunchType('nft')">NFT</button>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>curve</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.<br><br><strong>nft</strong> — Dutch auction for a single NFT, settled in ETH. Price decays linearly from start to floor over the chosen duration. First buyer wins at current price. Seller can cancel anytime. Two-step flow: approve token, then list.</span></span>
   </div>
 
 
-  <div class="coin-name-row">
+  <div id="coinNameRow" class="coin-name-row">
     <div class="section"><input type="text" id="coinName" class="amount-input" placeholder="Name" maxlength="50" style="font-size:16px" oninput="syncCoinURL()"></div>
     <div class="section"><input type="text" id="coinSymbol" class="amount-input" placeholder="Symbol" maxlength="10" style="font-size:16px" oninput="syncCoinURL()"></div>
   </div>
 
-  <div class="section" style="margin-bottom:14px">
+  <div id="coinDescWrap" class="section" style="margin-bottom:14px">
     <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional, max 280 chars)</span></label>
     <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:16px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px;-webkit-appearance:none" maxlength="280" oninput="syncCoinURL()"></textarea>
   </div>
 
-  <div class="coin-upload-row">
+  <div id="coinUploadRow" class="coin-upload-row">
     <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo"><span class="coin-upload-label">Logo</span></label>
     <input type="file" id="coinImageInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'image')">
     <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner"><span class="coin-upload-label">Banner</span></label>
@@ -1422,6 +1462,64 @@ body.modal-open { overflow: hidden; }
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="coinNftWrap" style="display:none;margin-bottom:14px">
+    <div class="section" style="margin-bottom:10px;position:relative">
+      <label>NFT Contract</label>
+      <input type="text" id="nftContract" class="amount-input" placeholder="Search a collection or paste 0x / name.eth" style="font-size:16px" autocomplete="off" oninput="_nftContractInput()" onfocus="_nftContractFocus()" onblur="_nftContractBlur()">
+      <div id="nftContractResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
+      <div id="nftCollectionDropdown" style="display:none"></div>
+    </div>
+    <div class="section" style="margin-bottom:10px">
+      <label>Token ID</label>
+      <input type="text" id="nftTokenId" class="amount-input" placeholder="42" inputmode="numeric" style="font-size:16px" oninput="auctionOnNftChangeDebounced()">
+    </div>
+
+    <div id="nftPreview" style="display:none;border:1px solid var(--border-muted);padding:10px;margin-bottom:10px"></div>
+
+    <div style="margin-bottom:10px">
+      <label>Start Price <span style="text-transform:none;color:var(--fg-dim)">(Ξ)</span></label>
+      <input type="text" id="nftStartPrice" class="amount-input" placeholder="10" inputmode="decimal" style="font-size:16px" value="10" oninput="auctionUpdatePreview();syncCoinURL()">
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label>Floor <span style="text-transform:none;color:var(--fg-dim)">(% of start — how low it can go)</span></label>
+      <div class="nft-chip-row">
+        <button type="button" class="nft-chip" onclick="auctionSetFloor(0,this)">0%</button>
+        <button type="button" class="nft-chip active" onclick="auctionSetFloor(1,this)">1%</button>
+        <button type="button" class="nft-chip" onclick="auctionSetFloor(10,this)">10%</button>
+        <button type="button" class="nft-chip" onclick="auctionSetFloor(50,this)">50%</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label>Duration</label>
+      <div class="nft-chip-row">
+        <button type="button" class="nft-chip" onclick="auctionSetDuration(1,this)">1d</button>
+        <button type="button" class="nft-chip active" onclick="auctionSetDuration(3,this)">3d</button>
+        <button type="button" class="nft-chip" onclick="auctionSetDuration(7,this)">7d</button>
+        <button type="button" class="nft-chip" onclick="auctionSetDuration(14,this)">14d</button>
+      </div>
+    </div>
+
+    <div id="nftDecayPreview" style="display:none;margin-top:12px;padding:10px;border:1px solid var(--border-muted);font-family:ui-monospace,Menlo,monospace"></div>
+
+    <!-- Advanced / Custom display — folds the shared Name/Description/Logo/Banner
+         inputs away by default; they get MOVED into #nftAdvancedBody by
+         coinSetLaunchType('nft') so the seller focuses on the NFT + terms first. -->
+    <div id="nftAdvancedWrap" style="margin-top:14px">
+      <button type="button" onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit">
+        <span>Custom display</span>
+        <span style="text-transform:none;font-weight:400;color:var(--fg-dim)">(optional &mdash; override name, image, banner, description)</span>
+        <span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span>
+      </button>
+      <div id="nftAdvancedBody" class="coin-drawer-body"></div>
+    </div>
+
+    <div style="margin-top:10px;text-align:center;font-size:11px">
+      <a href="./auction/preview.html" target="_blank" rel="noopener" style="color:var(--fg-dim);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;letter-spacing:0.04em">Preview what buyers will see &rarr;</a>
     </div>
   </div>
 
@@ -7392,6 +7490,16 @@ function syncCoinURL() {
       const rate = $('causeTapEthRate').value.trim();
       if (rate && rate !== '1') _sp.set('rate', rate);
     }
+  } else if (_coinLaunchType === 'nft') {
+    _sp.set('mode', 'nft');
+    const c = ($('nftContract')?.value || '').trim();
+    if (c) _sp.set('nft', c);
+    const tid = ($('nftTokenId')?.value || '').trim();
+    if (tid) _sp.set('id', tid);
+    const start = ($('nftStartPrice')?.value || '').trim();
+    if (start && start !== '10') _sp.set('start', start);
+    if (typeof _auctionFloorPct === 'number' && _auctionFloorPct !== 1) _sp.set('floor', String(_auctionFloorPct));
+    if (typeof _auctionDurationDays === 'number' && _auctionDurationDays !== 3) _sp.set('days', String(_auctionDurationDays));
   }
   const qs = _sp.toString();
   history.replaceState(null, '', (qs ? '?' + qs : window.location.pathname) + '#coin');
@@ -7647,7 +7755,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_ogTo) _ogTitle += ' to ' + _ogTo;
       updateOGMeta(_ogTitle, 'Send tokens on zFi');
     }
-    // Coin launch deeplink: ?name=MyCoin&symbol=MC&desc=Cool+coin&mode=cause&raise=5&days=14&tap=1&beneficiary=0x...#coin
+    // Coin launch deeplink:
+    //   Curve:  ?name=X&symbol=Y&desc=Z#coin
+    //   Cause:  ?...&mode=cause&raise=5&days=14&tap=1&beneficiary=0x...#coin
+    //   NFT:    ?...&mode=nft&nft=0x...&id=42&start=10&floor=1&days=3#coin
     if (_dlTabHash === '#coin') {
       const _dlName = _sp.get('name');
       const _dlSymbol = _sp.get('symbol');
@@ -7673,6 +7784,36 @@ document.addEventListener("DOMContentLoaded", () => {
           if (_sp.get('rate')) $('causeTapEthRate').value = _sp.get('rate');
         }
         coinUpdatePreview();
+      } else if (_dlMode === 'nft') {
+        coinSetLaunchType('nft');
+        const _dlNft = _sp.get('nft');
+        const _dlTokenId = _sp.get('id');
+        const _dlStart = _sp.get('start');
+        const _dlFloor = _sp.get('floor');
+        const _dlDays = _sp.get('days');
+        if (_dlNft) $('nftContract').value = _dlNft;
+        if (_dlTokenId) $('nftTokenId').value = _dlTokenId;
+        if (_dlStart) $('nftStartPrice').value = _dlStart;
+        if (_dlFloor != null) {
+          const pct = parseInt(_dlFloor, 10);
+          if (!isNaN(pct)) auctionSetFloor(pct, null);
+        }
+        if (_dlDays != null) {
+          const d = parseInt(_dlDays, 10);
+          if (!isNaN(d)) auctionSetDuration(d, null);
+        }
+        // Kick off NFT resolution — same code path as a normal edit.
+        if (_dlNft || _dlTokenId) {
+          if (typeof onCoinAddressInput === 'function') {
+            onCoinAddressInput('nftContract','nftContractResolved', auctionOnNftChange);
+          } else if (typeof auctionOnNftChange === 'function') {
+            auctionOnNftChange();
+          }
+        }
+        // coinSetLaunchType fired syncCoinURL before we populated the inputs, so
+        // any param that doesn't trigger a follow-up handler (e.g. a lone `start=`
+        // without contract+id) would be stripped from the URL. Resync now.
+        if (typeof syncCoinURL === 'function') syncCoinURL();
       } else if (_dlMode === 'curve' || !_dlMode) {
         coinSetLaunchType('coin');
       }
@@ -8102,6 +8243,7 @@ function switchTab(tab) {
 
 </script>
 <script src="./modules/coin.js"></script>
+<script src="./modules/auction.js"></script>
 <div id="ipfsFooter" style="display:none;text-align:center;padding:24px 12px 12px;font-size:11px;color:var(--fg-muted);opacity:0.6;word-break:break-all">
   ipfs: <span id="ipfsCid"></span>
 </div>

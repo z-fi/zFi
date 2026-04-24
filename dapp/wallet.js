@@ -188,7 +188,18 @@ async function connectWithWallet(walletKey, options = {}) {
       _isWalletConnect = false; _wcDeepLink = null;
     }
     if (!walletProvider) throw new Error('Wallet not found');
-    if (walletKey !== 'walletconnect') await walletProvider.request({ method: 'eth_requestAccounts' });
+    if (walletKey !== 'walletconnect') {
+      if (silent) {
+        // Silent reconnect: use the non-prompting eth_accounts. If the wallet
+        // hasn't already authorized this origin, this returns []; aborting here
+        // avoids MetaMask's native "connect to this site?" popup firing on
+        // every page load from stale localStorage state.
+        const accounts = await walletProvider.request({ method: 'eth_accounts' }).catch(() => []);
+        if (!accounts || accounts.length === 0) throw new Error('not authorized');
+      } else {
+        await walletProvider.request({ method: 'eth_requestAccounts' });
+      }
+    }
     const chainId = await walletProvider.request({ method: 'eth_chainId' });
     if (BigInt(chainId) !== 1n) {
       try { await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); const nc = await walletProvider.request({ method: 'eth_chainId' }); if (BigInt(nc) !== 1n) throw new Error('Chain switch failed'); }

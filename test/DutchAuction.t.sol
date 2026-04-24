@@ -163,7 +163,7 @@ contract DutchAuctionTest is Test {
     function testListNFTSingle() public {
         uint256 aId = _listOneNFT(42, 10 ether, 0, 1 hours);
         assertEq(nft.ownerOf(42), address(auction));
-        (address seller, address token,,,,,,) = auction.auctions(aId);
+        (address seller,,,, address token,,,,) = auction.auctions(aId);
         assertEq(seller, alice);
         assertEq(token, address(nft));
     }
@@ -181,7 +181,7 @@ contract DutchAuctionTest is Test {
         uint256 aId = auction.listNFT(address(nft), ids, 5 ether, 1, 0, 1 hours);
         vm.stopPrank();
 
-        uint256[] memory got = auction.idsOf(aId);
+        uint256[] memory got = auction.getAuction(aId).ids;
         assertEq(got.length, 3);
         for (uint256 i; i < 3; ++i) {
             assertEq(nft.ownerOf(i + 1), address(auction));
@@ -275,7 +275,7 @@ contract DutchAuctionTest is Test {
     function testListERC20() public {
         uint256 aId = _listERC20(1000e18, 10 ether, 1, 1 hours);
         assertEq(tok.balanceOf(address(auction)), 1000e18);
-        (,,,,,, uint128 initial, uint128 remaining) = auction.auctions(aId);
+        (,,,,,,, uint128 initial, uint128 remaining) = auction.auctions(aId);
         assertEq(initial, 1000e18);
         assertEq(remaining, 1000e18);
     }
@@ -288,7 +288,7 @@ contract DutchAuctionTest is Test {
         uint256 aId = auction.listERC20(address(usdt), 1000e6, 5 ether, 0, 0, 1 hours);
         vm.stopPrank();
         assertEq(usdt.balanceOf(address(auction)), 1000e6);
-        (,,,,,, uint128 initial,) = auction.auctions(aId);
+        (,,,,,,, uint128 initial,) = auction.auctions(aId);
         assertEq(initial, 1000e6);
     }
 
@@ -398,7 +398,7 @@ contract DutchAuctionTest is Test {
         assertEq(bob.balance, bobBefore - 10 ether);
 
         // auction deleted
-        (address seller,,,,,,,) = auction.auctions(aId);
+        (address seller,,,,,,,,) = auction.auctions(aId);
         assertEq(seller, address(0));
     }
 
@@ -486,7 +486,7 @@ contract DutchAuctionTest is Test {
         auction.fill{value: 10 ether}(aId, 1000e18);
 
         assertEq(tok.balanceOf(bob), 1000e18);
-        (address seller,,,,,,,) = auction.auctions(aId); // deleted
+        (address seller,,,,,,,,) = auction.auctions(aId); // deleted
         assertEq(seller, address(0));
     }
 
@@ -497,14 +497,14 @@ contract DutchAuctionTest is Test {
         auction.fill{value: 1 ether}(aId, 100e18);
         assertEq(tok.balanceOf(bob), 100e18);
 
-        (,,,,,,, uint128 remaining) = auction.auctions(aId);
+        (,,,,,,,, uint128 remaining) = auction.auctions(aId);
         assertEq(remaining, 900e18);
 
         vm.prank(carol);
         auction.fill{value: 1 ether}(aId, 100e18);
         assertEq(tok.balanceOf(carol), 100e18);
 
-        (,,,,,,, remaining) = auction.auctions(aId);
+        (,,,,,,,, remaining) = auction.auctions(aId);
         assertEq(remaining, 800e18);
     }
 
@@ -561,7 +561,7 @@ contract DutchAuctionTest is Test {
         auction.cancel(aId);
 
         assertEq(nft.ownerOf(7), alice);
-        (address seller,,,,,,,) = auction.auctions(aId);
+        (address seller,,,,,,,,) = auction.auctions(aId);
         assertEq(seller, address(0));
     }
 
@@ -766,33 +766,6 @@ contract DutchAuctionTest is Test {
         assertEq(auction.costOf(aId, 0), 0);
     }
 
-    function testRemainingCostOfNFT() public {
-        uint256 aId = _listOneNFT(7, 10 ether, 0, 1 hours);
-        assertEq(auction.remainingCostOf(aId), 10 ether);
-    }
-
-    function testRemainingCostOfERC20TracksPartialFill() public {
-        uint256 aId = _listERC20(1000e18, 10 ether, 0, 1 hours);
-        uint40 startT = uint40(block.timestamp);
-        vm.warp(startT + 30 minutes); // price = 5 ETH
-
-        // Full remaining: ceil(5e18 * 1000 / 1000) = 5 ETH.
-        assertEq(auction.remainingCostOf(aId), 5 ether);
-
-        vm.prank(bob);
-        auction.fill{value: 0.75 ether}(aId, 150e18);
-
-        // 850 tokens left: ceil(5e18 * 850 / 1000) = 4.25 ETH.
-        assertEq(auction.remainingCostOf(aId), 4.25 ether);
-    }
-
-    function testRemainingCostOfClosed() public {
-        uint256 aId = _listOneNFT(7, 10 ether, 0, 1 hours);
-        vm.prank(alice);
-        auction.cancel(aId);
-        assertEq(auction.remainingCostOf(aId), 0);
-    }
-
     function testPriceOfUnknownReturnsZero() public view {
         assertEq(auction.priceOf(12345), 0);
     }
@@ -906,7 +879,7 @@ contract DutchAuctionTest is Test {
         vm.prank(bob);
         auction.fill{value: 3 ether}(aId, 300e18); // exactly drains
 
-        (address seller,,,,,,, uint128 remaining) = auction.auctions(aId);
+        (address seller,,,,,,,, uint128 remaining) = auction.auctions(aId);
         assertEq(seller, address(0)); // listing was deleted
         assertEq(remaining, 0);
         assertEq(tok.balanceOf(bob), 600e18);
@@ -1006,7 +979,7 @@ contract DutchAuctionTest is Test {
         auction.fill{value: 5 ether}(a1, 0);
 
         // a2 is untouched.
-        (address s2,,,,,,, uint128 rem2) = auction.auctions(a2);
+        (address s2,,,,,,,, uint128 rem2) = auction.auctions(a2);
         assertEq(s2, alice);
         assertEq(rem2, 1000e18);
         assertEq(tok.balanceOf(address(auction)), 1000e18);
@@ -1034,7 +1007,7 @@ contract DutchAuctionTest is Test {
         uint256 aId = auction.listNFT(address(nft), ids, 1 ether, 0, 0, 1 hours);
         vm.stopPrank();
 
-        uint256[] memory got = auction.idsOf(aId);
+        uint256[] memory got = auction.getAuction(aId).ids;
         assertEq(got.length, 2);
         assertEq(got[0], 20);
         assertEq(got[1], 21);
@@ -1044,7 +1017,7 @@ contract DutchAuctionTest is Test {
         uint256 aId = _listOneNFT(30, 1 ether, 0, 1 hours);
         vm.prank(alice);
         auction.cancel(aId);
-        uint256[] memory got = auction.idsOf(aId);
+        uint256[] memory got = auction.getAuction(aId).ids;
         assertEq(got.length, 0);
     }
 
@@ -1071,7 +1044,7 @@ contract DutchAuctionTest is Test {
         vm.prank(bob);
         auction.fill{value: finalCost}(aId, remainder);
 
-        (address seller,,,,,,, uint128 rem) = auction.auctions(aId);
+        (address seller,,,,,,,, uint128 rem) = auction.auctions(aId);
         assertEq(seller, address(0));
         assertEq(rem, 0);
         assertEq(tok.balanceOf(address(auction)), 0);
