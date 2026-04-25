@@ -182,7 +182,7 @@ function createHarness({
   globals = {},
   statePatch = null,
   note = createBaseNote(),
-  mode = 'direct',
+  mode = 'relay',
   actionKind = 'withdraw',
 } = {}) {
   return createPrivacyHarness({
@@ -255,7 +255,6 @@ function createHarness({
       ppwAnonHint: createElement({}, { withScrollIntoView: true }),
       ppwWithdrawBalanceHint: createElement({}, { withScrollIntoView: true }),
       ppwWithdrawAmtLabel: createElement({}, { withScrollIntoView: true }),
-      ppwModeRelay: createElement({}, { withScrollIntoView: true }),
       ppwModeSummary: createElement({}, { withScrollIntoView: true }),
       ppwExtraGasWrap: createElement({}, { withScrollIntoView: true }),
       ppwExtraGas: createElement({ checked: false, disabled: false }, { withScrollIntoView: true }),
@@ -343,6 +342,31 @@ function createRelayFeeCommitment(harness, assetAddress, patch = {}) {
   };
 }
 
+function createMatchingWithdrawalProof(harness, circuitInputs) {
+  const withdrawnValue = BigInt(circuitInputs.withdrawnValue);
+  const existingValue = BigInt(circuitInputs.existingValue);
+  const label = BigInt(circuitInputs.label);
+  const existingNullifier = BigInt(circuitInputs.existingNullifier);
+  const newNullifier = BigInt(circuitInputs.newNullifier);
+  const newSecret = BigInt(circuitInputs.newSecret);
+  const nullifierHash = harness.context.poseidon1([existingNullifier]);
+  const newPrecommitment = harness.context.poseidon2([newNullifier, newSecret]);
+  const newCommitment = harness.context.poseidon3([existingValue - withdrawnValue, label, newPrecommitment]);
+  return {
+    proof: createProofResult().proof,
+    publicSignals: [
+      newCommitment,
+      nullifierHash,
+      withdrawnValue,
+      BigInt(circuitInputs.stateRoot),
+      BigInt(circuitInputs.stateTreeDepth),
+      BigInt(circuitInputs.ASPRoot),
+      BigInt(circuitInputs.ASPTreeDepth),
+      BigInt(circuitInputs.context),
+    ].map(String),
+  };
+}
+
 console.log('\n-- Withdrawal helpers --');
 
 test('leanIMT proof stays padded to circuit depth', () => {
@@ -368,13 +392,13 @@ test('next withdrawal index prefers the note lineage when available', () => {
 
 test('preview builder hides preview for full withdrawals (no new info until quote)', () => {
   const harness = createHarness({
-    mode: 'direct',
+    mode: 'relay',
     note: createBaseNote({ value: 1_000000000000000000n }),
   });
 
   const preview = harness.api.withdrawal.ppwBuildPreviewState(
     createBaseNote({ value: 1_000000000000000000n }),
-    'direct',
+    'relay',
     CONNECTED_ADDRESS,
   );
 
@@ -436,7 +460,6 @@ test('requesting a relay review enters review state only after a validated quote
   assert.equal(harness.elements.ppwWithdrawAmt.disabled, true);
   assert.equal(harness.elements.ppwWithdrawAmt.readOnly, true);
   assert.equal(harness.elements.ppwRecipient.disabled, true);
-  assert.equal(harness.elements.ppwModeRelay.disabled, true);
   assert.equal(harness.elements.ppwWithdrawPct25.disabled, true);
   assert.equal(harness.elements.ppwWithdrawPct50.disabled, true);
   assert.equal(harness.elements.ppwWithdrawPct75.disabled, true);
@@ -501,6 +524,7 @@ test('valid amount re-enables the withdraw CTA when the draft becomes valid agai
   const harness = createHarness();
   await markWalletCompatibilityReady(harness);
   harness.api.withdrawal.ppwSetDraftInteractivity('editing');
+  harness.elements.ppwRecipient.value = 'alice.eth';
   harness.elements.ppwWithdrawAmt.value = '11';
   harness.api.withdrawal.ppwUpdatePreview();
   assert.equal(harness.elements.ppwWithdrawBtn.disabled, true);
@@ -654,14 +678,9 @@ test('load withdrawal state fails closed when the spent check RPC read fails', a
 });
 
 test('withdraw flow aborts before proof preparation when spent status is unknown', async () => {
-  const harness = createHarness({ mode: 'direct' });
+  const harness = createHarness();
   let prepareProofCalls = 0;
-  harness.context.ppwCollectWithdrawalIntent = async () => createIntent({
-    isRelayMode: false,
-    recipient: CONNECTED_ADDRESS,
-    resolvedRecipient: CONNECTED_ADDRESS,
-    customRecipient: '',
-  });
+  harness.context.ppwCollectWithdrawalIntent = async () => createIntent();
   harness.context.ppwCheckNullifierUnspent = async () => {
     throw new Error('rpc unavailable');
   };
@@ -1747,33 +1766,11 @@ test('relay responses without a transaction hash clarify that submission did not
   );
 });
 
-test('direct submission blocks wallet changes before signing', async () => {
-  const dom = createDom({});
-  const statusCalls = [];
-  const { api } = loadPrivacyTestApi({
-    globals: {
-      console: TEST_CONSOLE,
-      ...dom,
-      _connectedAddress: CONNECTED_ADDRESS,
-      _isWalletConnect: false,
-      _connectedWalletProvider: null,
-      _signer: { getAddress: async () => OTHER_ADDRESS },
-      showStatus(message, type = '') {
-        statusCalls.push({ message, type });
-      },
-      escText: String,
-      escAttr: String,
-      fmt: String,
-      tokens: String,
-    },
-    statePatch: {
-      _ppwMode: 'direct',
-      _ppwNote: createBaseNote(),
-    },
-  });
+test('direct submission fails closed as unsupported', async () => {
+  const harness = createHarness();
   const run = createRun();
 
-  const result = await api.withdrawal.ppwSubmitWithdrawal(
+  const result = await harness.api.withdrawal.ppwSubmitWithdrawal(
     {
       intent: { ...createIntent({ isRelayMode: false, recipient: CONNECTED_ADDRESS }), isRelayMode: false, recipient: CONNECTED_ADDRESS },
     },
@@ -1789,9 +1786,9 @@ test('direct submission blocks wallet changes before signing', async () => {
   );
 
   assert.equal(result, null);
-  assert.match(
-    statusCalls.at(-1)?.message || '',
-    /Wallet (?:changed during withdrawal|disconnected)\. Please reconnect and retry\./,
+  assert.equal(
+    harness.lastStatus?.message,
+    'Direct withdrawal is no longer supported. Use relay withdrawal or ragequit.',
   );
 });
 
@@ -1946,6 +1943,16 @@ test('withdraw coordinator remains a thin orchestration layer over the extracted
   const harness = createHarness();
   const order = [];
   let stopArgs = null;
+  const reviewedRelayQuote = {
+    intentKey: 'review-key',
+    quoteState: {
+      relayQuote: {
+        feeCommitment: {
+          expiration: Date.now() + 60_000,
+        },
+      },
+    },
+  };
   harness.context.ppwCreateWithdrawRun = () => ({
     reset() {
       order.push('reset');
@@ -1956,19 +1963,16 @@ test('withdraw coordinator remains a thin orchestration layer over the extracted
   });
   harness.context.ppwCollectWithdrawalIntent = async () => {
     order.push('intent');
-    return { id: 'intent' };
+    return createIntent();
   };
+  harness.context.ppwBuildRelayQuoteDisplayKey = () => 'review-key';
   harness.context.ppwLoadWithdrawalState = async () => {
     order.push('load');
     return { id: 'state' };
   };
-  harness.context.ppwPrepareRelayQuote = async () => {
-    order.push('quote');
-    return { id: 'quote' };
-  };
   harness.context.ppwPrepareProofJob = async () => {
     order.push('job');
-    return { id: 'job', intent: createIntent({ isRelayMode: false, recipient: CONNECTED_ADDRESS, wAsset: 'ETH', withdrawnValue: 1n }), isPartial: false, assetUnit: 'ETH' };
+    return { id: 'job', intent: createIntent({ recipient: CONNECTED_ADDRESS, wAsset: 'ETH', withdrawnValue: 1n }), isPartial: false, assetUnit: 'ETH' };
   };
   harness.context.ppwGenerateAndVerifyProof = async () => {
     order.push('proof');
@@ -1988,15 +1992,13 @@ test('withdraw coordinator remains a thin orchestration layer over the extracted
   harness.context.ppwHandleWithdrawalFailure = () => {
     order.push('failure');
   };
-  harness.api.withdrawal.ppwSetMode('direct');
 
-  await harness.api.withdrawal.ppwWithdraw();
+  await harness.api.withdrawal.ppwWithdraw({ reviewedRelayQuote });
 
   assert.deepEqual(order, [
     'reset',
     'intent',
     'load',
-    'quote',
     'job',
     'proof',
     'revalidate',
@@ -2004,6 +2006,70 @@ test('withdraw coordinator remains a thin orchestration layer over the extracted
     'finalize',
   ]);
   assert.deepEqual(stopArgs, { success: true, mode: harness.api.withdrawal.ppwGetMode() });
+});
+
+test('review-confirmed relay withdrawal exercises the live extracted phases', async () => {
+  const note = createBaseNote({ withdrawalIndex: 0 });
+  const harness = createHarness({
+    mode: 'relay',
+    note,
+    statePatch: { _ppwMode: 'relay', _ppwNote: note },
+  });
+  const { reviewed, quoteCallsRef } = await requestRelayReview(harness, { note });
+  const submissions = [];
+  let scheduledRefreshes = 0;
+  let cacheInvalidations = 0;
+
+  harness.context.ppwLoadWithdrawalState = async () => createWithdrawalState();
+  harness.context.ppEnsureMasterKeys = async () => ({
+    masterNullifier: 11n,
+    masterSecret: 22n,
+    legacyMasterNullifier: null,
+    legacyMasterSecret: null,
+  });
+  harness.context.ppGetKeysetForDerivation = () => ({
+    masterNullifier: 11n,
+    masterSecret: 22n,
+  });
+  harness.context.ppResolveNextWithdrawalIndex = () => ({
+    nextIndex: 0,
+    currentIndex: 0,
+    source: 'note',
+    depositIndex: note.depositIndex,
+  });
+  harness.context.ppEnsureWithdrawArtifacts = async () => ({
+    wasmUrl: 'blob:wasm',
+    zkeyUrl: 'blob:zkey',
+  });
+  harness.context.ppRunWithdrawalProof = async (circuitInputs) => createMatchingWithdrawalProof(harness, circuitInputs);
+  harness.context.ppwVerifyProofOnchain = async () => true;
+  harness.context.ppEnsureWithdrawalRootsCurrent = async () => ({ ok: true });
+  harness.context.ppReadWithRpc = async () => ({ status: 1 });
+  harness.context.ppwRelayerRequest = async (chainId, scope, processooor, proof, publicSignals, feeCommitment) => {
+    submissions.push({ chainId, scope, processooor, proof, publicSignals, feeCommitment });
+    return { txHash: '0xrelaytx' };
+  };
+  harness.context.ppInvalidatePoolViewCaches = () => {
+    cacheInvalidations += 1;
+  };
+  harness.context.ppwScheduleMutationRefreshes = () => {
+    scheduledRefreshes += 1;
+  };
+
+  await harness.api.withdrawal.ppwHandleWithdrawPrimaryAction();
+
+  assert.ok(reviewed);
+  assert.equal(quoteCallsRef(), 1);
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0].chainId, reviewed.quoteState.relayChainId);
+  assert.equal(submissions[0].scope, reviewed.intent.scope);
+  assert.equal(submissions[0].processooor.processooor, harness.api.constants.addresses.entrypoint);
+  assert.equal(submissions[0].processooor.data, reviewed.quoteState.relayQuote.feeCommitment.withdrawalData);
+  assert.equal(submissions[0].feeCommitment, reviewed.quoteState.relayQuote.feeCommitment);
+  assert.equal(harness.lastStatus?.message, 'Withdrawal successful!');
+  assert.match(harness.elements.ppwResultSummary.innerHTML, /0xrelaytx/i);
+  assert.equal(cacheInvalidations, 1);
+  assert.equal(scheduledRefreshes, 1);
 });
 
 test('ragequit mode stays direct-only and submit-ready for original depositors', () => {
