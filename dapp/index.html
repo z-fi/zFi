@@ -556,6 +556,18 @@ body.modal-open { overflow: hidden; }
   outline: 1px solid var(--border);
   outline-offset: -1px;
 }
+.token-list-item.disabled { opacity: 0.4; cursor: not-allowed; }
+.token-list-item.disabled:hover { background: transparent; }
+.token-pill {
+  margin-left: auto;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
 .token-balance { margin-left: auto; font-size: 11px; color: var(--token-bal); font-variant-numeric: tabular-nums; opacity: 0.7; }
 
 /* Custom token input */
@@ -1092,6 +1104,33 @@ body.modal-open { overflow: hidden; }
   margin-top:6px;
   line-height:1.4;
 }
+/* zAMM protocol stats banner */
+.zamm-stats {
+  display: none;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.zamm-stats.ready { display: flex; }
+.zamm-stats:hover { color: var(--fg); }
+.zamm-stats-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+}
+.zamm-stats-eth { color: var(--fg); font-weight: 600; }
+.zamm-stats-meta { font-size: 11px; color: var(--fg-dim); }
+.zamm-stats-sep { color: var(--fg-dim); opacity: 0.6; }
+@media (max-width: 480px) {
+  .zamm-stats { font-size: 11px; gap: 6px; }
+  .zamm-stats-meta, .zamm-stats-sep { display: none; }
+}
 </style>
 </head>
 <body>
@@ -1106,7 +1145,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span></div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><a id="zammStats" class="zamm-stats" href="https://zamm.finance" target="_blank" rel="noopener" title="Total volume routed through zAMM"><span class="zamm-stats-label">zAMM</span><span class="zamm-stats-eth" id="zammStatsEth"></span><span id="zammStatsUsd"></span><span class="zamm-stats-sep">·</span><span class="zamm-stats-meta" id="zammStatsMeta"></span></a></div>
 
 <!-- Swap card -->
 <div class="swap-card">
@@ -1251,7 +1290,6 @@ body.modal-open { overflow: hidden; }
 </div><!-- end swapTab -->
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
-<div id="fwDaicoSection" class="live-sales" style="display:none"></div>
 <div id="liveCurveSection" class="live-sales" style="display:none"></div>
 <div id="featuredPmSection" class="live-sales" style="display:none"></div>
 <!-- Chat (MiniMeet) — lazy-loads on first open -->
@@ -1662,7 +1700,7 @@ body.modal-open { overflow: hidden; }
       <div class="modal-title">Select Token</div>
       <button class="modal-close" onclick="closeTokenModal()">&times;</button>
     </div>
-    <input type="text" id="tokenSearchInput" class="token-search" placeholder="Search or enter list.wei" autocomplete="off">
+    <input type="text" id="tokenSearchInput" class="token-search" placeholder="Search name, symbol, or 0x…" autocomplete="off">
     <div id="weiListStatus" class="token-search-status"></div>
     <div id="tokenList" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0"></div>
     <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px;display:flex;gap:8px;align-items:center;flex-shrink:0">
@@ -1700,6 +1738,10 @@ const BOLD_ADDRESS = "0x6440f144b7e50D6a8439336510312d2F54beB01D";
 const LUSD_ADDRESS = "0x5f98805A4E8be255a32880FDeC7F6728C6568bA0";
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+// Used as msg.sender / receiver when previewing quotes without a connected wallet.
+// The quoter's multicall encoders need a non-zero address to bake in; the resulting
+// calldata is never executed in preview mode (button stays "Connect Wallet").
+const _QUOTE_PREVIEW_ADDR = "0x000000000000000000000000000000000000dEaD";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
 // 0x / Matcha integration
 const MATCHA_ADDRESS = "0xBB11c36FBF566B5fad265218bCdB4F528d14E0b5";
@@ -2073,12 +2115,21 @@ async function loadLiveCurveCoins() {
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) return;
 
+    // Pull the ZORG-DAO spam list from the shared cache the coin gallery maintains.
+    // Cache-only (no RPC) on the lander — gallery visits refresh it in the background.
+    let spamSet = new Set();
+    try {
+      const cached = localStorage.getItem('zfi_spam_cache');
+      if (cached) spamSet = new Set((JSON.parse(cached).addrs) || []);
+    } catch {}
+
     // Dedupe by token_address (in case launch retries created multiple rows) and take the newest entry.
+    // Drop spam-flagged tokens up front so we don't waste a multicall slot decoding them.
     const seen = new Set();
     const ordered = [];
     for (const r of rows) {
       const a = (r.token_address || '').toLowerCase();
-      if (!a || seen.has(a)) continue;
+      if (!a || seen.has(a) || spamSet.has(a)) continue;
       seen.add(a);
       ordered.push(r);
     }
@@ -2110,10 +2161,19 @@ async function loadLiveCurveCoins() {
       const cap = BigInt(curve.cap);
       const vr = BigInt(curve.virtualReserve);
       const startPrice = BigInt(curve.startPrice);
+      const raisedETH = BigInt(curve.raisedETH);
+      const graduationTarget = BigInt(curve.graduationTarget);
       const remaining = vr - sold;
       const spotPrice = remaining > 0n ? (startPrice * vr * vr) / (remaining * remaining) : 0n;
       const perMilEth = (Number(spotPrice) / 1e18) * 1e6;
-      const pct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
+      const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
+      // Use the binding graduation criterion (raisedETH/target if target-gated) — XYK pricing
+      // back-loads ETH so sold/cap alone under-reports proximity to graduation. Match the
+      // detail page so the user sees a consistent progress signal across views.
+      const ethPct = graduationTarget > 0n
+        ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
+        : 0;
+      const pct = Math.max(salePct, ethPct);
       const status = curve.seeded ? 'graduated' : curve.graduated ? 'ready to LP' : 'live';
 
       const rawSym = String(r.symbol || '???').trim();
@@ -2190,51 +2250,6 @@ async function loadLiveCurveCoins() {
 }
 
 setTimeout(loadLiveCurveCoins, 200);
-
-// FW DAICO — sale complete, now trading
-setTimeout(async () => {
-  const FW_DAO = '0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853';
-  const el = $('fwDaicoSection');
-  if (!el) return;
-  try {
-    const daicos = await fetchDaicoScan();
-    const fw = daicos.find(d => d.dao.toLowerCase() === FW_DAO.toLowerCase());
-    if (!fw) return;
-    let icon = null, name = fw.meta.name || 'FW';
-    if (fw.meta.contractURI) {
-      try {
-        let url = fw.meta.contractURI;
-        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
-        else if (url.startsWith('data:')) {
-          const j = url.split(',').slice(1).join(',');
-          const m = JSON.parse(decodeURIComponent(j));
-          if (m.image) icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
-          if (m.name) name = m.name;
-        }
-        if (!icon) {
-          const res = await fetch(url);
-          const m = await res.json();
-          if (m.image) icon = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
-          if (m.name) name = m.name;
-        }
-      } catch {}
-    }
-    if (!icon) icon = 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico';
-    const sym = fw.meta.symbol || 'FW';
-    const logo = icon
-      ? `<img class="live-sale-logo" src="${esc(icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${esc(sym[0]||'?')}</div>'">`
-      : `<div class="live-sale-logo-ph">${esc(sym[0] || '?')}</div>`;
-    const displayName = name && name.length > 1 ? name : sym;
-    el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daico</div><a class="live-sale-card" href="coin/#${FW_DAO}">
-      ${logo}
-      <div class="live-sale-info">
-        <div class="live-sale-name">${esc(displayName)} <span style="color:var(--fg-muted);font-weight:400">$${esc(sym)}</span></div>
-        <div class="live-sale-meta" style="color:var(--fg-muted)">Collector DAO &middot; continuous sale</div>
-      </div>
-    </a>`;
-    if (_activeTab === 'swap') el.style.display = '';
-  } catch (e) { console.warn('FW DAICO section failed:', e); }
-}, 50);
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -2391,8 +2406,14 @@ const tokens = {
 
 // Load custom tokens from localStorage
 try {
+  // Pre-pass-2 versions registered every ZAMM v0 coin under the shared COINS
+  // singleton address; if such entries leaked into custom-token persistence,
+  // strip them on load so they don't shadow the proper wrapper-address
+  // registration the discovery loader will install later.
+  const COINS_SINGLETON_LOWER = '0x0000000000009710cd229bf635c4500029651ee8';
   const saved = JSON.parse(localStorage.getItem('zswap_custom_tokens') || '[]');
   for (const t of saved) {
+    if (t.address && t.address.toLowerCase() === COINS_SINGLETON_LOWER) continue;
     if (t.address && t.symbol && t.decimals != null && !tokens[t.symbol]) {
       tokens[t.symbol] = { address: t.address, symbol: t.symbol, decimals: t.decimals };
     }
@@ -2408,20 +2429,49 @@ function saveCustomTokens() {
       && !weiListTokenSource.has(t.symbol)
       && !t._isDaicoCoin
       && !t._isCurveCoin
+      && !t._isZammCoin
     );
     localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
   } catch (_) {}
 }
 
-// ---- .wei token list state ----
+// ---- Recent token selections ----
+const _RECENT_KEY = 'zswap_recent_tokens';
+const _RECENT_MAX = 6;
+function loadRecentTokens() {
+  try {
+    const raw = localStorage.getItem(_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(s => typeof s === 'string').slice(0, _RECENT_MAX) : [];
+  } catch (_) { return []; }
+}
+function pushRecentToken(symbol) {
+  if (!symbol) return;
+  try {
+    const cur = loadRecentTokens().filter(s => s !== symbol);
+    cur.unshift(symbol);
+    localStorage.setItem(_RECENT_KEY, JSON.stringify(cur.slice(0, _RECENT_MAX)));
+  } catch (_) {}
+}
+
+// ---- Token list state ----
+// `token-list` (bundled, fetched from ./token-list.json — same origin as the dapp,
+// always the latest because it ships with each IPFS deploy)
+// plus user-loaded `.wei` lists resolved on demand.
 const weiLists = new Map();       // name → { tokens: [...], loadedAt }
 const weiListTokenSource = new Map(); // symbol → listName
-let _tokenListAutoLoaded = false;  // true once auto-load of token-list.wei attempted
+const BUNDLED_TOKEN_LIST = 'token-list';
+let _bundledLoaded = false;
 
 function saveWeiLists() {
   try {
     const obj = {};
-    for (const [name, data] of weiLists) obj[name] = data;
+    for (const [name, data] of weiLists) {
+      // Bundled + external lists always re-fetch on load — only persist user .wei lists.
+      if (!name.endsWith('.wei')) continue;
+      obj[name] = data;
+    }
     localStorage.setItem('zswap_wei_lists', JSON.stringify(obj));
   } catch (_) {}
 }
@@ -2436,6 +2486,228 @@ function loadWeiLists() {
       }
     }
   } catch (_) {}
+  loadBundledTokenList();
+}
+
+let _bundledLoading = false;
+async function loadBundledTokenList() {
+  if (_bundledLoaded || _bundledLoading) return;
+  _bundledLoading = true;
+  try {
+    const r = await fetch('./token-list.json', { cache: 'default' });
+    if (!r.ok) return;
+    const validated = validateTokenList(await r.json());
+    if (validated.length === 0) return;
+    weiLists.set(BUNDLED_TOKEN_LIST, { tokens: validated, loadedAt: Date.now() });
+    mergeWeiListTokens(BUNDLED_TOKEN_LIST, validated);
+    _bundledLoaded = true;
+    if (currentModal && $('tokenSearchInput')) {
+      renderTokenList($('tokenSearchInput').value || '');
+    }
+    if (typeof _retryPendingDeeplinks === 'function') _retryPendingDeeplinks();
+  } catch (_) {
+  } finally {
+    _bundledLoading = false;
+  }
+  loadUniswapTokenList();
+  // Kick ZAMM v0 discovery in parallel with Uniswap rather than chaining behind it —
+  // they're independent endpoints, and a slow Uniswap fetch would otherwise delay
+  // ZAMM-coin deeplink resolution. Internal idempotency guard prevents double-fire.
+  loadZammV0Coins();
+}
+
+// Uniswap default list — ~600 curated mainnet tokens. Standard TokenList spec
+// ({tokens: [{chainId, address, name, symbol, decimals, logoURI}]}); we filter
+// to chainId 1 and map logoURI → icon. Loaded after the bundled list so that
+// our curation wins for symbol collisions.
+const UNISWAP_LIST = 'Uniswap';
+const UNISWAP_LIST_URL = 'https://tokens.uniswap.org/';
+let _uniswapLoaded = false, _uniswapLoading = false;
+async function loadUniswapTokenList() {
+  if (_uniswapLoaded || _uniswapLoading) return;
+  _uniswapLoading = true;
+  try {
+    const r = await fetch(UNISWAP_LIST_URL, { cache: 'default' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const raw = Array.isArray(data?.tokens) ? data.tokens : [];
+    const adapted = raw
+      .filter(t => Number(t.chainId) === CHAIN_ID)
+      .map(t => ({
+        address: t.address,
+        symbol: t.symbol,
+        decimals: t.decimals,
+        icon: typeof t.logoURI === 'string' && t.logoURI.startsWith('https://') ? t.logoURI : undefined,
+      }));
+    const validated = validateTokenList(adapted);
+    if (validated.length === 0) return;
+    weiLists.set(UNISWAP_LIST, { tokens: validated, loadedAt: Date.now() });
+    mergeWeiListTokens(UNISWAP_LIST, validated);
+    _uniswapLoaded = true;
+    if (currentModal && $('tokenSearchInput')) {
+      renderTokenList($('tokenSearchInput').value || '');
+    }
+    _retryPendingDeeplinks();
+  } catch (_) {
+  } finally {
+    _uniswapLoading = false;
+  }
+  loadZammV0Coins();
+}
+
+// ZAMM v0 OG coins — ERC6909 ids living inside the COINS singleton.
+// Pass 1: discovery only (rendered in the dropdown, not yet selectable for swap)
+// since the swap pipeline assumes one-address-per-token; ERC6909 routing via
+// swapVZ(idIn, idOut) is the next pass. See ZAMM_V0_COINS_INTEGRATION.md.
+const COINS_ADDRESS = "0x0000000000009710cd229bF635c4500029651eE8";
+const COINCHAN_API = "https://coinchan-indexer-production.up.railway.app";
+const ZAMM_COINS_KEY = 'zswap_zamm_v0_coins';
+const ZAMM_COINS_TTL = 6 * 60 * 60 * 1000; // 6h
+const ZAMM_COINS_LIMIT = 100;
+const _SYM_RE = /^[A-Za-z0-9.$_-]+$/;
+let _zammCoinsLoaded = false, _zammCoinsLoading = false;
+
+function _gatewayIpfs(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('https://') || url.startsWith('data:image/')) return url;
+  if (url.startsWith('ipfs://')) return DAICO_IPFS_GW + url.slice(7);
+  return null;
+}
+
+// Pending deeplink fragments — set by the DOMContentLoaded resolver when an
+// `?from=` or `?to=` couldn't be matched against the currently-registered
+// tokens (because Uniswap/ZAMM-coin lists load asynchronously). The discovery
+// loaders call _retryPendingDeeplinks() after registering new tokens, which
+// re-resolves and applies the deeplink before the user has interacted.
+let _pendingDeeplinkFrom = null;
+let _pendingDeeplinkTo = null;
+function _retryPendingDeeplinks() {
+  if (!_pendingDeeplinkFrom && !_pendingDeeplinkTo) return;
+  const findKey = (s) => {
+    if (!s) return null;
+    const u = s.toUpperCase();
+    const byKey = Object.keys(tokens).find(k => k.toUpperCase() === u);
+    if (byKey) return byKey;
+    if (s.startsWith('0x') && s.length === 42) {
+      const lo = s.toLowerCase();
+      return Object.keys(tokens).find(k => tokens[k].address.toLowerCase() === lo);
+    }
+    return null;
+  };
+  let changed = false;
+  if (_pendingDeeplinkFrom) {
+    const k = findKey(_pendingDeeplinkFrom);
+    if (k) { fromToken = k; _pendingDeeplinkFrom = null; changed = true; }
+  }
+  if (_pendingDeeplinkTo) {
+    const k = findKey(_pendingDeeplinkTo);
+    if (k) { toToken = k; _pendingDeeplinkTo = null; changed = true; }
+  }
+  if (!changed) return;
+  if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
+  if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
+  if (typeof updateBalances === 'function') updateBalances();
+  if (typeof syncSwapURL === 'function') syncSwapURL();
+  const fa = $("fromAmount");
+  if (fa && fa.value && typeof reQuoteDebounced === 'function') reQuoteDebounced();
+}
+
+// ZAMM v0 coins use ERC6909 ids equal to their ERC20 wrapper address —
+// `coinId === uint256(uint160(wrapperAddr))`. We register each coin under its
+// wrapper address so balance reads, allowance checks, and the address-keyed
+// reverse lookups all work the same as any other ERC20 token. The router's
+// `sweep(wrapperAddr)` automatically dispenses the ERC20 form to the receiver
+// after a swapVZ call (this is the same pattern the staking ZAMM swap uses).
+function _zammWrapperAddr(coinId) {
+  const id = BigInt(coinId);
+  if (id >= (1n << 160n)) return null;
+  return ethers.getAddress('0x' + id.toString(16).padStart(40, '0'));
+}
+
+function _registerZammCoin(c) {
+  // Skip the ZAMM staking coin itself — already represented as the built-in
+  // `ZAMM` token (same ERC20 wrapper at ZORG_PAY_TOKEN); showing it again
+  // would surface a duplicate row.
+  if (String(c.coinId) === ZORG_ID.toString()) return;
+  const wrapperAddr = _zammWrapperAddr(c.coinId);
+  if (!wrapperAddr) return; // coinId doesn't fit in 160 bits — can't sweep as ERC20
+
+  // Synthesise a clean symbol key. Indexer symbols are user-supplied, so guard.
+  const baseSym = c.symbol && _SYM_RE.test(c.symbol) && c.symbol.length <= 24
+    ? c.symbol
+    : ('zCoin' + String(c.coinId).slice(0, 6));
+  let key = baseSym;
+  if (tokens[key]) {
+    // Same wrapper address → already registered (in this list or another).
+    if (tokens[key].address.toLowerCase() === wrapperAddr.toLowerCase()) return;
+    // Different token owns the symbol → suffix with a wrapper-address tail.
+    key = baseSym + '.zamm' + wrapperAddr.slice(-4);
+    if (tokens[key]) return;
+  }
+  tokens[key] = {
+    address: wrapperAddr,
+    symbol: baseSym,
+    name: c.name || baseSym,
+    decimals: 18,
+    icon: _gatewayIpfs(c.imageUrl),
+    _isZammCoin: true,
+    coinId: String(c.coinId),
+    poolId: c.poolId ? String(c.poolId) : null,
+    priceInEth: typeof c.priceInEth === 'number' ? c.priceInEth : null,
+    liquidityEth: typeof c.liquidityEth === 'number' ? c.liquidityEth : 0,
+    holders: typeof c.holders === 'number' ? c.holders : 0,
+    fdvEth: typeof c.fdvEth === 'number' ? c.fdvEth : null,
+  };
+}
+
+async function loadZammV0Coins() {
+  if (_zammCoinsLoaded || _zammCoinsLoading) return;
+  _zammCoinsLoading = true;
+  try {
+    let coins = null;
+    try {
+      const raw = JSON.parse(localStorage.getItem(ZAMM_COINS_KEY) || 'null');
+      if (raw && Array.isArray(raw.coins) && raw.loadedAt && Date.now() - raw.loadedAt < ZAMM_COINS_TTL) {
+        coins = raw.coins;
+      }
+    } catch (_) {}
+
+    if (!coins) {
+      const url = COINCHAN_API + '/api/coins-table?limit=' + ZAMM_COINS_LIMIT + '&sortBy=liquidity&sortDir=desc';
+      const r = await fetch(url, { cache: 'default' });
+      if (!r.ok) return;
+      const data = await r.json();
+      const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      coins = items
+        .filter(c => c && c.token && c.token.toLowerCase() === COINS_ADDRESS.toLowerCase())
+        .filter(c => c.coinId && c.symbol)
+        .map(c => ({
+          coinId: String(c.coinId),
+          symbol: String(c.symbol),
+          name: c.name || null,
+          imageUrl: c.imageUrl || null,
+          swapFee: String(c.swapFee || '100'),
+          poolId: c.poolId ? String(c.poolId) : null,
+          priceInEth: typeof c.priceInEth === 'number' ? c.priceInEth : null,
+          liquidityEth: typeof c.liquidityEth === 'number' ? c.liquidityEth : 0,
+          holders: typeof c.holders === 'number' ? c.holders : 0,
+          fdvEth: typeof c.fdvEth === 'number' ? c.fdvEth : null,
+        }));
+      try {
+        localStorage.setItem(ZAMM_COINS_KEY, JSON.stringify({ loadedAt: Date.now(), coins }));
+      } catch (_) {}
+    }
+
+    for (const c of coins) _registerZammCoin(c);
+    _zammCoinsLoaded = true;
+    if (currentModal && $('tokenSearchInput')) {
+      renderTokenList($('tokenSearchInput').value || '');
+    }
+    _retryPendingDeeplinks();
+  } catch (_) {
+  } finally {
+    _zammCoinsLoading = false;
+  }
 }
 
 function validateTokenList(rawArray) {
@@ -2636,7 +2908,6 @@ function removeWeiList(listName) {
   }
   weiLists.delete(listName);
   saveWeiLists();
-  if (listName === 'token-list.wei') _tokenListAutoLoaded = false;
 }
 
 function renderTokenList(filter) {
@@ -2661,10 +2932,18 @@ function renderTokenList(filter) {
     return false;
   }
 
+  // DAICO is buy-only (ETH → coin), so disable those rows when picking the from-side.
+  const isFromSide = currentModal === 'from';
+  const shown = new Set();
+
   function makeRow(symbol) {
+    if (shown.has(symbol)) return null;
+    shown.add(symbol);
     const t = tokens[symbol];
     const row = document.createElement('div');
     row.className = 'token-list-item';
+    const disabled = isFromSide && t?._isDaicoCoin;
+    if (disabled) row.classList.add('disabled');
     row.setAttribute('data-symbol', symbol);
     const iconSpan = document.createElement('span');
     iconSpan.className = 'token-icon';
@@ -2674,27 +2953,81 @@ function renderTokenList(filter) {
     // Curve coins may have non-ASCII symbols sanitised away in their tokens[] key —
     // show the original symbol when it differs from the key.
     nameSpan.textContent = (t && t.symbol && t.symbol !== symbol) ? t.symbol : symbol;
-    const balSpan = document.createElement('span');
-    balSpan.className = 'token-balance';
-    if (_connectedAddress && t) {
-      const cached = getCachedBalance(t.address);
-      if (cached != null && cached > 0n) {
-        const formatted = t.address === ZERO_ADDRESS
-          ? ethers.formatEther(cached) : ethers.formatUnits(cached, t.decimals);
-        balSpan.textContent = fmt(formatted);
+    row.append(iconSpan, nameSpan);
+    if (disabled) {
+      const pill = document.createElement('span');
+      pill.className = 'token-pill';
+      pill.textContent = 'Buy only';
+      row.appendChild(pill);
+    } else {
+      const balSpan = document.createElement('span');
+      balSpan.className = 'token-balance';
+      if (_connectedAddress && t) {
+        const cached = getCachedBalance(t.address);
+        if (cached != null && cached > 0n) {
+          const formatted = t.address === ZERO_ADDRESS
+            ? ethers.formatEther(cached) : ethers.formatUnits(cached, t.decimals);
+          balSpan.textContent = fmt(formatted);
+        }
       }
+      row.appendChild(balSpan);
     }
-    row.append(iconSpan, nameSpan, balSpan);
     return row;
   }
 
-  // Built-in tokens
+  function appendRow(sym) {
+    const r = makeRow(sym);
+    if (r) frag.appendChild(r);
+    return r != null;
+  }
+
+  function appendGroupLabel(text, listName) {
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    if (listName && listName.endsWith('.wei')) {
+      label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
+    } else {
+      label.textContent = text || listName;
+    }
+    frag.appendChild(label);
+  }
+
   let hasAny = false;
+
+  // Recent picks (most-recently selected, persisted across sessions)
+  const recentSyms = loadRecentTokens()
+    .filter(sym => tokens[sym] && matchesFilter(sym, tokens[sym].address, tokens[sym].name));
+  if (recentSyms.length > 0) {
+    appendGroupLabel('Recent');
+    for (const sym of recentSyms) appendRow(sym);
+    hasAny = true;
+  }
+
+  // Tokens you hold (positive cached balance) — surface above everything else.
+  if (_connectedAddress) {
+    const heldSyms = [];
+    for (const sym of Object.keys(tokens)) {
+      if (shown.has(sym)) continue;
+      const t = tokens[sym];
+      if (!t) continue;
+      const cached = getCachedBalance(t.address);
+      if (cached == null || cached <= 0n) continue;
+      if (!matchesFilter(sym, t.address, t.name)) continue;
+      heldSyms.push(sym);
+    }
+    if (heldSyms.length > 0) {
+      appendGroupLabel('Your tokens');
+      for (const sym of heldSyms) appendRow(sym);
+      hasAny = true;
+    }
+  }
+
+  // Built-in tokens
   for (const sym of Object.keys(tokens)) {
+    if (shown.has(sym)) continue;
     if (!builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
     if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    frag.appendChild(makeRow(sym));
-    hasAny = true;
+    if (appendRow(sym)) hasAny = true;
   }
 
   // Pre-index weiListTokenSource by list name (O(n) instead of O(n*m))
@@ -2710,85 +3043,91 @@ function renderTokenList(filter) {
     const srcTokens = _weiByList.get(listName) || [];
     const listTokens = [];
     for (const sym of srcTokens) {
+      if (shown.has(sym)) continue;
       if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
       listTokens.push(sym);
     }
     if (listTokens.length === 0) continue;
-    const label = document.createElement('div');
-    label.className = 'token-group-label';
-    label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
-    frag.appendChild(label);
-    for (const sym of listTokens) frag.appendChild(makeRow(sym));
+    appendGroupLabel(null, listName);
+    for (const sym of listTokens) appendRow(sym);
     hasAny = true;
   }
 
   // DAICO graduated coins (ETH buy only)
   const daicoTokens = [];
   for (const sym of Object.keys(tokens)) {
+    if (shown.has(sym)) continue;
     if (!tokens[sym]._isDaicoCoin) continue;
     if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
     daicoTokens.push(sym);
   }
   if (daicoTokens.length > 0) {
-    const label = document.createElement('div');
-    label.className = 'token-group-label';
-    label.textContent = 'Coins';
-    frag.appendChild(label);
-    for (const sym of daicoTokens) frag.appendChild(makeRow(sym));
+    appendGroupLabel('Coins');
+    for (const sym of daicoTokens) appendRow(sym);
     hasAny = true;
   }
 
   // Curve coins (ClassicalCurveSale launches — ETH ↔ coin via curve sale or post-grad zAMM hook).
   const curveTokens = [];
   for (const sym of Object.keys(tokens)) {
+    if (shown.has(sym)) continue;
     if (!tokens[sym]._isCurveCoin) continue;
     if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
     curveTokens.push(sym);
   }
   if (curveTokens.length > 0) {
-    const label = document.createElement('div');
-    label.className = 'token-group-label';
-    label.textContent = 'Curve coins';
-    frag.appendChild(label);
-    for (const sym of curveTokens) frag.appendChild(makeRow(sym));
+    appendGroupLabel('Curve coins');
+    for (const sym of curveTokens) appendRow(sym);
     hasAny = true;
   }
 
-  // Custom tokens (not built-in, not from .wei lists, not DAICO/curve coins)
+  // ZAMM v0 OG coins — top by liquidity, ERC6909 ids in COINS singleton.
+  // Discovery only for now; selection blocked via .disabled in makeRow.
+  const zammCoins = [];
+  for (const sym of Object.keys(tokens)) {
+    if (shown.has(sym)) continue;
+    if (!tokens[sym]._isZammCoin) continue;
+    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
+    zammCoins.push(sym);
+  }
+  if (zammCoins.length > 0) {
+    // Sort by liquidity desc so the top of the list is the most useful.
+    zammCoins.sort((a, b) => (tokens[b].liquidityEth || 0) - (tokens[a].liquidityEth || 0));
+    appendGroupLabel('ZAMM coins');
+    for (const sym of zammCoins) appendRow(sym);
+    hasAny = true;
+  }
+
+  // Custom tokens (not built-in, not from .wei lists, not DAICO/curve/ZAMM coins)
   const customTokens = [];
   for (const sym of Object.keys(tokens)) {
+    if (shown.has(sym)) continue;
     if (tokens[sym]._isZammStake) continue; // ZAMM is in built-in section, skip here
     if (tokens[sym]._isDaicoCoin) continue;
     if (tokens[sym]._isCurveCoin) continue;
+    if (tokens[sym]._isZammCoin) continue;
     if (builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
     if (weiListTokenSource.has(sym)) continue;
     if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
     customTokens.push(sym);
   }
   if (customTokens.length > 0) {
-    const label = document.createElement('div');
-    label.className = 'token-group-label';
-    label.textContent = 'Custom';
-    frag.appendChild(label);
-    for (const sym of customTokens) frag.appendChild(makeRow(sym));
+    appendGroupLabel('Custom');
+    for (const sym of customTokens) appendRow(sym);
     hasAny = true;
   }
 
   if (!hasAny) {
     const empty = document.createElement('div');
     empty.style.cssText = 'padding:16px 12px;color:#999;font-size:13px;text-align:center';
-    if (q && !_tokenListAutoLoaded && !weiLists.has('token-list.wei') && !q.endsWith('.wei')) {
-      _tokenListAutoLoaded = true;
-      empty.textContent = 'Searching extended token list\u2026';
-      frag.appendChild(empty);
-      resolveWeiList('token-list.wei');
-    } else if (q && _weiResolving) {
-      empty.textContent = 'Searching extended token list\u2026';
-      frag.appendChild(empty);
+    if (q && _weiResolving) {
+      empty.textContent = 'Resolving \u2026';
+    } else if (q && !_bundledLoaded) {
+      empty.textContent = 'Loading token list \u2026';
     } else {
       empty.textContent = q ? 'No tokens match \u201c' + q + '\u201d' : 'No tokens';
-      frag.appendChild(empty);
     }
+    frag.appendChild(empty);
   }
 
   list.appendChild(frag);
@@ -2798,6 +3137,7 @@ function renderTokenList(filter) {
     const rows = list.querySelectorAll('.token-list-item');
     let bestRow = null;
     for (const row of rows) {
+      if (row.classList.contains('disabled')) continue;
       const sym = (row.getAttribute('data-symbol') || '').toLowerCase();
       const t = tokens[row.getAttribute('data-symbol')];
       // Exact symbol or address match gets priority
@@ -3066,6 +3406,8 @@ const MC_BAL_IFACE = new ethers.Interface([
 ]);
 const _balanceCache = new Map(); // key → { v: bigint, t: number }
 const _BAL_TTL = 15_000;
+let _modalFetchInFlight = null;
+let _modalFetchAt = 0;
 
 function getCachedBalance(tokenAddress) {
   const key = tokenAddress === ZERO_ADDRESS ? 'ETH' : tokenAddress.toLowerCase();
@@ -3109,43 +3451,59 @@ function mc3AsSettled(mc3, idx, iface, fn) {
 
 async function fetchModalBalances() {
   if (!_connectedAddress) return;
-  const allTokens = Object.values(tokens);
-  const calls = [];
-  const meta = [];
-  const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [_connectedAddress]);
+  // Reuse in-flight multicall if user reopens before it returns.
+  if (_modalFetchInFlight) return _modalFetchInFlight;
+  // Skip if last fetch is fresh enough that the cache is still hot. Half-TTL
+  // leaves headroom so the data the modal renders against is never near-expiry.
+  if (Date.now() - _modalFetchAt < _BAL_TTL / 2) return;
 
-  // ETH balance
-  calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
-    callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [_connectedAddress]) });
-  meta.push({ type: 'eth' });
+  const owner = _connectedAddress;
+  const promise = (async () => {
+    const allTokens = Object.values(tokens);
+    const calls = [];
+    const meta = [];
+    const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [owner]);
 
-  // All ERC-20 balances
-  for (const t of allTokens) {
-    if (t.address === ZERO_ADDRESS) continue;
-    calls.push({ target: t.address, allowFailure: true, callData: balOfData });
-    meta.push({ type: 'erc20', address: t.address });
-  }
+    // ETH balance
+    calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
+      callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [owner]) });
+    meta.push({ type: 'eth' });
 
-  try {
-    const results = await multicallRead(calls);
-    for (let i = 0; i < meta.length; i++) {
-      const m = meta[i];
-      const r = results[i];
-      if (!r || !r.success) continue;
-      try {
-        if (m.type === 'eth') {
-          setCachedBalance(ZERO_ADDRESS, MULTICALL3_IFACE.decodeFunctionResult("getEthBalance", r.returnData)[0]);
-        } else {
-          setCachedBalance(m.address, MC_BAL_IFACE.decodeFunctionResult("balanceOf", r.returnData)[0]);
-        }
-      } catch {}
+    // All ERC-20 balances
+    for (const t of allTokens) {
+      if (t.address === ZERO_ADDRESS) continue;
+      calls.push({ target: t.address, allowFailure: true, callData: balOfData });
+      meta.push({ type: 'erc20', address: t.address });
     }
-    // Re-render to show fetched balances
-    const filter = $('tokenSearchInput')?.value || '';
-    renderTokenList(filter);
-  } catch (e) {
-    console.warn("Multicall3 modal balances failed:", e);
-  }
+
+    try {
+      const results = await multicallRead(calls);
+      // Drop the result if the wallet changed mid-flight — those balances are stale.
+      if (owner !== _connectedAddress) return;
+      for (let i = 0; i < meta.length; i++) {
+        const m = meta[i];
+        const r = results[i];
+        if (!r || !r.success) continue;
+        try {
+          if (m.type === 'eth') {
+            setCachedBalance(ZERO_ADDRESS, MULTICALL3_IFACE.decodeFunctionResult("getEthBalance", r.returnData)[0]);
+          } else {
+            setCachedBalance(m.address, MC_BAL_IFACE.decodeFunctionResult("balanceOf", r.returnData)[0]);
+          }
+        } catch {}
+      }
+      // Re-render to show fetched balances
+      const filter = $('tokenSearchInput')?.value || '';
+      renderTokenList(filter);
+    } catch (e) {
+      console.warn("Multicall3 modal balances failed:", e);
+    }
+  })().finally(() => {
+    _modalFetchAt = Date.now();
+    _modalFetchInFlight = null;
+  });
+  _modalFetchInFlight = promise;
+  return promise;
 }
 
 function safeParseUnits(valStr, decimals) {
@@ -3554,6 +3912,12 @@ function manualRefresh() {
 // ---- Quoting ----
 let _quoteSeq = 0;
 let _inputMode = 'exactIn'; // 'exactIn' | 'exactOut'
+// Tracks the most recent quote that was actually shown to the user. When a
+// subsequent quote (typically a 15s refresh) fails for the same args, we keep
+// the existing UI instead of wiping the screen — a transient RPC blip
+// shouldn't yank a valid-looking quote out from under the user.
+let _lastGoodQuote = null; // { amtStr, fromSnap, toSnap, isExactOut, at }
+const _SOFT_REFRESH_GRACE_MS = 30_000;
 
 async function handleAmountChange() {
   const isExactOut = _inputMode === 'exactOut';
@@ -3561,23 +3925,15 @@ async function handleAmountChange() {
   const swapBtn = $("swapBtn");
   const dstEl = isExactOut ? $("fromAmount") : $("toAmount");
   const quoteInfoEl = $("quoteInfo");
-
-  if (!_connectedAddress) {
-    setText(swapBtn, "Connect Wallet");
-    setDisabled(swapBtn, false);
-    setShown(quoteInfoEl, false);
-    stopQuoteRefresh();
-    dstEl.value = "";
-    return;
-  }
+  const _previewMode = !_connectedAddress;
 
   const amtNum = Number(amtStr);
   if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
     dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, "Enter an amount");
-    setDisabled(swapBtn, true);
+    setText(swapBtn, _previewMode ? "Connect Wallet" : "Enter an amount");
+    setDisabled(swapBtn, !_previewMode);
     syncSwapURL();
     return;
   }
@@ -3595,8 +3951,8 @@ async function handleAmountChange() {
     dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, `Deposit ${fromToken} to Privacy Pools`);
-    setDisabled(swapBtn, !_connectedAddress);
+    setText(swapBtn, _previewMode ? "Connect Wallet" : `Deposit ${fromToken} to Privacy Pools`);
+    setDisabled(swapBtn, !_previewMode && !_connectedAddress);
     return;
   }
 
@@ -3641,8 +3997,8 @@ async function handleAmountChange() {
       setShown(quoteInfoEl, true);
       updateCalldataLink(null);
       stopQuoteRefresh(); // No refresh needed for 1:1
-      setText(swapBtn, wrapDir === 'wrap' ? 'Wrap' : 'Unwrap');
-      setDisabled(swapBtn, !_connectedAddress);
+      setText(swapBtn, _previewMode ? "Connect Wallet" : (wrapDir === 'wrap' ? 'Wrap' : 'Unwrap'));
+      setDisabled(swapBtn, !_previewMode && !_connectedAddress);
     } catch (e) {
       dstEl.value = "";
       setShown(quoteInfoEl, false);
@@ -3661,7 +4017,8 @@ async function handleAmountChange() {
     return;
   }
 
-  if (!_walletProvider) return;
+  // _walletProvider is null when no wallet is connected — quoting still works
+  // because getQuote / getExactOutQuote read via the public quoteRPC fallback.
 
   const seq = ++_quoteSeq;
   const fromSnap = fromToken, toSnap = toToken;
@@ -3837,6 +4194,10 @@ async function handleAmountChange() {
         } else if (s.expected) {
           simEl.textContent = 'Pending approval';
           simEl.className = '';
+        } else if (s.transient) {
+          // Slippage/minOut race — quote refresh rebuilds minOut against fresh state.
+          simEl.textContent = 'Sim inconclusive — price moved';
+          simEl.className = 'sim-warn';
         } else {
           simEl.textContent = 'Route would revert';
           simEl.className = 'sim-fail';
@@ -3868,6 +4229,11 @@ async function handleAmountChange() {
         // Allowance/balance error — expected before approval, not a routing issue
         simEl.textContent = 'Pending approval';
         simEl.className = '';
+      } else if (sim.transient) {
+        // Slippage/minOut race between quote build and sim — refresh will clear it.
+        // Don't block the swap button: the actual tx will be built against fresh state.
+        simEl.textContent = 'Sim inconclusive — price moved';
+        simEl.className = 'sim-warn';
       } else {
         // Real routing failure
         simEl.textContent = 'Route would revert';
@@ -3948,7 +4314,7 @@ async function handleAmountChange() {
       : isZOrgSell ? "Ragequit & Sell"
       : _ppSwapEnabled ? "Swap & Deposit"
       : "Swap";
-    if (fromData.address !== ZERO_ADDRESS) {
+    if (fromData.address !== ZERO_ADDRESS && _connectedAddress) {
       const amountIn = isExactOut ? quote.requiredInput : safeParseUnits(amtStr, fromData.decimals);
       if (isDirectStake) {
         // Check allowance against zOrg DAO for direct stake
@@ -3991,21 +4357,43 @@ async function handleAmountChange() {
       }
     }
 
-    if (_simBlocked) {
+    if (_previewMode) {
+      setText(swapBtn, "Connect Wallet");
+      setDisabled(swapBtn, false);
+    } else if (_simBlocked) {
       setText(swapBtn, "Swap would revert — try another route");
       setDisabled(swapBtn, true);
     } else {
       setText(swapBtn, btnLabel);
       setDisabled(swapBtn, false);
     }
+    // Mark this quote as "good" so a subsequent refresh failure for the same
+    // args can soft-fail (keep the displayed quote on screen).
+    _lastGoodQuote = { amtStr, fromSnap, toSnap, isExactOut, at: Date.now() };
   } catch (e) {
     console.error("Quote error:", e);
+    // Stale seq — a newer handler is responsible for the UI.
+    if (seq !== _quoteSeq) return;
+    // User-visible input errors should always show through.
+    const isUserInputErr = /Too many decimals|Invalid number|Empty amount/i.test(String(e?.message || ""));
+    // If a recent good quote for the same args is still on screen, this is
+    // almost certainly a refresh hiccup (RPC blip, single aggregator timeout).
+    // Keep the displayed quote instead of yanking it; just keep the timer ticking.
+    if (!isUserInputErr && _lastGoodQuote
+        && _lastGoodQuote.amtStr === amtStr
+        && _lastGoodQuote.fromSnap === fromSnap
+        && _lastGoodQuote.toSnap === toSnap
+        && _lastGoodQuote.isExactOut === isExactOut
+        && (Date.now() - _lastGoodQuote.at) < _SOFT_REFRESH_GRACE_MS) {
+      console.warn("Quote refresh failed; preserving last good quote.");
+      startQuoteRefresh();
+      return;
+    }
     dstEl.value = "";
     dstEl.placeholder = "0.0";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    const msg = /Too many decimals|Invalid number|Empty amount/i.test(String(e?.message || ""))
-      ? e.message : "Quote failed";
+    const msg = isUserInputErr ? e.message : "Quote failed";
     setText(swapBtn, msg);
     setDisabled(swapBtn, true);
     setTimeout(() => {
@@ -4110,7 +4498,7 @@ let _resolvedReceiver = null; // { input, address } or null
 let _receiverResolveSeq = 0;
 
 function getReceiver() {
-  if (!_connectedAddress) return null;
+  if (!_connectedAddress) return _QUOTE_PREVIEW_ADDR;
   const v = ($("receiverAddress")?.value || "").trim();
   if (!v) return _connectedAddress;
   if (ethers.isAddress(v) && v !== ZERO_ADDRESS) return ethers.getAddress(v);
@@ -4237,6 +4625,14 @@ function isZammSellPath(fromSym, toSym) {
 function isZammBuyPath(fromSym, toSym) {
   return tokens[toSym]?._isZammStake === true && !tokens[fromSym]?._isZOrg && !tokens[fromSym]?._isZammStake;
 }
+// any token → ZAMM v0 OG coin (buy via swapVZ on the hookless AMM)
+function isZammCoinBuyPath(fromSym, toSym) {
+  return tokens[toSym]?._isZammCoin === true && !tokens[fromSym]?._isZammCoin;
+}
+// ZAMM v0 OG coin → any token (sell via swapVZ on the hookless AMM)
+function isZammCoinSellPath(fromSym, toSym) {
+  return tokens[fromSym]?._isZammCoin === true && !tokens[toSym]?._isZammCoin;
+}
 // zOrg → any token except ZAMM (ragequit 1:1 to ZAMM, then sell ZAMM)
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
@@ -4261,6 +4657,7 @@ function isExactOutDisabled(fromSym, toSym) {
   return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
     || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
     || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
+    || isZammCoinBuyPath(fromSym, toSym) || isZammCoinSellPath(fromSym, toSym)
     || isDaicoCoinBuyPath(fromSym, toSym)
     || isCurvePath(fromSym, toSym);
 }
@@ -4358,7 +4755,7 @@ async function getCurveQuote(fromAmountStr, fromSym, toSym) {
   readSlippage(true);
   const slip = BigInt(slippageBps);
   const receiver = getReceiver();
-  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 600);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
 
   return await quoteRPC.call(async (rpc) => {
     // Single batch: curves() + creatorFees() + effectiveFee() — fresh state on every quote.
@@ -4543,6 +4940,33 @@ function getZammToEthQuote(amountIn, reserves) {
   return { ethOut: useHookless ? hooklessOut : hookedOut, useHookless };
 }
 
+// ---- Generic v0 coin pool helpers (any ZAMM v0 coin, identified by coinId) ----
+// Same encoding as computeZammPoolKey, but parameterised on coinId. v0 coins
+// only live on the hookless (ZAMM v0) AMM — Cookbook (v1) uses a different
+// pool-key encoding and has its own coin set, so we read just the v0 pool.
+function _computeZammCoinPoolKey(coinId) {
+  return ethers.AbiCoder.defaultAbiCoder().encode(
+    ["uint256","uint256","address","address","uint256"],
+    [0, BigInt(coinId), ZERO_ADDRESS, ZORG_TOKEN, 100]
+  );
+}
+
+async function getZammCoinPoolReserves(rpc, coinId) {
+  const poolId = BigInt(ethers.keccak256(_computeZammCoinPoolKey(coinId)));
+  const calldata = _zammPoolsIface.encodeFunctionData("pools", [poolId]);
+  const raw = await rpc.call({
+    to: ZAMM_HOOKLESS,
+    data: calldata,
+  });
+  if (!raw || raw === '0x') return { reserve0: 0n, reserve1: 0n };
+  try {
+    const d = _zammPoolsIface.decodeFunctionResult("pools", raw);
+    return { reserve0: BigInt(d[0]), reserve1: BigInt(d[1]) };
+  } catch {
+    return { reserve0: 0n, reserve1: 0n };
+  }
+}
+
 // ---- ETH ↔ WETH wrap/unwrap detection ----
 const WETH_ABI = ["function deposit() payable", "function withdraw(uint256 wad)"];
 
@@ -4663,9 +5087,12 @@ async function getZammSellQuote(fromAmountStr, fromSym, toSym) {
 
     // ZAMM → non-ETH: zAMM (ZAMM→ETH) + quoter (ETH→target)
     const quoter = getQuoterContract(rpc);
-    const splitSlip = BigInt(Math.min(Math.max(slippageBps * 3, 150), 500));
+    // Per-leg slippage: widen 3x (floor 1.5%, cap 5%) for compounding drift,
+    // but never tighter than the user's explicit slippage choice — otherwise a
+    // user who sets >5% has their per-leg protection silently capped below it.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
     const r = await quoter.buildBestSwapViaETHMulticall(
-      receiver, _connectedAddress, false,
+      receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
       ZERO_ADDRESS, toData.address,
       ethOut, splitSlip, deadline, callOpts
     );
@@ -4731,7 +5158,7 @@ async function getZammBuyQuote(fromAmountStr, fromSym, toSym) {
     // Non-ETH input: route tokenIn → ETH first via quoter (output stays in router)
     if (!ethIn) {
       const r = await quoter.buildBestSwapViaETHMulticall(
-        ZROUTER_ADDRESS, _connectedAddress, false,
+        ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
         fromData.address, ZERO_ADDRESS,
         amountIn, BigInt(slippageBps), deadline, callOpts
       );
@@ -4799,6 +5226,215 @@ async function getZammBuyQuote(fromAmountStr, fromSym, toSym) {
   });
 }
 
+// ---- ZAMM v0 OG coins: ETH ↔ coin via swapVZ on the hookless AMM ----
+// Each coin lives as ERC6909 id `coinId` inside the COINS singleton (= ZORG_TOKEN).
+// The router auto-converts between ERC20 wrapper and ERC6909 id (because
+// `coinId === uint256(uint160(wrapperAddr))`), so the swap shape is identical
+// to ZAMM staking — just substitute the wrapper address and id.
+
+// any token → ZAMM v0 coin: route input → ETH first if needed, then ETH → coin
+async function getZammCoinBuyQuote(fromAmountStr, fromSym, toSym) {
+  const fromData = tokens[fromSym], toData = tokens[toSym];
+  const coinId = BigInt(toData.coinId);
+  const wrapperAddr = toData.address; // already the ERC20 wrapper address
+  const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
+  readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+  const receiver = getReceiver();
+  const ethIn = fromData.address === ZERO_ADDRESS;
+
+  return await quoteRPC.call(async (rpc) => {
+    const callOpts = { blockTag: "latest" };
+
+    let ethForSwap = amountIn;
+    let firstLegCalls = null;
+    let firstLegSource = null;
+    let msgValue = ethIn ? amountIn : 0n;
+
+    // Two-leg path widens per-leg slippage to absorb compounding drift —
+    // matches the symmetric `getZammCoinSellQuote` non-ETH path.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
+    const legSlip = ethIn ? BigInt(slippageBps) : splitSlip;
+
+    // Non-ETH input: tokenIn → ETH first via quoter (output stays in router).
+    if (!ethIn) {
+      const quoter = getQuoterContract(rpc);
+      const r = await quoter.buildBestSwapViaETHMulticall(
+        ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
+        fromData.address, ZERO_ADDRESS,
+        amountIn, splitSlip, deadline, callOpts
+      );
+      const isTwoHop = r.b.amountOut > 0n;
+      ethForSwap = isTwoHop ? r.b.amountOut : r.a.amountOut;
+      firstLegCalls = Array.from(r.calls);
+      firstLegSource = AMM_NAMES[r.a.source] || "Unknown";
+      msgValue = 0n;
+    }
+
+    const reserves = await getZammCoinPoolReserves(rpc, coinId);
+    // zeroForOne=true → reserveIn=reserve0 (ETH), reserveOut=reserve1 (coin)
+    const coinOut = getZammAmountOut(ethForSwap, reserves.reserve0, reserves.reserve1, 100n);
+    const slipOut = coinOut * (10000n - legSlip) / 10000n;
+    // Spot rate for displayPriceImpact (single-leg ETH → coin only; two-leg
+    // spot would need to thread through the first-leg AMM too).
+    const spotRefAmount = 10n ** 16n; // 0.01 ETH
+    const spotOut = ethIn
+      ? getZammAmountOut(spotRefAmount, reserves.reserve0, reserves.reserve1, 100n)
+      : 0n;
+    const calls = [];
+
+    if (firstLegCalls) {
+      for (const c of firstLegCalls) calls.push(c);
+    }
+
+    // swapVZ: ETH → coin (zeroForOne=true). Output goes to router so the next
+    // sweep can dispense the ERC20 wrapper.
+    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
+      ZROUTER_ADDRESS, false, 100,
+      ZERO_ADDRESS, ZORG_TOKEN, 0, coinId,
+      ethIn ? 0 : ethForSwap, slipOut, ethers.MaxUint256
+    ]));
+    // Sweep ERC20 wrapper of the coin to receiver. The router auto-unwraps the
+    // ERC6909 because `coinId === uint256(wrapperAddr)`.
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [wrapperAddr, 0, 0, receiver]));
+    // Safety sweeps: leftover ETH and (if non-ETH input) leftover input token.
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+    if (!ethIn) {
+      calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [fromData.address, 0, 0, receiver]));
+    }
+
+    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+    const _simP = _simulateRoute(rpc, multicall, msgValue, calls, false);
+    const result = {
+      expectedOutput: coinOut,
+      multicall, calls, msgValue,
+      isTwoHop: !ethIn, isSplit: false, splitLegs: null,
+      sourceA: ethIn ? "zAMM₀" : firstLegSource,
+      sourceB: ethIn ? null : "zAMM₀",
+      allQuotes: [{ source: ethIn ? "zAMM₀" : `${firstLegSource} + zAMM₀`, sourceId: 2, feeBps: 100n, amountIn, amountOut: coinOut }],
+      spotRate: spotOut > 0n ? spotOut : null,
+      spotRefAmount: ethIn ? spotRefAmount : null,
+    };
+    result._simP = _simP.then(sim => {
+      result._sim = sim;
+      if (sim.ok && sim.simOutput != null && sim.simOutput > 0n) {
+        const drift = Number(coinOut - sim.simOutput) * 100 / Number(coinOut);
+        result._sim.drift = drift;
+      }
+      return sim;
+    }).catch(() => null);
+    return result;
+  });
+}
+
+// ZAMM v0 coin → any token: swapVZ to ETH, optionally route ETH → target.
+async function getZammCoinSellQuote(fromAmountStr, fromSym, toSym) {
+  const fromData = tokens[fromSym], toData = tokens[toSym];
+  const coinId = BigInt(fromData.coinId);
+  const wrapperAddr = fromData.address;
+  const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
+  readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
+  const receiver = getReceiver();
+  const toIsEth = toData.address === ZERO_ADDRESS;
+
+  return await quoteRPC.call(async (rpc) => {
+    const callOpts = { blockTag: "latest" };
+    const reserves = await getZammCoinPoolReserves(rpc, coinId);
+    // zeroForOne=false → sell coin (reserve1) for ETH (reserve0)
+    const ethOut = getZammAmountOut(amountIn, reserves.reserve1, reserves.reserve0, 100n);
+    // Spot rate for displayPriceImpact (single-leg coin → ETH only).
+    const spotRefAmount = 10n ** 18n; // 1 coin
+    const spotOut = toIsEth
+      ? getZammAmountOut(spotRefAmount, reserves.reserve1, reserves.reserve0, 100n)
+      : 0n;
+
+    if (toIsEth) {
+      const slipOut = ethOut * (10000n - BigInt(slippageBps)) / 10000n;
+      const calls = [];
+      // deposit: convert ERC20 wrapper to ERC6909 inside the router
+      calls.push(ROUTER_IFACE.encodeFunctionData('deposit', [ZORG_TOKEN, coinId, amountIn]));
+      // swapVZ: sell ERC6909 coin for ETH (zeroForOne=false)
+      calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
+        receiver, false, 100,
+        ZORG_TOKEN, ZERO_ADDRESS, coinId, 0,
+        amountIn, slipOut, ethers.MaxUint256
+      ]));
+      calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+      // Safety sweep: any leftover wrapper back to user
+      calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [wrapperAddr, 0, 0, receiver]));
+      const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+      const _simP = _simulateRoute(rpc, multicall, 0n, calls, false);
+      const result = {
+        expectedOutput: ethOut,
+        multicall, calls, msgValue: 0n,
+        isTwoHop: false, isSplit: false, splitLegs: null,
+        sourceA: "zAMM₀", sourceB: null,
+        allQuotes: [{ source: "zAMM₀", sourceId: 2, feeBps: 100n, amountIn, amountOut: ethOut }],
+        spotRate: spotOut > 0n ? spotOut : null,
+        spotRefAmount,
+      };
+      result._simP = _simP.then(sim => {
+        result._sim = sim;
+        if (sim.ok && sim.simOutput != null && sim.simOutput > 0n) {
+          const drift = Number(ethOut - sim.simOutput) * 100 / Number(ethOut);
+          result._sim.drift = drift;
+        }
+        return sim;
+      }).catch(() => null);
+      return result;
+    }
+
+    // coin → non-ETH: swapVZ (coin → ETH) + quoter (ETH → target)
+    const quoter = getQuoterContract(rpc);
+    // Per-leg slippage: widen 3x (floor 1.5%, cap 5%) for compounding drift,
+    // but never tighter than the user's explicit slippage choice — otherwise a
+    // user who sets >5% has their per-leg protection silently capped below it.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
+    const r = await quoter.buildBestSwapViaETHMulticall(
+      receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
+      ZERO_ADDRESS, toData.address,
+      ethOut, splitSlip, deadline, callOpts
+    );
+    const isTwoHop = r.b.amountOut > 0n;
+    const finalOut = isTwoHop ? r.b.amountOut : r.a.amountOut;
+    const secondLegSource = AMM_NAMES[isTwoHop ? r.b.source : r.a.source] || "Unknown";
+
+    const slipFirst = ethOut * (10000n - splitSlip) / 10000n;
+    const calls = [];
+    calls.push(ROUTER_IFACE.encodeFunctionData('deposit', [ZORG_TOKEN, coinId, amountIn]));
+    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
+      ZROUTER_ADDRESS, false, 100,
+      ZORG_TOKEN, ZERO_ADDRESS, coinId, 0,
+      amountIn, slipFirst, ethers.MaxUint256
+    ]));
+    for (const c of Array.from(r.calls)) calls.push(c);
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]));
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [wrapperAddr, 0, 0, receiver]));
+    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+
+    const _simP = _simulateRoute(rpc, multicall, 0n, calls, false);
+    const result = {
+      expectedOutput: finalOut,
+      multicall, calls, msgValue: 0n,
+      isTwoHop: true, isSplit: false, splitLegs: null,
+      sourceA: "zAMM₀", sourceB: secondLegSource,
+      allQuotes: [{ source: `zAMM₀ + ${secondLegSource}`, sourceId: 2, feeBps: 100n, amountIn, amountOut: finalOut }],
+    };
+    result._simP = _simP.then(sim => {
+      result._sim = sim;
+      if (sim.ok && sim.simOutput != null && sim.simOutput > 0n) {
+        const drift = Number(finalOut - sim.simOutput) * 100 / Number(finalOut);
+        result._sim.drift = drift;
+      }
+      return sim;
+    }).catch(() => null);
+    return result;
+  });
+}
+
 // zOrg → any token (except ZAMM, which is ragequit): ragequit (1:1) then sell ZAMM
 // This is a two-step flow: ragequit tx first, then ZAMM sell tx
 async function getZOrgSellQuote(fromAmountStr, fromSym, toSym) {
@@ -4847,7 +5483,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
     // Non-ETH input: route tokenIn → ETH first via quoter (output stays in router)
     if (!ethIn) {
       const r = await quoter.buildBestSwapViaETHMulticall(
-        ZROUTER_ADDRESS, _connectedAddress, false,
+        ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
         fromData.address, ZERO_ADDRESS,
         amountIn, BigInt(slippageBps), deadline, callOpts
       );
@@ -4981,6 +5617,10 @@ function _decodeSimOutput(mcReturn, calls, isSplit) {
 }
 
 async function _simulateRoute(provider, multicall, msgValue, calls, isSplit) {
+  // Without a connected wallet there's no realistic msg.sender to simulate as
+  // (placeholder address has no balance/allowance), so the sim would always
+  // revert. Reuse the 'timeout' shape so the consumer hides the sim row cleanly.
+  if (!_connectedAddress) return { ok: false, reason: 'timeout', expected: true };
   try {
     const tx = {
       from: _connectedAddress,
@@ -5003,7 +5643,22 @@ async function _simulateRoute(provider, multicall, msgValue, calls, isSplit) {
     if (/sim_timeout/i.test(msg)) return { ok: false, reason: 'timeout', expected: true }; // timed out — non-blocking, show "Pending"
     const isAllowanceErr = /STF|TRANSFER_FROM_FAILED|insufficient allowance|ERC20.*exceeds/i.test(msg);
     const isBalanceErr = /insufficient funds|gas required exceeds|insufficient balance/i.test(msg);
-    return { ok: false, reason: msg, expected: isAllowanceErr || isBalanceErr };
+    // Slippage/minOut/deadline reverts: the route is fine, but pool state shifted
+    // between quote build and sim. The next refresh rebuilds minOut against fresh
+    // reserves and usually clears it. Don't treat as a hard failure.
+    const isTransientErr = /Too little received|TLR|amountOutMin|MIN_OUTPUT|INSUFFICIENT_OUTPUT_AMOUNT|Slippage/i.test(msg);
+    // zRouter throws custom errors (e.g. error TLR(), error Slippage()) — ethers
+    // can't decode them since ROUTER_IFACE doesn't list errors, so they come back
+    // as a bare 4-byte selector with no human reason. Empirically these are almost
+    // always slippage/deadline races, not real route failures, so don't block.
+    const dataHex = String(e?.data || '');
+    const isUndecodedCustomError = (e?.code === 'CALL_EXCEPTION') && /^0x[0-9a-fA-F]{8}$/.test(dataHex) && !e?.reason;
+    return {
+      ok: false,
+      reason: msg,
+      expected: isAllowanceErr || isBalanceErr,
+      transient: isTransientErr || isUndecodedCustomError,
+    };
   }
 }
 
@@ -5068,7 +5723,6 @@ function _fireTenderlySimulation(from, to, data, value, seq) {
 }
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
-  if (!_connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
   if (!fromData || !toData) throw new Error("Unknown token");
   if (fromData.address === toData.address) throw new Error("Same token");
@@ -5098,6 +5752,14 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     return await getZammSellQuote(fromAmountStr, fromSym, toSym);
   }
 
+  // ZAMM v0 OG coin: any → coin (buy) and coin → any (sell) via swapVZ
+  if (isZammCoinBuyPath(fromSym, toSym)) {
+    return await getZammCoinBuyQuote(fromAmountStr, fromSym, toSym);
+  }
+  if (isZammCoinSellPath(fromSym, toSym)) {
+    return await getZammCoinSellQuote(fromAmountStr, fromSym, toSym);
+  }
+
   // zOrg sell path: ragequit (1:1 → ZAMM) then sell ZAMM
   if (isZOrgSellPath(fromSym, toSym)) {
     return await getZOrgSellQuote(fromAmountStr, fromSym, toSym);
@@ -5124,7 +5786,10 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
 
     // Split/multi-hop routes need wider per-leg slippage to avoid intermittent reverts
     // (each leg has its own amountLimit; first leg moves price affecting the second)
-    const splitSlip = BigInt(Math.min(Math.max(slippageBps * 3, 150), 500));
+    // Per-leg slippage: widen 3x (floor 1.5%, cap 5%) for compounding drift,
+    // but never tighter than the user's explicit slippage choice — otherwise a
+    // user who sets >5% has their per-leg protection silently capped below it.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
     // Light calls (getQuotes, quoteCurve, Lido, Rocket, spot rate) → single Multicall3 aggregate3
     const mc3Entries = [];
     mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("getQuotes", [false, fromData.address, toData.address, amountIn]) });
@@ -5164,7 +5829,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const heavyEntries = [];
     const _heavyBestIdx = heavyEntries.length;
     heavyEntries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
-      receiver, _connectedAddress, false,
+      receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
       fromData.address, toData.address,
       amountIn, BigInt(slippageBps), deadline
     ]) });
@@ -5214,7 +5879,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     if (bestResult.status !== 'fulfilled') {
       try {
         const fb = await quoter.buildBestSwapViaETHMulticall(
-          receiver, _connectedAddress, false,
+          receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
           fromData.address, toData.address,
           amountIn, BigInt(slippageBps), deadline,
           callOpts
@@ -5648,7 +6313,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
 
 // ---- Exact-out quoting ----
 async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
-  if (!_connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
   if (!fromData || !toData) throw new Error("Unknown token");
   if (fromData.address === toData.address) throw new Error("Same token");
@@ -5695,7 +6359,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     // Merge heavy buildBestSwap into the mc3 batch (1 eth_call instead of 2)
     const _mc3BestIdx = mc3Entries.length;
     mc3Entries.push({ target: ZQUOTER_ADDRESS, data: QUOTER_IFACE.encodeFunctionData("buildBestSwapViaETHMulticall", [
-      receiver, _connectedAddress, true,
+      receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), true,
       fromData.address, toData.address,
       amountOut, BigInt(slippageBps), deadline
     ]) });
@@ -5709,7 +6373,7 @@ async function getExactOutQuote(outputAmountStr, fromSym, toSym) {
     if (bestResult.status !== 'fulfilled') {
       try {
         const fb = await quoter.buildBestSwapViaETHMulticall(
-          receiver, _connectedAddress, true,
+          receiver, (_connectedAddress || _QUOTE_PREVIEW_ADDR), true,
           fromData.address, toData.address,
           amountOut, BigInt(slippageBps), deadline,
           callOpts
@@ -6201,6 +6865,9 @@ function _selectRoute(idx) {
         } else if (sim.expected) {
           simEl.textContent = 'Pending approval';
           simEl.className = '';
+        } else if (sim.transient) {
+          simEl.textContent = 'Sim inconclusive — price moved';
+          simEl.className = 'sim-warn';
         } else {
           simEl.textContent = 'Route would revert';
           simEl.className = 'sim-fail';
@@ -6349,8 +7016,16 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
     const amountIn = safeParseUnits(amtStr, fromData.decimals);
     if (amountIn === 0n) { el.textContent = '--'; el.className = ''; return; }
 
-    const spotRate = await getSpotRate(fromSym, toSym);
-    if (seq !== _quoteSeq) return; // stale — newer quote already in flight
+    // Bespoke pools (curve sale, zAMM hooked, zAMM-v0 coin) populate an inline
+    // reference rate on the quote itself — use it directly since the generic
+    // getSpotRate path doesn't index these tokens and would return null.
+    let spotRate;
+    if (quote && quote.spotRate != null && typeof quote.spotRefAmount === 'bigint' && quote.spotRefAmount > 0n) {
+      spotRate = { num: quote.spotRate, den: quote.spotRefAmount };
+    } else {
+      spotRate = await getSpotRate(fromSym, toSym);
+      if (seq !== _quoteSeq) return; // stale — newer quote already in flight
+    }
     if (spotRate == null || spotRate.den === 0n) {
       el.textContent = '--';
       el.className = '';
@@ -6378,9 +7053,10 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
       if (qBox) qBox.classList.remove('impact-high');
     }
 
-    // Block swap execution when slippage exceeds 30%
+    // Block swap execution when slippage exceeds 30% — but in preview mode
+    // (no wallet) leave the button as "Connect Wallet" so the user can still connect.
     const swapBtn = $("swapBtn");
-    if (displayImpact > 30 && seq === _quoteSeq && swapBtn) {
+    if (displayImpact > 30 && seq === _quoteSeq && swapBtn && _connectedAddress) {
       setText(swapBtn, `Price impact too high (${displayImpact.toFixed(1)}%)`);
       setDisabled(swapBtn, true);
     }
@@ -7391,7 +8067,7 @@ async function executeSwap() {
           withRetry(() => quoteRPC.call(async (rpc) => {
             const quoter = getQuoterContract(rpc);
             return quoter.buildBestSwapViaETHMulticall(
-              ZROUTER_ADDRESS, _connectedAddress, false,
+              ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
               fromData.address, WSTETH_ADDRESS,
               amountIn, BigInt(slippageBps), deadline,
               { blockTag: "latest" }
@@ -7427,14 +8103,14 @@ async function executeSwap() {
             const toData = tokens[toSnap];
             const exactOutputAmt = safeParseUnits(amtStr, toData.decimals);
             return quoter.buildBestSwapViaETHMulticall(
-              ZROUTER_ADDRESS, _connectedAddress, true,
+              ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), true,
               fromData.address, _ppTokenOut,
               exactOutputAmt, BigInt(slippageBps), deadline,
               { blockTag: "latest" }
             );
           }
           return quoter.buildBestSwapViaETHMulticall(
-            ZROUTER_ADDRESS, _connectedAddress, false,
+            ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), false,
             fromData.address, _ppTokenOut,
             amountIn, BigInt(slippageBps), deadline,
             { blockTag: "latest" }
@@ -7861,9 +8537,16 @@ function getZammPoolInfo(quote) {
   const fromAddr = tokens[fromToken].address;
   const toAddr = tokens[toToken].address;
   const isZorg = !!(tokens[fromToken]._isZOrg || tokens[toToken]._isZOrg || tokens[fromToken]._isZammStake || tokens[toToken]._isZammStake);
+  // ZAMM v0 OG coin: pool key is (ETH, COINS singleton, 0, coinId, 100) — same
+  // shape as the ZAMM staking pool, just with the coin's ERC6909 id.
+  const v0Coin = tokens[fromToken]?._isZammCoin
+    ? tokens[fromToken]
+    : (tokens[toToken]?._isZammCoin ? tokens[toToken] : null);
   const poolId = isZorg
     ? computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, ZORG_ID, 100n)
-    : computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
+    : v0Coin
+      ? computeZammPoolId(ZERO_ADDRESS, ZORG_TOKEN, 0n, BigInt(v0Coin.coinId), 100n)
+      : computeZammPoolId(fromAddr, toAddr, 0n, 0n, 100n);
   return { hasZamm: true, poolId };
 }
 
@@ -8090,6 +8773,7 @@ function initTokenListClick() {
     }
     const row = e.target.closest(".token-list-item");
     if (!row) return;
+    if (row.classList.contains('disabled')) return;
     const symbol = row.getAttribute("data-symbol");
     if (symbol) selectToken(symbol);
   });
@@ -8107,6 +8791,10 @@ function openTokenModal(side) {
   if (searchInput) searchInput.focus();
   // Batch-fetch all token balances via Multicall3 (single RPC)
   if (_connectedAddress) fetchModalBalances();
+  // Lazy-load discovery lists if they haven't kicked off yet (e.g. user opens
+  // the modal before requestIdleCallback fires).
+  if (!_uniswapLoaded && !_uniswapLoading) loadUniswapTokenList();
+  if (!_zammCoinsLoaded && !_zammCoinsLoading) loadZammV0Coins();
 }
 
 function closeTokenModal() {
@@ -8122,6 +8810,11 @@ function closeTokenModal() {
 const reQuoteDebounced = debounce(handleAmountChange, 600);
 
 function selectToken(symbol) {
+  // Track real selections in Recent. Skip the DAICO from-side rejection so it
+  // doesn't pollute the list with a token the user couldn't actually pick.
+  if (!(tokens[symbol]?._isDaicoCoin && currentModal === "from")) {
+    pushRecentToken(symbol);
+  }
   // Send tab: just set the send token
   if (currentModal === "send") {
     _sendToken = symbol;
@@ -8152,6 +8845,26 @@ function selectToken(symbol) {
   if (tokens[symbol]?._isCurveCoin) {
     if (currentModal === "from") { fromToken = symbol; toToken = "ETH"; }
     else { fromToken = "ETH"; toToken = symbol; }
+    updateTokenDisplay();
+    updateBalances();
+    closeTokenModal();
+    currentModal = null;
+    const _srcField = $("fromAmount");
+    if (_srcField) _srcField.focus();
+    if (_srcField && _srcField.value) reQuoteDebounced();
+    return;
+  }
+  // ZAMM v0 coins route via swapVZ on the hookless AMM. They can pair with any
+  // non-coin token (auto two-hop through ETH), but coin → coin isn't supported
+  // — force ETH on the other side if it would otherwise also be a v0 coin.
+  if (tokens[symbol]?._isZammCoin) {
+    if (currentModal === "from") {
+      fromToken = symbol;
+      if (tokens[toToken]?._isZammCoin) toToken = "ETH";
+    } else {
+      toToken = symbol;
+      if (tokens[fromToken]?._isZammCoin) fromToken = "ETH";
+    }
     updateTokenDisplay();
     updateBalances();
     closeTokenModal();
@@ -8391,11 +9104,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return undefined;
   };
-  const _dlFrom = _findToken(_urlp.get('from'));
-  const _dlTo = _findToken(_urlp.get('to'));
+  const _dlFromRaw = _urlp.get('from');
+  const _dlToRaw = _urlp.get('to');
+  const _dlFrom = _findToken(_dlFromRaw);
+  const _dlTo = _findToken(_dlToRaw);
   if (_dlFrom) fromToken = _dlFrom;
   if (_dlTo) toToken = _dlTo;
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
+  // Async lists (Uniswap, ZAMM v0 coins) load after DOMContentLoaded. If a
+  // deeplink target wasn't resolved here, remember it and let the discovery
+  // loaders retry once they finish registering tokens.
+  if (_dlFromRaw && !_dlFrom) _pendingDeeplinkFrom = _dlFromRaw;
+  if (_dlToRaw && !_dlTo) _pendingDeeplinkTo = _dlToRaw;
   const _dlAmt = _urlp.get('amt');
   const _dlOutAmt = _urlp.get('outamt');
   // Deeplink: ?pp=eth or ?pp=bold (Privacy Pools deposit)
@@ -8451,17 +9171,53 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!_ppConfig) setTimeout(() => loadPPConfig(), 100);
     }
   }
-  // Auto-import deeplinked token by address if not found in any list
-  const _dlToRaw = _urlp.get('to') || '';
-  if (!_dlTo && _dlToRaw.startsWith('0x') && _dlToRaw.length === 42) {
+  // Auto-import deeplinked token by address if not found in any list. We
+  // re-check both `!_dlTo` (the initial pass missed it) AND `!_pendingDeeplinkTo`
+  // (an async list — bundled, Uniswap, ZAMM v0 — hasn't already resolved it
+  // and applied via _retryPendingDeeplinks).
+  if (!_dlTo && _dlToRaw && _dlToRaw.startsWith('0x') && _dlToRaw.length === 42) {
     (async () => {
       try {
+        // Wait until the async discovery loaders (bundled list, Uniswap, ZAMM v0)
+        // finish — they may register the address with proper routing flags
+        // (`_isZammCoin`, `_isCurveCoin`). If we run the ERC20-symbol fallback
+        // first, it overwrites the slot with a generic entry and `_registerZammCoin`
+        // bails out (same-address guard), leaving the swap pipeline unable to
+        // route via swapVZ. Poll up to 3.5s, checking after each tick so we
+        // resolve as soon as discovery lands.
+        const lo = _dlToRaw.toLowerCase();
+        let waited = 0;
+        const STEP = 150;
+        const MAX_WAIT = 3500;
+        while (waited < MAX_WAIT) {
+          await new Promise(r => setTimeout(r, STEP));
+          waited += STEP;
+          const existingKey = Object.keys(tokens).find(k => tokens[k].address.toLowerCase() === lo);
+          if (existingKey) {
+            if (typeof _retryPendingDeeplinks === 'function') _retryPendingDeeplinks();
+            return;
+          }
+          // No match yet — exit the wait early once all discovery loaders have settled.
+          const stillLoading = (typeof _bundledLoading !== 'undefined' && _bundledLoading)
+            || (typeof _uniswapLoading !== 'undefined' && _uniswapLoading)
+            || (typeof _zammCoinsLoading !== 'undefined' && _zammCoinsLoading);
+          if (!stillLoading && waited >= 800) break;
+        }
+        // Final check before falling back to on-chain reads.
+        const existingKey2 = Object.keys(tokens).find(k => tokens[k].address.toLowerCase() === lo);
+        if (existingKey2) {
+          if (typeof _retryPendingDeeplinks === 'function') _retryPendingDeeplinks();
+          return;
+        }
         const rpc = _walletProvider || new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
         const erc20 = new ethers.Contract(_dlToRaw, ["function symbol() view returns (string)", "function decimals() view returns (uint8)"], rpc);
         const [sym, dec] = await Promise.all([erc20.symbol(), erc20.decimals()]);
         const symbol = String(sym || '').trim().slice(0, 24) || 'TKN';
         const addr = ethers.getAddress(_dlToRaw);
-        if (!tokens[symbol] || tokens[symbol].address.toLowerCase() === addr.toLowerCase()) {
+        // Re-check after the on-chain reads — discovery may have landed in the
+        // meantime. Don't clobber an entry that already has special-routing
+        // flags (e.g. _isZammCoin), even at the same address.
+        if (!tokens[symbol]) {
           tokens[symbol] = { address: addr, symbol, decimals: Number(dec) };
           toToken = symbol;
           updateTokenDisplay();
@@ -8741,6 +9497,8 @@ walletInit({
     _erc20Read.clear();
     _balanceCache.clear();
     _allowCache.clear();
+    _modalFetchAt = 0;
+    _modalFetchInFlight = null;
     ppHandlePrivacyWalletDisconnected();
   }]
 });
@@ -8756,8 +9514,6 @@ function switchTab(tab) {
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
   const lsEl = $('liveSalesSection');
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
-  const fwEl = $('fwDaicoSection');
-  if (fwEl && fwEl.innerHTML) fwEl.style.display = tab === 'swap' ? '' : 'none';
   const lcEl = $('liveCurveSection');
   if (lcEl && lcEl.innerHTML) lcEl.style.display = tab === 'swap' ? '' : 'none';
   const pmEl = $('featuredPmSection');
@@ -8818,6 +9574,76 @@ function switchTab(tab) {
       el.parentElement.style.display = '';
     }
   } catch {}
+})();
+
+// ---- zAMM protocol stats banner ----
+// Sources: indexer (cumulative ETH/swap/coin counts) + CheckTheChain (WETH/USDC).
+// See SWAP_STATS_INTEGRATION.md.
+(function() {
+  const ZAMM_INDEXER = "https://coinchan-indexer-production.up.railway.app/api/protocol-stats";
+  const ZAMM_LEGACY_ETH = 669.286648841; // pre-indexer volume; drop to 0 if indexer is backfilled
+  const CHECK_THE_CHAIN = "0x0000000000cDC1F8d393415455E382c30FBc0a84";
+  const checkPriceIface = new ethers.Interface([
+    "function checkPrice(string symbol) view returns (uint256, string)"
+  ]);
+  const checkPriceData = checkPriceIface.encodeFunctionData("checkPrice", ["WETH"]);
+
+  async function fetchEthUsd() {
+    try {
+      return await quoteRPC.call(async (rpc) => {
+        const raw = await rpc.call({ to: CHECK_THE_CHAIN, data: checkPriceData });
+        const [price] = checkPriceIface.decodeFunctionResult("checkPrice", raw);
+        return Number(price) / 1e6;
+      });
+    } catch { return null; }
+  }
+
+  function fmtUsd(n) {
+    if (!Number.isFinite(n)) return "";
+    if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+    if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+    if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+    return "$" + n.toFixed(0);
+  }
+
+  let lastOk = 0;
+
+  async function refresh() {
+    const wrap = document.getElementById("zammStats");
+    if (!wrap) return;
+    const [stats, ethUsd] = await Promise.all([
+      fetch(ZAMM_INDEXER, { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetchEthUsd(),
+    ]);
+    if (!stats || stats.totalEthSwapped == null) return;
+    let ethSwapped;
+    try {
+      ethSwapped = Number(ethers.formatEther(BigInt(stats.totalEthSwapped))) + ZAMM_LEGACY_ETH;
+    } catch { return; }
+    const usd = ethUsd ? ethSwapped * ethUsd : null;
+    document.getElementById("zammStatsEth").textContent =
+      ethSwapped.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " Ξ";
+    document.getElementById("zammStatsUsd").textContent = usd ? "(" + fmtUsd(usd) + ")" : "";
+    document.getElementById("zammStatsMeta").textContent =
+      Number(stats.totalSwapCount || 0).toLocaleString() + " swaps · " +
+      Number(stats.totalCoinCount || 0).toLocaleString() + " coins";
+    wrap.classList.add("ready");
+    lastOk = Date.now();
+  }
+
+  function start() {
+    refresh();
+    setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60_000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && Date.now() - lastOk > 60_000) refresh();
+    });
+  }
+
+  const kick = () => window.requestIdleCallback
+    ? requestIdleCallback(start, { timeout: 500 })
+    : setTimeout(start, 0);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", kick);
+  else kick();
 })();
 
 // ---- OTC order ticker (lazy, non-blocking) ----

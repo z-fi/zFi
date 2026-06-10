@@ -313,6 +313,11 @@ tr:hover td { background:var(--surface-hover); }
         <label class="lp-label">ETH (splits into YES + NO)</label>
         <input class="lp-input" id="collateralAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal">
       </div>
+      <div class="lp-row" style="margin-top:12px">
+        <span>Slippage</span>
+        <input class="lp-input-sm" id="collateralSlippage" type="number" step="0.1" min="0" max="50" value="5" inputmode="decimal">
+        <span>%</span>
+      </div>
       <div style="margin-top:16px">
         <button id="collateralLiqBtn" onclick="doSplitAddLiquidity()" style="width:100%">Split &amp; Add Liquidity</button>
       </div>
@@ -608,7 +613,9 @@ async function fetchPool(poolId) {
       reserve0 reserve1 price0 price1
     }
   }`;
-  // Try ZAMM (V0) first, then COOKBOOK (V1), then PAMM — avoids COOKBOOK mis-detection for V0 pools
+  // The indexer can return a record for the same pool ID under multiple sources (e.g. the
+  // canonical V0 pool also returns under COOKBOOK). Try ZAMM first so V0 wins when ambiguous;
+  // _isV0 is then verified on-chain in init() before any tx is built.
   for (const source of ["ZAMM", "COOKBOOK", "PAMM"]) {
     try {
       const res = await fetch(BASE + "/graphql", {
@@ -761,24 +768,23 @@ async function fetchTokenBalance(tokenAddr, coin, userAddr) {
     return await rpc.call(p => p.getBalance(userAddr));
   }
   const coinId = coin ? BigInt(coin.id || 0) : 0n;
-  if (coinId >= 1000000n) {
-    // ZAMM coin: balanceOf(owner, id) on Coins contract
-    return await rpc.call(p => {
-      const c = new ethers.Contract(COINS, ["function balanceOf(address,uint256) view returns (uint256)"], p);
-      return c.balanceOf(userAddr, coinId);
-    });
+  const erc6909Bal = ["function balanceOf(address,uint256) view returns (uint256)"];
+  const ta = tokenAddr.toLowerCase();
+  // Token-address-keyed branches first — a PAMM market or V1 hooked coin may have a large
+  // coinId that would otherwise mis-route to the COINS contract.
+  if (ta === PAMM.toLowerCase() && coinId > 0n) {
+    return await rpc.call(p => new ethers.Contract(PAMM, erc6909Bal, p).balanceOf(userAddr, coinId));
   }
-  if (tokenAddr.toLowerCase() === PAMM.toLowerCase() && coinId > 0n) {
-    return await rpc.call(p => {
-      const c = new ethers.Contract(PAMM, ["function balanceOf(address,uint256) view returns (uint256)"], p);
-      return c.balanceOf(userAddr, coinId);
-    });
+  if (ta === ZAMM_V1.toLowerCase() && coinId > 0n) {
+    // V1 hooked coin: stored as ERC6909 on the ZAMM_V1 singleton itself
+    return await rpc.call(p => new ethers.Contract(ZAMM_V1, erc6909Bal, p).balanceOf(userAddr, coinId));
+  }
+  if (coinId >= 1000000n) {
+    // ZAMM (V0) coin: ERC6909 on the COINS contract
+    return await rpc.call(p => new ethers.Contract(COINS, erc6909Bal, p).balanceOf(userAddr, coinId));
   }
   // Standard ERC20
-  return await rpc.call(p => {
-    const c = new ethers.Contract(tokenAddr, ERC20_ABI, p);
-    return c.balanceOf(userAddr);
-  });
+  return await rpc.call(p => new ethers.Contract(tokenAddr, ERC20_ABI, p).balanceOf(userAddr));
 }
 
 function renderBalances() {
@@ -887,13 +893,19 @@ function renderPool() {
 // Uses helper contract for ETH pools, falls back to ratio math
 let _helperDebounce = null;
 
+function safeParseUnits(val, decimals) {
+  try { return ethers.parseUnits(String(val), decimals); }
+  catch { return null; }
+}
+
 function onAddAmt0Change() {
   _addDirection = 0;
   if (!_onchain || _onchain.reserve0 === 0n) return;
   const val = $('addAmt0').value;
   if (!val || Number(val) === 0) { $('addAmt1').value = ''; return; }
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
-  const amt0 = ethers.parseUnits(val, d0);
+  const amt0 = safeParseUnits(val, d0);
+  if (amt0 === null) return;
   // Ratio fallback (instant)
   const amt1 = amt0 * _onchain.reserve1 / _onchain.reserve0;
   $('addAmt1').value = ethers.formatUnits(amt1, d1);
@@ -910,7 +922,8 @@ function onAddAmt1Change() {
   const val = $('addAmt1').value;
   if (!val || Number(val) === 0) { $('addAmt0').value = ''; return; }
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
-  const amt1 = ethers.parseUnits(val, d1);
+  const amt1 = safeParseUnits(val, d1);
+  if (amt1 === null) return;
   // Ratio fallback (instant)
   const amt0 = amt1 * _onchain.reserve0 / _onchain.reserve1;
   $('addAmt0').value = ethers.formatUnits(amt0, d0);
@@ -1010,7 +1023,9 @@ function onZapEthInput() {
     preview.textContent = '';
     return;
   }
-  const q = quoteZap(ethers.parseEther(val));
+  const wei = safeParseUnits(val, 18);
+  if (wei === null) { preview.textContent = ''; return; }
+  const q = quoteZap(wei);
   const d1 = tokenDecimals(1);
   const l1 = tokenLabel(1);
   const halfEthFmt = Number(ethers.formatEther(q.halfEth)).toFixed(6);
@@ -1020,17 +1035,17 @@ function onZapEthInput() {
 }
 
 function getPoolFeeBps() {
-  if (_isV0) return BigInt(_poolData.swapFee || 100);
-  const foh = BigInt(_poolData.feeOrHook || 30);
+  if (_isV0) return BigInt(_poolData.swapFee ?? 100);
+  const foh = BigInt(_poolData.feeOrHook ?? 30);
   // If feeOrHook > 10000 it's a hook address, not fee bps — use swapFee fallback
-  if (foh > 10000n) return BigInt(_poolData.swapFee || 30);
+  if (foh > 10000n) return BigInt(_poolData.swapFee ?? 30);
   return foh;
 }
 
 // Fee display for any pool object (used in pool list + header)
 function poolFeePct(p) {
-  if (p.source === 'ZAMM') return (Number(p.swapFee || 100) / 100).toFixed(2) + '%';
-  const foh = Number(p.feeOrHook || 30);
+  if (p.source === 'ZAMM') return (Number(p.swapFee ?? 100) / 100).toFixed(2) + '%';
+  const foh = Number(p.feeOrHook ?? 30);
   const hooked = p.hookType && p.hookType !== 'NONE';
   if (hooked || foh > 10000) {
     // Hooked pool: show swapFee if available, else "hooked"
@@ -1049,7 +1064,7 @@ function quoteZap(ethAmount) {
   const halfEth = ethAmount / 2n;
   const amtInWithFee = halfEth * (10000n - feeBps);
   const tokensOut = (amtInWithFee * reserve1) / (reserve0 * 10000n + amtInWithFee);
-  const isHooked = !_isV0 && BigInt(_poolData.feeOrHook || 30) > 10000n;
+  const isHooked = !_isV0 && BigInt(_poolData.feeOrHook ?? 30) > 10000n;
   return { halfEth, tokensOut, feeBps, isHooked };
 }
 
@@ -1069,7 +1084,8 @@ async function doZapLiquidity() {
 
   const val = $('zapEthAmt').value;
   if (!val || Number(val) <= 0) return;
-  const ethAmount = ethers.parseEther(val);
+  const ethAmount = safeParseUnits(val, 18);
+  if (ethAmount === null) { showStatus('addStatus', 'error', 'Invalid amount'); return; }
   const mins = quoteZapMins(ethAmount);
 
   try {
@@ -1106,19 +1122,35 @@ async function doSplitAddLiquidity() {
 
   const val = $('collateralAmt').value;
   if (!val || Number(val) <= 0) return;
-  const amountWei = ethers.parseEther(val);
+  const amountWei = safeParseUnits(val, 18);
+  if (amountWei === null) { showStatus('addStatus', 'error', 'Invalid amount'); return; }
 
   // Derive marketId from coin0.id (YES share id = marketId)
   const marketId = BigInt(_poolData.coin0.id);
-  const feeOrHook = BigInt(_poolData.feeOrHook || 30);
+  const feeOrHook = BigInt(_poolData.feeOrHook ?? 30);
   const addr = await _signer.getAddress();
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+
+  // After split, user has `amountWei` of YES and NO. addLiquidity deposits both fully only if
+  // the pool is empty or exactly 50/50; otherwise it deposits `amountWei` of the smaller-reserve
+  // side and proportionally less of the other. Compute expected amounts from current reserves,
+  // then apply slippage. minLiquidity left at 0 — token amounts already bound the deposit.
+  const slip = Number($('collateralSlippage').value) || 5;
+  const slipMul = BigInt(Math.floor((100 - slip) * 100));
+  let expected0 = amountWei, expected1 = amountWei;
+  if (_onchain && _onchain.reserve0 > 0n && _onchain.reserve1 > 0n) {
+    const r0 = BigInt(_onchain.reserve0), r1 = BigInt(_onchain.reserve1);
+    if (r0 >= r1) expected1 = amountWei * r1 / r0;
+    else expected0 = amountWei * r0 / r1;
+  }
+  const amount0Min = expected0 * slipMul / 10000n;
+  const amount1Min = expected1 * slipMul / 10000n;
 
   try {
     showStatus('addStatus', 'info', 'Sending split + add liquidity...');
     const pamm = new ethers.Contract(PAMM, PAMM_ABI, _signer);
     const tx = await pamm.splitAndAddLiquidity(
-      marketId, amountWei, feeOrHook, 0, 0, 0, addr, deadline,
+      marketId, amountWei, feeOrHook, amount0Min, amount1Min, 0, addr, deadline,
       { value: amountWei }
     );
     showStatus('addStatus', 'info', 'Waiting for confirmation...');
@@ -1139,7 +1171,8 @@ function onRemoveAmtChange() {
   if (!_onchain || _onchain.supply === 0n) return;
   const val = $('removeAmt').value;
   if (!val || Number(val) === 0) { $('removeExpected').textContent = '--'; return; }
-  const liq = ethers.parseUnits(val, 18);
+  const liq = safeParseUnits(val, 18);
+  if (liq === null) { $('removeExpected').textContent = '--'; return; }
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
   const out0 = liq * _onchain.reserve0 / _onchain.supply;
   const out1 = liq * _onchain.reserve1 / _onchain.supply;
@@ -1212,8 +1245,9 @@ async function doAddLiquidity() {
   const amt1Str = $('addAmt1').value;
   if (!amt0Str || !amt1Str || Number(amt0Str) === 0 || Number(amt1Str) === 0) return;
 
-  const amt0 = ethers.parseUnits(amt0Str, d0);
-  const amt1 = ethers.parseUnits(amt1Str, d1);
+  const amt0 = safeParseUnits(amt0Str, d0);
+  const amt1 = safeParseUnits(amt1Str, d1);
+  if (amt0 === null || amt1 === null) { showStatus('addStatus', 'error', 'Invalid amount'); return; }
   const slip = Number($('addSlippage').value) || 2;
   const min0 = amt0 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
   const min1 = amt1 * BigInt(Math.floor((100 - slip) * 100)) / 10000n;
@@ -1254,7 +1288,8 @@ async function doRemoveLiquidity() {
 
   const amtStr = $('removeAmt').value;
   if (!amtStr || Number(amtStr) === 0) return;
-  const liq = ethers.parseUnits(amtStr, 18);
+  const liq = safeParseUnits(amtStr, 18);
+  if (liq === null) { showStatus('removeStatus', 'error', 'Invalid amount'); return; }
 
   const d0 = tokenDecimals(0), d1 = tokenDecimals(1);
   const out0 = liq * _onchain.reserve0 / _onchain.supply;
@@ -1391,7 +1426,7 @@ async function renderPositions() {
         <td>${coinIcon(c0)}${esc(s0)} / ${coinIcon(c1)}${esc(s1)}<br><span class="text-muted" style="font-size:10px">${ver}</span></td>
         <td class="mono">${fmtWei(pos.liquidity, 18)}</td>
         <td class="mono" style="font-size:10px">${fmtWei(p.reserve0, d0)} / ${fmtWei(p.reserve1, d1)}</td>
-        <td><a href="#/${p.id || pos.poolId}" class="btn" onclick="setTimeout(()=>location.reload(),0)">Manage</a></td>
+        <td><a href="#/${p.id || pos.poolId}" class="btn">Manage</a></td>
       </tr>`;
     }
     html += '</table>';
@@ -1538,12 +1573,25 @@ async function fetchPoolList() {
     });
     const json = await res.json();
     const allPools = json.data && json.data.pools ? json.data.pools.items : [];
-    // Filter to ZAMM/COOKBOOK/PAMM pools with reserves and known symbols
-    const pools = allPools.filter(p => {
-      const isPAMM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
-      if (!isPAMM && p.source !== 'ZAMM' && p.source !== 'COOKBOOK') return false;
+    const canonicalV0 = computeCanonicalPoolId();
+    // The indexer can return the same pool ID under multiple sources (V0 and V1 pools sharing
+    // a key both hash to the same ID). Dedupe with priority ZAMM > COOKBOOK > PAMM so the
+    // canonical V0 pool's V0 record wins. The list shows the chosen source's metadata.
+    const sourceRank = { ZAMM: 0, COOKBOOK: 1, PAMM: 2 };
+    const byId = new Map();
+    for (const p of allPools) {
+      const cur = byId.get(p.id);
+      if (!cur || (sourceRank[p.source] ?? 9) < (sourceRank[cur.source] ?? 9)) byId.set(p.id, p);
+    }
+    // Show V1 (COOKBOOK) and PAMM pools. From V0, only the canonical zORG/ETH pool — to keep
+    // new users on V1. Existing V0 LP holders can still navigate via the My Positions tab.
+    const pools = [...byId.values()].filter(p => {
       if (!p.reserve0 || BigInt(p.reserve0) <= 0n) return false;
-      return true;
+      const isPAMM = p.token0 && p.token1 && p.token0.toLowerCase() === PAMM.toLowerCase() && p.token1.toLowerCase() === PAMM.toLowerCase();
+      if (isPAMM) return true;
+      if (p.source === 'COOKBOOK') return true;
+      if (p.source === 'ZAMM' && String(p.id) === canonicalV0) return true;
+      return false;
     });
     // Resolve coin metadata for each pool (use top-level coin0Id/coin1Id as fallback)
     for (const p of pools) {
@@ -1643,9 +1691,26 @@ async function init() {
   _poolData = pool;
   _updateObLink();
 
-  // Determine V0 vs V1 and prediction market
-  _isV0 = pool.source === "ZAMM";
+  // Determine V0 vs V1 and prediction market.
+  // Indexer source can be ambiguous (the canonical zORG/ETH V0 pool ID also returns under
+  // COOKBOOK), so verify against on-chain `pools(id).supply` — whichever singleton actually
+  // holds the pool wins. Falls back to the indexer hint if both/neither look populated.
   _isPM = pool.token0 && pool.token1 && pool.token0.toLowerCase() === PAMM.toLowerCase() && pool.token1.toLowerCase() === PAMM.toLowerCase();
+  const indexerSaysV0 = pool.source === "ZAMM";
+  let v0Supply = 0n, v1Supply = 0n;
+  try {
+    const pid = BigInt(poolId);
+    const poolsAbi = ["function pools(uint256) view returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256)"];
+    const [v0r, v1r] = await Promise.all([
+      rpc.call(p => new ethers.Contract(ZAMM_V0, poolsAbi, p).pools(pid)).catch(() => null),
+      rpc.call(p => new ethers.Contract(ZAMM_V1, poolsAbi, p).pools(pid)).catch(() => null)
+    ]);
+    if (v0r) v0Supply = BigInt(v0r[6]);
+    if (v1r) v1Supply = BigInt(v1r[6]);
+  } catch { /* fall through to indexer hint */ }
+  if (v0Supply > 0n && v1Supply === 0n) _isV0 = true;
+  else if (v1Supply > 0n && v0Supply === 0n) _isV0 = false;
+  else _isV0 = indexerSaysV0; // both empty or both populated — defer to indexer
   _ammAddress = _isV0 ? ZAMM_V0 : ZAMM_V1;
   _ammABI = _isV0 ? V0_ABI : V1_ABI;
 
@@ -1658,7 +1723,12 @@ async function init() {
   // Reconstruct PoolKey
   const id0 = pool.coin0 && pool.coin0.id ? BigInt(pool.coin0.id) : 0n;
   const id1 = pool.coin1 && pool.coin1.id ? BigInt(pool.coin1.id) : 0n;
-  const fee = _isV0 ? BigInt(pool.swapFee || 100) : BigInt(pool.feeOrHook || 30);
+  // Use ?? not || so a real 0-fee pool isn't substituted with the default. Fall back across
+  // fields because the on-chain V0/V1 detection above can disagree with the indexer source —
+  // the chosen record may not have the version's "preferred" fee field populated.
+  const fee = _isV0
+    ? BigInt(pool.swapFee ?? pool.feeOrHook ?? 100)
+    : BigInt(pool.feeOrHook ?? pool.swapFee ?? 30);
   _poolKey = {
     id0: id0,
     id1: id1,
@@ -1682,6 +1752,11 @@ async function init() {
       "id0:", id0.toString(), "id1:", id1.toString(), "fee:", fee.toString(),
       "source:", pool.source);
     _poolKey = null; // Prevent transactions with wrong key
+    // Surface the failure so users don't silently click a no-op button
+    const buttons = ['addLiqBtn', 'zapLiqBtn', 'collateralLiqBtn', 'removeLiqBtn'];
+    for (const id of buttons) { const b = $(id); if (b) b.disabled = true; }
+    showStatus('addStatus', 'error', 'Pool metadata mismatch — actions disabled. Reload or pick another pool.');
+    showStatus('removeStatus', 'error', 'Pool metadata mismatch — actions disabled. Reload or pick another pool.');
   }
 
   // Header + pool selector button label

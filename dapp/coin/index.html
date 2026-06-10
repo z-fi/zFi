@@ -62,6 +62,20 @@ input {
 /* Gallery */
 .coin-grid {
   display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;
+  align-items:start;
+}
+.coin-grid-section {
+  grid-column:1 / -1;
+  font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-muted);
+  padding:0 0 6px;margin-top:4px;
+  border-bottom:1px solid var(--border-muted);
+  display:flex;align-items:baseline;gap:8px;
+}
+.coin-grid-section:first-child { margin-top:0; }
+.coin-grid-section .count {
+  font-weight:400;letter-spacing:0;text-transform:none;
+  color:var(--fg-dim);font-size:10px;
 }
 .coin-card {
   border:1px solid var(--border);padding:16px;
@@ -121,28 +135,31 @@ input {
   opacity:1;color:var(--fg-muted);
 }
 
-/* Stacked duplicates */
-.coin-stack { position:relative;padding-bottom:4px;padding-right:4px; }
-.coin-stack > .coin-card:first-of-type { position:relative;z-index:2;background:var(--bg); }
-.coin-stack .coin-stacked {
-  position:absolute;bottom:0;left:4px;right:0;z-index:1;
-  height:100%;pointer-events:none;
-  overflow:hidden;opacity:1;
+/* Stacked duplicates: a single grid cell that renders the canonical card up
+   front, with a paper-stack shadow hinting at hidden variants. The badge
+   expands the stack inline (extras flow in below) without affecting neighbor
+   cells, since the grid uses align-items:start. */
+.coin-stack {
+  display:flex;flex-direction:column;gap:8px;
+  position:relative;
 }
-.coin-stack .coin-stacked > * { visibility:hidden; }
-.coin-stack .coin-stack-badge {
+.coin-stack > .coin-card:first-of-type {
+  box-shadow:
+    2px 2px 0 0 var(--bg),
+    2px 2px 0 1px var(--border),
+    4px 4px 0 0 var(--bg),
+    4px 4px 0 1px var(--border);
+}
+.coin-stack > .coin-card.coin-stacked { display:none; }
+.coin-stack.expanded > .coin-card:first-of-type { box-shadow:none; }
+.coin-stack.expanded > .coin-card.coin-stacked { display:block; }
+.coin-stack-badge {
   position:absolute;bottom:10px;right:10px;z-index:3;
   font-size:10px;font-weight:600;padding:3px 8px;
   background:var(--btn-bg);color:var(--btn-fg);
   cursor:pointer;letter-spacing:0.03em;
 }
-.coin-stack .coin-stack-badge:hover { background:var(--btn-hover); }
-.coin-stack.expanded .coin-stacked {
-  position:relative;bottom:auto;left:0;right:0;
-  height:auto;margin-top:-1px;pointer-events:auto;
-  overflow:visible;
-}
-.coin-stack.expanded .coin-stacked > * { visibility:visible; }
+.coin-stack-badge:hover { background:var(--btn-hover); }
 
 /* Detail page */
 .coin-banner {
@@ -245,6 +262,35 @@ input {
 }
 .action-btn:hover:not(:disabled) { background:var(--btn-hover); }
 .action-btn:disabled { background:var(--btn-dis-bg);border:1px solid var(--btn-dis-border);color:var(--btn-dis-fg);cursor:not-allowed; }
+
+/* Curve swap-tile pieces — the receive side is read-only (quote-driven) so it can't reuse
+   `.swap-section input`; this gives the same visual weight as the input side. */
+.curve-out-row { display:flex;gap:8px;align-items:flex-end; }
+.curve-out-amount {
+  flex:1;font-size:22px;font-weight:400;color:var(--fg);
+  padding:8px 0;border-bottom:1.5px solid var(--border);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  min-height:40px;line-height:24px;font-variant-numeric:tabular-nums;
+}
+.curve-out-amount.placeholder { color:var(--input-ph); }
+.curve-out-amount.muted { color:var(--fg-muted);font-style:italic; }
+.curve-out-sub { font-size:11px;color:var(--fg-muted);margin-top:4px;min-height:14px;font-variant-numeric:tabular-nums; }
+.curve-dir-arrow {
+  width:28px;height:28px;border:1px solid var(--border-muted);background:var(--bg);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--fg-muted);
+}
+.curve-dir-arrow svg { display:block; }
+.curve-details {
+  margin:10px 0 0;padding:8px 10px;background:var(--surface);font-size:11px;
+  border:1px solid var(--border-muted);
+}
+.curve-details-row {
+  display:flex;justify-content:space-between;align-items:center;
+  padding:2px 0;color:var(--fg-muted);
+}
+.curve-details-row .v { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
+.curve-details-row .v.warn { color:var(--red); }
 
 /* Collapsible drawer (tap, chart) */
 .drawer { border:1px solid var(--border);margin-bottom:16px;overflow:hidden; }
@@ -738,6 +784,98 @@ async function enrichNftAuction(a) {
   }
 }
 
+// Batched enrichment for the gallery — replaces an O(N) fan-out (1 Supabase fetch + 3 RPC
+// reads per auction) with a single Supabase IN-query and a single multicall3. The IPFS
+// metadata fetches still run in parallel per-auction since the URIs are heterogeneous.
+async function batchEnrichNftAuctions(auctions) {
+  if (!auctions.length) return [];
+
+  // Step 1: One Supabase query for every auction id at once.
+  const ids = auctions.map(a => a.id.toString()).join(',');
+  const rowsById = {};
+  try {
+    const rows = await coinDbFetch('launched_tokens', `id=in.(${ids})&launch_type=eq.nft-auction`);
+    if (Array.isArray(rows)) {
+      for (const r of rows) rowsById[String(r.id)] = r;
+    }
+  } catch {}
+
+  // Step 2: For auctions without a usable Supabase override, batch tokenURI + name + symbol
+  // into one multicall3 across all the source NFT contracts. Same SECURITY guard as the
+  // single-fetch path: only trust the Supabase row if its creator matches the on-chain seller.
+  const needOnchain = [];
+  for (const a of auctions) {
+    const row = rowsById[a.id.toString()];
+    const rowOk = row && row.metadata_uri
+      && String(row.creator || '').toLowerCase() === String(a.seller || '').toLowerCase()
+      && row.creator;
+    if (!rowOk) needOnchain.push(a);
+  }
+
+  const onchainData = {};
+  if (needOnchain.length > 0) {
+    const erc721I = new ethers.Interface(NFT_ERC721_ABI_MIN);
+    const calls = [];
+    for (const a of needOnchain) {
+      const tokenId = a.ids[0];
+      calls.push({ target: a.token, allowFailure: true, callData: erc721I.encodeFunctionData('tokenURI', [tokenId]) });
+      calls.push({ target: a.token, allowFailure: true, callData: erc721I.encodeFunctionData('name') });
+      calls.push({ target: a.token, allowFailure: true, callData: erc721I.encodeFunctionData('symbol') });
+    }
+    try {
+      const mcRes = await withRPC(async rpc => {
+        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+        return await mc.aggregate3(calls);
+      });
+      const decode = (r, fn) => {
+        if (!r || !r.success) return '';
+        try { return erc721I.decodeFunctionResult(fn, r.returnData)[0]; } catch { return ''; }
+      };
+      for (let i = 0; i < needOnchain.length; i++) {
+        const a = needOnchain[i];
+        onchainData[a.id.toString()] = {
+          uri: decode(mcRes[i * 3], 'tokenURI'),
+          name: decode(mcRes[i * 3 + 1], 'name'),
+          symbol: decode(mcRes[i * 3 + 2], 'symbol'),
+        };
+      }
+    } catch {}
+  }
+
+  // Step 3: Resolve metadata IPFS in parallel. Heterogeneous URIs (IPFS, Arweave, http)
+  // mean we can't batch this layer further; fan it out and let the gateway concurrency budget cap it.
+  return Promise.all(auctions.map(async a => {
+    const row = rowsById[a.id.toString()];
+    const rowOk = row && row.metadata_uri
+      && String(row.creator || '').toLowerCase() === String(a.seller || '').toLowerCase()
+      && row.creator;
+    if (rowOk) {
+      try {
+        const md = await auctionFetchMeta(row.metadata_uri);
+        if (md && (md.name || md.image)) {
+          return { a, meta: { name: md.name, image: md.image, collName: md.nftCollection } };
+        }
+      } catch {}
+    }
+    const oc = onchainData[a.id.toString()];
+    if (oc) {
+      const tokenId = a.ids[0];
+      try {
+        const md = await auctionFetchMeta(oc.uri);
+        return {
+          a,
+          meta: {
+            name: md.name || `${oc.symbol || oc.name || 'NFT'} #${tokenId.toString()}`,
+            image: md.image || '',
+            collName: oc.name,
+          },
+        };
+      } catch {}
+    }
+    return { a, meta: { name: `NFT #${a.ids[0]?.toString() || '?'}`, image: '' } };
+  }));
+}
+
 function _fmtAuctionDur(sec) {
   sec = Math.max(0, Math.floor(sec));
   if (sec < 60) return sec + 's';
@@ -747,6 +885,86 @@ function _fmtAuctionDur(sec) {
   if (h < 24) return `${h}h ${m%60}m`;
   const d = Math.floor(h/24);
   return `${d}d ${h%24}h`;
+}
+
+// ==================== ZAMM v0 COINS (gallery section) ====================
+// Top ZAMM v0 coins by liquidity, fetched once per gallery render. Tiles deep-link
+// back to the swap page with ETH→ZAMM pre-selected (the canonical swappable v0
+// pair) until pass 2 wires per-coin swap routing through the existing
+// computeZammPoolKey / swapVZ infrastructure.
+
+const COINS_SINGLETON = '0x0000000000009710cd229bF635c4500029651eE8';
+// ZAMM staking coin's coinId — already swappable as the built-in `ZAMM` token,
+// so we hide it here to avoid a duplicate row.
+const ZAMM_STAKE_COIN_ID = '1334160193485309697971829933264346612480800613613';
+// Pull a generous page from the indexer so the gallery shows the same v0 set
+// as the swap dropdown (we don't slice further — feature them all).
+const ZAMM_GALLERY_FETCH_LIMIT = 100;
+
+async function fetchZammV0CoinsForGallery() {
+  try {
+    const url = `https://coinchan-indexer-production.up.railway.app/api/coins-table?limit=${ZAMM_GALLERY_FETCH_LIMIT}&sortBy=liquidity&sortDir=desc`;
+    const r = await fetch(url, { cache: 'default' });
+    if (!r.ok) return [];
+    const data = await r.json();
+    const items = Array.isArray(data?.data) ? data.data : [];
+    return items
+      .filter(c => c && c.token && c.token.toLowerCase() === COINS_SINGLETON.toLowerCase())
+      .filter(c => c.coinId && String(c.coinId) !== ZAMM_STAKE_COIN_ID)
+      .filter(c => c.symbol)
+      // Skip coins with no AMM liquidity at all — the gallery card would advertise a
+      // tradeable pool that doesn't exist. Tiny non-zero liquidity is fine (the renderer
+      // falls through to scientific notation for sub-µETH so users can see it).
+      .filter(c => typeof c.liquidityEth === 'number' && c.liquidityEth > 0);
+  } catch (_) {
+    return [];
+  }
+}
+
+function renderZammV0CoinCard(c) {
+  const sym = String(c.symbol || '').slice(0, 24);
+  const name = c.name || sym;
+  const liq = typeof c.liquidityEth === 'number' ? c.liquidityEth : 0;
+  // Adaptive precision: at the bottom of the gallery, ZAMM v0 coins can have sub-milli-ETH
+  // liquidity. The old 3-decimal floor showed those as "0.000 Ξ" — useless. Carry more
+  // decimals down to the noise floor and fall back to scientific for sub-µETH so users
+  // can still tell a non-zero pool from genuinely empty.
+  const liqFmt = liq >= 10 ? liq.toFixed(1)
+    : liq >= 1 ? liq.toFixed(2)
+    : liq >= 0.0001 ? liq.toFixed(5)
+    : liq > 0 ? liq.toExponential(2)
+    : '0';
+  const holders = typeof c.holders === 'number' ? c.holders : 0;
+  const imgHref = c.imageUrl
+    ? (c.imageUrl.startsWith('ipfs://') ? IPFS_GW + c.imageUrl.slice(7)
+     : c.imageUrl.startsWith('https://') ? c.imageUrl : '')
+    : '';
+  const initial = (sym[0] || '?').toUpperCase();
+  const logoInner = imgHref
+    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='${escAttr(initial)}'">`
+    : escText(initial);
+  const searchable = `${name} ${sym} zamm coin`.toLowerCase();
+  // Deeplink to the swap page using the coin's ERC20 wrapper address
+  // (= `address(uint160(coinId))`). The swap page's ?to= resolver matches by 0x address,
+  // which is collision-free regardless of how the dropdown suffixes the symbol on its end.
+  // Coins whose coinId doesn't fit in 160 bits don't have an ERC20 wrapper and can't be
+  // routed via sweep — fall back to the canonical ZAMM swap so the click still goes somewhere.
+  const cid = (() => { try { return BigInt(c.coinId); } catch { return null; } })();
+  const wrapperAddr = (cid !== null && cid < (1n << 160n))
+    ? '0x' + cid.toString(16).padStart(40, '0')
+    : null;
+  const href = wrapperAddr ? `../?to=${wrapperAddr}` : `../?to=ZAMM`;
+  const dataAddr = wrapperAddr || COINS_SINGLETON.toLowerCase();
+  return `<a href="${href}" class="coin-card" data-name="${escAttr(searchable)}" data-symbol="${escAttr(sym.toLowerCase())}" data-addr="${dataAddr}" data-coin-id="${escAttr(String(c.coinId))}">
+      <div class="coin-card-head">
+        <div class="coin-logo">${logoInner}</div>
+        <div style="min-width:0;flex:1">
+          <div class="coin-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escText(name)}</div>
+          <div class="coin-card-symbol">$${escText(sym)} &middot; ZAMM</div>
+        </div>
+      </div>
+      <div class="coin-card-stat" style="font-variant-numeric:tabular-nums">${liqFmt} Ξ liq${holders > 0 ? ' &middot; ' + holders.toLocaleString() + ' holders' : ''}</div>
+    </a>`;
 }
 
 function renderNftAuctionCard(a, meta) {
@@ -773,7 +991,7 @@ function renderNftAuctionCard(a, meta) {
   const addrLow = a.token.toLowerCase();
   const searchable = `${name} ${coll} dutch auction nft`.toLowerCase();
   const logoInner = imgHref
-    ? `<img src="${escAttr(imgHref)}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='N'">`
+    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='N'">`
     : 'N';
   return `<a href="../auction/?id=${id}" class="coin-card" data-name="${searchable}" data-symbol="nft" data-addr="${addrLow}" data-auction-id="${id}">
       <div class="coin-card-head">
@@ -981,7 +1199,13 @@ function symbolSVG(symbol, size) {
 function logoHTML(meta, metadata, size) {
   size = size || 40;
   const imgUrl = resolveIPFS(metadata.image);
-  if (imgUrl) return `<img src="${escAttr(imgUrl)}" alt="" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(meta.symbol))},${size})">`;
+  // loading="lazy" on small (gallery-card) logos so off-screen tiles don't compete
+  // with above-the-fold images for the initial network burst. Detail-page logos
+  // (size > 48) still load eagerly since they're always in view.
+  if (imgUrl) {
+    const lazy = size <= 48 ? ' loading="lazy" decoding="async"' : '';
+    return `<img src="${escAttr(imgUrl)}" alt=""${lazy} onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(meta.symbol))},${size})">`;
+  }
   return symbolSVG(meta.symbol, size);
 }
 
@@ -1886,31 +2110,107 @@ window.addEventListener('hashchange', route);
 
 // ==================== GALLERY ====================
 
+// Stale-while-revalidate cache. Gallery state changes slowly (minutes), but the cold-load
+// pipeline (RPCs + Supabase + IPFS metadata + indexer) takes 1-3s. We snapshot the rendered
+// HTML keyed by the connected wallet so revisits paint instantly, then fetch fresh in the
+// background.
+const GALLERY_CACHE_KEY = 'zfi_gallery_cache_v1';
+const GALLERY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function _galleryCacheLoad() {
+  try {
+    const c = JSON.parse(localStorage.getItem(GALLERY_CACHE_KEY) || 'null');
+    if (!c || !c._ts || (Date.now() - c._ts) > GALLERY_CACHE_TTL) return null;
+    return c;
+  } catch { return null; }
+}
+function _galleryCacheSave(html, connectedAddress, userVerified) {
+  // Skip save when wallet isn't connected. The render that runs before wallet
+  // auto-connect resolves would otherwise overwrite a prior connected snapshot
+  // with a null-keyed one, forcing another cache miss the next time the wallet
+  // reconnects (and dropping the spam-button paint until the next refresh).
+  if (!connectedAddress) return;
+  try {
+    localStorage.setItem(GALLERY_CACHE_KEY, JSON.stringify({
+      _ts: Date.now(),
+      connectedAddress: connectedAddress || null,
+      // Persist verification so the cache-hit path matches the spam-button HTML it
+      // restores. Without this, _userIsVerified resets to false on fresh page load
+      // and the verified user sees buttons that respond with the "need 100k+ ZORG"
+      // toast until the background refresh re-verifies.
+      userVerified: !!userVerified,
+      html,
+    }));
+  } catch {} // quota exceeded etc. — non-fatal, just skip caching
+}
+
 async function renderGallery() {
   const gen = ++_renderGen;
+  // Invalidate any in-flight curve/zamm quote so its async callback can't write into the
+  // newly-rendered gallery DOM. _renderGen guards _galleryRenderFresh; these guard the
+  // already-fired quote setTimeout bodies that are mid-await on RPC.
+  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
+  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  ++_curveQuoteGen;
+  ++_curveZammQuoteGen;
   updateOGMeta('COIN', 'Trade coins on zFi - the most secure-by-default exchange', '');
   const app = $('app');
-  app.innerHTML = `
-    <div class="header">
-      <h1>Coins</h1>
-      <div><a href="../" class="nav-link">Swap</a> &middot; <a href="../dao/" class="nav-link">DAO</a></div>
-    </div>
-    <div class="loading">${zfiLoadingSVG(48)}Scanning for coins...</div>
-  `;
+
+  // Try the SWR cache. Wallet must match — spam buttons are gated on _userIsVerified
+  // which depends on the connected address, and rendering cached buttons for a different
+  // wallet would let the wrong user flag coins until the background refresh lands.
+  const cached = _galleryCacheLoad();
+  const currentAddr = _connectedAddress || null;
+  const cacheUsable = cached && cached.connectedAddress === currentAddr && cached.html;
+
+  if (cacheUsable) {
+    // Re-hydrate state that the cached HTML depends on but doesn't carry on its own:
+    //   _spamSet — the .coin-spam classes are baked in but flagCoinAsSpam reads/writes
+    //              the in-memory Set on click; an unloaded Set would lose the user's
+    //              prior flags until the background refresh runs loadSpamListFresh.
+    //   _userIsVerified — see comment in _galleryCacheSave.
+    loadSpamListCached();
+    if (typeof cached.userVerified === 'boolean') _userIsVerified = cached.userVerified;
+    app.innerHTML = cached.html;
+    // Background refresh: don't await. The gen check inside _galleryRenderFresh prevents
+    // a stale resolve from clobbering the DOM if the user navigated away.
+    _galleryRenderFresh(gen).catch(() => {});
+    return;
+  }
+
+  // Keep existing gallery on screen during the SWR refresh. Without this, the
+  // wallet-auto-connect path wipes the just-painted (no-wallet) gallery back to
+  // a loading screen before the verified re-render completes.
+  if (!$('coinGrid')) {
+    app.innerHTML = `
+      <div class="header">
+        <h1>Coins</h1>
+        <div><a href="../" class="nav-link">Swap</a> &middot; <a href="../dao/" class="nav-link">DAO</a></div>
+      </div>
+      <div class="loading">${zfiLoadingSVG(48)}Scanning for coins...</div>
+    `;
+  }
+  await _galleryRenderFresh(gen);
+}
+
+async function _galleryRenderFresh(gen) {
+  const app = $('app');
 
   try {
-    // Fetch DAICOs, ClassicalCurveSale tokens, and NFT auctions in parallel.
-    const [daicos, curveTokenAddrs, causeTokenRows, nftAuctions] = await Promise.all([
+    // Fetch DAICOs, ClassicalCurveSale tokens, NFT auctions, and ZAMM v0 coins in parallel.
+    const [daicos, curveTokenAddrs, causeTokenRows, nftAuctions, zammV0Coins] = await Promise.all([
       withRPC(async rpc => {
         const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
         return await helper.scanDAICOs(0, 500, [ZERO]);
       }),
       fetchCurveTokenList(),
       fetchCauseTokenList(),
-      fetchNftAuctions()
+      fetchNftAuctions(),
+      fetchZammV0CoinsForGallery()
     ]);
 
-    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && causeTokenRows.length === 0 && nftAuctions.length === 0) {
+    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && causeTokenRows.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
+      if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
           <h1>Coins</h1>
@@ -2108,7 +2408,6 @@ async function renderGallery() {
       if (isLowMcap) lowMcapCount++;
       const isSpam = _spamSet.has(cardAddr);
       if (isSpam) spamCount++;
-      const spamBtnHTML = _userIsVerified && !isSpam ? `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${cardAddr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
       const isCollect = md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector');
       const isFund = md && md.launchType === 'fund';
       const isLegacy = !isCause && !isCollect && (isFund || (md && md.template && !md.launchType));
@@ -2130,7 +2429,6 @@ async function renderGallery() {
 
       const cardHTML = `
         <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isInactive ? ' coin-inactive' : ''}${isLegacy ? ' coin-legacy' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
-          ${spamBtnHTML}
           <div class="coin-card-head">
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
             <div>
@@ -2184,6 +2482,7 @@ async function renderGallery() {
         const virtualReserve = BigInt(curve.virtualReserve);
         const startPrice = BigInt(curve.startPrice);
         const raisedETH = BigInt(curve.raisedETH);
+        const graduationTarget = BigInt(curve.graduationTarget);
         const graduated = curve.graduated;
         const seeded = curve.seeded;
 
@@ -2191,6 +2490,14 @@ async function renderGallery() {
         const spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
         const spotPriceEth = Number(spotPrice) / 1e18;
         const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
+        // When graduationTarget > 0 the curve graduates on raisedETH ≥ target, not full cap sale.
+        // XYK pricing back-loads ETH into the last ~30% of supply, so a coin can be ~90% to
+        // graduation while only ~50% sold. Use the binding criterion (max of both) for the bar
+        // and label so progress is monotonic and matches what's shown on the detail page.
+        const ethPct = graduationTarget > 0n
+          ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
+          : 0;
+        const progressPct = Math.max(salePct, ethPct);
         const curveMcap = spotPriceEth * 1e9; // 1B supply FDV
         const cSaleActive = !graduated && cap > 0n && sold < cap;
 
@@ -2207,10 +2514,10 @@ async function renderGallery() {
 
         const mcapDisplay = curveMcap > 1e-6 ? fmtMcap(curveMcap) : '';
         const mcapUsd = curveMcap > 1e-6 && ethUsd > 0 ? fmtUsd(curveMcap * ethUsd) : '';
-        const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : `${salePct.toFixed(1)}% sold`;
+        const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : `${progressPct.toFixed(1)}% bonded`;
         const logoImg = cMeta.image ? resolveIPFS(cMeta.image) : null;
         const logoEl = logoImg
-          ? `<img src="${escAttr(logoImg)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
+          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
           : symbolSVG(cSym, 40);
 
         const cCardHTML = `
@@ -2223,12 +2530,12 @@ async function renderGallery() {
                 <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span></div>
               </div>
             </div>
-            <div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(salePct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(salePct,100) / 10))}</div>
+            <div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(progressPct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(progressPct,100) / 10))}</div>
             <div class="coin-card-stat">${statusText}</div>
             ${mcapDisplay ? `<div class="coin-card-mcap">FDV ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cCardHTML, key: cCardName + '|' + cCardSym, mcap: curveMcap, r0: 0n, poolDeep: false, saleActive: cSaleActive, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false });
+        cards.push({ html: cCardHTML, key: cCardName + '|' + cCardSym, mcap: curveMcap, r0: 0n, poolDeep: false, saleActive: cSaleActive, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false, isCurve: true });
       }
     }
 
@@ -2242,14 +2549,12 @@ async function renderGallery() {
       const cCardAddr = cAddr.toLowerCase();
       const isSpam = _spamSet.has(cCardAddr);
       if (isSpam) spamCount++;
-      const spamBtnHTML = _userIsVerified && !isSpam ? `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${cCardAddr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
       const logoImg = row.image ? resolveIPFS(row.image) : null;
       const logoEl = logoImg
-        ? `<img src="${escAttr(logoImg)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
+        ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
         : symbolSVG(cSym, 40);
       const causeCardHTML = `
         <a href="#${cAddr}" class="coin-card${isSpam ? ' coin-spam' : ''}" data-name="${escText(cCardName)}" data-symbol="${escText(cCardSym)}" data-addr="${cCardAddr}" style="position:relative">
-          ${spamBtnHTML}
           <div class="coin-card-head">
             <div class="coin-logo">${logoEl}</div>
             <div>
@@ -2282,32 +2587,63 @@ async function renderGallery() {
     }
     let stackedCount = 0;
     let grid = '';
-    const sortedGroups = [...groups.values()];
-    for (const group of sortedGroups) group.sort((a, b) => b.mcap - a.mcap);
-    // Cause coins first, then finalized by liquidity, then in-sale by mcap
-    sortedGroups.sort((a, b) => {
+    const allGroups = [...groups.values()];
+    for (const group of allGroups) group.sort((a, b) => b.mcap - a.mcap);
+
+    // Classify each group as curve or DAICO based on its top (highest-mcap) card.
+    // Mixed-type stacks (rare — same name/symbol shared across launch types) follow
+    // their top card into whichever section it belongs to.
+    const curveGroups = [];
+    const daicoGroups = [];
+    for (const group of allGroups) {
+      if (group[0]?.isCurve) curveGroups.push(group);
+      else daicoGroups.push(group);
+    }
+    // DAICOs: finalized (post-sale) before in-sale; finalized sub-sorts by LP
+    // depth (r0), in-sale sub-sorts by mcap. Curve cards never capture r0, so
+    // a separate sort uses mcap for both halves — graduated/seeded first, then
+    // still-bonding by mcap (which tracks sale progress on a curve).
+    const daicoSort = (a, b) => {
       const aTop = a[0], bTop = b[0];
-      if (aTop.isCause !== bTop.isCause) return aTop.isCause ? -1 : 1;
       const aFinalized = !aTop.saleActive;
       const bFinalized = !bTop.saleActive;
       if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
       if (aFinalized) return aTop.r0 > bTop.r0 ? -1 : aTop.r0 < bTop.r0 ? 1 : 0;
       return bTop.mcap - aTop.mcap;
-    });
-    for (const group of sortedGroups) {
-      if (group.length === 1) {
-        grid += group[0].html;
-      } else {
-        const extra = group.length - 1;
-        stackedCount += extra;
-        grid += `<div class="coin-stack">`;
-        grid += `<span class="coin-stack-badge" onclick="event.preventDefault();toggleStack(this)">+${extra} more</span>`;
-        grid += group[0].html;
-        for (let j = 1; j < group.length; j++) {
-          grid += group[j].html.replace('class="coin-card', 'class="coin-card coin-stacked');
-        }
-        grid += `</div>`;
+    };
+    const curveSort = (a, b) => {
+      const aTop = a[0], bTop = b[0];
+      const aFinalized = !aTop.saleActive;
+      const bFinalized = !bTop.saleActive;
+      if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
+      return bTop.mcap - aTop.mcap;
+    };
+    curveGroups.sort(curveSort);
+    daicoGroups.sort(daicoSort);
+
+    function renderGroup(group) {
+      if (group.length === 1) return group[0].html;
+      const extra = group.length - 1;
+      stackedCount += extra;
+      let out = `<div class="coin-stack">`;
+      out += `<span class="coin-stack-badge" onclick="event.preventDefault();toggleStack(this)">+${extra} more</span>`;
+      out += group[0].html;
+      for (let j = 1; j < group.length; j++) {
+        out += group[j].html.replace('class="coin-card', 'class="coin-card coin-stacked');
       }
+      out += `</div>`;
+      return out;
+    }
+
+    if (curveGroups.length > 0) {
+      const n = curveGroups.reduce((s, g) => s + g.length, 0);
+      grid += `<div class="coin-grid-section" data-section="curve">Curve coins <span class="count">${n}</span></div>`;
+      for (const group of curveGroups) grid += renderGroup(group);
+    }
+    if (daicoGroups.length > 0) {
+      const n = daicoGroups.reduce((s, g) => s + g.length, 0);
+      grid += `<div class="coin-grid-section" data-section="daico">DAICOs <span class="count">${n}</span></div>`;
+      for (const group of daicoGroups) grid += renderGroup(group);
     }
     // Append hidden cards individually (hidden by CSS, searchable)
     for (const c of lowMcapCards) grid += c.html;
@@ -2315,27 +2651,43 @@ async function renderGallery() {
     for (const c of inactiveCards) grid += c.html;
     for (const c of spamCards) grid += c.html;
 
-    // NFT auctions: enrich with metadata in parallel, render, and prepend so
-    // time-sensitive listings land at the top of the gallery. Failures per
-    // auction fall back to a generic "NFT #id" card rather than dropping.
+    // NFT auctions: enrich via batched fetches (1 Supabase IN-query + 1 multicall3)
+    // instead of N×(1 Supabase + 3 RPC) per auction. For ~60 auctions this drops the
+    // load from O(60) HTTP and O(180) RPC calls to O(1) of each before the IPFS layer.
+    // Time-sensitive listings get prepended above the rest. Failures per auction fall
+    // back to a generic "NFT #id" card rather than dropping the whole row.
     let nftAuctionCount = 0;
     try {
-      const enriched = await Promise.all(nftAuctions.map(async a => {
-        try { return { a, meta: await enrichNftAuction(a) }; }
-        catch { return { a, meta: { name: `NFT #${a.ids[0]?.toString() || '?'}`, image: '' } }; }
-      }));
+      const enriched = await batchEnrichNftAuctions(nftAuctions);
       // Newest first — getAuctions already returns in id order, so reverse.
       enriched.reverse();
       const nftHtml = enriched.map(({a, meta}) => renderNftAuctionCard(a, meta)).join('');
       nftAuctionCount = enriched.length;
-      grid = nftHtml + grid;
+      const nftHeader = nftAuctionCount > 0
+        ? `<div class="coin-grid-section" data-section="auctions">Auctions <span class="count">${nftAuctionCount}</span></div>`
+        : '';
+      grid = nftHeader + nftHtml + grid;
     } catch (e) { console.warn('NFT auction rendering failed:', e); }
 
-    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0);
+    // ZAMM coins — top by liquidity, appended at the bottom of the gallery.
+    let zammV0Count = 0;
+    try {
+      if (Array.isArray(zammV0Coins) && zammV0Coins.length > 0) {
+        const zammHtml = zammV0Coins.map(renderZammV0CoinCard).join('');
+        zammV0Count = zammV0Coins.length;
+        const zammHeader = `<div class="coin-grid-section" data-section="zamm">ZAMM coins <span class="count">${zammV0Count}</span></div>`;
+        grid = grid + zammHeader + zammHtml;
+      }
+    } catch (e) { console.warn('ZAMM coins rendering failed:', e); }
+
+    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0) + zammV0Count;
     const _countLabel = nftAuctionCount > 0
       ? `${_coinTotal} coins &middot; ${nftAuctionCount} auction${nftAuctionCount === 1 ? '' : 's'}`
       : `${_coinTotal}`;
-    app.innerHTML = `
+    // Final gen check before writing: a background refresh that finishes after the user
+    // navigated away to a coin detail page would otherwise replace the detail with the gallery.
+    if (gen !== _renderGen) return;
+    const _galleryHtml = `
       <div class="header">
         <h1>Coins <span style="font-weight:400;color:var(--fg-muted)">(${_countLabel})</span></h1>
         <div><a href="../#coin" class="nav-link">Launch</a><span class="nav-sep">&middot;</span><a href="../" class="nav-link">Swap</a><span class="nav-sep">&middot;</span><a href="../dao/" class="nav-link">DAO</a></div>
@@ -2354,7 +2706,26 @@ async function renderGallery() {
       <div id="spamCount" data-count="${spamCount}" style="display:none"></div>
       <div style="text-align:center;font-size:10px;color:var(--fg-dim);margin-top:20px;padding-top:12px;border-top:1px solid var(--border-muted)">100k <a href="https://zfi.wei.is/?from=eth&to=zorg" target="_blank" style="color:inherit;text-decoration:underline">$zOrg</a> holders can flag spam</div>
     `;
+    // Preserve user state across the cache→fresh swap. Without this, a user who started
+    // searching/scrolling the cached view loses their input + scroll position 1-2s later
+    // when fresh data lands and replaces innerHTML.
+    const _prevSearch = $('coinSearch')?.value || '';
+    const _prevScrollY = window.scrollY;
+    app.innerHTML = _galleryHtml;
+    if (_prevSearch) {
+      const _newSearch = $('coinSearch');
+      if (_newSearch) { _newSearch.value = _prevSearch; filterCoins(); }
+    }
+    if (_prevScrollY > 0) window.scrollTo(0, _prevScrollY);
+    // Snapshot for instant first paint on the next visit. Keyed by wallet so spam-button
+    // visibility doesn't leak between accounts; userVerified rides along so the restored
+    // buttons match the in-memory verification flag.
+    _galleryCacheSave(_galleryHtml, _connectedAddress, _userIsVerified);
   } catch(e) {
+    // Don't replace the page with a failure banner if the user already navigated
+    // away — the cached gallery (or detail page) on screen is more useful than
+    // an error from a stale background refresh.
+    if (gen !== _renderGen) return;
     app.innerHTML = `
       <div class="header">
         <h1>Coins</h1>
@@ -2366,7 +2737,11 @@ async function renderGallery() {
 }
 
 function toggleStack(el) {
-  el.closest('.coin-stack').classList.toggle('expanded');
+  const stack = el.closest('.coin-stack');
+  const wasExpanded = stack.classList.toggle('expanded');
+  // Toggle the badge label so users know how to collapse it again.
+  const extra = stack.querySelectorAll('.coin-card.coin-stacked').length;
+  el.textContent = wasExpanded ? 'collapse' : `+${extra} more`;
 }
 
 function filterCoins() {
@@ -2375,6 +2750,11 @@ function filterCoins() {
   stacks.forEach(s => {
     if (q) s.classList.add('expanded');
     else s.classList.remove('expanded');
+  });
+  // Section headers are organizational, not search-relevant — collapse them
+  // while a query is active so the result list doesn't have orphan headings.
+  document.querySelectorAll('#coinGrid .coin-grid-section').forEach(h => {
+    h.style.display = q ? 'none' : '';
   });
   const cards = document.querySelectorAll('#coinGrid .coin-card');
   cards.forEach(c => {
@@ -2413,8 +2793,11 @@ let _curveBalance = 0n;
 let _curveRoomId = null;
 // Live creator-fee config so post-grad routed swaps charge the right amount.
 // _curveCreatorRouted is true when beneficiary != 0 (i.e. ZAMM direct swaps would revert with Unauthorized).
+// *OnInput flags determine which leg of the swap is taxed; quote/minOut math diverges based on them.
 let _curveCreatorBuyBps = 0;
 let _curveCreatorSellBps = 0;
+let _curveCreatorBuyOnInput = false;
+let _curveCreatorSellOnInput = false;
 let _curveCreatorRouted = false;
 // Single-flight guard so a quick double-click can't enqueue two trades.
 let _curveTrading = false;
@@ -2462,6 +2845,13 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   _curveTokenAddr = tokenAddr;
   _curveData = curve;
   _curveEffectiveFee = null;
+  // Invalidate any in-flight quote from a previous coin so its callback can't write into
+  // the freshly-rendered DOM. clearTimeout stops not-yet-fired timers; the gen bump guards
+  // already-fired async callbacks awaiting their RPC response.
+  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
+  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  ++_curveQuoteGen;
+  ++_curveZammQuoteGen;
 
   const sold = BigInt(curve.sold);
   const cap = BigInt(curve.cap);
@@ -2478,6 +2868,18 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   const spotPriceEth = Number(spotPrice) / 1e18;
   const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
   const fdvEth = spotPriceEth * 1e9;
+
+  // Graduation progress tracks whichever criterion the contract actually uses:
+  //   graduationTarget > 0 → triggers on raisedETH ≥ target (sold/cap is misleading because
+  //                          XYK pricing back-loads ETH into the last ~30% of supply).
+  //   graduationTarget == 0 → triggers on full cap sale, so sold/cap is the right metric.
+  const graduationTarget = BigInt(curve.graduationTarget);
+  const targetGated = graduationTarget > 0n;
+  const ethPct = targetGated && raisedETH > 0n
+    ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
+    : 0;
+  const progressPct = targetGated ? ethPct : Math.min(100, salePct);
+  const progressLabel = targetGated ? 'graduation' : 'curve';
 
   // Batch: obsCount + graduable + ETH/USD + token name/symbol + contractURI + creatorFees + balance via multicall
   const csIface = new ethers.Interface(CURVE_SALE_ABI);
@@ -2511,15 +2913,20 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   const tokenName = mcRes[3].success ? nameI.decodeFunctionResult('name', mcRes[3].returnData)[0] : 'Unknown';
   const tokenSymbol = mcRes[4].success ? nameI.decodeFunctionResult('symbol', mcRes[4].returnData)[0] : '???';
   const contractURI = mcRes[5].success ? uriI.decodeFunctionResult('contractURI', mcRes[5].returnData)[0] : '';
-  let cfBeneficiary = ZERO, cfBuyBps = 0, cfSellBps = 0;
+  let cfBeneficiary = ZERO, cfBuyBps = 0, cfSellBps = 0, cfBuyOnInput = false, cfSellOnInput = false;
   if (mcRes[6].success) {
     try {
       const cf = csIface.decodeFunctionResult('creatorFees', mcRes[6].returnData);
       cfBeneficiary = cf[0]; cfBuyBps = Number(cf[1]); cfSellBps = Number(cf[2]);
+      // *OnInput flags decide which leg is taxed — quote and minOut math diverges based on them.
+      // Defaults (false) match the prior assumption (sellOnInput=false), so existing pools are unaffected.
+      cfBuyOnInput = Boolean(cf[3]); cfSellOnInput = Boolean(cf[4]);
     } catch {}
   }
   _curveCreatorBuyBps = cfBuyBps;
   _curveCreatorSellBps = cfSellBps;
+  _curveCreatorBuyOnInput = cfBuyOnInput;
+  _curveCreatorSellOnInput = cfSellOnInput;
   _curveCreatorRouted = cfBeneficiary !== ZERO;
   const tokenBalance = (_connectedAddress && mcRes[7]?.success) ? erc20I.decodeFunctionResult('balanceOf', mcRes[7].returnData)[0] : 0n;
 
@@ -2638,71 +3045,128 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       </div>
     </div>
 
-    <!-- Progress bar -->
+    <!-- Progress bar (graduation criterion: ETH-target if set, otherwise sold/cap) -->
     <div style="margin-bottom:14px;font-family:monospace">
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
-        <span>curve</span>
-        <span>${salePct.toFixed(1)}%</span>
+        <span>${progressLabel}</span>
+        <span>${progressPct.toFixed(1)}%</span>
       </div>
-      <div style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
+      <div style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(progressPct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-progressPct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
     </div>
   `;
 
-  // Trade panel (pre-graduation)
+  // Render the slippage row with the persisted selection marked active. The previous
+  // hardcoded `active` on the 3% button desynced from _curveSlippageBps after every
+  // re-render — UI said 3% while the next trade actually used the user's last pick.
+  const _slipRowHTML = (() => {
+    const opts = [1, 3, 5, 10];
+    const cur = _curveSlippageBps / 100;
+    const btns = opts.map(p => `<button class="coin-tpl-btn${p === cur ? ' active' : ''}" onclick="curveSetSlippage(${p},this)" style="font-size:9px;padding:3px 6px">${p}%</button>`).join('');
+    return `<div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
+      <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
+      ${btns}
+    </div>`;
+  })();
+
+  // Trade panel (pre-graduation). Swap-tile layout: pay section → directional arrow → receive
+  // section → fee/price/min-received breakdown. Quote functions populate the receive side and
+  // the breakdown rows directly so users can see exactly what they'll get and what minOut the
+  // contract will be called with.
   if (!graduated) {
+    const _arrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
+    const _balShort = tokenBalance > 0n ? fmtTokenAmount(tokenBalance.toString()) : '0';
+    const _ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
+    const _tokTag = `<span class="swap-token-tag">$${escText(tokenSymbol)}</span>`;
     html += `
       <div class="section-card">
         <div class="section-title">Trade</div>
-        <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
+        <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border-muted);overflow:hidden">
           <button id="curveBuyBtn" onclick="curveSwitchSide('buy')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Buy</button>
           <button id="curveSellBtn" onclick="curveSwitchSide('sell')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">Sell</button>
         </div>
+
+        <!-- BUY: pay ETH → receive tokens -->
         <div id="curveBuyWrap">
-          <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveBuyAmount" type="text" inputmode="decimal" placeholder="0.00" aria-label="ETH amount to buy" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateBuyQuote()">
-            <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">ETH</span>
+          <div class="swap-section">
+            <div class="swap-section-head"><label>You pay</label></div>
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <input id="curveBuyAmount" type="text" inputmode="decimal" placeholder="0.0" aria-label="ETH amount to buy" oninput="curveUpdateBuyQuote()">
+              ${_ethTag}
+            </div>
+            <div class="swap-pct-row">
+              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.005)">0.005</button>
+              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.01)">0.01</button>
+              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.05)">0.05</button>
+              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.1)">0.1</button>
+            </div>
           </div>
-          <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
-            <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.005)" style="font-size:10px;padding:4px 8px">.005</button>
-            <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.01)" style="font-size:10px;padding:4px 8px">.01</button>
-            <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.05)" style="font-size:10px;padding:4px 8px">.05</button>
-            <button class="coin-tpl-btn" onclick="curveSetBuyAmt(0.1)" style="font-size:10px;padding:4px 8px">.1</button>
+          <div class="swap-arrow-row"><div class="curve-dir-arrow">${_arrowSvg}</div></div>
+          <div class="swap-section">
+            <div class="swap-section-head"><label>You receive (estimated)</label></div>
+            <div class="curve-out-row">
+              <div id="curveBuyOut" class="curve-out-amount placeholder">0</div>
+              ${_tokTag}
+            </div>
+            <div id="curveBuyOutSub" class="curve-out-sub">&nbsp;</div>
           </div>
-          <div id="curveBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
-          <button class="swap-btn" style="width:100%;font-size:13px" onclick="curveBuy()">${_connectedAddress ? 'Buy Tokens' : 'Connect Wallet'}</button>
+          <div id="curveBuyDetails" class="curve-details" style="display:none">
+            <div class="curve-details-row"><span>Price</span><span class="v" id="curveBuyDetPrice">—</span></div>
+            <div class="curve-details-row"><span>Curve fee</span><span class="v" id="curveBuyDetFee">—</span></div>
+            <div class="curve-details-row"><span>Min received</span><span class="v" id="curveBuyDetMin">—</span></div>
+          </div>
+          <button class="action-btn" style="margin-top:12px" onclick="curveBuy()">${_connectedAddress ? 'Buy ' + escText(tokenSymbol) : 'Connect Wallet'}</button>
         </div>
+
+        <!-- SELL: pay tokens → receive ETH -->
         <div id="curveSellWrap" style="display:none">
-          <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveSellAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveUpdateSellQuote()">
-            <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">tokens</span>
+          <div class="swap-section">
+            <div class="swap-section-head">
+              <label>You pay</label>
+              <span class="swap-balance" onclick="curveSetSellPct(100)" title="Click to use full balance">Balance: ${_balShort}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <input id="curveSellAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" oninput="curveUpdateSellQuote()">
+              ${_tokTag}
+            </div>
+            <div class="swap-pct-row">
+              <button class="swap-pct-btn" onclick="curveSetSellPct(25)">25%</button>
+              <button class="swap-pct-btn" onclick="curveSetSellPct(50)">50%</button>
+              <button class="swap-pct-btn" onclick="curveSetSellPct(75)">75%</button>
+              <button class="swap-pct-btn" onclick="curveSetSellPct(100)">Max</button>
+            </div>
           </div>
-          <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
-            <button class="coin-tpl-btn" onclick="curveSetSellPct(25)" style="font-size:10px;padding:4px 8px">25%</button>
-            <button class="coin-tpl-btn" onclick="curveSetSellPct(50)" style="font-size:10px;padding:4px 8px">50%</button>
-            <button class="coin-tpl-btn" onclick="curveSetSellPct(75)" style="font-size:10px;padding:4px 8px">75%</button>
-            <button class="coin-tpl-btn" onclick="curveSetSellPct(100)" style="font-size:10px;padding:4px 8px">Max</button>
+          <div class="swap-arrow-row"><div class="curve-dir-arrow">${_arrowSvg}</div></div>
+          <div class="swap-section">
+            <div class="swap-section-head"><label>You receive (estimated)</label></div>
+            <div class="curve-out-row">
+              <div id="curveSellOut" class="curve-out-amount placeholder">0</div>
+              ${_ethTag}
+            </div>
+            <div id="curveSellOutSub" class="curve-out-sub">&nbsp;</div>
           </div>
-          <div id="curveSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
-          <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveSell()">${_connectedAddress ? 'Sell' : 'Connect Wallet'}</button>
+          <div id="curveSellDetails" class="curve-details" style="display:none">
+            <div class="curve-details-row"><span>Price</span><span class="v" id="curveSellDetPrice">—</span></div>
+            <div class="curve-details-row"><span>Curve fee</span><span class="v" id="curveSellDetFee">—</span></div>
+            <div class="curve-details-row"><span>Min received</span><span class="v" id="curveSellDetMin">—</span></div>
+          </div>
+          <button class="action-btn" style="margin-top:12px;background:var(--red);color:#fff" onclick="curveSell()">${_connectedAddress ? 'Sell ' + escText(tokenSymbol) : 'Connect Wallet'}</button>
         </div>
-        <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-          <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(1,this)" style="font-size:9px;padding:3px 6px">1%</button>
-          <button class="coin-tpl-btn active" onclick="curveSetSlippage(3,this)" style="font-size:9px;padding:3px 6px">3%</button>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(5,this)" style="font-size:9px;padding:3px 6px">5%</button>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(10,this)" style="font-size:9px;padding:3px 6px">10%</button>
-        </div>
+
+        ${_slipRowHTML}
         <div id="curveTradeStatus" style="margin-top:8px"></div>
       </div>
     `;
   }
 
-  // Graduation button
+  // Graduation button — visible only when the curve has hit its trigger (sold == cap if
+  // graduationTarget == 0, else raisedETH >= graduationTarget) and the LP hasn't been
+  // seeded yet. The call is permissionless: any wallet can pay the gas to seed.
   if (graduable && !seeded) {
+    const _gradTrigger = targetGated ? 'ETH target reached' : 'curve fully sold';
     html += `
       <div style="margin-bottom:14px">
-        <button class="swap-btn" style="width:100%;background:#FF9800;color:#fff;font-size:13px" onclick="curveGraduate()">Graduate to zAMM</button>
-        <div style="font-size:10px;color:var(--fg-dim);text-align:center;margin-top:4px">Anyone can trigger graduation once 100% of curve supply is sold</div>
+        <button class="swap-btn" style="width:100%;background:#FF9800;color:#fff;font-size:13px" onclick="curveGraduate()">${_connectedAddress ? 'Graduate to zAMM' : 'Connect Wallet to Graduate'}</button>
+        <div style="font-size:10px;color:var(--fg-dim);text-align:center;margin-top:4px">${_gradTrigger} — anyone can seed the LP now</div>
         <div id="curveGradStatus" style="margin-top:8px"></div>
       </div>
     `;
@@ -2746,13 +3210,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
           <div id="curveZammSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
           <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveZammSwap('sell')">Sell</button>
         </div>
-        <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-          <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(1,this)" style="font-size:9px;padding:3px 6px">1%</button>
-          <button class="coin-tpl-btn active" onclick="curveSetSlippage(3,this)" style="font-size:9px;padding:3px 6px">3%</button>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(5,this)" style="font-size:9px;padding:3px 6px">5%</button>
-          <button class="coin-tpl-btn" onclick="curveSetSlippage(10,this)" style="font-size:9px;padding:3px 6px">10%</button>
-        </div>
+        ${_slipRowHTML}
         <div id="curveTradeStatus" style="margin-top:8px"></div>
       </div>
     `;
@@ -2790,7 +3248,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
         </button>
         <div class="activity-body" style="display:block">
           <table class="activity-table">
-            <thead><tr><th>Age</th><th>Type</th><th>Price (ETH/1M)</th><th>Cost (ETH)</th></tr></thead>
+            <thead><tr><th>Age</th><th>Type</th><th>Price (ETH/1M)</th><th>ETH</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -2814,6 +3272,10 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   if (COIN_DB_URL) {
     const rooms = await coinDbFetch('gated_rooms',
       `token_address=eq.${tokenAddr.toLowerCase()}&limit=1`);
+    // User may have navigated to a different coin while this fetch was in
+    // flight; without this guard we'd point _curveRoomId at the previous
+    // token's room and curveSendChat would post to the wrong place.
+    if (gen !== _renderGen) return;
     if (Array.isArray(rooms) && rooms.length > 0) {
       _curveRoomId = rooms[0].id;
       const chatDisabled = !tokenBalance || tokenBalance === 0n;
@@ -2846,6 +3308,8 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
 
   // Draw price chart in the user-selected mode (curve trajectory or OHLCV candles).
   drawCurveChartActive($('curveChart'), observations);
+  // Re-render on viewport changes so the canvas stays sharp on resize / orientation flips.
+  _attachCurveChartResize($('curveChart'));
 
   // Chat socket is lazy-connected when user opens the chat panel
 }
@@ -3020,14 +3484,16 @@ function drawCurveChart(canvas, observations) {
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(soldPx, soldPy, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-  // Y-axis price labels (start, mid, end) — per 1M tokens, matching the header
+  // Y-axis price labels (start, mid, end) — per 1M tokens, matching the header.
+  // Anchor at the actual y-pixel for each value so labels sit on their data point
+  // rather than drifting up to the chart edge (yHi/yLo are padded above/below).
   ctx.fillStyle = mutedColor;
   ctx.font = `${fontSize}px monospace`;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  ctx.fillText(formatEthPrice(yMax * 1e6), LEFT - 4, TOP + 4);
-  ctx.fillText(formatEthPrice(((yMax + yMin) / 2) * 1e6), LEFT - 4, TOP + chartH / 2);
-  ctx.fillText(formatEthPrice(yMin * 1e6), LEFT - 4, h - BOTTOM - 4);
+  ctx.fillText(formatEthPrice(yMax * 1e6), LEFT - 4, yToPx(yMax));
+  ctx.fillText(formatEthPrice(((yMax + yMin) / 2) * 1e6), LEFT - 4, yToPx((yMax + yMin) / 2));
+  ctx.fillText(formatEthPrice(yMin * 1e6), LEFT - 4, yToPx(yMin));
   ctx.fillStyle = dimColor;
   ctx.font = `${Math.max(7, fontSize - 1)}px monospace`;
   ctx.textAlign = 'right';
@@ -3076,6 +3542,19 @@ function drawCurveChart(canvas, observations) {
 function drawCurveChartActive(canvas, observations) {
   if (_curveChartMode === 'price') drawPriceChart(canvas, observations);
   else drawCurveChart(canvas, observations);
+}
+
+// Without this, the canvas keeps its initial CSS-pixel size after the user resizes the
+// window or rotates the device — the bitmap stretches/blurs because we set width/height
+// from getBoundingClientRect() once at draw time.
+let _curveChartResizeObserver = null;
+function _attachCurveChartResize(canvas) {
+  if (_curveChartResizeObserver) { _curveChartResizeObserver.disconnect(); _curveChartResizeObserver = null; }
+  if (!canvas || typeof ResizeObserver === 'undefined') return;
+  _curveChartResizeObserver = new ResizeObserver(() => {
+    if (canvas.isConnected) drawCurveChartActive(canvas, _curveObs);
+  });
+  _curveChartResizeObserver.observe(canvas);
 }
 
 // User-facing chart-mode toggle. Re-renders against cached observations — no extra RPC.
@@ -3353,7 +3832,20 @@ function curveSetBuyAmt(amt) {
   curveUpdateBuyQuote();
 }
 
-function curveSetSellPct(pct) {
+async function curveSetSellPct(pct) {
+  // For 100% in particular, _curveBalance is set at render time and may be stale if the user
+  // received/transferred tokens since then. Refresh from chain so the displayed quote matches
+  // what the contract will actually consume (curveSell caps to bal anyway, so the tx is safe;
+  // this is purely UX correctness on the Min-received row).
+  if (_signer && _connectedAddress) {
+    try {
+      const bal = await withRPC(async rpc => {
+        const t = new ethers.Contract(_curveTokenAddr, ERC20_ABI, rpc);
+        return await t.balanceOf(_connectedAddress);
+      });
+      _curveBalance = bal;
+    } catch {} // fall through to cached balance
+  }
   if (_curveBalance <= 0n) return;
   const amt = _curveBalance * BigInt(pct) / 100n;
   $('curveSellAmount').value = ethers.formatEther(amt);
@@ -3364,10 +3856,41 @@ function curveSetSlippage(pct, btn) {
   _curveSlippageBps = pct * 100;
   btn.parentElement.querySelectorAll('.coin-tpl-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  // Refresh the visible quote so the "Min received" row matches the new slippage immediately
+  // instead of waiting for the next input change. Debounced inside each quote fn.
+  if ($('curveBuyWrap') && $('curveBuyWrap').style.display !== 'none' && $('curveBuyAmount')?.value) {
+    curveUpdateBuyQuote();
+  } else if ($('curveSellWrap') && $('curveSellWrap').style.display !== 'none' && $('curveSellAmount')?.value) {
+    curveUpdateSellQuote();
+  } else if ($('curveZammBuyWrap') && $('curveZammBuyWrap').style.display !== 'none' && $('curveZammBuyInput')?.value) {
+    curveZammQuote('buy');
+  } else if ($('curveZammSellWrap') && $('curveZammSellWrap').style.display !== 'none' && $('curveZammSellInput')?.value) {
+    curveZammQuote('sell');
+  }
+}
+
+// Mirror of ClassicalCurveSale._effectiveFee for client-side fallback. The execution path
+// caches the on-chain effectiveFee in _curveEffectiveFee, but quotes can race the trade
+// (preset → click Buy before the 300ms debounce fires). Falling back to the static base
+// curve.feeBps under-counts the real fee inside the sniper-decay window, which makes
+// minOut/minProceeds too tight and the contract reverts with Slippage().
+function _effFeeNow(curve) {
+  const baseFee = Number(curve.feeBps);
+  const sniperFee = Number(curve.sniperFeeBps);
+  const sniperDuration = Number(curve.sniperDuration);
+  if (sniperFee === 0 || sniperDuration === 0) return baseFee;
+  const elapsed = Math.floor(Date.now() / 1000) - Number(curve.launchTime);
+  if (elapsed >= sniperDuration) return baseFee;
+  if (elapsed <= 0) return sniperFee;
+  return baseFee + Math.floor((sniperFee - baseFee) * (sniperDuration - elapsed) / sniperDuration);
 }
 
 // On-chain quote via ClassicalCurveSale view functions (authoritative, includes sniper fee)
 let _curveQuoteTimer = null;
+// Bumps every time a new quote is dispatched. Async callbacks that resolve after the user
+// changed input or navigated away check against this and skip their DOM write — otherwise
+// stale results overwrite fresh ones.
+let _curveQuoteGen = 0;
 let _curveEffectiveFee = null; // cached for execution path
 const CURVE_QUOTE_ABI = [
   'function quote(address token, uint256 amount) view returns (uint256)',
@@ -3396,25 +3919,55 @@ function _curveEstTokens(curve, netETH) {
   return tokens;
 }
 
+// Render-state helpers for the read-only receive box. Centralising the className/textContent
+// pair keeps the empty/quoting/error/quoted transitions consistent across both sides.
+function _curveSetOut(outEl, subEl, detEl, state, text, sub) {
+  if (!outEl) return;
+  outEl.textContent = text || '';
+  outEl.className = 'curve-out-amount' + (state === 'idle' ? ' placeholder' : state === 'quoting' || state === 'error' ? ' muted' : '');
+  if (subEl) subEl.innerHTML = sub || '&nbsp;';
+  if (detEl) detEl.style.display = state === 'quoted' ? '' : 'none';
+}
+
+// Adaptive ETH formatter — readable across the 7+ orders of magnitude curve trades span.
+function _curveFmtEth(n) {
+  if (!Number.isFinite(n) || n === 0) return '0';
+  if (n < 0.0001) return n.toExponential(2);
+  if (n < 1) return n.toFixed(6);
+  if (n < 1000) return n.toFixed(4);
+  return n.toFixed(2);
+}
+
 function curveUpdateBuyQuote() {
-  const el = $('curveBuyQuote');
-  if (!el || !_curveData) return;
+  const outEl = $('curveBuyOut'), subEl = $('curveBuyOutSub'), detEl = $('curveBuyDetails');
+  if (!outEl || !_curveData) return;
   const v = parseFloat($('curveBuyAmount')?.value || '0');
-  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
-  el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
+  if (!v || v <= 0) {
+    // Clear any pending quote — otherwise a 300ms-stale callback overwrites the idle state.
+    // clearTimeout only stops not-yet-fired timers; bumping the gen is what cancels an
+    // already-fired callback that's mid-await on RPC.
+    if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
+    ++_curveQuoteGen;
+    _curveSetOut(outEl, subEl, detEl, 'idle', '0');
+    return;
+  }
+  _curveSetOut(outEl, subEl, detEl, 'quoting', 'Quoting...');
   if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
+  // Generation token: an async quote that resolves after the user has typed something else
+  // (or navigated away) skips its DOM write. Without this, the latest displayed numbers can
+  // be from the second-to-last input.
+  const myGen = ++_curveQuoteGen;
   _curveQuoteTimer = setTimeout(async () => {
     try {
       const tokenAddr = _curveTokenAddr;
       const ethWei = ethers.parseEther(String(v));
-      // Single multicall: effectiveFee + quote(estTokens)
-      // Pre-estimate tokens client-side so we can include quote() in the same batch
       const curve = _curveData;
-      // Use cached fee for estimate, fetch fresh in same batch
-      const estFee = _curveEffectiveFee || Number(curve.feeBps);
+      // Sniper-aware fallback: during the decay window the real fee is above curve.feeBps,
+      // and feeding the lower number into estTokens produces an over-tight minOut downstream.
+      const estFee = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
       const estNet = ethWei * 10000n / BigInt(10000 + estFee);
       const estTokens = _curveEstTokens(curve, estNet);
-      if (estTokens <= 0n) { el.textContent = 'Curve fully sold'; return; }
+      if (estTokens <= 0n) { _curveSetOut(outEl, subEl, detEl, 'error', 'Curve fully sold'); return; }
       const mc3Calls = [
         { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('effectiveFee', [tokenAddr]) },
         { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quote', [tokenAddr, estTokens]) }
@@ -3423,47 +3976,70 @@ function curveUpdateBuyQuote() {
         const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
         return await mc.aggregate3(mc3Calls);
       });
-      const feeBps = mcRes[0].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[0].returnData)[0]) : Number(curve.feeBps);
+      if (myGen !== _curveQuoteGen) return; // user changed input or navigated since dispatch
+      const feeBps = mcRes[0].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[0].returnData)[0]) : _effFeeNow(curve);
       _curveEffectiveFee = feeBps;
-      if (!mcRes[1].success) { el.textContent = 'Quote unavailable'; return; }
+      if (!mcRes[1].success) { _curveSetOut(outEl, subEl, detEl, 'error', 'Quote unavailable'); return; }
       let cost = _cqIface.decodeFunctionResult('quote', mcRes[1].returnData)[0];
-      // If fee changed significantly, re-estimate tokens and re-quote
       let tokens = estTokens;
       if (Math.abs(feeBps - estFee) > 10) {
         const netETH = ethWei * 10000n / BigInt(10000 + feeBps);
         tokens = _curveEstTokens(curve, netETH);
-        // Re-quote cost for the corrected token amount
         try {
           const reQuoteRes = await withRPC(async rpc => {
             const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
             return await mc.aggregate3([{ target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quote', [tokenAddr, tokens]) }]);
           });
+          if (myGen !== _curveQuoteGen) return;
           if (reQuoteRes[0].success) cost = _cqIface.decodeFunctionResult('quote', reQuoteRes[0].returnData)[0];
         } catch {}
       }
       const feeEth = cost * BigInt(feeBps) / 10000n;
-      el.innerHTML = '~' + fmtTokenAmount(tokens.toString()) + ' tokens (fee: ' + (Number(feeEth) / 1e18).toFixed(4) + ' ETH)';
+      const minTokens = tokens * BigInt(10000 - _curveSlippageBps) / 10000n;
+
+      // Avg execution price (cost / tokens) rendered per 1M tokens to match the page header.
+      const tokensFloat = Number(tokens) / 1e18;
+      const costFloat = Number(cost) / 1e18;
+      const feeFloat = Number(feeEth) / 1e18;
+      const ethPerMil = tokensFloat > 0 ? (costFloat / tokensFloat) * 1e6 : 0;
+
+      outEl.textContent = fmtTokenAmount(tokens.toString());
+      outEl.className = 'curve-out-amount';
+      subEl.textContent = 'Avg ' + formatEthPrice(ethPerMil) + ' ETH / 1M';
+
+      $('curveBuyDetPrice').textContent = formatEthPrice(ethPerMil) + ' ETH / 1M';
+      $('curveBuyDetFee').textContent = _curveFmtEth(feeFloat) + ' ETH (' + (feeBps / 100).toFixed(2) + '%)';
+      $('curveBuyDetMin').textContent = fmtTokenAmount(minTokens.toString()) + ' (' + (_curveSlippageBps / 100) + '% slip)';
+      detEl.style.display = '';
     } catch (e) {
-      el.textContent = 'Quote failed';
+      if (myGen !== _curveQuoteGen) return;
+      _curveSetOut(outEl, subEl, detEl, 'error', 'Quote failed');
     }
   }, 300);
 }
 
 function curveUpdateSellQuote() {
-  const el = $('curveSellQuote');
-  if (!el || !_curveData) return;
+  const outEl = $('curveSellOut'), subEl = $('curveSellOutSub'), detEl = $('curveSellDetails');
+  if (!outEl || !_curveData) return;
   const v = parseFloat($('curveSellAmount')?.value || '0');
-  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
-  el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
+  if (!v || v <= 0) {
+    // Same idle-clear pattern as the buy side — bump gen to cancel any already-fired
+    // callback awaiting RPC, otherwise it'll write stale data over the idle state.
+    if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
+    ++_curveQuoteGen;
+    _curveSetOut(outEl, subEl, detEl, 'idle', '0');
+    return;
+  }
+  _curveSetOut(outEl, subEl, detEl, 'quoting', 'Quoting...');
   if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
+  const myGen = ++_curveQuoteGen;
   _curveQuoteTimer = setTimeout(async () => {
     try {
       const tokenAddr = _curveTokenAddr;
       let amount = ethers.parseEther(String(v));
       let capped = false;
       if (_curveBalance > 0n && amount > _curveBalance) { amount = _curveBalance; capped = true; }
-      if (amount <= 0n) { el.textContent = ''; return; }
-      // Single multicall: quoteSell + effectiveFee
+      if (amount <= 0n) { _curveSetOut(outEl, subEl, detEl, 'idle', '0'); return; }
       const mc3Calls = [
         { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quoteSell', [tokenAddr, amount]) },
         { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('effectiveFee', [tokenAddr]) }
@@ -3472,15 +4048,34 @@ function curveUpdateSellQuote() {
         const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
         return await mc.aggregate3(mc3Calls);
       });
-      if (!mcRes[0].success) { el.textContent = 'Quote unavailable'; return; }
+      if (myGen !== _curveQuoteGen) return;
+      if (!mcRes[0].success) { _curveSetOut(outEl, subEl, detEl, 'error', 'Quote unavailable'); return; }
       const gross = _cqIface.decodeFunctionResult('quoteSell', mcRes[0].returnData)[0];
-      const feeBps = mcRes[1].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[1].returnData)[0]) : Number(_curveData.feeBps);
+      const feeBps = mcRes[1].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[1].returnData)[0]) : _effFeeNow(_curveData);
       _curveEffectiveFee = feeBps;
       const fee = gross * BigInt(feeBps) / 10000n;
       const net = gross - fee;
-      el.innerHTML = '~' + (Number(net) / 1e18).toFixed(4) + ' ETH (fee: ' + (Number(fee) / 1e18).toFixed(4) + ' ETH)' + (capped ? ' <span style="color:var(--fg-dim)">(capped to balance)</span>' : '');
+      const minNet = net * BigInt(10000 - _curveSlippageBps) / 10000n;
+
+      const netFloat = Number(net) / 1e18;
+      const grossFloat = Number(gross) / 1e18;
+      const feeFloat = Number(fee) / 1e18;
+      const amountFloat = Number(amount) / 1e18;
+      const ethPerMil = amountFloat > 0 ? (grossFloat / amountFloat) * 1e6 : 0;
+
+      outEl.textContent = _curveFmtEth(netFloat);
+      outEl.className = 'curve-out-amount';
+      const usdSub = (_curveEthUsd && netFloat > 0) ? '≈ $' + (netFloat * _curveEthUsd).toFixed(2) : '';
+      const cappedTag = capped ? ' <span style="color:var(--fg-dim)">(capped to balance)</span>' : '';
+      subEl.innerHTML = (usdSub || '&nbsp;') + cappedTag;
+
+      $('curveSellDetPrice').textContent = formatEthPrice(ethPerMil) + ' ETH / 1M';
+      $('curveSellDetFee').textContent = _curveFmtEth(feeFloat) + ' ETH (' + (feeBps / 100).toFixed(2) + '%)';
+      $('curveSellDetMin').textContent = _curveFmtEth(Number(minNet) / 1e18) + ' ETH (' + (_curveSlippageBps / 100) + '% slip)';
+      detEl.style.display = '';
     } catch (e) {
-      el.textContent = 'Quote failed';
+      if (myGen !== _curveQuoteGen) return;
+      _curveSetOut(outEl, subEl, detEl, 'error', 'Quote failed');
     }
   }, 300);
 }
@@ -3661,6 +4256,9 @@ async function curveBuy() {
   if (_curveTrading) return;
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
   const tokenAddr = _curveTokenAddr;
+  // Snapshot _renderGen so we can detect navigation away during the tx and avoid
+  // forcing the user back to this coin's detail page when the post-trade re-render fires.
+  const _myRenderGen = _renderGen;
   const amtStr = ($('curveBuyAmount')?.value || '').trim();
   if (!amtStr || isNaN(amtStr) || Number(amtStr) <= 0) {
     $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Enter a valid ETH amount</div>';
@@ -3668,9 +4266,12 @@ async function curveBuy() {
   }
   const ethWei = ethers.parseEther(amtStr);
 
-  // Compute minAmountOut using cached effectiveFee + client estimate + slippage
+  // Compute minAmountOut using cached effectiveFee + client estimate + slippage.
+  // Sniper-aware fallback (not curve.feeBps) so a click before the quote debounce fires
+  // still uses an approximation of the live decay-window fee — otherwise minOut overshoots
+  // and the contract reverts with Slippage().
   const curve = _curveData;
-  const feeBps = _curveEffectiveFee || Number(curve.feeBps);
+  const feeBps = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
   const netETH = ethWei * 10000n / BigInt(10000 + feeBps);
   const approxTokens = _curveEstTokens(curve, netETH);
   const minOut = approxTokens * BigInt(10000 - _curveSlippageBps) / 10000n;
@@ -3710,13 +4311,21 @@ async function curveBuy() {
     // before the user can click Buy again on the now-stale form.
     // Await so _curveTrading stays held until the new panel is on screen,
     // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    await renderCoinPage(tokenAddr);
+    // Skip the re-render if the user navigated away during the tx — otherwise we'd force them
+    // back to this coin's detail page, with a hash that no longer matches the displayed content.
+    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
       const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
       $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Trade failed')}</div>`;
+      // Graduated() — another buyer pushed the curve over the line between
+      // our quote and submit. Flip the panel to post-grad so the user can
+      // retry on the right path without manually refreshing.
+      if (/Graduated/i.test(msg) || /Graduated/i.test(e?.message || '')) {
+        setTimeout(() => renderCoinPage(tokenAddr), 800);
+      }
     }
   } finally {
     _curveTrading = false;
@@ -3726,11 +4335,17 @@ async function curveBuy() {
 async function curveSell() {
   if (_curveTrading) return;
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
+  // Set the guard synchronously, before any await, so a double-click can't fire two
+  // concurrent balanceOf+quoteSell paths and emit two sell txs back-to-back.
+  _curveTrading = true;
   const tokenAddr = _curveTokenAddr;
+  // Snapshot _renderGen so we can detect navigation away during the tx and avoid
+  // forcing the user back to this coin's detail page when the post-trade re-render fires.
+  const _myRenderGen = _renderGen;
   const amtStr = ($('curveSellAmount')?.value || '').trim();
   if (!amtStr || isNaN(amtStr) || Number(amtStr) <= 0) {
     $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Enter a valid token amount</div>';
-    return;
+    _curveTrading = false; return;
   }
   let tokenWei = ethers.parseEther(amtStr);
   const address = await _signer.getAddress();
@@ -3739,27 +4354,32 @@ async function curveSell() {
   $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Checking balance...</div>`;
   const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, _signer);
   const bal = await tokenContract.balanceOf(address);
-  if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; return; }
+  if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; _curveTrading = false; return; }
   if (tokenWei > bal) tokenWei = bal;
 
-  // Compute minProceeds using on-chain quoteSell + cached fee, single multicall
+  // Compute minProceeds using on-chain quoteSell + cached fee, single multicall.
+  // Sniper-aware fallback (not curve.feeBps) so a click before the quote debounce fires
+  // still uses an approximation of the live decay-window fee — otherwise minProceeds
+  // overshoots and the contract reverts with Slippage().
   const curve = _curveData;
   let gross;
-  const feeBps = _curveEffectiveFee || Number(curve.feeBps);
+  const feeBps = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
   try {
     gross = await withRPC(async rpc => {
       const cs = new ethers.Contract(CURVE_SALE, CURVE_QUOTE_ABI, rpc);
       return await cs.quoteSell(tokenAddr, tokenWei);
     });
   } catch {
-    gross = tokenWei * BigInt(curve.startPrice) / (10n**18n);
+    // Don't fall back to startPrice — current spot can be ~100× higher on a
+    // near-graduated curve, collapsing minProceeds to ~1% of fair value.
+    $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Quote unavailable — try again in a moment</div>';
+    _curveTrading = false; return;
   }
   const fee = gross * BigInt(feeBps) / 10000n;
   const net = gross - fee;
   const minProceeds = net * BigInt(10000 - _curveSlippageBps) / 10000n;
 
   const deadline = BigInt(Math.floor(Date.now() / 1000)) + 600n;
-  _curveTrading = true;
   $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming sell...</div>`;
   try {
     // No approval needed: launch() clones make CURVE_SALE the immutable hook, and the clone's
@@ -3793,13 +4413,18 @@ async function curveSell() {
     $('curveSellAmount').value = '';
     // Await so _curveTrading stays held until the new panel is on screen,
     // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    await renderCoinPage(tokenAddr);
+    // Skip if user navigated away — see curveBuy for rationale.
+    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
       const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
       $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Trade failed')}</div>`;
+      // Graduated mid-flight — flip to post-grad panel.
+      if (/Graduated/i.test(msg) || /Graduated/i.test(e?.message || '')) {
+        setTimeout(() => renderCoinPage(tokenAddr), 800);
+      }
     }
   } finally {
     _curveTrading = false;
@@ -3813,13 +4438,16 @@ async function curveGraduate() {
   const btn = document.querySelector('[onclick="curveGraduate()"]');
   _graduating = true;
   if (btn) btn.disabled = true;
+  // Snapshot at start so we can skip the post-tx re-render if the user navigated away.
+  const _myRenderGen = _renderGen;
+  const _myToken = _curveTokenAddr;
   try {
     const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
-    const tx = await cs.graduate(_curveTokenAddr);
+    const tx = await cs.graduate(_myToken);
     $('curveGradStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Graduating... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
     $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Graduated! LP seeded on zAMM.</div>`;
-    await renderCoinPage(_curveTokenAddr);
+    if (_myRenderGen === _renderGen) await renderCoinPage(_myToken);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveGradStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
@@ -3837,6 +4465,9 @@ async function curveGraduate() {
 // Pool key: token0=ETH(zero), token1=token, feeOrHook = uint160(CURVE_SALE) | (1<<255)
 const CURVE_HOOK_FEE = BigInt(CURVE_SALE) | (1n << 255n);
 let _curveZammQuoteTimer = null;
+// Stale-callback guard for the post-grad ZAMM quote (mirrors _curveQuoteGen for the
+// pre-grad bonding-curve quote). Bumped on each dispatch and on every nav entry.
+let _curveZammQuoteGen = 0;
 
 function curveZammSide(side) {
   const buyBtn = $('curveZammBuyBtn'), sellBtn = $('curveZammSellBtn');
@@ -3848,7 +4479,19 @@ function curveZammSide(side) {
   $('curveZammSellWrap').style.display = side === 'sell' ? '' : 'none';
 }
 
-function curveZammSellPct(pct) {
+async function curveZammSellPct(pct) {
+  // Refresh balance from chain so the post-grad 100% sell quote matches the actual on-chain
+  // amount swapExactIn will consume. _curveBalance from render is stale once the user receives
+  // or transfers tokens out-of-band; the swap path itself caps to bal so the tx is safe.
+  if (_signer && _connectedAddress) {
+    try {
+      const bal = await withRPC(async rpc => {
+        const t = new ethers.Contract(_curveTokenAddr, ERC20_ABI, rpc);
+        return await t.balanceOf(_connectedAddress);
+      });
+      _curveBalance = bal;
+    } catch {} // fall through to cached balance
+  }
   if (_curveBalance <= 0n) return;
   const amt = _curveBalance * BigInt(pct) / 100n;
   $('curveZammSellInput').value = ethers.formatEther(amt);
@@ -3861,75 +4504,144 @@ function curveZammQuote(side) {
   if (!el) return;
   const raw = $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput')?.value || '';
   const v = parseFloat(raw);
-  if (!v || v <= 0) { el.textContent = 'Enter amount to see quote'; return; }
+  if (!v || v <= 0) {
+    // Bump gen alongside clearing the timer so an already-fired callback mid-await
+    // can't write stale numbers over the just-set idle text.
+    if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+    ++_curveZammQuoteGen;
+    el.textContent = 'Enter amount to see quote';
+    return;
+  }
   el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
   if (_curveZammQuoteTimer) clearTimeout(_curveZammQuoteTimer);
+  // Generation token: a first quote that resolves after the user types a second amount
+  // would otherwise overwrite the new "Quoting..." with stale results before the second
+  // debounce fires. Latest dispatch wins.
+  const myGen = ++_curveZammQuoteGen;
   _curveZammQuoteTimer = setTimeout(async () => {
     try {
       const amount = ethers.parseEther(String(v));
       const tokenAddr = _curveTokenAddr;
-      // Match the contract's routed swap: buy fee is taken from ETH input (so the pool sees less),
-      // sell fee is taken from ETH output (so the pool sees the full token amount).
-      const buyBps = BigInt(_curveCreatorBuyBps || 0);
-      const sellBps = BigInt(_curveCreatorSellBps || 0);
-      const swapAmount = isBuy ? amount * (10000n - buyBps) / 10000n : amount;
+      // Read live creator fees alongside the quote so the UI matches what curveZammSwap will
+      // compute at submit time. Without this, a creator that updates their fee between render
+      // and trade will see displayed quote and on-chain expectedOut diverge by `bps`, and a
+      // tight slippage setting reverts with Slippage().
+      // Match the contract's routed swap. The fee can be taken from either side per direction:
+      //   buyOnInput=true:  ETH tax skimmed before pool sees msg.value
+      //   buyOnInput=false: pool sees full ETH, tokens taxed before user receives them
+      //   sellOnInput=true: token tax skimmed before pool sees amountIn
+      //   sellOnInput=false: pool sees full tokens, ETH taxed before user receives it
       const tokenIn = isBuy ? ZERO : tokenAddr;
       const tokenOut = isBuy ? tokenAddr : ZERO;
-      const quote = await withRPC(async rpc => {
+      const [cfLive, quote] = await withRPC(async rpc => {
+        const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
         const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
-        return await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, swapAmount);
+        // Quote against the post-input-fee amount when the *OnInput flag is true. We have to
+        // fetch creatorFees first because swapAmount depends on the *OnInput flag.
+        const cf = await cs.creatorFees(tokenAddr);
+        const buyOnInputLive = Boolean(cf.buyOnInput);
+        const sellOnInputLive = Boolean(cf.sellOnInput);
+        const buyBpsLive = BigInt(cf.buyBps || 0);
+        const sellBpsLive = BigInt(cf.sellBps || 0);
+        const swapAmount = isBuy
+          ? (buyOnInputLive ? amount * (10000n - buyBpsLive) / 10000n : amount)
+          : (sellOnInputLive ? amount * (10000n - sellBpsLive) / 10000n : amount);
+        const q = await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, swapAmount);
+        return [cf, q];
       });
+      if (myGen !== _curveZammQuoteGen) return; // user changed input or navigated since dispatch
+      const buyBps = BigInt(cfLive.buyBps || 0);
+      const sellBps = BigInt(cfLive.sellBps || 0);
+      const buyOnInput = Boolean(cfLive.buyOnInput);
+      const sellOnInput = Boolean(cfLive.sellOnInput);
+      // Refresh cached state so the next swap submit sees the same numbers we just quoted against.
+      _curveCreatorBuyBps = Number(buyBps);
+      _curveCreatorSellBps = Number(sellBps);
+      _curveCreatorBuyOnInput = buyOnInput;
+      _curveCreatorSellOnInput = sellOnInput;
       let out = quote.amountOut;
-      // Sell: contract deducts sellBps from gross ETH output before sending to user.
-      if (!isBuy) out = out * (10000n - sellBps) / 10000n;
+      // Tax the output side only when the corresponding *OnInput flag is false.
+      if (isBuy && !buyOnInput) out = out * (10000n - buyBps) / 10000n;
+      if (!isBuy && !sellOnInput) out = out * (10000n - sellBps) / 10000n;
       if (isBuy) {
         el.innerHTML = '~' + fmtTokenAmount(out.toString()) + ' tokens';
       } else {
         el.innerHTML = '~' + (Number(ethers.formatEther(out))).toFixed(4) + ' ETH';
       }
-    } catch { el.textContent = 'Quote failed'; }
+    } catch {
+      if (myGen !== _curveZammQuoteGen) return;
+      el.textContent = 'Quote failed';
+    }
   }, 300);
 }
 
 async function curveZammSwap(side) {
   if (_curveTrading) return;
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
+  // Set the guard synchronously so a double-click can't fire two concurrent
+  // balanceOf+quote paths and submit two routed swaps back-to-back.
+  _curveTrading = true;
   const isBuy = side === 'buy';
   const raw = $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput')?.value || '';
   const v = parseFloat(raw);
   if (!v || v <= 0) {
     $('curveTradeStatus').innerHTML = `<div style="color:var(--red);font-size:12px">Enter a valid amount</div>`;
-    return;
+    _curveTrading = false; return;
   }
   let amount = ethers.parseEther(String(v));
   const tokenAddr = _curveTokenAddr;
+  // Snapshot at start so we can skip the post-tx re-render if the user navigated away.
+  const _myRenderGen = _renderGen;
   const address = await _signer.getAddress();
   // Cap sell to actual balance
   if (!isBuy) {
     const token = new ethers.Contract(tokenAddr, ERC20_ABI, _signer);
     const bal = await token.balanceOf(address);
-    if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; return; }
+    if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; _curveTrading = false; return; }
     if (amount > bal) amount = bal;
   }
   const tokenIn = isBuy ? ZERO : tokenAddr;
   const tokenOut = isBuy ? tokenAddr : ZERO;
   const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: tokenAddr, feeOrHook: CURVE_HOOK_FEE };
   const deadline = BigInt(Math.floor(Date.now() / 1000)) + 600n;
-  const buyBps = BigInt(_curveCreatorBuyBps || 0);
-  const sellBps = BigInt(_curveCreatorSellBps || 0);
 
-  _curveTrading = true;
   $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Quoting...</div>`;
   try {
-    // Quote against the amount the pool actually sees (buy: net of input fee; sell: full).
-    const swapAmount = isBuy ? amount * (10000n - buyBps) / 10000n : amount;
+    // Read live creator fee at submit time. Cached values from the render-time
+    // multicall can be stale if the creator updates `creatorFees` between
+    // render and confirmation, leading to a Slippage() revert because
+    // expectedOut would be computed against the wrong leg.
+    const csIfaceLive = new ethers.Interface(CURVE_SALE_ABI);
+    const cfLive = await withRPC(async rpc => {
+      const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
+      return await cs.creatorFees(tokenAddr);
+    });
+    const buyBps = BigInt(cfLive.buyBps || 0);
+    const sellBps = BigInt(cfLive.sellBps || 0);
+    const buyOnInput = Boolean(cfLive.buyOnInput);
+    const sellOnInput = Boolean(cfLive.sellOnInput);
+    // Refresh cached state so subsequent quote/render reads stay in sync.
+    _curveCreatorBuyBps = Number(buyBps);
+    _curveCreatorSellBps = Number(sellBps);
+    _curveCreatorBuyOnInput = buyOnInput;
+    _curveCreatorSellOnInput = sellOnInput;
+
+    // Quote against the amount the pool actually sees, branching on the *OnInput flag for
+    // each side. Without this branch, swapping a pool whose creator picked buyOnInput=false
+    // or sellOnInput=true produces an expectedOut off by `bps`, making minOut too tight and
+    // forcing a Slippage() revert on every routed swap.
+    const swapAmount = isBuy
+      ? (buyOnInput ? amount * (10000n - buyBps) / 10000n : amount)
+      : (sellOnInput ? amount * (10000n - sellBps) / 10000n : amount);
     const quote = await withRPC(async rpc => {
       const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
       return await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, swapAmount);
     });
-    // Expected user output after the routed creator fee.
+    // Expected user output after the routed creator fee. Tax the output side only when the
+    // corresponding *OnInput flag is false (otherwise the tax was already taken from input).
     let expectedOut = quote.amountOut;
-    if (!isBuy) expectedOut = expectedOut * (10000n - sellBps) / 10000n;
+    if (isBuy && !buyOnInput) expectedOut = expectedOut * (10000n - buyBps) / 10000n;
+    if (!isBuy && !sellOnInput) expectedOut = expectedOut * (10000n - sellBps) / 10000n;
     const minOut = expectedOut * BigInt(10000 - _curveSlippageBps) / 10000n;
 
     // No approval: launch() clones exempt the hook (=CURVE_SALE) from the allowance check.
@@ -3961,7 +4673,8 @@ async function curveZammSwap(side) {
     $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput').value = '';
     // Await so _curveTrading stays held until the new panel is on screen,
     // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    await renderCoinPage(tokenAddr);
+    // Skip if user navigated away — see curveBuy for rationale.
+    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
   } catch (e) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
@@ -4283,6 +4996,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   if (COIN_DB_URL) {
     const rooms = await coinDbFetch('gated_rooms',
       `token_address=eq.${sharesAddr.toLowerCase()}&limit=1`);
+    if (gen !== _renderGen) return;
     if (Array.isArray(rooms) && rooms.length > 0) {
       _curveRoomId = rooms[0].id;
       const chatDisabled = !userBalance || userBalance === 0n;
@@ -4679,6 +5393,14 @@ async function renderCoinPage(daoAddr) {
   _causeChatOpen = false;
   coinRoomDisconnect();
   const gen = ++_renderGen;
+  // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
+  // freshly-rendered detail page. renderCurveCoinPage bumps these on its own, but if we
+  // route to a DAICO detail instead, that path never touches them and a mid-await curve
+  // quote would null-deref on $('curveBuyDetPrice') etc.
+  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
+  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  ++_curveQuoteGen;
+  ++_curveZammQuoteGen;
   const app = $('app');
   app.innerHTML = `
     <a href="#" class="back-link">&larr; All Coins</a>
@@ -6371,7 +7093,10 @@ async function onOpsUnlock(token, to, coinId, amount, unlockTime) {
 }
 
 // ==================== INIT ====================
-walletInit({ appName: 'zFi Coins', onConnect: [updateModeButton, loadBalances], onDisconnect: [updateModeButton, () => { _userIsVerified = false; }] });
+// onConnect fires after tryAutoConnect resolves, which happens AFTER the initial
+// route()/renderGallery() runs. Without a re-render here, _userIsVerified stays
+// false and the spam buttons never paint on cold load.
+walletInit({ appName: 'zFi Coins', onConnect: [updateModeButton, loadBalances, () => { const h = location.hash.replace('#','').trim(); if (!(h && h.startsWith('0x') && h.length === 42)) renderGallery(); }], onDisconnect: [updateModeButton, () => { _userIsVerified = false; }] });
 route();
 </script>
 </body>
