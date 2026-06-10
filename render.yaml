@@ -1,24 +1,81 @@
-# Render Blueprint — an always-on static MIRROR of the zFi dapp.
+# Render Blueprint — full migration of zFi off Cloudflare.
 #
-# Why this exists: zfi.wei.is (the Cloudflare-fronted wei.is gateway) rate-limits.
-# IPFS remains the canonical, uninterruptible source — the content is reachable via
-# any ENS/IPFS gateway. Render is just one more centralized access path that is not
-# subject to the CF gateway's rate limits. It does NOT replace the IPFS deployment.
+# Cloudflare error 1027 (HTTP 429) was the Workers free-plan daily request cap
+# being exhausted account-wide, taking down the zfi.wei.is gateway AND both
+# Workers. This blueprint re-hosts everything on Render so nothing depends on
+# Cloudflare. After deploying, move wei.is DNS to Namecheap (or repoint the
+# records) so zfi.wei.is + api.zfi.wei.is point at the Render services below.
 #
-# The backend APIs (proxy-metadata, quotes) stay on their Cloudflare Workers
-# (zfi-pin.*.workers.dev, api.zfi.wei.is) and are unaffected by this.
-#
-# Pure static: dapp/ is the web root, vendor/ is pre-bundled, so there is no build.
+# IPFS stays canonical: the dapp content is still pinned (Pinata) and reachable
+# via any IPFS gateway. Render is the always-on access path + API host.
 services:
+  # 1) Static dapp — replaces the Cloudflare Worker gateway serving zfi.wei.is.
+  #    Pure static: dapp/ is the web root, vendor/ is pre-bundled, so no build.
   - type: web
     name: zfi
     runtime: static
     staticPublishPath: dapp
     buildCommand: echo "no build — static assets are committed"
-    pullRequestPreviewsEnabled: false
+    domains:
+      - zfi.wei.is
     headers:
-      # Mirror the dev server's permissive CORS so other origins (e.g. the IPFS
-      # copy) can fetch token-list.json and other assets from this mirror.
+      # Mirror the dev server's permissive CORS so other origins (e.g. an IPFS
+      # copy of the dapp) can fetch token-list.json and other assets.
       - path: /*
         name: Access-Control-Allow-Origin
         value: "*"
+
+  # 2) Combined API — replaces BOTH Cloudflare Workers (pin + quote) as one
+  #    Node service. Routes are dispatched by path in server/index.js.
+  - type: web
+    name: zfi-api
+    runtime: node
+    rootDir: server
+    # "starter" keeps the service always-on (no cold starts) — important for the
+    # "works without interruption" goal. Switch to "free" to avoid the ~$7/mo,
+    # but free spins down after 15 min idle and cold-starts ~30-60s.
+    plan: starter
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /health
+    domains:
+      - api.zfi.wei.is
+    envVars:
+      # Optional: extra CORS origins, comma-separated (e.g. your *.onrender.com
+      # test URL) while validating before the DNS cutover.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # IPFS pinning (Pinata)
+      - key: PINATA_KEY
+        sync: false
+      - key: PINATA_SECRET
+        sync: false
+      # Supabase (launched_tokens / trades / gated rooms)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      # Swap aggregator API keys (hidden server-side)
+      - key: OX_API_KEY
+        sync: false
+      - key: INCH_API_KEY
+        sync: false
+      - key: OKX_API_KEY
+        sync: false
+      - key: OKX_SECRET_KEY
+        sync: false
+      - key: OKX_PASSPHRASE
+        sync: false
+      - key: ENSO_API_KEY
+        sync: false
+      - key: BITGET_API_KEY
+        sync: false
+      - key: BITGET_SECRET_KEY
+        sync: false
+      # Tenderly simulation (optional; /simulate returns 503 if unset)
+      - key: TENDERLY_ACCESS_TOKEN
+        sync: false
+      - key: TENDERLY_ACCOUNT
+        sync: false
+      - key: TENDERLY_PROJECT
+        sync: false

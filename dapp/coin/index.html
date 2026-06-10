@@ -626,7 +626,7 @@ const TAP_VEST_ABI = [
 ];
 
 // DB proxy — writes go through the worker which holds the Supabase service_role key
-const COIN_DB_URL = 'https://zfi-pin.rosscampbell9.workers.dev'; // same worker, /db/ routes
+const COIN_DB_URL = 'https://api.zfi.wei.is'; // same worker, /db/ routes
 
 async function coinDbInsert(table, row) {
   if (!COIN_DB_URL) return;
@@ -699,7 +699,7 @@ const NFT_ERC721_ABI_MIN = [
   'function name() view returns (string)',
   'function symbol() view returns (string)'
 ];
-const WORKER_PROXY = 'https://zfi-pin.rosscampbell9.workers.dev/proxy-metadata';
+const WORKER_PROXY = 'https://api.zfi.wei.is/proxy-metadata';
 
 // Fetch up to the last N auctions (cheaper than the full history) and keep
 // only live NFT listings (seller != 0 and isNFT). Closed listings are filtered

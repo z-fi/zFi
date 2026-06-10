@@ -13,7 +13,7 @@ const COIN_SUPPLY = 1_000_000_000n;
 const COIN_SEC_PER_MONTH = 2_629_746n;
 const COIN_SHARE_BURNER = '0x000000000040084694F7B6fb2846D067B4c3Aa9f';
 
-const COIN_PIN_URL = 'https://zfi-pin.rosscampbell9.workers.dev';
+const COIN_PIN_URL = 'https://api.zfi.wei.is';
 
 // DB proxy — writes go through the worker which holds the Supabase service_role key
 // and enforces origin checks + source tagging server-side
