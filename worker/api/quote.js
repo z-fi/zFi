@@ -1,13 +1,35 @@
 // Cloudflare Worker: zFi On-Chain DEX Aggregator API
 // Deploy: cd worker/api && wrangler deploy
 
-const ZQUOTER = '0x9909861aa515afbce9d36c532eae7e0ebf804034';
 const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ZERO = '0x0000000000000000000000000000000000000000';
-const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
 const NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // common native ETH sentinel
+
+// Chain configs
+const CHAIN_CONFIG = {
+  1: {
+    weth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    zquoter: '0x9909861aa515afbce9d36c532eae7e0ebf804034',
+    rpcs: [
+      'https://ethereum.publicnode.com',
+      'https://1rpc.io/eth',
+      'https://eth.drpc.org',
+      'https://eth.llamarpc.com',
+    ],
+  },
+  42161: {
+    weth: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+    zquoter: '0x372209ed46ec3ab99C0205b4a3E67910c7f1704E',
+    rpcs: [
+      'https://arbitrum.publicnode.com',
+      'https://1rpc.io/arb',
+      'https://arbitrum.drpc.org',
+      'https://arbitrum.llamarpc.com',
+    ],
+  }
+};
 
 // External aggregator APIs
 const BEBOP_API = 'https://api.bebop.xyz/router/ethereum/v1/quote';
@@ -34,12 +56,6 @@ const APPROVAL_TARGETS = {
   'OpenOcean': '0x6352a56caadC4F1E25CD6c75970Fa768A3304e64',     // Exchange V2
 };
 
-const RPCS = [
-  'https://ethereum.publicnode.com',
-  'https://1rpc.io/eth',
-  'https://eth.drpc.org',
-  'https://eth.llamarpc.com',
-];
 
 const AMM_NAMES = {
   0: 'Uniswap V2', 1: 'SushiSwap', 2: 'zAMM',
@@ -267,13 +283,13 @@ function decQuoteCurve(hex) {
 
 // --- RPC call with fallback ---
 
-async function rpcCall(to, data) {
+async function rpcCall(to, data, rpcs) {
   const body = JSON.stringify({
     jsonrpc: '2.0', id: 1, method: 'eth_call',
     params: [{ to, data }, 'latest'],
   });
   let lastErr;
-  for (const url of RPCS) {
+  for (const url of rpcs) {
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -763,7 +779,10 @@ async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker) {
 // --- Main quote logic ---
 
 async function getQuote(params, env) {
-  const { tokenIn, tokenOut, amount, to, slippage, exactOut } = params;
+  const { tokenIn, tokenOut, amount, to, slippage, exactOut, chainId } = params;
+  
+  const chain = CHAIN_CONFIG[chainId];
+  const zQuoter = chain.zquoter;
   const receiver = to || ZERO;
   const refundTo = to || ZERO;
   const slippageBps = slippage || 50;
@@ -772,21 +791,21 @@ async function getQuote(params, env) {
 
   // Build all zQuoter calls
   const lightCalls = [
-    { target: ZQUOTER, data: '0x' + encGetQuotes(!!exactOut, tokenIn, tokenOut, amount) },
-    { target: ZQUOTER, data: '0x' + encQuoteCurve(!!exactOut, tokenIn, tokenOut, amount, 8) },
+    { target: zQuoter, data: '0x' + encGetQuotes(!!exactOut, tokenIn, tokenOut, amount) },
+    { target: zQuoter, data: '0x' + encQuoteCurve(!!exactOut, tokenIn, tokenOut, amount, 8) },
   ];
   const heavyCalls = [
-    { target: ZQUOTER, data: '0x' + encBuildBest(receiver, refundTo, !!exactOut, tokenIn, tokenOut, amount, slippageBps, deadline) },
-    { target: ZQUOTER, data: '0x' + encSplitSwap(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
-    { target: ZQUOTER, data: '0x' + encHybridSplit(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
-    { target: ZQUOTER, data: '0x' + enc3Hop(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
+    { target: zQuoter, data: '0x' + encBuildBest(receiver, refundTo, !!exactOut, tokenIn, tokenOut, amount, slippageBps, deadline) },
+    { target: zQuoter, data: '0x' + encSplitSwap(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
+    { target: zQuoter, data: '0x' + encHybridSplit(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
+    { target: zQuoter, data: '0x' + enc3Hop(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
   ];
 
-  // Batch zQuoter multicalls + all external APIs in parallel
-  const skip = exactOut ? Promise.resolve(null) : undefined;
+  // Batch zQuoter multicalls + external APIs (external only on Ethereum)
+  const skip = (exactOut || chainId !== 1) ? Promise.resolve(null) : undefined;
   const [lightRaw, heavyRaw, ...extQuotes] = await Promise.all([
-    rpcCall(MC3, encAggregate3(lightCalls)),
-    rpcCall(MC3, encAggregate3(heavyCalls)),
+    rpcCall(MC3, encAggregate3(lightCalls), chain.rpcs),
+    rpcCall(MC3, encAggregate3(heavyCalls), chain.rpcs),
     skip || fetchBebopQuote(tokenIn, tokenOut, amount, to),
     skip || fetchEnsoQuote(tokenIn, tokenOut, amount, to, env),
     skip || fetchOxQuote(tokenIn, tokenOut, amount, to, env),
@@ -1054,8 +1073,17 @@ export default {
 
       const exactOut = url.searchParams.get('exactOut') === 'true';
 
+      const chainIdStr = url.searchParams.get('chainId') || '1';
+      let chainId = 1;
+      if (chainIdStr) {
+        chainId = parseInt(chainIdStr, 10);
+        if (!CHAIN_CONFIG[chainId]) {
+          return jsonResponse({ error: `Unsupported chain. Supported: ${Object.keys(CHAIN_CONFIG).join(', ')}` }, 400);
+        }
+      }
+
       try {
-        const result = await getQuote({ tokenIn, tokenOut, amount: amountBn, to, slippage, exactOut }, env);
+        const result = await getQuote({ tokenIn, tokenOut, amount: amountBn, to, slippage, exactOut, chainId }, env);
         return jsonResponse(result);
       } catch (e) {
         return jsonResponse({ error: e.message }, 502);
