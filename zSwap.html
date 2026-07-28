@@ -5,12 +5,12 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <style>
 body{font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em;display:flex;flex-direction:column;box-sizing:border-box}
-.card{border-radius:1.25em;padding:1.25em;background:#fff;max-width:23em;width:100%;margin:auto;box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.06)}
+.card{border-radius:1.25em;padding:1.25em;background:#fff;max-width:23em;width:100%;margin:auto;box-shadow:0 1px 3px #0000000a,0 8px 24px #0000000f}
 .meta{display:flex;justify-content:space-between;align-items:center;font-size:.85em;color:#666;margin-bottom:.75em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid #ddd;border-radius:0;background:transparent;text-align:right;outline:0;transition:border-color .15s;-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .meta input:hover{border-bottom-color:#888}
-.meta input:focus{border-bottom-color:#000}
+.meta input:focus{border-bottom-color:currentcolor}
 .panel{background:#f5f5f5;border-radius:.9em;padding:.85em 1em;margin:.4em 0}
 .panel small{color:#888;font-size:.8em}
 .hdr small{text-transform:uppercase;letter-spacing:.08em;font-size:.7em}
@@ -21,7 +21,7 @@ body{font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em;disp
 .panel select{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;font-size:.9em;font-weight:600;color:#222;letter-spacing:.02em;cursor:pointer}
 .panel select:focus{outline:0}
 svg{vertical-align:middle;flex-shrink:0}
-.flip{display:flex;align-items:center;justify-content:center;margin:-.7em auto;width:2.1em;height:2.1em;border-radius:50%;border:4px solid #fff;background:#fff;cursor:pointer;color:#888;padding:0;box-shadow:0 1px 2px rgba(0,0,0,.06);transition:background .15s,color .15s,transform .25s}
+.flip{display:flex;align-items:center;justify-content:center;margin:-.7em auto;width:2.1em;height:2.1em;border-radius:50%;border:4px solid #fff;background:#fff;cursor:pointer;color:#888;padding:0;box-shadow:0 1px 2px #0000000f;transition:background .15s,color .15s,transform .25s}
 .flip:hover{background:#ebebeb;color:#222;transform:rotate(180deg)}
 .primary{width:100%;padding:.95em;font-size:1em;border-radius:.9em;background:#000;color:#fff;border:0;cursor:pointer;margin-top:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:background .15s}
 .primary:hover:not(:disabled){background:#333}
@@ -32,6 +32,17 @@ svg{vertical-align:middle;flex-shrink:0}
 #bal,#rate{display:block;font-size:.75em;margin-top:.5em;text-align:right}
 #bal:empty,#rate:empty{display:none}
 #bal a{color:#000;cursor:pointer;text-decoration:underline;font-weight:600}
+@media(prefers-color-scheme:dark){
+body{background:#111;color:#eee}
+.card{background:#1b1b1b;box-shadow:none}
+.panel{background:#262626}
+.panel select,.panel input,.meta input{color:#eee}
+.primary{background:#fff;color:#000}
+.primary:hover:not(:disabled){background:#ddd}
+.flip{background:#1b1b1b;border-color:#1b1b1b;color:#999}
+.flip:hover{background:#333;color:#fff}
+#stat a,#bal a{color:#fff}
+}
 </style>
 <div class="card">
 <div class="meta"><span id="addr">Not connected</span><label>Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label></div>
@@ -46,7 +57,6 @@ const ZQUOTER="0x000000DD6b918a1b9CafFA73C1a559aff0Af5333";
 const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-const SEL_BUILDSWAPAUTO="98d7d292";
 const SEL_ALLOWANCE="dd62ed3e";
 const SEL_APPROVE="095ea7b3";
 const SEL_BALANCEOF="70a08231";
@@ -60,14 +70,14 @@ const WSTETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none
 const RETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#ED5A37"/><path d="M16 5.75L9.89 15.85 16 19.45l6.08-3.6z" fill="#FFF"/><path d="M16 20.6l-6.11-3.59L16 25.58l6.08-8.57z" fill="#FFF"/></svg>`;
 const BOLD_ICON=`<svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.1719 4.56641H8.58203V26.1016H15.7617V25.2422C16.8398 25.793 18.0586 26.1055 19.3555 26.1055C23.7148 26.1055 27.25 22.5703 27.25 18.207C27.25 13.8438 23.7148 10.3086 19.3555 10.3086C18.0586 10.3086 16.8398 10.6211 15.7617 11.1719V4.56641H12.1719ZM15.7617 11.1719C13.207 12.4805 11.457 15.1406 11.457 18.207C11.457 21.2734 13.207 23.9336 15.7617 25.2422V11.1719Z" fill="#1C1D4F"/></svg>`;
 const TOKENS=[
-  {sym:"ETH",   addr:ZERO, dec:18, icon:ETH_ICON},
-  {sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
-  {sym:"wstETH",addr:"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",dec:18,icon:WSTETH_ICON},
-  {sym:"rETH",  addr:"0xae78736Cd615f374D3085123A210448E74Fc6393",dec:18,icon:RETH_ICON},
-  {sym:"WBTC",  addr:"0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",dec:8, icon:WBTC_ICON},
-  {sym:"USDC",  addr:"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",dec:6, icon:USDC_ICON},
-  {sym:"USDT",  addr:"0xdAC17F958D2ee523a2206206994597C13D831ec7",dec:6, icon:USDT_ICON},
-  {sym:"BOLD",  addr:"0x6440f144b7e50D6a8439336510312d2F54beB01D",dec:18,icon:BOLD_ICON},
+{sym:"ETH",   addr:ZERO, dec:18, icon:ETH_ICON},
+{sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
+{sym:"wstETH",addr:"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",dec:18,icon:WSTETH_ICON},
+{sym:"rETH",  addr:"0xae78736Cd615f374D3085123A210448E74Fc6393",dec:18,icon:RETH_ICON},
+{sym:"WBTC",  addr:"0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",dec:8, icon:WBTC_ICON},
+{sym:"USDC",  addr:"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",dec:6, icon:USDC_ICON},
+{sym:"USDT",  addr:"0xdAC17F958D2ee523a2206206994597C13D831ec7",dec:6, icon:USDT_ICON},
+{sym:"BOLD",  addr:"0x6440f144b7e50D6a8439336510312d2F54beB01D",dec:18,icon:BOLD_ICON},
 ];
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
 const pad32=h=>strip0x(h).padStart(64,"0");
@@ -76,203 +86,202 @@ const encAddr=a=>pad32(a.toLowerCase());
 const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
-  const t=s.trim().replace(/,/g,"");
-  const neg=t.startsWith("-");
-  const body=neg?t.slice(1):t;
-  if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(body))throw Error("invalid amount");
-  const[ip,fp=""]=body.split(".");
-  if(fp.length>dec)throw Error("too many decimals");
-  const v=BigInt((ip||"0")+fp.padEnd(dec,"0"));
-  return neg?-v:v;
+const t=s.trim().replace(/,/g,"");
+const neg=t.startsWith("-");
+const body=neg?t.slice(1):t;
+if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(body))throw Error("invalid amount");
+const[ip,fp=""]=body.split(".");
+if(fp.length>dec)throw Error("too many decimals");
+const v=BigInt((ip||"0")+fp.padEnd(dec,"0"));
+return neg?-v:v;
 };
 const formatUnits=(v,dec)=>{
-  if(!dec)return BigInt(v).toString();
-  const s=BigInt(v).toString().padStart(dec+1,"0");
-  const ip=s.slice(0,-dec);
-  const fp=s.slice(-dec).replace(/0+$/,"");
-  return fp?`${ip}.${fp}`:ip;
+if(!dec)return BigInt(v).toString();
+const s=BigInt(v).toString().padStart(dec+1,"0");
+const ip=s.slice(0,-dec);
+const fp=s.slice(-dec).replace(/0+$/,"");
+return fp?`${ip}.${fp}`:ip;
 };
 const trimAmt=(v,dec)=>{const s=formatUnits(v,dec),i=s.indexOf(".");if(i<0)return s;const r=s.slice(0,i+7).replace(/\.?0+$/,"");return r==="0"&&v?s:r};
 const fitFont=el=>{
-  const l=el.value.length;
-  el.style.fontSize=l>18?".9em":l>14?"1.1em":l>10?"1.25em":"1.4em";
+const l=el.value.length;
+el.style.fontSize=l>18?".9em":l>14?"1.1em":l>10?"1.25em":"1.4em";
 };
-const decodeBestSwap=hex=>{
-  const h=strip0x(hex);
-  if(h.length<448)throw Error("bad quote");
-  const num=i=>BigInt("0x"+h.slice(i*64,(i+1)*64));
-  const off=Number(num(4))*2;
-  if(off<448||off+64>h.length)throw Error("bad quote");
-  const cdLen=Number(BigInt("0x"+h.slice(off,off+64)));
-  if(cdLen===0||off+64+cdLen*2>h.length)throw Error("bad quote");
-  return{
-    best:{source:Number(num(0)),feeBps:num(1),amountIn:num(2),amountOut:num(3)},
-    callData:"0x"+h.slice(off+64,off+64+cdLen*2),
-    amountLimit:num(5),
-    msgValue:num(6),
-  };
+const decQ=(hex,slip,eo,u,v,S)=>{
+const h=strip0x(hex),num=i=>BigInt("0x"+h.slice(i*64,(i+1)*64)),E=()=>{throw Error("bad quote")};
+if(h.length<(v+2)*64)E();
+const o=Number(num(v))*2;if(o+64>h.length)E();
+const n=Number(BigInt("0x"+h.slice(o,o+64)));if(!n||o+64+n*2>h.length)E();
+const g=num(u+3),t=g>0n,k=S?0:t?u:0,B=10000n,ai=S?num(2)+num(u+2):num(2),ao=S?num(3)+g:t?g:num(3),q=eo?ai:ao;
+return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},callData:"0x"+h.slice(o+64,o+64+n*2),amountLimit:eo?(q*(B+slip)+B-1n)/B:q*(B-slip)/B,msgValue:num(v+1)};
 };
 const rpc=(method,params)=>window.ethereum.request({method,params});
 const waitTx=async hash=>{
-  const end=Date.now()+600000;
-  while(Date.now()<end){
-    const r=await rpc("eth_getTransactionReceipt",[hash]);
-    if(r){
-      if(r.status!=="0x1")throw Error("tx reverted: "+hash);
-      return r;
-    }
-    await new Promise(res=>setTimeout(res,1500));
-  }
-  throw Error("tx not mined in time");
+const end=Date.now()+600000;
+while(Date.now()<end){
+const r=await rpc("eth_getTransactionReceipt",[hash]);
+if(r){
+if(r.status!=="0x1")throw Error("tx reverted: "+hash);
+return r;
+}
+await new Promise(res=>setTimeout(res,1500));
+}
+throw Error("tx not mined in time");
 };
 const checkWallet=async()=>{const[c,a]=await Promise.all([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==1||a[0]?.toLowerCase()!==account.toLowerCase())throw Error("wallet changed")};
 const hexToBytes=h=>{const s=strip0x(h);const o=new Uint8Array(s.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(s.slice(i*2,i*2+2),16);return o};
 const decodeString=hex=>{
-  const h=strip0x(hex);
-  if(h.length<=64)return new TextDecoder().decode(hexToBytes(h)).replace(/\0+$/,"");
-  const off=Number(BigInt("0x"+h.slice(0,64)))*2;
-  const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
-  return new TextDecoder().decode(hexToBytes(h.slice(off+64,off+64+len)));
+const h=strip0x(hex);
+if(h.length<=64)return new TextDecoder().decode(hexToBytes(h)).replace(/\0+$/,"");
+const off=Number(BigInt("0x"+h.slice(0,64)))*2;
+const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
+return new TextDecoder().decode(hexToBytes(h.slice(off+64,off+64+len)));
 };
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(sym[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
 async function addCustomToken(a){
-  a=a.toLowerCase();
-  if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
-  const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
-  if(i>=0)return i;
-  const[symRet,decRet]=await Promise.all([
-    rpc(C,[{to:a,data:"0x95d89b41"},L]),
-    rpc(C,[{to:a,data:"0x313ce567"},L]),
-  ]);
-  const sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-  const dec=Number(BigInt(decRet));
-  if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
-  TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
-  try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
-  return TOKENS.length-1;
+a=a.toLowerCase();
+if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
+const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+if(i>=0)return i;
+const[symRet,decRet]=await Promise.all([
+rpc(C,[{to:a,data:"0x95d89b41"},L]),
+rpc(C,[{to:a,data:"0x313ce567"},L]),
+]);
+const sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
+const dec=Number(BigInt(decRet));
+if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
+TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
+try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
+return TOKENS.length-1;
 }
 try{for(const t of JSON.parse(localStorage.getItem(STORE)||"[]")){
-  const addr=(t?.addr||"").toLowerCase();
-  const dec=+t?.dec;
-  if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
-    const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-    TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
-  }
+const addr=(t?.addr||"").toLowerCase();
+const dec=+t?.dec;
+if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
+const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
+TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
+}
 }}catch{}
 let account=null,last=null,fromBalance=0n,mode="in",bSeq=0;
 async function refreshBalance(){
-  if(!account){bal.textContent="";fromBalance=0n;render();return}
-  const f=TOKENS[fromSel.value];
-  const my=++bSeq;
-  try{
-    const hex=f.addr===ZERO
-      ?await rpc("eth_getBalance",[account,L])
-      :await rpc(C,[{to:f.addr,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]);
-    if(my!==bSeq)return;
-    fromBalance=BigInt(hex);
-    const n=+formatUnits(fromBalance,f.dec);
-    const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
-    bal.innerHTML=`Balance: <a href="#">${pretty}</a>`;
-  }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
-  render();
+if(!account){bal.textContent="";fromBalance=0n;render();return}
+const f=TOKENS[fromSel.value];
+const my=++bSeq;
+try{
+const hex=f.addr===ZERO
+?await rpc("eth_getBalance",[account,L])
+:await rpc(C,[{to:f.addr,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]);
+if(my!==bSeq)return;
+fromBalance=BigInt(hex);
+const n=+formatUnits(fromBalance,f.dec);
+const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
+bal.innerHTML=`Balance: <a href="#">${pretty}</a>`;
+}catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
+render();
 }
 const optsHtml=()=>TOKENS.map((t,i)=>`<option value="${i}">${t.sym}</option>`).join("")+`<option value="__custom">+ Custom token…</option>`;
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
 const syncDisabled=()=>{
-  for(const opt of fromSel.options)opt.disabled=(opt.value===toSel.value&&opt.value!=="__custom");
-  for(const opt of toSel.options)opt.disabled=(opt.value===fromSel.value&&opt.value!=="__custom");
+for(const opt of fromSel.options)opt.disabled=(opt.value===toSel.value&&opt.value!=="__custom");
+for(const opt of toSel.options)opt.disabled=(opt.value===fromSel.value&&opt.value!=="__custom");
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
 syncDisabled();
 const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||""};
 const render=()=>{
-  if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
-  if(!last){swap.textContent="Swap";swap.disabled=true;return}
-  if(last.amountIn>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
-  swap.textContent="Swap";swap.disabled=false;
+if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
+if(!last){swap.textContent="Swap";swap.disabled=true;return}
+if(last.amountIn>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
+swap.textContent="Swap";swap.disabled=false;
 };
 syncIcons(); render();
 const isRejection=e=>e?.code===4001||/user\s+reject|user\s+denied/i.test(e?.message||"");
 async function connect(){
-  if(!window.ethereum){stat.textContent="No wallet detected.";return}
-  let accs;
-  try{accs=await rpc("eth_requestAccounts",[])}
-  catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);return}
-  let chainId=await rpc(I,[]);
-  if(+chainId!==1){
-    try{await rpc("wallet_switchEthereumChain",[{chainId:"0x1"}])}
-    catch(e){stat.textContent=isRejection(e)?"":"Switch to Ethereum mainnet.";return}
-  }
-  if(!accs[0])return;
-  account=accs[0];
-  addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
-  refreshBalance();
-  update();
+if(!window.ethereum){stat.textContent="No wallet detected.";return}
+let accs;
+try{accs=await rpc("eth_requestAccounts",[])}
+catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);return}
+let chainId=await rpc(I,[]);
+if(+chainId!==1){
+try{await rpc("wallet_switchEthereumChain",[{chainId:"0x1"}])}
+catch(e){stat.textContent=isRejection(e)?"":"Switch to Ethereum mainnet.";return}
+}
+if(!accs[0])return;
+account=accs[0];
+addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
+refreshBalance();
+update();
 }
 bal.addEventListener("click",async e=>{
-  if(e.target.tagName!=="A")return;
-  e.preventDefault();
-  const f=TOKENS[fromSel.value];
-  let reserve=0n;
-  if(f.addr===ZERO){
-    try{reserve=BigInt(await rpc("eth_gasPrice",[]))*900000n}catch{}
-  }
-  const max=fromBalance>reserve?fromBalance-reserve:0n;
-  amt.value=formatUnits(max,f.dec);
-  setMode("in");fitFont(amt);
-  update();
+if(e.target.tagName!=="A")return;
+e.preventDefault();
+const f=TOKENS[fromSel.value];
+let reserve=0n;
+if(f.addr===ZERO){
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*900000n}catch{}
+}
+const max=fromBalance>reserve?fromBalance-reserve:0n;
+amt.value=formatUnits(max,f.dec);
+setMode("in");fitFont(amt);
+update();
 });
 let seq=0;
 const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
 async function update(){
-  const my=++seq;
-  last=null; rate.textContent=""; render();
-  syncIcons();
-  const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
-  if(!f||!t)return;
-  if(f.addr===t.addr){stat.textContent="Pick different tokens.";return}
-  stat.textContent="";
-  const isIn=mode==="in";
-  const inEl=isIn?amt:outAmt, outEl=isIn?outAmt:amt, inTok=isIn?f:t;
-  outEl.value=""; fitFont(outEl);
-  if(!inEl.value.trim())return;
-  let swapAmt;
-  try{swapAmt=parseUnits(inEl.value.trim(),inTok.dec)}catch{return}
-  if(swapAmt<=0n)return;
-  if((f.addr===ZERO&&t.addr===WETH)||(f.addr===WETH&&t.addr===ZERO)){
-    outEl.value=inEl.value;fitFont(outEl);
-    rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
-    last={callData:f.addr===ZERO?"0xd0e30db0":"0x2e1a7d4d"+encUint(swapAmt),msgValue:f.addr===ZERO?swapAmt:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+1500000};
-    render();return;
-  }
-  const pct=Math.min(10,Math.max(.01,+slip.value||.5));
-  const slipBps=BigInt(Math.round(pct*100));
-  const deadline=BigInt(Math.floor(Date.now()/1e3)+1800);
-  outEl.value="...";fitFont(outEl);
-  const acct=account;
-  try{
-    const data="0x"+SEL_BUILDSWAPAUTO
-      +encAddr(acct||ZERO)+encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)
-      +encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
-    const ret=await rpc(C,[{to:ZQUOTER,data},L]);
-    if(my!==seq)return;
-    const r=decodeBestSwap(ret);
-    if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
-    const finalIn=r.best.amountIn;
-    const finalOut=r.best.amountOut;
-    if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
-    else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
-    const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
-    const s=r.best.source,raw=SOURCES[s]||"?";
-    const src=(s===3||s===4)&&r.best.feeBps?`${raw} ${Number(r.best.feeBps)/100}%`:raw;
-    rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
-    rate.textContent+=isIn?` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`:` · Max ${trimAmt(r.amountLimit,f.dec)} ${f.sym}`;
-    const inApprove=isIn?swapAmt:r.amountLimit;
-    if(acct)last={callData:r.callData,msgValue:r.msgValue,amountIn:inApprove,from:f,exp:Date.now()+1500000};
-    render();
-  }catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
+const my=++seq;
+last=null; rate.textContent=""; render();
+syncIcons();
+const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
+if(!f||!t)return;
+if(f.addr===t.addr){stat.textContent="Pick different tokens.";return}
+stat.textContent="";
+const isIn=mode==="in";
+const inEl=isIn?amt:outAmt, outEl=isIn?outAmt:amt, inTok=isIn?f:t;
+outEl.value=""; fitFont(outEl);
+if(!inEl.value.trim())return;
+let swapAmt;
+try{swapAmt=parseUnits(inEl.value.trim(),inTok.dec)}catch{return}
+if(swapAmt<=0n)return;
+if((f.addr===ZERO&&t.addr===WETH)||(f.addr===WETH&&t.addr===ZERO)){
+outEl.value=inEl.value;fitFont(outEl);
+rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
+last={callData:f.addr===ZERO?"0xd0e30db0":"0x2e1a7d4d"+encUint(swapAmt),msgValue:f.addr===ZERO?swapAmt:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+1500000};
+render();return;
+}
+const pct=Math.min(10,Math.max(.01,+slip.value||.5));
+const slipBps=BigInt(Math.round(pct*100));
+const deadline=BigInt(Math.floor(Date.now()/1e3)+1800);
+outEl.value="...";fitFont(outEl);
+const acct=account;
+try{
+const a=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
+const Q=(x,d,u,v,S)=>rpc(C,[{to:ZQUOTER,data:"0x"+x+d},L]).then(z=>decQ(z,slipBps,!isIn,u,v,S));
+let r=null;
+try{r=await Q("e453166e",a+a+tl,4,9)}catch{}
+if(!r)try{r=await Q("4c464f59",a+tl,8,13)}catch{}
+if(isIn){
+const w=slipBps*3n,SS=w<150n?150n:w>500n?500n:w;
+const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(SS)+encUint(deadline);
+for(const x of["892af013","85f86a90"]){try{const y=await Q(x,a+ps,4,8,1);if(y.best.amountOut>(r?r.best.amountOut:0n))r=y}catch{}}
+}
+if(my!==seq)return;
+if(!r)throw Error("bad quote");
+if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
+const finalIn=r.best.amountIn;
+const finalOut=r.best.amountOut;
+if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
+else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
+const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
+const s=r.best.source,raw=SOURCES[s]||"?";
+const src=(s===3||s===4)&&r.best.feeBps?`${raw} ${Number(r.best.feeBps)/100}%`:raw;
+rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
+rate.textContent+=isIn?` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`:` · Max ${trimAmt(r.amountLimit,f.dec)} ${f.sym}`;
+const inApprove=isIn?swapAmt:r.msgValue||r.amountLimit;
+if(acct)last={callData:r.callData,msgValue:r.msgValue,amountIn:inApprove,from:f,exp:Date.now()+1500000};
+render();
+}catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
 }
 let debounceT;
 const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(update,250)};
@@ -282,93 +291,93 @@ outAmt.addEventListener("input",()=>{setMode("out");fitFont(outAmt);updateSoon()
 slip.addEventListener("input",()=>{last=null;render();updateSoon()});
 slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5))});
 for(const sel of [fromSel,toSel]){
-  sel.dataset.prev=sel.value;
-  sel.addEventListener("change",async()=>{
-    if(sel.value!=="__custom"){
-      sel.dataset.prev=sel.value;
-      syncDisabled();
-      if(sel===fromSel)refreshBalance();
-      update();
-      return;
-    }
-    last=null;render();
-    const prev=sel.dataset.prev;
-    const a=(prompt("Paste token address:")||"").trim();
-    if(!a){sel.value=prev;update();return}
-    stat.textContent="Loading token...";
-    try{
-      const idx=await addCustomToken(a);
-      rebuild();
-      const otherSel=sel===fromSel?toSel:fromSel;
-      if(String(idx)===otherSel.value){otherSel.value=prev;otherSel.dataset.prev=prev}
-      sel.value=String(idx);
-      sel.dataset.prev=sel.value;
-      stat.textContent="";
-      syncDisabled();
-      refreshBalance();
-      update();
-    }catch(e){
-      stat.textContent="Couldn't load token: "+(e.message||e);
-      sel.value=prev;
-    }
-  });
+sel.dataset.prev=sel.value;
+sel.addEventListener("change",async()=>{
+if(sel.value!=="__custom"){
+sel.dataset.prev=sel.value;
+syncDisabled();
+if(sel===fromSel)refreshBalance();
+update();
+return;
+}
+last=null;render();
+const prev=sel.dataset.prev;
+const a=(prompt("Paste token address:")||"").trim();
+if(!a){sel.value=prev;update();return}
+stat.textContent="Loading token...";
+try{
+const idx=await addCustomToken(a);
+rebuild();
+const otherSel=sel===fromSel?toSel:fromSel;
+if(String(idx)===otherSel.value){otherSel.value=prev;otherSel.dataset.prev=prev}
+sel.value=String(idx);
+sel.dataset.prev=sel.value;
+stat.textContent="";
+syncDisabled();
+refreshBalance();
+update();
+}catch(e){
+stat.textContent="Couldn't load token: "+(e.message||e);
+sel.value=prev;
+}
+});
 }
 flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();refreshBalance();update()};
 window.ethereum?.on?.("chainChanged",()=>location.reload());
 window.ethereum?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
-  if(!window.ethereum)return;
-  try{
-    const accs=await rpc("eth_accounts",[]);
-    const cid=await rpc(I,[]);
-    if(accs[0]&&+cid===1){
-      account=accs[0];
-      addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
-      refreshBalance();update();
-    }
-  }catch{}
+if(!window.ethereum)return;
+try{
+const accs=await rpc("eth_accounts",[]);
+const cid=await rpc(I,[]);
+if(accs[0]&&+cid===1){
+account=accs[0];
+addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
+refreshBalance();update();
+}
+}catch{}
 })();
 swap.onclick=async()=>{
-  if(!account) return connect();
-  if(!last)return;
-  if(Date.now()>last.exp){stat.textContent="Quote expired — refreshing...";updateSoon();return}
-  swap.disabled=true;
-  try{
-    const {callData,msgValue,amountIn,from,to}=last;
-    if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
-    await checkWallet();
-    if(from.addr!==ZERO&&!to){
-      const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
-      const aHex=await rpc(C,[{to:from.addr,data:allowData},L]);
-      const a=BigInt(aHex);
-      if(a<amountIn){
-        const n=a>0n?2:1;
-        if(a>0n){
-          stat.textContent=`Approving (1/${n})...`;
-          const zeroData="0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(0);
-          const h1=await rpc(S,[{from:account,to:from.addr,data:zeroData}]);
-          await waitTx(h1);
-        }
-        stat.textContent=n>1?`Approving (2/2)...`:"Approving...";
-        const apprData="0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn);
-        const h2=await rpc(S,[{from:account,to:from.addr,data:apprData}]);
-        await waitTx(h2);
-        const nHex=await rpc(C,[{to:from.addr,data:allowData},L]);
-        if(BigInt(nHex)<amountIn)throw Error("approval failed");
-      }
-    }
-    stat.textContent="Swapping...";
-    const txReq={from:account,to:to||ZROUTER,data:callData,value:toHex(msgValue)};
-    await rpc(C,[txReq,L]);
-    await checkWallet();
-    const tx=await rpc(S,[txReq]);
-    if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
-    stat.innerHTML=txLink(tx,"Sent");
-    await waitTx(tx);
-    stat.innerHTML=txLink(tx,"Done");
-    last=null;
-    refreshBalance();
-    render();
-  }catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);render()}
+if(!account) return connect();
+if(!last)return;
+if(Date.now()>last.exp){stat.textContent="Quote expired — refreshing...";updateSoon();return}
+swap.disabled=true;
+try{
+const {callData,msgValue,amountIn,from,to}=last;
+if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
+await checkWallet();
+if(from.addr!==ZERO&&!to){
+const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
+const aHex=await rpc(C,[{to:from.addr,data:allowData},L]);
+const a=BigInt(aHex);
+if(a<amountIn){
+const n=a>0n?2:1;
+if(a>0n){
+stat.textContent=`Approving (1/${n})...`;
+const zeroData="0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(0);
+const h1=await rpc(S,[{from:account,to:from.addr,data:zeroData}]);
+await waitTx(h1);
+}
+stat.textContent=n>1?`Approving (2/2)...`:"Approving...";
+const apprData="0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn);
+const h2=await rpc(S,[{from:account,to:from.addr,data:apprData}]);
+await waitTx(h2);
+const nHex=await rpc(C,[{to:from.addr,data:allowData},L]);
+if(BigInt(nHex)<amountIn)throw Error("approval failed");
+}
+}
+stat.textContent="Swapping...";
+const txReq={from:account,to:to||ZROUTER,data:callData,value:toHex(msgValue)};
+await rpc(C,[txReq,L]);
+await checkWallet();
+const tx=await rpc(S,[txReq]);
+if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
+stat.innerHTML=txLink(tx,"Sent");
+await waitTx(tx);
+stat.innerHTML=txLink(tx,"Done");
+last=null;
+refreshBalance();
+render();
+}catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);render()}
 };
 </script>

@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x5081d078fb16d8c81ffc3af0c95c857c7f08263dbc73845ce8a355f6db9417aa;
-    uint256 constant EXPECTED_LEN = 24549;
+    bytes32 constant EXPECTED_HASH = 0x3079211498c4cc2d261f08f1e00b024310ff5cf494be73da1522b6a1655580fb;
+    uint256 constant EXPECTED_LEN = 24547;
 
     function test_HtmlPayloadRoundTrip() public {
         zSwap z = new zSwap();
@@ -26,7 +26,7 @@ contract zSwapDeployTest is Test {
     function test_NameAndVersion() public {
         zSwap z = new zSwap();
         assertEq(z.NAME(), "zSwap");
-        assertEq(z.VERSION(), "0.1");
+        assertEq(z.VERSION(), "0.2");
     }
 
     function test_ResolveMode_Is5219() public {
