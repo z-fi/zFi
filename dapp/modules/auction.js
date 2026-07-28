@@ -1,11 +1,8 @@
 // ==================== NFT DUTCH AUCTION ====================
 // Third tab of the coin launch page. Lists a single ERC721 NFT as a
 // Dutch auction (linear price decay in ETH) via the deployed DutchAuction.
-// Pattern mirrors coin.js: IPFS-pinned override metadata (optional), and a
-// Supabase row in `launched_tokens` with launch_type='nft-auction' so the
-// gallery can render custom logo/description. If the seller doesn't
-// customize anything, no Supabase row is written and the gallery falls back
-// to the NFT's native tokenURI.
+// There is no off-chain index, so buyers always see the NFT's native tokenURI —
+// the gallery and detail page both read it straight from the token contract.
 
 const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
 
@@ -116,6 +113,23 @@ function _auctionIpfsToHttp(uri) {
   return uri;
 }
 
+// Every configured gateway for an ipfs:// URI, best-first. Non-IPFS URIs have no
+// alternates, so the caller gets a single candidate.
+function _auctionIpfsCandidates(uri) {
+  if (!uri) return [];
+  if (uri.startsWith('ipfs://')) return IPFS_GATEWAYS.map(g => g + uri.slice(7));
+  return [_auctionIpfsToHttp(uri)];
+}
+
+// <img> onerror hook — walk to the next gateway, false when all are exhausted.
+function _auctionImgNextGateway(img) {
+  const src = img.getAttribute('src') || '';
+  const i = IPFS_GATEWAYS.findIndex(g => src.startsWith(g));
+  if (i === -1 || i + 1 >= IPFS_GATEWAYS.length) return false;
+  img.src = IPFS_GATEWAYS[i + 1] + src.slice(IPFS_GATEWAYS[i].length);
+  return true;
+}
+
 // Parse a tokenURI value (http, ipfs, or data:) into a metadata object.
 // Fast path fetches directly (works for IPFS gateway + CORS-friendly servers);
 // falls back to the worker proxy for CORS-blocked servers like Milady's nginx.
@@ -129,11 +143,15 @@ async function _auctionFetchMetadata(tokenURI) {
     const decoded = isB64 ? atob(body) : decodeURIComponent(body);
     try { return JSON.parse(decoded); } catch { return {}; }
   }
+  // Try each gateway before the proxy — one dead host shouldn't cost the seller
+  // the NFT preview and the name/description autofill.
+  for (const candidate of _auctionIpfsCandidates(tokenURI)) {
+    try {
+      const r = await fetch(candidate);
+      if (r.ok) return await r.json();
+    } catch {} // likely CORS or network — try the next gateway, then the proxy
+  }
   const url = _auctionIpfsToHttp(tokenURI);
-  try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
-  } catch {} // likely CORS or network — fall through to proxy
   try {
     const r = await fetch(`${COIN_PIN_URL}/proxy-metadata?url=${encodeURIComponent(url)}`);
     if (r.ok) return await r.json();
@@ -153,7 +171,10 @@ async function auctionOnNftChange() {
   setDisabled('coinLaunchBtn', true);
   // Any prior error ("not the owner", "could not read token", etc.) should
   // clear the moment the user edits the inputs — otherwise it looks stuck.
+  _coinLaunched = false;
   coinShowStatus('');
+  const _btn = $('coinLaunchBtn');
+  if (_btn) _btn.textContent = coinLaunchBtnLabel();
 
   if (!contract || !idRaw) {
     preview.style.display = 'none';
@@ -213,7 +234,7 @@ async function auctionOnNftChange() {
       : '—';
     preview.innerHTML = `
       <div style="display:flex;gap:12px;align-items:center">
-        ${image ? `<img src="${escAttr(image)}" style="width:56px;height:56px;object-fit:cover;border:1px solid var(--border-muted)" onerror="this.style.display='none'">` : `<div style="width:56px;height:56px;border:1px solid var(--border-muted);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--fg-muted)">no image</div>`}
+        ${image ? `<img src="${escAttr(image)}" style="width:56px;height:56px;object-fit:cover;border:1px solid var(--border-muted)" onerror="if(!_auctionImgNextGateway(this))this.style.display='none'">` : `<div style="width:56px;height:56px;border:1px solid var(--border-muted);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--fg-muted)">no image</div>`}
         <div style="min-width:0;flex:1">
           <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escText(_auctionNftMeta.name)}</div>
           <div style="font-size:11px;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escText(resolved.collName || '')}${resolved.collSym ? ' · ' + escText(resolved.collSym) : ''}</div>
@@ -221,17 +242,6 @@ async function auctionOnNftChange() {
         </div>
       </div>
     `;
-
-    // Auto-fill name/description for seller convenience — they can still override.
-    // The form fields cap at 50/280 chars; to detect a genuine override later we have
-    // to compare against the *same* truncated strings we auto-filled with. Also trim
-    // on both sides so metadata with trailing whitespace doesn't masquerade as edits.
-    _auctionNftMeta.nameAutofill = _auctionNftMeta.name.slice(0, 50).trim();
-    _auctionNftMeta.descAutofill = (_auctionNftMeta.description || '').slice(0, 280).trim();
-    const nameEl = $('coinName');
-    if (!nameEl.value.trim()) nameEl.value = _auctionNftMeta.nameAutofill;
-    const descEl = $('coinDescription');
-    if (!descEl.value.trim() && _auctionNftMeta.descAutofill) descEl.value = _auctionNftMeta.descAutofill;
 
     // Require that the connected wallet actually owns this token before enabling list.
     // resolved.owner == null means ownerOf reverted — usually a non-ERC-721 contract
@@ -351,17 +361,14 @@ function auctionUpdatePreview() {
 }
 
 // Two-step launch: approve the NFT for DutchAuction, then listNFT.
-// Optionally pins override metadata (custom logo/banner/description) to IPFS
-// and records the ipfs:// URI in `launched_tokens` for the gallery.
 async function auctionLaunch() {
   if (!_signer) { connectWallet(); return; }
   if (!_auctionNftMeta) { coinShowStatus('Enter NFT contract and token id first', true); return; }
 
   const contract = _auctionNftMeta.contract;
   const tokenId = _auctionNftMeta.tokenId;
-  const startPriceStr = ($('nftStartPrice').value || '').trim();
-  let startPrice;
-  try { startPrice = ethers.parseEther(startPriceStr || '0'); } catch { coinShowStatus('Invalid start price', true); return; }
+  const startPrice = coinParseEth($('nftStartPrice').value);
+  if (startPrice === null) { coinShowStatus('Invalid start price', true); return; }
   if (startPrice === 0n) { coinShowStatus('Start price must be greater than 0', true); return; }
   const endPrice = startPrice * BigInt(_auctionFloorPct) / 100n;
   // A 0% floor means the NFT can decay all the way to 0 Ξ — anyone paying gas
@@ -378,6 +385,7 @@ async function auctionLaunch() {
   }
   const duration = BigInt(_auctionDurationDays * 86400);
 
+  let launched = false;
   _coinLaunching = true;
   setDisabled('coinLaunchBtn', true);
   const _pg = $('coinLaunchProgress');
@@ -404,54 +412,7 @@ async function auctionLaunch() {
       await atx.wait();
     }
 
-    // --- Step 2: pin override metadata (only if seller customized) ---
-    const nameInput = ($('coinName').value || '').trim();
-    const descInput = ($('coinDescription').value || '').trim();
-    const hasCustomLogo = !!_coinImageFile;
-    const hasCustomBanner = !!_coinBannerFile;
-    // Compare against what we auto-filled into the form (truncated), not the full
-    // native metadata string — otherwise long names/descriptions look like overrides.
-    const nameAutofill = _auctionNftMeta.nameAutofill || '';
-    const descAutofill = _auctionNftMeta.descAutofill || '';
-    const hasNameOverride = !!(nameInput && nameInput !== nameAutofill);
-    const hasDescOverride = !!(descInput && descInput !== descAutofill);
-    const hasOverride = hasCustomLogo || hasCustomBanner || hasNameOverride || hasDescOverride;
-
-    let metadataURI = null;
-    let pinnedImageCID = null;
-    let pinnedBannerCID = null;
-    if (hasOverride) {
-      const md = {
-        name: (nameInput || _auctionNftMeta.name).slice(0, 120),
-        description: (descInput || _auctionNftMeta.description || '').slice(0, 1000),
-        launchType: 'nft-auction',
-        creatorWallet: seller,
-        nftContract: contract,
-        nftTokenId: tokenId.toString(),
-        nftCollection: _auctionNftMeta.collectionName || undefined,
-        nftSymbol: _auctionNftMeta.collectionSymbol || undefined
-      };
-      if (hasCustomLogo) {
-        coinShowStatus('Uploading custom logo to IPFS...');
-        _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
-        pinnedImageCID = _coinImageCID;
-        md.image = 'ipfs://' + _coinImageCID;
-      } else if (_auctionNftMeta.imageRaw) {
-        // Preserve the original URI (ipfs:// or http) so any IPFS gateway can resolve
-        // even if our default one goes down.
-        md.image = _auctionNftMeta.imageRaw;
-      }
-      if (hasCustomBanner) {
-        coinShowStatus('Uploading banner to IPFS...');
-        _coinBannerCID = await coinPinFile(_coinBannerFile, _coinBannerCID);
-        pinnedBannerCID = _coinBannerCID;
-        md.banner = 'ipfs://' + _coinBannerCID;
-      }
-      coinShowStatus('Pinning metadata...');
-      metadataURI = await coinPinMetadata(md);
-    }
-
-    // --- Step 3: listNFT ---
+    // --- Step 2: listNFT ---
     coinShowStatus('Listing on auction (2/2)...');
     const auction = new ethers.Contract(DUTCH_AUCTION, DUTCH_AUCTION_ABI, _signer);
     const tx = await auction.listNFT(contract, [tokenId], startPrice, endPrice, 0, duration);
@@ -467,34 +428,15 @@ async function auctionLaunch() {
       } catch {}
     }
 
-    // --- Step 4: log to Supabase, only if we actually have override metadata ---
-    if (auctionId && hasOverride) {
-      const imageField = pinnedImageCID
-        ? ('ipfs://' + pinnedImageCID)
-        : (_auctionNftMeta.imageRaw || null);
-      coinDbInsert('launched_tokens', {
-        id: auctionId,
-        creator: seller.toLowerCase(),
-        token_address: contract.toLowerCase(),
-        name: (nameInput || _auctionNftMeta.name).slice(0, 50),
-        symbol: (_auctionNftMeta.collectionSymbol || 'NFT').slice(0, 10),
-        image: imageField,
-        description: descInput ? descInput.slice(0, 280) : null,
-        launch_type: 'nft-auction',
-        metadata_uri: metadataURI,
-        tx_hash: tx.hash,
-        created_at: new Date().toISOString()
-      });
-    }
-
     // Success summary — parity with curve/cause launches: headline, terms,
     // verification tx link, and a direct link to the auction detail page.
-    const displayName = (nameInput || _auctionNftMeta.name || 'NFT').slice(0, 80);
+    const displayName = (_auctionNftMeta.name || 'NFT').slice(0, 80);
     const startEth = ethers.formatEther(startPrice);
     const endEth = ethers.formatEther(endPrice);
     const durTxt = _auctionDurationDays === 1 ? '1 day' : `${_auctionDurationDays} days`;
     const idTxt = auctionId ? ` &middot; Auction #${auctionId}` : '';
     const href = auctionId ? `./auction/?id=${auctionId}` : './auction/';
+    launched = true;
     coinShowStatus(
       `<strong>Launched!</strong> <strong>${escText(displayName)}</strong>${idTxt}<br><br>` +
       `Start: ${startEth} Ξ &rarr; Floor: ${endEth} Ξ over ${durTxt}<br>` +
@@ -504,10 +446,21 @@ async function auctionLaunch() {
       (auctionId ? ` &middot; <a href="${href}">View auction &rarr;</a>` : '')
     );
   } catch (e) {
-    coinShowStatus(e.shortMessage || e.message || 'Launch failed', true);
+    const rejected = (e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED';
+    coinShowStatus(rejected ? 'Listing cancelled' : escText(e.shortMessage || e.reason || e.message || 'Launch failed'), !rejected);
   } finally {
     _coinLaunching = false;
-    setDisabled('coinLaunchBtn', false);
+    // After a successful listing the seller no longer owns the token, so keep
+    // the CTA locked rather than letting a second click revert on-chain.
+    _coinLaunched = launched;
+    if (launched) {
+      _auctionNftMeta = null;
+      setDisabled('coinLaunchBtn', true);
+      const btn = $('coinLaunchBtn');
+      if (btn) btn.textContent = coinLaunchBtnLabel();
+    } else {
+      setDisabled('coinLaunchBtn', false);
+    }
     $('coinLaunchProgress').classList.remove('active');
   }
 }

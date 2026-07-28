@@ -13,7 +13,16 @@
   text-decoration:underline; text-underline-offset:3px;
 }
 .wallet button:hover { background:none; opacity:1; }
-.wallet button.connected { opacity:0.7; font-weight:600; text-transform:none; text-decoration:none; }
+/* Connected: a live dot gives the bare address some status affordance —
+   without it the account reads as static page text, not a control. */
+.wallet button.connected {
+  opacity:0.7; font-weight:600; text-transform:none; text-decoration:none;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.wallet button.connected::before {
+  content:''; width:5px; height:5px; border-radius:50%;
+  background:#22c55e; flex-shrink:0;
+}
 
 /* Wallet modal */
 .wallet-modal-overlay {

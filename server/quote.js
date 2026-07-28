@@ -1,7 +1,7 @@
 // Cloudflare Worker: zFi On-Chain DEX Aggregator API
 // Deploy: cd worker/api && wrangler deploy
 
-const ZQUOTER = '0x9909861aa515afbce9d36c532eae7e0ebf804034';
+const ZQUOTER = '0x000000DD6b918a1b9CafFA73C1a559aff0Af5333';
 const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -34,12 +34,23 @@ const APPROVAL_TARGETS = {
   'OpenOcean': '0x6352a56caadC4F1E25CD6c75970Fa768A3304e64',     // Exchange V2
 };
 
+// Ordered by measured eth_call gas capacity, NOT latency. The heavy zQuoter
+// builders need >100M gas in a single eth_call (6 hubs x the full venue grid);
+// low-cap nodes reject them with "out of gas". Measured 2026-07-29 on
+// buildBestSwapViaETHMulticall(ETH->USDC, 1e18):
+//   publicnode  OK      1rpc  out of gas      drpc  out of gas
+// eth.llamarpc.com is omitted: it was returning HTTP 521.
+// Set QUOTE_RPCS (comma-separated) to prepend your own high-cap endpoints —
+// an Alchemy/Infura key removes the single-provider dependency entirely.
 const RPCS = [
   'https://ethereum.publicnode.com',
   'https://1rpc.io/eth',
   'https://eth.drpc.org',
-  'https://eth.llamarpc.com',
 ];
+
+// Heavy builders are >100M-gas eth_calls; give them a much longer budget than
+// the default RPC timeout. Tune with HEAVY_TIMEOUT_MS.
+const HEAVY_TIMEOUT_MS = Number(process.env.HEAVY_TIMEOUT_MS) || 20000;
 
 const AMM_NAMES = {
   0: 'Uniswap V2', 1: 'SushiSwap', 2: 'zAMM',
@@ -96,8 +107,11 @@ function decDynBytes(hex, baseOff, ptrOff) {
 // --- Function selectors ---
 // aggregate3(tuple(address,bool,bytes)[])
 const SEL_AGGREGATE3 = '82ad56cb';
-// buildBestSwapViaETHMulticall(address,address,bool,address,address,uint256,uint256,uint256,uint24,int24,address)
-const SEL_BUILD_BEST = '19ce4350';
+// buildBestSwapViaETHMulticall(address,address,bool,address,address,uint256,uint256,uint256)
+// NOTE: was '19ce4350', the selector of an older 11-arg variant (…,uint24,int24,address)
+// that no deployed zQuoter exposes — every call reverted, silently costing us the
+// single-hop/2-hop-hub route on every quote.
+const SEL_BUILD_BEST = 'e453166e';
 // buildSplitSwap(address,address,address,uint256,uint256,uint256)
 const SEL_SPLIT = '892af013';
 // buildHybridSplit(address,address,address,uint256,uint256,uint256)
@@ -106,8 +120,9 @@ const SEL_HYBRID = '85f86a90';
 const SEL_GET_QUOTES = 'e1fd10bc';
 // quoteCurve(bool,address,address,uint256,uint256)
 const SEL_QUOTE_CURVE = 'fdfd58fb';
-// build3HopMulticall(address,address,address,uint256,uint256,uint256)
-const SEL_3HOP = 'bd7f84ff';
+// build3HopMulticall(address,bool,address,address,uint256,uint256,uint256)
+// NOTE: was 'bd7f84ff', a 6-arg variant missing the exactOut flag — same problem.
+const SEL_3HOP = '4c464f59';
 
 // --- Encode zQuoter call data ---
 
@@ -122,7 +137,7 @@ function encQuoteCurve(exactOut, tokenIn, tokenOut, amount, maxCandidates) {
 function encBuildBest(to, refundTo, exactOut, tokenIn, tokenOut, amount, slippage, deadline) {
   return SEL_BUILD_BEST + encAddr(to) + encAddr(refundTo) + encBool(exactOut) +
     encAddr(tokenIn) + encAddr(tokenOut) + encUint(amount) + encUint(slippage) +
-    encUint(deadline) + encUint(0) + encInt24(0) + encAddr(ZERO);
+    encUint(deadline);
 }
 
 function encSplitSwap(to, tokenIn, tokenOut, amount, slippage, deadline) {
@@ -135,8 +150,8 @@ function encHybridSplit(to, tokenIn, tokenOut, amount, slippage, deadline) {
     encUint(amount) + encUint(slippage) + encUint(deadline);
 }
 
-function enc3Hop(to, tokenIn, tokenOut, amount, slippage, deadline) {
-  return SEL_3HOP + encAddr(to) + encAddr(tokenIn) + encAddr(tokenOut) +
+function enc3Hop(to, exactOut, tokenIn, tokenOut, amount, slippage, deadline) {
+  return SEL_3HOP + encAddr(to) + encBool(exactOut) + encAddr(tokenIn) + encAddr(tokenOut) +
     encUint(amount) + encUint(slippage) + encUint(deadline);
 }
 
@@ -267,21 +282,28 @@ function decQuoteCurve(hex) {
 
 // --- RPC call with fallback ---
 
-async function rpcCall(to, data) {
+function rpcList(env) {
+  const extra = (env?.QUOTE_RPCS || '').split(',').map(s => s.trim()).filter(Boolean);
+  return extra.length ? extra.concat(RPCS) : RPCS;
+}
+
+async function rpcCall(to, data, env, timeoutMs) {
   const body = JSON.stringify({
     jsonrpc: '2.0', id: 1, method: 'eth_call',
     params: [{ to, data }, 'latest'],
   });
   let lastErr;
-  for (const url of RPCS) {
+  for (const url of rpcList(env)) {
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
-        // 5s (was 3s on CF Workers): tolerate cold DNS/TLS on the first request
-        // after a restart, where 3s wasn't enough to complete the handshake.
-        signal: AbortSignal.timeout(5000),
+        // 5s default tolerates cold DNS/TLS after a restart. The heavy zQuoter
+        // builders need far longer: they are >100M-gas eth_calls and several run
+        // concurrently against the same node, so 5s aborted them intermittently
+        // ("fetch failed") and the quote silently lost every on-chain route.
+        signal: AbortSignal.timeout(timeoutMs || 5000),
       });
       const json = await res.json();
       if (json.error) { lastErr = json.error.message || JSON.stringify(json.error); continue; }
@@ -781,14 +803,27 @@ async function getQuote(params, env) {
     { target: ZQUOTER, data: '0x' + encBuildBest(receiver, refundTo, !!exactOut, tokenIn, tokenOut, amount, slippageBps, deadline) },
     { target: ZQUOTER, data: '0x' + encSplitSwap(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
     { target: ZQUOTER, data: '0x' + encHybridSplit(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
-    { target: ZQUOTER, data: '0x' + enc3Hop(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
+    { target: ZQUOTER, data: '0x' + enc3Hop(receiver, !!exactOut, tokenIn, tokenOut, amount, splitSlip, deadline) },
   ];
+
+  // Each heavy builder goes out as its OWN eth_call rather than one aggregate3
+  // batch. Batching all four multiplies the gas of an already ~100M-gas call and
+  // is all-or-nothing: a single cap rejection loses every on-chain route and the
+  // quote silently degrades to aggregators only. Split, they run concurrently
+  // (same wall-clock) and any that fit still contribute.
+  const heavyOne = (call) =>
+    rpcCall(call.target, call.data, env, HEAVY_TIMEOUT_MS)
+      // Strip 0x: decAggregate3 hands inner returnData to the decoders WITHOUT a
+      // prefix, so a direct eth_call result must be normalised the same way or
+      // every decode throws (into a silent catch) and the route vanishes.
+      .then((r) => ({ success: true, returnData: r.startsWith('0x') ? r.slice(2) : r }))
+      .catch(() => ({ success: false, returnData: '' }));
 
   // Batch zQuoter multicalls + all external APIs in parallel
   const skip = exactOut ? Promise.resolve(null) : undefined;
-  const [lightRaw, heavyRaw, ...extQuotes] = await Promise.all([
-    rpcCall(MC3, encAggregate3(lightCalls)),
-    rpcCall(MC3, encAggregate3(heavyCalls)),
+  const [lightRaw, ...rest] = await Promise.all([
+    rpcCall(MC3, encAggregate3(lightCalls), env).catch(() => null),
+    ...heavyCalls.map(heavyOne),
     skip || fetchBebopQuote(tokenIn, tokenOut, amount, to),
     skip || fetchEnsoQuote(tokenIn, tokenOut, amount, to, env),
     skip || fetchOxQuote(tokenIn, tokenOut, amount, to, env),
@@ -802,8 +837,13 @@ async function getQuote(params, env) {
   ]);
   const extNames = ['Bebop', 'Enso', '0x', '1inch', 'OKX', 'KyberSwap', 'Odos', 'Paraswap', 'Bitget', 'OpenOcean'];
 
-  const lightMc3 = decAggregate3(lightRaw);
-  const heavyMc3 = decAggregate3(heavyRaw);
+  // rest = [4 heavy results, ...external aggregator quotes]
+  const heavyMc3 = rest.slice(0, heavyCalls.length);
+  const extQuotes = rest.slice(heavyCalls.length);
+
+  // Light grid is best-effort too: losing it costs the per-venue comparison
+  // list, not the route, so it must never fail the whole quote.
+  const lightMc3 = lightRaw ? decAggregate3(lightRaw) : [];
 
   // Decode heavy: buildBest (idx 0), split (1), hybrid (2), 3hop (3)
   let bestOutput = 0n, bestMulticall = null, bestMsgValue = 0n;

@@ -10,6 +10,7 @@
 (function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
 </script>
 <script src="../theme.js"></script>
+<script src="../modules/pool-events.js"></script>
 <style>
 :root { --green:#22c55e;--red:#ef4444; }
 .dark { --green:#22c55e;--red:#ef4444; }
@@ -237,61 +238,42 @@ function render() {
   container.replaceChildren();
   renderActivitySection(null);
 
-  // Check for activity before showing chart
-  fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=1')
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      if (poolId !== _currentPoolId) return; // stale
-      if (!json.data || !json.data.length) {
-        var msg = document.createElement('div');
-        msg.className = 'chart-error';
-        msg.textContent = 'No trading activity for this pool';
-        container.replaceChildren(msg);
-        return;
-      }
-      var toggle = document.createElement('div');
-      toggle.className = 'chart-type-toggle';
-      var btnLine = document.createElement('button');
-      btnLine.textContent = 'Line'; btnLine.dataset.type = 'line'; btnLine.className = 'active';
-      btnLine.onclick = function(){ setChartType('line'); };
-      var btnCandle = document.createElement('button');
-      btnCandle.textContent = 'Candle'; btnCandle.dataset.type = 'candle';
-      btnCandle.onclick = function(){ setChartType('candle'); };
-      toggle.appendChild(btnLine); toggle.appendChild(btnCandle);
+  // The chart itself is an embed and handles empty pools on its own; there is no
+  // indexer left to pre-check activity with, so it always renders.
+  var toggle = document.createElement('div');
+  toggle.className = 'chart-type-toggle';
+  var btnLine = document.createElement('button');
+  btnLine.textContent = 'Line'; btnLine.dataset.type = 'line'; btnLine.className = 'active';
+  btnLine.onclick = function(){ setChartType('line'); };
+  var btnCandle = document.createElement('button');
+  btnCandle.textContent = 'Candle'; btnCandle.dataset.type = 'candle';
+  btnCandle.onclick = function(){ setChartType('candle'); };
+  toggle.appendChild(btnLine); toggle.appendChild(btnCandle);
 
-      var tfToggle = document.createElement('div');
-      tfToggle.className = 'chart-tf-toggle' + (_chartType === 'candle' ? ' show' : '');
-      tfToggle.id = 'chartTfToggle';
-      ['1m','1h','1d'].forEach(function(tf){
-        var btn = document.createElement('button');
-        btn.textContent = tf; btn.dataset.tf = tf;
-        if (tf === _chartTf) btn.className = 'active';
-        btn.onclick = function(){ setChartTf(tf); };
-        tfToggle.appendChild(btn);
-      });
+  var tfToggle = document.createElement('div');
+  tfToggle.className = 'chart-tf-toggle' + (_chartType === 'candle' ? ' show' : '');
+  tfToggle.id = 'chartTfToggle';
+  ['1m','1h','1d'].forEach(function(tf){
+    var btn = document.createElement('button');
+    btn.textContent = tf; btn.dataset.tf = tf;
+    if (tf === _chartTf) btn.className = 'active';
+    btn.onclick = function(){ setChartTf(tf); };
+    tfToggle.appendChild(btn);
+  });
 
-      var wrap = document.createElement('div');
-      wrap.className = 'chart-wrap';
-      var iframe = document.createElement('iframe');
-      iframe.src = chartEmbedUrl(poolId, _chartType);
-      iframe.allow = 'clipboard-write';
-      iframe.sandbox = 'allow-scripts allow-same-origin';
-      wrap.appendChild(iframe);
+  var wrap = document.createElement('div');
+  wrap.className = 'chart-wrap';
+  var iframe = document.createElement('iframe');
+  iframe.src = chartEmbedUrl(poolId, _chartType);
+  iframe.allow = 'clipboard-write';
+  iframe.sandbox = 'allow-scripts allow-same-origin';
+  wrap.appendChild(iframe);
 
-      container.replaceChildren(toggle, tfToggle, wrap);
-      renderActivitySection(poolId);
-    })
-    .catch(function(){
-      if (poolId !== _currentPoolId) return;
-      var msg = document.createElement('div');
-      msg.className = 'chart-error';
-      msg.textContent = 'Failed to check pool activity';
-      container.replaceChildren(msg);
-    });
+  container.replaceChildren(toggle, tfToggle, wrap);
+  renderActivitySection(poolId);
 }
 
 // ==================== POOL ACTIVITY ====================
-var INDEXER = 'https://coinchan-indexer-production.up.railway.app';
 var _activityCursor = null;
 var _activityInterval = null;
 
@@ -351,11 +333,11 @@ function renderActivityTable(events, append) {
 }
 
 function loadActivity(poolId) {
-  fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30')
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      _activityCursor = json.nextCursor || null;
-      renderActivityTable(json.data || [], false);
+  poolEvents.load(poolId, { limit: 30 })
+    .then(function(res){
+      if (poolId !== _currentPoolId) return; // stale
+      _activityCursor = res.nextCursor || null;
+      renderActivityTable(res.events, false);
     })
     .catch(function(){
       var content = document.getElementById('activityContent');
@@ -364,11 +346,12 @@ function loadActivity(poolId) {
 }
 
 function refreshActivity(poolId) {
-  fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30')
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      _activityCursor = json.nextCursor || null;
-      renderActivityTable(json.data || [], false);
+  // Cheap re-scan: only the most recent window, so the 60s poll stays light.
+  poolEvents.load(poolId, { limit: 30, maxChunks: 1 })
+    .then(function(res){
+      if (poolId !== _currentPoolId) return;
+      if (res.nextCursor && !_activityCursor) _activityCursor = res.nextCursor;
+      renderActivityTable(res.events, false);
     })
     .catch(function(){});
 }
@@ -379,11 +362,10 @@ function loadMoreActivity() {
   if (!poolId) return;
   var btn = document.querySelector('.activity-more');
   if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
-  fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30&before=' + _activityCursor)
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      _activityCursor = json.nextCursor || null;
-      renderActivityTable(json.data || [], true);
+  poolEvents.load(poolId, { limit: 30, before: _activityCursor })
+    .then(function(res){
+      _activityCursor = res.nextCursor || null;
+      renderActivityTable(res.events, true);
       if (!_activityCursor && btn) btn.remove();
       else if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
     })
@@ -401,7 +383,7 @@ function renderActivitySection(poolId) {
     '</div>';
   loadActivity(poolId);
   if (_activityInterval) clearInterval(_activityInterval);
-  _activityInterval = setInterval(function(){ refreshActivity(poolId); }, 30000);
+  _activityInterval = setInterval(function(){ refreshActivity(poolId); }, 60000);
 }
 
 render();

@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>API</title>
 <meta property="og:title" content="zFi On-Chain API">
-<meta property="og:description" content="Free, public, fully on-chain DEX aggregator API. No keys, no servers, no tracking.">
+<meta property="og:description" content="Free, public DEX aggregator API. No keys, no signup, no tracking — on-chain routing plus every major aggregator.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="zFi On-Chain API">
-<meta name="twitter:description" content="Free, public, fully on-chain DEX aggregator API. No keys, no servers, no tracking.">
+<meta name="twitter:description" content="Free, public DEX aggregator API. No keys, no signup, no tracking — on-chain routing plus every major aggregator.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <link rel="stylesheet" href="../theme.css">
 <script>
@@ -110,11 +110,12 @@ p code, li code {
 
 <h1>On-Chain API</h1>
 
-<p class="lead">A free, public DEX aggregator that lives entirely on-chain. No API keys, no servers, no tracking. Call the contracts from any Ethereum RPC, or use the REST API for a single HTTP call.</p>
+<p class="lead">A free, public DEX aggregator. The routing core is fully on-chain &mdash; call zQuoter from any Ethereum RPC and get ready-to-send calldata, no keys and no intermediary. The hosted REST API wraps that in one HTTP call and additionally shops the trade against every major off-chain aggregator, returning whichever wins.</p>
 
 <div class="section">
   <h2>REST API</h2>
-  <p>One HTTP call returns the best quote + ready-to-send calldata. No SDK, no ABI encoding, no Multicall3 batching. The worker queries zQuoter on-chain and compares all route strategies for you.</p>
+  <p>One HTTP call returns the best quote + ready-to-send transaction. No SDK, no ABI encoding, no Multicall3 batching. The service runs all zQuoter route strategies on-chain (single-hop, 2-hop hub, split, hybrid split, 3-hop) <em>and</em> in parallel requests quotes from Bebop, Enso, 0x, 1inch, OKX, KyberSwap, Odos, Paraswap, Bitget and OpenOcean, then returns the single best output.</p>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Base URL <code>https://api.zfi.wei.is</code>. It is a hosted Node service (aggregator API keys are held server-side so you don't need any) &mdash; unlike direct zQuoter calls, it is a trusted third party in the quoting path. Always check the returned <code>tx.to</code> and decode the calldata before signing.</p>
 
   <h3>GET /quote</h3>
   <p>Returns the optimal swap route and transaction calldata.</p>
@@ -124,9 +125,9 @@ p code, li code {
     <li><code>tokenIn</code> &mdash; ERC20 address or <code>0x0000...0000</code> for ETH <em>(required)</em></li>
     <li><code>tokenOut</code> &mdash; ERC20 address or <code>0x0000...0000</code> for ETH <em>(required)</em></li>
     <li><code>amount</code> &mdash; raw integer in tokenIn's smallest unit (or tokenOut's if <code>exactOut=true</code>) <em>(required)</em></li>
-    <li><code>to</code> &mdash; recipient address. Required for executable calldata; without it the quote is still valid but <code>tx.data</code> will target <code>address(0)</code> <em>(optional)</em></li>
-    <li><code>slippage</code> &mdash; basis points, default 50 (0.5%) <em>(optional)</em></li>
-    <li><code>exactOut</code> &mdash; <code>true</code> for exact output mode <em>(optional)</em></li>
+    <li><code>to</code> &mdash; recipient / taker address. Pass it for executable calldata; without it the quote is still priced correctly but the on-chain route targets <code>address(0)</code> and aggregator routes are quoted for a placeholder taker, so the returned <code>tx</code> is <strong>not</strong> safe to send <em>(optional)</em></li>
+    <li><code>slippage</code> &mdash; basis points, 1&ndash;5000, default 50 (0.5%). Split / multi-hop legs automatically use 3&times; this, clamped to 150&ndash;500 bps, since per-leg slippage compounds <em>(optional)</em></li>
+    <li><code>exactOut</code> &mdash; <code>true</code> for exact output mode. Off-chain aggregators are skipped in this mode, so the quote is zQuoter-only <em>(optional)</em></li>
   </ul>
 
   <p style="margin-top:10px"><strong>Example &mdash; swap 1 ETH for USDC:</strong></p>
@@ -135,24 +136,36 @@ p code, li code {
   <p style="margin-top:10px"><strong>Response:</strong></p>
 <pre>{
   "bestRoute": {
-    "expectedOutput": "1850000000",
-    "source": "Uniswap V3",
+    "expectedOutput": "1897615271",
+    "source": "KyberSwap",
     "isTwoHop": false,
     "isSplit": false
   },
   "tx": {
-    "to": "0x000000000000FB114709235f1ccBFfb925F600e4",
+    "to": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
     "data": "0x...",
     "value": "1000000000000000000"
   },
   "allQuotes": [
-    { "source": "Uniswap V3", "amountOut": "1850000000" },
-    { "source": "Uniswap V2", "amountOut": "1845000000" }
-  ]
+    { "source": "KyberSwap",   "amountOut": "1897615271" },
+    { "source": "Uniswap V3",  "amountOut": "1895102204" },
+    { "source": "Uniswap V2",  "amountOut": "1845000000" }
+  ],
+  "approvalTarget": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"
 }</pre>
+  <ul>
+    <li><code>bestRoute.source</code> &mdash; winning venue. An AMM name (e.g. <code>Uniswap V3</code>), a composite like <code>Uniswap V3 + zAMM (hybrid)</code> or <code>A &rarr; B &rarr; C</code> for multi-hop, or an aggregator name</li>
+    <li><code>tx.to</code> &mdash; <strong>not always zRouter.</strong> It is zRouter when an on-chain zQuoter route wins, and the aggregator's own settlement contract when one of them wins. Always send to the returned address</li>
+    <li><code>tx.value</code> &mdash; wei to attach; <code>"0"</code> for ERC20 input</li>
+    <li><code>allQuotes</code> &mdash; every venue that returned a price, sorted best-first</li>
+    <li><code>approvalTarget</code> &mdash; the contract to approve for ERC20 input. zRouter for on-chain routes, the aggregator's spender otherwise. <code>settlementAddress</code> is additionally present for aggregators that settle at a different address than the approval spender</li>
+  </ul>
 
   <p style="margin-top:10px"><strong>Execute the swap:</strong></p>
 <pre>const quote = await fetch("https://api.zfi.wei.is/quote?...").then(r => r.json());
+
+// ERC20 input: approve the route's spender first (skip for native ETH)
+await token.approve(quote.approvalTarget, amountIn);
 
 await signer.sendTransaction({
   to: quote.tx.to,
@@ -160,12 +173,16 @@ await signer.sendTransaction({
   value: quote.tx.value
 });</pre>
 
+  <p style="margin-top:10px"><strong>Errors</strong> &mdash; JSON <code>{"error": "..."}</code> with <code>400</code> (bad or missing params), <code>405</code> (wrong method), <code>502</code> (no viable route / upstream failure).</p>
+
   <p style="margin-top:10px"><strong>Other endpoints:</strong></p>
   <ul>
     <li><code>GET /health</code> &mdash; returns <code>{"status":"ok"}</code></li>
+    <li><code>GET /</code> &mdash; 302 redirect to this page</li>
+    <li><code>POST /simulate</code> &mdash; body <code>{from, to, data, value}</code>; runs a mainnet Tenderly simulation and returns <code>{id, url, status}</code> with a shareable link. Returns <code>503</code> if the deployment has no Tenderly credentials configured</li>
   </ul>
 
-  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Open to all origins, no API keys required. Rate limited by Cloudflare Workers (100k req/day free tier).</p>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Open to all origins (CORS <code>*</code>), no API keys or signup required. Please be reasonable with request volume &mdash; each <code>/quote</code> fans out to a dozen upstreams.</p>
 </div>
 
 <hr class="divider">
@@ -173,7 +190,7 @@ await signer.sendTransaction({
 <div class="section">
   <h2>Contracts</h2>
   <p><strong>zQuoter</strong> &mdash; read-only route discovery and calldata builder.</p>
-  <p class="addr"><a href="https://etherscan.io/address/0x000000a7DfdD39f4D74c7b201501eaD119F8b86C" target="_blank" rel="noopener">0x000000a7DfdD39f4D74c7b201501eaD119F8b86C</a></p>
+  <p class="addr"><a href="https://etherscan.io/address/0x000000DD6b918a1b9CafFA73C1a559aff0Af5333" target="_blank" rel="noopener">0x000000DD6b918a1b9CafFA73C1a559aff0Af5333</a></p>
   <p style="margin-top:10px"><strong>zRouter</strong> &mdash; swap executor. Send the calldata built by zQuoter here.</p>
   <p class="addr"><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4" target="_blank" rel="noopener">0x000000000000FB114709235f1ccBFfb925F600e4</a></p>
   <p style="margin-top:10px;font-size:12px;color:var(--fg-muted)">Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido. Zero protocol fees.</p>
@@ -195,14 +212,14 @@ await signer.sendTransaction({
 
 <div class="section">
   <h2>Quick Start</h2>
-  <p>Swap 1 ETH for USDC using ethers.js and <code>buildSwapAuto</code> — the one-call entry point that cascades single-hop &rarr; 2-hop hub &rarr; 3-hop:</p>
+  <p>Swap 1 ETH for USDC using ethers.js and <code>buildBestSwapViaETHMulticall</code> — the primary entry point, returning the best of single-hop and 2-hop hub routing:</p>
 <pre>import { ethers } from "ethers";
 
-const ZQUOTER = "0x000000a7DfdD39f4D74c7b201501eaD119F8b86C";
+const ZQUOTER = "0x000000DD6b918a1b9CafFA73C1a559aff0Af5333";
 const ZROUTER = "0x000000000000FB114709235f1ccBFfb925F600e4";
 
 const quoterAbi = [
-  "function buildSwapAuto(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) view returns (tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) best, bytes callData, uint256 amountLimit, uint256 msgValue)"
+  "function buildBestSwapViaETHMulticall(address to, address refundTo, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) view returns (tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) a, tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)"
 ];
 
 const provider = new ethers.JsonRpcProvider("https://eth.llamarpc.com");
@@ -217,8 +234,9 @@ const oneETH = ethers.parseEther("1");
 const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
 
 // 1. Quote (view call — free, no gas)
-const r = await quoter.buildSwapAuto(
+const r = await quoter.buildBestSwapViaETHMulticall(
   me,             // to: recipient
+  me,             // refundTo: excess ETH / leftover MID refunds
   false,          // exactOut: false = exact input
   ETH,            // tokenIn
   USDC,           // tokenOut
@@ -227,16 +245,19 @@ const r = await quoter.buildSwapAuto(
   deadline
 );
 
-console.log("Expected USDC out:", ethers.formatUnits(r.best.amountOut, 6));
+// b is the second leg; b.amountOut == 0 means the route is single-hop.
+const out = r.b.amountOut > 0n ? r.b.amountOut : r.a.amountOut;
+console.log("Expected USDC out:", ethers.formatUnits(out, 6));
 
 // 2. Execute (send transaction)
 const tx = await signer.sendTransaction({
   to: ZROUTER,
-  data: r.callData,
+  data: r.multicall,
   value: r.msgValue
 });
 
 console.log("Tx:", tx.hash);</pre>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">For exotic pairs with no direct or hub route, fall back to <code>build3HopMulticall</code>. For the best possible output, also compare <code>buildSplitSwap</code> and <code>buildHybridSplit</code> — see <a href="#best-quote">Best Quote Selection</a>.</p>
 </div>
 
 <hr class="divider">
@@ -251,8 +272,8 @@ const token = new ethers.Contract(USDC, [
 await token.approve(ZROUTER, ethers.MaxUint256);
 
 // Then quote and execute as before, with tokenIn = USDC
-const r = await quoter.buildSwapAuto(
-  me, false,
+const r = await quoter.buildBestSwapViaETHMulticall(
+  me, me, false,
   USDC,           // tokenIn: USDC
   ETH,            // tokenOut: ETH
   ethers.parseUnits("1000", 6),  // 1000 USDC
@@ -261,7 +282,7 @@ const r = await quoter.buildSwapAuto(
 
 const tx = await signer.sendTransaction({
   to: ZROUTER,
-  data: r.callData,
+  data: r.multicall,
   value: r.msgValue  // 0 for ERC20 input
 });</pre>
   <p>zRouter also supports <code>permit</code> and <code>permit2TransferFrom</code> for gasless approvals. These can be batched into a <code>multicall</code> alongside the swap calls.</p>
@@ -272,28 +293,22 @@ const tx = await signer.sendTransaction({
 <div class="section">
   <h2>zQuoter Functions</h2>
 
-  <h3>buildSwapAuto<span class="pill">primary</span></h3>
-  <p>One-call entry point that cascades through route depths and returns a <em>single</em> flat result (Quote, calldata, amountLimit, msgValue). Use this when you just want the best available route without composing multiple entry points yourself.</p>
-  <div class="sig">buildSwapAuto(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote best, bytes callData, uint256 amountLimit, uint256 msgValue)</div>
-  <ul>
-    <li><code>to</code> &mdash; recipient of output tokens</li>
-    <li><code>exactOut</code> &mdash; <code>false</code> for exact input, <code>true</code> for exact output</li>
-    <li><code>tokenIn</code> / <code>tokenOut</code> &mdash; ERC20 address, or <code>address(0)</code> for ETH</li>
-    <li><code>swapAmount</code> &mdash; amount of <code>tokenIn</code> (exact-in) or desired <code>tokenOut</code> (exact-out)</li>
-    <li><code>slippageBps</code> &mdash; slippage tolerance in basis points (50 = 0.5%)</li>
-    <li><code>deadline</code> &mdash; unix timestamp after which the swap reverts</li>
-  </ul>
-  <p>Returns:</p>
-  <ul>
-    <li><code>best</code> &mdash; aggregated Quote summarizing end-to-end input/output (<code>source</code> = final leg's AMM)</li>
-    <li><code>callData</code> &mdash; <strong>ready to send</strong> to zRouter as the transaction's <code>data</code> field (multicall envelope when multi-hop, raw swap when single-hop)</li>
-    <li><code>amountLimit</code> &mdash; min output (exact-in) or max input (exact-out) after slippage</li>
-    <li><code>msgValue</code> &mdash; ETH value to attach to the transaction</li>
-  </ul>
-  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Cascade (NOT a head-to-head comparison across depths): single/2-hop is tried first, 3-hop is a fallback only for pairs that can't build at shallower depth. For the best possible output across depths on a single pair, compare <code>buildBestSwapViaETHMulticall</code> + <code>buildSplitSwap</code> + <code>buildHybridSplit</code> yourself (see <a href="#best-quote">Best Quote Selection</a>).</p>
+  <h3>Auto-routing cascade<span class="pill">pattern</span></h3>
+  <p>There is no single-call auto-router. Earlier versions shipped one (<code>buildSwapAuto</code>); it was removed because it was a <em>cascade</em>, not a comparison — it took the first depth that built rather than the best across strategies, so it could return worse output than comparing the builders yourself. Compose it caller-side in a few lines:</p>
+<pre>// 1. Best of {single-hop, 2-hop hub}
+try {
+  const r = await quoter.buildBestSwapViaETHMulticall(
+    me, me, exactOut, tokenIn, tokenOut, amount, 50n, deadline);
+  if (r.multicall.length > 2) return r;   // routed
+} catch {}
+
+// 2. 3-hop last resort for exotic pairs
+return await quoter.build3HopMulticall(
+  me, exactOut, tokenIn, tokenOut, amount, 50n, deadline);</pre>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Prefer the full comparison in <a href="#best-quote">Best Quote Selection</a> when you want maximum output — it additionally weighs <code>buildSplitSwap</code> and <code>buildHybridSplit</code>, which the old one-call path never considered.</p>
 
   <h3>buildBestSwap</h3>
-  <p>Direct single-hop best-of quote and calldata. Same return shape as <code>buildSwapAuto</code>, but no multicall envelope when the result is a raw single-hop swap routed directly to <code>to</code>. Use when you know a single-hop route exists and want minimum overhead.</p>
+  <p>Direct single-hop best-of quote and calldata. Returns a flat (Quote, calldata, amountLimit, msgValue) rather than the two-leg shape, with no multicall envelope when the result is a raw single-hop swap routed directly to <code>to</code>. Use when you know a single-hop route exists and want minimum overhead.</p>
   <div class="sig">buildBestSwap(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote best, bytes callData, uint256 amountLimit, uint256 msgValue)</div>
 
   <h3>buildBestSwapViaETHMulticall</h3>
@@ -355,7 +370,7 @@ const tx = await signer.sendTransaction({
 
 <div class="section" id="best-quote">
   <h2>Best Quote Selection</h2>
-  <p>For maximum output, compare multiple route strategies and take the best. This is what the <a href="../">swap page</a> does. (If you don't need the cross-depth comparison, just use <code>buildSwapAuto</code>.)</p>
+  <p>For maximum output, compare multiple route strategies and take the best. This is what the <a href="../">swap page</a> does. (If you don't need the cross-depth comparison, <code>buildBestSwapViaETHMulticall</code> alone is enough.)</p>
 <pre>const [best, split, hybrid] = await Promise.allSettled([
   quoter.buildBestSwapViaETHMulticall(
     me, me, false, tokenIn, tokenOut,
@@ -535,7 +550,7 @@ const tx = await signer.sendTransaction({
   <h2>Source</h2>
   <ul>
     <li><a href="https://github.com/z-fi/zFi" target="_blank" rel="noopener">GitHub</a></li>
-    <li><a href="https://etherscan.io/address/0x000000a7DfdD39f4D74c7b201501eaD119F8b86C#code" target="_blank" rel="noopener">zQuoter verified source</a></li>
+    <li><a href="https://etherscan.io/address/0x000000DD6b918a1b9CafFA73C1a559aff0Af5333#code" target="_blank" rel="noopener">zQuoter verified source</a></li>
     <li><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code" target="_blank" rel="noopener">zRouter verified source</a></li>
   </ul>
 </div>

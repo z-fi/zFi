@@ -52,11 +52,27 @@ contract zQuoter {
         view
         returns (Quote memory best, Quote[] memory quotes)
     {
-        (best, quotes) = zQuoter(address(_BASE)).getQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        try zQuoter(address(_BASE)).getQuotes(exactOut, tokenIn, tokenOut, swapAmount) returns (
+            Quote memory b_, Quote[] memory q_
+        ) {
+            (best, quotes) = (b_, q_);
+        } catch {
+            // The base quoter iterates fee tiers with no per-tier error handling,
+            // so one reverting pool reverts the whole aggregate — and every
+            // builder above it. Seen live when Uniswap enabled V4 protocol fees
+            // (block 25623201): the base's V4 math reverts once a pool's fee
+            // exceeds ~240 pips. Rebuild tier-by-tier so only that venue drops.
+            (best, quotes) = _rebuildQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        }
         // Reject exact-out V3 phantom-liquidity picks. Only the specific failing fee
         // tier is zeroed — other V3 tiers may be healthy — then we re-pick best.
         while (exactOut && best.source == AMM.UNI_V3 && best.amountIn > 0) {
-            (, uint256 rt) = _BASE.quoteV3(false, tokenIn, tokenOut, uint24(best.feeBps * 100), best.amountIn);
+            uint256[7] memory w_;
+            w_[1] = uint256(uint160(tokenIn));
+            w_[2] = uint256(uint160(tokenOut));
+            w_[3] = best.feeBps * 100;
+            w_[4] = best.amountIn;
+            (, uint256 rt) = _bq(IZQuoterBase.quoteV3.selector, w_, 5);
             if (rt * 10 >= swapAmount * 9) break;
             uint256 badFee = best.feeBps;
             best = Quote(AMM.UNI_V2, 0, 0, 0);
@@ -69,6 +85,61 @@ contract zQuoter {
                 if (quotes[i].amountIn > 0 && (best.amountIn == 0 || quotes[i].amountIn < best.amountIn)) {
                     best = quotes[i];
                 }
+            }
+        }
+    }
+
+    /// @dev One generic encoder/staticcall shared by every base-quoter call.
+    /// Writing the word array by hand collapses four ABI-encoder expansions into
+    /// a single site — the only way this fix fits zQuoter's EIP-170 headroom.
+    /// A reverting venue yields (0, 0) instead of propagating.
+    function _bq(bytes4 sel, uint256[7] memory w, uint256 n)
+        internal
+        view
+        returns (uint256 amountIn, uint256 amountOut)
+    {
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            mstore(p, sel)
+            for { let i := 0 } lt(i, n) { i := add(i, 1) } {
+                mstore(add(add(p, 4), mul(i, 32)), mload(add(w, mul(i, 32))))
+            }
+            if staticcall(gas(), 0x658bF1A6608210FDE7310760f391AD4eC8006A5F, p, add(4, mul(n, 32)), p, 64) {
+                amountIn := mload(p)
+                amountOut := mload(add(p, 32))
+            }
+        }
+    }
+
+    /// @dev Reproduces the base quoter's 14-entry grid — [V2, SUSHI, ZAMM x4,
+    /// V3 x4, V4 x4] over fee tiers {1, 5, 30, 100} bps — quoting each tier
+    /// independently so one bad pool cannot take down the rest.
+    function _rebuildQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 amount)
+        internal
+        view
+        returns (Quote memory best, Quote[] memory quotes)
+    {
+        quotes = new Quote[](14);
+        for (uint256 i; i < 14; ++i) {
+            AMM s;
+            uint256 bps = 30;
+            if (i == 0) {
+                s = AMM.UNI_V2;
+            } else if (i == 1) {
+                s = AMM.SUSHI;
+            } else {
+                uint256 k = (i - 2) & 3;
+                bps = k == 0 ? 1 : k == 1 ? 5 : k == 2 ? 30 : 100;
+                s = i < 6 ? AMM.ZAMM : i < 10 ? AMM.UNI_V3 : AMM.UNI_V4;
+            }
+            // Routes through _bq, so a poisoned venue cannot revert the rebuild.
+            Quote memory c = _requoteForSource(exactOut, tokenIn, tokenOut, amount, Quote(s, bps, 0, 0));
+            quotes[i] = c;
+            // Base convention: exact-in maximises output, exact-out minimises input.
+            if (exactOut) {
+                if (c.amountIn != 0 && (best.amountIn == 0 || c.amountIn < best.amountIn)) best = c;
+            } else if (c.amountOut > best.amountOut) {
+                best = c;
             }
         }
     }
@@ -130,6 +201,16 @@ contract zQuoter {
     // zRouter calldata builders:
 
     error NoRoute();
+
+    /// @dev Reject tokenIn == tokenOut. buildBestSwap already reverts via its
+    /// zero-quote check, but the multi-hop and split builders do not: they only
+    /// skip hubs equal to the token, so a same-token request would quote a real
+    /// round-trip (e.g. USDC->WETH->USDC) and return executable calldata that
+    /// loses the user two sets of pool fees. Call after ETH normalization so the
+    /// ETH/WETH sentinel pair is compared consistently.
+    function _requireDistinct(address tokenIn, address tokenOut) internal pure {
+        if (tokenIn == tokenOut) revert NoRoute();
+    }
 
     /// @dev Normalize CURVE_ETH sentinel to address(0) so all ETH logic is consistent.
     function _normalizeETH(address token) internal pure returns (address) {
@@ -637,87 +718,6 @@ contract zQuoter {
         msgValue = tokenIn == address(0) ? (exactOut ? amountLimit : swapAmount) : 0;
     }
 
-    /// @notice One-call quote+build that returns the same shape as buildBestSwap.
-    ///         Cascade (NOT a head-to-head comparison across depths): single/2-hop
-    ///         first, 3-hop only as a fallback for pairs that can't build at shallower
-    ///         depth. Frontends can use this as a drop-in for buildBestSwap — no
-    ///         decoder changes — and recover every pair that has *any* on-chain path.
-    ///
-    ///         Cascade:
-    ///           1. buildBestSwapViaETHMulticall — internally picks best of {single-hop, 2-hop hub}
-    ///           2. build3HopMulticall           — last-resort for exotic tokens (exactIn + exactOut)
-    ///
-    ///         Note: step 1 wraps single-hop results in a 1-element multicall envelope
-    ///         (~2–3k extra gas), but guarantees we never miss a strictly-better hub
-    ///         route just because a marginal single-hop pool also happened to quote.
-    ///         For custom tokens this matters: a user's exotic token may have a
-    ///         stale V3 1bp pool that buildBestSwap would prefer, while the deep
-    ///         liquidity actually lives on a WETH-hub 2-hop path.
-    ///
-    ///         The returned `best` aggregates multi-hop plans into a single Quote
-    ///         with end-to-end amounts (source = final leg's source).
-    function buildSwapAuto(
-        address to,
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 slippageBps,
-        uint256 deadline
-    ) public view returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue) {
-        // Defensive: no-op swap (tokenIn == tokenOut after ETH/WETH normalization).
-        // Without this, inner builders produce nonsense quotes or revert with an
-        // opaque error depending on which code path gets hit first.
-        if (_normalizeETH(tokenIn) == _normalizeETH(tokenOut)) revert NoRoute();
-
-        // 1. Best of {single-hop, 2-hop hub}. buildBestSwapViaETHMulticall's
-        //    internal logic only prefers hub if it's strictly better (>2% for
-        //    exactIn, or single-hop unavailable for exactOut), so this gives
-        //    optimal quote across both depths in one pass.
-        try this.buildBestSwapViaETHMulticall(
-            to, to, exactOut, tokenIn, tokenOut, swapAmount, slippageBps, deadline
-        ) returns (
-            Quote memory a, Quote memory b, bytes[] memory, bytes memory mc, uint256 mv
-        ) {
-            bool twoHop = (b.amountIn != 0 || b.amountOut != 0);
-            best.source = twoHop ? b.source : a.source;
-            best.feeBps = twoHop ? b.feeBps : a.feeBps;
-            best.amountIn = a.amountIn;
-            best.amountOut = twoHop ? b.amountOut : a.amountOut;
-            callData = mc;
-            amountLimit = SlippageLib.limit(exactOut, exactOut ? best.amountIn : best.amountOut, slippageBps);
-            msgValue = mv;
-            return (best, callData, amountLimit, msgValue);
-        } catch {}
-
-        // 2. 3-hop last resort for exotic custom tokens with no direct or 2-hop-via-hub pool.
-        //    Supported for both exactIn and exactOut after the exactOut extension to
-        //    build3HopMulticall.
-        try this.build3HopMulticall(to, exactOut, tokenIn, tokenOut, swapAmount, slippageBps, deadline) returns (
-            Quote memory a_, Quote memory, Quote memory c_, bytes[] memory, bytes memory mc, uint256 mv
-        ) {
-            if (exactOut) {
-                // leg-1's amountIn is the end-to-end input; tokenOut amount is the user's target.
-                best.source = c_.source;
-                best.feeBps = c_.feeBps;
-                best.amountIn = a_.amountIn;
-                best.amountOut = swapAmount;
-                amountLimit = SlippageLib.limit(true, best.amountIn, slippageBps);
-            } else {
-                best.source = c_.source;
-                best.feeBps = c_.feeBps;
-                best.amountIn = swapAmount;
-                best.amountOut = c_.amountOut;
-                amountLimit = SlippageLib.limit(false, best.amountOut, slippageBps);
-            }
-            callData = mc;
-            msgValue = mv;
-            return (best, callData, amountLimit, msgValue);
-        } catch {}
-
-        revert NoRoute();
-    }
-
     function _spacingFromBps(uint16 bps) internal pure returns (int24) {
         unchecked {
             if (bps == 1) return 1;
@@ -765,6 +765,7 @@ contract zQuoter {
         unchecked {
             tokenIn = _normalizeETH(tokenIn);
             tokenOut = _normalizeETH(tokenOut);
+            _requireDistinct(tokenIn, tokenOut);
 
             // Prevent stealable leftovers: if refundTo is the router itself, coerce to `to`.
             if (refundTo == ZROUTER && to != ZROUTER) refundTo = to;
@@ -1096,16 +1097,22 @@ contract zQuoter {
         address[6] memory HUBS = _hubs();
         r.score = type(uint256).max;
         unchecked {
-            for (uint256 i; i < HUBS.length; ++i) {
-                address MID1 = HUBS[i];
-                if (MID1 == tokenIn || MID1 == tokenOut) continue;
+            // MID2 is the OUTER loop: the final leg (MID2 -> tokenOut) depends only
+            // on MID2, so hoisting it here quotes it once per hub instead of once
+            // per (MID1, MID2) pair. Each _quoteBestSingleHop fans out to the full
+            // venue grid plus Curve discovery, so the naive ordering burned ~30
+            // redundant heavy quotes per call and pushed this path into RPC gas
+            // caps. (The forward pass already hoists its MID1-only leg.)
+            for (uint256 j; j < HUBS.length; ++j) {
+                address MID2 = HUBS[j];
+                if (MID2 == tokenIn || MID2 == tokenOut) continue;
 
-                for (uint256 j; j < HUBS.length; ++j) {
-                    address MID2 = HUBS[j];
-                    if (MID2 == tokenIn || MID2 == tokenOut || MID2 == MID1) continue;
+                Quote memory qc = _quoteBestSingleHop(true, MID2, tokenOut, swapAmount);
+                if (qc.amountIn == 0 || qc.source == AMM.LIDO) continue;
 
-                    Quote memory qc = _quoteBestSingleHop(true, MID2, tokenOut, swapAmount);
-                    if (qc.amountIn == 0 || qc.source == AMM.LIDO) continue;
+                for (uint256 i; i < HUBS.length; ++i) {
+                    address MID1 = HUBS[i];
+                    if (MID1 == tokenIn || MID1 == tokenOut || MID1 == MID2) continue;
 
                     Quote memory qb =
                         _quoteBestSingleHop(true, MID1, MID2, SlippageLib.limit(true, qc.amountIn, slippageBps));
@@ -1165,6 +1172,7 @@ contract zQuoter {
         unchecked {
             tokenIn = _normalizeETH(tokenIn);
             tokenOut = _normalizeETH(tokenOut);
+            _requireDistinct(tokenIn, tokenOut);
 
             Route3 memory r = exactOut
                 ? _discover3HopBackward(tokenIn, tokenOut, swapAmount, slippageBps)
@@ -1331,6 +1339,7 @@ contract zQuoter {
         unchecked {
             tokenIn = _normalizeETH(tokenIn);
             tokenOut = _normalizeETH(tokenOut);
+            _requireDistinct(tokenIn, tokenOut);
 
             // ---- ETH <-> WETH trivial wrap: splitting makes no sense; delegate to buildBestSwap ----
             if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
@@ -1489,6 +1498,7 @@ contract zQuoter {
         unchecked {
             tokenIn = _normalizeETH(tokenIn);
             tokenOut = _normalizeETH(tokenOut);
+            _requireDistinct(tokenIn, tokenOut);
 
             // ---- ETH <-> WETH trivial wrap: no split, delegate to buildBestSwap ----
             if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
@@ -1694,17 +1704,37 @@ contract zQuoter {
         uint256 fee = source.feeBps;
         uint256 ai;
         uint256 ao;
+        uint256[7] memory w;
+        w[0] = exactOut ? 1 : 0;
         if (src == AMM.UNI_V2 || src == AMM.SUSHI) {
-            (ai, ao) = _BASE.quoteV2(exactOut, tokenIn, tokenOut, amount, src == AMM.SUSHI);
+            w[1] = uint256(uint160(tokenIn));
+            w[2] = uint256(uint160(tokenOut));
+            w[3] = amount;
+            w[4] = src == AMM.SUSHI ? 1 : 0;
+            (ai, ao) = _bq(IZQuoterBase.quoteV2.selector, w, 5);
             fee = 30;
         } else if (src == AMM.UNI_V3) {
-            (ai, ao) = _BASE.quoteV3(exactOut, tokenIn, tokenOut, uint24(fee * 100), amount);
+            w[1] = uint256(uint160(tokenIn));
+            w[2] = uint256(uint160(tokenOut));
+            w[3] = fee * 100;
+            w[4] = amount;
+            (ai, ao) = _bq(IZQuoterBase.quoteV3.selector, w, 5);
         } else if (src == AMM.UNI_V4) {
-            (ai, ao) = _BASE.quoteV4(
-                exactOut, tokenIn, tokenOut, uint24(fee * 100), _spacingFromBps(uint16(fee)), address(0), amount
-            );
+            w[1] = uint256(uint160(tokenIn));
+            w[2] = uint256(uint160(tokenOut));
+            w[3] = fee * 100;
+            w[4] = uint256(uint24(_spacingFromBps(uint16(fee))));
+            w[5] = 0;
+            w[6] = amount;
+            (ai, ao) = _bq(IZQuoterBase.quoteV4.selector, w, 7);
         } else if (src == AMM.ZAMM) {
-            (ai, ao) = _BASE.quoteZAMM(exactOut, fee, tokenIn, tokenOut, 0, 0, amount);
+            w[1] = fee;
+            w[2] = uint256(uint160(tokenIn));
+            w[3] = uint256(uint160(tokenOut));
+            w[4] = 0;
+            w[5] = 0;
+            w[6] = amount;
+            (ai, ao) = _bq(IZQuoterBase.quoteZAMM.selector, w, 7);
         } else if (src == AMM.CURVE) {
             (uint256 cin, uint256 cout, address pool,,,,) = quoteCurve(exactOut, tokenIn, tokenOut, amount, 8);
             if (pool == address(0)) return q;

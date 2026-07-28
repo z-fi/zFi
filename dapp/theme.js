@@ -25,8 +25,8 @@ function _zfiRenderNav() {
   const items = [
     ['', 'Swap'], ['coin/', 'Coin'], ['predict/', 'Predict'],
     ['orderbook/', 'Orderbook', 'navOrderbook'], ['liquidity/', 'Liquidity'],
-    ['!https://multisig.wei.is/', 'Multisig'],
-    ['domains/', 'Domain'], ['dao/', 'DAO'],
+    ['!https://www.multisig.software/', 'Multisig'],
+    ['!https://wei.domains/', 'Domain'], ['dao/', 'DAO'],
     ['---'],
     ['about/', 'About'], ['api/', 'API'],
     ['!https://github.com/z-fi/zFi', 'GitHub'],

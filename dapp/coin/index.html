@@ -292,7 +292,7 @@ input {
 .curve-details-row .v { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
 .curve-details-row .v.warn { color:var(--red); }
 
-/* Collapsible drawer (tap, chart) */
+/* Collapsible drawer */
 .drawer { border:1px solid var(--border);margin-bottom:16px;overflow:hidden; }
 .drawer-toggle {
   display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;
@@ -304,29 +304,6 @@ input {
 .drawer.open .drawer-toggle .arrow { transform:rotate(180deg); }
 .drawer-body { display:none;padding:0 16px 16px; }
 .drawer.open .drawer-body { display:block; }
-
-/* Chart drawer body (special: aspect-ratio iframe instead of padded content) */
-.chart-body { display:none;position:relative;width:100%;background:var(--surface); }
-.drawer.open .chart-body { display:block; }
-.chart-type-toggle {
-  display:flex;gap:0;border-bottom:1px solid var(--border-muted);
-}
-.chart-type-toggle button {
-  font-family:inherit;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;
-  padding:6px 14px;border:none;cursor:pointer;background:transparent;color:var(--fg-muted);
-}
-.chart-type-toggle button.active { background:var(--btn-bg);color:var(--btn-fg); }
-.chart-type-toggle button:not(.active):hover { color:var(--fg); }
-.chart-tf-toggle { display:none;gap:0;border-bottom:1px solid var(--border-muted); }
-.chart-tf-toggle.show { display:flex; }
-.chart-tf-toggle button {
-  font-family:inherit;font-size:10px;font-weight:600;letter-spacing:0.05em;
-  padding:4px 10px;border:none;cursor:pointer;background:transparent;color:var(--fg-dim);
-}
-.chart-tf-toggle button.active { color:var(--fg);text-decoration:underline;text-underline-offset:3px; }
-.chart-tf-toggle button:not(.active):hover { color:var(--fg-muted); }
-.chart-iframe-wrap { position:relative;width:100%;height:min(56.25vw, 400px); }
-.chart-iframe-wrap iframe { position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:var(--surface);color-scheme:light dark; }
 
 /* Drawer body / tables — shared by Holders, Proposals, Orders drawers */
 .activity-body { display:none;padding:0; }
@@ -345,32 +322,10 @@ input {
 .activity-table a:hover { color:var(--fg); }
 .activity-empty { padding:16px;text-align:center;font-size:12px;color:var(--fg-muted); }
 
-/* Chat */
-.curve-chat { margin-top:16px; }
-.curve-chat-msgs {
-  max-height:300px;overflow-y:auto;border:1px solid var(--border-muted);
-  padding:8px;font-size:12px;line-height:1.6;
-}
-.curve-chat-msg { margin-bottom:6px; }
-.curve-chat-msg:last-child { margin-bottom:0; }
-.curve-chat-sender {
-  font-weight:600;font-size:11px;color:var(--fg-muted);cursor:pointer;
-}
-.curve-chat-sender:hover { color:var(--fg); }
-.curve-chat-time { font-size:10px;color:var(--fg-dim);margin-left:6px; }
-.curve-chat-text { margin-top:1px;word-break:break-word; }
-.curve-chat-input {
-  display:flex;gap:6px;margin-top:8px;
-}
-.curve-chat-input input {
-  flex:1;font-size:13px;padding:8px;border:1px solid var(--border-muted);
-  background:transparent;color:var(--fg);outline:none;
-}
-.curve-chat-input input:focus { border-color:var(--fg); }
-.curve-chat-input button {
-  padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;
-}
-.holder-row { display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border-muted);font-size:12px; }
+.holder-row { position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border-muted);font-size:12px; }
+/* Share-weight bar, scaled to the largest holder so the distribution reads at a glance */
+.holder-row::before { content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w,0%);background:var(--fg);opacity:0.05;pointer-events:none; }
+.holder-row > * { position:relative; }
 .holder-row:last-child { border-bottom:none; }
 .holder-addr { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .holder-addr a { color:var(--fg-muted);text-decoration:none; }
@@ -403,7 +358,19 @@ input {
 .prop-votes { display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--fg-muted); }
 .prop-votes .for { color:var(--green); }
 .prop-votes .against { color:var(--red); }
-.prop-bar { height:4px;border-radius:2px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
+.prop-bar { position:relative;height:4px;border-radius:2px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
+.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--fg-muted);opacity:0.9; }
+.prop-turnout { margin-left:auto;color:var(--fg-dim); }
+.prop-clock { color:var(--fg-muted);font-variant-numeric:tabular-nums; }
+.prop-clock-ready { color:var(--green); }
+.prop-id { float:right;opacity:0.55;font-variant-numeric:tabular-nums; }
+.stat-row-nav { border-top:1px solid var(--border-muted);margin-top:4px;padding-top:8px; }
+/* Derived treasury analysis — understated, collapsed by default */
+.stat-reveal { display:flex;align-items:center;gap:5px;width:100%;padding:7px 0 2px;margin-top:2px;background:none;border:none;font:inherit;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;opacity:0.65;transition:opacity 0.15s; }
+.stat-reveal:hover { opacity:1; }
+.stat-reveal > span { font-size:9px; }
+.stat-reveal-body[hidden] { display:none; }
+.coin-desc-inline { margin:0 0 14px;font-size:13px;line-height:1.6;color:var(--fg-muted); }
 .prop-bar-for { background:var(--green); }
 .prop-bar-against { background:var(--red); }
 .prop-bar-abstain { background:var(--fg-dim); }
@@ -456,10 +423,6 @@ input {
   .coin-side-toggle button { min-height:44px;padding:10px !important;font-size:13px !important; }
   /* Swap/action buttons */
   .swap-btn, .action-btn { min-height:48px;font-size:14px; }
-  /* Chat mobile */
-  .curve-chat-msgs { max-height:220px; }
-  .curve-chat-input input { font-size:16px;padding:10px; }
-  .curve-chat-input button { padding:10px 14px;font-size:12px; }
   /* User balance tag */
   .coin-user-balance { font-size:11px; }
   /* Ragequit / collapsible panels */
@@ -494,15 +457,11 @@ input {
 <script src="../vendor/ethers.min.js"></script>
 <script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
+<script src="../modules/curve-registry.js"></script>
+<!-- Pool Mint/Burn logs, used lazily to date the DAO's LP position. Deferred: nothing
+     on first paint depends on it. -->
+<script defer src="../modules/pool-events.js"></script>
 <script>
-// Extend shared toggleDark to also update chart iframe theme
-const _baseTD = toggleDark;
-toggleDark = function() {
-  _baseTD();
-  const on = document.documentElement.classList.contains('dark');
-  const iframe = document.querySelector('.chart-iframe-wrap iframe');
-  if (iframe) { try { iframe.contentWindow.postMessage({ type: 'theme', value: on ? 'dark' : 'light' }, 'https://www.zamm.finance'); } catch(e) {} }
-};
 const $ = id => document.getElementById(id);
 const _escTextMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
@@ -534,12 +493,69 @@ const CONTINUOUS_SALE_ABI = [
   'function paused() view returns (bool)',
 ];
 const SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
+// Fallback total supply (whole tokens) for a DAO with no sale record, where
+// sale.totalSupply isn't available. Matches COIN_SUPPLY in modules/coin.js — the
+// 1B convention every zFi launch uses. This was referenced in two places but never
+// defined, so any supply-less DAO threw ReferenceError mid-render: the gallery fell
+// into its error branch and the detail page came up blank.
+const COIN_SUPPLY_TOTAL = 1_000_000_000;
+
 const ZAMM = '0x000000000000040470635EB91b7CE4D132D616eD';
 const ZQUOTER = '0x658bF1A6608210FDE7310760f391AD4eC8006A5F'; // base quoter (has quoteZAMM)
 const CHAINLINK_ETH_USD = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419';
 const CHAINLINK_ABI = ['function latestAnswer() view returns (int256)'];
 const ZERO = ethers.ZeroAddress;
-const IPFS_GW = 'https://content.wrappr.wtf/ipfs/';
+// Ordered gateway list, not a single host. Metadata drives launch-type routing
+// (renderCoinPage dispatches on metadata.launchType), so one unreachable gateway
+// used to mean a cause coin silently rendered as a generic legacy DAO page.
+const IPFS_GWS = [
+  'https://ipfs.io/ipfs/',
+  'https://ipfs.filebase.io/ipfs/',   // our own pinning provider — holds every zFi pin
+  'https://dweb.link/ipfs/',
+  'https://w3s.link/ipfs/'
+];
+const IPFS_GW = IPFS_GWS[0];
+
+// <img> can't retry on its own — onerror walks to the next gateway and returns
+// false only once every gateway has been tried, at which point callers apply
+// their own fallback (symbol SVG, hide the banner, etc).
+function ipfsNextGateway(img) {
+  const src = img.getAttribute('src') || '';
+  const i = IPFS_GWS.findIndex(g => src.startsWith(g));
+  if (i === -1 || i + 1 >= IPFS_GWS.length) return false;
+  img.src = IPFS_GWS[i + 1] + src.slice(IPFS_GWS[i].length);
+  return true;
+}
+
+// Fetch JSON through each gateway in turn. Non-IPFS URIs (http, ar://) have no
+// alternates, so they get a single attempt.
+// One DAO on mainnet stored "ipfs://ipfs://Qm..." — collapse repeated schemes so a
+// malformed URI still resolves instead of being fetched as a relative path.
+function ipfsNormalize(uri) {
+  let u = String(uri || '').trim();
+  while (u.startsWith('ipfs://ipfs://')) u = u.slice(7);
+  return u;
+}
+
+async function ipfsFetchJson(uri, timeoutMs) {
+  uri = ipfsNormalize(uri);
+  const paths = uri.startsWith('ipfs://')
+    ? IPFS_GWS.map(g => g + uri.slice(7))
+    : [uri.startsWith('ar://') ? 'https://arweave.net/' + uri.slice(5) : uri];
+  let lastErr = null;
+  for (const url of paths) {
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), timeoutMs || 8000);
+    try {
+      const r = await fetch(url, { signal: ac.signal });
+      if (!r.ok) throw new Error('http ' + r.status);
+      return await r.json();
+    } catch (e) {
+      lastErr = e;
+    } finally { clearTimeout(to); }
+  }
+  throw lastErr || new Error('unreachable');
+}
 
 // ABIs
 const SCAN_ABI = [
@@ -582,6 +598,21 @@ const ERC20_ABI = [
   'function allowance(address,address) view returns (uint256)'
 ];
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
+
+// TokenWorks NFT held in the collector vault. These passes are partially refundable: the
+// contract escrows ETH that unlocks on a vesting schedule, and getRemainingLockedEth()
+// reports what is still redeemable. That figure is a hard floor on the NFT's worth, so
+// backing/share values the NFT at its locked ETH rather than at cost or at zero. The
+// resale value on top of the locked portion is not counted.
+const VAULT_NFT_CONTRACT = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
+const VAULT_NFT_TOKEN_ID = 156;
+const VAULT_NFT_ABI = ['function getRemainingLockedEth(uint256 tokenId) view returns (uint256)'];
+// Fee accumulator for the TokenWorks pass: pending() is ETH earned by the pass but not
+// yet claimed into the vault. Claimed fees already show up in the vault ETH balance, so
+// this is the missing piece — counted in backing, and shown separately since realising it
+// takes a claim.
+const VAULT_NFT_FEES = '0x1C175b9F0e8C73eD3e677e1cBb1B5A2DD4373Bfe';
+const VAULT_NFT_FEES_ABI = ['function pending(uint256 tokenId) view returns (uint256)'];
 const MC3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   'function getEthBalance(address) view returns (uint256)'
@@ -601,8 +632,47 @@ const CURVE_SALE_ABI = [
   // Routed swap: required post-graduation when creatorFee.beneficiary is set.
   // Same signature as ZAMM.swapExactIn — CURVE_SALE forwards to ZAMM and skims the creator fee.
   'function swapExactIn(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountIn, uint256 amountOutMin, bool zeroForOne, address to, uint256 deadline) payable returns (uint256 amountOut)',
-  'function creatorFees(address token) view returns (address beneficiary, uint16 buyBps, uint16 sellBps, bool buyOnInput, bool sellOnInput)'
+  'function creatorFees(address token) view returns (address beneficiary, uint16 buyBps, uint16 sellBps, bool buyOnInput, bool sellOnInput)',
+  // Custom errors. Without these fragments ethers can't decode a revert and every
+  // failure surfaces as a bare "execution reverted" — which also silently killed
+  // the Graduated() auto-recovery in curveBuy(), since it matches on the message
+  // text. Each selector below was confirmed against mainnet via eth_simulateV1.
+  'error Graduated()',        // 0x9d4b7885 — buy/sell after the curve completed
+  'error NotGraduable()',     // 0x9804bf8d — graduate() before the trigger is met
+  'error Slippage()',         // 0x7dd37f70 — minAmountOut / minProceeds not met
+  'error DeadlineExpired()',  // 0x1ab7da6b
+  'error ZeroAmount()',       // 0x1f2a2005
+  'error TransferFromFailed()'// 0x7939f424 — selling more tokens than you hold
 ];
+
+// Custom-error name -> what actually went wrong, in the user's terms. Ethers gives
+// us the bare error name once the fragments above are present; this turns it into
+// something a trader can act on.
+const CURVE_ERROR_TEXT = {
+  Graduated: 'This coin just graduated — liquidity moved to zAMM. Reloading the trade panel...',
+  NotGraduable: 'Not ready to graduate yet.',
+  Slippage: 'Price moved past your slippage tolerance. Raise slippage or try a smaller size.',
+  DeadlineExpired: 'The transaction sat too long and expired. Try again.',
+  ZeroAmount: 'Enter an amount greater than zero.',
+  TransferFromFailed: 'Token transfer failed — check your balance.'
+};
+
+// Pull a friendly message out of an ethers error, falling back to its own text.
+function curveErrText(e) {
+  const name = e?.revert?.name || (typeof e?.errorName === 'string' ? e.errorName : null);
+  if (name && CURVE_ERROR_TEXT[name]) return CURVE_ERROR_TEXT[name];
+  const msg = e?.shortMessage || e?.reason || (e?.message || '').split('\n')[0] || 'Trade failed';
+  return msg.length < 120 ? msg : 'Trade failed';
+}
+
+// True when the revert means "the curve finished" — the page should flip to the
+// post-graduation zAMM panel rather than leave a stale bonding-curve form up.
+function curveIsGraduatedErr(e) {
+  return (e?.revert?.name === 'Graduated')
+    || e?.data === '0x9d4b7885'
+    || /Graduated/i.test(e?.shortMessage || '')
+    || /Graduated/i.test(e?.message || '');
+}
 
 // ShareSale module
 const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
@@ -618,34 +688,6 @@ const TAP_VEST_ABI = [
   'function taps(address dao) view returns (address token, address beneficiary, uint128 ratePerSec, uint64 lastClaim)'
 ];
 
-// DB proxy — writes go through the worker which holds the Supabase service_role key
-const COIN_DB_URL = 'https://api.zfi.wei.is'; // same worker, /db/ routes
-
-async function coinDbInsert(table, row) {
-  if (!COIN_DB_URL) return;
-  try {
-    const res = await fetch(`${COIN_DB_URL}/db/${table}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(row)
-    });
-    if (!res.ok) console.warn('DB insert failed:', table, res.status, await res.text());
-  } catch (e) {
-    console.warn('DB insert failed:', table, e);
-  }
-}
-
-async function coinDbFetch(table, params) {
-  if (!COIN_DB_URL) return [];
-  try {
-    const res = await fetch(`${COIN_DB_URL}/db/${table}?${params}`);
-    return await res.json();
-  } catch (e) {
-    console.warn('DB fetch failed:', table, e);
-    return [];
-  }
-}
-
 function decodeObservations(rawArray) {
   return rawArray.map(packed => {
     const p = BigInt(packed);
@@ -658,29 +700,17 @@ function decodeObservations(rawArray) {
   });
 }
 
-// ClassicalCurveSale token discovery via Supabase launched_tokens
+// ClassicalCurveSale token discovery — newest-first addresses rebuilt from the
+// sale contract's own launch logs (dapp/modules/curve-registry.js).
 async function fetchCurveTokenList() {
-  try {
-    // Try filtered query first; fall back to unfiltered if launch_type column doesn't exist yet
-    let rows = await coinDbFetch('launched_tokens', 'launch_type=eq.curve&order=created_at.desc&limit=500');
-    if (!Array.isArray(rows)) rows = await coinDbFetch('launched_tokens', 'order=created_at.desc&limit=500');
-    return Array.isArray(rows) ? rows.map(r => r.token_address).filter(Boolean) : [];
-  } catch { return []; }
-}
-
-// Cause coin discovery via Supabase (new launches not in legacy scanDAICOs)
-async function fetchCauseTokenList() {
-  try {
-    const rows = await coinDbFetch('launched_tokens', 'launch_type=eq.cause&order=created_at.desc&limit=500');
-    return Array.isArray(rows) ? rows.filter(r => r.token_address) : [];
-  } catch { return []; }
+  if (!window.curveRegistry) return [];
+  return await window.curveRegistry.tokens();
 }
 
 // ==================== NFT AUCTION DISCOVERY (Dutch auction listings) ====================
 // Source of truth is on-chain: getAuctions(start, end) returns the flat struct
-// snapshot for every id in [start, end). Supabase only enriches displays for
-// sellers who customized (logo/banner/description overrides); non-customized
-// listings fall back to the NFT's own tokenURI at render time.
+// snapshot for every id in [start, end). Display metadata comes from the NFT's
+// own tokenURI at render time.
 
 const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
 const DUTCH_AUCTION_ABI = [
@@ -717,6 +747,8 @@ async function fetchNftAuctions(limit = 60) {
 // worker proxy on CORS failure. Covers ipfs://, ar://, http(s), and data URIs.
 async function auctionFetchMeta(uri) {
   if (!uri) return {};
+  // Bare on-chain JSON with no data: prefix — see fetchMetadata().
+  if (uri.trimStart().startsWith('{')) { try { return JSON.parse(uri); } catch { return {}; } }
   if (uri.startsWith('data:application/json')) {
     const comma = uri.indexOf(',');
     const body = uri.slice(comma + 1);
@@ -724,13 +756,11 @@ async function auctionFetchMeta(uri) {
     const s = isB64 ? atob(body) : decodeURIComponent(body);
     try { return JSON.parse(s); } catch { return {}; }
   }
+  // Every IPFS gateway first, then the worker proxy for CORS-blocked origins.
+  try { return await ipfsFetchJson(uri); } catch {}
   const url = uri.startsWith('ipfs://') ? IPFS_GW + uri.slice(7)
            : uri.startsWith('ar://')   ? 'https://arweave.net/' + uri.slice(5)
            : uri;
-  try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
-  } catch {}
   try {
     const r = await fetch(`${WORKER_PROXY}?url=${encodeURIComponent(url)}`);
     if (r.ok) return await r.json();
@@ -738,73 +768,15 @@ async function auctionFetchMeta(uri) {
   return {};
 }
 
-// Enrich an on-chain auction with display metadata: prefer the seller's pinned
-// override (if any), else fall back to the NFT contract's native tokenURI.
-// SECURITY: verify the Supabase row's `creator` matches the on-chain seller
-// before trusting the override — sequential auction ids + origin-spoofable
-// worker inserts would otherwise let attackers squat future ids with fake
-// metadata. Mismatch → fall through to the native tokenURI.
-async function enrichNftAuction(a) {
-  try {
-    const rows = await coinDbFetch('launched_tokens', `id=eq.${a.id.toString()}&launch_type=eq.nft-auction&limit=1`);
-    if (Array.isArray(rows) && rows.length > 0 && rows[0].metadata_uri) {
-      const rowCreator  = String(rows[0].creator || '').toLowerCase();
-      const chainSeller = String(a.seller || '').toLowerCase();
-      if (rowCreator && chainSeller && rowCreator === chainSeller) {
-        const md = await auctionFetchMeta(rows[0].metadata_uri);
-        if (md && (md.name || md.image)) return { name: md.name, image: md.image, collName: md.nftCollection };
-      }
-    }
-  } catch {}
-  try {
-    const tokenId = a.ids[0];
-    const [uri, collName, collSym] = await withRPC(rpc => {
-      const nft = new ethers.Contract(a.token, NFT_ERC721_ABI_MIN, rpc);
-      return Promise.all([
-        nft.tokenURI(tokenId).catch(() => ''),
-        nft.name().catch(() => ''),
-        nft.symbol().catch(() => '')
-      ]);
-    });
-    const md = await auctionFetchMeta(uri);
-    return {
-      name: md.name || `${collSym || collName || 'NFT'} #${tokenId.toString()}`,
-      image: md.image || '',
-      collName
-    };
-  } catch {
-    return { name: `NFT #${a.ids[0]?.toString() || '?'}`, image: '' };
-  }
-}
-
-// Batched enrichment for the gallery — replaces an O(N) fan-out (1 Supabase fetch + 3 RPC
-// reads per auction) with a single Supabase IN-query and a single multicall3. The IPFS
-// metadata fetches still run in parallel per-auction since the URIs are heterogeneous.
+// Batched enrichment for the gallery — replaces an O(N) fan-out (3 RPC reads per
+// auction) with a single multicall3. The IPFS metadata fetches still run in
+// parallel per-auction since the URIs are heterogeneous.
 async function batchEnrichNftAuctions(auctions) {
   if (!auctions.length) return [];
 
-  // Step 1: One Supabase query for every auction id at once.
-  const ids = auctions.map(a => a.id.toString()).join(',');
-  const rowsById = {};
-  try {
-    const rows = await coinDbFetch('launched_tokens', `id=in.(${ids})&launch_type=eq.nft-auction`);
-    if (Array.isArray(rows)) {
-      for (const r of rows) rowsById[String(r.id)] = r;
-    }
-  } catch {}
-
-  // Step 2: For auctions without a usable Supabase override, batch tokenURI + name + symbol
-  // into one multicall3 across all the source NFT contracts. Same SECURITY guard as the
-  // single-fetch path: only trust the Supabase row if its creator matches the on-chain seller.
-  const needOnchain = [];
-  for (const a of auctions) {
-    const row = rowsById[a.id.toString()];
-    const rowOk = row && row.metadata_uri
-      && String(row.creator || '').toLowerCase() === String(a.seller || '').toLowerCase()
-      && row.creator;
-    if (!rowOk) needOnchain.push(a);
-  }
-
+  // Step 1: Batch tokenURI + name + symbol into one multicall3 across all the
+  // source NFT contracts.
+  const needOnchain = auctions.slice();
   const onchainData = {};
   if (needOnchain.length > 0) {
     const erc721I = new ethers.Interface(NFT_ERC721_ABI_MIN);
@@ -835,21 +807,9 @@ async function batchEnrichNftAuctions(auctions) {
     } catch {}
   }
 
-  // Step 3: Resolve metadata IPFS in parallel. Heterogeneous URIs (IPFS, Arweave, http)
+  // Step 2: Resolve metadata IPFS in parallel. Heterogeneous URIs (IPFS, Arweave, http)
   // mean we can't batch this layer further; fan it out and let the gateway concurrency budget cap it.
   return Promise.all(auctions.map(async a => {
-    const row = rowsById[a.id.toString()];
-    const rowOk = row && row.metadata_uri
-      && String(row.creator || '').toLowerCase() === String(a.seller || '').toLowerCase()
-      && row.creator;
-    if (rowOk) {
-      try {
-        const md = await auctionFetchMeta(row.metadata_uri);
-        if (md && (md.name || md.image)) {
-          return { a, meta: { name: md.name, image: md.image, collName: md.nftCollection } };
-        }
-      } catch {}
-    }
     const oc = onchainData[a.id.toString()];
     if (oc) {
       const tokenId = a.ids[0];
@@ -922,7 +882,7 @@ function renderZammV0CoinCard(c) {
     : '';
   const initial = (sym[0] || '?').toUpperCase();
   const logoInner = imgHref
-    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='${escAttr(initial)}'">`
+    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.outerHTML='${escAttr(initial)}'">`
     : escText(initial);
   const searchable = `${name} ${sym} zamm coin`.toLowerCase();
   // Deeplink to the swap page using the coin's ERC20 wrapper address
@@ -936,7 +896,9 @@ function renderZammV0CoinCard(c) {
     : null;
   const href = wrapperAddr ? `../?to=${wrapperAddr}` : `../?to=ZAMM`;
   const dataAddr = wrapperAddr || COINS_SINGLETON.toLowerCase();
-  return `<a href="${href}" class="coin-card" data-name="${escAttr(searchable)}" data-symbol="${escAttr(sym.toLowerCase())}" data-addr="${dataAddr}" data-coin-id="${escAttr(String(c.coinId))}">
+  const isSpam = _spamSet.has(dataAddr);
+  return `<a href="${href}" class="coin-card${isSpam ? ' coin-spam' : ''}" data-name="${escAttr(searchable)}" data-symbol="${escAttr(sym.toLowerCase())}" data-addr="${dataAddr}" data-coin-id="${escAttr(String(c.coinId))}" style="position:relative">
+      ${spamBtnHTML(dataAddr, isSpam)}
       <div class="coin-card-head">
         <div class="coin-logo">${logoInner}</div>
         <div style="min-width:0;flex:1">
@@ -972,7 +934,7 @@ function renderNftAuctionCard(a, meta) {
   const addrLow = a.token.toLowerCase();
   const searchable = `${name} ${coll} dutch auction nft`.toLowerCase();
   const logoInner = imgHref
-    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='N'">`
+    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.outerHTML='N'">`
     : 'N';
   return `<a href="../auction/?id=${id}" class="coin-card" data-name="${searchable}" data-symbol="nft" data-addr="${addrLow}" data-auction-id="${id}">
       <div class="coin-card-head">
@@ -994,11 +956,27 @@ const ZORG_VERIFY_THRESHOLD = 100000n * (10n ** 18n);
 const VERIFIED_BADGE = `<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle;margin-left:3px"><circle cx="8" cy="8" r="7.5" fill="#1d9bf0"/><path d="M5 8.2l2 2 4-4.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ZORG_CHAT_ABI = [
   'function chat(string) payable',
+  'function badges() view returns (address)',
   'event Message(address indexed from, uint256 indexed index, string text)'
 ];
+// Moloch.chat() gates on `badges.balanceOf(msg.sender) != 0`, NOT on share balance.
+// The badge (a top-256 shareholder seat) is minted by Badges.onSharesChanged, which
+// only fires on a share balance change — so a holder who bought 100k+ zOrg through a
+// path that never touched the Shares transfer hook has no seat and every chat() call
+// reverts with Unauthorized. A zero-value self-transfer of shares re-triggers the hook
+// and mints the seat, so we preflight the badge and offer that as a one-click fix.
+const ZORG_BADGES_ABI = ['function balanceOf(address) view returns (uint256)'];
+const ZORG_SHARES_ABI = ['function transfer(address,uint256) returns (bool)'];
 
 let _userIsVerified = false;
 let _spamSet = new Set();
+
+// Flag button markup. Every card type in the gallery renders this so a verified
+// 100k+ zOrg holder can flag any coin, not just bonding-curve launches.
+function spamBtnHTML(addr, isSpam) {
+  if (!_userIsVerified || isSpam || !addr) return '';
+  return `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${addr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+}
 
 // Load cached spam list synchronously (no RPC), then update in background
 function loadSpamListCached() {
@@ -1049,11 +1027,61 @@ async function loadSpamListFresh() {
   }
 }
 
+function _spamToast(text) {
+  const t = document.createElement('div');
+  t.textContent = text;
+  Object.assign(t.style, {position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',background:'var(--surface)',color:'var(--red)',padding:'8px 16px',fontSize:'12px',borderRadius:'6px',border:'1px solid var(--border-muted)',zIndex:'9999',maxWidth:'90vw',textAlign:'center'});
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+// Resolve (and cache) the DAO's Badges contract address.
+let _zorgBadgesAddr = null;
+async function getZorgBadgesAddr() {
+  if (_zorgBadgesAddr) return _zorgBadgesAddr;
+  try {
+    const cached = localStorage.getItem('zfi_zorg_badges');
+    if (cached && /^0x[0-9a-fA-F]{40}$/.test(cached)) return (_zorgBadgesAddr = cached);
+  } catch {}
+  const addr = await withRPC(async rpc => new ethers.Contract(ZORG_DAO, ZORG_CHAT_ABI, rpc).badges());
+  try { localStorage.setItem('zfi_zorg_badges', addr); } catch {}
+  return (_zorgBadgesAddr = addr);
+}
+
+async function userHasZorgBadge(addr) {
+  try {
+    const badges = await getZorgBadgesAddr();
+    const bal = await withRPC(async rpc => new ethers.Contract(badges, ZORG_BADGES_ABI, rpc).balanceOf(addr));
+    return bal > 0n;
+  } catch { return false; }
+}
+
 async function flagCoinAsSpam(coinAddr) {
   const s = await connectWallet();
   if (!s) return;
-  if (!_userIsVerified) { const t = document.createElement('div'); t.textContent = 'You need 100k+ ZORG shares to flag coins.'; Object.assign(t.style, {position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',background:'var(--surface)',color:'var(--red)',padding:'8px 16px',fontSize:'12px',borderRadius:'6px',border:'1px solid var(--border-muted)',zIndex:'9999'}); document.body.appendChild(t); setTimeout(() => t.remove(), 3000); return; }
+  if (!_userIsVerified) { _spamToast('You need 100k+ zOrg shares to flag coins.'); return; }
   if (!confirm(`Flag ${coinAddr} as spam in the ZORG DAO chat?`)) return;
+
+  // Preflight the on-chain gate so a missing seat surfaces as a fixable prompt
+  // rather than an opaque "Unauthorized" revert.
+  if (!(await userHasZorgBadge(_connectedAddress))) {
+    if (!confirm('Your DAO seat badge is not minted yet, so the flag would revert.\n\nClaim it now? This sends a zero-value zOrg self-transfer that registers your seat, then you can flag.')) return;
+    try {
+      const shares = new ethers.Contract(ZORG_TOKEN, ZORG_SHARES_ABI, s);
+      const seatTx = await shares.transfer(_connectedAddress, 0n);
+      await seatTx.wait();
+    } catch (e) {
+      if (e.code !== 'ACTION_REJECTED' && !(e.message || '').includes('user rejected')) {
+        _spamToast('Could not claim seat: ' + (e.shortMessage || e.message || ''));
+      }
+      return;
+    }
+    if (!(await userHasZorgBadge(_connectedAddress))) {
+      _spamToast('Seat not granted — the top-256 shareholder seats are full at a higher balance than yours.');
+      return;
+    }
+  }
+
   try {
     const dao = new ethers.Contract(ZORG_DAO, ZORG_CHAT_ABI, s);
     const msg = `<<<COIN_SPAM address="${coinAddr}" COIN_SPAM>>>`;
@@ -1068,9 +1096,14 @@ async function flagCoinAsSpam(coinAddr) {
         localStorage.setItem('zfi_spam_cache', JSON.stringify(c));
       }
     } catch {}
-    // Hide the card immediately
-    const card = document.querySelector(`.coin-card[data-addr="${coinAddr.toLowerCase()}"]`);
-    if (card) { card.classList.add('coin-spam'); card.style.display = 'none'; }
+    // Hide every card for this address immediately (a coin can appear in more
+    // than one section, e.g. a DAICO that also has a ZAMM v0 listing).
+    const cards = document.querySelectorAll(`.coin-card[data-addr="${coinAddr.toLowerCase()}"]`);
+    cards.forEach(card => {
+      card.classList.add('coin-spam');
+      card.style.display = 'none';
+      card.querySelector('.spam-btn')?.remove();
+    });
     // Update spam count display
     const countEl = document.getElementById('spamCount');
     if (countEl) {
@@ -1083,7 +1116,7 @@ async function flagCoinAsSpam(coinAddr) {
     }
   } catch(e) {
     if (e.code !== 'ACTION_REJECTED' && !(e.message||'').includes('user rejected')) {
-      alert('Failed to flag: ' + (e.shortMessage || e.message || ''));
+      _spamToast('Failed to flag: ' + (e.shortMessage || e.message || ''));
     }
   }
 }
@@ -1134,6 +1167,7 @@ async function withRPC(fn) {
 
 function resolveIPFS(uri) {
   if (!uri) return '';
+  uri = ipfsNormalize(uri);
   if (uri.startsWith('ipfs://')) return IPFS_GW + uri.slice(7);
   return uri;
 }
@@ -1151,17 +1185,19 @@ async function fetchMetadata(contractURI) {
     } catch {}
   }
   try {
-    const url = resolveIPFS(contractURI);
     let metadata;
-    if (url.startsWith('data:')) {
-      const json = url.split(',').slice(1).join(',');
-      metadata = url.startsWith('data:application/json;base64,') ? JSON.parse(atob(json)) : JSON.parse(decodeURIComponent(json));
+    if (contractURI.trimStart().startsWith('{')) {
+      // Four early ClassicalCurveSale launches (SHIVWEI, SLOPPS, MAYBEWEI, GREGWEI)
+      // stored raw JSON with no `data:` prefix. It's on-chain and immutable, so the
+      // client has to cope — otherwise they render with no name, logo, or socials.
+      metadata = JSON.parse(contractURI);
+    } else if (contractURI.startsWith('data:')) {
+      const json = contractURI.split(',').slice(1).join(',');
+      metadata = contractURI.startsWith('data:application/json;base64,') ? JSON.parse(atob(json)) : JSON.parse(decodeURIComponent(json));
     } else {
-      const _ac = new AbortController();
-      const _to = setTimeout(() => _ac.abort(), 8000);
-      const res = await fetch(url, { signal: _ac.signal });
-      clearTimeout(_to);
-      metadata = await res.json();
+      // Walks every gateway before giving up — a single unreachable host used to
+      // return {} here, which drops the coin to the wrong detail page.
+      metadata = await ipfsFetchJson(contractURI);
     }
     _metadataCache[contractURI] = metadata;
     if (contractURI.startsWith('ipfs://')) {
@@ -1185,7 +1221,7 @@ function logoHTML(meta, metadata, size) {
   // (size > 48) still load eagerly since they're always in view.
   if (imgUrl) {
     const lazy = size <= 48 ? ' loading="lazy" decoding="async"' : '';
-    return `<img src="${escAttr(imgUrl)}" alt=""${lazy} onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(meta.symbol))},${size})">`;
+    return `<img src="${escAttr(imgUrl)}" alt=""${lazy} onerror="if(!ipfsNextGateway(this))this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(meta.symbol))},${size})">`;
   }
   return symbolSVG(meta.symbol, size);
 }
@@ -1217,64 +1253,6 @@ function updateOGMeta(title, description, imageUrl) {
   if (cardEl) cardEl.setAttribute('content', imageUrl ? 'summary_large_image' : 'summary');
 }
 
-var _coinChartType = 'line';
-var _coinChartTf = '1h';
-
-function coinChartUrl(poolId, type) {
-  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-  let url = `https://www.zamm.finance/embed/pool/1/${poolId}?type=${type}&theme=${theme}`;
-  if (type === 'candle') url += `&tf=${_coinChartTf}`;
-  return url;
-}
-
-function toggleChart() {
-  const el = $('chartDrawer');
-  if (!el) return;
-  el.classList.toggle('open');
-  if (el.classList.contains('open') && !el.dataset.loaded) {
-    el.dataset.loaded = '1';
-    const poolId = el.dataset.poolId;
-    const body = el.querySelector('.chart-body');
-    body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(poolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
-  }
-}
-
-function setCoinChartType(type) {
-  if (type === _coinChartType) return;
-  _coinChartType = type;
-  const el = $('chartDrawer');
-  if (!el) return;
-  const poolId = el.dataset.poolId;
-  const tfEl = document.getElementById('coinTfToggle');
-  if (tfEl) tfEl.classList.toggle('show', type === 'candle');
-  const wrap = el.querySelector('.chart-iframe-wrap');
-  if (wrap) {
-    const iframe = document.createElement('iframe');
-    iframe.src = coinChartUrl(poolId, type);
-    iframe.allow = 'clipboard-write';
-    iframe.sandbox = 'allow-scripts allow-same-origin';
-    wrap.replaceChildren(iframe);
-  }
-  el.querySelectorAll('.chart-type-toggle button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
-}
-
-function setCoinChartTf(tf) {
-  if (tf === _coinChartTf) return;
-  _coinChartTf = tf;
-  const el = $('chartDrawer');
-  if (!el) return;
-  const poolId = el.dataset.poolId;
-  const wrap = el.querySelector('.chart-iframe-wrap');
-  if (wrap) {
-    const iframe = document.createElement('iframe');
-    iframe.src = coinChartUrl(poolId, 'candle');
-    iframe.allow = 'clipboard-write';
-    iframe.sandbox = 'allow-scripts allow-same-origin';
-    wrap.replaceChildren(iframe);
-  }
-  const tfEl = document.getElementById('coinTfToggle');
-  if (tfEl) tfEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
-}
 
 // ==================== POOL ACTIVITY ====================
 
@@ -1305,6 +1283,19 @@ function fmtAge(ts) {
   if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
   return Math.floor(diff / 86400) + 'd ago';
+}
+
+// A sale deadline is a *future* timestamp, so fmtAge() renders it as a negative
+// "-2591999s ago". Cause launches default to a 30-day deadline, which means the
+// status tile was wrong on essentially every freshly launched cause coin.
+function fmtDeadline(ts) {
+  const left = ts - Math.floor(Date.now() / 1000);
+  if (left <= 0) return 'ended ' + fmtAge(ts);
+  if (left < 3600) return Math.max(1, Math.floor(left / 60)) + 'm left';
+  if (left < 86400) return Math.floor(left / 3600) + 'h left';
+  const days = Math.floor(left / 86400);
+  const hours = Math.floor((left % 86400) / 3600);
+  return days < 7 && hours > 0 ? `${days}d ${hours}h left` : `${days}d left`;
 }
 
 // Pool Activity + Liquidity Providers tables were indexer-backed and have been
@@ -1357,6 +1348,10 @@ async function loadHolders(daoAddr) {
     // Render immediately with short addresses
     function renderHolders(names) {
       let html = '';
+      const maxHeld = sorted.reduce((mx, m) => {
+        const t = (m.shares || 0n) + (m.loot || 0n);
+        return t > mx ? t : mx;
+      }, 0n);
       sorted.forEach((m, i) => {
         const addr = m.account;
         const addrLower = addr.toLowerCase();
@@ -1372,7 +1367,9 @@ async function loadHolders(daoAddr) {
 
         const pctColor = pctNum >= 10 ? 'var(--green)' : pctNum >= 1 ? 'var(--fg)' : 'var(--fg-muted)';
 
-        html += `<div class="holder-row">
+        const barW = maxHeld > 0n ? Number(total * 1000n / maxHeld) / 10 : 0;
+
+        html += `<div class="holder-row" style="--w:${barW}%">
           <div class="holder-addr"><a href="https://etherscan.io/address/${addr}" target="_blank" title="${addr}">${escText(displayName)}</a></div>
           ${tag}
           <div class="holder-shares">${fmtShares(total)}</div>
@@ -1502,23 +1499,10 @@ async function loadCurveHolders(tokenAddr) {
   }
 
   try {
-    // Primary: trader addresses from the token_trades DB.
+    // Candidate holders come from the token's own Transfer logs.
     let candidateAddrs = [];
-    try {
-      const trades = await coinDbFetch('token_trades',
-        `token_address=eq.${tokenAddr.toLowerCase()}&order=created_at.desc&limit=500`);
-      if (Array.isArray(trades)) {
-        const set = new Set();
-        for (const t of trades) { if (t.trader) set.add(t.trader.toLowerCase()); }
-        candidateAddrs = [...set];
-      }
-    } catch {}
-
-    // Fallback to chain scan if the DB had nothing \u2014 covers worker hiccups and non-UI trades.
-    if (candidateAddrs.length === 0) {
-      try { candidateAddrs = await fallbackTransferScan(); }
-      catch { candidateAddrs = []; }
-    }
+    try { candidateAddrs = await fallbackTransferScan(); }
+    catch { candidateAddrs = []; }
 
     if (candidateAddrs.length === 0) {
       content.innerHTML = '<div class="activity-empty">No holders yet</div>';
@@ -1563,6 +1547,7 @@ async function loadCurveHolders(tokenAddr) {
 
     function renderCurveHolderRows(names) {
       let html = '';
+      const maxBal = holders.reduce((mx, h) => (h.bal > mx ? h.bal : mx), 0n);
       holders.forEach((h, i) => {
         const tag = TAG[h.addr];
         const short = h.addr.slice(0, 6) + '\u2026' + h.addr.slice(-4);
@@ -1570,7 +1555,8 @@ async function loadCurveHolders(tokenAddr) {
         const tagHTML = tag ? `<span class="holder-tag ${tag.cls}">${tag.label}</span>` : '';
         const pctNum = totalSupply > 0n ? Number(h.bal * 10000n / totalSupply) / 100 : 0;
         const pctColor = pctNum >= 10 ? 'var(--green)' : pctNum >= 1 ? 'var(--fg)' : 'var(--fg-muted)';
-        html += `<div class="holder-row">
+        const barW = maxBal > 0n ? Number(h.bal * 1000n / maxBal) / 10 : 0;
+        html += `<div class="holder-row" style="--w:${barW}%">
           <div class="holder-addr"><a href="https://etherscan.io/address/${h.addr}" target="_blank" title="${h.addr}">${escText(display)}</a>${tag ? ' ' + tagHTML : ''}</div>
           <div class="holder-shares">${fmtTokenAmount(h.bal.toString())}</div>
           <div class="holder-pct" style="color:${pctColor}">${pctNum.toFixed(1)}%</div>
@@ -1606,6 +1592,99 @@ async function loadCurveHolders(tokenAddr) {
   } catch (e) {
     content.innerHTML = '<div class="activity-empty">Failed to load holders</div>';
   }
+}
+
+// ---- LP seed attribution ----
+// The LP-fee estimate credits lifetime pool fee growth to the DAO's units, which is only
+// right if the DAO's LP dates from the pool's first Mint. That can't be read from state,
+// so it's checked once against the seeding log and cached — the answer never changes for a
+// given pool, and nothing on the page waits for it.
+const LP_SEED_TTL = 30 * 24 * 3600 * 1000;
+
+async function verifyLpSeeder(poolId, daoAddr) {
+  const key = `lpSeed:${poolId}`;
+  try {
+    const hit = JSON.parse(localStorage.getItem(key) || 'null');
+    if (hit && Date.now() - hit.ts < LP_SEED_TTL) return hit;
+  } catch {}
+  if (!window.poolEvents) return null;
+
+  // Walk back until the scan is exhausted (cursor null == reached the zAMM deploy floor).
+  // Public RPCs cap log ranges, so a long-lived pool may not be reachable; in that case the
+  // oldest Mint seen is NOT necessarily the pool's first, and the answer must stay unknown
+  // rather than blaming whoever happens to be oldest in the window.
+  const mints = [];
+  let cursor = null, exhausted = false;
+  for (let i = 0; i < 6; i++) {
+    const { events, nextCursor } = await window.poolEvents.load(poolId, {
+      limit: 500, before: cursor, maxChunks: 16
+    });
+    mints.push(...events.filter(e => e.type === 'LIQADD'));
+    if (!nextCursor) { exhausted = true; break; }
+    cursor = nextCursor;
+  }
+  if (!exhausted || !mints.length) return { ts: Date.now(), inconclusive: true };
+  mints.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex);
+  const first = mints[0];
+
+  let seeder = (first.maker || '').toLowerCase();
+  // Mint records the caller, which may be a router or helper. Fall back to the tx sender.
+  let via = null;
+  if (seeder && seeder !== daoAddr.toLowerCase()) {
+    try {
+      const tx = await withRPC(async rpc => await rpc.getTransaction(first.txhash));
+      if (tx && tx.from) { via = seeder; seeder = tx.from.toLowerCase(); }
+    } catch {}
+  }
+  const out = {
+    ts: Date.now(),
+    isDao: seeder === daoAddr.toLowerCase(),
+    seeder, via,
+    block: first.blockNumber,
+    time: first.timestamp || null
+  };
+  try { localStorage.setItem(key, JSON.stringify(out)); } catch {}
+  return out;
+}
+
+// Compact duration: "2d 4h", "3h 12m", "45m", "30s"
+function fmtDur(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
+function fmtAgo(ts) {
+  const secs = Math.floor(Date.now() / 1000) - ts;
+  if (secs < 60) return 'just now';
+  return fmtDur(secs) + ' ago';
+}
+
+// Live-tick any [data-deadline] countdowns rendered into the proposals drawer.
+let _propTimer = null;
+function startPropCountdowns() {
+  if (_propTimer) clearInterval(_propTimer);
+  const tick = () => {
+    const els = document.querySelectorAll('[data-deadline]');
+    if (!els.length) { clearInterval(_propTimer); _propTimer = null; return; }
+    const now = Math.floor(Date.now() / 1000);
+    els.forEach(el => {
+      const dl = Number(el.dataset.deadline);
+      const left = dl - now;
+      if (left <= 0) {
+        el.textContent = el.dataset.expiredText || '';
+        el.removeAttribute('data-deadline');
+      } else {
+        el.textContent = (el.dataset.prefix || '') + fmtDur(left);
+      }
+    });
+  };
+  tick();
+  _propTimer = setInterval(tick, 1000);
 }
 
 function toggleProposals() {
@@ -1678,6 +1757,11 @@ async function loadProposals(daoAddr) {
     }
 
     const STATES = ['Unopened','Active','Queued','Succeeded','Defeated','Expired','Executed'];
+    // gov tuple is positional: [threshold, minYes, quorumAbs, proposalTTL, timelockDelay, quorumBps, ...]
+    const gov = result.base.gov || [];
+    const propTTL = Number(gov[3] || 0);
+    const timelockDelay = Number(gov[4] || 0);
+    const quorumBps = Number(gov[5] || 0);
     // Reverse to show newest first
     const sorted = [...proposals].reverse();
 
@@ -1693,7 +1777,9 @@ async function loadProposals(daoAddr) {
       const stateText = STATES[state] || `State ${state}`;
       const stateClass = stateText.toLowerCase();
       const desc = verMap.get(id.toString()) || `Proposal`;
-      const shortId = id.toString().slice(0, 10) + '...';
+      // Decimal proposal ids are unreadable; hex short-form matches how they appear elsewhere
+      const idHex = '0x' + BigInt(id).toString(16).padStart(64, '0');
+      const shortId = idHex.slice(0, 6) + '…' + idHex.slice(-4);
 
       const forF = parseFloat(ethers.formatUnits(forV, 18));
       const againstF = parseFloat(ethers.formatUnits(againstV, 18));
@@ -1705,26 +1791,63 @@ async function loadProposals(daoAddr) {
 
       const proposerShort = proposer ? `${proposer.slice(0,6)}...${proposer.slice(-4)}` : '';
 
+      // Bar is scaled to the snapshot supply, not to votes cast — a lone voter should
+      // read as a sliver, not a full green bar.
+      const snapshot = parseFloat(ethers.formatUnits(p.supplySnapshot || 0n, 18));
+      const scale = snapshot > 0 ? snapshot : total;
+      const w = v => scale > 0 ? (v / scale * 100) : 0;
+      const turnoutPct = scale > 0 ? total / scale * 100 : 0;
+      const quorumPct = quorumBps / 100;
+
+      // Deadline: Active counts down to end of voting, Queued to end of timelock.
+      const createdAt = Number(p.createdAt || 0);
+      const queuedAt = Number(p.queuedAt || 0);
+      const nowSec = Math.floor(Date.now() / 1000);
+      let timeHTML = '';
+      if (state === 1 && createdAt > 0 && propTTL > 0) {
+        const ends = createdAt + propTTL;
+        timeHTML = ends > nowSec
+          ? `<span class="prop-clock" data-deadline="${ends}" data-prefix="Voting ends in " data-expired-text="Voting ended">Voting ends in ${fmtDur(ends - nowSec)}</span>`
+          : `<span class="prop-clock">Voting ended</span>`;
+      } else if (state === 2 && queuedAt > 0 && timelockDelay > 0) {
+        const unlock = queuedAt + timelockDelay;
+        timeHTML = unlock > nowSec
+          ? `<span class="prop-clock" data-deadline="${unlock}" data-prefix="Executable in " data-expired-text="Ready to execute">Executable in ${fmtDur(unlock - nowSec)}</span>`
+          : `<span class="prop-clock prop-clock-ready">Ready to execute</span>`;
+      } else if (state === 2) {
+        timeHTML = `<span class="prop-clock prop-clock-ready">Ready to execute</span>`;
+      } else if (state === 3 && timelockDelay > 0 && queuedAt === 0) {
+        timeHTML = `<span class="prop-clock">Awaiting queue</span>`;
+      }
+
       html += `<div class="prop-item">
         <div class="prop-head">
           <div class="prop-desc">${escText(desc)}</div>
           <span class="prop-state ${stateClass}">${stateText}</span>
         </div>
-        ${total > 0 ? `<div class="prop-bar"><div class="prop-bar-for" style="width:${forPct}%"></div><div class="prop-bar-against" style="width:${againstPct}%"></div><div class="prop-bar-abstain" style="width:${abstainPct}%"></div></div>` : ''}
+        ${scale > 0 ? `<div class="prop-bar" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted${quorumPct > 0 ? ` &middot; ${quorumPct}% quorum` : ''}">
+          <div class="prop-bar-for" style="width:${w(forF)}%"></div>
+          <div class="prop-bar-against" style="width:${w(againstF)}%"></div>
+          <div class="prop-bar-abstain" style="width:${w(abstainF)}%"></div>
+          ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%"></div>` : ''}
+        </div>` : ''}
         <div class="prop-votes">
           <span><span class="for">For</span> ${forF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
           <span><span class="against">Against</span> ${againstF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
           <span>Abstain ${abstainF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+          ${scale > 0 ? `<span class="prop-turnout">${turnoutPct.toFixed(1)}% turnout${quorumPct > 0 ? ` / ${quorumPct}% quorum` : ''}</span>` : ''}
         </div>
         <div class="prop-meta">
-          <span title="${id.toString()}">${shortId}</span>
-          ${proposerShort ? ` &middot; <a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>` : ''}
+          ${timeHTML ? `${timeHTML} &middot; ` : ''}${createdAt > 0 ? `<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>` : ''}
+          ${proposerShort ? `${createdAt > 0 || timeHTML ? ' &middot; ' : ''}<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>` : ''}
+          <span class="prop-id" title="Proposal ID ${id.toString()}">#${shortId}</span>
         </div>
       </div>`;
     }
 
     html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote & manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
+    startPropCountdowns();
   } catch (e) {
     console.error('loadProposals error:', e);
     content.innerHTML = '<div class="activity-empty">Failed to load proposals</div>';
@@ -1734,6 +1857,80 @@ async function loadProposals(daoAddr) {
 function pctBar(pct, color) {
   color = color || 'var(--green)';
   return `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100).toFixed(1)}%;background:${color}"></div></div>`;
+}
+
+// ---- Cause (DAICO) progress meters ----
+// A cause coin is a fixed-price share sale, so there is no price to chart. What
+// actually moves is: how much of the target is funded, and how much of the raise
+// is still sitting in the treasury (ragequittable) vs already tapped out.
+function causeBarHTML(segments) {
+  // segments: [{flex, ch, color}] — monospace block bar, matches the curve page style.
+  return `<div style="font-family:monospace;font-size:11px;line-height:1;display:flex;width:100%">` +
+    segments.map(s => `<span style="flex:${Math.max(s.flex, 0.5)};overflow:hidden;white-space:nowrap;color:${s.color}">${s.ch.repeat(200)}</span>`).join('') +
+    `</div>`;
+}
+
+function causeMeterRow(label, value, bar) {
+  return `<div style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
+      <span>${label}</span><span>${value}</span>
+    </div>
+    ${bar}
+  </div>`;
+}
+
+// Inner HTML of #causeMeters. Shared by first render and the live refresh so the
+// two can never drift.
+function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
+  const raisedEth = Number(ethers.formatEther(raisedWei));
+  let html = '';
+
+  if (targetWei > 0n) {
+    const pct = Number(raisedWei * 10000n / targetWei) / 100;
+    const targetEth = Number(ethers.formatEther(targetWei));
+    html += causeMeterRow(
+      'funded',
+      `${fmtNum(raisedEth)} / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
+      causeBarHTML([
+        { flex: Math.min(pct, 100), ch: '█', color: pct >= 100 ? 'var(--green)' : 'var(--fg)' },
+        { flex: Math.max(100 - pct, 0), ch: '░', color: 'var(--fg-dim)' },
+      ])
+    );
+  } else if (raisedWei > 0n) {
+    html += causeMeterRow('funded', `${fmtNum(raisedEth)} ETH &middot; open-ended`,
+      causeBarHTML([{ flex: 100, ch: '█', color: 'var(--fg)' }]));
+  }
+
+  // Treasury split: what is still here (and ragequittable) vs what has left via
+  // the tap. Only meaningful once something has been raised.
+  if (raisedWei > 0n) {
+    const held = treasuryWei > raisedWei ? raisedWei : treasuryWei;
+    const deployed = raisedWei > treasuryWei ? raisedWei - treasuryWei : 0n;
+    const heldPct = Number(held * 10000n / raisedWei) / 100;
+    const heldEth = Number(ethers.formatEther(held));
+    const deployedEth = Number(ethers.formatEther(deployed));
+    html += causeMeterRow(
+      'treasury',
+      deployed > 0n
+        ? `${fmtNum(heldEth)} held &middot; ${fmtNum(deployedEth)} deployed`
+        : `${fmtNum(heldEth)} ETH held &middot; fully ragequittable`,
+      causeBarHTML([
+        { flex: heldPct, ch: '█', color: 'var(--green)' },
+        { flex: 100 - heldPct, ch: '▒', color: 'var(--fg-dim)' },
+      ])
+    );
+  }
+
+  return html;
+}
+
+// Days of runway left at the current tap rate, given what is in the treasury.
+function causeRunwayHTML(treasuryWei, ratePerSec) {
+  if (ratePerSec <= 0n || treasuryWei <= 0n) return '';
+  const days = Number(treasuryWei / ratePerSec) / 86400;
+  if (!isFinite(days) || days <= 0) return '';
+  const txt = days >= 365 ? '>1 year' : days >= 1 ? `~${Math.round(days)} days` : '<1 day';
+  return `<span style="color:${days < 14 ? 'var(--red)' : 'inherit'}">${txt} of runway at this rate</span>`;
 }
 
 function fmtETH(wei) {
@@ -1767,6 +1964,22 @@ function fmtUsd(val) {
   if (val >= 1e3) return '$' + (val / 1e3).toFixed(1) + 'K';
   if (val >= 1) return '$' + val.toFixed(2);
   return '$' + val.toFixed(2);
+}
+
+// Per-token prices are tiny — keep significant digits instead of flooring to $0.00
+function fmtUsdPrice(val) {
+  if (!(val > 0)) return '';
+  if (val >= 1) return '$' + val.toFixed(2);
+  if (val >= 0.01) return '$' + val.toFixed(4);
+  if (val >= 1e-8) return '$' + val.toPrecision(3).replace(/0+$/, '').replace(/\.$/, '');
+  return '$' + val.toExponential(2);
+}
+
+function fmtEthPrice(v) {
+  if (!(v > 0)) return '';
+  if (v >= 1) return v.toFixed(4) + ' ETH';
+  if (v >= 0.000001) return v.toFixed(9).replace(/0+$/, '') + ' ETH';
+  return v.toExponential(2) + ' ETH';
 }
 
 let _ethUsdPrice = 0;
@@ -1863,14 +2076,17 @@ async function refreshSaleStats() {
 }
 
 function route() {
-  if (_activityInterval) { clearInterval(_activityInterval); _activityInterval = null; }
+  // NOTE: an `_activityInterval` clear used to live here. Its declaration went away
+  // with the indexer-backed Pool Activity table, but this reference didn't — and an
+  // undeclared identifier throws ReferenceError rather than reading as undefined,
+  // so route() died before rendering and every coin page came up blank.
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
-  coinRoomDisconnect();
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
   _causeBuyMode = 'shares';
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
   const hash = location.hash.replace('#','').trim();
   if (hash && hash.startsWith('0x') && hash.length === 42) {
     renderCoinPage(hash);
@@ -1884,7 +2100,7 @@ window.addEventListener('hashchange', route);
 // ==================== GALLERY ====================
 
 // Stale-while-revalidate cache. Gallery state changes slowly (minutes), but the cold-load
-// pipeline (RPCs + Supabase + IPFS metadata + indexer) takes 1-3s. We snapshot the rendered
+// pipeline (RPCs + IPFS metadata) takes 1-3s. We snapshot the rendered
 // HTML keyed by the connected wallet so revisits paint instantly, then fetch fresh in the
 // background.
 const GALLERY_CACHE_KEY = 'zfi_gallery_cache_v1';
@@ -1924,6 +2140,7 @@ async function renderGallery() {
   // already-fired quote setTimeout bodies that are mid-await on RPC.
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
   ++_curveQuoteGen;
   ++_curveZammQuoteGen;
   updateOGMeta('COIN', 'Trade coins on zFi - the most secure-by-default exchange', '');
@@ -1971,18 +2188,17 @@ async function _galleryRenderFresh(gen) {
 
   try {
     // Fetch DAICOs, ClassicalCurveSale tokens, NFT auctions, and ZAMM v0 coins in parallel.
-    const [daicos, curveTokenAddrs, causeTokenRows, nftAuctions, zammV0Coins] = await Promise.all([
+    const [daicos, curveTokenAddrs, nftAuctions, zammV0Coins] = await Promise.all([
       withRPC(async rpc => {
         const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
         return await helper.scanDAICOs(0, 500, [ZERO]);
       }),
       fetchCurveTokenList(),
-      fetchCauseTokenList(),
       fetchNftAuctions(),
       fetchZammV0CoinsForGallery()
     ]);
 
-    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && causeTokenRows.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
+    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
       if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
@@ -2004,10 +2220,6 @@ async function _galleryRenderFresh(gen) {
       '0xF792394938E553eA4cdbFa984509550A5fe335e5'
     ].map(a => a.toLowerCase()));
     let filtered = (daicos || []).filter(d => !EXCLUDED_COINS.has(d.dao.toLowerCase()));
-
-    // Identify cause coins from Supabase not in scanDAICOs
-    const daicoAddrSet = new Set(filtered.map(d => d.dao.toLowerCase()));
-    const missingCauseRows = causeTokenRows.filter(r => !daicoAddrSet.has(r.token_address.toLowerCase()) && !EXCLUDED_COINS.has(r.token_address.toLowerCase()));
 
     // Load cached spam list synchronously (zero latency), refresh in background
     loadSpamListCached();
@@ -2053,13 +2265,18 @@ async function _galleryRenderFresh(gen) {
     const csIface = curveAddrs.length > 0 ? new ethers.Interface(CURVE_SALE_ABI) : null;
     const curveUriI = curveAddrs.length > 0 ? new ethers.Interface(['function contractURI() view returns (string)']) : null;
     const curveNameI = curveAddrs.length > 0 ? new ethers.Interface(['function name() view returns (string)', 'function symbol() view returns (string)']) : null;
+    const curvePoolI = curveAddrs.length > 0 ? new ethers.Interface(ZAMM_POOLS_ABI) : null;
     let curveMcCalls = [];
     for (const addr of curveAddrs) {
       curveMcCalls.push(
         { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('curves', [addr]) },
         { target: addr, allowFailure: true, callData: curveUriI.encodeFunctionData('contractURI') },
         { target: addr, allowFailure: true, callData: curveNameI.encodeFunctionData('name') },
-        { target: addr, allowFailure: true, callData: curveNameI.encodeFunctionData('symbol') }
+        { target: addr, allowFailure: true, callData: curveNameI.encodeFunctionData('symbol') },
+        // Post-graduation the curve's sold/virtualReserve freeze, so the card's mcap
+        // (and the low-mcap filter and mcap sort that read it) would stay pinned to the
+        // graduation price. Read the zAMM pool for the live number.
+        { target: ZAMM, allowFailure: true, callData: curvePoolI.encodeFunctionData('pools', [computePoolId(ZERO, addr, 0n, 0n, CURVE_HOOK_FEE)]) }
       );
     }
 
@@ -2198,6 +2415,7 @@ async function _galleryRenderFresh(gen) {
 
       const cardHTML = `
         <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isInactive ? ' coin-inactive' : ''}${isLegacy ? ' coin-legacy' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+          ${spamBtnHTML(cardAddr, isSpam)}
           <div class="coin-card-head">
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
             <div>
@@ -2223,7 +2441,7 @@ async function _galleryRenderFresh(gen) {
     if (curveAddrs.length > 0 && curveMcRes.length > 0) {
       // Fetch all curve metadata in parallel
       const curveMetaPromises = curveAddrs.map((_, i) => {
-        const uriRes = curveMcRes[i * 4 + 1];
+        const uriRes = curveMcRes[i * 5 + 1];
         if (!uriRes || !uriRes.success) return Promise.resolve(null);
         try {
           const uri = curveUriI.decodeFunctionResult('contractURI', uriRes.returnData)[0];
@@ -2235,7 +2453,7 @@ async function _galleryRenderFresh(gen) {
 
       for (let i = 0; i < curveAddrs.length; i++) {
         const tokenAddr = curveAddrs[i];
-        const cRes = curveMcRes[i * 4];
+        const cRes = curveMcRes[i * 5];
         if (!cRes.success) continue;
         let curve;
         try { curve = csIface.decodeFunctionResult('curves', cRes.returnData); } catch { continue; }
@@ -2243,8 +2461,8 @@ async function _galleryRenderFresh(gen) {
 
         const cMeta = curveMetadatas[i] || {};
         let cName, cSym;
-        try { cName = curveNameI.decodeFunctionResult('name', curveMcRes[i * 4 + 2].returnData)[0]; } catch { cName = cMeta.name || 'Unknown'; }
-        try { cSym = curveNameI.decodeFunctionResult('symbol', curveMcRes[i * 4 + 3].returnData)[0]; } catch { cSym = cMeta.symbol || '???'; }
+        try { cName = curveNameI.decodeFunctionResult('name', curveMcRes[i * 5 + 2].returnData)[0]; } catch { cName = cMeta.name || 'Unknown'; }
+        try { cSym = curveNameI.decodeFunctionResult('symbol', curveMcRes[i * 5 + 3].returnData)[0]; } catch { cSym = cMeta.symbol || '???'; }
 
         const sold = BigInt(curve.sold);
         const cap = BigInt(curve.cap);
@@ -2256,7 +2474,15 @@ async function _galleryRenderFresh(gen) {
         const seeded = curve.seeded;
 
         const remaining = virtualReserve - sold;
-        const spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
+        let spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
+        // Once seeded, price lives in the zAMM pool — the curve figures are frozen.
+        if (seeded && curveMcRes[i * 5 + 4]?.success) {
+          try {
+            const pr = curvePoolI.decodeFunctionResult('pools', curveMcRes[i * 5 + 4].returnData);
+            const r0 = BigInt(pr[0]), r1 = BigInt(pr[1]);
+            if (r0 > 0n && r1 > 0n) spotPrice = (r0 * (10n ** 18n)) / r1;
+          } catch {}
+        }
         const spotPriceEth = Number(spotPrice) / 1e18;
         const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
         // When graduationTarget > 0 the curve graduates on raisedETH ≥ target, not full cap sale.
@@ -2279,19 +2505,18 @@ async function _galleryRenderFresh(gen) {
         if (isLowMcap) lowMcapCount++;
         const isSpam = _spamSet.has(cCardAddr);
         if (isSpam) spamCount++;
-        const spamBtnHTML = _userIsVerified && !isSpam ? `<button class="spam-btn" title="Flag as spam" onclick="event.preventDefault();event.stopPropagation();flagCoinAsSpam('${cCardAddr}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
 
         const mcapDisplay = curveMcap > 1e-6 ? fmtMcap(curveMcap) : '';
         const mcapUsd = curveMcap > 1e-6 && ethUsd > 0 ? fmtUsd(curveMcap * ethUsd) : '';
         const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : `${progressPct.toFixed(1)}% bonded`;
         const logoImg = cMeta.image ? resolveIPFS(cMeta.image) : null;
         const logoEl = logoImg
-          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
+          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
           : symbolSVG(cSym, 40);
 
         const cCardHTML = `
           <a href="#${tokenAddr}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cCardName)}" data-symbol="${escText(cCardSym)}" data-addr="${cCardAddr}" style="position:relative">
-            ${spamBtnHTML}
+            ${spamBtnHTML(cCardAddr, isSpam)}
             <div class="coin-card-head">
               <div class="coin-logo">${logoEl}</div>
               <div>
@@ -2306,38 +2531,6 @@ async function _galleryRenderFresh(gen) {
         `;
         cards.push({ html: cCardHTML, key: cCardName + '|' + cCardSym, mcap: curveMcap, r0: 0n, poolDeep: false, saleActive: cSaleActive, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false, isCurve: true });
       }
-    }
-
-    // Build cards for Supabase cause coins not in scanDAICOs
-    for (const row of missingCauseRows) {
-      const cAddr = row.token_address;
-      const cName = row.name || 'Unnamed';
-      const cSym = row.symbol || '???';
-      const cCardName = cName.toLowerCase();
-      const cCardSym = cSym.toLowerCase();
-      const cCardAddr = cAddr.toLowerCase();
-      const isSpam = _spamSet.has(cCardAddr);
-      if (isSpam) spamCount++;
-      const logoImg = row.image ? resolveIPFS(row.image) : null;
-      const logoEl = logoImg
-        ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
-        : symbolSVG(cSym, 40);
-      const causeCardHTML = `
-        <a href="#${cAddr}" class="coin-card${isSpam ? ' coin-spam' : ''}" data-name="${escText(cCardName)}" data-symbol="${escText(cCardSym)}" data-addr="${cCardAddr}" style="position:relative">
-          <div class="coin-card-head">
-            <div class="coin-logo">${logoEl}</div>
-            <div>
-              <div class="coin-card-name">${escText(cName)}</div>
-              <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span></div>
-            </div>
-          </div>
-          ${row.description
-            ? `<div class="coin-card-stat" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escText(row.description)}</div>`
-            : `<div class="coin-card-bar">░░░░░░░░░░</div>
-          <div class="coin-card-stat">New</div>`}
-        </a>
-      `;
-      cards.push({ html: causeCardHTML, key: cCardName + '|' + cCardSym, mcap: 0, r0: 0n, poolDeep: false, saleActive: true, isTest: false, isSpam, isInactive: false, isLegacy: false, isLowMcap: false, isCause: true });
     }
 
     // Group by name|symbol, stack duplicates (exclude spam/inactive from grouping)
@@ -2420,9 +2613,9 @@ async function _galleryRenderFresh(gen) {
     for (const c of inactiveCards) grid += c.html;
     for (const c of spamCards) grid += c.html;
 
-    // NFT auctions: enrich via batched fetches (1 Supabase IN-query + 1 multicall3)
-    // instead of N×(1 Supabase + 3 RPC) per auction. For ~60 auctions this drops the
-    // load from O(60) HTTP and O(180) RPC calls to O(1) of each before the IPFS layer.
+    // NFT auctions: enrich via one batched multicall3 instead of N×3 RPC reads per
+    // auction. For ~60 auctions this drops the load from O(180) RPC calls to O(1)
+    // before the IPFS layer.
     // Time-sensitive listings get prepended above the rest. Failures per auction fall
     // back to a generic "NFT #id" card rather than dropping the whole row.
     let nftAuctionCount = 0;
@@ -2444,6 +2637,15 @@ async function _galleryRenderFresh(gen) {
       if (Array.isArray(zammV0Coins) && zammV0Coins.length > 0) {
         const zammHtml = zammV0Coins.map(renderZammV0CoinCard).join('');
         zammV0Count = zammV0Coins.length;
+        // Flagged ZAMM v0 coins are hidden by CSS like the rest — count them so the
+        // "N coins hidden" footer stays accurate.
+        for (const zc of zammV0Coins) {
+          const cid = (() => { try { return BigInt(zc.coinId); } catch { return null; } })();
+          const zAddr = (cid !== null && cid < (1n << 160n))
+            ? '0x' + cid.toString(16).padStart(40, '0')
+            : COINS_SINGLETON.toLowerCase();
+          if (_spamSet.has(zAddr)) { spamCount++; zammV0Count--; }
+        }
         const zammHeader = `<div class="coin-grid-section" data-section="zamm">ZAMM coins <span class="count">${zammV0Count}</span></div>`;
         grid = grid + zammHeader + zammHtml;
       }
@@ -2560,7 +2762,6 @@ let _curveData = null;
 let _curveObs = [];
 let _curveEthUsd = 0;
 let _curveBalance = 0n;
-let _curveRoomId = null;
 // Live creator-fee config so post-grad routed swaps charge the right amount.
 // _curveCreatorRouted is true when beneficiary != 0 (i.e. ZAMM direct swaps would revert with Unauthorized).
 // *OnInput flags determine which leg of the swap is taxed; quote/minOut math diverges based on them.
@@ -2620,6 +2821,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   // already-fired async callbacks awaiting their RPC response.
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
   ++_curveQuoteGen;
   ++_curveZammQuoteGen;
 
@@ -2632,12 +2834,18 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   const seeded = curve.seeded;
   const launchTime = Number(curve.launchTime);
 
-  // Spot price
+  // Spot price. Pre-graduation this is the bonding curve. Post-graduation the
+  // curve's sold/virtualReserve freeze at their graduation values, so this formula
+  // would pin the header (and FDV) to the graduation price forever while real
+  // trading moves the zAMM pool. Verified on a simulated graduation: one 3 ETH buy
+  // left this reading 143% below the actual pool price. `let` so the post-multicall
+  // block below can swap in the live pool spot once reserves are known.
   const remaining = virtualReserve - sold;
-  const spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
-  const spotPriceEth = Number(spotPrice) / 1e18;
+  const curveSpotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
+  let spotPrice = curveSpotPrice;
+  let spotPriceEth = Number(spotPrice) / 1e18;
   const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
-  const fdvEth = spotPriceEth * 1e9;
+  let fdvEth = spotPriceEth * 1e9;
 
   // Graduation progress tracks whichever criterion the contract actually uses:
   //   graduationTarget > 0 → triggers on raisedETH ≥ target (sold/cap is misleading because
@@ -2665,7 +2873,9 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     { target: tokenAddr, allowFailure: true, callData: nameI.encodeFunctionData('symbol') },
     { target: tokenAddr, allowFailure: true, callData: uriI.encodeFunctionData('contractURI') },
     // Post-grad routing: read live creator fee so swap quotes & minOut match what the contract will actually charge.
-    { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorFees', [tokenAddr]) }
+    { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorFees', [tokenAddr]) },
+    // Post-graduation the live price lives in the zAMM pool, not the frozen curve.
+    { target: ZAMM, allowFailure: true, callData: new ethers.Interface(ZAMM_POOLS_ABI).encodeFunctionData('pools', [computePoolId(ZERO, tokenAddr, 0n, 0n, CURVE_HOOK_FEE)]) }
   ];
   if (_connectedAddress) {
     mc3Calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
@@ -2698,7 +2908,19 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   _curveCreatorBuyOnInput = cfBuyOnInput;
   _curveCreatorSellOnInput = cfSellOnInput;
   _curveCreatorRouted = cfBeneficiary !== ZERO;
-  const tokenBalance = (_connectedAddress && mcRes[7]?.success) ? erc20I.decodeFunctionResult('balanceOf', mcRes[7].returnData)[0] : 0n;
+  // Pool reserves are index 7; the optional balanceOf now lands at 8.
+  if (seeded && mcRes[7]?.success) {
+    try {
+      const pr = new ethers.Interface(ZAMM_POOLS_ABI).decodeFunctionResult('pools', mcRes[7].returnData);
+      const r0 = BigInt(pr[0]), r1 = BigInt(pr[1]);
+      if (r0 > 0n && r1 > 0n) {
+        spotPrice = (r0 * (10n ** 18n)) / r1;   // ETH per whole token, 1e18-scaled
+        spotPriceEth = Number(spotPrice) / 1e18;
+        fdvEth = spotPriceEth * 1e9;
+      }
+    } catch {}
+  }
+  const tokenBalance = (_connectedAddress && mcRes[8]?.success) ? erc20I.decodeFunctionResult('balanceOf', mcRes[8].returnData)[0] : 0n;
 
   _curveEthUsd = ethUsd;
   _curveBalance = tokenBalance;
@@ -2760,7 +2982,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
 
   let html = `
     <a href="#" class="back-link">&larr; All Coins</a>
-    ${bannerUrl ? `<div class="coin-banner"><img src="${escAttr(bannerUrl)}" alt="" onerror="this.parentNode.style.display='none'"></div>` : ''}
+    ${bannerUrl ? `<div class="coin-banner"><img src="${escAttr(bannerUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.parentNode.style.display='none'"></div>` : ''}
     <div class="coin-detail-head">
       <div class="coin-detail-logo">${curveMeta ? logoHTML({symbol: tokenSymbol}, curveMeta, 64) : symbolSVG(tokenSymbol, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
@@ -2823,6 +3045,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       </div>
       <div style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(progressPct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-progressPct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
     </div>
+    <div id="curveSniperNotice" style="display:none"></div>
   `;
 
   // Render the slippage row with the persisted selection marked active. The previous
@@ -2879,6 +3102,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
             </div>
             <div id="curveBuyOutSub" class="curve-out-sub">&nbsp;</div>
           </div>
+          <div id="curveBuyCapNote" style="display:none;font-size:11px;line-height:1.5;color:#FF9800;margin-top:6px"></div>
           <div id="curveBuyDetails" class="curve-details" style="display:none">
             <div class="curve-details-row"><span>Price</span><span class="v" id="curveBuyDetPrice">—</span></div>
             <div class="curve-details-row"><span>Curve fee</span><span class="v" id="curveBuyDetFee">—</span></div>
@@ -3026,7 +3250,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     `;
   }
 
-  // Holders drawer — fetch unique traders from DB, then batch balanceOf on-chain
+  // Holders drawer — candidates from Transfer logs, then batch balanceOf on-chain
   html += `
     <div class="drawer" id="curveHoldersDrawer" data-token="${tokenAddr}">
       <button class="drawer-toggle" onclick="toggleCurveHolders()">
@@ -3036,34 +3260,6 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
       <div class="drawer-body" id="curveHoldersContent"></div>
     </div>
   `;
-
-  // Chat — room lookup from Supabase, messages via Socket.IO (collapsed by default, lazy-connect)
-  _curveRoomId = null;
-  if (COIN_DB_URL) {
-    const rooms = await coinDbFetch('gated_rooms',
-      `token_address=eq.${tokenAddr.toLowerCase()}&limit=1`);
-    // User may have navigated to a different coin while this fetch was in
-    // flight; without this guard we'd point _curveRoomId at the previous
-    // token's room and curveSendChat would post to the wrong place.
-    if (gen !== _renderGen) return;
-    if (Array.isArray(rooms) && rooms.length > 0) {
-      _curveRoomId = rooms[0].id;
-      const chatDisabled = !tokenBalance || tokenBalance === 0n;
-      html += `
-        <div class="curve-chat" id="causeChatWrap">
-          <div class="section-title" style="margin-bottom:6px;cursor:pointer;user-select:none" onclick="toggleCauseChat()">Chat <span id="causeChatChevron" style="font-size:10px">&#9654;</span></div>
-          <div id="causeChatBody" style="display:none">
-            <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">No messages yet</div></div>
-            <div class="curve-chat-input">
-              <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold tokens to chat' : 'Message...'}" maxlength="500"
-                ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
-              <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-  }
 
   // Links
   html += `
@@ -3081,7 +3277,47 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   // Re-render on viewport changes so the canvas stays sharp on resize / orientation flips.
   _attachCurveChartResize($('curveChart'));
 
-  // Chat socket is lazy-connected when user opens the chat panel
+  // Anti-sniper window: the launch fee starts elevated and decays to the base fee
+  // over sniperDuration. Quotes already price this in, but nothing explained *why*
+  // an early buyer is paying 5% instead of 1%, or that simply waiting is cheaper.
+  startCurveSniperNotice(baseFeeBps, sniperFeeBps, sniperDuration, launchTimeSec, graduated);
+}
+
+function startCurveSniperNotice(baseFeeBps, sniperFeeBps, sniperDuration, launchTimeSec, graduated) {
+  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
+  const el = $('curveSniperNotice');
+  if (!el) return;
+  if (graduated || !sniperDuration || sniperFeeBps <= baseFeeBps) { el.style.display = 'none'; return; }
+
+  const tick = () => {
+    const node = $('curveSniperNotice');
+    if (!node || !node.isConnected) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; return; }
+    const left = (launchTimeSec + sniperDuration) - Math.floor(Date.now() / 1000);
+    if (left <= 0) {
+      node.style.display = 'none';
+      clearInterval(_curveSniperTimer);
+      _curveSniperTimer = null;
+      return;
+    }
+    // Mirrors ClassicalCurveSale._effectiveFee (and _effFeeAt above).
+    const elapsed = sniperDuration - left;
+    const feeNow = baseFeeBps + Math.floor((sniperFeeBps - baseFeeBps) * (sniperDuration - elapsed) / sniperDuration);
+    const mins = Math.floor(left / 60), secs = left % 60;
+    const leftTxt = mins > 0 ? `${mins}m ${String(secs).padStart(2, '0')}s` : `${secs}s`;
+    const pct = Math.max(0, Math.min(100, (elapsed / sniperDuration) * 100));
+    node.style.display = '';
+    node.innerHTML = `
+      <div style="margin-bottom:14px;padding:8px 10px;border-radius:6px;background:var(--surface);border-left:3px solid #FF9800">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:600;color:#FF9800">Anti-sniper fee active &mdash; ${(feeNow / 100).toFixed(2)}%</span>
+          <span style="font-size:11px;color:var(--fg-muted)">${leftTxt} until ${(baseFeeBps / 100).toFixed(2)}%</span>
+        </div>
+        <div style="font-family:monospace;font-size:10px;line-height:1;color:var(--fg-dim);display:flex;width:100%;margin-top:5px"><span style="flex:${Math.max(pct, 0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100 - pct, 0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
+        <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">Buying now costs more. The fee decays to ${(baseFeeBps / 100).toFixed(2)}% and goes to the creator either way.</div>
+      </div>`;
+  };
+  tick();
+  _curveSniperTimer = setInterval(tick, 1000);
 }
 
 // ---- Chart ----
@@ -3657,6 +3893,7 @@ function _effFeeNow(curve) {
 
 // On-chain quote via ClassicalCurveSale view functions (authoritative, includes sniper fee)
 let _curveQuoteTimer = null;
+let _curveSniperTimer = null;
 // Bumps every time a new quote is dispatched. Async callbacks that resolve after the user
 // changed input or navigated away check against this and skip their DOM write — otherwise
 // stale results overwrite fresh ones.
@@ -3697,6 +3934,10 @@ function _curveSetOut(outEl, subEl, detEl, state, text, sub) {
   outEl.className = 'curve-out-amount' + (state === 'idle' ? ' placeholder' : state === 'quoting' || state === 'error' ? ' muted' : '');
   if (subEl) subEl.innerHTML = sub || '&nbsp;';
   if (detEl) detEl.style.display = state === 'quoted' ? '' : 'none';
+  // The cap warning belongs to a specific quote — drop it on idle/quoting/error
+  // so a stale "this buy is capped" can't outlive the number it described.
+  const capEl = $('curveBuyCapNote');
+  if (capEl && state !== 'quoted') { capEl.innerHTML = ''; capEl.style.display = 'none'; }
 }
 
 // Adaptive ETH formatter — readable across the 7+ orders of magnitude curve trades span.
@@ -3773,9 +4014,33 @@ function curveUpdateBuyQuote() {
       const feeFloat = Number(feeEth) / 1e18;
       const ethPerMil = tokensFloat > 0 ? (costFloat / tokensFloat) * 1e6 : 0;
 
+      // _curveEstTokens clamps the estimate to maxBuyBps (10% of supply on a
+      // standard launch) and to remaining supply. Without a notice, "You pay 1 ETH"
+      // sits next to a token count that corresponds to a far smaller spend.
+      // Verified against mainnet via eth_simulateV1: buyExactIn does NOT revert
+      // past the cap — it fills exactly maxBuyBps and refunds the surplus in the
+      // same tx. So this is a "you won't get the size you asked for" notice, not
+      // a failure warning.
+      const capTokens = BigInt(curve.maxBuyBps) > 0n ? BigInt(curve.cap) * BigInt(curve.maxBuyBps) / 10000n : 0n;
+      const leftTokens = BigInt(curve.cap) - BigInt(curve.sold);
+      let capNote = '';
+      if (capTokens > 0n && tokens >= capTokens) capNote = `max ${(Number(curve.maxBuyBps) / 100).toFixed(0)}% of supply per tx`;
+      else if (leftTokens > 0n && tokens >= leftTokens) capNote = 'only ' + fmtTokenAmount(leftTokens.toString()) + ' left on the curve';
+      const totalCost = cost + feeEth;
+      const capped = !!capNote && totalCost < (ethWei * 99n / 100n);
+
       outEl.textContent = fmtTokenAmount(tokens.toString());
       outEl.className = 'curve-out-amount';
       subEl.textContent = 'Avg ' + formatEthPrice(ethPerMil) + ' ETH / 1M';
+
+      const capEl = $('curveBuyCapNote');
+      if (capEl) {
+        const refund = ethWei > totalCost ? ethWei - totalCost : 0n;
+        capEl.innerHTML = capped
+          ? `Capped &mdash; ${escText(capNote)}. About ${escText(_curveFmtEth(Number(totalCost) / 1e18))} ETH fills; the remaining ~${escText(_curveFmtEth(Number(refund) / 1e18))} ETH is refunded in the same transaction.`
+          : '';
+        capEl.style.display = capped ? '' : 'none';
+      }
 
       $('curveBuyDetPrice').textContent = formatEthPrice(ethPerMil) + ' ETH / 1M';
       $('curveBuyDetFee').textContent = _curveFmtEth(feeFloat) + ' ETH (' + (feeBps / 100).toFixed(2) + '%)';
@@ -3850,178 +4115,6 @@ function curveUpdateSellQuote() {
   }, 300);
 }
 
-// ---- Gated coin room chat via MiniMeet Socket.IO ----
-const MINIMEET_URL = 'https://www.minimeet.cc';
-let _coinSocket = null;
-let _coinRoomJoined = false;
-
-function _coinChatMsg(m) {
-  const rawSender = m.sender_name || m.name || m.sender || '???';
-  const sender = rawSender.startsWith('0x') && rawSender.length > 16 ? rawSender.slice(0, 6) + '\u2026' + rawSender.slice(-4) : rawSender;
-  const ts = m.ts || m.created_at || m.createdAt;
-  const age = ts ? fmtAge(Math.floor((typeof ts === 'number' ? ts : new Date(ts).getTime()) / 1000)) : 'now';
-  return `<div class="curve-chat-msg"><span class="curve-chat-sender" title="${escAttr(m.sender || '')}">${escText(sender)}</span> <span class="curve-chat-time">&middot; ${age}</span><div class="curve-chat-text">${escText(m.text || '')}</div></div>`;
-}
-
-async function coinRoomConnect(roomId) {
-  if (_coinSocket) { _coinSocket.disconnect(); _coinSocket = null; }
-  _coinRoomJoined = false;
-
-  // Load Socket.IO if not already loaded (shared with trollbox)
-  if (typeof io === 'undefined') {
-    await new Promise((resolve, reject) => {
-      if (typeof io !== 'undefined') { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = 'https://cdn.socket.io/4.8.3/socket.io.min.js';
-      s.integrity = 'sha384-kzavj5fiMwLKzzD1f8S7TeoVIEi7uKHvbTA3ueZkrzYq75pNQUiUi6Dy98Q3fxb0';
-      s.crossOrigin = 'anonymous';
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Socket.IO load failed'));
-      document.head.appendChild(s);
-    });
-  }
-
-  _coinSocket = io(MINIMEET_URL, { transports: ['websocket', 'polling'], reconnection: true });
-
-  // Listen for messages
-  _coinSocket.on('gated-room-chat', (msg) => {
-    const msgsEl = $('curveChatMsgs');
-    if (!msgsEl) return;
-    const empty = msgsEl.querySelector('.activity-empty');
-    if (empty) empty.remove();
-    msgsEl.insertAdjacentHTML('beforeend', _coinChatMsg(msg));
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-  });
-
-  // Listen for history
-  _coinSocket.on('gated-room-history', ({ messages }) => {
-    const msgsEl = $('curveChatMsgs');
-    if (!msgsEl || !messages) return;
-    msgsEl.innerHTML = messages.length > 0
-      ? messages.map(_coinChatMsg).join('')
-      : '<div class="activity-empty">No messages yet</div>';
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-  });
-
-  // Request history on connect (read-only, no auth needed)
-  _coinSocket.on('connect', () => {
-    _coinSocket.emit('gated-room-history', { roomId, limit: 50 });
-  });
-}
-
-function coinRoomDisconnect() {
-  if (_coinSocket) { _coinSocket.disconnect(); _coinSocket = null; }
-  _coinRoomJoined = false;
-}
-
-let _chatSending = false;
-async function curveSendChat() {
-  if (_chatSending) return;
-  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
-  if (!_curveRoomId || !_coinSocket) return;
-  const input = $('curveChatInput');
-  const text = (input?.value || '').trim();
-  if (!text || text.length > 500) return;
-  _chatSending = true;
-
-  // Join room with wallet proof on first send (deferred auth, like trollbox)
-  if (!_coinRoomJoined) {
-    try {
-      const addr = (await _signer.getAddress()).toLowerCase();
-      const nonceRes = await fetch(`${MINIMEET_URL}/auth/wallet/nonce?address=${encodeURIComponent(addr)}`);
-      if (!nonceRes.ok) throw new Error('Nonce failed');
-      const { message, nonce } = await nonceRes.json();
-      const signature = await _signer.signMessage(message);
-
-      // Register wallet on socket if not already
-      const displayName = await curveResolveName(addr) || addr.slice(0, 6) + '\u2026' + addr.slice(-4);
-      _coinSocket.emit('register', { name: displayName, walletAddress: addr, walletSignature: signature, walletNonce: nonce });
-
-      // Wait for registration
-      await new Promise((resolve) => {
-        _coinSocket.once('registered', resolve);
-        _coinSocket.once('register-error', resolve);
-        setTimeout(resolve, 3000);
-      });
-
-      // Join gated room
-      _coinSocket.emit('join-gated-room', { roomId: _curveRoomId, walletAddress: addr, walletSignature: signature, walletNonce: nonce });
-
-      // Wait for join result
-      const joined = await new Promise((resolve) => {
-        _coinSocket.once('gated-room-joined', () => resolve(true));
-        _coinSocket.once('gated-room-error', (err) => {
-          console.warn('Room join failed:', err.message || err);
-          resolve(false);
-        });
-        setTimeout(() => resolve(false), 5000);
-      });
-
-      if (!joined) {
-        const msgsEl = $('curveChatMsgs');
-        if (msgsEl) msgsEl.insertAdjacentHTML('beforeend', `<div class="curve-chat-msg" style="color:var(--fg-dim);font-style:italic">Hold tokens to chat</div>`);
-        const chatInput = $('curveChatInput');
-        if (chatInput) { chatInput.disabled = true; chatInput.placeholder = 'Hold tokens to chat'; }
-        _chatSending = false;
-        return;
-      }
-      _coinRoomJoined = true;
-    } catch (e) {
-      console.warn('Chat auth failed:', e);
-      _chatSending = false;
-      return;
-    }
-  }
-
-  _coinSocket.emit('gated-room-chat', { roomId: _curveRoomId, text });
-  input.value = '';
-  setTimeout(() => { _chatSending = false; }, 1000);
-}
-
-// Auto-join room after buy, auto-boot after sell (if Supabase configured)
-async function curveAfterTrade(tokenAddr, traderWallet, isBuy) {
-  if (!COIN_DB_URL) return;
-  try {
-    const rooms = await coinDbFetch('gated_rooms',
-      `token_address=eq.${tokenAddr.toLowerCase()}&limit=1`);
-    if (!rooms.length) return;
-    const room = rooms[0];
-    const balance = await withRPC(async rpc => {
-      const iface = new ethers.Interface(ERC20_ABI);
-      const raw = await rpc.call({ to: tokenAddr, data: iface.encodeFunctionData('balanceOf', [traderWallet]) });
-      return iface.decodeFunctionResult('balanceOf', raw)[0];
-    });
-    const minBal = BigInt(room.min_balance);
-    if (isBuy && balance >= minBal) {
-      // Auto-join via worker proxy
-      await fetch(`${COIN_DB_URL}/db/gated_room_members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify({
-          room_id: room.id,
-          user_name: traderWallet.toLowerCase(),
-          wallet_address: traderWallet.toLowerCase(),
-          joined_at: new Date().toISOString()
-        })
-      });
-    } else if (!isBuy && balance < minBal && room.creator !== traderWallet.toLowerCase()) {
-      // Auto-boot via worker proxy (worker scopes to own-source rows)
-      await fetch(`${COIN_DB_URL}/db/gated_room_members?room_id=eq.${room.id}&user_name=eq.${traderWallet.toLowerCase()}`, {
-        method: 'DELETE'
-      });
-    }
-  } catch (e) { console.warn('Room membership update failed:', e); }
-}
-
-async function curveResolveName(address) {
-  try {
-    return await withRPC(async rpc => {
-      const ns = new ethers.Contract(WEINS, WEINS_ABI, rpc);
-      return (await ns.reverseResolve(address)) || null;
-    });
-  } catch { return null; }
-}
-
 async function curveBuy() {
   if (_curveTrading) return;
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
@@ -4056,25 +4149,14 @@ async function curveBuy() {
     const receipt = await tx.wait();
 
     const purchaseTopic = ethers.id('Purchase(address,address,uint256,uint256,uint256)');
-    let tokenAmount = 0n, cost = 0n;
+    let tokenAmount = 0n;
     for (const log of receipt.logs) {
       if (log.topics[0] === purchaseTopic && log.address.toLowerCase() === CURVE_SALE.toLowerCase()) {
         const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256'], log.data);
-        tokenAmount = decoded[0]; cost = decoded[1]; break;
+        tokenAmount = decoded[0]; break;
       }
     }
 
-    const address = await _signer.getAddress();
-    const traderName = await curveResolveName(address);
-    coinDbInsert('token_trades', {
-      id: crypto.randomUUID().slice(0, 12),
-      token_address: tokenAddr.toLowerCase(), trader: address.toLowerCase(),
-      trader_name: traderName, type: 'buy',
-      token_amount: tokenAmount.toString(), eth_amount: cost.toString(),
-      tx_hash: tx.hash, created_at: new Date().toISOString()
-    });
-
-    curveAfterTrade(tokenAddr, address, true); // auto-join room
     $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${fmtTokenAmount(tokenAmount.toString())} tokens! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('curveBuyAmount').value = '';
     // Re-render immediately so a buy that triggered graduation flips the UI to the post-grad panel
@@ -4088,12 +4170,11 @@ async function curveBuy() {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
-      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Trade failed')}</div>`;
+      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
       // Graduated() — another buyer pushed the curve over the line between
       // our quote and submit. Flip the panel to post-grad so the user can
       // retry on the right path without manually refreshing.
-      if (/Graduated/i.test(msg) || /Graduated/i.test(e?.message || '')) {
+      if (curveIsGraduatedErr(e)) {
         setTimeout(() => renderCoinPage(tokenAddr), 800);
       }
     }
@@ -4161,24 +4242,14 @@ async function curveSell() {
     const receipt = await tx.wait();
 
     const soldTopic = ethers.id('Sold(address,address,uint256,uint256,uint256)');
-    let amount = 0n, proceeds = 0n;
+    let proceeds = 0n;
     for (const log of receipt.logs) {
       if (log.topics[0] === soldTopic && log.address.toLowerCase() === CURVE_SALE.toLowerCase()) {
         const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256'], log.data);
-        amount = decoded[0]; proceeds = decoded[1]; break;
+        proceeds = decoded[1]; break;
       }
     }
 
-    const sellerName = await curveResolveName(address);
-    coinDbInsert('token_trades', {
-      id: crypto.randomUUID().slice(0, 12),
-      token_address: tokenAddr.toLowerCase(), trader: address.toLowerCase(),
-      trader_name: sellerName, type: 'sell',
-      token_amount: amount.toString(), eth_amount: proceeds.toString(),
-      tx_hash: tx.hash, created_at: new Date().toISOString()
-    });
-
-    curveAfterTrade(tokenAddr, address, false); // auto-boot if below min
     $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Sold for ${(Number(proceeds) / 1e18).toFixed(4)} ETH! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('curveSellAmount').value = '';
     // Await so _curveTrading stays held until the new panel is on screen,
@@ -4189,10 +4260,9 @@ async function curveSell() {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
-      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Trade failed')}</div>`;
+      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
       // Graduated mid-flight — flip to post-grad panel.
-      if (/Graduated/i.test(msg) || /Graduated/i.test(e?.message || '')) {
+      if (curveIsGraduatedErr(e)) {
         setTimeout(() => renderCoinPage(tokenAddr), 800);
       }
     }
@@ -4222,8 +4292,7 @@ async function curveGraduate() {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveGradStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
-      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Graduation failed')}</div>`;
+      $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
     }
   } finally {
     _graduating = false;
@@ -4428,17 +4497,7 @@ async function curveZammSwap(side) {
     $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
 
-    const traderName = await curveResolveName(address);
-    coinDbInsert('token_trades', {
-      id: crypto.randomUUID().slice(0, 12),
-      token_address: tokenAddr.toLowerCase(), trader: address.toLowerCase(),
-      trader_name: traderName, type: isBuy ? 'buy' : 'sell',
-      token_amount: (isBuy ? expectedOut : amount).toString(),
-      eth_amount: (isBuy ? amount : expectedOut).toString(),
-      tx_hash: tx.hash, created_at: new Date().toISOString()
-    });
 
-    curveAfterTrade(tokenAddr, address, isBuy);
     $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">${isBuy ? 'Bought' : 'Sold'}! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput').value = '';
     // Await so _curveTrading stays held until the new panel is on screen,
@@ -4449,8 +4508,7 @@ async function curveZammSwap(side) {
     if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
       $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
     } else {
-      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Swap failed')}</div>`;
+      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
     }
   } finally {
     _curveTrading = false;
@@ -4550,7 +4608,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const daicoSaleActive = saleDeadline === 0 || now < saleDeadline;
   const saleActive = daicoSaleActive || contSaleActive;
   const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && daicoSaleActive) || contSaleActive;
-  const salePct = (!isOpenCap && cap > 0n) ? Number(sold * 10000n / cap) / 100 : 0;
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
@@ -4580,7 +4637,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   let html = `
     <a href="#" class="back-link">&larr; All Coins</a>
-    ${causeBannerUrl ? `<div class="coin-banner"><img src="${escAttr(causeBannerUrl)}" alt="" onerror="this.parentNode.style.display='none'"></div>` : ''}
+    ${causeBannerUrl ? `<div class="coin-banner"><img src="${escAttr(causeBannerUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.parentNode.style.display='none'"></div>` : ''}
     <div class="coin-detail-head">
       <div class="coin-detail-logo">${logoHTML(data.meta, metadata, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
@@ -4609,10 +4666,14 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const treasuryEth = Number(ethers.formatEther(treasuryETH));
   const treasuryUsd = ethUsd ? ' ($' + (treasuryEth * ethUsd).toFixed(2) + ')' : '';
   const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
+  // Target = every share the sale can still mint, at the fixed price. Undefined
+  // for open-ended sales, which get a running total instead of a percentage.
+  const targetWei = (!isOpenCap && cap > 0n && price > 0n) ? cap * price / ethers.parseEther('1') : 0n;
+  const targetEth = Number(ethers.formatEther(targetWei));
   html += `
     <div id="causeRaisedRow" style="margin-bottom:10px">
       <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
-      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised</span>
+      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(targetEth) + ' ETH target' : ''}</span>
       <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
       ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
     </div>
@@ -4636,23 +4697,15 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
         <div id="causeStatusVal" style="font-weight:600;color:${saleEnded ? 'var(--fg-muted)' : 'var(--green)'}">${saleEnded ? 'Ended' : 'Active'}</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${saleDeadline > 0 ? fmtAge(saleDeadline) : 'no deadline'}</div>
+        <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
       </div>
     </div>
   `;
 
-  // Progress bar (skip for open/unlimited cap)
-  if (!isOpenCap && cap > 0n) {
-    html += `
-      <div id="causeProgressBar" style="margin-bottom:14px;font-family:monospace">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
-          <span>funded</span>
-          <span id="causePctLabel">${salePct.toFixed(1)}%</span>
-        </div>
-        <div id="causePctBar" style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
-      </div>
-    `;
-  }
+  // Progress meters — ETH-denominated funding + treasury/deployed split. Shown
+  // for open-ended sales too (as a running total), which the old shares-based bar
+  // skipped entirely.
+  html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH)}</div>`;
 
   // Buy form (if sale active)
   if (!saleEnded) {
@@ -4724,6 +4777,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     html += `
       <div class="section-card" style="background:var(--surface)">
         <div class="section-title">Tap Vesting</div>
+        ${(!tapInstant && treasuryETH > 0n) ? `<div id="causeTapRunway" style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">${causeRunwayHTML(treasuryETH, tapRate)}</div>` : ''}
         <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
           <dt>Rate</dt><dd>${rateDisplay}</dd>
           <dt>Claimable</dt><dd>~${pendingEth} ETH</dd>
@@ -4761,31 +4815,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     </div>
   `;
 
-  // Chat — room lookup from Supabase, messages via Socket.IO (collapsed by default, lazy-connect)
-  _curveRoomId = null;
-  if (COIN_DB_URL) {
-    const rooms = await coinDbFetch('gated_rooms',
-      `token_address=eq.${sharesAddr.toLowerCase()}&limit=1`);
-    if (gen !== _renderGen) return;
-    if (Array.isArray(rooms) && rooms.length > 0) {
-      _curveRoomId = rooms[0].id;
-      const chatDisabled = !userBalance || userBalance === 0n;
-      html += `
-        <div class="curve-chat" id="causeChatWrap">
-          <div class="section-title" style="margin-bottom:6px;cursor:pointer;user-select:none" onclick="toggleCauseChat()">Chat <span id="causeChatChevron" style="font-size:10px">&#9654;</span></div>
-          <div id="causeChatBody" style="display:none">
-            <div class="curve-chat-msgs" id="curveChatMsgs"><div class="activity-empty">No messages yet</div></div>
-            <div class="curve-chat-input">
-              <input type="text" id="curveChatInput" placeholder="${chatDisabled ? 'Hold shares to chat' : 'Message...'}" maxlength="500"
-                ${chatDisabled ? 'disabled' : ''} onkeydown="if(event.key==='Enter')curveSendChat()">
-              <button onclick="curveSendChat()" ${chatDisabled ? 'disabled style="opacity:0.5"' : ''}>Send</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-  }
-
   // Links
   html += `
     <div style="margin-top:16px;font-size:11px;color:var(--fg-dim)">
@@ -4798,8 +4827,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   app.innerHTML = html;
 
-  // Chat socket is lazy-connected when user opens the chat panel
-
   // Store for buy/ragequit functions
   app.dataset.dao = daoAddr;
   app.dataset.shares = sharesAddr;
@@ -4808,8 +4835,9 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.treasury = treasuryETH.toString();
   app.dataset.totalSupply = (sharesTotalSupply + lootTotalSupply).toString();
   app.dataset.userBalance = userBalance.toString();
+  app.dataset.tapRate = tapRate.toString();
 
-  // Auto-refresh sale stats every 30s (partial update, preserves chat/inputs)
+  // Auto-refresh sale stats every 30s (partial update, preserves inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
   _causeRefreshTimer = setInterval(() => {
     if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); return; }
@@ -4819,26 +4847,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
 let _causeRefreshTimer = null;
 let _causeBuyMode = 'shares'; // 'shares' or 'eth'
-let _causeChatOpen = false;
-
-function toggleCauseChat() {
-  _causeChatOpen = !_causeChatOpen;
-  const body = $('causeChatBody');
-  const chevron = $('causeChatChevron');
-  if (body) body.style.display = _causeChatOpen ? '' : 'none';
-  if (chevron) chevron.innerHTML = _causeChatOpen ? '&#9660;' : '&#9654;';
-  if (_causeChatOpen && _curveRoomId && !_coinSocket) {
-    const msgsEl = $('curveChatMsgs');
-    if (msgsEl) msgsEl.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(14)} Loading...</div>`;
-    coinRoomConnect(_curveRoomId);
-    // Fallback if history never arrives
-    setTimeout(() => {
-      const el = $('curveChatMsgs');
-      if (el && el.querySelector('.activity-empty')) el.innerHTML = '<div class="activity-empty">No messages yet</div>';
-    }, 8000);
-  }
-}
-
 async function refreshCauseStats(daoAddr, metadata) {
   const gen = _renderGen;
   try {
@@ -4883,6 +4891,8 @@ async function refreshCauseStats(daoAddr, metadata) {
     const treasuryEth = Number(ethers.formatEther(treasuryETH));
     const ethUsd = _ethUsdPrice || 0;
 
+    const targetWei = (!isOpenCap && cap > 0n && price > 0n) ? cap * price / ethers.parseEther('1') : 0n;
+
     // Update raised row
     const raisedEl = $('causeRaisedRow');
     if (raisedEl) {
@@ -4891,7 +4901,7 @@ async function refreshCauseStats(daoAddr, metadata) {
       const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
       raisedEl.innerHTML = `
         <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
-        <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised</span>
+        <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(Number(ethers.formatEther(targetWei))) + ' ETH target' : ''}</span>
         <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
         ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
       `;
@@ -4912,6 +4922,11 @@ async function refreshCauseStats(daoAddr, metadata) {
       statusEl.textContent = saleEnded ? 'Ended' : 'Active';
       statusEl.style.color = saleEnded ? 'var(--fg-muted)' : 'var(--green)';
     }
+    const dlEl = $('causeDeadlineVal');
+    if (dlEl) {
+      dlEl.textContent = saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline';
+      dlEl.style.color = (saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800) ? 'var(--red)' : 'var(--fg-dim)';
+    }
 
     // Update user balance
     if (_connectedAddress) {
@@ -4919,13 +4934,15 @@ async function refreshCauseStats(daoAddr, metadata) {
       if (balEl) balEl.textContent = (userBalance > 0n ? fmtTokenAmount(userBalance.toString()) : '0') + ' shares';
     }
 
-    // Update progress bar (capped sales only)
-    if (!isOpenCap && cap > 0n) {
-      const salePct = Number(sold * 10000n / cap) / 100;
-      const pctLabel = $('causePctLabel');
-      if (pctLabel) pctLabel.textContent = salePct.toFixed(1) + '%';
-      const pctBar = $('causePctBar');
-      if (pctBar) pctBar.innerHTML = `<span style="flex:${Math.max(salePct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-salePct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span>`;
+    // Update progress meters
+    const metersEl = $('causeMeters');
+    if (metersEl) metersEl.innerHTML = causeMetersHTML(raisedWei, targetWei, treasuryETH);
+
+    // Runway moves with the treasury, so recompute it from the rate stashed at render
+    const runwayEl = $('causeTapRunway');
+    if (runwayEl) {
+      const rate = BigInt($('app').dataset.tapRate || '0');
+      runwayEl.innerHTML = causeRunwayHTML(treasuryETH, rate);
     }
 
     // Update stored data
@@ -5050,21 +5067,6 @@ async function causeBuy(daoAddr) {
     statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
 
-    // Record trade (use DAO address, consistent with launched_tokens)
-    const address = await _signer.getAddress();
-    const traderName = await curveResolveName(address);
-    coinDbInsert('token_trades', {
-      id: crypto.randomUUID().slice(0, 12),
-      token_address: daoAddr.toLowerCase(), trader: address.toLowerCase(),
-      trader_name: traderName, type: 'buy',
-      token_amount: shareAmt.toString(), eth_amount: cost.toString(),
-      tx_hash: tx.hash, created_at: new Date().toISOString()
-    });
-
-    // Auto-join chat room
-    const sharesAddr = $('app')?.dataset.shares;
-    if (sharesAddr) curveAfterTrade(sharesAddr, address, true);
-
     statusEl.innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${Number(ethers.formatEther(shareAmt)).toLocaleString()} shares! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('causeBuyAmount').value = '';
     setTimeout(() => refreshCauseStats(daoAddr, null), 2000);
@@ -5138,10 +5140,6 @@ async function causeRagequit(daoAddr) {
     const tx = await dao.ragequit([ZERO], sharesToBurn, 0);
     statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
-    // Auto-boot from chat room if balance dropped below min
-    const sharesAddr = $('app')?.dataset.shares;
-    const address = await _signer.getAddress();
-    if (sharesAddr) curveAfterTrade(sharesAddr, address, false);
 
     statusEl.innerHTML = `<div style="font-size:12px;color:var(--green)">Redeemed! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('causeRqAmount').value = '';
@@ -5160,8 +5158,6 @@ async function causeRagequit(daoAddr) {
 // ==================== DAICO COIN PAGE ====================
 async function renderCoinPage(daoAddr) {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
-  _causeChatOpen = false;
-  coinRoomDisconnect();
   const gen = ++_renderGen;
   // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
   // freshly-rendered detail page. renderCurveCoinPage bumps these on its own, but if we
@@ -5169,6 +5165,7 @@ async function renderCoinPage(daoAddr) {
   // quote would null-deref on $('curveBuyDetPrice') etc.
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
+  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
   ++_curveQuoteGen;
   ++_curveZammQuoteGen;
   const app = $('app');
@@ -5213,13 +5210,18 @@ async function renderCoinPage(daoAddr) {
     const feeOrHookVal = sale ? BigInt(sale.feeOrHook) : 30n;
     const poolId = computePoolId(ZERO, sharesAddr, 0n, 0n, feeOrHookVal);
     const tapActive_ = tap && tap.ratePerSec > 0n;
-    const [metadata, poolResult, ethUsd] = await Promise.all([
+    const [metadata, poolResult, ethUsd, daoLpBal] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
       withRPC(async rpc => {
         const z = new ethers.Contract(ZAMM, ZAMM_POOLS_ABI, rpc);
         return await z.pools(poolId);
       }).catch(() => null),
-      getEthUsd()
+      getEthUsd(),
+      // LP is ERC6909 on zAMM; a DAO that seeded its own pool owns part of the reserves
+      withRPC(async rpc => {
+        const z = new ethers.Contract(ZAMM, ZAMM_LP_ABI, rpc);
+        return await z.balanceOf(daoAddr, poolId);
+      }).catch(() => 0n)
     ]);
     if (gen !== _renderGen) return;
     // Override icon for DAOs with configured Continuous Sale icons
@@ -5307,7 +5309,7 @@ async function renderCoinPage(daoAddr) {
     );
     let bannerHTML = '';
     if (bannerUrl) {
-      bannerHTML = `<div class="coin-banner"><img src="${escAttr(bannerUrl)}" alt="" onerror="this.parentNode.style.display='none'"></div>`;
+      bannerHTML = `<div class="coin-banner"><img src="${escAttr(bannerUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.parentNode.style.display='none'"></div>`;
     }
 
     // LP info
@@ -5326,19 +5328,52 @@ async function renderCoinPage(daoAddr) {
     const detailTeamLocked = detailTeamBps > 0 ? detailTotalSupply * detailTeamBps / 10000 : 0;
     const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
     const inLp = Number(ethers.formatEther(reserve1));
-    const circulating = detailTotalSupply - unsold - detailTeamLocked;
+    // The DAO may own part of its own pool (LP is ERC6909; pools() returns LP supply at
+    // index 6). Its slice of the reserves is treasury: the ETH backs shares, and the
+    // shares sitting in it are DAO-held, so they are not circulating.
+    const lpSupply = poolResult ? (poolResult[6] ?? 0n) : 0n;
+    const daoLpFrac = lpSupply > 0n && daoLpBal > 0n
+      ? Math.min(1, Number((daoLpBal * 1000000n) / lpSupply) / 1000000)
+      : 0;
+    const daoPoolEth = Number(ethers.formatEther(reserve0)) * daoLpFrac;
+    const daoPoolTokens = inLp * daoLpFrac;
+
+    // LP fees earned. zAMM has no claimable fee accumulator — swap fees compound straight
+    // into the reserves — so fees are measured as growth in sqrt(k) per LP unit. That index
+    // is unchanged by proportional mints/burns and rises only when a swap pays a fee, and it
+    // starts at 1 when a pool is seeded. Applying it to the DAO's current position gives the
+    // fee portion of that position, assuming its LP has been in place since inception.
+    const lpFeeGrowth = (() => {
+      if (lpSupply <= 0n || reserve0 <= 0n || reserve1 <= 0n) return 1;
+      const k = reserve0 * reserve1;
+      let x = k, y = (x + 1n) / 2n;              // integer sqrt (Newton)
+      while (y < x) { x = y; y = (x + k / x) / 2n; }
+      const g = Number((x * 1000000n) / lpSupply) / 1000000;
+      return g > 1 ? g : 1;
+    })();
+    // Position is ETH side + token side, both valued at spot, hence the doubling.
+    const daoLpFeesEth = daoPoolEth > 0 ? 2 * daoPoolEth * (1 - 1 / lpFeeGrowth) : 0;
+    const circulating = detailTotalSupply - unsold - detailTeamLocked - daoPoolTokens;
     // Price: pool spot if sale ended or pool is deep, else sale price
     const poolDeep = hasPool && reserve1 > 0n && inLp > detailTotalSupply * 0.01;
     const usePool = hasPool && (!saleActive || poolDeep);
-    if (circulating > 0) {
-      if (usePool) {
-        mcapETH = (Number(ethers.formatEther(reserve0)) / inLp) * circulating;
-      } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
-        mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
-      }
+    // Spot price per token: pool reserve ratio when the pool is the reference, else sale price
+    let priceETH = 0, priceSrc = '';
+    if (usePool && inLp > 0) {
+      priceETH = Number(ethers.formatEther(reserve0)) / inLp;
+      priceSrc = 'pool';
+    } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
+      priceETH = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt));
+      priceSrc = 'sale';
     }
+    if (circulating > 0 && priceETH > 0) mcapETH = priceETH * circulating;
     const mcapDisplay = mcapETH > 1e-6 ? fmtMcap(mcapETH) : '';
     const mcapUsd = mcapETH > 1e-6 && ethUsd > 0 ? fmtUsd(mcapETH * ethUsd) : '';
+    const priceEthDisplay = priceETH > 0 ? fmtEthPrice(priceETH) : '';
+    const priceUsdDisplay = priceETH > 0 && ethUsd > 0 ? fmtUsdPrice(priceETH * ethUsd) : '';
+    const priceRowHTML = priceEthDisplay
+      ? `<div class="coin-mcap-row" style="font-weight:400;color:var(--fg-dim)" title="${priceSrc === 'pool' ? 'pool reserve ratio (spot)' : 'sale price'}">Price: ${priceEthDisplay}${priceUsdDisplay ? ` <span style="color:var(--fg-muted)">(${priceUsdDisplay})</span>` : ''}${priceSrc === 'sale' ? `<span style="color:var(--fg-muted);font-size:11px"> &middot; sale price</span>` : ''}</div>`
+      : '';
 
     let html = `
       <a href="#" class="back-link">&larr; All Coins</a>
@@ -5357,13 +5392,17 @@ async function renderCoinPage(daoAddr) {
         ? `<div class="coin-mcap-row" style="color:var(--fg-dim)">Collector DAO &middot; continuous sale</div>`
         : isCollect && treasuryETH > 0n
         ? `<div class="coin-mcap-row">Treasury: ${fmtETH(treasuryETH)} ETH${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)})</span>` : ''}</div>`
-        : mcapDisplay ? `<div class="coin-mcap-row">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
+        : mcapDisplay ? `<div class="coin-mcap-row" title="Price &times; circulating supply (total less unsold, team-locked, and shares the DAO owns via its own LP). Excludes treasury holdings.">Circ. MCap: ${mcapDisplay}${mcapUsd ? ` <span style="color:var(--fg-muted);font-weight:400">(${mcapUsd})</span>` : ''}</div>` : ''}
+      ${priceRowHTML}
     `;
 
     // Description + socials
     const hasSocials = metadata.twitter || metadata.telegram || metadata.discord;
+    // A one-line description in a full bordered card outweighs the treasury visually;
+    // drop the card chrome when there's little to hold.
+    const terseDesc = !hasSocials && metadata.description && metadata.description.length <= 60;
     if (metadata.description || hasSocials) {
-      html += `<div class="section-card">`;
+      html += terseDesc ? `<div class="coin-desc-inline">` : `<div class="section-card">`;
       if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
       if (hasSocials) {
         html += `<div class="socials-row"${metadata.description ? ' style="margin-top:10px"' : ''}>`;
@@ -5463,35 +5502,121 @@ async function renderCoinPage(daoAddr) {
 
     // Treasury + Pool reserves + Vault
     if (treasuryETH > 0n || hasPool || contSaleActive) {
+      // Backing per share = redeemable-ish ETH / circulating shares, shown against the
+      // market price so a premium/discount to NAV is visible. Vault ETH arrives async,
+      // so this renders from the DAO balance first and is refreshed below.
+      const navRender = (backingEth, note) => {
+        if (!(circulating > 0) || !(backingEth > 0)) return '';
+        const perShare = backingEth / circulating;
+        const noteHTML = note ? ` <span style="color:var(--fg-dim);font-weight:400;font-size:10px">${note}</span>` : '';
+        const ratio = priceETH > 0 ? priceETH / perShare : 0;
+        const tone = ratio >= 1 ? 'var(--fg-muted)' : 'var(--green)';
+        const label = ratio > 0
+          ? ` <span style="color:${tone};font-weight:400" title="${ratio >= 1
+              ? `The market price is ${ratio.toFixed(2)}&times; the treasury value behind each share — buyers are paying ${((ratio - 1) * 100).toFixed(0)}% above backing.`
+              : `The market price is ${(ratio * 100).toFixed(0)}% of the treasury value behind each share — shares trade below backing.`}">(${ratio >= 1 ? ratio.toFixed(2) + '&times; premium' : (1 / ratio).toFixed(2) + '&times; discount'})</span>`
+          : '';
+        return `${fmtEthPrice(perShare)}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsdPrice(perShare * ethUsd)})</span>` : ''}${label}${noteHTML}`;
+      };
+      const navHTML = navRender(Number(ethers.formatEther(treasuryETH)) + daoPoolEth);
+
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
           ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">${ethIco} Vault</span><span class="stat-value"><span id="vaultEthBal">Loading...</span> <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="font-size:10px;color:var(--fg-muted);text-decoration:underline;margin-left:4px">view</a></span></div>
-          <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>` : ''}
+          <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>
+          <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Fees earned by the vault's TokenWorks pass that have not been claimed into the vault yet. Claiming requires a proposal.">Unclaimed fees</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
           ${hasPool ? `
             <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
           ` : ''}
+          ${(daoLpFrac > 0 || navHTML || contVaultAddr) ? `
+          <button class="stat-reveal" onclick="const d=this.nextElementSibling;const o=d.hasAttribute('hidden');o?d.removeAttribute('hidden'):d.setAttribute('hidden','');this.classList.toggle('open',o);this.firstElementChild.textContent=o?'▾':'▸'" aria-label="Toggle backing detail"><span>&#9656;</span> Backing detail</button>
+          <div class="stat-reveal-body" hidden>
+            ${daoLpFrac > 0 ? `<div class="stat-row" title="The DAO holds ${(daoLpFrac * 100).toFixed(2)}% of this pool's LP, so that share of the reserves is treasury. Its ETH counts toward backing; its $${escText(data.meta.symbol || '???')} is treated as non-circulating."><span class="stat-label">DAO LP share</span><span class="stat-value">${(daoLpFrac * 100).toFixed(1)}% <span style="color:var(--fg-muted);font-weight:400">(${fmtNum(daoPoolEth)} ${ethIco} + ${daoPoolTokens >= 1000 ? (daoPoolTokens / 1000).toFixed(1) + 'K' : daoPoolTokens.toFixed(0)} $${escText(data.meta.symbol || '???')})</span></span></div>` : ''}
+            ${daoLpFeesEth > 0 ? `<div class="stat-row" id="lpFeesRow" title="Estimated swap fees earned by the DAO's LP position. zAMM compounds fees into the reserves rather than escrowing them, so this is derived from the growth in sqrt(k) per LP unit (${((lpFeeGrowth - 1) * 100).toFixed(3)}% since the pool was seeded) applied to the DAO's current position. Already included in the LP value above."><span class="stat-label">LP fees earned <span id="lpFeesQualifier" style="font-weight:400;font-size:10px;opacity:0.6">(est.)</span></span><span class="stat-value">${fmtNum(daoLpFeesEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsdPrice(daoLpFeesEth * ethUsd)})</span>` : ''}</span></div>` : ''}
+            ${reserve0 > 0n && reserve1 > 0n && priceSrc !== 'pool' ? `<div class="stat-row" title="pool reserve ratio: ${ethers.formatEther(reserve0)} ETH / ${ethers.formatEther(reserve1)} $${escText(data.meta.symbol || '???')}"><span class="stat-label">Pool Price</span><span class="stat-value">${fmtEthPrice(Number(ethers.formatEther(reserve0)) / Number(ethers.formatEther(reserve1)))}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsdPrice((Number(ethers.formatEther(reserve0)) / Number(ethers.formatEther(reserve1))) * ethUsd)})</span>` : ''}</span></div>` : ''}
+            <div class="stat-row stat-row-nav" id="navRow"${navHTML ? '' : ' style="display:none"'}>
+              <span class="stat-label" title="Treasury value divided by circulating shares: ETH held by the DAO and its vault, plus the NFT's refundable ETH and the DAO's share of its own LP. Not currently redeemable — realising it takes governance.">Backing / share</span>
+              <span class="stat-value" id="navValue">${navHTML}</span>
+            </div>
+          </div>` : ''}
         </div>
       `;
+      // Date the DAO's LP once the page is idle, and say so on the row: confirmed seeder
+      // means the fee estimate covers the pool's whole life; anything else is softened.
+      if (daoLpFeesEth > 0) {
+        const idle = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
+        idle(async () => {
+          try {
+            const seed = await verifyLpSeeder(poolId.toString(), daoAddr);
+            const q = $('lpFeesQualifier'), row = $('lpFeesRow');
+            // Unknown stays "(est.)" — the log scan not reaching inception is not evidence.
+            if (!q || !row || !seed || seed.inconclusive) return;
+            if (seed.isDao) {
+              const when = seed.time ? ` ${new Date(seed.time * 1000).toLocaleDateString()}` : '';
+              q.textContent = '(since seed)';
+              row.title = `Swap fees earned by the DAO's LP. The DAO seeded this pool${when}${seed.via ? ' (via ' + seed.via.slice(0, 6) + '…' + seed.via.slice(-4) + ')' : ''}, so the full ${((lpFeeGrowth - 1) * 100).toFixed(3)}% growth in sqrt(k) per LP unit since inception applies to its position. Already included in the LP value above.`;
+            } else {
+              q.textContent = '(est., upper bound)';
+              row.title = `Estimated swap fees on the DAO's LP. This pool was seeded by ${seed.seeder.slice(0, 6)}…${seed.seeder.slice(-4)}, not the DAO, so crediting the full ${((lpFeeGrowth - 1) * 100).toFixed(3)}% lifetime fee growth to the DAO's units overstates if they were minted later. Treat as an upper bound. Already included in the LP value above.`;
+            }
+          } catch {}
+        });
+      }
+
       // Fetch vault balances async
       if (contVaultAddr) {
         (async () => {
+          // NOTE: this runs before `content.innerHTML = html` below, so the treasury nodes
+          // do not exist yet — every DOM write here must happen after an await.
           try {
-            const vaultBal = await withRPC(async rpc => {
+            const nftIface = new ethers.Interface(VAULT_NFT_ABI);
+            const feeIface = new ethers.Interface(VAULT_NFT_FEES_ABI);
+            const [vaultBal, nftLocked, nftPending] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
+                { target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [VAULT_NFT_TOKEN_ID]) },
+                { target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [VAULT_NFT_TOKEN_ID]) },
               ]);
-              return res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n;
+              return [
+                res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
+                res[1].success ? nftIface.decodeFunctionResult('getRemainingLockedEth', res[1].returnData)[0] : 0n,
+                res[2].success ? feeIface.decodeFunctionResult('pending', res[2].returnData)[0] : 0n,
+              ];
             });
             const el = $('vaultEthBal');
             if (el) el.textContent = fmtETH(vaultBal);
-          } catch { const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
-          // Hardcoded NFT count for FWC vault (1 FundingWorks NFT currently held)
-          const nftEl = $('vaultNftBal');
-          if (nftEl) nftEl.innerHTML = '<a href="https://opensea.io/item/ethereum/0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6/156" target="_blank" style="color:inherit;text-decoration:underline">1 TokenWorks NFT</a>';
+            // Hardcoded NFT holding for the FWC vault (1 TokenWorks NFT currently held),
+            // annotated with the ETH still refundable from it.
+            const nftLockedEth = Number(ethers.formatEther(nftLocked));
+            const nftEl = $('vaultNftBal');
+            if (nftEl) nftEl.innerHTML = `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${VAULT_NFT_TOKEN_ID}" target="_blank" style="color:inherit;text-decoration:underline">1 TokenWorks NFT</a>${nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : ''}`;
+            // Unclaimed fees earned by the pass — claimable to the vault via proposal
+            const pendingEth = Number(ethers.formatEther(nftPending));
+            const feeRowEl = $('vaultFeesRow'), feeValEl = $('vaultFeesVal');
+            if (feeRowEl && feeValEl && pendingEth > 0) {
+              feeValEl.innerHTML = `${fmtNum(pendingEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(pendingEth * ethUsd)})</span>` : ''}`;
+              feeRowEl.style.display = '';
+            }
+            // Backing = vault ETH + the NFT's still-refundable ETH + fees it has earned
+            const navNotes = [
+              nftLockedEth > 0 ? 'NFT locked ETH' : '',
+              pendingEth > 0 ? 'unclaimed fees' : '',
+              daoPoolEth > 0 ? 'DAO-owned LP' : ''
+            ].filter(Boolean);
+            const navBody = navRender(
+              Number(ethers.formatEther(treasuryETH + vaultBal + nftLocked + nftPending)) + daoPoolEth,
+              navNotes.length ? 'incl. ' + navNotes.join(' + ') : ''
+            );
+            const navValEl = $('navValue'), navRowEl = $('navRow');
+            if (navBody && navValEl && navRowEl) {
+              navValEl.innerHTML = navBody;
+              navRowEl.style.display = '';
+            }
+          } catch (e) { console.error('vault stats load failed:', e); const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
         })();
       }
     }
@@ -5561,18 +5686,22 @@ async function renderCoinPage(daoAddr) {
     // Swap tile — three-mode: Sale / Swap / Ragequit
     const coinLogoUrl = resolveIPFS(metadata.image);
     const coinLogoTag = coinLogoUrl
-      ? `<img src="${escAttr(coinLogoUrl)}" alt="" onerror="this.style.display='none'">`
+      ? `<img src="${escAttr(coinLogoUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.style.display='none'">`
       : '';
     const ethSvg = `<span class="eth-icon"><svg width="14" height="14" viewBox="0 0 256 417" fill="currentColor" opacity="0.6"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg></span>`;
 
-    const defaultMode = saleActive ? 'sale' : hasPool ? 'swap' : 'ragequit';
+    // Ragequit burns shares for a pro-rata slice of the DAO's *own* ETH balance. If the
+    // DAO holds none (e.g. collector DAOs that park ETH in a separate vault), redeeming
+    // returns nothing — hide the tab rather than let someone burn for zero.
+    const canRagequit = treasuryETH > 0n;
+    const defaultMode = saleActive ? 'sale' : hasPool ? 'swap' : canRagequit ? 'ragequit' : 'swap';
 
     html += `
       <div class="section-card swap-tile">
         <div class="swap-mode-tabs">
             ${saleActive ? `<button id="modeTabSale" class="${defaultMode==='sale'?'active':''}" onclick="setTradeMode('sale')">Sale</button>` : ''}
             <button id="modeTabSwap" class="${defaultMode==='swap'?'active':''}" onclick="setTradeMode('swap')">Swap</button>
-            <button id="modeTabRagequit" class="${defaultMode==='ragequit'?'active':''}" onclick="setTradeMode('ragequit')">Ragequit</button>
+            ${canRagequit ? `<button id="modeTabRagequit" class="${defaultMode==='ragequit'?'active':''}" onclick="setTradeMode('ragequit')">Ragequit</button>` : ''}
             ${hasPool ? `<button id="modeTabLp" onclick="setTradeMode('lp')">LP</button>` : ''}
         </div>
 
@@ -5647,6 +5776,7 @@ async function renderCoinPage(daoAddr) {
         </div>
 
         <!-- RAGEQUIT MODE -->
+        ${canRagequit ? `
         <div id="ragequitMode" class="swap-mode-content${defaultMode==='ragequit'?' active':''}">
           <div class="swap-section">
             <div class="swap-section-head">
@@ -5664,7 +5794,7 @@ async function renderCoinPage(daoAddr) {
           </div>
           <div class="rq-estimate" id="rqEstimate"></div>
           <button id="rqBtn" class="action-btn" onclick="onRagequitBtn()">Connect Wallet</button>
-        </div>
+        </div>` : ''}
 
         <!-- LP MODE -->
         ${hasPool ? `
@@ -5755,16 +5885,9 @@ async function renderCoinPage(daoAddr) {
     // (retired). Removed — on-chain reserve reads and trading remain fully functional.
     const _activityLpHTML = '';
 
-    const _chartHTML = hasPool && !saleActive ? `
-        <div class="drawer" id="chartDrawer" data-pool-id="${poolId}" style="display:none">
-          <button class="drawer-toggle" onclick="toggleChart()">
-            <span>Price Chart</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="chart-body"></div>
-        </div>` : '';
-
-    html += _chartHTML + _activityLpHTML;
+    // Price Chart drawer removed: it embedded the zamm.finance/coinchan chart,
+    // which this dapp no longer depends on.
+    html += _activityLpHTML;
 
     // Shareholders drawer
     html += `
@@ -5828,23 +5951,6 @@ async function renderCoinPage(daoAddr) {
       if (coinLogoUrl && !coinLogoUrl.startsWith('data:')) _obHref += '&logo1=' + encodeURIComponent(coinLogoUrl);
       if (hasPool && reserve0 > 0n) _obHref += '&price=' + (Number(ethers.formatEther(reserve1)) / Number(ethers.formatEther(reserve0)));
       _navOb.href = _obHref;
-    }
-
-    // Chart drawer — the coinchan indexer previously gated this on trading activity.
-    // Without it we render the embedded chart directly whenever a pool exists (the
-    // embed derives its own data). Collapsed by default on sale/collector pages.
-    if (hasPool) {
-      const _chartPoolId = poolId.toString();
-      const el = $('chartDrawer');
-      if (el && el.dataset.poolId === _chartPoolId) {
-        el.style.display = '';
-        if (!saleActive && !(_coinMeta && (_coinMeta.type === 'collector' || _coinMeta.type === 'fw-collector' || _coinMeta.launchType === 'collector'))) {
-          el.classList.add('open');
-          el.dataset.loaded = '1';
-          const body = el.querySelector('.chart-body');
-          if (body) body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(_chartPoolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
-        }
-      }
     }
 
     // Fund deeplink: ?amt=1.5#0xDAO... — pre-fill sale amount
@@ -5941,7 +6047,7 @@ function updateSwapLabels() {
   if (!payToken || !recvToken) return;
   const coinLogoUrl = _coinMeta ? resolveIPFS(_coinMeta.image) : '';
   const coinTag = coinLogoUrl
-    ? `<img src="${escAttr(coinLogoUrl)}" alt="" onerror="this.style.display='none'"> ${sym}`
+    ? `<img src="${escAttr(coinLogoUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.style.display='none'"> ${sym}`
     : sym;
   const ethTag = `<span class="eth-icon"><svg width="14" height="14" viewBox="0 0 256 417" fill="currentColor" opacity="0.6"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg></span> ETH`;
   payToken.innerHTML = isBuy ? ethTag : coinTag;
@@ -6396,6 +6502,13 @@ async function executeRagequit() {
 
   const raw = ($('rqSharesInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) return;
+
+  // Empty treasury => burning shares returns nothing. Refuse rather than let it through.
+  if ((_coinData?._treasuryEthBal || 0n) <= 0n) {
+    const el = $('rqEstimate');
+    if (el) el.innerHTML = `<span style="color:var(--red)">Treasury is empty &mdash; redeeming would burn shares for 0 ETH.</span>`;
+    return;
+  }
 
   const daoAddr = $('app').dataset.dao;
   const btn = $('rqBtn');

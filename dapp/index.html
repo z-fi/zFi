@@ -318,7 +318,9 @@ button.secondary:hover { background: var(--surface-hover); }
   font-weight: 600;
   pointer-events: none;
 }
-.slip-num {
+/* Must out-specify the global `input[type="number"]` rule (0,1,1), which would
+   otherwise force this to 24px / width:100% / a heavy bottom border. */
+input[type="number"].slip-num {
   -webkit-appearance: none;
   appearance: textfield;
   background: transparent;
@@ -334,8 +336,8 @@ button.secondary:hover { background: var(--surface-hover); }
   outline: none;
   transition: border-color 0.15s ease;
 }
-.slip-num:hover { border-bottom-color: var(--slip-hover); }
-.slip-num:focus { border-bottom-color: var(--slip-focus); }
+input[type="number"].slip-num:hover { border-bottom-color: var(--slip-hover); }
+input[type="number"].slip-num:focus { border-bottom-color: var(--slip-focus); border-bottom-width: 1px; margin-bottom: 0; }
 .slip-num::-webkit-outer-spin-button,
 .slip-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .slip-num[type="number"] { -moz-appearance: textfield; }
@@ -413,13 +415,18 @@ button.secondary:hover { background: var(--surface-hover); }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 8px;
-  border-radius: 6px;
-  transition: background 0.12s;
+  padding: 6px 8px;
+  border-radius: 0;
+  transition: background 0.12s, box-shadow 0.12s;
 }
 .routes-list-item { cursor: pointer; }
 .routes-list-item:hover { background: var(--surface-hover, rgba(0,0,0,0.03)); }
-.routes-list-item.route-selected { background: var(--surface-hover, rgba(0,0,0,0.04)); outline: 1.5px solid var(--badge-bg); }
+/* A full-brightness 1.5px ring here read as an error state and fought the
+   "best" badge for attention. A left rule + fill marks selection quietly. */
+.routes-list-item.route-selected {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+  box-shadow: inset 2px 0 0 var(--fg);
+}
 .routes-list-item.route-best {
   color: var(--fg);
   font-weight: 500;
@@ -443,6 +450,13 @@ button.secondary:hover { background: var(--surface-hover); }
   align-items: center;
   gap: 5px;
 }
+/* The badge only exists on the best row; without a reserved slot it shunts that
+   row's amount left and breaks the alignment of the whole number column. */
+.routes-list-item .best-slot {
+  flex: 0 0 32px;
+  display: flex;
+  justify-content: flex-end;
+}
 .routes-list-item .best-badge {
   background: var(--badge-bg);
   color: var(--badge-fg);
@@ -456,7 +470,7 @@ button.secondary:hover { background: var(--surface-hover); }
 .routes-list-item .route-diff {
   font-size: 10px;
   color: var(--fg-muted);
-  min-width: 3.5ch;
+  min-width: 5ch;
   text-align: right;
 }
 .routes-list-item .route-bar {
@@ -783,7 +797,18 @@ body.modal-open { overflow: hidden; }
 .coin-upload-btn img {
   position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
 }
-.coin-upload-btn img ~ .coin-upload-label { display:none; }
+/* The thumbnail is appended after the label/clear spans, so a sibling selector
+   can't reach backwards — :has() on the parent is what actually matches. */
+.coin-upload-btn:has(img) .coin-upload-label { display:none; }
+.coin-upload-btn:has(img) { border-style:solid; }
+.coin-upload-clear {
+  display:none;position:absolute;top:2px;right:2px;z-index:2;
+  width:18px;height:18px;align-items:center;justify-content:center;
+  border-radius:50%;background:var(--bg);color:var(--fg-muted);
+  font-size:13px;line-height:1;cursor:pointer;
+}
+.coin-upload-btn:has(img) .coin-upload-clear { display:flex; }
+.coin-upload-clear:hover { color:var(--fg); }
 .coin-upload-logo { width:56px;height:56px;border-radius:50%;flex-shrink:0; }
 .coin-upload-banner { flex:1;height:56px;border-radius:6px; }
 
@@ -843,10 +868,8 @@ body.modal-open { overflow: hidden; }
 .coin-slider-row .coin-slider-val svg { vertical-align:middle;flex-shrink:0; }
 .coin-sliders.locked input[type="range"] { pointer-events:none;opacity:0.4; }
 .coin-drawer-body { display:none;padding-top:4px; }
-#coinSocialsWrap.open .coin-drawer-body,
-#nftAdvancedWrap.open .coin-drawer-body { display:block; }
-#coinSocialsWrap.open .coin-drawer-arrow,
-#nftAdvancedWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
+#coinSocialsWrap.open .coin-drawer-body { display:block; }
+#coinSocialsWrap.open .coin-drawer-arrow { transform:rotate(180deg); }
 .coin-tpl-badge {
   display:inline-flex;align-items:center;vertical-align:middle;margin-left:4px;
   color:var(--fg);opacity:0.7;
@@ -913,10 +936,10 @@ body.modal-open { overflow: hidden; }
 .live-sales { margin-top:16px; }
 .live-sale-card {
   display:flex;align-items:center;gap:10px;padding:10px 12px;
-  border:1px solid var(--border);background:var(--bg);
-  text-decoration:none;color:var(--fg);transition:border-color 0.15s;cursor:pointer;
+  border:1px solid var(--card-border);background:var(--bg);
+  text-decoration:none;color:var(--fg);transition:border-color 0.15s,background 0.15s;cursor:pointer;
 }
-.live-sale-card:hover { border-color:var(--fg-muted); }
+.live-sale-card:hover { border-color:var(--fg-muted);background:var(--surface); }
 .live-sale-logo { width:28px;height:28px;border-radius:50%;object-fit:cover;background:var(--surface);flex-shrink:0; }
 .live-sale-logo-ph { width:28px;height:28px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--fg-muted);flex-shrink:0; }
 .live-sale-info { flex:1;min-width:0; }
@@ -937,7 +960,7 @@ body.modal-open { overflow: hidden; }
   margin-bottom:-1px;
 }
 .otc-order:first-child { border-top:1px solid var(--border-muted); }
-.otc-order:hover { border-color:var(--fg-muted);z-index:1;position:relative; }
+.otc-order:hover { border-color:var(--fg-muted);background:var(--surface);z-index:1;position:relative; }
 .otc-icons { display:flex;align-items:center;flex-shrink:0; }
 .otc-icons svg, .otc-icons img { width:18px;height:18px; }
 .otc-icons .otc-ic1 { margin-left:-5px; }
@@ -955,6 +978,71 @@ body.modal-open { overflow: hidden; }
   padding: 24px;
   background: var(--bg);
 }
+
+/* Shared section heading for the feed blocks below the card
+   (recent orders / curve coins / predictions) — these used to be three
+   near-identical inline styles that had drifted apart. */
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-bottom: 8px;
+}
+.sec-head a { font-weight: 400; text-decoration: none; opacity: 0.7; transition: opacity 0.15s; }
+.sec-head a:hover { opacity: 1; }
+/* Feed blocks share one vertical rhythm instead of 12/16/16px each. */
+.live-sales, #otcTicker { margin-top: 24px; }
+
+/* Swap card: the two amount fields read as distinct panels rather than two
+   underlines separated by a floating arrow. */
+.swap-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-muted);
+  padding: 14px 14px 12px;
+  margin-bottom: 0;
+}
+.swap-arrow + .swap-panel { border-top: none; margin-bottom: 16px; }
+/* Quote block already sits 16px below via the panel's own margin. */
+.swap-arrow + .swap-panel + .quote-info { margin-top: 0; }
+/* Amounts can run to full token precision (50% of a balance = 18 decimals), so
+   the type scales down as the string grows — see _fitAmount(). --amt-base is
+   set per breakpoint, --amt-scale per length, so the two never fight. */
+.swap-panel .amount-input {
+  border-bottom: none;
+  padding: 2px 0;
+  font-size: calc(var(--amt-base, 28px) * var(--amt-scale, 1));
+  font-variant-numeric: tabular-nums;
+  transition: font-size 0.1s ease;
+}
+.swap-panel .amount-input[data-size="sm"]  { --amt-scale: 0.85; }
+.swap-panel .amount-input[data-size="xs"]  { --amt-scale: 0.72; }
+.swap-panel .amount-input[data-size="xxs"] { --amt-scale: 0.6; }
+.swap-panel input:focus { border-bottom: none; margin-bottom: 0; }
+.swap-panel .balance { margin-top: 2px; }
+/* Arrow straddles the seam between the two panels. The extra padding on the
+   facing edges is the gutter it sits in — without it the button lands on top
+   of the 25/50/75/100 row. */
+.swap-panel:has(+ .swap-arrow) { padding-bottom: 26px; }
+.swap-arrow + .swap-panel { padding-top: 26px; }
+.swap-arrow { margin: -16px 0; position: relative; z-index: 2; }
+
+/* Hint line above the card — the info icon used to sit alone and unlabeled. */
+.swap-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+}
+.swap-hint .info-icon { opacity: 0.55; }
 
 /* Receiver accordion */
 .receiver-toggle {
@@ -982,51 +1070,42 @@ body.modal-open { overflow: hidden; }
   background:transparent; color:var(--fg);
 }
 .send-field input:focus { border-bottom-width:2.5px; margin-bottom:-1px; }
-.send-datetime {
-  width:100%; padding:6px 0; font-size:16px; font-family:inherit;
-  border:none; border-bottom:1px solid var(--border-muted); outline:none;
-  background:transparent; color:var(--fg);
-}
-.send-datetime:focus { border-bottom-color:var(--fg); }
-.dark .send-datetime::-webkit-calendar-picker-indicator { filter:invert(1); }
-.send-datetime::-webkit-calendar-picker-indicator { opacity:0.5; cursor:pointer; }
-.send-datetime::-webkit-calendar-picker-indicator:hover { opacity:1; }
 .send-balance { font-size:12px; color:var(--token-bal); margin-top:4px; }
 .send-balance .max-btn { font-size:11px; background:none; border:none; color:var(--fg-muted); cursor:pointer; text-decoration:underline; padding:0 2px; font-family:inherit; }
 .send-balance .max-btn:hover { color:var(--fg); }
-.timelock-item {
+.xfer-item {
   border:1px solid var(--card-border); padding:14px 16px; margin-bottom:0;
   border-bottom:none; font-size:12px; background:var(--bg);
 }
-.timelock-item:first-child { border-top:1px solid var(--card-border); }
-.timelock-item:last-child { border-bottom:1px solid var(--card-border); }
-.timelock-head { display:flex; justify-content:space-between; align-items:center; }
-.timelock-amount { font-size:14px; font-weight:600; letter-spacing:0.01em; }
-.timelock-status { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; }
-.timelock-status.locked { color:#f59e0b; }
-.timelock-status.unlockable { color:var(--green, #22c55e); }
-.timelock-meta { font-size:11px; color:var(--fg-muted); margin-top:6px; letter-spacing:0.02em; }
-.timelock-meta a { text-decoration:none; }
-.timelock-meta a:hover { text-decoration:underline; }
-.timelock-claim { margin-top:8px; }
-.timelock-claim button {
+.xfer-item:first-child { border-top:1px solid var(--card-border); }
+.xfer-item:last-child { border-bottom:1px solid var(--card-border); }
+.xfer-head { display:flex; justify-content:space-between; align-items:center; }
+.xfer-amount { font-size:14px; font-weight:600; letter-spacing:0.01em; }
+.xfer-status { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; }
+.xfer-status.locked { color:#f59e0b; }
+.xfer-status.unlockable { color:var(--green, #22c55e); }
+.xfer-meta { font-size:11px; color:var(--fg-muted); margin-top:6px; letter-spacing:0.02em; }
+.xfer-meta a { text-decoration:none; }
+.xfer-meta a:hover { text-decoration:underline; }
+.xfer-claim { margin-top:8px; }
+.xfer-claim button {
   font-family:inherit; font-size:11px; font-weight:600; cursor:pointer;
   padding:8px 20px; border:1px solid var(--btn-bg); background:var(--btn-bg);
   color:var(--btn-fg); text-transform:uppercase; letter-spacing:0.08em; transition:background 0.2s;
 }
-.timelock-claim button:hover { background:var(--btn-hover); }
-.timelock-claim button:disabled { background:var(--btn-dis-bg); border-color:var(--btn-dis-border); color:var(--btn-dis-fg); cursor:not-allowed; }
-.timelock-claim button + button { margin-left:6px; }
-.timelock-status.pending { color:#3b82f6; }
-.timelock-status.recoverable { color:var(--green, #22c55e); }
-.timelock-status.matured { color:var(--green, #22c55e); }
-.timelock-status.clawback-ready { color:#f59e0b; }
-.timelock-countdown { font-size:10px; color:var(--fg-dim); margin-top:2px; font-variant-numeric:tabular-nums; }
-.timelock-claim button.secondary { background:transparent; color:var(--fg); border-color:var(--card-border); }
-.timelock-claim button.secondary:hover { background:var(--card-border); }
-.timelock-claim button.danger { background:transparent; color:#ef4444; border-color:#ef4444; }
-.timelock-claim button.danger:hover { background:#ef4444; color:var(--bg); }
-.timelock-item.slow-focus { animation:slowFocusPulse 2.4s ease-out 1; box-shadow:0 0 0 2px var(--fg) inset; }
+.xfer-claim button:hover { background:var(--btn-hover); }
+.xfer-claim button:disabled { background:var(--btn-dis-bg); border-color:var(--btn-dis-border); color:var(--btn-dis-fg); cursor:not-allowed; }
+.xfer-claim button + button { margin-left:6px; }
+.xfer-status.pending { color:#3b82f6; }
+.xfer-status.recoverable { color:var(--green, #22c55e); }
+.xfer-status.matured { color:var(--green, #22c55e); }
+.xfer-status.clawback-ready { color:#f59e0b; }
+.xfer-countdown { font-size:10px; color:var(--fg-dim); margin-top:2px; font-variant-numeric:tabular-nums; }
+.xfer-claim button.secondary { background:transparent; color:var(--fg); border-color:var(--card-border); }
+.xfer-claim button.secondary:hover { background:var(--card-border); }
+.xfer-claim button.danger { background:transparent; color:#ef4444; border-color:#ef4444; }
+.xfer-claim button.danger:hover { background:#ef4444; color:var(--bg); }
+.xfer-item.slow-focus { animation:slowFocusPulse 2.4s ease-out 1; box-shadow:0 0 0 2px var(--fg) inset; }
 @keyframes slowFocusPulse { 0% { background:var(--fg); color:var(--bg); } 35% { background:var(--fg); color:var(--bg); } 100% { background:var(--bg); color:var(--fg); } }
 /* Delayed transfer (SLOW) options */
 .delay-chip {
@@ -1074,6 +1153,26 @@ body.modal-open { overflow: hidden; }
   margin-top:6px;
   line-height:1.4;
 }
+
+/* Swap-card responsive overrides.
+   These live at the END of the sheet on purpose: the @media blocks near the top
+   are declared BEFORE the component rules they try to override, so at equal
+   specificity the later component rule wins and those overrides never apply.
+   Anything added up there for .swap-card / .swap-panel is dead on arrival. */
+@media (max-width: 700px) {
+  .swap-card { padding: 20px 16px; }
+  .swap-panel { padding: 12px 12px 10px; }
+  .swap-panel:has(+ .swap-arrow) { padding-bottom: 24px; }
+  .swap-arrow + .swap-panel { padding-top: 24px; }
+  .swap-panel .amount-input { --amt-base: 24px; }
+  /* Arrow is 38px on mobile — half of that keeps it centred on the seam. */
+  .swap-arrow { margin: -19px 0; }
+}
+@media (max-width: 380px) {
+  .swap-card { padding: 16px 12px; }
+  .swap-panel { padding: 10px 10px 8px; }
+  .swap-panel .amount-input { --amt-base: 21px; }
+}
 </style>
 </head>
 <body>
@@ -1088,13 +1187,13 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span></div>
+<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
 
 <!-- Swap card -->
 <div class="swap-card">
 
 <!-- From token section -->
-<div class="section token-section">
+<div class="section token-section swap-panel">
   <div class="token-header">
     <label style="margin:0">From</label>
     <div class="token-select" onclick="openTokenModal('from')">
@@ -1115,7 +1214,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <!-- To token section -->
-<div class="section token-section">
+<div class="section token-section swap-panel">
   <div class="token-header">
     <label style="margin:0">To</label>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1168,7 +1267,7 @@ body.modal-open { overflow: hidden; }
     </div>
     <div id="allRoutesList" class="routes-list"></div>
   </div>
-  <a id="calldataLink" href="#" target="_blank" rel="noopener" title="Preview calldata — final tx may differ slightly (fresh quote at execution)" style="display:none;font-size:11px;color:var(--fg-muted);text-decoration:none;opacity:0.6;transition:opacity 0.15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Inspect calldata &#8599;</a>
+  <a id="calldataLink" href="#" target="_blank" rel="noopener" title="Preview calldata — final tx may differ slightly (fresh quote at execution)" style="display:none;font-size:11px;color:var(--fg-muted);text-decoration:none;opacity:0.6;transition:opacity 0.15s;margin-top:8px" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">Inspect calldata &#8599;</a>
 </div>
 
 <!-- Receiver (optional) -->
@@ -1223,9 +1322,9 @@ body.modal-open { overflow: hidden; }
 
 <!-- Recent OTC orders -->
 <div id="otcTicker" style="display:none;margin-top:12px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-    <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-dim);font-weight:600">Recent Orders</span>
-    <a href="./orderbook/" style="font-size:10px;color:var(--fg-dim);text-decoration:none;opacity:0.7;transition:opacity 0.15s;letter-spacing:0.03em" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">VIEW ALL &rarr;</a>
+  <div class="sec-head">
+    <span>Recent Orders</span>
+    <a href="./orderbook/">View all &rarr;</a>
   </div>
   <div id="otcTickerList"></div>
 </div>
@@ -1386,19 +1485,19 @@ body.modal-open { overflow: hidden; }
 
 
   <div id="coinNameRow" class="coin-name-row">
-    <div class="section"><input type="text" id="coinName" class="amount-input" placeholder="Name" maxlength="50" style="font-size:16px" oninput="syncCoinURL()"></div>
-    <div class="section"><input type="text" id="coinSymbol" class="amount-input" placeholder="Symbol" maxlength="10" style="font-size:16px" oninput="syncCoinURL()"></div>
+    <div class="section"><input type="text" id="coinName" class="amount-input" placeholder="Name" maxlength="50" style="font-size:16px" autocomplete="off" spellcheck="false" oninput="coinFormChanged()"></div>
+    <div class="section"><input type="text" id="coinSymbol" class="amount-input" placeholder="Symbol" maxlength="10" style="font-size:16px" autocomplete="off" spellcheck="false" autocapitalize="characters" oninput="coinSymbolInput(this)"></div>
   </div>
 
   <div id="coinDescWrap" class="section" style="margin-bottom:14px">
     <label>Description <span style="text-transform:none;color:var(--fg-dim)">(optional, max 280 chars)</span></label>
-    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:16px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px;-webkit-appearance:none" maxlength="280" oninput="syncCoinURL()"></textarea>
+    <textarea id="coinDescription" placeholder="What is this coin about?" rows="2" style="width:100%;padding:8px 0;font-size:16px;font-family:inherit;border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);resize:vertical;min-height:40px;-webkit-appearance:none" maxlength="280" oninput="coinFormChanged()"></textarea>
   </div>
 
   <div id="coinUploadRow" class="coin-upload-row">
-    <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo"><span class="coin-upload-label">Logo</span></label>
+    <label class="coin-upload-btn coin-upload-logo" for="coinImageInput" title="Logo (optional — auto-generated from the symbol if left empty)"><span class="coin-upload-label">Logo</span><span class="coin-upload-clear" role="button" aria-label="Remove logo" title="Remove" onclick="coinClearImage('image',event)">&times;</span></label>
     <input type="file" id="coinImageInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'image')">
-    <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner"><span class="coin-upload-label">Banner</span></label>
+    <label class="coin-upload-btn coin-upload-banner" for="coinBannerInput" title="Banner (optional — auto-generated from the symbol if left empty)"><span class="coin-upload-label">Banner</span><span class="coin-upload-clear" role="button" aria-label="Remove banner" title="Remove" onclick="coinClearImage('banner',event)">&times;</span></label>
     <input type="file" id="coinBannerInput" accept="image/*" style="display:none" onchange="coinFilePicked(this,'banner')">
   </div>
 
@@ -1419,13 +1518,13 @@ body.modal-open { overflow: hidden; }
         <span id="causeOpenLink" style="font-size:11px;color:var(--fg-dim);cursor:pointer;text-decoration:underline;text-transform:none;font-weight:normal" onclick="causeSetOngoing(true)">or open-ended</span>
       </label>
       <div style="display:flex;align-items:center;gap:6px">
-        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:16px;flex:1" value="10" oninput="coinUpdatePreview()">
+        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:16px;flex:1" value="10" autocomplete="off" oninput="coinNumInput(this,true)">
         <span style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--fg-muted);flex-shrink:0"><svg width="14" height="14" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>ETH</span>
       </div>
     </div>
     <div id="causeDeadlineWrap" style="margin-bottom:10px">
       <label>Deadline (days)</label>
-      <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:16px" value="30" oninput="coinUpdatePreview()">
+      <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,false)">
     </div>
     <div id="causeOngoingWrap" style="display:none;margin-bottom:10px">
       <div style="font-size:12px;color:var(--fg-dim);line-height:1.5">Open-ended fundraise. No target, no deadline. Anyone can contribute ETH for shares at any time. <span style="text-decoration:underline;cursor:pointer" onclick="causeSetOngoing(false)">Set a target instead</span></div>
@@ -1450,11 +1549,11 @@ body.modal-open { overflow: hidden; }
         <div id="causeTapRateFields">
           <div id="causeTapMonthsWrap" style="margin-bottom:10px">
             <label>Vesting Duration (months)</label>
-            <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" oninput="coinUpdatePreview()">
+            <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" autocomplete="off" oninput="coinNumInput(this,false)">
           </div>
           <div id="causeTapEthRateWrap" style="display:none;margin-bottom:10px">
             <label>Rate (ETH/month)</label>
-            <input type="text" id="causeTapEthRate" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" oninput="coinUpdatePreview()">
+            <input type="text" id="causeTapEthRate" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" autocomplete="off" oninput="coinNumInput(this,true)">
           </div>
         </div>
       </div>
@@ -1470,14 +1569,14 @@ body.modal-open { overflow: hidden; }
     </div>
     <div class="section" style="margin-bottom:10px">
       <label>Token ID</label>
-      <input type="text" id="nftTokenId" class="amount-input" placeholder="42" inputmode="numeric" style="font-size:16px" oninput="auctionOnNftChangeDebounced()">
+      <input type="text" id="nftTokenId" class="amount-input" placeholder="42" inputmode="numeric" style="font-size:16px" autocomplete="off" oninput="this.value=this.value.replace(/[^0-9]/g,'');auctionOnNftChangeDebounced()">
     </div>
 
     <div id="nftPreview" style="display:none;border:1px solid var(--border-muted);padding:10px;margin-bottom:10px"></div>
 
     <div style="margin-bottom:10px">
       <label>Start Price <span style="text-transform:none;color:var(--fg-dim)">(Ξ)</span></label>
-      <input type="text" id="nftStartPrice" class="amount-input" placeholder="10" inputmode="decimal" style="font-size:16px" value="10" oninput="auctionUpdatePreview();syncCoinURL()">
+      <input type="text" id="nftStartPrice" class="amount-input" placeholder="10" inputmode="decimal" style="font-size:16px" value="10" autocomplete="off" oninput="coinNumInput(this,true)">
     </div>
 
     <div style="margin-bottom:10px">
@@ -1502,18 +1601,6 @@ body.modal-open { overflow: hidden; }
 
     <div id="nftDecayPreview" style="display:none;margin-top:12px;padding:10px;border:1px solid var(--border-muted);font-family:ui-monospace,Menlo,monospace"></div>
 
-    <!-- Advanced / Custom display — folds the shared Name/Description/Logo/Banner
-         inputs away by default; they get MOVED into #nftAdvancedBody by
-         coinSetLaunchType('nft') so the seller focuses on the NFT + terms first. -->
-    <div id="nftAdvancedWrap" style="margin-top:14px">
-      <button type="button" onclick="this.parentElement.classList.toggle('open')" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit">
-        <span>Custom display</span>
-        <span style="text-transform:none;font-weight:400;color:var(--fg-dim)">(optional &mdash; override name, image, banner, description)</span>
-        <span class="coin-drawer-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s">&#9660;</span>
-      </button>
-      <div id="nftAdvancedBody" class="coin-drawer-body"></div>
-    </div>
-
     <div style="margin-top:10px;text-align:center;font-size:11px">
       <a href="./auction/preview.html" target="_blank" rel="noopener" style="color:var(--fg-dim);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;letter-spacing:0.04em">Preview what buyers will see &rarr;</a>
     </div>
@@ -1533,6 +1620,7 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
+  <div id="coinFormHint" style="display:none;font-size:11px;color:var(--fg-dim);margin-bottom:8px;text-align:center;line-height:1.5"></div>
   <button id="coinLaunchBtn" class="swap-btn" disabled style="letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
   <div id="coinLaunchProgress" class="coin-launch-progress"><div class="coin-launch-progress-fill"></div></div>
 
@@ -1572,16 +1660,6 @@ body.modal-open { overflow: hidden; }
     <div id="sendToResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
   </div>
 
-  <div>
-    <div class="receiver-toggle" onclick="sendToggleOption('Lock')">
-      <span class="chevron" id="sendLockChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
-      <label style="margin:0;cursor:pointer;pointer-events:none">Timelock<span class="send-suboption-label">vesting until date</span></label>
-    </div>
-    <div id="sendLockWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
-      <input type="datetime-local" id="sendUnlockTime" class="send-datetime" placeholder="Unlock date">
-    </div>
-  </div>
-
   <div style="margin-top:8px">
     <div class="receiver-toggle" onclick="sendToggleOption('Delay')">
       <span class="chevron" id="sendDelayChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
@@ -1607,11 +1685,6 @@ body.modal-open { overflow: hidden; }
 
   <button id="sendBtn" class="swap-btn" onclick="doSendOrLock()" style="margin-top:4px">Connect Wallet</button>
   <div id="sendStatus" class="status" style="margin-top:8px"></div>
-</div>
-
-<div style="margin-top:24px">
-  <h2 style="font-size:14px;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px">Timelocks</h2>
-  <div id="timelockList" style="font-size:12px;color:var(--fg-muted)">Connect wallet to view timelocks</div>
 </div>
 
 <div style="margin-top:24px">
@@ -1653,7 +1726,7 @@ body.modal-open { overflow: hidden; }
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0x000000a7DfdD39f4D74c7b201501eaD119F8b86C";
+const ZQUOTER_ADDRESS = "0x000000DD6b918a1b9CafFA73C1a559aff0Af5333";
 const ZQUOTER_BASE_ADDRESS = "0x658bF1A6608210FDE7310760f391AD4eC8006A5F";
 const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
@@ -1759,7 +1832,12 @@ const ZORG_PAY_TOKEN = "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"; // ERC20 eq
 const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
-const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
+const IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs/",
+  "https://ipfs.filebase.io/ipfs/",   // our own pinning provider — holds every zFi pin
+  "https://dweb.link/ipfs/",
+  "https://w3s.link/ipfs/"
+];
 const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
 // DAICO graduated coin discovery (search-triggered only)
 const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
@@ -1768,7 +1846,7 @@ let _daicoCoinsCache = null; // [{symbol, address, decimals, feeOrHook, dao}]
 let _daicoScanBusy = false;
 let _daicoRawCache = null; // raw scanDAICOs result
 let _daicoRawPromise = null; // in-flight scan promise
-const DAICO_IPFS_GW = "https://content.wrappr.wtf/ipfs/";
+const DAICO_IPFS_GW = IPFS_GATEWAYS[0];
 
 async function fetchDaicoScan() {
   if (_daicoRawCache) return _daicoRawCache;
@@ -1812,6 +1890,8 @@ async function searchDaicoCoins() {
       if (!g.contractURI) return;
       try {
         let url = g.contractURI;
+        // Some early launches stored raw JSON on-chain with no data: prefix.
+        if (url.trimStart().startsWith('{')) { const m = JSON.parse(url); if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) g.icon = _img; } return; }
         if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
         else if (url.startsWith('data:')) { const j = url.split(',').slice(1).join(','); const m = JSON.parse(decodeURIComponent(j)); if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) g.icon = _img; } return; }
         const res = await fetch(url);
@@ -1861,6 +1941,7 @@ async function loadLiveSale() {
     if (s.contractURI) {
       try {
         let url = s.contractURI;
+        if (url.trimStart().startsWith('{')) { const m = JSON.parse(url); if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; } return; }
         if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
         else if (url.startsWith('data:')) {
           const j = url.split(',').slice(1).join(',');
@@ -1883,7 +1964,7 @@ async function loadLiveSale() {
       : `<div class="live-sale-logo-ph">${esc(s.symbol?.[0] || '?')}</div>`;
     const displayName = s.name && s.name.length > 1 ? s.name : s.symbol || '???';
     const ethFmt = s.raisedETH >= 1 ? s.raisedETH.toFixed(1) : s.raisedETH >= 0.01 ? s.raisedETH.toFixed(2) : s.raisedETH.toFixed(3);
-    el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">daicos</div><a class="live-sale-card" href="coin/#${s.dao}">
+    el.innerHTML = `<div class="sec-head"><span>DAICOs</span></div><a class="live-sale-card" href="coin/#${s.dao}">
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
@@ -1928,7 +2009,7 @@ function renderFeaturedPm(m) {
   const tvlFmt = m.tvl >= 100 ? m.tvl.toFixed(2) : m.tvl >= 1 ? m.tvl.toFixed(4) : m.tvl.toFixed(6);
   const collSym = (!m.collateral || m.collateral === ZERO_ADDRESS) ? 'ETH' : 'TOKEN';
   const question = (m.rawDesc ? parsePmDesc(m.rawDesc) : (m.question || 'Prediction market').replace(/<[^>]*>/g, ''));
-  el.innerHTML = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">predictions</div><a class="live-sale-card" href="predict/#${m.marketId}">
+  el.innerHTML = `<div class="sec-head"><span>Predictions</span><a href="predict/">View all &rarr;</a></div><a class="live-sale-card" href="predict/#${m.marketId}">
     <div class="live-sale-info">
       <div class="live-sale-name" style="white-space:normal;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${esc(question)}</div>
       <div class="live-sale-meta">${tvlFmt} ${collSym} locked</div>
@@ -2031,19 +2112,24 @@ const CURVE_SALE_IFACE = new ethers.Interface([
 ]);
 // Pool key for graduated curve coins on ZAMM: feeOrHook = uint160(CURVE_SALE) | (1<<255).
 const CURVE_HOOK_FEE = BigInt(CURVE_SALE) | (1n << 255n);
-const CURVE_TILE_DB_URL = 'https://api.zfi.wei.is';
-const CURVE_TILE_IPFS_GW = 'https://content.wrappr.wtf/ipfs/';
+const CURVE_TILE_IPFS_GW = IPFS_GATEWAYS[0];
 const CURVE_TILE_MAX = 3;
+const CURVE_TOKEN_IFACE = new ethers.Interface([
+  'function name() view returns (string)',
+  'function symbol() view returns (string)',
+  'function contractURI() view returns (string)',
+]);
 
 async function loadLiveCurveCoins() {
   const el = $('liveCurveSection');
   try {
-    // Pull recent curve launches from Supabase (token_address + display metadata).
-    // Falls back silently to nothing if the worker is down — tile just stays hidden.
-    const res = await fetch(`${CURVE_TILE_DB_URL}/db/launched_tokens?launch_type=eq.curve&order=created_at.desc&limit=50`);
-    if (!res.ok) return;
-    const rows = await res.json();
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    // Recent curve launches come from the sale contract's own logs
+    // (dapp/modules/curve-registry.js). Falls back silently to nothing if the
+    // RPC is down — tile just stays hidden.
+    if (!window.curveRegistry) return;
+    const launched = await window.curveRegistry.tokens();
+    if (launched.length === 0) return;
+    const rpc = new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
 
     // Pull the ZORG-DAO spam list from the shared cache the coin gallery maintains.
     // Cache-only (no RPC) on the lander — gallery visits refresh it in the background.
@@ -2053,37 +2139,45 @@ async function loadLiveCurveCoins() {
       if (cached) spamSet = new Set((JSON.parse(cached).addrs) || []);
     } catch {}
 
-    // Dedupe by token_address (in case launch retries created multiple rows) and take the newest entry.
     // Drop spam-flagged tokens up front so we don't waste a multicall slot decoding them.
-    const seen = new Set();
-    const ordered = [];
-    for (const r of rows) {
-      const a = (r.token_address || '').toLowerCase();
-      if (!a || seen.has(a) || spamSet.has(a)) continue;
-      seen.add(a);
-      ordered.push(r);
-    }
+    const ordered = launched.filter(a => !spamSet.has(a.toLowerCase())).slice(0, 50);
+    if (ordered.length === 0) return;
 
-    // Multicall curves() for each token in one round-trip.
-    const rpc = new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
-    const calls = ordered.map(r => [
-      CURVE_SALE,
-      true,
-      CURVE_SALE_IFACE.encodeFunctionData('curves', [r.token_address])
-    ]);
+    // Multicall curves() + name/symbol/contractURI for each token in one round-trip.
+    const CALLS_PER = 4;
+    const calls = [];
+    for (const addr of ordered) {
+      calls.push([CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('curves', [addr])]);
+      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('name', [])]);
+      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('symbol', [])]);
+      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('contractURI', [])]);
+    }
     const mcRaw = await rpc.call({
       to: MULTICALL3_ADDRESS,
       data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls])
     });
     const mcRes = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', mcRaw)[0];
 
+    const decode = (res, fn) => {
+      if (!res || !res.success || res.returnData === '0x') return null;
+      try { return CURVE_TOKEN_IFACE.decodeFunctionResult(fn, res.returnData)[0]; } catch { return null; }
+    };
+
     const cards = [];
     for (let i = 0; i < ordered.length; i++) {
-      const r = ordered[i];
-      if (!mcRes[i].success) continue;
+      const tokenAddr = ordered[i];
+      const base = i * CALLS_PER;
+      if (!mcRes[base].success) continue;
       let curve;
-      try { curve = CURVE_SALE_IFACE.decodeFunctionResult('curves', mcRes[i].returnData); }
+      try { curve = CURVE_SALE_IFACE.decodeFunctionResult('curves', mcRes[base].returnData); }
       catch { continue; }
+      const r = {
+        token_address: tokenAddr,
+        name: decode(mcRes[base + 1], 'name'),
+        symbol: decode(mcRes[base + 2], 'symbol'),
+        contractURI: decode(mcRes[base + 3], 'contractURI'),
+        image: null,   // filled from contractURI metadata for the visible cards only
+      };
       // Skip uninitialised slots (creator==0 means the token isn't actually configured here).
       if (!curve.creator || curve.creator === ethers.ZeroAddress) continue;
 
@@ -2109,16 +2203,18 @@ async function loadLiveCurveCoins() {
       const rawSym = String(r.symbol || '???').trim();
       // Sanitise symbol for use as a tokens[] key + URL param (matches validateTokenList rules).
       const safeSym = rawSym.replace(/[^A-Za-z0-9.$_-]/g, '').slice(0, 24) || 'COIN';
-      const icon = r.image ? (r.image.startsWith('ipfs://') ? CURVE_TILE_IPFS_GW + r.image.slice(7) : r.image) : null;
+      // Icons live in the contractURI metadata JSON; only the visible cards fetch it (below).
+      const icon = null;
       const displayName = r.name || rawSym;
 
       // Inject into the dropdown so users can search/select. Collide-safe key:
       // if the symbol is already taken by a different address, suffix with .curve-{addr-prefix}.
       // Keep `symbol` as the raw user-supplied string so non-ASCII symbols still display correctly
       // (the picker falls back to the key when sanitisation strips the symbol entirely).
+      let key = null;
       try {
         const checksummed = ethers.getAddress(r.token_address);
-        let key = safeSym;
+        key = safeSym;
         const existing = tokens[key];
         if (existing && existing.address.toLowerCase() !== checksummed.toLowerCase()) {
           key = safeSym + '.curve-' + r.token_address.slice(2, 6).toLowerCase();
@@ -2134,9 +2230,8 @@ async function loadLiveCurveCoins() {
             _curveSeeded: !!curve.seeded,
             _curveGraduated: !!curve.graduated,
           };
-          if (icon && (icon.startsWith('https://') || icon.startsWith('data:image/'))) {
-            tokens[key].icon = icon;
-          }
+        } else {
+          key = null;   // collided with a non-curve token; nothing of ours to decorate
         }
       } catch {} // bad address — skip injection but still allow the tile card
 
@@ -2145,6 +2240,8 @@ async function loadLiveCurveCoins() {
         name: r.name || curve.creator.slice(0, 8),
         symbol: rawSym,
         icon,
+        contractURI: r.contractURI,
+        tokenKey: key,
         perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated
       });
     }
@@ -2155,9 +2252,36 @@ async function loadLiveCurveCoins() {
     if (!el || cards.length === 0) return;
     const tileCards = cards.slice(0, CURVE_TILE_MAX);
 
+    // Resolve logos from contractURI metadata — visible cards only, so one tile costs
+    // at most CURVE_TILE_MAX extra fetches.
+    await Promise.allSettled(tileCards.map(async c => {
+      if (!c.contractURI) return;
+      try {
+        let m;
+        if (c.contractURI.trimStart().startsWith('{')) {
+          // Raw on-chain JSON, no data: prefix — four early curve launches use this.
+          m = JSON.parse(c.contractURI);
+        } else if (c.contractURI.startsWith('data:')) {
+          m = JSON.parse(decodeURIComponent(c.contractURI.split(',').slice(1).join(',')));
+        } else {
+          const url = c.contractURI.startsWith('ipfs://')
+            ? CURVE_TILE_IPFS_GW + c.contractURI.slice(7) : c.contractURI;
+          if (!url.startsWith('https://')) return;
+          m = await (await fetch(url)).json();
+        }
+        if (!m || !m.image) return;
+        const img = m.image.startsWith('ipfs://') ? CURVE_TILE_IPFS_GW + m.image.slice(7) : m.image;
+        if (!img.startsWith('https://') && !img.startsWith('data:image/')) return;
+        c.icon = img;
+        if (c.tokenKey && tokens[c.tokenKey] && tokens[c.tokenKey]._isCurveCoin) {
+          tokens[c.tokenKey].icon = img;
+        }
+      } catch {}
+    }));
+
     // Format: lowercase header (matches existing tiles) + stacked cards.
     const fmtPrice = v => v >= 1 ? v.toFixed(3) : v >= 0.01 ? v.toFixed(4) : v >= 0.0001 ? v.toFixed(6) : v.toExponential(2);
-    let html = `<div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:6px">curve coins</div>`;
+    let html = `<div class="sec-head"><span>Curve Coins</span><a href="coin/">Launch &rarr;</a></div>`;
     for (const c of tileCards) {
       const logo = c.icon
         ? `<img class="live-sale-logo" src="${escAttr(c.icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${escAttr((c.symbol[0]||'?').toUpperCase())}</div>'">`
@@ -3166,11 +3290,16 @@ function makeLetterIcon(sym) {
 }
 
 // ---- RPC fallback system ----
+// The heavy zQuoter builders need >100M gas in a single eth_call; nodes with a
+// lower cap reject them with "out of gas". Measured 2026-07-29 on
+// buildBestSwapViaETHMulticall(ETH->USDC, 1e18): publicnode OK, 1rpc and drpc
+// out of gas. Nodes that fail that way are demoted below (see gasCapFails), so
+// ordering self-corrects at runtime rather than being hardcoded.
+// eth.llamarpc.com omitted: returning HTTP 521.
 const RPCS = [
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
   "https://eth.drpc.org",
-  "https://eth.llamarpc.com",
 ];
 
 function makeWalletReader() {
@@ -3189,6 +3318,7 @@ function makeFallbackProvider(urls) {
     downUntil: 0,
     ok: true,
     avgMs: 0, // rolling average latency for smarter ordering
+    gasCapFails: 0, // times this node rejected a call for exceeding its gas cap
     _calls: 0,
   }));
 
@@ -3203,6 +3333,8 @@ function makeFallbackProvider(urls) {
       p: walletReader,
       downUntil: 0,
       ok: true,
+      gasCapFails: 0,
+      avgMs: Number.MAX_SAFE_INTEGER, // last resort: only after public RPCs
     });
   }
 
@@ -3219,21 +3351,37 @@ function makeFallbackProvider(urls) {
       /failed to detect network|timeout|timed out|ETIMEDOUT/i.test(s);
   };
   const isAuthErr = (e) => /Unauthorized|invalid api key|403|401/i.test(String(e?.message || ""));
+  // Node gas-cap rejection. NOT deterministic: the identical call succeeds on a
+  // higher-cap RPC. The heavy quoter builders need >100M gas, which several
+  // public nodes refuse. Must be checked BEFORE isContractErr — misclassifying
+  // it as a revert aborts the whole fallback chain and hard-fails a quote that
+  // another RPC would have served.
+  const isGasCapErr = (e) => {
+    const c = e?.error?.code ?? e?.info?.error?.code ?? e?.code;
+    if (c === -32003) return true;
+    const s = String(e?.message || "") + " " + String(e?.error?.message || "") +
+      " " + String(e?.info?.error?.message || "");
+    return /out of gas|gas required exceeds|exceeds .*gas|intrinsic gas|gas limit/i.test(s);
+  };
   // Deterministic contract errors — same revert on every RPC, no point retrying
   const isContractErr = (e) => {
+    if (isGasCapErr(e)) return false; // capability, not consensus — keep trying
     const c = e?.code;
-    // EIP-1474 code 3 = execution reverted; -32000 = out of gas / EVM error
+    // EIP-1474 code 3 = execution reverted
     if (c === 3 || c === "CALL_EXCEPTION") return true;
     const s = String(e?.message || "");
-    return /execution reverted|out of gas|CALL_EXCEPTION/i.test(s);
+    return /execution reverted|CALL_EXCEPTION/i.test(s);
   };
 
   return {
     async call(fn) {
       const now = Date.now();
       let lastErr;
-      // Prefer RPCs that are up, sorted by recent latency (fastest first)
-      const up = nodes.filter(n => n.ok && n.downUntil <= now).sort((a, b) => a.avgMs - b.avgMs);
+      // Prefer RPCs that are up, ordered by capability first (nodes that have
+      // rejected calls on gas go last, however fast they are) then by latency.
+      // Sorting on latency alone actively favours the low-cap nodes.
+      const up = nodes.filter(n => n.ok && n.downUntil <= now)
+        .sort((a, b) => (a.gasCapFails - b.gasCapFails) || (a.avgMs - b.avgMs));
       const down = nodes.filter(n => n.ok && n.downUntil > now);
       const candidates = up.concat(down);
 
@@ -3250,7 +3398,8 @@ function makeFallbackProvider(urls) {
         } catch (e) {
           lastErr = e;
           if (isContractErr(e)) throw e; // deterministic — don't retry other RPCs
-          if (isAuthErr(e)) n.ok = false;
+          if (isGasCapErr(e)) n.gasCapFails++; // demote, then fall through to next RPC
+          else if (isAuthErr(e)) n.ok = false;
           else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
         }
       }
@@ -4399,6 +4548,35 @@ function initSimpleSlippage() {
   });
 }
 document.addEventListener("DOMContentLoaded", initSimpleSlippage);
+
+// ---- Amount field auto-fit ----
+// A percentage of a balance is exact to the token's full precision, so values
+// like 0.004375726120725896 are routine and overflow the panel at full size.
+// Step the type down by length instead of truncating (truncating would change
+// the amount actually swapped).
+function _fitAmount(el) {
+  const n = (el.value || "").length;
+  el.dataset.size = n > 21 ? "xxs" : n > 16 ? "xs" : n > 12 ? "sm" : "";
+}
+function initAmountFit() {
+  // toAmount/fromAmount are assigned from ~20 places, so patch the instance's
+  // value setter rather than chasing every call site.
+  const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+  if (!proto || !proto.get || !proto.set) return;
+  for (const id of ["fromAmount", "toAmount"]) {
+    const el = $(id);
+    if (!el) continue;
+    Object.defineProperty(el, "value", {
+      configurable: true,
+      enumerable: true,
+      get() { return proto.get.call(this); },
+      set(v) { proto.set.call(this, v); _fitAmount(this); },
+    });
+    el.addEventListener("input", () => _fitAmount(el));
+    _fitAmount(el);
+  }
+}
+document.addEventListener("DOMContentLoaded", initAmountFit);
 
 // ---- Receiver name resolution ----
 let _resolvedReceiver = null; // { input, address } or null
@@ -6587,7 +6765,7 @@ function displayAllRoutes(quote, toSym, isExactOut = false, fromSym = null) {
         : '';
       return `<div class="routes-list-item${isSelected ? ' route-selected' : ''}${isBest ? ' route-best' : ''}" data-route-idx="${origIdx}">` +
         `<span class="route-source"><span class="route-source-name">${escText(q.source)}${escText(feeLabel)}</span></span>` +
-        `<span class="route-amount">${diff ? '<span class="route-diff">' + diff + '</span>' : ''}${inp} ${escText(fromData.symbol)}${badge}</span>` +
+        `<span class="route-amount">${diff ? '<span class="route-diff">' + diff + '</span>' : ''}${inp} ${escText(fromData.symbol)}<span class="best-slot">${badge}</span></span>` +
         `</div>`;
     }).join('');
   } else {
@@ -6606,7 +6784,7 @@ function displayAllRoutes(quote, toSym, isExactOut = false, fromSym = null) {
         : '';
       return `<div class="routes-list-item${isSelected ? ' route-selected' : ''}${isBest ? ' route-best' : ''}" data-route-idx="${origIdx}">` +
         `<span class="route-source"><span class="route-source-name">${escText(q.source)}${escText(feeLabel)}</span></span>` +
-        `<span class="route-amount">${diff ? '<span class="route-diff">' + diff + '</span>' : ''}${out} ${escText(toData.symbol)}${badge}</span>` +
+        `<span class="route-amount">${diff ? '<span class="route-diff">' + diff + '</span>' : ''}${out} ${escText(toData.symbol)}<span class="best-slot">${badge}</span></span>` +
         `</div>`;
     }).join('');
   }
@@ -6914,6 +7092,15 @@ async function getSpotRate(fromSym, toSym) {
   }
 }
 
+// Aggregator routes often have no indexed spot rate to compare against, so
+// impact is genuinely unknown rather than zero. Drop the row instead of leaving
+// a dead "Impact: --" in the quote box.
+function hideImpactRow(el) {
+  el.textContent = '--';
+  el.className = '';
+  setShown('impactRow', false);
+}
+
 async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
   const el = $('impactInfo');
   if (!el) return;
@@ -6921,7 +7108,7 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
   try {
     const fromData = tokens[fromSym], toData = tokens[toSym];
     const amountIn = safeParseUnits(amtStr, fromData.decimals);
-    if (amountIn === 0n) { el.textContent = '--'; el.className = ''; return; }
+    if (amountIn === 0n) { hideImpactRow(el); return; }
 
     // Bespoke pools (curve sale, zAMM hooked, zAMM-v0 coin) populate an inline
     // reference rate on the quote itself — use it directly since the generic
@@ -6934,8 +7121,7 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
       if (seq !== _quoteSeq) return; // stale — newer quote already in flight
     }
     if (spotRate == null || spotRate.den === 0n) {
-      el.textContent = '--';
-      el.className = '';
+      hideImpactRow(el);
       return;
     }
 
@@ -6968,8 +7154,7 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
       setDisabled(swapBtn, true);
     }
   } catch (e) {
-    el.textContent = '--';
-    el.className = '';
+    hideImpactRow(el);
     const qBox = $('quoteInfo');
     if (qBox) qBox.classList.remove('impact-high');
   }
@@ -8633,7 +8818,8 @@ function updateCalldataLink(multicall) {
   if (!el) return;
   if (!multicall) { el.style.display = 'none'; return; }
   el.href = `https://calldata.swiss-knife.xyz/decoder?calldata=${multicall}&chainId=1&address=${ZROUTER_ADDRESS}`;
-  el.style.display = '';
+  // inline-block so the margin-top separating it from the routes list applies
+  el.style.display = 'inline-block';
 }
 
 function updateReceiverWarn() {
@@ -8933,7 +9119,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const _dlDesc = _sp.get('desc');
       const _dlMode = _sp.get('mode');
       if (_dlName) $('coinName').value = _dlName;
-      if (_dlSymbol) $('coinSymbol').value = _dlSymbol;
+      // Match what coinSymbolInput() enforces on typed input, so a shared link
+      // can't seed a symbol the form itself would reject.
+      if (_dlSymbol) $('coinSymbol').value = _dlSymbol.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
       if (_dlDesc) $('coinDescription').value = _dlDesc;
       if (_dlMode === 'cause') {
         coinSetLaunchType('cause');
@@ -9172,7 +9360,7 @@ walletInit({
   onConnect: [() => {
     updateBalances();
     handleAmountChange();
-    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); sendLoadSlowTransfers(); }
+    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadSlowTransfers(); }
     ppHandlePrivacyWalletConnected();
   }],
   onDisconnect: [() => {
@@ -9188,6 +9376,7 @@ walletInit({
     _allowCache.clear();
     _modalFetchAt = 0;
     _modalFetchInFlight = null;
+    if (typeof sendHandleDisconnect === 'function') sendHandleDisconnect();
     ppHandlePrivacyWalletDisconnected();
   }]
 });
@@ -9229,7 +9418,6 @@ function switchTab(tab) {
     document.title = 'SEND';
     sendUpdateTokenDisplay();
     sendUpdateBalance();
-    sendLoadTimelocks();
     sendLoadSlowTransfers();
     syncSendURL();
   }
@@ -9237,6 +9425,7 @@ function switchTab(tab) {
 }
 
 </script>
+<script src="./modules/curve-registry.js"></script>
 <script src="./modules/coin.js"></script>
 <script src="./modules/auction.js"></script>
 <div id="ipfsFooter" style="display:none;text-align:center;padding:24px 12px 12px;font-size:11px;color:var(--fg-muted);opacity:0.6;word-break:break-all">

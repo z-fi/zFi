@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PM</title>
+<title>PREDICT</title>
 <meta property="og:title" content="PREDICT">
 <meta property="og:description" content="The open onchain prediction market">
 <meta property="og:type" content="website">
@@ -135,7 +135,22 @@ input {
 .odds-label .yes-label { color:var(--yes); }
 .odds-label .no-label { color:var(--no); }
 .odds-bar {
-  display:flex;height:4px;overflow:hidden;margin-bottom:16px;cursor:default;gap:1px;
+  display:flex;height:4px;overflow:hidden;margin-bottom:10px;cursor:default;gap:1px;
+}
+.market-question { font-size:18px;font-weight:700;line-height:1.4;margin-bottom:16px; }
+/* Live meta strip under the odds bar: oracle progress / liquidity + countdown */
+.market-meta {
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  font-size:12px;color:var(--fg-muted);padding:0 0 12px;margin-bottom:4px;
+}
+.market-meta b { color:var(--fg);font-weight:600; }
+.market-meta .dim { opacity:0.5; }
+.market-meta .urgent { color:var(--no);font-weight:700; }
+/* Secondary drawers, grouped away from the primary trade flow */
+.details-group { margin-top:20px; }
+.details-label {
+  font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--fg-dim);opacity:0.7;margin-bottom:2px;
 }
 .odds-yes {
   background:var(--yes);transition:width 0.3s;
@@ -185,8 +200,23 @@ input {
 }
 .trade-section input::placeholder { color:var(--fg-dim); }
 .trade-section input:focus { border-bottom-width:2.5px;margin-bottom:-1px; }
-.trade-quote { font-size:12px;color:var(--fg-muted);min-height:18px;margin-bottom:10px; }
+.trade-quote { font-size:12px;color:var(--fg-muted);margin-bottom:6px; }
+.trade-quote:empty { display:none; }
+.quote-age { font-size:10px;margin-bottom:8px; }
+.quote-age:empty { display:none; }
 .trade-pct-row { display:flex;gap:4px;margin-top:6px; }
+
+/* Slippage — collapsed to a single line until you need it */
+.slip-toggle {
+  display:flex;align-items:center;gap:5px;margin:0 0 10px;padding:0;
+  border:none;background:transparent;color:var(--fg-dim);cursor:pointer;
+  font-family:inherit;font-size:11px;
+}
+.slip-toggle:hover { color:var(--fg-muted); }
+.slip-toggle b { font-weight:600;color:var(--fg-muted); }
+.slip-toggle .arrow { font-size:8px;opacity:0.5;transition:transform 0.2s; }
+.slip-toggle.open .arrow { transform:rotate(180deg); }
+.slip-panel { display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px; }
 .trade-pct-btn {
   flex:1;padding:3px 0;font-size:10px;font-weight:500;letter-spacing:0.04em;
   border:none;background:transparent;color:var(--fg-dim);
@@ -478,6 +508,8 @@ input[type="datetime-local"] { color-scheme:light; }
   .trade-section input { font-size:18px; }
   .trade-pct-btn { font-size:9px;padding:5px 0; }
   .odds-label span { font-size:20px; }
+  .market-question { font-size:16px; }
+  .market-meta { flex-wrap:wrap;gap:4px 12px;font-size:11px; }
   .modal-overlay { padding:0;padding-top:0;align-items:flex-end; }
   .modal { max-width:100%;margin:0;border-left:none;border-right:none;border-bottom:none;max-height:85vh;max-height:85dvh;padding:16px;padding-bottom:max(16px, env(safe-area-inset-bottom)); }
   .market-type-tab { font-size:10px;padding:6px 2px; }
@@ -727,6 +759,7 @@ input[type="datetime-local"] { color-scheme:light; }
 <script src="../vendor/ethers.min.js"></script>
 <script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
+<script src="../modules/pool-events.js"></script>
 <script>
 // Extend shared toggleDark to also redraw odds chart with new theme colors
 const _baseTD = toggleDark;
@@ -757,22 +790,17 @@ function computePredictionPoolId(marketId, isLabeled) {
   return { poolId: BigInt(ethers.keccak256(encoded)).toString(), yesIsToken0 };
 }
 
-const INDEXER = 'https://coinchan-indexer-production.up.railway.app';
-
+// Pool history now comes from on-chain Swap/Mint/Burn logs (modules/pool-events.js)
+// rather than the retired indexer. Log scans are range-capped by public RPCs, so this
+// reaches back months, not to genesis — the odds chart anchors on current reserves and
+// walks backwards so a partial window still plots correctly.
 async function fetchAllEvents(poolId) {
-  const all = [];
-  let cursor = null;
-  for (let i = 0; i < 20; i++) {
-    let url = INDEXER + '/api/events?poolId=' + poolId + '&limit=100';
-    if (cursor) url += '&cursor=' + cursor;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (!json.data || !json.data.length) break;
-    all.push(...json.data);
-    if (!json.nextCursor) break;
-    cursor = json.nextCursor;
+  try {
+    return await poolEvents.history(poolId, { limit: 600, rounds: 2, maxChunks: 6 });
+  } catch (e) {
+    console.warn('fetchAllEvents:', e);
+    return [];
   }
-  return all.reverse(); // chronological order
 }
 
 // ==================== PNL TRACKING (localStorage) ====================
@@ -1182,7 +1210,13 @@ function loadMarketChart(poolId, yesIsToken0) {
 
   const cached = _chartEventsCache;
   _chartEventsCache = null;
-  (cached ? Promise.resolve(cached) : fetchAllEvents(poolId)).then(events => {
+  // Current reserves anchor the backwards replay below — read them alongside the logs.
+  Promise.all([
+    cached ? Promise.resolve(cached) : fetchAllEvents(poolId),
+    withRPC(rpc => new ethers.Contract(CONTRACTS.ZAMM, ZAMM_ABI, rpc).pools(BigInt(poolId)))
+      .then(p => [p[0].toString(), p[1].toString()])
+      .catch(() => null)
+  ]).then(([events, reserves]) => {
     const cur = document.getElementById('marketChart');
     if (!cur || cur.dataset.poolId !== poolId) return;
     // No swap events → no trading activity → hide entire drawer
@@ -1194,24 +1228,23 @@ function loadMarketChart(poolId, yesIsToken0) {
       return;
     }
 
-    // Reconstruct reserves from all events, but only plot swap points
-    let r0 = 0, r1 = 0;
+    // Walk backwards from the pool's current reserves, undoing each event, so the
+    // series stays correct even when the log scan doesn't reach the pool's first block.
+    let r0 = Number(reserves ? reserves[0] : 0);
+    let r1 = Number(reserves ? reserves[1] : 0);
     const allPoints = [];
-    for (const ev of events) {
-      const a0in = Number(ev.amount0_in || 0);
-      const a1in = Number(ev.amount1_in || 0);
-      const a0out = Number(ev.amount0_out || 0);
-      const a1out = Number(ev.amount1_out || 0);
-      r0 += a0in - a0out;
-      r1 += a1in - a1out;
-      if (r0 + r1 <= 0) continue;
-      // Only plot swaps — LP adds/removes shift reserves but aren't price actions
-      if (ev.category !== 'SWAP') continue;
-      // YES price = noReserve / total (CPMM formula)
-      const yesPct = yesIsToken0
-        ? (r1 / (r0 + r1)) * 100
-        : (r0 / (r0 + r1)) * 100;
-      allPoints.push({ t: Number(ev.timestamp), yesPct });
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      // r0/r1 are the reserves as of just after `ev`
+      if (ev.category === 'SWAP' && r0 + r1 > 0) {
+        // YES price = noReserve / total (CPMM formula)
+        const yesPct = yesIsToken0
+          ? (r1 / (r0 + r1)) * 100
+          : (r0 / (r0 + r1)) * 100;
+        allPoints.unshift({ t: Number(ev.timestamp), yesPct });
+      }
+      r0 -= Number(ev.amount0_in || 0) - Number(ev.amount0_out || 0);
+      r1 -= Number(ev.amount1_in || 0) - Number(ev.amount1_out || 0);
     }
 
     if (!allPoints.length) { cur.innerHTML = ''; return; }
@@ -1277,20 +1310,29 @@ function loadMarketChart(poolId, yesIsToken0) {
 var _pmActivityCursor = null;
 var _pmActivityInterval = null;
 
+function stopPoolActivityPolling() {
+  if (_pmActivityInterval) {
+    clearInterval(_pmActivityInterval);
+    _pmActivityInterval = null;
+  }
+}
+
 function togglePoolActivity() {
   const el = $('pmActivityDrawer');
   if (!el) return;
   el.classList.toggle('open');
   const body = el.querySelector('.pm-activity-body');
-  if (body) body.style.display = el.classList.contains('open') ? '' : 'none';
-  if (el.classList.contains('open') && !el.dataset.loaded) {
+  const isOpen = el.classList.contains('open');
+  if (body) body.style.display = isOpen ? '' : 'none';
+  stopPoolActivityPolling();
+  if (!isOpen) return;
+  const poolId = el.dataset.poolId;
+  if (!el.dataset.loaded) {
     el.dataset.loaded = '1';
-    loadPoolActivity(el.dataset.poolId);
-    _pmActivityInterval = setInterval(() => refreshPoolActivity(el.dataset.poolId), 30000);
-  } else if (!el.classList.contains('open') && _pmActivityInterval) {
-    clearInterval(_pmActivityInterval);
-    _pmActivityInterval = null;
+    loadPoolActivity(poolId);
   }
+  // Re-arm polling every time the drawer is opened, not just the first time
+  _pmActivityInterval = setInterval(() => refreshPoolActivity(poolId), 30000);
 }
 
 function pmFmtWei(wei) {
@@ -1383,10 +1425,9 @@ function renderPmActivityTable(events, append) {
 
 async function loadPoolActivity(poolId) {
   try {
-    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30');
-    const json = await res.json();
-    _pmActivityCursor = json.nextCursor || null;
-    renderPmActivityTable(json.data, false);
+    const res = await poolEvents.load(poolId, { limit: 30 });
+    _pmActivityCursor = res.nextCursor || null;
+    renderPmActivityTable(res.events, false);
   } catch(e) {
     const content = $('pmActivityContent');
     if (content) content.innerHTML = '<div class="pm-activity-empty">Failed to load activity</div>';
@@ -1395,10 +1436,10 @@ async function loadPoolActivity(poolId) {
 
 async function refreshPoolActivity(poolId) {
   try {
-    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30');
-    const json = await res.json();
-    _pmActivityCursor = json.nextCursor || null;
-    renderPmActivityTable(json.data, false);
+    // Cheap re-scan of the most recent window only.
+    const res = await poolEvents.load(poolId, { limit: 30, maxChunks: 1 });
+    if (res.nextCursor && !_pmActivityCursor) _pmActivityCursor = res.nextCursor;
+    renderPmActivityTable(res.events, false);
   } catch(e) {}
 }
 
@@ -1410,10 +1451,9 @@ async function loadMorePmActivity() {
   const btn = el.querySelector('.pm-activity-more');
   if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
   try {
-    const res = await fetch(INDEXER + '/api/events?poolId=' + poolId + '&limit=30&before=' + _pmActivityCursor);
-    const json = await res.json();
-    _pmActivityCursor = json.nextCursor || null;
-    renderPmActivityTable(json.data, true);
+    const res = await poolEvents.load(poolId, { limit: 30, before: _pmActivityCursor });
+    _pmActivityCursor = res.nextCursor || null;
+    renderPmActivityTable(res.events, true);
     if (!_pmActivityCursor && btn) btn.remove();
     else if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
   } catch(e) {
@@ -1448,7 +1488,6 @@ const CONTRACTS = {
   PM_HOOK_ROUTER: '0x0000000000Ff22a7FFEf88639d95C03183c5093C',
   CHAINLINK_ETH_USD: '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
   BOOTSTRAPPER: '0x51157306D13fdc57a81B4b3574E04ad2e039CC88',
-  GASPM: '0x0000000000ee3d4294438093EaA34308f47Bc0b4',
   LEGACY_RESOLVER: '0x9a70ca659D5E7eB41bB94a8eE56e254c9ec6b79c',
   PM_ROUTER: '0x000000000055ff709f26efb262fba8b0ae8c35dc'
 };
@@ -1520,7 +1559,7 @@ const MASTER_ROUTER_ABI = [
 // ==================== zRouter integration (buy with any token) ====================
 
 const ZROUTER_ADDRESS = '0x000000000000FB114709235f1ccBFfb925F600e4';
-const ZQUOTER_ADDRESS = '0x000000a7DfdD39f4D74c7b201501eaD119F8b86C';
+const ZQUOTER_ADDRESS = '0x000000DD6b918a1b9CafFA73C1a559aff0Af5333';
 const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -1774,9 +1813,7 @@ const BOOTSTRAPPER_ABI = [
   'function bootstrapPriceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address priceFeed, uint8 op, uint256 priceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
   'function bootstrapETHBalanceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address account, uint8 op, uint256 balanceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
   'function bootstrapTokenBalanceMarket(string description, address collateral, uint64 close, address hook, uint256 collateralForLP, address to, uint256 deadline, address token, address account, uint8 op, uint256 balanceThreshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares)',
-  'function bootstrapWithCondition(string description, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, bool buyYes, uint256 collateralForBuy, uint256 minSharesOut, address to, uint256 deadline, address target, bytes callData, uint8 op, uint256 threshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut)',
-  'function addOrderbookBids(uint256 marketId, address collateral, tuple(bool buyYes, uint256 priceInBps, uint256 amount, uint256 minShares)[] bids, address to) payable',
-  'function computeMarketIdResolver(string description, address collateral) view returns (uint256)'
+  'function bootstrapWithCondition(string description, address collateral, uint64 close, bool canClose, address hook, uint256 collateralForLP, bool buyYes, uint256 collateralForBuy, uint256 minSharesOut, address to, uint256 deadline, address target, bytes callData, uint8 op, uint256 threshold) payable returns (uint256 marketId, uint256 poolId, uint256 lpShares, uint256 sharesOut)'
 ];
 
 const CHAINLINK_ABI = [
@@ -1816,9 +1853,6 @@ const MULTICALL3_ABI = [
 // ==================== RPC ====================
 
 let rpcIdx = 0;
-function getRPC() {
-  return new ethers.JsonRpcProvider(RPCS[rpcIdx % RPCS.length], 1, { staticNetwork: true });
-}
 async function withRPC(fn) {
   for (let i = 0; i < RPCS.length; i++) {
     try {
@@ -1869,11 +1903,27 @@ async function reverseResolveWei(addr) {
 
 // ==================== HELPERS ====================
 
-function fmtETH(wei) {
-  const v = Number(ethers.formatEther(wei));
-  if (v >= 1) return v.toFixed(4) + ' ETH';
-  if (v >= 0.001) return v.toFixed(6) + ' ETH';
-  return v.toFixed(8) + ' ETH';
+// Collateral amounts, outcome shares and pool LP are all denominated in the market's
+// collateral token, so they must be scaled by that token's decimals — not always 18.
+function getCollateralDecimals(addr) {
+  if (!addr || addr === ethers.ZeroAddress) return 18;
+  const tok = findPayTokenByAddress(addr);
+  return tok ? tok.decimals : 18;
+}
+function _collDec() {
+  return getCollateralDecimals($('app')?.dataset.collateral);
+}
+// Format/parse in the *current market's* collateral units (identical to
+// formatEther/parseEther for the usual 18-decimal case).
+function fmtColl(v) { return ethers.formatUnits(v, _collDec()); }
+function parseColl(v) {
+  const dec = _collDec();
+  // parseUnits rejects exponent notation and excess precision — normalise both.
+  let s = typeof v === 'number' ? v.toFixed(Math.min(dec, 20)) : String(v).trim();
+  if (/e/i.test(s)) s = Number(s).toFixed(Math.min(dec, 20));
+  const dot = s.indexOf('.');
+  if (dot >= 0 && s.length - dot - 1 > dec) s = s.slice(0, dot + dec + 1);
+  return ethers.parseUnits(s || '0', dec);
 }
 
 function fmtCountdown(closeTs) {
@@ -2413,8 +2463,7 @@ window.addEventListener('hashchange', route);
 
 async function renderGallery() {
   document.title = 'PREDICT';
-  const _nav = $('navOrderbook');
-  if (_nav) _nav.href = '../orderbook/';
+  stopPoolActivityPolling();
   const app = $('app');
   const createBtnHTML = '<button onclick="openCreateModal()" style="font-size:11px;padding:6px 14px">+ Create</button>';
   app.innerHTML = `
@@ -2471,7 +2520,8 @@ async function renderGallery() {
             const resolver = result.resolvers[i];
             const description = result.descs[i];
             const close = Number(result.closes[i]);
-            const tvl = Number(result.collateralAmounts[i]) / 1e18;
+            const collateralAddr = result.collaterals[i];
+            const tvl = Number(ethers.formatUnits(result.collateralAmounts[i], getCollateralDecimals(collateralAddr)));
             const states = Number(result.states[i]);
             const resolved = (states & 1) !== 0;
             const outcome = (states & 2) !== 0;
@@ -2482,7 +2532,7 @@ async function renderGallery() {
             fetched.push({
               marketId, description, close, tvl, resolved, outcome,
               question: parsed.question,
-              collateral: result.collaterals[i],
+              collateral: collateralAddr,
               resolver,
               isLegacy: legacy,
               isLabeled: !legacy,
@@ -2629,7 +2679,11 @@ function renderGalleryUI() {
   if (_galleryFilter === 'active') filtered = markets.filter(m => !m.resolved && m.close > now);
   else if (_galleryFilter === 'resolved') filtered = markets.filter(m => m.resolved || m.close <= now);
 
-  const searchVal = $('marketSearch')?.value || '';
+  const searchEl = $('marketSearch');
+  const searchVal = searchEl?.value || '';
+  // The whole page is re-rendered on each keystroke — remember where the caret was
+  const searchFocused = document.activeElement === searchEl;
+  const searchCaret = searchFocused ? searchEl.selectionStart : null;
 
   let cards = '';
   for (const m of filtered) {
@@ -2695,8 +2749,17 @@ function renderGalleryUI() {
     </div>
     <input type="text" class="market-search" id="marketSearch" placeholder="Search markets..." oninput="renderGalleryUI()" value="${escText(searchVal)}">
     <div class="market-grid" id="marketGrid">${cards}</div>
-    <div style="text-align:center;font-size:11px;color:var(--fg-dim);margin-top:24px;letter-spacing:0.05em;text-transform:uppercase">the open prediction market</div>
+    <div style="text-align:center;font-size:11px;color:var(--fg-dim);margin-top:24px;letter-spacing:0.05em;text-transform:uppercase">the 100% onchain prediction market</div>
   `;
+
+  if (searchFocused) {
+    const fresh = $('marketSearch');
+    if (fresh) {
+      fresh.focus();
+      const pos = searchCaret != null ? searchCaret : fresh.value.length;
+      fresh.setSelectionRange(pos, pos);
+    }
+  }
 }
 
 function setFilter(f) {
@@ -2710,6 +2773,8 @@ let _renderSeq = 0;
 async function renderMarketPage(marketId) {
   const seq = ++_renderSeq;
   _selectedPayToken = null;
+  stopPoolActivityPolling();
+  _pmActivityCursor = null;
   const app = $('app');
   app.dataset.marketId = marketId;
   app.innerHTML = `
@@ -3003,7 +3068,7 @@ async function renderMarketPage(marketId) {
     const outcome = mkt.outcome;
     const collateral = mkt.collateral;
     const collateralLocked = mkt.collateralLocked;
-    const tvl = Number(ethers.formatEther(collateralLocked));
+    const tvl = Number(fmtColl(collateralLocked));
     const parsed = parseMarketDescription(description);
     const nPct = 100 - yPct;
 
@@ -3011,23 +3076,21 @@ async function renderMarketPage(marketId) {
     const isActive = !resolved && close > now;
     const collSym = getCollateralSymbol(collateral);
 
+    // ---------------- HEADER: question, odds, live meta ----------------
     let html = `<a href="#" class="back-link" onclick="event.preventDefault();history.replaceState(null,'',location.pathname);route()">&larr; All Markets</a>`;
-
-    // Question + odds bar + implied outcome
-    const _leadSide = yPct >= 50 ? 'Yes' : 'No';
-    const _leadPct = Math.max(yPct, nPct);
-    const _leadColor = yPct >= 50 ? 'var(--yes)' : 'var(--no)';
     html += `
-      <div style="font-size:18px;font-weight:700;line-height:1.4;margin-bottom:16px">${parsed.question}</div>
+      <div class="market-question">${parsed.question}</div>
       <div class="odds-label"><span class="yes-label">YES ${yPct}%</span><span class="no-label">NO ${nPct}%</span></div>
       <div class="odds-bar">
         <div class="odds-yes" style="width:${yPct}%"></div>
         <div class="odds-no"></div>
       </div>
-      ${!resolved && _leadPct !== 50 ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:6px;margin-bottom:2px">${_leadPct}% chance <span style="color:${_leadColor};font-weight:600">${_leadSide}</span></div>` : ''}
     `;
 
-    // Oracle price + countdown strip for onchain-resolver markets
+    // Meta strip: oracle progress when there is an onchain condition, liquidity
+    // otherwise — plus the countdown. Shown for every market, not just oracle ones.
+    const tvlFmt = tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4);
+    let metaLeft = `<span>${tvlFmt} ${collSym} <span class="dim">liquidity</span></span>`;
     if ((isOurResolver || isLegacyResolver) && condData && resValue !== null && !resolved) {
       const _cd = condData;
       const _callData = (typeof _cd.callDataA === 'string' ? _cd.callDataA : ethers.hexlify(_cd.callDataA || '0x')).toLowerCase();
@@ -3040,111 +3103,144 @@ async function renderMarketPage(marketId) {
       const _val = Number(resValue) / Math.pow(10, _dec);
       const _thresh = Number(_cd.threshold) / Math.pow(10, _dec);
       const _fmtV = (v) => v >= 1e9 ? (v/1e9).toFixed(2)+'B' : v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v < 0.01 && v > 0 ? v.toFixed(4) : v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-      const _timeLeft = close - now;
-      const _urgent = _timeLeft > 0 && _timeLeft < 86400;
-      const _timeColor = _urgent ? 'var(--no)' : 'var(--fg-muted)';
-      const _countdown = _timeLeft <= 0 ? 'Closed' : fmtCountdown(close);
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:14px;padding:8px 0;border-bottom:1px solid var(--border-muted)">
-        <span style="color:var(--fg-muted)">Now <span style="color:var(--fg);font-weight:600">${_pre}${_fmtV(_val)}${_suf}</span> <span style="opacity:0.5">/ ${_pre}${_fmtV(_thresh)}${_suf}</span></span>
-        <span style="color:${_timeColor};font-weight:${_urgent ? '700' : '400'}">${_countdown}</span>
-      </div>`;
+      metaLeft = `<span><span class="dim">Now</span> <b>${_pre}${_fmtV(_val)}${_suf}</b> <span class="dim">of ${_pre}${_fmtV(_thresh)}${_suf}</span></span>`;
     }
+    const _timeLeft = close - now;
+    const _urgent = !resolved && _timeLeft > 0 && _timeLeft < 86400;
+    const metaRight = resolved
+      ? `<span style="color:${outcome ? 'var(--yes)' : 'var(--no)'};font-weight:600">Resolved ${outcome ? 'YES' : 'NO'}</span>`
+      : _timeLeft <= 0
+        ? `<span>Closed &middot; awaiting resolution</span>`
+        : `<span class="${_urgent ? 'urgent' : ''}">${fmtCountdown(close)} left</span>`;
+    html += `<div class="market-meta">${metaLeft}${metaRight}</div>`;
 
-    // Odds chart drawer — collapsed by default, loaded on open
+    // Odds chart — collapsed by default, loaded on open, hidden if the pool never traded
     const { poolId: chartPoolId, yesIsToken0: chartYesIsToken0 } = computePredictionPoolId(marketId, isLabeled);
     html += `<div class="market-chart-drawer" id="marketChartDrawer">
       <button class="market-chart-toggle-btn" onclick="toggleMarketChart()"><span>Odds Chart</span><span class="arrow">&#9660;</span></button>
       <div class="market-chart" id="marketChart" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}" style="display:none"></div>
     </div>`;
 
-    html += `<div class="market-chart-drawer" id="pmActivityDrawer" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}">
-      <button class="market-chart-toggle-btn" onclick="togglePoolActivity()"><span>Pool Activity</span><span class="arrow">&#9660;</span></button>
-      <div class="pm-activity-body" style="display:none"><div id="pmActivityContent"><div class="pm-activity-empty">Click to load</div></div></div>
-    </div>`;
-
-    // Market info card
-    const resolverShort = resolverAddr.slice(0, 6) + '...' + resolverAddr.slice(-4);
-    const resolverDisplayName = isOurResolver ? 'Onchain Resolver' : (resolverWeiName ? resolverWeiName : resolverShort);
-    const resolverLabel = resolverDisplayName + (resolverVerified ? VERIFIED_BADGE : '');
-    html += `
-      <div class="market-chart-drawer" id="marketInfoDrawer">
-        <button class="market-chart-toggle-btn" onclick="toggleDrawer('marketInfoDrawer')"><span>Market Info</span><span class="arrow">&#9660;</span></button>
-        <div class="drawer-body" style="display:none;padding:4px 0 8px">
-          <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value">${resolved ? (outcome ? '<span style="color:var(--yes)">Resolved YES</span>' : '<span style="color:var(--no)">Resolved NO</span>') : (isActive ? `<span style="color:${close - now < 86400 ? 'var(--no)' : 'var(--fg)'}">${fmtCountdown(close)} left</span>` : 'Closed')}</span></div>
-          <div class="stat-row"><span class="stat-label">Closes</span><span class="stat-value"${!resolved && close - now < 86400 ? ' style="color:var(--no)"' : ''}>${fmtDate(close)}</span></div>
-          <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value" style="display:inline-flex;align-items:center;gap:3px">${tvl >= 1 ? tvl.toFixed(2) : tvl.toFixed(4)} ${collSym} ${payTokenIcon(collSym).replace(/width="20"/g,'width="14"').replace(/height="20"/g,'height="14"')}</span></div>
-          <div class="stat-row"><span class="stat-label">Resolver</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${resolverAddr}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${resolverLabel}</a></span></div>
-          ${!isOurResolver && !isLegacyResolver && resolverFeeBps > 0 ? `<div class="stat-row"><span class="stat-label">Resolver Fee</span><span class="stat-value">${(resolverFeeBps / 100).toFixed(2)}%</span></div>` : ''}
-          <div class="stat-row"><span class="stat-label">Market ID</span><span class="stat-value" style="font-size:11px;word-break:break-all"><a href="https://etherscan.io/address/${CONTRACTS.PAMM}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${marketId.slice(0, 12)}...${marketId.slice(-6)}</a></span></div>
-          ${isLabeled && currentFeeBps > 0n && currentFeeBps <= 10000n ? `<div class="stat-row"><span class="stat-label">Swap Fee <span onclick="event.stopPropagation();showRawTooltip(this,'Dynamic fee — adapts each swap based on market conditions.\\n\\nComponents:\\n• Base fee: decays from high to low over the bootstrap window\\n• Skew fee: increases when probability deviates from 50% (non-linear curve)\\n• Directional fee: linear scaling with probability deviation from 50%\\n• Volatility fee: added when recent price variance is high\\n\\nTotal fee is capped at 3%. Fee shown is the current rate — it changes with every trade.\\n\\nzAMM LPs earn fees from pool swaps. Vault LPs earn fees from vault OTC fills — 90% to vault when inventory is balanced, 70% when imbalanced. The remainder goes to a rebalance budget.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></span><span class="stat-value">${(Number(currentFeeBps) / 100).toFixed(2)}%</span></div>` : ''}
-        </div>
-      </div>
-    `;
-    // Vault cooldown (computed once, used in vault card and positions)
-    const vaultCooldownSec = vaultDepositTime ? _vaultCooldownRemaining(vaultDepositTime, close) : 0;
-    const vaultCooldownLabel = vaultCooldownSec > 0 ? fmtDuration(vaultCooldownSec) : '';
-
-    // Vault info card (labeled markets with vault inventory)
-    if (isLabeled && (vaultYesShares > 0n || vaultNoShares > 0n)) {
-      const vYes = Number(ethers.formatEther(vaultYesShares));
-      const vNo = Number(ethers.formatEther(vaultNoShares));
-      const vBudgetEth = Number(ethers.formatEther(vaultBudget));
-
-      // Health checks
-      const twapAge = twapTimestamp1 > 0 ? now - twapTimestamp1 : 0;
-      const twapStale = twapTimestamp1 > 0 && twapAge >= 1800;
-      const twapVeryStale = twapTimestamp1 > 0 && twapAge >= 7200;
-      const totalInventory = vaultYesShares + vaultNoShares;
-      const imbalanceRatio = totalInventory > 0n
-        ? Number(vaultYesShares > vaultNoShares ? vaultYesShares - vaultNoShares : vaultNoShares - vaultYesShares) / Number(totalInventory) * 100
-        : 0;
-      const isImbalanced = imbalanceRatio > 20;
-      const budgetMaterial = vBudgetEth >= 0.0001;
-      const needsRebalance = isImbalanced && budgetMaterial && isActive;
-      const needsSettle = budgetMaterial && !isActive;
-      const needsAttention = (twapVeryStale && isActive) || needsRebalance || needsSettle;
-      const hasActions = (isActive && twapStale) || needsRebalance || needsSettle || (resolved && (vaultYesShares > 0n || vaultNoShares > 0n || vaultBudget > 0n));
-
+    // ---------------- PRIMARY ACTION: trade / claim ----------------
+    if (isActive) {
+      const isETH = !collateral || collateral === ethers.ZeroAddress;
+      const payLabel = isETH ? 'ETH' : getCollateralSymbol(collateral);
       html += `
-        <div class="market-chart-drawer" id="vaultInfoDrawer">
-          <button class="market-chart-toggle-btn" onclick="toggleDrawer('vaultInfoDrawer')"><span>Vault</span><span class="arrow">&#9660;</span></button>
-          <div class="drawer-body" style="display:none;padding:4px 0 8px">
-            <div style="font-size:11px;color:var(--fg-muted);margin-bottom:10px">Holds shares from sweep trades. Depositors earn OTC fees. <span onclick="event.stopPropagation();showRawTooltip(this,'When large trades sweep through the zAMM, the opposite-side shares are deposited into the vault automatically. Vault depositors earn fees from vault OTC fills proportional to their LP tokens.\\n\\nHow it works:\\n• Sweep buys deposit opposite shares into the vault\\n• Vault LPs earn 90% of OTC fees when inventory is balanced, 70% when imbalanced\\n• Remaining OTC fees go to a rebalance budget used to re-equalize YES/NO inventory\\n\\nMaintenance (permissionless):\\n• Update TWAP — refreshes the price oracle used for vault pricing (every 30min)\\n• Rebalance — uses budget to swap excess inventory toward balance\\n• Settle — after market closes, distributes remaining budget to LPs\\n• Finalize — after resolution, redeems vault shares and closes out\\n\\nHarvest lets you claim earned fees without withdrawing your vault position.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></div>
-            ${vaultYesShares > 0n ? `<div class="stat-row"><span class="stat-label">YES Inventory</span><span class="stat-value">${vYes >= 1 ? vYes.toFixed(2) : vYes.toFixed(4)} shares</span></div>` : ''}
-            ${vaultNoShares > 0n ? `<div class="stat-row"><span class="stat-label">NO Inventory</span><span class="stat-value">${vNo >= 1 ? vNo.toFixed(2) : vNo.toFixed(4)} shares</span></div>` : ''}
-            ${vaultBudget > 0n && vBudgetEth >= 0.0001 ? `<div class="stat-row"><span class="stat-label">Budget</span><span class="stat-value">${vBudgetEth >= 1 ? vBudgetEth.toFixed(2) : vBudgetEth.toFixed(4)} ${collSym}</span></div>` : ''}
-            ${needsAttention ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-muted)">${[twapVeryStale && isActive ? 'TWAP oracle is stale' : '', needsRebalance ? 'Inventory is imbalanced' : '', needsSettle ? 'Budget can be settled' : ''].filter(Boolean).join('. ')}.</div>` : ''}
-            ${hasActions ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-              ${isActive && twapStale ? `<button onclick="updateTWAP('${marketId}')" id="twapBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Update TWAP</button>` : ''}
-              ${needsRebalance ? `<button onclick="rebalanceVault('${marketId}')" id="rebalanceBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Rebalance</button>` : ''}
-              ${needsSettle ? `<button onclick="settleBudget('${marketId}')" id="settleBudgetBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Settle</button>` : ''}
-              ${resolved ? `<button onclick="finalizeMarket('${marketId}')" id="finalizeBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Finalize</button>` : ''}
-            </div>` : ''}
+        <div class="section-card" id="tradeCard" style="margin-top:16px">
+          <div class="trade-dir">
+            <button class="active" data-dir="buy" onclick="setTradeDir('buy')">Buy</button>
+            <button data-dir="sell" onclick="setTradeDir('sell')">Sell</button>
           </div>
+          <div class="trade-side">
+            <button class="active" data-side="yes" onclick="setTradeSide('yes')">Yes ${yPct}%</button>
+            <button data-side="no" onclick="setTradeSide('no')">No ${nPct}%</button>
+          </div>
+          <div class="trade-section">
+            <div class="trade-section-head">
+              <label id="tradeInputLabel">${payLabel}</label>
+              <span class="trade-balance" id="tradeBalance" onclick="setMaxAmount()"></span>
+            </div>
+            <div class="pay-token-row">
+              <input type="number" id="tradeInput" placeholder="0.0" step="any" min="0" oninput="onTradeInput()">
+              <button class="pay-token-btn" id="payTokenBtn" onclick="openPayTokenModal()" style="display:none">${payLabel} <span style="font-size:9px;opacity:0.5">&#9662;</span></button>
+            </div>
+            <div class="trade-pct-row" id="tradePctRow">
+              <button class="trade-pct-btn" onclick="setPct(0.25)">25%</button>
+              <button class="trade-pct-btn" onclick="setPct(0.5)">50%</button>
+              <button class="trade-pct-btn" onclick="setPct(0.75)">75%</button>
+              <button class="trade-pct-btn" onclick="setPct(1)">Max</button>
+            </div>
+          </div>
+          <div class="trade-quote" id="tradeQuote"></div>
+          <div class="quote-age" id="quoteAge"></div>
+          <button type="button" class="slip-toggle" id="slipToggle" onclick="toggleSlippagePanel()">Slippage <b id="slipVal">${_tradeSlippage}%</b><span class="arrow">&#9660;</span></button>
+          <div class="slip-panel" id="slippagePanel" style="display:none">
+            <span style="display:flex;gap:4px;align-items:center" id="slippageRow">
+              ${[3,5,10,15].map(v => `<button onclick="setSlippage(${v})" class="trade-pct-btn" style="font-size:10px;padding:2px 6px;min-width:0;${_tradeSlippage===v?'color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg)':''}" data-slip="${v}">${v}%</button>`).join('')}
+              <input type="number" id="slippageCustom" min="0.1" max="50" step="0.1" style="width:44px;padding:2px 4px;font-size:10px;background:var(--surface);border:1px solid ${![3,5,10,15].includes(_tradeSlippage)?'var(--btn-bg)':'var(--border-muted)'};color:var(--fg);text-align:center;border-radius:3px" value="${_tradeSlippage}" onfocus="clearSlippagePresets()" oninput="setSlippage(parseFloat(this.value)||15,true)">
+              <span style="font-size:10px">%</span>
+            </span>
+          </div>
+          <button class="form-btn" id="tradeBtn" onclick="executeTrade()" disabled>Enter amount</button>
+          <div style="text-align:center;margin-top:12px">
+            <button onclick="openLPModal('${marketId}')" style="font-size:11px;padding:6px 16px;background:transparent;border:1px solid var(--border-muted);color:var(--fg-muted)">Provide Liquidity</button>
+          </div>
+        </div>
+      `;
+    } else if (!resolved) {
+      html += `
+        <div class="section-card" style="text-align:center;opacity:0.7;margin-top:16px">
+          <div style="font-size:13px;color:var(--fg-muted)">Market closed — awaiting resolution</div>
+          ${(isOurResolver || isLegacyResolver) ? `<button class="resolve-btn" style="margin-top:10px;font-size:12px;padding:6px 18px" onclick="document.getElementById('resolveSection')?.scrollIntoView({behavior:'smooth'})">Check Resolution</button>` : ''}
         </div>
       `;
     }
 
-    // User positions (if any)
+    // Claim card (resolved markets)
+    if (resolved && !_connectedAddress) {
+      html += `
+        <div class="section-card" style="text-align:center;margin-top:16px">
+          <div style="font-size:13px;color:var(--fg-muted);margin-bottom:10px">Market resolved <b style="color:${outcome ? 'var(--yes)' : 'var(--no)'}">${outcome ? 'YES' : 'NO'}</b></div>
+          <button class="form-btn" onclick="connectWallet().then(()=>renderMarketPage('${marketId}'))">Connect wallet to check winnings</button>
+        </div>
+      `;
+    }
+    if (resolved && _connectedAddress && (userYes > 0n || userNo > 0n)) {
+      const winningShares = outcome ? userYes : userNo;
+      const losingShares = outcome ? userNo : userYes;
+      if (winningShares > 0n) {
+        const winAmt = Number(fmtColl(winningShares));
+        const pendingColl = outcome ? pendingYesColl : pendingNoColl;
+        const payoutAmt = pendingColl > 0n ? Number(fmtColl(pendingColl)) : winAmt;
+        const payoutFmt = payoutAmt >= 1 ? payoutAmt.toFixed(2) : payoutAmt.toFixed(4);
+        html += `
+          <div class="section-card" style="border-color:var(--yes);margin-top:16px">
+            <div class="section-title" style="color:var(--yes)">Claim Winnings</div>
+            <div style="text-align:center;margin-bottom:12px;font-size:14px">
+              You have <b>${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)}</b> winning ${outcome ? 'YES' : 'NO'} shares
+            </div>
+            <div id="claimQuote" style="text-align:center;font-size:12px;color:var(--fg-muted);margin-bottom:12px">
+              ~${payoutFmt} ${collSym} payout${pendingColl > 0n && pendingColl < winningShares ? ' (after resolver fee)' : ''}
+            </div>
+            <button class="resolve-btn" id="claimBtn" style="background:var(--yes);color:#000" onclick="claimWinnings('${marketId}')">Claim ${payoutFmt} ${collSym}</button>
+          </div>
+        `;
+      } else if (losingShares > 0n) {
+        html += `
+          <div class="section-card" style="border-color:var(--no);opacity:0.7;margin-top:16px">
+            <div class="section-title" style="color:var(--no)">No Payout</div>
+            <div style="text-align:center;font-size:13px;color:var(--fg-muted)">
+              Market resolved ${outcome ? 'YES' : 'NO'} — your ${outcome ? 'NO' : 'YES'} shares have no value
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // ---------------- YOUR POSITIONS ----------------
+    const vaultCooldownSec = vaultDepositTime ? _vaultCooldownRemaining(vaultDepositTime, close) : 0;
+    const vaultCooldownLabel = vaultCooldownSec > 0 ? fmtDuration(vaultCooldownSec) : '';
+    const fmtAmt = v => v >= 1 ? v.toFixed(2) : v.toFixed(4);
+    // A 100.00% pool share reads as noise; say what it means instead.
+    const shareNote = pct => pct >= 99.95 ? 'sole LP' : (pct < 0.01 ? '<0.01%' : pct.toFixed(2) + '%');
+
     const hasTradePos = userYes > 0n || userNo > 0n;
     const hasLPPos = userAmmLP > 0n || userAmmLPLegacy > 0n || userYesVaultLP > 0n || userNoVaultLP > 0n;
     if (hasTradePos || hasLPPos) {
-      let posHtml = `<div class="market-chart-drawer open" id="positionsDrawer">
+      let posHtml = `<div class="market-chart-drawer open" id="positionsDrawer" style="margin-top:16px">
         <button class="market-chart-toggle-btn" onclick="toggleDrawer('positionsDrawer')">
-          <span>Your Positions</span><span class="arrow">▼</span>
+          <span>Your Positions</span><span class="arrow">&#9660;</span>
         </button>
         <div class="drawer-body" style="padding:0 0 8px">`;
       if (hasTradePos) {
         posHtml += `<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-dim);margin-bottom:4px">Outcome Tokens</div>`;
         if (userYes > 0n) {
-          const _yAmt = Number(ethers.formatEther(userYes));
-          const _yVal = _yAmt * yPct / 100;
-          posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span>${_yAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">≈${_yVal >= 1 ? _yVal.toFixed(2) : _yVal.toFixed(4)} ${collSym} (${yPct}%)</span></span></div>`;
+          const _yAmt = Number(fmtColl(userYes));
+          posHtml += `<div class="pos-row"><span class="pos-side yes">YES</span><span class="pos-val">${_yAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">&asymp;${fmtAmt(_yAmt * yPct / 100)} ${collSym}</span></span></div>`;
         }
         if (userNo > 0n) {
-          const _nAmt = Number(ethers.formatEther(userNo));
-          const _nVal = _nAmt * nPct / 100;
-          posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span>${_nAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">≈${_nVal >= 1 ? _nVal.toFixed(2) : _nVal.toFixed(4)} ${collSym} (${nPct}%)</span></span></div>`;
+          const _nAmt = Number(fmtColl(userNo));
+          posHtml += `<div class="pos-row"><span class="pos-side no">NO</span><span class="pos-val">${_nAmt.toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">&asymp;${fmtAmt(_nAmt * nPct / 100)} ${collSym}</span></span></div>`;
         }
         posHtml += `<div id="posPNL" style="margin-top:4px"></div>`;
       }
@@ -3161,154 +3257,38 @@ async function renderMarketPage(marketId) {
             const matched = uYR < uNR ? uYR : uNR;
             const leftover = uYR > uNR ? uYR - uNR : uNR - uYR;
             const leftoverPrice = uYR > uNR ? yPct : nPct; // YES excess → valued at YES%, NO excess → NO%
-            const estVal = Number(ethers.formatEther(matched)) + Number(ethers.formatEther(leftover)) * leftoverPrice / 100;
-            lpCollEst = ` <span style="color:var(--fg-muted);font-size:11px">~${estVal >= 1 ? estVal.toFixed(2) : estVal.toFixed(4)} ${collSym}</span>`;
+            const estVal = Number(fmtColl(matched)) + Number(fmtColl(leftover)) * leftoverPrice / 100;
+            lpCollEst = ` <span style="color:var(--fg-muted);font-size:11px">&asymp;${fmtAmt(estVal)} ${collSym}</span>`;
           }
-          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(ethers.formatEther(userAmmLP)).toFixed(4)} LP${lpCollEst} <span style="color:var(--fg-muted);font-size:11px">(${ammPctShare < 0.01 ? '<0.01' : ammPctShare.toFixed(2)}%)</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM</span><span class="pos-val">${Number(fmtColl(userAmmLP)).toFixed(4)} LP${lpCollEst} <span style="color:var(--fg-muted);font-size:11px">(${shareNote(ammPctShare)})</span></span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="withdrawAmmBtn25" onclick="withdrawAmmLP(25)">25%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn50" onclick="withdrawAmmLP(50)">50%</button><button class="lp-withdraw-btn" id="withdrawAmmBtn" onclick="withdrawAmmLP()">ALL</button></span></div>`;
         }
         if (userAmmLPLegacy > 0n) {
-          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM <span style="font-size:9px;opacity:0.5">(alt pool)</span></span><span class="pos-val">${Number(ethers.formatEther(userAmmLPLegacy)).toFixed(4)} LP</span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="withdrawAmmLegacyBtn" onclick="withdrawAmmLPLegacy()">WITHDRAW</button></span></div>`;
+          posHtml += `<div class="pos-row"><span class="pos-side" style="color:var(--fg)">AMM <span style="font-size:9px;opacity:0.5">(alt pool)</span></span><span class="pos-val">${Number(fmtColl(userAmmLPLegacy)).toFixed(4)} LP</span><span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="withdrawAmmLegacyBtn" onclick="withdrawAmmLPLegacy()">WITHDRAW</button></span></div>`;
         }
-        if (userYesVaultLP > 0n) {
-          const yPctShare = totalYesVaultLP > 0n ? (Number(userYesVaultLP) / Number(totalYesVaultLP) * 100) : 0;
-          const yBtn = vaultCooldownSec > 0
+        // Vault LP is only meaningful once translated back into shares + collateral value
+        const vaultRow = (isYes) => {
+          const userLP = isYes ? userYesVaultLP : userNoVaultLP;
+          const totalLP = isYes ? totalYesVaultLP : totalNoVaultLP;
+          const inventory = isYes ? vaultYesShares : vaultNoShares;
+          const pctShare = totalLP > 0n ? (Number(userLP) / Number(totalLP) * 100) : 0;
+          const myShares = totalLP > 0n ? Number(fmtColl(inventory * userLP / totalLP)) : 0;
+          const myVal = myShares * (isYes ? yPct : nPct) / 100;
+          const valTxt = myShares > 0
+            ? `${fmtAmt(myShares)} shares <span style="color:var(--fg-muted);font-size:11px">&asymp;${fmtAmt(myVal)} ${collSym}</span>`
+            : `${Number(fmtColl(userLP)).toFixed(4)} LP`;
+          const actions = vaultCooldownSec > 0
             ? `<span style="font-size:10px;color:var(--fg-muted)">&#128274; ${vaultCooldownLabel}</span>`
-            : `<span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="harvestYesVaultBtn" onclick="harvestFees('${marketId}',true)">HARVEST</button><button class="lp-withdraw-btn" id="withdrawYesVaultBtn" onclick="withdrawVault(true)">WITHDRAW</button></span>`;
-          posHtml += `<div class="pos-row"><span class="pos-side yes">YES Vault</span><span class="pos-val">${Number(ethers.formatEther(userYesVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${yPctShare < 0.01 ? '<0.01' : yPctShare.toFixed(2)}%)</span></span>${yBtn}</div>`;
-        }
-        if (userNoVaultLP > 0n) {
-          const nPctShare = totalNoVaultLP > 0n ? (Number(userNoVaultLP) / Number(totalNoVaultLP) * 100) : 0;
-          const nBtn = vaultCooldownSec > 0
-            ? `<span style="font-size:10px;color:var(--fg-muted)">&#128274; ${vaultCooldownLabel}</span>`
-            : `<span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="harvestNoVaultBtn" onclick="harvestFees('${marketId}',false)">HARVEST</button><button class="lp-withdraw-btn" id="withdrawNoVaultBtn" onclick="withdrawVault(false)">WITHDRAW</button></span>`;
-          posHtml += `<div class="pos-row"><span class="pos-side no">NO Vault</span><span class="pos-val">${Number(ethers.formatEther(userNoVaultLP)).toFixed(4)} <span style="color:var(--fg-muted);font-size:11px">(${nPctShare < 0.01 ? '<0.01' : nPctShare.toFixed(2)}%)</span></span>${nBtn}</div>`;
-        }
+            : `<span style="display:flex;gap:3px"><button class="lp-withdraw-btn" id="harvest${isYes ? 'Yes' : 'No'}VaultBtn" onclick="harvestFees('${marketId}',${isYes})">HARVEST</button><button class="lp-withdraw-btn" id="withdraw${isYes ? 'Yes' : 'No'}VaultBtn" onclick="withdrawVault(${isYes})">WITHDRAW</button></span>`;
+          return `<div class="pos-row"><span class="pos-side ${isYes ? 'yes' : 'no'}">${isYes ? 'YES' : 'NO'} Vault</span><span class="pos-val">${valTxt} <span style="color:var(--fg-muted);font-size:11px">(${shareNote(pctShare)})</span></span>${actions}</div>`;
+        };
+        if (userYesVaultLP > 0n) posHtml += vaultRow(true);
+        if (userNoVaultLP > 0n) posHtml += vaultRow(false);
       }
       posHtml += `</div></div>`;
       html += posHtml;
     }
 
-    // Trade card (only if market is active)
-    if (!isActive && !resolved) {
-      html += `
-        <div class="section-card" style="text-align:center;opacity:0.7">
-          <div style="font-size:13px;color:var(--fg-muted)">Market closed — awaiting resolution</div>
-          ${(isOurResolver || isLegacyResolver) ? `<button class="resolve-btn" style="margin-top:10px;font-size:12px;padding:6px 18px" onclick="document.getElementById('resolveSection')?.scrollIntoView({behavior:'smooth'})">Check Resolution</button>` : ''}
-        </div>
-      `;
-    }
-    if (isActive) {
-      const isETH = !collateral || collateral === ethers.ZeroAddress;
-      html += `
-        <div class="section-card" id="tradeCard">
-          <div class="section-title">Trade</div>
-          <div class="trade-dir">
-            <button class="active" data-dir="buy" onclick="setTradeDir('buy')">Buy</button>
-            <button data-dir="sell" onclick="setTradeDir('sell')">Sell</button>
-          </div>
-          <div class="trade-side">
-            <button class="active" data-side="yes" onclick="setTradeSide('yes')">Yes</button>
-            <button data-side="no" onclick="setTradeSide('no')">No</button>
-          </div>
-          <div class="trade-section">
-            <div class="trade-section-head">
-              <label id="tradeInputLabel">${isETH ? 'ETH' : getCollateralSymbol(collateral)}</label>
-              <span class="trade-balance" id="tradeBalance" onclick="setMaxAmount()"></span>
-            </div>
-            <div class="pay-token-row">
-              <input type="number" id="tradeInput" placeholder="0.0" step="any" min="0" oninput="onTradeInput()">
-              <button class="pay-token-btn" id="payTokenBtn" onclick="openPayTokenModal()" style="display:none">${isETH ? 'ETH' : getCollateralSymbol(collateral)} <span style="font-size:9px;opacity:0.5">&#9662;</span></button>
-            </div>
-            <div class="trade-pct-row" id="tradePctRow">
-              <button class="trade-pct-btn" onclick="setPct(0.25)">25%</button>
-              <button class="trade-pct-btn" onclick="setPct(0.5)">50%</button>
-              <button class="trade-pct-btn" onclick="setPct(0.75)">75%</button>
-              <button class="trade-pct-btn" onclick="setPct(1)">Max</button>
-            </div>
-          </div>
-          <div class="trade-quote" id="tradeQuote"></div>
-          <div id="quoteAge" style="font-size:10px;min-height:14px;margin-bottom:2px"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--fg-muted)">
-            <span>Slippage</span>
-            <span style="display:flex;gap:4px;align-items:center" id="slippageRow">
-              ${[3,5,10,15].map(v => `<button onclick="setSlippage(${v})" class="trade-pct-btn" style="font-size:10px;padding:2px 6px;min-width:0;${_tradeSlippage===v?'color:var(--btn-fg);background:var(--btn-bg);border-color:var(--btn-bg)':''}" data-slip="${v}">${v}%</button>`).join('')}
-              <input type="number" id="slippageCustom" min="0.1" max="50" step="0.1" style="width:44px;padding:2px 4px;font-size:10px;background:var(--surface);border:1px solid ${![3,5,10,15].includes(_tradeSlippage)?'var(--btn-bg)':'var(--border-muted)'};color:var(--fg);text-align:center;border-radius:3px" value="${_tradeSlippage}" onfocus="clearSlippagePresets()" oninput="setSlippage(parseFloat(this.value)||15,true)">
-              <span style="font-size:10px">%</span>
-            </span>
-          </div>
-          <button class="form-btn" id="tradeBtn" onclick="executeTrade()" disabled>Enter amount</button>
-          <div style="text-align:center;margin-top:12px">
-            <button onclick="openLPModal('${marketId}')" style="font-size:11px;padding:6px 16px;background:transparent;border:1px solid var(--border-muted);color:var(--fg-muted)">Provide Liquidity</button>
-          </div>
-        </div>
-      `;
-    }
-
-    // Orderbook links for YES/NO limit orders
-    {
-      const _yesId = BigInt(marketId);
-      const _noId = BigInt(ethers.keccak256(ethers.solidityPacked(['string', 'uint256'], ['PMARKET:NO', _yesId])));
-      const _pamm = CONTRACTS.PAMM;
-      // Sorted: token0=token1=PAMM, ids sorted
-      const [_sId0, _sId1, _sLabel0, _sLabel1] = _yesId < _noId
-        ? [_yesId, _noId, 'YES', 'NO'] : [_noId, _yesId, 'NO', 'YES'];
-      // Price: coin0 per coin1 (depends on sort order)
-      const _price = _yesId < _noId
-        ? (yPct > 0 ? (nPct / yPct) : '')   // coin0=YES, coin1=NO → price of NO in YES
-        : (nPct > 0 ? (yPct / nPct) : '');  // coin0=NO, coin1=YES → price of YES in NO
-      const _obBase = '../orderbook/?token0=' + encodeURIComponent(_pamm) + '&token1=' + encodeURIComponent(_pamm)
-        + '&id0=' + _sId0.toString() + '&id1=' + _sId1.toString()
-        + '&label0=' + encodeURIComponent(_sLabel0) + '&label1=' + encodeURIComponent(_sLabel1);
-      const _obHref = _price ? _obBase + '&price=' + _price : _obBase;
-      html += `
-        <div style="display:flex;gap:12px;justify-content:center;margin:12px 0;font-size:12px">
-          <a href="${_obHref}" style="color:var(--fg-muted);text-decoration:none;border-bottom:1px dotted var(--fg-dim)">Limit Orders (YES/NO)</a>
-        </div>
-      `;
-    }
-
-    // Claim card (if resolved and user has position)
-    if (resolved && !_connectedAddress) {
-      html += `
-        <div class="section-card" style="text-align:center">
-          <div style="font-size:13px;color:var(--fg-muted);margin-bottom:10px">Market resolved <b style="color:${outcome ? 'var(--yes)' : 'var(--no)'}">${outcome ? 'YES' : 'NO'}</b></div>
-          <button class="form-btn" onclick="connectWallet().then(()=>renderMarketPage('${marketId}'))">Connect wallet to check winnings</button>
-        </div>
-      `;
-    }
-    if (resolved && _connectedAddress && (userYes > 0n || userNo > 0n)) {
-      const winningShares = outcome ? userYes : userNo;
-      const losingShares = outcome ? userNo : userYes;
-      if (winningShares > 0n) {
-        const winAmt = Number(ethers.formatEther(winningShares));
-        const pendingColl = outcome ? pendingYesColl : pendingNoColl;
-        const payoutAmt = pendingColl > 0n ? Number(ethers.formatEther(pendingColl)) : winAmt;
-        const payoutFmt = payoutAmt >= 1 ? payoutAmt.toFixed(2) : payoutAmt.toFixed(4);
-        html += `
-          <div class="section-card" style="border-color:var(--yes)">
-            <div class="section-title" style="color:var(--yes)">Claim Winnings</div>
-            <div style="text-align:center;margin-bottom:12px;font-size:14px">
-              You have <b>${winAmt >= 1 ? winAmt.toFixed(2) : winAmt.toFixed(4)}</b> winning ${outcome ? 'YES' : 'NO'} shares
-            </div>
-            <div id="claimQuote" style="text-align:center;font-size:12px;color:var(--fg-muted);margin-bottom:12px">
-              ~${payoutFmt} ${collSym} payout${pendingColl > 0n && pendingColl < winningShares ? ' (after resolver fee)' : ''}
-            </div>
-            <button class="resolve-btn" id="claimBtn" style="background:var(--yes);color:#000" onclick="claimWinnings('${marketId}')">Claim ${payoutFmt} ${collSym}</button>
-          </div>
-        `;
-      } else if (losingShares > 0n) {
-        html += `
-          <div class="section-card" style="border-color:var(--no);opacity:0.7">
-            <div class="section-title" style="color:var(--no)">No Payout</div>
-            <div style="text-align:center;font-size:13px;color:var(--fg-muted)">
-              Market resolved ${outcome ? 'YES' : 'NO'} — your ${outcome ? 'NO' : 'YES'} shares have no value
-            </div>
-          </div>
-        `;
-      }
-    }
-
-    // Resolution section
+    // ---------------- RESOLUTION ----------------
     if (isOurResolver || isLegacyResolver) {
       try {
         html += buildResolutionSection(marketId, { resolved, outcome, resValue, resCond, resReady, condData, close, canClose: mkt.canClose, resolverAddr, isOurResolver, isLegacyResolver });
@@ -3332,6 +3312,72 @@ async function renderMarketPage(marketId) {
         </div>
       `;
     }
+
+    // ---------------- DETAILS (secondary, all collapsed) ----------------
+    const resolverShort = resolverAddr.slice(0, 6) + '...' + resolverAddr.slice(-4);
+    const resolverDisplayName = isOurResolver ? 'Onchain Resolver' : (resolverWeiName ? resolverWeiName : resolverShort);
+    const resolverLabel = resolverDisplayName + (resolverVerified ? VERIFIED_BADGE : '');
+    let detailsHtml = `
+      <div class="market-chart-drawer" id="marketInfoDrawer">
+        <button class="market-chart-toggle-btn" onclick="toggleDrawer('marketInfoDrawer')"><span>Market Info</span><span class="arrow">&#9660;</span></button>
+        <div class="drawer-body" style="display:none;padding:4px 0 8px">
+          <div class="stat-row"><span class="stat-label">Closes</span><span class="stat-value"${!resolved && close - now < 86400 ? ' style="color:var(--no)"' : ''}>${fmtDate(close)}</span></div>
+          <div class="stat-row"><span class="stat-label">Liquidity</span><span class="stat-value" style="display:inline-flex;align-items:center;gap:3px">${tvlFmt} ${collSym} ${payTokenIcon(collSym).replace(/width="20"/g,'width="14"').replace(/height="20"/g,'height="14"')}</span></div>
+          <div class="stat-row"><span class="stat-label">Resolver</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${resolverAddr}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${resolverLabel}</a></span></div>
+          ${!isOurResolver && !isLegacyResolver && resolverFeeBps > 0 ? `<div class="stat-row"><span class="stat-label">Resolver Fee</span><span class="stat-value">${(resolverFeeBps / 100).toFixed(2)}%</span></div>` : ''}
+          ${isLabeled && currentFeeBps > 0n && currentFeeBps <= 10000n ? `<div class="stat-row"><span class="stat-label">Swap Fee <span onclick="event.stopPropagation();showRawTooltip(this,'Dynamic fee — adapts each swap based on market conditions.\\n\\nComponents:\\n• Base fee: decays from high to low over the bootstrap window\\n• Skew fee: increases when probability deviates from 50% (non-linear curve)\\n• Directional fee: linear scaling with probability deviation from 50%\\n• Volatility fee: added when recent price variance is high\\n\\nTotal fee is capped at 3%. Fee shown is the current rate — it changes with every trade.\\n\\nzAMM LPs earn fees from pool swaps. Vault LPs earn fees from vault OTC fills — 90% to vault when inventory is balanced, 70% when imbalanced. The remainder goes to a rebalance budget.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></span><span class="stat-value">${(Number(currentFeeBps) / 100).toFixed(2)}%</span></div>` : ''}
+          <div class="stat-row"><span class="stat-label">Market ID</span><span class="stat-value" style="font-size:11px;word-break:break-all"><a href="https://etherscan.io/address/${CONTRACTS.PAMM}" target="_blank" rel="noopener" style="color:var(--fg-muted)">${marketId.slice(0, 12)}...${marketId.slice(-6)}</a></span></div>
+        </div>
+      </div>
+    `;
+
+    // Vault (labeled markets that actually hold inventory)
+    if (isLabeled && (vaultYesShares > 0n || vaultNoShares > 0n)) {
+      const vYes = Number(fmtColl(vaultYesShares));
+      const vNo = Number(fmtColl(vaultNoShares));
+      const vBudget = Number(fmtColl(vaultBudget));
+
+      // Health checks
+      const twapAge = twapTimestamp1 > 0 ? now - twapTimestamp1 : 0;
+      const twapStale = twapTimestamp1 > 0 && twapAge >= 1800;
+      const twapVeryStale = twapTimestamp1 > 0 && twapAge >= 7200;
+      const totalInventory = vaultYesShares + vaultNoShares;
+      const imbalanceRatio = totalInventory > 0n
+        ? Number(vaultYesShares > vaultNoShares ? vaultYesShares - vaultNoShares : vaultNoShares - vaultYesShares) / Number(totalInventory) * 100
+        : 0;
+      const isImbalanced = imbalanceRatio > 20;
+      const budgetMaterial = vBudget >= 0.0001;
+      const needsRebalance = isImbalanced && budgetMaterial && isActive;
+      const needsSettle = budgetMaterial && !isActive;
+      const needsAttention = (twapVeryStale && isActive) || needsRebalance || needsSettle;
+      const hasActions = (isActive && twapStale) || needsRebalance || needsSettle || (resolved && (vaultYesShares > 0n || vaultNoShares > 0n || vaultBudget > 0n));
+
+      detailsHtml += `
+        <div class="market-chart-drawer" id="vaultInfoDrawer">
+          <button class="market-chart-toggle-btn" onclick="toggleDrawer('vaultInfoDrawer')"><span>Vault${needsAttention ? ' <span style="color:var(--no)">&bull;</span>' : ''}</span><span class="arrow">&#9660;</span></button>
+          <div class="drawer-body" style="display:none;padding:4px 0 8px">
+            <div style="font-size:11px;color:var(--fg-muted);margin-bottom:10px">Holds shares from sweep trades. Depositors earn OTC fees. <span onclick="event.stopPropagation();showRawTooltip(this,'When large trades sweep through the zAMM, the opposite-side shares are deposited into the vault automatically. Vault depositors earn fees from vault OTC fills proportional to their LP tokens.\\n\\nHow it works:\\n• Sweep buys deposit opposite shares into the vault\\n• Vault LPs earn 90% of OTC fees when inventory is balanced, 70% when imbalanced\\n• Remaining OTC fees go to a rebalance budget used to re-equalize YES/NO inventory\\n\\nMaintenance (permissionless):\\n• Update TWAP — refreshes the price oracle used for vault pricing (every 30min)\\n• Rebalance — uses budget to swap excess inventory toward balance\\n• Settle — after market closes, distributes remaining budget to LPs\\n• Finalize — after resolution, redeems vault shares and closes out\\n\\nHarvest lets you claim earned fees without withdrawing your vault position.')" style="opacity:0.4;cursor:help;font-size:9px">ⓘ</span></div>
+            ${vaultYesShares > 0n ? `<div class="stat-row"><span class="stat-label">YES Inventory</span><span class="stat-value">${fmtAmt(vYes)} shares</span></div>` : ''}
+            ${vaultNoShares > 0n ? `<div class="stat-row"><span class="stat-label">NO Inventory</span><span class="stat-value">${fmtAmt(vNo)} shares</span></div>` : ''}
+            ${budgetMaterial ? `<div class="stat-row"><span class="stat-label">Budget</span><span class="stat-value">${fmtAmt(vBudget)} ${collSym}</span></div>` : ''}
+            ${needsAttention ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-muted)">${[twapVeryStale && isActive ? 'TWAP oracle is stale' : '', needsRebalance ? 'Inventory is imbalanced' : '', needsSettle ? 'Budget can be settled' : ''].filter(Boolean).join('. ')}.</div>` : ''}
+            ${hasActions ? `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              ${isActive && twapStale ? `<button onclick="updateTWAP('${marketId}')" id="twapBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Update TWAP</button>` : ''}
+              ${needsRebalance ? `<button onclick="rebalanceVault('${marketId}')" id="rebalanceBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Rebalance</button>` : ''}
+              ${needsSettle ? `<button onclick="settleBudget('${marketId}')" id="settleBudgetBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Settle</button>` : ''}
+              ${resolved ? `<button onclick="finalizeMarket('${marketId}')" id="finalizeBtn" class="lp-withdraw-btn" style="flex:1;min-width:0;text-align:center;padding:5px 10px">Finalize</button>` : ''}
+            </div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    detailsHtml += `<div class="market-chart-drawer" id="pmActivityDrawer" data-pool-id="${chartPoolId}" data-yes-is-token0="${chartYesIsToken0 ? '1' : '0'}">
+      <button class="market-chart-toggle-btn" onclick="togglePoolActivity()"><span>Pool Activity</span><span class="arrow">&#9660;</span></button>
+      <div class="pm-activity-body" style="display:none"><div id="pmActivityContent"><div class="pm-activity-empty">Click to load</div></div></div>
+    </div>`;
+
+    html += `<div class="details-group"><div class="details-label">Details</div>${detailsHtml}</div>`;
 
     app.innerHTML = html;
 
@@ -3377,19 +3423,6 @@ async function renderMarketPage(marketId) {
     app.dataset.userAmmLPLegacy = userAmmLPLegacy.toString();
     app.dataset.userYesVaultLP = userYesVaultLP.toString();
     app.dataset.userNoVaultLP = userNoVaultLP.toString();
-
-    // Update nav orderbook link for this market's YES/NO pair
-    {
-      const _nav = $('navOrderbook');
-      if (_nav) {
-        const _yId = BigInt(marketId);
-        const _nId = BigInt(ethers.keccak256(ethers.solidityPacked(['string', 'uint256'], ['PMARKET:NO', _yId])));
-        const [_si0, _si1, _sl0, _sl1] = _yId < _nId ? [_yId, _nId, 'YES', 'NO'] : [_nId, _yId, 'NO', 'YES'];
-        _nav.href = '../orderbook/?token0=' + encodeURIComponent(CONTRACTS.PAMM) + '&token1=' + encodeURIComponent(CONTRACTS.PAMM)
-          + '&id0=' + _si0.toString() + '&id1=' + _si1.toString()
-          + '&label0=' + encodeURIComponent(_sl0) + '&label1=' + encodeURIComponent(_sl1);
-      }
-    }
 
     // Load balances if connected
     if (_connectedAddress && isActive) {
@@ -3453,10 +3486,21 @@ function setTradeSide(side) {
   }
 }
 
+function toggleSlippagePanel() {
+  const panel = $('slippagePanel');
+  const toggle = $('slipToggle');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? '' : 'none';
+  if (toggle) toggle.classList.toggle('open', open);
+}
+
 function setSlippage(pct, fromCustom) {
   if (!pct || pct < 0.1) pct = 0.1;
   if (pct > 50) pct = 50;
   _tradeSlippage = pct;
+  const val = $('slipVal');
+  if (val) val.textContent = pct + '%';
   const row = $('slippageRow');
   if (row) {
     const isPreset = [3,5,10,15].includes(pct);
@@ -3548,7 +3592,9 @@ function renderPayTokenList() {
     const isActive = tok.address.toLowerCase() === selAddr;
     const icon = payTokenIcon(tok.symbol);
     const symSafe = escText(tok.symbol);
-    return `<li class="${isActive ? 'active' : ''}" onclick="selectPayToken('${escText(key)}')">
+    // Key goes through a data attribute, not inline JS — custom token symbols come
+    // from arbitrary contracts and may contain quotes.
+    return `<li class="${isActive ? 'active' : ''}" data-tok-key="${escAttr(key)}">
       ${icon}<span class="tok-sym">${symSafe}</span>
       ${isDefault ? '<span class="tok-note">collateral</span>' : ''}
     </li>`;
@@ -3574,6 +3620,13 @@ function renderPayTokenList() {
   }
 
   list.innerHTML = html;
+  if (!list.dataset.bound) {
+    list.dataset.bound = '1';
+    list.addEventListener('click', e => {
+      const li = e.target.closest('li[data-tok-key]');
+      if (li) selectPayToken(li.dataset.tokKey);
+    });
+  }
 }
 
 function closePayTokenModal() {
@@ -3728,10 +3781,11 @@ async function loadTradeBalance(marketId, collateral, userYes, userNo) {
         }
       }
     } else {
-      // Sell: show share balance
+      // Sell: show share balance (shares carry the collateral token's decimals)
+      balEl.dataset.decimals = String(_collDec());
       if (userYes > 0n || userNo > 0n) {
         const shares = _tradeSide === 'yes' ? userYes : userNo;
-        balEl.textContent = 'Bal: ' + Number(ethers.formatEther(shares)).toFixed(4) + ' shares';
+        balEl.textContent = 'Bal: ' + Number(fmtColl(shares)).toFixed(4) + ' shares';
         balEl.dataset.balance = shares.toString();
       } else {
         // Fetch from chain
@@ -3742,7 +3796,7 @@ async function loadTradeBalance(marketId, collateral, userYes, userNo) {
           const shareId = _tradeSide === 'yes' ? yesId : noId;
           return await pamm.balanceOf(_connectedAddress, shareId);
         });
-        balEl.textContent = 'Bal: ' + Number(ethers.formatEther(bal)).toFixed(4) + ' shares';
+        balEl.textContent = 'Bal: ' + Number(fmtColl(bal)).toFixed(4) + ' shares';
         balEl.dataset.balance = bal.toString();
       }
     }
@@ -3872,13 +3926,20 @@ function onTradeInput() {
   // Instant local estimate (collateral path)
   const rYes = BigInt($('app').dataset.ammYesReserve || '0');
   const rNo = BigInt($('app').dataset.ammNoReserve || '0');
-  const amountWei = ethers.parseEther(val.toString());
+  const amountWei = parseColl(val);
+  if (amountWei <= 0n) {
+    btn.textContent = 'Amount too small';
+    btn.disabled = true;
+    if (quoteEl) quoteEl.textContent = '';
+    _lastQuote = null;
+    return;
+  }
 
   let estimated = 0n;
   if (_tradeDir === 'buy') {
     estimated = _tradeSide === 'yes' ? quoteBuyYes(amountWei, rYes, rNo) : quoteBuyNo(amountWei, rYes, rNo);
     if (quoteEl && estimated > 0n) {
-      const _avgPct = Math.round((val / Number(ethers.formatEther(estimated))) * 100);
+      const _avgPct = Math.round((val / Number(fmtColl(estimated))) * 100);
       const _spot = rYes + rNo > 0n ? Math.round(Number(_tradeSide === 'yes' ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
       const _impact = _spot > 0 ? Math.round(((_avgPct - _spot) / _spot) * 100) : 0;
       let _quoteExtra = '';
@@ -3886,10 +3947,10 @@ function onTradeInput() {
         _quoteExtra = `<br><span style="font-size:11px;color:var(--no)">⚠ ${_impact}% price impact — may revert or increase slippage</span>`;
       }
       const _collSym0 = getCollateralSymbol($('app').dataset.collateral);
-      quoteEl.innerHTML = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
+      quoteEl.innerHTML = '~' + Number(fmtColl(estimated)).toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
         + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`
         + _quoteExtra
-        + payoutPreviewHtml(Number(ethers.formatEther(estimated)), val, _tradeSide, _collSym0);
+        + payoutPreviewHtml(Number(fmtColl(estimated)), val, _tradeSide, _collSym0);
     }
   } else {
     estimated = _tradeSide === 'yes' ? quoteSellYes(amountWei, rYes, rNo) : quoteSellNo(amountWei, rYes, rNo);
@@ -3897,9 +3958,9 @@ function onTradeInput() {
     const collSym = getCollateralSymbol(collateral);
 
     if (quoteEl && estimated > 0n) {
-      const _avgPct = Math.round((Number(ethers.formatEther(estimated)) / Number(ethers.formatEther(amountWei))) * 100);
+      const _avgPct = Math.round((Number(fmtColl(estimated)) / Number(fmtColl(amountWei))) * 100);
       const _spot = rYes + rNo > 0n ? Math.round(Number(_tradeSide === 'yes' ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
-      quoteEl.innerHTML = '~' + Number(ethers.formatEther(estimated)).toFixed(4) + ' ' + collSym
+      quoteEl.innerHTML = '~' + Number(fmtColl(estimated)).toFixed(4) + ' ' + collSym
         + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% per share` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`;
     }
   }
@@ -3929,8 +3990,8 @@ async function fetchOnchainQuote(amountWei) {
           const result = await quoter.quoteBuyWithSweep(marketId, buyYes, amountWei, 9999, { gasLimit: 5000000 });
           const shares = BigInt(result.totalSharesOut);
           const pmShares = BigInt(result.pmSharesOut);
-          const _sharesF = Number(ethers.formatEther(shares));
-          const _collF = Number(ethers.formatEther(amountWei));
+          const _sharesF = Number(fmtColl(shares));
+          const _collF = Number(fmtColl(amountWei));
           const _avgPct = _sharesF > 0 ? Math.round((_collF / _sharesF) * 100) : 0;
           const _rY = BigInt($('app').dataset.ammYesReserve || '0'), _rN = BigInt($('app').dataset.ammNoReserve || '0');
           const _spot = _rY + _rN > 0n ? Math.round(Number(_tradeSide === 'yes' ? _rN : _rY) * 100 / Number(_rY + _rN)) : 0;
@@ -3938,7 +3999,7 @@ async function fetchOnchainQuote(amountWei) {
             + `<span style="color:var(--fg-muted);font-size:11px;margin-left:6px">@ ${_avgPct}% avg` + (_avgPct !== _spot ? ` (spot ${_spot}%)` : '') + `</span>`;
           if (pmShares > 0n) {
             const oppSide = buyYes ? 'NO' : 'YES';
-            quoteHtml += `<br><span style="font-size:11px;color:var(--fg-muted)">~${Number(ethers.formatEther(pmShares)).toFixed(4)} ${oppSide} minted to vault (withdrawal cooldown)</span>`;
+            quoteHtml += `<br><span style="font-size:11px;color:var(--fg-muted)">~${Number(fmtColl(pmShares)).toFixed(4)} ${oppSide} minted to vault (withdrawal cooldown)</span>`;
           }
           const _collSymL = getCollateralSymbol($('app').dataset.collateral);
           quoteEl.innerHTML = quoteHtml + payoutPreviewHtml(_sharesF, _collF, _tradeSide, _collSymL);
@@ -3948,8 +4009,8 @@ async function fetchOnchainQuote(amountWei) {
           const collOut = BigInt(result.totalCollateralOut);
           const collateral = $('app').dataset.collateral;
           const collSym = getCollateralSymbol(collateral);
-          const _collF = Number(ethers.formatEther(collOut));
-          const _sharesF = Number(ethers.formatEther(amountWei));
+          const _collF = Number(fmtColl(collOut));
+          const _sharesF = Number(fmtColl(amountWei));
           const _avgPct = _sharesF > 0 ? Math.round((_collF / _sharesF) * 100) : 0;
           const _rY2 = BigInt($('app').dataset.ammYesReserve || '0'), _rN2 = BigInt($('app').dataset.ammNoReserve || '0');
           const _spot2 = _rY2 + _rN2 > 0n ? Math.round(Number(_tradeSide === 'yes' ? _rN2 : _rY2) * 100 / Number(_rY2 + _rN2)) : 0;
@@ -3979,8 +4040,8 @@ async function fetchOnchainQuote(amountWei) {
         if (_tradeDir === 'buy') {
           const shares = buyYes ? quoteBuyYes(amountWei, rYes, rNo, LEGACY_FEE_BPS) : quoteBuyNo(amountWei, rYes, rNo, LEGACY_FEE_BPS);
           if (quoteEl && shares > 0n) {
-            const _sF = Number(ethers.formatEther(shares));
-            const _cF = Number(ethers.formatEther(amountWei));
+            const _sF = Number(fmtColl(shares));
+            const _cF = Number(fmtColl(amountWei));
             const _avgPct = _sF > 0 ? Math.round((_cF / _sF) * 100) : 0;
             const _spotL = rYes + rNo > 0n ? Math.round(Number(buyYes ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
             quoteEl.innerHTML = _sF.toFixed(4) + ' ' + _tradeSide.toUpperCase() + ' shares'
@@ -3991,8 +4052,8 @@ async function fetchOnchainQuote(amountWei) {
         } else {
           const collOut = buyYes ? quoteSellYes(amountWei, rYes, rNo, LEGACY_FEE_BPS) : quoteSellNo(amountWei, rYes, rNo, LEGACY_FEE_BPS);
           if (quoteEl && collOut > 0n) {
-            const _cF = Number(ethers.formatEther(collOut));
-            const _sF = Number(ethers.formatEther(amountWei));
+            const _cF = Number(fmtColl(collOut));
+            const _sF = Number(fmtColl(amountWei));
             const _avgPct = _sF > 0 ? Math.round((_cF / _sF) * 100) : 0;
             const _spotL2 = rYes + rNo > 0n ? Math.round(Number(buyYes ? rNo : rYes) * 100 / Number(rYes + rNo)) : 0;
             quoteEl.innerHTML = _cF.toFixed(4) + ' ' + collSym
@@ -4137,8 +4198,8 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
     const collateral = $('app').dataset.collateral;
     const collSym = getCollateralSymbol(collateral);
 
-    const _rSharesF = Number(ethers.formatEther(quote.sharesOut));
-    const _rCollF = Number(ethers.formatEther(quote.collateralAmount));
+    const _rSharesF = Number(fmtColl(quote.sharesOut));
+    const _rCollF = Number(fmtColl(quote.collateralAmount));
     const _rAvgPct = _rSharesF > 0 ? Math.round((_rCollF / _rSharesF) * 100) : 0;
     const _rY3 = BigInt($('app').dataset.ammYesReserve || '0'), _rN3 = BigInt($('app').dataset.ammNoReserve || '0');
     const _rSpot = _rY3 + _rN3 > 0n ? Math.round(Number(buyYes ? _rN3 : _rY3) * 100 / Number(_rY3 + _rN3)) : 0;
@@ -4177,7 +4238,7 @@ async function executeTrade() {
 
   const val = parseFloat(input.value);
   if (!val || val <= 0) return;
-  const amountWei = ethers.parseEther(val.toString());
+  const amountWei = parseColl(val);
 
   const isETH = !collateral || collateral === ethers.ZeroAddress;
   const buyYes = _tradeSide === 'yes';
@@ -4280,7 +4341,7 @@ async function executeTrade() {
       await tx.wait();
       btn.textContent = 'Buy confirmed!';
       if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
-      recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', Number(ethers.formatEther(freshQuote.collateralAmount)), Number(ethers.formatEther(freshQuote.sharesOut)));
+      recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', Number(fmtColl(freshQuote.collateralAmount)), Number(fmtColl(freshQuote.sharesOut)));
       input.value = '';
 
       setTimeout(() => renderMarketPage(marketId), 2000);
@@ -4323,7 +4384,7 @@ async function executeTrade() {
         await tx.wait();
         btn.textContent = 'Buy confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
-        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(ethers.formatEther(_lastQuote.expectedOut)));
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(fmtColl(_lastQuote.expectedOut)));
         input.value = '';
 
       } else {
@@ -4369,11 +4430,11 @@ async function executeTrade() {
         }
         // Update input + quote to reflect adjusted amount
         if (sellAmt !== (_lastQuote.amount || amountWei)) {
-          const adjF = Number(ethers.formatEther(sellAmt));
+          const adjF = Number(fmtColl(sellAmt));
           input.value = adjF >= 1 ? adjF.toFixed(4) : adjF.toFixed(6);
           if (quoteEl) {
             const collSym = getCollateralSymbol(collateral);
-            const collF = sellMinColl > 0n ? Number(ethers.formatEther(sellMinColl * 10000n / (10000n - slipBps))) : 0;
+            const collF = sellMinColl > 0n ? Number(fmtColl(sellMinColl * 10000n / (10000n - slipBps))) : 0;
             quoteEl.innerHTML = '~' + collF.toFixed(4) + ' ' + collSym
               + `<br><span style="font-size:11px;color:var(--fg-muted)">Adjusted to max — pool overflow at higher amounts</span>`;
           }
@@ -4388,7 +4449,7 @@ async function executeTrade() {
         await tx.wait();
         btn.textContent = 'Sell confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Sell confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
-        const sellValF = Number(ethers.formatEther(sellAmt));
+        const sellValF = Number(fmtColl(sellAmt));
         recordTrade(_connectedAddress, marketId, _tradeSide, 'sell', sellValF, sellValF);
         input.value = '';
       }
@@ -4427,7 +4488,7 @@ async function executeTrade() {
         await tx.wait();
         btn.textContent = 'Buy confirmed!';
         if (quoteEl) quoteEl.innerHTML = `<span style="color:var(--green)">Buy confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">View tx</a>`;
-        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(ethers.formatEther(_lastQuote.expectedOut)));
+        recordTrade(_connectedAddress, marketId, _tradeSide, 'buy', val, Number(fmtColl(_lastQuote.expectedOut)));
         input.value = '';
 
       } else {
@@ -5081,12 +5142,14 @@ function updateSupplyPreview() {
   const el = $('supplyPreview');
   if (!el) return;
   const sym = _supplyTokenData.symbol || 'token';
-  const threshold = $('supplyThreshold').value || '___';
-  const op = $('supplyOp').value;
-  const verb = parseInt(op) >= 2 ? 'reach' : 'drop below';
+  const rawThreshold = $('supplyThreshold').value;
+  const op = parseInt($('supplyOp').value);
+  // OP enum: 0=LT, 1=GT, 2=LTE, 3=GTE — only GT/GTE mean the supply has to climb
+  const verb = (op === OP.GT || op === OP.GTE) ? 'reach' : 'drop below';
   const dateStr = $('supplyCloseDate').value;
   const date = dateStr ? fmtDate(Math.floor(new Date(dateStr).getTime() / 1000)) : '___';
-  el.innerHTML = `Will <b>${sym}</b> supply ${verb} <b>${Number(threshold).toLocaleString() || '___'}</b> by <b>${date}</b>?`;
+  const threshold = rawThreshold && isFinite(Number(rawThreshold)) ? Number(rawThreshold).toLocaleString() : '___';
+  el.innerHTML = `Will <b>${escText(sym)}</b> supply ${verb} <b>${threshold}</b> by <b>${date}</b>?`;
   updateCreateDeeplink();
 }
 
@@ -5317,7 +5380,6 @@ async function createSupplyMarket(collateralForLP, deadline) {
   if (closeTimestamp < Math.floor(Date.now() / 1000) + 3600) { alert('Close date must be at least 1 hour in the future'); return; }
 
   const decimals = _supplyTokenData.decimals || 18;
-  const sym = _supplyTokenData.symbol || 'TOKEN';
   const thresholdUnits = ethers.parseUnits(threshold.toString(), decimals);
   const description = `SUPPLY|${tokenAddr}|${op}|${threshold}|${closeTimestamp}`;
 
@@ -5635,7 +5697,7 @@ async function provideLiquidity() {
   const amount = parseFloat($('lpAmount').value) || 0;
   if (!marketId || amount <= 0) { alert('Enter an amount'); return; }
 
-  const amountWei = ethers.parseEther(amount.toString());
+  const amountWei = parseColl(amount);
   const btn = $('lpBtn');
   btn.disabled = true; btn.textContent = 'Providing...';
   const isLabeled = $('lpModal').dataset.isLabeled === '1';
@@ -5841,7 +5903,8 @@ async function withdrawAmmLP(pct) {
   const withdrawAmt = pct ? totalLP * BigInt(pct) / 100n : totalLP;
   if (withdrawAmt <= 0n) return;
 
-  const btn = $('withdrawAmmBtn');
+  const btn = $(pct ? 'withdrawAmmBtn' + pct : 'withdrawAmmBtn');
+  const btnLabel = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
   try {
@@ -5870,7 +5933,7 @@ async function withdrawAmmLP(pct) {
       console.error('Withdraw AMM LP failed:', e);
       alert('Withdraw failed: ' + decodeError(e));
     }
-    if (btn) { btn.disabled = false; btn.textContent = 'WITHDRAW'; }
+    if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
   }
 }
 

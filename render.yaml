@@ -6,7 +6,7 @@
 # Cloudflare. After deploying, move wei.is DNS to Namecheap (or repoint the
 # records) so zfi.wei.is + api.zfi.wei.is point at the Render services below.
 #
-# IPFS stays canonical: the dapp content is still pinned (Pinata) and reachable
+# IPFS stays canonical: the dapp content is still pinned (Filebase) and reachable
 # via any IPFS gateway. Render is the always-on access path + API host.
 services:
   # 1) Static dapp — replaces the Cloudflare Worker gateway serving zfi.wei.is.
@@ -24,6 +24,15 @@ services:
       - path: /*
         name: Access-Control-Allow-Origin
         value: "*"
+    routes:
+      # The WNS app is its own dapp at wei.domains and no longer ships here.
+      # Keep /domains redirecting for anyone holding an old link.
+      - type: redirect
+        source: /domains
+        destination: https://wei.domains/
+      - type: redirect
+        source: /domains/*
+        destination: https://wei.domains/
 
   # 2) Combined API — replaces BOTH Cloudflare Workers (pin + quote) as one
   #    Node service. Routes are dispatched by path in server/index.js.
@@ -45,16 +54,13 @@ services:
       # test URL) while validating before the DNS cutover.
       - key: ALLOWED_ORIGINS
         sync: false
-      # IPFS pinning (Pinata)
-      - key: PINATA_KEY
+      # IPFS pinning (Filebase, S3-compatible — bucket must be IPFS-enabled)
+      - key: FILEBASE_KEY
         sync: false
-      - key: PINATA_SECRET
+      - key: FILEBASE_SECRET
         sync: false
-      # Supabase (launched_tokens / trades / gated rooms)
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_KEY
-        sync: false
+      - key: FILEBASE_BUCKET
+        value: zfi
       # Swap aggregator API keys (hidden server-side)
       - key: OX_API_KEY
         sync: false

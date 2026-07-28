@@ -1,8 +1,10 @@
-// Cloudflare Worker: IPFS pinning proxy for Pinata + 0x/1inch/OKX swap API proxies
+// Cloudflare Worker: IPFS pinning proxy for Filebase + 0x/1inch/OKX swap API proxies
+// LEGACY — production runs server/pin.js on Render; kept in sync as a fallback.
 // Deploy: wrangler deploy
-// Secrets: wrangler secret put PINATA_KEY / PINATA_SECRET / OX_API_KEY / INCH_API_KEY / OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE
+// Secrets: wrangler secret put FILEBASE_KEY / FILEBASE_SECRET / FILEBASE_BUCKET / OX_API_KEY / INCH_API_KEY / OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE
 
-const PINATA = 'https://api.pinata.cloud';
+const FILEBASE_S3 = 's3.filebase.com';
+const FILEBASE_REGION = 'us-east-1';
 const OX_API = 'https://api.0x.org';
 const INCH_API = 'https://api.1inch.dev';
 const OKX_API = 'https://web3.okx.com';
@@ -24,8 +26,67 @@ function json(request, data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors(request), 'Content-Type': 'application/json' } });
 }
 
-function pinHeaders(env) {
-  return { pinata_api_key: env.PINATA_KEY, pinata_secret_api_key: env.PINATA_SECRET };
+// --- Filebase (S3-compatible IPFS pinning) -------------------------------
+// Uploading an object to an IPFS-enabled Filebase bucket pins it and returns the
+// CID in the `x-amz-meta-cid` response header. Auth is AWS SigV4, implemented
+// here with crypto.subtle so this file stays Worker/Node portable.
+
+const _enc = new TextEncoder();
+const _hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+async function sha256Hex(data) {
+  return _hex(await crypto.subtle.digest('SHA-256', typeof data === 'string' ? _enc.encode(data) : data));
+}
+
+async function hmac(key, data) {
+  const k = await crypto.subtle.importKey(
+    'raw', typeof key === 'string' ? _enc.encode(key) : key,
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, _enc.encode(data)));
+}
+
+// PUT `body` into the Filebase bucket under `key`; resolves to the pinned CID.
+async function filebasePut(env, key, body, contentType) {
+  const bucket = env.FILEBASE_BUCKET || 'zfi';
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''); // YYYYMMDDTHHMMSSZ
+  const date = amzDate.slice(0, 8);
+  const payloadHash = await sha256Hex(body);
+  const canonicalUri = `/${bucket}/${key.split('/').map(encodeURIComponent).join('/')}`;
+  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    'PUT', canonicalUri, '',
+    `content-type:${contentType}`,
+    `host:${FILEBASE_S3}`,
+    `x-amz-content-sha256:${payloadHash}`,
+    `x-amz-date:${amzDate}`,
+    '', signedHeaders, payloadHash,
+  ].join('\n');
+
+  const scope = `${date}/${FILEBASE_REGION}/s3/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await sha256Hex(canonicalRequest)].join('\n');
+
+  let signingKey = await hmac(`AWS4${env.FILEBASE_SECRET}`, date);
+  signingKey = await hmac(signingKey, FILEBASE_REGION);
+  signingKey = await hmac(signingKey, 's3');
+  signingKey = await hmac(signingKey, 'aws4_request');
+  const signature = _hex(await hmac(signingKey, stringToSign));
+
+  const res = await fetch(`https://${FILEBASE_S3}${canonicalUri}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+      Authorization: `AWS4-HMAC-SHA256 Credential=${env.FILEBASE_KEY}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`filebase ${res.status}: ${(await res.text()).slice(0, 200)}`);
+
+  const cid = res.headers.get('x-amz-meta-cid');
+  if (!cid) throw new Error('no CID returned (is the bucket IPFS-enabled?)');
+  return cid;
 }
 
 export default {
@@ -104,76 +165,6 @@ export default {
       });
     }
 
-    // POST /db/:table  — Supabase insert proxy (hides credentials, enforces origin + source)
-    // GET  /db/:table  — Supabase read proxy
-    // PATCH /db/:table — Supabase update proxy
-    // DELETE /db/:table — Supabase delete proxy
-    if (url.pathname.startsWith('/db/')) {
-      const table = url.pathname.slice(4).split('?')[0]; // e.g. "launched_tokens"
-      const ALLOWED_TABLES = ['launched_tokens', 'token_trades', 'gated_rooms', 'gated_room_members', 'gated_room_messages'];
-      if (!ALLOWED_TABLES.includes(table)) return json(request, { error: 'invalid table' }, 400);
-
-      const supabaseUrl = env.SUPABASE_URL;    // e.g. https://xyz.supabase.co
-      const supabaseKey = env.SUPABASE_KEY;     // service_role key (server-side only)
-      if (!supabaseUrl || !supabaseKey) return json(request, { error: 'db not configured' }, 500);
-
-      const SOURCE = 'zfi';
-      const qs = url.search || '';
-      const target = `${supabaseUrl}/rest/v1/${table}${qs}`;
-      const headers = {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': request.headers.get('Prefer') || 'return=minimal',
-      };
-
-      if (request.method === 'GET') {
-        const res = await fetch(target, { headers });
-        return new Response(res.body, {
-          status: res.status,
-          headers: { ...cors(request), 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (request.method === 'POST') {
-        const body = await request.text();
-        if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
-        let row;
-        try { row = JSON.parse(body); } catch { return json(request, { error: 'invalid JSON' }, 400); }
-        // Force source tag
-        row.source = SOURCE;
-        const res = await fetch(target, { method: 'POST', headers, body: JSON.stringify(row) });
-        return new Response(res.body, {
-          status: res.status,
-          headers: { ...cors(request), 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (request.method === 'PATCH') {
-        const body = await request.text();
-        if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
-        // Only allow updating own-source rows
-        const patchTarget = target.includes('source=eq.') ? target : `${target}${qs ? '&' : '?'}source=eq.${SOURCE}`;
-        const res = await fetch(patchTarget, { method: 'PATCH', headers, body });
-        return new Response(res.body, {
-          status: res.status,
-          headers: { ...cors(request), 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (request.method === 'DELETE') {
-        // Only allow deleting own-source rows
-        const delTarget = target.includes('source=eq.') ? target : `${target}${qs ? '&' : '?'}source=eq.${SOURCE}`;
-        const res = await fetch(delTarget, { method: 'DELETE', headers });
-        return new Response(res.body, {
-          status: res.status,
-          headers: { ...cors(request), 'Content-Type': 'application/json' },
-        });
-      }
-
-      return json(request, { error: 'method not allowed' }, 405);
-    }
-
     // GET /proxy-metadata?url=<https-url>  — fetch NFT tokenURI JSON from servers
     // that don't set CORS (e.g. Milady's nginx). Image URLs inside the returned JSON
     // load directly via <img> tags (no CORS required for display), so the proxy is
@@ -206,7 +197,7 @@ export default {
 
     if (request.method !== 'POST') return json(request, { error: 'method not allowed' }, 405);
 
-    // POST /pin-image  — multipart image upload → pinFileToIPFS
+    // POST /pin-image  — multipart image upload → pinned to IPFS via Filebase
     if (url.pathname === '/pin-image') {
       const ct = request.headers.get('content-type') || '';
       if (!ct.includes('multipart/form-data')) return json(request, { error: 'multipart/form-data required' }, 400);
@@ -216,20 +207,17 @@ export default {
       if (!file || !file.size) return json(request, { error: 'no file' }, 400);
       if (file.size > MAX_IMAGE) return json(request, { error: 'file too large (5MB max)' }, 400);
 
-      const pinForm = new FormData();
-      pinForm.append('file', file, file.name || 'image');
-
-      const res = await fetch(`${PINATA}/pinning/pinFileToIPFS`, {
-        method: 'POST',
-        headers: pinHeaders(env),
-        body: pinForm,
-      });
-      const data = await res.json();
-      if (!res.ok) return json(request, { error: data.error || 'pin failed' }, 502);
-      return json(request, { cid: data.IpfsHash });
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Content-addressed object key so re-uploading identical bytes is idempotent.
+      const key = `images/${await sha256Hex(bytes)}`;
+      try {
+        return json(request, { cid: await filebasePut(env, key, bytes, file.type || 'application/octet-stream') });
+      } catch (e) {
+        return json(request, { error: 'pin failed: ' + (e.message || 'unknown') }, 502);
+      }
     }
 
-    // POST /pin-json  — JSON metadata → pinJSONToIPFS
+    // POST /pin-json  — JSON metadata → pinned to IPFS via Filebase
     if (url.pathname === '/pin-json') {
       const body = await request.text();
       if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
@@ -237,14 +225,14 @@ export default {
       let metadata;
       try { metadata = JSON.parse(body); } catch { return json(request, { error: 'invalid JSON' }, 400); }
 
-      const res = await fetch(`${PINATA}/pinning/pinJSONToIPFS`, {
-        method: 'POST',
-        headers: { ...pinHeaders(env), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinataContent: metadata }),
-      });
-      const data = await res.json();
-      if (!res.ok) return json(request, { error: data.error || 'pin failed' }, 502);
-      return json(request, { cid: data.IpfsHash });
+      // Re-serialize the parsed value so the pinned bytes are exactly what we validated.
+      const canonical = _enc.encode(JSON.stringify(metadata));
+      const key = `json/${await sha256Hex(canonical)}.json`;
+      try {
+        return json(request, { cid: await filebasePut(env, key, canonical, 'application/json') });
+      } catch (e) {
+        return json(request, { error: 'pin failed: ' + (e.message || 'unknown') }, 502);
+      }
     }
 
     return json(request, { error: 'not found' }, 404);

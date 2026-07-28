@@ -15,27 +15,6 @@ const COIN_SHARE_BURNER = '0x000000000040084694F7B6fb2846D067B4c3Aa9f';
 
 const COIN_PIN_URL = 'https://api.zfi.wei.is';
 
-// DB proxy — writes go through the worker which holds the Supabase service_role key
-// and enforces origin checks + source tagging server-side
-const COIN_DB_URL = COIN_PIN_URL; // same worker, /db/ routes
-
-async function coinDbInsert(table, row) {
-  if (!COIN_DB_URL) return;
-  try {
-    await fetch(`${COIN_DB_URL}/db/${table}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(row)
-    });
-  } catch (e) {
-    console.warn('DB insert failed:', table, e);
-  }
-}
-
-function coinGenId() {
-  return crypto.randomUUID().slice(0, 12);
-}
-
 // ClassicalCurveSale deployment
 const CLASSICAL_CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
 const CLASSICAL_TOKEN_IMPL = '0xC54843C7419B3B7813d4C1065dA7f88104cdb047';
@@ -122,10 +101,137 @@ const SAFE_SUMMONER_ABI = [{
 let _coinTemplate = null;
 let _coinLaunchType = 'coin';
 let _coinLaunching = false;
+let _coinLaunched = false;   // set after a successful deploy — keeps the CTA locked
 let _coinImageCID = null;
 let _coinImageFile = null;
 let _coinBannerCID = null;
 let _coinBannerFile = null;
+
+const COIN_MIN_RAISE_WEI = 10n ** 14n; // 0.0001 ETH
+
+// ---- Input parsing ----
+// parseFloat -> String -> parseEther round-trips through a double and can emit
+// exponent notation ("1e-7") that parseEther rejects, surfacing as a generic
+// "Launch failed". Parse the raw string instead so the value the user typed is
+// the value that gets deployed, and invalid input fails validation up front.
+function coinParseEth(v) {
+  const s = String(v == null ? '' : v).trim().replace(/,/g, '');
+  if (!s || s === '.' || !/^\d*\.?\d*$/.test(s)) return null;
+  try { return ethers.parseEther(s); } catch { return null; }
+}
+
+function coinParseCount(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = parseInt(s, 10);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+// Live input sanitizers so the numeric fields can't hold characters that would
+// only fail later at submit time.
+function coinNumInput(el, decimal) {
+  const before = el.value;
+  let v = before.replace(decimal ? /[^0-9.]/g : /[^0-9]/g, '');
+  if (decimal) {
+    const i = v.indexOf('.');
+    if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
+  }
+  if (v !== before) {
+    const pos = Math.max(0, el.selectionStart - (before.length - v.length));
+    el.value = v;
+    try { el.setSelectionRange(pos, pos); } catch {}
+  }
+  coinFormChanged();
+}
+
+// Symbols are tickers — uppercase, no whitespace or punctuation.
+function coinSymbolInput(el) {
+  const before = el.value;
+  const v = before.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (v !== before) {
+    const pos = Math.max(0, el.selectionStart - (before.length - v.length));
+    el.value = v;
+    try { el.setSelectionRange(pos, pos); } catch {}
+  }
+  coinFormChanged();
+}
+
+// Single entry point for "the user edited the form": clears a finished launch,
+// re-runs gating, and keeps the shareable URL in sync.
+function coinFormChanged() {
+  if (_coinLaunched) { _coinLaunched = false; coinShowStatus(''); }
+  coinUpdatePreview();
+  syncCoinURL();
+}
+
+// Returns a human-readable reason the form can't be submitted, or null if ready.
+// Mirrors exactly what coinLaunch() enforces so the CTA and the submit path can
+// never disagree.
+function coinValidateForm() {
+  if (_coinLaunchType === 'nft') return null; // auction.js owns NFT gating
+  const name = ($('coinName')?.value || '').trim();
+  const symbol = ($('coinSymbol')?.value || '').trim();
+  if (name.length < 2) return 'Enter a name (at least 2 characters)';
+  if (!symbol) return 'Enter a symbol';
+  if (_coinLaunchType !== 'cause') return null;
+
+  if (!_causeOngoing) {
+    const raise = coinParseEth($('causeRaise').value);
+    if (raise === null || raise < COIN_MIN_RAISE_WEI) return 'Raise must be at least 0.0001 ETH';
+    const days = coinParseCount($('causeDeadline').value);
+    if (days === null || days < 1) return 'Deadline must be at least 1 day';
+    if (days > 3650) return 'Deadline must be 3650 days or less';
+  }
+  if (!$('causeTapEnabled').checked) return null;
+
+  const benInput = ($('causeTapBeneficiary')?.value || '').trim();
+  if (benInput && !coinGetResolved('causeTapBeneficiary')) return 'Waiting for the beneficiary address to resolve';
+  if ($('causeTapInstant').checked) return null;
+  if (_causeOngoing) {
+    const rate = coinParseEth($('causeTapEthRate').value);
+    if (rate === null || rate === 0n) return 'Enter a valid ETH/month rate';
+  } else {
+    const months = coinParseCount($('causeTapMonths').value);
+    if (months === null || months < 1) return 'Vesting duration must be at least 1 month';
+    if (months > 1200) return 'Vesting duration must be 1200 months or less';
+  }
+  return null;
+}
+
+function coinApplyValidation() {
+  const hint = $('coinFormHint');
+  if (_coinLaunching) return;
+  if (_coinLaunched) {
+    setDisabled('coinLaunchBtn', true);
+    if (hint) hint.style.display = 'none';
+    return;
+  }
+  const err = coinValidateForm();
+  setDisabled('coinLaunchBtn', !!err);
+  if (hint) {
+    hint.textContent = err || '';
+    hint.style.display = err ? '' : 'none';
+  }
+}
+
+function coinLaunchBtnLabel() {
+  if (_coinLaunched) return 'Launched';
+  return _coinLaunchType === 'nft' ? 'List Auction' : 'Launch Coin';
+}
+
+// Clear a picked logo/banner without having to re-open the file dialog.
+function coinClearImage(kind, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  const inputId = kind === 'banner' ? 'coinBannerInput' : 'coinImageInput';
+  const input = $(inputId);
+  if (input) input.value = '';
+  if (kind === 'banner') { _coinBannerFile = null; _coinBannerCID = null; }
+  else { _coinImageFile = null; _coinImageCID = null; }
+  const label = document.querySelector(`label[for="${inputId}"]`);
+  const img = label?.querySelector('img');
+  if (img) img.remove();
+  coinFormChanged();
+}
 
 // ---- Generic address/name resolver ----
 const _coinResolvers = {};
@@ -253,32 +359,27 @@ function coinSetLaunchType(type) {
   const symWrap = document.querySelector('#coinTab .coin-name-row > .section:nth-child(2)');
   if (symWrap) symWrap.style.display = isNft ? 'none' : '';
 
-  // Reorder: for NFT mode, the NFT contract + token id should be the first thing
-  // the seller sees. Move the shared Name/Description/Upload fields into the
-  // Custom Display drawer at the bottom of the NFT wrap so they're available
-  // but out of the way. On leave, restore them to their original DOM position.
+  // Buyers see an auction's native tokenURI, so seller-supplied name/description/
+  // logo/banner have nowhere to surface — hide the shared display fields in NFT
+  // mode rather than collecting input that can never be shown.
   const nameRow = $('coinNameRow');
   const descWrap = $('coinDescWrap');
   const uploadRow = $('coinUploadRow');
-  const drawer = $('nftAdvancedBody');
-  const socialsWrap = $('coinSocialsWrap');
-  if (isNft) {
-    if (drawer && nameRow && !drawer.contains(nameRow)) {
-      drawer.appendChild(nameRow);
-      drawer.appendChild(descWrap);
-      drawer.appendChild(uploadRow);
-    }
-  } else if (socialsWrap?.parentElement && nameRow && drawer?.contains(nameRow)) {
-    const parent = socialsWrap.parentElement;
-    parent.insertBefore(nameRow, socialsWrap);
-    parent.insertBefore(descWrap, socialsWrap);
-    parent.insertBefore(uploadRow, socialsWrap);
+  for (const el of [nameRow, descWrap, uploadRow]) {
+    if (el) el.style.display = isNft ? 'none' : '';
   }
   // NFT launch button stays disabled until a valid NFT is resolved.
   setDisabled('coinLaunchBtn', true);
+  // A success/error banner from the previous mode is meaningless here. Same for
+  // the validation hint — NFT mode never re-runs coinApplyValidation, so a stale
+  // "Enter a symbol" would otherwise sit under a form that has no symbol field.
+  _coinLaunched = false;
+  coinShowStatus('');
+  const hint = $('coinFormHint');
+  if (hint) { hint.textContent = ''; hint.style.display = 'none'; }
   // CTA label should match the selected mode so users know what they're confirming.
   const launchBtn = $('coinLaunchBtn');
-  if (launchBtn) launchBtn.textContent = isNft ? 'List Auction' : 'Launch Coin';
+  if (launchBtn) launchBtn.textContent = coinLaunchBtnLabel();
   _coinTemplate = isCoin ? null : (isCause ? 'cause' : 'nft-auction');
   // Animate type icon
   const anim = $('coinLaunchAnim');
@@ -299,12 +400,12 @@ function causeSetOngoing(on) {
   const instant = $('causeTapInstant').checked;
   $('causeTapMonthsWrap').style.display = (!on && !instant) ? '' : 'none';
   $('causeTapEthRateWrap').style.display = (on && !instant) ? '' : 'none';
-  coinUpdatePreview();
+  coinFormChanged();
 }
 
 function causeTapToggle() {
   $('causeTapFields').style.display = $('causeTapEnabled').checked ? '' : 'none';
-  coinUpdatePreview();
+  coinFormChanged();
 }
 
 function causeTapInstantToggle() {
@@ -315,64 +416,77 @@ function causeTapInstantToggle() {
     $('causeTapMonthsWrap').style.display = _causeOngoing ? 'none' : '';
     $('causeTapEthRateWrap').style.display = _causeOngoing ? '' : 'none';
   }
-  coinUpdatePreview();
+  coinFormChanged();
 }
 
 function coinUpdatePreview() {
+  // NFT mode owns its own preview + button gating (auction.js). Falling through
+  // here would hit the unconditional setDisabled(false) at the bottom and enable
+  // "List Auction" before an NFT is resolved — switchTab('coin') and the
+  // ?mode=nft deeplink both call this after coinSetLaunchType('nft').
+  if (_coinLaunchType === 'nft') {
+    if (typeof auctionUpdatePreview === 'function') auctionUpdatePreview();
+    return;
+  }
+
   const ethMini = ETH_ICON.replace('width="24" height="24"', 'width="12" height="12"');
 
   if (_coinLaunchType === 'cause') {
-    const raise = parseFloat($('causeRaise').value) || 10;
-    const days = parseInt($('causeDeadline').value) || 30;
     const ongoing = _causeOngoing;
+    // Fall back to the placeholder defaults while a field is mid-edit so the
+    // preview keeps rendering; coinApplyValidation() is what blocks submission.
+    const raiseWei = (ongoing ? null : coinParseEth($('causeRaise').value)) ?? ethers.parseEther('10');
+    const days = coinParseCount($('causeDeadline').value) ?? 30;
     const totalShares = ongoing ? 'unlimited' : '10M';
     const tapOn = $('causeTapEnabled').checked;
     const tapInstant = $('causeTapInstant').checked;
-    const tapMonths = parseInt($('causeTapMonths').value) || 12;
-    const tapEthRate = parseFloat($('causeTapEthRate').value) || 1;
+    const tapMonths = coinParseCount($('causeTapMonths').value) ?? 12;
+    const tapRateWei = coinParseEth($('causeTapEthRate').value) ?? ethers.parseEther('1');
+
+    // Every figure below is computed from the same bigints coinLaunch() sends,
+    // so the preview can't drift from what actually gets deployed.
+    const priceWei = ongoing ? ethers.parseEther('0.000001') : raiseWei / 10_000_000n;
+    const perDay = (ratePerSec) => {
+      const wei = ratePerSec * 86400n;
+      const eth = Number(wei) / 1e18;
+      return eth < 0.0001 ? eth.toPrecision(2) : eth.toFixed(4);
+    };
+
     let tapDesc = '';
     if (tapOn) {
       if (tapInstant) {
         tapDesc = 'Instant (all funds to beneficiary)';
       } else if (ongoing) {
-        // Match contract: rate = parseEther(ethPerMonth) / COIN_SEC_PER_MONTH, display as rate * 86400
-        const rateWei = ethers.parseEther(String(tapEthRate)) / COIN_SEC_PER_MONTH;
-        const ratePerDay = Number(rateWei) * 86400 / 1e18;
-        const rateStr = ratePerDay < 0.0001 ? ratePerDay.toPrecision(2) : ratePerDay.toFixed(4);
-        tapDesc = `~${rateStr} ${ethMini}/day (~${tapEthRate} ${ethMini}/mo)`;
+        const rateWei = tapRateWei / COIN_SEC_PER_MONTH;
+        tapDesc = `~${perDay(rateWei)} ${ethMini}/day (~${ethers.formatEther(tapRateWei)} ${ethMini}/mo)`;
       } else {
-        // Match contract: budget = parseEther(raise), rate = budget / (months * SEC_PER_MONTH)
-        const budgetWei = ethers.parseEther(String(raise));
         const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
-        const rateWei = totalSec > 0n ? budgetWei / totalSec : 0n;
-        const ratePerDay = Number(rateWei) * 86400 / 1e18;
-        const rateStr = ratePerDay < 0.0001 ? ratePerDay.toPrecision(2) : ratePerDay.toFixed(4);
-        tapDesc = `~${rateStr} ${ethMini}/day over ${tapMonths}mo`;
+        const rateWei = totalSec > 0n ? raiseWei / totalSec : 0n;
+        tapDesc = `~${perDay(rateWei)} ${ethMini}/day over ${tapMonths}mo`;
       }
     }
-    // Pricing info for capped sales
-    let priceLine = '';
-    if (!ongoing) {
-      const pricePerShare = raise / 10_000_000;
-      const ethPerMil = pricePerShare * 1_000_000;
-      const ethPerMilStr = ethPerMil < 0.0001 ? ethPerMil.toPrecision(2) : ethPerMil >= 1 ? ethPerMil.toFixed(2) : ethPerMil.toFixed(4);
-      priceLine = `<dt>Price</dt><dd>${ethPerMilStr} ${ethMini} per 1M shares</dd>`;
-    }
+
+    // Price per 1M shares — priceWei is per whole (1e18) share.
+    const perMil = Number(priceWei * 1_000_000n) / 1e18;
+    const perMilStr = perMil < 0.0001 ? perMil.toPrecision(2) : perMil >= 1 ? perMil.toFixed(2) : perMil.toFixed(4);
     const p = $('coinCausePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
       (ongoing
         ? `<dt>Mode</dt><dd>Ongoing (no cap, no deadline)</dd>`
-        : `<dt>Raise</dt><dd>${raise} ${ethMini}</dd>`) +
+        : `<dt>Raise</dt><dd>${ethers.formatEther(raiseWei)} ${ethMini}</dd>`) +
       `<dt>Shares</dt><dd>${totalShares} (proportional to ETH contributed)</dd>` +
-      priceLine +
+      `<dt>Price</dt><dd>${perMilStr} ${ethMini} per 1M shares</dd>` +
       (ongoing ? '' : `<dt>Deadline</dt><dd>${days} days</dd>`) +
       (tapOn ? `<dt>Tap</dt><dd>${tapDesc}</dd>` : '') +
+      // The creator buys their own single share at launch, so the tx carries
+      // value. Surfacing it avoids a surprise in the wallet confirm dialog.
+      `<dt>You pay now</dt><dd>${ethers.formatEther(priceWei)} ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>`;
     $('coinCausePreviewWrap').style.display = '';
     $('coinCurvePreviewWrap').style.display = 'none';
-    setDisabled('coinLaunchBtn', false);
+    coinApplyValidation();
     return;
   }
 
@@ -388,28 +502,45 @@ function coinUpdatePreview() {
       `<dt>Trade Fee</dt><dd>1% &rarr; creator</dd>` +
       `<dt>Sniper Fee</dt><dd>5% first 5 min (decays to 1%)</dd>` +
       `<dt>Max Buy</dt><dd>10% per tx</dd>` +
+      `<dt>You pay now</dt><dd>0 ${ethMini} <span style="color:var(--fg-dim)">(gas only)</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">LP tokens burned (permanent liquidity) &middot; 0.25% pool fee post-graduation &middot; 0.05% creator fee post-graduation</div>`;
     $('coinCurvePreviewWrap').style.display = '';
     $('coinCausePreviewWrap').style.display = 'none';
   }
-  setDisabled('coinLaunchBtn', false);
+  coinApplyValidation();
 }
 
 function coinFilePicked(input, type) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { alert('Too large (5MB max)'); input.value = ''; return; }
+  const label = type === 'banner' ? 'Banner' : 'Logo';
+  if (!/^image\//.test(file.type)) {
+    coinShowStatus(`${label} must be an image file`, true);
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    coinShowStatus(`${label} is ${(file.size / 1048576).toFixed(1)}MB — 5MB max`, true);
+    input.value = '';
+    return;
+  }
   if (type === 'banner') { _coinBannerFile = file; _coinBannerCID = null; }
   else { _coinImageFile = file; _coinImageCID = null; }
-  const btn = input.previousElementSibling.tagName === 'LABEL' ? input.previousElementSibling : input.nextElementSibling;
+  // Look the label up by `for` rather than walking siblings — the upload row gets
+  // relocated into the NFT drawer, and the old sibling guess broke on reorder.
+  const btn = document.querySelector(`label[for="${input.id}"]`) || input.previousElementSibling;
   const reader = new FileReader();
   reader.onload = () => {
+    if (!btn) return;
+    // Append rather than clearing textContent, which would also delete the
+    // "remove" button and the placeholder label. CSS hides the label via :has(img).
     let img = btn.querySelector('img');
-    if (!img) { img = document.createElement('img'); btn.textContent = ''; btn.appendChild(img); }
+    if (!img) { img = document.createElement('img'); img.alt = ''; btn.appendChild(img); }
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+  coinFormChanged();
 }
 
 function coinSvgEsc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -493,9 +624,11 @@ async function coinLaunch() {
   const name = $('coinName').value.trim();
   const symbol = $('coinSymbol').value.trim();
   const desc = $('coinDescription').value.trim();
-  if (!name || name.length < 2) { coinShowStatus('Enter a name (at least 2 characters)', true); return; }
-  if (!symbol || symbol.length < 1) { coinShowStatus('Enter a symbol', true); return; }
+  // Backstop for the CTA gating — same rules, so the two can't disagree.
+  const invalid = coinValidateForm();
+  if (invalid) { coinShowStatus(invalid, true); return; }
 
+  let launched = false;
   _coinLaunching = true;
   setDisabled('coinLaunchBtn', true);
   const _pg = $('coinLaunchProgress');
@@ -561,19 +694,11 @@ async function coinLaunch() {
 
     // --- Cause DAICO path (SafeSummoner.safeSummonDAICO) ---
     if (_coinLaunchType === 'cause') {
-      const raiseRaw = parseFloat($('causeRaise').value);
-      const daysRaw = parseInt($('causeDeadline').value);
       const ongoing = _causeOngoing;
-      const raise = ongoing ? 0 : raiseRaw;
-      const days = ongoing ? 0 : daysRaw;
-      if (!ongoing && (isNaN(raise) || raise < 0.0001)) {
-        coinShowStatus('Raise must be at least 0.0001 ETH', true);
-        _coinLaunching = false; setDisabled('coinLaunchBtn', false); $('coinLaunchProgress').classList.remove('active'); return;
-      }
-      if (!ongoing && (isNaN(days) || days <= 0)) {
-        coinShowStatus('Enter a valid deadline (at least 1 day)', true);
-        _coinLaunching = false; setDisabled('coinLaunchBtn', false); $('coinLaunchProgress').classList.remove('active'); return;
-      }
+      // coinValidateForm() already rejected unparseable input; `?? 0n` only keeps
+      // the ongoing branch (where these fields are hidden) from reading null.
+      const raiseWei = ongoing ? 0n : (coinParseEth($('causeRaise').value) ?? 0n);
+      const days = ongoing ? 0 : (coinParseCount($('causeDeadline').value) ?? 0);
 
       let priceWei, capShares, deadline;
       if (ongoing) {
@@ -584,9 +709,12 @@ async function coinLaunch() {
       } else {
         // Fixed 10M shares, price derived from raise
         // Cap is 9,999,999 because creator's 1 share is minted at deploy (total supply = 10M)
-        const totalShares = 10_000_000;
-        priceWei = ethers.parseEther(String(raise)) / BigInt(totalShares);
-        capShares = ethers.parseEther(String(totalShares - 1));
+        const totalShares = 10_000_000n;
+        priceWei = raiseWei / totalShares;
+        // Integer division can floor to 0 for dust raises, which would make the
+        // sale free and mint the whole cap to the first caller.
+        if (priceWei === 0n) throw new Error('Raise is too small — increase it so each share costs at least 1 wei');
+        capShares = ethers.parseEther(String(totalShares - 1n));
         deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days) * 86400n;
       }
 
@@ -600,37 +728,25 @@ async function coinLaunch() {
       if (tapEnabled) {
         const benInput = ($('causeTapBeneficiary')?.value || '').trim();
         const beneficiary = coinGetResolved('causeTapBeneficiary') || (benInput ? null : address);
-        if (!beneficiary) {
-          coinShowStatus('Beneficiary address is not yet resolved — wait for it to resolve or enter a 0x address', true);
-          _coinLaunching = false; setDisabled('coinLaunchBtn', false); $('coinLaunchProgress').classList.remove('active'); return;
-        }
+        if (!beneficiary) throw new Error('Beneficiary address is not yet resolved — wait for it, or paste a 0x address');
         let budgetWei, rate;
         if (tapInstant) {
           // All funds flow directly to beneficiary — use raise/sec rate so entire
           // treasury drains in 1 second. TapVest requires advance = claimed/rate >= 1,
           // so rate must be <= expected treasury to avoid NothingToClaim revert.
-          budgetWei = ongoing ? ethers.MaxUint256 : ethers.parseEther(String(raise));
-          rate = ongoing ? ethers.parseEther('1000') : ethers.parseEther(String(raise)); // raise ETH/sec
+          budgetWei = ongoing ? ethers.MaxUint256 : raiseWei;
+          rate = ongoing ? ethers.parseEther('1000') : raiseWei; // raise ETH/sec
         } else if (ongoing) {
           // Ongoing: user-specified ETH/month rate, unlimited budget
-          const ethPerMonth = parseFloat($('causeTapEthRate').value);
-          if (isNaN(ethPerMonth) || ethPerMonth <= 0) {
-            coinShowStatus('Enter a valid ETH/month rate', true);
-            _coinLaunching = false; setDisabled('coinLaunchBtn', false); $('coinLaunchProgress').classList.remove('active'); return;
-          }
           budgetWei = ethers.MaxUint256;
-          rate = ethers.parseEther(String(ethPerMonth)) / COIN_SEC_PER_MONTH;
+          rate = (coinParseEth($('causeTapEthRate').value) ?? 0n) / COIN_SEC_PER_MONTH;
           if (rate === 0n) rate = 1n;
         } else {
           // Fixed: budget = raise, rate = budget / months
-          const tapMonths = parseInt($('causeTapMonths').value);
-          if (isNaN(tapMonths) || tapMonths <= 0) {
-            coinShowStatus('Enter a valid vesting duration (at least 1 month)', true);
-            _coinLaunching = false; setDisabled('coinLaunchBtn', false); $('coinLaunchProgress').classList.remove('active'); return;
-          }
-          budgetWei = ethers.parseEther(String(raise));
+          const tapMonths = coinParseCount($('causeTapMonths').value) ?? 0;
+          budgetWei = raiseWei;
           const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
-          rate = budgetWei / totalSec;
+          rate = totalSec > 0n ? budgetWei / totalSec : 0n;
           if (rate === 0n && budgetWei > 0n) rate = 1n;
         }
         if (rate > MAX_UINT128) rate = MAX_UINT128;
@@ -701,55 +817,25 @@ async function coinLaunch() {
       const predicted = coinPredict(initHolders, initShares, salt);
       const daoAddress = predicted.dao;
 
-      // Register in Supabase
-      if (daoAddress && COIN_DB_URL) {
-        const now = new Date().toISOString();
-        const tokenId = coinGenId();
-        const roomId = coinGenId();
-        (async () => {
-          try {
-            await coinDbInsert('gated_rooms', {
-              id: roomId, name: '$' + symbol.toUpperCase(),
-              creator: address.toLowerCase(),
-              token_address: predicted.shares.toLowerCase(),
-              token_type: 'ERC20', min_balance: ethers.parseEther('1').toString(),
-              avatar: metadata.image || null, description: desc || null,
-              created_at: now
-            });
-            await coinDbInsert('gated_room_members', {
-              room_id: roomId, user_name: address.toLowerCase(),
-              wallet_address: address.toLowerCase(), joined_at: now
-            });
-            await coinDbInsert('launched_tokens', {
-              id: tokenId, creator: address.toLowerCase(),
-              token_address: daoAddress.toLowerCase(),
-              name: name.slice(0, 50), symbol: symbol.toUpperCase().slice(0, 10),
-              image: metadata.image || null, room_id: roomId,
-              description: desc ? desc.slice(0, 280) : null,
-              launch_type: 'cause', metadata_uri: orgURI || null,
-              tx_hash: tx.hash, created_at: now
-            });
-          } catch (e) { console.warn('Supabase registration failed:', e); }
-        })();
-      }
-
+      // Report the rate actually encoded in tapModule rather than recomputing
+      // from the form, so the receipt can't disagree with the deployed vest.
       let tapSummary = '';
       if (tapEnabled) {
         if (tapInstant) {
           tapSummary = 'Tap: Instant (all funds to beneficiary)<br>';
-        } else if (ongoing) {
-          const ethPerMonth = parseFloat($('causeTapEthRate').value) || 1;
-          tapSummary = `Tap: ~${(ethPerMonth / 30.44).toFixed(4)} ETH/day (~${ethPerMonth} ETH/mo)<br>`;
         } else {
-          tapSummary = `Tap: ~${(raise / (parseInt($('causeTapMonths').value) * 30.44)).toFixed(4)} ETH/day<br>`;
+          const perDayEth = Number(tapModule.ratePerSec * 86400n) / 1e18;
+          const perMoEth = Number(tapModule.ratePerSec * COIN_SEC_PER_MONTH) / 1e18;
+          tapSummary = `Tap: ~${perDayEth.toFixed(4)} ETH/day (~${perMoEth.toFixed(4)} ETH/mo)<br>`;
         }
       }
+      launched = true;
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
         (ongoing
           ? `Sale: Ongoing &middot; 1 ETH = 1M shares<br>`
-          : `Sale: ${raise} ETH &middot; 10M shares &middot; ${days}d<br>`) +
+          : `Sale: ${ethers.formatEther(raiseWei)} ETH &middot; 10M shares &middot; ${days}d<br>`) +
         tapSummary +
         `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
@@ -830,53 +916,7 @@ async function coinLaunch() {
         }
       }
 
-      // Register in Supabase for discoverability
-      if (tokenAddress && COIN_DB_URL) {
-        const now = new Date().toISOString();
-        const tokenId = coinGenId();
-        const roomId = coinGenId();
-        // Fire-and-forget: don't block success display on DB writes
-        (async () => {
-          try {
-            // 1. Create gated room
-            await coinDbInsert('gated_rooms', {
-              id: roomId,
-              name: '$' + symbol.toUpperCase(),
-              creator: address.toLowerCase(),
-              token_address: tokenAddress.toLowerCase(),
-              token_type: 'ERC20',
-              min_balance: '1000000000000000000', // 1 token (18 decimals)
-              avatar: metadata.image || null,
-              description: desc || null,
-              created_at: now
-            });
-            // 2. Add creator as first room member
-            await coinDbInsert('gated_room_members', {
-              room_id: roomId,
-              user_name: address.toLowerCase(),
-              wallet_address: address.toLowerCase(),
-              joined_at: now
-            });
-            // 3. Insert token record with tx_hash (confirmed)
-            await coinDbInsert('launched_tokens', {
-              id: tokenId,
-              creator: address.toLowerCase(),
-              token_address: tokenAddress.toLowerCase(),
-              name: name.slice(0, 50),
-              symbol: symbol.toUpperCase().slice(0, 10),
-              image: metadata.image || null,
-              room_id: roomId,
-              description: desc ? desc.slice(0, 280) : null,
-              launch_type: 'curve', metadata_uri: orgURI || null,
-              tx_hash: tx.hash,
-              created_at: now
-            });
-          } catch (e) {
-            console.warn('Supabase registration failed:', e);
-          }
-        })();
-      }
-
+      launched = true;
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         (tokenAddress ? `Token: <a href="https://etherscan.io/address/${tokenAddress}" target="_blank">${tokenAddress}</a><br>` : '') +
@@ -896,7 +936,13 @@ async function coinLaunch() {
     }
   } finally {
     _coinLaunching = false;
-    setDisabled('coinLaunchBtn', false);
+    // Leave the CTA locked after a success: the form still describes a coin that
+    // now exists, and a second click would deploy a duplicate. Editing any field
+    // (coinFormChanged) or switching mode clears the lock.
+    _coinLaunched = launched;
+    const btn = $('coinLaunchBtn');
+    if (btn) btn.textContent = coinLaunchBtnLabel();
+    coinApplyValidation();
     $('coinLaunchProgress').classList.remove('active');
   }
 }

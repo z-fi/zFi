@@ -685,10 +685,11 @@ body.modal-open { overflow:hidden; }
 <script src="../vendor/ethers.min.js"></script>
 <script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
+<script src="../modules/curve-registry.js"></script>
+<script src="../modules/zamm-pools.js"></script>
 <script>
 // ---- Constants ----
 const ZERO    = "0x0000000000000000000000000000000000000000";
-const BASE    = "https://coinchan-indexer-production.up.railway.app";
 
 const SWAPBOARD = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const SWAPBOARD_PF = "0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831";
@@ -728,7 +729,12 @@ const ERC20_ABI = [
 // ---- Token registry (shared with swap page via localStorage) ----
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)"];
-const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
+const IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs/",
+  "https://ipfs.filebase.io/ipfs/",   // our own pinning provider — holds every zFi pin
+  "https://dweb.link/ipfs/",
+  "https://w3s.link/ipfs/"
+];
 const RPC_URL = "https://ethereum.publicnode.com";
 
 // ---- Known tokens (from swap page) ----
@@ -1228,24 +1234,22 @@ function switchTab(tab) {
   if (tab === 'mine') renderMyOrders();
 }
 
-// ---- Fetch pool data ----
+// ---- Fetch pool data (on-chain, via the shared zAMM pool registry) ----
+// Pool IDs hash their key, so the registry rebuilds candidate keys from launcher
+// state + saved keys and verifies them on-chain. Unknown IDs return null and the
+// caller falls back to the ?token0/?token1 query params.
 async function fetchPool(poolId) {
-  const query = `query ($id: BigInt!, $source: String!, $chainId: Float!) {
-    pool(id: $id, source: $source, chainId: $chainId) {
-      id token0 token1
-      coin0 { id decimals name symbol imageUrl }
-      coin1 { id decimals name symbol imageUrl }
-      reserve0 reserve1
-    }
-  }`;
   try {
-    const res = await fetch(BASE + "/graphql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { id: poolId, source: "ZAMM", chainId: 1 } })
-    });
-    const { data } = await res.json();
-    if (data && data.pool) return data.pool;
+    const entry = await window.zammPools.resolvePool(poolId);
+    if (!entry) return null;
+    return {
+      id: entry.id,
+      token0: entry.token0, token1: entry.token1,
+      coin0: { id: entry.id0.toString(), decimals: entry.meta0.decimals, symbol: entry.meta0.symbol, name: entry.meta0.name },
+      coin1: { id: entry.id1.toString(), decimals: entry.meta1.decimals, symbol: entry.meta1.symbol, name: entry.meta1.name },
+      reserve0: (entry.reserve0 ?? 0n).toString(),
+      reserve1: (entry.reserve1 ?? 0n).toString()
+    };
   } catch (e) {
     console.warn('Pool fetch failed:', e);
   }

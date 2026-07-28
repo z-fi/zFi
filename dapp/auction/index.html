@@ -297,7 +297,7 @@ body { max-width:560px; }
 <script>
 // Deployed contract + worker
 const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
-const COIN_DB_URL = 'https://api.zfi.wei.is';
+const WORKER_URL = 'https://api.zfi.wei.is';
 
 const RPCS = [
   'https://ethereum.publicnode.com',
@@ -326,7 +326,24 @@ const ERC721_ABI = [
 const CHAINLINK_ETH_USD = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419';
 const CHAINLINK_ABI = ['function latestAnswer() view returns (int256)'];
 
-const IPFS_GW = 'https://content.wrappr.wtf/ipfs/';
+// Ordered gateway list — a single unreachable host previously blanked the NFT
+// image and dropped the auction's display metadata entirely.
+const IPFS_GWS = [
+  'https://ipfs.io/ipfs/',
+  'https://ipfs.filebase.io/ipfs/',   // our own pinning provider — holds every zFi pin
+  'https://dweb.link/ipfs/',
+  'https://w3s.link/ipfs/'
+];
+const IPFS_GW = IPFS_GWS[0];
+
+// <img> onerror hook: advance to the next gateway, false once all are spent.
+function ipfsNextGateway(img) {
+  const src = img.getAttribute('src') || '';
+  const i = IPFS_GWS.findIndex(g => src.startsWith(g));
+  if (i === -1 || i + 1 >= IPFS_GWS.length) return false;
+  img.src = IPFS_GWS[i + 1] + src.slice(IPFS_GWS[i].length);
+  return true;
+}
 
 // ---- RPC helpers ----
 let _rpcIdx = 0;
@@ -340,13 +357,6 @@ async function withRPC(fn) {
       return v;
     } catch (e) { if (i === _rpcProviders.length - 1) throw e; }
   }
-}
-
-async function coinDbFetch(table, params) {
-  try {
-    const res = await fetch(`${COIN_DB_URL}/db/${table}?${params}`);
-    return await res.json();
-  } catch { return []; }
 }
 
 function ipfsToHttp(uri) {
@@ -370,12 +380,15 @@ async function fetchMeta(uri) {
     try { return JSON.parse(s); } catch { return {}; }
   }
   const url = ipfsToHttp(uri);
+  const candidates = uri.startsWith('ipfs://') ? IPFS_GWS.map(g => g + uri.slice(7)) : [url];
+  for (const c of candidates) {
+    try {
+      const r = await fetch(c);
+      if (r.ok) return await r.json();
+    } catch {}
+  }
   try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
-  } catch {}
-  try {
-    const r = await fetch(`${COIN_DB_URL}/proxy-metadata?url=${encodeURIComponent(url)}`);
+    const r = await fetch(`${WORKER_URL}/proxy-metadata?url=${encodeURIComponent(url)}`);
     if (r.ok) return await r.json();
   } catch {}
   return {};
@@ -500,14 +513,14 @@ function renderBannerAndLogo() {
   const img = _meta?.image ? ipfsToHttp(_meta.image) : (_meta?.banner ? ipfsToHttp(_meta.banner) : '');
   const bannerSrc = _meta?.banner ? ipfsToHttp(_meta.banner) : img;
   if (bannerSrc) {
-    $('bannerBody').innerHTML = `<img src="${escText(bannerSrc)}" alt="" onerror="this.outerHTML = window._auctionFallbackBanner">`;
+    $('bannerBody').innerHTML = `<img src="${escText(bannerSrc)}" alt="" onerror="if(!ipfsNextGateway(this))this.outerHTML = window._auctionFallbackBanner">`;
   } else {
     $('bannerBody').innerHTML = window._auctionFallbackBanner;
   }
 
   const logoSrc = _meta?.image ? ipfsToHttp(_meta.image) : '';
   if (logoSrc) {
-    $('logoBody').innerHTML = `<img src="${escText(logoSrc)}" alt="" onerror="this.outerHTML = window._auctionFallbackLogo">`;
+    $('logoBody').innerHTML = `<img src="${escText(logoSrc)}" alt="" onerror="if(!ipfsNextGateway(this))this.outerHTML = window._auctionFallbackLogo">`;
   } else {
     $('logoBody').innerHTML = window._auctionFallbackLogo;
   }
@@ -818,25 +831,7 @@ async function loadAuctionState() {
 }
 
 async function loadMetadata() {
-  // Prefer custom override from Supabase keyed by auction id + launch_type.
-  // SECURITY: auction ids are sequential uints, so Supabase rows keyed by id
-  // alone are squattable by any client that can spoof the Origin header (the
-  // worker's only authn check). Require the row's `creator` to match the
-  // on-chain seller — the attacker can't forge the chain. On mismatch we fall
-  // through to the NFT's native tokenURI, never silently serving attacker art.
-  try {
-    const rows = await coinDbFetch('launched_tokens', `id=eq.${_auctionId.toString()}&launch_type=eq.nft-auction&limit=1`);
-    if (Array.isArray(rows) && rows.length > 0 && rows[0].metadata_uri) {
-      const rowCreator  = String(rows[0].creator || '').toLowerCase();
-      const chainSeller = String(_auction?.seller || '').toLowerCase();
-      if (rowCreator && chainSeller && rowCreator === chainSeller) {
-        const md = await fetchMeta(rows[0].metadata_uri);
-        if (md && (md.name || md.image)) { _meta = md; return; }
-      }
-    }
-  } catch {}
-
-  // Fallback: native tokenURI from the NFT contract.
+  // Metadata is the NFT's native tokenURI — there is no off-chain override index.
   if (_auction && _auction.ids.length > 0) {
     try {
       const [uri, collName, collSym] = await withRPC(rpc => {

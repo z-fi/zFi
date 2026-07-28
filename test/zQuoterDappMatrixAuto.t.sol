@@ -4,8 +4,8 @@ pragma solidity ^0.8.33;
 import "forge-std/Test.sol";
 import "../src/zQuoter.sol";
 
-/// @notice Full matrix test of buildSwapAuto for every pair the zSwap.html dapp
-///         exposes. buildSwapAuto is the drop-in upgrade for buildBestSwap — it
+/// @notice Full matrix test of the auto-routing cascade for every pair the
+///         zSwap.html dapp exposes. The cascade now runs caller-side (it
 ///         returns the same ABI shape but cascades through single-hop → 2-hop →
 ///         3-hop, so every pair with *any* on-chain path should route.
 contract zQuoterDappMatrixAutoTest is Test {
@@ -55,19 +55,41 @@ contract zQuoterDappMatrixAutoTest is Test {
         uint256 swapAmount = exactOut ? amts[j] : amts[i];
         uint256 deadline = block.timestamp + 1800;
 
-        try quoter.buildSwapAuto(USER, exactOut, tokens[i], tokens[j], swapAmount, SLIPPAGE_BPS, deadline) returns (
-            zQuoter.Quote memory best, bytes memory cd, uint256, /*amtLim*/ uint256 msgVal
+        // Cascade single-hop / 2-hop-hub, then 3-hop as a last resort. This is
+        // exactly what the removed `buildSwapAuto` did internally; doing it
+        // caller-side is the migration path for anyone who used it, and lets the
+        // caller additionally compare buildSplitSwap / buildHybridSplit (which
+        // buildSwapAuto never did) for strictly better output.
+        try quoter.buildBestSwapViaETHMulticall(
+            USER, USER, exactOut, tokens[i], tokens[j], swapAmount, SLIPPAGE_BPS, deadline
+        ) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, /*calls*/ bytes memory cd, uint256 msgVal
         ) {
-            if (cd.length == 0) return (false, 0, 0, 0, 0, 0);
-            if (exactOut) {
-                if (best.amountIn == 0) return (false, 0, 0, 0, 0, 0);
-            } else {
-                if (best.amountOut == 0) return (false, 0, 0, 0, 0, 0);
+            bool twoHop = (b.amountIn != 0 || b.amountOut != 0);
+            uint256 endIn = a.amountIn;
+            uint256 endOut = twoHop ? b.amountOut : a.amountOut;
+            if (cd.length != 0 && (exactOut ? endIn != 0 : endOut != 0)) {
+                return (true, endIn, endOut, msgVal, uint8(twoHop ? b.source : a.source), cd.length);
             }
-            return (true, best.amountIn, best.amountOut, msgVal, uint8(best.source), cd.length);
-        } catch {
-            return (false, 0, 0, 0, 0, 0);
-        }
+        } catch {}
+
+        try quoter.build3HopMulticall(USER, exactOut, tokens[i], tokens[j], swapAmount, SLIPPAGE_BPS, deadline)
+        returns (
+            zQuoter.Quote memory a_,
+            zQuoter.Quote memory, /*b_*/
+            zQuoter.Quote memory c_,
+            bytes[] memory, /*calls*/
+            bytes memory cd,
+            uint256 msgVal
+        ) {
+            uint256 endIn = exactOut ? a_.amountIn : swapAmount;
+            uint256 endOut = exactOut ? swapAmount : c_.amountOut;
+            if (cd.length != 0 && (exactOut ? endIn != 0 : endOut != 0)) {
+                return (true, endIn, endOut, msgVal, uint8(c_.source), cd.length);
+            }
+        } catch {}
+
+        return (false, 0, 0, 0, 0, 0);
     }
 
     function _sourceName(uint8 s) internal pure returns (string memory) {
@@ -177,29 +199,6 @@ contract zQuoterDappMatrixAutoTest is Test {
         assertTrue(ok);
     }
 
-    // --- Decoder sanity: buildSwapAuto returns the same ABI shape as buildBestSwap ---
-    // (Quote, bytes, uint256, uint256) so zSwap.html's decodeBestSwap() works unchanged.
-    // Note: callData length may differ because auto wraps single-hop results in a
-    // 1-element multicall envelope; the decoder slices by the ABI offset/length
-    // header, so envelope size is irrelevant. What must match is the source &
-    // amounts for pairs where buildBestSwap itself would succeed.
-    function test_auto_abi_shape_matches_buildBestSwap() public {
-        uint256 deadline = block.timestamp + 1800;
-        (zQuoter.Quote memory a,,, uint256 mvA) =
-            quoter.buildBestSwap(USER, false, ETH, _USDC, 1e18, SLIPPAGE_BPS, deadline);
-        (zQuoter.Quote memory b, bytes memory cdB,, uint256 mvB) =
-            quoter.buildSwapAuto(USER, false, ETH, _USDC, 1e18, SLIPPAGE_BPS, deadline);
-        // Quote fields must match: source, fee, amounts.
-        assertEq(uint256(a.source), uint256(b.source), "source");
-        assertEq(a.feeBps, b.feeBps, "feeBps");
-        assertEq(a.amountIn, b.amountIn, "amountIn");
-        assertEq(a.amountOut, b.amountOut, "amountOut");
-        // msgValue must match because the swap is the same.
-        assertEq(mvA, mvB, "msgValue");
-        // callData is non-empty and decodable.
-        assertGt(cdB.length, 4, "callData has selector");
-    }
-
     // Same-token swap must revert NoRoute cleanly rather than produce nonsense.
     function test_auto_same_token_reverts() public {
         vm.expectRevert();
@@ -213,12 +212,22 @@ contract zQuoterDappMatrixAutoTest is Test {
         this.callAuto(false, ETH, ETH, 1e18);
     }
 
+    /// @dev Caller-side replacement for the removed `buildSwapAuto`: try the
+    /// single-hop / 2-hop-hub builder, then 3-hop. Reverts if neither routes.
     function callAuto(bool exactOut, address tIn, address tOut, uint256 amount)
         external
         view
-        returns (zQuoter.Quote memory, bytes memory, uint256, uint256)
+        returns (zQuoter.Quote memory a, bytes memory cd, uint256 msgVal)
     {
-        return quoter.buildSwapAuto(USER, exactOut, tIn, tOut, amount, SLIPPAGE_BPS, block.timestamp + 1800);
+        uint256 deadline = block.timestamp + 1800;
+        zQuoter.Quote memory b;
+        (a, b,, cd, msgVal) =
+            quoter.buildBestSwapViaETHMulticall(USER, USER, exactOut, tIn, tOut, amount, SLIPPAGE_BPS, deadline);
+        bool twoHop = (b.amountIn != 0 || b.amountOut != 0);
+        if (cd.length != 0 && (exactOut ? a.amountIn != 0 : (twoHop ? b.amountOut : a.amountOut) != 0)) {
+            return (a, cd, msgVal);
+        }
+        revert("no route");
     }
 
     // --- 3-hop exactOut regression test ---
