@@ -657,11 +657,6 @@ body.modal-open { overflow: hidden; }
   /* Privacy tab mobile */
   .pp-note-area { font-size: 10px; }
   .pp-asset-btn { padding: 8px 6px; font-size: 12px; min-height: 40px; }
-  /* Trollbox mobile */
-  .trollbox-input input { font-size:16px; padding:12px; }
-  .trollbox-input button { padding:12px 16px; font-size:14px; }
-  .trollbox-msgs { max-height:220px; }
-  .trollbox-msg .tb-img { max-width:140px; }
   /* Coin launch form mobile */
   .coin-name-row { flex-direction:column;gap:0; }
   .coin-name-row .section { margin-bottom:14px; }
@@ -953,31 +948,6 @@ body.modal-open { overflow: hidden; }
 .otc-src.otc { background:rgba(99,145,255,0.12);color:#6391ff; }
 .dark .otc-src.otc { color:#8ab4ff; }
 
-/* Trollbox */
-.trollbox { border:1px solid var(--border); background:var(--bg); margin-top:12px; display:flex; flex-direction:column; font-size:13px; border-radius:4px; }
-.trollbox-header { padding:12px 14px; border-bottom:1px solid var(--card-border); font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; -webkit-tap-highlight-color:transparent; }
-.trollbox-header .tb-badge { background:var(--btn-bg); color:var(--btn-fg); border-radius:10px; padding:1px 6px; font-size:11px; display:none; }
-.trollbox-msgs { overflow-y:auto; padding:8px 10px; max-height:280px; min-height:0; transition:max-height .2s ease; -webkit-overflow-scrolling:touch; }
-.trollbox.collapsed .trollbox-msgs, .trollbox.collapsed .trollbox-input { display:none; }
-.trollbox-input { display:flex; gap:8px; padding:10px; border-top:1px solid var(--card-border); }
-.trollbox-input input { flex:1; min-width:0; background:var(--surface); border:1px solid var(--card-border); border-radius:4px; padding:10px 12px; color:var(--fg); font-size:14px; outline:none; font-family:inherit; -webkit-appearance:none; }
-.trollbox-input input:focus { border-color:var(--btn-bg); }
-.trollbox-input input::placeholder { color:var(--input-ph); }
-.trollbox-input button { background:var(--btn-bg); border:none; color:var(--btn-fg); border-radius:4px; padding:10px 18px; font-size:14px; cursor:pointer; font-family:inherit; white-space:nowrap; -webkit-tap-highlight-color:transparent; }
-.trollbox-input button:hover { background:var(--btn-hover); }
-.trollbox-input button:active { opacity:0.8; }
-.trollbox-msg { display:flex; gap:8px; padding:4px 0; }
-.trollbox-msg .tb-avatar { flex-shrink:0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
-.trollbox-msg .tb-avatar span { font-size:10px; font-weight:700; color:#fff; }
-.trollbox-msg .tb-name { font-weight:600; }
-.trollbox-msg .tb-time { color:var(--fg-muted); font-size:11px; margin-left:6px; }
-.trollbox-msg .tb-text { margin-top:2px; word-break:break-word; }
-.trollbox-msg .tb-text a { color:var(--link-fg, #7B8CFF); }
-.trollbox-msg .tb-img { max-width:180px; max-height:120px; border-radius:6px; margin-top:4px; display:block; cursor:pointer; }
-.trollbox-react { display:flex; gap:4px; margin-top:3px; flex-wrap:wrap; }
-.trollbox-react button { background:var(--surface); border:1px solid var(--card-border); border-radius:12px; padding:2px 8px; font-size:12px; cursor:pointer; line-height:1.5; -webkit-tap-highlight-color:transparent; }
-.trollbox-react button.active { border-color:var(--btn-bg); }
-
 /* Swap card container */
 .swap-card {
   border: 1px solid var(--border);
@@ -1104,33 +1074,6 @@ body.modal-open { overflow: hidden; }
   margin-top:6px;
   line-height:1.4;
 }
-/* zAMM protocol stats banner */
-.zamm-stats {
-  display: none;
-  align-items: baseline;
-  gap: 8px;
-  margin-left: auto;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--fg-muted);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.zamm-stats.ready { display: flex; }
-.zamm-stats:hover { color: var(--fg); }
-.zamm-stats-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-dim);
-}
-.zamm-stats-eth { color: var(--fg); font-weight: 600; }
-.zamm-stats-meta { font-size: 11px; color: var(--fg-dim); }
-.zamm-stats-sep { color: var(--fg-dim); opacity: 0.6; }
-@media (max-width: 480px) {
-  .zamm-stats { font-size: 11px; gap: 6px; }
-  .zamm-stats-meta, .zamm-stats-sep { display: none; }
-}
 </style>
 </head>
 <body>
@@ -1145,7 +1088,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><a id="zammStats" class="zamm-stats" href="https://zamm.finance" target="_blank" rel="noopener" title="Total volume routed through zAMM"><span class="zamm-stats-label">zAMM</span><span class="zamm-stats-eth" id="zammStatsEth"></span><span id="zammStatsUsd"></span><span class="zamm-stats-sep">·</span><span class="zamm-stats-meta" id="zammStatsMeta"></span></a></div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span></div>
 
 <!-- Swap card -->
 <div class="swap-card">
@@ -1292,19 +1235,6 @@ body.modal-open { overflow: hidden; }
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
 <div id="liveCurveSection" class="live-sales" style="display:none"></div>
 <div id="featuredPmSection" class="live-sales" style="display:none"></div>
-<!-- Chat (MiniMeet) — lazy-loads on first open -->
-<div id="trollbox" class="trollbox collapsed">
-  <div class="trollbox-header" onclick="tbToggle()">
-    Chat <span id="tbBadge" class="tb-badge">0</span>
-    <span id="tbChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
-  </div>
-  <div id="tbMessages" class="trollbox-msgs"></div>
-  <div class="trollbox-input">
-    <input id="tbInput" type="text" maxlength="500" placeholder="Connect wallet to post" disabled onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();tbSend()}">
-    <button onclick="tbSend()">Send</button>
-  </div>
-</div>
-
 <div id="privacyTab" style="display:none">
 <div id="ppWalletSeedBackupNotice" class="pp-notice" style="display:none;margin-bottom:16px"></div>
 <div class="swap-card">
@@ -2560,10 +2490,8 @@ async function loadUniswapTokenList() {
 // since the swap pipeline assumes one-address-per-token; ERC6909 routing via
 // swapVZ(idIn, idOut) is the next pass. See ZAMM_V0_COINS_INTEGRATION.md.
 const COINS_ADDRESS = "0x0000000000009710cd229bF635c4500029651eE8";
-const COINCHAN_API = "https://coinchan-indexer-production.up.railway.app";
 const ZAMM_COINS_KEY = 'zswap_zamm_v0_coins';
 const ZAMM_COINS_TTL = 6 * 60 * 60 * 1000; // 6h
-const ZAMM_COINS_LIMIT = 100;
 const _SYM_RE = /^[A-Za-z0-9.$_-]+$/;
 let _zammCoinsLoaded = false, _zammCoinsLoading = false;
 
@@ -2672,31 +2600,10 @@ async function loadZammV0Coins() {
       }
     } catch (_) {}
 
-    if (!coins) {
-      const url = COINCHAN_API + '/api/coins-table?limit=' + ZAMM_COINS_LIMIT + '&sortBy=liquidity&sortDir=desc';
-      const r = await fetch(url, { cache: 'default' });
-      if (!r.ok) return;
-      const data = await r.json();
-      const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      coins = items
-        .filter(c => c && c.token && c.token.toLowerCase() === COINS_ADDRESS.toLowerCase())
-        .filter(c => c.coinId && c.symbol)
-        .map(c => ({
-          coinId: String(c.coinId),
-          symbol: String(c.symbol),
-          name: c.name || null,
-          imageUrl: c.imageUrl || null,
-          swapFee: String(c.swapFee || '100'),
-          poolId: c.poolId ? String(c.poolId) : null,
-          priceInEth: typeof c.priceInEth === 'number' ? c.priceInEth : null,
-          liquidityEth: typeof c.liquidityEth === 'number' ? c.liquidityEth : 0,
-          holders: typeof c.holders === 'number' ? c.holders : 0,
-          fdvEth: typeof c.fdvEth === 'number' ? c.fdvEth : null,
-        }));
-      try {
-        localStorage.setItem(ZAMM_COINS_KEY, JSON.stringify({ loadedAt: Date.now(), coins }));
-      } catch (_) {}
-    }
+    // ZAMM v0 coin discovery came from the coinchan indexer (retired). We now only
+    // surface any coins still cached locally from a prior visit; there is no
+    // network fallback. Swap routing itself is unaffected — it resolves on-chain.
+    if (!coins) { _zammCoinsLoaded = true; return; }
 
     for (const c of coins) _registerZammCoin(c);
     _zammCoinsLoaded = true;
@@ -9259,234 +9166,16 @@ $("swapBtn").addEventListener("click", () => {
   executeSwap();
 });
 
-// ---- Chat (MiniMeet) — lazy-loads on first open ----
-(function() {
-  const TB_URL = "https://www.minimeet.cc";
-  const TB_WEI_REG = "0x0000000000696760E15f265e828DB644A0c242EB";
-  let tbSocket = null, tbUserId = null, tbDisplayName = null, tbAddr = null;
-  let tbCollapsed = true, tbUnread = 0, tbRetryTimer = null, tbConnecting = false, tbReadOnly = false;
-  let _ioLoaded = null;
-  function loadSocketIO() {
-    if(_ioLoaded) return _ioLoaded;
-    return _ioLoaded = new Promise((resolve, reject) => {
-      if(typeof io !== 'undefined') { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = 'https://cdn.socket.io/4.8.3/socket.io.min.js';
-      s.integrity = 'sha384-kzavj5fiMwLKzzD1f8S7TeoVIEi7uKHvbTA3ueZkrzYq75pNQUiUi6Dy98Q3fxb0';
-      s.crossOrigin = 'anonymous';
-      s.onload = resolve;
-      s.onerror = () => { _ioLoaded = null; reject(new Error('Socket.IO load failed')); };
-      document.head.appendChild(s);
-    });
-  }
-
-  function tbEsc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
-  function tbLinkify(t) { return t.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:var(--link-fg,#7B8CFF)">$1</a>'); }
-  function tbColor(s) { let h=0; for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${h%360},70%,60%)`; }
-
-  async function tbResolveName(addr) {
-    const t = (p,ms) => Promise.race([p, new Promise((_,r)=>setTimeout(r,ms))]);
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-    try { const ns = new ethers.Contract(TB_WEI_REG,["function reverseResolve(address) view returns (string)"],rpc); const w = await t(ns.reverseResolve(addr),5000); if(w) return w.toLowerCase(); } catch{}
-    try { const e = await t(rpc.lookupAddress(addr),5000); if(e) return e.toLowerCase(); } catch{}
-    return addr.slice(0,6)+"..."+addr.slice(-4);
-  }
-
-  function tbStatus(text) {
-    const c = $('tbMessages'); if(!c) return;
-    c.innerHTML = `<div style="padding:12px 4px;color:var(--fg-muted);font-size:12px;text-align:center">${tbEsc(text)}</div>`;
-  }
-
-  function tbAppend(msg) {
-    const c = $('tbMessages'); if(!c) return;
-    const el = document.createElement('div');
-    el.className = 'trollbox-msg'; el.dataset.msgId = msg.id;
-    const color = tbColor(msg.name);
-    const d = new Date(msg.ts);
-    const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0');
-    el.innerHTML = `<div class="tb-avatar" style="background:${msg.avatar?`url('${tbEsc(msg.avatar)}') center/cover`:color}">
-      ${msg.avatar?'':`<span>${tbEsc(msg.name.slice(0,2).toUpperCase())}</span>`}
-    </div><div style="min-width:0">
-      <span class="tb-name" style="color:${color}">${tbEsc(msg.name)}</span>
-      <span class="tb-time">${hh}:${mm}</span>
-      ${msg.text?`<div class="tb-text">${tbLinkify(tbEsc(msg.text))}</div>`:''}
-      ${msg.image?`<img class="tb-img" src="${tbEsc(msg.image)}" onclick="window.open(this.src)">`:''}
-      <div class="trollbox-react" data-mid="${tbEsc(msg.id)}">${tbRenderReactions(msg.id, msg.reactions)}</div>
-    </div>`;
-    c.appendChild(el);
-    c.scrollTop = c.scrollHeight;
-    if(tbCollapsed && tbUserId && msg.userId !== tbUserId) {
-      tbUnread++;
-      const badge = $('tbBadge');
-      if(badge) { badge.textContent = tbUnread; badge.style.display = ''; }
-    }
-  }
-
-  function tbRenderReactions(msgId, reactions) {
-    if(!reactions) return '';
-    const counts = {};
-    for(const [uid, emoji] of Object.entries(reactions)) {
-      if(!counts[emoji]) counts[emoji] = { n:0, mine:false };
-      counts[emoji].n++;
-      if(uid === tbUserId) counts[emoji].mine = true;
-    }
-    return Object.entries(counts).map(([emoji, {n, mine}]) =>
-      `<button class="${mine?'active':''}" onclick="tbReact('${tbEsc(msgId)}','${tbEsc(emoji)}')">${emoji} ${n}</button>`
-    ).join('');
-  }
-
-  function tbUpdateReactions(msgId, reactions) {
-    const el = document.querySelector(`.trollbox-react[data-mid="${msgId}"]`);
-    if(el) el.innerHTML = tbRenderReactions(msgId, reactions);
-  }
-
-  window.tbReact = function(msgId, emoji) {
-    if(tbSocket && tbUserId) tbSocket.emit('chat-react', { msgId, emoji });
-  };
-
-  function tbSetInputState() {
-    const inp = $('tbInput');
-    if(!inp) return;
-    inp.disabled = false;
-    inp.placeholder = tbUserId ? 'Say something...' : (_connectedAddress ? 'Type to chat (sign on send)' : 'Type to chat (connect wallet on send)');
-  }
-
-  // Toggle open/close — lazy-connects on first open
-  window.tbToggle = function() {
-    const box = $('trollbox'); if(!box) return;
-    tbCollapsed = !tbCollapsed;
-    box.classList.toggle('collapsed', tbCollapsed);
-    $('tbChevron').innerHTML = tbCollapsed ? '&#9654;' : '&#9660;';
-    if(!tbCollapsed) {
-      tbUnread = 0;
-      const badge = $('tbBadge'); if(badge) badge.style.display = 'none';
-      if(!tbSocket && !tbConnecting) {
-        tbConnectReadOnly(); // always read-only on open; auth on first send
-      } else { const c = $('tbMessages'); if(c) c.scrollTop = c.scrollHeight; }
-    }
-  };
-
-  window.tbSend = async function() {
-    const inp = $('tbInput'); if(!inp) return;
-    const txt = inp.value.trim().slice(0,500);
-    if(!txt) return;
-    if(!tbUserId) {
-      // Not authed yet — connect wallet if needed, then upgrade
-      if(!_connectedAddress || !_signer) { if(typeof connectWallet === 'function') connectWallet(); return; }
-      if(tbSocket) await tbUpgradeAuth();
-      // Wait briefly for registration to complete
-      await new Promise(r => setTimeout(r, 1000));
-      if(!tbUserId) return; // auth failed or still pending
-    }
-    if(!tbSocket) return;
-    tbSocket.emit('chat-public', { text: txt });
-    inp.value = '';
-  };
-
-  function tbSetupSocketListeners() {
-    tbSocket.on('chat-public', tbAppend);
-    tbSocket.on('chat-history', (msgs) => { $('tbMessages').innerHTML = ''; msgs.forEach(tbAppend); });
-    tbSocket.on('chat-react', ({ msgId, reactions }) => tbUpdateReactions(msgId, reactions));
-  }
-
-  // Read-only connection — no wallet required, just listen for messages
-  async function tbConnectReadOnly() {
-    if(tbSocket || tbConnecting) return;
-    tbConnecting = true;
-    tbReadOnly = true;
-    tbStatus('Loading chat...');
-    tbSetInputState();
-    try {
-      await loadSocketIO();
-      tbSocket = io(TB_URL, { transports:["websocket","polling"], reconnection:true, reconnectionAttempts:Infinity, reconnectionDelay:1000, reconnectionDelayMax:10000 });
-      tbSetupSocketListeners();
-      tbSocket.on('connect', () => {
-        tbSocket.emit('chat-history');
-        // If server requires auth for history, show hint after timeout
-        setTimeout(() => {
-          const c = $('tbMessages');
-          if(c && c.querySelector('[style*="text-align:center"]') && !tbUserId) {
-            tbStatus('Connect wallet to see full chat');
-          }
-        }, 5000);
-      });
-      tbSocket.on('registered', (data) => {
-        tbUserId = data.userId;
-        if(data.sessionToken) localStorage.setItem('zfi_tb_session', data.sessionToken);
-        tbSocket.emit('chat-history');
-        tbReadOnly = false;
-        tbSetInputState();
-      });
-      tbSocket.on('register-error', ({ message }) => { console.error('Chat auth failed:', message); });
-      tbSocket.on('reconnect', () => {
-        if(tbUserId) tbSocket.emit('register', { name:tbDisplayName, reconnectUserId:tbUserId, walletAddress:tbAddr });
-        else tbSocket.emit('chat-history');
-      });
-      if(tbRetryTimer) { clearTimeout(tbRetryTimer); tbRetryTimer = null; }
-    } catch(e) {
-      console.error('Chat connect error:', e);
-      if(tbSocket) { try { tbSocket.disconnect(); } catch(_){} }
-      tbSocket = null;
-      tbStatus('Chat offline');
-      tbRetryTimer = setTimeout(() => tbConnectReadOnly(), 15000);
-    } finally { tbConnecting = false; }
-  }
-
-  // Upgrade a read-only socket to fully authenticated
-  async function tbUpgradeAuth() {
-    if(!tbSocket || !_signer || !_connectedAddress) return;
-    try {
-      tbAddr = _connectedAddress.toLowerCase();
-      const [displayName, nonceRes] = await Promise.all([
-        tbResolveName(tbAddr),
-        fetch(`${TB_URL}/auth/wallet/nonce?address=${encodeURIComponent(tbAddr)}`)
-      ]);
-      tbDisplayName = displayName;
-      if(!nonceRes.ok) throw new Error('Nonce request failed');
-      const { message, nonce } = await nonceRes.json();
-      const signature = await _signer.signMessage(message);
-      const sess = localStorage.getItem('zfi_tb_session');
-      const payload = { name:tbDisplayName, walletAddress:tbAddr, walletSignature:signature, walletNonce:nonce };
-      if(sess) payload.sessionToken = sess;
-      tbSocket.emit('register', payload);
-    } catch(e) { console.error('Chat upgrade error:', e); }
-  }
-
-  window.tbDisconnect = function() {
-    if(tbRetryTimer) { clearTimeout(tbRetryTimer); tbRetryTimer = null; }
-    if(tbSocket) { tbSocket.disconnect(); tbSocket = null; }
-    tbUserId = null; tbDisplayName = null; tbAddr = null; tbUnread = 0;
-    tbConnecting = false; tbReadOnly = false;
-    const box = $('trollbox'); if(box) box.classList.add('collapsed');
-    tbCollapsed = true;
-    $('tbMessages').innerHTML = '';
-    tbSetInputState();
-    const badge = $('tbBadge'); if(badge) badge.style.display = 'none';
-  };
-
-  // Update chat UI when wallet connects (auth deferred to first send)
-  window.tbOnWalletConnect = function() {
-    tbSetInputState();
-  };
-
-  // Hide chat when not on swap tab
-  window.tbSyncVisibility = function() {
-    const box = $('trollbox'); if(!box) return;
-    box.style.display = $('swapTab')?.style.display !== 'none' ? '' : 'none';
-  };
-})();
 
 walletInit({
   appName: 'zFi',
   onConnect: [() => {
     updateBalances();
     handleAmountChange();
-    if(typeof tbOnWalletConnect === 'function') tbOnWalletConnect();
     if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadTimelocks(); sendLoadSlowTransfers(); }
     ppHandlePrivacyWalletConnected();
   }],
   onDisconnect: [() => {
-    tbDisconnect();
     setText('swapBtn', 'Connect Wallet');
     setDisabled('swapBtn', false);
     setText('fromBalance', 'Balance: --');
@@ -9518,7 +9207,6 @@ function switchTab(tab) {
   if (lcEl && lcEl.innerHTML) lcEl.style.display = tab === 'swap' ? '' : 'none';
   const pmEl = $('featuredPmSection');
   if (pmEl && pmEl.innerHTML) pmEl.style.display = tab === 'swap' ? '' : 'none';
-  if (typeof tbSyncVisibility === 'function') tbSyncVisibility();
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
@@ -9574,76 +9262,6 @@ function switchTab(tab) {
       el.parentElement.style.display = '';
     }
   } catch {}
-})();
-
-// ---- zAMM protocol stats banner ----
-// Sources: indexer (cumulative ETH/swap/coin counts) + CheckTheChain (WETH/USDC).
-// See SWAP_STATS_INTEGRATION.md.
-(function() {
-  const ZAMM_INDEXER = "https://coinchan-indexer-production.up.railway.app/api/protocol-stats";
-  const ZAMM_LEGACY_ETH = 669.286648841; // pre-indexer volume; drop to 0 if indexer is backfilled
-  const CHECK_THE_CHAIN = "0x0000000000cDC1F8d393415455E382c30FBc0a84";
-  const checkPriceIface = new ethers.Interface([
-    "function checkPrice(string symbol) view returns (uint256, string)"
-  ]);
-  const checkPriceData = checkPriceIface.encodeFunctionData("checkPrice", ["WETH"]);
-
-  async function fetchEthUsd() {
-    try {
-      return await quoteRPC.call(async (rpc) => {
-        const raw = await rpc.call({ to: CHECK_THE_CHAIN, data: checkPriceData });
-        const [price] = checkPriceIface.decodeFunctionResult("checkPrice", raw);
-        return Number(price) / 1e6;
-      });
-    } catch { return null; }
-  }
-
-  function fmtUsd(n) {
-    if (!Number.isFinite(n)) return "";
-    if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
-    if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
-    if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
-    return "$" + n.toFixed(0);
-  }
-
-  let lastOk = 0;
-
-  async function refresh() {
-    const wrap = document.getElementById("zammStats");
-    if (!wrap) return;
-    const [stats, ethUsd] = await Promise.all([
-      fetch(ZAMM_INDEXER, { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetchEthUsd(),
-    ]);
-    if (!stats || stats.totalEthSwapped == null) return;
-    let ethSwapped;
-    try {
-      ethSwapped = Number(ethers.formatEther(BigInt(stats.totalEthSwapped))) + ZAMM_LEGACY_ETH;
-    } catch { return; }
-    const usd = ethUsd ? ethSwapped * ethUsd : null;
-    document.getElementById("zammStatsEth").textContent =
-      ethSwapped.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " Ξ";
-    document.getElementById("zammStatsUsd").textContent = usd ? "(" + fmtUsd(usd) + ")" : "";
-    document.getElementById("zammStatsMeta").textContent =
-      Number(stats.totalSwapCount || 0).toLocaleString() + " swaps · " +
-      Number(stats.totalCoinCount || 0).toLocaleString() + " coins";
-    wrap.classList.add("ready");
-    lastOk = Date.now();
-  }
-
-  function start() {
-    refresh();
-    setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 60_000);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && Date.now() - lastOk > 60_000) refresh();
-    });
-  }
-
-  const kick = () => window.requestIdleCallback
-    ? requestIdleCallback(start, { timeout: 500 })
-    : setTimeout(start, 0);
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", kick);
-  else kick();
 })();
 
 // ---- OTC order ticker (lazy, non-blocking) ----

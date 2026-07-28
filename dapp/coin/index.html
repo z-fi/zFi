@@ -328,7 +328,7 @@ input {
 .chart-iframe-wrap { position:relative;width:100%;height:min(56.25vw, 400px); }
 .chart-iframe-wrap iframe { position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:var(--surface);color-scheme:light dark; }
 
-/* Pool activity drawer */
+/* Drawer body / tables — shared by Holders, Proposals, Orders drawers */
 .activity-body { display:none;padding:0; }
 .drawer.open .activity-body { display:block; }
 .activity-table { width:100%;border-collapse:collapse;font-size:12px; }
@@ -340,17 +340,9 @@ input {
 .activity-table tr:last-child td { border-bottom:none; }
 .activity-table .evt-buy { color:var(--green); }
 .activity-table .evt-sell { color:var(--red); }
-.activity-table .evt-liqadd { color:var(--green); }
-.activity-table .evt-liqrem { color:var(--red); }
 .activity-table .evt-type { font-weight:600;font-size:11px; }
 .activity-table a { color:var(--fg-muted);font-size:11px; }
 .activity-table a:hover { color:var(--fg); }
-.activity-more {
-  display:block;width:100%;padding:8px;font-size:11px;font-weight:600;letter-spacing:0.05em;
-  text-transform:uppercase;color:var(--fg-muted);background:transparent;border:none;border-top:1px solid var(--border-muted);
-  cursor:pointer;font-family:inherit;
-}
-.activity-more:hover { color:var(--fg);background:var(--surface); }
 .activity-empty { padding:16px;text-align:center;font-size:12px;color:var(--fg-muted); }
 
 /* Chat */
@@ -571,6 +563,7 @@ const ZAMM_POOLS_ABI = [
 ];
 const ZAMM_LP_ABI = [
   'function addLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) key, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256, uint256, uint256)',
+  'function removeLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) key, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) returns (uint256 amount0, uint256 amount1)',
   'function balanceOf(address, uint256) view returns (uint256)'
 ];
 const V1_ZAP = '0x0000000000Ee8cD7fd26236a2e4C1505dAc0Dce9';
@@ -902,23 +895,11 @@ const ZAMM_STAKE_COIN_ID = '1334160193485309697971829933264346612480800613613';
 const ZAMM_GALLERY_FETCH_LIMIT = 100;
 
 async function fetchZammV0CoinsForGallery() {
-  try {
-    const url = `https://coinchan-indexer-production.up.railway.app/api/coins-table?limit=${ZAMM_GALLERY_FETCH_LIMIT}&sortBy=liquidity&sortDir=desc`;
-    const r = await fetch(url, { cache: 'default' });
-    if (!r.ok) return [];
-    const data = await r.json();
-    const items = Array.isArray(data?.data) ? data.data : [];
-    return items
-      .filter(c => c && c.token && c.token.toLowerCase() === COINS_SINGLETON.toLowerCase())
-      .filter(c => c.coinId && String(c.coinId) !== ZAMM_STAKE_COIN_ID)
-      .filter(c => c.symbol)
-      // Skip coins with no AMM liquidity at all — the gallery card would advertise a
-      // tradeable pool that doesn't exist. Tiny non-zero liquidity is fine (the renderer
-      // falls through to scientific notation for sub-µETH so users can see it).
-      .filter(c => typeof c.liquidityEth === 'number' && c.liquidityEth > 0);
-  } catch (_) {
-    return [];
-  }
+  // ZAMM v0 gallery listing relied on the coinchan indexer (now retired). The
+  // top-by-liquidity discovery feed is unavailable without it; individual coin
+  // pages still work fully from on-chain reads. Return empty so the gallery
+  // simply omits this section rather than hitting a dead host.
+  return [];
 }
 
 function renderZammV0CoinCard(c) {
@@ -1297,82 +1278,12 @@ function setCoinChartTf(tf) {
 
 // ==================== POOL ACTIVITY ====================
 
-const INDEXER = 'https://coinchan-indexer-production.up.railway.app';
-
-const LOCKUP_CHECK_ABI = ['function lockups(bytes32) view returns (uint256)'];
-const COIN_SUPPLY_TOTAL = 1_000_000_000n;
-
 async function fetchOpsLockup(sharesAddr, opsAddr, metadata) {
-  // Derive team allocation from metadata or try common defaults
-  const teamBpsList = metadata.teamBps ? [metadata.teamBps] : [1500, 1000, 2000, 2500, 500, 3000];
-  try {
-    // Get lockup hashes from indexer (cap at 10 most recent)
-    const res = await fetch(INDEXER + '/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query ($address: String!) {
-          account(address: $address) {
-            lockupReceived(limit: 10) { items { id } }
-          }
-        }`,
-        variables: { address: opsAddr.toLowerCase() }
-      })
-    });
-    const { data } = await res.json();
-    const items = data?.account?.lockupReceived?.items || [];
-    if (items.length === 0) return null;
-    // Batch: read all unlockTimes in one RPC round via Promise.all
-    const hashes = items.map(i => i.id);
-    const unlockTimes = await withRPC(async rpc => {
-      const zamm = new ethers.Contract(ZAMM, LOCKUP_CHECK_ABI, rpc);
-      return await Promise.all(hashes.map(h => zamm.lockups(h).catch(() => 0n)));
-    });
-    // Precompute hashes for each teamBps candidate (pure CPU, no RPC)
-    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-    for (let i = 0; i < hashes.length; i++) {
-      const unlockTime = unlockTimes[i];
-      if (unlockTime === 0n) continue;
-      for (const tb of teamBpsList) {
-        const teamSupply = (COIN_SUPPLY_TOTAL * BigInt(tb)) / 10000n;
-        const teamSupplyWei = ethers.parseEther(teamSupply.toString());
-        const encoded = abiCoder.encode(
-          ['address', 'address', 'uint256', 'uint256', 'uint256'],
-          [sharesAddr, opsAddr, 0n, teamSupplyWei, unlockTime]
-        );
-        const computed = ethers.keccak256(encoded);
-        if (computed.toLowerCase() === hashes[i].toLowerCase()) {
-          return { amount: teamSupplyWei.toString(), unlockTime: unlockTime.toString(), coinId: '0' };
-        }
-      }
-    }
-    return null;
-  } catch { return null; }
-}
-
-let _activityCursor = null;
-let _activityInterval = null;
-
-function toggleActivity() {
-  const el = $('activityDrawer');
-  if (!el) return;
-  el.classList.toggle('open');
-  if (el.classList.contains('open') && !el.dataset.loaded) {
-    el.dataset.loaded = '1';
-    loadActivity(el.dataset.poolId);
-    _activityInterval = setInterval(() => refreshActivity(el.dataset.poolId), 30000);
-  } else if (!el.classList.contains('open') && _activityInterval) {
-    clearInterval(_activityInterval);
-    _activityInterval = null;
-  }
-}
-
-function fmtWei(wei) {
-  if (!wei || wei === '0') return '0';
-  const s = wei.padStart(19, '0');
-  const whole = s.slice(0, s.length - 18) || '0';
-  const frac = s.slice(s.length - 18, s.length - 14);
-  return whole + '.' + frac;
+  // Ops lockup discovery required the coinchan indexer (retired) to enumerate a
+  // beneficiary's lockup hashes before reconstructing them on-chain. Without it
+  // we can't locate the hashes, so the Ops Allocation drawer is skipped. Core
+  // trading and on-chain reserve reads are unaffected.
+  return null;
 }
 
 function renderSocials(md, hasDesc) {
@@ -1396,146 +1307,8 @@ function fmtAge(ts) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-function activityRow(e) {
-  const cls = 'evt-' + e.type.toLowerCase();
-  const label = { BUY: 'Buy', SELL: 'Sell', LIQADD: '+LP', LIQREM: '-LP' }[e.type] || e.type;
-  const ethAmt = (e.type === 'BUY' || e.type === 'LIQADD') ? fmtWei(e.amount0_in) : fmtWei(e.amount0_out);
-  const tokenAmt = (e.type === 'BUY' || e.type === 'LIQREM') ? fmtWei(e.amount1_out) : fmtWei(e.amount1_in);
-  const maker = e.maker ? e.maker.slice(0, 6) + '\u2026' + e.maker.slice(-4) : '-';
-  const txShort = e.txhash.slice(0, 6) + '\u2026' + e.txhash.slice(-4);
-  return `<tr class="${cls}">
-    <td>${fmtAge(e.timestamp)}</td>
-    <td class="evt-type">${label}</td>
-    <td>${ethAmt}</td>
-    <td>${tokenAmt}</td>
-    <td><a href="https://etherscan.io/address/${escText(e.maker)}" target="_blank">${maker}</a></td>
-    <td><a href="https://etherscan.io/tx/${escText(e.txhash)}" target="_blank">${txShort}</a></td>
-  </tr>`;
-}
-
-function renderActivityTable(events, append) {
-  const content = $('activityContent');
-  if (!content) return;
-  if (!events.length && !append) {
-    content.innerHTML = '<div class="activity-empty">No activity yet</div>';
-    return;
-  }
-  const rows = events.map(activityRow).join('');
-  if (append) {
-    const tbody = content.querySelector('tbody');
-    if (tbody) tbody.insertAdjacentHTML('beforeend', rows);
-  } else {
-    content.innerHTML = `<table class="activity-table">
-      <thead><tr><th>Age</th><th>Type</th><th>ETH</th><th>Token</th><th>Maker</th><th>Tx</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>` + (_activityCursor ? `<button class="activity-more" onclick="loadMoreActivity()">Load More</button>` : '');
-  }
-}
-
-async function loadActivity(poolId) {
-  try {
-    const res = await fetch(`${INDEXER}/api/events?poolId=${poolId}&limit=30`);
-    const json = await res.json();
-    _activityCursor = json.nextCursor || null;
-    renderActivityTable(json.data, false);
-  } catch(e) {
-    const content = $('activityContent');
-    if (content) content.innerHTML = '<div class="activity-empty">Failed to load activity</div>';
-  }
-}
-
-async function refreshActivity(poolId) {
-  try {
-    const res = await fetch(`${INDEXER}/api/events?poolId=${poolId}&limit=30`);
-    const json = await res.json();
-    _activityCursor = json.nextCursor || null;
-    renderActivityTable(json.data, false);
-  } catch(e) { /* silent refresh failure */ }
-}
-
-async function loadMoreActivity() {
-  if (!_activityCursor) return;
-  const el = $('activityDrawer');
-  if (!el) return;
-  const poolId = el.dataset.poolId;
-  const btn = el.querySelector('.activity-more');
-  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
-  try {
-    const res = await fetch(`${INDEXER}/api/events?poolId=${poolId}&limit=30&before=${_activityCursor}`);
-    const json = await res.json();
-    _activityCursor = json.nextCursor || null;
-    renderActivityTable(json.data, true);
-    if (!_activityCursor && btn) btn.remove();
-    else if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
-  } catch(e) {
-    if (btn) { btn.textContent = 'Load More'; btn.disabled = false; }
-  }
-}
-
-function toggleLpList() {
-  const el = $('lpDrawer');
-  if (!el) return;
-  el.classList.toggle('open');
-  if (el.classList.contains('open') && !el.dataset.loaded) {
-    el.dataset.loaded = '1';
-    loadLpProviders(el.dataset.poolId);
-  }
-}
-
-async function loadLpProviders(poolId) {
-  const content = $('lpListContent');
-  if (!content) return;
-  content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
-  try {
-    const allEvents = [];
-    let cursor = null;
-    for (;;) {
-      let url = `${INDEXER}/api/events?poolId=${poolId}&limit=500`;
-      if (cursor) url += `&before=${cursor}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      for (const e of json.data) {
-        if (e.type === 'LIQADD' || e.type === 'LIQREM') allEvents.push(e);
-      }
-      cursor = json.nextCursor || null;
-      if (!cursor) break;
-    }
-    // Aggregate net liquidity per address
-    const map = {};
-    for (const e of allEvents) {
-      const addr = e.maker;
-      if (!map[addr]) map[addr] = { addr, net: 0n, lastTs: 0 };
-      const amt = BigInt(e.type === 'LIQADD' ? e.amount0_in : e.amount0_out);
-      map[addr].net += e.type === 'LIQADD' ? amt : -amt;
-      if (e.timestamp > map[addr].lastTs) map[addr].lastTs = e.timestamp;
-    }
-    const providers = Object.values(map).filter(p => p.net > 0n).sort((a, b) => a.net > b.net ? -1 : a.net < b.net ? 1 : 0);
-    renderLpTable(providers);
-  } catch(e) {
-    content.innerHTML = '<div class="activity-empty">Failed to load LP data</div>';
-  }
-}
-
-function renderLpTable(providers) {
-  const content = $('lpListContent');
-  if (!content) return;
-  if (!providers.length) {
-    content.innerHTML = '<div class="activity-empty">No liquidity providers</div>';
-    return;
-  }
-  const rows = providers.map(p => {
-    const short = p.addr.slice(0, 6) + '\u2026' + p.addr.slice(-4);
-    return `<tr>
-      <td><a href="https://etherscan.io/address/${escText(p.addr)}" target="_blank">${short}</a></td>
-      <td>${fmtWei(p.net.toString())}</td>
-      <td>${fmtAge(p.lastTs)}</td>
-    </tr>`;
-  }).join('');
-  content.innerHTML = `<table class="activity-table">
-    <thead><tr><th>Address</th><th>Liquidity (ETH)</th><th>Last Active</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
-}
+// Pool Activity + Liquidity Providers tables were indexer-backed and have been
+// removed along with the coinchan indexer dependency.
 
 // ==================== SHAREHOLDERS ====================
 
@@ -2270,13 +2043,9 @@ async function _galleryRenderFresh(gen) {
       }
     } catch {}
 
-    // Fetch metadata, pool reserves, ETH/USD price, pool activity, and curve data ALL in parallel
-    const activityPromise = activityCached ? Promise.resolve(null) :
-      fetch(INDEXER + '/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: '{ pools(limit: 1000) { items { token0 token1 updatedAt } } }' })
-      }).then(r => r.json()).catch(() => null);
+    // Pool activity/recency came from the coinchan indexer (retired). Without it we
+    // skip the inactive-coin heuristic — coins are simply not flagged inactive.
+    const activityPromise = Promise.resolve(null);
 
     // Build curve multicall in advance so it runs in parallel with DAICO data
     const daicoAddrs = new Set(filtered.map(d => d.dao.toLowerCase()));
@@ -2781,6 +2550,7 @@ let _lpSubMode = 'zap'; // 'zap' | 'pair'
 
 let _poolReserve0 = 0n;
 let _poolReserve1 = 0n;
+let _poolSupply = 0n; // total LP supply for the zAMM pool
 let _lpBalance = 0n;
 
 // ==================== CURVE COIN PAGE ====================
@@ -5520,7 +5290,7 @@ async function renderCoinPage(daoAddr) {
 
     // Market cap (pool price preferred, fallback to sale price)
     let mcapETH = 0;
-    const isCollect = metadata.launchType === 'collector' || metadata.type === 'collector' || metadata.type === 'fw-collector';
+    const isCollect = metadata.launchType === 'collector' || metadata.type === 'collector' || metadata.type === 'fw-collector' || !!contSaleConfig;
 
     // Banner + OG meta for social sharing
     const bannerUrl = resolveIPFS(metadata.banner);
@@ -5726,8 +5496,8 @@ async function renderCoinPage(daoAddr) {
       }
     }
 
-    // Tap drawer (collapsed)
-    if (tapActive && !contSaleActive) {
+    // Tap drawer (collapsed) — inert for collector DAOs, so hide it there
+    if (tapActive && !contSaleActive && !isCollect) {
       const claimableETH = Number(ethers.formatEther(tap.claimable || 0n));
       {
         html += `
@@ -5902,6 +5672,7 @@ async function renderCoinPage(daoAddr) {
           <div class="swap-dir">
             <button id="lpZapBtn" class="active" onclick="setLpSubMode('zap')">Zap (ETH only)</button>
             <button id="lpPairBtn" onclick="setLpSubMode('pair')">Add Both</button>
+            <button id="lpRemoveBtn" onclick="setLpSubMode('remove')">Remove</button>
           </div>
           <div id="lpZapForm">
             <div class="swap-section">
@@ -5950,6 +5721,29 @@ async function renderCoinPage(daoAddr) {
             </div>
             <button id="lpPairDoBtn" class="action-btn" onclick="doLpAdd()">Connect Wallet</button>
           </div>
+          <div id="lpRemoveForm" style="display:none">
+            <div class="swap-section">
+              <div class="swap-section-head">
+                <label>LP to remove</label>
+                <span id="lpRemoveBal" class="swap-balance"></span>
+                <span class="swap-token-tag">LP</span>
+              </div>
+              <input type="text" id="lpRemoveInput" placeholder="0.0" oninput="onLpRemoveInput()" autocomplete="off">
+              <div class="swap-pct-row">
+                <button class="swap-pct-btn" onclick="fillLpRemovePct(25)">25%</button>
+                <button class="swap-pct-btn" onclick="fillLpRemovePct(50)">50%</button>
+                <button class="swap-pct-btn" onclick="fillLpRemovePct(75)">75%</button>
+                <button class="swap-pct-btn" onclick="fillLpRemovePct(100)">100%</button>
+              </div>
+            </div>
+            <div class="swap-quote" id="lpRemoveQuote"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
+              <span style="font-size:11px;color:var(--fg-muted)">Slippage</span>
+              <input type="text" id="lpRemoveSlippage" value="2" style="width:40px;font-size:12px;text-align:center;border-bottom:1px solid var(--border)" autocomplete="off">
+              <span style="font-size:11px;color:var(--fg-muted)">%</span>
+            </div>
+            <button id="lpRemoveDoBtn" class="action-btn" onclick="doLpRemove()">Connect Wallet</button>
+          </div>
           <div class="swap-quote" id="lpStatus"></div>
           <div id="lpBalanceInfo" style="font-size:11px;color:var(--fg-muted);margin-top:8px"></div>
         </div>
@@ -5957,26 +5751,9 @@ async function renderCoinPage(daoAddr) {
       </div>
     `;
 
-    // Chart drawer (only if pool has reserves; hidden until activity confirmed)
-    const _activityLpHTML = hasPool && !saleActive ? `
-        <div class="drawer" id="activityDrawer" data-pool-id="${poolId}">
-          <button class="drawer-toggle" onclick="toggleActivity()">
-            <span>Pool Activity</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="activity-body">
-            <div id="activityContent"><div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div></div>
-          </div>
-        </div>
-        <div class="drawer" id="lpDrawer" data-pool-id="${poolId}">
-          <button class="drawer-toggle" onclick="toggleLpList()">
-            <span>Liquidity Providers</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="activity-body">
-            <div id="lpListContent"><div class="activity-empty">Click to load</div></div>
-          </div>
-        </div>` : '';
+    // Pool Activity + Liquidity Providers drawers depended on the coinchan indexer
+    // (retired). Removed — on-chain reserve reads and trading remain fully functional.
+    const _activityLpHTML = '';
 
     const _chartHTML = hasPool && !saleActive ? `
         <div class="drawer" id="chartDrawer" data-pool-id="${poolId}" style="display:none">
@@ -6036,6 +5813,7 @@ async function renderCoinPage(daoAddr) {
     app.dataset.hasPool = hasPool ? '1' : '';
     _poolReserve0 = reserve0;
     _poolReserve1 = reserve1;
+    _poolSupply = poolResult ? (poolResult[6] ?? 0n) : 0n;
     _swapDir = 'buy';
     _saleData = sale;
     _lpSubMode = 'zap';
@@ -6052,27 +5830,21 @@ async function renderCoinPage(daoAddr) {
       _navOb.href = _obHref;
     }
 
-    // Show chart drawer only if pool has trading activity
+    // Chart drawer — the coinchan indexer previously gated this on trading activity.
+    // Without it we render the embedded chart directly whenever a pool exists (the
+    // embed derives its own data). Collapsed by default on sale/collector pages.
     if (hasPool) {
       const _chartPoolId = poolId.toString();
-      fetch(`${INDEXER}/api/events?poolId=${_chartPoolId}&limit=1`)
-        .then(r => r.json())
-        .then(json => {
-          const el = $('chartDrawer');
-          if (!el || el.dataset.poolId !== _chartPoolId) return; // stale
-          if (json.data && json.data.length) {
-            el.style.display = '';
-            if (!saleActive && !(_coinMeta && (_coinMeta.type === 'collector' || _coinMeta.type === 'fw-collector' || _coinMeta.launchType === 'collector'))) {
-              el.classList.add('open');
-              el.dataset.loaded = '1';
-              const body = el.querySelector('.chart-body');
-              if (body) body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(_chartPoolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
-            }
-          } else {
-            el.remove();
-          }
-        })
-        .catch(() => { const el = $('chartDrawer'); if (el && el.dataset.poolId === _chartPoolId) el.remove(); });
+      const el = $('chartDrawer');
+      if (el && el.dataset.poolId === _chartPoolId) {
+        el.style.display = '';
+        if (!saleActive && !(_coinMeta && (_coinMeta.type === 'collector' || _coinMeta.type === 'fw-collector' || _coinMeta.launchType === 'collector'))) {
+          el.classList.add('open');
+          el.dataset.loaded = '1';
+          const body = el.querySelector('.chart-body');
+          if (body) body.innerHTML = `<div class="chart-type-toggle"><button class="active" data-type="line" onclick="setCoinChartType('line')">Line</button><button data-type="candle" onclick="setCoinChartType('candle')">Candle</button></div><div class="chart-tf-toggle${_coinChartType === 'candle' ? ' show' : ''}" id="coinTfToggle"><button data-tf="1m" onclick="setCoinChartTf('1m')"${_coinChartTf==='1m'?' class="active"':''}>1m</button><button data-tf="1h" onclick="setCoinChartTf('1h')"${_coinChartTf==='1h'?' class="active"':''}>1h</button><button data-tf="1d" onclick="setCoinChartTf('1d')"${_coinChartTf==='1d'?' class="active"':''}>1d</button></div><div class="chart-iframe-wrap"><iframe src="${coinChartUrl(_chartPoolId, _coinChartType)}" allow="clipboard-write" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
+        }
+      }
     }
 
     // Fund deeplink: ?amt=1.5#0xDAO... — pre-fill sale amount
@@ -6141,8 +5913,10 @@ function updateModeButton() {
   } else if (_tradeMode === 'lp') {
     const zapBtn = $('lpZapDoBtn');
     const pairBtn = $('lpPairDoBtn');
+    const removeBtn = $('lpRemoveDoBtn');
     if (zapBtn) zapBtn.textContent = connected ? 'Zap Liquidity' : 'Connect Wallet';
     if (pairBtn) pairBtn.textContent = connected ? 'Add Liquidity' : 'Connect Wallet';
+    if (removeBtn) removeBtn.textContent = connected ? 'Remove Liquidity' : 'Connect Wallet';
   }
 }
 
@@ -6571,8 +6345,6 @@ async function executeSaleBuy() {
     $('saleLpNote').textContent = '';
 
     setTimeout(() => renderCoinPage(daoAddr), 2000);
-    const adEl = $('activityDrawer');
-    if (adEl && adEl.dataset.loaded) setTimeout(() => refreshActivity(adEl.dataset.poolId), 4000);
   } catch(e) {
     console.error('Sale buy error:', e);
     const quoteEl = $('saleQuote');
@@ -6662,14 +6434,97 @@ function setLpSubMode(mode) {
   _lpSubMode = mode;
   const zapBtn = $('lpZapBtn');
   const pairBtn = $('lpPairBtn');
+  const removeBtn = $('lpRemoveBtn');
   if (zapBtn) zapBtn.classList.toggle('active', mode === 'zap');
   if (pairBtn) pairBtn.classList.toggle('active', mode === 'pair');
+  if (removeBtn) removeBtn.classList.toggle('active', mode === 'remove');
   const zapForm = $('lpZapForm');
   const pairForm = $('lpPairForm');
+  const removeForm = $('lpRemoveForm');
   if (zapForm) zapForm.style.display = mode === 'zap' ? '' : 'none';
   if (pairForm) pairForm.style.display = mode === 'pair' ? '' : 'none';
+  if (removeForm) removeForm.style.display = mode === 'remove' ? '' : 'none';
   const status = $('lpStatus');
   if (status) { status.textContent = ''; status.className = 'swap-quote'; }
+  if (mode === 'remove') { loadLpBalance().then(updateLpRemoveBal); }
+}
+
+function updateLpRemoveBal() {
+  const el = $('lpRemoveBal');
+  if (el) el.textContent = _lpBalance > 0n ? 'Balance: ' + Number(ethers.formatEther(_lpBalance)).toLocaleString(undefined, {maximumFractionDigits:6}) : 'Balance: 0';
+}
+
+function fillLpRemovePct(pct) {
+  if (_lpBalance <= 0n) return;
+  const amt = _lpBalance * BigInt(pct) / 100n;
+  if (amt <= 0n) return;
+  $('lpRemoveInput').value = ethers.formatEther(amt);
+  onLpRemoveInput();
+}
+
+function onLpRemoveInput() {
+  const raw = ($('lpRemoveInput').value || '').trim();
+  const quoteEl = $('lpRemoveQuote');
+  if (!raw || isNaN(raw) || Number(raw) <= 0 || _poolSupply === 0n) {
+    if (quoteEl) quoteEl.textContent = '';
+    return;
+  }
+  const liq = ethers.parseEther(raw);
+  const amount0 = liq * _poolReserve0 / _poolSupply;
+  const amount1 = liq * _poolReserve1 / _poolSupply;
+  const sym = _coinData?.meta?.symbol || '???';
+  if (quoteEl) quoteEl.textContent = `~${Number(ethers.formatEther(amount0)).toFixed(6)} ETH + ~${Number(ethers.formatEther(amount1)).toFixed(6)} $${sym}`;
+}
+
+async function doLpRemove() {
+  if (!_signer) { await connectWallet(); return; }
+  const raw = ($('lpRemoveInput').value || '').trim();
+  if (!raw || isNaN(raw) || Number(raw) <= 0) return;
+  const liq = ethers.parseEther(raw);
+  if (liq > _lpBalance) { const s = $('lpStatus'); if (s) s.innerHTML = '<span style="color:var(--red,#e55)">Exceeds your LP balance</span>'; return; }
+  if (_poolSupply === 0n) return;
+
+  const shares = $('app').dataset.shares;
+  const feeOrHook = BigInt($('app').dataset.feeOrHook || '30');
+  const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: shares, feeOrHook };
+
+  const slip = Number(($('lpRemoveSlippage').value || '2').trim()) || 2;
+  const slipMul = BigInt(Math.floor((100 - slip) * 100));
+  const amount0Min = (liq * _poolReserve0 / _poolSupply) * slipMul / 10000n;
+  const amount1Min = (liq * _poolReserve1 / _poolSupply) * slipMul / 10000n;
+
+  const btn = $('lpRemoveDoBtn');
+  const status = $('lpStatus');
+  btn.textContent = 'Confirm in wallet...';
+  btn.disabled = true;
+
+  try {
+    const addr = await _signer.getAddress();
+    const zamm = new ethers.Contract(ZAMM, ZAMM_LP_ABI, _signer);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+
+    const tx = await zamm.removeLiquidity(
+      poolKey, liq, amount0Min, amount1Min, addr, deadline
+    );
+    btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+    await tx.wait();
+
+    if (status) status.innerHTML = `<span style="color:var(--green)">Liquidity removed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+    $('lpRemoveInput').value = '';
+    $('lpRemoveQuote').textContent = '';
+    await refreshPoolReserves();
+    await loadLpBalance();
+    updateLpRemoveBal();
+  } catch(e) {
+    if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
+      if (status) status.textContent = 'Cancelled';
+    } else {
+      if (status) status.textContent = 'Remove failed: ' + (e.shortMessage || e.reason || e.message || '').split('\n')[0].slice(0, 80);
+    }
+  } finally {
+    btn.textContent = 'Remove Liquidity';
+    btn.disabled = false;
+  }
 }
 
 function fillLpPct(pct) {
@@ -6916,6 +6771,7 @@ async function refreshPoolReserves() {
     });
     _poolReserve0 = result.reserve0 ?? result[0] ?? 0n;
     _poolReserve1 = result.reserve1 ?? result[1] ?? 0n;
+    _poolSupply = result[6] ?? 0n;
   } catch(e) {
     console.debug('refreshPoolReserves:', e.message);
   }
@@ -7018,10 +6874,8 @@ async function executeSwap() {
     $('swapPayInput').value = '';
     $('swapReceiveInput').value = '';
 
-    // Refresh page data + activity feed (delay for indexer)
+    // Refresh page data
     setTimeout(() => renderCoinPage($('app').dataset.dao), 2000);
-    const adEl = $('activityDrawer');
-    if (adEl && adEl.dataset.loaded) setTimeout(() => refreshActivity(adEl.dataset.poolId), 4000);
   } catch(e) {
     if (e.code === 'ACTION_REJECTED' || (e.message||'').includes('user rejected')) {
       $('swapQuote').textContent = 'Cancelled';
