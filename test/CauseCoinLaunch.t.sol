@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 import {SafeSummoner, Call, SUMMONER, MOLOCH_IMPL, SHARES_IMPL, LOOT_IMPL, RENDERER} from "src/dao/SafeSummoner.sol";

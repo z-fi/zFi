@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract Kyberol {
     address constant KS_ROUTER = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5; // KyberSwap Meta Aggregation Router v2

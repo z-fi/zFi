@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 
@@ -20,7 +20,10 @@ contract zSwapRegistrySimTest is Test {
     bytes4 constant SET_HTML_AS_TARGET_SEL = 0x80671d24; // setHtmlAsTarget(address,string)
 
     function setUp() public {
-        vm.createSelectFork(vm.envOr("MAINNET_RPC", string("https://1rpc.io/eth")));
+        // Same endpoint as foundry.toml's eth_rpc_url: 1rpc.io now answers with
+        // a plan/usage-limit error, which surfaces here as a setUp failure that
+        // looks like a broken test rather than a dead RPC.
+        vm.createSelectFork(vm.envOr("MAINNET_RPC", string("https://gateway.tenderly.co/public/mainnet")));
 
         // Simulate the owner having flipped trust(REGISTRY, true) on zRouter, so
         // this test exercises the post-broadcast flow before the tx actually lands.

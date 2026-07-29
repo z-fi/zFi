@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract OneInch {
     address constant ROUTER = 0x111111125421cA6dc452d289314280a0f8842A65; // AggregationRouterV6

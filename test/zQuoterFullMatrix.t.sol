@@ -1,0 +1,149 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.36;
+
+import "forge-std/Test.sol";
+import "../src/zQuoter.sol";
+import {zQuoterV4} from "../src/zQuoterV4.sol";
+
+interface IERC20 {
+    function balanceOf(address) external view returns (uint256);
+    function approve(address, uint256) external returns (bool);
+    function decimals() external view returns (uint8);
+}
+
+/// @dev Exhaustive matrix over every pair in the zSwap dropdown, in BOTH
+/// directions, that does not merely check the quote is plausible but actually
+/// EXECUTES the swap and measures the tokens received.
+///
+/// Motivation: every bug in this saga looked fine at quote time and failed at
+/// execution — the V4 protocol-fee misread produced confident inflated numbers,
+/// and the partial-fill bug produced confident dust. A quote-only check would
+/// have passed both. The contract here is: for any pair, EITHER we produce a
+/// route that executes and delivers at least the promised minimum, OR we refuse
+/// to quote. A route that builds but reverts is a failure.
+contract zQuoterFullMatrixTest is Test {
+    zQuoter q;
+
+    address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
+    /// zQuoter hardcodes this; the helper is etched here to mirror deployment.
+    address constant V4_HELPER = 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6;
+
+    address constant ETH = address(0);
+    address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
+    address constant RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
+    address constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address constant BOLD = 0x6440f144b7e50D6a8439336510312d2F54beB01D;
+
+    address[8] toks = [ETH, WETH, WSTETH, RETH, WBTC, USDC, USDT, BOLD];
+    string[8] syms = ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD"];
+    // ~$40 notional each
+    uint256[8] amts = [
+        21052631578947368,
+        21052631578947368,
+        17391304347826086,
+        18604651162790697,
+        60000,
+        40000000,
+        40000000,
+        40000000000000000000
+    ];
+
+    address user = address(0xB0B);
+    uint256 routed;
+    uint256 refused;
+    uint256 broke;
+
+    function setUp() public {
+        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.etch(V4_HELPER, address(new zQuoterV4()).code);
+        q = new zQuoter();
+    }
+
+    function _fund(address t, uint256 amt) internal {
+        if (t == ETH) {
+            vm.deal(user, amt * 2);
+        } else {
+            deal(t, user, amt * 2, true);
+            vm.prank(user);
+            IERC20(t).approve(ZROUTER, type(uint256).max);
+        }
+    }
+
+    function _bal(address t, address who) internal view returns (uint256) {
+        return t == ETH ? who.balance : IERC20(t).balanceOf(who);
+    }
+
+    /// Quote, then execute, then verify the recipient actually received it.
+    function _run(uint256 i, uint256 j) internal {
+        address tin = toks[i];
+        address tout = toks[j];
+        uint256 amt = amts[i];
+        string memory pair = string.concat(syms[i], "->", syms[j]);
+
+        bytes memory cd;
+        uint256 msgVal;
+        uint256 expected;
+        try q.buildBestSwapViaETHMulticall(user, user, false, tin, tout, amt, 100, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
+            expected = b.amountOut > 0 ? b.amountOut : a.amountOut;
+            cd = mc;
+            msgVal = mv;
+        } catch {
+            refused++;
+            emit log_named_string(pair, "REFUSED at quote (acceptable)");
+            return;
+        }
+
+        if (cd.length == 0 || expected == 0) {
+            refused++;
+            emit log_named_string(pair, "no route (acceptable)");
+            return;
+        }
+
+        _fund(tin, amt + msgVal);
+        uint256 before = _bal(tout, user);
+
+        vm.prank(user);
+        (bool ok,) = ZROUTER.call{value: msgVal}(cd);
+
+        if (!ok) {
+            broke++;
+            emit log_named_string(pair, "!!! QUOTED BUT EXECUTION REVERTED");
+            return;
+        }
+
+        uint256 got = _bal(tout, user) - before;
+        if (got == 0) {
+            broke++;
+            emit log_named_string(pair, "!!! EXECUTED BUT DELIVERED NOTHING");
+            return;
+        }
+        // Delivered must be within 5% of the quote (slippage bound is 1%).
+        if (got * 100 < expected * 95) {
+            broke++;
+            emit log_named_string(pair, "!!! DELIVERED FAR LESS THAN QUOTED");
+            emit log_named_uint("  quoted", expected);
+            emit log_named_uint("  got   ", got);
+            return;
+        }
+        routed++;
+    }
+
+    function test_fullMatrix_executes() public {
+        for (uint256 i; i < 8; ++i) {
+            for (uint256 j; j < 8; ++j) {
+                if (i == j) continue;
+                _run(i, j);
+            }
+        }
+        emit log_named_uint("routed+executed ", routed);
+        emit log_named_uint("refused (safe)  ", refused);
+        emit log_named_uint("BROKEN (bad)    ", broke);
+        assertEq(broke, 0, "some pairs quoted a route that did not execute");
+        assertGt(routed, 40, "expected most pairs to route");
+    }
+}

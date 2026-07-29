@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 /// @dev uniV2 / uniV3 / uniV4 / zAMM
 ///      multi-amm multi-call router

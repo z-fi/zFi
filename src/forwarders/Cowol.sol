@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 /// @notice CoW Protocol adapter for zFi. Holds sell-side tokens while a CoW
 ///         batch-auction order is live and implements ERC-1271 so the CoW

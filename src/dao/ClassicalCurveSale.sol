@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity ^0.8.36;
 
 /// @title ClassicalCurveSale
 /// @notice Pump.fun-style bonding curve with virtual constant-product (XYK) pricing.

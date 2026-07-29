@@ -1,11 +1,15 @@
 [profile.default]
-solc = "0.8.34"
+solc = "0.8.36"
 via_ir = true
 optimizer = true
 optimizer_runs = 9_999_999
 
+# Must be an ARCHIVE endpoint: the pin below is far enough back that pruning
+# full nodes (1rpc.io, flashbots, cloudflare) return "historical state is not
+# available" and every forked test errors before its first assertion.
+# eth.merkle.io also serves this block, but rate-limits forge's request volume.
 # Override with FOUNDRY_ETH_RPC_URL env var for faster RPC.
-eth_rpc_url = "https://1rpc.io/eth"
+eth_rpc_url = "https://gateway.tenderly.co/public/mainnet"
 fork_block_number = 24_880_000
 no_rpc_rate_limit = true
 

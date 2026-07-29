@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract OpenOceanol {
     address constant OO_ROUTER = 0x6352a56caadC4F1E25CD6c75970Fa768A3304e64; // OpenOcean Exchange V2

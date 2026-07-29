@@ -4,60 +4,100 @@
 <title>zSwap</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <style>
-body{font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em;display:flex;flex-direction:column;box-sizing:border-box}
-.card{border-radius:1.25em;padding:1.25em;background:#fff;max-width:23em;width:100%;margin:auto;box-shadow:0 1px 3px #0000000a,0 8px 24px #0000000f}
-.meta{display:flex;justify-content:space-between;align-items:center;font-size:.85em;color:#666;margin-bottom:.75em}
-.meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid #ddd;border-radius:0;background:transparent;text-align:right;outline:0;transition:border-color .15s;-moz-appearance:textfield}
+:root{--b:#fafafa;--c:#fff;--p:#f6f6f6;--f:#000;--m:#888;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#ebebeb;--s:0 1px 3px #0000000a,0 8px 24px #0000000f}
+.d{--b:#101010;--c:#181818;--p:#242424;--f:#eee;--m:#999;--n:#999;--e:#3d3d3d;--k:#fff;--kf:#000;--kh:#ddd;--fh:#303030;--s:none}
+body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
+.card{border:1px solid var(--e);border-radius:.5em;padding:.9em;background:var(--c);max-width:22em;width:100%;margin:auto;box-shadow:var(--s);box-sizing:border-box}
+#addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
+.meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.meta input:hover{border-bottom-color:#888}
+#th,#lk{border:0;border-radius:.4em;background:transparent;cursor:pointer;font-size:1.05em;color:var(--n);width:1.8em;height:1.8em;line-height:1}
+#th:hover{background:var(--p);color:var(--f)}
+.meta input:hover{border-bottom-color:var(--m)}
 .meta input:focus{border-bottom-color:currentcolor}
-.panel{background:#f5f5f5;border-radius:.9em;padding:.85em 1em;margin:.4em 0}
-.panel small{color:#888;font-size:.8em}
+.panel{background:var(--p);border:1px solid transparent;border-radius:.5em;padding:.82em .85em;margin:.32em 0}
+.panel:focus-within{border-color:var(--m)}
+.panel small{color:var(--m);font-size:.8em}
 .hdr small{text-transform:uppercase;letter-spacing:.08em;font-size:.7em}
 .row{display:flex;gap:.4em;align-items:center;margin-top:.35em}
-.panel input{font-size:1.4em;border:0;background:transparent;outline:none;padding:0;flex:1;min-width:0;width:100%;font-variant-numeric:tabular-nums;transition:font-size .1s}
+.panel input{font-size:1.4em;border:0;background:transparent;color:var(--f);outline:none;padding:0;flex:1;min-width:0;width:100%;font-variant-numeric:tabular-nums;transition:font-size .1s}
 .pill{display:inline-flex;align-items:center;gap:.4em;cursor:pointer;transition:opacity .15s}
 .pill:hover,.pill:focus-within{opacity:.6}
-.panel select{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;font-size:.9em;font-weight:600;color:#222;letter-spacing:.02em;cursor:pointer}
+.panel select,.dly select{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;max-width:8em;font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
 .panel select:focus{outline:0}
 svg{vertical-align:middle;flex-shrink:0}
-.flip{display:flex;align-items:center;justify-content:center;margin:-.7em auto;width:2.1em;height:2.1em;border-radius:50%;border:4px solid #fff;background:#fff;cursor:pointer;color:#888;padding:0;box-shadow:0 1px 2px #0000000f;transition:background .15s,color .15s,transform .25s}
-.flip:hover{background:#ebebeb;color:#222;transform:rotate(180deg)}
-.primary{width:100%;padding:.95em;font-size:1em;border-radius:.9em;background:#000;color:#fff;border:0;cursor:pointer;margin-top:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:background .15s}
-.primary:hover:not(:disabled){background:#333}
-.primary:disabled{background:#ccc;cursor:not-allowed}
-#stat{font-size:.8em;color:#666;word-break:break-all;margin-top:.75em;min-height:1em;text-align:center}
-#stat a{color:#000;text-decoration:underline}
+.flip{display:flex;align-items:center;justify-content:center;margin:-.62em auto;width:2em;height:2em;border-radius:50%;border:3px solid var(--c);background:var(--c);cursor:pointer;color:var(--m);padding:0;box-shadow:0 1px 2px #0000000f;transition:all .25s}
+.flip:hover{background:var(--fh);color:var(--f);transform:rotate(180deg)}
+.primary{width:100%;min-height:3.1em;padding:.9em;overflow-wrap:anywhere;line-height:1.3;font-size:1em;border-radius:.5em;background:var(--k);color:var(--kf);border:0;cursor:pointer;margin-top:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:background .15s}
+.primary:hover:not(:disabled){background:var(--kh)}
+.primary:disabled{background:var(--e);color:var(--m);cursor:not-allowed}
+.rcpt{width:100%;box-sizing:border-box;margin-top:.6em;padding:.62em .8em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
+.rcpt:focus{border-color:var(--m)}
+.rcpt.bad{border-color:#c33}
+#rcvEl{display:block;font-size:.7em;color:var(--m);margin-top:.35em;word-break:break-all;text-align:center}
+#rcvEl:empty{display:none}
+#stat{font-size:.8em;color:var(--n);word-break:break-all;margin-top:.75em;text-align:center}
+#stat:not(:empty){margin-bottom:.5em}
+#stat a{color:var(--f);text-decoration:underline}
 .hdr{display:flex;justify-content:space-between;align-items:center;gap:.5em}
-#bal,#rate{display:block;font-size:.75em;margin-top:.5em;text-align:right}
+.tabs{display:flex;gap:.18em;margin-bottom:.75em;background:var(--p);padding:.18em;border-radius:.5em}
+.tabs button{flex:1;padding:.5em;font-size:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;border:0;border-radius:.35em;background:transparent;color:var(--m);cursor:pointer;transition:background .15s,color .15s}
+.tabs button.on{background:var(--k);color:var(--kf)}
+.tabs button:hover:not(.on),.tabs button:focus-visible:not(.on){background:var(--fh);color:var(--f)}
+.tabs button.on:hover,.tabs button.on:focus-visible{background:var(--kh)}
+.hide{display:none!important}
+.dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
+.dly select{font-size:1em}
+#pos{margin-top:.4em}
+#pos:empty{display:none}
+.ph{margin:.9em 0 .45em;font-size:.9em;color:var(--f);font-weight:700}
+.p{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.55em .7em;border:1px solid var(--e);border-radius:.45em;margin-bottom:.35em;font-size:.75em}
+.p span{flex:1;min-width:8em}
+.p b{display:block;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}
+.p i{font-style:normal;color:var(--m);display:block;font-size:.9em}
+.p button{border:0;border-radius:.35em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer;margin-left:auto}
+.p button:hover:not(:disabled),.p button:focus-visible:not(:disabled){background:var(--kh)}
+.p button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
+#rate{text-wrap:balance}
+#bal,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
 #bal:empty,#rate:empty{display:none}
-#bal a{color:#000;cursor:pointer;text-decoration:underline;font-weight:600}
-@media(prefers-color-scheme:dark){
-body{background:#111;color:#eee}
-.card{background:#1b1b1b;box-shadow:none}
-.panel{background:#262626}
-.panel select,.panel input,.meta input{color:#eee}
-.primary{background:#fff;color:#000}
-.primary:hover:not(:disabled){background:#ddd}
-.flip{background:#1b1b1b;border-color:#1b1b1b;color:#999}
-.flip:hover{background:#333;color:#fff}
-#stat a,#bal a{color:#fff}
-}
+#bal a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
+@media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}}
 </style>
+<script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <div class="card">
-<div class="meta"><span id="addr">Not connected</span><label>Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label></div>
-<div class="panel"><div class="hdr"><small>You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="bal"></small></div>
+<div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lk" title="Copy link">⧉</button><button id="th" title="Theme">☾</button></div>
+<div class="tabs"><button id="tabSwap" class="on">Swap</button><button id="tabSend">Send</button></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel"><div class="hdr"><small>You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="rate"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small>You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="rate"></small></div>
+<input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
+<small id="rcvEl"></small>
+<label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="stat"></div>
+<div id="pos"></div>
 </div>
 <script>
-const ZQUOTER="0x000000DD6b918a1b9CafFA73C1a559aff0Af5333";
+const ic=()=>th.textContent=H.className=='d'?'☀︎':'☾';ic();
+th.onclick=()=>{H.classList.toggle('d');LS.t=H.className=='d'?'d':'l';ic()};
+const ZQUOTER="0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13";
+const WNS="0x0000000000696760E15f265e828DB644A0c242EB";
+const GNS="0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6";
+const ENSREG="0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
 const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
+const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
+const SEL_RSLV="0178b8bf",SEL_EADDR="3b3b57de",SEL_ENAME="691f3431";
 const SEL_ALLOWANCE="dd62ed3e";
+const SEL_DS="3644e515",SEL_NONCES="7ecebe00",SEL_NAME="06fdde03";
+const SEL_RPERMIT="7ac2ff7b",SEL_MULTICALL="ac9650d8";
+const PERMIT2="0x000000000022D473030F116dDEE9F6B43aC78BA3";
+const SEL_P2TF="09d31579";
+const EIP712DOM="EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const SEL_APPROVE="095ea7b3";
 const SEL_BALANCEOF="70a08231";
 const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
@@ -87,13 +127,10 @@ const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
 const t=s.trim().replace(/,/g,"");
-const neg=t.startsWith("-");
-const body=neg?t.slice(1):t;
-if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(body))throw Error("invalid amount");
-const[ip,fp=""]=body.split(".");
+if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(t))throw Error("invalid amount");
+const[ip,fp=""]=t.split(".");
 if(fp.length>dec)throw Error("too many decimals");
-const v=BigInt((ip||"0")+fp.padEnd(dec,"0"));
-return neg?-v:v;
+return BigInt((ip||"0")+fp.padEnd(dec,"0"));
 };
 const formatUnits=(v,dec)=>{
 if(!dec)return BigInt(v).toString();
@@ -112,10 +149,11 @@ const h=strip0x(hex),num=i=>BigInt("0x"+h.slice(i*64,(i+1)*64)),E=()=>{throw Err
 if(h.length<(v+2)*64)E();
 const o=Number(num(v))*2;if(o+64>h.length)E();
 const n=Number(BigInt("0x"+h.slice(o,o+64)));if(!n||o+64+n*2>h.length)E();
-const g=num(u+3),t=g>0n,k=S?0:t?u:0,B=10000n,ai=S?num(2)+num(u+2):num(2),ao=S?num(3)+g:t?g:num(3),q=eo?ai:ao;
+const g=num(u+3),t=g>0n,k=S?(num(3)>0n?0:u):t?u:0,B=10000n,ai=S?num(2)+num(u+2):num(2),ao=S?num(3)+g:t?g:num(3),q=eo?ai:ao;
 return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},callData:"0x"+h.slice(o+64,o+64+n*2),amountLimit:eo?(q*(B+slip)+B-1n)/B:q*(B-slip)/B,msgValue:num(v+1)};
 };
 const rpc=(method,params)=>window.ethereum.request({method,params});
+const okRet=h=>{h=strip0x(h);if(h&&BigInt("0x"+h)===0n)throw Error("token returned false")};
 const waitTx=async hash=>{
 const end=Date.now()+600000;
 while(Date.now()<end){
@@ -130,6 +168,42 @@ throw Error("tx not mined in time");
 };
 const checkWallet=async()=>{const[c,a]=await Promise.all([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==1||a[0]?.toLowerCase()!==account.toLowerCase())throw Error("wallet changed")};
 const hexToBytes=h=>{const s=strip0x(h);const o=new Uint8Array(s.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(s.slice(i*2,i*2+2),16);return o};
+const KRC=[1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n];
+const KR=[0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
+const KM=(1n<<64n)-1n;
+const krol=(x,n)=>n?((x<<BigInt(n))|(x>>BigInt(64-n)))&KM:x;
+const keccak=b=>{const A=new Array(25).fill(0n),rate=136;
+const pad=rate-(b.length%rate),buf=new Uint8Array(b.length+pad);buf.set(b);
+buf[b.length]|=1;buf[buf.length-1]|=0x80;
+for(let o=0;o<buf.length;o+=rate){
+for(let i=0;i<17;i++){let v=0n;for(let j=7;j>=0;j--)v=(v<<8n)|BigInt(buf[o+i*8+j]);A[i]^=v}
+for(let r=0;r<24;r++){
+const Cc=[];for(let x=0;x<5;x++)Cc[x]=A[x]^A[x+5]^A[x+10]^A[x+15]^A[x+20];
+for(let x=0;x<5;x++){const D=Cc[(x+4)%5]^krol(Cc[(x+1)%5],1);for(let y=0;y<25;y+=5)A[x+y]^=D}
+const B=[];for(let x=0;x<5;x++)for(let y=0;y<5;y++)B[y+5*((2*x+3*y)%5)]=krol(A[x+5*y],KR[x+5*y]);
+for(let x=0;x<5;x++)for(let y=0;y<5;y++)A[x+5*y]=B[x+5*y]^((~B[(x+1)%5+5*y]&KM)&B[(x+2)%5+5*y]);
+A[0]^=KRC[r]}}
+let out="";for(let i=0;i<4;i++){let v=A[i];for(let j=0;j<8;j++){out+=Number(v&0xffn).toString(16).padStart(2,"0");v>>=8n}}
+return "0x"+out};
+const namehash=n=>{let nd="0x"+"0".repeat(64);
+if(n)for(const l of n.split(".").reverse())nd=keccak(new Uint8Array([...hexToBytes(nd),...hexToBytes(keccak(new TextEncoder().encode(l)))]));
+return nd};
+const encStr=v=>{const b=new TextEncoder().encode(v);let h="";
+for(const x of b)h+=x.toString(16).padStart(2,"0");
+return pad32("20")+encUint(b.length)+h.padEnd(Math.ceil(h.length/64)*64,"0")};
+const nsFwd=async(reg,n)=>{const id=await rpc(C,[{to:reg,data:"0x"+SEL_CID+encStr(n)},L]);
+const a=await rpc(C,[{to:reg,data:"0x"+SEL_RES+strip0x(id)},L]);
+return "0x"+strip0x(a).slice(-40)};
+const nsRev=async(reg,a)=>{try{return decodeString(await rpc(C,[{to:reg,data:"0x"+SEL_REV+encAddr(a)},L])).trim()}catch{return""}};
+const ensRslv=async nd=>"0x"+strip0x(await rpc(C,[{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)},L])).slice(-40);
+const ensFwd=async n=>{const nd=namehash(n),r=await ensRslv(nd);
+if(/^0x0{40}$/i.test(r))return"";
+return "0x"+strip0x(await rpc(C,[{to:r,data:"0x"+SEL_EADDR+pad32(nd)},L])).slice(-40)};
+const ensRev=async a=>{const nd=namehash(strip0x(a).toLowerCase()+".addr.reverse"),r=await ensRslv(nd);
+if(/^0x0{40}$/i.test(r))return"";
+try{return decodeString(await rpc(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L])).trim()}catch{return""}};
+const nameFwd=n=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\.eth$/i.test(n)?ensFwd(n):Promise.resolve("");
+const nameRev=async a=>await nsRev(WNS,a)||await nsRev(GNS,a)||await ensRev(a)||"";
 const decodeString=hex=>{
 const h=strip0x(hex);
 if(h.length<=64)return new TextDecoder().decode(hexToBytes(h)).replace(/\0+$/,"");
@@ -137,9 +211,76 @@ const off=Number(BigInt("0x"+h.slice(0,64)))*2;
 const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
 return new TextDecoder().decode(hexToBytes(h.slice(off+64,off+64+len)));
 };
+
+const kecStr=v=>keccak(new TextEncoder().encode(v));
+const domainSep=(name,ver,tok)=>keccak(hexToBytes(
+kecStr(EIP712DOM)+pad32(kecStr(name))+pad32(kecStr(ver))+encUint(CHAIN_ID)+encAddr(tok)));
+const permitInfo=async(tok,owner)=>{
+try{
+const ds=await rpc(C,[{to:tok,data:"0x"+SEL_DS},L]);
+if(!ds||ds==="0x")return null;
+const nonce=BigInt(await rpc(C,[{to:tok,data:"0x"+SEL_NONCES+encAddr(owner)},L]));
+const name=decodeString(await rpc(C,[{to:tok,data:"0x"+SEL_NAME},L]));
+for(const ver of ["1","2"])if(domainSep(name,ver,tok).toLowerCase()===ds.toLowerCase())
+return{name,ver,nonce};
+}catch{}
+return null};
+const signPermit=async(tok,info,owner,value,deadline)=>{
+const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},
+{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
+Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},
+{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
+primaryType:"Permit",domain:{name:info.name,version:info.ver,chainId:CHAIN_ID,verifyingContract:tok},
+message:{owner,spender:ZROUTER,value:value.toString(),nonce:info.nonce.toString(),deadline:deadline.toString()}};
+const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
+if(sig.length!==130)throw Error("bad signature");
+let v=parseInt(sig.slice(128,130),16);if(v<27)v+=27;
+return"0x"+SEL_RPERMIT+encAddr(tok)+encUint(value)+encUint(deadline)+encUint(v)+sig.slice(0,64)+sig.slice(64,128)};
+
+const P2DOM={name:"Permit2",chainId:CHAIN_ID,verifyingContract:PERMIT2};
+const p2Ready=async(tok,owner)=>{
+try{return BigInt(await rpc(C,[{to:tok,data:"0x"+SEL_ALLOWANCE+encAddr(owner)+encAddr(PERMIT2)},L]))}catch{return 0n}};
+const signPermit2=async(tok,owner,amount,deadline)=>{
+const nonce=BigInt("0x"+[...crypto.getRandomValues(new Uint8Array(31))].map(b=>b.toString(16).padStart(2,"0")).join(""));
+const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"chainId",type:"uint256"},
+{name:"verifyingContract",type:"address"}],
+TokenPermissions:[{name:"token",type:"address"},{name:"amount",type:"uint256"}],
+PermitTransferFrom:[{name:"permitted",type:"TokenPermissions"},{name:"spender",type:"address"},
+{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
+primaryType:"PermitTransferFrom",domain:P2DOM,
+message:{permitted:{token:tok,amount:amount.toString()},spender:ZROUTER,
+nonce:nonce.toString(),deadline:deadline.toString()}};
+const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
+const n=sig.length/2;if(n!==64&&n!==65)throw Error("bad signature");
+const tail=encUint(n)+sig.padEnd(Math.ceil(sig.length/64)*64,"0");
+return"0x"+SEL_P2TF+encAddr(tok)+encUint(amount)+encUint(nonce)+encUint(deadline)+pad32("a0")+tail};
+
+const canBatch=async owner=>{
+try{const c=await rpc("wallet_getCapabilities",[owner]);
+const k=c&&(c["0x1"]||c[1]||c["1"]);
+return!!(k&&k.atomic&&(k.atomic.status==="supported"||k.atomic.status==="ready"))}catch{return false}};
+const sendBatch=async(owner,calls)=>{
+const res=await rpc("wallet_sendCalls",[{version:"2.0.0",chainId:"0x1",from:owner,atomicRequired:true,calls}]);
+const id=typeof res==="string"?res:res.id;
+for(let i=0;i<600;i++){
+try{const st=await rpc("wallet_getCallsStatus",[id]);
+const rc=st&&st.receipts&&st.receipts[0],x=rc&&(rc.transactionHash||rc.hash);
+if(rc&&rc.status==="0x0")throw Error("batch reverted");
+if(x)return x;
+const q=String(st&&st.status);
+if(q==="500"||/fail|revert|reject/i.test(q))throw Error("batch failed");
+if(q==="200"||/CONFIRMED|SUCCESS/i.test(q))throw Error("batch missing tx");
+}catch(e){if(/^batch /.test(e.message))throw e}
+await new Promise(r=>setTimeout(r,1000))}
+throw Error("batch timed out")};
+const encCalls=cs=>{const n=cs.length;let head="",tail="";let off=n*32;
+for(const c of cs){const d=strip0x(c),len=d.length/2;
+head+=encUint(off);const body=encUint(len)+d.padEnd(Math.ceil(d.length/64)*64,"0");
+tail+=body;off+=body.length/2}
+return"0x"+SEL_MULTICALL+pad32("20")+encUint(n)+head+tail};
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(sym[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
-async function addCustomToken(a){
+async function addCustomToken(a,keep=1){
 a=a.toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
 const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
@@ -148,11 +289,12 @@ const[symRet,decRet]=await Promise.all([
 rpc(C,[{to:a,data:"0x95d89b41"},L]),
 rpc(C,[{to:a,data:"0x313ce567"},L]),
 ]);
-const sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
+let sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
+if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
 const dec=Number(BigInt(decRet));
 if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
 TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
-try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
+if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
 return TOKENS.length-1;
 }
 try{for(const t of JSON.parse(localStorage.getItem(STORE)||"[]")){
@@ -163,7 +305,7 @@ const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
 TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
 }
 }}catch{}
-let account=null,last=null,fromBalance=0n,mode="in",bSeq=0;
+let account=null,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0;
 async function refreshBalance(){
 if(!account){bal.textContent="";fromBalance=0n;render();return}
 const f=TOKENS[fromSel.value];
@@ -192,6 +334,13 @@ syncDisabled();
 const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||""};
 const render=()=>{
 if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
+if(tab==="send"){
+if(!sendReady){swap.textContent="Send";swap.disabled=true;return}
+if(sendReady.amount>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
+const a=`${trimAmt(sendReady.amount,sendReady.token.dec)} ${sendReady.token.sym}`,dv=+dly.value;
+swap.textContent=(dv?`Lock ${a} for ${rel(dv)}`:`Send ${a}`)+` \u2192 ${sendReady.label}`;
+swap.disabled=false;return;
+}
 if(!last){swap.textContent="Swap";swap.disabled=true;return}
 if(last.amountIn>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
 swap.textContent="Swap";swap.disabled=false;
@@ -202,7 +351,7 @@ async function connect(){
 if(!window.ethereum){stat.textContent="No wallet detected.";return}
 let accs;
 try{accs=await rpc("eth_requestAccounts",[])}
-catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);return}
+catch(e){err(e);return}
 let chainId=await rpc(I,[]);
 if(+chainId!==1){
 try{await rpc("wallet_switchEthereumChain",[{chainId:"0x1"}])}
@@ -210,9 +359,10 @@ catch(e){stat.textContent=isRejection(e)?"":"Switch to Ethereum mainnet.";return
 }
 if(!accs[0])return;
 account=accs[0];
-addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
+showAddr();
 refreshBalance();
 update();
+loadPos();
 }
 bal.addEventListener("click",async e=>{
 if(e.target.tagName!=="A")return;
@@ -220,7 +370,7 @@ e.preventDefault();
 const f=TOKENS[fromSel.value];
 let reserve=0n;
 if(f.addr===ZERO){
-try{reserve=BigInt(await rpc("eth_gasPrice",[]))*900000n}catch{}
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*(tab!=="send"?900000n:+dly.value?200000n:30000n)}catch{}
 }
 const max=fromBalance>reserve?fromBalance-reserve:0n;
 amt.value=formatUnits(max,f.dec);
@@ -228,8 +378,14 @@ setMode("in");fitFont(amt);
 update();
 });
 let seq=0;
+const err=e=>stat.textContent=isRejection(e)?"":"Error: "+String(e.message||e).slice(0,110);
+const settle=async tx=>{
+if(!tx){stat.textContent="Done";return}
+if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
+stat.innerHTML=txLink(tx,"Sent");await waitTx(tx);stat.innerHTML=txLink(tx,"Done")};
 const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
 async function update(){
+if(tab==="send")return updateSend();
 const my=++seq;
 last=null; rate.textContent=""; render();
 syncIcons();
@@ -242,9 +398,27 @@ const inEl=isIn?amt:outAmt, outEl=isIn?outAmt:amt, inTok=isIn?f:t;
 outEl.value=""; fitFont(outEl);
 if(!inEl.value.trim())return;
 let swapAmt;
-try{swapAmt=parseUnits(inEl.value.trim(),inTok.dec)}catch{return}
+try{swapAmt=parseUnits(inEl.value.trim(),inTok.dec)}
+catch(e){const q=inEl.value.trim();
+if(q&&!/\.$/.test(q))stat.textContent=/decimals/.test(e.message)?`${inTok.sym} has ${inTok.dec} decimals`:"Invalid amount";
+return}
 if(swapAmt<=0n)return;
-if((f.addr===ZERO&&t.addr===WETH)||(f.addr===WETH&&t.addr===ZERO)){
+const rv=rc.value.trim();
+let rcv="";
+if(rv){
+if(/^0x[0-9a-fA-F]{40}$/.test(rv)){rcv=rv;rcvEl.textContent=""}
+else if(/\.(g?wei|eth)$/i.test(rv)){
+rcvEl.textContent="resolving...";
+try{rcv=await nameFwd(rv.toLowerCase())}catch{rcv=""}
+if(my!==seq)return;
+if(!rcv||/^0x0{40}$/i.test(rcv)){rc.classList.add("bad");rcvEl.textContent="";
+outEl.value="";fitFont(outEl);stat.textContent="Name not registered";return}
+rcvEl.textContent=rcv}
+else{rc.classList.add("bad");rcvEl.textContent="";
+outEl.value="";fitFont(outEl);stat.textContent="Recipient must be an address or a .wei / .gwei / .eth name";return}
+}else rcvEl.textContent="";
+rc.classList.remove("bad");
+if(!rv&&((f.addr===ZERO&&t.addr===WETH)||(f.addr===WETH&&t.addr===ZERO))){
 outEl.value=inEl.value;fitFont(outEl);
 rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
 last={callData:f.addr===ZERO?"0xd0e30db0":"0x2e1a7d4d"+encUint(swapAmt),msgValue:f.addr===ZERO?swapAmt:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+1500000};
@@ -256,16 +430,23 @@ const deadline=BigInt(Math.floor(Date.now()/1e3)+1800);
 outEl.value="...";fitFont(outEl);
 const acct=account;
 try{
-const a=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
-const Q=(x,d,u,v,S)=>rpc(C,[{to:ZQUOTER,data:"0x"+x+d},L]).then(z=>decQ(z,slipBps,!isIn,u,v,S));
+const a=encAddr(rcv||acct||ZERO),rf=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
+const Q=(x,d,u,v,S,sb)=>rpc(C,[{to:ZQUOTER,data:"0x"+x+d},L]).then(z=>decQ(z,sb||slipBps,!isIn,u,v,S));
 let r=null;
-try{r=await Q("e453166e",a+a+tl,4,9)}catch{}
-if(!r)try{r=await Q("4c464f59",a+tl,8,13)}catch{}
+const pick=y=>{if(!y)return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
+if(!r||(isIn?v>r.best.amountOut:v<r.best.amountIn))r=y};
+// every builder is quoted concurrently: these are heavy multi-pool calls and
+// running them in series made a quote cost four round-trips instead of one.
+// Order of pick() is preserved so ties still resolve to the simpler route.
+const jobs=[Q("e453166e",a+rf+tl,4,9),Q("4c464f59",a+tl,8,13)];
 if(isIn){
 const w=slipBps*3n,SS=w<150n?150n:w>500n?500n:w;
 const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(SS)+encUint(deadline);
-for(const x of["892af013","85f86a90"]){try{const y=await Q(x,a+ps,4,8,1);if(y.best.amountOut>(r?r.best.amountOut:0n))r=y}catch{}}
+// the split builders bound every leg with SS, not the user's slippage, so the
+// displayed Min must be derived from SS or it understates the enforced floor.
+for(const x of["892af013","85f86a90"])jobs.push(Q(x,a+ps,4,8,1,SS));
 }
+for(const y of await Promise.all(jobs.map(p=>p.catch(()=>null))))pick(y);
 if(my!==seq)return;
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
@@ -284,11 +465,15 @@ render();
 }catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
 }
 let debounceT;
+const showAddr=async()=>{const a=account,short=a.slice(0,6)+"..."+a.slice(-4);
+addr.textContent=short;addr.title=a;
+const n=await nameRev(a);if(n&&a===account)addr.textContent=n};
 const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(update,250)};
-const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;render()};
+const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
 amt.addEventListener("input",()=>{setMode("in");fitFont(amt);updateSoon()});
 outAmt.addEventListener("input",()=>{setMode("out");fitFont(outAmt);updateSoon()});
 slip.addEventListener("input",()=>{last=null;render();updateSoon()});
+rc.addEventListener("input",()=>{last=null;sendReady=null;render();updateSoon()});
 slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5))});
 for(const sel of [fromSel,toSel]){
 sel.dataset.prev=sel.value;
@@ -332,12 +517,244 @@ const accs=await rpc("eth_accounts",[]);
 const cid=await rpc(I,[]);
 if(accs[0]&&+cid===1){
 account=accs[0];
-addr.textContent=account.slice(0,6)+"..."+account.slice(-4);
+showAddr();
 refreshBalance();update();
 }
 }catch{}
 })();
+const SEL_TRANSFER="a9059cbb";
+const SLOW="0x000000000000888741B254d37e1b27128AfEAaBC";
+const SEL_DEPOSITTO="94eeaec9",SEL_CLAIM="379607f5",SEL_REVERSE="97d15425",SEL_WITHDRAWFROM="d4fdc309";
+const SEL_OUT="d40d4bc6",SEL_IN="e3993ee7",SEL_PENDING="6577b86a";
+const idTok=i=>"0x"+(i&((1n<<160n)-1n)).toString(16).padStart(40,"0");
+const idDelay=i=>i>>160n;
+const w=(h,n)=>BigInt("0x"+(strip0x(h).slice(n*64,n*64+64)||"0"));
+const decArr=h=>{h=strip0x(h);const n=Number(BigInt("0x"+h.slice(64,128)));const o=[];
+for(let i=0;i<n;i++)o.push(BigInt("0x"+h.slice(128+i*64,192+i*64)));return o};
+const metaCache=new Map();
+async function tokMeta(a){
+a=a.toLowerCase();
+if(a===ZERO)return{sym:"ETH",dec:18};
+const k=TOKENS.find(t=>t.addr.toLowerCase()===a);
+if(k)return k;
+if(metaCache.has(a))return metaCache.get(a);
+let m={sym:a.slice(0,6)+"…",dec:18};
+try{const[sr,dr]=await Promise.all([rpc(C,[{to:a,data:"0x95d89b41"},L]),rpc(C,[{to:a,data:"0x313ce567"},L])]);
+const d=Number(BigInt(dr));
+if(Number.isInteger(d)&&d>=0&&d<=36)m={sym:decodeString(sr).trim().replace(/[<>&"'`]/g,"").slice(0,10)||m.sym,dec:d};
+}catch{}
+metaCache.set(a,m);return m;
+}
+const rel=s=>{const a=Math.abs(s),u=[[86400,"d"],[3600,"h"],[60,"m"]];
+for(const[n,l]of u)if(a>=n)return Math.floor(a/n)+l;return a+"s"};
+let posSeq=0;
+async function loadPos(){
+if(!account){pos.innerHTML="";tabSend.textContent="Send";return}
+const my=++posSeq;
+let outIds=[],inIds=[];
+try{
+const[oh,ih]=await Promise.all([
+rpc(C,[{to:SLOW,data:"0x"+SEL_OUT+encAddr(account)},L]),
+rpc(C,[{to:SLOW,data:"0x"+SEL_IN+encAddr(account)},L])]);
+outIds=decArr(oh);inIds=decArr(ih);
+}catch{return}
+if(my!==posSeq)return;
+const dirs=new Map();
+for(const[t,d]of[...outIds.map(i=>[i,"out"]),...inIds.map(i=>[i,"in"])]){
+const k=t.toString();dirs.set(k,(dirs.get(k)||"")+d)}
+const keys=[...dirs.keys()];
+const ps=await Promise.all(keys.map(k=>
+rpc(C,[{to:SLOW,data:"0x"+SEL_PENDING+encUint(BigInt(k))},L]).catch(()=>0)));
+if(my!==posSeq)return;
+const rows=[];
+keys.forEach((k,i)=>{const p=ps[i];if(!p)return;
+const ts=w(p,0);
+if(ts===0n)return;
+rows.push({tid:BigInt(k),dir:dirs.get(k),ts,id:w(p,3),amount:w(p,4)})});
+const now=BigInt(Math.floor(Date.now()/1e3));
+const ready=rows.filter(r=>r.dir.includes("in")&&now>=r.ts+idDelay(r.id)).length;
+tabSend.textContent=ready?`Send (${ready})`:"Send";
+if(tab!=="send"||!rows.length){pos.innerHTML="";return}
+rows.sort((a,b)=>Number((a.ts+idDelay(a.id))-(b.ts+idDelay(b.id))));
+const metas=await Promise.all(rows.map(r=>tokMeta(idTok(r.id))));
+if(my!==posSeq)return;
+let html=`<div class="ph">Time-locked</div>`;
+rows.forEach((r,n)=>{
+const m=metas[n],exp=r.ts+idDelay(r.id),left=Number(exp-now);
+const ripe=now>=exp;
+const amt=`${trimAmt(r.amount,m.dec)} ${m.sym}`;
+const io=r.dir.includes("in"),oo=r.dir.includes("out");
+let act,note;
+if(ripe)note=io?"Ready to claim":"Matured · recipient can claim";
+else note=(io&&!oo?"Arrives in ":"Reversible · sends in ")+rel(left);
+if(io&&ripe)act=`<button data-a="c" data-t="${r.tid}">Claim</button>`;
+else if(oo&&!ripe)act=`<button data-a="r" data-t="${r.tid}" data-i="${r.id}" data-m="${r.amount}">Reverse</button>`;
+else act=`<button disabled>${io?"In":"Out"}</button>`;
+html+=`<div class="p"><span><b>${oo&&io?"↺":oo?"→":"←"} ${amt}</b><i>${note}</i></span>${act}</div>`;
+});
+pos.innerHTML=html;
+}
+pos.addEventListener("click",async e=>{
+const b=e.target.closest("button[data-t]");
+if(!b)return;
+b.disabled=true;
+try{
+await checkWallet();
+// claim() pays the recipient directly, but reverse() only credits the
+// sender's unlockedBalances - on its own it settles the position and returns
+// nothing, so it must be paired with withdrawFrom in one multicall.
+const rv=b.dataset.a==="r";
+let data="0x"+(rv?SEL_REVERSE:SEL_CLAIM)+encUint(BigInt(b.dataset.t));
+if(rv)data=encCalls([data,"0x"+SEL_WITHDRAWFROM+encAddr(account)+encAddr(account)
++encUint(BigInt(b.dataset.i))+encUint(BigInt(b.dataset.m))]);
+const txReq={from:account,to:SLOW,data,value:"0x0"};
+await rpc(C,[txReq,L]);
+await settle(await rpc(S,[txReq]));
+refreshBalance();loadPos();
+}catch(x){err(x);b.disabled=false}
+});
+
+const rcvOf=async v=>{
+if(/^0x[0-9a-fA-F]{40}$/.test(v))return v;
+if(!/\.(g?wei|eth)$/i.test(v))return "";
+let a="";try{a=await nameFwd(v.toLowerCase())}catch{}
+return !a||/^0x0{40}$/i.test(a)?"":a;
+};
+async function updateSend(){
+const my=++sSeq;
+sendReady=null;
+const f=TOKENS[fromSel.value];
+const v=rc.value.trim();
+let amount=0n,amtErr="";
+const q=amt.value.trim();
+try{amount=parseUnits(q,f.dec)}
+catch(e){if(q&&!/\.$/.test(q))amtErr=/decimals/.test(e.message)?`${f.sym} has ${f.dec} decimals`:"Invalid amount"}
+if(!v){rc.classList.remove("bad");rcvEl.textContent="";stat.textContent=amtErr;render();return}
+if(/^0x[0-9a-fA-F]{40}$/.test(v)===false&&/\.(g?wei|eth)$/i.test(v)===false){
+rc.classList.add("bad");rcvEl.textContent="";
+stat.textContent="Recipient must be an address or a .wei / .gwei / .eth name";render();return}
+if(!/^0x/.test(v))rcvEl.textContent="resolving...";
+const to=await rcvOf(v);
+if(my!==sSeq)return;
+if(!to){rc.classList.add("bad");rcvEl.textContent="";stat.textContent="Name not registered";render();return}
+rc.classList.remove("bad");
+rcvEl.textContent=to;
+stat.textContent=amtErr;
+if(amount>0n)sendReady={to,amount,token:f,label:/^0x/.test(v)?to.slice(0,6)+"\u2026"+to.slice(-4):v};
+render();
+}
+const setTab=t=>{
+tab=t;last=null;sendReady=null;stat.textContent="";
+tabSwap.classList.toggle("on",t==="swap");tabSend.classList.toggle("on",t==="send");
+for(const el of[rcvPanel,flip,slipL])el.classList.toggle("hide",t==="send");
+dlyL.classList.toggle("hide",t!=="send");
+payL.textContent=t==="send"?"Amount":"You pay";
+loadPos();
+rc.placeholder=t==="send"?"Recipient \u2014 0x or .eth/.(g)wei":"Recipient (optional) \u2014 0x or .eth/.(g)wei";
+outAmt.value="";mode="in";
+update();
+};
+dly.onchange=()=>render();
+setInterval(()=>{if(account&&!document.hidden)loadPos()},3e4);
+// SHAREABLE LINKS  (prefill only - nothing is ever auto-submitted)
+//   #to=alice.wei&amount=10&token=USDC            request a payment
+//   #to=alice.wei&amount=1&token=ETH&lock=1d      request it time-locked via SLOW
+//   #token=ETH&out=USDC&amount=500&exactOut=1     "pay me 500 USDC, spend ETH"
+// token/out accept a symbol or a 0x address (imported on demand); lock accepts
+// seconds or 1h/1d/1w and snaps to the nearest offered option. The recipient is
+// still resolved and shown before signing, exactly as if it had been typed.
+const lsecs=v=>{const m=/^(\d+)([mhdw]?)$/.exec((v||"").trim());
+return m?+m[1]*(m[2]=="d"?86400:m[2]=="h"?3600:m[2]=="w"?604800:m[2]=="m"?60:1):NaN};
+async function applyLink(){
+const q=new URLSearchParams(location.hash.slice(1));
+if(![...q.keys()].length)return;
+const tok=async v=>{if(!v)return -1;const x=v.trim().toLowerCase();
+let i=TOKENS.findIndex(t=>t.sym.toLowerCase()===x||t.addr.toLowerCase()===x);
+if(i<0&&/^0x[0-9a-f]{40}$/.test(x)){try{i=await addCustomToken(x,0)}catch{}}
+return i};
+const fi=await tok(q.get("token")),oi=await tok(q.get("out"));
+rebuild();
+if(fi>=0)fromSel.value=fi;
+if(oi>=0&&oi!==fi)toSel.value=oi;
+syncDisabled();
+const to=q.get("to");if(to)rc.value=to;
+const lk=lsecs(q.get("lock"));
+if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
+dly.value=String(os.find(v=>v>=lk)??os[os.length-1])}
+setTab(q.get("out")?"swap":(to||!isNaN(lk))?"send":tab);
+const n=q.get("amount");
+if(n&&/^\d*\.?\d+$/.test(n)){
+if(q.get("exactOut")==="1"&&q.get("out")){outAmt.value=n;setMode("out");fitFont(outAmt)}
+else{amt.value=n;setMode("in");fitFont(amt)}
+}
+refreshBalance();update();
+}
+addEventListener("hashchange",applyLink);
+// the inverse of applyLink: turn the current form into a shareable request.
+// A disambiguated custom symbol carries a space, so those fall back to the
+// address rather than emitting something applyLink could not resolve.
+const tname=t=>/\s/.test(t.sym)?t.addr:t.sym;
+lk.onclick=async()=>{
+const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
+p.set("token",tname(f));
+if(tab==="send"){
+const r=rc.value.trim();if(r)p.set("to",r);
+if(amt.value.trim())p.set("amount",amt.value.trim());
+if(+dly.value)p.set("lock",dly.value);
+}else{
+p.set("out",tname(t));
+if(mode==="out"&&outAmt.value.trim()){p.set("amount",outAmt.value.trim());p.set("exactOut","1")}
+else if(amt.value.trim())p.set("amount",amt.value.trim());
+}
+const u=location.origin+location.pathname+"#"+p;
+try{await navigator.clipboard.writeText(u);stat.textContent="Link copied"}
+catch{stat.textContent=u}
+};
+tabSwap.onclick=()=>setTab("swap");
+tabSend.onclick=()=>setTab("send");
+applyLink();
+async function doSend(){
+if(!sendReady)return;
+swap.disabled=true;
+try{
+const{to,amount,token}=sendReady;
+const fresh=await rcvOf(rc.value.trim());
+if(fresh.toLowerCase()!==to.toLowerCase())throw Error("recipient changed \u2014 check and retry");
+if(amount>fromBalance)throw Error("insufficient balance");
+await checkWallet();
+const dsec=BigInt(dly.value||0);
+let txReq,batch=null;
+if(dsec>0n){
+const isE=token.addr===ZERO;
+const dep="0x"+SEL_DEPOSITTO+encAddr(isE?ZERO:token.addr)+encAddr(to)
++encUint(isE?0n:amount)+encUint(dsec)+encUint(160n)+encUint(0n);
+txReq={from:account,to:SLOW,data:dep,value:isE?toHex(amount):"0x0"};
+if(!isE){
+const aHex=await rpc(C,[{to:token.addr,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(SLOW)},L]);
+const cur=BigInt(aHex);
+if(cur<amount){
+// USDT and friends revert on a non-zero -> non-zero approve, so clear first.
+const pre=cur>0n?[{to:token.addr,data:"0x"+SEL_APPROVE+encAddr(SLOW)+encUint(0),value:"0x0"}]:[];
+const ap={to:token.addr,data:"0x"+SEL_APPROVE+encAddr(SLOW)+encUint(amount),value:"0x0"};
+if(await canBatch(account))batch=[...pre,ap,{to:SLOW,data:dep,value:"0x0"}];
+else{stat.textContent="Approve "+token.sym+"...";
+for(const c of[...pre,ap]){const at=await rpc(S,[{from:account,...c}]);await waitTx(at)}}
+}}
+}else{
+txReq=token.addr===ZERO
+?{from:account,to,value:toHex(amount)}
+:{from:account,to:token.addr,data:"0x"+SEL_TRANSFER+encAddr(to)+encUint(amount),value:"0x0"};
+}
+let tx;
+if(batch){await checkWallet();tx=await sendBatch(account,batch)}
+else{const ret=await rpc(C,[txReq,L]);if(dsec===0n&&token.addr!==ZERO)okRet(ret);tx=await rpc(S,[txReq])}
+await settle(tx);
+amt.value="";fitFont(amt);sendReady=null;
+refreshBalance();render();loadPos();
+}catch(e){err(e);render()}
+}
 swap.onclick=async()=>{
+if(tab==="send"){if(!account)return connect();return doSend()}
 if(!account) return connect();
 if(!last)return;
 if(Date.now()>last.exp){stat.textContent="Quote expired — refreshing...";updateSoon();return}
@@ -346,11 +763,32 @@ try{
 const {callData,msgValue,amountIn,from,to}=last;
 if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
 await checkWallet();
+let cd2=callData,batchCalls=null;
 if(from.addr!==ZERO&&!to){
 const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
 const aHex=await rpc(C,[{to:from.addr,data:allowData},L]);
 const a=BigInt(aHex);
 if(a<amountIn){
+let permitted=false;
+const pi=await permitInfo(from.addr,account);
+if(pi){try{
+stat.textContent="Sign approval...";
+const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
+cd2=encCalls([await signPermit(from.addr,pi,account,amountIn,pd),callData]);
+permitted=true;
+}catch(e){if(isRejection(e)){stat.textContent="";swap.disabled=false;return}}}
+if(!permitted&&await p2Ready(from.addr,account)>=amountIn){try{
+stat.textContent="Sign approval...";
+const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
+cd2=encCalls([await signPermit2(from.addr,account,amountIn,pd),callData]);
+permitted=true;
+}catch(e){if(isRejection(e)){stat.textContent="";swap.disabled=false;return}}}
+if(!permitted&&await canBatch(account)){
+batchCalls=[{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn),value:"0x0"},
+{to:ZROUTER,data:callData,value:toHex(msgValue)}];
+permitted=true;
+}
+if(!permitted){
 const n=a>0n?2:1;
 if(a>0n){
 stat.textContent=`Approving (1/${n})...`;
@@ -366,18 +804,22 @@ const nHex=await rpc(C,[{to:from.addr,data:allowData},L]);
 if(BigInt(nHex)<amountIn)throw Error("approval failed");
 }
 }
+}
 stat.textContent="Swapping...";
-const txReq={from:account,to:to||ZROUTER,data:callData,value:toHex(msgValue)};
+let tx;
+if(batchCalls){
+await checkWallet();
+tx=await sendBatch(account,batchCalls);
+}else{
+const txReq={from:account,to:to||ZROUTER,data:cd2,value:toHex(msgValue)};
 await rpc(C,[txReq,L]);
 await checkWallet();
-const tx=await rpc(S,[txReq]);
-if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
-stat.innerHTML=txLink(tx,"Sent");
-await waitTx(tx);
-stat.innerHTML=txLink(tx,"Done");
+tx=await rpc(S,[txReq]);
+}
+await settle(tx);
 last=null;
 refreshBalance();
 render();
-}catch(e){stat.textContent=isRejection(e)?"":"Error: "+(e.message||e);render()}
+}catch(e){err(e);render()}
 };
 </script>

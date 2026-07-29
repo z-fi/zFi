@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity ^0.8.36;
 
 interface IShares {
     function balanceOf(address) external view returns (uint256);

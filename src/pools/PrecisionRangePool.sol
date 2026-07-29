@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 /// @title PrecisionRangePool (ETH/USDC $2200-$3000)
 /// @notice Concentrated constant-product pool for a single pair and fixed price range.

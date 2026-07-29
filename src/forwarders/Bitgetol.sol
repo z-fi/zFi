@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract Bitgetol {
     address constant BK_SWAP_ROUTER = 0xBc1D9760bd6ca468CA9fB5Ff2CFbEAC35d86c973;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 /// @title OwnedTarget
 /// @notice Minimal ERC-173 owner stub. Pair with HTMLRegistry as a target

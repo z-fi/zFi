@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 /// @title PrecisionStablePool (USDT/USDC)
 /// @notice Stableswap pool for a single pair. Curve math, no generality.

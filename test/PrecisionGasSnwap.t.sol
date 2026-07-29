@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 import "../src/pools/PrecisionStablePool.sol";

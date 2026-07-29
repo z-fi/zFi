@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Extract zQuoter creation (init) bytecode using the EIP-170-compatible deploy
-# recipe: solc 0.8.34, via_ir, optimizer runs 20, yul optimizer disabled.
+# recipe: solc 0.8.36, via_ir, optimizer runs 20, yul optimizer disabled.
 #
 # The DAO contracts in src/dao/ fail yul=false on their own (unrelated to
 # zQuoter), so we temporarily move them aside during the build.
@@ -22,7 +22,7 @@ DAO_HOLDOUT="/tmp/zquoter_dao_holdout_$$"
 TMP_CFG=$(mktemp /tmp/zquoter.foundry.XXXXXX.toml)
 cat > "$TMP_CFG" <<'EOF'
 [profile.default]
-solc = "0.8.34"
+solc = "0.8.36"
 via_ir = true
 optimizer = true
 optimizer_runs = 20

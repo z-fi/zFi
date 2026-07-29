@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract Parasol {
     address constant AUGUSTUS = 0x6A000F20005980200259B80c5102003040001068; // Augustus v6

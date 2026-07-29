@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.33;
+pragma solidity ^0.8.36;
 
 contract Bebop {
     address constant JAM_BALANCE_MGR = 0xC5a350853E4e36b73EB0C24aaA4b8816C9A3579a; // JAM approval target

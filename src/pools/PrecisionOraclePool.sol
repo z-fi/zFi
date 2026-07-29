@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 /// @title PrecisionOraclePool (ETH/USDC)
 /// @notice Oracle-priced pool — Chainlink sets the price, not a bonding curve.

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Compile with: solc >= 0.8.34 | via_ir: true | optimizer: true, runs: 20
+// Compile with: solc >= 0.8.36 | via_ir: true | optimizer: true, runs: 20
 // Required foundry.toml:
 //   [profile.default.optimizer_details]
 //   yul = false
 // Disabling the Yul optimizer with via_ir keeps contract under EIP-170 (24,576 bytes).
-pragma solidity ^0.8.34;
+pragma solidity ^0.8.36;
 
 interface IZQuoterBase {
     // Per-source quoters.
@@ -25,6 +25,16 @@ interface IZQuoterBase {
 }
 
 IZQuoterBase constant _BASE = IZQuoterBase(0x658bF1A6608210FDE7310760f391AD4eC8006A5F);
+
+/// @dev Corrected Uniswap V4 quoting. The base quoter computes the V4 swap fee as
+/// `protocolFee + lpFee`, but protocolFee is a packed uint24 (two 12-bit halves),
+/// not a rate. Harmless while Uniswap left protocol fees at zero; when they were
+/// enabled at block 25623201 it became an enormous bogus fee and every V4 quote
+/// went wrong — under-quoting ~0.49x/0.90x on some pools and, where the implied
+/// fee exceeded 100%, returning a constant independent of input (~2013x high).
+/// zQuoterV4 is the base's own V4 code with that one expression corrected; it
+/// matches Uniswap's canonical quoter exactly.
+address constant _V4 = 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6;
 
 contract zQuoter {
     enum AMM {
@@ -63,6 +73,23 @@ contract zQuoter {
             // (block 25623201): the base's V4 math reverts once a pool's fee
             // exceeds ~240 pips. Rebuild tier-by-tier so only that venue drops.
             (best, quotes) = _rebuildQuotes(exactOut, tokenIn, tokenOut, swapAmount);
+        }
+        // The base grid's V4 entries are computed with the broken fee (see _V4), so
+        // replace them with corrected quotes and re-pick. Everything downstream —
+        // _quoteBestSingleHop, hub legs, split candidates — reads this array.
+        for (uint256 i; i < quotes.length; ++i) {
+            if (quotes[i].source == AMM.UNI_V4) {
+                quotes[i] = _requoteForSource(exactOut, tokenIn, tokenOut, swapAmount, quotes[i]);
+            }
+        }
+        best = Quote(AMM.UNI_V2, 0, 0, 0);
+        for (uint256 i; i < quotes.length; ++i) {
+            Quote memory c = quotes[i];
+            if (exactOut) {
+                if (c.amountIn != 0 && (best.amountIn == 0 || c.amountIn < best.amountIn)) best = c;
+            } else if (c.amountOut > best.amountOut) {
+                best = c;
+            }
         }
         // Reject exact-out V3 phantom-liquidity picks. Only the specific failing fee
         // tier is zeroed — other V3 tiers may be healthy — then we re-pick best.
@@ -105,6 +132,23 @@ contract zQuoter {
                 mstore(add(add(p, 4), mul(i, 32)), mload(add(w, mul(i, 32))))
             }
             if staticcall(gas(), 0x658bF1A6608210FDE7310760f391AD4eC8006A5F, p, add(4, mul(n, 32)), p, 64) {
+                amountIn := mload(p)
+                amountOut := mload(add(p, 32))
+            }
+        }
+    }
+
+    /// @dev Corrected-V4 variant of _bq: identical encoding, different target.
+    function _bq4(uint256[7] memory w) internal view returns (uint256 amountIn, uint256 amountOut) {
+        bytes4 sel = IZQuoterBase.quoteV4.selector;
+        address t = _V4;
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            mstore(p, sel)
+            for { let i := 0 } lt(i, 7) { i := add(i, 1) } {
+                mstore(add(add(p, 4), mul(i, 32)), mload(add(w, mul(i, 32))))
+            }
+            if staticcall(gas(), t, p, 228, p, 64) {
                 amountIn := mload(p)
                 amountOut := mload(add(p, 32))
             }
@@ -1726,7 +1770,7 @@ contract zQuoter {
             w[4] = uint256(uint24(_spacingFromBps(uint16(fee))));
             w[5] = 0;
             w[6] = amount;
-            (ai, ao) = _bq(IZQuoterBase.quoteV4.selector, w, 7);
+            (ai, ao) = _bq4(w);
         } else if (src == AMM.ZAMM) {
             w[1] = fee;
             w[2] = uint256(uint160(tokenIn));
