@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>IMPACT</title>
+<link rel="stylesheet" href="../theme.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<script src="../theme.js"></script>
+<style>
+:root{--amber:#b45309;--amber-bg:rgba(180,83,9,.08);--red:#dc2626;--red-bg:rgba(220,38,38,.08);--ok:#16a34a}
+.dark{--amber:#f59e0b;--amber-bg:rgba(245,158,11,.1);--red:#f87171;--red-bg:rgba(248,113,113,.1);--ok:#4ade80}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:20px;letter-spacing:.02em;margin-bottom:4px}
+.sub{color:var(--fg-muted);font-size:13px;line-height:1.5;margin-bottom:24px}
+.card{border:1px solid var(--border-muted);background:var(--surface);padding:16px;margin-bottom:16px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px;padding:5px 0}
+.row span:last-child{font-variant-numeric:tabular-nums}
+.muted{color:var(--fg-muted)}
+label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-muted);margin-bottom:8px}
+input[type=range]{width:100%;accent-color:var(--fg)}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+button{font:inherit;font-size:12px;padding:6px 10px;border:1px solid var(--border-muted);background:var(--bg);color:var(--fg);cursor:pointer}
+button:hover{background:var(--surface-hover)}
+button[aria-pressed=true]{background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg)}
+.tierbar{display:flex;height:8px;margin:14px 0 6px;border:1px solid var(--border-muted)}
+.tierbar div{height:100%}
+.tierlabels{display:flex;font-size:10px;color:var(--fg-dim);justify-content:space-between}
+.rate{font-size:13px;padding:10px 0;border-top:1px solid var(--border-muted);margin-top:10px}
+.status{font-size:13px;padding:10px 12px;margin-top:10px;border-left:3px solid transparent}
+.status.warn{background:var(--amber-bg);border-left-color:var(--amber);color:var(--amber)}
+.status.stop{background:var(--red-bg);border-left-color:var(--red);color:var(--red)}
+.status.none{color:var(--fg-dim);padding-left:0;border:0}
+.dialog{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;
+background:var(--bg);border:1px solid var(--border-muted);padding:12px;margin-top:10px}
+.badge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 6px;border:1px solid currentColor}
+.k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg-dim);margin:20px 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Price impact — tier preview</h1>
+<p class="sub">
+What a zSwap user sees as a trade moves away from the market rate. Slippage bounds the
+<em>quote</em>, not a fair price, so on an illiquid pool a ruinous fill passes a tight slippage
+check untouched — these tiers are the only thing that stops it. Presets are real measurements
+against the deployed quoter on mainnet.
+</p>
+
+<div class="card">
+  <label for="bps">Price impact — <span id="bpsOut">29</span> bps</label>
+  <input type="range" id="bps" min="0" max="9900" step="1" value="29">
+  <div class="tierbar" id="tierbar"></div>
+  <div class="tierlabels"><span>0</span><span>hide 50</span><span>warn 500</span><span>confirm 1500</span><span>typed 3000</span><span>99%</span></div>
+  <div class="presets" id="presets"></div>
+  <div class="presets" style="margin-top:10px">
+    <button id="dirBtn" aria-pressed="false">Direction: exact-in</button>
+  </div>
+</div>
+
+<div class="k">What renders in the swap panel</div>
+<div class="card">
+  <div class="row"><span class="muted">You pay</span><span id="pay">—</span></div>
+  <div class="row"><span class="muted">You receive</span><span id="recv">—</span></div>
+  <div class="row"><span class="muted">At market rate</span><span id="mkt">—</span></div>
+  <div class="rate" id="rate">—</div>
+  <div class="status none" id="status">No warning shown at this level.</div>
+</div>
+
+<div class="k">Blocking dialog <span id="tierBadge" class="badge">none</span></div>
+<div class="card" style="padding:12px">
+  <div class="dialog" id="dialog">No dialog — the swap proceeds on one click.</div>
+</div>
+
+<p class="sub" style="margin-top:20px">
+Two identical confirmations were considered and rejected: people click through both, and it
+teaches them to dismiss the first, so the tier that was working stops working. Above 30% the
+gate instead asks for something that cannot be done without reading — typing the loss back.
+</p>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// MIRRORED FROM zSwap.html. Kept byte-identical in behaviour on purpose: a demo
+// that drifts from the page is worse than no demo, because it certifies a UX
+// nobody ships. check-zSwap.mjs asserts these constants match the real page.
+const IMPACT_HIDE=50n, IMPACT_WARN=500n, IMPACT_CONFIRM=1500n, IMPACT_TYPED=3000n;
+const REF_N=100n;
+const impactBps=(v,ref,eo)=>{if(!v||!ref)return null;const lin=ref*REF_N;
+if(lin===0n)return 0n;
+return eo?(v<=lin?0n:(v-lin)*10000n/lin):(v>=lin?0n:(lin-v)*10000n/lin)};
+// ---------------------------------------------------------------------------
+
+const fmt=(n,d=2)=>n.toLocaleString('en-US',{maximumFractionDigits:d});
+// Real measurements, deployed quoter, mainnet. See script/sweep-tokens.mjs.
+const PRESETS=[
+  {l:'1 ETH → USDC',        bps:0,    pay:'1 ETH',        sym:'USDC', mkt:1923.14},
+  {l:'1,000 ETH → USDC',    bps:29,   pay:'1,000 ETH',    sym:'USDC', mkt:1923143.95},
+  {l:'10,000 ETH → USDC',   bps:444,  pay:'10,000 ETH',   sym:'USDC', mkt:19231439.5},
+  {l:'100,000 ETH → USDC',  bps:8106, pay:'100,000 ETH',  sym:'USDC', mkt:192314395},
+  {l:'1 ETH → osETH (thin)',bps:9878, pay:'1 ETH',        sym:'osETH',mkt:0.9994},
+  {l:'1 ETH → BAL (thin)',  bps:9135, pay:'1 ETH',        sym:'BAL',  mkt:1128.4},
+];
+
+let cur=PRESETS[1], eo=false;
+const $=id=>document.getElementById(id);
+
+$('presets').innerHTML=PRESETS.map((p,i)=>`<button data-i="${i}">${p.l}</button>`).join('');
+$('presets').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  cur=PRESETS[+b.dataset.i];$('bps').value=cur.bps;render()};
+$('bps').oninput=render;
+$('dirBtn').onclick=()=>{eo=!eo;$('dirBtn').setAttribute('aria-pressed',eo);
+  $('dirBtn').textContent='Direction: '+(eo?'exact-out':'exact-in');render()};
+
+function tierOf(b){
+  if(b>=IMPACT_TYPED)return{k:'typed',cls:'stop'};
+  if(b>=IMPACT_CONFIRM)return{k:'confirm',cls:'stop'};
+  if(b>=IMPACT_WARN)return{k:'warn',cls:'warn'};
+  if(b>=IMPACT_HIDE)return{k:'shown',cls:'none'};
+  return{k:'hidden',cls:'none'};
+}
+
+function render(){
+  const b=BigInt($('bps').value);
+  $('bpsOut').textContent=$('bps').value;
+  const pct=(Number(b)/100).toFixed(2);
+
+  // derive the two amounts the same way the page does: market is the small
+  // reference scaled up, actual is market less the impact.
+  const mkt=cur.mkt, got=mkt*(1-Number(b)/10000);
+  const loss=Math.abs(mkt-got);
+  const lossTxt=`${fmt(loss,loss<1?4:0)} ${cur.sym}`;
+  const worse=`about ${lossTxt} ${eo?'more than':'less than'} the market rate`;
+
+  $('pay').textContent=cur.pay;
+  $('recv').textContent=`${fmt(got,got<1?4:0)} ${cur.sym}`;
+  $('mkt').textContent=`${fmt(mkt,mkt<1?4:0)} ${cur.sym}`;
+
+  const t=tierOf(b);
+  $('rate').textContent=`1 ETH ≈ ${fmt(mkt,mkt<1?4:2)} ${cur.sym} · UniV3`
+    +(b>=IMPACT_HIDE?` · Impact ${pct}%`:'')
+    +(b>=IMPACT_HIDE?'':'   (impact hidden below 0.50%)');
+
+  const st=$('status');
+  st.className='status '+t.cls;
+  st.textContent=b>=IMPACT_WARN
+    ? `High price impact: ${pct}% — ${worse.replace('about ','about ')}.`
+    : b>=IMPACT_HIDE ? 'Impact shown inline; no warning at this level.'
+    : 'No warning shown at this level.';
+
+  const badge=$('tierBadge');
+  badge.textContent=t.k;
+  badge.style.color=t.cls==='stop'?'var(--red)':t.cls==='warn'?'var(--amber)':'var(--fg-dim)';
+
+  const d=$('dialog');
+  if(b>=IMPACT_TYPED){
+    const need=String(Math.floor(Number(b)/100));
+    d.textContent=`STOP — this trade is priced ${pct}% away from the market.\n\n`
+      +`You would ${eo?'pay':'receive'} ${worse}.\n\n`
+      +`Usually this means the pool is illiquid or the amount is wrong.\n\n`
+      +`Type ${need} to accept this loss:  [____]`;
+  }else if(b>=IMPACT_CONFIRM){
+    d.textContent=`Price impact ${pct}%.\n\nYou will ${eo?'pay':'receive'} ${worse}.\n\nContinue?   [Cancel] [OK]`;
+  }else{
+    d.textContent='No dialog — the swap proceeds on one click.';
+  }
+}
+
+// tier bar, proportional to the slider range
+(()=>{const max=9900;
+const seg=[[0,50,'var(--fg-dim)'],[50,500,'var(--ok)'],[500,1500,'var(--amber)'],[1500,3000,'var(--red)'],[3000,max,'var(--red)']];
+$('tierbar').innerHTML=seg.map(([a,z,c],i)=>
+  `<div style="flex:${z-a};background:${c};opacity:${i===4?1:.55}"></div>`).join('')})();
+
+render();
+</script>
+</body>
+</html>

@@ -17,12 +17,35 @@ interface IZROUTER {
     ) external payable returns (uint256 amountIn, uint256 amountOut);
 }
 
+interface ICurveCoins {
+    function coins(uint256 i) external view returns (address);
+}
+
 /// @notice FORK execution tests for Curve routes — directly constructs `swapCurve`
 ///         calldata from `quoteCurve` results and executes against mainnet zRouter.
-///         The motivating concern: zRouter's swapCurve may not correctly deliver ETH
-///         when the chosen Curve pool holds WETH (WETH-representation pool) and the
-///         user wants ETH out. These tests exercise that code path directly.
+///
+/// @dev    The ETH-output constraint these tests exist for is RESOLVED, and resolved in
+///         the quoter rather than the router. Curve's tricrypto pools hold WETH, not
+///         native ETH, so an exchange out of coin `j` pays WETH. zRouter measures a hop's
+///         output with `address(this).balance` when the route's next token is ETH, so a
+///         single-hop route naming ETH as its output never observes the payout and
+///         reverts `BadSwap()` at zRouter.sol:594.
+///
+///         `zQuoter._buildCurveSwapCalldata` works around that by emitting a two-hop
+///         route `[tokenIn, pool, WETH, WETH_dummy, ETH]` whose second hop is the `st=8`
+///         unwrap, so nothing built by the quoter ever produces the failing shape. The
+///         router is deliberately left alone.
+///
+///         The two `singleHopRevertsBadSwap` cases below therefore assert the REVERT.
+///         They are what stops someone deleting the quoter's unwrap hop on the
+///         assumption that a plain one-hop Curve route to ETH works — and if Curve ever
+///         deploys a native-ETH variant of these pools, their root-cause assertion is
+///         what will say so.
 contract zQuoterCurveExecTest is Test {
+    /// @dev zRouter.BadSwap(), which it does not export. Raised at zRouter.sol:594 when a
+    ///      hop's measured output balance fails to increase.
+    bytes4 constant BAD_SWAP = 0x7c7f7bb9;
+
     zQuoter quoter;
 
     address constant ETH = address(0);
@@ -130,51 +153,47 @@ contract zQuoterCurveExecTest is Test {
     //         Pool outputs WETH, user wants ETH. This is where zRouter's
     //         output balance tracking + _safeTransferETH may misbehave.
     // ------------------------------------------------------------------
-    function test_curve_WBTC_to_ETH_via_tricrypto() public {
+    /// A one-hop route naming ETH as its output must revert, because the pool pays WETH.
+    /// This is the constraint zQuoter's unwrap hop exists to satisfy — see the two-hop
+    /// case below, which routes the same swap successfully.
+    function test_curve_WBTC_to_ETH_singleHopRevertsBadSwap() public {
         uint256 amtIn = 0.1e8; // 0.1 WBTC
         (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) = quoter.quoteCurve(false, _WBTC, ETH, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for WBTC->ETH");
             return;
         }
-        emit log_named_address("pool WBTC->ETH", pool);
-        emit log_named_uint("i", i);
-        emit log_named_uint("j", j);
-        emit log_named_uint("quoted ETH", cout);
+
+        // Root cause, asserted rather than assumed: if Curve ever fronts these pools with
+        // native ETH, this is the line that fails and the workaround can be revisited.
+        assertEq(ICurveCoins(pool).coins(j), _WETH, "pool coin j is no longer WETH");
 
         deal(_WBTC, address(this), amtIn);
         _approve(_WBTC, _ROUTER, amtIn);
 
-        (bool ok, bytes memory ret, uint256 received) = _execCurveDirect(_WBTC, ETH, amtIn, pool, i, j, stable, cout, 0);
+        (bool ok, bytes memory ret,) = _execCurveDirect(_WBTC, ETH, amtIn, pool, i, j, stable, cout, 0);
 
-        if (!ok) {
-            emit log_named_bytes("REVERT WBTC->ETH Curve (ETH-out bug?)", ret);
-        }
-        assertTrue(ok, "Curve WBTC->ETH reverted - ETH-output path broken");
-        assertGt(received, 0, "no ETH received - Curve WETH-rep pool ETH-out misbehavior");
-        emit log_named_uint("received ETH wei", received);
+        assertFalse(ok, "single-hop ETH-out now succeeds: zRouter may handle WETH payouts natively");
+        assertEq(bytes4(ret), BAD_SWAP, "reverted for some reason other than the WETH-payout mismatch");
     }
 
-    function test_curve_USDT_to_ETH_via_tricrypto() public {
+    function test_curve_USDT_to_ETH_singleHopRevertsBadSwap() public {
         uint256 amtIn = 1000e6; // 1000 USDT
         (, uint256 cout, address pool,, bool stable, uint8 i, uint8 j) = quoter.quoteCurve(false, _USDT, ETH, amtIn, 8);
         if (pool == address(0)) {
             emit log("skip: no Curve route for USDT->ETH");
             return;
         }
-        emit log_named_address("pool USDT->ETH", pool);
+
+        assertEq(ICurveCoins(pool).coins(j), _WETH, "pool coin j is no longer WETH");
 
         deal(_USDT, address(this), amtIn);
         _approve(_USDT, _ROUTER, amtIn);
 
-        (bool ok, bytes memory ret, uint256 received) = _execCurveDirect(_USDT, ETH, amtIn, pool, i, j, stable, cout, 0);
+        (bool ok, bytes memory ret,) = _execCurveDirect(_USDT, ETH, amtIn, pool, i, j, stable, cout, 0);
 
-        if (!ok) {
-            emit log_named_bytes("REVERT USDT->ETH Curve", ret);
-        }
-        assertTrue(ok, "Curve USDT->ETH reverted");
-        assertGt(received, 0, "no ETH received");
-        emit log_named_uint("received ETH wei", received);
+        assertFalse(ok, "single-hop ETH-out now succeeds: zRouter may handle WETH payouts natively");
+        assertEq(bytes4(ret), BAD_SWAP, "reverted for some reason other than the WETH-payout mismatch");
     }
 
     // ------------------------------------------------------------------

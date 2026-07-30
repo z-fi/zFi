@@ -12,6 +12,12 @@ import {zQuoterV4} from "../src/zQuoterV4.sol";
 /// zQuoter hardcodes _V4, so the helper is etched at that address to match the
 /// deployed layout. Run against state AFTER block 25623201.
 contract zQuoterV4WiredTest is Test {
+    /// @dev Defaults so the suite runs without tribal knowledge. Both are
+    /// overridable by env. The block is chosen to be AFTER the currently
+    /// deployed zQuoter/zRouter, so live-address tests are possible here.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     zQuoter q;
 
     address constant V4_HELPER = 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6;
@@ -24,7 +30,7 @@ contract zQuoterV4WiredTest is Test {
     address constant USER = address(0xBEEF);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         vm.etch(V4_HELPER, address(new zQuoterV4()).code);
         q = new zQuoter();
     }

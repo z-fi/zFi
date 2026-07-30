@@ -73,8 +73,9 @@ contract zQuoterDappMatrixAutoTest is Test {
             }
         } catch {}
 
-        try quoter.build3HopMulticall(USER, exactOut, tokens[i], tokens[j], swapAmount, SLIPPAGE_BPS, deadline)
-        returns (
+        try quoter.build3HopMulticall(
+            USER, exactOut, tokens[i], tokens[j], swapAmount, SLIPPAGE_BPS, deadline
+        ) returns (
             zQuoter.Quote memory a_,
             zQuoter.Quote memory, /*b_*/
             zQuoter.Quote memory c_,

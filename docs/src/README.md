@@ -9,13 +9,13 @@ the first onchain superdapp
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
 
-Current v0.2 deployment flow: deploy the three generated HTML data contracts, then deploy `zSwap(data1, data2, data3)` with those addresses. Record the final wrapper address here after deployment.
+Current v0.2 deployment flow: deploy the four generated HTML data contracts, then deploy `zSwap(data1, data2, data3, data4)` with those addresses. Record the final wrapper address here after deployment.
 
 ### The permanent-HTML pattern
 
-The HTML payload is installed as the **runtime bytecode of three data contracts** created before the wrapper. The wrapper keeps three `immutable` pointers (`DATA1`, `DATA2`, `DATA3`). At read time, `html()` copies all three chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
+The HTML payload is installed as the **runtime bytecode of four data contracts** created before the wrapper. The wrapper keeps four `immutable` pointers (`DATA1`…`DATA4`). At read time, `html()` copies all four chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 49,424 bytes across 3 data contracts (16,475 / 16,475 / 16,474 bytes), with 24,304 bytes of 3-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 97,818 bytes across 4 data contracts (24,455 / 24,455 / 24,455 / 24,453 bytes), with 486 bytes of 4-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 
@@ -35,12 +35,37 @@ Once loaded, `zSwap.html` is a self-contained swap UI that:
 
 - Connects an injected wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
 - Quotes via [zQuoter](https://etherscan.io/address/0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
+- Compares those AMM routes with live current Swapboard, legacy Swapboard v1, and Dutchboard liquidity, then composes a better exact-in or exact-out split when one exists.
 - Routes the swap through [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4), handling ERC-20 approvals and native ETH.
+- Keeps split routes atomic for ETH and ERC-20 input, with EIP-2612, Permit2, and EIP-5792 wallet batching available through the same swap button.
+- Places fixed-price or linearly decaying Dutch orders, and fills public fungible orders, through the same permit → Permit2 → existing allowance → atomic wallet batch → legacy approval funding paths.
+- Pins AMM and book reads to one block, re-quotes the AMM remainder after allocating book liquidity, and accepts a hybrid only when its expected improvement clears a gas-aware threshold.
+- Bounds order discovery and planning work, and discloses `Book scan capped` or `Planner heuristic/capped` whenever the displayed result may omit a better combination.
 - Displays the chosen source DEX, effective rate, and Min received / Max paid under the user's slippage setting.
 - Sends native ETH or ERC-20s directly, with recipient resolution for `0x`, `.eth`, `.wei`, and `.gwei`.
 - Manages SLOW time-locked sends: deposit with a delay, reverse before maturity, and claim when ready.
 
 No JavaScript bundler, no external asset loads at runtime — icons are inlined SVG and the script speaks JSON-RPC directly to the injected provider.
+
+### Routed order ownership
+
+Swapboard and Dutchboard each expose a regular creation function that delegates to an internal helper with `msg.sender`, plus a `...For(maker)` variant. The `For` caller supplies the complete escrow, while the named maker owns cancellation, returned escrow, and fill proceeds. No EIP-712/ERC-1271 maker authorization or nonce is needed for that boundary: naming another address cannot debit it and can only give it a funded order. A signature becomes necessary if a future path pulls the named maker's assets, reimburses a sponsor, or executes reusable offchain instructions. Accordingly, an indexed `maker` field proves who owns the funded order, not that the address requested or endorsed it; unsolicited sponsored orders are possible but cannot cost the named maker assets.
+
+Orderbol connects that primitive to zRouter. For ERC-20 orders, zRouter first calls `checkpoint(token)`, then funds Orderbol and places the order through the same immediate executor. The transient, single-use checkpoint accepts exactly the post-checkpoint balance increase, so a later caller cannot convert donated or stranded tokens into an order they own. Native Swapboard orders instead bind the escrow to the exact `msg.value`; native Dutch sell orders are wrapped into canonical WETH before listing because Dutchboard escrows ERC-20 lots.
+
+Swapbol applies the same checkpoint and per-call delta isolation to composed public fills. It grants each board or zRouter only an exact, call-scoped allowance, revokes it before returning, keeps output `recipient` separate from `refundTo`, and rejects zero/self destinations and ambiguous same-asset ETH/WETH routes. Private orders and NFTs remain direct-wallet fills because pretending that a router is an arbitrary taker would weaken Swapboard's `counterparty == msg.sender` authorization.
+
+### Native ETH, WETH, and Dutch liquidity
+
+The UI presents ETH consistently while preserving each venue's settlement asset. Swapboard resting ETH is canonical WETH. For native input, Swapbol wraps only the exact amount consumed by each Swapboard leg; a Dutch leg is paid as literal ETH when its quote is `address(0)`, or with freshly wrapped WETH when its quote is WETH. This makes WETH-quoted Dutch liquidity composable with an ETH-input route instead of silently dropping it. For native output, book legs deliver WETH to Swapbol, which unwraps only the current call's aggregate WETH increase and sends the resulting ETH to the recipient. Pre-existing WETH and forced ETH stay outside the route.
+
+Makers can cancel a Swapboard WETH order or a fungible Dutchboard WETH listing back to native ETH through `cancelOrderUnwrap` and `cancelUnwrap`. Both redemption paths delete order state before external calls and verify exact WETH debit and ETH credit so one order cannot consume pooled wrapper escrow. Swapboard also refuses its own address or WETH as a maker/recipient; Dutchboard refuses zero/self fill recipients and unsafe fungible sellers, preventing successful settlement into unrecoverable, unaccounted balances.
+
+### Bounded book planning and display safety
+
+SwapboardView caps planning at 256 candidates, removes all-or-nothing rows that cannot fit the current request before that cap, and bounds token metadata calls by gas and returndata size. Invalid or hostile `symbol()` / `decimals()` responses fall back to a blank symbol and 18 decimals. The browser decoder independently validates every dynamic offset and string length, then strips markup-sensitive characters before order metadata reaches HTML.
+
+The in-page planner compares rate-greedy execution, every single all-or-nothing seed, and every pair among the first 24 all-or-nothing candidates. It returns at most 32 book legs and re-quotes the remaining AMM amount for up to two rounds. This materially improves mixed AON selection without pretending to solve an unbounded knapsack: candidate, leg, or higher-order AON limits set the visible `Planner heuristic/capped` warning.
 
 ### Regenerating the payload
 
@@ -52,7 +77,7 @@ node script/build-zSwap-chunks.mjs
 forge test --match-path test/zSwap.t.sol
 ```
 
-`build-zSwap.mjs` refreshes size natspec and the canonical source comment at the bottom of `zSwap.sol`. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` and `out/zSwap.chunk2.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
+`build-zSwap.mjs` refreshes size natspec and the canonical source comment at the bottom of `zSwap.sol`. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk4.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
 
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 

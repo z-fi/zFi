@@ -140,7 +140,7 @@ contract SwapboardCoverageTest is Test {
         LyingERC721 bad = new LyingERC721();
         bad.mint(maker, 3);
         vm.prank(maker);
-        vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTEscrowFailed.selector, address(bad), 3));
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(bad), 3));
         sb.createOrder(address(bad), 3, address(B), 1e6, false, 0, true, false, address(0));
     }
 
@@ -290,11 +290,9 @@ contract SwapboardCoverageTest is Test {
         assertFalse(sb.isFillableBy(999, address(this)));
     }
 
-    function test_OnErc721ReceivedReturnsMagicValue() public view {
-        assertEq(
-            sb.onERC721Received(address(0), address(0), 0, ""),
-            bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))
-        );
+    function test_DirectSafeNftTransfersAreRejected() public {
+        vm.expectRevert(Swapboard.DirectNFTTransfer.selector);
+        sb.onERC721Received(address(0), address(0), 0, "");
     }
 
     // ------------------------------------------------------------- receive

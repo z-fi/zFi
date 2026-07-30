@@ -29,6 +29,12 @@ interface IERC20 {
 ///     the inflated V4 pool was detectable by being size-INvariant)
 ///   * all four builders, matching what zSwap's cascade actually calls
 contract zQuoterExhaustiveTest is Test {
+    /// @dev Defaults so the suite runs without tribal knowledge. Both are
+    /// overridable by env. The block is chosen to be AFTER the currently
+    /// deployed zQuoter/zRouter, so live-address tests are possible here.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     zQuoter q;
 
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
@@ -57,7 +63,7 @@ contract zQuoterExhaustiveTest is Test {
     uint256 broke;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         vm.etch(V4_HELPER, address(new zQuoterV4()).code);
         q = new zQuoter();
         user = address(this);
@@ -83,9 +89,15 @@ contract zQuoterExhaustiveTest is Test {
 
     /// Execute `cd` and verify delivery. `want` is the quoted output (exact-in)
     /// or the exact target (exact-out).
-    function _exec(string memory label, address tin, address tout, uint256 spend, bytes memory cd, uint256 mv, uint256 want)
-        internal
-    {
+    function _exec(
+        string memory label,
+        address tin,
+        address tout,
+        uint256 spend,
+        bytes memory cd,
+        uint256 mv,
+        uint256 want
+    ) internal {
         if (cd.length == 0 || want == 0) {
             refused++;
             return;
@@ -116,10 +128,10 @@ contract zQuoterExhaustiveTest is Test {
 
     function _exactIn(uint256 i, uint256 j, uint256 notional) internal {
         uint256 amt = _amt(i, notional);
-        string memory label =
-            string.concat(syms[i], "->", syms[j], " in $", vm.toString(notional));
-        try q.buildBestSwapViaETHMulticall(user, user, false, toks[i], toks[j], amt, 200, type(uint256).max)
-        returns (zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv) {
+        string memory label = string.concat(syms[i], "->", syms[j], " in $", vm.toString(notional));
+        try q.buildBestSwapViaETHMulticall(user, user, false, toks[i], toks[j], amt, 200, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
             _exec(label, toks[i], toks[j], amt, mc, mv, b.amountOut > 0 ? b.amountOut : a.amountOut);
         } catch {
             refused++;
@@ -128,10 +140,10 @@ contract zQuoterExhaustiveTest is Test {
 
     function _exactOut(uint256 i, uint256 j, uint256 notional) internal {
         uint256 want = _amt(j, notional);
-        string memory label =
-            string.concat(syms[i], "->", syms[j], " OUT $", vm.toString(notional));
-        try q.buildBestSwapViaETHMulticall(user, user, true, toks[i], toks[j], want, 200, type(uint256).max)
-        returns (zQuoter.Quote memory a, zQuoter.Quote memory, bytes[] memory, bytes memory mc, uint256 mv) {
+        string memory label = string.concat(syms[i], "->", syms[j], " OUT $", vm.toString(notional));
+        try q.buildBestSwapViaETHMulticall(user, user, true, toks[i], toks[j], want, 200, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
             // fund generously: exact-out spends up to amountIn plus slippage
             _exec(label, toks[i], toks[j], a.amountIn * 2 + 1, mc, mv, want);
         } catch {
@@ -155,9 +167,26 @@ contract zQuoterExhaustiveTest is Test {
         uint256 amt = _amt(i, notional);
         string memory label = string.concat(syms[i], "->", syms[j], " 3hop");
         try q.build3HopMulticall(user, false, toks[i], toks[j], amt, 300, type(uint256).max) returns (
-            zQuoter.Quote memory, zQuoter.Quote memory, zQuoter.Quote memory c, bytes[] memory, bytes memory mc, uint256 mv
+            zQuoter.Quote memory,
+            zQuoter.Quote memory,
+            zQuoter.Quote memory c,
+            bytes[] memory,
+            bytes memory mc,
+            uint256 mv
         ) {
             _exec(label, toks[i], toks[j], amt, mc, mv, c.amountOut);
+        } catch {
+            refused++;
+        }
+    }
+
+    function _hybrid(uint256 i, uint256 j, uint256 notional) internal {
+        uint256 amt = _amt(i, notional);
+        string memory label = string.concat(syms[i], "->", syms[j], " hybrid");
+        try q.buildHybridSplit(user, toks[i], toks[j], amt, 300, type(uint256).max) returns (
+            zQuoter.Quote[2] memory legs, bytes memory mc, uint256 mv
+        ) {
+            _exec(label, toks[i], toks[j], amt, mc, mv, legs[0].amountOut + legs[1].amountOut);
         } catch {
             refused++;
         }
@@ -208,6 +237,18 @@ contract zQuoterExhaustiveTest is Test {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
                 _hop3(i, j, 40);
+            }
+        }
+        _report();
+    }
+
+    /// @dev zSwap considers this fourth exact-in candidate for non-trivial trades.
+    ///      Exercise every curated pair rather than only the ETH->USDT regression.
+    function test_hybridBuilder_allPairs() public {
+        for (uint256 i; i < 8; ++i) {
+            for (uint256 j; j < 8; ++j) {
+                if (i == j) continue;
+                _hybrid(i, j, 5000);
             }
         }
         _report();

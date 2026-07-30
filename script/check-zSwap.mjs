@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { AbiCoder, Interface } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HTML_PATH = path.join(ROOT, 'zSwap.html');
@@ -35,7 +36,7 @@ const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 
 const EIP170 = 24576;
-const CHUNKS = 3;
+const CHUNKS = 4;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -89,6 +90,43 @@ check(`fits ${CHUNKS} x EIP-170`, () => {
   return `${bytes.toLocaleString('en-US')} B, ${(EIP170 * CHUNKS - bytes).toLocaleString('en-US')} B headroom`;
 });
 
+check('actionable quotes expire after 45 seconds', () => {
+  if (!/\bconst QUOTE_TTL=45000;/.test(html)) throw Error('QUOTE_TTL is not 45 seconds');
+  const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
+  if (uses.length !== 2) throw Error(`expected 2 quote-expiry uses, found ${uses.length}`);
+  if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
+});
+
+check('recipient and orderbook metadata guards remain wired', () => {
+  if (!/return \/\^0x0\{40\}\$\/i\.test\(v\)\?""\:v/.test(html)) {
+    throw Error('literal zero recipient is not rejected by rcvOf');
+  }
+  if (!html.includes('sA:safeSym(text(b,9))') || !html.includes('sB:safeSym(text(b,13))')) {
+    throw Error('lens-provided token symbols bypass safeSym');
+  }
+  if (!html.includes('o.maker.toLowerCase()===account.toLowerCase()')) {
+    throw Error('private maker-owned rows are filtered out');
+  }
+});
+
+check('manual fills preserve native/WETH routing domains', () => {
+  if (!html.includes('const routeIn=nativeIn?ZERO:r.tB')) throw Error('native input is not normalized');
+  if (!html.includes('],routeIn,routeOut,account,account,dl)')) throw Error('fillPlan uses raw book tokens');
+  if (!html.includes('encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)')) {
+    throw Error('prepared outer snwap does not protect the routed output');
+  }
+  if (!html.includes('SEL_FILL2_ETH="13092239"')) throw Error('direct native Swapboard fill selector missing');
+  if (!html.includes('if(!rv&&f.addr===WETH&&t.addr===ZERO)')) {
+    throw Error('WETH -> ETH direct unwrap is not preserved');
+  }
+  if (!html.includes('tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()')) {
+    throw Error('ETH -> WETH does not enter strict Dutch candidate filtering');
+  }
+  if (!html.includes('r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO')) {
+    throw Error('ETH -> WETH candidates are not limited to native-quoted Dutch WETH');
+  }
+});
+
 // ---------- 4. zSwap.sol embedded copy is in sync ----------
 check('src/zSwap.sol embedded copy matches zSwap.html', () => {
   const sol = fs.readFileSync(SOL_PATH, 'utf8');
@@ -120,9 +158,12 @@ check('element ids referenced by the script exist in the markup', () => {
 // Run the page in a sandbox whose globals auto-vivify, so the DOM-touching
 // top-level code is inert and the pure helpers become reachable.
 const HELPERS = [
-  'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'encCalls',
+  'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
   'encUint', 'encAddr', 'pad32', 'strip0x', 'keccak', 'namehash',
   'decodeString', 'idTok', 'idDelay',
+  'decViewPage', 'planBookExactIn', 'planBookExactOut',
+  'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
+  'encPermit2Hybrid', 'impactBps', 'safeSym',
 ];
 
 function stub() {
@@ -186,7 +227,12 @@ const eq = (got, want, what) => {
 };
 
 if (exported) {
-  const { decQ, parseUnits, formatUnits, trimAmt, encCalls, keccak, namehash, decodeString, idTok, idDelay } = exported;
+  const {
+    decQ, parseUnits, formatUnits, trimAmt, maxAmt, merge, hasAtomicBatch, encCalls, keccak, namehash,
+    decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
+    encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
+    encPermit2Hybrid, impactBps, safeSym,
+  } = exported;
 
   check('keccak matches known vectors', () => {
     eq(keccak(new TextEncoder().encode('')),
@@ -201,6 +247,9 @@ if (exported) {
     eq(formatUnits(1500000000000000000n, 18), '1.5', 'formatUnits');
     eq(formatUnits(1n, 18), '0.000000000000000001', 'formatUnits dust');
     eq(trimAmt(1234567890123456789n, 18), '1.234567', 'trimAmt truncates to 6dp');
+    eq(maxAmt(1000000000000000001n, 18), '1.000001', 'Max rounds up');
+    eq(maxAmt(1n, 18), '0.000001', 'dust Max rounds up');
+    eq(maxAmt(1234567n, 6), '1.234567', 'Max preserves full token precision through 6dp');
     // a negative amount must not parse — it would encode as a huge uint256
     let threw = false;
     try { parseUnits('-1', 18); } catch { threw = true; }
@@ -209,6 +258,46 @@ if (exported) {
     threw = false;
     try { parseUnits('1.1234567', 6); } catch (e) { threw = /decimals/.test(e.message); }
     if (!threw) throw Error('parseUnits accepted more decimals than the token supports');
+  });
+
+  check('safeSym strips markup, controls, and bounds untrusted metadata', () => {
+    eq(safeSym('<svg onload="x">&BAD`'), 'svg onload=xBAD', 'markup stripped');
+    eq(safeSym('\u0000\u0008'), '?', 'controls collapse to fallback');
+    eq(safeSym('ABCDEFGHIJKLMNOPQRST'), 'ABCDEFGHIJKLMNOP', 'symbol length cap');
+  });
+
+  check('executable quote retains its real bound and value', () => {
+    const est = {best: {amountIn: 100n, amountOut: 200n}, amountLimit: 101n, msgValue: 0n};
+    const exe = {
+      best: {amountIn: 103n, amountOut: 194n},
+      amountLimit: 107n,
+      msgValue: 109n,
+      callData: '0x1234',
+    };
+    const q = merge(est, exe);
+    eq(q.best.amountIn, 100n, 'zero-bound input estimate retained');
+    eq(q.best.amountOut, 200n, 'zero-bound output estimate retained');
+    eq(q.amountLimit, 107n, 'executable per-leg bound retained');
+    eq(q.msgValue, 109n, 'executable msg.value retained');
+    eq(q.callData, '0x1234', 'executable calldata retained');
+  });
+
+  check('atomic batching honors mainnet and chain-global capabilities', () => {
+    if (!hasAtomicBatch({'0x1': {atomic: {status: 'supported'}}})) {
+      throw Error('mainnet atomic capability ignored');
+    }
+    if (!hasAtomicBatch({'0x0': {atomic: {status: 'ready'}}})) {
+      throw Error('chain-global atomic capability ignored');
+    }
+    if (hasAtomicBatch({'0x0': {atomic: {status: 'unsupported'}}})) {
+      throw Error('unsupported global atomic capability accepted');
+    }
+    if (hasAtomicBatch({
+      '0x1': {atomic: {status: 'unsupported'}},
+      '0x0': {atomic: {status: 'supported'}},
+    })) {
+      throw Error('chain-specific unsupported capability did not override global');
+    }
   });
 
   check('encCalls builds valid multicall(bytes[]) ABI', () => {
@@ -237,6 +326,255 @@ if (exported) {
     const dyn = '0x' + (32).toString(16).padStart(64, '0') + (4).toString(16).padStart(64, '0') +
       Buffer.from('WBTC').toString('hex').padEnd(64, '0');
     eq(decodeString(dyn), 'WBTC', 'dynamic symbol');
+  });
+
+  check('decViewPage validates and decodes the lens OrderView ABI', () => {
+    const coder = AbiCoder.defaultAbiCoder();
+    const rowType =
+      'tuple(uint256,address,bool,uint64,bool,bool,address,address,uint256,string,uint8,address,uint256,string,uint8,address)[]';
+    const row = [
+      7n, '0x0000000000000000000000000000000000000011', true, 9n, false, false,
+      '0x0000000000000000000000000000000000000022',
+      '0x0000000000000000000000000000000000000033', 40n, 'OUT', 18,
+      '0x0000000000000000000000000000000000000044', 20n, 'PAY', 6,
+      '0x0000000000000000000000000000000000000055',
+    ];
+    const p = decViewPage(coder.encode([rowType, 'uint256'], [[row], 6n]));
+    eq(p.next, 6n, 'cursor');
+    eq(p.rows.length, 1, 'row count');
+    eq(p.rows[0].id, 7, 'order id');
+    eq(p.rows[0].aA, 40n, 'amountA');
+    eq(p.rows[0].sB, 'PAY', 'symbolB');
+  });
+
+  check('book planner and executor encoders agree on mixed Fill legs', () => {
+    const rows = [
+      { id: 1, board: '0x0000000000000000000000000000000000000011', pf: false, nA: false, nB: false, aA: 60n, aB: 40n },
+      { id: 2, board: '0x0000000000000000000000000000000000000022', pf: true,  nA: false, nB: false, aA: 120n, aB: 80n },
+      // Better unit rate but impossible AON: it must not crowd usable rows.
+      { id: 3, board: '0x0000000000000000000000000000000000000033', pf: false, nA: false, nB: false, aA: 1000n, aB: 500n },
+    ];
+    const p = planBookExactIn(rows, 100n, 100n, 100n);
+    eq(p.bookIn, 100n, 'book input');
+    eq(p.bookOut, 150n, 'book output');
+    eq(p.fills.length, 2, 'fill count');
+    const fp = encFillPlan(
+      p.fills,
+      '0x0000000000000000000000000000000000000044',
+      '0x0000000000000000000000000000000000000055',
+      '0x0000000000000000000000000000000000000066',
+      '0x0000000000000000000000000000000000000077',
+      99n,
+    );
+    if (!fp.startsWith('0xc277f67c')) throw Error('wrong fillPlan selector');
+    const sn = encSnwap(
+      '0x0000000000000000000000000000000000000044', p.bookIn,
+      '0x0000000000000000000000000000000000000066',
+      '0x0000000000000000000000000000000000000055', p.bookOut,
+      '0x0000000000000000000000000000000000000077', fp,
+    );
+    if (!sn.startsWith('0x5f3bd1c8')) throw Error('wrong snwap selector');
+
+    const po = planBookExactOut(rows, 90n, 100n, 100n);
+    eq(po.bookOut, 90n, 'exact-out book output');
+    eq(po.bookIn, 60n, 'exact-out book input');
+    eq(po.ammOut, 0n, 'exact-out remainder');
+
+    const ammData = '0x12345678aabb';
+    const fps = encFillPlanAndSwap(
+      p.fills,
+      '0x0000000000000000000000000000000000000044',
+      '0x0000000000000000000000000000000000000055',
+      '0x0000000000000000000000000000000000000066',
+      '0x0000000000000000000000000000000000000077',
+      99n, 7n, ammData,
+    );
+    const iface = new Interface([
+      'function fillPlanAndSwap(address,address,address,address,uint256,(uint256,address,uint256,uint256,bool)[],uint256,bytes)',
+    ]);
+    const d = iface.decodeFunctionData('fillPlanAndSwap', fps);
+    eq(d[5].length, 2, 'combined fill count');
+    eq(d[6], 7n, 'AMM input');
+    eq(d[7], ammData, 'AMM calldata');
+    const sw = encSweep(
+      '0x0000000000000000000000000000000000000044', 7n,
+      '0x0000000000000000000000000000000000000077',
+    );
+    if (!sw.startsWith('0xcb019b84')) throw Error('wrong sweep selector');
+    const funded = encPermit2Hybrid(
+      '0x12345678', p.fills,
+      '0x0000000000000000000000000000000000000044',
+      '0x0000000000000000000000000000000000000055',
+      '0x0000000000000000000000000000000000000066',
+      '0x0000000000000000000000000000000000000077',
+      99n, p.bookIn, p.bookOut,
+    );
+    const mc = new Interface(['function multicall(bytes[])']).decodeFunctionData('multicall', funded)[0];
+    eq(mc.length, 5, 'Permit2 prepared call count');
+    if (!mc[0].startsWith('0x5f3bd1c8') || !mc[1].startsWith('0xcb019b84') ||
+        !mc[2].startsWith('0x5f3bd1c8') || mc[3] !== '0x12345678' ||
+        !mc[4].startsWith('0xcb019b84')) throw Error('Permit2 call order');
+    const snwapIface = new Interface([
+      'function snwap(address,uint256,address,address,uint256,address,bytes)',
+    ]);
+    const checkpoint = snwapIface.decodeFunctionData('snwap', mc[0]);
+    if (!checkpoint[6].startsWith('0xa972985e')) throw Error('missing funding checkpoint');
+  });
+
+  check('book planners retain a zero-cost Dutch fill', () => {
+    const freeDutch = [{
+      id: 41,
+      board: '0x00000000000000000000000000000000000000d1',
+      // SwapboardView exposes fungible Dutch listings as partially fillable.
+      pf: true,
+      nA: false,
+      nB: false,
+      aA: 25n,
+      aB: 0n,
+      dutch: true,
+    }];
+
+    const pi = planBookExactIn(freeDutch, 100n, 100n, 100n);
+    if (!pi) throw Error('exact-in discarded the zero-cost Dutch row');
+    eq(pi.fills.length, 1, 'exact-in Dutch fill count');
+    eq(pi.fills[0].pay, 0n, 'exact-in Dutch payment');
+    eq(pi.fills[0].get, 25n, 'exact-in Dutch output');
+    eq(pi.bookIn, 0n, 'exact-in Dutch book input');
+    eq(pi.bookOut, 25n, 'exact-in Dutch book output');
+    eq(pi.ammIn, 100n, 'exact-in AMM remainder');
+
+    const po = planBookExactOut(freeDutch, 10n, 100n, 100n);
+    if (!po) throw Error('exact-out discarded the zero-cost Dutch row');
+    eq(po.fills.length, 1, 'exact-out Dutch fill count');
+    eq(po.fills[0].pay, 0n, 'exact-out Dutch payment');
+    eq(po.fills[0].get, 10n, 'exact-out Dutch output');
+    eq(po.fills[0].part, true, 'exact-out Dutch partial flag');
+    eq(po.bookIn, 0n, 'exact-out Dutch book input');
+    eq(po.bookOut, 10n, 'exact-out Dutch book output');
+    eq(po.ammOut, 0n, 'exact-out AMM remainder');
+  });
+
+  check('paired AON seeding escapes the greedy single-seed trap', () => {
+    // X has the best unit rate/cost and therefore follows either single seed,
+    // but its smaller lot crowds out the other 12-unit AON. A+B is globally
+    // better: exact-in scores 48 vs 47; exact-out costs 48 vs 49.
+    const exactInRows = [
+      {id: 3, board: '0x0000000000000000000000000000000000000003', pf: false, nA: false, nB: false, aA: 21n, aB: 10n},
+      {id: 1, board: '0x0000000000000000000000000000000000000001', pf: false, nA: false, nB: false, aA: 24n, aB: 12n},
+      {id: 2, board: '0x0000000000000000000000000000000000000002', pf: false, nA: false, nB: false, aA: 24n, aB: 12n},
+    ];
+    const pi = planBookExactIn(exactInRows, 24n, 24n, 24n);
+    if (!pi) throw Error('exact-in produced no paired-AON plan');
+    eq(pi.fills.map(f => f.id).join(','), '1,2', 'exact-in paired AON ids');
+    eq(pi.bookIn, 24n, 'exact-in paired AON input');
+    eq(pi.bookOut, 48n, 'exact-in paired AON output');
+    eq(pi.ammIn, 0n, 'exact-in paired AON remainder');
+    eq(pi.bounded, true, 'exact-in AON heuristic disclosure');
+
+    const exactOutRows = [
+      {id: 3, board: '0x0000000000000000000000000000000000000003', pf: false, nA: false, nB: false, aA: 10n, aB: 19n},
+      {id: 1, board: '0x0000000000000000000000000000000000000001', pf: false, nA: false, nB: false, aA: 12n, aB: 24n},
+      {id: 2, board: '0x0000000000000000000000000000000000000002', pf: false, nA: false, nB: false, aA: 12n, aB: 24n},
+    ];
+    const po = planBookExactOut(exactOutRows, 24n, 3n, 1n);
+    if (!po) throw Error('exact-out produced no paired-AON plan');
+    eq(po.fills.map(f => f.id).join(','), '1,2', 'exact-out paired AON ids');
+    eq(po.bookIn, 48n, 'exact-out paired AON input');
+    eq(po.bookOut, 24n, 'exact-out paired AON output');
+    eq(po.ammOut, 0n, 'exact-out paired AON remainder');
+    eq(po.bounded, true, 'exact-out AON heuristic disclosure');
+  });
+
+  check('book planners cap executable plans at 32 legs', () => {
+    const rows = Array.from({length: 40}, (_, i) => ({
+      id: i + 1,
+      board: '0x00000000000000000000000000000000000000c1',
+      pf: true,
+      nA: false,
+      nB: false,
+      aA: 2n,
+      aB: 1n,
+    }));
+
+    const pi = planBookExactIn(rows, 40n, 40n, 40n);
+    if (!pi) throw Error('exact-in produced no capped plan');
+    eq(pi.fills.length, 32, 'exact-in leg cap');
+    eq(pi.bookIn, 32n, 'exact-in capped book input');
+    eq(pi.bookOut, 64n, 'exact-in capped book output');
+    eq(pi.ammIn, 8n, 'exact-in capped AMM remainder');
+    eq(pi.bounded, true, 'exact-in cap disclosure');
+
+    const po = planBookExactOut(rows, 80n, 3n, 1n);
+    if (!po) throw Error('exact-out produced no capped plan');
+    eq(po.fills.length, 32, 'exact-out leg cap');
+    eq(po.bookIn, 32n, 'exact-out capped book input');
+    eq(po.bookOut, 64n, 'exact-out capped book output');
+    eq(po.ammOut, 16n, 'exact-out capped AMM remainder');
+    eq(po.bounded, true, 'exact-out cap disclosure');
+  });
+
+  // ---- price impact ----
+  // This exists because the bug it guards was found by READING the code, not by
+  // running it: impactBps compared one direction for both trade types, so every
+  // exactOut quote reported 0% and the confirm gate never fired on that path.
+  // Every measurement taken at the time was exactIn, so nothing would have caught
+  // it. Direction is the whole point of this helper, so it gets pinned.
+  check('impactBps: exactIn reports a shortfall in output', () => {
+    // reference priced 1/100th; linear would be 10_000, actual 9_000 => 10%
+    eq(impactBps(9000n, 100n, false), 1000n, 'exactIn 10% shortfall');
+    eq(impactBps(10000n, 100n, false), 0n, 'exactIn exactly linear');
+    eq(impactBps(11000n, 100n, false), 0n, 'exactIn better than linear is not impact');
+  });
+
+  check('impactBps: exactOut reports an overspend in input', () => {
+    // exactOut is inverted: paying MORE than linear is the impact
+    eq(impactBps(11000n, 100n, true), 1000n, 'exactOut 10% overspend');
+    eq(impactBps(10000n, 100n, true), 0n, 'exactOut exactly linear');
+    eq(impactBps(9000n, 100n, true), 0n, 'exactOut cheaper than linear is not impact');
+  });
+
+  check('impactBps: refuses to guess when either side is unknown', () => {
+    eq(impactBps(0n, 100n, false), null, 'no amount');
+    eq(impactBps(9000n, 0n, false), null, 'no reference');
+  });
+
+  check('impactBps: the two directions disagree on the same numbers', () => {
+    // the exact confusion that produced the bug - if these ever match again,
+    // one of the branches has been collapsed back into the other
+    const a = impactBps(11000n, 100n, false), b = impactBps(11000n, 100n, true);
+    if (String(a) === String(b)) throw Error(`directions collapsed: both ${a}`);
+  });
+
+  check('impact tiers are ordered and match the measured thresholds', () => {
+    const m = html.match(/IMPACT_HIDE=(\d+)n,\s*IMPACT_WARN=(\d+)n,\s*IMPACT_CONFIRM=(\d+)n,\s*IMPACT_TYPED=(\d+)n/);
+    if (!m) throw Error('impact tier constants not found');
+    const [hide, warn, confirm_, typed] = m.slice(1).map(Number);
+    if (!(hide < warn && warn < confirm_ && confirm_ < typed)) {
+      throw Error(`tiers out of order: ${hide}/${warn}/${confirm_}/${typed}`);
+    }
+    // measured on mainnet: normal trades read 0-29bps, 10k ETH->USDC read 444.
+    // hide must sit above the noise floor and below a real warning.
+    if (hide < 30 || hide > 100) throw Error(`hide ${hide}bps outside the measured noise band`);
+    if (typed < 2000) throw Error(`typed gate ${typed}bps low enough to fire on legitimate trades`);
+    return `${hide}/${warn}/${confirm_}/${typed} bps`;
+  });
+
+  check('impact demo panel has not drifted from the page', () => {
+    const demo = path.join(ROOT, 'dapp', 'impact', 'index.html');
+    if (!fs.existsSync(demo)) return 'no demo panel present';
+    const grab = f => {
+      const m = fs.readFileSync(f, 'utf8').match(
+        /IMPACT_HIDE=(\d+)n,\s*IMPACT_WARN=(\d+)n,\s*IMPACT_CONFIRM=(\d+)n,\s*IMPACT_TYPED=(\d+)n/);
+      if (!m) throw Error(`impact tiers not found in ${path.basename(f)}`);
+      return m.slice(1).join('/');
+    };
+    const a = grab(HTML_PATH), b = grab(demo);
+    // A preview that certifies a UX nobody ships is worse than no preview.
+    if (a !== b) throw Error(`page ${a} vs demo ${b}`);
+    // the helper itself must be the same expression, not a lookalike
+    const fn = f => (fs.readFileSync(f, 'utf8').match(/const impactBps=\([^;]*;[^;]*;[^;]*;/) || [''])[0].replace(/\s+/g, '');
+    if (fn(HTML_PATH) !== fn(demo)) throw Error('impactBps body differs between page and demo');
+    return `tiers ${a} match`;
   });
 
   // ---- decQ against recorded mainnet quoter returns ----

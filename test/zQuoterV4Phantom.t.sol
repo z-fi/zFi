@@ -16,6 +16,12 @@ import "../src/zQuoter.sol";
 /// Must run against state AFTER block 25623201, so it forks at a recent block
 /// rather than the suite's pinned one (which predates the fee activation).
 contract zQuoterV4PhantomTest is Test {
+    /// @dev Defaults so the suite runs without tribal knowledge. Both are
+    /// overridable by env. The block is chosen to be AFTER the currently
+    /// deployed zQuoter/zRouter, so live-address tests are possible here.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     zQuoter quoter;
 
     address constant BASE = 0x658bF1A6608210FDE7310760f391AD4eC8006A5F;
@@ -25,7 +31,7 @@ contract zQuoterV4PhantomTest is Test {
     address constant USER = address(0xBEEF);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         quoter = new zQuoter();
     }
 

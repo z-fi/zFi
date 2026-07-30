@@ -9,6 +9,8 @@
 body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
 .card{border:1px solid var(--e);border-radius:.5em;padding:.9em;background:var(--c);max-width:22em;width:100%;margin:auto;box-shadow:var(--s);box-sizing:border-box}
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#addr.on{cursor:pointer}
+#addr.on:hover{color:var(--f);text-decoration:line-through}
 .meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -47,8 +49,23 @@ svg{vertical-align:middle;flex-shrink:0}
 .tabs button:hover:not(.on),.tabs button:focus-visible:not(.on){background:var(--fh);color:var(--f)}
 .tabs button.on:hover,.tabs button.on:focus-visible{background:var(--kh)}
 .hide{display:none!important}
+#book{margin-top:.4em}
+#book:empty{display:none}
+#book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin:.6em 0 .3em;font-weight:600;display:flex;justify-content:space-between}
+.o{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.5em .7em;background:var(--p);border-radius:.6em;margin-bottom:.3em;font-size:.75em}
+.o .l{display:flex;align-items:center;gap:.45em;min-width:0}
+.o svg{flex-shrink:0}
+.o svg+svg{margin-left:-.5em}
+.o b{font-weight:600;font-variant-numeric:tabular-nums;display:block}
+.o i{font-style:normal;color:var(--m);display:block;font-size:.9em;word-break:break-all}
+.o a{color:var(--m)}
+.o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer}
+.o button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
+.tg{display:inline-block;font-size:.85em;padding:.05em .35em;border-radius:.35em;background:var(--e);color:var(--n);margin-left:.3em}
+.tg.w{background:#c33;color:#fff}
 .dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
 .dly select{font-size:1em}
+.dly input{width:9em;border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);text-align:right;outline:0;font:inherit;font-variant-numeric:tabular-nums}
 #pos{margin-top:.4em}
 #pos:empty{display:none}
 .ph{margin:.9em 0 .45em;font-size:.9em;color:var(--f);font-weight:700}
@@ -68,16 +85,20 @@ svg{vertical-align:middle;flex-shrink:0}
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <div class="card">
 <div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lk" title="Copy link">⧉</button><button id="th" title="Theme">☾</button></div>
-<div class="tabs"><button id="tabSwap" class="on">Swap</button><button id="tabSend">Send</button></div>
+<div class="tabs"><button id="tabSwap" class="on">Swap</button><button id="tabSend">Send</button><button id="tabBook">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small>You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="rate"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="rate"></small></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
+<label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
+<label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
+<label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="stat"></div>
 <div id="pos"></div>
+<div id="book"></div>
 </div>
 <script>
 const ic=()=>th.textContent=H.className=='d'?'☀︎':'☾';ic();
@@ -94,7 +115,7 @@ const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
 const SEL_RSLV="0178b8bf",SEL_EADDR="3b3b57de",SEL_ENAME="691f3431";
 const SEL_ALLOWANCE="dd62ed3e";
 const SEL_DS="3644e515",SEL_NONCES="7ecebe00",SEL_NAME="06fdde03";
-const SEL_RPERMIT="7ac2ff7b",SEL_MULTICALL="ac9650d8";
+const SEL_RPERMIT="7ac2ff7b",SEL_MULTICALL="ac9650d8",SEL_SWEEP="cb019b84";
 const PERMIT2="0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const SEL_P2TF="09d31579";
 const EIP712DOM="EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
@@ -140,6 +161,11 @@ const fp=s.slice(-dec).replace(/0+$/,"");
 return fp?`${ip}.${fp}`:ip;
 };
 const trimAmt=(v,dec)=>{const s=formatUnits(v,dec),i=s.indexOf(".");if(i<0)return s;const r=s.slice(0,i+7).replace(/\.?0+$/,"");return r==="0"&&v?s:r};
+// A displayed maximum must never round down below the amount the calldata can
+// spend. Keep the compact six-decimal presentation, but round it toward +∞;
+// the exact base-unit value is also exposed in the rate element's title.
+const maxAmt=(v,dec)=>{v=BigInt(v);if(dec<=6)return formatUnits(v,dec);
+const u=10n**BigInt(dec-6);return formatUnits((v+u-1n)/u,6)};
 const fitFont=el=>{
 const l=el.value.length;
 el.style.fontSize=l>18?".9em":l>14?"1.1em":l>10?"1.25em":"1.4em";
@@ -152,6 +178,11 @@ const n=Number(BigInt("0x"+h.slice(o,o+64)));if(!n||o+64+n*2>h.length)E();
 const g=num(u+3),t=g>0n,k=S?(num(3)>0n?0:u):t?u:0,B=10000n,ai=S?num(2)+num(u+2):num(2),ao=S?num(3)+g:t?g:num(3),q=eo?ai:ao;
 return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},callData:"0x"+h.slice(o+64,o+64+n*2),amountLimit:eo?(q*(B+slip)+B-1n)/B:q*(B-slip)/B,msgValue:num(v+1)};
 };
+// `est` is the zero-bound quote used for apples-to-apples route comparison.
+// `exe` owns the calldata and its real per-leg slippage budget. Recomputing one
+// global bound from `est` can overstate an exact-in Min or understate an
+// exact-out Max on multihop routes, so only replace the displayed estimate.
+const merge=(est,exe)=>{if(!est)return exe;if(!exe)return null;return{...exe,best:est.best}};
 const rpc=(method,params)=>window.ethereum.request({method,params});
 const okRet=h=>{h=strip0x(h);if(h&&BigInt("0x"+h)===0n)throw Error("token returned false")};
 const waitTx=async hash=>{
@@ -251,14 +282,17 @@ primaryType:"PermitTransferFrom",domain:P2DOM,
 message:{permitted:{token:tok,amount:amount.toString()},spender:ZROUTER,
 nonce:nonce.toString(),deadline:deadline.toString()}};
 const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
-const n=sig.length/2;if(n!==64&&n!==65)throw Error("bad signature");
+// Permit2 verifies ERC-1271 contract signatures as arbitrary bytes; EOAs still
+// return the usual compact/full 64/65-byte form.
+const n=sig.length/2;if(!Number.isInteger(n)||n===0||n>4096)throw Error("bad signature");
 const tail=encUint(n)+sig.padEnd(Math.ceil(sig.length/64)*64,"0");
 return"0x"+SEL_P2TF+encAddr(tok)+encUint(amount)+encUint(nonce)+encUint(deadline)+pad32("a0")+tail};
 
+const hasAtomicBatch=c=>{const k=c&&(c["0x1"]||c[1]||c["1"]||c["0x0"]||c[0]||c["0"]);
+return!!(k&&k.atomic&&(k.atomic.status==="supported"||k.atomic.status==="ready"))};
 const canBatch=async owner=>{
 try{const c=await rpc("wallet_getCapabilities",[owner]);
-const k=c&&(c["0x1"]||c[1]||c["1"]);
-return!!(k&&k.atomic&&(k.atomic.status==="supported"||k.atomic.status==="ready"))}catch{return false}};
+return hasAtomicBatch(c)}catch{return false}};
 const sendBatch=async(owner,calls)=>{
 const res=await rpc("wallet_sendCalls",[{version:"2.0.0",chainId:"0x1",from:owner,atomicRequired:true,calls}]);
 const id=typeof res==="string"?res:res.id;
@@ -278,6 +312,34 @@ for(const c of cs){const d=strip0x(c),len=d.length/2;
 head+=encUint(off);const body=encUint(len)+d.padEnd(Math.ceil(d.length/64)*64,"0");
 tail+=body;off+=body.length/2}
 return"0x"+SEL_MULTICALL+pad32("20")+encUint(n)+head+tail};
+const MC3="0xcA11bde05977b3631167028862bE2a173976CA11";
+// aggregate3((address,bool,bytes)[]) -> (bool,bytes)[]. Not just fewer
+// round-trips: separate eth_calls each resolve at whatever block they land on,
+// so routes were being compared across different chain states. One call, one block.
+const encAgg3=cs=>{const n=cs.length;let head="",tail="",off=n*32;
+for(const c of cs){const d=strip0x(c.data),len=d.length/2;
+const body=encAddr(c.to)+encBool(true)+encUint(96)+encUint(len)+d.padEnd(Math.ceil(d.length/64)*64,"0");
+head+=encUint(off);tail+=body;off+=body.length/2}
+return"0x82ad56cb"+pad32("20")+encUint(n)+head+tail};
+const decAgg3=hex=>{const h=strip0x(hex),at=i=>h.slice(i*64,(i+1)*64);
+const n=Number(BigInt("0x"+at(1))),out=[];
+for(let i=0;i<n;i++){const rel=Number(BigInt("0x"+at(2+i)))/32,w=2+rel;
+const ok=BigInt("0x"+at(w))===1n,bo=Number(BigInt("0x"+at(w+1)))/32,lw=w+bo;
+const len=Number(BigInt("0x"+at(lw)));
+out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
+return out};
+const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
+// Impact, no oracle: quote amt and amt/REF_N; with zero impact output scales
+// linearly, so the shortfall IS the impact. The reference carries ~1/N of it, so
+// this understates - right direction for a warning. Mainnet: ETH/USDC reads
+// 0-10 bps at 1-100 ETH, 29 at 1k, 444 at 10k, 8106 at 100k.
+const REF_N=100n;
+const IMPACT_HIDE=50n, IMPACT_WARN=500n, IMPACT_CONFIRM=1500n, IMPACT_TYPED=3000n;
+// eo flips the sense: on exactIn, impact is LESS out than linear; on exactOut it
+// is MORE in. Comparing one way on both made exactOut always read 0.
+const impactBps=(v,ref,eo)=>{if(!v||!ref)return null;const lin=ref*REF_N;
+if(lin===0n)return 0n;
+return eo?(v<=lin?0n:(v-lin)*10000n/lin):(v>=lin?0n:(lin-v)*10000n/lin)};
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(sym[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
 async function addCustomToken(a,keep=1){
@@ -305,7 +367,8 @@ const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
 TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
 }
 }}catch{}
-let account=null,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0;
+const QUOTE_TTL=45000;
+let account=null,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
 async function refreshBalance(){
 if(!account){bal.textContent="";fromBalance=0n;render();return}
 const f=TOKENS[fromSel.value];
@@ -334,6 +397,28 @@ syncDisabled();
 const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||""};
 const render=()=>{
 if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
+if(tab==="book"){
+// Fixed: both amounts are the limit price. Dutch: `want` is the
+// starting total ask and floorAmt is the ending total ask.
+const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
+if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
+const dutch=kind.value==="dutch";
+let sell=0n,want=0n,floor=0n,badOrderAmount=false;
+try{sell=parseUnits(amt.value.trim(),f.dec);want=parseUnits(outAmt.value.trim(),t.dec);
+  if(dutch&&floorAmt.value.trim())floor=parseUnits(floorAmt.value.trim(),t.dec)}
+catch{badOrderAmount=true}
+if(badOrderAmount){swap.textContent="Invalid order amount";swap.disabled=true;return}
+if(!sell||!want){swap.textContent="Place order";swap.disabled=true;return}
+if(f.addr===ZERO&&t.addr===WETH){swap.textContent="Pick different token";swap.disabled=true;return}
+if(!dutch&&f.addr===WETH&&t.addr===ZERO){swap.textContent="Pick different token";swap.disabled=true;return}
+if(dutch&&floor>want){swap.textContent="Floor exceeds start";swap.disabled=true;return}
+if(dutch&&+dly.value===0){swap.textContent="Choose decay duration";swap.disabled=true;return}
+if(sell>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
+swap.textContent=dutch
+  ?`Dutch ${trimAmt(sell,f.dec)} ${f.sym} · ${trimAmt(want,t.dec)} → ${trimAmt(floor,t.dec)} ${t.sym}`
+  :`Place ${fill.value==="1"?"":"all-or-nothing "}order \u2014 ${trimAmt(sell,f.dec)} ${f.sym} \u2192 ${trimAmt(want,t.dec)} ${t.addr===ZERO?"WETH":t.sym}`;
+swap.disabled=false;return;
+}
 if(tab==="send"){
 if(!sendReady){swap.textContent="Send";swap.disabled=true;return}
 if(sendReady.amount>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
@@ -349,6 +434,7 @@ syncIcons(); render();
 const isRejection=e=>e?.code===4001||/user\s+reject|user\s+denied/i.test(e?.message||"");
 async function connect(){
 if(!window.ethereum){stat.textContent="No wallet detected.";return}
+sessionStorage.removeItem("dc");
 let accs;
 try{accs=await rpc("eth_requestAccounts",[])}
 catch(e){err(e);return}
@@ -385,10 +471,11 @@ if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
 stat.innerHTML=txLink(tx,"Sent");await waitTx(tx);stat.innerHTML=txLink(tx,"Done")};
 const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
 async function update(){
+syncIcons();
+if(tab==="book")return render();
 if(tab==="send")return updateSend();
 const my=++seq;
 last=null; rate.textContent=""; render();
-syncIcons();
 const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
 if(!f||!t)return;
 if(f.addr===t.addr){stat.textContent="Pick different tokens.";return}
@@ -406,7 +493,10 @@ if(swapAmt<=0n)return;
 const rv=rc.value.trim();
 let rcv="";
 if(rv){
-if(/^0x[0-9a-fA-F]{40}$/.test(rv)){rcv=rv;rcvEl.textContent=""}
+if(/^0x[0-9a-fA-F]{40}$/.test(rv)){
+if(/^0x0{40}$/i.test(rv)){rc.classList.add("bad");rcvEl.textContent="";
+outEl.value="";fitFont(outEl);stat.textContent="Recipient cannot be the zero address";return}
+rcv=rv;rcvEl.textContent=""}
 else if(/\.(g?wei|eth)$/i.test(rv)){
 rcvEl.textContent="resolving...";
 try{rcv=await nameFwd(rv.toLowerCase())}catch{rcv=""}
@@ -418,10 +508,10 @@ else{rc.classList.add("bad");rcvEl.textContent="";
 outEl.value="";fitFont(outEl);stat.textContent="Recipient must be an address or a .wei / .gwei / .eth name";return}
 }else rcvEl.textContent="";
 rc.classList.remove("bad");
-if(!rv&&((f.addr===ZERO&&t.addr===WETH)||(f.addr===WETH&&t.addr===ZERO))){
+if(!rv&&f.addr===WETH&&t.addr===ZERO){
 outEl.value=inEl.value;fitFont(outEl);
 rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
-last={callData:f.addr===ZERO?"0xd0e30db0":"0x2e1a7d4d"+encUint(swapAmt),msgValue:f.addr===ZERO?swapAmt:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+1500000};
+last={callData:"0x2e1a7d4d"+encUint(swapAmt),msgValue:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+QUOTE_TTL};
 render();return;
 }
 const pct=Math.min(10,Math.max(.01,+slip.value||.5));
@@ -431,47 +521,233 @@ outEl.value="...";fitFont(outEl);
 const acct=account;
 try{
 const a=encAddr(rcv||acct||ZERO),rf=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
-const Q=(x,d,u,v,S,sb)=>rpc(C,[{to:ZQUOTER,data:"0x"+x+d},L]).then(z=>decQ(z,sb||slipBps,!isIn,u,v,S));
+const _rq=[];
+// collect now, resolve as one batched eth_call below
+const Q=(x,d,u,v,S,sb)=>{_rq.push({to:ZQUOTER,data:"0x"+x+d,u,v,S,sb});return _rq.length-1};
 let r=null;
+const candKey=f.addr.toLowerCase()+":"+t.addr.toLowerCase();
+const cachedCandidates=candCache[candKey];
+// Pin AMM and book reads to one state snapshot.
+const quoteBlock=cachedCandidates&&Date.now()-cachedCandidates.at<15000
+  ?cachedCandidates.block:await rpc("eth_blockNumber",[]);
+const candJob=acct?swapCandidates(f.addr,t.addr,quoteBlock).catch(()=>{
+  const x=[];x.unavailable=true;return x
+}):Promise.resolve([]);
+const gasPriceJob=acct?rpc("eth_gasPrice",[]).then(BigInt).catch(()=>0n):Promise.resolve(0n);
 const pick=y=>{if(!y)return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
 if(!r||(isIn?v>r.best.amountOut:v<r.best.amountIn))r=y};
-// every builder is quoted concurrently: these are heavy multi-pool calls and
-// running them in series made a quote cost four round-trips instead of one.
-// Order of pick() is preserved so ties still resolve to the simpler route.
-const jobs=[Q("e453166e",a+rf+tl,4,9),Q("4c464f59",a+tl,8,13)];
+// Earlier jobs win ties, keeping the simpler route.
+const tl0=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(0n)+encUint(deadline);
+// Zero-bound quotes compare estimates; bounded twins supply executable calldata.
+const jobs=[
+[Q("e453166e",a+rf+tl0,4,9),Q("e453166e",a+rf+tl,4,9)],
+[Q("4c464f59",a+tl0,8,13),Q("4c464f59",a+tl,8,13)]];
+let splitSlip=0n;
 if(isIn){
 const w=slipBps*3n,SS=w<150n?150n:w>500n?500n:w;
+splitSlip=SS;
 const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(SS)+encUint(deadline);
-// the split builders bound every leg with SS, not the user's slippage, so the
-// displayed Min must be derived from SS or it understates the enforced floor.
-for(const x of["892af013","85f86a90"])jobs.push(Q(x,a+ps,4,8,1,SS));
+// Split calldata enforces SS, so derive its displayed minimum from SS.
+for(const x of["892af013","85f86a90"])jobs.push([Q(x,a+ps,4,8,1,SS)]);
 }
-for(const y of await Promise.all(jobs.map(p=>p.catch(()=>null))))pick(y);
+// Seed planning from the AMM's 99% tail rate, then re-quote the remainder.
+const tailStep=swapAmt/100n||1n,tailAmt=swapAmt>tailStep?swapAmt-tailStep:0n;
+const tailJobs=[];
+if(tailAmt){
+  const z=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(tailAmt)+encUint(0n)+encUint(deadline);
+  tailJobs.push(Q("e453166e",a+rf+z,4,9),Q("4c464f59",a+z,8,13));
+  if(isIn)for(const x of["892af013","85f86a90"]){
+    const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(tailAmt)+encUint(splitSlip)+encUint(deadline);
+    tailJobs.push(Q(x,a+ps,4,8,1,splitSlip));
+  }
+}
+// Same-block 1/REF_N quote is the impact reference.
+const refAmt=swapAmt/REF_N;
+const iRef=refAmt>0n
+  ?Q("e453166e",a+rf+encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(refAmt)+encUint(0n)+encUint(deadline),4,9)
+  :-1;
+// One allow-failure multicall for all quotes.
+const mcRaw=await mc3(_rq.map(q=>({to:q.to,data:q.data})),quoteBlock);
+if(my!==seq)return;
+const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,q.u,q.v,q.S):null}catch{return null}});
+for(const g of jobs)pick(g.length>1?merge(dec[g[0]],dec[g[1]]):dec[g[0]]);
+let tail=null;
+for(const i of tailJobs){const y=dec[i];if(!y)continue;
+  const v=isIn?y.best.amountOut:y.best.amountIn;
+  if(v&&(!tail||(isIn?v>tail.best.amountOut:v<tail.best.amountIn)))tail=y;
+}
 if(my!==seq)return;
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
+let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false;
+if(acct){
+  const candidates=await candJob;
+  bookIncomplete=!!candidates.incomplete;
+  bookUnavailable=!!candidates.unavailable;
+  if(my!==seq)return;
+  const quoteRem=async(x,eo)=>{
+    const qs=[],groups=[],add=(sel,data,u,v,S,sb)=>{
+      qs.push({data:"0x"+sel+data,u,v,S,sb});return qs.length-1};
+    const z0=encBool(eo)+encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(0n)+encUint(deadline);
+    const zs=encBool(eo)+encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(slipBps)+encUint(deadline);
+    groups.push([add("e453166e",a+rf+z0,4,9),add("e453166e",a+rf+zs,4,9)]);
+    groups.push([add("4c464f59",a+z0,8,13),add("4c464f59",a+zs,8,13)]);
+    if(!eo){
+      const w=slipBps*3n,ss=w<150n?150n:w>500n?500n:w;
+      const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(ss)+encUint(deadline);
+      for(const sel of["892af013","85f86a90"])groups.push([add(sel,a+ps,4,8,1,ss)]);
+    }
+    const raw=await mc3(qs.map(q=>({to:ZQUOTER,data:q.data})),quoteBlock);
+    const ds=qs.map((q,i)=>{try{return raw[i]?decQ(raw[i],q.sb||slipBps,eo,q.u,q.v,q.S):null}catch{return null}});
+    let best=null;
+    for(const g of groups){
+      const y=g.length>1?merge(ds[g[0]],ds[g[1]]):ds[g[0]];
+      if(!y)continue;const v=eo?y.best.amountIn:y.best.amountOut;
+      if(v&&(!best||(eo?v<best.best.amountIn:v>best.best.amountOut)))best=y;
+    }
+    return best;
+  };
+  const gasValue=async wei=>{
+    const token=isIn?t.addr:f.addr;
+    if(token===ZERO||token.toLowerCase()===WETH.toLowerCase())return wei;
+    const eo=!isIn,ti=isIn?ZERO:token,to=isIn?token:ZERO;
+    const z=encBool(eo)+encAddr(ti)+encAddr(to)+encUint(wei)+encUint(0n)+encUint(deadline);
+    try{
+      const raw=await rpc(C,[{to:ZQUOTER,data:"0xe453166e"+a+rf+z},quoteBlock]);
+      const q=decQ(raw,0n,eo,4,9);
+      return isIn?q.best.amountOut:q.best.amountIn;
+    }catch{return null}
+  };
+  const tailDelta=swapAmt-tailAmt;
+  const seedOut=isIn&&tail&&r.best.amountOut>tail.best.amountOut
+    ?r.best.amountOut-tail.best.amountOut:r.best.amountOut;
+  const seedIn=!isIn&&tail&&r.best.amountIn>tail.best.amountIn
+    ?r.best.amountIn-tail.best.amountIn:r.best.amountIn;
+  let p=isIn
+    ?planBookExactIn(candidates,swapAmt,seedOut,tail&&seedOut!==r.best.amountOut?tailDelta:r.best.amountIn)
+    :planBookExactOut(candidates,swapAmt,seedIn,tail&&seedIn!==r.best.amountIn?tailDelta:r.best.amountOut);
+  plannerBounded=!!(p&&p.bounded);
+  let amm=null;
+  for(let round=0;p&&(isIn?p.ammIn:p.ammOut)&&round<2;round++){
+    const rem=isIn?p.ammIn:p.ammOut;
+    amm=await quoteRem(rem,!isIn).catch(()=>null);
+    if(!amm)break;
+    const next=isIn
+      ?planBookExactIn(candidates,swapAmt,amm.best.amountOut,rem)
+      :planBookExactOut(candidates,swapAmt,amm.best.amountIn,rem);
+    if(!next){p=null;break}
+    const stable=(isIn?next.ammIn===p.ammIn:next.ammOut===p.ammOut);
+    p=next;plannerBounded=plannerBounded||!!p.bounded;if(stable)break;
+  }
+  if(p){
+    const rem=isIn?p.ammIn:p.ammOut;
+    amm=rem?await quoteRem(rem,!isIn).catch(()=>null):null;
+    if(!rem||amm){
+      const recipient=rcv||acct;
+      const ammBudget=amm?(isIn?rem:amm.amountLimit):0n;
+      const totalBudget=p.bookIn+ammBudget;
+      const expectedIn=p.bookIn+(amm?amm.best.amountIn:0n);
+      const expectedOut=p.bookOut+(amm?amm.best.amountOut:0n);
+      const saving=isIn
+        ?(expectedOut>r.best.amountOut?expectedOut-r.best.amountOut:0n)
+        :(expectedIn<r.best.amountIn?r.best.amountIn-expectedIn:0n);
+      let gasFloor=null;
+      if(saving){
+        const gasPrice=await gasPriceJob;
+        if(gasPrice){
+          // Conservative incremental executor + settlement gas.
+          const extraWei=gasPrice*(120000n+105000n*BigInt(p.fills.length));
+          gasFloor=await gasValue(extraWei);
+        }
+      }
+      const edgeBps=5n+2n*BigInt(p.fills.length);
+      const fallbackWin=isIn
+        ?expectedOut*10000n>r.best.amountOut*(10000n+edgeBps)
+        :expectedIn*(10000n+edgeBps)<r.best.amountIn*10000n;
+      const wins=saving>0n&&(gasFloor===null?fallbackWin:saving*10n>gasFloor*12n);
+      if(my!==seq)return;
+      if(wins){
+        const fp=encFillPlanAndSwap(
+          p.fills,f.addr,t.addr,recipient,acct,deadline,ammBudget,amm?amm.callData:"0x"
+        );
+        const minOut=isIn?p.bookOut+(amm?amm.amountLimit:0n):swapAmt;
+        // A free full Dutch fill must not sweep unrelated router token dust.
+        const snwapIn=totalBudget===0n?ZERO:f.addr;
+        const planCall=encSnwap(snwapIn,totalBudget,recipient,t.addr,minOut,SWAPBOL,fp);
+        const callData=f.addr===ZERO?planCall:encCalls([
+          encCheckpoint(SWAPBOL,f.addr,acct),planCall
+        ]);
+        let fundedCallData=null;
+        if(f.addr!==ZERO){
+          fundedCallData=encPermit2Hybrid(
+            amm?amm.callData:"0x",p.fills,f.addr,t.addr,recipient,acct,deadline,p.bookIn,p.bookOut
+          );
+        }
+        r={...r,best:{...r.best,amountIn:expectedIn,amountOut:expectedOut},callData,
+          fundedCallData,amountLimit:isIn?minOut:totalBudget,msgValue:f.addr===ZERO?totalBudget:0n};
+        hybrid=isIn
+          ?{bookIn:p.bookIn,bookOut:p.bookOut,ammIn:p.ammIn}
+          :{bookIn:p.bookIn,bookOut:p.bookOut,ammOut:p.ammOut};
+        plannerBounded=plannerBounded||!!p.bounded;
+      }
+    }
+  }
+}
 const finalIn=r.best.amountIn;
 const finalOut=r.best.amountOut;
 if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
 else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
 const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
 const s=r.best.source,raw=SOURCES[s]||"?";
-const src=(s===3||s===4)&&r.best.feeBps?`${raw} ${Number(r.best.feeBps)/100}%`:raw;
+const src=hybrid?"Orderbook + AMM":(s===3||s===4)&&r.best.feeBps?`${raw} ${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
-rate.textContent+=isIn?` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`:` · Max ${trimAmt(r.amountLimit,f.dec)} ${f.sym}`;
+rate.title="";
+if(isIn)rate.textContent+=` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`;
+else{
+const exactMax=formatUnits(r.amountLimit,f.dec);
+rate.textContent+=` · Max ${maxAmt(r.amountLimit,f.dec)} ${f.sym}`;
+rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
+}
+if(bookIncomplete)rate.textContent+=" · Book scan capped";
+if(plannerBounded)rate.textContent+=" · Planner heuristic/capped";
+if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";
+// Hidden below IMPACT_HIDE: deep pairs read a few bps and always showing that
+// teaches people to ignore it. Slippage bounds the QUOTE, not a fair rate, so a
+// ruinous trade passes a tight slippage check untouched.
+const refQ=iRef>=0&&dec[iRef]?dec[iRef].best:null;
+const imp=refQ?impactBps(isIn?finalOut:finalIn,isIn?refQ.amountOut:refQ.amountIn,!isIn):null;
+// The reference leg priced 1/REF_N of this trade, so scaling it up is what the
+// market would have paid. A percentage is abstract under pressure; the amount
+// you are giving up is not, so carry it through to the confirm.
+const mkt=refQ?(isIn?refQ.amountOut:refQ.amountIn)*REF_N:0n;
+const lossTok=imp!==null&&mkt?(isIn?(mkt>finalOut?mkt-finalOut:0n):(finalIn>mkt?finalIn-mkt:0n)):0n;
+if(imp!==null&&imp>=IMPACT_HIDE){
+const pctTxt=(Number(imp)/100).toFixed(2);
+rate.textContent+=` · Impact ${pctTxt}%`;
+if(imp>=IMPACT_WARN)stat.textContent=`High price impact: ${pctTxt}% — about ${trimAmt(lossTok,isIn?t.dec:f.dec)} ${isIn?t.sym:f.sym} worse than the market rate.`;
+}
 const inApprove=isIn?swapAmt:r.msgValue||r.amountLimit;
-if(acct)last={callData:r.callData,msgValue:r.msgValue,amountIn:inApprove,from:f,exp:Date.now()+1500000};
+if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msgValue,
+amountIn:inApprove,from:f,exp:Date.now()+QUOTE_TTL,impact:imp,
+lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
+mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
 }
 let debounceT;
 const showAddr=async()=>{const a=account,short=a.slice(0,6)+"..."+a.slice(-4);
-addr.textContent=short;addr.title=a;
+addr.textContent=short;addr.title=a+" - click to disconnect";addr.classList.add("on");
 const n=await nameRev(a);if(n&&a===account)addr.textContent=n};
+async function disconnect(){
+sessionStorage.setItem("dc","1");
+try{await rpc("wallet_revokePermissions",[{eth_accounts:{}}])}catch{}
+location.reload();
+}
+addr.onclick=()=>{if(account)disconnect()};
 const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(update,250)};
 const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
-amt.addEventListener("input",()=>{setMode("in");fitFont(amt);updateSoon()});
-outAmt.addEventListener("input",()=>{setMode("out");fitFont(outAmt);updateSoon()});
+amt.addEventListener("input",()=>{if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
+outAmt.addEventListener("input",()=>{if(tab==="book"){fitFont(outAmt);render();return}setMode("out");fitFont(outAmt);updateSoon()});
 slip.addEventListener("input",()=>{last=null;render();updateSoon()});
 rc.addEventListener("input",()=>{last=null;sendReady=null;render();updateSoon()});
 slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5))});
@@ -511,7 +787,7 @@ flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/
 window.ethereum?.on?.("chainChanged",()=>location.reload());
 window.ethereum?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
-if(!window.ethereum)return;
+if(!window.ethereum||sessionStorage.getItem("dc"))return;
 try{
 const accs=await rpc("eth_accounts",[]);
 const cid=await rpc(I,[]);
@@ -523,6 +799,481 @@ refreshBalance();update();
 }catch{}
 })();
 const SEL_TRANSFER="a9059cbb";
+// -------------------------------------------------------------- ORDERBOOK
+// Current Swapboard + legacy v1. The deprecated 0x..85B831 board is excluded.
+const SB2="0x0000006c0fBc8CBAe822c41C9DC00956D0941e23";
+const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+const SBVIEW="0x000000B95ee642F1A216ef85b54BF77C127b1F50";
+const SWAPBOL="0x00000040Ba80f8dc500d10ea6cF889b518592756";
+const DUTCH="0x000000b87444cAd0beb79545dcaE8b4508d48179";
+const ORDERBOL="0x0000000B98f59027FAFEac53daEf59D1135e1502";
+const SEL_NEXTID="2a58b330",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7";
+const SEL_FILL1="c37dfc5b",SEL_FILL2="8ab3bfc9",SEL_FILL2_UNWRAP="402ad677",SEL_FILL2_ETH="13092239";
+const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
+const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
+const SEL_DUTCH_LISTING="de74e57b";
+const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466",SEL_FILLPLAN="c277f67c";
+const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
+const SEL_ORDER_FIXED="63b5a5be",SEL_ORDER_DUTCH="921f90cb",SEL_CHECKPOINT="a972985e";
+const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
+const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
+let bookSeq=0,bookRows=[],candCache={};
+
+const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
+const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
+// Token metadata is attacker-controlled. Rows are rendered with innerHTML, so
+// normalize every lens-provided symbol before it reaches text or an SVG.
+const safeSym=s=>String(s??"").replace(/[<>&"'`]/g,"")
+  .replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,16)||"?";
+const escan=(a,id)=>`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
+
+async function leg(addr,amt,isNft,meta){
+  const k=known(addr);
+  if(isNft)return{ic:genIcon("#"),txt:`#${amt}`,ok:0,link:escan(addr,amt)};
+  const raw=meta&&meta.sym?meta:await tokMeta(addr),m={...raw,sym:safeSym(raw.sym)};
+  return{ic:k?sm(k.icon):genIcon(m.sym),txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:escan(addr)};
+}
+
+function decViewPage(hex){
+  const h=strip0x(hex),bytes=h.length/2;
+  const word=b=>{if(b<0||b+32>bytes)throw Error("bad lens page");return BigInt("0x"+h.slice(b*2,(b+32)*2))};
+  const addr=(b)=>"0x"+h.slice((b+12)*2,(b+32)*2);
+  const arr=Number(word(0)),next=word(32);
+  if(!Number.isSafeInteger(arr)||arr<64||arr+32>bytes)throw Error("bad lens offset");
+  const n=Number(word(arr)),head=arr+32;
+  if(!Number.isSafeInteger(n)||n>256||head+n*32>bytes)throw Error("bad lens length");
+  const text=(base,k)=>{const off=Number(word(base+k*32)),p=base+off,len=Number(word(p));
+    if(!Number.isSafeInteger(off)||!Number.isSafeInteger(len)||len>64||p+32+len>bytes)throw Error("bad lens string");
+    const a=new Uint8Array(len);for(let i=0;i<len;i++)a[i]=parseInt(h.slice((p+32+i)*2,(p+33+i)*2),16);
+    return new TextDecoder().decode(a)};
+  const rows=[];
+  for(let i=0;i<n;i++){
+    const off=Number(word(head+i*32)),b=head+off;
+    if(!Number.isSafeInteger(off)||b+16*32>bytes)throw Error("bad lens row");
+    rows.push({id:word(b),maker:addr(b+32),pf:word(b+64)===1n,exp:word(b+96),
+      nA:word(b+128)===1n,nB:word(b+160)===1n,cp:addr(b+192),
+      tA:addr(b+224),aA:word(b+256),sA:safeSym(text(b,9)),dA:Number(word(b+320)),
+      tB:addr(b+352),aB:word(b+384),sB:safeSym(text(b,13)),dB:Number(word(b+448)),board:addr(b+480)});
+  }
+  return{rows,next};
+}
+
+const betterRate=(a,b)=>a.aA*b.aB>b.aA*a.aB;
+const MAX_BOOK_LEGS=32,AON_PAIR_SEEDS=24;
+function planBookExactIn(rows,amountIn,ammOut,ammIn){
+  if(!amountIn||!ammIn)return null;
+  let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aB<=amountIn));
+  const candidateCapped=c.length>256;
+  const aonCount=c.reduce((n,o)=>n+!o.pf,0);
+  const aonBounded=aonCount>=3;
+  c.sort((a,b)=>betterRate(a,b)?-1:betterRate(b,a)?1:0);
+  if(c.length>256)c.length=256;
+  const build=(seed=-1,seed2=-1)=>{
+    let rem=amountIn,bin=0n,bout=0n,fills=[],legCapped=false;
+    const take=o=>{
+      if(o.aA*ammIn<=ammOut*o.aB)return;
+      if(!o.pf&&o.aB>rem)return;
+      if(fills.length>=MAX_BOOK_LEGS){legCapped=true;return}
+      if(o.aB===0n){
+        fills.push({id:o.id,board:o.board,pay:0n,get:o.aA,part:false});
+        bout+=o.aA;return;
+      }
+      const pay=o.aB<rem?o.aB:rem;
+      if(!pay)return;
+      const get=o.pf?o.aA*pay/o.aB:o.aA;
+      if(!get)return;
+      fills.push({id:o.id,board:o.board,pay,get,part:o.pf&&pay<o.aB});
+      rem-=pay;bin+=pay;bout+=get;
+    };
+    if(seed>=0)take(c[seed]);
+    if(seed2>=0)take(c[seed2]);
+    for(let i=0;i<c.length;i++)if(i!==seed&&i!==seed2)take(c[i]);
+    return{fills,bookIn:bin,bookOut:bout,ammIn:rem,score:bout+rem*ammOut/ammIn,
+      bounded:candidateCapped||aonBounded||legCapped};
+  };
+  let best=build(-1);
+  for(let i=0;i<c.length;i++)if(!c[i].pf){
+    const p=build(i);if(p.score>best.score)best=p;
+  }
+  const aon=[];for(let i=0;i<c.length&&aon.length<AON_PAIR_SEEDS;i++)if(!c[i].pf)aon.push(i);
+  for(let i=0;i<aon.length;i++)for(let j=i+1;j<aon.length;j++){
+    const p=build(aon[i],aon[j]);if(p.score>best.score)best=p;
+  }
+  return best.fills.length?best:null;
+}
+
+const cheaperRate=(a,b)=>a.aB*b.aA<b.aB*a.aA;
+function planBookExactOut(rows,amountOut,ammIn,ammOut){
+  if(!amountOut||!ammOut)return null;
+  let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aA<=amountOut));
+  const candidateCapped=c.length>256;
+  const aonCount=c.reduce((n,o)=>n+!o.pf,0);
+  const aonBounded=aonCount>=3;
+  c.sort((a,b)=>cheaperRate(a,b)?-1:cheaperRate(b,a)?1:0);
+  if(c.length>256)c.length=256;
+  const build=(seed=-1,seed2=-1)=>{
+    let left=amountOut,bin=0n,bout=0n,fills=[],legCapped=false;
+    const take=o=>{
+      if(o.aB*ammOut>=ammIn*o.aA)return;
+      if(!o.pf&&o.aA>left)return;
+      if(fills.length>=MAX_BOOK_LEGS){legCapped=true;return}
+      const want=o.aA<left?o.aA:left;
+      let pay,get;
+      if(o.aB===0n){pay=0n;get=want}
+      else if(want===o.aA){pay=o.aB;get=o.aA}
+      else{
+        pay=(want*o.aB+o.aA-1n)/o.aA;
+        if(pay>o.aB)pay=o.aB;
+        get=pay*o.aA/o.aB;
+      }
+      if(!get)return;
+      fills.push({id:o.id,board:o.board,pay,get,part:want!==o.aA});
+      bin+=pay;bout+=get;left-=get<left?get:left;
+    };
+    if(seed>=0)take(c[seed]);
+    if(seed2>=0)take(c[seed2]);
+    for(let i=0;i<c.length&&left;i++)if(i!==seed&&i!==seed2)take(c[i]);
+    return{fills,bookIn:bin,bookOut:bout,ammOut:left,score:bin+left*ammIn/ammOut,
+      bounded:candidateCapped||aonBounded||legCapped};
+  };
+  let best=build(-1);
+  for(let i=0;i<c.length;i++)if(!c[i].pf){
+    const p=build(i);if(p.score<best.score)best=p;
+  }
+  const aon=[];for(let i=0;i<c.length&&aon.length<AON_PAIR_SEEDS;i++)if(!c[i].pf)aon.push(i);
+  for(let i=0;i<aon.length;i++)for(let j=i+1;j<aon.length;j++){
+    const p=build(aon[i],aon[j]);if(p.score<best.score)best=p;
+  }
+  return best.fills.length?best:null;
+}
+
+function encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline){
+  let tail=encUint(fills.length);
+  for(const f of fills)tail+=encUint(f.id)+encAddr(f.board)+encUint(f.pay)+encUint(f.get)+encBool(f.part);
+  return"0x"+SEL_FILLPLAN+encAddr(tokenIn)+encAddr(tokenOut)+encAddr(recipient)+encAddr(refundTo)
+    +encUint(deadline)+encUint(192)+tail;
+}
+
+function encFillPlanAndSwap(fills,tokenIn,tokenOut,recipient,refundTo,deadline,ammIn,ammData){
+  let ft=encUint(fills.length);
+  for(const f of fills)ft+=encUint(f.id)+encAddr(f.board)+encUint(f.pay)+encUint(f.get)+encBool(f.part);
+  const d=strip0x(ammData||"0x"),dt=encUint(d.length/2)+d.padEnd(Math.ceil(d.length/64)*64,"0");
+  return"0x"+SEL_FILLPLAN_SWAP+encAddr(tokenIn)+encAddr(tokenOut)+encAddr(recipient)+encAddr(refundTo)
+    +encUint(deadline)+encUint(256)+encUint(ammIn)+encUint(256+ft.length/2)+ft+dt;
+}
+
+function encSnwap(tokenIn,amountIn,recipient,tokenOut,minOut,executor,data){
+  const d=strip0x(data),body=encUint(d.length/2)+d.padEnd(Math.ceil(d.length/64)*64,"0");
+  return"0x"+SEL_SNWAP+encAddr(tokenIn)+encUint(amountIn)+encAddr(recipient)+encAddr(tokenOut)
+    +encUint(minOut)+encAddr(executor)+encUint(224)+body;
+}
+const encCheckpoint=(executor,token,recipient)=>encSnwap(
+  ZERO,0n,recipient,ZERO,0n,executor,"0x"+SEL_CHECKPOINT+encAddr(token)
+);
+const encSweep=(token,amount,to)=>"0x"+SEL_SWEEP+encAddr(token)+encUint(0)+encUint(amount)+encAddr(to);
+function encPermit2Hybrid(ammData,fills,tokenIn,tokenOut,recipient,refundTo,deadline,bookIn,bookOut){
+  const bookData=encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline);
+  // Isolate the exact book budget before an exact-out AMM has a chance to
+  // sweep/refund zRouter's whole token balance. The book executor is already
+  // prefunded, so the protecting outer snwap uses a zero token input.
+  const steps=[encCheckpoint(SWAPBOL,tokenIn,refundTo)];
+  if(bookIn)steps.push(encSweep(tokenIn,bookIn,SWAPBOL));
+  steps.push(encSnwap(ZERO,0n,recipient,tokenOut,bookOut,SWAPBOL,bookData));
+  if(ammData&&ammData!=="0x")steps.push(ammData);
+  // Exact-out AMMs can spend less than their maximum. Return anything still
+  // physically held by zRouter to the payer, never the output recipient.
+  steps.push(encSweep(tokenIn,0n,refundTo));
+  return encCalls(steps);
+}
+
+async function swapCandidates(tokenIn,tokenOut,block){
+  const key=tokenIn.toLowerCase()+":"+tokenOut.toLowerCase(),old=candCache[key];
+  if(old&&Date.now()-old.at<15000&&old.block===block){
+    old.rows.incomplete=old.incomplete;return old.rows;
+  }
+  const snapshotAt=Date.now();
+  const boardIn=tokenIn===ZERO?WETH:tokenIn;
+  const boardOut=tokenOut===ZERO?WETH:tokenOut;
+  const [lc,le]=await Promise.all([
+    rpc("eth_getCode",[SBVIEW,block]),rpc("eth_getCode",[SWAPBOL,block])
+  ]);
+  if(lc.length<5||le.length<5){
+    const rows=[];rows.unavailable=true;return rows;
+  }
+  const specs=[...BOARDS];
+  if(DUTCH!==ZERO&&(await rpc("eth_getCode",[DUTCH,block])).length>4){
+    specs.push({a:DUTCH,dutch:1,ti:tokenIn});
+    // Swapbol can wrap the native route budget per Dutch leg, so ETH users
+    // compete against both literal-ETH and WETH-quoted Dutch liquidity.
+    if(tokenIn===ZERO)specs.push({a:DUTCH,dutch:1,ti:WETH});
+  }
+  const groups=await Promise.all(specs.map(async b=>{
+    let cursor=0n,out=[],turns=0,incomplete=false,failed=false;
+    try{do{
+      // Swapboards are WETH books at the native boundary. Dutchboard can take
+      // native quote payment directly, but its sold lot is always ERC-20, so
+      // native output is represented by a WETH lot and unwrapped by Swapbol.
+      const ti=b.dutch?b.ti:boardIn,to=boardOut;
+      const data="0x"+(b.dutch?SEL_DUTCH_CANDS:SEL_CANDS)+encAddr(b.a)
+        +(b.dutch?"":encBool(b.v2))+encAddr(ti)+encAddr(to)+encAddr(SWAPBOL)
+        +encUint(cursor)+encUint(512);
+      const p=decViewPage(await rpc(C,[{to:SBVIEW,data},block]));
+      out.push(...p.rows.map(r=>({...r,v2:b.v2||0,dutch:b.dutch||0})));
+      cursor=p.next;
+      ++turns;
+    }while(cursor&&turns<64)}catch{failed=true;incomplete=true}
+    incomplete=incomplete||!!cursor;
+    return{out,incomplete,failed};
+  }));
+  let rows=groups.flatMap(g=>g.out);
+  if(tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()){
+    rows=rows.filter(r=>r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO);
+  }
+  const incomplete=groups.some(g=>g.incomplete);
+  rows.incomplete=incomplete;
+  rows.unavailable=groups.every(g=>g.failed&&!g.out.length);
+  // A slow older request must not make a later block look freshly cached.
+  const current=candCache[key],bn=BigInt(block),cn=current?BigInt(current.block):-1n;
+  if(!current||bn>cn||(bn===cn&&snapshotAt>=current.at)){
+    candCache[key]={at:snapshotAt,block,rows,incomplete};
+  }
+  // Entries are only fresh for 15s; drop the rest so a long session that touches
+  // many pairs does not pin every page of every book it ever quoted.
+  for(const k in candCache)if(k!==key&&snapshotAt-candCache[k].at>60000)delete candCache[k];
+  return rows;
+}
+
+async function lensBookRows(my){
+  if((await rpc("eth_getCode",[SBVIEW,L])).length<5)return null;
+  const specs=[...BOARDS];
+  if(DUTCH!==ZERO&&(await rpc("eth_getCode",[DUTCH,L])).length>4)specs.push({a:DUTCH,dutch:1});
+  const pages=await Promise.all(specs.map(async b=>{
+    let cursor=0n,out=[],turns=0;
+    do{
+      const data="0x"+(b.dutch?SEL_RECENT_DUTCH:SEL_RECENT)+encAddr(b.a)
+        +(b.dutch?"":encBool(b.v2))+encUint(cursor)+encUint(80)+encUint(256);
+      const p=decViewPage(await rpc(C,[{to:SBVIEW,data},L]));
+      out.push(...p.rows.map(r=>({...r,v2:b.v2||0,dutch:b.dutch||0})));
+      cursor=p.next;
+    }while(cursor&&out.length<160&&++turns<64&&my===bookSeq);
+    return out;
+  }));
+  return pages.flat();
+}
+
+async function loadBook(){
+  if(!account||tab!=="book"){book.innerHTML="";return}
+  const my=++bookSeq;
+  const live=[];
+  for(const b of BOARDS){
+    let code="0x";
+    try{code=await rpc("eth_getCode",[b.a,L])}catch{}
+    if(code.length>4)live.push(b);
+  }
+  if(my!==bookSeq)return;
+  if(!live.length){book.innerHTML='<h6><span>Orderbook</span></h6><div class="o"><span class="l"><i>No Swapboard deployed on this network yet.</i></span></div>';return}
+  let rows=null;
+  try{rows=await lensBookRows(my)}catch{rows=null}
+  if(my!==bookSeq)return;
+  if(!rows)rows=[];
+  for(const b of rows.length?[]:live){
+    let total=0;
+    try{total=Number(BigInt(await rpc(C,[{to:b.a,data:"0x"+SEL_NEXTID},L])))}catch{continue}
+    if(!total)continue;
+    // newest first: low ids are overwhelmingly filled or cancelled
+    const hi=total,lo=Math.max(0,hi-40);
+    const ids=[];for(let i=hi-1;i>=lo;--i)ids.push(i);
+    let raw="";
+    try{raw=await rpc(C,[{to:b.a,data:"0x"+SEL_GETORDERS+encUint(32)+encUint(ids.length)+ids.map(i=>encUint(i)).join("")},L])}catch{continue}
+    if(my!==bookSeq)return;
+    const h=strip0x(raw);if(!h)continue;
+    const w=WORDS(b.v2),n=Number(BigInt("0x"+h.slice(64,128)));
+    const at=(r,k)=>BigInt("0x"+h.slice(128+(r*w+k)*64,128+(r*w+k+1)*64));
+    const ad=(r,k)=>"0x"+h.slice(128+(r*w+k)*64+24,128+(r*w+k+1)*64);
+    for(let r=0;r<n&&r<ids.length;++r){
+      if(at(r,1)!==1n)continue;                       // not active
+      const o=b.v2
+        ?{id:ids[r],board:b.a,v2:1,maker:ad(r,0),pf:at(r,2)===1n,exp:at(r,3),
+          nA:at(r,4)===1n,nB:at(r,5)===1n,cp:ad(r,6),
+          tA:ad(r,7),aA:at(r,8),tB:ad(r,9),aB:at(r,10)}
+        :{id:ids[r],board:b.a,v2:0,maker:ad(r,0),pf:0,exp:0n,nA:0,nB:0,
+          cp:ZERO,tA:ad(r,2),aA:at(r,3),tB:ad(r,4),aB:at(r,5)};
+      if(o.exp&&BigInt(Math.floor(Date.now()/1e3))>o.exp)continue;   // expired
+      if(o.cp!==ZERO
+        &&o.cp.toLowerCase()!==account.toLowerCase()
+        &&o.maker.toLowerCase()!==account.toLowerCase())continue; // neither maker nor permitted taker
+      rows.push(o);
+    }
+  }
+  if(my!==bookSeq)return;
+  rows=rows.filter(o=>{
+    if(o.exp&&BigInt(Math.floor(Date.now()/1e3))>o.exp)return false;
+    return o.cp===ZERO
+      ||o.cp.toLowerCase()===account.toLowerCase()
+      ||o.maker.toLowerCase()===account.toLowerCase();
+  });
+  const dutchRows=rows.filter(r=>r.dutch);
+  if(dutchRows.length){
+    const raw=await mc3(dutchRows.map(r=>({to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(r.id)})));
+    raw.forEach((x,i)=>{if(!x)return;const h=strip0x(x),w=n=>BigInt("0x"+h.slice(n*64,(n+1)*64));
+      if(h.length>=640)Object.assign(dutchRows[i],{
+        start:w(2),duration:w(3),startPrice:w(5),endPrice:w(7),initial:w(8),remaining:w(9)
+      });
+    });
+  }
+  bookRows=rows;
+  if(!rows.length){book.innerHTML='<h6><span>Orderbook</span><span>0</span></h6>';return}
+  const legs=await Promise.all(rows.map(r=>Promise.all([
+    leg(r.tA,r.aA,r.nA,r.sA!=null?{sym:r.sA,dec:r.dA}:null),
+    leg(r.tB,r.aB,r.nB,r.sB!=null?{sym:r.sB,dec:r.dB}:null)
+  ])));
+  if(my!==bookSeq)return;
+  let own="",rest="",nOwn=0,nRest=0;
+  rows.forEach((r,i)=>{
+    const[a,bg]=legs[i];
+    const mine=r.maker.toLowerCase()===account.toLowerCase();
+    const tags=(r.nA||r.nB?'<span class="tg">NFT</span>':"")
+      +(r.v2&&!r.pf&&!r.nA&&!r.nB?'<span class="tg">AON</span>':"")
+      +(r.dutch?'<span class="tg">Dutch</span>':"")
+      +(r.cp!==ZERO?'<span class="tg">private</span>':"")
+      +(!a.ok||!bg.ok?'<span class="tg w">unverified</span>':"");
+    const now=BigInt(Math.floor(Date.now()/1e3));
+    let when=r.exp?" · "+rel(Number(r.exp-now))+" left":"";
+    if(r.dutch&&r.duration){
+      const end=r.start+r.duration;
+      const floor=r.initial?(r.endPrice*r.remaining+r.initial-1n)/r.initial:0n;
+      when=now>=end?` · floor reached: ${trimAmt(floor,r.dB)} ${r.sB}`
+        :` · floor ${trimAmt(floor,r.dB)} ${r.sB} in ${rel(Number(end-now))}`;
+    }
+    const act=mine?`<button data-x="c" data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}">Cancel</button>`
+                  :`<button data-x="f" data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}">Fill</button>`;
+    const row=`<div class="o"><span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
+      +`<i>${a.link}${tags}${when}</i></span></span>${act}</div>`;
+    if(mine){own+=row;++nOwn}else{rest+=row;++nRest}
+  });
+  let html="";
+  if(nOwn)html+=`<h6><span>Your orders</span><span>${nOwn}</span></h6>`+own;
+  if(nRest)html+=`<h6><span>Orderbook</span><span>${nRest}</span></h6>`+rest;
+  book.innerHTML=html;
+}
+
+book.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-i]");
+  if(!b)return;
+  b.disabled=true;
+  try{
+    await checkWallet();
+    const id=BigInt(b.dataset.i),to=b.dataset.b,dl=BigInt(Math.floor(Date.now()/1e3)+1800);
+    const row=bookRows.find(x=>String(x.id)===b.dataset.i&&x.board.toLowerCase()===to.toLowerCase());
+    if(!row)throw Error("order changed — refresh and retry");
+    // The token selects can transiently read "__custom", so never index blind.
+    const selFrom=TOKENS[fromSel.value],selTo=TOKENS[toSel.value];
+    if(b.dataset.x==="c"){
+      const native=selFrom?.addr===ZERO&&!row.nA
+        &&row.tA.toLowerCase()===WETH.toLowerCase();
+      const sel=b.dataset.d==="1"
+        ?(native?SEL_DUTCH_CANCEL_UNWRAP:SEL_DUTCH_CANCEL)
+        :(native&&b.dataset.v==="1"?SEL_CANCEL_UNWRAP:SEL_CANCELORD);
+      const data="0x"+sel+encUint(id);
+      stat.textContent=`Cancelling — the unfilled remainder returns as ${native&&(b.dataset.d==="1"||b.dataset.v==="1")?"ETH":"its escrow token"}`;
+      const tx={from:account,to,data,value:"0x0"};
+      await rpc(C,[tx,L]);
+      await settle(await rpc(S,[tx]));
+      loadBook();refreshBalance();return;
+    }
+
+    const r=row;
+
+    // Public fungible orders can use the same zRouter funding waterfall as a
+    // swap. Swapbol remains msg.sender at the board, so private orders must
+    // stay on the direct-wallet path below or their counterparty guard would
+    // be weakened. NFTs likewise keep their native approval semantics.
+    const nativeOut=selTo?.addr===ZERO&&!r.nA
+      &&r.tA.toLowerCase()===WETH.toLowerCase();
+    const nativeIn=selFrom?.addr===ZERO&&!r.nB
+      &&r.tB.toLowerCase()===WETH.toLowerCase();
+    const routeIn=nativeIn?ZERO:r.tB;
+    const routeOut=nativeOut?ZERO:r.tA;
+    const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()
+      ||(routeOut===ZERO&&routeIn.toLowerCase()===WETH.toLowerCase());
+    if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
+      if((await rpc("eth_getCode",[SWAPBOL,L])).length<5)throw Error("orderbook executor not deployed yet");
+      const pay=r.aB,fillPlan=encFillPlan([
+        {id:r.id,board:r.board,pay,get:r.aA,part:false}
+      ],routeIn,routeOut,account,account,dl);
+      // amount == 0 means "sweep all" to zRouter, so a free Dutch fill must
+      // name native input on the protecting snwap even when its quote is ERC20.
+      const planCall=encSnwap(pay?routeIn:ZERO,pay,account,routeOut,r.aA,SWAPBOL,fillPlan);
+      const checkpoint=routeIn===ZERO?null:encCheckpoint(SWAPBOL,routeIn,account);
+      const direct=checkpoint?encCalls([checkpoint,planCall]):planCall;
+      const funded=routeIn===ZERO||!pay?direct:encCalls([
+        checkpoint,
+        encSweep(routeIn,pay,SWAPBOL),
+        encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)
+      ]);
+      const meta=known(routeIn)||{addr:routeIn,sym:r.sB||"TOKEN",dec:r.dB||18};
+      await sendRouterFunded(direct,funded,meta,pay,routeIn===ZERO?pay:0n,"Filling order...");
+      loadBook();refreshBalance();return;
+    }
+
+    const data=r.dutch
+      ?"0x"+SEL_DUTCH_FILL+encUint(id)+encUint(r.nA?0n:r.aA)+encAddr(account)+encUint(r.aB)
+      :r.v2
+        ?"0x"+(nativeIn?SEL_FILL2_ETH:nativeOut?SEL_FILL2_UNWRAP:SEL_FILL2)
+          +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encAddr(ZERO) // 0 = full fill
+        :"0x"+SEL_FILL1+encUint(id)+encUint(dl);
+    // Swapboard has a native prepaid fill. Dutch NFT lots are not routed
+    // through snwap's ERC20 balance guard, so wrap + approve + fill them with
+    // wallet batching when available (and as recoverable legacy steps otherwise).
+    const wrap=nativeIn&&r.dutch&&r.aB
+      ?{to:WETH,data:"0xd0e30db0",value:toHex(r.aB)}:null;
+    // Only Swapboard v2 has a payable ETH fill. A v1 order quoted in WETH still
+    // reads as `nativeIn`, but it must be paid by approval, not by msg.value.
+    const payNative=(nativeIn&&!r.dutch&&r.v2)||(r.dutch&&r.tB===ZERO);
+    const tx={from:account,to,data,value:payNative?toHex(r.aB):"0x0"};
+    const approvals=[];
+    if(r.nB){
+      let ap=ZERO;
+      try{ap="0x"+strip0x(await rpc(C,[{to:r.tB,data:"0x081812fc"+encUint(r.aB)},L])).slice(-40)}catch{}
+      if(ap.toLowerCase()!==to.toLowerCase()){
+        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(r.aB),value:"0x0"});
+      }
+    }else if(r.tB!==ZERO&&r.aB&&!(nativeIn&&!r.dutch&&r.v2)){
+      const al=BigInt(await rpc(C,[{to:r.tB,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(to)},L]));
+      if(al<r.aB){
+        // Clear a stale non-zero allowance for USDT-style tokens.
+        if(al)approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(0n),value:"0x0"});
+        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(r.aB),value:"0x0"});
+      }
+    }
+    const revoke=r.dutch&&!r.nB&&r.tB!==ZERO
+      ?{to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(0n),value:"0x0"}:null;
+    if((wrap||approvals.length||revoke)&&await canBatch(account)){
+      stat.textContent="Preparing and filling atomically...";
+      await settle(await sendBatch(account,[
+        ...(wrap?[wrap]:[]),...approvals,{to,data,value:tx.value},...(revoke?[revoke]:[])
+      ]));
+      loadBook();refreshBalance();return;
+    }
+    if(wrap){
+      stat.textContent="Wrapping ETH...";
+      await waitTx(await rpc(S,[{from:account,...wrap}]));
+    }
+    for(let i=0;i<approvals.length;i++){
+      stat.textContent=`Approve${r.nB?" NFT":""}${approvals.length>1?` (${i+1}/${approvals.length})`:""}...`;
+      await waitTx(await rpc(S,[{from:account,...approvals[i]}]));
+    }
+    await rpc(C,[tx,L]);
+    await settle(await rpc(S,[tx]));
+    if(revoke)try{
+      stat.textContent="Filled · revoking quote allowance...";
+      await waitTx(await rpc(S,[{from:account,...revoke}]));
+      stat.textContent="Done";
+    }catch{stat.textContent="Filled · quote allowance remains; revoke it in your wallet"}
+    loadBook();refreshBalance();
+  }catch(x){err(x);b.disabled=false}
+});
+
 const SLOW="0x000000000000888741B254d37e1b27128AfEAaBC";
 const SEL_DEPOSITTO="94eeaec9",SEL_CLAIM="379607f5",SEL_REVERSE="97d15425",SEL_WITHDRAWFROM="d4fdc309";
 const SEL_OUT="d40d4bc6",SEL_IN="e3993ee7",SEL_PENDING="6577b86a";
@@ -547,7 +1298,8 @@ metaCache.set(a,m);return m;
 }
 const rel=s=>{const a=Math.abs(s),u=[[86400,"d"],[3600,"h"],[60,"m"]];
 for(const[n,l]of u)if(a>=n)return Math.floor(a/n)+l;return a+"s"};
-let posSeq=0;
+let posSeq=0,posShown=25;
+const POSPAGE=25;
 async function loadPos(){
 if(!account){pos.innerHTML="";tabSend.textContent="Send";return}
 const my=++posSeq;
@@ -562,9 +1314,16 @@ if(my!==posSeq)return;
 const dirs=new Map();
 for(const[t,d]of[...outIds.map(i=>[i,"out"]),...inIds.map(i=>[i,"in"])]){
 const k=t.toString();dirs.set(k,(dirs.get(k)||"")+d)}
-const keys=[...dirs.keys()];
-const ps=await Promise.all(keys.map(k=>
-rpc(C,[{to:SLOW,data:"0x"+SEL_PENDING+encUint(BigInt(k))},L]).catch(()=>0)));
+// newest first: ids climb, so the tail is the most recent
+const allKeys=[...dirs.keys()].sort((a,b)=>a.length-b.length||(a<b?1:-1));
+const keys=allKeys.slice(0,posShown);
+const more=allKeys.length-keys.length;
+const ps=[];
+for(let i=0;i<keys.length;i+=10){
+ps.push(...await Promise.all(keys.slice(i,i+10).map(k=>
+rpc(C,[{to:SLOW,data:"0x"+SEL_PENDING+encUint(BigInt(k))},L]).catch(()=>0))));
+if(my!==posSeq)return;
+}
 if(my!==posSeq)return;
 const rows=[];
 keys.forEach((k,i)=>{const p=ps[i];if(!p)return;
@@ -573,7 +1332,8 @@ if(ts===0n)return;
 rows.push({tid:BigInt(k),dir:dirs.get(k),ts,id:w(p,3),amount:w(p,4)})});
 const now=BigInt(Math.floor(Date.now()/1e3));
 const ready=rows.filter(r=>r.dir.includes("in")&&now>=r.ts+idDelay(r.id)).length;
-tabSend.textContent=ready?`Send (${ready})`:"Send";
+// the badge counts what has been loaded; a trailing + means there is more
+tabSend.textContent=ready?`Send (${ready}${more?"+":""})`:"Send";
 if(tab!=="send"||!rows.length){pos.innerHTML="";return}
 rows.sort((a,b)=>Number((a.ts+idDelay(a.id))-(b.ts+idDelay(b.id))));
 const metas=await Promise.all(rows.map(r=>tokMeta(idTok(r.id))));
@@ -592,9 +1352,12 @@ else if(oo&&!ripe)act=`<button data-a="r" data-t="${r.tid}" data-i="${r.id}" dat
 else act=`<button disabled>${io?"In":"Out"}</button>`;
 html+=`<div class="p"><span><b>${oo&&io?"↺":oo?"→":"←"} ${amt}</b><i>${note}</i></span>${act}</div>`;
 });
+if(more)html+=`<div class="p" style="justify-content:center"><button data-a="m">Show ${Math.min(more,POSPAGE)} more of ${more}</button></div>`;
 pos.innerHTML=html;
 }
 pos.addEventListener("click",async e=>{
+const m=e.target.closest('button[data-a="m"]');
+if(m){posShown+=POSPAGE;m.disabled=true;loadPos();return}
 const b=e.target.closest("button[data-t]");
 if(!b)return;
 b.disabled=true;
@@ -615,7 +1378,7 @@ refreshBalance();loadPos();
 });
 
 const rcvOf=async v=>{
-if(/^0x[0-9a-fA-F]{40}$/.test(v))return v;
+if(/^0x[0-9a-fA-F]{40}$/.test(v))return /^0x0{40}$/i.test(v)?"":v;
 if(!/\.(g?wei|eth)$/i.test(v))return "";
 let a="";try{a=await nameFwd(v.toLowerCase())}catch{}
 return !a||/^0x0{40}$/i.test(a)?"":a;
@@ -644,18 +1407,48 @@ if(amount>0n)sendReady={to,amount,token:f,label:/^0x/.test(v)?to.slice(0,6)+"\u2
 render();
 }
 const setTab=t=>{
-tab=t;last=null;sendReady=null;stat.textContent="";
-tabSwap.classList.toggle("on",t==="swap");tabSend.classList.toggle("on",t==="send");
-for(const el of[rcvPanel,flip,slipL])el.classList.toggle("hide",t==="send");
-dlyL.classList.toggle("hide",t!=="send");
-payL.textContent=t==="send"?"Amount":"You pay";
-loadPos();
-rc.placeholder=t==="send"?"Recipient \u2014 0x or .eth/.(g)wei":"Recipient (optional) \u2014 0x or .eth/.(g)wei";
+if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
+tab=t;last=null;sendReady=null;stat.textContent="";posShown=POSPAGE;
+const send=t==="send",bk=t==="book";
+tabSwap.classList.toggle("on",t==="swap");
+tabSend.classList.toggle("on",send);
+tabBook.classList.toggle("on",bk);
+// the pay/receive panels already describe a limit order, so the orders tab
+// reuses them: sell this, want that. Only the labels and the slippage change.
+for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+slipL.classList.toggle("hide",t!=="swap");
+dlyL.classList.toggle("hide",t==="swap");
+kindL.classList.toggle("hide",!bk);
+dlyL.firstChild.nodeValue=bk?"Expires":"Time lock";
+dly.options[0].textContent=bk?"Never":"Instant";
+if(send)dly.value=sendD;else if(bk)dly.value=bookD;
+payL.textContent=send?"Amount":bk?"You sell":"You pay";
+rcvHdr.textContent=bk&&kind.value==="dutch"?"Start ask total":bk?"You want":"You receive";
+rc.placeholder=send?"Recipient \u2014 0x or .eth/.(g)wei"
+:bk?"Private to (optional) \u2014 0x or .eth/.(g)wei"
+:"Recipient (optional) \u2014 0x or .eth/.(g)wei";
+syncOrderType();
+loadPos();loadBook();
 outAmt.value="";mode="in";
 update();
 };
-dly.onchange=()=>render();
-setInterval(()=>{if(account&&!document.hidden)loadPos()},3e4);
+dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;render()};
+fill.onchange=render;
+const syncOrderType=()=>{
+  const dutch=tab==="book"&&kind.value==="dutch";
+  floorL.classList.toggle("hide",!dutch);
+  fillL.classList.toggle("hide",tab!=="book"||dutch);
+  rc.classList.toggle("hide",dutch);
+  rcvEl.classList.toggle("hide",dutch);
+  // Persist the forced default too, or leaving and re-entering the tab restores
+  // "Never" and the button silently reverts to "Choose decay duration".
+  if(dutch&&+dly.value===0){dly.value="86400";if(tab==="book")bookD=dly.value}
+  if(tab==="book")rcvHdr.textContent=dutch?"Start ask total":"You want";
+};
+kind.onchange=()=>{syncOrderType();render()};
+floorAmt.addEventListener("input",()=>{fitFont(floorAmt);render()});
+tabBook.onclick=()=>setTab("book");
+setInterval(()=>{if(account&&!document.hidden){loadPos();if(tab==="book")loadBook()}},3e4);
 // SHAREABLE LINKS  (prefill only - nothing is ever auto-submitted)
 //   #to=alice.wei&amount=10&token=USDC            request a payment
 //   #to=alice.wei&amount=1&token=ETH&lock=1d      request it time-locked via SLOW
@@ -676,6 +1469,13 @@ const fi=await tok(q.get("token")),oi=await tok(q.get("out"));
 rebuild();
 if(fi>=0)fromSel.value=fi;
 if(oi>=0&&oi!==fi)toSel.value=oi;
+// A link naming only one side can collide with whatever the other side already
+// held (e.g. #token=USDC against the default USDC output). Move the side the
+// link did not ask for rather than dead-ending on "Pick different tokens".
+if(fromSel.value===toSel.value){
+const alt=String(TOKENS.findIndex((t,i)=>String(i)!==fromSel.value));
+if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
+}
 syncDisabled();
 const to=q.get("to");if(to)rc.value=to;
 const lk=lsecs(q.get("lock"));
@@ -753,14 +1553,142 @@ amt.value="";fitFont(amt);sendReady=null;
 refreshBalance();render();loadPos();
 }catch(e){err(e);render()}
 }
+
+async function sendRouterFunded(callData,fundedCallData,token,amount,msgValue,verb){
+  await checkWallet();
+  let data=callData,batch=null;
+  if(token.addr!==ZERO){
+    const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
+    const allowance=BigInt(await rpc(C,[{to:token.addr,data:allowData},L]));
+    if(allowance<amount){
+      let ready=false;
+      const pi=await permitInfo(token.addr,account);
+      if(pi)try{
+        stat.textContent="Sign approval...";
+        const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
+        data=encCalls([await signPermit(token.addr,pi,account,amount,pd),callData]);
+        ready=true;
+      }catch(e){if(isRejection(e))throw e}
+      const selected=TOKENS[fromSel.value];
+      const walletBal=selected&&selected.addr.toLowerCase()===token.addr.toLowerCase()
+        ?fromBalance:BigInt(await rpc(C,[{to:token.addr,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
+      if(!ready&&walletBal>=amount&&await p2Ready(token.addr,account)>=amount)try{
+        stat.textContent="Sign approval...";
+        const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
+        data=encCalls([await signPermit2(token.addr,account,amount,pd),fundedCallData||callData]);
+        ready=true;
+      }catch(e){if(isRejection(e))throw e}
+      if(!ready&&await canBatch(account)){
+        const pre=allowance>0n
+          ?[{to:token.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(0n),value:"0x0"}]:[];
+        batch=[...pre,
+          {to:token.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amount),value:"0x0"},
+          {to:ZROUTER,data:callData,value:toHex(msgValue)}];
+        ready=true;
+      }
+      if(!ready){
+        const approvals=allowance>0n?[0n,amount]:[amount];
+        for(let i=0;i<approvals.length;i++){
+          stat.textContent=`Approve ${token.sym}${approvals.length>1?` (${i+1}/${approvals.length})`:""}...`;
+          const h=await rpc(S,[{from:account,to:token.addr,
+            data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(approvals[i]),value:"0x0"}]);
+          await waitTx(h);
+        }
+        const fresh=BigInt(await rpc(C,[{to:token.addr,data:allowData},L]));
+        if(fresh<amount)throw Error("approval failed");
+      }
+    }
+  }
+  stat.textContent=verb;
+  let tx;
+  if(batch){await checkWallet();tx=await sendBatch(account,batch)}
+  else{
+    const req={from:account,to:ZROUTER,data,value:toHex(msgValue)};
+    await rpc(C,[req,L]);await checkWallet();tx=await rpc(S,[req]);
+  }
+  await settle(tx);
+}
+
+async function placeOrder(){
+const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
+swap.disabled=true;
+try{
+const sell=parseUnits(amt.value.trim(),f.dec),want=parseUnits(outAmt.value.trim(),t.dec);
+const dutch=kind.value==="dutch";
+const floor=dutch&&floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),t.dec):0n;
+const board=dutch?DUTCH:SB2;
+const quoteToken=!dutch&&t.addr===ZERO?WETH:t.addr;
+const [bc,oc]=await Promise.all([rpc("eth_getCode",[board,L]),rpc("eth_getCode",[ORDERBOL,L])]);
+if(bc.length<5)throw Error(`${dutch?"Dutch":"fixed"} orderbook not deployed yet`);
+if(oc.length<5)throw Error("routed order adapter not deployed yet");
+if(f.addr===ZERO&&t.addr===WETH)throw Error("pick a non-WETH quote token");
+if(!dutch&&(f.addr===WETH||f.addr===ZERO)&&quoteToken===WETH)throw Error("pick different tokens");
+if(dutch&&floor>want)throw Error("floor exceeds start price");
+let cp=ZERO;
+const v=rc.value.trim();
+if(!dutch&&v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
+const pf=fill.value==="1"?1n:0n;
+let orderData;
+if(dutch){
+  const duration=BigInt(dly.value||0);
+  if(!duration)throw Error("choose a decay duration");
+  if(sell>(1n<<128n)-1n||want>(1n<<96n)-1n||floor>(1n<<96n)-1n)throw Error("Dutch amount too large");
+  orderData="0x"+SEL_ORDER_DUTCH+encAddr(DUTCH)+encAddr(account)+encAddr(account)
+    +encAddr(f.addr)+encAddr(t.addr)+encUint(sell)+encUint(want)+encUint(floor)
+    +encUint(0n)+encUint(duration);
+}else{
+  const exp=+dly.value?BigInt(Math.floor(Date.now()/1e3)+ +dly.value):0n;
+  orderData="0x"+SEL_ORDER_FIXED+encAddr(SB2)+encAddr(account)+encAddr(account)
+    +encAddr(f.addr)+encUint(sell)+encAddr(quoteToken)+encUint(want)+encUint(pf)
+    +encUint(exp)+encAddr(cp);
+}
+let direct,funded;
+if(f.addr===ZERO){
+  direct=funded=encSnwap(ZERO,0n,account,ZERO,0n,ORDERBOL,orderData);
+}else{
+  // Snapshot Orderbol before either transfer path funds it. The transient,
+  // single-use checkpoint prevents old donated balances from becoming this
+  // caller's order while keeping every approval option at zRouter.
+  const checkpoint=encCheckpoint(ORDERBOL,f.addr,account);
+  direct=encCalls([
+    checkpoint,
+    encSnwap(f.addr,sell,account,ZERO,0n,ORDERBOL,orderData)
+  ]);
+  funded=encCalls([
+    checkpoint,
+    encSweep(f.addr,sell,ORDERBOL),
+    encSnwap(ZERO,0n,account,ZERO,0n,ORDERBOL,orderData)
+  ]);
+}
+await sendRouterFunded(direct,funded,f,sell,f.addr===ZERO?sell:0n,
+  dutch?"Placing Dutch order...":t.addr===ZERO?"Placing limit order (ETH quote settles as WETH)...":"Placing limit order...");
+amt.value="";outAmt.value="";floorAmt.value="";
+fitFont(amt);fitFont(outAmt);fitFont(floorAmt);
+loadBook();refreshBalance();render();
+}catch(e){err(e);render()}
+}
 swap.onclick=async()=>{
+if(tab==="book"){if(!account)return connect();return placeOrder()}
 if(tab==="send"){if(!account)return connect();return doSend()}
 if(!account) return connect();
 if(!last)return;
 if(Date.now()>last.exp){stat.textContent="Quote expired — refreshing...";updateSoon();return}
+// Slippage cannot catch this - it bounds the QUOTE, not a fair rate - so this is
+// the only thing standing between a fat-fingered size, or an illiquid pool, and
+// a ruinous fill. Two identical dialogs would not help: people click through
+// both, and it teaches them to dismiss the first. So the severe tier asks for
+// something that cannot be done without reading - typing the loss back.
+if(last.impact!==null&&last.impact!==undefined&&last.impact>=IMPACT_CONFIRM){
+const pct=(Number(last.impact)/100).toFixed(2);
+const worse=`about ${trimAmt(last.lossTok,last.lossDec)} ${last.lossSym} ${last.isIn?"less than":"more than"} the market rate`;
+if(last.impact>=IMPACT_TYPED){
+const need=String(Math.floor(Number(last.impact)/100));
+if(prompt(`STOP — this trade is priced ${pct}% away from the market.\n\nYou would ${last.isIn?"receive":"pay"} ${worse}.\n\nUsually this means the pool is illiquid or the amount is wrong.\n\nType ${need} to accept this loss:`)!==need)return;
+}else if(!confirm(`Price impact ${pct}%.\n\nYou will ${last.isIn?"receive":"pay"} ${worse}.\n\nContinue?`))return;
+}
 swap.disabled=true;
 try{
-const {callData,msgValue,amountIn,from,to}=last;
+const {callData,fundedCallData,msgValue,amountIn,from,to}=last;
 if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
 await checkWallet();
 let cd2=callData,batchCalls=null;
@@ -777,14 +1705,19 @@ const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
 cd2=encCalls([await signPermit(from.addr,pi,account,amountIn,pd),callData]);
 permitted=true;
 }catch(e){if(isRejection(e)){stat.textContent="";swap.disabled=false;return}}}
-if(!permitted&&await p2Ready(from.addr,account)>=amountIn){try{
+// Permit2 deposits into zRouter. Its prepared route checkpoints and funds the
+// book executor first, executes those legs, then spends the AMM remainder and
+// returns any input change. Both floors are enforced atomically in one multicall.
+const p2Amount=amountIn;
+if(!permitted&&fromBalance>=p2Amount&&await p2Ready(from.addr,account)>=p2Amount){try{
 stat.textContent="Sign approval...";
 const pd=BigInt(Math.floor(Date.now()/1e3)+1800);
-cd2=encCalls([await signPermit2(from.addr,account,amountIn,pd),callData]);
+cd2=encCalls([await signPermit2(from.addr,account,p2Amount,pd),fundedCallData||callData]);
 permitted=true;
 }catch(e){if(isRejection(e)){stat.textContent="";swap.disabled=false;return}}}
 if(!permitted&&await canBatch(account)){
-batchCalls=[{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn),value:"0x0"},
+const pre=a>0n?[{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(0n),value:"0x0"}]:[];
+batchCalls=[...pre,{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn),value:"0x0"},
 {to:ZROUTER,data:callData,value:toHex(msgValue)}];
 permitted=true;
 }

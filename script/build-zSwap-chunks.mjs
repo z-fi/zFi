@@ -13,7 +13,8 @@
  *   1. deploy chunk 1           -> address A
  *   2. deploy chunk 2           -> address B
  *   3. deploy chunk 3           -> address C
- *   4. deploy zSwap(A, B, C)    (constructor args appended to the creation code)
+ *   4. deploy chunk 4           -> address D
+ *   5. deploy zSwap(A, B, C, D) (constructor args appended to the creation code)
  *
  * Each chunk's initcode is the classic data-contract stub:
  *   PUSH2 <len> DUP1 PUSH1 0x0a PUSH0 CODECOPY PUSH0 RETURN | <payload>
@@ -27,9 +28,9 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 3;
-if (process.argv[2] && process.argv[2] !== "3") {
-  console.error("zSwap currently supports exactly 3 data chunks; update the wrapper before changing this.");
+const n = 4;
+if (process.argv[2] && process.argv[2] !== "4") {
+  console.error("zSwap currently supports exactly 4 data chunks; update the wrapper before changing this.");
   process.exit(1);
 }
 

@@ -4,6 +4,13 @@ pragma solidity ^0.8.36;
 import "forge-std/Test.sol";
 import "../src/zQuoter.sol";
 
+interface IRouterLido {
+    function exactETHToSTETH(address to) external payable returns (uint256 shares);
+    function exactETHToWSTETH(address to) external payable returns (uint256 wstOut);
+    function ethToExactSTETH(address to, uint256 exactOut) external payable;
+    function ethToExactWSTETH(address to, uint256 exactOut) external payable;
+}
+
 /// @notice End-to-end fork tests that EXECUTE quoter-built calldata against mainnet
 ///         zRouter. Covers the scenarios the latest review flagged:
 ///           - Curve ETH-out end-to-end via quoter's new 2-hop unwrap builder
@@ -229,7 +236,49 @@ contract zQuoterForkExecTest is Test {
     }
 
     // ================================================================
-    // G. deadline == type(uint256).max sentinel handling
+    // G. Lido direct stake paths selected by zSwap for ETH -> stETH/wstETH
+    // ================================================================
+    function test_lido_exactIn_stETH_and_wstETH() public {
+        uint256 amount = 0.5 ether;
+
+        vm.deal(address(this), amount * 2);
+        uint256 stBefore = _bal(_STETH, address(this));
+        IRouterLido(_ROUTER).exactETHToSTETH{value: amount}(address(this));
+        assertGt(_bal(_STETH, address(this)) - stBefore, 0, "Lido exact-in produced no stETH");
+
+        uint256 wstBefore = _bal(_WSTETH, address(this));
+        IRouterLido(_ROUTER).exactETHToWSTETH{value: amount}(address(this));
+        assertGt(_bal(_WSTETH, address(this)) - wstBefore, 0, "Lido exact-in produced no wstETH");
+    }
+
+    function test_lido_exactOut_stETH_and_wstETH_refundsExcessETH() public {
+        _execLidoExactOut(_STETH, 0.25 ether);
+        _execLidoExactOut(_WSTETH, 0.25 ether);
+    }
+
+    function _execLidoExactOut(address tokenOut, uint256 target) internal {
+        (uint256 quotedIn, uint256 quotedOut) = quoter.quoteLido(true, tokenOut, target);
+        assertEq(quotedOut, target, "Lido exact-out quote target mismatch");
+        assertGt(quotedIn, 0, "Lido exact-out quote missing input");
+
+        // Supply a material surplus. The router must send only what the stake
+        // requires and return the rest to this caller.
+        uint256 budget = quotedIn + 0.01 ether;
+        vm.deal(address(this), budget);
+        uint256 ethBefore = address(this).balance;
+        uint256 tokenBefore = _bal(tokenOut, address(this));
+        if (tokenOut == _STETH) {
+            IRouterLido(_ROUTER).ethToExactSTETH{value: budget}(address(this), target);
+        } else {
+            IRouterLido(_ROUTER).ethToExactWSTETH{value: budget}(address(this), target);
+        }
+        uint256 received = _bal(tokenOut, address(this)) - tokenBefore;
+        assertGe(received, target, "Lido exact-out delivered below target");
+        assertGt(address(this).balance, ethBefore - budget + 0.009 ether, "Lido did not refund excess ETH");
+    }
+
+    // ================================================================
+    // H. deadline == type(uint256).max sentinel handling
     //    zRouter.swapV2 treats `deadline == max` as "use SUSHI_FACTORY". The quoter's
     //    _v2Deadline must translate for UNI_V2 (replace with now+30min) and passthrough
     //    for SUSHI.

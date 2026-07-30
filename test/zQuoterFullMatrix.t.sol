@@ -22,6 +22,12 @@ interface IERC20 {
 /// route that executes and delivers at least the promised minimum, OR we refuse
 /// to quote. A route that builds but reverts is a failure.
 contract zQuoterFullMatrixTest is Test {
+    /// @dev Defaults so the suite runs without tribal knowledge. Both are
+    /// overridable by env. The block is chosen to be AFTER the currently
+    /// deployed zQuoter/zRouter, so live-address tests are possible here.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     zQuoter q;
 
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
@@ -57,7 +63,7 @@ contract zQuoterFullMatrixTest is Test {
     uint256 broke;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         vm.etch(V4_HELPER, address(new zQuoterV4()).code);
         q = new zQuoter();
     }
@@ -65,11 +71,23 @@ contract zQuoterFullMatrixTest is Test {
     function _fund(address t, uint256 amt) internal {
         if (t == ETH) {
             vm.deal(user, amt * 2);
+            return;
+        }
+        if (t == WETH) {
+            // WETH9 computes totalSupply() as address(this).balance rather than reading a
+            // storage slot, so `deal(..., adjustSupply: true)` cannot find a slot to write
+            // and aborts with "No storage use detected for target". Set the balance without
+            // the supply probe, then top up WETH's own ETH by the same amount so its
+            // supply == backing identity still holds and any downstream withdraw() is
+            // funded. Done with cheatcodes rather than a pranked deposit() because prank
+            // rewrites msg.sender but leaves the value coming from the test contract.
+            deal(WETH, user, amt * 2);
+            vm.deal(WETH, WETH.balance + amt * 2);
         } else {
             deal(t, user, amt * 2, true);
-            vm.prank(user);
-            IERC20(t).approve(ZROUTER, type(uint256).max);
         }
+        vm.prank(user);
+        IERC20(t).approve(ZROUTER, type(uint256).max);
     }
 
     function _bal(address t, address who) internal view returns (uint256) {

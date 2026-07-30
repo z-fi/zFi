@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+
+import fs from "node:fs";
+import path from "node:path";
+import {execFileSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
+import {
+  AbiCoder,
+  Interface,
+  getAddress,
+  getCreate2Address,
+  keccak256,
+} from "ethers";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const DEPLOY = path.join(ROOT, "deploy");
+const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
+const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+const LEGACY = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+const EIP170 = 24_576;
+const deployInterface = new Interface([
+  "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
+]);
+
+const read = (file) => fs.readFileSync(path.join(DEPLOY, file), "utf8").trim();
+const inspect = (name, field, extra = []) =>
+  execFileSync("forge", ["inspect", name, field, ...extra], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).trim();
+const artifactAddress = (name) => getAddress(read(`${name}.address.txt`));
+
+const specs = [
+  {name: "Swapboard", args: [WETH]},
+  {name: "Dutchboard", args: []},
+  {name: "SwapboardView", args: []},
+  {name: "Orderbol", args: []},
+  {
+    name: "Swapbol",
+    args: [
+      LEGACY,
+      artifactAddress("Swapboard"),
+      artifactAddress("Dutchboard"),
+    ],
+  },
+];
+
+let failed = false;
+for (const {name, args} of specs) {
+  try {
+    const bytecode = inspect(name, "bytecode");
+    const runtime = inspect(name, "deployedBytecode");
+    const abi = JSON.parse(inspect(name, "abi", ["--json"]));
+    const inputs = abi.find((item) => item.type === "constructor")?.inputs || [];
+    if (inputs.length !== args.length) {
+      throw Error(`constructor expects ${inputs.length} argument(s), manifest has ${args.length}`);
+    }
+
+    const encodedArgs = AbiCoder.defaultAbiCoder().encode(
+      inputs.map((input) => input.type),
+      args,
+    );
+    const creation = bytecode + encodedArgs.slice(2);
+    const storedCreation = read(`${name}.creation.txt`);
+    if (storedCreation.toLowerCase() !== creation.toLowerCase()) {
+      throw Error("stored creation code differs from canonical compiler output");
+    }
+
+    const salt = read(`${name}.salt.txt`);
+    const address = getCreate2Address(FACTORY, salt, keccak256(creation));
+    if (address !== artifactAddress(name)) throw Error(`address mismatch: recomputed ${address}`);
+    if (!address.toLowerCase().startsWith("0x000000")) {
+      throw Error(`address does not retain the three-byte vanity prefix: ${address}`);
+    }
+
+    const calldata = read(`${name}.deploy.calldata.txt`);
+    const decoded = deployInterface.decodeFunctionData("create2Deploy", calldata);
+    if (decoded[0].toLowerCase() !== creation.toLowerCase() || decoded[1].toLowerCase() !== salt.toLowerCase()) {
+      throw Error("SafeSummoner calldata does not embed the matching creation code and salt");
+    }
+    if (deployInterface.encodeFunctionData("create2Deploy", decoded).toLowerCase() !== calldata.toLowerCase()) {
+      throw Error("SafeSummoner calldata is not canonical ABI encoding");
+    }
+
+    const creationBytes = (creation.length - 2) / 2;
+    const runtimeBytes = (runtime.length - 2) / 2;
+    if (runtimeBytes > EIP170) throw Error(`runtime exceeds EIP-170 by ${runtimeBytes - EIP170} bytes`);
+    console.log(
+      `ok  ${name.padEnd(13)} ${address}  creation=${creationBytes}  runtime=${runtimeBytes}`
+        + `  initHash=${keccak256(creation)}`,
+    );
+  } catch (error) {
+    failed = true;
+    console.error(`FAIL ${name}: ${error.message}`);
+  }
+}
+
+const mirror = path.join(ROOT, "out", "Swapboard.creation.txt");
+if (!fs.existsSync(mirror)) {
+  failed = true;
+  console.error("FAIL Swapboard mirror: out/Swapboard.creation.txt is missing");
+} else if (fs.readFileSync(mirror, "utf8").trim().toLowerCase() !== read("Swapboard.creation.txt").toLowerCase()) {
+  failed = true;
+  console.error("FAIL Swapboard mirror: out/ and deploy/ creation payloads differ");
+} else {
+  console.log("ok  Swapboard mirror deploy/Swapboard.creation.txt == out/Swapboard.creation.txt");
+}
+
+if (failed) process.exit(1);

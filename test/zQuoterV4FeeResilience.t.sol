@@ -13,7 +13,7 @@ import "../src/zQuoter.sol";
 /// layered on top, for any pair touching that pool.
 ///
 /// The fault is synthesized via `vm.store` rather than read from live state, so
-/// this stays deterministic, runs at the suite's existing pinned fork block, and
+/// this stays deterministic, runs at the fork block this suite pins itself, and
 /// keeps reproducing the bug after Uniswap changes these fees again.
 contract zQuoterV4FeeResilienceTest is Test {
     zQuoter quoter;
@@ -30,7 +30,18 @@ contract zQuoterV4FeeResilienceTest is Test {
     /// @dev 500 pips both directions — what governance actually set on ETH/USDC 3000/60.
     uint256 constant FEE_500_BOTH = 0x1f41f4;
 
+    /// @dev This suite must NOT ride foundry.toml's global pin (24,880,000):
+    /// the `_V4` tier-quoting helper this quoter delegates to has no code that
+    /// far back, so every per-tier staticcall returns empty, every V4 tier zeros
+    /// out, and the healthy-path comparison against BASE fails for a reason that
+    /// has nothing to do with protocol fees. 25,640,000 is the first pin where
+    /// the helper, BASE and the PoolManager all exist - the same block the other
+    /// repaired zQuoter suites use.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     function setUp() public {
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         quoter = new zQuoter();
 
         // Establish a known-good baseline. Depending on the fork block these pools
@@ -63,6 +74,10 @@ contract zQuoterV4FeeResilienceTest is Test {
     // ** THE FIX (zQuoter survives it)
 
     function test_getQuotes_survivesPoisonedTier() public {
+        (, zQuoter.Quote[] memory healthy) = quoter.getQuotes(false, ETH, _USDC, 1 ether);
+        uint256 healthyV4 = healthy[12].amountOut;
+        assertGt(healthyV4, 0, "fixture: the tier must quote before it is poisoned");
+
         _setProtocolFee(ETH, _USDC, 3000, 60, FEE_500_BOTH);
 
         (zQuoter.Quote memory best, zQuoter.Quote[] memory quotes) = quoter.getQuotes(false, ETH, _USDC, 1 ether);
@@ -70,9 +85,15 @@ contract zQuoterV4FeeResilienceTest is Test {
         assertEq(quotes.length, 14, "grid shape preserved");
         assertGt(best.amountOut, 0, "still finds a best route");
 
-        // The poisoned V4 30bps entry is zeroed, not fatal, and order is preserved.
+        // A fee-bearing tier is PRICED, not discarded. An earlier fix zeroed it
+        // to dodge the revert, which threw away real liquidity; the tier quoter
+        // now applies the protocol fee properly. 500 pips is 0.05%, so the tier
+        // comes back ~5bps below its healthy value instead of dropping to zero.
         assertTrue(quotes[12].source == zQuoter.AMM.UNI_V4, "index 12 is the V4 30bps tier");
-        assertEq(quotes[12].amountOut, 0, "poisoned tier zeroed");
+        assertGt(quotes[12].amountOut, 0, "poisoned tier still quotes");
+        assertApproxEqRel(
+            quotes[12].amountOut, healthyV4 * 999_500 / 1_000_000, 1e15, "protocol fee not applied as 500 pips"
+        );
 
         // The liquidity that actually matters survives.
         uint256 v3Live;
@@ -87,7 +108,7 @@ contract zQuoterV4FeeResilienceTest is Test {
     function test_builder_survivesPoisonedTier() public {
         _setProtocolFee(ETH, _USDC, 3000, 60, FEE_500_BOTH);
 
-        (zQuoter.Quote memory a, zQuoter.Quote memory b, , bytes memory mc, uint256 mv) =
+        (zQuoter.Quote memory a, zQuoter.Quote memory b,, bytes memory mc, uint256 mv) =
             quoter.buildBestSwapViaETHMulticall(USER, USER, false, ETH, _USDC, 1 ether, 100, type(uint256).max);
 
         uint256 out = b.amountOut > 0 ? b.amountOut : a.amountOut;
@@ -132,4 +153,5 @@ contract zQuoterV4FeeResilienceTest is Test {
         v |= (pips << PROTOCOL_FEE_SHIFT);
         vm.store(POOL_MANAGER, slot, bytes32(v));
     }
+
 }

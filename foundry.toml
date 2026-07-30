@@ -13,12 +13,78 @@ eth_rpc_url = "https://gateway.tenderly.co/public/mainnet"
 fork_block_number = 24_880_000
 no_rpc_rate_limit = true
 
+# Foundry's default per-test gas cap is 2^30. test/zQuoterFullMatrix.t.sol quotes AND
+# executes every ordered pair of an 8-token set — 56 forked round trips in a single test
+# body — and lands just over that, failing with OutOfGas before it can assert anything.
+# The cap is a harness artifact rather than a property of the code under test, and the
+# suite's whole point is that a quote which cannot execute is a bug, so the matrix has to
+# run to completion to be worth anything. Tests that care about gas measure it explicitly
+# (see test/DutchboardBundleGas.t.sol) rather than relying on this ceiling.
+gas_limit = "18446744073709551615"
+
 fs_permissions = [
     { access = "read", path = "./zSwap.html" },
     { access = "read", path = "./script/zSwapRegistry-setHtmlAsTarget.calldata.txt" },
 ]
 
-# zQuoter needs low runs + yul=false to stay under EIP-170 (24,576 bytes)
+# DIFFERENTIAL COMPILATION
+#
+# SwapboardView exceeds EIP-170 (24,576 B) under the default settings: 25,372 B before
+# the Dutchboard reader was added, 26,325 B with it. Nothing has to be removed to fix
+# that. The default `optimizer_runs = 9_999_999` trades bytecode size for runtime gas,
+# and the lens is the one contract in this repo where that trade is backwards — its own
+# header says it is "intended for `eth_call` only — not meant to be called on-chain in
+# transactions", so runtime gas is nearly free while size is the binding constraint.
+# At 200 runs the current source compiles to 24,030 B, leaving 546 B below
+# EIP-170 with every feature intact. Treat that margin as a release invariant:
+# any lens edit must be followed by an explicit deployed-bytecode size check.
+#
+# This is expressed as a per-file compiler profile rather than a whole-repo `[profile.*]`
+# so a plain `forge build` produces the deployable artifact. A separate profile would
+# only be applied when someone remembered to pass FOUNDRY_PROFILE, which is exactly the
+# kind of thing that gets forgotten at deploy time and silently ships a 26 KB contract
+# that cannot be deployed at all.
+#
+# Note the settings differ from the zquoter profile below in one respect that matters:
+# yul must stay ENABLED here. With `yul = false` the lens fails to compile at all —
+# _sweepPlanOut is stack-too-deep — so the two contracts genuinely need different
+# compiler treatment rather than a single shared "small" profile.
+# The restriction states the REQUIREMENT; the additional profile SATISFIES it. Both are
+# needed — a restriction with no matching profile is a hard "Missing profile satisfying
+# settings restrictions" build error, which is the desired failure mode: the constraint
+# cannot silently lapse.
+[[profile.default.additional_compiler_profiles]]
+name = "lens"
+via_ir = true
+optimizer = true
+optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/SwapboardView.sol"
+max_optimizer_runs = 200
+
+# NOTE: zQuoter deliberately does NOT get the same treatment, even though it has the same
+# size problem. Its artifact needs yul = false, and `compilation_restrictions` cannot
+# express that — restricting max_optimizer_runs alone still leaves the Yul optimizer on and
+# yields 26,684 B, over the limit. So zQuoter's shippable artifact can only come from
+# `FOUNDRY_PROFILE=zquoter` and a plain `forge build` produces an oversized one. Tests that
+# do `new zQuoter()` therefore exercise a differently-optimized build; they check behaviour,
+# which is unaffected, not bytecode.
+
+# zQuoter needs low runs + yul=false to stay under EIP-170 (24,576 bytes). Both settings
+# are load-bearing and the margin is thin: runs=20 with yul=false gives 24,438 B, 138 B
+# under the limit. Dropping yul=false alone pushes it to 26,684 B, and the default profile
+# yields 32,359 B — neither is deployable.
+#
+# Verified 2026-07-31 against the live deployment at
+# 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13: this profile reproduces the deployed contract
+# exactly. All 24,438 bytes agree except the trailing 43-byte CBOR metadata, which differs
+# only because the deployment was built with solc 0.8.34 and this repo now pins 0.8.36.
+# test/zQuoterPerVenueExec.t.sol asserts that equivalence with the metadata stripped.
+#
+# Caveat: this profile cannot build the repo as a whole, because it sets src = "src" and so
+# applies yul = false to every contract — src/dao/ClassicalCurveSale.sol then hits
+# stack-too-deep. Build zQuoter with `--contracts src/zQuoter.sol --skip 'test/**'`.
 [profile.zquoter]
 src = "src"
 test = "test"

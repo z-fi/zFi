@@ -5,10 +5,7 @@ import "forge-std/Test.sol";
 import {zQuoterV4} from "../src/zQuoterV4.sol";
 
 interface IBaseQuoter {
-    function quoteV4(bool, address, address, uint24, int24, address, uint256)
-        external
-        view
-        returns (uint256, uint256);
+    function quoteV4(bool, address, address, uint24, int24, address, uint256) external view returns (uint256, uint256);
 }
 
 interface IV4Quoter {
@@ -28,6 +25,7 @@ interface IV4Quoter {
     }
 
     function quoteExactInputSingle(QuoteExactSingleParams memory) external returns (uint256, uint256);
+    function quoteExactOutputSingle(QuoteExactSingleParams memory) external returns (uint256, uint256);
 }
 
 /// @dev Differential test: our corrected V4 quoter vs Uniswap's canonical
@@ -38,6 +36,12 @@ interface IV4Quoter {
 /// protocol fees at block 25623201 every V4 quote went wrong. Run against state
 /// AFTER that block.
 contract zQuoterV4FixTest is Test {
+    /// @dev Defaults so the suite runs without tribal knowledge. Both are
+    /// overridable by env. The block is chosen to be AFTER the currently
+    /// deployed zQuoter/zRouter, so live-address tests are possible here.
+    string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
+    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+
     zQuoterV4 q;
 
     address constant BASE = 0x658bF1A6608210FDE7310760f391AD4eC8006A5F;
@@ -50,7 +54,7 @@ contract zQuoterV4FixTest is Test {
     address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         q = new zQuoterV4();
     }
 
@@ -58,8 +62,23 @@ contract zQuoterV4FixTest is Test {
         (address c0, address c1) = a < b ? (a, b) : (b, a);
         try CANON.quoteExactInputSingle(
             IV4Quoter.QuoteExactSingleParams(IV4Quoter.PoolKey(c0, c1, fee, sp, address(0)), a < b, amt, "")
-        ) returns (uint256 out, uint256) {
+        ) returns (
+            uint256 out, uint256
+        ) {
             return out;
+        } catch {
+            return 0;
+        }
+    }
+
+    function _canonExactOut(address a, address b, uint24 fee, int24 sp, uint128 amt) internal returns (uint256) {
+        (address c0, address c1) = a < b ? (a, b) : (b, a);
+        try CANON.quoteExactOutputSingle(
+            IV4Quoter.QuoteExactSingleParams(IV4Quoter.PoolKey(c0, c1, fee, sp, address(0)), a < b, amt, "")
+        ) returns (
+            uint256 input, uint256
+        ) {
+            return input;
         } catch {
             return 0;
         }
@@ -70,6 +89,19 @@ contract zQuoterV4FixTest is Test {
         uint256 ref = _canon(a, b, fee, sp, amt);
         if (ref == 0) return; // pool not usable at this size; nothing to compare
         (, uint256 ours) = q.quoteV4(false, a, b, fee, sp, address(0), amt);
+        assertGt(ours, 0, string.concat(label, ": ours returned 0"));
+        uint256 hi = ref > ours ? ref : ours;
+        uint256 lo = ref > ours ? ours : ref;
+        assertLe((hi - lo) * 1000 / hi, 5, string.concat(label, ": >0.5% off canonical"));
+    }
+
+    /// @dev Exact-output is a separate code path: it reverses the amount sign,
+    ///      accumulates input rather than output, and must reject unfillable targets.
+    function _diffExactOut(address a, address b, uint24 fee, int24 sp, uint128 amt, string memory label) internal {
+        uint256 ref = _canonExactOut(a, b, fee, sp, amt);
+        if (ref == 0) return; // target is unavailable at this fork state
+        (uint256 ours, uint256 out) = q.quoteV4(true, a, b, fee, sp, address(0), amt);
+        assertEq(out, amt, string.concat(label, ": returned the wrong output amount"));
         assertGt(ours, 0, string.concat(label, ": ours returned 0"));
         uint256 hi = ref > ours ? ref : ours;
         uint256 lo = ref > ours ? ours : ref;
@@ -97,6 +129,15 @@ contract zQuoterV4FixTest is Test {
         _diff(WBTC, USDC, 3000, 60, 10000, "WBTC/USDC small");
         _diff(WBTC, USDC, 3000, 60, 49612, "WBTC/USDC mid");
         _diff(WBTC, USDC, 3000, 60, 1000000, "WBTC/USDC large");
+    }
+
+    function test_exactOut_matchesCanonical_bothDirectionsAndTiers() public {
+        _diffExactOut(ETH, USDC, 500, 10, 10e6, "ETH/USDC 500/10");
+        _diffExactOut(ETH, USDC, 3000, 60, 10e6, "ETH/USDC 3000/60");
+        _diffExactOut(USDC, ETH, 500, 10, 1e16, "USDC/ETH 500/10");
+        _diffExactOut(WBTC, USDC, 500, 10, 20e6, "WBTC/USDC 500/10");
+        _diffExactOut(USDC, WBTC, 3000, 60, 10_000, "USDC/WBTC 3000/60");
+        _diffExactOut(USDC, USDT, 100, 1, 20e6, "USDC/USDT 100/1");
     }
 
     /// The headline case: base returns a constant ~2013x too high; we must not.
@@ -144,6 +185,15 @@ contract zQuoterV4FixTest is Test {
         uint128 amt = 18_604_651_162_790_697; // ~$40 of rETH
         (, uint256 ours) = q.quoteV4(false, RETH, USDC, 3000, 60, address(0), amt);
         assertEq(ours, 0, "unfillable pool must quote 0, not a partial fill");
+    }
+
+    function test_exactOut_partialFillIsNotAQuote() public {
+        uint128 want = 20e6; // far beyond the thin rETH/USDC pool's available USDC
+        uint256 ref = _canonExactOut(RETH, USDC, 3000, 60, want);
+        assertEq(ref, 0, "canonical quoter must reject the unfillable output target");
+        (uint256 amountIn, uint256 amountOut) = q.quoteV4(true, RETH, USDC, 3000, 60, address(0), want);
+        assertEq(amountIn, 0, "unfillable exact-out input must be zero");
+        assertEq(amountOut, 0, "unfillable exact-out output must be zero");
     }
 
     /// The same pool must still quote a size it CAN fill.

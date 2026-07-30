@@ -8,7 +8,7 @@
 // throughput vs. ethers' JS keccak256.
 //
 // Usage:
-//   node script/mine_create2_salt.js [leading_zero_bytes=2] [max_iter=1e10] [bytecode_file]
+//   node script/mine_create2_salt.js [leading_zero_bytes=2] [max_iter=1e10] [bytecode_file] [start_salt=0]
 
 const { Worker, isMainThread, parentPort, workerData } = require("node:worker_threads");
 const fs = require("fs");
@@ -29,6 +29,7 @@ function keccak256Buf(buf) {
 if (isMainThread) {
   const leadingZeroBytes = parseInt(process.argv[2] || "2", 10);
   const maxIter = parseInt(process.argv[3] || "10000000000", 10);
+  const startSalt = BigInt(process.argv[5] || "0");
   const bytecodeFile = process.argv[4]
     ? path.resolve(process.argv[4])
     : path.join(__dirname, "..", "out", "zQuoter.creation.txt");
@@ -47,6 +48,7 @@ if (isMainThread) {
   console.log("initCodeHash  :", initCodeHash);
   console.log("target prefix :", "0x" + "00".repeat(leadingZeroBytes), `(${leadingZeroBytes} leading zero bytes)`);
   console.log("max iter      :", maxIter.toLocaleString());
+  console.log("start salt    :", startSalt.toLocaleString());
   console.log("workers       :", numWorkers, `(${perWorker.toLocaleString()} iters each)`);
   console.log("");
 
@@ -59,7 +61,13 @@ if (isMainThread) {
   const workers = [];
   for (let i = 0; i < numWorkers; i++) {
     const w = new Worker(__filename, {
-      workerData: { initCodeHashHex: initCodeHash, startOffset: i, stride: numWorkers, maxIterPerWorker: perWorker },
+      workerData: {
+        initCodeHashHex: initCodeHash,
+        startSaltHex: "0x" + startSalt.toString(16),
+        startOffset: i,
+        stride: numWorkers,
+        maxIterPerWorker: perWorker,
+      },
     });
     workers.push(w);
 
@@ -84,19 +92,26 @@ if (isMainThread) {
             console.log("  verified:", expected.toLowerCase() === msg.address ? "yes" : "NO — ethers mismatch");
             console.log("  elapsed :", elapsed.toFixed(2) + "s");
             console.log("  iters   :", totalIters.toLocaleString(), "(across all workers)");
-            for (const w of workers) w.terminate();
+            // Exit straight away rather than terminate()-ing the workers first.
+            // Tearing down a worker mid-hash aborts inside the native keccak
+            // addon, which printed a FATAL ERROR *after* the result and made a
+            // successful mine look like a crash. process.exit takes the threads
+            // with it.
             process.exit(0);
           }
+        }
+      } else if (msg.type === "done") {
+        workersDone++;
+        if (workersDone === numWorkers && !found) {
+          console.log("no match found within", maxIter.toLocaleString(), "iterations");
+          process.exit(1);
         }
       }
     });
 
-    w.on("exit", () => {
-      workersDone++;
-      if (workersDone === numWorkers && !found) {
-        console.log("no match found within", maxIter.toLocaleString(), "iterations");
-        process.exit(1);
-      }
+    w.on("error", (err) => {
+      console.error("worker failed:", err.message);
+      process.exit(2);
     });
   }
 
@@ -112,7 +127,7 @@ if (isMainThread) {
     );
   }, 30000).unref();
 } else {
-  const { initCodeHashHex, startOffset, stride, maxIterPerWorker } = workerData;
+  const { initCodeHashHex, startSaltHex, startOffset, stride, maxIterPerWorker } = workerData;
 
   // 85-byte CREATE2 preimage: 0xff || factory(20) || salt(32) || initCodeHash(32)
   const buf = Buffer.alloc(85);
@@ -129,8 +144,9 @@ if (isMainThread) {
   const REPORT_EVERY = 500000;
 
   // 64-bit salt counter as two 32-bit halves (stays within Number safe range).
-  let saltLo = startOffset >>> 0;
-  let saltHi = 0;
+  const firstSalt = BigInt(startSaltHex) + BigInt(startOffset);
+  let saltLo = Number(firstSalt & 0xffffffffn) >>> 0;
+  let saltHi = Number((firstSalt >> 32n) & 0xffffffffn) >>> 0;
 
   for (let i = 0; i < maxIterPerWorker; i++) {
     // Write salt low 8 bytes (bytes 45..52) as big-endian.
@@ -192,4 +208,6 @@ if (isMainThread) {
   if (sinceReport > 0) {
     parentPort.postMessage({ type: "progress", iters: sinceReport });
   }
+  parentPort.postMessage({ type: "done" });
+  parentPort.close();
 }

@@ -24,7 +24,7 @@ const HTML_PATH = path.join(ROOT, 'zSwap.html');
 const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 
 const EIP170_LIMIT = 24576;
-const CHUNKS = 3;
+const CHUNKS = 4;
 
 const html = fs.readFileSync(HTML_PATH);
 const htmlText = html.toString('utf8');
@@ -94,6 +94,30 @@ for (const p of READMES) {
   }
   const next = txt.replace(SENTENCE_RE, sentence);
   if (next !== txt) fs.writeFileSync(p, next);
+}
+
+// test/zSwap.t.sol pins the page by length AND keccak. Nothing else updates
+// those, so an HTML edit used to leave the suite red with a bare "length
+// mismatch" until someone rediscovered the constants by hand. Refresh them here.
+// Node has no keccak256 (crypto's sha3 is FIPS SHA-3, a different padding), so
+// shell out to cast, which any Foundry checkout has.
+const TESTPIN = path.join(ROOT, 'test', 'zSwap.t.sol');
+if (fs.existsSync(TESTPIN)) {
+  let t = fs.readFileSync(TESTPIN, 'utf8');
+  let hash = null;
+  try {
+    const { execFileSync } = await import('node:child_process');
+    hash = execFileSync('cast', ['keccak', '0x' + html.toString('hex')], { encoding: 'utf8' }).trim();
+  } catch {
+    console.warn('WARNING: `cast keccak` unavailable — update EXPECTED_HASH in test/zSwap.t.sol by hand.');
+  }
+  const before = t;
+  t = t.replace(/uint256 constant EXPECTED_LEN = \d+;/, `uint256 constant EXPECTED_LEN = ${html.length};`);
+  if (hash && /^0x[0-9a-f]{64}$/.test(hash)) {
+    t = t.replace(/bytes32 constant EXPECTED_HASH = 0x[0-9a-f]{64};/, `bytes32 constant EXPECTED_HASH = ${hash};`);
+  }
+  if (t !== before) fs.writeFileSync(TESTPIN, t);
+  console.log(`test/zSwap.t.sol: page pin refreshed (len ${html.length}${hash ? ', hash ' + hash.slice(0, 10) + '…' : ''})`);
 }
 
 console.log(`zSwap.html: ${html.length} B across ${CHUNKS} chunks (${headroom} B headroom)`);

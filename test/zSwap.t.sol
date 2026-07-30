@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x0cebca5a3920a7aac7aca78ae8a5de55602747d6da2affb07770fb79d2f7e832;
-    uint256 constant EXPECTED_LEN = 49424;
+    bytes32 constant EXPECTED_HASH = 0xfa31460d416f507d30be5fbe1334b4670493b3f76a5cb7a66cd84d9322ebf5e0;
+    uint256 constant EXPECTED_LEN = 97818;
 
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
@@ -24,19 +24,34 @@ contract zSwapDeployTest is Test {
     }
 
     /// @dev Builds zSwap exactly as production does: split zSwap.html into
-    /// three parts, deploy each as its own data contract, pass all three in.
+    /// four parts, deploy each as its own data contract, pass all four in.
     function _deploy() internal returns (zSwap) {
         bytes memory html = vm.readFileBinary("zSwap.html");
-        uint256 per = (html.length + 2) / 3;
-        address[3] memory p;
-        for (uint256 k; k < 3; ++k) {
+        uint256 per = (html.length + 3) / 4;
+        address[4] memory p;
+        for (uint256 k; k < 4; ++k) {
             uint256 start = k * per;
             uint256 end = start + per > html.length ? html.length : start + per;
             bytes memory part = new bytes(end - start);
             for (uint256 i; i < end - start; ++i) part[i] = html[start + i];
             p[k] = _writeChunk(part);
         }
-        return new zSwap(p[0], p[1], p[2]);
+        return new zSwap(p[0], p[1], p[2], p[3]);
+    }
+
+    function _contains(bytes memory haystack, bytes memory needle) internal pure returns (bool) {
+        if (needle.length == 0 || needle.length > haystack.length) return needle.length == 0;
+        for (uint256 i; i <= haystack.length - needle.length; ++i) {
+            bool match_ = true;
+            for (uint256 j; j < needle.length; ++j) {
+                if (haystack[i + j] != needle[j]) {
+                    match_ = false;
+                    break;
+                }
+            }
+            if (match_) return true;
+        }
+        return false;
     }
 
     function test_HtmlPayloadRoundTrip() public {
@@ -52,9 +67,13 @@ contract zSwapDeployTest is Test {
         bytes memory c1 = z.DATA1().code;
         bytes memory c2 = z.DATA2().code;
         bytes memory c3 = z.DATA3().code;
-        assertEq(c1.length + c2.length + c3.length, EXPECTED_LEN, "chunk codesize mismatch");
-        assertEq(keccak256(bytes.concat(c1, c2, c3)), EXPECTED_HASH, "chunk content mismatch");
-        assertTrue(c1.length <= 24576 && c2.length <= 24576 && c3.length <= 24576, "chunk over EIP-170");
+        bytes memory c4 = z.DATA4().code;
+        assertEq(c1.length + c2.length + c3.length + c4.length, EXPECTED_LEN, "chunk codesize mismatch");
+        assertEq(keccak256(bytes.concat(c1, c2, c3, c4)), EXPECTED_HASH, "chunk content mismatch");
+        assertTrue(
+            c1.length <= 24576 && c2.length <= 24576 && c3.length <= 24576 && c4.length <= 24576,
+            "chunk over EIP-170"
+        );
     }
 
     function test_NameAndVersion() public {
@@ -68,19 +87,22 @@ contract zSwapDeployTest is Test {
         address b = _writeChunk(bytes("b"));
 
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(address(0), a, b); // missing chunk
+        new zSwap(address(0), a, b, address(0)); // missing chunk
 
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, address(0), b);
+        new zSwap(a, address(0), b, a);
 
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, address(0));
+        new zSwap(a, b, address(0), a);
 
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, a, b); // duplicated chunk
+        new zSwap(a, a, b, address(0)); // duplicated chunk
 
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, b);
+        new zSwap(a, b, b, address(0));
+
+        vm.expectRevert(zSwap.InvalidData.selector);
+        new zSwap(a, b, address(0), b);
     }
 
     function test_ResolveMode_Is5219() public {
@@ -120,5 +142,20 @@ contract zSwapDeployTest is Test {
         assertEq(s1, s2);
         assertEq(keccak256(bytes(b1)), keccak256(bytes(b2)));
         assertEq(h1.length, h2.length);
+    }
+
+    /// @dev The immutable frontend must keep querying every on-chain candidate
+    ///      that its execution path can select: 1/2-hop, 3-hop, split, hybrid.
+    ///      This is a wiring regression test; the corresponding fork tests
+    ///      execute each generated calldata path against zRouter.
+    function test_SwapFrontend_usesAllOnchainRouteBuilders() public {
+        bytes memory html = vm.readFileBinary("zSwap.html");
+        assertTrue(
+            _contains(html, bytes("const ZQUOTER=\"0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13\"")),
+            "wrong zQuoter deployment"
+        );
+        assertTrue(_contains(html, bytes("Q(\"e453166e\"")), "missing 1/2-hop builder");
+        assertTrue(_contains(html, bytes("Q(\"4c464f59\"")), "missing 3-hop builder");
+        assertTrue(_contains(html, bytes("\"892af013\",\"85f86a90\"")), "missing split/hybrid builders");
     }
 }

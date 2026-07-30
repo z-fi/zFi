@@ -1,0 +1,259 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy Swapboard</title>
+<style>
+:root{
+  --bg:#f7f7f5; --panel:#fff; --ink:#16161a; --dim:#6b6b76; --line:#e2e2dd;
+  --ok:#1a7f4b; --bad:#b3261e; --warn:#8a6100; --accent:#2b4c7e;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#131316;--panel:#1b1b20;--ink:#ececef;--dim:#9a9aa4;--line:#2e2e36;
+        --ok:#5fd39b;--bad:#ff8a80;--warn:#e0b155;--accent:#8fb0e0}
+}
+:root[data-theme=dark]{--bg:#131316;--panel:#1b1b20;--ink:#ececef;--dim:#9a9aa4;--line:#2e2e36;
+  --ok:#5fd39b;--bad:#ff8a80;--warn:#e0b155;--accent:#8fb0e0}
+:root[data-theme=light]{--bg:#f7f7f5;--panel:#fff;--ink:#16161a;--dim:#6b6b76;--line:#e2e2dd;
+  --ok:#1a7f4b;--bad:#b3261e;--warn:#8a6100;--accent:#2b4c7e}
+*{box-sizing:border-box}
+body{margin:0;padding:2rem 1rem;background:var(--bg);color:var(--ink);
+  font:15px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif}
+main{max-width:46rem;margin:0 auto;display:flex;flex-direction:column;gap:1.25rem}
+h1{font-size:1.3rem;margin:0;letter-spacing:-.01em}
+h1 small{display:block;font-weight:400;font-size:.8rem;color:var(--dim);letter-spacing:.02em;margin-top:.2rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem 1.1rem}
+.card h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin:0 0 .7rem}
+label{display:block;font-size:.8rem;color:var(--dim);margin:.6rem 0 .25rem}
+input{width:100%;padding:.55rem .6rem;border:1px solid var(--line);border-radius:6px;
+  background:var(--bg);color:var(--ink);font:13px/1.4 var(--mono)}
+input:focus{outline:2px solid var(--accent);outline-offset:1px}
+button{padding:.7rem 1rem;border:0;border-radius:7px;background:var(--accent);color:#fff;
+  font-size:.92rem;font-weight:600;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.sec{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:.35rem .9rem;font-size:.82rem}
+dt{color:var(--dim)}
+dd{margin:0;font-family:var(--mono);font-size:.78rem;word-break:break-all}
+.chk{display:flex;gap:.5rem;font-size:.83rem;padding:.25rem 0;align-items:flex-start}
+.chk b{font-family:var(--mono);font-weight:700;flex:0 0 1.1rem}
+.pass b{color:var(--ok)} .fail b{color:var(--bad)} .wait b{color:var(--dim)}
+.fail{color:var(--bad)}
+.note{font-size:.8rem;color:var(--dim);margin:.6rem 0 0}
+.warn{border-left:3px solid var(--warn);padding-left:.7rem;font-size:.83rem;color:var(--ink)}
+code{font-family:var(--mono);font-size:.78rem;background:var(--bg);padding:.1em .35em;border-radius:3px}
+</style>
+
+<main>
+<h1>Deploy Swapboard<small>Ethereum mainnet · CREATE2 via SafeSummoner</small></h1>
+
+<div class="card">
+  <h2>Fixed parameters</h2>
+  <dl>
+    <dt>Factory</dt><dd id="pFactory"></dd>
+    <dt>Constructor</dt><dd id="pWeth"></dd>
+    <dt>Creation code</dt><dd id="pCode">not loaded</dd>
+  </dl>
+  <p class="note">The constructor takes a single argument, the canonical mainnet WETH.
+     It is already appended to the creation code below &mdash; nothing else to fill in.</p>
+  <div class="row" style="margin-top:.7rem">
+    <button class="sec" id="pick">Load creation code&hellip;</button>
+    <input type="file" id="file" accept=".txt,.hex" hidden>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Mined salt</h2>
+  <label for="salt">Salt (32-byte hex, from <code>mine_create2_salt.js</code>)</label>
+  <input id="salt" spellcheck="false" placeholder="0x0000&hellip;">
+  <label for="want">Address you mined (deployment aborts unless it matches)</label>
+  <input id="want" spellcheck="false" placeholder="0x000&hellip;">
+  <p class="note">Both come from the miner's <code>FOUND:</code> block. The expected address is
+     not cosmetic &mdash; it is the guard that catches a salt mined against different bytecode.</p>
+</div>
+
+<div class="card">
+  <h2>Preflight</h2>
+  <div id="checks"><div class="chk wait"><b>&middot;</b><span>Connect a wallet to begin.</span></div></div>
+  <div class="row" style="margin-top:.9rem">
+    <button id="connect">Connect wallet</button>
+    <button id="verify" class="sec" disabled>Re-run checks</button>
+    <button id="deploy" disabled>Deploy</button>
+  </div>
+  <div id="out" class="note"></div>
+</div>
+
+<div class="card warn">
+  This deploys an immutable contract to mainnet. The salt is only valid for the exact
+  creation code it was mined against &mdash; if <code>Swapboard.sol</code> changed at all,
+  even a comment, re-mine before deploying. Every check above must read
+  <b>OK</b> before the deploy button enables.
+</div>
+</main>
+
+<script>
+const SUMMONER = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
+const WETH     = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+// cast sig "create2Deploy(bytes,bytes32)"  -> 0x94d6f6d4
+// cast sig "predictCreate2(bytes,bytes32)" -> 0x98b44bb6
+const SEL_DEPLOY  = "0x94d6f6d4";
+const SEL_PREDICT = "0x98b44bb6";
+
+const $ = id => document.getElementById(id);
+let code = null, account = null, predicted = null, ready = false;
+
+$("pFactory").textContent = SUMMONER;
+$("pWeth").textContent = WETH + "  (WETH)";
+
+// ---- encoding -------------------------------------------------------------
+const strip = h => h.replace(/^0x/, "").toLowerCase();
+const pad32 = h => strip(h).padStart(64, "0");
+const encAddr = a => pad32(a);
+const encUint = n => pad32(BigInt(n).toString(16));
+
+// abi.encode(bytes,bytes32): offset(0x40), salt, length, data(padded)
+function encodeCall(sel, bytesHex, salt) {
+  const d = strip(bytesHex);
+  const len = d.length / 2;
+  const padded = d + "0".repeat((32 - (len % 32 || 32)) * 2);
+  return sel + encUint(64) + pad32(salt) + encUint(len) + padded;
+}
+
+const rpc = (method, params) => window.ethereum.request({ method, params });
+
+// ---- creation code loading ------------------------------------------------
+function setCode(text) {
+  const t = text.trim();
+  if (!/^0x[0-9a-fA-F]+$/.test(t)) throw new Error("not a 0x hex blob");
+  if (t.length % 2) throw new Error("odd-length hex");
+  const tail = strip(t).slice(-64);
+  if (tail !== pad32(WETH)) {
+    throw new Error("creation code does not end with the WETH constructor argument");
+  }
+  code = t;
+  $("pCode").textContent = ((t.length - 2) / 2).toLocaleString() + " bytes"
+    + "  · ends with WETH arg ✓";
+  render();
+}
+
+$("pick").onclick = () => $("file").click();
+$("file").onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { setCode(await f.text()); } catch (err) { fail(err.message); }
+};
+// If served over http(s) the file sits next to this page; file:// will refuse,
+// which is what the picker is for.
+fetch("./Swapboard.creation.txt").then(r => r.ok && r.text()).then(t => t && setCode(t)).catch(() => {});
+
+// ---- checks ---------------------------------------------------------------
+const rows = [{ ok: null, msg: "Connect a wallet to begin." }];
+function mark(ok, msg) { rows.push({ ok, msg }); }
+function paint() {
+  $("checks").innerHTML = rows.map(r =>
+    `<div class="chk ${r.ok === null ? "wait" : r.ok ? "pass" : "fail"}">`
+    + `<b>${r.ok === null ? "·" : r.ok ? "OK" : "✕"}</b><span>${r.msg}</span></div>`
+  ).join("");
+}
+function fail(m) { $("out").innerHTML = `<span class="fail">${m}</span>`; }
+
+async function verify() {
+  rows.length = 0; ready = false; predicted = null;
+  $("deploy").disabled = true; $("out").textContent = "";
+  try {
+    if (!code) { mark(false, "Creation code not loaded."); return paint(); }
+    mark(true, "Creation code loaded, ending in the WETH constructor argument.");
+
+    const chain = await rpc("eth_chainId", []);
+    const onMainnet = BigInt(chain) === 1n;
+    mark(onMainnet, onMainnet ? "Wallet is on Ethereum mainnet."
+                              : `Wrong network — chainId ${BigInt(chain)}, expected 1.`);
+    if (!onMainnet) return paint();
+
+    const fcode = await rpc("eth_getCode", [SUMMONER, "latest"]);
+    const hasFactory = fcode && fcode !== "0x";
+    mark(hasFactory, hasFactory ? "SafeSummoner factory has code at " + SUMMONER + "."
+                                : "No factory code at " + SUMMONER + " — wrong chain or wrong address.");
+    if (!hasFactory) return paint();
+
+    const saltRaw = $("salt").value.trim();
+    const want = $("want").value.trim();
+    if (!/^0x[0-9a-fA-F]{1,64}$/.test(saltRaw)) { mark(false, "Salt is not 32-byte hex."); return paint(); }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(want)) { mark(false, "Expected address is not a 20-byte address."); return paint(); }
+    const salt = "0x" + pad32(saltRaw);
+    mark(true, "Salt parsed: " + salt);
+
+    // Ask the factory itself where these exact bytes land.
+    const res = await rpc("eth_call", [{ to: SUMMONER, data: encodeCall(SEL_PREDICT, code, salt) }, "latest"]);
+    predicted = "0x" + res.slice(-40);
+    const match = predicted.toLowerCase() === want.toLowerCase();
+    mark(match, match
+      ? "Factory predicts " + predicted + ", matching the address you mined."
+      : "MISMATCH — factory predicts " + predicted + " but you mined " + want
+        + ". The salt was mined against different bytecode; do not deploy.");
+    if (!match) return paint();
+
+    const lead = (predicted.match(/^0x(0*)/)[1].length / 2) | 0;
+    mark(true, `Vanity: ${lead} leading zero byte${lead === 1 ? "" : "s"}.`);
+
+    const existing = await rpc("eth_getCode", [predicted, "latest"]);
+    const free = !existing || existing === "0x";
+    mark(free, free ? "Nothing deployed at that address yet."
+                    : "Already occupied — something exists at " + predicted + ".");
+    if (!free) return paint();
+
+    // Dry-run the real call. The constructor is non-payable, so value must be 0.
+    const tx = { from: account, to: SUMMONER, value: "0x0",
+                 data: encodeCall(SEL_DEPLOY, code, salt) };
+    await rpc("eth_call", [tx, "latest"]);
+    mark(true, "Simulated deployment succeeded (zero value — the constructor is non-payable).");
+
+    const gas = await rpc("eth_estimateGas", [tx]);
+    mark(true, "Gas estimate: " + BigInt(gas).toLocaleString() + ".");
+
+    ready = true; $("deploy").disabled = false;
+  } catch (e) {
+    mark(false, "Check failed: " + (e.data?.message || e.message || e));
+  }
+  paint();
+}
+
+$("connect").onclick = async () => {
+  try {
+    if (!window.ethereum) throw new Error("No injected wallet found.");
+    [account] = await rpc("eth_requestAccounts", []);
+    $("connect").textContent = account.slice(0, 6) + "…" + account.slice(-4);
+    $("verify").disabled = false;
+    verify();
+  } catch (e) { fail(e.message); }
+};
+$("verify").onclick = verify;
+for (const id of ["salt", "want"]) $(id).oninput = () => { if (account) verify(); };
+function render() { if (account) verify(); }
+
+$("deploy").onclick = async () => {
+  if (!ready) return;
+  $("deploy").disabled = true;
+  try {
+    const salt = "0x" + pad32($("salt").value.trim());
+    const hash = await rpc("eth_sendTransaction", [{
+      from: account, to: SUMMONER, value: "0x0", data: encodeCall(SEL_DEPLOY, code, salt)
+    }]);
+    $("out").innerHTML = "Submitted <code>" + hash + "</code> — waiting…";
+    let rcpt = null;
+    while (!rcpt) {
+      await new Promise(r => setTimeout(r, 3000));
+      rcpt = await rpc("eth_getTransactionReceipt", [hash]);
+    }
+    if (BigInt(rcpt.status) !== 1n) { fail("Transaction reverted. Nothing deployed."); return; }
+    const now = await rpc("eth_getCode", [predicted, "latest"]);
+    if (!now || now === "0x") { fail("Mined, but no code at " + predicted + ". Investigate before retrying."); return; }
+    $("out").innerHTML = "<b>Deployed.</b> Swapboard is live at <code>" + predicted + "</code>"
+      + " — runtime " + ((now.length - 2) / 2).toLocaleString() + " bytes.";
+  } catch (e) {
+    fail(e.data?.message || e.message || String(e));
+    $("deploy").disabled = false;
+  }
+};
+paint();
+</script>
