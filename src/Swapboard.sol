@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.36;
 
+import {ERC721} from "../lib/solady/src/tokens/ERC721.sol";
 import {Multicallable} from "../lib/solady/src/utils/Multicallable.sol";
 import {SafeTransferLib} from "../lib/solady/src/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "../lib/solady/src/utils/FixedPointMathLib.sol";
@@ -11,125 +12,20 @@ import {ReentrancyGuardTransient} from "../lib/solady/src/utils/ReentrancyGuardT
 ///         ERC-721, with optional partial fills, an optional maker-side expiry
 ///         and an optional named counterparty.
 ///
-/// @dev Extends the audited Swapboard deployed by the Ethereum Community
-///      Foundation (0x000000fF3D7A2d373615141d7489Ca66683DbecF). The escrow
-///      model is unchanged: a maker deposits tokenA on creation, a taker pays
-///      tokenB on fill, and cancellation returns the remainder. Everything
-///      below documents the additions and their security or compatibility
-///      trade-offs.
+/// @dev tokenA is escrowed on creation and returned on cancellation or fill;
+///      tokenB is paid by the taker. ERC-721 amounts are token IDs and cannot be
+///      partially filled. Expiry is maker-side and inclusive; fill deadlines are
+///      taker-side and inclusive. ETH paths use the immutable canonical WETH.
+///      Escrow transfers use exact balance or ownership checks.
 ///
-/// EXPIRY
-///   An order without a lifetime is a free option written to the market: the
-///   escrow rests at a fixed price, and if the market moves, anyone may take
-///   the stale side until the maker pays gas to cancel. `expiry` bounds that.
-///   0 means never expires, preserving the original behaviour by default.
-///
-///   Note this is distinct from the `deadline` argument carried on every fill,
-///   which is a TAKER-side guard against a stale mempool transaction and says
-///   nothing about how long the order rests. Both bounds are inclusive: an order
-///   is fillable at its `expiry` timestamp and expires once block.timestamp is
-///   greater; a transaction is valid at its `deadline` timestamp.
-///
-/// PARTIAL FILLS
-///   A taker may take part of an order when the maker allows it, leaving the
-///   remainder resting. Amounts divide with full-precision mulDiv rounding
-///   toward the maker, and a fill too small to move any tokenA is rejected.
-///   Partial fills are what make this a limit book rather than an OTC board,
-///   and a nonzero expiry keeps a remainder from resting indefinitely.
-///
-/// NFT SIDES
-///   `nftA` / `nftB` mark a side as an ERC-721, where the matching amount is a
-///   tokenId. tokenId 0 is legitimate, so the zero-amount check is skipped for
-///   that side. Partial fills are refused whenever either side is an NFT,
-///   because an ERC-721 is indivisible, and an NFT order settles only at its
-///   full ask - a short bid is refused rather than quietly billed in full.
-///
-///   NFTs move with transferFrom, never safeTransferFrom. safeTransferFrom
-///   invokes onERC721Received on a contract recipient, opening a callback into
-///   the middle of settlement and refusing recipients that do not implement the
-///   hook. Settlement state is written before its external transfer legs, and
-///   every state-mutating order entry point is nonReentrant.
-///
-///   transferFrom returns nothing, so a collection that no-ops an unauthorised
-///   transfer instead of reverting - an `if` where the standard requires a
-///   `require`, which real collections have shipped - is indistinguishable from
-///   one that settled. Every leg therefore confirms with ownerOf rather than
-///   trusting the call, and confirms BOTH ends: asking only where the token
-///   ended up would accept one that was already sitting there, which is how a
-///   fresh order could be backed by an NFT the board is holding for somebody
-///   else. The one exception is the return leg (cancel and sweep), where an NFT
-///   already at the maker means the return is complete rather than failed.
-///
-/// WHAT THE ESCROW MEASURES, AND WHAT IT DOES NOT
-///   Fungible tokenA is balance-measured on both entry and exit. Entry must
-///   credit the board by exactly amountA; exit must debit the board and credit
-///   the recipient by exactly the settled amount. This rejects fee-on-transfer,
-///   rebasing-during-transfer and true-returning no-op tokens before they can
-///   leave an active order undercollateralised or close an order without paying
-///   its owner. NFT ownership is verified as described above. Elastic-supply
-///   tokens can still rebase pooled custody between transactions and are
-///   therefore unsupported.
-///
-///   Fungible tokenB is not measured on an ordinary fill: it goes straight from
-///   taker to maker and never touches the board's books, so a token that skims
-///   on transfer would pay the maker less than amountB. Measuring it would cost
-///   two balance reads on every fill and would refuse such tokens outright
-///   rather than merely disclosing them, so it is left to the maker: pricing an
-///   order in a fee-on-transfer token prices in its fee. NFT-B ownership is
-///   verified. The ETH path is different: its WETH passes through the board, so
-///   wrap, transfer and unwrap deltas are all confirmed exactly to keep
-///   unrelated WETH escrow isolated.
-///
-/// PRIVATE ORDERS
-///   `counterparty` restricts a fill to one address; 0 leaves the order public.
-///
-/// RECIPIENT
-///   Every fill takes a `recipient`, so an aggregator can settle straight to
-///   its user instead of receiving and forwarding. It is a delivery address and
-///   never authorisation: `counterparty` is still tested against msg.sender,
-///   because a caller-supplied recipient could otherwise be set to the intended
-///   counterparty and drain every private order. A private order can be routed
-///   only when the router itself is the named counterparty; naming an end user
-///   does not authorize a third-party router.
-///
-///   Both the `recipient` of a fill and the `maker` of a sponsored order are
-///   payout addresses, and both refuse the board itself and the wrapper. An
-///   unwrapped payout to WETH would be re-wrapped to the board and lost, and
-///   anything sent to the board sits outside the escrow it accounts for. This
-///   contract is immutable and neither mistake is recoverable.
-///
-/// SWEEPING
-///   Expired orders may be swept by anyone. Escrow always returns to the maker,
-///   so nothing is capturable; it exists so funds are never stranded behind an
-///   absent maker. cancelExpired is strict, trySweepExpired skips stale entries
-///   - a keeper's list is read before it is mined, and anything filled in
-///   between would otherwise abort the whole batch. Stale is the only thing it
-///   skips: a settlement that reverts still aborts the batch, because a sweep
-///   that quietly closed an order it could not pay out would discard the very
-///   claim it exists to protect.
-///
-/// BATCHING
-///   Typed batch entry points cover the common cases: createOrders, fillOrders,
-///   tryFillOrders, replaceOrders, cancelOrders, cancelExpired,
-///   trySweepExpired. multicall
-///   covers the rest by composing them in one transaction. Repricing has its
-///   own entry point, replaceOrder, because cancel-then-create moves the whole
-///   escrow twice and rewrites storage under a new id to express a change of
-///   two numbers; see its docs. Every state-mutating order entry point is
-///   nonReentrant, and the guard clears between sub-calls, so they compose in
-///   sequence.
-///
-///   multicall refuses a non-zero msg.value, since forwarding one value to
-///   several calls would let it be spent more than once. The payable paths
-///   (createOrderWithEth, fillOrderWithEth) are therefore outside it: reprice a
-///   WETH order with cancelOrder + createOrder rather than the unwrap variants.
-///
-/// STORAGE
-///   maker(160) + active(8) + partialFill(8) + expiry(64) + nftA(8) + nftB(8)
-///   is exactly 256 bits, so expiry and both NFT flags cost no extra storage.
-///   `counterparty` cannot fit a remaining gap (the widest is 96 bits) and
-///   takes a slot of its own, paid only by orders that use it.
-contract Swapboard is ReentrancyGuardTransient, Multicallable {
+/// @dev Fungible tokenA transfers are measured on both sides, and direct
+///      fungible tokenB payments are measured at the maker. NFT ownership and
+///      WETH wrap/unwrap deltas are checked exactly. `counterparty` restricts
+///      fills to one caller; recipient only controls delivery. Anyone may sweep
+///      expired orders, and typed batch methods are atomic unless prefixed `try`.
+///      Rebasing and reflection tokens remain unsupported because pooled escrow
+///      balances can change between calls; integrators should allowlist assets.
+contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     using SafeTransferLib for address;
 
     /// @dev maker/active/partialFill/expiry/nftA/nftB fill slot 0 exactly.
@@ -203,53 +99,149 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
     event OrderCanceled(uint256 indexed orderId, address indexed maker);
     event OrderExpiredSwept(uint256 indexed orderId, address indexed maker, address indexed caller);
 
-    error BadMaker();
+    error NotWETH(address expected, address actual);
     error ZeroETH();
+    error BadMaker();
+    error NotMaker(uint256 orderId, address caller, address maker);
     error SameToken();
     error ZeroAmount();
     error ZeroAddress();
     error BadRecipient();
-    error LengthMismatch();
-    error ZeroFillAmount();
-    error DeadlineExpired();
-    error NFTNotDivisible();
-    error NFTNotReplaceable(uint256 orderId);
-    error DirectNFTTransfer();
     error ExpiryInPast(uint64 expiry);
     error NotAContract(address token);
     error OrderExpired(uint256 orderId);
     error OrderNotFound(uint256 orderId);
+    error LengthMismatch();
     error OrderNotActive(uint256 orderId);
-    error OrderNotExpired(uint256 orderId);
-    error PartialFillNotAllowed(uint256 orderId);
-    error NotWETH(address expected, address actual);
-    error NFTTransferFailed(address token, uint256 tokenId);
-    error ETHAmountMismatch(uint256 required, uint256 sent);
+    error ZeroFillAmount();
     error BalanceMismatch(uint256 expected, uint256 received);
-    error BalanceDeltaMismatch(address token, address account, uint256 expected, uint256 actual);
-    error NotMaker(uint256 orderId, address caller, address maker);
+    error DeadlineExpired();
+    error NFTNotDivisible();
     error NotCounterparty(uint256 orderId, address caller, address counterparty);
+    error OrderNotExpired(uint256 orderId);
+    error DirectNFTTransfer();
+    error ETHAmountMismatch(uint256 required, uint256 sent);
+    error NFTNotReplaceable(uint256 orderId);
+    error NFTTransferFailed(address token, uint256 tokenId);
+    error BalanceDeltaMismatch(address token, address account, uint256 expected, uint256 actual);
+    error PartialFillNotAllowed(uint256 orderId);
+    error InsufficientOutput(uint256 minimum, uint256 actual);
 
-    /// @dev `_weth` is a deployment trust root. Exact balance deltas are checked
-    /// at runtime, but a malicious wrapper can also lie through `balanceOf`;
-    /// deployments must still use the chain's canonical, immutable wrapper.
+    /// @dev Use the chain's canonical WETH deployment.
     constructor(address _weth) {
         if (_weth == address(0)) revert ZeroAddress();
         if (_weth.code.length == 0) revert NotAContract(_weth);
         weth = _weth;
     }
 
-    /// @dev Only WETH may send ETH here through an ordinary call, via withdraw()
-    /// during an unwrap. Forced ETH can still arrive without executing receive().
+    // ------------------------------------------------------ POSITION RECEIPTS
+
+    function name() public pure override returns (string memory) {
+        return "Swapboard Position";
+    }
+
+    function symbol() public pure override returns (string memory) {
+        return "SBPOS";
+    }
+
+    /// @dev Deliberately empty. Everything about a position is already on
+    ///      chain and readable through `orders`, so a URI would either point
+    ///      somewhere that can rot or duplicate what a caller can already fetch.
+    function tokenURI(uint256) public pure override returns (string memory) {
+        return "";
+    }
+
+    /// @dev Ownership IS makership. Rather than teach settlement to consult
+    ///      `ownerOf`, the stored `maker` is kept in step on every transfer, so
+    ///      payout, cancellation and repricing keep working exactly as before
+    ///      and there is only ever one source of truth. Minting sets it in
+    ///      `_store`; burning is a close, where it must not be cleared because
+    ///      `maker == address(0)` is how a nonexistent order is recognised.
+    function _afterTokenTransfer(address from, address to, uint256 id) internal override {
+        if (from != address(0) && to != address(0)) {
+            _checkMaker(to);
+            orders[id].maker = to;
+        }
+    }
+
+    /// @dev Only WETH may send ETH through an ordinary call.
     receive() external payable {
         if (msg.sender != weth) revert NotWETH(weth, msg.sender);
     }
 
-    /// @dev Refuse unsolicited safeTransferFrom deposits. Orders escrow with
-    /// transferFrom, so accepting direct 721 sends would only create untracked
-    /// inventory with no safe owner-authenticated rescue path.
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        revert DirectNFTTransfer();
+    /// @notice Terms carried in a pushed NFT's transfer data.
+    /// @dev Exactly five words. `tokenA` is not present: the collection is
+    ///      established by the call itself, not by anything the sender writes.
+    struct PushOrder {
+        address tokenB;
+        uint256 amountB;
+        uint64 expiry;
+        bool nftB;
+        address counterparty;
+    }
+
+    /// @notice Create an order from an NFT pushed with `safeTransferFrom`,
+    ///         carrying its terms in `data`. One transaction, no approval.
+    ///
+    /// @dev This board previously refused every incoming 721. It accepts one
+    ///      now ONLY when the transfer carries well-formed terms, and an
+    ///      unsolicited push still reverts with the original error - a token
+    ///      sent here by mistake is rejected rather than silently escrowed with
+    ///      no owner.
+    ///
+    ///      THE COLLECTION IS THE CALLER. `tokenA` is `msg.sender`, so the
+    ///      sender cannot name a collection they do not control; the only way
+    ///      to be a collection here is for the collection to make the call.
+    ///
+    ///      OWNERSHIP IS VERIFIED, NOT MOVED. The token is already here by the
+    ///      time this runs, so there is nothing to transfer - and attempting a
+    ///      transfer would be the bug. A caller that moved nothing must not be
+    ///      able to mint an order over escrow that is already backing somebody
+    ///      else's, which is exactly what checking `ownerOf` prevents. The same
+    ///      reasoning as Dutchboard's push listing.
+    ///
+    ///      A fabricated collection can of course report whatever it likes and
+    ///      mint an order backed by its own worthless token. That is not an
+    ///      attack on this board or on anyone's escrow: it is an order nobody
+    ///      has to fill, indistinguishable from listing any other worthless
+    ///      asset, and it is the taker's job to know what they are buying.
+    ///
+    ///      PARTIAL FILLS ARE REFUSED, as for any NFT-sided order: an ERC-721
+    ///      is indivisible and settles only at its full ask.
+    function onERC721Received(address, address from, uint256 tokenId, bytes calldata data)
+        external
+        nonReentrant
+        returns (bytes4)
+    {
+        // No terms means this was not a deliberate order, so keep the old
+        // behaviour and refuse it.
+        if (data.length != 160) revert DirectNFTTransfer();
+        PushOrder memory o = abi.decode(data, (PushOrder));
+
+        address tokenA = msg.sender;
+        // This board is itself an ERC-721 now, so a position pushed back here
+        // would try to escrow the board's own receipt against itself.
+        if (tokenA == address(this)) revert BadMaker();
+        // `from` becomes the maker, and a maker is a payout address: the same
+        // addresses refused at creation are refused here.
+        _checkMaker(from);
+        if (tokenA.code.length == 0) revert NotAContract(tokenA);
+        if (o.tokenB == address(0)) revert ZeroAddress();
+        if (o.tokenB.code.length == 0) revert NotAContract(o.tokenB);
+        // tokenId 0 is a legitimate NFT, so only a fungible side is checked.
+        if (!o.nftB && o.amountB == 0) revert ZeroAmount();
+        // Two fungible legs in one token would be a no-op trade; here tokenA is
+        // always an NFT, so a shared collection is a legitimate 721-for-721
+        // swap and only the degenerate same-id case needs refusing - which the
+        // payment leg's ownerOf preflight already does at fill time.
+        _checkExpiry(o.expiry);
+
+        if (IERC721(tokenA).ownerOf(tokenId) != address(this)) {
+            revert NFTTransferFailed(tokenA, tokenId);
+        }
+
+        _store(from, tokenA, tokenId, o.tokenB, o.amountB, false, o.expiry, true, o.nftB, o.counterparty);
+        return this.onERC721Received.selector;
     }
 
     // ----------------------------------------------------------------- CREATE
@@ -270,19 +262,8 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         );
     }
 
-    /// @notice Create a fully-funded order owned by `maker`.
-    /// @dev The caller supplies the escrow, while cancellation rights, returned
-    ///      escrow, and fill proceeds belong to `maker`. This is the routed
-    ///      creation primitive: a zRouter-funded executor can receive the
-    ///      maker's asset, approve this contract for the exact amount, and call
-    ///      here without becoming the on-book maker itself.
-    ///
-    ///      No maker signature is required because the caller cannot debit the
-    ///      named maker: it pays from its own balance. Naming somebody else can
-    ///      only gift that address a funded order. It cannot, however, be used to
-    ///      post an order nobody can be paid through - see _checkMaker. An
-    ///      integrator must not read `maker` as evidence that the named address
-    ///      asked for the order; it evidences only who will be paid.
+    /// @notice Create a fully funded order owned by `maker`.
+    /// @dev The caller supplies the escrow; cancellation and payouts go to `maker`.
     function createOrderFor(
         address maker,
         address tokenA,
@@ -413,28 +394,15 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         orderId = _store(maker, tokenA, amountA, tokenB, amountB, partialFill, expiry, nftA, nftB, counterparty);
     }
 
-    /// @dev Moves an ERC-721 and proves it moved. transferFrom returns nothing,
-    /// so a collection that no-ops an unauthorised transfer rather than
-    /// reverting looks exactly like one that settled.
-    ///
-    /// Both ends are checked, and the first check is the load-bearing one.
-    /// Confirming only the destination answers "does `to` hold it now", which is
-    /// already true whenever the token was sitting there beforehand: against
-    /// such a collection anyone could escrow an NFT the board is holding for
-    /// another maker - the transfer does nothing, the destination check passes -
-    /// and then cancel that order to walk off with it.
+    /// @dev Confirm ownership before and after `transferFrom`.
     function _moveNFT(address token, address from, address to, uint256 tokenId) internal {
         if (IERC721(token).ownerOf(tokenId) != from) revert NFTTransferFailed(token, tokenId);
         IERC721(token).transferFrom(from, to, tokenId);
         if (IERC721(token).ownerOf(tokenId) != to) revert NFTTransferFailed(token, tokenId);
     }
 
-    /// @dev Return leg of the escrow, for cancel and sweep. An NFT already back
-    /// with the maker means the return is complete, not failed. Otherwise the board
-    /// must still own it before the transfer, and the maker must own it after.
-    /// This preflight is important: a collection may allow the token to find
-    /// its way home through a sticky approval yet correctly revert a later
-    /// transfer whose declared `from` is no longer the owner.
+    /// @dev An NFT already owned by the maker is treated as returned; otherwise
+    ///      confirm board ownership before transferring it back.
     function _returnNFT(address token, address to, uint256 tokenId) internal {
         address owner = IERC721(token).ownerOf(tokenId);
         if (owner == to) return;
@@ -443,11 +411,7 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         if (IERC721(token).ownerOf(tokenId) != to) revert NFTTransferFailed(token, tokenId);
     }
 
-    /// @dev Transfers escrowed fungible tokens without trusting the token's
-    /// boolean return value alone. Both deltas matter: an exact recipient credit
-    /// catches a true-returning no-op or recipient-side tax, while an exact
-    /// board debit prevents a sender-paid fee from consuming another order's
-    /// pooled escrow. A revert restores both the order state and the token call.
+    /// @dev Confirm exact board debit and recipient credit for pooled escrow.
     function _sendEscrowToken(address token, address to, uint256 amount) internal {
         uint256 boardBefore = token.balanceOf(address(this));
         uint256 recipientBefore = token.balanceOf(to);
@@ -464,9 +428,17 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         }
     }
 
-    /// @dev The board pools WETH escrow across orders, so a successful-looking
-    /// deposit that under-mints must not let this call spend somebody else's
-    /// backing.
+    /// @dev Confirm that a direct fungible payment credits the maker by the
+    ///      nominal amount. This rejects fee-on-transfer and other tokens that
+    ///      debit the taker by one amount while crediting the maker by another.
+    function _payToken(address token, address from, address to, uint256 amount) internal {
+        uint256 recipientBefore = token.balanceOf(to);
+        token.safeTransferFrom(from, to, amount);
+        uint256 received = _increase(recipientBefore, token.balanceOf(to));
+        if (received != amount) revert BalanceDeltaMismatch(token, to, amount, received);
+    }
+
+    /// @dev Confirm the exact WETH credit from wrapping.
     function _wrapETH(uint256 amount) internal {
         uint256 beforeBalance = weth.balanceOf(address(this));
         IWETH(weth).deposit{value: amount}();
@@ -476,9 +448,7 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         }
     }
 
-    /// @dev Confirms both sides of the wrapper redemption. Exact WETH debit
-    /// prevents an over-burning wrapper from consuming another order; exact ETH
-    /// receipt prevents forced or donated ETH from subsidising a short unwrap.
+    /// @dev Confirm exact WETH debit and native ETH credit.
     function _unwrapETH(uint256 amount) internal {
         uint256 wethBefore = weth.balanceOf(address(this));
         uint256 ethBefore = address(this).balance;
@@ -511,25 +481,14 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         }
     }
 
-    /// @dev A maker is a payout address, not merely a label: returned escrow and
-    /// fill proceeds are both sent there. `_to` refuses the board and the wrapper
-    /// as a delivery address for that reason, and the same two are refused here.
-    ///
-    /// Naming the board is the worse of the two, and the only one a fill does not
-    /// simply revert on. Such an order can never be cancelled - msg.sender is
-    /// never the board - and the sweep cannot credit the board from its own
-    /// balance, so the escrow is locked. A fill, however, SUCCEEDS: the ordinary
-    /// tokenB leg goes straight from taker to maker and is deliberately not
-    /// balance-measured, so it lands on the board as untracked inventory with no
-    /// owner and no rescue path. The order looks live and public on-book, so that
-    /// loss falls on the taker rather than on whoever funded the mistake.
+    /// @dev Maker receives escrow and fill proceeds, so the board and WETH are
+    /// invalid maker addresses.
     function _checkMaker(address maker) internal view {
         if (maker == address(0)) revert ZeroAddress();
         if (maker == address(this) || maker == weth) revert BadMaker();
     }
 
-    /// @dev Creation requires every nonzero expiry to be strictly in the future.
-    /// Fill and sweep use the inclusive boundary documented in the contract header.
+    /// @dev Creation requires a nonzero expiry to be in the future.
     function _checkExpiry(uint64 expiry) internal view {
         if (expiry != 0 && expiry <= block.timestamp) revert ExpiryInPast(expiry);
     }
@@ -551,6 +510,12 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         }
         orders[orderId] =
             Order(maker, true, partialFill, expiry, nftA, nftB, counterparty, tokenA, amountA, tokenB, amountB);
+
+        // The position itself is the receipt. Minted with `_mint`, never
+        // `_safeMint`: a receiver hook here would hand control to the maker in
+        // the middle of order creation, which is the callback-mid-settlement
+        // hazard this board avoids everywhere else.
+        _mint(maker, orderId);
         emit OrderCreated(
             orderId, maker, tokenA, amountA, tokenB, amountB, partialFill, expiry, nftA, nftB, counterparty
         );
@@ -558,53 +523,66 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
 
     // ------------------------------------------------------------------- FILL
 
+    /// @param fillAmountB Fungible payment amount; it must be explicit and nonzero.
+    ///        A zero full-fill sentinel is retained only for NFT orders, where an
+    ///        amount can be token ID zero and NFT orders cannot be repriced.
+    /// @param minAmountA Minimum fungible tokenA output; zero disables the floor.
+    ///        Ignored for NFT tokenA, whose amount is a token ID.
     /// @param recipient Where tokenA is delivered. address(0) means the caller.
     ///        This is a delivery address only - it is NEVER used for
     ///        authorisation. `counterparty` is still checked against msg.sender,
     ///        because a caller-supplied recipient could otherwise be set to the
     ///        intended counterparty and drain every private order.
-    function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB, address recipient)
+    function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB, uint256 minAmountA, address recipient)
         external
         nonReentrant
     {
         _checkDeadline(deadline);
-        _fill(orderId, fillAmountB, false, false, _to(recipient));
+        _fill(orderId, fillAmountB, minAmountA, 0, _to(recipient));
     }
 
-    /// @dev Atomic: if any fill reverts, the whole batch reverts.
+    /// @dev Atomic: if any fill reverts, the whole batch reverts. Each
+    ///      `minAmountsA[i]` protects the corresponding order.
     /// @notice Fill several orders atomically; any failure aborts the batch.
     ///         Use tryFillOrders to skip rather than revert.
     function fillOrders(
         uint256[] calldata orderIds,
         uint256 deadline,
         uint256[] calldata fillAmountsB,
+        uint256[] calldata minAmountsA,
         address recipient
     ) external nonReentrant {
         _checkDeadline(deadline);
-        if (orderIds.length != fillAmountsB.length) revert LengthMismatch();
+        if (orderIds.length != fillAmountsB.length || orderIds.length != minAmountsA.length) {
+            revert LengthMismatch();
+        }
         address to = _to(recipient);
         for (uint256 i; i < orderIds.length; ++i) {
-            _fill(orderIds[i], fillAmountsB[i], false, false, to);
+            _fill(orderIds[i], fillAmountsB[i], minAmountsA[i], 0, to);
         }
     }
 
     /// @dev Skips orders that are inactive, missing, expired, or reserved for a
-    /// different counterparty. Every other revert path still aborts the batch.
+    /// different counterparty. Every other revert path still aborts the batch;
+    ///      minimum-output failures are not silently skipped.
     function tryFillOrders(
         uint256[] calldata orderIds,
         uint256 deadline,
         uint256[] calldata fillAmountsB,
+        uint256[] calldata minAmountsA,
         address recipient
     ) external nonReentrant returns (bool[] memory filled) {
         _checkDeadline(deadline);
-        if (orderIds.length != fillAmountsB.length) revert LengthMismatch();
+        if (orderIds.length != fillAmountsB.length || orderIds.length != minAmountsA.length) {
+            revert LengthMismatch();
+        }
         address to = _to(recipient);
         filled = new bool[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
             Order storage o = orders[orderIds[i]];
             address cp = o.counterparty;
             if (o.active && !_expired(o.expiry) && (cp == address(0) || cp == msg.sender)) {
-                _fill(orderIds[i], fillAmountsB[i], false, false, to);
+                _fill(orderIds[i], fillAmountsB[i], minAmountsA[i], 0, to);
                 filled[i] = true;
             }
         }
@@ -612,12 +590,19 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
 
     /// @notice Fill and receive tokenA as ETH rather than WETH. Reverts unless
     ///         tokenA is WETH; ignored when tokenA is an NFT.
-    function fillOrderUnwrap(uint256 orderId, uint256 deadline, uint256 fillAmountB, address recipient)
+    /// @param minAmountA Minimum WETH output; zero disables the floor.
+    function fillOrderUnwrap(
+        uint256 orderId,
+        uint256 deadline,
+        uint256 fillAmountB,
+        uint256 minAmountA,
+        address recipient
+    )
         external
         nonReentrant
     {
         _checkDeadline(deadline);
-        _fill(orderId, fillAmountB, true, false, _to(recipient));
+        _fill(orderId, fillAmountB, minAmountA, 1, _to(recipient));
     }
 
     /// @dev msg.value is the fill amount and is wrapped before settlement, so a
@@ -627,7 +612,13 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
     /// order. NFT-A and all-or-nothing orders must arrive exactly paid. _fill
     /// independently rejects those short fills; checking here gives the ETH path
     /// its specific ETHAmountMismatch error before wrapping the caller's value.
-    function fillOrderWithEth(uint256 orderId, uint256 deadline, address recipient) external payable nonReentrant {
+    /// @param minAmountA Minimum fungible tokenA output; zero disables the floor.
+    ///        Ignored for NFT tokenA.
+    function fillOrderWithEth(uint256 orderId, uint256 deadline, uint256 minAmountA, address recipient)
+        external
+        payable
+        nonReentrant
+    {
         _checkDeadline(deadline);
         if (msg.value == 0) revert ZeroETH();
         Order storage order = orders[orderId];
@@ -641,10 +632,13 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
             revert ETHAmountMismatch(owed, msg.value);
         }
         _wrapETH(msg.value);
-        _fill(orderId, msg.value, false, true, _to(recipient));
+        _fill(orderId, msg.value, minAmountA, 2, _to(recipient));
     }
 
-    function _fill(uint256 orderId, uint256 fillAmountB, bool unwrap, bool prepaid, address to) internal {
+    /// @dev mode bit 0 unwraps tokenA as ETH; mode bit 1 uses pre-wrapped WETH
+    ///      for tokenB. Packing these path flags keeps this settlement routine
+    ///      below the compiler's stack limit after adding the output floor.
+    function _fill(uint256 orderId, uint256 fillAmountB, uint256 minAmountA, uint256 mode, address to) internal {
         Order storage order = orders[orderId];
         address maker = order.maker;
         if (maker == address(0)) revert OrderNotFound(orderId);
@@ -656,111 +650,114 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         address cp = order.counterparty;
         if (cp != address(0) && cp != msg.sender) revert NotCounterparty(orderId, msg.sender, cp);
 
-        address tokenA = order.tokenA;
-        address tokenB = order.tokenB;
-        bool nftA = order.nftA;
-        bool nftB = order.nftB;
+        (uint256 outA, uint256 paidB, bool full) = _applyFill(orderId, order, fillAmountB);
+
+        // A taker signs this floor before the transaction enters the public
+        // mempool. It therefore remains protected if the maker reprices the
+        // live order before this call executes. NFT token IDs are not amounts,
+        // so the floor applies only to fungible tokenA legs.
+        if (!order.nftA && outA < minAmountA) revert InsufficientOutput(minAmountA, outA);
+
+        _settleFill(FillLegs(order.tokenA, order.tokenB, maker, to, outA, paidB, mode, order.nftA, order.nftB));
+
+        if (full) {
+            emit OrderFilled(orderId, msg.sender, maker, outA, paidB);
+        } else {
+            emit OrderPartiallyFilled(orderId, msg.sender, maker, outA, paidB, order.amountA, order.amountB);
+        }
+    }
+
+    /// @dev Apply fill arithmetic and update the order before any external
+    ///      transfer. Keeping this in its own frame avoids stack pressure in
+    ///      the settlement routine, which also carries the slippage floor.
+    function _applyFill(uint256 orderId, Order storage order, uint256 fillAmountB)
+        internal
+        returns (uint256 outA, uint256 paidB, bool full)
+    {
         uint256 amountA = order.amountA;
         uint256 amountB = order.amountB;
 
-        // An NFT order always settles in full. Zero is the explicit full-fill
-        // sentinel; any nonzero value must not authorize more than it names:
-        //   nftB - amountB is a tokenId, so the >= comparison used to detect a
-        //          full fill is meaningless. Exact match, or the 0 sentinel.
-        //   nftA - amountB is a price. An overbid still clamps to the ask, as
-        //          it does for any order, but a short bid must not be billed at
-        //          the full ask; that is the same hazard fillOrderWithEth
-        //          already refuses, reached through the ERC-20 leg instead.
+        // NFT orders always settle in full. Their amount fields may be token IDs,
+        // so zero remains the explicit full-fill sentinel for either NFT side.
+        // Fungible orders must receive an explicit payment amount: resolving zero
+        // against the live order would let a maker reprice the taker's input after
+        // the taker signed a transaction.
+        if (fillAmountB == 0 && !order.nftA && !order.nftB) revert ZeroFillAmount();
         if (fillAmountB != 0) {
-            if (nftB && fillAmountB != amountB) revert PartialFillNotAllowed(orderId);
-            if (nftA && fillAmountB < amountB) revert PartialFillNotAllowed(orderId);
+            if (order.nftB && fillAmountB != amountB) revert PartialFillNotAllowed(orderId);
+            if (order.nftA && fillAmountB < amountB) revert PartialFillNotAllowed(orderId);
         }
 
-        uint256 outA;
-        bool full;
-        if (nftA || nftB || fillAmountB == 0 || fillAmountB >= amountB) {
+        if (order.nftA || order.nftB || fillAmountB >= amountB) {
             order.active = false;
             order.amountA = 0;
             order.amountB = 0;
-            (outA, fillAmountB, full) = (amountA, amountB, true);
-        } else {
-            if (!order.partialFill) revert PartialFillNotAllowed(orderId);
-            // Rounds down, favouring the maker. Full precision so large
-            // 18-decimal amounts cannot overflow the intermediate product.
-            outA = FixedPointMathLib.fullMulDiv(fillAmountB, amountA, amountB);
-            if (outA == 0) revert ZeroFillAmount();
-            order.amountA = amountA - outA;
-            order.amountB = amountB - fillAmountB;
+            // The position exists exactly while the order does. A PARTIAL fill
+            // leaves the order live with a remainder, so its receipt survives
+            // and its claim simply shrinks; only a closing fill burns it.
+            _burn(orderId);
+            return (amountA, amountB, true);
         }
 
-        // tokenB to the maker. On the ETH path it is already wrapped and held here.
-        // The 721 leg is the maker's payment, so it is confirmed rather than
-        // assumed: an unconfirmed no-op would hand the escrow over for nothing.
-        if (nftB) _moveNFT(tokenB, msg.sender, maker, fillAmountB);
-        else if (prepaid) _sendEscrowToken(tokenB, maker, fillAmountB);
-        else tokenB.safeTransferFrom(msg.sender, maker, fillAmountB);
+        if (!order.partialFill) revert PartialFillNotAllowed(orderId);
+        // Rounds down, favouring the maker. Full precision so large
+        // 18-decimal amounts cannot overflow the intermediate product.
+        outA = FixedPointMathLib.fullMulDiv(fillAmountB, amountA, amountB);
+        if (outA == 0) revert ZeroFillAmount();
+        order.amountA = amountA - outA;
+        order.amountB = amountB - fillAmountB;
+        return (outA, fillAmountB, false);
+    }
 
-        // tokenA to the taker. Confirmed at both ends too: escrow can go missing
-        // between creation and fill on a collection that leaves a stale approval
-        // behind, and the taker has already paid by this point.
-        if (nftA) {
-            _moveNFT(tokenA, address(this), to, outA);
-        } else if (unwrap) {
-            if (tokenA != weth) revert NotWETH(weth, tokenA);
-            _unwrapETH(outA);
-            to.safeTransferETH(outA);
-        } else {
-            _sendEscrowToken(tokenA, to, outA);
-        }
+    /// @dev Settlement arguments, grouped only so they occupy one stack slot
+    ///      at the call site. `_fill` carries enough live locals that passing
+    ///      these individually exhausts the stack under via-IR.
+    struct FillLegs {
+        address tokenA;
+        address tokenB;
+        address maker;
+        address to;
+        uint256 outA;
+        uint256 fillAmountB;
+        uint256 mode;
+        bool nftA;
+        bool nftB;
+    }
 
-        if (full) {
-            emit OrderFilled(orderId, msg.sender, maker, outA, fillAmountB);
+    /// @dev Both transfer legs, in their own frame. Ordering and confirmation
+    ///      are unchanged from when this was inline: tokenB reaches the maker
+    ///      first, then tokenA reaches the taker, and every leg is verified
+    ///      rather than assumed.
+    function _settleFill(FillLegs memory f) internal {
+        // tokenB to the maker. On the ETH path it is already wrapped and held
+        // here. The 721 leg is the maker's payment, so it is confirmed rather
+        // than assumed: an unconfirmed no-op would hand the escrow over for
+        // nothing.
+        if (f.nftB) _moveNFT(f.tokenB, msg.sender, f.maker, f.fillAmountB);
+        else if ((f.mode & 2) != 0) _sendEscrowToken(f.tokenB, f.maker, f.fillAmountB);
+        else _payToken(f.tokenB, msg.sender, f.maker, f.fillAmountB);
+
+        // tokenA to the taker. Confirmed at both ends too: escrow can go
+        // missing between creation and fill on a collection that leaves a stale
+        // approval behind, and the taker has already paid by this point.
+        if (f.nftA) {
+            _moveNFT(f.tokenA, address(this), f.to, f.outA);
+        } else if ((f.mode & 1) != 0) {
+            if (f.tokenA != weth) revert NotWETH(weth, f.tokenA);
+            _unwrapETH(f.outA);
+            f.to.safeTransferETH(f.outA);
         } else {
-            emit OrderPartiallyFilled(orderId, msg.sender, maker, outA, fillAmountB, order.amountA, order.amountB);
+            _sendEscrowToken(f.tokenA, f.to, f.outA);
         }
     }
 
     // ---------------------------------------------------------------- REPLACE
 
-    /// @notice Maker-only. Reprice and resize a live fungible order in place.
-    /// @dev Repricing is cancelOrder followed by createOrder, which works but
-    ///      pays for it twice: the whole escrow makes a round trip through the
-    ///      maker, and the new order writes fresh storage under a fresh id.
-    ///      For a human repricing occasionally that is noise. For a programmatic
-    ///      maker - a pool quoting a two-sided market that must reprice after
-    ///      every fill - it is the dominant cost, and it is pure overhead,
-    ///      since the order that comes back is the same order at a new price.
-    ///
-    ///      Only the three things a reprice actually changes may change:
-    ///      amounts and expiry. Tokens, the NFT flags, partialFill, the
-    ///      counterparty and the maker are all fixed, so the id remains a
-    ///      stable handle - an integrator holding it keeps a claim on the same
-    ///      pair, the same permissions and the same owner. Changing any of
-    ///      those is a different order and must be created as one.
-    ///
-    ///      Escrow moves by the difference only, and in the same directions the
-    ///      rest of the contract already measures: growing pulls from the maker
-    ///      and confirms exactly what arrived, shrinking returns through
-    ///      _sendEscrowToken and confirms both ends. Fee-on-transfer and
-    ///      no-op-transfer tokens are refused here exactly as they are at
-    ///      creation, so a replace cannot leave an order undercollateralised.
-    ///
-    ///      Growing writes storage after the pull and shrinking writes it
-    ///      before the return, mirroring _createOrder and _returnEscrow
-    ///      respectively: at no point during an external call does the recorded
-    ///      escrow exceed what the board actually holds for this order.
-    ///
-    ///      NFT orders are refused. Their amounts are tokenIds rather than
-    ///      quantities, so there is no difference to move, and a "resize" would
-    ///      silently mean a different token.
-    ///
-    ///      An expired order may still be replaced: it is the maker's own
-    ///      escrow, and cancelOrder + createOrder would let them do it anyway.
-    ///      Growing an order funded through createOrderWithEth pulls WETH, not
-    ///      ETH: this entry point is deliberately not payable, since forwarding
-    ///      one msg.value across a batch would let it be spent more than once,
-    ///      the same reason multicall refuses value. Top such an order up in
-    ///      WETH, or cancel and recreate it through the payable path.
+    /// @notice Maker-only repricing and resizing for a live fungible order.
+    /// @dev Only amounts and expiry change; the order id, pair, permissions and
+    ///      maker remain fixed. NFT orders are not replaceable. Escrow moves only
+    ///      by the amount difference and uses the same exact transfer checks as
+    ///      creation and cancellation. This method is not payable.
     function replaceOrder(uint256 orderId, uint256 newAmountA, uint256 newAmountB, uint64 newExpiry)
         external
         nonReentrant
@@ -768,20 +765,14 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         _replace(orderId, newAmountA, newAmountB, newExpiry);
     }
 
-    /// @notice Reprice several orders in one transaction.
-    /// @dev Atomic, like createOrders: one bad id aborts the batch. A quoting
-    ///      maker reprices every rung it has resting at once, and a partially
-    ///      applied ladder would leave some rungs on the old price and some on
-    ///      the new - a book the maker never intended to show.
+    /// @notice Reprice several orders atomically.
     function replaceOrders(ReplaceOrderParams[] calldata params) external nonReentrant {
         for (uint256 i; i < params.length; ++i) {
             _replace(params[i].orderId, params[i].amountA, params[i].amountB, params[i].expiry);
         }
     }
 
-    function _replace(uint256 orderId, uint256 newAmountA, uint256 newAmountB, uint64 newExpiry)
-        internal
-    {
+    function _replace(uint256 orderId, uint256 newAmountA, uint256 newAmountB, uint64 newExpiry) internal {
         Order storage order = orders[orderId];
         address maker = order.maker;
         if (maker == address(0)) revert OrderNotFound(orderId);
@@ -849,7 +840,7 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
             if (!order.active) revert OrderNotActive(orderId);
             if (!_expired(order.expiry)) revert OrderNotExpired(orderId);
 
-            _returnEscrow(order, maker, false);
+            _returnEscrow(orderId, order, maker, false);
             emit OrderExpiredSwept(orderId, maker, msg.sender);
         }
     }
@@ -868,7 +859,7 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
             address maker = order.maker;
             if (maker == address(0) || !order.active || !_expired(order.expiry)) continue;
 
-            _returnEscrow(order, maker, false);
+            _returnEscrow(orderId, order, maker, false);
             emit OrderExpiredSwept(orderId, maker, msg.sender);
             swept[i] = true;
         }
@@ -881,27 +872,20 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
         if (!order.active) revert OrderNotActive(orderId);
         if (msg.sender != maker) revert NotMaker(orderId, msg.sender, maker);
 
-        _returnEscrow(order, maker, unwrap);
+        _returnEscrow(orderId, order, maker, unwrap);
         emit OrderCanceled(orderId, maker);
     }
 
-    /// @dev Closes an order and sends what is left of the escrow back to the
-    /// maker. Shared by cancel and both sweeps: the three differ only in who may
-    /// call them and how a stale id is treated, and the settlement itself must
-    /// not drift apart between them. Storage is cleared before the transfer.
-    ///
-    /// A sweep that hits a transfer it cannot complete reverts rather than
-    /// skipping. `swept[i] = false` means the entry was stale - already settled,
-    /// not yet expired, never created - which is what a keeper's list goes
-    /// stale with; a token that will not move is not a stale entry, and a batch
-    /// that quietly closed such an order would discard the maker's claim.
-    function _returnEscrow(Order storage order, address maker, bool unwrap) internal {
+    /// @dev Clear storage, then return the remaining escrow. Transfer failures
+    /// revert; only stale sweep entries are skipped by the caller.
+    function _returnEscrow(uint256 orderId, Order storage order, address maker, bool unwrap) internal {
         address tokenA = order.tokenA;
         uint256 amountA = order.amountA;
         bool nftA = order.nftA;
         order.active = false;
         order.amountA = 0;
         order.amountB = 0;
+        _burn(orderId);
 
         if (nftA) {
             _returnNFT(tokenA, maker, amountA);

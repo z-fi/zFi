@@ -57,7 +57,7 @@ contract SwapboardFillTest is Test {
         vm.deal(taker, 100 ether);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.ETHAmountMismatch.selector, 10 ether, 1));
-        board.fillOrderWithEth{value: 1}(id, 0, address(0));
+        board.fillOrderWithEth{value: 1}(id, 0, 0, address(0));
 
         assertEq(weth.balanceOf(address(board)), 100 ether, "victim escrow untouched");
         assertEq(nft.ownerOf(1), address(board), "NFT still escrowed");
@@ -69,7 +69,7 @@ contract SwapboardFillTest is Test {
 
         vm.deal(taker, 100 ether);
         vm.prank(taker);
-        board.fillOrderWithEth{value: 10 ether}(id, 0, address(0));
+        board.fillOrderWithEth{value: 10 ether}(id, 0, 0, address(0));
 
         assertEq(nft.ownerOf(1), taker, "taker got the NFT");
         assertEq(weth.balanceOf(maker), 10 ether, "maker paid in full");
@@ -89,7 +89,7 @@ contract SwapboardFillTest is Test {
         vm.deal(taker, 100 ether);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.ETHAmountMismatch.selector, 5 ether, 1 ether));
-        board.fillOrderWithEth{value: 1 ether}(id, 0, address(0));
+        board.fillOrderWithEth{value: 1 ether}(id, 0, 0, address(0));
 
         assertEq(weth.balanceOf(address(board)), 100 ether, "victim escrow untouched");
     }
@@ -105,7 +105,7 @@ contract SwapboardFillTest is Test {
 
         vm.deal(taker, 100 ether);
         vm.prank(taker);
-        board.fillOrderWithEth{value: 1 ether}(id, 0, address(0));
+        board.fillOrderWithEth{value: 1 ether}(id, 0, 0, address(0));
 
         assertEq(other.balanceOf(taker), 10e18, "pro rata: 1/5 of the ask");
         assertEq(weth.balanceOf(maker), 1 ether, "maker paid what arrived");
@@ -125,6 +125,6 @@ contract SwapboardFillTest is Test {
         vm.deal(taker, 10 ether);
         vm.prank(taker);
         vm.expectRevert(Swapboard.NFTNotDivisible.selector);
-        board.fillOrderWithEth{value: 7}(id, 0, address(0));
+        board.fillOrderWithEth{value: 7}(id, 0, 0, address(0));
     }
 }

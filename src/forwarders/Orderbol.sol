@@ -6,7 +6,7 @@ pragma solidity ^0.8.36;
 ///         Dutchboard orders without making the router their owner.
 ///
 /// @dev zRouter.snwap transfers the maker's input to this executor before the
-///      call. Orderbol grants the selected board an exact, call-scoped
+///      call. Orderbol grants the deployment-bound board an exact, call-scoped
 ///      allowance and invokes its `...For` entry point. The board pulls from
 ///      Orderbol but records `maker`, so fill proceeds, cancellation rights,
 ///      and returned escrow all stay with the user.
@@ -25,6 +25,12 @@ pragma solidity ^0.8.36;
 contract Orderbol {
     address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    /// @dev Deployment trust roots. Order creation has no token-output
+    /// postcondition for zRouter to measure, so accepting an arbitrary board
+    /// would let it consume the full escrow while returning a fake id.
+    address public immutable swapboard;
+    address public immutable dutchboard;
+
     uint256 constant REENTRANCY_GUARD_SLOT = 0x8c463a67;
     uint256 constant CHECKPOINT_SEED = 0x7a8bde8e;
 
@@ -34,6 +40,16 @@ contract Orderbol {
 
     error BadOrder();
     error InputMismatch(uint256 expected, uint256 actual);
+    error DeadlineExpired();
+
+    constructor(address swapboard_, address dutchboard_) {
+        if (
+            swapboard_ == address(0) || dutchboard_ == address(0) || swapboard_ == dutchboard_
+                || swapboard_.code.length == 0 || dutchboard_.code.length == 0
+        ) revert BadOrder();
+        swapboard = swapboard_;
+        dutchboard = dutchboard_;
+    }
 
     /// @notice Snapshot an ERC-20 balance immediately before funding.
     /// @dev The same immediate caller must consume this checkpoint in the same
@@ -56,6 +72,7 @@ contract Orderbol {
 
     /// @notice Create a fungible current-Swapboard order.
     /// @param tokenA address(0) means native ETH; the board wraps it to WETH.
+    /// @param deadline Optional placement deadline; zero disables it.
     function placeSwapboard(
         address board,
         address maker,
@@ -66,32 +83,40 @@ contract Orderbol {
         uint256 amountB,
         bool partialFill,
         uint64 expiry,
-        address counterparty
-    ) external payable {
+        address counterparty,
+        uint256 deadline
+    ) external payable returns (uint256 orderId) {
         _enter();
         uint256 ethBase = address(this).balance - msg.value;
         if (
-            board == address(0) || board == address(this) || maker == address(0) || maker == address(this)
-                || refundTo == address(0) || refundTo == address(this) || amountA == 0 || amountB == 0
-                || tokenB == address(0)
+            board != swapboard || maker == address(0) || maker == address(this) || maker == WETH
+                || refundTo == address(0) || refundTo == address(this) || refundTo == WETH
+                || refundTo == swapboard || refundTo == dutchboard || amountA == 0 || amountB == 0
+                || tokenB == address(0) || tokenB.code.length == 0
         ) revert BadOrder();
+        if (deadline != 0 && block.timestamp > deadline) revert DeadlineExpired();
+
+        address escrowToken = tokenA == address(0) ? WETH : tokenA;
+        if (escrowToken == tokenB || (tokenA != address(0) && tokenA.code.length == 0)) revert BadOrder();
 
         if (tokenA == address(0)) {
             if (msg.value != amountA) revert InputMismatch(amountA, msg.value);
-            IRelayedSwapboard(board).createOrderWithEthFor{value: amountA}(
+            orderId = IRelayedSwapboard(swapboard).createOrderWithEthFor{value: amountA}(
                 maker, tokenB, amountB, partialFill, expiry, false, counterparty
             );
+            _checkSwapboardOrder(orderId, maker, WETH, amountA, tokenB, amountB, partialFill, expiry, counterparty);
         } else {
             if (msg.value != 0) revert InputMismatch(0, msg.value);
             uint256 base = _consumeFunding(tokenA, amountA);
-            safeApprove(tokenA, board, amountA);
-            IRelayedSwapboard(board)
+            safeApprove(tokenA, swapboard, amountA);
+            orderId = IRelayedSwapboard(swapboard)
                 .createOrderFor(
                     maker, tokenA, amountA, tokenB, amountB, partialFill, expiry, false, false, counterparty
                 );
-            safeApprove(tokenA, board, 0);
+            safeApprove(tokenA, swapboard, 0);
             uint256 actual = balanceOf(tokenA);
             if (actual != base) revert InputMismatch(base, actual);
+            _checkSwapboardOrder(orderId, maker, tokenA, amountA, tokenB, amountB, partialFill, expiry, counterparty);
         }
 
         _sweepETH(refundTo, ethBase);
@@ -101,6 +126,7 @@ contract Orderbol {
     /// @notice Create a fungible Dutchboard listing.
     /// @param token address(0) means native ETH, wrapped here to canonical WETH
     ///              before the board escrows it.
+    /// @param deadline Optional placement deadline; zero disables it.
     function placeDutch(
         address board,
         address seller,
@@ -111,18 +137,29 @@ contract Orderbol {
         uint256 startPrice,
         uint256 endPrice,
         uint40 startTime,
-        uint40 duration
-    ) external payable {
+        uint40 duration,
+        uint256 deadline
+    ) external payable returns (uint256 listingId) {
         _enter();
         uint256 ethBase = address(this).balance - msg.value;
         if (
-            board == address(0) || board == address(this) || seller == address(0) || seller == address(this)
-                || refundTo == address(0) || refundTo == address(this) || amount == 0
+            board != dutchboard || seller == address(0) || seller == address(this) || seller == WETH
+                || refundTo == address(0) || refundTo == address(this) || refundTo == WETH
+                || refundTo == swapboard || refundTo == dutchboard || amount == 0
         ) {
             revert BadOrder();
         }
+        if (deadline != 0 && block.timestamp > deadline) revert DeadlineExpired();
 
-        address escrowToken = token;
+        if (startPrice == 0 || startPrice < endPrice || startPrice > type(uint96).max || endPrice > type(uint96).max) {
+            revert BadOrder();
+        }
+        if (duration == 0 || (startTime != 0 && startTime < block.timestamp)) revert BadOrder();
+        if (token != address(0) && token.code.length == 0) revert BadOrder();
+        if (quote != address(0) && quote.code.length == 0) revert BadOrder();
+        address escrowToken = token == address(0) ? WETH : token;
+        if (escrowToken == quote) revert BadOrder();
+
         uint256 escrowBase;
         if (token == address(0)) {
             if (msg.value != amount) revert InputMismatch(amount, msg.value);
@@ -137,12 +174,13 @@ contract Orderbol {
         }
 
         safeApprove(escrowToken, board, amount);
-        IRelayedDutchboard(board)
+        listingId = IRelayedDutchboard(dutchboard)
             .listERC20For(seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration);
-        safeApprove(escrowToken, board, 0);
+        safeApprove(escrowToken, dutchboard, 0);
 
         uint256 actual = balanceOf(escrowToken);
         if (actual != escrowBase) revert InputMismatch(escrowBase, actual);
+        _checkDutchListing(listingId, seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration);
         _sweepETH(refundTo, ethBase);
         _leave();
     }
@@ -158,8 +196,52 @@ contract Orderbol {
         }
         if (active == 0) revert BadOrder();
         uint256 current = balanceOf(token);
-        uint256 funded = current >= base ? current - base : type(uint256).max;
+        if (current < base) revert BadOrder();
+        uint256 funded = current - base;
         if (funded != amount) revert InputMismatch(amount, funded);
+    }
+
+    function _checkSwapboardOrder(
+        uint256 orderId,
+        address maker,
+        address tokenA,
+        uint256 amountA,
+        address tokenB,
+        uint256 amountB,
+        bool partialFill,
+        uint64 expiry,
+        address counterparty
+    ) internal view {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = orderId;
+        IRelayedSwapboardView.Order[] memory orders = IRelayedSwapboardView(swapboard).getOrders(ids);
+        if (orders.length != 1) revert BadOrder();
+        IRelayedSwapboardView.Order memory o = orders[0];
+        if (
+            !o.active || o.maker != maker || o.tokenA != tokenA || o.amountA != amountA || o.tokenB != tokenB
+                || o.amountB != amountB || o.partialFill != partialFill || o.expiry != expiry || o.nftA || o.nftB
+                || o.counterparty != counterparty
+        ) revert BadOrder();
+    }
+
+    function _checkDutchListing(
+        uint256 listingId,
+        address seller,
+        address token,
+        address quote,
+        uint128 amount,
+        uint256 startPrice,
+        uint256 endPrice,
+        uint40 startTime,
+        uint40 duration
+    ) internal view {
+        IRelayedDutchboardView.ListingView memory l = IRelayedDutchboardView(dutchboard).getListing(listingId);
+        if (
+            l.id != listingId || l.seller != seller || l.token != token || l.quote != quote || l.isNFT
+                || l.duration != duration || l.startPrice != startPrice || l.endPrice != endPrice || l.initial != amount
+                || l.remaining != amount || l.ids.length != 0
+                || l.startTime != (startTime == 0 ? uint40(block.timestamp) : startTime)
+        ) revert BadOrder();
     }
 
     function _checkpointSlot(address token) internal view returns (bytes32 slot) {
@@ -177,7 +259,9 @@ contract Orderbol {
     /// @dev Forced or previously donated ETH is never part of the current
     ///      routed order. Only value created/refunded during this call may move.
     function _sweepETH(address to, uint256 base) internal {
-        uint256 amount = address(this).balance - base;
+        uint256 current = address(this).balance;
+        if (current < base) revert InputMismatch(base, current);
+        uint256 amount = current - base;
         if (amount == 0) return;
         assembly ("memory-safe") {
             if iszero(call(gas(), to, amount, codesize(), 0x00, codesize(), 0x00)) {
@@ -231,6 +315,24 @@ interface IRelayedSwapboard {
     ) external payable returns (uint256 orderId);
 }
 
+interface IRelayedSwapboardView {
+    struct Order {
+        address maker;
+        bool active;
+        bool partialFill;
+        uint64 expiry;
+        bool nftA;
+        bool nftB;
+        address counterparty;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory);
+}
+
 interface IRelayedDutchboard {
     function listERC20For(
         address seller,
@@ -244,6 +346,26 @@ interface IRelayedDutchboard {
     ) external returns (uint256 id);
 }
 
+interface IRelayedDutchboardView {
+    struct ListingView {
+        uint256 id;
+        address seller;
+        address token;
+        address quote;
+        bool isNFT;
+        uint40 startTime;
+        uint40 duration;
+        uint96 startPrice;
+        uint96 endPrice;
+        uint128 initial;
+        uint128 remaining;
+        uint256[] ids;
+        uint256 price;
+    }
+
+    function getListing(uint256 id) external view returns (ListingView memory);
+}
+
 interface IWETH {
     function deposit() external payable;
 }
@@ -255,6 +377,19 @@ function safeApprove(address token, address to, uint256 amount) {
         mstore(0x14, to)
         mstore(0x34, amount)
         mstore(0x00, 0x095ea7b3000000000000000000000000)
+
+        if amount {
+            mstore(0x34, 0)
+            let reset := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
+            if iszero(and(eq(mload(0x00), 1), reset)) {
+                if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), reset)) {
+                    mstore(0x00, 0x3e3f8f73)
+                    revert(0x1c, 0x04)
+                }
+            }
+        }
+
+        mstore(0x34, amount)
         let success := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
         if iszero(and(eq(mload(0x00), 1), success)) {
             if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), success)) {

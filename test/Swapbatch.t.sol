@@ -13,6 +13,8 @@ contract SwapbatchTest is Test {
     Swapbatch batch;
     MockWETH weth;
     MockERC20 A;
+    MockERC20 B;
+    LegacyBoard legacyBoard;
 
     address maker1 = makeAddr("maker1");
     address maker2 = makeAddr("maker2");
@@ -23,8 +25,10 @@ contract SwapbatchTest is Test {
     function setUp() public {
         weth = new MockWETH();
         sb = new Swapboard(address(weth));
-        batch = new Swapbatch(address(weth));
         A = new MockERC20("AAA", 18);
+        B = new MockERC20("BBB", 18);
+        legacyBoard = new LegacyBoard(address(weth), A, B);
+        batch = new Swapbatch(address(weth), address(legacyBoard), address(sb));
         vm.deal(address(sb), 0);
         vm.deal(address(batch), 0);
         vm.deal(taker, 100 ether);
@@ -56,9 +60,18 @@ contract SwapbatchTest is Test {
         out[0] = t;
     }
 
+    function _outs(address a, address b) internal pure returns (address[] memory out) {
+        out = new address[](2);
+        (out[0], out[1]) = (a, b);
+    }
+
     function _amts(uint256 a, uint256 b) internal pure returns (uint256[] memory out) {
         out = new uint256[](2);
         (out[0], out[1]) = (a, b);
+    }
+
+    function _mins(uint256 n) internal pure returns (uint256[] memory out) {
+        out = new uint256[](n);
     }
 
     /// @dev The helper must end every call holding nothing and granting nothing.
@@ -66,6 +79,7 @@ contract SwapbatchTest is Test {
         assertEq(address(batch).balance, 0, "helper holds ETH");
         assertEq(weth.balanceOf(address(batch)), 0, "helper holds WETH");
         assertEq(A.balanceOf(address(batch)), 0, "helper holds tokenA");
+        assertEq(B.balanceOf(address(batch)), 0, "helper holds tokenB");
         assertEq(weth.allowance(address(batch), address(sb)), 0, "helper left an approval");
     }
 
@@ -78,7 +92,7 @@ contract SwapbatchTest is Test {
         uint256 before = taker.balance;
         vm.prank(taker);
         bool[] memory filled = batch.fillOrdersWithEth{value: 3 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
 
         assertTrue(filled[0] && filled[1], "both reported filled");
@@ -97,7 +111,7 @@ contract SwapbatchTest is Test {
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapbatch.InsufficientValue.selector, 3 ether, 3 ether - 1));
         batch.fillOrdersWithEth{value: 3 ether - 1}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
     }
 
@@ -108,7 +122,7 @@ contract SwapbatchTest is Test {
         uint256 before = taker.balance;
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 10 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
 
         assertEq(before - taker.balance, 3 ether, "overpayment refunded");
@@ -127,7 +141,7 @@ contract SwapbatchTest is Test {
         uint256 before = taker.balance;
         vm.prank(taker);
         bool[] memory filled = batch.fillOrdersWithEth{value: 3 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, true, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, true, false
         );
 
         assertTrue(filled[0], "live order filled");
@@ -148,7 +162,7 @@ contract SwapbatchTest is Test {
         vm.prank(taker);
         vm.expectRevert();
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
         assertEq(A.balanceOf(taker), 0, "nothing settled");
         assertEq(taker.balance, 100 ether, "value returned");
@@ -160,7 +174,7 @@ contract SwapbatchTest is Test {
 
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 5 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, third, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, third, false, false
         );
 
         assertEq(A.balanceOf(third), 300e18, "lots went to the recipient");
@@ -177,7 +191,7 @@ contract SwapbatchTest is Test {
 
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), type(uint256).max, address(0), false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, address(0), false, false
         );
 
         assertEq(A.balanceOf(taker), 300e18, "lots reached the caller");
@@ -190,11 +204,39 @@ contract SwapbatchTest is Test {
 
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 1.5 ether}(
-            address(sb), _ids(id1, id2), _amts(0.5 ether, 1 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), _amts(0.5 ether, 1 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
 
         assertEq(A.balanceOf(taker), 150e18, "half of each lot");
         _assertClean();
+    }
+
+    function test_zeroFillAmountIsRejectedInsteadOfUsingAnotherLegBudget() public {
+        uint256 id1 = _makeOrder(maker1, 100e18, 1 ether, false);
+        uint256 id2 = _makeOrder(maker2, 200e18, 2 ether, false);
+
+        vm.prank(taker);
+        vm.expectRevert(abi.encodeWithSelector(Swapbatch.ZeroFillAmount.selector, 1));
+        batch.fillOrdersWithEth{value: 1 ether}(
+            address(sb), _ids(id1, id2), _amts(1 ether, 0), _mins(2), _none(), type(uint256).max, taker, true, false
+        );
+    }
+
+    function test_recipientCannotBeTheHelperOrWeth() public {
+        uint256 id = _makeOrder(maker1, 100e18, 1 ether, false);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        uint256[] memory amts = new uint256[](1);
+        amts[0] = 1 ether;
+
+        vm.expectRevert(Swapbatch.BadRecipient.selector);
+        batch.fillOrdersWithEth{value: 1 ether}(
+            address(sb), ids, amts, _mins(1), _none(), type(uint256).max, address(batch), false, false
+        );
+        vm.expectRevert(Swapbatch.BadRecipient.selector);
+        batch.fillOrdersWithEth{value: 1 ether}(
+            address(sb), ids, amts, _mins(1), _none(), type(uint256).max, address(weth), false, false
+        );
     }
 
     // ------------------------------------------------------------------- GUARDS
@@ -206,7 +248,7 @@ contract SwapbatchTest is Test {
         vm.prank(taker);
         vm.expectRevert(Swapbatch.LengthMismatch.selector);
         batch.fillOrdersWithEth{value: 1 ether}(
-            address(sb), ids, _amts(1 ether, 2 ether), _none(), type(uint256).max, taker, false, false
+            address(sb), ids, _amts(1 ether, 2 ether), _mins(2), _none(), type(uint256).max, taker, false, false
         );
     }
 
@@ -214,7 +256,7 @@ contract SwapbatchTest is Test {
         vm.prank(taker);
         vm.expectRevert(Swapbatch.NoOrders.selector);
         batch.fillOrdersWithEth{value: 1 ether}(
-            address(sb), new uint256[](0), new uint256[](0), _none(), type(uint256).max, taker, false, false
+            address(sb), new uint256[](0), new uint256[](0), new uint256[](0), _none(), type(uint256).max, taker, false, false
         );
     }
 
@@ -231,13 +273,13 @@ contract SwapbatchTest is Test {
     /// The deployed board takes no recipient and pays tokenA to its msg.sender — this
     /// helper. `tokensOut` is then the only way the purchase reaches the user.
     function test_legacyBoardDeliversViaSweep() public {
-        LegacyBoard legacy = new LegacyBoard(address(weth), A);
+        LegacyBoard legacy = legacyBoard;
         A.mint(address(legacy), 300e18);
 
         uint256 before = taker.balance;
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _one(address(A)),
+            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _mins(2), _outs(address(A), address(A)),
             type(uint256).max, taker, false, true
         );
 
@@ -249,27 +291,51 @@ contract SwapbatchTest is Test {
     /// Forgetting `tokensOut` against a legacy board would strand the whole purchase,
     /// so it must revert rather than settle.
     function test_legacyBoardRequiresTokensOut() public {
-        LegacyBoard legacy = new LegacyBoard(address(weth), A);
+        LegacyBoard legacy = legacyBoard;
         A.mint(address(legacy), 300e18);
 
         vm.prank(taker);
-        vm.expectRevert(Swapbatch.TokensOutRequired.selector);
+        vm.expectRevert(Swapbatch.TokensOutLengthMismatch.selector);
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _none(),
+            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _mins(2), _none(),
             type(uint256).max, taker, false, true
         );
+    }
+
+    function test_legacyBoardValidatesEveryDistinctOutput() public {
+        LegacyBoard legacy = legacyBoard;
+        A.mint(address(legacy), 100e18);
+        B.mint(address(legacy), 100e18);
+
+        vm.prank(taker);
+        vm.expectRevert(
+            abi.encodeWithSelector(Swapbatch.TokensOutMismatch.selector, 1, address(B), address(A))
+        );
+        batch.fillOrdersWithEth{value: 2 ether}(
+            address(legacy), _ids(0, 2), _amts(1 ether, 1 ether), _mins(2), _outs(address(A), address(A)),
+            type(uint256).max, taker, false, true
+        );
+
+        vm.prank(taker);
+        batch.fillOrdersWithEth{value: 2 ether}(
+            address(legacy), _ids(0, 2), _amts(1 ether, 1 ether), _mins(2), _outs(address(A), address(B)),
+            type(uint256).max, taker, false, true
+        );
+        assertEq(A.balanceOf(taker), 100e18);
+        assertEq(B.balanceOf(taker), 100e18);
+        _assertClean();
     }
 
     /// Calling a legacy board with the modern encoding must fail loudly, not silently
     /// buy assets into this contract.
     function test_modernEncodingAgainstLegacyBoardReverts() public {
-        LegacyBoard legacy = new LegacyBoard(address(weth), A);
+        LegacyBoard legacy = legacyBoard;
         A.mint(address(legacy), 300e18);
 
         vm.prank(taker);
         vm.expectRevert();
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _one(address(A)),
+            address(legacy), _ids(0, 1), _amts(1 ether, 2 ether), _mins(2), _outs(address(A), address(A)),
             type(uint256).max, taker, false, false
         );
     }
@@ -286,7 +352,7 @@ contract SwapbatchTest is Test {
         uint256 before = taker.balance;
         vm.prank(taker);
         batch.fillOrdersWithEth{value: quoted}(
-            address(sb), _ids(id1, id2), amts, _none(), type(uint256).max, taker, false, false
+            address(sb), _ids(id1, id2), amts, _mins(amts.length), _none(), type(uint256).max, taker, false, false
         );
         assertEq(before - taker.balance, quoted, "charged more than quoted");
     }
@@ -298,7 +364,7 @@ contract SwapbatchTest is Test {
         vm.prank(taker);
         vm.expectRevert();
         batch.fillOrdersWithEth{value: 3 ether}(
-            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _none(), block.timestamp - 1, taker, false, false
+            address(sb), _ids(id1, id2), _amts(1 ether, 2 ether), _mins(2), _none(), block.timestamp - 1, taker, false, false
         );
     }
 
@@ -322,7 +388,7 @@ contract SwapbatchTest is Test {
 
         vm.prank(taker);
         batch.fillOrdersWithEth{value: total + 1 ether}(
-            address(sb), ids, amts, _none(), type(uint256).max, taker, false, false
+            address(sb), ids, amts, _mins(amts.length), _none(), type(uint256).max, taker, false, false
         );
 
         assertEq(A.balanceOf(taker), 60e18, "all three lots delivered");
@@ -336,10 +402,21 @@ contract SwapbatchTest is Test {
 contract LegacyBoard {
     address public immutable weth;
     MockERC20 public immutable tokenA;
+    MockERC20 public immutable tokenB;
 
-    constructor(address _weth, MockERC20 _a) {
+    struct Order {
+        address maker;
+        bool active;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    constructor(address _weth, MockERC20 _a, MockERC20 _b) {
         weth = _weth;
         tokenA = _a;
+        tokenB = _b;
     }
 
     function fillOrders(uint256[] calldata orderIds, uint256, uint256[] calldata fillAmountsB) external {
@@ -348,6 +425,19 @@ contract LegacyBoard {
             paid += fillAmountsB[i];
         }
         MockERC20(weth).transferFrom(msg.sender, address(this), paid);
-        tokenA.transfer(msg.sender, 100e18 * orderIds.length + 100e18); // 300e18 for two legs
+        for (uint256 i; i < orderIds.length; ++i) {
+            (orderIds[i] < 2 ? tokenA : tokenB).transfer(msg.sender, 100e18);
+        }
+    }
+
+    function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory out) {
+        out = new Order[](orderIds.length);
+        for (uint256 i; i < orderIds.length; ++i) {
+            if (orderIds[i] < 2) {
+                out[i] = Order(address(1), true, address(tokenA), 100e18, address(weth), 1 ether);
+            } else if (orderIds[i] < 4) {
+                out[i] = Order(address(1), true, address(tokenB), 100e18, address(weth), 1 ether);
+            }
+        }
     }
 }

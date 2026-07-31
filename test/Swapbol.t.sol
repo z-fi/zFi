@@ -41,6 +41,7 @@ contract BoardStub {
     TKN public tokenOut;
     uint256 public rate; // tokenOut paid per tokenIn pulled, 1e18 scale
     bool public payToCaller; // mimics a board that ignores the recipient
+    bool public shouldRevert;
 
     constructor(TKN i, TKN o, uint256 r) {
         tokenIn = i;
@@ -52,26 +53,47 @@ contract BoardStub {
         payToCaller = v;
     }
 
-    function fill(uint256 amountIn, address recipient) external {
+    function setShouldRevert(bool v) external {
+        shouldRevert = v;
+    }
+
+    struct Order {
+        address maker;
+        bool active;
+        bool partialFill;
+        uint64 expiry;
+        bool nftA;
+        bool nftB;
+        address counterparty;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    function getOrders(uint256[] calldata ids) external view returns (Order[] memory out) {
+        out = new Order[](ids.length);
+        for (uint256 i; i < ids.length; ++i) {
+            out[i] = Order(address(1), true, true, 0, false, false, address(0), address(tokenOut), 100e18, address(tokenIn), 50e18);
+        }
+    }
+
+    function fillOrder(uint256, uint256, uint256 amountIn, uint256, address recipient) external {
+        if (shouldRevert) revert("board failed");
         tokenIn.transferFrom(msg.sender, address(this), amountIn);
         uint256 out = amountIn * rate / 1e18;
         tokenOut.transfer(payToCaller ? msg.sender : recipient, out);
     }
 
-    function noop() external {}
-
-    function boom() external pure {
-        revert("board failed");
+    function fillOrderWithEth(uint256, uint256, uint256, address) external payable {
+        if (shouldRevert) revert("board failed");
     }
 
-    /// Payable leg: keeps part of the value and refunds the rest, so the
-    /// forwarder's ETH sweep has something to return.
-    function takeEth(uint256 keep) external payable {
-        if (msg.value > keep) {
-            (bool ok,) = msg.sender.call{value: msg.value - keep}("");
-            require(ok);
-        }
-    }
+    receive() external payable {}
+}
+
+contract VenueStub {
+    receive() external payable {}
 }
 
 contract SwapbolTest is Test {
@@ -85,7 +107,7 @@ contract SwapbolTest is Test {
         tin = new TKN();
         tout = new TKN();
         board = new BoardStub(tin, tout, 2e18); // 1 in -> 2 out
-        fwd = new Swapbol(address(tin), address(tout), address(board));
+        fwd = new Swapbol(address(new VenueStub()), address(board), address(new VenueStub()));
         tout.mint(address(board), 1_000e18);
         // This repo pins a mainnet fork, and the address Forge derives for the
         // forwarder already holds ~0.000577 ETH on it. Zero it so the ETH
@@ -101,7 +123,7 @@ contract SwapbolTest is Test {
 
     function test_ApprovesTheBoardAndForwardsTheFill() public {
         _fund(10e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (10e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 10e18, 0, user)));
         assertEq(tout.balanceOf(user), 20e18, "board paid the user directly");
         assertEq(tin.balanceOf(address(fwd)), 0, "no tokenIn stranded");
         assertEq(tout.balanceOf(address(fwd)), 0, "no tokenOut stranded");
@@ -112,7 +134,7 @@ contract SwapbolTest is Test {
     function test_SweepsOutputWhenTheBoardPaysTheForwarder() public {
         board.setPayToCaller(true);
         _fund(10e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (10e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 10e18, 0, user)));
         assertEq(tout.balanceOf(user), 20e18, "output still reached the user");
         assertEq(tout.balanceOf(address(fwd)), 0, "nothing left behind");
     }
@@ -121,7 +143,7 @@ contract SwapbolTest is Test {
     /// to the user, not sit here for the next caller to sweep.
     function test_ReturnsUnspentTokenIn() public {
         _fund(10e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (4e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 4e18, 0, user)));
         assertEq(tout.balanceOf(user), 8e18, "paid for what was filled");
         assertEq(tin.balanceOf(user), 6e18, "unspent input returned");
         assertEq(tin.balanceOf(address(fwd)), 0, "nothing stranded");
@@ -133,11 +155,11 @@ contract SwapbolTest is Test {
     /// returning; a second fill re-approves from zero.
     function test_ApprovalIsScopedToTheCallAndRevoked() public {
         _fund(5e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (5e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 5e18, 0, user)));
         assertEq(tin.allowance(address(fwd), address(board)), 0, "revoked before returning");
 
         _fund(5e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (5e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 5e18, 0, user)));
         assertEq(tout.balanceOf(user), 20e18, "second fill still works");
         assertEq(tin.allowance(address(fwd), address(board)), 0, "and leaves nothing behind either");
     }
@@ -146,7 +168,7 @@ contract SwapbolTest is Test {
     /// revoked too, not left as a standing claim on the next user's deposit.
     function test_UnusedApprovalIsRevokedAfterAPartialFill() public {
         _fund(10e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (4e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 4e18, 0, user)));
         assertEq(tin.allowance(address(fwd), address(board)), 0, "unspent allowance revoked");
     }
 
@@ -155,14 +177,15 @@ contract SwapbolTest is Test {
     function test_BoardRevertBubblesUp() public {
         _fund(1e18);
         vm.expectRevert(bytes("board failed"));
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.boom, ()));
+        board.setShouldRevert(true);
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 1e18, 0, user)));
     }
 
     /// Nothing accumulates between calls: the forwarder is a pass-through, so a
     /// stray balance cannot be captured by whoever calls it next.
     function test_HoldsNothingBetweenCalls() public {
         _fund(3e18);
-        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fill, (3e18, user)));
+        fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 3e18, 0, user)));
         assertEq(tin.balanceOf(address(fwd)), 0);
         assertEq(tout.balanceOf(address(fwd)), 0);
         assertEq(address(fwd).balance, 0);
@@ -177,7 +200,7 @@ contract SwapbolTest is Test {
 
         vm.startPrank(attacker);
         fwd.checkpoint(address(tin));
-        fwd.fill(address(board), address(tin), address(tout), attacker, attacker, abi.encodeCall(BoardStub.noop, ()));
+        fwd.fill(address(board), address(tin), address(tout), attacker, attacker, abi.encodeCall(BoardStub.fillOrder, (0, 0, 0, 0, attacker)));
         vm.stopPrank();
 
         assertEq(tin.balanceOf(attacker), 0, "donated input not refunded to caller");
@@ -199,11 +222,10 @@ contract SwapbolTest is Test {
     function test_EthLegForwardsValueAndSweepsTheRefund() public {
         vm.deal(address(this), 2 ether);
         uint256 before = user.balance;
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill{value: 2 ether}(
-            address(board), address(0), address(0), user, user, abi.encodeCall(BoardStub.takeEth, (1.5 ether))
+            address(board), address(0), address(0), user, user, abi.encodeCall(BoardStub.fillOrderWithEth, (0, 0, 0, user))
         );
-        assertEq(address(board).balance, 1.5 ether, "board kept what it charged");
-        assertEq(user.balance - before, 0.5 ether, "refund swept to the user");
-        assertEq(address(fwd).balance, 0, "forwarder retains no ETH");
+        assertEq(user.balance, before, "rejected unreviewed native stub");
     }
 }

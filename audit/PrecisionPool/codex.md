@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-31  
 **Reviewer:** OpenAI Codex  
-**Repository base:** `6833f5e` on `precision-pools`, plus the reviewed working-tree changes  
+**Repository base:** `e8dce80` on `precision-pools`, plus the reviewed working-tree changes
 **Solidity:** 0.8.36, via IR, optimizer enabled  
 **Production compiler unit:** 200 runs for `PrecisionPoolFactory.sol` and its
 embedded `PrecisionPool` creation code; 9,999,999 runs by default  
@@ -15,6 +15,7 @@ Primary scope:
 - `src/pools/PrecisionPool.sol`
 - `src/pools/PrecisionPoolFactory.sol`
 - `src/pools/PrecisionPoolLens.sol`
+- `src/pools/PrecisionPoolPolicy.sol`
 
 Integration and regression scope:
 
@@ -33,10 +34,11 @@ Source hashes for the reviewed contracts:
 
 | File | SHA-256 |
 | --- | --- |
-| `PrecisionPool.sol` | `4a1e97ce329d33d184eeb76d1a6d326d3636bba0668113878a4130b641b4ef17` |
-| `PrecisionPoolFactory.sol` | `760bcbef19220b242fd8128feca197b491de20b2eb6cf0dd4758b33b8520896c` |
-| `PrecisionPoolLens.sol` | `a8faf9993c603bdc3c1e8f54e9a5da0b3803c7cdf8b9998253eef168a087aea1` |
+| `PrecisionPool.sol` | `494423f52de6e0f8aa4a70a9d5ae9c04d205dee4c926c687403735be53b88e7e` |
+| `PrecisionPoolFactory.sol` | `e82e0eaac58216cecb367dd3bdaa57de345b6e35b64641016459980c25bd315b` |
+| `PrecisionPoolLens.sol` | `7bc4ffe56f703a6d24e69b90498f0a23d30ccc7473de688071971725a0877c2f` |
 | `PrecisionZap.sol` | `08e750d06860d32d4f26086828ebdaf8cf5acd4d4e782ce545d1205bf8ede52c` |
+| `PrecisionPoolPolicy.sol` | `5219610ffc2e40178a0fdd3b223d21eb0080f3e9ff3d39ebdfce1bf50de42888` |
 
 The source was not committed at the time of review. A deployment must be built
 from a clean, tagged commit that reproduces these hashes, compiler units, and
@@ -57,12 +59,15 @@ This is not an unconditional approval of the entire user-facing launch:
 2. The deployed zQuoter is also unaware of PrecisionPool. Until it is replaced
    or the dapp explicitly compares PrecisionPoolLens results, PrecisionPool
    cannot participate in automatic multi-venue splitting.
-3. Token and hook curation, deployment verification, monitoring, incident
-   response, and a staged value-at-risk rollout remain operational
-   requirements.
+3. Hook review, routing-policy operations, deployment verification,
+   monitoring, incident response, and a staged value-at-risk rollout remain
+   operational requirements.
 
 Do not advertise PrecisionPool support in zSwap until item 1 is implemented
 and exercised with end-to-end transaction-construction tests.
+
+The policy-specific threat model, truth table, governance requirements, and
+zRouter enforcement boundary are in `audit/PrecisionPool/PrecisionPoolPolicy.md`.
 
 ## Finding Summary
 
@@ -399,18 +404,40 @@ Production calldata should set both zRouter's recipient-delta minimum and the
 pool's `minOut`; a deadline or equivalent submission expiry belongs in the
 calling wallet/application layer.
 
+### Hooked-pool routing policy
+
+`PrecisionPoolPolicy` keeps factory deployment permissionless while giving
+zSwap one exact per-pool decision:
+
+- unknown addresses are denied;
+- unhooked factory pools are allowed by default;
+- hooked pools require explicit `Approved`; and
+- `Blocked` denies either kind and erases prior approval.
+
+The registry uses Solady `Ownable`, requires an explicit nonzero initial owner,
+and disables renunciation. The owner should be a threshold Safe. zSwap must
+fail closed on `isRoutable` before quoting and immediately before submission.
+The policy is advisory unless `requireRoutable` is included atomically.
+
+ERC-20 zRouter routes can prepend a zero-input `snwap` policy preflight before
+the existing checkpoint and settlement legs. Native zRouter multicalls cannot
+use that shape because delegatecalled `snwap` entries each see and forward the
+full `msg.value`; strict native enforcement needs a policy-aware gateway or a
+separately reviewed factory integration.
+
 ### Unimplemented dapp path
 
 `zSwap.html` has no PrecisionPool reference, ABI, configured factory/lens
-address, discovery call, quote comparison, checkpoint construction, or
-settlement encoding. The live contract path is compatible, but the current
+or policy address, discovery call, quote comparison, checkpoint construction,
+or settlement encoding. The live contract path is compatible, but the current
 dapp cannot use it.
 
 Before calling zSwap integration production-ready:
 
-1. deploy and verify the factory and replaceable lens;
+1. deploy and verify the factory, replaceable lens, and routing policy;
 2. add their chain-specific addresses and ABIs to zSwap;
-3. enumerate bounded factory pages and filter to an approved token/market list;
+3. enumerate bounded factory pages and filter every pool through
+   `policy.isRoutable`;
 4. compare `quoteFor(..., address(factory), ...)` with existing venue quotes;
 5. construct the exact checkpointed ERC-20 multicall described above;
 6. use the same recipient and nonzero slippage floors at both layers; and
@@ -419,8 +446,10 @@ Before calling zSwap integration production-ready:
 
 ## Token and Hook Assumptions
 
-Only curated, standard, non-rebasing ERC-20s should be exposed by the
-production dapp. Factory permissionlessness is not token endorsement.
+Only standard, non-rebasing ERC-20 pools should be exposed by the production
+dapp. There is no token-wide allowlist: unsafe or misconfigured markets are
+blocked at the exact pool address. Factory permissionlessness is not token
+endorsement.
 
 Unsupported or unsafe token characteristics include:
 
@@ -467,7 +496,8 @@ operationally monitor every approved hook implementation and upgrade authority.
   validated onchain. A units or token-order mistake creates a valid but
   economically wrong market. Peer-review every market tuple before funding.
 - **Permissionless fragmentation:** anyone may create arbitrary bands. The
-  dapp must distinguish approved deep markets from unreviewed registry entries.
+  dapp must apply `PrecisionPoolPolicy`; hooked pools are denied by default and
+  a problematic unhooked pool must be explicitly blocked.
 - **MEV and AMM economics:** sandwiching, arbitrage, loss-versus-rebalancing,
   inventory concentration, and adverse selection are inherent and not removed
   by these fixes.
@@ -489,7 +519,7 @@ operationally monitor every approved hook implementation and upgrade authority.
 
 Targeted build:
 
-`forge build --offline src/pools/PrecisionPool.sol src/pools/PrecisionPoolFactory.sol src/pools/PrecisionPoolLens.sol`
+`forge build --offline src/pools/PrecisionPool.sol src/pools/PrecisionPoolFactory.sol src/pools/PrecisionPoolLens.sol src/pools/PrecisionPoolPolicy.sol`
 
 Result: success under Solidity 0.8.36. Compiler warnings were from upstream
 Solady memory-safe annotation deprecations. Forge lint reported no high- or
@@ -500,22 +530,24 @@ Checked-in production artifact sizes:
 
 | Contract/compiler unit | Runtime bytes | EIP-170 margin | Artifact initcode bytes |
 | --- | ---: | ---: | ---: |
-| PrecisionPool deployed by the 200-run factory | 11,590 | 12,986 | 12,502 |
-| PrecisionPool standalone default artifact | 14,761 | 9,815 | 15,673 |
-| PrecisionPoolFactory, 200 runs | 18,324 | 6,252 | 18,506 |
-| PrecisionPoolLens in the factory compiler unit | 8,327 | 16,249 | 8,555 |
-| PrecisionZap in the factory compiler unit | 1,391 | 23,185 | 1,618 |
+| PrecisionPool deployed by the 200-run factory | 11,578 | 12,998 | 12,490 |
+| PrecisionPool standalone default artifact | 14,715 | 9,861 | 15,627 |
+| PrecisionPoolFactory, 200 runs | 18,312 | 6,264 | 18,494 |
+| PrecisionPoolLens in the factory compiler unit | 9,227 | 15,349 | 9,461 |
+| PrecisionZap in the factory compiler unit | 1,390 | 23,186 | 1,617 |
+| PrecisionPoolPolicy, default runs | 2,790 | 21,786 | 3,047 |
 
 The pool artifact initcode excludes its 288 bytes of ABI-encoded constructor
-arguments. The factory's actual pool initcode is therefore 12,790 bytes.
+arguments. The factory's actual pool initcode is therefore 12,778 bytes.
+Policy artifact initcode excludes its 64 bytes of constructor arguments.
 
 For comparison, compiling the final pool and factory together at 9,999,999
 runs produces:
 
 | Contract | Runtime bytes | EIP-170 margin | Artifact initcode bytes |
 | --- | ---: | ---: | ---: |
-| PrecisionPool | 14,761 | 9,815 | 15,673 |
-| PrecisionPoolFactory | 23,452 | 1,124 | 23,634 |
+| PrecisionPool | 14,715 | 9,861 | 15,627 |
+| PrecisionPoolFactory | 23,406 | 1,170 | 23,588 |
 
 EIP-170 limits runtime code to 24,576 bytes:
 https://eips.ethereum.org/EIPS/eip-170
@@ -524,14 +556,15 @@ Test results:
 
 | Suite | Result |
 | --- | --- |
-| `test/PrecisionPool.t.sol` | 74 passed, 0 failed |
+| `test/PrecisionPool.t.sol` | 75 passed, 0 failed |
+| `test/PrecisionPoolPolicy.t.sol` | 15 passed, 0 failed |
 | Price and seed fuzzing | 512 combined runs passed |
 | `test/ConstantSurchargeHook.t.sol` | 9 passed, 0 failed |
 | `test/PrecisionPoolSnwap.t.sol` on pinned mainnet fork | 9 passed, 0 failed |
 | `forge fmt --check` on target contracts and zRouter integration test | passed |
 | `git diff --check` | passed |
 
-The mainnet tests used archive block `24,880,000`. They cover live zRouter
+The mainnet tests used archive block `25,640,000`. They cover live zRouter
 swaps, checkpoint settlement, discovery, multi-leg state updates, third-party
 recipients, and checkpointed LP exit through `PrecisionZap`. Prague bytecode
 is compatible with Ethereum mainnet following Pectra:
@@ -550,13 +583,15 @@ instrumentation defect.
 
 ## Mainnet Release Checklist
 
-- [ ] Commit and tag the exact reviewed source; reproduce the three SHA-256
+- [ ] Commit and tag the exact reviewed source; reproduce all SHA-256
       hashes and artifact sizes above from a clean checkout.
 - [ ] Choose 200-run deployment optimization or 9,999,999-run lifetime
       optimization before publishing addresses; record the exact compiler unit,
       via-IR, and Prague settings in the deployment manifest.
 - [ ] Deploy the factory with the exact live SafeExecutor as
       `trustedExecutor`, not the zRouter address itself.
+- [ ] Deploy `PrecisionPoolPolicy` for that exact factory with a threshold Safe
+      as `initialOwner`; verify an emergency `Blocked` update before launch.
 - [ ] Send zero ETH while deploying the payable pool constructor directly;
       normal factory deployment already does this.
 - [ ] Verify zRouter and SafeExecutor code hashes immediately before deployment.
@@ -564,8 +599,8 @@ instrumentation defect.
 - [ ] Use `createAndSeed` for all launch markets.
 - [ ] Independently review token order, decimals, raw sqrt bounds, fee, creator
       share, hook, and recipient for every launch tuple.
-- [ ] Publish an approved token, hook, and market-address list; do not trust
-      arbitrary registry entries in the dapp.
+- [ ] Review every hooked pool before approval and publish the policy address;
+      filter every discovered pool through it in zSwap.
 - [ ] Accept and document the canonical Permit2 dependency for LP shares, or
       disable Solady's automatic Permit2 allowance before the release review.
 - [ ] Complete and test the zSwap integration described above.
@@ -584,7 +619,8 @@ The reviewed pool, factory, and lens are suitable for a carefully curated,
 staged Ethereum mainnet deployment after the release checklist is satisfied.
 The accounting, boundary, authorization, prefund, fee, reentrancy, and quote
 paths are materially hardened and covered by adversarial and live-router
-tests.
+tests. `PrecisionPoolPolicy` is suitable as the minimal Solady-owned zSwap
+routing registry under its separate security reference.
 
 The current repository is **not yet ready to claim end-to-end zSwap support**
 because the dapp and aggregate quoter do not contain PrecisionPool integration.

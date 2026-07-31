@@ -116,7 +116,7 @@ contract SwapboardAuditTest is Test {
         uint256 paid = B.balanceOf(taker);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(n), 3));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
 
         assertEq(B.balanceOf(taker), paid, "taker keeps their money");
     }
@@ -200,7 +200,7 @@ contract SwapboardAuditTest is Test {
 
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(bad), 5));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
 
         assertEq(A.balanceOf(taker), 0, "no escrow released");
         assertEq(A.balanceOf(address(sb)), 100e18, "escrow intact");
@@ -217,7 +217,7 @@ contract SwapboardAuditTest is Test {
 
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(n), 6));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
 
         assertEq(A.balanceOf(taker), 0, "no escrow released");
     }
@@ -234,7 +234,7 @@ contract SwapboardAuditTest is Test {
 
         vm.prank(taker); // no balance, no allowance: transferFrom returns false
         vm.expectRevert();
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
 
         assertEq(A.balanceOf(taker), 0, "no escrow released");
     }
@@ -257,7 +257,7 @@ contract SwapboardAuditTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(Swapboard.BalanceDeltaMismatch.selector, address(bad), address(sb), 100e18, 0)
         );
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
 
         (, bool active,,,,,,,,,) = sb.orders(id);
         assertTrue(active, "failed payout preserves the claim");
@@ -288,7 +288,7 @@ contract SwapboardAuditTest is Test {
                 Swapboard.BalanceDeltaMismatch.selector, address(bad), address(sb), 100e18, 100e18 + 1
             )
         );
-        sb.fillOrder(first, 0, 0, address(0));
+        sb.fillOrder(first, 0, 500e6, 0, address(0));
 
         assertEq(bad.balanceOf(address(sb)), 200e18, "both orders remain fully backed");
         (, bool firstActive,,,,,,,,,) = sb.orders(first);
@@ -311,7 +311,7 @@ contract SwapboardAuditTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(Swapboard.BalanceDeltaMismatch.selector, address(bad), taker, 100e18, 100e18 - 1)
         );
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
 
         assertEq(bad.balanceOf(taker), 0);
         assertEq(bad.balanceOf(address(sb)), 100e18);
@@ -342,7 +342,7 @@ contract SwapboardAuditTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(Swapboard.BalanceDeltaMismatch.selector, address(bad), address(board), 10 ether, 0)
         );
-        board.fillOrderWithEth{value: 10 ether}(id, 0, address(0));
+        board.fillOrderWithEth{value: 10 ether}(id, 0, 0, address(0));
 
         assertEq(bad.balanceOf(address(board)), 100 ether, "victim escrow untouched");
         assertEq(bad.balanceOf(attacker), 0, "no unrelated WETH paid out");
@@ -412,7 +412,7 @@ contract SwapboardAuditTest is Test {
         uint256 held = B.balanceOf(taker);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.PartialFillNotAllowed.selector, id));
-        sb.fillOrder(id, 0, 1, address(0)); // offering 1 unit, ask is 1000e6
+        sb.fillOrder(id, 0, 1, 0, address(0)); // offering 1 unit, ask is 1000e6
 
         assertEq(B.balanceOf(taker), held, "not charged the full ask against a 1-unit bid");
         assertEq(n.ownerOf(7), address(sb), "NFT still escrowed");
@@ -432,8 +432,8 @@ contract SwapboardAuditTest is Test {
 
         uint256 held = B.balanceOf(taker);
         vm.startPrank(taker);
-        sb.fillOrder(sentinel, 0, 0, address(0));
-        sb.fillOrder(overbid, 0, 9999e6, address(0));
+        sb.fillOrder(sentinel, 0, 0, 0, address(0));
+        sb.fillOrder(overbid, 0, 9999e6, 0, address(0));
         vm.stopPrank();
 
         assertEq(n.ownerOf(8), taker);
@@ -462,8 +462,8 @@ contract SwapboardAuditTest is Test {
         vm.stopPrank();
 
         vm.startPrank(taker);
-        sb.fillOrder(sell, 0, 0, address(0)); // NFT out of escrow
-        sb.fillOrder(buy, 0, 0, address(0)); // NFT in as payment
+        sb.fillOrder(sell, 0, 0, 0, address(0)); // NFT out of escrow
+        sb.fillOrder(buy, 0, 0, 0, address(0)); // NFT in as payment
         vm.stopPrank();
         vm.prank(maker);
         sb.cancelOrder(cancelled); // NFT back to the maker

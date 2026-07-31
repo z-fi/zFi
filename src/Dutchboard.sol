@@ -1,62 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
+import {ERC721} from "../lib/solady/src/tokens/ERC721.sol";
+
 /// @title Dutchboard
-/// @notice Decaying, partially-fillable limit orders over an arbitrary pair. A maker
-///         escrows a lot (an ERC20 amount, one NFT, or a bundle) and names the asset
-///         they want paid in; the asking price decays linearly from `startPrice` to
-///         `endPrice` and is flat outside that window. Takers fill at whatever the
-///         schedule says at their block. Sellers can cancel and reclaim the unsold
-///         remainder at any time.
+/// @notice Decaying, partially fillable orders for ERC-20s and NFTs.
+/// @dev A maker escrows the sell asset and chooses a payment asset. The total
+///      price decays from `startPrice` to `endPrice`; partial ERC-20 fills use
+///      the original lot size so fill history does not change the schedule.
+///      Address(0) denotes native ETH. Exact balance-delta checks reject
+///      fee-on-transfer and no-op tokens; rebasing, reflection, upgradeable,
+///      and otherwise non-standard tokens are outside the security model.
 ///
-/// @dev    Generalises DutchAuction, whose payment asset is always native ETH. That
-///         restriction makes the most common retail limit order inexpressible: ETH can
-///         only be the asset you receive, never the asset you pay, so "sell 10 ETH for
-///         USDC at 4200" cannot be listed at all. Here `quote` is a parameter, and
-///         `quote == address(0)` reproduces DutchAuction's ETH behaviour exactly.
-///
-///         WHY THIS AND NOT A DECAYING ORDER BOOK. The invariant that makes decay and
-///         partial fills safe together is that unit price is a pure function of time:
-///         `initial` is kept alongside `remaining` and every fill costs
-///         `ceil(priceOf * take / initial)`, so no fill history can change what the
-///         next taker pays. An order book that decrements the two sides of the pair in
-///         place loses the reference ratio after its first partial fill and has nothing
-///         left to reprice the remainder against.
-///
-///         PRICES ARE READ FROM A SCHEDULE, NEVER FROM A POOL. `_priceOf` is monotone
-///         non-increasing and touches no external state, so a pending fill can never be
-///         repriced against the taker and no amount of pool displacement moves the cost.
-///         Anchoring the schedule to a live AMM quote at fill time would hand a filler
-///         the ability to depress the quote, take the whole lot, and restore it; makers
-///         anchor off-chain at listing time and relist to re-anchor.
-///
-///         STORAGE. uint96 prices are what make the extra `quote` address free:
-///           slot 0  seller(160) + isNFT(8) + startTime(40) + duration(40)  = 248
-///           slot 1  token(160)  + startPrice(96)                           = 256
-///           slot 2  quote(160)  + endPrice(96)                             = 256
-///           slot 3  initial(128) + remaining(128)                          = 256
-///           slot 4  ids[]                                                  NFT only
-///         Four slots plus the array — one fewer than DutchAuction spends without a
-///         quote asset. The ceiling is ~7.9e28 base units of `quote` for a whole lot,
-///         checked at listing rather than silently truncated.
-///
-///         The narrowing buys packing only, NOT overflow safety: DutchAuction's uint128
-///         prices are already safe in the same expression, since
-///         `(2^128-1)^2 + (2^128-1) - 1 == 2^256 - 2^128 - 1` clears the modulus.
-///         See test/DutchAuctionCostBounds.t.sol, which pins that bound at the maxima.
-///
-///         Only plain ERC20s are supported for either leg. Exact balance-delta checks
-///         reject fee-on-transfer and successful-looking no-op transfers; rebasing
-///         tokens remain out of scope because custody is pooled between transactions.
-contract Dutchboard {
-    /// @dev The chain's canonical wrapper, and a deployment trust root. It is a
-    ///      constructor parameter rather than a hardcoded mainnet constant so the
-    ///      same source deploys correctly everywhere: a hardcoded address is
-    ///      codeless off mainnet, which leaves `cancelUnwrap` permanently broken
-    ///      and `receive` guarding against the wrong sender - a silent deployment
-    ///      footgun rather than a compile error. Exact balance deltas are checked
-    ///      at runtime, but a malicious wrapper can also lie through `balanceOf`,
-    ///      so deployments must still pass the canonical, immutable wrapper.
+///      Each partial fill rounds its own quote cost upward, so splitting one
+///      purchase can cost more than taking the same quantity in one fill. UIs
+///      must use `costOf` and show that exact result, especially for low-decimal
+///      quote assets. A listing remains live after its duration at `endPrice`;
+///      `endPrice == 0` therefore deliberately creates a free terminal fill.
+///      Native-ETH listings require the seller to accept ETH, and `to` should
+///      be an NFT-safe destination when the sold asset is an ERC-721.
+///      Listings do not auto-expire, and seller self-fills are permitted; indexers
+///      should not treat every `Filled` event as an arm's-length sale.
+contract Dutchboard is ERC721 {
+    /// @dev Canonical WETH for this deployment; used for wrapping and unwrapping.
     address public immutable weth;
 
     constructor(address _weth) {
@@ -104,20 +70,15 @@ contract Dutchboard {
     event Cancelled(uint256 indexed id);
 
     error Bad();
+    error NotWETH(address expected, address actual);
     error NotSeller();
     error Reentrancy();
-    error Insufficient();
     error CostExceeded(uint256 cost, uint256 maxCost);
-    error NotWETH(address expected, address actual);
+    error Insufficient();
     error NFTTransferFailed(address token, uint256 tokenId);
     error BalanceDeltaMismatch(address token, address account, uint256 expected, uint256 actual);
 
-    /// @dev Transient-storage slot (EIP-1153) for the reentrancy guard. Requires a
-    ///      Cancun-era EVM. Both legs can be caller-chosen contracts here — the lot
-    ///      token, the quote token, an NFT receiver hook — so the guard is load-bearing,
-    ///      not defensive: without it a hostile quote token could reenter `fill` mid
-    ///      settlement. State is also written before every external call below, so a
-    ///      reentrant read sees the post-fill remainder either way.
+    /// @dev EIP-1153 transient slot for the reentrancy guard.
     uint256 constant _REENTRANCY_GUARD_SLOT = 0x929eee149b4bd21269;
 
     modifier nonReentrant() {
@@ -143,12 +104,11 @@ contract Dutchboard {
 
     // ------------------------------------------------------------------- LISTING
 
-    /// @notice List an ERC20 amount, priced in `quote`. Partial fills are allowed.
-    ///         Caller must approve this contract for `amount`.
-    ///         `startTime == 0` starts immediately; any non-zero `startTime` must not be
-    ///         in the past. `startPrice` must be non-zero and >= `endPrice`; `endPrice`
-    ///         may be 0, so a lot can decay to free.
-    /// @param  quote Payment asset, or address(0) for native ETH. Must differ from `token`.
+    /// @notice List an ERC-20 amount priced in `quote`; partial fills are allowed.
+    /// @dev `startTime == 0` starts immediately. Prices must be nonzero and
+    ///      nonincreasing; `endPrice` may be zero, which makes the lot free
+    ///      after the decay completes unless the seller cancels first.
+    /// @param quote Payment asset, or address(0) for native ETH.
     function listERC20(
         address token,
         address quote,
@@ -163,11 +123,8 @@ contract Dutchboard {
 
     /// @notice List escrow supplied by the caller while assigning seller rights
     ///         to `seller`.
-    /// @dev This is the routed-order counterpart to listERC20. A zRouter-funded
-    ///      executor can approve the exact lot and call here; fills, cancellation,
-    ///      and returned escrow still belong to `seller`. Since funds are pulled
-    ///      from msg.sender, naming another seller can only sponsor that seller's
-    ///      order and cannot debit them.
+    /// @dev The caller supplies the escrow; fills and cancellation remain owned
+    ///      by `seller`.
     function listERC20For(
         address seller,
         address token,
@@ -204,6 +161,7 @@ contract Dutchboard {
         }
         Listing storage l = listings[id];
         l.seller = seller;
+        _mint(seller, id);
         l.startTime = startTime == 0 ? uint40(block.timestamp) : startTime;
         l.duration = duration;
         l.token = token;
@@ -216,24 +174,9 @@ contract Dutchboard {
         emit Created(id, seller, token, quote);
     }
 
-    /// @notice List one or more NFTs (max 100) from a single ERC721 as one lot, priced
-    ///         in `quote`. Settles in full only. Caller must have approved this contract
-    ///         for every id (per-id `approve` or `setApprovalForAll`).
-    /// @dev    For a single NFT, prefer `onERC721Received` — pushing the token in with
-    ///         `safeTransferFrom` lists it without granting any approval at all. This
-    ///         entry point remains the only way to list a bundle as one lot.
-    ///
-    ///         There is deliberately no `listNFTFor`. The `For` variant exists so a
-    ///         router-funded executor can escrow a lot on a seller's behalf, and zRouter
-    ///         pulls only ERC-20s and native ETH — its sole ERC-721 contact is a
-    ///         hardcoded NameNFT reveal, not a generic collection transfer. An NFT
-    ///         counterpart would have no caller until zRouter itself learns to pull
-    ///         arbitrary ERC-721s, and an unreachable entry point widens the escrow
-    ///         surface for nothing. Note that the push path above does let a third party
-    ///         open a listing owned by someone else, but only by transferring a token
-    ///         they already control: `from` has provably parted with it by the time the
-    ///         hook runs, so naming them seller is the only non-lossy choice, and no
-    ///         approval over their remaining tokens is ever involved.
+    /// @notice List up to 100 NFTs from one ERC-721 collection as one full-fill lot.
+    /// @dev The caller must approve every token. Use `onERC721Received` for a
+    ///      single NFT when an approval-free push is preferred.
     function listNFT(
         address token,
         address quote,
@@ -254,6 +197,7 @@ contract Dutchboard {
         }
         Listing storage l = listings[id];
         l.seller = msg.sender;
+        _mint(msg.sender, id);
         l.isNFT = true;
         l.startTime = startTime == 0 ? uint40(block.timestamp) : startTime;
         l.duration = duration;
@@ -268,9 +212,35 @@ contract Dutchboard {
         emit Created(id, msg.sender, token, quote);
     }
 
-    /// @notice Curve parameters carried in a push listing's `safeTransferFrom` data.
-    /// @dev A named struct rather than five loose values so the encoding a frontend has
-    ///      to produce is readable from the ABI: `abi.encode(PushTerms(...))`.
+    // ------------------------------------------------------ POSITION RECEIPTS
+
+    function name() public pure override returns (string memory) {
+        return "Dutchboard Position";
+    }
+
+    function symbol() public pure override returns (string memory) {
+        return "DBPOS";
+    }
+
+    /// @dev Empty by design: a listing is fully readable through `listings`, so
+    ///      a URI would either rot or restate what a caller can already fetch.
+    function tokenURI(uint256) public pure override returns (string memory) {
+        return "";
+    }
+
+    /// @dev Ownership IS sellership. Keeping the stored `seller` in step on
+    ///      transfer means fill payouts and cancellation keep working exactly
+    ///      as before, with one source of truth rather than two. Burning is a
+    ///      close, and must not rewrite `seller`, because a deleted listing is
+    ///      recognised by its zero seller.
+    function _afterTokenTransfer(address from, address to, uint256 id) internal override {
+        if (from != address(0) && to != address(0)) {
+            if (to == address(this) || to == weth) revert Bad();
+            listings[id].seller = to;
+        }
+    }
+
+    /// @notice Curve parameters carried in push-listing transfer data.
     struct PushTerms {
         address quote;
         uint256 startPrice;
@@ -279,38 +249,9 @@ contract Dutchboard {
         uint40 duration;
     }
 
-    /// @notice List a single NFT by sending it here with `safeTransferFrom`, carrying the
-    ///         decay curve in the transfer's `data` as an encoded `PushTerms`.
-    ///
-    /// @dev    The point is not the saved transaction, it is the approval that never
-    ///         happens. `listNFT` requires the seller to grant this contract per-id
-    ///         `approve` or a blanket `setApprovalForAll`, and the blanket form leaves a
-    ///         standing authority over every token in the collection that outlives the
-    ///         listing. A push hands over exactly one token and grants nothing.
-    ///
-    ///         Single NFT only. `safeTransferFrom` delivers one token per call, so a
-    ///         bundle would need either one call per id or a mutable half-assembled
-    ///         listing sitting in storage with its own fill and cancel semantics. Bundle
-    ///         sellers are already paying for an approval, so they keep using `listNFT`.
-    ///
-    ///         `msg.sender` IS the collection and is the only trustworthy source of that
-    ///         address — a caller-supplied one would let anyone claim any token. Anyone
-    ///         can also call this directly while transferring nothing, so ownership is
-    ///         re-verified rather than inferred from the fact that we were called: with
-    ///         no check, a listing could be minted against escrow another seller already
-    ///         has here, and cancelled to steal it. Escrow is already in hand by now, so
-    ///         this deliberately does not route through `_moveNFT`, whose precondition is
-    ///         that the board does NOT yet hold the token.
-    ///
-    ///         Malformed or absent `data` reverts. A stray transfer to this address must
-    ///         bounce rather than mint a listing on terms decoded out of zero bytes.
-    ///
-    ///         The `nonReentrant` guard here has one benign consequence worth naming: a
-    ///         collection that invokes the receiver hook from plain `transferFrom` -
-    ///         non-standard, but shipped - reenters this guard during `listNFT`'s
-    ///         `_moveNFT` and reverts. Such a collection is unlistable through `listNFT`
-    ///         and must use this push path instead. Fills and cancels are unaffected,
-    ///         since they move the token to the taker or the seller rather than here.
+    /// @notice List one NFT pushed with `safeTransferFrom` and encoded `PushTerms`.
+    /// @dev Requires exactly one token and verifies that this board owns it before
+    ///      creating the listing. Malformed data or unsolicited transfers revert.
     function onERC721Received(address, address from, uint256 tokenId, bytes calldata data)
         external
         nonReentrant
@@ -320,6 +261,9 @@ contract Dutchboard {
         PushTerms memory t = abi.decode(data, (PushTerms));
 
         address token = msg.sender; // the collection, established by the call itself
+        // This board is an ERC-721 now, so a position pushed back here would
+        // try to escrow its own receipt against itself.
+        if (token == address(this)) revert Bad();
         (uint96 sp, uint96 ep) = _checkPrices(t.startPrice, t.endPrice);
         _checkAssets(token, t.quote);
         if (
@@ -337,6 +281,7 @@ contract Dutchboard {
         }
         Listing storage l = listings[id];
         l.seller = from;
+        _mint(from, id);
         l.isNFT = true;
         l.startTime = t.startTime == 0 ? uint40(block.timestamp) : t.startTime;
         l.duration = t.duration;
@@ -350,19 +295,13 @@ contract Dutchboard {
         return this.onERC721Received.selector;
     }
 
-    /// @dev Enforces the plain-ERC20 / ERC-721 assumption at the boundary rather than
-    ///      leaving it to a later `balanceOf` to revert on a codeless address. That
-    ///      fallback holds everywhere but one place: `_payQuoteToken` returns early on
-    ///      a zero amount, so a lot quoted in a codeless address and decayed to
-    ///      `endPrice == 0` would settle without the quote ever being called.
-    ///      `quote == address(0)` is native ETH and is the one address exempted.
+    /// @dev Require contract addresses for token and non-native quote assets.
     function _checkAssets(address token, address quote) internal view {
         if (token == address(0) || token.code.length == 0) revert Bad();
         if (quote != address(0) && quote.code.length == 0) revert Bad();
     }
 
-    /// @dev Narrowing to uint96 is checked, not silent: a price a maker cannot express
-    ///      must fail at listing rather than escrow a lot at a truncated ask.
+    /// @dev Check the price range before narrowing to uint96.
     function _checkPrices(uint256 startPrice, uint256 endPrice) internal pure returns (uint96 sp, uint96 ep) {
         if (startPrice == 0 || startPrice < endPrice || startPrice > type(uint96).max) revert Bad();
         (sp, ep) = (uint96(startPrice), uint96(endPrice));
@@ -392,8 +331,14 @@ contract Dutchboard {
         return listings[id].token;
     }
 
-    /// @dev Callers must have already confirmed the slot is live (seller != 0); skipping
-    ///      the guard avoids a duplicate slot-0 SLOAD and a redundant mapping keccak.
+    /// @notice Whether a listing is an ERC-721 bundle rather than an ERC-20 lot.
+    /// @dev Kept narrow so atomic executors can reject NFT listings before they
+    ///      attempt ERC-20 balance accounting.
+    function isNFTOf(uint256 id) external view returns (bool) {
+        return listings[id].isNFT;
+    }
+
+    /// @dev Callers check that the listing is live before calling this helper.
     function _priceOf(Listing storage l) internal view returns (uint256) {
         if (block.timestamp <= l.startTime) return l.startPrice;
         unchecked {
@@ -422,31 +367,22 @@ contract Dutchboard {
         return _cost(price, take, l.initial);
     }
 
-    /// @dev Rounds up, so a positive-price buy cannot round to zero when `initial` is
-    ///      much larger than the current price. uint96 price x uint128 take is at most
-    ///      2^224, so the sum cannot overflow.
+    /// @dev Round up so a positive-price fill cannot round to zero. This is
+    ///      intentionally applied independently per fill; splitting a lot can
+    ///      therefore cost more than one fill for the same aggregate quantity.
     function _cost(uint256 price, uint128 take, uint128 initial) internal pure returns (uint256) {
         unchecked {
             return (price * take + initial - 1) / initial;
         }
     }
 
-    /// @notice Fill a listing, paying in the listing's `quote`.
-    /// @param  take    ERC20: units to buy. NFT: 0, or the whole bundle size.
-    /// @param  to      Recipient of the lot. Named explicitly rather than assuming
-    ///                 msg.sender, so a router or forwarder can settle straight to the
-    ///                 end user instead of taking custody and sweeping.
-    /// @param  maxCost Taker's bound on what they pay. Required for the ERC20 path,
-    ///                 where cost is pulled by `transferFrom` and cannot be bounded by
-    ///                 attaching an exact value; pass `type(uint256).max` to waive.
-    ///                 The schedule only ever decays, so this can only bind if the
-    ///                 taker's own quote was stale in their favour.
+    /// @notice Fill a listing, paying in its `quote`.
+    /// @param take ERC20 units to buy; for NFTs, pass 0 or the full bundle size.
+    /// @param to Recipient of the lot. For NFTs, use an address that can safely
+    ///        hold an ERC-721; delivery uses `transferFrom`, not a receiver hook.
+    /// @param maxCost Maximum payment; use `type(uint256).max` for no bound.
     function fill(uint256 id, uint128 take, address to, uint256 maxCost) public payable nonReentrant {
-        // Single fills keep the strict guard: value attached to an ERC20-quoted listing
-        // buys nothing, and rejecting it flags a mis-encoded call rather than quietly
-        // handing the ETH straight back. `fillMany` cannot be this strict — a mixed batch
-        // legitimately carries value for its ETH legs — so it refunds the unspent
-        // remainder instead, which protects against stranding just as well.
+        // Reject ETH attached to an ERC20-quoted single fill.
         if (msg.value != 0 && listings[id].quote != address(0)) revert Bad();
 
         uint256 ethUsed = _settle(id, take, to, maxCost, msg.value);
@@ -455,18 +391,9 @@ contract Dutchboard {
         }
     }
 
-    /// @notice Fill several listings in one transaction. Each leg is bounded by its own
-    ///         `maxCosts` entry, and legs may be quoted in different assets.
-    /// @dev    ETH-quoted legs draw from `msg.value`, counted ONCE across the batch:
-    ///         `_settle` is told how much remains unspent and refuses a leg that would
-    ///         exceed it, so no leg can be paid twice out of the same value. Anything
-    ///         unspent — the excess, or the whole of it when every leg is ERC20-quoted —
-    ///         is refunded, so ETH can never be stranded here.
-    ///
-    ///         Atomic: a leg that reverts aborts the batch. There is no skip-on-failure
-    ///         variant because the schedule only decays, so the usual reason a leg fails
-    ///         is that someone else took it first, and silently paying more for the rest
-    ///         of a plan is rarely what a taker wants.
+    /// @notice Fill several listings atomically.
+    /// @dev ETH legs share `msg.value`; unused value is refunded once at the end.
+    ///      Each leg is bounded by its `maxCosts` entry.
     /// @return ethSpent Total ETH forwarded to sellers across the batch.
     function fillMany(uint256[] calldata ids, uint128[] calldata takes, uint256[] calldata maxCosts, address to)
         public
@@ -489,12 +416,8 @@ contract Dutchboard {
         }
     }
 
-    /// @dev One leg. Returns the ETH forwarded to the seller, which is 0 for an
-    ///      ERC20-quoted listing. `ethAvailable` is the caller's UNSPENT value; bounding
-    ///      each leg by it is what stops one `msg.value` settling several ETH legs.
-    ///
-    ///      Refunds are deliberately NOT issued here — the caller nets them once at the
-    ///      end, so a batch cannot pay out mid-loop into a reentrant recipient.
+    /// @dev Settle one leg and return the ETH forwarded to its seller. `ethAvailable`
+    ///      is the remaining batch value; refunds happen once in the caller.
     function _settle(uint256 id, uint128 take, address to, uint256 maxCost, uint256 ethAvailable)
         internal
         returns (uint256 ethUsed)
@@ -502,14 +425,9 @@ contract Dutchboard {
         Listing storage l = listings[id];
         address seller = l.seller;
         if (seller == address(0)) revert Bad();
-        // WETH is refused alongside the board itself: an unwrapped payout re-wrapped
-        // to this address, or a lot delivered into escrow accounting that does not
-        // track it, are both unrecoverable in an immutable contract.
+        // Do not send a lot to this board or its WETH wrapper.
         if (to == address(0) || to == address(this) || to == weth) revert Bad();
-        // A scheduled listing is not open yet. Without this the schedule shapes only
-        // the curve: `_priceOf` returns `startPrice` before the window, so a lot a
-        // seller listed for next week could be taken today. The taker would pay the
-        // maximum, so nothing is stolen - but `startTime` must mean what it says.
+        // A scheduled listing cannot be filled before its start time.
         if (block.timestamp < l.startTime) revert Bad();
 
         uint256 price = _priceOf(l);
@@ -525,6 +443,7 @@ contract Dutchboard {
             cost = price;
             if (cost > maxCost) revert CostExceeded(cost, maxCost);
             delete listings[id];
+            _burn(id);
             for (uint256 i; i < ids.length; ++i) {
                 _moveNFT(token, address(this), to, ids[i]);
             }
@@ -537,23 +456,23 @@ contract Dutchboard {
             amount = take;
             unchecked {
                 uint128 newRem = rem - take;
-                if (newRem == 0) delete listings[id];
-                else l.remaining = newRem;
+                // A partial fill leaves the listing live, so its receipt
+                // survives with a smaller claim; only exhaustion burns it.
+                if (newRem == 0) {
+                    delete listings[id];
+                    _burn(id);
+                } else {
+                    l.remaining = newRem;
+                }
             }
             _sendEscrowToken(token, to, take);
         }
 
-        // Paying the seller last keeps the write-before-call ordering intact for both
-        // branches: by the time a caller-chosen quote token gets control, the lot is
-        // already gone from escrow and `remaining` already reflects this fill.
+        // Update the listing before giving the quote asset control.
         if (quote == address(0)) {
-            // Against UNSPENT value, not msg.value: in a batch the same msg.value would
-            // otherwise cover every ETH leg independently.
+            // Check the remaining batch value, not the original msg.value.
             if (ethAvailable < cost) revert Insufficient();
-            // A lot may decay to free, and a zero-value call still hands the seller
-            // control with all gas: a seller contract with no `receive` would
-            // otherwise brick its own listing at the bottom of the curve. Skipping
-            // the call mirrors `_payQuoteToken`, which already returns on amount 0.
+            // A zero-price leg needs no ETH call.
             if (cost != 0) safeTransferETH(seller, cost);
             ethUsed = cost;
         } else {
@@ -574,12 +493,14 @@ contract Dutchboard {
         if (l.isNFT) {
             uint256[] memory ids = l.ids;
             delete listings[id];
+            _burn(id);
             for (uint256 i; i < ids.length; ++i) {
                 _returnNFT(token, msg.sender, ids[i]);
             }
         } else {
             uint256 rem = l.remaining;
             delete listings[id];
+            _burn(id);
             if (rem != 0) _sendEscrowToken(token, msg.sender, rem);
         }
         emit Cancelled(id);
@@ -587,9 +508,7 @@ contract Dutchboard {
 
     /// @notice Seller closes a fungible canonical-WETH listing and receives its
     ///         unsold remainder as native ETH.
-    /// @dev Storage is deleted before either WETH or the seller receives control.
-    ///      Exact wrapper debit and ETH credit checks keep unrelated pooled WETH
-    ///      and forced ETH from subsidising a malformed withdrawal.
+    /// @dev Delete storage before unwrapping and paying the seller.
     function cancelUnwrap(uint256 id) external nonReentrant {
         Listing storage l = listings[id];
         if (l.seller != msg.sender) revert NotSeller();
@@ -599,6 +518,7 @@ contract Dutchboard {
 
         uint256 rem = l.remaining;
         delete listings[id];
+        _burn(id);
         _unwrapETH(rem);
         safeTransferETH(msg.sender, rem);
         emit Cancelled(id);
@@ -606,13 +526,11 @@ contract Dutchboard {
 
     // ---------------------------------------------------------- ASSET MOVEMENT
 
-    /// @dev Enforces the documented plain-ERC20 assumption at the escrow boundary.
-    ///      Exact board credit prevents a short or successful-looking no-op deposit
-    ///      from creating a listing backed by another maker's pooled balance.
+    /// @dev Require the caller and board balances to change by exactly `amount`.
     function _pullEscrowToken(address token, address from, uint256 amount) internal {
         uint256 fromBefore = IERC20(token).balanceOf(from);
         uint256 boardBefore = IERC20(token).balanceOf(address(this));
-        safeTransferFrom(token, from, address(this), amount);
+        safeTransferFromERC20(token, from, address(this), amount);
 
         uint256 spent = _decrease(fromBefore, IERC20(token).balanceOf(from));
         if (spent != amount) revert BalanceDeltaMismatch(token, from, amount, spent);
@@ -621,9 +539,7 @@ contract Dutchboard {
         if (received != amount) revert BalanceDeltaMismatch(token, address(this), amount, received);
     }
 
-    /// @dev Confirms both sides of an escrow payout. The board can hold the same token
-    ///      for many listings, so an over-debit must revert instead of consuming the
-    ///      next maker's lot; an under-credit must not charge the taker for less output.
+    /// @dev Confirm the board debit and recipient credit for pooled escrow.
     function _sendEscrowToken(address token, address to, uint256 amount) internal {
         uint256 boardBefore = IERC20(token).balanceOf(address(this));
         uint256 toBefore = IERC20(token).balanceOf(to);
@@ -636,9 +552,7 @@ contract Dutchboard {
         if (received != amount) revert BalanceDeltaMismatch(token, to, amount, received);
     }
 
-    /// @dev Confirms both sides of canonical WETH redemption. The contract can
-    ///      hold pooled WETH escrow and forced ETH, so either balance alone is
-    ///      insufficient evidence that this listing redeemed exactly.
+    /// @dev Confirm both the WETH debit and native ETH credit.
     function _unwrapETH(uint256 amount) internal {
         uint256 wethBefore = IERC20(weth).balanceOf(address(this));
         uint256 ethBefore = address(this).balance;
@@ -655,14 +569,12 @@ contract Dutchboard {
         }
     }
 
-    /// @dev Payment never rests on the board, but both deltas still matter: the taker
-    ///      must spend exactly `amount` and the seller must receive exactly `amount`.
-    ///      A self-fill is already a no-op economically and needs no token round-trip.
+    /// @dev Confirm exact taker debit and seller credit; self-fills need no transfer.
     function _payQuoteToken(address token, address from, address to, uint256 amount) internal {
         if (amount == 0 || from == to) return;
         uint256 fromBefore = IERC20(token).balanceOf(from);
         uint256 toBefore = IERC20(token).balanceOf(to);
-        safeTransferFrom(token, from, to, amount);
+        safeTransferFromERC20(token, from, to, amount);
 
         uint256 spent = _decrease(fromBefore, IERC20(token).balanceOf(from));
         if (spent != amount) revert BalanceDeltaMismatch(token, from, amount, spent);
@@ -671,19 +583,15 @@ contract Dutchboard {
         if (received != amount) revert BalanceDeltaMismatch(token, to, amount, received);
     }
 
-    /// @dev ERC-721 transferFrom has no return value. Source and destination ownership
-    ///      checks prevent a quietly-no-op transfer from creating unbacked escrow,
-    ///      duplicating an NFT already held for another listing, or charging a buyer
-    ///      without delivering the bundle.
+    /// @dev Confirm ownership before and after `transferFrom`.
     function _moveNFT(address token, address from, address to, uint256 tokenId) internal {
         if (IERC721(token).ownerOf(tokenId) != from) revert NFTTransferFailed(token, tokenId);
         IERC721(token).transferFrom(from, to, tokenId);
         if (IERC721(token).ownerOf(tokenId) != to) revert NFTTransferFailed(token, tokenId);
     }
 
-    /// @dev If a broken collection's sticky approval already let an NFT return home,
-    ///      cancellation may close the stale listing. Otherwise the board must still
-    ///      own the NFT and the return transfer must be observable through ownerOf.
+    /// @dev Treat an NFT already returned to its seller as complete; otherwise
+    ///      require the board to own it before transferring it back.
     function _returnNFT(address token, address to, uint256 tokenId) internal {
         address owner = IERC721(token).ownerOf(tokenId);
         if (owner == to) return;
@@ -760,6 +668,8 @@ interface IWETH {
 
 error TransferFailed();
 
+error ETHTransferFailed();
+
 function safeTransfer(address token, address to, uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, to)
@@ -778,7 +688,7 @@ function safeTransfer(address token, address to, uint256 amount) {
 
 error TransferFromFailed();
 
-function safeTransferFrom(address token, address from, address to, uint256 amount) {
+function safeTransferFromERC20(address token, address from, address to, uint256 amount) {
     assembly ("memory-safe") {
         let m := mload(0x40)
         mstore(0x60, amount)
@@ -796,8 +706,6 @@ function safeTransferFrom(address token, address from, address to, uint256 amoun
         mstore(0x40, m)
     }
 }
-
-error ETHTransferFailed();
 
 function safeTransferETH(address to, uint256 amount) {
     assembly ("memory-safe") {

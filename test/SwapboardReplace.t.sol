@@ -92,16 +92,45 @@ contract SwapboardReplaceTest is Test {
         sb.replaceOrder(id, 100e18, 400e18, 0); // doubled the ask
 
         vm.prank(taker);
-        sb.fillOrder(id, block.timestamp, 400e18, taker);
+        sb.fillOrder(id, block.timestamp, 400e18, 0, taker);
 
         assertEq(A.balanceOf(taker), 100e18, "taker got the lot");
         assertEq(B.balanceOf(maker), 400e18, "maker was paid the new price");
     }
 
+    function test_TakerMinimumOutputBlocksAReprice() public {
+        uint256 id = _order();
+        vm.prank(maker);
+        sb.replaceOrder(id, 1e18, 200e18, 0); // materially worse tokenA output
+
+        vm.prank(taker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.InsufficientOutput.selector, 100e18, 1e18));
+        sb.fillOrder(id, block.timestamp, 200e18, 100e18, taker);
+
+        (, bool active,,,,,,,,,) = sb.orders(id);
+        assertTrue(active, "slippage failure keeps the order live");
+        assertEq(A.balanceOf(taker), 0, "no output was delivered");
+        assertEq(B.balanceOf(maker), 0, "no payment was taken");
+    }
+
+    function test_ZeroFullFillSentinelIsRejectedForFungibleOrders() public {
+        uint256 id = _order();
+        vm.prank(maker);
+        sb.replaceOrder(id, 100e18, 400e18, 0);
+
+        vm.prank(taker);
+        vm.expectRevert(Swapboard.ZeroFillAmount.selector);
+        sb.fillOrder(id, block.timestamp, 0, 100e18, taker);
+
+        (, bool active,,,,,,,,,) = sb.orders(id);
+        assertTrue(active, "the repriced order remains live");
+        assertEq(B.balanceOf(maker), 0, "the taker was not charged");
+    }
+
     function test_PartialFillThenReplaceUsesTheRemainder() public {
         uint256 id = _order();
         vm.prank(taker);
-        sb.fillOrder(id, block.timestamp, 100e18, taker); // half
+        sb.fillOrder(id, block.timestamp, 100e18, 0, taker); // half
 
         assertEq(_get(id).amountA, 50e18);
         uint256 makerBefore = A.balanceOf(maker);

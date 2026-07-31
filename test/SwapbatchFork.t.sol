@@ -46,7 +46,7 @@ contract SwapbatchForkTest is Test {
             vm.envOr("FOUNDRY_ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_640_000
         );
         require(_BOARD.code.length != 0, "live board missing at fork block");
-        batch = new Swapbatch(_WETH);
+        batch = new Swapbatch(_WETH, _BOARD, address(0));
         vm.deal(address(batch), 0);
         vm.deal(taker, 100 ether);
         vm.label(_BOARD, "Swapboard(live)");
@@ -60,6 +60,10 @@ contract SwapbatchForkTest is Test {
     function _bal(address token, address who) internal view returns (uint256) {
         (bool ok, bytes memory d) = token.staticcall(abi.encodeWithSignature("balanceOf(address)", who));
         return ok ? abi.decode(d, (uint256)) : 0;
+    }
+
+    function _mins(uint256 n) internal pure returns (uint256[] memory out) {
+        out = new uint256[](n);
     }
 
     /// Maker escrows USDC and asks for WETH, so the taker pays ETH and receives USDC.
@@ -87,13 +91,14 @@ contract SwapbatchForkTest is Test {
         (ids[0], ids[1]) = (id1, id2);
         uint256[] memory amts = new uint256[](2);
         (amts[0], amts[1]) = (0.5 ether, 1 ether);
-        address[] memory outs = new address[](1);
+        address[] memory outs = new address[](2);
         outs[0] = _USDC;
+        outs[1] = _USDC;
 
         uint256 before = taker.balance;
         vm.prank(taker);
         batch.fillOrdersWithEth{value: 2 ether}(
-            _BOARD, ids, amts, outs, type(uint256).max, taker, false, true
+            _BOARD, ids, amts, _mins(ids.length), outs, type(uint256).max, taker, false, true
         );
 
         assertEq(_bal(_USDC, taker), 3_000e6, "both lots swept to the taker");
@@ -115,13 +120,14 @@ contract SwapbatchForkTest is Test {
         ids[0] = id1;
         uint256[] memory amts = new uint256[](1);
         amts[0] = 0.5 ether;
-        address[] memory outs = new address[](1);
+        address[] memory outs = new address[](2);
         outs[0] = _USDC;
+        outs[1] = address(0);
 
         vm.prank(taker);
         vm.expectRevert();
         batch.fillOrdersWithEth{value: 1 ether}(
-            _BOARD, ids, amts, outs, type(uint256).max, taker, false, false
+            _BOARD, ids, amts, _mins(ids.length), outs, type(uint256).max, taker, false, false
         );
     }
 
@@ -134,13 +140,14 @@ contract SwapbatchForkTest is Test {
         (ids[0], ids[1]) = (id1, unknown);
         uint256[] memory amts = new uint256[](2);
         (amts[0], amts[1]) = (0.5 ether, 1 ether);
-        address[] memory outs = new address[](1);
+        address[] memory outs = new address[](2);
         outs[0] = _USDC;
+        outs[1] = address(0);
 
         uint256 before = taker.balance;
         vm.prank(taker);
         bool[] memory filled = batch.fillOrdersWithEth{value: 2 ether}(
-            _BOARD, ids, amts, outs, type(uint256).max, taker, true, true
+            _BOARD, ids, amts, _mins(ids.length), outs, type(uint256).max, taker, true, true
         );
 
         assertTrue(filled[0], "live order filled");

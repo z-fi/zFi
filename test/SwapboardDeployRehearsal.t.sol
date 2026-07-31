@@ -70,7 +70,7 @@ contract SwapboardDeployRehearsalTest is Test {
 
         uint256 takerUsdc = IERC20(USDC).balanceOf(taker);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 6000e6, 0, address(0));
 
         assertEq(IERC20(WETH).balanceOf(taker), 2 ether, "taker paid in real WETH");
         assertEq(takerUsdc - IERC20(USDC).balanceOf(taker), 6000e6, "charged the ask exactly");
@@ -89,7 +89,7 @@ contract SwapboardDeployRehearsalTest is Test {
 
         uint256 before = taker.balance;
         vm.prank(taker);
-        sb.fillOrderUnwrap(id, 0, 0, address(0));
+        sb.fillOrderUnwrap(id, 0, 15_000e6, 0, address(0));
 
         assertEq(taker.balance - before, 5 ether, "taker received real ETH");
         assertEq(address(sb).balance, 0, "board retains no ETH");
@@ -116,7 +116,7 @@ contract SwapboardDeployRehearsalTest is Test {
 
         uint256 before = taker.balance;
         vm.prank(taker);
-        sb.fillOrderUnwrap(id, 0, 9000e6, address(0)); // 30% of the ask
+        sb.fillOrderUnwrap(id, 0, 9000e6, 0, address(0)); // 30% of the ask
 
         assertEq(taker.balance - before, 3 ether, "pro rata, unwrapped");
         assertEq(IERC20(WETH).balanceOf(address(sb)), 7 ether, "remainder still escrowed as WETH");
@@ -138,7 +138,7 @@ contract SwapboardDeployRehearsalTest is Test {
         assertEq(boardWeth, 20 ether + 0, "parked escrow present");
 
         vm.prank(taker);
-        sb.fillOrderWithEth{value: 6 ether}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 6 ether}(id, 0, 0, address(0));
 
         assertEq(IERC20(USDC).balanceOf(taker) - 1_000_000e6, 50_000e6, "taker got the USDC");
         assertEq(IERC20(WETH).balanceOf(maker), 6 ether, "maker paid from the taker's ETH");
@@ -182,7 +182,7 @@ contract SwapboardDeployRehearsalTest is Test {
         IERC20(DAI).approve(address(sb), type(uint256).max);
 
         vm.prank(taker);
-        sb.fillOrder(id, 0, 10_000e18, address(0)); // 40%
+        sb.fillOrder(id, 0, 10_000e18, 0, address(0)); // 40%
 
         assertEq(IERC20(USDC).balanceOf(taker) - 1_000_000e6, 10_000e6, "pro rata out");
         assertEq(IERC20(USDC).balanceOf(address(sb)), 15_000e6, "remainder still escrowed");

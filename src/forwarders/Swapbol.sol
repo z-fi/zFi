@@ -17,7 +17,7 @@ pragma solidity ^0.8.36;
 ///      the legacy v1 Swapboard pays msg.sender, which is this contract:
 ///
 ///        v1  0x000000fF3D7A2d373615141d7489Ca66683DbecF  fillOrder(uint256,uint256)
-///        current replacement Swapboard                   fillOrder(uint256,uint256,uint256,address)
+///        current replacement Swapboard                   fillOrder(uint256,uint256,uint256,uint256,address)
 ///        Dutchboard                                      fill(uint256,uint128,address,uint256)
 ///
 ///      So against v1 the sweep below is not a fallback for a refunded leg - it
@@ -30,13 +30,10 @@ pragma solidity ^0.8.36;
 ///
 ///      EVERY ENTRY POINT BINDS ITS VENUE TO IMMUTABLE DEPLOYMENT CONFIGURATION.
 ///      `fill` takes a board address, but only to select among the three
-///      bindings - it is not a call target drawn from calldata. That
-///      distinction is the whole safety argument: `fill` forwards
-///      caller-supplied `data` verbatim, so an unconstrained board would let
-///      anyone make this contract call any contract with any calldata -
-///      including `approve` on an ERC-20, planting a permanent allowance that
-///      the scoped revoke below never touches, because it was never granted
-///      through `safeApprove`.
+///      bindings - it is not a call target drawn from calldata. Its calldata
+///      is decoded and reconstructed as one of the reviewed fill methods; a
+///      creation, cancellation, approval, sweep, or arbitrary fallback call
+///      is rejected before any approval is granted.
 ///
 ///      APPROVALS ARE SCOPED TO THE CALL. The sibling forwarders (Matcha,
 ///      Parasol, OneInch, ...) lazily grant an infinite approval and never
@@ -139,8 +136,8 @@ contract Swapbol {
     }
 
     /// @param board    Venue holding the order. Must be one of the immutable
-    ///                 bindings: `data` is forwarded verbatim, so an arbitrary
-    ///                 board would make this an arbitrary-call primitive.
+    ///                 bindings. `data` must be the exact ABI for that venue's
+    ///                 reviewed fill method; it is decoded and selector-checked.
     /// @param tokenIn  What the taker pays the maker; snwap has already sent it
     ///                 here. address(0) for ETH.
     /// @param tokenOut What the order pays out, swept if any lands here.
@@ -149,7 +146,7 @@ contract Swapbol {
     ///                 `recipient`, as in `fillPlan`: on an exact-output or
     ///                 relayed fill the change belongs to whoever funded the
     ///                 route, who is not always the party being paid out.
-    /// @param data     Encoded fill call, e.g. fillOrder(id, deadline, amount, recipient).
+    /// @param data     Encoded fill call, e.g. fillOrder(id, deadline, amount, minAmountA, recipient).
     function fill(
         address board,
         address tokenIn,
@@ -160,12 +157,15 @@ contract Swapbol {
     ) public payable {
         _enter();
         uint256 ethBase = address(this).balance - msg.value;
+        uint256 wethBase = balanceOf(WETH);
         if (board != boardV1 && board != boardCurrent && board != dutchboard) revert UnknownBoard(board);
         if (
             recipient == address(0) || recipient == address(this) || refundTo == address(0)
                 || refundTo == address(this) || (tokenIn != address(0) && tokenIn == tokenOut)
                 || (tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))
         ) revert BadPlan();
+
+        _validateFillData(board, tokenIn, tokenOut, recipient, data);
 
         uint256 inputBase;
         uint256 outputBase = tokenOut == address(0) ? 0 : balanceOf(tokenOut);
@@ -197,27 +197,7 @@ contract Swapbol {
 
         if (approved != 0) safeApprove(tokenIn, board, 0);
 
-        // The board pays `recipient` directly, so this normally moves nothing.
-        // It matters when a leg refunds, or when a caller omits the recipient
-        // and the board pays this contract instead.
-        if (tokenOut != address(0)) {
-            _sweepTokenDelta(tokenOut, outputBase, recipient);
-        }
-
-        // Return any unspent tokenIn, so a partial fill does not strand the
-        // difference here for the next caller to sweep. Change goes to
-        // `refundTo`, not `recipient`: they differ on relayed and exact-output
-        // fills, and the funder is the one owed it.
-        if (tokenIn != address(0)) {
-            _sweepTokenDelta(tokenIn, inputBase, refundTo);
-        }
-
-        // Only ETH created by this call is returned. Forced or counterfactually
-        // prefunded ETH is not this user's refund and must not make an otherwise
-        // ERC-20-only route fail merely because `recipient` cannot receive ETH.
-        // ETH is the payout when tokenOut is native, and change otherwise -
-        // the same split `_sweep` applies to the plan entry points.
-        _sendEthDelta(ethBase, tokenOut == address(0) ? recipient : refundTo);
+        _sweep(tokenIn, tokenOut, recipient, refundTo, ethBase, wethBase, inputBase, outputBase);
         _leave();
     }
 
@@ -292,6 +272,7 @@ contract Swapbol {
         uint256 wethBase = balanceOf(WETH);
         _checkPlan(tokenIn, tokenOut, recipient, refundTo, deadline, fills);
         if ((ammIn == 0) != (ammData.length == 0)) revert BadPlan();
+        if (ammData.length != 0) _validateAmmData(ammData);
 
         uint256 plannedIn = _bookInput(fills) + ammIn;
         uint256 inputBase = _checkInput(tokenIn, plannedIn);
@@ -327,24 +308,69 @@ contract Swapbol {
                 || fills.length == 0 || tokenIn == tokenOut || (tokenIn == WETH && tokenOut == address(0))
         ) revert BadPlan();
 
+        for (uint256 i; i < fills.length; ++i) {
+            _validatePlanLeg(tokenIn, tokenOut, fills[i]);
+        }
+
         // ETH -> WETH is normally a canonical wrap, so accepting arbitrary book
         // legs would blur input and output accounting (and could make same-asset
         // Swapboard orders look like price improvement). The useful exception is
         // Dutch liquidity that actually sells WETH for native ETH: every book leg
         // must therefore be on the immutable Dutchboard and quote literal ETH.
         // The AMM remainder may then be zQuoter's ordinary zRouter wrap calldata.
-        if (tokenIn == address(0) && tokenOut == WETH) {
-            for (uint256 i; i < fills.length; ++i) {
-                Fill calldata leg = fills[i];
-                if (
-                    leg.board != dutchboard || IDutchQuote(dutchboard).tokenOf(leg.orderId) != WETH
-                        || IDutchQuote(dutchboard).quoteOf(leg.orderId) != address(0)
-                ) {
-                    revert BadPlan();
-                }
-            }
-        }
         if (deadline != 0 && block.timestamp > deadline) revert DeadlineExpired();
+    }
+
+    /// @dev zQuoter emits only zRouter's swap/settlement vocabulary. The target is
+    /// immutable, but that alone is not enough: zRouter also exposes a generic
+    /// `execute` entry point and owner/permit helpers. A caller-supplied AMM blob
+    /// must not be able to turn this forwarder into a general zRouter executor.
+    /// Multicalls are recursively checked because zQuoter wraps routes and sweeps
+    /// in one or more `multicall` envelopes.
+    function _validateAmmData(bytes memory data) internal pure {
+        if (data.length < 4) revert BadPlan();
+        bytes4 selector;
+        assembly ("memory-safe") {
+            selector := mload(add(data, 0x20))
+        }
+
+        if (selector == _selector("multicall(bytes[])")) {
+            bytes[] memory calls = abi.decode(_withoutSelector(data), (bytes[]));
+            if (calls.length == 0) revert BadPlan();
+            for (uint256 i; i < calls.length; ++i) {
+                _validateAmmData(calls[i]);
+            }
+            return;
+        }
+
+        if (
+            selector == _selector("swapV2(address,bool,address,address,uint256,uint256,uint256)")
+                || selector == _selector("swapVZ(address,bool,uint256,address,address,uint256,uint256,uint256,uint256,uint256)")
+                || selector == _selector("swapV3(address,bool,uint24,address,address,uint256,uint256,uint256)")
+                || selector == _selector("swapV4(address,bool,uint24,int24,address,address,uint256,uint256,uint256)")
+                || selector == _selector(
+                    "swapCurve(address,bool,address[11],uint256[4][5],address[5],uint256,uint256,uint256)"
+                )
+                || selector == _selector("exactETHToSTETH(address)")
+                || selector == _selector("exactETHToWSTETH(address)")
+                || selector == _selector("ethToExactSTETH(address,uint256)")
+                || selector == _selector("ethToExactWSTETH(address,uint256)")
+                || selector == _selector("deposit(address,uint256,uint256)")
+                || selector == _selector("wrap(uint256)")
+                || selector == _selector("unwrap(uint256)")
+                || selector == _selector("sweep(address,uint256,uint256,address)")
+        ) return;
+
+        revert BadPlan();
+    }
+
+    function _withoutSelector(bytes memory data) internal pure returns (bytes memory body) {
+        body = new bytes(data.length - 4);
+        for (uint256 i; i < body.length; ++i) body[i] = data[i + 4];
+    }
+
+    function _selector(string memory signature) internal pure returns (bytes4 result) {
+        result = bytes4(keccak256(bytes(signature)));
     }
 
     function _checkInput(address tokenIn, uint256 plannedIn) internal returns (uint256 inputBase) {
@@ -388,6 +414,123 @@ contract Swapbol {
         }
     }
 
+    /// @dev The generic entry point is retained for integrations that already
+    /// use it, but it is a typed firewall rather than an arbitrary board call.
+    /// Exact calldata lengths also prevent ABI-decoder-tolerated trailing data.
+    function _validateFillData(
+        address board,
+        address tokenIn,
+        address tokenOut,
+        address recipient,
+        bytes calldata data
+    ) internal view {
+        if (data.length < 4) revert BadPlan();
+        bytes4 selector;
+        assembly ("memory-safe") {
+            selector := calldataload(data.offset)
+        }
+
+        if (board == boardV1) {
+            if (selector != ISwapboardV1Fill.fillOrder.selector || data.length != 68 || tokenIn == address(0)) {
+                revert BadPlan();
+            }
+            (uint256 orderId,) = abi.decode(data[4:], (uint256, uint256));
+            _validateV1Order(orderId, tokenIn, tokenOut);
+            return;
+        }
+
+        if (board == boardCurrent) {
+            if (selector == ISwapboardCurrentFill.fillOrder.selector || selector == ISwapboardCurrentFill.fillOrderUnwrap.selector) {
+                if (data.length != 164 || tokenIn == address(0)) revert BadPlan();
+                (uint256 orderId,, , , address to) = abi.decode(data[4:], (uint256, uint256, uint256, uint256, address));
+                if (to != address(0) && to != recipient) revert BadPlan();
+                if (tokenOut == address(0)) {
+                    if (selector != ISwapboardCurrentFill.fillOrderUnwrap.selector) revert BadPlan();
+                } else if (selector != ISwapboardCurrentFill.fillOrder.selector) {
+                    revert BadPlan();
+                }
+                _validateCurrentOrder(orderId, tokenIn, tokenOut);
+                return;
+            }
+            if (selector == ISwapboardCurrentFill.fillOrderWithEth.selector) {
+                if (data.length != 132 || tokenIn != address(0)) revert BadPlan();
+                (uint256 orderId,, , address to) = abi.decode(data[4:], (uint256, uint256, uint256, address));
+                if (to != address(0) && to != recipient) revert BadPlan();
+                // fillOrderWithEth returns WETH. For a native output route the
+                // output must land here so `_sweep` can unwrap it once.
+                if (tokenOut == address(0) && to != address(0) && to != address(this)) revert BadPlan();
+                _validateCurrentOrder(orderId, address(0), tokenOut);
+                return;
+            }
+            revert BadPlan();
+        }
+
+        if (board == dutchboard) {
+            if (selector != IDutchFill.fill.selector || data.length != 132) revert BadPlan();
+            (uint256 orderId,, address to,) = abi.decode(data[4:], (uint256, uint128, address, uint256));
+            if (to != address(0) && to != recipient) revert BadPlan();
+            // A native-output Dutch listing pays WETH. It must pay this
+            // contract, not the final recipient, so the output can be unwrapped.
+            if (tokenOut == address(0) && to != address(0) && to != address(this)) revert BadPlan();
+            _validateDutchListing(orderId, tokenIn, tokenOut);
+            return;
+        }
+
+        revert UnknownBoard(board);
+    }
+
+    function _validatePlanLeg(address tokenIn, address tokenOut, Fill calldata leg) internal view {
+        if (leg.board == boardV1) {
+            _validateV1Order(leg.orderId, tokenIn, tokenOut);
+        } else if (leg.board == boardCurrent) {
+            _validateCurrentOrder(leg.orderId, tokenIn, tokenOut);
+        } else if (leg.board == dutchboard) {
+            _validateDutchListing(leg.orderId, tokenIn, tokenOut);
+        } else {
+            revert UnknownBoard(leg.board);
+        }
+    }
+
+    function _validateV1Order(uint256 orderId, address tokenIn, address tokenOut) internal view {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = orderId;
+        ISwapboardV1OrderView.Order[] memory orders = ISwapboardV1OrderView(boardV1).getOrders(ids);
+        if (orders.length != 1 || !orders[0].active) revert BadPlan();
+        if (orders[0].tokenA != _swapboardOutput(tokenOut) || orders[0].tokenB != _swapboardInput(tokenIn)) {
+            revert BadPlan();
+        }
+    }
+
+    function _validateCurrentOrder(uint256 orderId, address tokenIn, address tokenOut) internal view {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = orderId;
+        ISwapboardCurrentOrderView.Order[] memory orders = ISwapboardCurrentOrderView(boardCurrent).getOrders(ids);
+        if (orders.length != 1 || !orders[0].active || orders[0].nftA || orders[0].nftB) revert BadPlan();
+        if (orders[0].tokenA != _swapboardOutput(tokenOut) || orders[0].tokenB != _swapboardInput(tokenIn)) {
+            revert BadPlan();
+        }
+    }
+
+    function _validateDutchListing(uint256 orderId, address tokenIn, address tokenOut) internal view {
+        if (
+            IDutchQuote(dutchboard).isNFTOf(orderId)
+                || IDutchQuote(dutchboard).quoteOf(orderId) != tokenIn
+                || IDutchQuote(dutchboard).tokenOf(orderId) != _dutchOutput(tokenOut)
+        ) revert BadPlan();
+    }
+
+    function _swapboardInput(address token) internal pure returns (address) {
+        return token == address(0) ? WETH : token;
+    }
+
+    function _swapboardOutput(address token) internal pure returns (address) {
+        return token == address(0) ? WETH : token;
+    }
+
+    function _dutchOutput(address token) internal pure returns (address) {
+        return token == address(0) ? WETH : token;
+    }
+
     function _fillLegs(address tokenIn, address tokenOut, address recipient, uint256 deadline, Fill[] calldata fills)
         internal
     {
@@ -404,22 +547,23 @@ contract Swapbol {
             uint256 value;
 
             if (board != address(0) && board == boardV1) {
-                data = abi.encodeWithSelector(bytes4(0xc37dfc5b), leg.orderId, deadline);
+                data = abi.encodeCall(ISwapboardV1Fill.fillOrder, (leg.orderId, deadline));
                 if (tokenIn == address(0)) {
                     _wrapWETH(leg.payIn);
                     payToken = WETH;
                 }
             } else if (board != address(0) && board == boardCurrent) {
-                data = abi.encodeWithSelector(bytes4(0x8ab3bfc9), leg.orderId, deadline, leg.payIn, bookRecipient);
+                data = abi.encodeCall(
+                    ISwapboardCurrentFill.fillOrder,
+                    (leg.orderId, deadline, leg.payIn, leg.getOut, bookRecipient)
+                );
                 if (tokenIn == address(0)) {
                     _wrapWETH(leg.payIn);
                     payToken = WETH;
                 }
             } else if (board != address(0) && board == dutchboard) {
                 if (leg.getOut > type(uint128).max) revert AmountTooLarge();
-                data = abi.encodeWithSelector(
-                    bytes4(0xae7a8260), leg.orderId, uint128(leg.getOut), bookRecipient, leg.payIn
-                );
+                data = abi.encodeCall(IDutchFill.fill, (leg.orderId, uint128(leg.getOut), bookRecipient, leg.payIn));
                 if (tokenIn == address(0)) {
                     address quote = IDutchQuote(dutchboard).quoteOf(leg.orderId);
                     if (quote == address(0)) {
@@ -538,9 +682,66 @@ interface IWETH {
     function withdraw(uint256 amount) external;
 }
 
+interface ISwapboardV1Fill {
+    function fillOrder(uint256 orderId, uint256 deadline) external;
+}
+
+interface ISwapboardCurrentFill {
+    function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB, uint256 minAmountA, address recipient)
+        external;
+
+    function fillOrderUnwrap(
+        uint256 orderId,
+        uint256 deadline,
+        uint256 fillAmountB,
+        uint256 minAmountA,
+        address recipient
+    ) external;
+
+    function fillOrderWithEth(uint256 orderId, uint256 deadline, uint256 minAmountA, address recipient)
+        external
+        payable;
+}
+
+interface ISwapboardV1OrderView {
+    struct Order {
+        address maker;
+        bool active;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory);
+}
+
+interface ISwapboardCurrentOrderView {
+    struct Order {
+        address maker;
+        bool active;
+        bool partialFill;
+        uint64 expiry;
+        bool nftA;
+        bool nftB;
+        address counterparty;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory);
+}
+
+interface IDutchFill {
+    function fill(uint256 id, uint128 take, address to, uint256 maxCost) external payable;
+}
+
 interface IDutchQuote {
     function quoteOf(uint256 id) external view returns (address);
     function tokenOf(uint256 id) external view returns (address);
+    function isNFTOf(uint256 id) external view returns (bool);
 }
 
 // Solady safe transfer helpers:
@@ -568,8 +769,31 @@ error ApproveFailed();
 function safeApprove(address token, address to, uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, to)
-        mstore(0x34, amount)
         mstore(0x00, 0x095ea7b3000000000000000000000000)
+
+        // USDT-style tokens require a zero transition before a new nonzero
+        // allowance. Clearing first preserves the call-scoped allowance model
+        // while remaining compatible with that common approval convention.
+        if amount {
+            mstore(0x34, 0)
+            let reset := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
+            if iszero(and(eq(mload(0x00), 1), reset)) {
+                if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), reset)) {
+                    mstore(0x00, 0x3e3f8f73)
+                    revert(0x1c, 0x04)
+                }
+            }
+            // The reset call wrote its return data over 0x00..0x20, and the
+            // calldata being reused lives at 0x10..0x54 - so that write lands
+            // on the selector. Without rebuilding it here the approve below
+            // ships whatever the reset returned as its selector, which is why
+            // this path failed against every ordinary ERC-20 rather than only
+            // the USDT-style tokens it exists for.
+            mstore(0x14, to)
+            mstore(0x00, 0x095ea7b3000000000000000000000000)
+        }
+
+        mstore(0x34, amount)
         let success := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
         if iszero(and(eq(mload(0x00), 1), success)) {
             if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), success)) {

@@ -29,14 +29,13 @@ pragma solidity ^0.8.36;
 ///
 ///         HOLDS NOTHING BETWEEN CALLS. Every entry point is public, so whatever this
 ///         contract holds or has granted when a call returns belongs to whoever calls it
-///         next. Both sweeps below are therefore unconditional, and the approval is
-///         scoped to the call.
+///         next. Legacy output delivery is therefore derived from the orders and transfers
+///         only the balance delta created by this batch; it never sweeps a caller-listed
+///         token's entire balance.
 ///
-///         APPROVALS ARE SCOPED. `board` is a parameter — there are three Swapboard
-///         deployments and this should serve all of them — so the lazy infinite approval
-///         the sibling forwarders use against hardcoded aggregators would let any caller
-///         plant a permanent allowance to an address they control. The approval here is
-///         for exactly the batch total and is revoked before returning.
+///         APPROVALS ARE SCOPED. The constructor binds one reviewed legacy board and one
+///         reviewed modern board. The caller cannot pair an arbitrary board with a caller-
+///         supplied ABI/version flag. The approval is exact and revoked before returning.
 ///
 ///         REENTRANCY. A fill hands control to maker-chosen code (tokenA, tokenB, or a
 ///         721 hook). Without a guard that code could re-enter and point the sweeps —
@@ -51,31 +50,27 @@ pragma solidity ^0.8.36;
 ///                     tryFillOrders(uint256[],uint256,uint256[])
 ///                     (no `multicall` either, so ETH batching there is
 ///                      impossible today without this helper)
-///           current   fillOrders(uint256[],uint256,uint256[],address)  <- pays direct
-///                     tryFillOrders(uint256[],uint256,uint256[],address)
+///           current   fillOrders(uint256[],uint256,uint256[],uint256[],address) <- pays direct
+///                     tryFillOrders(uint256[],uint256,uint256[],uint256[],address)
 ///
 ///         So on a legacy board the `tokensOut` sweep is not a safety net, it is the
 ///         DELIVERY PATH, and the whole purchase sits here until it runs. Omitting a
-///         bought asset from `tokensOut` against a legacy board strands it permanently:
-///         nothing else in this contract can move an arbitrary token. `legacyBoard`
-///         therefore requires a non-empty `tokensOut`, so the mistake reverts instead of
-///         silently eating the batch.
+///         bought asset from `tokensOut` against a legacy board would strand it permanently:
+///         nothing else in this contract can move an arbitrary token. The helper therefore
+///         requires one validated expected output per order and transfers only this batch's
+///         balance delta.
 ///
-///         An order whose tokenA is WETH delivers WETH, not ETH; the board's unwrap
-///         variants are single-order only and batching them is out of scope here.
+///         An order whose tokenA is WETH delivers WETH, not ETH. Only unused WETH input
+///         is unwrapped into the caller's ETH refund.
 contract Swapbatch {
     /// @dev Canonical wrapper, fixed at deployment. A deployment trust root: a lying
     ///      wrapper could misreport `balanceOf` and defeat the leftover sweep.
     address public immutable weth;
+    address public immutable legacyBoard;
+    address public immutable modernBoard;
 
     /// @dev Transient reentrancy flag. `uint32(bytes4(keccak256("Reentrancy()")))`.
     uint256 constant REENTRANCY_GUARD_SLOT = 0xab143c07;
-
-    /// @dev Batch-fill selectors, verified against the deployed board's bytecode.
-    bytes4 constant FILL_LEGACY = 0x0a81e15f; // fillOrders(uint256[],uint256,uint256[])
-    bytes4 constant TRY_LEGACY = 0x562f64eb; // tryFillOrders(uint256[],uint256,uint256[])
-    bytes4 constant FILL_MODERN = 0x86ba4707; // fillOrders(uint256[],uint256,uint256[],address)
-    bytes4 constant TRY_MODERN = 0xec4b6520; // tryFillOrders(uint256[],uint256,uint256[],address)
 
     error Reentrancy();
     error LengthMismatch();
@@ -83,19 +78,36 @@ contract Swapbatch {
     error InsufficientValue(uint256 required, uint256 sent);
     error ZeroAddress();
     error NotAContract(address token);
+    error UnknownBoard(address board);
+    error BoardVersionMismatch();
+    error TokensOutLengthMismatch();
+    error TokensOutMismatch(uint256 index, address expected, address actual);
     error TokensOutRequired();
+    error TokensOutUnexpected();
+    error ZeroFillAmount(uint256 index);
+    error BadRecipient();
     error BoardCallFailed();
+    error SlippageUnsupported();
+    error WETHAmountMismatch(uint256 expected, uint256 actual);
+    error InvalidResult();
 
-    constructor(address _weth) {
+    constructor(address _weth, address _legacyBoard, address _modernBoard) {
         if (_weth == address(0)) revert ZeroAddress();
         if (_weth.code.length == 0) revert NotAContract(_weth);
+        if (_legacyBoard == address(0) && _modernBoard == address(0)) revert UnknownBoard(address(0));
+        if (_legacyBoard != address(0) && _legacyBoard.code.length == 0) revert NotAContract(_legacyBoard);
+        if (_modernBoard != address(0) && _modernBoard.code.length == 0) revert NotAContract(_modernBoard);
+        if (_legacyBoard != address(0) && _legacyBoard == _modernBoard) revert UnknownBoard(_legacyBoard);
         weth = _weth;
+        legacyBoard = _legacyBoard;
+        modernBoard = _modernBoard;
     }
 
     /// @notice Fill `orderIds` on `board`, paying with the ETH attached to this call.
-    /// @param  board         Swapboard holding the orders (v2 onward).
+    /// @param  board         One of the constructor-bound reviewed boards.
     /// @param  orderIds      Orders to fill.
     /// @param  fillAmountsB  WETH paid to each order's maker; must align with `orderIds`.
+    /// @param  minAmountsA   Minimum tokenA output for each order; must align with `orderIds`.
     /// @param  deadline      Passed through to the board's staleness check.
     /// @param  recipient     Receives tokenA from every leg, plus all refunds.
     ///                       address(0) means the caller.
@@ -103,22 +115,23 @@ contract Swapbatch {
     ///                       batch). true uses `tryFillOrders`, which skips orders that
     ///                       are inactive, missing, expired, or reserved for someone
     ///                       else — the ETH for a skipped leg comes back as a refund.
-    /// @param  legacyBoard   true for a board without a `recipient` argument, which pays
+    /// @param  legacyBoardMode true for the constructor-bound board without a `recipient` argument, which pays
     ///                       tokenA to this contract. `tokensOut` then MUST list every
     ///                       bought asset, because that sweep is the only way out.
-    /// @param  tokensOut     Assets to sweep to `recipient` after the batch. Required
-    ///                       when `legacyBoard`; a belt-and-braces no-op otherwise, and
-    ///                       may be empty against a board that pays direct.
+    /// @param  tokensOut     For the legacy board, one expected tokenA per order, in the
+    ///                       same order as `orderIds`; each is validated against the board
+    ///                       before settlement. It must be empty for the modern board.
     /// @return filled        Per-order outcome; all true on the atomic path.
     function fillOrdersWithEth(
         address board,
         uint256[] calldata orderIds,
         uint256[] calldata fillAmountsB,
+        uint256[] calldata minAmountsA,
         address[] calldata tokensOut,
         uint256 deadline,
         address recipient,
         bool skipFailures,
-        bool legacyBoard
+        bool legacyBoardMode
     ) public payable returns (bool[] memory filled) {
         assembly ("memory-safe") {
             if tload(REENTRANCY_GUARD_SLOT) {
@@ -130,14 +143,49 @@ contract Swapbatch {
 
         uint256 n = orderIds.length;
         if (n == 0) revert NoOrders();
-        if (n != fillAmountsB.length) revert LengthMismatch();
-        // On a legacy board the sweep IS the delivery path, so an empty list would mean
-        // buying assets this contract cannot subsequently move.
-        if (legacyBoard && tokensOut.length == 0) revert TokensOutRequired();
+        if (n != fillAmountsB.length || n != minAmountsA.length) revert LengthMismatch();
+        bool isLegacy = legacyBoard != address(0) && board == legacyBoard;
+        bool isModern = modernBoard != address(0) && board == modernBoard;
+        if (!isLegacy && !isModern) revert UnknownBoard(board);
+        if (legacyBoardMode != isLegacy) revert BoardVersionMismatch();
+        if (isLegacy && tokensOut.length != n) revert TokensOutLengthMismatch();
+        if (isModern && tokensOut.length != 0) revert TokensOutUnexpected();
+        // The legacy board has no slippage argument. Do not advertise protected
+        // execution while routing to it; callers must pass zero floors there.
+        if (isLegacy) {
+            for (uint256 i; i < n; ++i) {
+                if (minAmountsA[i] != 0) revert SlippageUnsupported();
+            }
+        }
 
-        // Never address(0): the board maps a zero recipient to ITS msg.sender, which is
-        // this contract, and the bought tokenA would land here for the next caller.
+        for (uint256 i; i < n; ++i) {
+            if (fillAmountsB[i] == 0) revert ZeroFillAmount(i);
+        }
+
+        // Never use the helper or WETH as an end recipient. The former strands direct
+        // modern output; the latter is the wrapper trust root, not a user destination.
         address to = recipient == address(0) ? msg.sender : recipient;
+        if (to == address(this) || to == weth || to == address(0)) revert BadRecipient();
+
+        uint256 ethBase = address(this).balance - msg.value;
+        uint256 wethBase = balanceOf(weth, address(this));
+        ILegacyBatchOrderView.Order[] memory legacyOrders;
+        uint256[] memory outputBases;
+        if (isLegacy) {
+            legacyOrders = _legacyOrders(board, orderIds);
+            outputBases = new uint256[](n);
+            for (uint256 i; i < n; ++i) {
+                address expected = legacyOrders[i].tokenA;
+                if (expected == address(0)) {
+                    if (!legacyBoardMode || tokensOut[i] != address(0)) revert TokensOutMismatch(i, expected, tokensOut[i]);
+                } else if (tokensOut[i] != expected) {
+                    revert TokensOutMismatch(i, expected, tokensOut[i]);
+                }
+                if (tokensOut[i] != address(0) && tokensOut[i] != weth) {
+                    outputBases[i] = balanceOf(tokensOut[i], address(this));
+                }
+            }
+        }
 
         // msg.value is counted exactly once, against the sum of the legs. This is the
         // whole reason this contract exists.
@@ -149,17 +197,24 @@ contract Swapbatch {
 
         // Wrap only what the batch owes, so any excess stays as ETH to refund.
         IWETH(weth).deposit{value: total}();
+        uint256 afterDeposit = balanceOf(weth, address(this));
+        if (afterDeposit < wethBase) revert WETHAmountMismatch(wethBase, afterDeposit);
+        uint256 wrapped = afterDeposit - wethBase;
+        if (wrapped != total) revert WETHAmountMismatch(total, wrapped);
         safeApprove(weth, board, total);
 
         // The legacy encoding simply omits the trailing recipient word; both generations
         // otherwise take the same arguments in the same order.
-        bytes memory callData = legacyBoard
-            ? abi.encodeWithSelector(
-                skipFailures ? TRY_LEGACY : FILL_LEGACY, orderIds, deadline, fillAmountsB
-            )
-            : abi.encodeWithSelector(
-                skipFailures ? TRY_MODERN : FILL_MODERN, orderIds, deadline, fillAmountsB, to
-            );
+        bytes memory callData;
+        if (isLegacy) {
+            callData = skipFailures
+                ? abi.encodeCall(ILegacyBatchFill.tryFillOrders, (orderIds, deadline, fillAmountsB))
+                : abi.encodeCall(ILegacyBatchFill.fillOrders, (orderIds, deadline, fillAmountsB));
+        } else {
+            callData = skipFailures
+                ? abi.encodeCall(IModernBatchFill.tryFillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to))
+                : abi.encodeCall(IModernBatchFill.fillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to));
+        }
 
         (bool ok, bytes memory ret) = board.call(callData);
         if (!ok) {
@@ -172,6 +227,7 @@ contract Swapbatch {
 
         if (skipFailures) {
             filled = abi.decode(ret, (bool[]));
+            if (filled.length != n) revert InvalidResult();
         } else {
             filled = new bool[](n);
             for (uint256 i; i < n; ++i) {
@@ -183,32 +239,70 @@ contract Swapbatch {
         // skipped leg unspent.
         safeApprove(weth, board, 0);
 
-        // Deliver the bought assets. On a legacy board this is the whole purchase; on a
-        // modern one the board already paid `to` and this moves nothing. Sweeping the
-        // full balance means stray tokens go to this caller too — this is not a vault.
-        for (uint256 i; i < tokensOut.length; ++i) {
-            address t = tokensOut[i];
-            if (t == weth) continue; // handled by the unwrap below, never sent as WETH
-            uint256 bal = balanceOf(t, address(this));
-            if (bal != 0) safeTransfer(t, to, bal);
+        uint256 purchasedWeth;
+        if (isLegacy) {
+            for (uint256 i; i < n; ++i) {
+                if (filled[i]) purchasedWeth += legacyOrders[i].amountA;
+            }
+            _deliverLegacy(legacyOrders, filled, tokensOut, outputBases, purchasedWeth, to);
         }
 
-        // Skipped legs leave wrapped ETH here. Unwrap it rather than handing back WETH:
-        // the caller paid in ETH and a silent asset change would strand it for anyone
-        // integrating this as a router leg. Sweeps the whole balance, so stray WETH is
-        // collected by this caller too — this contract is not a vault.
-        uint256 left = balanceOf(weth, address(this));
-        if (left != 0) IWETH(weth).withdraw(left);
+        // Only WETH left from the current input allocation is refunded as ETH. Purchased
+        // WETH was delivered above and pre-existing WETH is never touched.
+        uint256 currentWeth = balanceOf(weth, address(this));
+        uint256 reserved = wethBase + purchasedWeth;
+        if (currentWeth < reserved) revert WETHAmountMismatch(reserved, currentWeth);
+        uint256 left = currentWeth - reserved;
+        if (left != 0) {
+            IWETH(weth).withdraw(left);
+            uint256 received = address(this).balance - (ethBase + (msg.value - total));
+            if (received != left) revert WETHAmountMismatch(left, received);
+        }
 
         // Excess value plus anything just unwrapped, in one transfer.
+        if (address(this).balance < ethBase) revert InvalidResult();
         assembly ("memory-safe") {
-            if selfbalance() {
-                if iszero(call(gas(), to, selfbalance(), codesize(), 0x00, codesize(), 0x00)) {
+            let refund := sub(selfbalance(), ethBase)
+            if refund {
+                if iszero(call(gas(), to, refund, codesize(), 0x00, codesize(), 0x00)) {
                     mstore(0x00, 0xb12d13eb) // ETHTransferFailed()
                     revert(0x1c, 0x04)
                 }
             }
             tstore(REENTRANCY_GUARD_SLOT, 0)
+        }
+    }
+
+    function _legacyOrders(address board, uint256[] calldata orderIds)
+        internal
+        view
+        returns (ILegacyBatchOrderView.Order[] memory orders)
+    {
+        orders = ILegacyBatchOrderView(board).getOrders(orderIds);
+        if (orders.length != orderIds.length) revert InvalidResult();
+    }
+
+    function _deliverLegacy(
+        ILegacyBatchOrderView.Order[] memory orders,
+        bool[] memory filled,
+        address[] calldata tokensOut,
+        uint256[] memory outputBases,
+        uint256 purchasedWeth,
+        address to
+    ) internal {
+        bool sentWeth;
+        for (uint256 i; i < orders.length; ++i) {
+            if (!filled[i] || tokensOut[i] == address(0)) continue;
+            if (tokensOut[i] == weth) {
+                if (sentWeth) continue;
+                if (purchasedWeth != 0) safeTransfer(weth, to, purchasedWeth);
+                sentWeth = true;
+                continue;
+            }
+            uint256 current = balanceOf(tokensOut[i], address(this));
+            if (current < outputBases[i]) revert InvalidResult();
+            uint256 delta = current - outputBases[i];
+            if (delta != 0) safeTransfer(tokensOut[i], to, delta);
         }
     }
 
@@ -231,6 +325,44 @@ contract Swapbatch {
 interface IWETH {
     function deposit() external payable;
     function withdraw(uint256) external;
+}
+
+interface ILegacyBatchFill {
+    function fillOrders(uint256[] calldata orderIds, uint256 deadline, uint256[] calldata fillAmountsB) external;
+    function tryFillOrders(uint256[] calldata orderIds, uint256 deadline, uint256[] calldata fillAmountsB)
+        external
+        returns (bool[] memory filled);
+}
+
+interface IModernBatchFill {
+    function fillOrders(
+        uint256[] calldata orderIds,
+        uint256 deadline,
+        uint256[] calldata fillAmountsB,
+        uint256[] calldata minAmountsA,
+        address recipient
+    ) external;
+
+    function tryFillOrders(
+        uint256[] calldata orderIds,
+        uint256 deadline,
+        uint256[] calldata fillAmountsB,
+        uint256[] calldata minAmountsA,
+        address recipient
+    ) external returns (bool[] memory filled);
+}
+
+interface ILegacyBatchOrderView {
+    struct Order {
+        address maker;
+        bool active;
+        address tokenA;
+        uint256 amountA;
+        address tokenB;
+        uint256 amountB;
+    }
+
+    function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory);
 }
 
 // Solady safe transfer helpers:
@@ -258,8 +390,20 @@ error ApproveFailed();
 function safeApprove(address token, address to, uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, to)
-        mstore(0x34, amount)
         mstore(0x00, 0x095ea7b3000000000000000000000000)
+
+        if amount {
+            mstore(0x34, 0)
+            let reset := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
+            if iszero(and(eq(mload(0x00), 1), reset)) {
+                if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), reset)) {
+                    mstore(0x00, 0x3e3f8f73)
+                    revert(0x1c, 0x04)
+                }
+            }
+        }
+
+        mstore(0x34, amount)
         let success := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
         if iszero(and(eq(mload(0x00), 1), success)) {
             if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), success)) {

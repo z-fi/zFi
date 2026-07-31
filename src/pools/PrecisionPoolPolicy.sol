@@ -12,43 +12,29 @@ interface IPrecisionPoolPolicyView {
 }
 
 /// @title PrecisionPoolPolicy
-/// @notice Onchain routing policy for frontends and quoters using one
-///         PrecisionPoolFactory.
-///
-/// @dev    Factory provenance and zSwap endorsement are deliberately separate:
-///         the permissionless factory records every canonical pool, while this
-///         contract decides which of those pools zSwap should route through.
-///
-///         An unhooked factory pool is routable by default. A hooked pool is
-///         denied until the owner approves that exact pool address. Blocking
-///         overrides both rules and deliberately erases prior approval, so an
-///         incident requires a fresh review before a hooked pool returns.
-///
-///         This contract is a policy oracle, not custody or hard enforcement.
-///         Direct pool and generic zRouter calls remain permissionless. A
-///         client must check `isRoutable` before quoting and again immediately
-///         before submission, or include `requireRoutable` in an atomic route.
-///
-///         The owner should be a Safe or timelock. Hook addresses are immutable
-///         on pools, but a proxy hook can still change behavior; approval of
-///         such a pool remains an active governance trust decision.
+/// @notice Routing policy for pools created by a PrecisionPoolFactory.
+/// @dev Unhooked factory pools are routable by default. Hooked pools require
+///      explicit approval, while `Blocked` always denies routing. This is a
+///      policy oracle only; pools and generic router calls remain permissionless.
 contract PrecisionPoolPolicy is Ownable {
+    /// @notice Policy applied to a pool.
     enum Policy {
         Default,
         Approved,
         Blocked
     }
 
+    /// @notice Factory whose pools this policy can approve or block.
     IPrecisionPoolFactoryRegistry public immutable factory;
 
     /// @notice Explicit policy for a factory pool.
     /// @dev `Default` allows unhooked pools and denies hooked pools.
     mapping(address pool => Policy) public policyOf;
 
-    error InvalidFactory();
     error InvalidOwner();
-    error NotFactoryPool();
     error UnhookedPool();
+    error InvalidFactory();
+    error NotFactoryPool();
     error PoolNotRoutable();
     error RenounceDisabled();
 
@@ -61,26 +47,24 @@ contract PrecisionPoolPolicy is Ownable {
         _initializeOwner(initialOwner);
     }
 
-    /// @notice Whether zSwap should quote and route through `pool`.
+    /// @notice Whether the pool is routable.
     function isRoutable(address pool) public view returns (bool) {
-        if (!factory.isPool(pool)) return false;
-
         Policy policy = policyOf[pool];
         if (policy == Policy.Blocked) return false;
-        if (IPrecisionPoolPolicyView(pool).hook() == address(0)) return true;
-        return policy == Policy.Approved;
+        if (!factory.isPool(pool)) return false;
+        if (policy == Policy.Approved) return true;
+        return IPrecisionPoolPolicyView(pool).hook() == address(0);
     }
 
     /// @notice Revert unless `pool` is currently routable.
-    /// @dev Useful when a route can include an atomic policy preflight.
+    /// @dev Useful as an atomic preflight in a route.
     function requireRoutable(address pool) external view {
         if (!isRoutable(pool)) revert PoolNotRoutable();
     }
 
-    /// @notice Set the policy for one canonical factory pool.
-    /// @dev `Approved` is meaningful only for hooked pools. Setting `Blocked`
-    ///      over an approval discards it; restoring a hooked pool therefore
-    ///      requires setting `Approved`, not merely `Default`.
+    /// @notice Set the policy for one factory pool.
+    /// @dev `Approved` is valid only for hooked pools. A blocked hooked pool
+    ///      must be explicitly approved again before it becomes routable.
     function setPoolPolicy(address pool, Policy newPolicy) external onlyOwner {
         if (!factory.isPool(pool)) revert NotFactoryPool();
         if (newPolicy == Policy.Approved && IPrecisionPoolPolicyView(pool).hook() == address(0)) {
@@ -93,8 +77,8 @@ contract PrecisionPoolPolicy is Ownable {
         emit PoolPolicySet(pool, oldPolicy, newPolicy);
     }
 
-    /// @dev A routing policy must retain an accountable owner so compromised
-    ///      or mutable hooked pools can always be blocked.
+    /// @dev Prevents explicit zero-owner renunciation. Prefer ownership
+    ///      handover for later governance transfers.
     function renounceOwnership() public payable override onlyOwner {
         revert RenounceDisabled();
     }

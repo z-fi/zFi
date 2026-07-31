@@ -321,7 +321,7 @@ contract PrecisionPoolTest is Test {
     function test_UntrustedExecutorCannotSpendFactoryTokenDust() public {
         usdc.mint(address(factory), 5_000e6);
         vm.expectRevert(PrecisionPoolFactory.NotExecutor.selector);
-        factory.executePrefundedSwap(address(pool), address(usdc), 5_000e6, 0, trader);
+        factory.executePrefundedSwap(address(pool), trader, address(usdc), 5_000e6, 0, trader);
     }
 
     function test_PublicExecutorCannotSpendFactoryDustWithoutAFreshCheckpoint() public {
@@ -337,7 +337,7 @@ contract PrecisionPoolTest is Test {
         uint256 dust = 5_000e6;
         usdc.mint(address(securedFactory), dust);
         bytes memory settlement = abi.encodeCall(
-            PrecisionPoolFactory.executePrefundedSwap, (securedPool, address(usdc), dust, uint256(0), trader)
+            PrecisionPoolFactory.executePrefundedSwap, (securedPool, trader, address(usdc), dust, uint256(0), trader)
         );
 
         // Anyone can use the public executor, but old factory balances are not
@@ -1192,6 +1192,54 @@ contract PrecisionPoolTest is Test {
 
         // And a holder of nothing sees nothing.
         assertEq(l.positionsOf(address(0xBEEF11), 0, 100).length, 0);
+    }
+
+    /// @dev Guards the precomputed `_constantNameHash`. A wrong constant is
+    /// invisible to any test that builds its digest from DOMAIN_SEPARATOR(),
+    /// because both sides would then share the same wrong value. Only an
+    /// external signer breaks - a wallet derives the domain from the name
+    /// STRING per EIP-712 - so the domain is rebuilt from "Precision LP" here
+    /// and a real signature is checked against it.
+    function test_ConstantNameHashMatchesTheActualName() public {
+        bytes32 rebuilt = keccak256(
+            abi.encode(
+                keccak256(
+                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                ),
+                keccak256(bytes(pool.name())),
+                keccak256("1"),
+                block.chainid,
+                address(pool)
+            )
+        );
+        assertEq(rebuilt, pool.DOMAIN_SEPARATOR(), "constant disagrees with name()");
+
+        // And a signature built that way is actually accepted, so the constant
+        // is right in use and not merely arithmetically equal.
+        (address signer, uint256 pk) = makeAddrAndKey("permitSigner");
+        address spender = address(0x5AFE);
+        uint256 deadline = block.timestamp + 1 days;
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                rebuilt,
+                keccak256(
+                    abi.encode(
+                        keccak256(
+                            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                        ),
+                        signer,
+                        spender,
+                        uint256(777),
+                        pool.nonces(signer),
+                        deadline
+                    )
+                )
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 sg) = vm.sign(pk, digest);
+        pool.permit(signer, spender, 777, deadline, v, r, sg);
+        assertEq(pool.allowance(signer, spender), 777, "external signature accepted");
     }
 
     // ------------------------------------------------------------- fee drift

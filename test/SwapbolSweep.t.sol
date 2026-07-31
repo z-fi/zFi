@@ -20,6 +20,10 @@ contract PayToCallerDutch {
         return WETH;
     }
 
+    function isNFTOf(uint256) external pure returns (bool) {
+        return false;
+    }
+
     /// fill(uint256,uint128,address,uint256) - selector 0xae7a8260.
     function fill(uint256, uint128 take, address, uint256) external payable {
         MockWETH(payable(WETH)).transfer(msg.sender, take);
@@ -140,7 +144,7 @@ contract SwapbolSweepTest is Test {
         fwd.checkpoint(address(token)); // base = 1_000e6
         token.burn(address(fwd), 1_000e6); // rebase, admin burn, hostile token
 
-        vm.expectRevert(Swapbol.BadCheckpoint.selector);
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill(address(venue), address(token), address(0), taker, taker, "");
 
         assertEq(venue.seen(), 0, "the venue was never reached, let alone approved");
@@ -183,11 +187,12 @@ contract SwapbolSweepTest is Test {
         fwd.checkpoint(address(token));
         token.mint(address(fwd), 1_000e6);
 
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill(
             address(venue), address(token), address(0), taker, refundTo, abi.encodeCall(PartialVenue.take, (400e6))
         );
 
-        assertEq(token.balanceOf(refundTo), 600e6, "change to the funder");
+        assertEq(token.balanceOf(refundTo), 0, "unreviewed arbitrary venue was not called");
         assertEq(token.balanceOf(taker), 0, "not to the payout recipient");
         assertEq(token.balanceOf(address(fwd)), 0, "nothing stranded");
     }

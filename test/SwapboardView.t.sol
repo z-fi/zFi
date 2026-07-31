@@ -569,7 +569,7 @@ contract SwapboardViewV2Test is Test {
 
         tokenB.mint(address(this), fills[0].payIn);
         tokenB.approve(address(board), fills[0].payIn);
-        board.fillOrder(fills[0].orderId, block.timestamp, fills[0].payIn, address(this));
+        board.fillOrder(fills[0].orderId, block.timestamp, fills[0].payIn, 0, address(this));
 
         assertEq(tokenB.balanceOf(maker), bookIn, "maker receives the reported input");
         assertEq(tokenA.balanceOf(address(this)), bookOut, "taker receives the reported output");

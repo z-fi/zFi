@@ -69,9 +69,15 @@ fs_permissions = [
 # and the lens is the one contract in this repo where that trade is backwards — its own
 # header says it is "intended for `eth_call` only — not meant to be called on-chain in
 # transactions", so runtime gas is nearly free while size is the binding constraint.
-# At 200 runs the current source compiles to 24,030 B, leaving 546 B below
+# At 200 runs the current source compiles to 24,048 B, leaving 528 B below
 # EIP-170 with every feature intact. Treat that margin as a release invariant:
 # any lens edit must be followed by an explicit deployed-bytecode size check.
+#
+# MEASURE WITH `forge build --force`. A plain `forge test` can leave `out/`
+# holding artifacts compiled WITHOUT these restrictions - SwapboardView reads
+# 28,608 B that way and 24,048 B for real. A size check against stale artifacts
+# will report a deployable contract as over EIP-170, or worse, an over-limit one
+# as fine. The restriction below is only meaningful alongside a forced build.
 #
 # This is expressed as a per-file compiler profile rather than a whole-repo `[profile.*]`
 # so a plain `forge build` produces the deployable artifact. A separate profile would
@@ -105,6 +111,15 @@ max_optimizer_runs = 200
 # the factory OR the pool must be followed by a deployed-size check.
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionPoolFactory.sol"
+max_optimizer_runs = 200
+
+# Swapboard reached ~437 B under EIP-170 after gaining replaceOrder, the push
+# receiver and ERC-721 positions. Its per-call gas is dominated by storage and
+# transfers rather than by inlining, and the same restriction on the pool
+# factory measured LOWER runtime gas, not higher. Same release invariant as the
+# lens: any edit here must be followed by a deployed-size check.
+[[profile.default.compilation_restrictions]]
+paths = "src/Swapboard.sol"
 max_optimizer_runs = 200
 
 # NOTE: zQuoter deliberately does NOT get the same treatment, even though it has the same

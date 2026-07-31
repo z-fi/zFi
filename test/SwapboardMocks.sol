@@ -49,6 +49,18 @@ contract MockWETH is MockERC20("WETH", 18) {
     }
 }
 
+/// @dev Burns the requested WETH but returns one wei too little as native ETH.
+contract ShortNativeWETH is MockERC20("SHORT_NATIVE_WETH", 18) {
+    function deposit() external payable {
+        balanceOf[msg.sender] += msg.value;
+    }
+
+    function withdraw(uint256 amount) external {
+        balanceOf[msg.sender] -= amount;
+        payable(msg.sender).transfer(amount - 1);
+    }
+}
+
 contract MockNFT {
     mapping(uint256 => address) public ownerOf;
     mapping(address => mapping(address => bool)) public isApprovedForAll;
@@ -68,6 +80,7 @@ contract MockNFT {
         ownerOf[id] = t;
     }
 }
+
 
 /// @dev Alias kept so tests can name the 721 either way.
 contract MockERC721 is MockNFT {}
@@ -94,6 +107,26 @@ contract LyingERC721 {
     function setApprovalForAll(address, bool) external {}
 
     function transferFrom(address, address, uint256) external {}
+}
+
+/// @dev Accepts deposits but no-ops when the board tries to return an NFT.
+contract ReturnLyingERC721 {
+    mapping(uint256 => address) public ownerOf;
+    address public immutable blockedFrom;
+
+    constructor(address _blockedFrom) {
+        blockedFrom = _blockedFrom;
+    }
+
+    function mint(address to, uint256 id) external {
+        ownerOf[id] = to;
+    }
+
+    function transferFrom(address from, address to, uint256 id) external {
+        require(ownerOf[id] == from, "not owner");
+        if (from == blockedFrom) return;
+        ownerOf[id] = to;
+    }
 }
 
 /// @dev An ERC-721 written with an `if` where the standard requires a `require`:
@@ -245,7 +278,9 @@ contract EvilERC20 is MockERC20("EVIL", 18) {
         if (armed) {
             armed = false;
             (bool ok,) = board.call(
-                abi.encodeWithSignature("fillOrder(uint256,uint256,uint256,address)", target, 0, 0, address(0))
+                abi.encodeWithSignature(
+                    "fillOrder(uint256,uint256,uint256,uint256,address)", target, 0, 0, 0, address(0)
+                )
             );
             require(!ok, "REENTERED");
         }

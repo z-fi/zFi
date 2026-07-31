@@ -4,63 +4,20 @@ pragma solidity ^0.8.36;
 import {FixedPointMathLib} from "../lib/solady/src/utils/FixedPointMathLib.sol";
 
 /// @title SwapboardView
-/// @notice Read-only helper that merges active orders from both Swapboard
-///         contracts into one array, with token metadata, in a single call.
+/// @notice Read-only discovery, metadata, and hybrid planning for v1/v2 Swapboard
+///         books and Dutchboard listings.
 ///
-/// THE TWO BOARDS
-///   v1 — the original board. All-or-nothing fills. Order is 6 static fields.
-///   v2 — the current board: partial fills, expiry, NFTs, and private orders.
-///        Order is 11 static fields. This is the only board this source creates
-///        orders on.
+/// @dev v1 orders use six static fields and are all-or-nothing. v2 uses eleven
+///      fields for partial fills, expiry, NFTs, and private fills. Separate
+///      interfaces keep the two encodings from being confused.
 ///
-/// WHY ONE INTERFACE PER BOARD
-///   v2 appended fields to Order, and every field is static, so getOrders returns
-///   a flat sequence of words whose width differs per board — 6 against 11 per
-///   order. Decoding one with the other's struct either reverts or shifts fields
-///   into plausible-looking garbage. Each board therefore gets its own interface
-///   and converter; the caller states which address is which rather than the lens
-///   guessing.
+/// Active v2 orders remain stored after expiry until swept, so active discovery
+/// excludes expired orders and `getExpiredOrders` exposes them for cleanup.
+/// Either board address may be address(0) to skip it.
 ///
-/// ACTIVE IS NOT FILLABLE
-///   On v2 an order stays `active` after it expires, until someone sweeps it with
-///   cancelExpired. Filtering on `active` alone would list orders whose fills
-///   revert with OrderExpired. getAllActiveOrders therefore returns only fillable
-///   orders — active and not expired — while getExpiredOrders returns the
-///   sweepable ones, so escrow sitting behind an absent maker stays discoverable
-///   instead of being hidden by the same filter that protects takers.
-///
-/// COMPOSING WITH v1
-///   v1 is not migrated. Its resting orders are real escrow that anyone can still
-///   take and its makers can still cancel, so the UI routes all creation to v2
-///   while continuing to discover and fill everything already resting on v1.
-///   Dropping v1 from the lens would not retire it, it would only hide it from
-///   the one UI positioned to clear it.
-///
-///   Either board may be passed as address(0) to skip it, which lets a caller
-///   that wants only the current book ask for exactly that.
-///
-/// PLANNING A SPLIT
-///   planHybrid and planHybridOut work out how much of a swap the book can beat
-///   an AMM on, in either direction, across both boards at once. They do not
-///   quote the AMM: the caller supplies that baseline, so the lens stays
-///   independent of any particular quoter. Each returned leg names the board it
-///   settles against, so a plan may span the two.
-///
-///   Exact-in maximises output against an input budget; exact-out minimises
-///   input against an output target. These are not the same search read
-///   backwards - the sort key, the threshold and the direction of "better" all
-///   invert - so they are separate matchers rather than one with a flag.
-///
-///   Both take a single baseline struck over the WHOLE amount, which is an
-///   average across the AMM's price impact rather than the marginal rate that
-///   actually prices the remainder. See planHybrid for what that costs and the
-///   two-round fix; previewPlanAtRate and previewPlanOutAtRate are the second
-///   round.
-///
-/// @dev Intended for `eth_call` only — not meant to be called on-chain in
-///      transactions. The unpaged scans are unbounded by design; use the paged
-///      variants against large books, and candidatesFrom rather than planHybrid
-///      or candidates when a UI is quoting repeatedly.
+/// `planHybrid` and `planHybridOut` compare book legs with a caller-supplied AMM
+/// baseline. Exact-in maximizes output; exact-out minimizes input. These helpers
+/// are intended for `eth_call`; use paged discovery for large books.
 contract SwapboardView {
     /// @notice One leg of a hybrid route: take `payIn` of tokenIn to this order
     ///         and receive `getOut` of tokenOut.
@@ -76,18 +33,11 @@ contract SwapboardView {
     /// this; discovery may scan a deeper book to retain its best candidates.
     uint256 internal constant MAX_CANDIDATES = 256;
 
-    /// @dev Ids per getOrders call while WALKING a book - _walk and _collectBest
-    /// only. Bounds the returndata of any single read there; the walk continues
-    /// across as many windows as it needs.
-    ///
-    /// The display endpoints do not window. _scanDown and _readBoardPaged issue
-    /// one read of up to `maxScan` ids, so on those paths the caller's `maxScan`
-    /// is the only bound on returndata.
+    /// @dev Ids per `getOrders` call while walking a book. Display reads use the
+    /// caller's `maxScan` directly.
     uint256 internal constant SCAN_WINDOW = 256;
 
-    /// @dev Metadata is presentation-only and every listed token is untrusted.
-    /// Bound both execution and returndata so a hostile symbol() cannot burn the
-    /// whole eth_call or force an unbounded memory copy for every order page.
+    /// @dev Bound untrusted metadata calls and returned string sizes.
     uint256 internal constant META_GAS = 50_000;
     uint256 internal constant MAX_SYMBOL_BYTES = 64;
 
@@ -214,66 +164,25 @@ contract SwapboardView {
         return _scanDown(boardV2, Board.V2, cursor, limit, maxScan, tokenA, tokenB);
     }
 
-    /// @notice Plan how much of a swap should go to the book rather than an AMM.
+    /// @notice Plan a book/AMM split for an exact-input swap.
+    /// @dev `baselineOut` is a full-size AMM quote. The planner uses its average
+    ///      rate as both the floor and the remainder estimate, so `worthwhile` is
+    ///      a heuristic screen. Use `previewPlanAtRate` with a remainder quote for
+    ///      a second pass.
     ///
-    /// @dev PRICING THE REMAINDER. `baselineOut` is what the AMM pays for the
-    /// WHOLE `amountIn`, so `baselineOut / amountIn` is an average rate struck
-    /// across the full price impact. Scoring a plan's untouched remainder at
-    /// that average understates it, because a smaller trade slips less, which
-    /// biases the matcher toward claiming more of the input for the book than
-    /// it should. Using it as the take/skip floor errs the other way: the true
-    /// opportunity cost of one more book leg is the AMM's MARGINAL rate at the
-    /// tail of the trade, which is worse than its average, so orders priced
-    /// between the two are profitable but skipped here.
-    ///
-    /// NEITHER ERROR CAN SELECT A LOSING LEG, which is what makes the
-    /// approximation safe to ship. Every leg has to strictly beat the floor, and
-    /// the average rate is a HIGHER bar than the marginal rate it stands in for,
-    /// so any leg clearing it also clears the AMM's true cost at the tail. The
-    /// remainder bias can shift how much gets allocated among legs that are all
-    /// profitable; it cannot route to one that is not. Both error modes leave
-    /// value unclaimed rather than trade badly - as does the matcher's own
-    /// heuristic, which is rate-greedy plus one forced all-or-nothing block and
-    /// so cannot find a split needing two such blocks to displace better rates.
-    ///
-    /// Both errors vanish as the remainder approaches `amountIn`, and both are
-    /// fixed the same way - quote the actual remainder and re-plan against it.
-    /// A caller that wants the accurate split reads the book once with
-    /// `candidatesFrom`, plans, quotes the remainder that plan leaves, and calls
-    /// `previewPlanAtRate` with `ammOut(remainder) * 1e18 / remainder`. Two
-    /// rounds converge in practice. This entry point remains the single-shot
-    /// approximation, and its `worthwhile` is a screen rather than a verdict.
-    ///
-    /// @param boardV1     Original all-or-nothing board. address(0) to skip.
-    /// @param boardV2     Current extended board (partialFill + expiry). address(0) to
-    ///                    skip. Both are planned over together; each fill names
-    ///                    its own board, so the caller can route a split that
-    ///                    spans the two.
-    /// @param tokenIn     What the taker pays.
-    /// @param tokenOut    What the taker wants.
-    /// @param amountIn    Total the taker is spending.
-    /// @param taker       Whose fills these are; private orders for others are
-    ///                    skipped, and the caller must pass the real taker or
-    ///                    the plan will include orders they cannot execute.
-    /// @param baselineOut What a pure AMM route pays for the whole `amountIn`.
-    ///                    Supplied by the caller so this stays independent of
-    ///                    any particular quoter.
-    /// @param maxScan     Ids to inspect per board, newest first. 0 scans each
-    ///                    book in full. A cap here bounds work but makes the
-    ///                    scan newest-N rather than best-N: a keenly priced
-    ///                    order that has simply been resting a while ages out
-    ///                    of consideration, which is the opposite of what a
-    ///                    good limit order deserves. Cap only when a book has
-    ///                    grown large enough that the full read will not
-    ///                    return.
-    /// @return fills      Legs to route through the book, best rate first.
-    /// @return bookIn     tokenIn consumed by those legs.
-    /// @return bookOut    tokenOut they produce.
-    /// @return ammIn      tokenIn left for the AMM.
-    /// @return worthwhile True only if the split can beat `baselineOut`. The
-    ///                    caller must honour this: when false the book legs are
-    ///                    still returned for display, but routing through them
-    ///                    would be worse than doing nothing.
+    /// @param boardV1 Legacy all-or-nothing board; address(0) to skip.
+    /// @param boardV2 Current board; address(0) to skip.
+    /// @param tokenIn Asset paid by the taker.
+    /// @param tokenOut Asset received by the taker.
+    /// @param amountIn Total input budget.
+    /// @param taker Address used to filter private orders.
+    /// @param baselineOut AMM output for the full input budget.
+    /// @param maxScan Maximum ids scanned per board; zero scans the full books.
+    /// @return fills Book legs, best rate first.
+    /// @return bookIn Input used by the book.
+    /// @return bookOut Output from the book.
+    /// @return ammIn Input left for the AMM.
+    /// @return worthwhile Whether the selected book legs beat the baseline screen.
     function planHybrid(
         address boardV1,
         address boardV2,
@@ -287,20 +196,14 @@ contract SwapboardView {
         OrderView[] memory c = _candidates(boardV1, boardV2, tokenIn, tokenOut, taker, maxScan, amountIn, false);
         (fills, bookIn, bookOut) = _plan(c, amountIn, _rate(baselineOut, amountIn));
         ammIn = amountIn - bookIn;
-        // Compare totals, not marginal rates: the book legs are only worth
-        // taking if what they pay PLUS what the AMM still pays on the smaller
-        // remainder beats routing everything through the AMM. The caller
-        // supplies the remainder quote, so the final word is theirs; this says
-        // only that the book beat the baseline on the portion it claimed.
+        // This compares the selected book rate with the full-size AMM baseline;
+        // callers should treat it as a screen, not a remainder quote.
         worthwhile =
             bookOut != 0 && (bookIn == 0 || FixedPointMathLib.fullMulDiv(bookOut, amountIn, bookIn) > baselineOut);
     }
 
-    /// @notice Plan a split over a book the caller already holds, without
-    ///         re-reading the chain. Same matcher as planHybrid, so a client can
-    ///         fetch the book once, then re-plan locally as the amount changes.
-    /// @dev Candidates must already be direction-filtered and fillable; this
-    ///      does not re-check them.
+    /// @notice Plan over a caller-supplied, direction-filtered fillable book.
+    /// @dev Does not re-read or validate the supplied rows.
     function previewPlan(OrderView[] calldata book, uint256 amountIn, uint256 baselineOut)
         external
         pure
@@ -309,12 +212,7 @@ contract SwapboardView {
         return _plan(_copy(book), amountIn, _rate(baselineOut, amountIn));
     }
 
-    /// @notice previewPlan against an explicit floor rate rather than a
-    ///         full-size quote. This is the second round of the iteration
-    ///         described on planHybrid: pass the rate the AMM actually pays on
-    ///         the remainder the first plan left, and the take/skip floor and
-    ///         the remainder's valuation both stop being averages struck over
-    ///         an amount no longer being routed there.
+    /// @notice Plan over a caller-supplied book and explicit AMM floor rate.
     /// @param floorRateWad tokenOut per tokenIn, WAD. Orders at or below this
     ///        are skipped, and the untouched remainder is valued at it.
     function previewPlanAtRate(OrderView[] calldata book, uint256 amountIn, uint256 floorRateWad)
@@ -325,12 +223,8 @@ contract SwapboardView {
         return _plan(_copy(book), amountIn, floorRateWad);
     }
 
-    /// @notice The orders a plan would consider, already direction-filtered and
-    ///         fillable by `taker`, from both books in one call.
-    /// @dev Convenience for a small board or a one-off. It walks both books
-    /// whole, so it carries exactly the cost described on planHybrid and is not
-    /// what a UI should call on a board of any size - use candidatesFrom, which
-    /// bounds each call and can be run concurrently.
+    /// @notice Return direction-filtered, fillable candidates from both books.
+    /// @dev Scans each book in full; use `candidatesFrom` for bounded pages.
     function candidates(
         address boardV1,
         address boardV2,
@@ -342,30 +236,9 @@ contract SwapboardView {
         return _candidates(boardV1, boardV2, tokenIn, tokenOut, taker, maxScan, type(uint256).max, false);
     }
 
-    /// @notice One bounded window of candidates, newest id first. Pass cursor 0
-    ///         to start at the newest order and keep passing the returned
-    ///         cursor until it comes back 0.
-    ///
-    /// @dev THIS IS THE ONE A UI SHOULD CALL. planHybrid walks both books on
-    /// every invocation, and that walk is priced by the size of the whole board
-    /// rather than the depth of the market being quoted: the board has no
-    /// per-pair index, so ids belonging to other pairs are still loaded and
-    /// discarded. Measured at roughly 8.5k gas per id scanned, a board holding
-    /// a few thousand orders puts a single plan past the call budget of an
-    /// ordinary endpoint, whatever the pair being quoted.
-    ///
-    /// So a quote per keystroke cannot be a full-book scan. Walk the book once
-    /// with this - windows are independent, so they can run concurrently - hold
-    /// the candidates client-side, and re-plan locally with previewPlanAtRate
-    /// as the amount and the remainder quote move. Re-walk on a timer, not on
-    /// input. planHybrid remains correct and is the right call for a small
-    /// board or a one-off; it is not the right call on every render.
-    ///
-    /// One board per call, each with its own cursor, matching
-    /// getAllActiveOrdersPaged: the two books have unrelated id spaces and a
-    /// shared cursor could only advance at the pace of the slower one.
-    /// @param isV2 Which decoder to use. Passing this wrong misreads the
-    ///        board's fields as plausible garbage rather than reverting.
+    /// @notice Return one bounded, newest-first candidate window.
+    /// @dev Pass the returned cursor to continue. `isV2` selects the order
+    ///      decoder, so it must match the supplied board.
     function candidatesFrom(
         address board,
         bool isV2,
@@ -394,24 +267,10 @@ contract SwapboardView {
 
     // ------------------------------------------------------------- EXACT OUT
 
-    /// @notice Exact-out twin of planHybrid: how much of a fixed OUTPUT should
-    ///         be bought from the book rather than an AMM, spending as little
-    ///         tokenIn as possible.
-    ///
-    /// @dev Not the exact-in plan with its arguments swapped. There the budget
-    /// is input and the thing maximised is output; here the budget is output
-    /// and the thing minimised is input. So the sort key inverts to cost per
-    /// unit out and ascends, the threshold is a ceiling rather than a floor,
-    /// and a plan wins by scoring LOWER.
-    ///
-    /// An all-or-nothing block paying more than is still wanted is skipped, not
-    /// taken and overshot: the caller named an exact amount out and would be
-    /// billed for the excess.
-    ///
-    /// `baselineIn` of 0 means no AMM to fall back on, which opens the ceiling
-    /// rather than closing it - the opposite of what a 0 floor means on the
-    /// exact-in side, because there the absent alternative is worth nothing and
-    /// here it costs everything.
+    /// @notice Plan a book/AMM split for an exact-output swap.
+    /// @dev Orders are ranked by input cost per output unit. All-or-nothing rows
+    ///      that overshoot the target are skipped; `baselineIn == 0` means no AMM
+    ///      fallback.
     /// @param baselineIn What a pure AMM route COSTS for the whole `amountOut`.
     /// @return fills      Legs to route through the book, cheapest first.
     /// @return bookOut    tokenOut those legs deliver.
@@ -447,7 +306,7 @@ contract SwapboardView {
         worthwhile = bookOut != 0 && (baselineIn == 0 ? ammOut == 0 : _cost(bookIn, ammOut, ceilRate) < baselineIn);
     }
 
-    /// @notice Exact-out plan over a book the caller already holds.
+    /// @notice Exact-out plan over a caller-supplied book.
     function previewPlanOut(OrderView[] calldata book, uint256 amountOut, uint256 baselineIn)
         external
         pure
@@ -456,10 +315,7 @@ contract SwapboardView {
         return _planOut(_copy(book), amountOut, _ceil(baselineIn, amountOut));
     }
 
-    /// @notice Exact-out plan against an explicit cost ceiling - the second
-    ///         round of the same iteration previewPlanAtRate serves, quoting
-    ///         what the AMM actually charges for the remainder the first plan
-    ///         left rather than an average struck over the whole amount.
+    /// @notice Exact-out plan against an explicit AMM cost ceiling.
     /// @param ceilRateWad tokenIn per tokenOut, WAD. Orders at or above this
     ///        cost are skipped. type(uint256).max means no AMM alternative.
     function previewPlanOutAtRate(OrderView[] calldata book, uint256 amountOut, uint256 ceilRateWad)
@@ -620,17 +476,9 @@ contract SwapboardView {
         }
     }
 
-    /// @dev _plan sorts in place, so calldata has to be copied to memory first.
-    ///
-    /// Structurally unplannable rows are dropped here rather than trusted. The
-    /// preview entry points are the documented way to re-plan a book the client
-    /// already holds, and the obvious way to assemble that book - merging the
-    /// display endpoints, which do not apply _usable - can hand this NFT rows.
-    /// On an NFT leg the amount IS a tokenId, so scoring it as a quantity makes
-    /// a high tokenId look like extraordinary depth, and a tokenId of 0 on the
-    /// B leg collides with the free-row sentinel. Direction and taker are still
-    /// the caller's to filter: this has no tokenIn/tokenOut/taker to check them
-    /// against.
+    /// @dev Copy calldata because the planner sorts in place. Drop NFT and zero-A
+    /// rows; callers of preview methods must still provide the right direction
+    /// and counterparty.
     function _copy(OrderView[] calldata book) internal pure returns (OrderView[] memory c) {
         OrderView[] memory buf = new OrderView[](book.length);
         uint256 k;
@@ -645,17 +493,7 @@ contract SwapboardView {
         }
     }
 
-    /// @dev The free-row sentinel: a Dutchboard listing whose schedule has
-    /// decayed to a zero price, fillable for a maxCost of 0.
-    ///
-    /// The NFT terms are load-bearing, not defensive. `amountB == 0` alone is
-    /// ambiguous - on a Swapboard order with `nftB` set, `amountB` is a tokenId,
-    /// and tokenId 0 is a legitimate NFT that Swapboard deliberately permits.
-    /// Reading that row as free would rank it above every real order and emit a
-    /// leg paying 0 for the whole of `amountA`. _usable already rejects NFT rows
-    /// on every discovery path and _copy now does the same for supplied books;
-    /// qualifying the sentinel itself keeps the planners correct on any future
-    /// path that forgets to.
+    /// @dev A zero-price Dutchboard ERC-20 row is free; NFT tokenId 0 is not.
     function _freeRow(OrderView memory o) internal pure returns (bool) {
         return o.amountB == 0 && !o.nftA && !o.nftB;
     }
@@ -665,17 +503,8 @@ contract SwapboardView {
         return FixedPointMathLib.fullMulDiv(out, 1e18, inAmt);
     }
 
-    /// @dev Orders this taker could actually fill, in the right DIRECTION: the
-    /// maker must be selling what the taker wants and asking for what the taker
-    /// has. Matching on the pair alone would surface the other side of the
-    /// market, which is never fillable by this taker.
-    ///
-    /// Both books are walked in full by default, in windows, rather than taking
-    /// one newest-N slice: a resting order does not get worse with age, and
-    /// slicing by id would hide the best price in the book for no reason other
-    /// than that it was placed early. Metadata is deliberately not attached -
-    /// planning needs amounts and tokens, not symbols, and the per-token reads
-    /// are what make a full-book scan expensive.
+    /// @dev Keep only rows in the requested direction, fillable by `taker`, and
+    /// compatible with the planner's fungible-only assumptions.
     function _candidates(
         address boardV1,
         address boardV2,
@@ -702,10 +531,7 @@ contract SwapboardView {
         }
     }
 
-    /// @dev Scans this board (within maxScan) and retains only the best global
-    /// candidates in `buf`. The planner is intentionally bounded to 256 inputs,
-    /// but that cap must constrain the matcher rather than privilege the newest
-    /// orders from whichever board happens to be visited first.
+    /// @dev Scan one board and retain the best global candidates in `buf`.
     function _collectBest(
         address board,
         Board v,
@@ -760,27 +586,8 @@ contract SwapboardView {
         return k;
     }
 
-    /// @dev What retaining this row is worth to a plan bounded by `capacity` -
-    /// its rate multiplied by the depth it can actually use.
-    ///
-    /// Ranking the bounded candidate set on RATE ALONE let dust crowd out
-    /// liquidity. 256 orders each resting one wei at a keen price are 256 of the
-    /// best rates in the book, so they evicted every row with real depth, and
-    /// planHybrid then returned a set of dust legs while routing effectively the
-    /// whole trade to the AMM. The legs still each beat the floor - this was
-    /// never a path to a losing fill - but the book was hidden for the price of
-    /// dust escrow and the gas to rest it.
-    ///
-    /// Weighting by usable depth prices that attack out: a row can only displace
-    /// another by offering more OUTPUT toward this request, so a wei of escrow
-    /// contributes a wei of value however keenly it is priced. With no bound on
-    /// the request (`candidates`, capacity = max) the budget is unbounded, so
-    /// coverage is the row's whole size and this ranks by total output.
-    ///
-    /// Overflow is only reachable on the exact-out side, where coverage is an
-    /// output amount and the ratio may be arbitrary. It saturates to 0 - the
-    /// same "unrepresentable, sorts last" convention the planners already use -
-    /// rather than reverting and taking the whole read down.
+    /// @dev Rank a row by its contribution within `capacity`. Saturate
+    ///      unrepresentable exact-out values instead of reverting.
     function _valueOf(OrderView memory o, uint256 capacity, bool exactOut) internal pure returns (uint256) {
         uint256 a = o.amountA;
         uint256 b = o.amountB;
@@ -803,15 +610,8 @@ contract SwapboardView {
         }
     }
 
-    /// @dev Walks ids down from `hi` (exclusive) to `lo`, appending usable
-    /// orders. Returns the new count and where it stopped - which is `lo` on a
-    /// complete walk, or higher if the buffer filled first.
-    ///
-    /// Reads go out in windows so no single getOrders returns an unbounded
-    /// blob, but the WALK itself is what costs: every id is loaded whether or
-    /// not it is the caller's pair, because the board keeps no per-pair index.
-    /// That is the scaling term, and it is set by the size of the whole book
-    /// rather than the depth of one market.
+    /// @dev Walk ids downward in bounded windows, appending usable orders and
+    ///      returning the next cursor when the candidate buffer fills.
     function _walk(
         address board,
         Board v,
@@ -857,24 +657,9 @@ contract SwapboardView {
         return o.counterparty == address(0) || o.counterparty == taker;
     }
 
-    /// @dev Rate-greedy alone is not optimal once all-or-nothing orders are in
-    /// play: taking a better-priced partial first can leave too little room for
-    /// a large AON block that would have been worth more in total. With
-    /// remainder 100 and an AMM paying 0.95, a partial at 1.10 for 50 scores
-    /// 102.5, while a single AON at 1.05 for 100 scores 105.
-    ///
-    /// So several plans are built and the best is kept: the plain rate-greedy,
-    /// plus one plan per AON order that greedy could not fit, seeded with that
-    /// order taken first. Plans are scored on total value - what the book pays
-    /// plus what the untouched remainder would fetch at the AMM's rate - so a
-    /// plan that claims less input is not penalised for it.
-    ///
-    /// This is a heuristic, not an optimum. Seeding one AON block at a time
-    /// will not find a pair that only both fit when neither greedy partial is
-    /// taken first - that is a knapsack, and not worth chasing here. The cost
-    /// is O(n^2) in the candidate count, which MAX_CANDIDATES exists to bound;
-    /// measured at 256 candidates the whole plan is around 4M gas, comfortably
-    /// inside an eth_call but not free.
+    /// @dev Use a rate-greedy plan plus one seeded plan per candidate to account
+    ///      for all-or-nothing rows. This is heuristic and O(n^2), bounded by
+    ///      `MAX_CANDIDATES`.
     function _plan(OrderView[] memory c, uint256 amountIn, uint256 floorRate)
         internal
         pure
@@ -1157,40 +942,10 @@ contract SwapboardView {
         }
     }
 
-    /// @dev Dutchboard rows, converted into the common view shape.
-    ///
-    /// A Dutchboard price MOVES. `amountB` here is the cost of the whole remainder AT
-    /// THIS BLOCK, derived from the snapshot's `price` rather than re-read per id, so a
-    /// row is a quote with the same lifetime as the `eth_call` that produced it. That is
-    /// sound for a lens documented as eth_call-only, and it fails safe: the schedule only
-    /// decays, so a plan executed a few blocks later pays LESS than it quoted, never
-    /// more. A UI caching rows should still expire Dutchboard ones sooner than Swapboard
-    /// ones, which do not move at all.
-    ///
-    /// Cost is linear in `take` — `ceil(price * take / initial)` — exactly like a
-    /// Swapboard partial fill, so the matcher's proportional arithmetic already produces
-    /// correct legs and needs no special case. Only the FILL ENCODING differs:
-    ///
-    ///   Swapboard   fillOrder(id, deadline, payIn, to)     <- taker names what they PAY
-    ///   Dutchboard  fill(id, getOut, to, maxCost)          <- taker names what they GET
-    ///
-    /// so a Fill leg against a Dutchboard address is encoded with `take = getOut` and
-    /// `maxCost = payIn`. That bound is always sufficient: the matcher floors `getOut`
-    /// from `payIn`, and flooring take can only lower `ceil(price * take / initial)`
-    /// below `payIn`.
-    ///
-    /// Two Dutchboard shapes are deliberately not surfaced:
-    ///   - expired rows do not exist. A lot past its window is still fillable, flat at
-    ///     `endPrice`, so `wantExpired` has no meaning and returns nothing.
-    ///   - NFT BUNDLES are skipped. `nftA` means `amountA` IS a tokenId, and a bundle of
-    ///     several has no faithful single-token representation; a one-NFT lot converts
-    ///     exactly and is surfaced. Bundles remain discoverable through the auction UI.
-    ///
-    /// A zero-price ERC-20 row IS surfaced. Dutchboard explicitly permits an
-    /// endPrice of zero, and once the schedule reaches it the remainder is
-    /// fillable for maxCost zero. The planners recognize amountB == 0 as that
-    /// free-row sentinel: exact-in takes the whole lot without consuming input,
-    /// while exact-out names only the output still needed.
+    /// @dev Convert Dutchboard rows into the common view shape. `amountB` is the
+    /// current cost of the full fungible remainder; the quote is valid only for
+    /// the call snapshot because the price decays. NFT bundles are skipped, while
+    /// single NFTs and zero-price ERC-20 rows are represented when fillable.
     function _fetchDutch(address board, uint256[] memory ids, bool wantExpired, address ta, address tb)
         internal
         view
@@ -1251,11 +1006,7 @@ contract SwapboardView {
         }
     }
 
-    /// @notice Fillable Dutchboard listings, newest id first, one bounded window at a
-    ///         time. The Dutchboard counterpart to `candidatesFrom`; merge the result
-    ///         with Swapboard candidates client-side and plan over the union with
-    ///         `previewPlanAtRate`, which takes the book as calldata and does not care
-    ///         which board a row came from.
+    /// @notice Fillable Dutchboard candidates, newest id first, in one bounded window.
     function dutchCandidatesFrom(
         address board,
         address tokenIn,
@@ -1302,17 +1053,12 @@ contract SwapboardView {
         return _scanDown(board, Board.DUTCH, cursor, limit, maxScan, address(0), address(0));
     }
 
-    /// @dev Must mirror Swapboard exactly: 0 never expires, and an order is
-    /// live AT its expiry (strictly greater, not >=). A mismatch here would
-    /// hide a fillable order, or offer a sweep that reverts.
+    /// @dev Match Swapboard's inclusive expiry boundary.
     function _isExpired(uint64 expiry) internal view returns (bool) {
         return expiry != 0 && block.timestamp > expiry;
     }
 
-    /// @dev Unordered match, so one query returns both sides of a market: an
-    /// order selling A for B and one selling B for A both count. A zero token
-    /// is a wildcard, so (A, 0) means "every order touching A" and (0, 0) is
-    /// no filter at all.
+    /// @dev Match either market direction; address(0) is a wildcard.
     function _pairMatch(address oa, address ob, address ta, address tb) internal pure returns (bool) {
         if (ta == address(0) && tb == address(0)) return true;
         if (tb == address(0)) return oa == ta || ob == ta;
@@ -1322,9 +1068,7 @@ contract SwapboardView {
 
     // ---- Token metadata ----
 
-    /// @dev One metadata read per distinct token rather than per order leg, then
-    /// applied back. Books concentrate in a handful of tokens, so this is what
-    /// keeps the single-call read affordable.
+    /// @dev Read metadata once per distinct token, then apply it to each row.
     function _withMeta(OrderView[] memory views) internal view returns (OrderView[] memory) {
         (address[] memory tokens, uint256 count) = _uniqueTokens(views);
         (string[] memory symbols, uint8[] memory decs) = _batchMeta(tokens, count);

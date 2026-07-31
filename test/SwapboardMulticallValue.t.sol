@@ -66,8 +66,8 @@ contract SwapboardMulticallValueTest is Test {
         assertEq(address(sb).balance, 0, "board should start empty");
 
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeCall(Swapboard.fillOrderWithEth, (id1, type(uint256).max, attacker));
-        calls[1] = abi.encodeCall(Swapboard.fillOrderWithEth, (id2, type(uint256).max, attacker));
+        calls[0] = abi.encodeCall(Swapboard.fillOrderWithEth, (id1, type(uint256).max, 0, attacker));
+        calls[1] = abi.encodeCall(Swapboard.fillOrderWithEth, (id2, type(uint256).max, 0, attacker));
 
         vm.deal(attacker, 1 ether);
         vm.prank(attacker);
@@ -88,8 +88,8 @@ contract SwapboardMulticallValueTest is Test {
         vm.startPrank(attacker);
         weth.approve(address(sb), 2 ether);
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeCall(Swapboard.fillOrder, (id1, type(uint256).max, 1 ether, attacker));
-        calls[1] = abi.encodeCall(Swapboard.fillOrder, (id2, type(uint256).max, 1 ether, attacker));
+        calls[0] = abi.encodeCall(Swapboard.fillOrder, (id1, type(uint256).max, 1 ether, 0, attacker));
+        calls[1] = abi.encodeCall(Swapboard.fillOrder, (id2, type(uint256).max, 1 ether, 0, attacker));
         sb.multicall(calls);
         vm.stopPrank();
 
@@ -116,8 +116,8 @@ contract SwapboardMulticallValueTest is Test {
         assertEq(address(sb).balance, 1 ether, "stray ETH resting");
 
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeCall(Swapboard.fillOrderWithEth, (id1, type(uint256).max, attacker));
-        calls[1] = abi.encodeCall(Swapboard.fillOrderWithEth, (id2, type(uint256).max, attacker));
+        calls[0] = abi.encodeCall(Swapboard.fillOrderWithEth, (id1, type(uint256).max, 0, attacker));
+        calls[1] = abi.encodeCall(Swapboard.fillOrderWithEth, (id2, type(uint256).max, 0, attacker));
 
         vm.deal(attacker, 1 ether);
         vm.prank(attacker);
@@ -133,7 +133,7 @@ contract SwapboardMulticallValueTest is Test {
         uint256 id1 = _makeOrder(maker1, 100e18, 1 ether);
         vm.deal(attacker, 1 ether);
         vm.prank(attacker);
-        sb.fillOrderWithEth{value: 1 ether}(id1, type(uint256).max, attacker);
+        sb.fillOrderWithEth{value: 1 ether}(id1, type(uint256).max, 0, attacker);
         assertEq(A.balanceOf(attacker), 100e18, "lot delivered");
         assertEq(weth.balanceOf(maker1), 1 ether, "maker paid");
     }

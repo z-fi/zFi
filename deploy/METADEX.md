@@ -40,11 +40,11 @@ receipt and runtime-code verification are recorded.
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
-| Replacement Swapboard | **NOT DEPLOYED** | `0x0000006c0fBc8CBAe822c41C9DC00956D0941e23` | `0x0000000000000000000000000000000000000000000000000000000000bb4ed7` | `0xe83076a3e283edfa1586be975dea40a97dc44d6ef63417455f67876390166de2` | 17,988 B | 17,708 B |
-| Dutchboard | **NOT DEPLOYED** | `0x000000b87444cAd0beb79545dcaE8b4508d48179` | `0x35fa7f853ac5d3e482cea32afdfc4d8e71cd14024b99128a08ad1e11b26525e8` | `0x4f5753ab664bcb2227f958a865f46cf5637c1b8004587ed4b6879ffd556c5a9c` | 12,066 B | 12,040 B |
-| SwapboardView | **NOT DEPLOYED** | `0x000000B95ee642F1A216ef85b54BF77C127b1F50` | `0x00000000000000000000000000000000000000000000000000000000008409e7` | `0x0a00192f07ea9ca2465f312344e5fd4d576f9bb201e533666415e87bf61d3044` | 24,056 B | 24,030 B |
-| Orderbol | **NOT DEPLOYED** | `0x0000000B98f59027FAFEac53daEf59D1135e1502` | `0x00000000000000000000000000000000000000000000000000000000018ce12f` | `0xe9343bc4a6d07ad48e6b7e6d1f927a83012b424ecaf922ee4caf06fad662c972` | 3,489 B | 3,463 B |
-| Swapbol | **NOT DEPLOYED** | `0x00000040Ba80f8dc500d10ea6cF889b518592756` | `0x1a9500773adf0551c6646949e9508b5c389411f8fbd53cca1c33ff370a2a023c` | `0x5388da1b374914d8383bafc9cd511eb58ef78f5d41247f37a009a262bdb7ec80` | 7,412 B | 6,877 B |
+| Replacement Swapboard | **NOT DEPLOYED** | `0xD3958F4f0610DEEff356193722ceb942BDd20d39` | `0x000000000000000000000000000000000000000000000000000000000000bb4ed7` | `0x3a37851e6aaaeb1570cceaf8c0404dcf55107d65e2f88a3a3c5c2608634ed6f2` | 24,419 B | 24,139 B |
+| Dutchboard | **NOT DEPLOYED** | `0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C` | `0x35fa7f853ac5d3e482cea32afdfc4d8e71cd14024b99128a08ad1e11b26525e8` | `0x73d63b8a746f456d0f816056bbc6752ee0ea87d89092eb3fdd69669be66e437e` | 17,395 B | 17,154 B |
+| SwapboardView | **NOT DEPLOYED** | `0xF796EF7B108a8DbC8F9650579fAb88BBa00BD296` | `0x00000000000000000000000000000000000000000000000000000000008409e7` | `0xd255af2a37dd789bc6920b252c38eecd1c1646e7c41d1515f91e41614cc77371` | 24,074 B | 24,048 B |
+| Orderbol | **NOT DEPLOYED** | `0xf03bE3A900762D7D31e6d69809fd2D54Aa53b2BA` | `0x000000000000000000000000000000000000000000000000000000000000362f` | `0xa020eab931e1ce6d2464adb688fdc5659285976fb7fb4dd5d4f557da9e938c41` | 8,544 B | 8,141 B |
+| Swapbol | **NOT DEPLOYED** | `0xa8429A3516E0ad2b0500b2bc7E85BE0262fb2154` | `0x01a9500773adf0551c6646949e9508b5c389411f8fbd53cca1c33ff370a2a023` | `0xd68c9824dbffca8e7f7b62ba5a124c7ce7da69883b4abe5b6255162da366fd97` | 14,629 B | 14,017 B |
 
 Runtime size means deployed bytecode from the canonical production compiler
 profile. Initcode hash means `keccak256` of the complete
@@ -69,9 +69,9 @@ profile. Initcode hash means `keccak256` of the complete
 
 ### Dutchboard
 
-- Constructor: none.
-- Canonical mainnet WETH is compiled into the runtime for native cancellation
-  and routing.
+- Constructor: `constructor(address _weth)`
+- Argument: canonical mainnet WETH
+  `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`.
 - NFTs may be listed two ways: `listNFT` for bundles, which needs an ERC-721
   approval, and a push listing that needs none — `safeTransferFrom` into the
   board carrying an ABI-encoded `PushTerms` as the transfer's `data`. See the
@@ -100,10 +100,19 @@ profile. Initcode hash means `keccak256` of the complete
 
 ### Orderbol
 
-- Constructor: none.
-- No deployment-time board binding. Each placement call names its target
-  board; exact scoped approval and funded-balance checkpoints enforce the
-  transaction boundary.
+- Constructor:
+  `constructor(address swapboard_, address dutchboard_)`
+- Arguments, in order:
+  1. replacement Swapboard
+     `0xD3958F4f0610DEEff356193722ceb942BDd20d39`;
+  2. Dutchboard
+     `0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C`.
+- Placement calls retain their board argument for ABI compatibility, but it
+  must equal the matching immutable deployment binding. The returned order or
+  listing ID is checked against the requested maker/seller, assets, amounts,
+  terms, and active state before any refund is sent.
+- A five-minute placement deadline is used by the zSwap UI; direct callers may
+  pass their own deadline or zero to disable that optional bound.
 - Canonical mainnet WETH is compiled into the runtime for native Dutch lots.
 - Artifacts:
   - `deploy/Orderbol.address.txt`
@@ -119,9 +128,9 @@ profile. Initcode hash means `keccak256` of the complete
   1. legacy v1
      `0x000000fF3D7A2d373615141d7489Ca66683DbecF`;
   2. replacement Swapboard
-     `0x0000006c0fBc8CBAe822c41C9DC00956D0941e23`;
+     `0xD3958F4f0610DEEff356193722ceb942BDd20d39`;
   3. Dutchboard
-     `0x000000b87444cAd0beb79545dcaE8b4508d48179`.
+     `0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C`.
 - The constructor rejects zero, duplicate, or code-less venues. Replacement
   Swapboard and Dutchboard must therefore be deployed before Swapbol.
 - Frozen artifacts:

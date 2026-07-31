@@ -7,7 +7,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {
   AbiCoder,
@@ -20,6 +19,14 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
+const SOURCES = {
+  Swapboard: "src/Swapboard.sol",
+  Dutchboard: "src/Dutchboard.sol",
+  SwapboardView: "src/SwapboardView.sol",
+  Orderbol: "src/forwarders/Orderbol.sol",
+  Swapbatch: "src/forwarders/Swapbatch.sol",
+  Swapbol: "src/forwarders/Swapbol.sol",
+};
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   console.error(
@@ -28,18 +35,43 @@ if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   process.exit(1);
 }
 
-const bytecode = execFileSync("forge", ["inspect", name, "bytecode"], {
-  cwd: ROOT,
-  encoding: "utf8",
-}).trim();
-if (!/^0x[0-9a-f]+$/i.test(bytecode)) throw Error("forge returned invalid bytecode");
+function findFreshArtifact(contractName) {
+  const source = SOURCES[contractName];
+  if (!source) throw Error(`no canonical source mapping for ${contractName}`);
+  const sourceHash = keccak256(fs.readFileSync(path.join(ROOT, source)));
+  const expectedRuns = contractName === "SwapboardView" ? 200 : 9_999_999;
+  const candidates = [];
+  function visit(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (entry.name === `${contractName}.json`) candidates.push(full);
+    }
+  }
+  visit(path.join(ROOT, "out"));
+  for (const file of candidates.sort()) {
+    const artifact = JSON.parse(fs.readFileSync(file, "utf8"));
+    const metadata = typeof artifact.metadata === "string"
+      ? JSON.parse(artifact.metadata)
+      : artifact.metadata;
+    const sourceKey = metadata && Object.keys(metadata.sources || {}).find((key) => key.endsWith(source));
+    if (
+      sourceKey &&
+      metadata.sources[sourceKey].keccak256.toLowerCase() === sourceHash.toLowerCase() &&
+      metadata.settings.optimizer.runs === expectedRuns
+    ) return artifact;
+  }
+  throw Error(
+    `no fresh ${contractName} artifact for ${source} with optimizer_runs=${expectedRuns}; ` +
+      "run the canonical forge build first",
+  );
+}
 
-const abi = JSON.parse(
-  execFileSync("forge", ["inspect", name, "abi", "--json"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  })
-);
+const artifact = findFreshArtifact(name);
+const bytecode = artifact.bytecode.object;
+if (!/^0x[0-9a-f]+$/i.test(bytecode)) throw Error("artifact contains invalid bytecode");
+const abi = artifact.abi;
 const constructor = abi.find((item) => item.type === "constructor");
 const inputs = constructor?.inputs || [];
 let constructorArgs;

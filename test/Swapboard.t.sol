@@ -39,7 +39,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(false, uint64(block.timestamp + 1 days));
         vm.warp(block.timestamp + 1 days - 1);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(taker), 100e18, "taker got tokenA");
         assertEq(B.balanceOf(maker), 200e6, "maker got tokenB");
     }
@@ -49,7 +49,7 @@ contract SwapboardTest is Test {
         vm.warp(block.timestamp + 1 days + 1);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderExpired.selector, id));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
     }
 
     function test_FillAtExactExpiryStillWorks() public {
@@ -57,7 +57,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(false, exp);
         vm.warp(exp); // expiry is inclusive: expired only once past it
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(taker), 100e18);
     }
 
@@ -65,7 +65,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(false, 0);
         vm.warp(block.timestamp + 3650 days);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(taker), 100e18);
     }
 
@@ -129,7 +129,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(true, uint64(block.timestamp + 1 days));
         // 1 unit of B against 100e18/200e6 -> 0.5e12 A, exact
         vm.prank(taker);
-        sb.fillOrder(id, 0, 1, address(0));
+        sb.fillOrder(id, 0, 1, 0, address(0));
         (,,,,,,,, uint256 remA,, uint256 remB) = sb.orders(id);
         assertEq(remB, 200e6 - 1);
         assertEq(A.balanceOf(taker), 100e18 * 1 / 200e6);
@@ -139,20 +139,20 @@ contract SwapboardTest is Test {
     function test_PartialRemainderStillExpires() public {
         uint256 id = _mk(true, uint64(block.timestamp + 1 days));
         vm.prank(taker);
-        sb.fillOrder(id, 0, 50e6, address(0)); // take a quarter
+        sb.fillOrder(id, 0, 50e6, 0, address(0)); // take a quarter
         assertTrue(sb.isFillableBy(id, taker));
         vm.warp(block.timestamp + 2 days);
         assertFalse(sb.isFillableBy(id, taker), "resting remainder must expire too");
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderExpired.selector, id));
-        sb.fillOrder(id, 0, 10e6, address(0));
+        sb.fillOrder(id, 0, 10e6, 0, address(0));
     }
 
     function test_PartialFillRejectedOnAllOrNothing() public {
         uint256 id = _mk(false, 0);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.PartialFillNotAllowed.selector, id));
-        sb.fillOrder(id, 0, 50e6, address(0));
+        sb.fillOrder(id, 0, 50e6, 0, address(0));
     }
 
     function test_DustFillRejected() public {
@@ -161,7 +161,7 @@ contract SwapboardTest is Test {
         uint256 id = sb.createOrder(address(A), 1, address(B), 1000e6, true, 0, false, false, address(0));
         vm.prank(taker);
         vm.expectRevert(Swapboard.ZeroFillAmount.selector);
-        sb.fillOrder(id, 0, 1, address(0));
+        sb.fillOrder(id, 0, 1, 0, address(0));
     }
 
     // ------------------------------------------------------ taker deadline
@@ -171,7 +171,7 @@ contract SwapboardTest is Test {
         vm.warp(1000);
         vm.prank(taker);
         vm.expectRevert(Swapboard.DeadlineExpired.selector);
-        sb.fillOrder(id, 999, 0, address(0)); // but the taker's own deadline has passed
+        sb.fillOrder(id, 999, 0, 0, address(0)); // but the taker's own deadline has passed
     }
 
     // ------------------------------------------------------------ batches
@@ -187,9 +187,10 @@ contract SwapboardTest is Test {
         uint256[] memory amts = new uint256[](2);
         amts[0] = 10e6;
         amts[1] = 10e6;
+        uint256[] memory mins = new uint256[](2);
 
         vm.prank(taker);
-        bool[] memory filled = sb.tryFillOrders(ids, 0, amts, address(0));
+        bool[] memory filled = sb.tryFillOrders(ids, 0, amts, mins, address(0));
         assertFalse(filled[0], "expired skipped");
         assertTrue(filled[1], "live filled");
     }
@@ -217,7 +218,7 @@ contract SwapboardTest is Test {
         assertEq(n.ownerOf(7), address(sb), "NFT escrowed on create");
 
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
         assertEq(n.ownerOf(7), taker, "NFT delivered to taker");
         assertEq(B.balanceOf(maker), 500e6, "maker paid");
     }
@@ -231,7 +232,7 @@ contract SwapboardTest is Test {
         vm.prank(maker);
         uint256 id = sb.createOrder(address(A), 50e18, address(n), 9, false, 0, false, true, address(0));
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
         assertEq(n.ownerOf(9), maker, "maker receives the NFT");
         assertEq(A.balanceOf(taker), 50e18, "taker receives tokenA");
     }
@@ -245,7 +246,7 @@ contract SwapboardTest is Test {
         uint256 id = sb.createOrder(address(n), 0, address(B), 100e6, false, 0, true, false, address(0));
         assertEq(n.ownerOf(0), address(sb), "tokenId 0 escrowed, not rejected as ZeroAmount");
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 100e6, 0, address(0));
         assertEq(n.ownerOf(0), taker);
     }
 
@@ -266,7 +267,7 @@ contract SwapboardTest is Test {
         vm.prank(taker);
         // amountB is a tokenId; a mismatched value must not read as a full fill
         vm.expectRevert(abi.encodeWithSelector(Swapboard.PartialFillNotAllowed.selector, id));
-        sb.fillOrder(id, 0, 5, address(0));
+        sb.fillOrder(id, 0, 5, 0, address(0));
     }
 
     function test_NftReturnedOnCancelAndSweep() public {
@@ -299,10 +300,10 @@ contract SwapboardTest is Test {
         B.approve(address(sb), type(uint256).max);
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NotCounterparty.selector, id, keeper, taker));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
 
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(taker), 100e18);
     }
 
@@ -312,7 +313,7 @@ contract SwapboardTest is Test {
         vm.prank(keeper);
         B.approve(address(sb), type(uint256).max);
         vm.prank(keeper);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(keeper), 100e18);
     }
 
@@ -332,8 +333,11 @@ contract SwapboardTest is Test {
         ids[0] = mine;
         ids[1] = open;
         uint256[] memory amts = new uint256[](2);
+        uint256[] memory mins = new uint256[](2);
+        amts[0] = 20e6;
+        amts[1] = 200e6;
         vm.prank(taker);
-        bool[] memory filled = sb.tryFillOrders(ids, 0, amts, address(0));
+        bool[] memory filled = sb.tryFillOrders(ids, 0, amts, mins, address(0));
         assertFalse(filled[0], "reserved for someone else -> skipped");
         assertTrue(filled[1], "public -> filled");
     }
@@ -350,10 +354,10 @@ contract SwapboardTest is Test {
         B.approve(address(sb), type(uint256).max);
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NotCounterparty.selector, id, keeper, taker));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
 
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 500e6, 0, address(0));
         assertEq(n.ownerOf(7), taker, "named counterparty gets the NFT");
     }
 
@@ -364,7 +368,7 @@ contract SwapboardTest is Test {
         vm.warp(block.timestamp + 2 days);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderExpired.selector, id));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
     }
 
     // ---- NFT-for-ETH underpayment ----
@@ -387,7 +391,7 @@ contract SwapboardTest is Test {
         vm.deal(taker, 20e18);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.ETHAmountMismatch.selector, 10e18, 1e18));
-        sb.fillOrderWithEth{value: 1e18}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 1e18}(id, 0, 0, address(0));
 
         assertEq(weth.balanceOf(address(sb)), boardBefore, "no escrow moved");
         assertEq(n.ownerOf(7), address(sb), "NFT still escrowed");
@@ -400,7 +404,7 @@ contract SwapboardTest is Test {
         vm.deal(taker, 20e18);
         uint256 mb = weth.balanceOf(maker);
         vm.prank(taker);
-        sb.fillOrderWithEth{value: 10e18}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 10e18}(id, 0, 0, address(0));
         assertEq(n.ownerOf(7), taker, "taker gets the NFT");
         assertEq(weth.balanceOf(maker) - mb, 10e18, "maker paid in full");
     }
@@ -413,7 +417,7 @@ contract SwapboardTest is Test {
         vm.deal(taker, 10e18);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.ETHAmountMismatch.selector, 5e18, 1e18));
-        sb.fillOrderWithEth{value: 1e18}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 1e18}(id, 0, 0, address(0));
     }
 
     /// A partial-fill order legitimately accepts less, and must pay out pro rata.
@@ -423,7 +427,7 @@ contract SwapboardTest is Test {
         vm.deal(taker, 10e18);
         uint256 tb = A.balanceOf(taker);
         vm.prank(taker);
-        sb.fillOrderWithEth{value: 1e18}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 1e18}(id, 0, 0, address(0));
         assertEq(A.balanceOf(taker) - tb, 20e18, "20% paid -> 20% of tokenA");
     }
 
@@ -432,7 +436,7 @@ contract SwapboardTest is Test {
     function test_FillDeliversToRecipientNotCaller() public {
         uint256 id = _mk(false, 0);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, keeper); // taker pays, keeper receives
+        sb.fillOrder(id, 0, 200e6, 0, keeper); // taker pays, keeper receives
         assertEq(A.balanceOf(keeper), 100e18, "tokenA delivered to recipient");
         assertEq(A.balanceOf(taker), 0, "caller receives nothing");
         assertEq(B.balanceOf(maker), 200e6, "maker still paid by the caller");
@@ -441,7 +445,7 @@ contract SwapboardTest is Test {
     function test_ZeroRecipientMeansCaller() public {
         uint256 id = _mk(false, 0);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 200e6, 0, address(0));
         assertEq(A.balanceOf(taker), 100e18);
     }
 
@@ -450,7 +454,7 @@ contract SwapboardTest is Test {
         vm.prank(maker);
         uint256 id = sb.createOrder(address(n), 7, address(B), 500e6, false, 0, true, false, address(0));
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, keeper);
+        sb.fillOrder(id, 0, 500e6, 0, keeper);
         assertEq(n.ownerOf(7), keeper, "NFT delivered to recipient");
     }
 
@@ -458,7 +462,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(false, 0);
         vm.prank(taker);
         vm.expectRevert(Swapboard.BadRecipient.selector);
-        sb.fillOrder(id, 0, 0, address(sb));
+        sb.fillOrder(id, 0, 200e6, 0, address(sb));
     }
 
     /// WETH as recipient would re-wrap an unwrapped payout back to the board.
@@ -466,7 +470,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(false, 0);
         vm.prank(taker);
         vm.expectRevert(Swapboard.BadRecipient.selector);
-        sb.fillOrder(id, 0, 0, address(weth));
+        sb.fillOrder(id, 0, 200e6, 0, address(weth));
     }
 
     /// The recipient is a delivery address, never authorisation. Naming the
@@ -479,7 +483,7 @@ contract SwapboardTest is Test {
         B.approve(address(sb), type(uint256).max);
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NotCounterparty.selector, id, keeper, taker));
-        sb.fillOrder(id, 0, 0, taker); // pretending to fill "for" the counterparty
+        sb.fillOrder(id, 0, 200e6, 0, taker); // pretending to fill "for" the counterparty
     }
 
     // ---- skipping sweep ----
@@ -534,7 +538,7 @@ contract SwapboardTest is Test {
         uint256 id = _mk(true, 0); // 100 A for 200 USDC-ish B
         uint256 tb = B.balanceOf(taker);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 999_999e6, address(0)); // offers far more than asked
+        sb.fillOrder(id, 0, 999_999e6, 0, address(0)); // offers far more than asked
         assertEq(tb - B.balanceOf(taker), 200e6, "charged exactly amountB");
         assertEq(A.balanceOf(taker), 100e18, "received all of tokenA");
     }
@@ -544,12 +548,12 @@ contract SwapboardTest is Test {
     function test_PartialFillCannotStrandAZombieOrder() public {
         uint256 id = _mk(true, 0);
         vm.prank(taker);
-        sb.fillOrder(id, 0, 200e6 - 1, address(0)); // one unit short of everything
+        sb.fillOrder(id, 0, 200e6 - 1, 0, address(0)); // one unit short of everything
         (,,,,,,,, uint256 remA,, uint256 remB) = sb.orders(id);
         assertGt(remA, 0, "remainder still backed by tokenA");
         assertEq(remB, 1, "one unit of tokenB still wanted");
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0)); // and it is still fillable
+        sb.fillOrder(id, 0, 1, 0, address(0)); // and it is still fillable
         (, bool active,,,,,,,,,) = sb.orders(id);
         assertFalse(active, "settles cleanly");
     }
@@ -564,7 +568,7 @@ contract SwapboardTest is Test {
         uint256 id = sb.createOrder(address(evil), 100e18, address(B), 200e6, false, 0, false, false, address(0));
         evil.arm(address(sb), id); // reenter on the payout transfer
         vm.prank(taker);
-        sb.fillOrder(id, 0, 0, address(0)); // EvilERC20 asserts the reentrant call failed
+        sb.fillOrder(id, 0, 200e6, 0, address(0)); // EvilERC20 asserts the reentrant call failed
         assertEq(evil.balanceOf(taker), 100e18, "fill still settled correctly");
     }
 
@@ -575,7 +579,7 @@ contract SwapboardTest is Test {
         vm.prank(maker);
         uint256 id = sb.createOrder(address(n), 7, address(B), 500e6, false, 0, true, false, address(0));
         vm.prank(taker);
-        sb.fillOrderUnwrap(id, 0, 0, address(0));
+        sb.fillOrderUnwrap(id, 0, 0, 0, address(0));
         assertEq(n.ownerOf(7), taker, "NFT delivered; unwrap ignored");
     }
 }

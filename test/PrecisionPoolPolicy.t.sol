@@ -15,6 +15,24 @@ contract PolicyHook {
     function afterSwap(address, address, uint256, uint256, address) external {}
 }
 
+contract TogglePoolRegistry {
+    mapping(address pool => bool) internal _isPool;
+    bool internal _reverts;
+
+    function setPool(address pool, bool exists) external {
+        _isPool[pool] = exists;
+    }
+
+    function setReverts(bool reverts_) external {
+        _reverts = reverts_;
+    }
+
+    function isPool(address pool) external view returns (bool) {
+        if (_reverts) revert();
+        return _isPool[pool];
+    }
+}
+
 contract PrecisionPoolPolicyTest is Test {
     address internal constant OWNER = address(0xA11CE);
     address internal constant NEXT_OWNER = address(0xB0B);
@@ -73,6 +91,21 @@ contract PrecisionPoolPolicyTest is Test {
 
         vm.expectRevert(PrecisionPoolPolicy.PoolNotRoutable.selector);
         policy.requireRoutable(unknown);
+    }
+
+    function testBlockedPoolDoesNotDependOnFactoryLiveness() external {
+        TogglePoolRegistry registry = new TogglePoolRegistry();
+        registry.setPool(hookedPool, true);
+        PrecisionPoolPolicy isolatedPolicy =
+            new PrecisionPoolPolicy(IPrecisionPoolFactoryRegistry(address(registry)), OWNER);
+
+        vm.prank(OWNER);
+        isolatedPolicy.setPoolPolicy(hookedPool, PrecisionPoolPolicy.Policy.Blocked);
+        registry.setReverts(true);
+
+        assertFalse(isolatedPolicy.isRoutable(hookedPool));
+        vm.expectRevert(PrecisionPoolPolicy.PoolNotRoutable.selector);
+        isolatedPolicy.requireRoutable(hookedPool);
     }
 
     function testDefaultAllowsUnhookedPool() external view {
@@ -158,6 +191,15 @@ contract PrecisionPoolPolicyTest is Test {
         vm.prank(NEXT_OWNER);
         policy.setPoolPolicy(hookedPool, PrecisionPoolPolicy.Policy.Approved);
         assertTrue(policy.isRoutable(hookedPool));
+    }
+
+    function testOwnershipHandoverChangesAuthority() external {
+        vm.prank(NEXT_OWNER);
+        policy.requestOwnershipHandover();
+
+        vm.prank(OWNER);
+        policy.completeOwnershipHandover(NEXT_OWNER);
+        assertEq(policy.owner(), NEXT_OWNER);
     }
 
     function testOwnershipCannotBeRenounced() external {

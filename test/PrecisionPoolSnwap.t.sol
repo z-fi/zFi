@@ -103,7 +103,7 @@ contract PrecisionPoolSnwapTest is Test {
 
     function _swapData(address tokenIn, uint256 amountIn, address to) internal view returns (bytes memory) {
         return abi.encodeWithSelector(
-            PrecisionPoolFactory.executePrefundedSwap.selector, address(pool), tokenIn, amountIn, uint256(0), to
+            PrecisionPoolFactory.executePrefundedSwap.selector, address(pool), to, tokenIn, amountIn, uint256(0), to
         );
     }
 

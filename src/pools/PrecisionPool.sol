@@ -5,156 +5,79 @@ import {ERC20} from "../../lib/solady/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "../../lib/solady/src/utils/FixedPointMathLib.sol";
 
-/// @title PrecisionPool
-/// @notice Concentrated constant-product pool over one pair and one fixed price
-///         range, with ERC-20 LP shares. Generalises PrecisionRangePool, whose
-///         pair, range and fee are compile-time constants, into a clone target
-///         the factory can stamp out per market.
-///
-/// @dev    Real reserves x (token0) and y (token1) are concentrated by virtual
-///         reserves, so the pool trades as if it held far more than it does:
-///
-///             X = x + L/sqrtPHigh      Y = y + L*sqrtPLow      X * Y = L^2
-///
-///         Liquidity L is the LP share supply, so `totalSupply` is literally
-///         the pool's liquidity and the virtual offsets follow from it. There
-///         is no separate accounting to keep in step.
-///
-///         PRICES ARE IN RAW UNITS AND DECIMALS NEVER APPEAR HERE. `sqrtPLow`
-///         and `sqrtPHigh` are the square roots of a price quoted in raw token1
-///         per raw token0, scaled by 1e18. A pool over an 18-decimal token0 and
-///         a 6-decimal token1 therefore carries a range that already has the
-///         1e12 in it. This is deliberate: doing decimal adjustment on-chain
-///         would mean reading and trusting two `decimals()` calls and carrying
-///         the conversion through every price expression, which is exactly
-///         where concentrated-liquidity implementations acquire their rounding
-///         bugs. The factory and the frontend compute the adjusted bounds once,
-///         off-chain, where they can be checked by eye.
-///
-///         SEEDING TAKES A PRICE RATHER THAN INFERRING ONE. The first deposit
-///         names the price it is seeding at, and liquidity comes from two
-///         independent divisions - one per side, smaller wins, remainder
-///         refunded. Inferring the price from the deposit ratio instead means
-///         solving (1 - ab)L^2 - (bx + ay)L - xy = 0, whose discriminant
-///         carries a `B^2` term; with the range fixed at deploy time that term
-///         is safely bounded, but once the range is a parameter `B` reaches
-///         ~1e50 for pairs whose token1 has more decimals than token0, and the
-///         square overflows a uint256 before any realistic deposit size. Naming
-///         the price keeps every intermediate inside 256 bits.
-///
-///         A BAND SEEDED AT ITS OWN EDGE IS A LIMIT ORDER THAT EARNS. One
-///         side of the requirement vanishes at each bound, so a deposit made
-///         there is entirely token0 or entirely token1, and the pool converts
-///         it as the price crosses the band. Unlike a resting order it is paid
-///         the swap fee throughout, and unlike a managed position its claim is
-///         an ordinary fungible token. It needs no separate code path - see
-///         _seed, where only two divisors have to be sidestepped.
-///
-///         WHAT A SEED PRICE CAN AND CANNOT DO. It sets where the pool starts
-///         quoting, so a seeder who names a price the market disagrees with is
-///         arbitraged for the difference - the same exposure the first deposit
-///         into any pool carries, and paid by the seeder rather than by anyone
-///         who follows. It cannot be used against later depositors: once the
-///         supply is nonzero the argument is ignored entirely and deposits are
-///         struck at the pool's own reserve ratio.
-///
-///         EXCESS IS REFUNDED, NOT ABSORBED. Both deposit paths take what the
-///         binding side supports and return the rest. Keeping the overage would
-///         quietly pay it to existing holders, which turns a mis-sized deposit
-///         into a transfer between users rather than a rounding detail.
-///
-///         BOUNDARIES ARE REAL. A swap that would take more than a side holds
-///         is refused rather than clamped: past the edge of the range the pool
-///         is entirely in one asset and there is nothing left to sell. The
-///         caller finds out instead of silently receiving less.
-///
-///         PARAMETERS ARE IMMUTABLES, AND THE POOL IS DEPLOYED IN FULL. A
-///         clone would make each market ~45k gas instead of ~1.6M, but it puts
-///         a delegatecall and a read out of the proxy's own bytecode in front
-///         of every swap forever, and it forbids `immutable` - which fails
-///         silently, by reading zero, rather than loudly. Ranges are curated
-///         rather than freeform precisely so that pools are few and deep, and
-///         with few pools the deployer paying once beats every future taker
-///         paying a little. The saving crosses over around 2,300 swaps.
-///
-///         THE HOOK HAS TWO BOUNDED POWERS. Before pricing, its static
-///         `feeFor` callback may add a surcharge up to `MAX_TOTAL_FEE` less the
-///         immutable base fee. The surcharge accrues to the hook for later
-///         collection, so depositors and routers must treat a nonzero hook as
-///         economic authority over takers. The callback is gas-capped,
-///         read-only and failure-tolerant: failure means no surcharge.
-///
-///         After settlement, `afterSwap` receives a fixed gas budget. Its
-///         return value and success are ignored, so it cannot bend the curve,
-///         redirect output, veto a trade or brick the immutable pool. A hook
-///         that must never miss an observation does not belong behind this
-///         interface.
-///
-///         Uses that fit: bounded dynamic surcharges, reward accrual, a TWAP or
-///         analytics feed. Uses that do not: custom curves, output custody or
-///         hard access control. Those require the ability to alter or veto
-///         settlement and therefore belong in a different implementation.
-///
-///         EXTENSION IS OTHERWISE BY IMPLEMENTATION. A pool that must price
-///         differently is a different contract behind the same factory, so
-///         nothing that decides a price is ever injected at runtime.
-/// @notice Bounded surcharge provider and advisory post-swap observer.
-/// @dev Both callbacks are gas-capped and failure-tolerant. `feeFor` can affect
-///      price only within the pool-wide ceiling; `afterSwap` cannot affect
-///      settlement.
+/// @title IPrecisionHook
+/// @notice Hook interface for a bounded fee surcharge and post-swap callback.
+/// @dev The pool caps the fee and does not revert on callback failure.
 interface IPrecisionHook {
-    /// @notice Additional fee, in pips, on top of the pool's own.
-    /// @dev Deliberately `view`. A stateful pricing callback would make a
-    ///      quote unreproducible - the lens could not ask what a swap will
-    ///      cost without performing it - and quoting exactly is what lets
-    ///      these pools be compared against other venues before routing.
+    /// @notice Additional fee in pips, on top of the pool's base fee.
+    /// @dev This is `view` so the lens can reproduce the swap's fee.
     function feeFor(address sender, address tokenIn, uint256 amountIn) external view returns (uint256 extraFee);
 
     function afterSwap(address sender, address tokenIn, uint256 amountIn, uint256 amountOut, address to) external;
 }
 
+/// @title PrecisionPool
+/// @notice Concentrated constant-product pool for one pair and fixed price
+///         range, with ERC-20 LP shares.
+/// @dev Real reserves are combined with virtual reserves derived from LP
+///      supply. Bounds are raw token1/token0 prices, represented as square
+///      roots scaled by 1e18; token decimals must already be reflected in them.
+///      The first deposit supplies an initial price; later deposits are
+///      proportional and unused amounts are refunded. Boundary seeds are
+///      supported. Swaps that leave the range are rejected.
+///
+///      FEES STAY IN THE RESERVES, SO THE CURVE IS NOT EXACT. Output is priced
+///      on the input net of fees, but the reserves keep the LP portion of that
+///      fee. The effective product therefore grows above L-squared over time
+///      while the virtual offsets, derived from an unchanged LP supply, do not
+///      follow it. Two consequences integrators must model rather than assume
+///      away:
+///
+///        - `totalSupply` is the liquidity the offsets are built from, NOT
+///          sqrt(XY) of the live reserves, and the two diverge with volume;
+///        - a position reaching a range boundary is not guaranteed to have
+///          converted entirely into one asset. It may sit at the bound still
+///          holding some of the other side - that residue is retained fees and
+///          belongs to the LPs.
+///
+///      This is auto-compounding growing-K behaviour, deliberately: fees
+///      accrue to share value with no separate accumulator and no harvest
+///      call. Quoters and any limit-order-style integration should compute
+///      terminal inventory from the reserves rather than from the idealised
+///      curve. See test_RetainedFeesOvercollateraliseWithoutBreakingTheBand.
 contract PrecisionPool is ERC20 {
     using SafeTransferLib for address;
 
     uint256 constant WAD = 1e18;
-    uint256 constant FEE_DENOM = 1_000_000; // fee is in pips
+    /// @dev Fee denominator; fees are expressed in pips.
+    uint256 constant FEE_DENOM = 1_000_000;
 
-    /// @dev Burned on the seed so share price cannot be inflated against a
-    ///      one-wei supply.
+    /// @dev Sent to the dead address on the initial mint to prevent share-price
+    ///      inflation against a tiny supply.
     uint256 constant MIN_LIQUIDITY = 1000;
 
-    /// @dev Ceiling on the creator's share OF THE FEE, not of volume. Half is
-    ///      already aggressive; the cap exists so the parameter cannot be set
-    ///      somewhere an LP would never knowingly deposit into.
-    uint256 constant MAX_CREATOR_SHARE = 5_000; // 50% of the fee
-    uint256 constant BPS = 10_000;
+    /// @dev Maximum creator share of the base fee (50%).
+    uint256 constant MAX_CREATOR_SHARE = 5_000;
+    uint256 constant BPS = 10_000; // basis points
 
-    /// @dev Ceiling on base plus hook fee. A hook cannot price a pool below
-    ///      its stated fee, and cannot price it above this; between the two it
-    ///      is free, and a taker's own minOut is the backstop.
-    uint256 constant MAX_TOTAL_FEE = 100_000; // 10%
+    /// @dev Maximum combined base fee and hook surcharge (10%).
+    uint256 constant MAX_TOTAL_FEE = 100_000;
 
-    /// @dev Bounds the domain of the virtual-reserve arithmetic. Together
-    /// with `MAX_LIQUIDITY`, this keeps every virtual reserve and the
-    /// price-ratio calculation below uint256 for every factory-created pool.
-    /// A sqrt price is WAD-scaled, so this still permits a raw price of 1e36.
+    /// @dev Upper bound for WAD-scaled square-root prices. Together with the
+    ///      liquidity cap, it keeps virtual-reserve arithmetic bounded.
     uint256 constant MAX_SQRT_PRICE = 1e36;
 
-    /// @dev LP supply is also the curve liquidity. Capping it at the reserve
-    /// width prevents an extremely narrow range from turning an otherwise
-    /// modest deposit into a liquidity value whose virtual reserves overflow.
+    /// @dev LP supply is the curve liquidity; the cap keeps virtual reserves
+    ///      within uint256 arithmetic.
     uint256 constant MAX_LIQUIDITY = type(uint128).max;
 
-    /// @dev Budget for each hook callback. Enough for bounded pricing logic or
-    ///      accounting and an event, while capping a hostile hook's gas cost.
+    /// @dev Gas limit for each hook callback.
     uint256 constant HOOK_GAS = 150_000;
 
-    /// @dev `uint32(bytes4(keccak256("Reentrancy()")))`. A named slot rather
-    ///      than slot zero, which is where an inherited library would most
-    ///      plausibly collide.
+    /// @dev Transient slot used by the reentrancy guard.
     uint256 constant _REENTRANCY_SLOT = 0xab143c06;
 
-    /// @notice Pair, range and fee. Fixed at deployment and free to read.
+    /// @notice Canonical token pair; address(0) represents native ETH.
     address public immutable token0;
     address public immutable token1;
     /// @notice The only contract permitted to settle a prefunded factory route.
@@ -163,54 +86,46 @@ contract PrecisionPool is ERC20 {
     ///      settlement private to the factory prevents a later caller from
     ///      claiming assets somebody else transferred in an earlier transaction.
     address public immutable factory;
+    /// @notice Lower bound of the raw token1/token0 price range, sqrt-scaled by 1e18.
     uint256 public immutable sqrtPLow;
+    /// @notice Upper bound of the raw token1/token0 price range, sqrt-scaled by 1e18.
     uint256 public immutable sqrtPHigh;
+    /// @notice Base swap fee in pips.
     uint256 public immutable fee;
 
-    /// @notice Bounded surcharge provider and post-swap observer; zero for none.
+    /// @notice Bounded surcharge provider and post-swap observer; zero if none.
     address public immutable hook;
 
-    /// @notice The pool's creator: recipient of any fee split, and the
-    ///         authority a surcharge hook checks. address(0) = none.
-    /// @dev A fixed split of the pool's own fee rather than an addition to it,
-    ///      so it changes nothing about what a taker pays or what the pool
-    ///      quotes - only who keeps the proceeds. That is why it may reduce an
-    ///      LP's take where a hook may not: this is an immutable term, visible
-    ///      before anyone deposits, rather than a price a third party sets at
-    ///      runtime. The launchpad case needs no hook contract at all.
+    /// @notice Recipient of the creator fee share and hook configuration.
+    ///         Address(0) means no recipient is configured.
     address public immutable feeRecipient;
 
-    /// @notice Creator's share of the fee, in bps OF THE FEE.
+    /// @notice Creator's share of the base fee, in basis points.
     uint256 public immutable creatorFeeBps;
 
     uint128 public reserve0;
     uint128 public reserve1;
 
-    /// @notice Fees earned by the hook and not yet collected.
-    /// @dev Held here rather than pushed on each swap. Pushing would let a
-    ///      hook that cannot receive its own fee revert the swap, which is the
-    ///      one power this design refuses to grant. Accrued balances are netted
-    ///      out of available balances by `_assertBacked`, so they are never
-    ///      mistaken for a deposit or a swap input.
-    uint128 public hookOwed0;
-    uint128 public hookOwed1;
+    /// @notice Hook fees earned but not yet collected.
+    /// @dev Accrued fees are excluded from balances available to LPs and swaps.
+    uint256 public hookOwed0;
+    uint256 public hookOwed1;
 
-    /// @notice Fees earned by the creator and not yet collected. Held and
-    ///         netted out exactly as the hook's are.
-    uint128 public creatorOwed0;
-    uint128 public creatorOwed1;
+    /// @notice Creator fees earned but not yet collected.
+    uint256 public creatorOwed0;
+    uint256 public creatorOwed1;
 
     error Bad();
+    error NotHook();
     error Overflow();
+    error NotFactory();
     error Reentrancy();
     error ZeroAmount();
     error InvalidToken();
-    error NotHook();
-    error NotFeeRecipient();
-    error NotFactory();
     error BalanceDeficit();
-    error UnsupportedToken();
+    error NotFeeRecipient();
     error PriceOutOfRange();
+    error UnsupportedToken();
     error InsufficientOutput();
     error InsufficientLiquidity();
 
@@ -218,10 +133,11 @@ contract PrecisionPool is ERC20 {
     event HookFee(address indexed tokenIn, uint256 amount, uint256 extraFee);
     event HookFeeCollected(address indexed to, uint256 amount0, uint256 amount1);
     event CreatorFeeCollected(address indexed to, uint256 amount0, uint256 amount1);
-    /// @dev Emitted when the advisory call failed, so a silently broken hook
-    ///      is visible on-chain to whoever operates it.
+    /// @dev Emitted when the post-swap callback fails.
     event HookCallFailed(address indexed hook);
-    event AddLiquidity(address indexed provider, uint256 amount0, uint256 amount1, uint256 lp);
+    /// @dev The indexed address is the LP share recipient, which need not be
+    ///      the payer or the refund recipient.
+    event AddLiquidity(address indexed recipient, uint256 amount0, uint256 amount1, uint256 lp);
     event RemoveLiquidity(address indexed provider, uint256 lp, uint256 amount0, uint256 amount1);
 
     modifier nonReentrant() {
@@ -238,9 +154,8 @@ contract PrecisionPool is ERC20 {
         }
     }
 
-    /// @dev The factory validates these; see PrecisionPoolFactory. They are
-    ///      re-checked here so a pool deployed by hand cannot be wired to an
-    ///      unusable dependency or enter an unsafe arithmetic domain.
+    /// @dev Repeats the factory's dependency and arithmetic checks for direct
+    ///      deployments.
     constructor(
         address factory_,
         address token0_,
@@ -257,15 +172,12 @@ contract PrecisionPool is ERC20 {
         if (token1_.code.length == 0 || (token0_ != address(0) && token0_.code.length == 0)) revert Bad();
         if (hook_ != address(0) && hook_.code.length == 0) revert Bad();
         if (sqrtPLow_ == 0 || sqrtPHigh_ <= sqrtPLow_ || sqrtPHigh_ > MAX_SQRT_PRICE) revert Bad();
-        // `extraFee` reserves the difference up to `MAX_TOTAL_FEE`; permitting
-        // a direct deployment above that ceiling would underflow that room.
+        // Reserve room for the hook surcharge.
         if (fee_ >= MAX_TOTAL_FEE) revert Bad();
         (factory, token0, token1, sqrtPLow, sqrtPHigh, fee) = (factory_, token0_, token1_, sqrtPLow_, sqrtPHigh_, fee_);
         hook = hook_;
-        // A share with nobody to pay would burn the fee, so it is refused. The
-        // reverse is legitimate and deliberately allowed: a pool may name its
-        // creator while taking no split at all, which is how a surcharge hook
-        // learns who to pay and who may configure it.
+        // A nonzero creator share requires a recipient. A recipient without a
+        // share is allowed so a surcharge hook can identify its controller.
         if (creatorFeeBps_ > MAX_CREATOR_SHARE) revert Bad();
         if (creatorFeeBps_ != 0 && feeRecipient_ == address(0)) revert Bad();
         (feeRecipient, creatorFeeBps) = (feeRecipient_, creatorFeeBps_);
@@ -277,10 +189,8 @@ contract PrecisionPool is ERC20 {
         revert Bad();
     }
 
-    /// @notice Current price as a sqrt, raw token1 per raw token0, scaled 1e18.
-    /// @dev Derived from the virtual reserves, so it is the price a marginal
-    ///      trade actually executes against rather than a stored number that
-    ///      could drift from them.
+    /// @notice Current sqrt price in raw token1/token0, scaled by 1e18.
+    /// @dev Derived from the pool's virtual and real reserves.
     function sqrtPriceCurrent() public view returns (uint256) {
         return _sqrtPrice(totalSupply(), reserve0, reserve1);
     }
@@ -292,9 +202,7 @@ contract PrecisionPool is ERC20 {
         return FixedPointMathLib.sqrt(FixedPointMathLib.fullMulDiv(_virtual1(supply, sqrtPLow) + r1, WAD * WAD, vX));
     }
 
-    /// @dev Exactly equivalent to checking the floored square root returned by
-    /// `_sqrtPrice`, but the swap already has both virtual reserves and does
-    /// not need to compute the square root itself.
+    /// @dev Checks the price ratio directly, avoiding a square-root operation.
     function _priceInRange(uint256 vX, uint256 vY) internal view returns (bool) {
         if (vX == 0) return false;
         uint256 ratio = FixedPointMathLib.fullMulDiv(vY, WAD * WAD, vX);
@@ -305,15 +213,26 @@ contract PrecisionPool is ERC20 {
         }
     }
 
+    /// @dev True when at least one direction admits an executable integer
+    ///      trade: a one-unit input must price to an output the real reserve
+    ///      can actually pay. Fees only shrink the priced input, so this is the
+    ///      necessary granularity condition, checked against the augmented
+    ///      reserves the swap itself uses.
+    function _tradeable(uint256 x, uint256 y, uint256 r0, uint256 r1) internal pure returns (bool) {
+        if (r1 != 0 && FixedPointMathLib.fullMulDiv(1, y, x + 1) <= r1) return true;
+        if (r0 != 0 && FixedPointMathLib.fullMulDiv(1, x, y + 1) <= r0) return true;
+        return false;
+    }
+
     function _virtual0(uint256 liquidity, uint256 hi) internal pure returns (uint256) {
-        // liquidity <= uint128.max and WAD == 1e18, so the product fits.
+        // The factory caps liquidity and the price range so this product fits.
         unchecked {
             return liquidity * WAD / hi;
         }
     }
 
     function _virtual1(uint256 liquidity, uint256 lo) internal pure returns (uint256) {
-        // liquidity <= uint128.max and lo <= 1e36, so the product fits.
+        // The factory caps liquidity and the price range so this product fits.
         unchecked {
             return liquidity * lo / WAD;
         }
@@ -322,8 +241,7 @@ contract PrecisionPool is ERC20 {
     // -------------------------------------------------------------------- SWAP
 
     /// @notice Pull exactly `amountIn` from the caller and settle the swap.
-    /// @dev The safe direct path. ERC-20 input and accounting occur in one
-    ///      transaction, so no untrusted caller can claim a prefunded balance.
+    /// @dev Pulls and settles the input in the same transaction.
     function swapExactIn(address tokenIn, uint256 amountIn, uint256 minOut, address to)
         external
         payable
@@ -338,19 +256,30 @@ contract PrecisionPool is ERC20 {
             if (msg.value != 0) revert Bad();
             _pullExact(tokenIn, msg.sender, amountIn);
         }
-        return _swapExact(tokenIn, zeroForOne, amountIn, minOut, to);
+        return _swapExact(msg.sender, tokenIn, zeroForOne, amountIn, minOut, to);
     }
 
-    /// @notice Settle an exact amount already forwarded by this pool's factory.
-    /// @dev Used by `PrecisionPoolFactory` as a zRouter executor. The factory
-    ///      transfers or forwards exactly the amount and this function never
-    ///      treats older balance surplus as a new trade.
-    function swapFromFactory(address tokenIn, uint256 amountIn, uint256 minOut, address to)
-        external
-        payable
-        nonReentrant
-        returns (uint256 amountOut)
-    {
+    /// @notice Settle an exact amount already forwarded by the factory.
+    /// @dev Callable only by the factory after it has forwarded exactly the
+    ///      declared input amount.
+    /// @param originator Who the factory says is trading. On a routed swap the
+    ///        immediate caller is the factory, so without this every routed
+    ///        trade would present the factory to the hook - a sender-keyed
+    ///        discount would leak to everyone routing, or be denied to them all.
+    ///
+    ///        IT IS NOT AUTHENTICATED. The router reaches the factory through a
+    ///        public executor that does not forward the payer, so nobody in
+    ///        this path can prove who the trader is. Treat it as a label for
+    ///        accounting and analytics. A hook that grants privilege on it is
+    ///        unsafe, and that is a property of the routing topology rather
+    ///        than something this contract can fix.
+    function swapFromFactory(
+        address originator,
+        address tokenIn,
+        uint256 amountIn,
+        uint256 minOut,
+        address to
+    ) external payable nonReentrant returns (uint256 amountOut) {
         if (msg.sender != factory) revert NotFactory();
         bool zeroForOne = _direction(tokenIn);
         if (amountIn == 0) revert ZeroAmount();
@@ -359,13 +288,17 @@ contract PrecisionPool is ERC20 {
         } else if (msg.value != 0) {
             revert Bad();
         }
-        return _swapExact(tokenIn, zeroForOne, amountIn, minOut, to);
+        return _swapExact(originator, tokenIn, zeroForOne, amountIn, minOut, to);
     }
 
-    function _swapExact(address tokenIn, bool zeroForOne, uint256 amountIn, uint256 minOut, address to)
-        internal
-        returns (uint256 amountOut)
-    {
+    function _swapExact(
+        address sender,
+        address tokenIn,
+        bool zeroForOne,
+        uint256 amountIn,
+        uint256 minOut,
+        address to
+    ) internal returns (uint256 amountOut) {
         if (to == address(0) || to == address(this)) revert Bad();
         uint256 r0 = reserve0;
         uint256 r1 = reserve1;
@@ -377,26 +310,33 @@ contract PrecisionPool is ERC20 {
             ? (r0, r1, _virtual0(supply, sqrtPHigh), _virtual1(supply, sqrtPLow))
             : (r1, r0, _virtual1(supply, sqrtPLow), _virtual0(supply, sqrtPHigh));
 
-        // Surplus from a forced or mistaken transfer is deliberately left
-        // unaccounted. Only the exact amount authenticated by the caller or
-        // factory is eligible to move the curve.
+        // Only the authenticated input amount may move the curve; other
+        // balance surplus remains unaccounted.
         uint256 availableIn = zeroForOne ? available0 : available1;
         if (amountIn > availableIn - rIn) revert BalanceDeficit();
 
-        // The hook is paid only the slice it asked for, off the top; the pool
-        // then charges its own fee on what remains, so an LP's terms are
-        // exactly what the pool advertises no matter what the hook does.
+        // Take the hook surcharge first, then apply the base fee to the rest.
+        //
+        // Both are derived as a DIFFERENCE from a rounded-down remainder rather
+        // than computed and floored directly. Flooring the fee rounds in the
+        // trader's favour, and below `FEE_DENOM/rate` raw units it floors to
+        // zero outright - so a trade split finely enough pays no fee at all.
+        // Nothing carries a remainder between calls and the reentrancy guard
+        // clears each time, so plain batching was sufficient to exploit it.
+        // Rounding the remainder down and taking the fee as what is left over
+        // means every nonzero trade pays at least one raw unit, or produces no
+        // executable output and reverts.
         uint256 hookCut;
         uint256 surcharge;
         if (hook != address(0)) {
-            surcharge = _extraFee(tokenIn, amountIn);
-            hookCut = FixedPointMathLib.fullMulDiv(amountIn, surcharge, FEE_DENOM);
+            surcharge = extraFee(sender, tokenIn, amountIn);
+            hookCut = amountIn - FixedPointMathLib.fullMulDiv(amountIn, FEE_DENOM - surcharge, FEE_DENOM);
         }
         uint256 net = amountIn - hookCut;
 
-        // The creator's cut comes out of the fee the pool already charges, so
-        // `inAfterFee` - and therefore the price - is untouched by it.
-        uint256 feeAmount = FixedPointMathLib.fullMulDiv(net, fee, FEE_DENOM);
+        // The creator share comes from the base fee and does not change the
+        // amount used for pricing.
+        uint256 feeAmount = net - FixedPointMathLib.fullMulDiv(net, FEE_DENOM - fee, FEE_DENOM);
         uint256 creatorCut;
         uint256 creatorBps = creatorFeeBps;
         if (creatorBps != 0) creatorCut = FixedPointMathLib.fullMulDiv(feeAmount, creatorBps, BPS);
@@ -406,11 +346,7 @@ contract PrecisionPool is ERC20 {
         uint256 inAfterFee = net - feeAmount;
         amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, rOut + vOut, rIn + vIn + inAfterFee);
 
-        // Past the edge of the range the pool holds only one asset. Refuse
-        // rather than clamp, so the caller learns the range is exhausted. A
-        // rounded-zero result is also unfillable: accepting it would consume
-        // a taker's input (and possibly fee) while the lens correctly reports
-        // no executable output.
+        // Do not clamp at a range boundary or accept a rounded-zero output.
         if (amountOut == 0 || amountOut > rOut) revert InsufficientOutput();
         if (amountOut < minOut) revert InsufficientOutput();
 
@@ -424,9 +360,7 @@ contract PrecisionPool is ERC20 {
             _accrueFees(zeroForOne, hookCut, creatorCut, tokenIn, surcharge);
         }
 
-        // Reserves keep the input less both cuts. Since each cut is bounded by
-        // the fee, what remains is still at least `inAfterFee`, so the pool
-        // never grows by less than the price it just quoted assumed.
+        // Keep the input less the hook and creator cuts in the reserves.
         if (zeroForOne) {
             _setReserves(next0, next1);
             _pay(token1, to, amountOut, balance1);
@@ -436,7 +370,7 @@ contract PrecisionPool is ERC20 {
         }
 
         emit Swap(tokenIn, amountIn, amountOut, to);
-        _afterSwap(tokenIn, amountIn, amountOut, to);
+        _afterSwap(sender, tokenIn, amountIn, amountOut, to);
     }
 
     function _direction(address tokenIn) internal view returns (bool zeroForOne) {
@@ -444,13 +378,8 @@ contract PrecisionPool is ERC20 {
         if (!zeroForOne && tokenIn != token1) revert InvalidToken();
     }
 
-    /// @notice The hook's surcharge for this trade, in pips, already clamped.
-    /// @dev Gas-capped and failure-tolerant, exactly like the observer: a hook
-    ///      that reverts, burns its budget, or answers with a short word is
-    ///      read as charging nothing rather than as a reason to fail the swap.
-    ///      The clamp is what bounds a hostile answer - and a hook that wants
-    ///      to turn flow away can simply price at the ceiling, which is access
-    ///      control without the power to brick anything.
+    /// @notice Return the hook surcharge for a trade, clamped to the fee ceiling.
+    /// @dev A revert, out-of-gas call, or invalid return is treated as zero.
     function extraFee(address sender, address tokenIn, uint256 amountIn) public view returns (uint256) {
         address h = hook;
         if (h == address(0)) return 0;
@@ -472,29 +401,33 @@ contract PrecisionPool is ERC20 {
         return answer > room ? room : answer;
     }
 
-    function _extraFee(address tokenIn, uint256 amountIn) internal view returns (uint256) {
-        return extraFee(msg.sender, tokenIn, amountIn);
-    }
-
     function _accrueFees(bool zeroForOne, uint256 hookCut, uint256 creatorCut, address tokenIn, uint256 surcharge)
         internal
     {
+        // Counters are uint256. Accrual is cumulative while reserves are not -
+        // the same units can be traded back and forth indefinitely - so a
+        // narrower counter is not bounded by reserve size and could saturate
+        // after enough directional volume. Once saturated every further swap
+        // in that direction reverts, permanently if the payee can no longer
+        // collect. The backing balances are uint256 already, so nothing is
+        // gained by narrowing the claim against them.
         if (hookCut != 0) {
-            uint256 hookOwed = (zeroForOne ? hookOwed0 : hookOwed1) + hookCut;
-            if (hookOwed > type(uint128).max) revert Overflow();
-            if (zeroForOne) hookOwed0 = uint128(hookOwed);
-            else hookOwed1 = uint128(hookOwed);
+            unchecked {
+                if (zeroForOne) hookOwed0 += hookCut;
+                else hookOwed1 += hookCut;
+            }
             emit HookFee(tokenIn, hookCut, surcharge);
         }
         if (creatorCut != 0) {
-            uint256 creatorOwed = (zeroForOne ? creatorOwed0 : creatorOwed1) + creatorCut;
-            if (creatorOwed > type(uint128).max) revert Overflow();
-            if (zeroForOne) creatorOwed0 = uint128(creatorOwed);
-            else creatorOwed1 = uint128(creatorOwed);
+            unchecked {
+                if (zeroForOne) creatorOwed0 += creatorCut;
+                else creatorOwed1 += creatorCut;
+            }
         }
     }
 
-    /// @notice Recipient-only. Sweeps the creator's accrued share.
+    /// @notice Sweep accrued creator fees.
+    /// @dev Callable only by `feeRecipient`.
     function collectCreatorFees(address to) external nonReentrant returns (uint256 a0, uint256 a1) {
         if (msg.sender != feeRecipient) revert NotFeeRecipient();
         if (to == address(0) || to == address(this)) revert Bad();
@@ -506,9 +439,8 @@ contract PrecisionPool is ERC20 {
         emit CreatorFeeCollected(to, a0, a1);
     }
 
-    /// @notice Hook-only. Sweeps what the hook has earned.
-    /// @dev Pulled rather than pushed, so the pool never depends on the hook
-    ///      being able to receive anything.
+    /// @notice Sweep accrued hook fees.
+    /// @dev Callable only by the configured hook.
     function collectHookFees(address to) external nonReentrant returns (uint256 a0, uint256 a1) {
         if (msg.sender != hook) revert NotHook();
         if (to == address(0) || to == address(this)) revert Bad();
@@ -520,11 +452,11 @@ contract PrecisionPool is ERC20 {
         emit HookFeeCollected(to, a0, a1);
     }
 
-    /// @dev Reached only once the swap is fully settled - reserves written and
-    ///      output paid - and still inside the reentrancy guard, so a hook that
-    ///      calls back cannot re-enter. Success is deliberately not checked:
-    ///      see the note on immutability in the contract header.
-    function _afterSwap(address tokenIn, uint256 amountIn, uint256 amountOut, address to) internal {
+    /// @dev Called after reserves and output are settled, while the reentrancy
+    ///      guard is active. Failure is reported but does not revert the swap.
+    function _afterSwap(address sender, address tokenIn, uint256 amountIn, uint256 amountOut, address to)
+        internal
+    {
         address h = hook;
         if (h == address(0)) return;
         uint256 budget = HOOK_GAS;
@@ -532,7 +464,7 @@ contract PrecisionPool is ERC20 {
         assembly ("memory-safe") {
             let m := mload(0x40)
             mstore(m, shl(224, 0x3da8b865)) // `afterSwap(address,address,uint256,uint256,address)`.
-            mstore(add(m, 0x04), caller())
+            mstore(add(m, 0x04), and(sender, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(add(m, 0x24), and(tokenIn, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(add(m, 0x44), amountIn)
             mstore(add(m, 0x64), amountOut)
@@ -544,14 +476,13 @@ contract PrecisionPool is ERC20 {
 
     // --------------------------------------------------------------- LIQUIDITY
 
-    /// @notice Pull both sides from the caller and mint LP shares atomically.
-    /// @param amount0 Exact token0 amount to pull (or exact `msg.value` when
-    ///        token0 is native ETH).
-    /// @param amount1 Exact token1 amount to pull.
     /// @notice Deposit both sides and mint LP shares.
-    /// @param sqrtPriceInit Price to seed at, read only while the pool is empty
-    ///        and ignored entirely afterwards.
-    /// @param to Receives the LP shares.
+    /// @dev Pulls exact amounts from the caller and refunds unused amounts.
+    /// @param sqrtPriceInit Initial price for an empty pool; ignored afterwards.
+    /// @param amount0 Token0 amount, or exact `msg.value` for native token0.
+    /// @param amount1 Token1 amount.
+    /// @param minLP Minimum LP shares to mint.
+    /// @param to LP share recipient.
     function addLiquidityExact(uint256 sqrtPriceInit, uint256 amount0, uint256 amount1, uint256 minLP, address to)
         external
         payable
@@ -568,9 +499,9 @@ contract PrecisionPool is ERC20 {
         return _addLiquidity(sqrtPriceInit, amount0, amount1, minLP, to, msg.sender);
     }
 
-    /// @notice Mint against assets forwarded atomically by the factory.
-    /// @dev The factory transfers both declared ERC-20 amounts and forwards
-    ///      the declared native amount in this same call.
+    /// @notice Mint against assets forwarded by the factory.
+    /// @dev The factory transfers ERC-20 amounts and forwards native value in
+    ///      the same call.
     function addLiquidityFromFactory(
         uint256 sqrtPriceInit,
         uint256 amount0,
@@ -602,22 +533,16 @@ contract PrecisionPool is ERC20 {
         uint256 r0 = reserve0;
         uint256 r1 = reserve1;
         (uint256 available0, uint256 available1, uint256 balance0, uint256 balance1) = _assertBacked(r0, r1);
-        // A forced or mistaken transfer is not part of this mint. As with
-        // swaps, crediting generic balance surplus would let a later caller
-        // convert somebody else's donation into LP shares.
+        // Do not credit unrelated balance surplus to this deposit.
         if (amount0 > available0 - r0 || amount1 > available1 - r1) {
             revert BalanceDeficit();
         }
 
         uint256 supply = totalSupply();
         if (supply == 0) {
-            // The factory authenticates the named creator before initializing
-            // a branded market. Direct first deposits must not bypass that
-            // check and choose the market's immutable starting price.
+            // A named market must be initialized through the factory.
             if (feeRecipient != address(0) && msg.sender != factory) revert NotFactory();
-            // Inclusive, unlike a strict interior check: seeding AT a bound is
-            // the one-sided case, and it is a feature rather than a degenerate
-            // input. See _seed.
+            // Bounds are inclusive; a boundary seed is one-sided.
             if (sqrtPriceInit < sqrtPLow || sqrtPriceInit > sqrtPHigh) revert PriceOutOfRange();
             (lp, used0, used1) = _seed(amount0, amount1, sqrtPLow, sqrtPHigh, sqrtPriceInit);
             if (lp <= MIN_LIQUIDITY) revert InsufficientLiquidity();
@@ -632,33 +557,55 @@ contract PrecisionPool is ERC20 {
         }
 
         if (lp < minLP) revert InsufficientLiquidity();
+
+        // The seed's two bound corrections run in sequence, and the upper one
+        // can undo the lower one: zeroing `used1` to respect the ceiling can
+        // leave the pool below its floor. Rounding in the proportional path can
+        // nudge the price similarly. Neither is caught by the corrections
+        // themselves, so the postcondition is asserted here against the state
+        // actually about to be committed - the same one swaps already enforce.
+        //
+        // Without it a seed can pass every guard, mint shares, burn the
+        // permanent minimum, and leave a pool priced outside its own range with
+        // one side empty, which cannot trade in either direction. Refusing the
+        // deposit is strictly better than creating that pool.
+        //
+        // Deliberately NOT applied to removals: making an exit conditional on a
+        // price check could trap liquidity, which is a worse failure than the
+        // one this prevents.
+        {
+            uint256 postSupply = supply == 0 ? lp + MIN_LIQUIDITY : supply + lp;
+            uint256 postR0 = r0 + used0;
+            uint256 postR1 = r1 + used1;
+            uint256 postX = _virtual0(postSupply, sqrtPHigh) + postR0;
+            uint256 postY = _virtual1(postSupply, sqrtPLow) + postR1;
+            if (!_priceInRange(postX, postY)) revert PriceOutOfRange();
+            // Being inside the band is not the same as being tradeable. The
+            // band is a property of the floored price representation; whether
+            // an integer trade exists is a property of the reserves. A seed
+            // whose whole output reserve is worth less than one raw unit of
+            // the other token satisfies the first and fails the second: the
+            // smallest possible swap already asks for more than the pool
+            // holds, and output is monotone in input, so every swap reverts.
+            // Such a pool is immutable and permanently inert, so refuse to
+            // create it. Only checked on the seed - later deposits are
+            // proportional and only ever enlarge the reserves, and removals
+            // must never be blocked.
+            if (supply == 0 && !_tradeable(postX, postY, postR0, postR1)) revert InsufficientLiquidity();
+        }
+
         _setReserves(r0 + used0, r1 + used1);
         _mint(to, lp);
 
-        // Refund after reserves are written, so a token or recipient that
-        // calls back sees books that already account for the deposit. The
-        // reentrancy guard is still held here.
+        // Write reserves before refunding so callbacks see settled state.
         if (amount0 > used0) _pay(token0, refundTo, amount0 - used0, balance0);
         if (amount1 > used1) _pay(token1, refundTo, amount1 - used1, balance1);
 
         emit AddLiquidity(to, used0, used1, lp);
     }
 
-    /// @dev L from each side independently; the smaller binds. Every step is a
-    ///      mulDiv whose operands stay inside 256 bits for any range the
-    ///      factory will accept.
-    ///
-    ///      SEEDING AT A BOUND IS A ONE-SIDED POSITION, AND IS SUPPORTED. At
-    ///      `sl` the token1 requirement is zero and the pool holds only
-    ///      token0, which it will sell as the price rises through the band; at
-    ///      `sh` the mirror. That is a limit order - except that it collects
-    ///      the swap fee for as long as it waits, and its claim is a fungible
-    ///      ERC-20 rather than a position that has to be managed.
-    ///
-    ///      The general expressions below already yield zero on the unused
-    ///      side, so only their divisors need avoiding: `s - sl` is zero at the
-    ///      low bound and `sh - s` at the high one. Nothing else is special
-    ///      about the edges.
+    /// @dev Compute liquidity from each side and use the smaller result.
+    ///      Boundary prices are supported and produce one-sided liquidity.
     function _seed(uint256 in0, uint256 in1, uint256 sl, uint256 sh, uint256 s)
         internal
         pure
@@ -678,17 +625,12 @@ contract PrecisionPool is ERC20 {
         if (lp == 0) revert ZeroAmount();
         if (lp > MAX_LIQUIDITY) revert InsufficientLiquidity();
 
-        // Round the requirement up, so the pool is never left short of the
-        // liquidity it just minted against.
-        // Both go to zero of their own accord at the corresponding bound.
+        // Round requirements up so the pool is not underfunded.
         used0 = FixedPointMathLib.fullMulDivUp(FixedPointMathLib.fullMulDivUp(lp, sh - s, sh), WAD, s);
         used1 = FixedPointMathLib.fullMulDivUp(lp, s - sl, WAD);
 
-        // The continuous formulas above round requirements up. At a boundary,
-        // that sub-wei conservatism can put the discrete virtual-reserve ratio
-        // just outside the immutable band. Refund only that rounding excess so
-        // the actual marginal price, not merely the requested seed price,
-        // starts inside both bounds.
+        // Remove rounding excess if it would put the discrete price outside
+        // the configured range.
         uint256 v0 = _virtual0(lp, sh);
         uint256 v1 = _virtual1(lp, sl);
         if (v0 == 0 || v1 == 0) revert InsufficientLiquidity();
@@ -705,14 +647,13 @@ contract PrecisionPool is ERC20 {
         if (used0 > in0 || used1 > in1) revert InsufficientLiquidity();
     }
 
-    /// @dev Struck at the pool's own reserve ratio, so a deposit cannot move
-    ///      the price and the seed argument is irrelevant here.
+    /// @dev Uses the pool's reserve ratio, so the deposit does not move price.
     function _proportional(uint256 in0, uint256 in1, uint256 r0, uint256 r1, uint256 supply)
         internal
         pure
         returns (uint256 lp, uint256 used0, uint256 used1)
     {
-        // At a range boundary one side is empty and cannot bind.
+        // An empty side does not constrain the proportional amount.
         uint256 lpFrom0 = r0 == 0 ? type(uint256).max : FixedPointMathLib.fullMulDiv(in0, supply, r0);
         uint256 lpFrom1 = r1 == 0 ? type(uint256).max : FixedPointMathLib.fullMulDiv(in1, supply, r1);
         lp = FixedPointMathLib.min(lpFrom0, lpFrom1);
@@ -752,26 +693,18 @@ contract PrecisionPool is ERC20 {
 
     // ----------------------------------------------------------------- ERC-20
 
-    /// @dev One implementation per market would let these name the pair, but
-    ///      building strings on-chain means trusting two `symbol()` calls that
-    ///      may be missing or bytes32. The pair is `token0`/`token1`; a
-    ///      frontend reads them and labels the position itself.
-    /// @dev `name()` is a compile-time constant, so the EIP-712 name hash is
-    ///      too. Solady recomputes `keccak256(bytes(name()))` on every permit
-    ///      and every DOMAIN_SEPARATOR read unless this is supplied; returning
-    ///      it precomputed removes that hash from the signature path.
-    ///
-    ///      Pools still sign in distinct domains despite the shared name: the
-    ///      separator binds `address(this)` and `chainid`, so a signature for
-    ///      one pool is worthless against another.
+    /// @dev The name hash is fixed; pool address and chain ID still separate
+    ///      each permit domain.
     function _constantNameHash() internal pure override returns (bytes32) {
         return 0x97afff290dde66c4a8458ec3623f0fe8e943ac845271886a6598e35deed20617;
     }
 
+    /// @notice LP token name.
     function name() public pure override returns (string memory) {
         return "Precision LP";
     }
 
+    /// @notice LP token symbol.
     function symbol() public pure override returns (string memory) {
         return "pLP";
     }

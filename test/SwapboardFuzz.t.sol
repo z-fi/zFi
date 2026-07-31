@@ -65,7 +65,7 @@ contract SwapboardFuzzTest is Test {
             if (bid < remB && FixedPointMathLib.fullMulDiv(bid, remA, remB) == 0) continue;
 
             vm.prank(taker);
-            sb.fillOrder(id, 0, bid, address(0));
+            sb.fillOrder(id, 0, bid, 0, address(0));
             paid += bid;
         }
 
@@ -104,7 +104,7 @@ contract SwapboardFuzzTest is Test {
 
         vm.deal(taker, sent);
         vm.prank(taker);
-        try sb.fillOrderWithEth{value: sent}(id, 0, address(0)) {
+        try sb.fillOrderWithEth{value: sent}(id, 0, 0, address(0)) {
             assertEq(weth.balanceOf(address(sb)), parked, "victim escrow untouched");
             assertEq(weth.balanceOf(maker), sent, "maker paid exactly what arrived");
             assertLe(A.balanceOf(taker), 50e18, "and never more escrow than the order held");

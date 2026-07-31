@@ -2,7 +2,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {
   AbiCoder,
@@ -18,23 +17,60 @@ const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const LEGACY = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const EIP170 = 24_576;
+const SOURCES = {
+  Swapboard: "src/Swapboard.sol",
+  Dutchboard: "src/Dutchboard.sol",
+  SwapboardView: "src/SwapboardView.sol",
+  Orderbol: "src/forwarders/Orderbol.sol",
+  Swapbol: "src/forwarders/Swapbol.sol",
+};
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
 ]);
 
 const read = (file) => fs.readFileSync(path.join(DEPLOY, file), "utf8").trim();
-const inspect = (name, field, extra = []) =>
-  execFileSync("forge", ["inspect", name, field, ...extra], {
-    cwd: ROOT,
-    encoding: "utf8",
-  }).trim();
 const artifactAddress = (name) => getAddress(read(`${name}.address.txt`));
+
+function findFreshArtifact(name) {
+  const source = SOURCES[name];
+  const sourceHash = keccak256(fs.readFileSync(path.join(ROOT, source)));
+  const expectedRuns = name === "SwapboardView" ? 200 : 9_999_999;
+  const candidates = [];
+  function visit(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (entry.name === `${name}.json`) candidates.push(full);
+    }
+  }
+  visit(path.join(ROOT, "out"));
+  for (const file of candidates.sort()) {
+    const artifact = JSON.parse(fs.readFileSync(file, "utf8"));
+    const metadata = typeof artifact.metadata === "string"
+      ? JSON.parse(artifact.metadata)
+      : artifact.metadata;
+    const sourceKey = metadata && Object.keys(metadata.sources || {}).find((key) => key.endsWith(source));
+    if (
+      sourceKey &&
+      metadata.sources[sourceKey].keccak256.toLowerCase() === sourceHash.toLowerCase() &&
+      metadata.settings.optimizer.runs === expectedRuns
+    ) return artifact;
+  }
+  throw Error(
+    `no fresh ${name} artifact for ${source} with optimizer_runs=${expectedRuns}; ` +
+      "run the canonical forge build first",
+  );
+}
 
 const specs = [
   {name: "Swapboard", args: [WETH]},
-  {name: "Dutchboard", args: []},
+  {name: "Dutchboard", args: [WETH]},
   {name: "SwapboardView", args: []},
-  {name: "Orderbol", args: []},
+  {
+    name: "Orderbol",
+    args: [artifactAddress("Swapboard"), artifactAddress("Dutchboard")],
+  },
   {
     name: "Swapbol",
     args: [
@@ -48,9 +84,10 @@ const specs = [
 let failed = false;
 for (const {name, args} of specs) {
   try {
-    const bytecode = inspect(name, "bytecode");
-    const runtime = inspect(name, "deployedBytecode");
-    const abi = JSON.parse(inspect(name, "abi", ["--json"]));
+    const artifact = findFreshArtifact(name);
+    const bytecode = artifact.bytecode.object;
+    const runtime = artifact.deployedBytecode.object;
+    const abi = artifact.abi;
     const inputs = abi.find((item) => item.type === "constructor")?.inputs || [];
     if (inputs.length !== args.length) {
       throw Error(`constructor expects ${inputs.length} argument(s), manifest has ${args.length}`);
@@ -69,9 +106,6 @@ for (const {name, args} of specs) {
     const salt = read(`${name}.salt.txt`);
     const address = getCreate2Address(FACTORY, salt, keccak256(creation));
     if (address !== artifactAddress(name)) throw Error(`address mismatch: recomputed ${address}`);
-    if (!address.toLowerCase().startsWith("0x000000")) {
-      throw Error(`address does not retain the three-byte vanity prefix: ${address}`);
-    }
 
     const calldata = read(`${name}.deploy.calldata.txt`);
     const decoded = deployInterface.decodeFunctionData("create2Deploy", calldata);

@@ -112,7 +112,7 @@ contract zPoolTest is Test {
 
         // Take a fifth of the ask: pay 80.32 B, receive 0.04 A.
         vm.prank(arb);
-        board.fillOrder(id, block.timestamp, 80.32e18, arb);
+        board.fillOrder(id, block.timestamp, 80.32e18, 0, arb);
 
         assertEq(A.balanceOf(arb) - 1_000_000e18, 0.04e18, "taker got A");
         assertEq(B.balanceOf(address(pool)), 199_600e18 + 80.32e18, "proceeds land at the pool");
@@ -129,7 +129,7 @@ contract zPoolTest is Test {
         _seed();
         uint256 id = pool.askId();
         vm.prank(arb);
-        board.fillOrder(id, block.timestamp, 401.6e18, arb); // whole ask
+        board.fillOrder(id, block.timestamp, 401.6e18, 0, arb); // whole ask
 
         vm.prank(keeper);
         pool.poke();
@@ -153,7 +153,7 @@ contract zPoolTest is Test {
         _seed();
         uint256 id = pool.askId();
         vm.prank(arb);
-        board.fillOrder(id, block.timestamp, 401.6e18, arb);
+        board.fillOrder(id, block.timestamp, 401.6e18, 0, arb);
 
         vm.prank(keeper);
         pool.poke();
@@ -207,7 +207,7 @@ contract zPoolTest is Test {
         _seed();
         uint256 ask = pool.askId();
         vm.prank(arb);
-        board.fillOrder(ask, block.timestamp, 80.32e18, arb);
+        board.fillOrder(ask, block.timestamp, 80.32e18, 0, arb);
         vm.warp(uint256(pool.rotationDeadline()) + 1);
 
         vm.prank(keeper);
@@ -331,7 +331,7 @@ contract zPoolTest is Test {
         assertApproxEqRel(_unitPrice(o.amountA, o.amountB), 2208.8e18, 1e12, "resting above mid");
 
         vm.prank(arb);
-        board.fillOrder(id, block.timestamp, o.amountB, arb);
+        board.fillOrder(id, block.timestamp, o.amountB, 0, arb);
         assertGt(g.price(), 2000e18, "the move was captured, not just dodged");
     }
 
@@ -565,7 +565,7 @@ contract zPoolTest is Test {
         if (a.active && _unitPrice(a.amountA, a.amountB) < px) {
             uint256 id = pool.askId();
             vm.prank(arb);
-            board.fillOrder(id, block.timestamp, a.amountB, arb);
+            board.fillOrder(id, block.timestamp, a.amountB, 0, arb);
         }
         // The bid gives B for A, so it is worth hitting when the pool pays
         // more than the market for A.
@@ -573,7 +573,7 @@ contract zPoolTest is Test {
         if (b.active && _unitPrice(b.amountB, b.amountA) > px) {
             uint256 id = pool.bidId();
             vm.prank(arb);
-            board.fillOrder(id, block.timestamp, b.amountB, arb);
+            board.fillOrder(id, block.timestamp, b.amountB, 0, arb);
         }
     }
 
@@ -587,7 +587,7 @@ contract zPoolTest is Test {
             if (pay != 0) {
                 uint256 id = pool.askId();
                 vm.prank(arb);
-                board.fillOrder(id, block.timestamp, pay, arb);
+                board.fillOrder(id, block.timestamp, pay, 0, arb);
             }
         }
         ISwapboard.Order memory b = _live(pool.bidId(), pool.postedBid());
@@ -596,7 +596,7 @@ contract zPoolTest is Test {
             if (pay != 0) {
                 uint256 id = pool.bidId();
                 vm.prank(arb);
-                board.fillOrder(id, block.timestamp, pay, arb);
+                board.fillOrder(id, block.timestamp, pay, 0, arb);
             }
         }
     }

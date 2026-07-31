@@ -79,11 +79,11 @@ contract SwapboardAuditNew is Test {
 
         vm.prank(bob);
         vm.expectRevert(Swapboard.BadRecipient.selector);
-        board.fillOrder(id, 0, 0, address(board));
+        board.fillOrder(id, 0, 0, 0, address(board));
 
         vm.prank(bob);
         vm.expectRevert(Swapboard.BadRecipient.selector);
-        board.fillOrder(id, 0, 0, address(weth));
+        board.fillOrder(id, 0, 0, 0, address(weth));
     }
 
     /// Ordinary sponsorship still works, and cannot debit the named maker.
@@ -116,7 +116,7 @@ contract SwapboardAuditNew is Test {
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(nft), uint256(7)));
-        board.fillOrder(id, 0, 0, bob);
+        board.fillOrder(id, 0, 0, 0, bob);
 
         // Still cancellable — the escrow was never at risk.
         vm.prank(alice);

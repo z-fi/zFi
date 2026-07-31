@@ -801,12 +801,12 @@ refreshBalance();update();
 const SEL_TRANSFER="a9059cbb";
 // -------------------------------------------------------------- ORDERBOOK
 // Current Swapboard + legacy v1. The deprecated 0x..85B831 board is excluded.
-const SB2="0x0000006c0fBc8CBAe822c41C9DC00956D0941e23";
+const SB2="0xD3958F4f0610DEEff356193722ceb942BDd20d39";
 const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
-const SBVIEW="0x000000B95ee642F1A216ef85b54BF77C127b1F50";
-const SWAPBOL="0x00000040Ba80f8dc500d10ea6cF889b518592756";
-const DUTCH="0x000000b87444cAd0beb79545dcaE8b4508d48179";
-const ORDERBOL="0x0000000B98f59027FAFEac53daEf59D1135e1502";
+const SBVIEW="0xF796EF7B108a8DbC8F9650579fAb88BBa00BD296";
+const SWAPBOL="0xa8429A3516E0ad2b0500b2bc7E85BE0262fb2154";
+const DUTCH="0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C";
+const ORDERBOL="0xf03bE3A900762D7D31e6d69809fd2D54Aa53b2BA";
 const SEL_NEXTID="2a58b330",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7";
 const SEL_FILL1="c37dfc5b",SEL_FILL2="8ab3bfc9",SEL_FILL2_UNWRAP="402ad677",SEL_FILL2_ETH="13092239";
 const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
@@ -814,7 +814,7 @@ const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
 const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466",SEL_FILLPLAN="c277f67c";
 const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
-const SEL_ORDER_FIXED="63b5a5be",SEL_ORDER_DUTCH="921f90cb",SEL_CHECKPOINT="a972985e";
+const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="fb910431",SEL_CHECKPOINT="a972985e";
 const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
 const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
 let bookSeq=0,bookRows=[],candCache={};
@@ -1628,6 +1628,7 @@ let cp=ZERO;
 const v=rc.value.trim();
 if(!dutch&&v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
 const pf=fill.value==="1"?1n:0n;
+const placementDeadline=BigInt(Math.floor(Date.now()/1e3)+300);
 let orderData;
 if(dutch){
   const duration=BigInt(dly.value||0);
@@ -1635,12 +1636,12 @@ if(dutch){
   if(sell>(1n<<128n)-1n||want>(1n<<96n)-1n||floor>(1n<<96n)-1n)throw Error("Dutch amount too large");
   orderData="0x"+SEL_ORDER_DUTCH+encAddr(DUTCH)+encAddr(account)+encAddr(account)
     +encAddr(f.addr)+encAddr(t.addr)+encUint(sell)+encUint(want)+encUint(floor)
-    +encUint(0n)+encUint(duration);
+    +encUint(0n)+encUint(duration)+encUint(placementDeadline);
 }else{
   const exp=+dly.value?BigInt(Math.floor(Date.now()/1e3)+ +dly.value):0n;
   orderData="0x"+SEL_ORDER_FIXED+encAddr(SB2)+encAddr(account)+encAddr(account)
     +encAddr(f.addr)+encUint(sell)+encAddr(quoteToken)+encUint(want)+encUint(pf)
-    +encUint(exp)+encAddr(cp);
+    +encUint(exp)+encAddr(cp)+encUint(placementDeadline);
 }
 let direct,funded;
 if(f.addr===ZERO){

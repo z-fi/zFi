@@ -3,7 +3,15 @@ pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 import {Swapboard} from "../src/Swapboard.sol";
-import {MockERC20, MockWETH, MockERC721, FeeToken, LyingERC721} from "./SwapboardMocks.sol";
+import {
+    MockERC20,
+    MockWETH,
+    MockERC721,
+    ShortNativeWETH,
+    FeeToken,
+    LyingERC721,
+    ReturnLyingERC721
+} from "./SwapboardMocks.sol";
 
 /// @dev Covers the entry points and revert paths the behavioural suite does not
 /// reach: batch operations, the ETH create path, unwrap-on-cancel, and every
@@ -72,6 +80,31 @@ contract SwapboardCoverageTest is Test {
         sb.createOrderWithEth{value: 1 ether}(address(weth), 1e6, false, 0, false, address(0));
     }
 
+    function test_CreateOrderWithEthRejectsZeroTokenB() public {
+        vm.prank(maker);
+        vm.expectRevert(Swapboard.ZeroAddress.selector);
+        sb.createOrderWithEth{value: 1 ether}(address(0), 1e6, false, 0, false, address(0));
+    }
+
+    function test_CreateOrderWithEthRejectsZeroFungibleAmount() public {
+        vm.prank(maker);
+        vm.expectRevert(Swapboard.ZeroAmount.selector);
+        sb.createOrderWithEth{value: 1 ether}(address(B), 0, false, 0, false, address(0));
+    }
+
+    function test_CreateOrderWithEthRejectsPartialNftAsk() public {
+        vm.prank(maker);
+        vm.expectRevert(Swapboard.NFTNotDivisible.selector);
+        sb.createOrderWithEth{value: 1 ether}(address(B), 1, true, 0, true, address(0));
+    }
+
+    function test_CreateOrderWithEthRejectsEoaTokenB() public {
+        address eoa = address(0xbeef);
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.NotAContract.selector, eoa));
+        sb.createOrderWithEth{value: 1 ether}(eoa, 1, false, 0, false, address(0));
+    }
+
     function test_CreateOrdersBatch() public {
         Swapboard.CreateOrderParams[] memory p = new Swapboard.CreateOrderParams[](2);
         p[0] = Swapboard.CreateOrderParams(address(A), 10e18, address(B), 20e6, true, 0, false, false, address(0));
@@ -110,6 +143,12 @@ contract SwapboardCoverageTest is Test {
         sb.createOrder(address(A), 0, address(B), 1e6, false, 0, false, false, address(0));
     }
 
+    function test_RejectsZeroTokenBAmount() public {
+        vm.prank(maker);
+        vm.expectRevert(Swapboard.ZeroAmount.selector);
+        sb.createOrder(address(A), 1e18, address(B), 0, false, 0, false, false, address(0));
+    }
+
     function test_RejectsSameToken() public {
         vm.prank(maker);
         vm.expectRevert(Swapboard.SameToken.selector);
@@ -122,6 +161,13 @@ contract SwapboardCoverageTest is Test {
         sb.createOrder(address(0xbeef), 1e18, address(B), 1e6, false, 0, false, false, address(0));
     }
 
+    function test_RejectsEoaAsTokenB() public {
+        address eoa = address(0xbeef);
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.NotAContract.selector, eoa));
+        sb.createOrder(address(A), 1e18, eoa, 1e6, false, 0, false, false, address(0));
+    }
+
     /// A fee-on-transfer token would leave the escrow short of what the order
     /// promises, so the shortfall is detected rather than silently accepted.
     function test_FeeOnTransferTokenIsRejected() public {
@@ -132,6 +178,30 @@ contract SwapboardCoverageTest is Test {
         vm.prank(maker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.BalanceMismatch.selector, 100e18, 99e18));
         sb.createOrder(address(fee), 100e18, address(B), 1e6, false, 0, false, false, address(0));
+    }
+
+    /// TokenB is paid directly to the maker, so its recipient delta must still
+    /// equal the nominal payment. A transfer tax must not buy the taker a full
+    /// tokenA output for a short payment.
+    function test_FeeOnTransferTokenBIsRejected() public {
+        FeeToken fee = new FeeToken();
+        fee.mint(taker, 100e18);
+        vm.prank(taker);
+        fee.approve(address(sb), type(uint256).max);
+
+        vm.prank(maker);
+        uint256 id = sb.createOrder(address(A), 10e18, address(fee), 100e18, false, 0, false, false, address(0));
+
+        vm.prank(taker);
+        vm.expectRevert(
+            abi.encodeWithSelector(Swapboard.BalanceDeltaMismatch.selector, address(fee), maker, 100e18, 99e18)
+        );
+        sb.fillOrder(id, 0, 100e18, 0, address(0));
+
+        assertEq(A.balanceOf(taker), 0, "short payment releases no escrow");
+        assertEq(fee.balanceOf(maker), 0, "maker receives no taxed payment");
+        (, bool active,,,,,,,,,) = sb.orders(id);
+        assertTrue(active, "order remains live");
     }
 
     /// An ERC-721 that no-ops transferFrom would leave an order backed by
@@ -153,8 +223,11 @@ contract SwapboardCoverageTest is Test {
         ids[0] = a;
         ids[1] = b;
         uint256[] memory amts = new uint256[](2);
+        uint256[] memory mins = new uint256[](2);
+        amts[0] = 20e6;
+        amts[1] = 60e6;
         vm.prank(taker);
-        sb.fillOrders(ids, 0, amts, address(0));
+        sb.fillOrders(ids, 0, amts, mins, address(0));
         assertEq(A.balanceOf(taker), 40e18, "both filled");
     }
 
@@ -164,26 +237,31 @@ contract SwapboardCoverageTest is Test {
         ids[0] = a;
         ids[1] = 999; // does not exist
         uint256[] memory amts = new uint256[](2);
+        uint256[] memory mins = new uint256[](2);
+        amts[0] = 20e6;
+        amts[1] = 1;
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotFound.selector, 999));
-        sb.fillOrders(ids, 0, amts, address(0));
+        sb.fillOrders(ids, 0, amts, mins, address(0));
         assertEq(A.balanceOf(taker), 0, "first fill rolled back too");
     }
 
     function test_FillOrdersRejectsMismatchedLengths() public {
         uint256[] memory ids = new uint256[](2);
         uint256[] memory amts = new uint256[](1);
+        uint256[] memory mins = new uint256[](2);
         vm.prank(taker);
         vm.expectRevert(Swapboard.LengthMismatch.selector);
-        sb.fillOrders(ids, 0, amts, address(0));
+        sb.fillOrders(ids, 0, amts, mins, address(0));
     }
 
     function test_TryFillOrdersRejectsMismatchedLengths() public {
         uint256[] memory ids = new uint256[](3);
         uint256[] memory amts = new uint256[](2);
+        uint256[] memory mins = new uint256[](3);
         vm.prank(taker);
         vm.expectRevert(Swapboard.LengthMismatch.selector);
-        sb.tryFillOrders(ids, 0, amts, address(0));
+        sb.tryFillOrders(ids, 0, amts, mins, address(0));
     }
 
     function test_CancelOrdersBatch() public {
@@ -228,18 +306,66 @@ contract SwapboardCoverageTest is Test {
         sb.cancelOrderUnwrap(id);
     }
 
+    function test_CancelUnwrapRejectsShortNativePayout() public {
+        ShortNativeWETH bad = new ShortNativeWETH();
+        Swapboard board = new Swapboard(address(bad));
+
+        vm.prank(maker);
+        uint256 id = board.createOrderWithEth{value: 1 ether}(address(B), 1e6, false, 0, false, address(0));
+        vm.prank(maker);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Swapboard.BalanceDeltaMismatch.selector, address(0), address(board), 1 ether, 1 ether - 1
+            )
+        );
+        board.cancelOrderUnwrap(id);
+    }
+
     function test_FillUnwrapRejectsNonWethOrder() public {
         uint256 id = _mk(10e18, 20e6);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NotWETH.selector, address(weth), address(A)));
-        sb.fillOrderUnwrap(id, 0, 0, address(0));
+        sb.fillOrderUnwrap(id, 0, 20e6, 0, address(0));
+    }
+
+    function test_FillUnwrapDeliversWethEscrowAsEth() public {
+        vm.prank(maker);
+        uint256 id = sb.createOrderWithEth{value: 1 ether}(address(B), 1e6, false, 0, false, address(0));
+        uint256 before = taker.balance;
+
+        vm.prank(taker);
+        sb.fillOrderUnwrap(id, 0, 1e6, 0, address(0));
+
+        assertEq(taker.balance - before, 1 ether, "WETH escrow was unwrapped for the taker");
+    }
+
+    function test_FillWithEthRejectsNftTokenB() public {
+        MockERC721 nft = new MockERC721();
+        nft.mint(taker, 7);
+        vm.prank(maker);
+        uint256 id = sb.createOrder(address(A), 1e18, address(weth), 7, false, 0, false, true, address(0));
+
+        vm.prank(taker);
+        vm.expectRevert(Swapboard.NFTNotDivisible.selector);
+        sb.fillOrderWithEth{value: 1}(id, 0, 0, address(0));
+    }
+
+    function test_CancelRejectsNftReturnThatDoesNotMove() public {
+        ReturnLyingERC721 nft = new ReturnLyingERC721(address(sb));
+        nft.mint(maker, 7);
+        vm.prank(maker);
+        uint256 id = sb.createOrder(address(nft), 7, address(B), 1e6, false, 0, true, false, address(0));
+
+        vm.prank(maker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.NFTTransferFailed.selector, address(nft), 7));
+        sb.cancelOrder(id);
     }
 
     function test_FillWithEthRejectsNonWethTokenB() public {
         uint256 id = _mk(10e18, 20e6); // tokenB is BBB, not WETH
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.NotWETH.selector, address(weth), address(B)));
-        sb.fillOrderWithEth{value: 1 ether}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 1 ether}(id, 0, 0, address(0));
     }
 
     function test_FillWithEthRejectsZeroValue() public {
@@ -247,7 +373,7 @@ contract SwapboardCoverageTest is Test {
         uint256 id = sb.createOrder(address(A), 10e18, address(weth), 1 ether, false, 0, false, false, address(0));
         vm.prank(taker);
         vm.expectRevert(Swapboard.ZeroETH.selector);
-        sb.fillOrderWithEth{value: 0}(id, 0, address(0));
+        sb.fillOrderWithEth{value: 0}(id, 0, 0, address(0));
     }
 
     // --------------------------------------------------------- fill guards
@@ -255,7 +381,7 @@ contract SwapboardCoverageTest is Test {
     function test_FillRejectsUnknownOrder() public {
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotFound.selector, 42));
-        sb.fillOrder(42, 0, 0, address(0));
+        sb.fillOrder(42, 0, 0, 0, address(0));
     }
 
     function test_FillRejectsSettledOrder() public {
@@ -264,13 +390,51 @@ contract SwapboardCoverageTest is Test {
         sb.cancelOrder(id);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotActive.selector, id));
-        sb.fillOrder(id, 0, 0, address(0));
+        sb.fillOrder(id, 0, 0, 0, address(0));
+    }
+
+    function test_FillRejectsInsufficientOutputAndPreservesState() public {
+        uint256 id = _mk(100e18, 200e6);
+        uint256 makerPaymentBefore = B.balanceOf(maker);
+        uint256 takerPaymentBefore = B.balanceOf(taker);
+
+        vm.prank(taker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.InsufficientOutput.selector, 100e18 + 1, 100e18));
+        sb.fillOrder(id, 0, 200e6, 100e18 + 1, address(0));
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        Swapboard.Order memory order = sb.getOrders(ids)[0];
+        assertEq(order.maker, maker);
+        assertTrue(order.active, "slippage failure keeps the order live");
+        assertEq(order.amountA, 100e18, "escrow amount is unchanged");
+        assertEq(order.amountB, 200e6, "ask amount is unchanged");
+        assertEq(B.balanceOf(maker), makerPaymentBefore, "maker was not paid");
+        assertEq(B.balanceOf(taker), takerPaymentBefore, "taker was not charged");
     }
 
     function test_CancelRejectsUnknownOrder() public {
         vm.prank(maker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotFound.selector, 7));
         sb.cancelOrder(7);
+    }
+
+    function test_CancelExpiredRejectsUnknownOrder() public {
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 7;
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotFound.selector, 7));
+        sb.cancelExpired(ids);
+    }
+
+    function test_CancelExpiredRejectsSettledOrder() public {
+        uint256 id = _mk(10e18, 20e6);
+        vm.prank(maker);
+        sb.cancelOrder(id);
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderNotActive.selector, id));
+        sb.cancelExpired(ids);
     }
 
     // ----------------------------------------------------------- view reads

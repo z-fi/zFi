@@ -25,9 +25,9 @@ contract OrderbolTest is Test {
         vm.etch(WETH, address(wethImpl).code);
         vm.deal(WETH, 1_000 ether);
 
-        executor = new Orderbol();
         swapboard = new Swapboard(WETH);
         dutchboard = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        executor = new Orderbol(address(swapboard), address(dutchboard));
         // A new contract inherits whatever balance already sits at its address,
         // and these forked tests deploy to deterministic CREATE addresses - one
         // of which (0x2e23...470b) holds 1 wei on mainnet at the pinned block.
@@ -45,9 +45,10 @@ contract OrderbolTest is Test {
         lot.mint(address(executor), 10e18);
 
         vm.prank(sponsor);
-        executor.placeSwapboard(
-            address(swapboard), maker, sponsor, address(lot), 10e18, address(quote), 25e18, true, 0, address(0)
+        uint256 orderId = executor.placeSwapboard(
+            address(swapboard), maker, sponsor, address(lot), 10e18, address(quote), 25e18, true, 0, address(0), 0
         );
+        assertEq(orderId, 0);
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
@@ -71,9 +72,10 @@ contract OrderbolTest is Test {
         lot.mint(address(executor), 10e18);
         quote.mint(taker, 100e18);
 
-        executor.placeDutch(
-            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours
+        uint256 listingId = executor.placeDutch(
+            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0
         );
+        assertEq(listingId, 0);
 
         Dutchboard.ListingView memory l = dutchboard.getListing(0);
         assertEq(l.seller, maker, "routed executor became seller");
@@ -93,7 +95,7 @@ contract OrderbolTest is Test {
         vm.deal(address(this), 10 ether);
 
         executor.placeSwapboard{value: 2 ether}(
-            address(swapboard), maker, address(this), address(0), 2 ether, address(quote), 5e18, true, 0, address(0)
+            address(swapboard), maker, address(this), address(0), 2 ether, address(quote), 5e18, true, 0, address(0), 0
         );
 
         uint256[] memory ids = new uint256[](1);
@@ -110,7 +112,7 @@ contract OrderbolTest is Test {
         vm.deal(address(this), 10 ether);
 
         executor.placeDutch{value: 3 ether}(
-            address(dutchboard), maker, address(this), address(0), address(quote), 3 ether, 9e18, 6e18, 0, 1 days
+            address(dutchboard), maker, address(this), address(0), address(quote), 3 ether, 9e18, 6e18, 0, 1 days, 0
         );
 
         Dutchboard.ListingView memory l = dutchboard.getListing(0);
@@ -128,7 +130,7 @@ contract OrderbolTest is Test {
         lot.mint(address(executor), 10e18);
 
         executor.placeSwapboard(
-            address(swapboard), maker, sponsor, address(lot), 10e18, address(quote), 25e18, true, 0, address(0)
+            address(swapboard), maker, sponsor, address(lot), 10e18, address(quote), 25e18, true, 0, address(0), 0
         );
 
         assertEq(address(executor).balance, 1 ether, "pre-existing ETH was swept");
@@ -149,7 +151,8 @@ contract OrderbolTest is Test {
             1e18,
             true,
             0,
-            address(0)
+            address(0),
+            0
         );
     }
 
@@ -165,17 +168,38 @@ contract OrderbolTest is Test {
             1e18,
             true,
             0,
-            address(0)
+            address(0),
+            0
         );
 
         vm.expectRevert(Orderbol.BadOrder.selector);
         executor.placeSwapboard(
-            address(swapboard), maker, address(executor), address(0), 1 ether, address(quote), 1e18, true, 0, address(0)
+            address(swapboard), maker, address(executor), address(0), 1 ether, address(quote), 1e18, true, 0, address(0), 0
         );
 
         vm.expectRevert(Orderbol.BadOrder.selector);
         executor.placeDutch(
-            address(dutchboard), address(executor), sponsor, address(0), address(quote), 1 ether, 1e18, 1e18, 0, 1 days
+            address(dutchboard), address(executor), sponsor, address(0), address(quote), 1 ether, 1e18, 1e18, 0, 1 days, 0
+        );
+    }
+
+    function test_rejectsArbitraryBoardAndWethRefundRecipient() public {
+        MockERC20 fake = new MockERC20("FAKE", 18);
+        vm.expectRevert(Orderbol.BadOrder.selector);
+        executor.placeSwapboard(
+            address(fake), maker, sponsor, address(lot), 1e18, address(quote), 1e18, true, 0, address(0), 0
+        );
+
+        vm.expectRevert(Orderbol.BadOrder.selector);
+        executor.placeSwapboard(
+            address(swapboard), maker, WETH, address(lot), 1e18, address(quote), 1e18, true, 0, address(0), 0
+        );
+    }
+
+    function test_rejectsExpiredPlacementDeadline() public {
+        vm.expectRevert(Orderbol.DeadlineExpired.selector);
+        executor.placeSwapboard(
+            address(swapboard), maker, sponsor, address(lot), 1e18, address(quote), 1e18, true, 0, address(0), 1
         );
     }
 }

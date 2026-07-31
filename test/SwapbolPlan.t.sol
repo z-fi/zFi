@@ -65,30 +65,32 @@ contract MockMetaAmmRouter {
         _send(tokenOut, recipient, amountOut);
     }
 
-    function exactIn(address tokenIn, address tokenOut, address recipient, uint256 amountIn, uint256 amountOut)
-        external
-        payable
-    {
-        _take(tokenIn, amountIn);
-        _send(tokenOut, recipient, amountOut);
-    }
-
-    function exactOut(
+    /// Matches an allowlisted zRouter selector while keeping the test's fixed
+    /// output behaviour independent of live AMM state.
+    function swapV2(
+        address recipient,
+        bool exactOut,
         address tokenIn,
         address tokenOut,
-        address recipient,
-        uint256 maxIn,
-        uint256 actualIn,
-        uint256 amountOut
-    ) external payable {
-        require(actualIn <= maxIn, "limit");
-        if (tokenIn == address(0)) require(msg.value == maxIn, "value");
-        else MockERC20(tokenIn).transferFrom(msg.sender, address(this), actualIn);
-        _send(tokenOut, recipient, amountOut);
-        if (tokenIn == address(0) && maxIn != actualIn) {
-            (bool ok,) = msg.sender.call{value: maxIn - actualIn}("");
-            require(ok, "refund");
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256
+    ) external payable returns (uint256 amountIn, uint256 amountOut) {
+        amountOut = exactOut ? swapAmount : amountLimit;
+        if (exactOut) {
+            amountIn = tokenIn == address(0) ? amountLimit / 2 : amountLimit - 2e18;
+            require(amountIn <= amountLimit, "limit");
+            if (tokenIn == address(0)) require(msg.value == amountLimit, "value");
+            else MockERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+            if (tokenIn == address(0) && amountLimit != amountIn) {
+                (bool ok,) = msg.sender.call{value: amountLimit - amountIn}("");
+                require(ok, "refund");
+            }
+        } else {
+            amountIn = swapAmount;
+            _take(tokenIn, amountIn);
         }
+        _send(tokenOut, recipient, amountOut);
     }
 
     function _take(address token, uint256 amount) internal {
@@ -374,7 +376,10 @@ contract SwapbolPlanTest is Test {
             block.timestamp + 30 minutes,
             legs,
             ammIn,
-            abi.encodeCall(MockMetaAmmRouter.exactIn, (address(pay), address(out), taker, ammIn, 5e18))
+            abi.encodeCall(
+                MockMetaAmmRouter.swapV2,
+                (taker, false, address(pay), address(out), ammIn, 5e18, block.timestamp + 30 minutes)
+            )
         );
 
         assertEq(out.balanceOf(taker), bookOut + 5e18, "aggregate route output");
@@ -393,7 +398,6 @@ contract SwapbolPlanTest is Test {
         Swapbol.Fill[] memory legs = new Swapbol.Fill[](1);
         legs[0] = Swapbol.Fill(0, address(legacy), 20e18, 10e18, false);
         uint256 ammMax = 12e18;
-        uint256 ammActual = 10e18;
         uint256 maxIn = 20e18 + ammMax;
         address refund = address(0xF00D);
         bytes memory data = abi.encodeCall(
@@ -406,7 +410,10 @@ contract SwapbolPlanTest is Test {
                 block.timestamp + 30 minutes,
                 legs,
                 ammMax,
-                abi.encodeCall(MockMetaAmmRouter.exactOut, (address(pay), address(out), taker, ammMax, ammActual, 5e18))
+                abi.encodeCall(
+                    MockMetaAmmRouter.swapV2,
+                    (taker, true, address(pay), address(out), 5e18, ammMax, block.timestamp + 30 minutes)
+                )
             )
         );
 
@@ -421,7 +428,7 @@ contract SwapbolPlanTest is Test {
         vm.stopPrank();
 
         assertEq(out.balanceOf(taker), 15e18, "exact output");
-        assertEq(pay.balanceOf(refund), ammMax - ammActual, "unused maximum refunded separately");
+        assertEq(pay.balanceOf(refund), 2e18, "unused maximum refunded separately");
         assertEq(pay.balanceOf(taker), 0, "output recipient did not receive input change");
         assertEq(pay.balanceOf(maker), 20e18, "book paid");
         assertEq(pay.allowance(address(executor), META_AMM), 0, "AMM approval revoked");
@@ -449,7 +456,10 @@ contract SwapbolPlanTest is Test {
                 block.timestamp + 30 minutes,
                 legs,
                 1 ether,
-                abi.encodeCall(MockMetaAmmRouter.exactIn, (address(0), address(out), taker, 1 ether, 5e18))
+                abi.encodeCall(
+                    MockMetaAmmRouter.swapV2,
+                    (taker, false, address(0), address(out), 1 ether, 5e18, block.timestamp + 30 minutes)
+                )
             )
         );
         bytes[] memory calls = new bytes[](2);
@@ -489,7 +499,10 @@ contract SwapbolPlanTest is Test {
                 block.timestamp + 30 minutes,
                 legs,
                 2 ether,
-                abi.encodeCall(MockMetaAmmRouter.exactOut, (address(0), address(out), taker, 2 ether, 1 ether, 5e18))
+                abi.encodeCall(
+                    MockMetaAmmRouter.swapV2,
+                    (taker, true, address(0), address(out), 5e18, 2 ether, block.timestamp + 30 minutes)
+                )
             )
         );
         bytes[] memory calls = new bytes[](2);
@@ -578,7 +591,10 @@ contract SwapbolPlanTest is Test {
                 block.timestamp + 30 minutes,
                 legs,
                 10e18,
-                abi.encodeCall(MockMetaAmmRouter.exactIn, (address(pay), address(out), taker, 10e18, 5e18))
+                abi.encodeCall(
+                    MockMetaAmmRouter.swapV2,
+                    (taker, false, address(pay), address(out), 10e18, 5e18, block.timestamp + 30 minutes)
+                )
             )
         );
         bytes[] memory calls = new bytes[](3);

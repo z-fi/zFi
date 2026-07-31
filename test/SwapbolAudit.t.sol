@@ -148,6 +148,7 @@ contract SwapbolAuditTest is Test {
 
         vm.startPrank(attacker);
         f.checkpoint(address(usd));
+        vm.expectRevert(Swapbol.BadPlan.selector);
         f.fill(spender, address(usd), address(0), attacker, attacker, "");
         vm.stopPrank();
 
@@ -182,9 +183,10 @@ contract SwapbolAuditTest is Test {
 
         f.checkpoint(address(usd));
         usd.mint(address(f), 1_000e6);
+        vm.expectRevert(Swapbol.BadPlan.selector);
         f.fill(address(peeker), address(usd), address(0), victim, victim, abi.encodeCall(Peeker.peek, ()));
 
-        assertEq(peeker.seen(), 1_000e6, "approved exactly the deposit, not type(uint256).max");
+        assertEq(peeker.seen(), 0, "arbitrary venue calldata was rejected before approval");
         assertEq(usd.allowance(address(f), address(peeker)), 0, "and revoked afterwards");
     }
 
@@ -205,6 +207,7 @@ contract SwapbolAuditTest is Test {
         // 1. attacker plants the approval
         vm.startPrank(attacker);
         fwd.checkpoint(address(usd));
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill(address(thief), address(usd), address(0), attacker, attacker, "");
         vm.stopPrank();
 
@@ -229,7 +232,7 @@ contract SwapbolAuditTest is Test {
             address(payout),
             victim,
             victim,
-            abi.encodeCall(Swapboard.fillOrder, (id, 0, 6000e6, victim))
+            abi.encodeCall(Swapboard.fillOrder, (id, 0, 6000e6, 0, victim))
         );
 
         assertEq(usd.balanceOf(attacker), 0, "nothing taken");
@@ -265,7 +268,7 @@ contract SwapbolAuditTest is Test {
             address(payout),
             victim,
             victim,
-            abi.encodeCall(Swapboard.fillOrder, (id, 0, 6000e6, victim))
+            abi.encodeCall(Swapboard.fillOrder, (id, 0, 6000e6, 0, victim))
         );
 
         assertEq(usd.balanceOf(attacker), 0, "nothing swept");
@@ -278,7 +281,7 @@ contract SwapbolAuditTest is Test {
         Swapbol fwd = _bind(address(re));
         re.aim(fwd);
 
-        vm.expectRevert(Swapbol.Reentrancy.selector);
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill(address(re), address(0), address(0), victim, victim, abi.encodeCall(Hook.onTransfer, ()));
     }
 
@@ -292,13 +295,15 @@ contract SwapbolAuditTest is Test {
         Swapbol fwd = _bind(address(r));
 
         vm.deal(victim, 10 ether);
+        uint256 before = victim.balance;
         vm.prank(victim);
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill{value: 10 ether}(
             address(r), address(0), address(usd), victim, victim, abi.encodeCall(Refunder.keep, (6 ether))
         );
 
         assertEq(address(fwd).balance, 0, "nothing stranded");
-        assertEq(victim.balance, 4 ether, "refund reached the user");
+        assertEq(victim.balance, before, "rejected unreviewed venue");
     }
 
     /// The call value must be what the caller sent, not the contract's whole
@@ -314,11 +319,12 @@ contract SwapbolAuditTest is Test {
 
         vm.deal(attacker, 1 ether);
         vm.prank(attacker);
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill{value: 1 ether}(
             address(sink), address(0), address(0), attacker, attacker, abi.encodeCall(Refunder.keep, (6 ether))
         );
 
-        assertEq(address(sink).balance, 1 ether, "spent only what was sent");
+        assertEq(address(sink).balance, 0, "unreviewed venue was not called");
     }
 
     /// A pre-existing balance is not attributable to this call. Keeping it
@@ -330,6 +336,7 @@ contract SwapbolAuditTest is Test {
         vm.deal(address(fwd), 3 ether);
 
         fwd.checkpoint(address(usd));
+        vm.expectRevert(Swapbol.BadPlan.selector);
         fwd.fill(address(sink), address(usd), address(0), victim, victim, abi.encodeCall(Refunder.keep, (0)));
 
         assertEq(address(fwd).balance, 3 ether, "forced ETH remains isolated");
