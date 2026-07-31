@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {PrecisionPoolLens} from "../src/pools/PrecisionPoolLens.sol";
+import {PrecisionZap} from "../src/pools/PrecisionZap.sol";
 
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
@@ -12,6 +13,16 @@ interface IERC20 {
 }
 
 interface ISnwap {
+    function snwapMulti(
+        address tokenIn,
+        uint256 amountIn,
+        address recipient,
+        address[] calldata tokensOut,
+        uint256[] calldata amountsOutMin,
+        address executor,
+        bytes calldata executorData
+    ) external payable returns (uint256[] memory amountsOut);
+
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -21,6 +32,8 @@ interface ISnwap {
         address executor,
         bytes calldata executorData
     ) external payable returns (uint256 amountOut);
+
+    function multicall(bytes[] calldata data) external payable returns (bytes[] memory results);
 }
 
 /// @dev The assumption the whole composition story rests on: that the LIVE
@@ -94,6 +107,34 @@ contract PrecisionPoolSnwapTest is Test {
         );
     }
 
+    /// @dev zRouter's SafeExecutor is public, so an ERC-20 precision route
+    /// checkpoints the factory in an earlier entry of the same multicall. The
+    /// second entry then transfers the input and consumes exactly that delta.
+    function _checkpointedErc20Snwap(address tokenIn, uint256 amountIn, address to, address tokenOut)
+        internal
+        returns (uint256 amountOut)
+    {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(
+            ISnwap.snwap,
+            (
+                address(0),
+                uint256(0),
+                to,
+                address(0),
+                uint256(0),
+                address(factory),
+                abi.encodeCall(PrecisionPoolFactory.checkpoint, (tokenIn))
+            )
+        );
+        calls[1] = abi.encodeCall(
+            ISnwap.snwap,
+            (tokenIn, amountIn, to, tokenOut, uint256(0), address(factory), _swapData(tokenIn, amountIn, to))
+        );
+        bytes[] memory results = ISnwap(ZROUTER).multicall(calls);
+        amountOut = abi.decode(results[1], (uint256));
+    }
+
     /// @dev ETH in. snwap forwards msg.value to the executor, which passes
     /// the declared exact amount on to the pool.
     function test_LiveRouterSwapsEthForUsdc() public {
@@ -121,8 +162,7 @@ contract PrecisionPoolSnwapTest is Test {
         uint256 before = user.balance;
 
         vm.prank(user);
-        uint256 out = ISnwap(ZROUTER)
-            .snwap(USDC, amountIn, user, address(0), 0, address(factory), _swapData(USDC, amountIn, user));
+        uint256 out = _checkpointedErc20Snwap(USDC, amountIn, user, address(0));
 
         assertEq(out, predicted, "quote held through the router");
         assertEq(user.balance - before, predicted, "ETH delivered to the recipient");
@@ -224,5 +264,89 @@ contract PrecisionPoolSnwapTest is Test {
 
         assertEq(IERC20(USDC).balanceOf(user) - before, a + b, "both legs delivered");
         assertTrue(p2 == bands[0] || p2 == bands[1]);
+    }
+
+    /// @dev Exiting a band inside a route: the router funds the zap with LP
+    /// shares, the zap burns them, and snwapMulti measures BOTH sides landing
+    /// on the recipient. Whichever leg the user did not want would be an
+    /// ordinary swap in the next multicall entry - not this contract's job.
+    function test_ExitAPositionThroughTheLiveRouter() public {
+        PrecisionZap zap = new PrecisionZap(factory, ZROUTER_SAFE_EXECUTOR);
+
+        uint256 shares = pool.balanceOf(lp) / 2;
+        uint256 supply = pool.totalSupply();
+        // Redemption is exact and knowable in advance - no quoting needed.
+        uint256 expect0 = uint256(pool.reserve0()) * shares / supply;
+        uint256 expect1 = uint256(pool.reserve1()) * shares / supply;
+
+        vm.prank(lp);
+        pool.approve(ZROUTER, type(uint256).max);
+
+        address[] memory tokensOut = new address[](2);
+        tokensOut[0] = address(0);
+        tokensOut[1] = USDC;
+        uint256[] memory mins = new uint256[](2);
+
+        uint256 eth0 = lp.balance;
+        uint256 usdc0 = IERC20(USDC).balanceOf(lp);
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(
+            ISnwap.snwap,
+            (
+                address(0),
+                uint256(0),
+                lp,
+                address(0),
+                uint256(0),
+                address(zap),
+                abi.encodeCall(PrecisionZap.checkpoint, (address(pool)))
+            )
+        );
+        calls[1] = abi.encodeCall(
+            ISnwap.snwapMulti,
+            (
+                address(pool),
+                shares,
+                lp,
+                tokensOut,
+                mins,
+                address(zap),
+                abi.encodeCall(PrecisionZap.exit, (address(pool), shares, 0, 0, lp))
+            )
+        );
+
+        vm.prank(lp);
+        ISnwap(ZROUTER).multicall(calls);
+
+        assertEq(lp.balance - eth0, expect0, "ETH leg exact");
+        assertEq(IERC20(USDC).balanceOf(lp) - usdc0, expect1, "USDC leg exact");
+        assertEq(pool.balanceOf(lp), supply - 1000 - shares, "shares burned");
+        assertEq(pool.balanceOf(address(zap)), 0, "zap keeps nothing");
+    }
+
+    /// @dev Without a fresh checkpoint the zap will not spend a balance it
+    /// finds lying around, so a stray transfer cannot be redeemed by whoever
+    /// calls next.
+    function test_ZapRefusesUncheckpointedShares() public {
+        PrecisionZap zap = new PrecisionZap(factory, ZROUTER_SAFE_EXECUTOR);
+
+        vm.prank(lp);
+        pool.transfer(address(zap), 1e6);
+
+        vm.prank(ZROUTER_SAFE_EXECUTOR);
+        vm.expectRevert(PrecisionZap.BadCheckpoint.selector);
+        zap.exit(address(pool), 1e6, 0, 0, lp);
+    }
+
+    function test_ZapRefusesUntrustedCallersAndUnknownPools() public {
+        PrecisionZap zap = new PrecisionZap(factory, ZROUTER_SAFE_EXECUTOR);
+
+        vm.expectRevert(PrecisionZap.NotExecutor.selector);
+        zap.exit(address(pool), 1, 0, 0, lp);
+
+        vm.prank(ZROUTER_SAFE_EXECUTOR);
+        vm.expectRevert(PrecisionZap.NoPool.selector);
+        zap.exit(address(0xDEAD), 1, 0, 0, lp);
     }
 }

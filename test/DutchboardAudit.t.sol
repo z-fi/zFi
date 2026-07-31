@@ -28,7 +28,7 @@ contract DutchboardAuditTest is Test {
     address attacker = address(0xBAD);
 
     function setUp() public {
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         lot = new MockERC20("LOT", 18);
         quote = new MockERC20("QUOTE", 18);
         quote.mint(taker, 1_000_000e18);

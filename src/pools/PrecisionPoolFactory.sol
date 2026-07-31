@@ -5,8 +5,8 @@ import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 import {PrecisionPool} from "./PrecisionPool.sol";
 
 /// @title PrecisionPoolFactory
-/// @notice Deploys PrecisionPool, one per (pair, range, fee), at an address
-///         derived from those parameters.
+/// @notice Deploys PrecisionPool, one per complete immutable market tuple, at
+///         an address derived from those parameters.
 ///
 /// @dev    RANGES ARE MEANT TO BE CURATED, AND THAT IS AN ARCHITECTURAL CHOICE
 ///         RATHER THAN A POLICY ONE. Here a range is a whole pool, not a
@@ -80,18 +80,22 @@ contract PrecisionPoolFactory {
     uint256 constant MAX_FEE = 100_000;
     uint256 constant MAX_CREATOR_SHARE = 5_000;
     uint256 constant MAX_PAGE_SIZE = 128;
+    uint256 constant MAX_SQRT_PRICE = 1e36;
+    uint256 constant CHECKPOINT_NAMESPACE = 1 << 255;
 
     error Bad();
     error Exists();
     error NoPool();
     error NotCreator();
     error NotExecutor();
+    error BadCheckpoint();
 
-    /// @notice The sole router permitted to use the transfer-first execution
-    ///         path. address(0) deliberately disables that optional path.
-    /// @dev ERC-20 transfers do not carry a transaction-scoped provenance
-    ///      signal. Without this bound, anyone could exchange an unsolicited
-    ///      token balance sent to the factory for a pool's other asset.
+    /// @notice Executor used for the checkpointed, transfer-first route.
+    ///         address(0) deliberately disables that optional path.
+    /// @dev zRouter's SafeExecutor is public, so its address alone is not a
+    ///      provenance signal. ERC-20 routes therefore also use the transient
+    ///      balance checkpoint below; it binds a settlement to the fresh amount
+    ///      funded after that checkpoint, never to pre-existing factory dust.
     address public immutable trustedExecutor;
 
     /// @dev Every pool ever created, in creation order.
@@ -119,6 +123,7 @@ contract PrecisionPoolFactory {
     /// @param trustedExecutor_ Router allowed to call `executePrefundedSwap`.
     ///        Set to address(0) when only direct exact-input swaps are wanted.
     constructor(address trustedExecutor_) {
+        if (trustedExecutor_ != address(0) && trustedExecutor_.code.length == 0) revert Bad();
         trustedExecutor = trustedExecutor_;
     }
 
@@ -129,22 +134,23 @@ contract PrecisionPoolFactory {
     function createPool(Market calldata m) public returns (address pool) {
         _check(m);
         _checkCreator(m);
-        address predicted = poolFor(m);
+        bytes32 salt = _marketSalt(m);
+        bytes memory initCode = _poolInitCode(m);
+        address predicted = _poolAddress(salt, keccak256(initCode));
         if (predicted.code.length != 0) revert Exists();
 
-        pool = address(
-            new PrecisionPool{salt: keccak256(abi.encode(m))}(
-                address(this),
-                m.token0,
-                m.token1,
-                m.sqrtPLow,
-                m.sqrtPHigh,
-                m.fee,
-                m.hook,
-                m.feeRecipient,
-                m.creatorFeeBps
-            )
-        );
+        assembly ("memory-safe") {
+            pool := create2(0, add(initCode, 0x20), mload(initCode), salt)
+            if iszero(pool) {
+                let size := returndatasize()
+                if iszero(size) {
+                    mstore(0x00, 0x846ec056) // `Exists()`.
+                    revert(0x1c, 0x04)
+                }
+                returndatacopy(0, 0, size)
+                revert(0, size)
+            }
+        }
 
         _index(pool, m);
         emit PoolCreated(pool, m.token0, m.token1, m.fee);
@@ -226,8 +232,11 @@ contract PrecisionPoolFactory {
         uint256 remaining = total - start;
         if (size > remaining) size = remaining;
         out = new address[](size);
-        for (uint256 i; i < size; ++i) {
-            out[i] = pools[start + i];
+        for (uint256 i; i < size;) {
+            unchecked {
+                out[i] = pools[start + i];
+                ++i;
+            }
         }
     }
 
@@ -274,7 +283,7 @@ contract PrecisionPoolFactory {
         returns (address pool, uint256 lp, uint256 used0, uint256 used1)
     {
         pool = poolFor(m);
-        if (pool.code.length == 0) revert NoPool();
+        if (!isPool[pool]) revert NoPool();
         // A branded market can only be initialized by the recipient named in
         // its immutable terms. Subsequent liquidity remains permissionless.
         if (PrecisionPool(payable(pool)).totalSupply() == 0) _checkCreator(m);
@@ -308,30 +317,39 @@ contract PrecisionPoolFactory {
         );
     }
 
-    /// @notice Direct, exact-input swap path. Pulls ERC-20s in the same call
-    ///         and therefore never relies on an observable prefund.
-    function swapExactIn(address pool, address tokenIn, uint256 amountIn, uint256 minOut, address to)
-        external
-        payable
-        returns (uint256 amountOut)
-    {
-        if (!isPool[pool]) revert NoPool();
-        PrecisionPool p = PrecisionPool(payable(pool));
-        if (tokenIn != p.token0() && tokenIn != p.token1()) revert Bad();
-        bool nativeIn = tokenIn == address(0) && p.token0() == address(0);
-        if (nativeIn) {
-            if (msg.value != amountIn) revert Bad();
-            return p.swapFromFactory{value: amountIn}(tokenIn, amountIn, minOut, to);
+    /// @notice Snapshot an ERC-20 balance before a zRouter route funds this factory.
+    /// @dev Call through `trustedExecutor` in an earlier entry of the same
+    ///      zRouter multicall, then call `executePrefundedSwap` after zRouter
+    ///      has forwarded the input. The checkpoint is transient, keyed by
+    ///      token, and consumed before any token call is made. Both endpoints
+    ///      authenticate the single immutable executor.
+    ///      Native input does not need this flow: `msg.value` authenticates its
+    ///      exact amount in the settlement call itself.
+    function checkpoint(address token) external {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (token == address(0) || token.code.length == 0) revert Bad();
+
+        bytes32 slot = _checkpointSlot(token);
+        uint256 encoded;
+        assembly ("memory-safe") {
+            encoded := tload(slot)
         }
-        if (msg.value != 0) revert Bad();
-        _pullExact(tokenIn, msg.sender, pool, amountIn);
-        return p.swapFromFactory(tokenIn, amountIn, minOut, to);
+        if (encoded != 0) revert BadCheckpoint();
+
+        uint256 checkpointBalance = token.balanceOf(address(this));
+        if (checkpointBalance == type(uint256).max) revert BadCheckpoint();
+        unchecked {
+            encoded = checkpointBalance + 1;
+        }
+        assembly ("memory-safe") {
+            tstore(slot, encoded)
+        }
     }
 
     /// @notice Exact settlement for an atomic executor that has already funded
     ///         this factory in the current transaction (for example zRouter's
-    ///         `snwap`). The specified amount, rather than this contract's
-    ///         total balance, is forwarded to the pool.
+    ///         `snwap`). ERC-20 input must be covered by a same-transaction
+    ///         `checkpoint`; native input is authenticated by `msg.value`.
     function executePrefundedSwap(address pool, address tokenIn, uint256 amountIn, uint256 minOut, address to)
         external
         payable
@@ -340,15 +358,37 @@ contract PrecisionPoolFactory {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (!isPool[pool]) revert NoPool();
         PrecisionPool p = PrecisionPool(payable(pool));
-        if (tokenIn != p.token0() && tokenIn != p.token1()) revert Bad();
-        bool nativeIn = tokenIn == address(0) && p.token0() == address(0);
-        if (nativeIn) {
+        if (tokenIn == address(0)) {
             if (msg.value != amountIn) revert Bad();
             return p.swapFromFactory{value: amountIn}(tokenIn, amountIn, minOut, to);
         }
         if (msg.value != 0) revert Bad();
-        _transferExact(tokenIn, pool, amountIn);
+        uint256 senderBefore = _consumeCheckpoint(tokenIn, amountIn);
+        _transferExact(tokenIn, pool, amountIn, senderBefore);
         return p.swapFromFactory(tokenIn, amountIn, minOut, to);
+    }
+
+    function _consumeCheckpoint(address token, uint256 amount) internal returns (uint256 current) {
+        bytes32 slot = _checkpointSlot(token);
+        uint256 encoded;
+        assembly ("memory-safe") {
+            encoded := tload(slot)
+            // Clear before the token receives control. A reentrant call cannot
+            // consume the same route funding twice.
+            tstore(slot, 0)
+        }
+        if (encoded == 0) revert BadCheckpoint();
+
+        uint256 base;
+        unchecked {
+            base = encoded - 1;
+        }
+        current = token.balanceOf(address(this));
+        if (current < base || current - base != amount) revert BadCheckpoint();
+    }
+
+    function _checkpointSlot(address token) internal pure returns (bytes32) {
+        return bytes32(CHECKPOINT_NAMESPACE | uint256(uint160(token)));
     }
 
     function _pullExact(address token, address from, address to, uint256 amount) internal {
@@ -359,9 +399,8 @@ contract PrecisionPoolFactory {
         if (afterBalance < beforeBalance || afterBalance - beforeBalance != amount) revert Bad();
     }
 
-    function _transferExact(address token, address to, uint256 amount) internal {
+    function _transferExact(address token, address to, uint256 amount, uint256 senderBefore) internal {
         if (amount == 0) return;
-        uint256 senderBefore = token.balanceOf(address(this));
         uint256 recipientBefore = token.balanceOf(to);
         SafeTransferLib.safeTransfer(token, to, amount);
         uint256 senderAfter = token.balanceOf(address(this));
@@ -378,40 +417,47 @@ contract PrecisionPoolFactory {
     ///      by view callers; the factory has to carry that code regardless, in
     ///      order to deploy at all.
     function poolFor(Market calldata m) public view returns (address) {
-        bytes32 initHash = keccak256(
-            abi.encodePacked(
-                type(PrecisionPool).creationCode,
-                abi.encode(
-                    address(this),
-                    m.token0,
-                    m.token1,
-                    m.sqrtPLow,
-                    m.sqrtPHigh,
-                    m.fee,
-                    m.hook,
-                    m.feeRecipient,
-                    m.creatorFeeBps
-                )
-            )
-        );
-        return address(
-            uint160(
-                uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), keccak256(abi.encode(m)), initHash)))
+        return _poolAddress(_marketSalt(m), keccak256(_poolInitCode(m)));
+    }
+
+    function _poolInitCode(Market calldata m) internal view returns (bytes memory) {
+        return abi.encodePacked(
+            type(PrecisionPool).creationCode,
+            abi.encode(
+                address(this),
+                m.token0,
+                m.token1,
+                m.sqrtPLow,
+                m.sqrtPHigh,
+                m.fee,
+                m.hook,
+                m.feeRecipient,
+                m.creatorFeeBps
             )
         );
     }
 
-    function _check(Market calldata m) internal pure {
+    function _marketSalt(Market calldata m) internal pure returns (bytes32) {
+        return keccak256(abi.encode(m));
+    }
+
+    function _poolAddress(bytes32 salt, bytes32 initHash) internal view returns (address) {
+        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initHash)))));
+    }
+
+    function _check(Market calldata m) internal view {
         // Canonical ordering; address(0) is native ETH and sorts first, which
         // is what makes it always token0.
         if (m.token0 >= m.token1) revert Bad();
-        if (m.token1 == address(0)) revert Bad();
+        if (m.token1.code.length == 0 || (m.token0 != address(0) && m.token0.code.length == 0)) revert Bad();
         // sqrtPLow divides the virtual reserve, and an empty or inverted range
-        // leaves the seed with nothing to divide by.
-        if (m.sqrtPLow == 0 || m.sqrtPHigh <= m.sqrtPLow) revert Bad();
+        // leaves the seed with nothing to divide by. The upper bound combines
+        // with the pool's liquidity cap to keep virtual-reserve math in range.
+        if (m.sqrtPLow == 0 || m.sqrtPHigh <= m.sqrtPLow || m.sqrtPHigh > MAX_SQRT_PRICE) revert Bad();
         if (m.fee >= MAX_FEE) revert Bad();
         if (m.creatorFeeBps > MAX_CREATOR_SHARE) revert Bad();
         if (m.creatorFeeBps != 0 && m.feeRecipient == address(0)) revert Bad();
+        if (m.hook != address(0) && m.hook.code.length == 0) revert Bad();
     }
 
     function _checkCreator(Market calldata m) internal view {

@@ -56,7 +56,7 @@ contract DutchboardCancelUnwrapTest is Test {
         vm.deal(WETH, 1_000 ether);
         weth = MockWETH(payable(WETH));
 
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         // These tests assert the board holds no stray ETH. Forked tests deploy
         // to deterministic CREATE addresses, and this one (0x2e23...470b, the
         // second contract a forge test deploys) holds 1 wei on mainnet at the

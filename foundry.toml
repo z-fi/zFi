@@ -7,10 +7,44 @@ optimizer_runs = 9_999_999
 # Must be an ARCHIVE endpoint: the pin below is far enough back that pruning
 # full nodes (1rpc.io, flashbots, cloudflare) return "historical state is not
 # available" and every forked test errors before its first assertion.
-# eth.merkle.io also serves this block, but rate-limits forge's request volume.
-# Override with FOUNDRY_ETH_RPC_URL env var for faster RPC.
-eth_rpc_url = "https://gateway.tenderly.co/public/mainnet"
-fork_block_number = 24_880_000
+# Override with FOUNDRY_ETH_RPC_URL env var for a faster/paid RPC.
+#
+# Probed 2026-07-31 for archive state at block 24_880_000:
+#   eth.drpc.org                        OK   <- current default
+#   eth.merkle.io                       OK   but rate-limits forge's request volume
+#   gateway.tenderly.co/public/mainnet  OK   but see below
+#   eth.llamarpc.com                    HTTP 521
+#   rpc.ankr.com/eth                    -32000 (no archive on the free tier)
+#   ethereum-rpc.publicnode.com         HTTP 403
+#
+# Tenderly was the default until it stopped being viable under whole-suite load: a full
+# `forge test` produced ~142 "operation timed out" / "connection reset" database errors,
+# and a single isolated fork suite made no progress in 29 minutes. Those surface as test
+# FAILURES rather than infrastructure errors, so a saturated endpoint is indistinguishable
+# from a broken contract until you read the message — budget a re-run before believing any
+# fork-test failure.
+#
+# NOTE: several suites hardcode their own URL in vm.createSelectFork instead of reading
+# this key, so FOUNDRY_ETH_RPC_URL does not reach them. zQuoterFullMatrix reads
+# vm.envOr("ETH_RPC_URL", ...) and does. Grep before assuming an override took effect.
+eth_rpc_url = "https://eth.drpc.org"
+# Must be AFTER the deployments the quoter depends on. zQuoter staticcalls the V4 helper
+# at 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6, and at the previous pin of 24_880_000 that
+# address had ZERO bytes of code (as did the live zQuoter at 0x0000002d...). A staticcall to
+# a codeless address succeeds with empty returndata, so V4 legs decoded to garbage: a
+# WBTC->ETH quote came back as 4.5e37 wei instead of ~3.2e18, won venue selection with the
+# bogus number, and then reverted with Slippage() against its own impossible minimum.
+#
+# That produced four "exec failed via UNI_V4" failures in zQuoterForkExec plus the 1:1
+# wstETH assertion in zQuoterFork, all of which look exactly like a broken quoter and are
+# really a fork pinned before its dependencies existed. Verified 2026-07-31: those tests
+# pass at 25_640_000 and fail at 24_880_000 with no source change.
+#
+# 25_640_000 also sits after Uniswap enabled V4 protocol fees at 25_623_201, so the
+# protocol-fee composition documented in src/zQuoterV4.sol is actually exercised rather
+# than trivially correct. It matches the block the newer suites already self-pin to
+# (zQuoterFullMatrix, zQuoterPerVenueExec), so the repo now forks one consistent state.
+fork_block_number = 25_640_000
 no_rpc_rate_limit = true
 
 # Foundry's default per-test gas cap is 2^30. test/zQuoterFullMatrix.t.sol quotes AND
@@ -63,6 +97,16 @@ optimizer_runs = 200
 paths = "src/SwapboardView.sol"
 max_optimizer_runs = 200
 
+# PrecisionPoolFactory embeds PrecisionPool's creation code so it can deploy
+# markets, which means it GROWS whenever the pool does - from a different file,
+# silently. At default runs it sits ~900 B under EIP-170. Runtime gas here is
+# cheap to give up: createPool is once per market, and the per-swap executor is
+# thin dispatch. Same release invariant as the lens above - any edit to either
+# the factory OR the pool must be followed by a deployed-size check.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPoolFactory.sol"
+max_optimizer_runs = 200
+
 # NOTE: zQuoter deliberately does NOT get the same treatment, even though it has the same
 # size problem. Its artifact needs yul = false, and `compilation_restrictions` cannot
 # express that — restricting max_optimizer_runs alone still leaves the Yul optimizer on and
@@ -80,7 +124,11 @@ max_optimizer_runs = 200
 # 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13: this profile reproduces the deployed contract
 # exactly. All 24,438 bytes agree except the trailing 43-byte CBOR metadata, which differs
 # only because the deployment was built with solc 0.8.34 and this repo now pins 0.8.36.
-# test/zQuoterPerVenueExec.t.sol asserts that equivalence with the metadata stripped.
+# That check was made out-of-band, not in CI: the test suite compiles under the default
+# profile, so it has no access to this artifact and cannot reproduce the comparison.
+# test/zQuoterPerVenueExec.t.sol instead asserts behavioural equivalence — same venue and
+# same amountOut from the live contract and a local build — which is what the bytecode
+# hash was standing in for, and which survives a compiler bump.
 #
 # Caveat: this profile cannot build the repo as a whole, because it sets src = "src" and so
 # applies yul = false to every contract — src/dao/ClassicalCurveSale.sol then hits

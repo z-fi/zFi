@@ -49,10 +49,20 @@ pragma solidity ^0.8.36;
 ///         reject fee-on-transfer and successful-looking no-op transfers; rebasing
 ///         tokens remain out of scope because custody is pooled between transactions.
 contract Dutchboard {
-    /// @dev Dutchboard is a mainnet primitive. Keeping the canonical wrapper as
-    ///      a constant avoids introducing a deployment parameter solely for the
-    ///      optional cancellation convenience.
-    address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    /// @dev The chain's canonical wrapper, and a deployment trust root. It is a
+    ///      constructor parameter rather than a hardcoded mainnet constant so the
+    ///      same source deploys correctly everywhere: a hardcoded address is
+    ///      codeless off mainnet, which leaves `cancelUnwrap` permanently broken
+    ///      and `receive` guarding against the wrong sender - a silent deployment
+    ///      footgun rather than a compile error. Exact balance deltas are checked
+    ///      at runtime, but a malicious wrapper can also lie through `balanceOf`,
+    ///      so deployments must still pass the canonical, immutable wrapper.
+    address public immutable weth;
+
+    constructor(address _weth) {
+        if (_weth == address(0) || _weth.code.length == 0) revert Bad();
+        weth = _weth;
+    }
 
     struct Listing {
         address seller;
@@ -128,7 +138,7 @@ contract Dutchboard {
     ///      as WETH9 does during withdraw(). ETH can still be forced in without
     ///      executing receive(), so unwrap accounting relies on exact deltas.
     receive() external payable {
-        if (msg.sender != WETH) revert NotWETH(WETH, msg.sender);
+        if (msg.sender != weth) revert NotWETH(weth, msg.sender);
     }
 
     // ------------------------------------------------------------------- LISTING
@@ -182,9 +192,10 @@ contract Dutchboard {
         uint40 duration
     ) internal returns (uint256 id) {
         (uint96 sp, uint96 ep) = _checkPrices(startPrice, endPrice);
+        _checkAssets(token, quote);
         if (
-            seller == address(0) || seller == address(this) || seller == WETH || token == address(0) || amount == 0
-                || duration == 0 || token == quote || (startTime != 0 && startTime < block.timestamp)
+            seller == address(0) || seller == address(this) || seller == weth || amount == 0 || duration == 0
+                || token == quote || (startTime != 0 && startTime < block.timestamp)
         ) {
             revert Bad();
         }
@@ -233,6 +244,7 @@ contract Dutchboard {
         uint40 duration
     ) public nonReentrant returns (uint256 id) {
         (uint96 sp, uint96 ep) = _checkPrices(startPrice, endPrice);
+        _checkAssets(token, quote);
         if (
             ids.length == 0 || ids.length > 100 || duration == 0 || token == quote
                 || (startTime != 0 && startTime < block.timestamp)
@@ -292,6 +304,13 @@ contract Dutchboard {
     ///
     ///         Malformed or absent `data` reverts. A stray transfer to this address must
     ///         bounce rather than mint a listing on terms decoded out of zero bytes.
+    ///
+    ///         The `nonReentrant` guard here has one benign consequence worth naming: a
+    ///         collection that invokes the receiver hook from plain `transferFrom` -
+    ///         non-standard, but shipped - reenters this guard during `listNFT`'s
+    ///         `_moveNFT` and reverts. Such a collection is unlistable through `listNFT`
+    ///         and must use this push path instead. Fills and cancels are unaffected,
+    ///         since they move the token to the taker or the seller rather than here.
     function onERC721Received(address, address from, uint256 tokenId, bytes calldata data)
         external
         nonReentrant
@@ -302,8 +321,9 @@ contract Dutchboard {
 
         address token = msg.sender; // the collection, established by the call itself
         (uint96 sp, uint96 ep) = _checkPrices(t.startPrice, t.endPrice);
+        _checkAssets(token, t.quote);
         if (
-            from == address(0) || from == address(this) || from == WETH || token == t.quote || t.duration == 0
+            from == address(0) || from == address(this) || from == weth || token == t.quote || t.duration == 0
                 || (t.startTime != 0 && t.startTime < block.timestamp)
         ) revert Bad();
 
@@ -328,6 +348,17 @@ contract Dutchboard {
 
         emit Created(id, from, token, t.quote);
         return this.onERC721Received.selector;
+    }
+
+    /// @dev Enforces the plain-ERC20 / ERC-721 assumption at the boundary rather than
+    ///      leaving it to a later `balanceOf` to revert on a codeless address. That
+    ///      fallback holds everywhere but one place: `_payQuoteToken` returns early on
+    ///      a zero amount, so a lot quoted in a codeless address and decayed to
+    ///      `endPrice == 0` would settle without the quote ever being called.
+    ///      `quote == address(0)` is native ETH and is the one address exempted.
+    function _checkAssets(address token, address quote) internal view {
+        if (token == address(0) || token.code.length == 0) revert Bad();
+        if (quote != address(0) && quote.code.length == 0) revert Bad();
     }
 
     /// @dev Narrowing to uint96 is checked, not silent: a price a maker cannot express
@@ -375,10 +406,12 @@ contract Dutchboard {
     /// @notice `quote` cost to take `take` units of `id` right now — mirrors `fill`.
     ///         NFT lots: pass `take == 0` or the full bundle size; returns the lot price.
     ///         Returns 0 for anything a UI should treat as non-fillable: closed listing,
-    ///         NFT with mismatched `take`, ERC20 with `take == 0` or `take > remaining`.
+    ///         a listing whose window has not opened, NFT with mismatched `take`, ERC20
+    ///         with `take == 0` or `take > remaining`.
     function costOf(uint256 id, uint128 take) public view returns (uint256) {
         Listing storage l = listings[id];
         if (l.seller == address(0)) return 0;
+        if (block.timestamp < l.startTime) return 0;
         uint256 price = _priceOf(l);
         if (l.isNFT) {
             uint256 n = l.ids.length;
@@ -469,7 +502,15 @@ contract Dutchboard {
         Listing storage l = listings[id];
         address seller = l.seller;
         if (seller == address(0)) revert Bad();
-        if (to == address(0) || to == address(this)) revert Bad();
+        // WETH is refused alongside the board itself: an unwrapped payout re-wrapped
+        // to this address, or a lot delivered into escrow accounting that does not
+        // track it, are both unrecoverable in an immutable contract.
+        if (to == address(0) || to == address(this) || to == weth) revert Bad();
+        // A scheduled listing is not open yet. Without this the schedule shapes only
+        // the curve: `_priceOf` returns `startPrice` before the window, so a lot a
+        // seller listed for next week could be taken today. The taker would pay the
+        // maximum, so nothing is stolen - but `startTime` must mean what it says.
+        if (block.timestamp < l.startTime) revert Bad();
 
         uint256 price = _priceOf(l);
         address token = l.token;
@@ -509,7 +550,11 @@ contract Dutchboard {
             // Against UNSPENT value, not msg.value: in a batch the same msg.value would
             // otherwise cover every ETH leg independently.
             if (ethAvailable < cost) revert Insufficient();
-            safeTransferETH(seller, cost);
+            // A lot may decay to free, and a zero-value call still hands the seller
+            // control with all gas: a seller contract with no `receive` would
+            // otherwise brick its own listing at the bottom of the curve. Skipping
+            // the call mirrors `_payQuoteToken`, which already returns on amount 0.
+            if (cost != 0) safeTransferETH(seller, cost);
             ethUsed = cost;
         } else {
             _payQuoteToken(quote, msg.sender, seller, cost);
@@ -550,7 +595,7 @@ contract Dutchboard {
         if (l.seller != msg.sender) revert NotSeller();
         if (l.isNFT) revert Bad();
         address token = l.token;
-        if (token != WETH) revert NotWETH(WETH, token);
+        if (token != weth) revert NotWETH(weth, token);
 
         uint256 rem = l.remaining;
         delete listings[id];
@@ -595,13 +640,13 @@ contract Dutchboard {
     ///      hold pooled WETH escrow and forced ETH, so either balance alone is
     ///      insufficient evidence that this listing redeemed exactly.
     function _unwrapETH(uint256 amount) internal {
-        uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
+        uint256 wethBefore = IERC20(weth).balanceOf(address(this));
         uint256 ethBefore = address(this).balance;
-        IWETH(WETH).withdraw(amount);
+        IWETH(weth).withdraw(amount);
 
-        uint256 spent = _decrease(wethBefore, IERC20(WETH).balanceOf(address(this)));
+        uint256 spent = _decrease(wethBefore, IERC20(weth).balanceOf(address(this)));
         if (spent != amount) {
-            revert BalanceDeltaMismatch(WETH, address(this), amount, spent);
+            revert BalanceDeltaMismatch(weth, address(this), amount, spent);
         }
 
         uint256 received = _increase(ethBefore, address(this).balance);

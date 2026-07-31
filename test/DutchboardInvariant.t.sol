@@ -307,7 +307,7 @@ contract DutchboardInvariantTest is Test {
     address carol = address(0xCAFE);
 
     function setUp() public {
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         lot = new InvariantERC20();
         quote = new InvariantERC20();
         nft = new InvariantERC721();

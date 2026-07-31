@@ -227,7 +227,7 @@ contract SwapbolPlanTest is Test {
         lens = new SwapboardView();
         current = new Swapboard(WETH);
         legacy = new ExecutableLegacyV1();
-        dutch = new Dutchboard();
+        dutch = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         executor = new Swapbol(address(legacy), address(current), address(dutch));
         pay = new MockERC20("PAY", 18);
         out = new MockERC20("OUT", 18);

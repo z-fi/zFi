@@ -21,7 +21,7 @@ contract DutchboardMakerForTest is Test {
     uint256 constant PRICE = 100e6;
 
     function setUp() public {
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         lot = new MockERC20("LOT", 18);
         quote = new MockERC20("USD", 6);
 

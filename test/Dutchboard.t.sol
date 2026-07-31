@@ -30,8 +30,8 @@ contract DutchboardTest is Test {
     uint256 constant ASK_LO = 38_000e6; // floor at $3,800/ETH
 
     function setUp() public {
-        board = new Dutchboard();
-        swapbol = new Swapbol(address(this), address(new Dutchboard()), address(board));
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        swapbol = new Swapbol(address(this), address(new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)), address(board));
         boardEthAtDeploy = address(board).balance;
         vm.label(address(board), "Dutchboard");
         vm.label(_USDC, "USDC");

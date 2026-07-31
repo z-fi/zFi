@@ -7,6 +7,16 @@ import {FixedPointMathLib} from "../lib/solady/src/utils/FixedPointMathLib.sol";
 import {ReentrancyGuardTransient} from "../lib/solady/src/utils/ReentrancyGuardTransient.sol";
 
 /// @title zPool
+/// @notice SHELVED - not for deployment. Superseded by src/pools/PrecisionPool.
+///
+/// @dev    Kept for the evidence it produced rather than the code it is. This
+///         was an attempt to provide passive liquidity as resting Swapboard
+///         orders, and measuring it is what argued for a continuous curve
+///         instead: a flat-priced rung is a free option whose cost scales with
+///         how far a full take moves the pool's own price, which forces the
+///         rung to stay narrower than the spread, which in turn caps depth per
+///         repost and leaves keeper gas eating the edge. Those measurements are
+///         in test/zPool.t.sol and are the reason PrecisionPool exists.
 /// @notice A passive two-sided maker over Swapboard. Depositors pool a pair,
 ///         the pool rests one buy and one sell order around its own reserve
 ///         ratio, and the spread those orders earn accrues to the shares.

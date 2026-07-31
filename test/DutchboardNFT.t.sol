@@ -128,7 +128,7 @@ contract DutchboardNFTTest is Test {
     uint256 constant UINT96_MAX = type(uint96).max;
 
     function setUp() public {
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         nft = new MockNFT();
         quote = new MockERC20("QUOTE", 18);
         // This suite's CREATE address collides with a mainnet account holding dust, so

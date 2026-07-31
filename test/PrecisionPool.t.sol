@@ -3,6 +3,8 @@ pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
+import {ERC20} from "../lib/solady/src/tokens/ERC20.sol";
+import {FixedPointMathLib} from "../lib/solady/src/utils/FixedPointMathLib.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {PrecisionPoolLens} from "../src/pools/PrecisionPoolLens.sol";
 import {FeeToken, MockERC20, SenderFeeERC20} from "./SwapboardMocks.sol";
@@ -104,6 +106,36 @@ contract SenderSensitiveFeeHook {
     }
 
     function afterSwap(address, address, uint256, uint256, address) external {}
+}
+
+contract ArgumentSensitiveFeeHook {
+    address immutable expectedSender;
+    address immutable expectedToken;
+    uint256 immutable expectedAmount;
+
+    constructor(address sender_, address token_, uint256 amount_) {
+        (expectedSender, expectedToken, expectedAmount) = (sender_, token_, amount_);
+    }
+
+    function feeFor(address sender, address token, uint256 amount) external view returns (uint256) {
+        return sender == expectedSender && token == expectedToken && amount == expectedAmount ? 1234 : 0;
+    }
+
+    function afterSwap(address, address, uint256, uint256, address) external {}
+}
+
+/// @dev Mirrors zRouter's public SafeExecutor property: anyone can make it
+/// call a target, so a factory cannot treat its address as proof that a route
+/// was freshly funded.
+contract PublicExecutor {
+    function execute(address target, bytes calldata data) external payable {
+        (bool ok, bytes memory result) = target.call{value: msg.value}(data);
+        if (!ok) {
+            assembly ("memory-safe") {
+                revert(add(result, 0x20), mload(result))
+            }
+        }
+    }
 }
 
 contract PrecisionPoolTest is Test {
@@ -244,6 +276,23 @@ contract PrecisionPoolTest is Test {
         pool.swapExactIn{value: 1 ether}(address(0), 1 ether, type(uint256).max, trader);
     }
 
+    /// @dev A quote of zero means the pool will not take the trade. In
+    /// particular, a one-wei input must not become an unnoticed donation just
+    /// because integer division rounds the output down.
+    function test_RoundedZeroOutputIsRefused() public {
+        PrecisionPoolLens lens = _lens();
+        assertEq(lens.quote(address(pool), address(0), 1), 0, "lens marks dust unfillable");
+
+        uint256 reserve0Before = pool.reserve0();
+        uint256 reserve1Before = pool.reserve1();
+        vm.prank(trader);
+        vm.expectRevert(PrecisionPool.InsufficientOutput.selector);
+        pool.swapExactIn{value: 1}(address(0), 1, 0, trader);
+
+        assertEq(pool.reserve0(), reserve0Before, "dust input was not retained");
+        assertEq(pool.reserve1(), reserve1Before, "no output was paid");
+    }
+
     function test_UnknownTokenIsRefused() public {
         MockERC20 other = new MockERC20("X", 18);
         vm.prank(trader);
@@ -264,14 +313,44 @@ contract PrecisionPoolTest is Test {
         assertEq(actual, predicted, "only the declared amount moved the curve");
 
         vm.prank(trader);
-        vm.expectRevert(PrecisionPool.LegacyPrefundDisabled.selector);
-        pool.swap(address(usdc), 0, trader);
+        (bool ok,) =
+            address(pool).call(abi.encodeWithSignature("swap(address,uint256,address)", address(usdc), 0, trader));
+        assertFalse(ok, "the removed prefund selector has no callable fallback");
     }
 
     function test_UntrustedExecutorCannotSpendFactoryTokenDust() public {
         usdc.mint(address(factory), 5_000e6);
         vm.expectRevert(PrecisionPoolFactory.NotExecutor.selector);
         factory.executePrefundedSwap(address(pool), address(usdc), 5_000e6, 0, trader);
+    }
+
+    function test_PublicExecutorCannotSpendFactoryDustWithoutAFreshCheckpoint() public {
+        PublicExecutor executor = new PublicExecutor();
+        PrecisionPoolFactory securedFactory = new PrecisionPoolFactory(address(executor));
+
+        vm.startPrank(lp);
+        usdc.approve(address(securedFactory), type(uint256).max);
+        (address securedPool,,,) =
+            securedFactory.createAndSeed{value: 10 ether}(_mkt(FEE, address(0)), SQRT_MID, 10 ether, 30_000e6, 0, lp);
+        vm.stopPrank();
+
+        uint256 dust = 5_000e6;
+        usdc.mint(address(securedFactory), dust);
+        bytes memory settlement = abi.encodeCall(
+            PrecisionPoolFactory.executePrefundedSwap, (securedPool, address(usdc), dust, uint256(0), trader)
+        );
+
+        // Anyone can use the public executor, but old factory balances are not
+        // route funding and are therefore unavailable to them.
+        vm.expectRevert(PrecisionPoolFactory.BadCheckpoint.selector);
+        executor.execute(address(securedFactory), settlement);
+
+        // The normal route is explicit: checkpoint first, fund second, consume
+        // the exact fresh delta. The old dust stays where it was.
+        executor.execute(address(securedFactory), abi.encodeCall(PrecisionPoolFactory.checkpoint, (address(usdc))));
+        usdc.mint(address(securedFactory), dust);
+        executor.execute(address(securedFactory), settlement);
+        assertEq(usdc.balanceOf(address(securedFactory)), dust, "only fresh route input was spent");
     }
 
     // -------------------------------------------------------------- liquidity
@@ -377,11 +456,55 @@ contract PrecisionPoolTest is Test {
         factory.createPool(_mktRaw(address(usdc), address(0), SQRT_LOW, SQRT_HIGH, FEE, address(0)));
     }
 
+    function test_NonContractTokensAndHooksAreRefused() public {
+        vm.expectRevert(PrecisionPoolFactory.Bad.selector);
+        factory.createPool(_mktRaw(address(0), address(0xBEEF), SQRT_LOW, SQRT_HIGH, FEE, address(0)));
+
+        vm.expectRevert(PrecisionPoolFactory.Bad.selector);
+        factory.createPool(_mktRaw(address(0), address(usdc), SQRT_LOW, SQRT_HIGH, FEE, address(0xBEEF)));
+
+        vm.expectRevert(PrecisionPoolFactory.Bad.selector);
+        new PrecisionPoolFactory(address(0xBEEF));
+    }
+
     function test_InvertedOrEmptyRangeIsRefused() public {
         vm.expectRevert(PrecisionPoolFactory.Bad.selector);
         factory.createPool(_mktRaw(address(0), address(usdc), SQRT_HIGH, SQRT_LOW, FEE, address(0)));
         vm.expectRevert(PrecisionPoolFactory.Bad.selector);
         factory.createPool(_mktRaw(address(0), address(usdc), SQRT_LOW, SQRT_LOW, FEE, address(0)));
+    }
+
+    function test_PriceOutsideTheSafeArithmeticDomainIsRefused() public {
+        PrecisionPoolFactory.Market memory m = _mktRaw(address(0), address(usdc), 1e36 - 1, 1e36 + 1, FEE, address(0));
+        vm.expectRevert(PrecisionPoolFactory.Bad.selector);
+        factory.createPool(m);
+    }
+
+    /// @dev A one-unit-wide range can make LP supply grow much faster than the
+    /// real reserve. The supply cap keeps its virtual reserves in uint256.
+    function test_ExcessiveLiquidityFromAnUltraNarrowRangeIsRefused() public {
+        uint256 amount1 = 1e21;
+        usdc.mint(lp, amount1);
+        PrecisionPoolFactory.Market memory m = _mktRaw(address(0), address(usdc), 1 ether, 1 ether + 1, FEE, address(0));
+
+        vm.startPrank(lp);
+        usdc.approve(address(factory), type(uint256).max);
+        vm.expectRevert(PrecisionPool.InsufficientLiquidity.selector);
+        factory.createAndSeed(m, 1 ether + 1, 0, amount1, 0, lp);
+        vm.stopPrank();
+    }
+
+    /// @dev If either virtual reserve rounds to zero at inception, a one-sided
+    /// pool at that edge cannot quote or move off the edge. Reject it instead
+    /// of creating a permanently unusable market.
+    function test_SeedRequiresNonzeroVirtualReserves() public {
+        uint256 amount0 = 1e21;
+        vm.deal(lp, amount0);
+        PrecisionPoolFactory.Market memory m = _mktRaw(address(0), address(usdc), 1, 2, FEE, address(0));
+
+        vm.prank(lp);
+        vm.expectRevert(PrecisionPool.InsufficientLiquidity.selector);
+        factory.createAndSeed{value: amount0}(m, 1, amount0, 0, 0, lp);
     }
 
     function test_SeedingAMarketThatDoesNotExistIsRefused() public {
@@ -428,6 +551,30 @@ contract PrecisionPoolTest is Test {
         vm.prank(creator);
         address named = factory.createPool(m);
         assertEq(PrecisionPool(payable(named)).feeRecipient(), creator);
+    }
+
+    function test_NamedMarketCannotBeInitializedAroundTheCreatorCheck() public {
+        address creator = address(0xC0DE);
+        PrecisionPoolFactory.Market memory m = _mkt(3000, address(0));
+        m.feeRecipient = creator;
+
+        vm.prank(creator);
+        address named = factory.createPool(m);
+
+        vm.startPrank(trader);
+        usdc.approve(named, type(uint256).max);
+        vm.expectRevert(PrecisionPool.NotFactory.selector);
+        PrecisionPool(payable(named)).addLiquidityExact{value: 1 ether}(SQRT_MID, 1 ether, 3_000e6, 0, trader);
+        vm.stopPrank();
+
+        usdc.mint(creator, 3_000e6);
+        vm.deal(creator, 1 ether);
+        vm.startPrank(creator);
+        usdc.approve(address(factory), type(uint256).max);
+        factory.seed{value: 1 ether}(m, SQRT_MID, 1 ether, 3_000e6, 0, creator);
+        vm.stopPrank();
+
+        assertGt(PrecisionPool(payable(named)).totalSupply(), 0, "creator initialized through the authenticated path");
     }
 
     // ------------------------------------------------------------------- lens
@@ -521,11 +668,31 @@ contract PrecisionPoolTest is Test {
         assertEq(m.length, 1);
         assertEq(m[0].pool, address(pool));
         assertEq(m[0].fee, FEE);
-        assertEq(m[0].effectiveFee, FEE, "no hook, so nothing on top");
+        assertEq(m[0].effectiveFee0, FEE, "no hook, so nothing on top");
         assertEq(m[0].hook, address(0));
         assertEq(m[0].reserve0, pool.reserve0());
         assertEq(m[0].liquidity, pool.totalSupply());
         assertApproxEqRel(m[0].sqrtPriceCurrent, SQRT_MID, 0.001e18);
+    }
+
+    function test_DescribeReportsTheCompoundedEffectiveFee() public {
+        FeeHook h = new FeeHook(10_000);
+        PrecisionPool fp = _feePool(address(h));
+        PrecisionPoolLens l = _lens();
+        PrecisionPoolLens.PoolInfo memory m = l.infoFor(address(fp), trader, 1 ether);
+
+        // The surcharge is taken first and the base fee applies to the
+        // remainder: 1% + 0.05% - their 0.0005% overlap.
+        assertEq(m.effectiveFee0, 10_495);
+        assertEq(l.effectiveFeeFor(address(fp), trader, address(usdc), 1_000e6), 10_495);
+    }
+
+    function test_LensRejectsAnInvalidFactory() public {
+        vm.expectRevert(PrecisionPoolLens.BadFactory.selector);
+        new PrecisionPoolLens(PrecisionPoolFactory(address(0)));
+
+        vm.expectRevert(PrecisionPoolLens.BadFactory.selector);
+        new PrecisionPoolLens(PrecisionPoolFactory(address(0xBEEF)));
     }
 
     // ------------------------------------------- one-sided band = limit order
@@ -535,9 +702,10 @@ contract PrecisionPoolTest is Test {
     /// That is a limit order - except it earns fees while it waits and the
     /// claim on it is a fungible ERC-20 rather than an NFT.
     function test_OneSidedBandIsALimitSell() public {
+        uint256 balanceBefore = lp.balance;
         vm.startPrank(lp);
         usdc.approve(address(factory), type(uint256).max);
-        (address p, uint256 lpOut,, uint256 used1) =
+        (address p, uint256 lpOut, uint256 used0, uint256 used1) =
             factory.createAndSeed{value: 5 ether}(_mkt(3000, address(0)), SQRT_LOW, 5 ether, 0, 0, lp);
         vm.stopPrank();
         PrecisionPool ask = PrecisionPool(payable(p));
@@ -545,11 +713,14 @@ contract PrecisionPoolTest is Test {
         assertGt(lpOut, 0, "shares minted from one asset alone");
         assertEq(used1, 0, "no counter-asset was required");
         assertEq(ask.reserve1(), 0, "holds only what it is selling");
-        assertEq(ask.reserve0(), 5 ether);
+        assertEq(ask.reserve0(), used0, "reported usage matches reserves");
+        assertLe(used0, 5 ether, "seed never consumes more than supplied");
+        assertEq(lp.balance, balanceBefore - used0, "rounding excess was refunded");
 
         // The order fills as buyers lift it: they pay token1, the band sells
         // token0, and its price walks up toward the far bound.
         uint256 startPrice = ask.sqrtPriceCurrent();
+        assertGe(startPrice, SQRT_LOW, "seed rounding stayed inside the lower bound");
         vm.startPrank(trader);
         usdc.approve(address(ask), type(uint256).max);
         uint256 got = ask.swapExactIn(address(usdc), 3_000e6, 0, trader);
@@ -587,6 +758,7 @@ contract PrecisionPoolTest is Test {
         assertEq(used0, 0, "no ETH required to post a bid");
         assertEq(bid.reserve0(), 0, "holds only the asset it is paying with");
         assertGt(bid.reserve1(), 0);
+        assertLe(bid.sqrtPriceCurrent(), SQRT_HIGH, "seed rounding stayed inside the upper bound");
 
         // Sellers hit it: they deliver token0 and the band pays out token1.
         vm.prank(trader);
@@ -608,15 +780,18 @@ contract PrecisionPoolTest is Test {
         assertEq(ask.reserve1(), 0, "resting at the lower bound");
 
         uint256 supplyBefore = ask.totalSupply();
+        uint256 reserveBefore = ask.reserve0();
+        uint256 balanceBefore = lp.balance;
         (, uint256 lp2, uint256 used0, uint256 used1) =
             factory.seed{value: 2 ether}(_mkt(3000, address(0)), 0, 2 ether, 0, 0, lp);
         vm.stopPrank();
 
         assertGt(lp2, 0, "joined the existing order");
         assertEq(used1, 0, "still one-sided");
-        assertEq(used0, 2 ether);
+        assertLe(used0, 2 ether, "rounding never over-consumes");
+        assertEq(lp.balance, balanceBefore - used0, "unused input was refunded");
         assertEq(ask.totalSupply(), supplyBefore + lp2);
-        assertEq(ask.reserve0(), 7 ether, "one book, deeper");
+        assertEq(ask.reserve0(), reserveBefore + used0, "one book, deeper");
     }
 
     // ------------------------------------------------------- fee compounding
@@ -807,6 +982,17 @@ contract PrecisionPoolTest is Test {
         assertEq(fp.hookOwed0(), 0);
     }
 
+    function test_PricingHookReceivesEveryEncodedArgument() public {
+        uint256 expectedAmount = 123e6;
+        ArgumentSensitiveFeeHook h = new ArgumentSensitiveFeeHook(trader, address(usdc), expectedAmount);
+        PrecisionPool hp = _hookedPool(address(h));
+
+        assertEq(hp.extraFee(trader, address(usdc), expectedAmount), 1234);
+        assertEq(hp.extraFee(lp, address(usdc), expectedAmount), 0);
+        assertEq(hp.extraFee(trader, address(0), expectedAmount), 0);
+        assertEq(hp.extraFee(trader, address(usdc), expectedAmount + 1), 0);
+    }
+
     /// @dev The subtle one: an uncollected hook fee sits in the same balance
     /// as the reserves. If it were not netted out, the next swap would count
     /// somebody else's fee as its own input and pay it out twice.
@@ -975,7 +1161,171 @@ contract PrecisionPoolTest is Test {
         factory.createPool(m);
     }
 
+    /// @dev The portfolio read: one call answers "what do I own", and the
+    /// amounts are what redeeming would actually pay rather than an estimate.
+    function test_PositionsOfIsThePortfolioViewAndMatchesRedemption() public {
+        PrecisionPoolLens l = _lens();
+
+        // A second band the LP also holds, and a third they do not.
+        vm.startPrank(lp);
+        usdc.approve(address(factory), type(uint256).max);
+        (address p2,,,) = factory.createAndSeed{value: 5 ether}(
+            _mkt(3000, address(0)), SQRT_MID, 5 ether, 20_000e6, 0, lp
+        );
+        factory.createPool(_mkt(10000, address(0)));
+        vm.stopPrank();
+
+        PrecisionPoolLens.Position[] memory pos = l.positionsOf(lp, 0, 100);
+        assertEq(pos.length, 2, "only bands actually held, empty ones dropped");
+        assertEq(pos[0].pool, address(pool));
+        assertEq(pos[1].pool, p2);
+        assertEq(pos[0].shares, pool.balanceOf(lp));
+
+        // The reported claim is exactly what redeeming pays.
+        uint256 shares = pos[0].shares;
+        uint256 expect0 = pos[0].amount0;
+        uint256 expect1 = pos[0].amount1;
+        vm.prank(lp);
+        (uint256 a0, uint256 a1) = pool.removeLiquidity(shares, 0, 0, lp);
+        assertEq(a0, expect0, "token0 claim was exact");
+        assertEq(a1, expect1, "token1 claim was exact");
+
+        // And a holder of nothing sees nothing.
+        assertEq(l.positionsOf(address(0xBEEF11), 0, 100).length, 0);
+    }
+
+    // ------------------------------------------------------------- fee drift
+
+    /// @dev The band's floor implies a maximum token0 holding for a given `L`:
+    ///      x_max = L * (1/sqrtPLow - 1/sqrtPHigh). Retained fees push the real
+    ///      reserve past it, which is what nudges the implied price outside the
+    ///      stated bounds.
+    function _xMax(uint256 L) internal pure returns (uint256) {
+        return
+            FixedPointMathLib.fullMulDiv(
+                FixedPointMathLib.fullMulDiv(L, SQRT_HIGH - SQRT_LOW, SQRT_HIGH), 1e18, SQRT_LOW
+            );
+    }
+
+    /// @dev Retained fees grow the reserves while `L` - and the virtual
+    ///      offsets derived from it - stay put, so token0 ends up EXCEEDING
+    ///      what `L` implies the band holds at its floor. The interesting part
+    ///      is that this over-collateralisation does not push the price out of
+    ///      the band: containment still holds, and the surplus is simply fees
+    ///      the pool kept. Pinned here because the excess is easy to mistake
+    ///      for an accounting error when reading reserves directly.
+    function test_RetainedFeesOvercollateraliseWithoutBreakingTheBand() public {
+        PrecisionPoolLens l = _lens();
+        uint256 low = 1;
+        uint256 high = 1_000 ether;
+        while (low < high) {
+            uint256 mid = (low + high + 1) / 2;
+            if (l.quote(address(pool), address(0), mid) == 0) high = mid - 1;
+            else low = mid;
+        }
+
+        uint256 supply = pool.totalSupply();
+        vm.prank(trader);
+        pool.swapExactIn{value: low}(address(0), low, 0, trader);
+
+        uint256 p = pool.sqrtPriceCurrent();
+        uint256 ppm = p >= SQRT_LOW ? 0 : (SQRT_LOW - p) * 1_000_000 / SQRT_LOW;
+        emit log_named_uint("drift below floor (ppm)", ppm);
+        emit log_named_uint("reserve0            ", pool.reserve0());
+        emit log_named_uint("x_max implied by L  ", _xMax(supply));
+
+        // Small, and in the LPs' favour: the pool holds more token0 than the
+        // band's floor implies, which is the retained fee and nothing else.
+        assertEq(ppm, 0, "containment holds - the price never leaves the band");
+        assertEq(pool.totalSupply(), supply, "no shares were minted by the swap");
+        assertGt(pool.reserve0(), _xMax(supply), "and the pool holds MORE than L implies");
+    }
+
+    // ---------------------------------------------------------------- permit2
+
+    address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+    /// @dev Solady fixes Permit2's allowance at infinity by default, and the
+    /// pool does not override it. So LP shares reach Permit2 with no approval
+    /// transaction at all - not a cheaper approval, none.
+    function test_LpSharesNeedNoApprovalForPermit2() public view {
+        assertEq(pool.allowance(lp, PERMIT2), type(uint256).max, "infinite without approving");
+        assertEq(pool.allowance(address(0xDEAD), PERMIT2), type(uint256).max, "for anyone");
+    }
+
+    function test_Permit2CanMoveLpSharesWithNoPriorApproval() public {
+        uint256 amount = pool.balanceOf(lp) / 4;
+        address dst = address(0xD57);
+
+        vm.prank(PERMIT2);
+        pool.transferFrom(lp, dst, amount);
+
+        assertEq(pool.balanceOf(dst), amount, "moved on Permit2's authority alone");
+        assertEq(pool.allowance(lp, PERMIT2), type(uint256).max, "and stays infinite");
+    }
+
+    /// @dev The integration hazard this creates: the usual "approve an exact
+    /// amount to Permit2" step does not merely waste gas, it REVERTS. A
+    /// frontend carrying that step for ordinary tokens must skip it here.
+    function test_ApprovingPermit2AnExactAmountReverts() public {
+        vm.prank(lp);
+        vm.expectRevert(ERC20.Permit2AllowanceIsFixedAtInfinity.selector);
+        pool.approve(PERMIT2, 1_000);
+
+        // Approving the maximum is accepted, as a no-op.
+        vm.prank(lp);
+        assertTrue(pool.approve(PERMIT2, type(uint256).max));
+    }
+
+    /// @dev And the same applies to a 2612 permit aimed at Permit2, which is
+    /// the gasless variant of the same mistake.
+    function test_Permit2612ToPermit2ForAnExactAmountAlsoReverts() public {
+        (address signer, uint256 pk) = makeAddrAndKey("signer");
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                pool.DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                        signer,
+                        PERMIT2,
+                        uint256(1_000),
+                        pool.nonces(signer),
+                        block.timestamp + 1 days
+                    )
+                )
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 sig) = vm.sign(pk, digest);
+        vm.expectRevert(ERC20.Permit2AllowanceIsFixedAtInfinity.selector);
+        pool.permit(signer, PERMIT2, 1_000, block.timestamp + 1 days, v, r, sig);
+    }
+
+    /// @dev Each pool still signs in its own domain, despite every pool
+    /// sharing the name "Precision LP" - the separator binds the address.
+    function test_PermitDomainIsPerPoolDespiteASharedName() public {
+        vm.prank(lp);
+        address other = factory.createPool(_mkt(3000, address(0)));
+        assertEq(pool.name(), PrecisionPool(payable(other)).name(), "same name");
+        assertTrue(
+            pool.DOMAIN_SEPARATOR() != PrecisionPool(payable(other)).DOMAIN_SEPARATOR(),
+            "but signatures cannot cross pools"
+        );
+    }
+
     // ------------------------------------------------------------------- fuzz
+
+    function testFuzz_SeedPriceStaysInsideTheBand(uint256 sqrtPriceInit) public {
+        sqrtPriceInit = bound(sqrtPriceInit, SQRT_LOW, SQRT_HIGH);
+        vm.prank(lp);
+        (address p,,,) =
+            factory.createAndSeed{value: 10 ether}(_mkt(777, address(0)), sqrtPriceInit, 10 ether, 30_000e6, 0, lp);
+
+        uint256 actual = PrecisionPool(payable(p)).sqrtPriceCurrent();
+        assertGe(actual, SQRT_LOW, "seed rounding never starts below the band");
+        assertLe(actual, SQRT_HIGH, "seed rounding never starts above the band");
+    }
 
     /// @dev The core safety property: whatever the trade, the price stays
     /// inside the band and a swap never hands out more than the pool holds.
@@ -997,5 +1347,44 @@ contract PrecisionPoolTest is Test {
         assertLe(s, SQRT_HIGH, "never above the band");
         assertLe(pool.reserve0(), address(pool).balance, "reserves back by real balance");
         assertLe(pool.reserve1(), usdc.balanceOf(address(pool)), "reserves back by real balance");
+    }
+
+    function test_MaximumFillKeepsPriceInsideTheBand() public {
+        PrecisionPoolLens lens = _lens();
+        uint256 low = 1;
+        uint256 high = 1_000 ether;
+        while (low < high) {
+            uint256 mid = (low + high + 1) / 2;
+            if (lens.quote(address(pool), address(0), mid) == 0) high = mid - 1;
+            else low = mid;
+        }
+
+        vm.prank(trader);
+        pool.swapExactIn{value: low}(address(0), low, 0, trader);
+
+        // Hard containment is NOT a property of this design and asserting it
+        // fails for a benign reason. Retained fees grow the reserves while `L`
+        // - and therefore the virtual offsets derived from it - stays put, so
+        // token0 can exceed what `L` says the band holds at its floor and the
+        // implied price slips just below it. The pool is over-collateralised,
+        // not under: it holds MORE than `L` implies, and the excess is exactly
+        // the fees it kept. See test_FeeDriftIsBoundedAndFavoursLps for the
+        // magnitude and the direction.
+        assertGe(pool.sqrtPriceCurrent(), SQRT_LOW, "fee retention moved price below the immutable band");
+    }
+
+    function test_MaximumReverseFillKeepsPriceInsideTheBand() public {
+        PrecisionPoolLens lens = _lens();
+        uint256 low = 1;
+        uint256 high = 10_000_000e6;
+        while (low < high) {
+            uint256 mid = (low + high + 1) / 2;
+            if (lens.quote(address(pool), address(usdc), mid) == 0) high = mid - 1;
+            else low = mid;
+        }
+
+        vm.prank(trader);
+        pool.swapExactIn(address(usdc), low, 0, trader);
+        assertLe(pool.sqrtPriceCurrent(), SQRT_HIGH, "fee retention moved price above the immutable band");
     }
 }

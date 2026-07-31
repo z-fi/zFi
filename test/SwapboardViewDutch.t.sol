@@ -25,7 +25,7 @@ contract SwapboardViewDutchTest is Test {
 
     function setUp() public {
         view_ = new SwapboardView();
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         SELL = new MockERC20("SELL", 18);
         PAY = new MockERC20("PAY", 18);
     }
@@ -320,5 +320,53 @@ contract SwapboardViewDutchTest is Test {
     /// Deep copy - memory structs alias on assignment.
     function _clone(SwapboardView.OrderView memory o) internal pure returns (SwapboardView.OrderView memory) {
         return abi.decode(abi.encode(o), (SwapboardView.OrderView));
+    }
+
+    // -------------------------------------------------------- SCHEDULED ROWS
+
+    /// A scheduled listing is not open yet and Dutchboard refuses the fill. The
+    /// schedule still reports `startPrice` before the window, so the lens has to
+    /// apply the same gate: otherwise it quotes a row the planners route through
+    /// and every resulting fill reverts.
+    function test_scheduledListingIsNotSurfacedUntilItOpens() public {
+        SELL.mint(maker, LOT);
+        uint40 start = uint40(block.timestamp + 1 days);
+        vm.startPrank(maker);
+        SELL.approve(address(board), LOT);
+        uint256 id = board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours);
+        vm.stopPrank();
+
+        (SwapboardView.OrderView[] memory rows,) =
+            view_.dutchCandidatesFrom(address(board), address(PAY), address(SELL), taker, 0, 100);
+        assertEq(rows.length, 0, "quoted a row the board would refuse");
+
+        vm.warp(start);
+        (rows,) = view_.dutchCandidatesFrom(address(board), address(PAY), address(SELL), taker, 0, 100);
+        assertEq(rows.length, 1, "row not surfaced once open");
+        assertEq(rows[0].orderId, id, "wrong id");
+        assertEq(rows[0].amountB, 200e18, "should open at startPrice");
+    }
+
+    /// The gate reaches every Dutchboard read path, since they all convert through
+    /// the same helper.
+    function test_scheduledListingIsHiddenFromEveryReadPath() public {
+        SELL.mint(maker, LOT);
+        uint40 start = uint40(block.timestamp + 1 days);
+        vm.startPrank(maker);
+        SELL.approve(address(board), LOT);
+        board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours);
+        vm.stopPrank();
+
+        (SwapboardView.OrderView[] memory paged,) = view_.getActiveDutchListingsPaged(address(board), 0, 10, 100);
+        assertEq(paged.length, 0, "paged read surfaced a closed window");
+
+        (SwapboardView.OrderView[] memory recent,) = view_.getRecentDutchListings(address(board), 0, 10, 100);
+        assertEq(recent.length, 0, "recent read surfaced a closed window");
+
+        vm.warp(start);
+        (paged,) = view_.getActiveDutchListingsPaged(address(board), 0, 10, 100);
+        assertEq(paged.length, 1, "paged read lost the row once open");
+        (recent,) = view_.getRecentDutchListings(address(board), 0, 10, 100);
+        assertEq(recent.length, 1, "recent read lost the row once open");
     }
 }

@@ -2,6 +2,43 @@
 pragma solidity ^0.8.36;
 
 /// @title PrecisionRangePool (ETH/USDC $2200-$3000)
+/// @notice DEPRECATED - superseded by PrecisionPool. Retained as a gas
+///         baseline and as the reference the generalised pool was derived
+///         from. Do not deploy.
+///
+/// @dev    WHY IT IS SUPERSEDED. PrecisionPool is this contract with its pair,
+///         band and fee lifted into constructor parameters, behind a factory
+///         with an on-chain registry and a lens. The AMM step is identical -
+///         the same virtual-reserve formulation, the same single multiply and
+///         divide, no ticks or traversal - so nothing is given up by moving.
+///
+///         TWO BEHAVIOURS THAT DIFFER, BOTH FIXED IN THE SUCCESSOR:
+///
+///         1. An oversupplied deposit is ABSORBED here rather than refunded.
+///            `addLiquidity` mints for min(lp0, lp1) but then writes both
+///            reserves from the full balances, so the surplus side is paid to
+///            existing holders. A mis-sized deposit therefore becomes a
+///            transfer between users. Demonstrated in
+///            test/PrecisionRangePoolReview.t.sol.
+///
+///         2. `reserve0`/`reserve1` are cast to uint128 unchecked, so an
+///            oversized balance would truncate silently instead of reverting.
+///            Unreachable for ETH/USDC - 2^128 wei is 3.4e20 ETH - but a
+///            landmine if the pattern were carried to an 18-decimal token
+///            with a large supply.
+///
+///         Neither is exploitable at this pair and this scale, which is why
+///         this is a deprecation rather than a withdrawal.
+///
+///         A THIRD LIMIT IS WHY THE SUCCESSOR EXISTS AT ALL. `addLiquidity`
+///         infers the seed price by solving a quadratic whose discriminant
+///         carries a B^2 term. With the band fixed at compile time that term
+///         stays bounded, and this contract is correct. Once the band becomes
+///         a parameter, B reaches ~1e50 for pairs whose token1 has more
+///         decimals than token0 and the square overflows a uint256 before any
+///         realistic deposit. PrecisionPool has the first deposit name its
+///         price instead, replacing the quadratic with two divisions.
+///
 /// @notice Concentrated constant-product pool for a single pair and fixed price range.
 /// @dev Integrates with zRouter via snwap. Uses native ETH (not WETH).
 ///      Virtual reserves concentrate liquidity into the hardcoded range.

@@ -189,7 +189,7 @@ contract SwapboardViewAuditTest is Test {
     /// staticcall to the zero address succeeds with empty returndata, so the row
     /// used to render with a blank symbol.
     function test_NativeEthQuoteIsLabelled() public {
-        Dutchboard board = new Dutchboard();
+        Dutchboard board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         MockERC20 sell = new MockERC20("SELL", 18);
         address maker = makeAddr("maker");
 

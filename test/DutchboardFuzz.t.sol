@@ -49,7 +49,7 @@ contract DutchboardFuzzTest is Test {
     address taker = makeAddr("taker");
 
     function setUp() public {
-        board = new Dutchboard();
+        board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         lot = new FuzzERC20();
         quote = new FuzzERC20();
         // The fork's CREATE address can hold real mainnet dust; start from a clean slate

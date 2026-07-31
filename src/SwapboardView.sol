@@ -1215,6 +1215,11 @@ contract SwapboardView {
             if (idx >= raw.length) continue;
             IDutchboard.ListingView memory l = raw[idx];
             if (l.seller == address(0)) continue; // closed or never listed
+            // A scheduled listing is not open yet, and Dutchboard refuses the fill.
+            // The schedule still reports startPrice before the window, so without
+            // this the lens would quote a row every planner would happily route
+            // through and every fill would revert.
+            if (block.timestamp < l.startTime) continue;
             if (!_pairMatch(l.token, l.quote, ta, tb)) continue;
             if (l.isNFT && l.ids.length != 1) continue; // bundle: not representable
 

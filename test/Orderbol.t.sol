@@ -27,7 +27,7 @@ contract OrderbolTest is Test {
 
         executor = new Orderbol();
         swapboard = new Swapboard(WETH);
-        dutchboard = new Dutchboard();
+        dutchboard = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
         // A new contract inherits whatever balance already sits at its address,
         // and these forked tests deploy to deterministic CREATE addresses - one
         // of which (0x2e23...470b) holds 1 wei on mainnet at the pinned block.

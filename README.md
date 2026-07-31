@@ -97,7 +97,13 @@ Hardcoded stableswap using Curve's invariant (A=2000), simplified for exactly 2 
 - **LP revenue**: 100% to LPs, no protocol fee
 - **Integration**: EIP-7702 batch wallet, zRouter `snwap`, or [multisig executeBatch](https://etherscan.io/address/0xd54cb65224410f3ff97a8e72f363f224419f4fb0)
 
-### PrecisionRangePool (ETH/USDC $2200-$3000)
+### PrecisionRangePool (ETH/USDC $2200-$3000) — deprecated
+
+> Superseded by **PrecisionPool**, which is this design with the pair, band and
+> fee as constructor parameters, behind a CREATE2 factory with an on-chain
+> registry and a lens. The AMM step is unchanged. Retained as a gas baseline;
+> not for deployment. See the contract header for the two behavioural
+> differences and the overflow bound that motivated generalising it.
 
 Concentrated constant-product pool with a hardcoded price range. The range is baked in as virtual reserve offsets — the core AMM step is a single multiplication and division, with no traversal loops, ticks, or bitmaps. Uses native ETH (not WETH).
 
