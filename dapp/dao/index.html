@@ -4715,6 +4715,22 @@ body.modal-open { overflow: hidden; }
         return rpcProviderCache.get(rpc);
       }
 
+      // A read that never returns is the failure this fallback could not see: without a
+      // deadline a hung endpoint pins the whole dashboard, because the promise neither
+      // resolves nor rejects and the next RPC is never tried.
+      const RPC_TIMEOUT_MS = 9000;
+      function withRpcTimeout(work, label) {
+        let timer;
+        return Promise.race([
+          Promise.resolve()
+            .then(work)
+            .finally(() => clearTimeout(timer)),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} timed out after ${RPC_TIMEOUT_MS}ms`)), RPC_TIMEOUT_MS);
+          })
+        ]);
+      }
+
       // Execute a function with RPC fallback
       // Tries connected provider first (unless WalletConnect), then each public RPC until one succeeds
       async function withRpcFallback(fn) {
@@ -4723,7 +4739,7 @@ body.modal-open { overflow: hidden; }
         // Try connected wallet provider first (if not WalletConnect - its RPCs are unreliable)
         if (_walletProvider && !_isWalletConnect) {
           try {
-            return await fn(_walletProvider);
+            return await withRpcTimeout(() => fn(_walletProvider), 'wallet provider');
           } catch (e) {
             logger.warn('Connected provider failed, trying public RPCs:', e.message);
           }
@@ -4733,7 +4749,7 @@ body.modal-open { overflow: hidden; }
         for (const rpc of network.rpcs) {
           try {
             const rpcProvider = getRpcProvider(rpc);
-            return await fn(rpcProvider);
+            return await withRpcTimeout(() => fn(rpcProvider), rpc);
           } catch (e) {
             logger.warn(`RPC ${rpc} failed:`, e.message);
             // Continue to next RPC
@@ -11905,7 +11921,13 @@ body.modal-open { overflow: hidden; }
       }
 
       // Open DAO dashboard
+      // Bumped on every DAO open and on leaving the dashboard. Each await below can outlive
+      // the click that started it — without this, a slow section render from the previous
+      // DAO lands on the one now on screen.
+      let _daoLoadGen = 0;
+
       async function openDAO(daoIndex, source = 'user') {
+        const gen = ++_daoLoadGen;
         // Clear cached DAICO data when opening from gallery (not via openDAOByAddress which pre-caches it)
         if (source === 'user') {
           currentDAICO = null;
@@ -11962,12 +11984,29 @@ body.modal-open { overflow: hidden; }
         // Update URL hash for deep linking (allows sharing direct links to this DAO)
         history.replaceState(null, '', `#/dao/${getNetwork().chainId}/${daoAddress}`);
 
+        // Revealing early means whatever the last DAO left behind would show until each
+        // section re-renders, so blank them first: an empty panel is honest, another DAO's
+        // treasury is not.
+        for (const id of ['treasuryAssets', 'proposalsList', 'governanceInfo', 'salesInfo', 'tributeOffers', 'allowancesInfo']) {
+          const node = document.getElementById(id);
+          if (node) node.innerHTML = '';
+        }
+
+        // Show the shell now. The header, address and stats are already populated, and the
+        // sections below fill in as their reads land — previously every one of them had to
+        // finish before the dashboard appeared at all, so a slow RPC read as a dead click.
+        hideHeroFire();
+        DOMCache.daoGallery.classList.remove('show');
+        DOMCache.allDaosGallery.classList.remove('show');
+        DOMCache.daoDashboard.classList.add('show');
+
         // Fire-and-forget (no downstream dependencies)
         renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
         renderDaoStats();
 
         // Batch all view calls into one RPC round-trip via Multicall3
         const userAddr = _signer ? await _signer.getAddress() : null;
+        if (gen !== _daoLoadGen) return;
         let batchData;
         try {
           batchData = await batchDashboardData(daoAddress, userAddr);
@@ -11975,6 +12014,8 @@ body.modal-open { overflow: hidden; }
           logger.warn('Multicall batch failed, falling back to individual calls:', e.message);
           batchData = { config: undefined, sales: [], allowances: [], tributes: undefined, sharesTransfersLocked: undefined, lootTransfersLocked: undefined, contractURI: undefined };
         }
+
+        if (gen !== _daoLoadGen) return;
 
         // Render with pre-fetched data (falls back to individual RPC if batch data missing)
         renderGovernanceInfo(batchData).catch(e => logger.error('renderGovernanceInfo failed:', e));
@@ -11995,8 +12036,11 @@ body.modal-open { overflow: hidden; }
           }
         }
 
+        if (gen !== _daoLoadGen) return;
+
         // Sequential — depends on renderSalesInfo completing (needs customSaleTokens)
         await renderTreasury();
+        if (gen !== _daoLoadGen) return;
 
         // Show/hide membership tab based on membership status
         const membershipBtn = document.getElementById('viewToggleMembership');
@@ -12008,15 +12052,12 @@ body.modal-open { overflow: hidden; }
           switchDaoView('dao');
         }
 
-        hideHeroFire();
-        DOMCache.daoGallery.classList.remove('show');
-        DOMCache.allDaosGallery.classList.remove('show');
-        DOMCache.daoDashboard.classList.add('show');
-
       }
 
       // Back to gallery
       function backToGallery() {
+        // Anything still in flight belongs to a DAO the user has left.
+        _daoLoadGen++;
         currentDAO = null;
         currentDAICO = null;
         const _navOb = document.getElementById('navOrderbook');
