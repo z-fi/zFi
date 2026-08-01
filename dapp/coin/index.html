@@ -606,7 +606,11 @@ const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 // resale value on top of the locked portion is not counted.
 const VAULT_NFT_CONTRACT = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
 const VAULT_NFT_TOKEN_IDS = [156, 343];
-const VAULT_NFT_ABI = ['function getRemainingLockedEth(uint256 tokenId) view returns (uint256)'];
+const VAULT_NFT_ABI = [
+  'function getRemainingLockedEth(uint256 tokenId) view returns (uint256)',
+  // Fully on-chain metadata: data:application/json;base64 wrapping a data:image/svg+xml image.
+  'function tokenURI(uint256 tokenId) view returns (string)',
+];
 // Fee accumulator for the TokenWorks pass: pending() is ETH earned by the pass but not
 // yet claimed into the vault. Claimed fees already show up in the vault ETH balance, so
 // this is the missing piece — counted in backing, and shown separately since realising it
@@ -5544,6 +5548,17 @@ async function renderCoinPage(daoAddr) {
           </div>` : ''}
         </div>
       `;
+      // Gallery of the passes the vault has collected. The art comes from each token's
+      // on-chain SVG, so it is filled in by the vault fetch below and stays hidden if
+      // the tokenURI reads fail.
+      if (contVaultAddr) {
+        html += `
+          <div class="section-card" id="vaultGalleryCard" style="display:none">
+            <div class="section-title">Collection</div>
+            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px"></div>
+          </div>
+        `;
+      }
       // Date the DAO's LP once the page is idle, and say so on the row: confirmed seeder
       // means the fee estimate covers the pool's whole life; anything else is softened.
       if (daoLpFeesEth > 0) {
@@ -5574,13 +5589,14 @@ async function renderCoinPage(daoAddr) {
           try {
             const nftIface = new ethers.Interface(VAULT_NFT_ABI);
             const feeIface = new ethers.Interface(VAULT_NFT_FEES_ABI);
-            const [vaultBal, nftLocked, nftPending] = await withRPC(async rpc => {
+            const [vaultBal, nftLocked, nftPending, tokenURIs] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
                 // One locked-ETH + one pending-fees call per collected pass, in id order.
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('tokenURI', [id]) })),
               ]);
               const n = VAULT_NFT_TOKEN_IDS.length;
               const sum = (offset, iface, fn) => res.slice(offset, offset + n).reduce(
@@ -5589,6 +5605,7 @@ async function renderCoinPage(daoAddr) {
                 res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
                 sum(1, nftIface, 'getRemainingLockedEth'),
                 sum(1 + n, feeIface, 'pending'),
+                res.slice(1 + 2 * n, 1 + 3 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
               ];
             });
             const el = $('vaultEthBal');
@@ -5601,6 +5618,29 @@ async function renderCoinPage(daoAddr) {
             if (nftEl) nftEl.innerHTML = `${nftCountHeld} TokenWorks NFT${nftCountHeld > 1 ? 's' : ''} `
               + VAULT_NFT_TOKEN_IDS.map(id => `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="color:inherit;text-decoration:underline">#${id}</a>`).join(' ')
               + (nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : '');
+            // Gallery: the pass art is a base64 data URI inside base64 JSON, both on-chain,
+            // so the image can go straight into an <img> with no gateway in the path.
+            const galleryEl = $('vaultGallery'), galleryCard = $('vaultGalleryCard');
+            if (galleryEl && galleryCard) {
+              const cards = (tokenURIs || []).map((uri, i) => {
+                const id = VAULT_NFT_TOKEN_IDS[i];
+                let meta = null;
+                try {
+                  const b64 = String(uri).split('base64,')[1];
+                  if (b64) meta = JSON.parse(decodeURIComponent(escape(atob(b64))));
+                } catch {}
+                if (!meta || !meta.image) return '';
+                return `
+                  <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="display:block;text-decoration:none;color:inherit">
+                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--surface);display:block">
+                    <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;text-align:center">${escText(meta.name || '#' + id)}</div>
+                  </a>`;
+              }).filter(Boolean);
+              if (cards.length) {
+                galleryEl.innerHTML = cards.join('');
+                galleryCard.style.display = '';
+              }
+            }
             // Unclaimed fees earned by the pass — claimable to the vault via proposal
             const pendingEth = Number(ethers.formatEther(nftPending));
             const feeRowEl = $('vaultFeesRow'), feeValEl = $('vaultFeesVal');
