@@ -5902,15 +5902,16 @@ async function renderCoinPage(daoAddr) {
     const canRagequit = treasuryETH > 0n;
     const defaultMode = saleActive ? 'sale' : hasPool ? 'swap' : canRagequit ? 'ragequit' : 'swap';
 
-    // An unlimited mint at a fixed price is a ceiling on the pool: nobody rationally pays
-    // more on the AMM than they can mint for. Liquidity added above that price is what
-    // arbitrage sells into, so say so before someone supplies it.
+    // The mint sets a reference price the pool tends to track. Worth a note when the pool
+    // has drifted meaningfully above it — but a fraction of a percent is just noise, and
+    // flagging that reads as a warning where there is nothing to warn about.
     const poolSpotEth = (hasPool && inLp > 0) ? Number(ethers.formatEther(reserve0)) / inLp : 0;
     const mintPriceEth = 1 / CONT_SALE_SHARES_PER_ETH;
-    const lpCappedWarning = (contSaleActive && poolSpotEth > mintPriceEth)
-      ? `<div style="font-size:11px;line-height:1.5;color:var(--fg-muted);background:var(--surface);border-left:2px solid var(--red);padding:8px 10px;margin-bottom:10px;border-radius:0 6px 6px 0">
-           The DAO mints unlimited shares at ${fmtEthPrice(mintPriceEth)}. The pool trades at ${fmtEthPrice(poolSpotEth)},
-           so liquidity added here is likely to be sold into by arbitrage until the two meet.
+    const lpPremium = (contSaleActive && poolSpotEth > 0) ? poolSpotEth / mintPriceEth : 0;
+    const lpCappedWarning = lpPremium > 1.05
+      ? `<div style="font-size:11px;line-height:1.5;color:var(--fg-dim);margin-bottom:10px">
+           Shares mint at ${fmtEthPrice(mintPriceEth)}, so the pool tends to track that price.
+           The pool is currently ${((lpPremium - 1) * 100).toFixed(0)}% above it.
          </div>`
       : '';
 
