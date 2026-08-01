@@ -5533,14 +5533,13 @@ async function renderCoinPage(daoAddr) {
     // where a redemption cannot reach it, so only promise a refund when there is one.
     const rqNote = treasuryETH > 0n
       ? 'Shares are ragequittable for a pro-rata treasury refund.'
-      : 'Shares are ragequittable, but redemption only pays out the DAO’s own ETH balance — funds held in the vault or in NFTs are not redeemable without governance.';
+      : 'Shares are ragequittable against the DAO’s own ETH; vault holdings are distributed by governance.';
     if (contSaleActive) {
       html += `
         <div class="section-card">
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
           <div id="nextPassProgress" style="display:none;margin:8px 0 10px"></div>
-          <div class="stat-row" id="contSaleNavRow" style="display:none"><span class="stat-label" title="What the treasury behind those shares is currently worth. Minting below that figure hands new buyers value from existing holders; minting above it does the reverse. Backing is not redeemable without governance.">Backing bought</span><span class="stat-value" id="contSaleNavVal"></span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
           <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
@@ -5802,19 +5801,6 @@ async function renderCoinPage(daoAddr) {
                   ? `${fmtETH(shortWei)} ${ethIco} to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
                   : 'Funded &mdash; ready for the next acquisition'}</div>`;
               nextEl.style.display = '';
-            }
-            // State the mint against book in the units of the row above it: what one ETH of
-            // minting actually buys. Below 1 ETH the mint is dilutive to existing holders.
-            const backingEth = Number(ethers.formatEther(treasuryETH + vaultBal + nftLocked + nftPending)) + daoPoolEth;
-            const csNavRow = $('contSaleNavRow'), csNavVal = $('contSaleNavVal');
-            if (csNavRow && csNavVal && circulating > 0 && backingEth > 0) {
-              const perMillion = (backingEth / circulating) * CONT_SALE_SHARES_PER_ETH;
-              const dilutive = perMillion > 1;
-              csNavVal.innerHTML = `~${fmtNum(perMillion)} ${ethIco} per 1 ${ethIco} minted`
-                + `<div style="font-size:10px;color:var(--fg-dim);font-weight:400;margin-top:2px">${dilutive
-                  ? 'mint is below backing &mdash; new mints dilute existing holders'
-                  : 'mint is at or above backing'}</div>`;
-              csNavRow.style.display = '';
             }
           } catch (e) {
             console.error('vault stats load failed:', e);
