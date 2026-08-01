@@ -2093,7 +2093,7 @@ async function refreshSaleStats() {
     const barEl = $('salePctBar');
     if (barEl) barEl.innerHTML = pctBar(salePct, 'var(--green)');
     const rEl = $('saleRaisedRow');
-    if (rEl) rEl.innerHTML = ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : '';
+    if (rEl) rEl.innerHTML = ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)}</span></div>` : '';
     // Refresh mint progress for FW Collector
     const tap = data.tap;
     const minterAddr = tap && tap.ops && tap.ops !== ZERO ? tap.ops : null;
@@ -2120,7 +2120,7 @@ async function refreshSaleStats() {
             </div>`;
         }
         const tmEl = $('treasuryMinterBal');
-        if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
+        if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)}`;
       } catch (e) { console.error('Mint progress refresh failed:', e); }
     }
     loadBalances();
@@ -5471,11 +5471,16 @@ async function renderCoinPage(daoAddr) {
     // A one-line description in a full bordered card outweighs the treasury visually;
     // drop the card chrome when there's little to hold.
     const terseDesc = !hasSocials && metadata.description && metadata.description.length <= 60;
-    if (metadata.description || hasSocials) {
+    // The collector label above already carries this text on FWC-style DAOs; repeating it
+    // verbatim one line down is noise, so drop the echo and keep anything else.
+    const descEchoesLabel = !!metadata.description && isCollect
+      && metadata.description.trim().toLowerCase() === 'collector dao';
+    const showDesc = !!metadata.description && !descEchoesLabel;
+    if (showDesc || hasSocials) {
       html += terseDesc ? `<div class="coin-desc-inline">` : `<div class="section-card">`;
-      if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
+      if (showDesc) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
       if (hasSocials) {
-        html += `<div class="socials-row"${metadata.description ? ' style="margin-top:10px"' : ''}>`;
+        html += `<div class="socials-row"${showDesc ? ' style="margin-top:10px"' : ''}>`;
         if (metadata.twitter) {
           const _tw = metadata.twitter.replace(/^@/, '').trim();
           const _twHandle = _tw.replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com)\//, '').replace(/\/.*$/, '');
@@ -5507,7 +5512,7 @@ async function renderCoinPage(daoAddr) {
     const saleContent = `
         <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value" id="saleSoldVal">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
         <div id="salePctBar">${pctBar(salePct, 'var(--green)')}</div>
-        <div id="saleRaisedRow">${ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : ''}</div>
+        <div id="saleRaisedRow">${ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)}</span></div>` : ''}</div>
         <div id="saleMintProgress"></div>
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
@@ -5540,9 +5545,11 @@ async function renderCoinPage(daoAddr) {
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
           <div id="nextPassProgress" style="display:none;margin:8px 0 10px"></div>
-          <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
-          ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
+          <div style="font-size:11px;line-height:1.6;color:var(--fg-muted);margin-top:10px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
+          <div style="font-size:10px;color:var(--fg-dim);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-muted)">
+            <a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Sale ${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a>${contVaultAddr ? `
+            &nbsp;&middot;&nbsp; <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Vault ${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a>` : ''}
+          </div>
         </div>
       `;
       if (hasDaicoSale) html += saleEndedDrawer;
@@ -5616,12 +5623,12 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
-          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)}</span></div>` : ''}
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">${ethIco} Vault</span><span class="stat-value"><span id="vaultEthBal">Loading...</span> <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="font-size:10px;color:var(--fg-muted);text-decoration:underline;margin-left:4px">view</a></span></div>
           <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>
           <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Everything the vault's passes have earned in fees since they were acquired, whether or not it has been claimed yet. Claimed fees have already been taken into the vault and largely reinvested into further passes; unclaimed fees still sit at the fee accumulator and need a claim to realise.">Fees earned</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
           ${hasPool ? `
-            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
           ` : ''}
           ${(daoLpFrac > 0 || navHTML || contVaultAddr) ? `
@@ -5647,7 +5654,7 @@ async function renderCoinPage(daoAddr) {
             <!-- auto-fill with a max track width so a two-pass vault gets two small tiles,
                  not two tiles stretched across the whole card. Seeded with one skeleton per
                  known id so the card holds its space instead of appearing after the read. -->
-            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,110px));gap:8px;justify-content:start">${VAULT_NFT_TOKEN_IDS.map(() => '<div class="nft-skel"></div>').join('')}</div>
+            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,132px));gap:10px;justify-content:start">${VAULT_NFT_TOKEN_IDS.map(() => '<div class="nft-skel"></div>').join('')}</div>
             <div id="vaultGalleryCaption" style="font-size:10px;color:var(--fg-dim);margin-top:8px"></div>
           </div>
         `;
@@ -5767,7 +5774,7 @@ async function renderCoinPage(daoAddr) {
                 claimedEth > 0 ? `${fmtNum(claimedEth)} claimed &amp; reinvested` : '',
                 pendingEth > 0 ? `${fmtNum(pendingEth)} unclaimed` : ''
               ].filter(Boolean).join(' &middot; ');
-              feeValEl.innerHTML = `${fmtNum(earnedEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(earnedEth * ethUsd)})</span>` : ''}`
+              feeValEl.innerHTML = `${fmtNum(earnedEth)} ETH${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(earnedEth * ethUsd)})</span>` : ''}`
                 + (split ? `<div style="font-size:10px;color:var(--fg-dim);font-weight:400;margin-top:2px">${split}</div>` : '');
               feeRowEl.style.display = '';
             }
@@ -5790,15 +5797,17 @@ async function renderCoinPage(daoAddr) {
             // proceeds and claimed fees pool in the vault until they clear a pass price.
             const nextEl = $('nextPassProgress');
             if (nextEl) {
+              // A goal wants round numbers, not a balance's full precision.
+              const fmt4 = w => Number(ethers.formatEther(w)).toFixed(4);
               const passPrice = ethers.parseEther(PASS_PRICE_ETH);
               const haveWei = vaultBal + nftPending;      // claimable fees count toward it
               const pct = Number((haveWei * 10000n) / passPrice) / 100;
               const shortWei = haveWei >= passPrice ? 0n : passPrice - haveWei;
               nextEl.innerHTML = `
-                <div class="stat-row"><span class="stat-label" style="font-size:12px">Toward pass #${VAULT_NFT_TOKEN_IDS.length + 1}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(haveWei)} / ${PASS_PRICE_ETH} ${ethIco}</span></div>
+                <div class="stat-row"><span class="stat-label" style="font-size:12px">Toward pass #${VAULT_NFT_TOKEN_IDS.length + 1}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmt4(haveWei)} / ${PASS_PRICE_ETH} ETH</span></div>
                 ${pctBar(Math.min(pct, 100), 'var(--green)')}
                 <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${shortWei > 0n
-                  ? `${fmtETH(shortWei)} ${ethIco} to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
+                  ? `${fmt4(shortWei)} ETH to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
                   : 'Funded &mdash; ready for the next acquisition'}</div>`;
               nextEl.style.display = '';
             }
