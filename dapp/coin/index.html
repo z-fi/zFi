@@ -5446,16 +5446,31 @@ async function renderCoinPage(daoAddr) {
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
         ${sale && sale.deadline > 0n ? `<div id="saleDeadlineRow"></div>` : ''}`
+    // The DAICO sale is phase 0 of a collector DAO; once it closes a continuous sale can
+    // reopen minting as phase 1. When phase 1 is live the phase 0 record still stands, so
+    // it stays on the page as a collapsed drawer under the live card rather than vanishing.
+    const saleEndedDrawer = `
+        <div class="drawer" id="saleDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>${contSaleActive ? 'Phase 0 &middot; Sale (Ended)' : 'Sale (Ended)'}</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="drawer-body">
+            ${saleContent}
+          </div>
+        </div>
+      `;
     if (contSaleActive) {
       html += `
         <div class="section-card">
-          <div class="section-title">Continuous Sale (Live)</div>
+          <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
           <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. Shares are ragequittable for a pro-rata treasury refund.</div>
         </div>
       `;
+      if (hasDaicoSale) html += saleEndedDrawer;
     } else if (saleActive && hasDaicoSale) {
       html += `
         <div class="section-card">
@@ -5491,17 +5506,7 @@ async function renderCoinPage(daoAddr) {
       // Auto-refresh sale stats every 20s while sale is live
       _saleRefreshInterval = setInterval(refreshSaleStats, 20000);
     } else if (hasDaicoSale) {
-      html += `
-        <div class="drawer" id="saleDrawer">
-          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>Sale (Ended)</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="drawer-body">
-            ${saleContent}
-          </div>
-        </div>
-      `;
+      html += saleEndedDrawer;
     }
 
     // Treasury + Pool reserves + Vault
@@ -5555,7 +5560,9 @@ async function renderCoinPage(daoAddr) {
         html += `
           <div class="section-card" id="vaultGalleryCard" style="display:none">
             <div class="section-title">Collection</div>
-            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px"></div>
+            <!-- auto-fill with a max track width so a two-pass vault gets two small tiles,
+                 not two tiles stretched across the whole card. -->
+            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,110px));gap:8px;justify-content:start"></div>
           </div>
         `;
       }
@@ -5632,8 +5639,8 @@ async function renderCoinPage(daoAddr) {
                 if (!meta || !meta.image) return '';
                 return `
                   <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="display:block;text-decoration:none;color:inherit">
-                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--surface);display:block">
-                    <div style="font-size:10px;color:var(--fg-muted);margin-top:4px;text-align:center">${escText(meta.name || '#' + id)}</div>
+                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" title="${escAttr(meta.name || '#' + id)}" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;background:var(--surface);display:block">
+                    <div style="font-size:10px;color:var(--fg-muted);margin-top:3px;text-align:center">#${id}</div>
                   </a>`;
               }).filter(Boolean);
               if (cards.length) {
