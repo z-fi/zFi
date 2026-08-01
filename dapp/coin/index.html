@@ -605,7 +605,7 @@ const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 // backing/share values the NFT at its locked ETH rather than at cost or at zero. The
 // resale value on top of the locked portion is not counted.
 const VAULT_NFT_CONTRACT = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
-const VAULT_NFT_TOKEN_ID = 156;
+const VAULT_NFT_TOKEN_IDS = [156, 343];
 const VAULT_NFT_ABI = ['function getRemainingLockedEth(uint256 tokenId) view returns (uint256)'];
 // Fee accumulator for the TokenWorks pass: pending() is ETH earned by the pass but not
 // yet claimed into the vault. Claimed fees already show up in the vault ETH balance, so
@@ -5578,22 +5578,29 @@ async function renderCoinPage(daoAddr) {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
-                { target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [VAULT_NFT_TOKEN_ID]) },
-                { target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [VAULT_NFT_TOKEN_ID]) },
+                // One locked-ETH + one pending-fees call per collected pass, in id order.
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
               ]);
+              const n = VAULT_NFT_TOKEN_IDS.length;
+              const sum = (offset, iface, fn) => res.slice(offset, offset + n).reduce(
+                (acc, r) => acc + (r.success ? iface.decodeFunctionResult(fn, r.returnData)[0] : 0n), 0n);
               return [
                 res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
-                res[1].success ? nftIface.decodeFunctionResult('getRemainingLockedEth', res[1].returnData)[0] : 0n,
-                res[2].success ? feeIface.decodeFunctionResult('pending', res[2].returnData)[0] : 0n,
+                sum(1, nftIface, 'getRemainingLockedEth'),
+                sum(1 + n, feeIface, 'pending'),
               ];
             });
             const el = $('vaultEthBal');
             if (el) el.textContent = fmtETH(vaultBal);
-            // Hardcoded NFT holding for the FWC vault (1 TokenWorks NFT currently held),
-            // annotated with the ETH still refundable from it.
+            // Hardcoded NFT holdings for the FWC vault (TokenWorks passes collected so far),
+            // annotated with the ETH still refundable across them.
             const nftLockedEth = Number(ethers.formatEther(nftLocked));
             const nftEl = $('vaultNftBal');
-            if (nftEl) nftEl.innerHTML = `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${VAULT_NFT_TOKEN_ID}" target="_blank" style="color:inherit;text-decoration:underline">1 TokenWorks NFT</a>${nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : ''}`;
+            const nftCountHeld = VAULT_NFT_TOKEN_IDS.length;
+            if (nftEl) nftEl.innerHTML = `${nftCountHeld} TokenWorks NFT${nftCountHeld > 1 ? 's' : ''} `
+              + VAULT_NFT_TOKEN_IDS.map(id => `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="color:inherit;text-decoration:underline">#${id}</a>`).join(' ')
+              + (nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : '');
             // Unclaimed fees earned by the pass — claimable to the vault via proposal
             const pendingEth = Number(ethers.formatEther(nftPending));
             const feeRowEl = $('vaultFeesRow'), feeValEl = $('vaultFeesVal');
