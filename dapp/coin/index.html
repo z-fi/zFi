@@ -5471,20 +5471,9 @@ async function renderCoinPage(daoAddr) {
           </div>
         </div>
       `;
-    // What the mint costs against the pool's spot price — the reason to use the sale tab
-    // rather than the AMM, or the warning that it is the more expensive route.
-    const contSalePrice = 1 / CONT_SALE_SHARES_PER_ETH;
-    const contSaleRatio = (contSaleActive && priceSrc === 'pool' && priceETH > 0) ? contSalePrice / priceETH : 0;
-    // Say it in shares, not in percent: the row is denominated in shares per ETH, so
-    // "47% below market" makes the reader convert to price-per-share to use it.
-    const contSaleTip = contSaleRatio > 0
-      ? `Minting costs ${fmtEthPrice(contSalePrice)} per share. The pool's spot price is ${fmtEthPrice(priceETH)} per share. Pool spot ignores slippage, so a large buy through the AMM would cost more than this comparison shows.`
-      : '';
-    const contSaleVsMarket = contSaleRatio > 0
-      ? (contSaleRatio < 1
-        ? ` &middot; <span style="color:var(--green)" title="${escAttr(contSaleTip)}">${(1 / contSaleRatio).toFixed(1)}&times; more shares than buying on the pool</span>`
-        : ` &middot; <span style="color:var(--fg-muted)" title="${escAttr(contSaleTip)}">the pool gives ${contSaleRatio.toFixed(1)}&times; more shares per ETH right now</span>`)
-      : '';
+    // No price comparison here — the Swap tab quotes mint against pool per trade and routes
+    // to whichever is better, which is the comparison that actually decides anything.
+    const contSaleTip = 'Fixed mint rate. The Swap tab compares this against the pool for the size you enter and uses whichever gives more shares.';
     // Ragequit pays out of the DAO's *own* ETH. A collector DAO parks its ETH in the vault,
     // where a redemption cannot reach it, so only promise a refund when there is one.
     const rqNote = treasuryETH > 0n
@@ -5494,7 +5483,7 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="section-card">
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
-          <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares${contSaleVsMarket}</span></div>
+          <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
           <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
@@ -5827,7 +5816,7 @@ async function renderCoinPage(daoAddr) {
             <input type="text" id="saleReceiveInput" placeholder="0.0" oninput="onSaleReceiveInput()" autocomplete="off">
             <div class="sale-lp-note" id="saleLpNote"></div>
           </div>
-          <div class="swap-quote" id="saleQuote">${contSaleActive ? `Continuous sale: 1 ETH = 1M shares${contSaleVsMarket}` : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
+          <div class="swap-quote" id="saleQuote">${contSaleActive ? `Continuous sale: 1 ETH = 1M shares` : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
           ${!contSaleActive ? `<button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>` : ''}
           <button id="saleBuyBtn" class="action-btn" onclick="onSaleBuyBtn()">Connect Wallet</button>
           <button id="saleCopyLink" class="swap-pct-btn" onclick="copySaleLink()" style="width:100%;margin-top:6px;font-size:11px;padding:5px">Copy share link</button>
@@ -6081,6 +6070,7 @@ async function renderCoinPage(daoAddr) {
 function setTradeMode(mode) {
   _tradeMode = mode;
   _cachedQuote = null;
+  _bestRoute = 'pool';
   // Update tab active states
   const tabs = ['Sale','Swap','Ragequit','Lp'];
   tabs.forEach(t => {
@@ -6105,7 +6095,8 @@ function updateModeButton() {
     if (btn) btn.textContent = connected ? 'Buy' : 'Connect Wallet';
   } else if (_tradeMode === 'swap') {
     const btn = $('swapBtn');
-    if (btn) btn.textContent = connected ? 'Swap' : 'Connect Wallet';
+    // Name the action the button will actually take, since a buy may route to the mint.
+    if (btn) btn.textContent = connected ? (_bestRoute === 'mint' ? 'Mint' : 'Swap') : 'Connect Wallet';
   } else if (_tradeMode === 'ragequit') {
     const btn = $('rqBtn');
     if (btn) btn.textContent = connected ? 'Ragequit' : 'Connect Wallet';
@@ -6122,6 +6113,7 @@ function updateModeButton() {
 function setSwapDir(dir) {
   _swapDir = dir;
   _cachedQuote = null;
+  _bestRoute = 'pool'; // stale route must not label a sell as a mint
   $('swapBuyBtn').classList.toggle('active', dir === 'buy');
   $('swapSellBtn').classList.toggle('active', dir === 'sell');
   updateSwapLabels();
@@ -6150,6 +6142,7 @@ function updateSwapLabels() {
 let _lastQuoteId = 0;
 let _quoteDebounce = null;
 let _cachedQuote = null; // { exactOut, tokenIn, tokenOut, amount, result, ts }
+let _bestRoute = 'pool'; // 'pool' | 'mint' — which source the last buy quote picked
 
 function onPayInput() {
   _exactOut = false;
@@ -6170,39 +6163,63 @@ function scheduleQuote() {
 
 async function fetchQuote() {
   const raw = _exactOut ? $('swapReceiveInput').value.trim() : $('swapPayInput').value.trim();
-  if (!raw || isNaN(raw) || Number(raw) <= 0) { $('swapQuote').textContent = ''; return; }
+  if (!raw || isNaN(raw) || Number(raw) <= 0) { $('swapQuote').textContent = ''; _bestRoute = 'pool'; return; }
 
   const quoteId = ++_lastQuoteId;
   const shares = $('app').dataset.shares;
   const feeOrHook = BigInt($('app').dataset.feeOrHook || '30');
+  // Buying is a choice between two sources of shares: the pool, and the DAO's own mint
+  // at a fixed rate. Quote both and take whichever hands the user more. Selling has no
+  // second route — the sale only mints.
+  const isBuy = _swapDir === 'buy';
+  const canMint = isBuy && !!$('app').dataset.contSale;
+  _bestRoute = 'pool';
 
-  try {
-    const amount = ethers.parseEther(raw);
-    const isBuy = _swapDir === 'buy';
-    const tokenIn = isBuy ? ZERO : shares;
-    const tokenOut = isBuy ? shares : ZERO;
+  let amount;
+  try { amount = ethers.parseEther(raw); } catch { return; }
+  const tokenIn = isBuy ? ZERO : shares;
+  const tokenOut = isBuy ? shares : ZERO;
 
-    const result = await withRPC(async rpc => {
-      const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
-      return await quoter.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
-    });
-    _cachedQuote = { exactOut: _exactOut, tokenIn, tokenOut, amount, result, ts: Date.now() };
+  const result = await withRPC(async rpc => {
+    const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
+    return await quoter.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
+  }).catch(() => null);
+  if (quoteId !== _lastQuoteId) return;
+  if (result) _cachedQuote = { exactOut: _exactOut, tokenIn, tokenOut, amount, result, ts: Date.now() };
 
-    if (quoteId !== _lastQuoteId) return;
+  if (!result && !canMint) { $('swapQuote').textContent = 'No liquidity yet'; return; }
 
-    if (_exactOut) {
-      const val = Number(ethers.formatEther(result.amountIn)).toLocaleString(undefined, {maximumFractionDigits: 6});
-      $('swapPayInput').value = ethers.formatEther(result.amountIn);
-      $('swapQuote').textContent = `Estimated cost: ~${val}`;
-    } else {
-      const val = Number(ethers.formatEther(result.amountOut)).toLocaleString(undefined, {maximumFractionDigits: 6});
-      $('swapReceiveInput').value = ethers.formatEther(result.amountOut);
-      $('swapQuote').textContent = `Estimated output: ~${val}`;
-    }
-  } catch(e) {
-    if (quoteId !== _lastQuoteId) return;
-    $('swapQuote').textContent = 'No liquidity yet';
+  const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+  const sym = '$' + (_coinData?.meta?.symbol || '???');
+  const fmtEthAmt = v => Number(ethers.formatEther(v)).toLocaleString(undefined, {maximumFractionDigits: 6});
+
+  if (_exactOut) {
+    // Cheapest way to end up with the requested shares. The mint has no slippage or fee,
+    // so its cost is exact; round the ETH up so the mint covers the full amount.
+    const mintIn = canMint ? (amount + rate - 1n) / rate : 0n;
+    const poolIn = result ? result.amountIn : 0n;
+    const useMint = canMint && (!result || mintIn < poolIn);
+    const payIn = useMint ? mintIn : poolIn;
+    _bestRoute = useMint ? 'mint' : 'pool';
+    $('swapPayInput').value = ethers.formatEther(payIn);
+    const alt = (canMint && result)
+      ? ` <span style="color:var(--fg-dim)">(${useMint ? 'pool' : 'mint'}: ~${fmtEthAmt(useMint ? poolIn : mintIn)} ETH)</span>`
+      : '';
+    $('swapQuote').innerHTML = `Cost: ~${fmtEthAmt(payIn)} ETH via ${useMint ? 'mint' : 'pool'}${alt}`;
+  } else {
+    // Most shares for the ETH being spent.
+    const mintOut = canMint ? amount * rate : 0n;
+    const poolOut = result ? result.amountOut : 0n;
+    const useMint = canMint && mintOut > poolOut;
+    const out = useMint ? mintOut : poolOut;
+    _bestRoute = useMint ? 'mint' : 'pool';
+    $('swapReceiveInput').value = ethers.formatEther(out);
+    const alt = (canMint && result)
+      ? ` <span style="color:var(--fg-dim)">(${useMint ? 'pool' : 'mint'}: ~${fmtShares(useMint ? poolOut : mintOut)})</span>`
+      : '';
+    $('swapQuote').innerHTML = `~${fmtShares(out)} ${escText(sym)} via ${useMint ? 'mint' : 'pool'}${alt}`;
   }
+  updateModeButton();
 }
 
 
@@ -7015,6 +7032,39 @@ async function executeSwap() {
     const amount = ethers.parseEther(raw);
     const tokenIn = isBuy ? ZERO : shares;
     const tokenOut = isBuy ? shares : ZERO;
+
+    // Route the buy to whichever source gives more. Decided here rather than trusting the
+    // displayed quote, so an amount edited inside the debounce window still routes on its
+    // own numbers. Minting is fixed-rate: no slippage, no approval — just send the ETH.
+    const contSaleAddr = $('app').dataset.contSale;
+    let useMint = false, mintPay = 0n;
+    if (isBuy && contSaleAddr) {
+      const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+      mintPay = _exactOut ? (amount + rate - 1n) / rate : amount;
+      const fresh = _cachedQuote && Date.now() - _cachedQuote.ts < 15000
+        && _cachedQuote.exactOut === _exactOut && _cachedQuote.tokenIn === tokenIn
+        && _cachedQuote.tokenOut === tokenOut && _cachedQuote.amount === amount
+        ? _cachedQuote.result
+        : await withRPC(async rpc => {
+            const q = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
+            return await q.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
+          }).catch(() => null);
+      // No pool quote at all (no liquidity) still leaves the mint as a route.
+      useMint = !fresh || (_exactOut ? mintPay < fresh.amountIn : amount * rate > fresh.amountOut);
+    }
+    if (useMint) {
+      const payAmt = mintPay;
+      btn.textContent = 'Confirm in wallet...';
+      const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, s);
+      const mintTx = await cs.buy({ value: payAmt });
+      btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${mintTx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+      await mintTx.wait();
+      $('swapQuote').innerHTML = `<span style="color:var(--green)">Minted!</span> <a href="https://etherscan.io/tx/${mintTx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+      $('swapPayInput').value = '';
+      $('swapReceiveInput').value = '';
+      setTimeout(() => renderCoinPage($('app').dataset.dao), 2000);
+      return;
+    }
     // ZAMM PoolKey: token0=ETH(ZERO), token1=shares. Buy=zeroForOne(true), Sell=zeroForOne(false)
     const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: shares, feeOrHook: feeOrHook };
 
