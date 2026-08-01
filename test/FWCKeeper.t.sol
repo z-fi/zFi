@@ -79,6 +79,7 @@ contract FWCKeeperTest is Test {
         assertTrue(keeper.canChat(), "needs a badge seat");
 
         uint256 msgsBefore = dao.getMessageCount();
+        vm.prank(WHALE); // proposing is a member action
         uint256 id = keeper.proposeClaimPermit(12);
 
         // the tagged message is on-chain for the dapps to parse
@@ -166,6 +167,7 @@ contract FWCKeeperTest is Test {
     function test_ProposalIsPrecomputable() public {
         _equip();
         (uint256 pid, bytes32 pnonce, bytes memory pdata) = keeper.previewClaimProposal(12);
+        vm.prank(WHALE);
         uint256 id = keeper.proposeClaimPermit(12);
         assertEq(id, pid, "id must match the preview");
 
@@ -181,7 +183,9 @@ contract FWCKeeperTest is Test {
     /// Two proposals for the same action must not collide on the same id.
     function test_SequentialProposalsAreDistinct() public {
         _equip();
+        vm.prank(WHALE);
         uint256 first = keeper.proposeClaimPermit(12);
+        vm.prank(WHALE);
         uint256 second = keeper.proposeClaimPermit(12);
         assertTrue(first != second, "sequence number must separate them");
         assertEq(keeper.proposalCount(), 2, "counter advanced");
@@ -265,7 +269,46 @@ contract FWCKeeperTest is Test {
         _equip();
         vm.prank(keeper.GUARDIAN());
         keeper.setStopped(true);
+        vm.prank(WHALE);
         vm.expectRevert(FWCKeeper.Stopped.selector);
+        keeper.proposeClaimPermit(12);
+    }
+
+    /// Shares sent here for voting rights must not be burnt: the guardian can pull them back.
+    function test_GuardianCanReclaimShares() public {
+        address GUARDIAN = keeper.GUARDIAN();
+        ISharesT shares = ISharesT(dao.shares());
+        vm.prank(WHALE);
+        shares.transfer(address(keeper), 10_000 ether);
+        assertEq(shares.balanceOf(address(keeper)), 10_000 ether, "funded");
+
+        vm.prank(RANDOM);
+        vm.expectRevert(FWCKeeper.NotGuardian.selector);
+        keeper.reclaim(address(shares));
+
+        uint256 gBefore = shares.balanceOf(GUARDIAN);
+        vm.prank(GUARDIAN);
+        keeper.reclaim(address(shares));
+        assertEq(shares.balanceOf(address(keeper)), 0, "swept");
+        assertEq(shares.balanceOf(GUARDIAN), gBefore + 10_000 ether, "returned to guardian");
+    }
+
+    /// Stray ETH is recoverable too, rather than reverting on arrival and stranding later.
+    function test_GuardianCanReclaimEth() public {
+        vm.deal(address(keeper), 1 ether);
+        address GUARDIAN = keeper.GUARDIAN();
+        uint256 before = GUARDIAN.balance;
+        vm.prank(GUARDIAN);
+        keeper.reclaim(address(0));
+        assertEq(address(keeper).balance, 0, "swept");
+        assertEq(GUARDIAN.balance, before + 1 ether, "returned");
+    }
+
+    /// Proposal writing is a member action, not an open spam channel into the chatroom.
+    function test_NonMemberCannotPropose() public {
+        _equip();
+        vm.prank(RANDOM);
+        vm.expectRevert(FWCKeeper.NotMember.selector);
         keeper.proposeClaimPermit(12);
     }
 }

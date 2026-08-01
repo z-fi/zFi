@@ -93,6 +93,7 @@ contract FWCKeeper {
     event Spent(address indexed caller, bytes32 indexed nonce);
     event Proposed(address indexed caller, uint256 indexed id);
     event StopSet(bool stopped);
+    event Reclaimed(address indexed token, uint256 amount);
 
     /// @dev Bumped per self-authored proposal so each gets a distinct nonce, and a
     /// re-run after a defeat is a new proposal rather than a collision with the old one.
@@ -100,6 +101,8 @@ contract FWCKeeper {
 
     error NoPermit();
     error NotGuardian();
+    error NotMember();
+    error RescueFailed();
     error Stopped();
     error NothingPending();
     error VaultUnderfunded();
@@ -135,9 +138,7 @@ contract FWCKeeper {
         if (pendingFees() == 0) revert NothingPending();
         uint256 before = VAULT.balance;
         _spend(claimPayload(), CLAIM_NONCE);
-        unchecked {
-            claimed = VAULT.balance - before;
-        }
+        claimed = VAULT.balance - before;
         emit FeesClaimed(msg.sender, claimed);
     }
 
@@ -227,6 +228,9 @@ contract FWCKeeper {
         returns (uint256 id)
     {
         if (stopped) revert Stopped();
+        // Each call writes a message and opens a proposal, so leaving it open to anyone
+        // is an unbounded spam channel into the DAO's chatroom. Members only.
+        if (IBadges(DAO.badges()).balanceOf(msg.sender) == 0 && msg.sender != GUARDIAN) revert NotMember();
         uint256 seq = ++proposalCount;
         bytes memory data;
         bytes32 proposalNonce;
@@ -314,6 +318,37 @@ contract FWCKeeper {
     /**
      * GUARDIAN
      */
+
+    /// @notice Send anything this contract holds back to the guardian. Guardian only.
+    /// @param token ERC20 to sweep, or address(0) for ETH.
+    /// @dev Without this the shares delegated here for proposal rights would be burnt:
+    /// nothing else in this contract can move a token or a wei. The destination is fixed
+    /// to the guardian, so there is no recipient argument to point somewhere else.
+    ///
+    /// Note this is the one power the guardian has beyond switching the contract off. It
+    /// reaches only what sits at this address — the voting shares someone funded it with —
+    /// and never the vault, the treasury, or anything a permit touches.
+    function reclaim(address token) external {
+        if (msg.sender != GUARDIAN) revert NotGuardian();
+        if (token == address(0)) {
+            uint256 bal = address(this).balance;
+            (bool sent,) = GUARDIAN.call{value: bal}("");
+            if (!sent) revert RescueFailed();
+            emit Reclaimed(token, bal);
+            return;
+        }
+        (bool ok, bytes memory ret) = token.call(abi.encodeWithSignature("balanceOf(address)", address(this)));
+        if (!ok || ret.length < 32) revert RescueFailed();
+        uint256 amount = abi.decode(ret, (uint256));
+        (ok, ret) = token.call(abi.encodeWithSignature("transfer(address,uint256)", GUARDIAN, amount));
+        // Tolerate non-standard tokens that return nothing on success.
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert RescueFailed();
+        emit Reclaimed(token, amount);
+    }
+
+    /// @dev Accept ETH so a stray send can be reclaimed rather than stranded. Nothing here
+    /// spends it: the vault pays for remints out of its own balance.
+    receive() external payable {}
 
     /// @notice Switch this contract off, or back on. Guardian only.
     /// @dev The guardian cannot make this contract do anything — there is no path from
