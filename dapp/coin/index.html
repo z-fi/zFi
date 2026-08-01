@@ -447,6 +447,56 @@ input {
   .coin-preset-row button { padding:8px 6px !important; }
   .coin-slippage-row { gap:4px; }
 }
+
+/* Vault collection gallery */
+.nft-tile {
+  display:block;width:100%;padding:0;border:none;background:none;text-align:center;
+  cursor:zoom-in;border-radius:8px;outline-offset:3px;
+}
+.nft-tile:hover { background:none; }
+.nft-tile img {
+  width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:8px;
+  background:var(--surface);border:1px solid var(--border-muted);
+  transition:transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.nft-tile:hover img, .nft-tile:focus-visible img {
+  transform:translateY(-2px) scale(1.03);border-color:var(--fg-muted);
+  box-shadow:0 6px 18px rgba(0,0,0,0.18);
+}
+.nft-tile-label {
+  font-size:10px;color:var(--fg-muted);margin-top:4px;letter-spacing:0.03em;
+  transition:color 0.18s ease;
+}
+.nft-tile:hover .nft-tile-label, .nft-tile:focus-visible .nft-tile-label { color:var(--fg); }
+.nft-skel {
+  aspect-ratio:1;border-radius:8px;background:var(--surface);
+  animation:nftPulse 1.4s ease-in-out infinite;
+}
+@keyframes nftPulse { 0%,100% { opacity:0.4 } 50% { opacity:0.75 } }
+/* Lightbox */
+.nft-lb {
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(0,0,0,0.72);backdrop-filter:blur(3px);
+  animation:nftFade 0.15s ease;
+}
+@keyframes nftFade { from { opacity:0 } to { opacity:1 } }
+.nft-lb-inner { max-width:min(520px,92vw);width:100%;text-align:center; }
+.nft-lb img {
+  width:100%;max-height:70vh;object-fit:contain;border-radius:10px;background:var(--surface);
+  display:block;margin:0 auto;
+}
+.nft-lb-meta { margin-top:12px;font-size:12px;color:#fff;opacity:0.9; }
+.nft-lb-meta a { color:#fff;text-decoration:underline; }
+.nft-lb-close {
+  position:absolute;top:16px;right:20px;background:none;color:#fff;font-size:22px;
+  line-height:1;padding:6px 10px;opacity:0.8;
+}
+.nft-lb-close:hover { background:none;opacity:1; }
+@media (prefers-reduced-motion: reduce) {
+  .nft-tile img { transition:none }
+  .nft-tile:hover img, .nft-tile:focus-visible img { transform:none }
+  .nft-skel, .nft-lb { animation:none }
+}
 </style>
 </head>
 <body>
@@ -2091,6 +2141,9 @@ function route() {
   // with the indexer-backed Pool Activity table, but this reference didn't — and an
   // undeclared identifier throws ReferenceError rather than reading as undefined,
   // so route() died before rendering and every coin page came up blank.
+  // A route change must not leave the gallery overlay pinned over the next page.
+  closeNftLightbox();
+  _vaultGalleryItems = [];
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
@@ -5596,11 +5649,12 @@ async function renderCoinPage(daoAddr) {
       // the tokenURI reads fail.
       if (contVaultAddr) {
         html += `
-          <div class="section-card" id="vaultGalleryCard" style="display:none">
+          <div class="section-card" id="vaultGalleryCard">
             <div class="section-title">Collection</div>
             <!-- auto-fill with a max track width so a two-pass vault gets two small tiles,
-                 not two tiles stretched across the whole card. -->
-            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,110px));gap:8px;justify-content:start"></div>
+                 not two tiles stretched across the whole card. Seeded with one skeleton per
+                 known id so the card holds its space instead of appearing after the read. -->
+            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,110px));gap:8px;justify-content:start">${VAULT_NFT_TOKEN_IDS.map(() => '<div class="nft-skel"></div>').join('')}</div>
             <div id="vaultGalleryCaption" style="font-size:10px;color:var(--fg-dim);margin-top:8px"></div>
           </div>
         `;
@@ -5639,7 +5693,8 @@ async function renderCoinPage(daoAddr) {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
-                // One locked-ETH + one pending-fees call per collected pass, in id order.
+                // Four groups of one call per pass, each in id order: locked ETH, pending
+                // fees, lifetime claimed fees, then the on-chain metadata URI.
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('claimed', [id]) })),
@@ -5656,6 +5711,9 @@ async function renderCoinPage(daoAddr) {
                 res.slice(1 + 3 * n, 1 + 4 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
               ];
             });
+            // Navigating away mid-flight must not paint the old vault's numbers onto the
+            // page that replaced it.
+            if (gen !== _renderGen) return;
             const el = $('vaultEthBal');
             if (el) el.textContent = fmtETH(vaultBal);
             // Hardcoded NFT holdings for the FWC vault (TokenWorks passes collected so far),
@@ -5664,27 +5722,30 @@ async function renderCoinPage(daoAddr) {
             const nftEl = $('vaultNftBal');
             const nftCountHeld = VAULT_NFT_TOKEN_IDS.length;
             if (nftEl) nftEl.innerHTML = `${nftCountHeld} TokenWorks NFT${nftCountHeld > 1 ? 's' : ''} `
-              + VAULT_NFT_TOKEN_IDS.map(id => `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="color:inherit;text-decoration:underline">#${id}</a>`).join(' ')
+              + VAULT_NFT_TOKEN_IDS.map(id => `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">#${id}</a>`).join(' ')
               + (nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : '');
             // Gallery: the pass art is a base64 data URI inside base64 JSON, both on-chain,
             // so the image can go straight into an <img> with no gateway in the path.
             const galleryEl = $('vaultGallery'), galleryCard = $('vaultGalleryCard');
             if (galleryEl && galleryCard) {
-              const cards = (tokenURIs || []).map((uri, i) => {
+              _vaultGalleryItems = (tokenURIs || []).map((uri, i) => {
                 const id = VAULT_NFT_TOKEN_IDS[i];
                 let meta = null;
                 try {
                   const b64 = String(uri).split('base64,')[1];
                   if (b64) meta = JSON.parse(decodeURIComponent(escape(atob(b64))));
                 } catch {}
-                if (!meta || !meta.image) return '';
-                return `
-                  <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit">
-                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" decoding="async" title="${escAttr(meta.name || '#' + id)}" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;background:var(--surface);display:block">
-                    <div style="font-size:10px;color:var(--fg-muted);margin-top:3px;text-align:center">#${id}</div>
-                  </a>`;
+                return (meta && meta.image) ? { id, name: meta.name || ('#' + id), image: meta.image } : null;
               }).filter(Boolean);
-              if (cards.length) {
+              // Tiles open the art in-page rather than jumping straight to a marketplace —
+              // the outbound links live in the lightbox, one step further in.
+              const cards = _vaultGalleryItems.map((it, i) => `
+                  <button type="button" class="nft-tile" onclick="openNftLightbox(${i})" aria-label="View ${escAttr(it.name)}">
+                    <img src="${escAttr(it.image)}" alt="${escAttr(it.name)}" loading="lazy" decoding="async">
+                    <div class="nft-tile-label">#${it.id}</div>
+                  </button>`);
+              if (!cards.length) { galleryCard.style.display = 'none'; }
+              else {
                 galleryEl.innerHTML = cards.join('');
                 // Summarise what the collection is worth in ETH terms, so the art is not the
                 // only thing the card says.
@@ -5692,7 +5753,6 @@ async function renderCoinPage(daoAddr) {
                 if (capEl) capEl.textContent = `${cards.length} pass${cards.length > 1 ? 'es' : ''}`
                   + (nftLockedEth > 0 ? ` \u00b7 ${fmtNum(nftLockedEth)} ETH refundable` : '')
                   + (nftPending + nftClaimed > 0n ? ` \u00b7 ${fmtNum(Number(ethers.formatEther(nftPending + nftClaimed)))} ETH fees earned to date` : '');
-                galleryCard.style.display = '';
               }
             }
             // Unclaimed fees earned by the pass — claimable to the vault via proposal
@@ -5739,7 +5799,12 @@ async function renderCoinPage(daoAddr) {
                   : 'mint is at or above backing'}</div>`;
               csNavRow.style.display = '';
             }
-          } catch (e) { console.error('vault stats load failed:', e); const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
+          } catch (e) {
+            console.error('vault stats load failed:', e);
+            const el = $('vaultEthBal'); if (el) el.textContent = '--';
+            // Otherwise the placeholder tiles pulse forever, implying art still loading.
+            const gc = $('vaultGalleryCard'); if (gc) gc.style.display = 'none';
+          }
         })();
       }
     }
@@ -6395,6 +6460,51 @@ function fillPct(pct) {
     $('swapReceiveInput').value = '';
     scheduleQuote();
   }
+}
+
+// ==================== NFT GALLERY LIGHTBOX ====================
+
+let _vaultGalleryItems = [];   // { id, name, image } per decoded pass
+let _nftLbKeyHandler = null;
+
+function openNftLightbox(i) {
+  const it = _vaultGalleryItems[i];
+  if (!it) return;
+  closeNftLightbox();
+  const lb = document.createElement('div');
+  lb.className = 'nft-lb';
+  lb.id = 'nftLightbox';
+  lb.setAttribute('role', 'dialog');
+  lb.setAttribute('aria-modal', 'true');
+  lb.setAttribute('aria-label', it.name);
+  lb.innerHTML = `
+    <button type="button" class="nft-lb-close" aria-label="Close" onclick="closeNftLightbox()">&times;</button>
+    <div class="nft-lb-inner">
+      <img src="${escAttr(it.image)}" alt="${escAttr(it.name)}">
+      <div class="nft-lb-meta">
+        ${escText(it.name)}
+        &middot; <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${it.id}" target="_blank" rel="noopener">OpenSea</a>
+        &middot; <a href="https://etherscan.io/token/${VAULT_NFT_CONTRACT}?a=${it.id}" target="_blank" rel="noopener">Etherscan</a>
+      </div>
+    </div>`;
+  // Backdrop closes; clicks on the art itself do not.
+  lb.addEventListener('click', e => { if (e.target === lb || e.target.closest('.nft-lb-inner') === null) closeNftLightbox(); });
+  _nftLbKeyHandler = e => {
+    if (e.key === 'Escape') closeNftLightbox();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + _vaultGalleryItems.length) % _vaultGalleryItems.length;
+      openNftLightbox(next);
+    }
+  };
+  document.addEventListener('keydown', _nftLbKeyHandler);
+  document.body.appendChild(lb);
+  lb.querySelector('.nft-lb-close').focus();
+}
+
+function closeNftLightbox() {
+  const el = $('nftLightbox');
+  if (el) el.remove();
+  if (_nftLbKeyHandler) { document.removeEventListener('keydown', _nftLbKeyHandler); _nftLbKeyHandler = null; }
 }
 
 // ==================== SALE BUY ====================
