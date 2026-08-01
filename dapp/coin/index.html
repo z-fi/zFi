@@ -488,6 +488,8 @@ const CONTINUOUS_SALES = {
     icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
   },
 };
+// Fixed mint rate of the continuous sale: 1 ETH buys 1M shares.
+const CONT_SALE_SHARES_PER_ETH = 1000000;
 const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
@@ -4887,8 +4889,11 @@ async function refreshCauseStats(daoAddr, metadata) {
     const cap = sold + saleAllowance;
     const saleDeadline = saleData ? Number(saleData.deadline) : 0;
     const now = Math.floor(Date.now() / 1000);
-    const saleActive = saleDeadline === 0 || now < saleDeadline;
-    const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
+    // A live continuous sale keeps minting open regardless of the DAICO's own deadline or
+    // cap. Without this the 30s refresh flips Status back to "Ended" under an open sale.
+    const contSaleLive = !!$('app')?.dataset?.contSale;
+    const saleActive = contSaleLive || saleDeadline === 0 || now < saleDeadline;
+    const isOpenCap = contSaleLive || cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
     const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
     const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
     const raisedEth = Number(ethers.formatEther(raisedWei));
@@ -5262,15 +5267,18 @@ async function renderCoinPage(daoAddr) {
     const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
     const contSaleAddr = contSaleConfig?.sale;
     const contVaultAddr = contSaleConfig?.vault;
-    let contSaleActive = false;
+    // Keep the phase-0 answer: the DAICO sale being over is what makes the pool the honest
+    // price reference, and a live phase-1 sale must not drag the header back to phase 0's price.
+    const daicoSaleActive = saleActive;
+    let contSaleActive = false, contSaleUnknown = false;
     if (contSaleAddr) {
-      try {
-        const csPaused = await withRPC(async rpc => {
-          const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
-          return await cs.paused();
-        });
-        contSaleActive = !csPaused;
-      } catch {}
+      const csPaused = await withRPC(async rpc => {
+        const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
+        return await cs.paused();
+      }).catch(() => null);
+      // A failed read is not evidence the sale is closed — say so rather than imply it ended.
+      if (csPaused === null) contSaleUnknown = true;
+      else contSaleActive = !csPaused;
       if (contSaleActive) saleActive = true;
     }
 
@@ -5360,12 +5368,15 @@ async function renderCoinPage(daoAddr) {
     const circulating = detailTotalSupply - unsold - detailTeamLocked - daoPoolTokens;
     // Price: pool spot if sale ended or pool is deep, else sale price
     const poolDeep = hasPool && reserve1 > 0n && inLp > detailTotalSupply * 0.01;
-    const usePool = hasPool && (!saleActive || poolDeep);
+    const usePool = hasPool && (!daicoSaleActive || poolDeep);
     // Spot price per token: pool reserve ratio when the pool is the reference, else sale price
     let priceETH = 0, priceSrc = '';
     if (usePool && inLp > 0) {
       priceETH = Number(ethers.formatEther(reserve0)) / inLp;
       priceSrc = 'pool';
+    } else if (contSaleActive) {
+      priceETH = 1 / CONT_SALE_SHARES_PER_ETH;
+      priceSrc = 'sale';
     } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
       priceETH = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt));
       priceSrc = 'sale';
@@ -5460,14 +5471,28 @@ async function renderCoinPage(daoAddr) {
           </div>
         </div>
       `;
+    // What the mint costs against the pool's spot price — the reason to use the sale tab
+    // rather than the AMM, or the warning that it is the more expensive route.
+    const contSalePrice = 1 / CONT_SALE_SHARES_PER_ETH;
+    const contSaleRatio = (contSaleActive && priceSrc === 'pool' && priceETH > 0) ? contSalePrice / priceETH : 0;
+    const contSaleVsMarket = contSaleRatio > 0
+      ? (contSaleRatio < 1
+        ? ` &middot; <span style="color:var(--green)">${((1 - contSaleRatio) * 100).toFixed(0)}% below market</span>`
+        : ` &middot; <span style="color:var(--fg-muted)">${((contSaleRatio - 1) * 100).toFixed(0)}% above market</span>`)
+      : '';
+    // Ragequit pays out of the DAO's *own* ETH. A collector DAO parks its ETH in the vault,
+    // where a redemption cannot reach it, so only promise a refund when there is one.
+    const rqNote = treasuryETH > 0n
+      ? 'Shares are ragequittable for a pro-rata treasury refund.'
+      : 'Shares are ragequittable, but redemption only pays out the DAO’s own ETH balance — funds held in the vault or in NFTs are not redeemable without governance.';
     if (contSaleActive) {
       html += `
         <div class="section-card">
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
-          <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
+          <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares${contSaleVsMarket}</span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. Shares are ragequittable for a pro-rata treasury refund.</div>
+          <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
         </div>
       `;
       if (hasDaicoSale) html += saleEndedDrawer;
@@ -5507,6 +5532,15 @@ async function renderCoinPage(daoAddr) {
       _saleRefreshInterval = setInterval(refreshSaleStats, 20000);
     } else if (hasDaicoSale) {
       html += saleEndedDrawer;
+    }
+    // The phase-1 status read failed, so the page cannot say whether minting is open.
+    // Say that, instead of leaving the ended drawer to imply the sale is over.
+    if (contSaleUnknown) {
+      html += `
+        <div class="section-card" style="background:var(--surface)">
+          <div style="font-size:11px;color:var(--fg-muted)">Continuous sale status unavailable &mdash; could not reach the <a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">sale contract</a>. Reload to try again.</div>
+        </div>
+      `;
     }
 
     // Treasury + Pool reserves + Vault
@@ -5788,7 +5822,7 @@ async function renderCoinPage(daoAddr) {
             <input type="text" id="saleReceiveInput" placeholder="0.0" oninput="onSaleReceiveInput()" autocomplete="off">
             <div class="sale-lp-note" id="saleLpNote"></div>
           </div>
-          <div class="swap-quote" id="saleQuote">${contSaleActive ? 'Continuous sale: 1 ETH = 1M shares' : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
+          <div class="swap-quote" id="saleQuote">${contSaleActive ? `Continuous sale: 1 ETH = 1M shares${contSaleVsMarket}` : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
           ${!contSaleActive ? `<button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>` : ''}
           <button id="saleBuyBtn" class="action-btn" onclick="onSaleBuyBtn()">Connect Wallet</button>
           <button id="saleCopyLink" class="swap-pct-btn" onclick="copySaleLink()" style="width:100%;margin-top:6px;font-size:11px;padding:5px">Copy share link</button>
@@ -6349,7 +6383,7 @@ function onSalePayInput() {
 
   // Continuous Sale: fixed rate (1 ETH = 1M shares)
   if ($('app').dataset.contSale) {
-    const shares = payAmt * 1000000n;
+    const shares = payAmt * BigInt(CONT_SALE_SHARES_PER_ETH);
     $('saleReceiveInput').value = ethers.formatEther(shares);
     const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
     updateSaleBtnState();
@@ -6380,10 +6414,12 @@ function onSaleReceiveInput() {
     return;
   }
 
-  // Continuous Sale: fixed rate (1M shares per ETH)
+  // Continuous Sale: fixed rate (1M shares per ETH). Round the ETH up — flooring it
+  // would quote a payment that mints fewer shares than the amount just typed.
   if ($('app').dataset.contSale) {
     const shares = ethers.parseEther(raw);
-    const ethNeeded = shares / 1000000n;
+    const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+    const ethNeeded = (shares + rate - 1n) / rate;
     $('salePayInput').value = ethers.formatEther(ethNeeded);
     updateSaleUsd();
     updateSaleBtnState();
