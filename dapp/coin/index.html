@@ -2047,6 +2047,34 @@ function fmtEthPrice(v) {
 
 let _ethUsdPrice = 0;
 let _ethUsdTs = 0;
+// Every read below is an eth_call, so they belong in one aggregate3 rather than as
+// separate requests that each walk the RPC fallback list independently.
+async function mcAggregate(calls) {
+  if (!calls.length) return [];
+  return await withRPC(async rpc => {
+    const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+    return await mc.aggregate3(calls);
+  });
+}
+// Decode one aggregate3 slot, or fall back if the call reverted.
+function mcDecode(res, iface, fn, fallback) {
+  try {
+    return (res && res.success) ? iface.decodeFunctionResult(fn, res.returnData) : fallback;
+  } catch { return fallback; }
+}
+
+// Read the cached ETH price without issuing a call (0 when stale), and fill the cache
+// from an answer the page already fetched in a batch.
+function ethUsdCached() {
+  return (_ethUsdPrice > 0 && Date.now() - _ethUsdTs < 5 * 60 * 1000) ? _ethUsdPrice : 0;
+}
+function setEthUsdFromAnswer(answer) {
+  if (answer === null || answer === undefined) return _ethUsdPrice;
+  _ethUsdPrice = Number(answer) / 1e8;
+  _ethUsdTs = Date.now();
+  return _ethUsdPrice;
+}
+
 async function getEthUsd() {
   if (_ethUsdPrice > 0 && Date.now() - _ethUsdTs < 5 * 60 * 1000) return _ethUsdPrice;
   try {
@@ -5236,17 +5264,15 @@ async function renderCoinPage(daoAddr) {
 
   // Try ClassicalCurveSale and DAICO path in parallel — use whichever matches
   try {
-    const [curveData, daicoData] = await Promise.all([
-      withRPC(async rpc => {
-        const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
-        const c = await cs.curves(daoAddr);
-        return (c.creator && c.creator !== ZERO) ? c : null;
-      }).catch(() => null),
-      withRPC(async rpc => {
-        const helper = new ethers.Contract(VIEW_HELPER, GET_DAICO_ABI, rpc);
-        return await helper.getDAICO(daoAddr, [ZERO]);
-      }).catch(() => null)
-    ]);
+    const curveIface = new ethers.Interface(CURVE_SALE_ABI);
+    const daicoIface = new ethers.Interface(GET_DAICO_ABI);
+    const routeRes = await mcAggregate([
+      { target: CURVE_SALE, allowFailure: true, callData: curveIface.encodeFunctionData('curves', [daoAddr]) },
+      { target: VIEW_HELPER, allowFailure: true, callData: daicoIface.encodeFunctionData('getDAICO', [daoAddr, [ZERO]]) },
+    ]).catch(() => []);
+    const curveDecoded = mcDecode(routeRes[0], curveIface, 'curves', null);
+    const curveData = (curveDecoded && curveDecoded.creator && curveDecoded.creator !== ZERO) ? curveDecoded : null;
+    const daicoData = mcDecode(routeRes[1], daicoIface, 'getDAICO', null)?.[0] ?? null;
     if (gen !== _renderGen) return;
 
     if (curveData) {
@@ -5275,26 +5301,33 @@ async function renderCoinPage(daoAddr) {
     const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
     const contSaleAddr = contSaleConfig?.sale;
     const contVaultAddr = contSaleConfig?.vault;
-    const [metadata, poolResult, ethUsd, daoLpBal, csPaused] = await Promise.all([
-      fetchMetadata(data.meta.contractURI),
-      withRPC(async rpc => {
-        const z = new ethers.Contract(ZAMM, ZAMM_POOLS_ABI, rpc);
-        return await z.pools(poolId);
-      }).catch(() => null),
-      getEthUsd(),
+    // One multicall for every on-chain read this page needs up front — pool reserves, the
+    // DAO's LP balance, the sale's paused flag and (only when its 5-minute cache is stale)
+    // the ETH price. Metadata is HTTP, so it stays alongside rather than inside.
+    const poolsIface = new ethers.Interface(ZAMM_POOLS_ABI);
+    const lpIface = new ethers.Interface(ZAMM_LP_ABI);
+    const csIface = new ethers.Interface(CONTINUOUS_SALE_ABI);
+    const clIface = new ethers.Interface(CHAINLINK_ABI);
+    const cachedUsd = ethUsdCached();
+    const detailCalls = [
+      { target: ZAMM, allowFailure: true, callData: poolsIface.encodeFunctionData('pools', [poolId]) },
       // LP is ERC6909 on zAMM; a DAO that seeded its own pool owns part of the reserves
-      withRPC(async rpc => {
-        const z = new ethers.Contract(ZAMM, ZAMM_LP_ABI, rpc);
-        return await z.balanceOf(daoAddr, poolId);
-      }).catch(() => 0n),
-      // null = the read failed, which is not the same as the sale being closed.
-      contSaleAddr
-        ? withRPC(async rpc => {
-            const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
-            return await cs.paused();
-          }).catch(() => null)
-        : Promise.resolve(undefined)
+      { target: ZAMM, allowFailure: true, callData: lpIface.encodeFunctionData('balanceOf', [daoAddr, poolId]) },
+    ];
+    const pausedIdx = contSaleAddr ? detailCalls.push(
+      { target: contSaleAddr, allowFailure: true, callData: csIface.encodeFunctionData('paused') }) - 1 : -1;
+    const usdIdx = cachedUsd > 0 ? -1 : detailCalls.push(
+      { target: CHAINLINK_ETH_USD, allowFailure: true, callData: clIface.encodeFunctionData('latestAnswer') }) - 1;
+
+    const [metadata, detailRes] = await Promise.all([
+      fetchMetadata(data.meta.contractURI),
+      mcAggregate(detailCalls).catch(() => []),
     ]);
+    const poolResult = mcDecode(detailRes[0], poolsIface, 'pools', null);
+    const daoLpBal = mcDecode(detailRes[1], lpIface, 'balanceOf', [0n])[0];
+    // null = the read failed, which is not the same as the sale being closed.
+    const csPaused = pausedIdx < 0 ? undefined : (mcDecode(detailRes[pausedIdx], csIface, 'paused', null)?.[0] ?? null);
+    const ethUsd = usdIdx < 0 ? cachedUsd : setEthUsdFromAnswer(mcDecode(detailRes[usdIdx], clIface, 'latestAnswer', null)?.[0]);
     if (gen !== _renderGen) return;
     // Override icon for DAOs with configured Continuous Sale icons
     if (contSaleConfig?.icon && metadata && !metadata.image) metadata.image = contSaleConfig.icon;
@@ -5806,9 +5839,12 @@ async function renderCoinPage(daoAddr) {
               nextEl.innerHTML = `
                 <div class="stat-row"><span class="stat-label" style="font-size:12px">Toward pass #${VAULT_NFT_TOKEN_IDS.length + 1}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmt4(haveWei)} / ${PASS_PRICE_ETH} ETH</span></div>
                 ${pctBar(Math.min(pct, 100), 'var(--green)')}
-                <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${shortWei > 0n
-                  ? `${fmt4(shortWei)} ETH to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
-                  : 'Funded &mdash; ready for the next acquisition'}</div>`;
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--fg-dim);margin-top:4px">
+                  <span>${shortWei > 0n
+                    ? `${fmt4(shortWei)} ETH to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
+                    : 'Funded &mdash; ready for the next acquisition'}</span>
+                  <span>${Math.min(pct, 100).toFixed(0)}%</span>
+                </div>`;
               nextEl.style.display = '';
             }
           } catch (e) {
