@@ -5475,10 +5475,15 @@ async function renderCoinPage(daoAddr) {
     // rather than the AMM, or the warning that it is the more expensive route.
     const contSalePrice = 1 / CONT_SALE_SHARES_PER_ETH;
     const contSaleRatio = (contSaleActive && priceSrc === 'pool' && priceETH > 0) ? contSalePrice / priceETH : 0;
+    // Say it in shares, not in percent: the row is denominated in shares per ETH, so
+    // "47% below market" makes the reader convert to price-per-share to use it.
+    const contSaleTip = contSaleRatio > 0
+      ? `Minting costs ${fmtEthPrice(contSalePrice)} per share. The pool's spot price is ${fmtEthPrice(priceETH)} per share. Pool spot ignores slippage, so a large buy through the AMM would cost more than this comparison shows.`
+      : '';
     const contSaleVsMarket = contSaleRatio > 0
       ? (contSaleRatio < 1
-        ? ` &middot; <span style="color:var(--green)">${((1 - contSaleRatio) * 100).toFixed(0)}% below market</span>`
-        : ` &middot; <span style="color:var(--fg-muted)">${((contSaleRatio - 1) * 100).toFixed(0)}% above market</span>`)
+        ? ` &middot; <span style="color:var(--green)" title="${escAttr(contSaleTip)}">${(1 / contSaleRatio).toFixed(1)}&times; more shares than buying on the pool</span>`
+        : ` &middot; <span style="color:var(--fg-muted)" title="${escAttr(contSaleTip)}">the pool gives ${contSaleRatio.toFixed(1)}&times; more shares per ETH right now</span>`)
       : '';
     // Ragequit pays out of the DAO's *own* ETH. A collector DAO parks its ETH in the vault,
     // where a redemption cannot reach it, so only promise a refund when there is one.
