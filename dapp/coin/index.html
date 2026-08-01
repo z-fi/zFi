@@ -540,6 +540,8 @@ const CONTINUOUS_SALES = {
 };
 // Fixed mint rate of the continuous sale: 1 ETH buys 1M shares.
 const CONT_SALE_SHARES_PER_ETH = 1000000;
+// What one TokenWorks pass costs to acquire — the unit the vault saves up toward.
+const PASS_PRICE_ETH = '1';
 const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
@@ -2062,6 +2064,7 @@ async function getEthUsd() {
 
 let _renderGen = 0;
 let _saleRefreshInterval = null;
+let _vaultRefreshTimer = null;
 let _saleCountdownInterval = null;
 
 async function refreshSaleStats() {
@@ -2116,17 +2119,6 @@ async function refreshSaleStats() {
               <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
             </div>`;
         }
-        const fwEl = $('fwCollectorInfo');
-        if (fwEl) {
-          const nfts = Number(nftCount);
-          const mBal = Number(ethers.formatEther(minterBal));
-          const lEth = Number(ethers.formatEther(lockedEth));
-          fwEl.innerHTML = `
-            <div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="stat-value">${fmtNum(mBal)} ${ethIco}</span></div>
-            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${nfts}</span></div>` : ''}
-            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
-          `;
-        }
         const tmEl = $('treasuryMinterBal');
         if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
       } catch (e) { console.error('Mint progress refresh failed:', e); }
@@ -2144,6 +2136,7 @@ function route() {
   // A route change must not leave the gallery overlay pinned over the next page.
   closeNftLightbox();
   _vaultGalleryItems = [];
+  if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
@@ -5546,6 +5539,7 @@ async function renderCoinPage(daoAddr) {
         <div class="section-card">
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
+          <div id="nextPassProgress" style="display:none;margin:8px 0 10px"></div>
           <div class="stat-row" id="contSaleNavRow" style="display:none"><span class="stat-label" title="What the treasury behind those shares is currently worth. Minting below that figure hands new buyers value from existing holders; minting above it does the reverse. Backing is not redeemable without governance.">Backing bought</span><span class="stat-value" id="contSaleNavVal"></span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
@@ -5681,9 +5675,10 @@ async function renderCoinPage(daoAddr) {
         });
       }
 
-      // Fetch vault balances async
+      // Fetch vault balances async, then keep them current: a pass purchase or a fee
+      // claim while the page sits open should not leave stale numbers on screen.
       if (contVaultAddr) {
-        (async () => {
+        const loadVaultStats = async () => {
           // NOTE: this runs before `content.innerHTML = html` below, so the treasury nodes
           // do not exist yet — every DOM write here must happen after an await.
           try {
@@ -5746,7 +5741,13 @@ async function renderCoinPage(daoAddr) {
                   </button>`);
               if (!cards.length) { galleryCard.style.display = 'none'; }
               else {
-                galleryEl.innerHTML = cards.join('');
+                // The 30s refresh re-reads the same art; rewriting it would re-decode a few
+                // hundred KB of inline SVG and flicker. Only touch the DOM when the set changes.
+                const sig = _vaultGalleryItems.map(it => it.id).join(',');
+                if (galleryEl.dataset.sig !== sig) {
+                  galleryEl.dataset.sig = sig;
+                  galleryEl.innerHTML = cards.join('');
+                }
                 // Summarise what the collection is worth in ETH terms, so the art is not the
                 // only thing the card says.
                 const capEl = $('vaultGalleryCaption');
@@ -5786,6 +5787,22 @@ async function renderCoinPage(daoAddr) {
               navValEl.innerHTML = navBody;
               navRowEl.style.display = '';
             }
+            // Progress to the next pass. This is the collector loop made visible: mint
+            // proceeds and claimed fees pool in the vault until they clear a pass price.
+            const nextEl = $('nextPassProgress');
+            if (nextEl) {
+              const passPrice = ethers.parseEther(PASS_PRICE_ETH);
+              const haveWei = vaultBal + nftPending;      // claimable fees count toward it
+              const pct = Number((haveWei * 10000n) / passPrice) / 100;
+              const shortWei = haveWei >= passPrice ? 0n : passPrice - haveWei;
+              nextEl.innerHTML = `
+                <div class="stat-row"><span class="stat-label" style="font-size:12px">Toward pass #${VAULT_NFT_TOKEN_IDS.length + 1}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(haveWei)} / ${PASS_PRICE_ETH} ${ethIco}</span></div>
+                ${pctBar(Math.min(pct, 100), 'var(--green)')}
+                <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${shortWei > 0n
+                  ? `${fmtETH(shortWei)} ${ethIco} to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
+                  : 'Funded &mdash; ready for the next acquisition'}</div>`;
+              nextEl.style.display = '';
+            }
             // State the mint against book in the units of the row above it: what one ETH of
             // minting actually buys. Below 1 ETH the mint is dilutive to existing holders.
             const backingEth = Number(ethers.formatEther(treasuryETH + vaultBal + nftLocked + nftPending)) + daoPoolEth;
@@ -5805,7 +5822,13 @@ async function renderCoinPage(daoAddr) {
             // Otherwise the placeholder tiles pulse forever, implying art still loading.
             const gc = $('vaultGalleryCard'); if (gc) gc.style.display = 'none';
           }
-        })();
+        };
+        loadVaultStats();
+        if (_vaultRefreshTimer) clearInterval(_vaultRefreshTimer);
+        _vaultRefreshTimer = setInterval(() => {
+          if (gen !== _renderGen) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; return; }
+          loadVaultStats();
+        }, 30000);
       }
     }
 
