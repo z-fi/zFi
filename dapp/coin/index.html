@@ -346,20 +346,33 @@ input {
 .links-row a:hover { color:var(--fg); }
 
 /* Proposals */
-.prop-chat-head {
-  display:flex;align-items:center;gap:6px;margin:14px 0 6px;padding-top:10px;
+.prop-sec-head {
+  display:flex;align-items:center;gap:6px;margin:16px 0 6px;padding-top:12px;
   border-top:1px solid var(--border-muted);
   font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);
 }
-.prop-chat-head span {
+.prop-sec-head.prop-sec-first { margin-top:0;padding-top:0;border-top:none; }
+.prop-sec-head span {
   font-size:9px;padding:1px 5px;border-radius:8px;background:var(--surface);color:var(--fg-muted);
 }
+.prop-chat-list { margin-bottom:2px; }
 .prop-chat-item {
-  display:flex;gap:8px;padding:6px 0;font-size:12px;line-height:1.5;color:var(--fg-muted);
-  border-bottom:1px solid var(--border-muted);white-space:pre-wrap;overflow-wrap:anywhere;
+  display:flex;gap:8px;padding:7px 0;font-size:12px;line-height:1.55;color:var(--fg-muted);
+  border-bottom:1px solid var(--border-muted);cursor:pointer;
 }
-.prop-chat-item:last-of-type { border-bottom:none; }
-.prop-chat-idx { flex:none;color:var(--fg-dim);font-size:10px;padding-top:2px; }
+.prop-chat-item:last-child { border-bottom:none; }
+.prop-chat-item:hover .prop-chat-body { color:var(--fg); }
+.prop-chat-idx {
+  flex:none;width:26px;color:var(--fg-dim);font-size:10px;padding-top:3px;
+  font-variant-numeric:tabular-nums;
+}
+/* Long updates are common here; clamp them so the proposals below stay reachable
+   without nesting a scrollbar inside the drawer. Click expands. */
+.prop-chat-body {
+  white-space:pre-wrap;overflow-wrap:anywhere;transition:color 0.15s ease;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.prop-chat-item.open .prop-chat-body { -webkit-line-clamp:unset;overflow:visible; }
 
 .prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
 .prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
@@ -1842,7 +1855,7 @@ async function loadProposals(daoAddr) {
     // Reverse to show newest first
     const sorted = [...proposals].reverse();
 
-    let html = '';
+    let propHtml = '';
     for (const p of sorted) {
       const id = p.id;
       const proposer = p.proposer;
@@ -1897,7 +1910,7 @@ async function loadProposals(daoAddr) {
         timeHTML = `<span class="prop-clock">Awaiting queue</span>`;
       }
 
-      html += `<div class="prop-item">
+      propHtml += `<div class="prop-item">
         <div class="prop-head">
           <div class="prop-desc">${escText(desc)}</div>
           <span class="prop-state ${stateClass}">${stateText}</span>
@@ -1922,23 +1935,31 @@ async function loadProposals(daoAddr) {
       </div>`;
     }
 
-    if (!html) html = '<div class="activity-empty">No proposals yet</div>';
+    if (!propHtml) propHtml = '<div class="activity-empty">No proposals yet</div>';
 
     // Discussion — the same response already carried the DAO's messages, so this is free.
-    // Messages that are proposal payloads are skipped: each is already on screen above as
+    // Messages that are proposal payloads are skipped: each is already on screen below as
     // the proposal it encodes, and its raw JSON is several hundred characters of noise.
     const chat = messages.filter(m => !/<<<PROPOSAL_DATA[\s\S]*PROPOSAL_DATA>>>/.test(m.text || ''));
-    if (chat.length) {
-      html += `<div class="prop-chat-head">Discussion <span>${chat.length}</span></div>`;
-      for (const m of [...chat].reverse()) {
-        // Strip machine-readable tags; they are UI plumbing, not something to read.
-        const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
-        if (!body) continue;
-        html += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span>${escText(body)}</div>`;
-      }
+    let chatHtml = '';
+    for (const m of [...chat].reverse()) {
+      // Strip machine-readable tags; they are UI plumbing, not something to read.
+      const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
+      if (!body) continue;
+      chatHtml += `<div class="prop-chat-item" onclick="this.classList.toggle('open')" title="Click to expand"><span class="prop-chat-idx">#${Number(m.index)}</span><span class="prop-chat-body">${escText(body)}</span></div>`;
     }
 
-    html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
+    // Chat first: it is what someone opening the drawer is here to read, and it dates the
+    // proposals underneath. Each message clamps to three lines so a long thread cannot
+    // bury them.
+    let html = '';
+    if (chatHtml) {
+      html += `<div class="prop-sec-head prop-sec-first">Discussion <span>${chat.length}</span></div>`;
+      html += `<div class="prop-chat-list">${chatHtml}</div>`;
+    }
+    html += `<div class="prop-sec-head${chatHtml ? '' : ' prop-sec-first'}">Proposals <span>${proposals.length}</span></div>`;
+    html += propHtml;
+    html += `<div style="text-align:center;margin-top:10px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
     startPropCountdowns();
   } catch (e) {
