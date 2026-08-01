@@ -346,6 +346,21 @@ input {
 .links-row a:hover { color:var(--fg); }
 
 /* Proposals */
+.prop-chat-head {
+  display:flex;align-items:center;gap:6px;margin:14px 0 6px;padding-top:10px;
+  border-top:1px solid var(--border-muted);
+  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);
+}
+.prop-chat-head span {
+  font-size:9px;padding:1px 5px;border-radius:8px;background:var(--surface);color:var(--fg-muted);
+}
+.prop-chat-item {
+  display:flex;gap:8px;padding:6px 0;font-size:12px;line-height:1.5;color:var(--fg-muted);
+  border-bottom:1px solid var(--border-muted);white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.prop-chat-item:last-of-type { border-bottom:none; }
+.prop-chat-idx { flex:none;color:var(--fg-dim);font-size:10px;padding-top:2px; }
+
 .prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
 .prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
 .prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word; }
@@ -1768,22 +1783,21 @@ async function loadProposals(daoAddr) {
     const PROP_ABI = [
       'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string,string,string,address,address,address,address) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256,uint256,uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address,uint256,uint256,uint16,uint256,address[],uint32[])[] members, tuple(uint256 id, address proposer, uint8 state, uint48 snapshotBlock, uint64 createdAt, uint64 queuedAt, uint256 supplySnapshot, uint96 forVotes, uint96 againstVotes, uint96 abstainVotes, tuple(bool,address,uint256,bool,uint8,uint256,uint256) futarchy, tuple(address,uint8,uint256)[] voters)[] proposals, tuple(uint256 index, string text)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
     ];
-    const [result, daoConfig] = await withRPC(async rpc => {
-      const helper = new ethers.Contract(VIEW_HELPER, PROP_ABI, rpc);
-      const moloch = new ethers.Contract(daoAddr, ['function config() view returns (uint64)'], rpc);
-      return Promise.all([
-        helper.getDAOWithDAICO(daoAddr, 0, 50, 0, 200, [], [ZERO]),
-        moloch.config()
-      ]);
-    });
+    // Both reads ride in one aggregate3 rather than two parallel eth_calls, each of which
+    // would walk the RPC fallback list on its own.
+    const helperIface = new ethers.Interface(PROP_ABI);
+    const cfgIface = new ethers.Interface(['function config() view returns (uint64)']);
+    const propRes = await mcAggregate([
+      { target: VIEW_HELPER, allowFailure: true, callData: helperIface.encodeFunctionData('getDAOWithDAICO', [daoAddr, 0, 50, 0, 200, [], [ZERO]]) },
+      { target: daoAddr, allowFailure: true, callData: cfgIface.encodeFunctionData('config') },
+    ]);
+    const result = mcDecode(propRes[0], helperIface, 'getDAOWithDAICO', null)?.[0];
+    if (!result) throw new Error('DAO read failed');
+    const daoConfig = mcDecode(propRes[1], cfgIface, 'config', [0n])[0];
     const proposals = result.base.proposals || [];
     const messages = result.base.messages || [];
     const currentConfig = Number(daoConfig);
 
-    if (proposals.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No proposals yet</div>';
-      return;
-    }
 
     // Decode proposal messages to get descriptions
     function decodePropMsg(text) {
@@ -1908,7 +1922,23 @@ async function loadProposals(daoAddr) {
       </div>`;
     }
 
-    html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote & manage proposals in DAO page</a></div>`;
+    if (!html) html = '<div class="activity-empty">No proposals yet</div>';
+
+    // Discussion — the same response already carried the DAO's messages, so this is free.
+    // Messages that are proposal payloads are skipped: each is already on screen above as
+    // the proposal it encodes, and its raw JSON is several hundred characters of noise.
+    const chat = messages.filter(m => !/<<<PROPOSAL_DATA[\s\S]*PROPOSAL_DATA>>>/.test(m.text || ''));
+    if (chat.length) {
+      html += `<div class="prop-chat-head">Discussion <span>${chat.length}</span></div>`;
+      for (const m of [...chat].reverse()) {
+        // Strip machine-readable tags; they are UI plumbing, not something to read.
+        const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
+        if (!body) continue;
+        html += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span>${escText(body)}</div>`;
+      }
+    }
+
+    html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
     startPropCountdowns();
   } catch (e) {
@@ -6162,7 +6192,7 @@ async function renderCoinPage(daoAddr) {
     html += `
       <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
         <button class="drawer-toggle" onclick="toggleProposals()">
-          <span>Proposals</span>
+          <span>Proposals &amp; Chat</span>
           <span class="arrow">&#9660;</span>
         </button>
         <div class="activity-body">
