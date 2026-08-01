@@ -5219,7 +5219,12 @@ async function renderCoinPage(daoAddr) {
     const feeOrHookVal = sale ? BigInt(sale.feeOrHook) : 30n;
     const poolId = computePoolId(ZERO, sharesAddr, 0n, 0n, feeOrHookVal);
     const tapActive_ = tap && tap.ratePerSec > 0n;
-    const [metadata, poolResult, ethUsd, daoLpBal] = await Promise.all([
+    // Looked up before the fetch so the sale's paused() rides along with it instead of
+    // costing this page a second serial round trip.
+    const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+    const contSaleAddr = contSaleConfig?.sale;
+    const contVaultAddr = contSaleConfig?.vault;
+    const [metadata, poolResult, ethUsd, daoLpBal, csPaused] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
       withRPC(async rpc => {
         const z = new ethers.Contract(ZAMM, ZAMM_POOLS_ABI, rpc);
@@ -5230,12 +5235,18 @@ async function renderCoinPage(daoAddr) {
       withRPC(async rpc => {
         const z = new ethers.Contract(ZAMM, ZAMM_LP_ABI, rpc);
         return await z.balanceOf(daoAddr, poolId);
-      }).catch(() => 0n)
+      }).catch(() => 0n),
+      // null = the read failed, which is not the same as the sale being closed.
+      contSaleAddr
+        ? withRPC(async rpc => {
+            const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
+            return await cs.paused();
+          }).catch(() => null)
+        : Promise.resolve(undefined)
     ]);
     if (gen !== _renderGen) return;
     // Override icon for DAOs with configured Continuous Sale icons
-    const _csConf = CONTINUOUS_SALES[daoAddr.toLowerCase()];
-    if (_csConf?.icon && metadata && !metadata.image) metadata.image = _csConf.icon;
+    if (contSaleConfig?.icon && metadata && !metadata.image) metadata.image = contSaleConfig.icon;
     _coinMeta = metadata;
 
     // Cause coin detection — render simplified sale page
@@ -5264,18 +5275,11 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Continuous Sale: override saleActive if a continuous sale contract is active
-    const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
-    const contSaleAddr = contSaleConfig?.sale;
-    const contVaultAddr = contSaleConfig?.vault;
     // Keep the phase-0 answer: the DAICO sale being over is what makes the pool the honest
     // price reference, and a live phase-1 sale must not drag the header back to phase 0's price.
     const daicoSaleActive = saleActive;
     let contSaleActive = false, contSaleUnknown = false;
     if (contSaleAddr) {
-      const csPaused = await withRPC(async rpc => {
-        const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
-        return await cs.paused();
-      }).catch(() => null);
       // A failed read is not evidence the sale is closed — say so rather than imply it ended.
       if (csPaused === null) contSaleUnknown = true;
       else contSaleActive = !csPaused;
@@ -5484,6 +5488,7 @@ async function renderCoinPage(daoAddr) {
         <div class="section-card">
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
+          <div class="stat-row" id="contSaleNavRow" style="display:none"><span class="stat-label" title="What the treasury behind those shares is currently worth. Minting below that figure hands new buyers value from existing holders; minting above it does the reverse. Backing is not redeemable without governance.">Backing bought</span><span class="stat-value" id="contSaleNavVal"></span></div>
           <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
           <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
@@ -5591,6 +5596,7 @@ async function renderCoinPage(daoAddr) {
             <!-- auto-fill with a max track width so a two-pass vault gets two small tiles,
                  not two tiles stretched across the whole card. -->
             <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,110px));gap:8px;justify-content:start"></div>
+            <div id="vaultGalleryCaption" style="font-size:10px;color:var(--fg-dim);margin-top:8px"></div>
           </div>
         `;
       }
@@ -5666,13 +5672,19 @@ async function renderCoinPage(daoAddr) {
                 } catch {}
                 if (!meta || !meta.image) return '';
                 return `
-                  <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" style="display:block;text-decoration:none;color:inherit">
-                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" title="${escAttr(meta.name || '#' + id)}" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;background:var(--surface);display:block">
+                  <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit">
+                    <img src="${escAttr(meta.image)}" alt="${escAttr(meta.name || 'TokenWorks #' + id)}" loading="lazy" decoding="async" title="${escAttr(meta.name || '#' + id)}" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;background:var(--surface);display:block">
                     <div style="font-size:10px;color:var(--fg-muted);margin-top:3px;text-align:center">#${id}</div>
                   </a>`;
               }).filter(Boolean);
               if (cards.length) {
                 galleryEl.innerHTML = cards.join('');
+                // Summarise what the collection is worth in ETH terms, so the art is not the
+                // only thing the card says.
+                const capEl = $('vaultGalleryCaption');
+                if (capEl) capEl.textContent = `${cards.length} pass${cards.length > 1 ? 'es' : ''}`
+                  + (nftLockedEth > 0 ? ` \u00b7 ${fmtNum(nftLockedEth)} ETH refundable` : '')
+                  + (nftPending > 0n ? ` \u00b7 ${fmtNum(Number(ethers.formatEther(nftPending)))} ETH fees earned` : '');
                 galleryCard.style.display = '';
               }
             }
@@ -5697,6 +5709,19 @@ async function renderCoinPage(daoAddr) {
             if (navBody && navValEl && navRowEl) {
               navValEl.innerHTML = navBody;
               navRowEl.style.display = '';
+            }
+            // State the mint against book in the units of the row above it: what one ETH of
+            // minting actually buys. Below 1 ETH the mint is dilutive to existing holders.
+            const backingEth = Number(ethers.formatEther(treasuryETH + vaultBal + nftLocked + nftPending)) + daoPoolEth;
+            const csNavRow = $('contSaleNavRow'), csNavVal = $('contSaleNavVal');
+            if (csNavRow && csNavVal && circulating > 0 && backingEth > 0) {
+              const perMillion = (backingEth / circulating) * CONT_SALE_SHARES_PER_ETH;
+              const dilutive = perMillion > 1;
+              csNavVal.innerHTML = `~${fmtNum(perMillion)} ${ethIco} per 1 ${ethIco} minted`
+                + `<div style="font-size:10px;color:var(--fg-dim);font-weight:400;margin-top:2px">${dilutive
+                  ? 'mint is below backing &mdash; new mints dilute existing holders'
+                  : 'mint is at or above backing'}</div>`;
+              csNavRow.style.display = '';
             }
           } catch (e) { console.error('vault stats load failed:', e); const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
         })();
@@ -5777,6 +5802,18 @@ async function renderCoinPage(daoAddr) {
     // returns nothing — hide the tab rather than let someone burn for zero.
     const canRagequit = treasuryETH > 0n;
     const defaultMode = saleActive ? 'sale' : hasPool ? 'swap' : canRagequit ? 'ragequit' : 'swap';
+
+    // An unlimited mint at a fixed price is a ceiling on the pool: nobody rationally pays
+    // more on the AMM than they can mint for. Liquidity added above that price is what
+    // arbitrage sells into, so say so before someone supplies it.
+    const poolSpotEth = (hasPool && inLp > 0) ? Number(ethers.formatEther(reserve0)) / inLp : 0;
+    const mintPriceEth = 1 / CONT_SALE_SHARES_PER_ETH;
+    const lpCappedWarning = (contSaleActive && poolSpotEth > mintPriceEth)
+      ? `<div style="font-size:11px;line-height:1.5;color:var(--fg-muted);background:var(--surface);border-left:2px solid var(--red);padding:8px 10px;margin-bottom:10px;border-radius:0 6px 6px 0">
+           The DAO mints unlimited shares at ${fmtEthPrice(mintPriceEth)}. The pool trades at ${fmtEthPrice(poolSpotEth)},
+           so liquidity added here is likely to be sold into by arbitrage until the two meet.
+         </div>`
+      : '';
 
     html += `
       <div class="section-card swap-tile">
@@ -5881,6 +5918,7 @@ async function renderCoinPage(daoAddr) {
         <!-- LP MODE -->
         ${hasPool ? `
         <div id="lpMode" class="swap-mode-content">
+          ${lpCappedWarning}
           <div class="swap-dir">
             <button id="lpZapBtn" class="active" onclick="setLpSubMode('zap')">Zap (ETH only)</button>
             <button id="lpPairBtn" onclick="setLpSubMode('pair')">Add Both</button>
