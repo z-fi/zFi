@@ -613,12 +613,17 @@ const VAULT_NFT_ABI = [
   // Fully on-chain metadata: data:application/json;base64 wrapping a data:image/svg+xml image.
   'function tokenURI(uint256 tokenId) view returns (string)',
 ];
-// Fee accumulator for the TokenWorks pass: pending() is ETH earned by the pass but not
-// yet claimed into the vault. Claimed fees already show up in the vault ETH balance, so
-// this is the missing piece — counted in backing, and shown separately since realising it
-// takes a claim.
+// Fee accumulator for the TokenWorks pass. pending() is ETH the pass has earned but not
+// yet claimed; claimed() is everything ever taken into the vault, which is what funds the
+// next purchase. Showing only pending makes a collection that has been claimed down and
+// reinvested look like it never earned anything, so the page reads both.
+// Backing counts pending only — claimed ETH is already in the vault balance or spent on a
+// pass, and adding it again would double count.
 const VAULT_NFT_FEES = '0x1C175b9F0e8C73eD3e677e1cBb1B5A2DD4373Bfe';
-const VAULT_NFT_FEES_ABI = ['function pending(uint256 tokenId) view returns (uint256)'];
+const VAULT_NFT_FEES_ABI = [
+  'function pending(uint256 tokenId) view returns (uint256)',
+  'function claimed(uint256 tokenId) view returns (uint256)',
+];
 const MC3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   'function getEthBalance(address) view returns (uint256)'
@@ -5568,7 +5573,7 @@ async function renderCoinPage(daoAddr) {
           ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">${ethIco} Vault</span><span class="stat-value"><span id="vaultEthBal">Loading...</span> <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="font-size:10px;color:var(--fg-muted);text-decoration:underline;margin-left:4px">view</a></span></div>
           <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>
-          <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Fees earned by the vault's TokenWorks pass that have not been claimed into the vault yet. Claiming requires a proposal.">Unclaimed fees</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
+          <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Everything the vault's passes have earned in fees since they were acquired, whether or not it has been claimed yet. Claimed fees have already been taken into the vault and largely reinvested into further passes; unclaimed fees still sit at the fee accumulator and need a claim to realise.">Fees earned</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
           ${hasPool ? `
             <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
@@ -5630,13 +5635,14 @@ async function renderCoinPage(daoAddr) {
           try {
             const nftIface = new ethers.Interface(VAULT_NFT_ABI);
             const feeIface = new ethers.Interface(VAULT_NFT_FEES_ABI);
-            const [vaultBal, nftLocked, nftPending, tokenURIs] = await withRPC(async rpc => {
+            const [vaultBal, nftLocked, nftPending, nftClaimed, tokenURIs] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
                 // One locked-ETH + one pending-fees call per collected pass, in id order.
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('claimed', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('tokenURI', [id]) })),
               ]);
               const n = VAULT_NFT_TOKEN_IDS.length;
@@ -5646,7 +5652,8 @@ async function renderCoinPage(daoAddr) {
                 res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
                 sum(1, nftIface, 'getRemainingLockedEth'),
                 sum(1 + n, feeIface, 'pending'),
-                res.slice(1 + 2 * n, 1 + 3 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
+                sum(1 + 2 * n, feeIface, 'claimed'),
+                res.slice(1 + 3 * n, 1 + 4 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
               ];
             });
             const el = $('vaultEthBal');
@@ -5684,15 +5691,24 @@ async function renderCoinPage(daoAddr) {
                 const capEl = $('vaultGalleryCaption');
                 if (capEl) capEl.textContent = `${cards.length} pass${cards.length > 1 ? 'es' : ''}`
                   + (nftLockedEth > 0 ? ` \u00b7 ${fmtNum(nftLockedEth)} ETH refundable` : '')
-                  + (nftPending > 0n ? ` \u00b7 ${fmtNum(Number(ethers.formatEther(nftPending)))} ETH fees earned` : '');
+                  + (nftPending + nftClaimed > 0n ? ` \u00b7 ${fmtNum(Number(ethers.formatEther(nftPending + nftClaimed)))} ETH fees earned to date` : '');
                 galleryCard.style.display = '';
               }
             }
             // Unclaimed fees earned by the pass — claimable to the vault via proposal
             const pendingEth = Number(ethers.formatEther(nftPending));
+            const claimedEth = Number(ethers.formatEther(nftClaimed));
+            const earnedEth = pendingEth + claimedEth;
             const feeRowEl = $('vaultFeesRow'), feeValEl = $('vaultFeesVal');
-            if (feeRowEl && feeValEl && pendingEth > 0) {
-              feeValEl.innerHTML = `${fmtNum(pendingEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(pendingEth * ethUsd)})</span>` : ''}`;
+            if (feeRowEl && feeValEl && earnedEth > 0) {
+              // Lead with lifetime earnings. A claimed-down collection otherwise reads as
+              // one that has never earned, when the claims are what funded the next pass.
+              const split = [
+                claimedEth > 0 ? `${fmtNum(claimedEth)} claimed &amp; reinvested` : '',
+                pendingEth > 0 ? `${fmtNum(pendingEth)} unclaimed` : ''
+              ].filter(Boolean).join(' &middot; ');
+              feeValEl.innerHTML = `${fmtNum(earnedEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(earnedEth * ethUsd)})</span>` : ''}`
+                + (split ? `<div style="font-size:10px;color:var(--fg-dim);font-weight:400;margin-top:2px">${split}</div>` : '');
               feeRowEl.style.display = '';
             }
             // Backing = vault ETH + the NFT's still-refundable ETH + fees it has earned
