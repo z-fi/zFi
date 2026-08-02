@@ -3954,6 +3954,18 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
     return;
   }
   const SIDE = side.toUpperCase();
+  // Hard invariant: a buy splits X collateral into X YES + X NO and swaps the
+  // unwanted side, so it can never rationally return fewer than X shares — the
+  // swap leg can only add. A quote below the split floor means the route is
+  // degenerate (a dust pool caps the sweep fill and the extra collateral buys
+  // nothing). Refuse it rather than let someone pay 100x for the same shares.
+  if (costF > 0 && sharesF < costF) {
+    _quoteFailed(`This market can only fill about ${sharesF.toFixed(6)} ${SIDE} shares right now, `
+      + `no matter how much you spend — the pool is too thin to route this trade. `
+      + `Try a much smaller amount, or add liquidity first.`);
+    _setTradeBtn('Insufficient liquidity', true);
+    return;
+  }
   const spot = _spotPct(side);
   const avg = costF > 0 ? (costF / sharesF) * 100 : 0;
   const impact = spot > 0 && avg > spot ? ((avg - spot) / spot) * 100 : 0;
