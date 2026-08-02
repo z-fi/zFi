@@ -1844,6 +1844,9 @@ const ZORG_ID = 1334160193485309697971829933264346612480800613613n;
 const ZORG_PAY_TOKEN = "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"; // ERC20 equivalent of the ERC6909 swap output
 const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
+// FWC collector DAO shares. Built-in so the tile lists it without a search, the same
+// way zOrg is — a first-party DAO token with a live zAMM ETH pool.
+const FWC_DAO_TOKEN = "0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
 const IPFS_GATEWAYS = [
   "https://ipfs.io/ipfs/",
@@ -1851,7 +1854,7 @@ const IPFS_GATEWAYS = [
   "https://dweb.link/ipfs/",
   "https://w3s.link/ipfs/"
 ];
-const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, FWC_DAO_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
 // DAICO graduated coin discovery (search-triggered only)
 const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
 const DAICO_SCAN_ABI = ["function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"];
@@ -2459,6 +2462,7 @@ const tokens = {
   ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
   WETH: { address: WETH_ADDRESS, symbol: "WETH", decimals: 18 },
   zOrg: { address: ZORG_DAO_TOKEN, symbol: "zOrg", decimals: 18, _isZOrg: true },
+  FWC: { address: FWC_DAO_TOKEN, symbol: "FWC", decimals: 18 },
   ZAMM: { address: ZORG_PAY_TOKEN, symbol: "ZAMM", decimals: 18, _isZammStake: true },
   BOLD: { address: BOLD_ADDRESS, symbol: "BOLD", decimals: 18 },
   LUSD: { address: LUSD_ADDRESS, symbol: "LUSD", decimals: 18 },
