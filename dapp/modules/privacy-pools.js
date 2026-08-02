@@ -6022,7 +6022,11 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
   for (const { row, isSpent, unverified } of verdicts) {
     console.warn(
       'Privacy: spent-check ' + row.asset + ' deposit #' + row.depositIndex +
+      ' derivation=' + (row.derivation || '?') +
       ' value=' + (row.originalValue ?? '?') +
+      // The nullifier hash is public data — it appears in the Withdrawn event
+      // that spent it — so logging it is safe and lets the burn be traced.
+      ' nullifierHash=' + (row.preSpend?.nullifier != null ? ppHashHex(poseidon1([row.preSpend.nullifier])) : 'n/a') +
       ' poolSaysSpent=' + (unverified ? 'unverified' : String(isSpent)) +
       ' eventBlamesTx=' + (row.spentByTxHash || 'none') +
       (ppIsNoteStrandedByPriorNullifier(row)
