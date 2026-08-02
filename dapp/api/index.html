@@ -114,7 +114,7 @@ p code, li code {
 
 <div class="section">
   <h2>REST API</h2>
-  <p>One HTTP call returns the best quote + ready-to-send transaction. No SDK, no ABI encoding, no Multicall3 batching. The service runs all zQuoter route strategies on-chain (single-hop, 2-hop hub, split, hybrid split, 3-hop) <em>and</em> in parallel requests quotes from Bebop, Enso, 0x, 1inch, OKX, KyberSwap, Odos, Paraswap, Bitget and OpenOcean, then returns the single best output.</p>
+  <p>One HTTP call returns the best quote + ready-to-send transaction. No SDK, no ABI encoding, no Multicall3 batching. The service runs all zQuoter route strategies on-chain (single-hop, 2-hop hub, split, hybrid split, 3-hop) <em>and</em> in parallel requests quotes from Bebop, Enso, 0x, 1inch, OKX, KyberSwap, Paraswap, Bitget and OpenOcean, then returns the single best output.</p>
   <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Base URL <code>https://api.zfi.wei.is</code>. It is a hosted Node service (aggregator API keys are held server-side so you don't need any) &mdash; unlike direct zQuoter calls, it is a trusted third party in the quoting path. Always check the returned <code>tx.to</code> and decode the calldata before signing.</p>
 
   <h3>GET /quote</h3>
@@ -222,7 +222,7 @@ const quoterAbi = [
   "function buildBestSwapViaETHMulticall(address to, address refundTo, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) view returns (tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) a, tuple(uint8 source, uint256 feeBps, uint256 amountIn, uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)"
 ];
 
-const provider = new ethers.JsonRpcProvider("https://eth.llamarpc.com");
+const provider = new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
 const signer = /* your wallet signer */;
 const me = await signer.getAddress();
 

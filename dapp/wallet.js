@@ -3,9 +3,8 @@
 
 const RPCS = [
   'https://ethereum.publicnode.com',
-  'https://1rpc.io/eth',
-  'https://eth.drpc.org',
-  'https://eth.llamarpc.com'
+  'https://mainnet.gateway.tenderly.co',
+  'https://eth.drpc.org'
 ];
 const WEINS = '0x0000000000696760E15f265e828DB644A0c242EB';
 const WEINS_ABI = ['function reverseResolve(address) view returns (string)'];
@@ -159,7 +158,7 @@ async function connectWithWallet(walletKey, options = {}) {
       const WCProvider = wcModule?.EthereumProvider;
       if (!WCProvider?.init) throw new Error('WalletConnect not available');
       if (_walletConnectProvider) { try { await _walletConnectProvider.disconnect?.(); } catch (e) {} _walletConnectProvider = null; }
-      _walletConnectProvider = await WCProvider.init({ projectId: WC_PROJECT_ID, chains: [1], showQrModal: !silent, rpcMap: { 1: 'https://1rpc.io/eth' }, metadata: { name: _appName, description: _appName, url: window.location.origin, icons: [] } });
+      _walletConnectProvider = await WCProvider.init({ projectId: WC_PROJECT_ID, chains: [1], showQrModal: !silent, rpcMap: { 1: 'https://ethereum.publicnode.com' }, metadata: { name: _appName, description: _appName, url: window.location.origin, icons: [] } });
       if (!silent) _walletConnectProvider.on('display_uri', () => { _wcDeepLink = readWalletConnectRedirect(_walletConnectProvider.session?.peer?.metadata); });
       await _walletConnectProvider.enable();
       walletProvider = _walletConnectProvider;
