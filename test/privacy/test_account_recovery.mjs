@@ -1454,5 +1454,121 @@ test('pending-deposit reservation normalization prunes stale and superseded entr
   );
 });
 
+// ── On-chain reinstatement of falsely-spent accounts ─────────────────
+// A note is only spent if the pool says so. Event tracing is a claim; if it is
+// wrong the note must come back, otherwise withdrawable funds are stranded.
+
+function createSpentRow(overrides = {}) {
+  return {
+    asset: 'ETH',
+    depositIndex: 3,
+    source: 'spent',
+    value: '0',
+    originalValue: '99500000000000000',
+    label: 42n,
+    depositTxHash: '0xdep',
+    depositBlockNumber: 100,
+    txHash: '0xwithdraw',
+    blockNumber: 200,
+    spentByTxHash: '0xwithdraw',
+    withdrawalSteps: [{ value: 1n, txHash: '0xwithdraw', blockNumber: 200 }],
+    preSpend: {
+      nullifier: 7n,
+      secret: 8n,
+      precommitment: 9n,
+      commitment: '0x' + 'ab'.padStart(64, '0'),
+      value: '99500000000000000',
+      label: 42n,
+      withdrawalIndex: null,
+      source: 'deposit',
+      derivation: 'safe',
+      blockNumber: 100,
+      txHash: '0xdep',
+    },
+    ...overrides,
+  };
+}
+
+const { ethers: realEthers } = createPoseidonContext({ withEthers: true });
+
+function loadReinstateApi(nullifierHashesImpl) {
+  // Keep the real ethers (the runtime builds Interfaces at load time) and swap
+  // only the Contract constructor so the pool read is scripted.
+  const stubbedEthers = Object.create(realEthers);
+  stubbedEthers.Contract = class {
+    constructor() {
+      this.nullifierHashes = nullifierHashesImpl;
+    }
+  };
+  const { api } = createPrivacyTestContext({
+    globals: {
+      poseidon1: (inputs) => inputs[0],
+      ethers: stubbedEthers,
+      // The runtime declares ppReadWithRpc itself, so a global of that name is
+      // shadowed; stub the provider it delegates to instead.
+      quoteRPC: { call: async (work) => work({}) },
+    },
+  });
+  return api.load.ppReinstateFalselySpentAccounts;
+}
+
+test('a note the pool reports as unspent is reinstated as live and withdrawable', async () => {
+  const reinstate = loadReinstateApi(async () => false);
+  const row = createSpentRow();
+  const inserted = new Set([row.preSpend.commitment]);
+
+  const [next] = await reinstate([row], '0xpool', inserted);
+
+  assert.equal(next.source, 'deposit');
+  assert.equal(next.value, '99500000000000000');
+  assert.equal(next.nullifier, 7n);
+  assert.equal(next.secret, 8n);
+  assert.equal(next.currentCommitment, row.preSpend.commitment);
+  assert.equal(next.currentCommitmentInserted, true);
+  assert.equal(next.pending, false);
+  assert.equal(next.spentTraceReinstated, true);
+  assert.equal(next.withdrawalSteps, undefined);
+});
+
+test('a note the pool reports as spent stays spent', async () => {
+  const reinstate = loadReinstateApi(async () => true);
+  const row = createSpentRow();
+
+  const [next] = await reinstate([row], '0xpool', new Set());
+
+  assert.equal(next, row);
+  assert.equal(next.source, 'spent');
+});
+
+test('an unverifiable spent check leaves the conservative verdict in place', async () => {
+  const reinstate = loadReinstateApi(async () => { throw new Error('rpc down'); });
+  const row = createSpentRow();
+
+  const [next] = await reinstate([row], '0xpool', new Set());
+
+  assert.equal(next.source, 'spent');
+});
+
+test('ragequit rows and rows without pre-spend state are never reinstated', async () => {
+  const reinstate = loadReinstateApi(async () => false);
+  const ragequitRow = createSpentRow({ ragequit: true });
+  const noSnapshot = createSpentRow({ preSpend: undefined });
+
+  const rows = await reinstate([ragequitRow, noSnapshot], '0xpool', new Set());
+
+  assert.equal(rows[0], ragequitRow);
+  assert.equal(rows[1], noSnapshot);
+});
+
+test('a reinstated note whose commitment is not yet in the tree reads as pending', async () => {
+  const reinstate = loadReinstateApi(async () => false);
+  const row = createSpentRow();
+
+  const [next] = await reinstate([row], '0xpool', new Set());
+
+  assert.equal(next.currentCommitmentInserted, false);
+  assert.equal(next.pending, true);
+});
+
 
 await done();

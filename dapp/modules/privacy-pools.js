@@ -957,10 +957,19 @@ const PP_UNUSED_INDEX_SEARCH_LIMIT = 50;
 const PP_UNUSED_INDEX_BATCH_SIZE = 10;
 const PP_ENTRYPOINT_IFACE = new ethers.Interface(PP_ENTRYPOINT_ABI);
 
-async function ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, startIndex) {
-  // Batch usedPrecommitments checks via Multicall3 instead of N serial RPC calls.
+const PP_POOL_NULLIFIER_IFACE = new ethers.Interface(['function nullifierHashes(uint256) view returns (bool)']);
+
+async function ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, startIndex, poolAddress = null) {
+  // Batch the availability checks via Multicall3 instead of N serial RPC calls.
   // Pre-derive all candidate keys (synchronous poseidon hashes), then check a batch
   // at a time until we find the first unused index.
+  //
+  // An index is only safe when BOTH are true:
+  //   - its precommitment has never been deposited (entrypoint), and
+  //   - its nullifier has never been spent (pool).
+  // Checking the precommitment alone is not enough: an index whose nullifier is
+  // already spent would produce a deposit that can never be withdrawn or
+  // ragequit, silently stranding the funds.
   let idx = startIndex;
   for (let batchStart = 0; batchStart < PP_UNUSED_INDEX_SEARCH_LIMIT; batchStart += PP_UNUSED_INDEX_BATCH_SIZE) {
     const batchSize = Math.min(PP_UNUSED_INDEX_BATCH_SIZE, PP_UNUSED_INDEX_SEARCH_LIMIT - batchStart);
@@ -972,11 +981,29 @@ async function ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, st
       target: PP_ENTRYPOINT,
       data: PP_ENTRYPOINT_IFACE.encodeFunctionData('usedPrecommitments', [keys.precommitment]),
     }));
+    if (poolAddress) {
+      for (const keys of candidates) {
+        entries.push({
+          target: poolAddress,
+          data: PP_POOL_NULLIFIER_IFACE.encodeFunctionData('nullifierHashes', [poseidon1([keys.nullifier])]),
+        });
+      }
+    }
     const results = await ppReadWithRpc((rpc) => mc3ViewBatch(rpc, entries));
     for (let i = 0; i < candidates.length; i++) {
       if (!results[i]?.success) continue; // treat failed calls as "used" — safe default
       const used = PP_ENTRYPOINT_IFACE.decodeFunctionResult('usedPrecommitments', results[i].returnData)[0];
-      if (!used) return idx + i;
+      if (used) continue;
+      if (poolAddress) {
+        const nullifierResult = results[candidates.length + i];
+        if (!nullifierResult?.success) continue; // unverifiable — skip the index
+        const spent = PP_POOL_NULLIFIER_IFACE.decodeFunctionResult('nullifierHashes', nullifierResult.returnData)[0];
+        if (spent) {
+          console.warn('Privacy: skipping deposit index ' + (idx + i) + ' — its nullifier is already spent in the pool.');
+          continue;
+        }
+      }
+      return idx + i;
     }
     idx += batchSize;
   }
@@ -1197,6 +1224,29 @@ function ppGetRecoveredSafeDepositIndex(migratedCount, safeRows) {
   return nextIndex;
 }
 
+// A chain is declared spent purely from event matching. Keep everything needed
+// to (a) ask the pool whether that nullifier is genuinely spent and (b) put the
+// note back into service if it is not — a note wrongly declared spent is
+// otherwise unwithdrawable and unragequittable, with its funds still on-chain.
+function ppBuildPreSpendSnapshot(note, withdrawal) {
+  return {
+    preSpend: {
+      nullifier: note.nullifier,
+      secret: note.secret,
+      precommitment: note.precommitment,
+      commitment: note.commitment,
+      value: note.value,
+      label: note.label,
+      withdrawalIndex: note.withdrawalIndex ?? null,
+      source: note.source,
+      derivation: note.derivation,
+      blockNumber: note.blockNumber,
+      txHash: note.txHash,
+    },
+    spentByTxHash: withdrawal?.txHash || null,
+  };
+}
+
 function ppTraceLoadedAccountChain(initial, withdrawnMap, legacyKeys, safeKeys) {
   const depositTxHash = initial.depositTxHash;
   const depositBlockNumber = initial.depositBlockNumber;
@@ -1233,7 +1283,9 @@ function ppTraceLoadedAccountChain(initial, withdrawnMap, legacyKeys, safeKeys) 
         depositTxHash,
         depositBlockNumber,
         originalValue: initialValue,
+        label: current.label,
         derivation: current.derivation,
+        ...ppBuildPreSpendSnapshot(current, w),
       };
       break;
     }
@@ -1318,6 +1370,7 @@ function ppTraceLoadedAccountChain(initial, withdrawnMap, legacyKeys, safeKeys) 
       label: current.label,
       derivation: current.derivation,
       chainUnresolved: true,
+      ...ppBuildPreSpendSnapshot(current, w),
     };
     break;
   }
@@ -2949,7 +3002,7 @@ async function ppPrepareDepositKeys(asset, scope, ppKeys, btn) {
   let depositIdx, nullifier, secret, precommitment;
   await ppWithPendingDepositLock(_connectedAddress, scope, async () => {
     const startIdx = await ppResolveNextSafeDepositIndex(_connectedAddress, asset, scope, ppKeys);
-    depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, startIdx);
+    depositIdx = await ppFindUnusedDepositIndex(masterNullifier, masterSecret, scope, startIdx, ppGetPoolAddress(asset));
     ({ nullifier, secret, precommitment } = ppDeriveDepositKeys(masterNullifier, masterSecret, scope, depositIdx));
     ppReservePendingDepositIndex(_connectedAddress, scope, depositIdx);
   });
@@ -5885,6 +5938,65 @@ function ppwSyncBackgroundRefreshLoop() {
   ppwStopBackgroundRefreshLoop();
 }
 
+// Event matching can only ever be a claim about what happened; the pool's
+// nullifierHashes mapping is the fact. Re-check every inferred "spent" verdict
+// against it and reinstate any note the pool still considers live, so a tracing
+// gap can never strand withdrawable funds.
+async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves) {
+  const candidates = (Array.isArray(rows) ? rows : [])
+    .filter(row => row && row.source === 'spent' && !row.ragequit && row.preSpend?.nullifier != null);
+  if (!candidates.length) return rows;
+
+  const verdicts = await Promise.all(candidates.map(async (row) => {
+    try {
+      const nullHash = poseidon1([row.preSpend.nullifier]);
+      const isSpent = await ppReadWithRpc(async (rpc) => {
+        const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+        return await pool.nullifierHashes(nullHash);
+      });
+      return { row, isSpent };
+    } catch (err) {
+      // Unverifiable: leave the conservative "spent" verdict in place.
+      console.warn('Privacy: could not verify spent status on-chain for a pool account', err);
+      return { row, isSpent: true };
+    }
+  }));
+
+  const reinstated = new Map();
+  for (const { row, isSpent } of verdicts) {
+    if (isSpent) continue;
+    const pre = row.preSpend;
+    console.warn(
+      'Load: pool account was traced as spent by tx ' + (row.spentByTxHash || 'unknown') +
+      ', but the pool reports its nullifier as unspent. Reinstating it as live.'
+    );
+    const commitment = pre.commitment == null
+      ? null
+      : (typeof pre.commitment === 'string' ? pre.commitment : ppHashHex(pre.commitment));
+    reinstated.set(row, {
+      ...row,
+      nullifier: pre.nullifier,
+      secret: pre.secret,
+      precommitment: pre.precommitment,
+      commitment,
+      value: pre.value,
+      label: pre.label ?? row.label,
+      withdrawalIndex: pre.withdrawalIndex,
+      source: pre.source || 'deposit',
+      txHash: pre.txHash || row.txHash,
+      blockNumber: pre.blockNumber ?? row.blockNumber,
+      currentCommitment: commitment,
+      currentCommitmentInserted: !!commitment && insertedLeaves.has(commitment),
+      pending: !!commitment && !insertedLeaves.has(commitment),
+      chainUnresolved: false,
+      spentTraceReinstated: true,
+      withdrawalSteps: undefined,
+    });
+  }
+  if (!reinstated.size) return rows;
+  return rows.map(row => reinstated.get(row) || row);
+}
+
 async function ppBuildLoadedPoolAccountsFromEvents(allEvents, keys, walletSeedVersion, abortSignal = null, refreshLink = null) {
   const results = [];
   const warnings = allEvents.filter(x => x.loadWarning).map(x => x.loadWarning);
@@ -5957,6 +6069,8 @@ async function ppBuildLoadedPoolAccountsFromEvents(allEvents, keys, walletSeedVe
     });
 
     let assetResults = [...legacyScan.results, ...safeScan.results];
+    assetResults = await ppReinstateFalselySpentAccounts(assetResults, poolAddress, insertedLeaves);
+    if (abortSignal?.aborted) break;
     if (assetResults.length) {
       const labels = Array.from(new Set(assetResults
         .map(row => ppLoadedAccountLabelKey(row.label))
@@ -8106,6 +8220,7 @@ function ppRegisterInternalTestApi() {
       ppResolveReservedSafeDepositIndex,
       ppGetRecoveredSafeDepositIndex,
       ppTraceLoadedAccountChain,
+      ppReinstateFalselySpentAccounts,
       ppBuildDepositEventsMap,
       ppLoadCachedEventLogs,
       ppSaveCachedEventLogs,
