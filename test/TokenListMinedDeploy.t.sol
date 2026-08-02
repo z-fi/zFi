@@ -3,6 +3,7 @@ pragma solidity ^0.8.36;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
+import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
@@ -12,11 +13,11 @@ import {PostDeployListings} from "./PostDeployListings.sol";
 contract TokenListMinedDeployTest is Test, PostDeployListings {
     address constant SUMMONER = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant OWNER = 0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2;
-    address constant RENDERER = 0x000000F2CcbE111146ec4aa17c76BC1eCBa4f7C6;
-    address constant LIST = 0x000000e852c6513458C6ea2F99916d513E77edF9;
+    address constant RENDERER = 0x00000087fee5Af18afE38a885ecDb939b1F92598;
+    address constant LIST = 0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1;
 
-    bytes32 constant RENDERER_SALT = 0x000000000000000000000000000000000000000000000000000000000171eb16;
-    bytes32 constant LIST_SALT = 0x00000000000000000000000000000000000000000000000000000000004803cc;
+    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000000dec008;
+    bytes32 constant LIST_SALT = 0x0000000000000000000000000000000000000000000000000000000001268730;
 
     /// @dev The recorded initcode is a frozen artifact of a specific build, and the
     ///      salt was mined FOR that build. Editing the source invalidates both, so
@@ -27,11 +28,34 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
     function testMinedDeploymentLandsAndWires() public {
         bytes memory recorded = vm.readFileBinary("deploy/TokenList.initcode.bin");
         bytes memory recordedRenderer = vm.readFileBinary("deploy/TokenListRenderer.initcode.bin");
-        bytes memory compiled = abi.encodePacked(vm.getCode("TokenList.sol:TokenList"), abi.encode(OWNER, RENDERER));
-        bytes memory compiledRenderer = vm.getCode("TokenListRenderer.sol:TokenListRenderer");
-        if (keccak256(recorded) != keccak256(compiled) || keccak256(recordedRenderer) != keccak256(compiledRenderer)) {
-            emit log("TokenList deployment artifacts are stale: re-mine both salts and re-record both initcodes");
-            vm.skip(true);
+
+        // Staleness is a question about the SOURCE, not about whichever build happens
+        // to be sitting in `out/`.
+        //
+        // This used to compare the recorded initcode against `vm.getCode`, and that
+        // made the check depend on how the caller had built. Under `via_ir` a
+        // contract compiles differently depending on which other files share its
+        // compilation unit, so `forge build` of the two sources alone and a full
+        // `forge build` produce bytecode ~900 B apart from identical source at
+        // identical settings. The recorded artifacts come from the isolated build, so
+        // under a full build this comparison always failed and the test skipped
+        // itself — silently, and for long enough to hide a stale assertion of its own.
+        // A guard that only fires when someone happens to build the right way is not
+        // a guard.
+        //
+        // The recorded source hashes answer the question this is actually asking: did
+        // the code these artifacts were mined for change? That is true or false
+        // regardless of build mode, so this test now runs everywhere.
+        string memory manifest = vm.readFile("deploy/TokenList.sources.txt");
+        string[3] memory sources =
+            ["src/utils/TokenList.sol", "src/utils/TokenListRenderer.sol", "src/utils/TokenListLens.sol"];
+        for (uint256 i; i < sources.length; ++i) {
+            string memory entry = string.concat(sources[i], " ", vm.toString(keccak256(bytes(vm.readFile(sources[i])))));
+            if (!vm.contains(manifest, entry)) {
+                emit log_named_string("source changed since the salts were mined", sources[i]);
+                emit log("re-mine, re-record with script/build-create2-artifact.mjs, and update the constants here");
+                vm.skip(true);
+            }
         }
 
         assertGt(SUMMONER.code.length, 0, "SafeSummoner must exist on this fork");
@@ -50,6 +74,7 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
         assertGt(LIST.code.length, 0, "list has no code");
 
         TokenList list = TokenList(LIST);
+        TokenListLens lens = new TokenListLens();
         assertEq(list.owner(), OWNER, "owner");
         assertEq(address(list.renderer()), RENDERER, "renderer wired");
         assertFalse(list.rendererLocked());
@@ -87,12 +112,12 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
         assertEq(zorg.name, "zOrg Shares", "zOrg name");
         assertEq(zorg.symbol, "ZORG", "zOrg symbol");
         assertEq(zorg.url, "https://zorg.wei.domains", "zOrg link");
-        assertEq(list.rankedIds()[8], list.idOf(ZORG), "zOrg placement");
+        assertEq(lens.rankedIds(list)[8], list.idOf(ZORG), "zOrg placement");
         assertEq(uint8(list.get(ZORGZ).standard), uint8(TokenList.Standard.ERC721), "zOrgz is ERC-721");
         assertEq(uint8(list.get(WNS).standard), uint8(TokenList.Standard.ERC721), "WNS is ERC-721");
         assertTrue(list.get(ZORGZ).onchainSvg, "zOrgz token IDs use onchain SVG");
         assertTrue(list.get(WNS).onchainSvg, "WNS token IDs use onchain SVG");
-        assertEq(list.rankedIds()[10], list.idOf(WNS), "WNS is final initial listing");
+        assertEq(lens.rankedIds(list)[10], list.idOf(WNS), "WNS is final initial listing");
         assertEq(list.ownerOf(0), LIST, "attested listing held by the registry");
         assertTrue(list.supportsInterface(0x49064906) && list.supportsInterface(0xb45a3c0e));
         assertGt(bytes(list.tokenURI(0)).length, 1000, "card renders");

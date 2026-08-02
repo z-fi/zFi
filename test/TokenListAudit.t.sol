@@ -4,6 +4,7 @@ pragma solidity ^0.8.36;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
+import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 
 contract MockERC20 {
@@ -39,6 +40,7 @@ contract MockERC721 {
 contract TokenListAuditTest is Test {
     address owner = address(0xA11CE);
     TokenList list;
+    TokenListLens lens;
     MockERC20 erc20;
     MockERC721 erc721;
 
@@ -49,6 +51,7 @@ contract TokenListAuditTest is Test {
     function setUp() public {
         vm.chainId(8453);
         list = new TokenList(owner, new TokenListRenderer());
+        lens = new TokenListLens();
         erc20 = new MockERC20();
         erc721 = new MockERC721();
     }
@@ -247,11 +250,11 @@ contract TokenListAuditTest is Test {
     function testSearchHonoursItsLimit() public {
         _listErc20();
         _listForeign();
-        assertEq(list.search("mock", 10).length, 1);
-        assertEq(list.search("o", 10).length, 2); // "Mock Token" and "Solana Thing"
-        assertEq(list.search("o", 1).length, 1);
-        assertEq(list.search("o", 0).length, 0);
-        assertEq(list.search("nothinghere", 10).length, 0);
+        assertEq(lens.search(list, "mock", 10).length, 1);
+        assertEq(lens.search(list, "o", 10).length, 2); // "Mock Token" and "Solana Thing"
+        assertEq(lens.search(list, "o", 1).length, 1);
+        assertEq(lens.search(list, "o", 0).length, 0);
+        assertEq(lens.search(list, "nothinghere", 10).length, 0);
     }
 
     /// @dev An index past the end is an unknown listing, not a panic.

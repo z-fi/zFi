@@ -5,6 +5,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Base64} from "../lib/solady/src/utils/Base64.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
+import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
@@ -120,6 +121,7 @@ contract TokenListTest is Test, PostDeployListings {
     using LibString for string;
 
     TokenList list;
+    TokenListLens lens;
     address owner = address(0xA11CE);
     address stranger = address(0xB0B);
 
@@ -137,6 +139,7 @@ contract TokenListTest is Test, PostDeployListings {
     ///      do with the contract.
     function setUp() public {
         list = new TokenList(owner, new TokenListRenderer());
+        lens = new TokenListLens();
     }
 
     function _list(address token, uint32 rank) internal returns (uint256) {
@@ -286,7 +289,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(all.length, SEEDED);
         assertEq(list.summariesPaged(2, type(uint256).max).length, SEEDED - 2);
         assertEq(list.summariesPaged(SEEDED, type(uint256).max).length, 0);
-        assertEq(list.rankedIdsPaged(0, type(uint256).max).length, SEEDED);
+        assertEq(lens.rankedIdsPaged(list, 0, type(uint256).max).length, SEEDED);
     }
 
     function testHostileMetadataIsSanitized() public {
@@ -314,7 +317,7 @@ contract TokenListTest is Test, PostDeployListings {
 
     /// @dev Every seeded logo must be a self-contained, namespaced SVG document.
     function testSeededLogosAreStandaloneSVGs() public view {
-        uint256[] memory ids = list.rankedIds();
+        uint256[] memory ids = lens.rankedIds(list);
         for (uint256 i; i < ids.length; ++i) {
             string memory logo = list.logoOf(ids[i]);
             assertTrue(logo.startsWith("data:image/svg+xml;base64,"));
@@ -466,7 +469,7 @@ contract TokenListTest is Test, PostDeployListings {
 
         // The seeded defaults rank far above these, so they occupy the head; the
         // three added tokens must still sort among themselves by descending rank.
-        uint256[] memory ranked = list.rankedIds();
+        uint256[] memory ranked = lens.rankedIds(list);
         assertEq(ranked.length, SEEDED + 3);
         assertEq(ranked[SEEDED], idB);
         assertEq(ranked[SEEDED + 1], idC);
@@ -474,37 +477,40 @@ contract TokenListTest is Test, PostDeployListings {
 
         vm.prank(owner);
         list.setRank(idA, type(uint32).max);
-        assertEq(list.rankedIds()[0], idA);
+        assertEq(lens.rankedIds(list)[0], idA);
 
-        // The typed page is emitted in rank order too.
-        assertEq(list.summariesPaged(0, 1)[0].symbol, "AAA");
+        // The two pages differ deliberately: the registry pages in LISTING order and
+        // the lens sorts. Ranking left the registry to buy EIP-170 headroom — see
+        // the header on `TokenListLens`.
+        assertEq(lens.rankedSummaries(list, 0, 1)[0].symbol, "AAA", "lens pages by rank");
+        assertEq(list.summariesPaged(0, 1)[0].symbol, "ETH", "registry pages in listing order");
     }
 
     function testSearchIsCaseInsensitive() public {
         MockToken a = new MockToken("Zebra Coin", "ZEBRA", 18);
         uint256 idA = _list(address(a), 0);
 
-        uint256[] memory hits = list.search("zebra", 10);
+        uint256[] memory hits = lens.search(list, "zebra", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], idA);
 
-        hits = list.search("ZEBRA COIN", 10);
+        hits = lens.search(list, "ZEBRA COIN", 10);
         assertEq(hits.length, 1);
 
         // The seeded set is searchable straight out of the constructor.
-        hits = list.search("usdt", 10);
+        hits = lens.search(list, "usdt", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], list.idOf(0xdAC17F958D2ee523a2206206994597C13D831ec7));
 
         // ...and so is a post-deploy listing, through the same index.
         _applyPostDeployListings();
-        hits = list.search("wbtc", 10);
+        hits = lens.search(list, "wbtc", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], list.idOf(WBTC));
 
-        assertTrue(list.search("usd", 10).length >= 2); // USDC and USDT
-        assertEq(list.search("usd", 1).length, 1); // limit is respected
-        assertEq(list.search("nothinghere", 10).length, 0);
+        assertTrue(lens.search(list, "usd", 10).length >= 2); // USDC and USDT
+        assertEq(lens.search(list, "usd", 1).length, 1); // limit is respected
+        assertEq(lens.search(list, "nothinghere", 10).length, 0);
     }
 
     // OPEN-ENDED METADATA --------------------------------------------------
@@ -716,7 +722,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(list.idAt(0), ethId);
 
         string[4] memory expected = ["ETH", "WETH", "USDC", "USDT"];
-        uint256[] memory ranked = list.rankedIds();
+        uint256[] memory ranked = lens.rankedIds(list);
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);
         }
@@ -769,7 +775,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertTrue(t.synced);
         assertEq(t.rank, 992_000);
         assertEq(t.url, "https://zorg.wei.domains");
-        assertEq(list.rankedIds()[8], list.idOf(ZORG));
+        assertEq(lens.rankedIds(list)[8], list.idOf(ZORG));
 
         string memory svg = string(Base64.decode(t.logo.slice(26)));
         assertTrue(svg.contains("zorg-clip"));
@@ -799,8 +805,8 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(w.decimals, 0);
         assertEq(w.url, "https://opensea.io/collection/wei-name-service");
         assertTrue(w.synced);
-        assertEq(list.rankedIds()[9], list.idOf(ZORGZ));
-        assertEq(list.rankedIds()[10], list.idOf(WNS));
+        assertEq(lens.rankedIds(list)[9], list.idOf(ZORGZ));
+        assertEq(lens.rankedIds(list)[10], list.idOf(WNS));
 
         assertTrue(list.json(list.idOf(ZORGZ)).contains('"p":"ERC-721"'));
         assertTrue(list.json(list.idOf(WNS)).contains('"p":"ERC-721"'));
@@ -815,7 +821,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(list.total(), 11);
         string[11] memory expected =
             ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD", "ZORG", "zzz", "WEI"];
-        uint256[] memory ranked = list.rankedIds();
+        uint256[] memory ranked = lens.rankedIds(list);
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);
             assertTrue(list.tokenURI(ranked[i]).startsWith("data:application/json;base64,"));
@@ -844,7 +850,7 @@ contract TokenListTest is Test, PostDeployListings {
     }
 
     function testEverySeededCardRenders() public view {
-        uint256[] memory ids = list.rankedIds();
+        uint256[] memory ids = lens.rankedIds(list);
         for (uint256 i; i < ids.length; ++i) {
             assertTrue(list.tokenURI(ids[i]).startsWith("data:application/json;base64,"));
             assertTrue(bytes(list.logoOf(ids[i])).length > 100); // real art, not a stub
@@ -965,13 +971,13 @@ contract TokenListTest is Test, PostDeployListings {
     ///      and `get(id)` batched through `Multicallable` covers the case — so the
     ///      unbounded side is measured against `get` itself.
     function testPagedReadsAreBoundedAndRanked() public {
-        uint256[] memory ids = list.rankedIdsPaged(0, 3);
+        uint256[] memory ids = lens.rankedIdsPaged(list, 0, 3);
         assertEq(ids.length, 3);
-        uint256[] memory all = list.rankedIds();
+        uint256[] memory all = lens.rankedIds(list);
         assertEq(ids[0], all[0]);
         assertEq(ids[2], all[2]);
-        assertEq(list.rankedIdsPaged(SEEDED, 5).length, 0);
-        assertEq(list.rankedIdsPaged(0, type(uint256).max).length, SEEDED);
+        assertEq(lens.rankedIdsPaged(list, SEEDED, 5).length, 0);
+        assertEq(lens.rankedIdsPaged(list, 0, type(uint256).max).length, SEEDED);
 
         TokenList.Summary[] memory page = list.summariesPaged(1, 2);
         assertEq(page.length, 2);

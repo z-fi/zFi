@@ -240,20 +240,73 @@ Three existing tests were updated, all for intentional interface changes:
 
 # Post-review deployment prep
 
-Done after the fixes landed, on a worktree off `origin/main`:
+Done after the fixes landed, on a worktree off `origin/main`.
 
-- Both salts re-mined and all deterministic artifacts regenerated. Renderer
-  `0x000000F2CcbE111146ec4aa17c76BC1eCBa4f7C6`, registry
-  `0x000000e852c6513458C6ea2F99916d513E77edF9`, both with three leading zero bytes.
-- `test/TokenListMinedDeploy.t.sol` was **silently skipping** and had been for long
-  enough to hide a stale assertion: it still expected an eleven-token constructor
-  after seeding was cut to four. It now deploys the recorded payload through the
-  real SafeSummoner on a fork, lands at the mined address, and applies the
-  post-deploy route to the full eleven-entry list. 98/98 pass, nothing skipped.
+## The registry did not actually fit
+
+The headroom in this document's first pass — 637 B — was measured from an isolated
+`forge build` of the two source files. A full `forge build` (what `forge test`
+does) produced **24,811 B, over EIP-170**, from identical source at identical
+settings. Under `via_ir` a contract optimises differently depending on which other
+files share its compilation unit, and the two builds sat ~900 B apart.
+
+That meant three things were wrong simultaneously:
+
+- a fresh clone's default build produced a registry that could not be deployed;
+- Foundry does not enforce EIP-170 inside tests, so the suite passed against a
+  variant mainnet would have rejected — green tests said nothing about the shipped
+  bytes;
+- `TokenListMinedDeploy` compared the recorded initcode against `vm.getCode`, so
+  under a full build it always mismatched and **skipped itself**. It had been
+  skipping long enough to hide a stale assertion of its own: it still expected an
+  eleven-token constructor after seeding was cut to four.
+
+Lowering `max_optimizer_runs` does not help — 1, 10 and 20 all produce ~24,817.
+
+## What fixed it
+
+`TokenListLens` now owns `rankedIds`, `rankedIdsPaged`, `rankedSummaries` and
+`search`; `TokenList.summariesPaged` pages in listing order and the registry drops
+`LibSort` entirely. The split follows what can and cannot be replaced: the registry
+is immutable and must retain room to ship a security fix, while a lens can be
+redeployed at will, so the replaceable work moved to the replaceable contract.
+
+Measured savings were badly non-additive — removing `search` alone saved 1,471 B,
+removing `search` and `rankedIdsPaged` together saved only 472 — which is the same
+optimizer cliff B-01 described, so each candidate configuration had to be measured
+rather than reasoned about.
+
+| | before | after |
+| --- | ---: | ---: |
+| isolated build | 23,939 | 22,167 |
+| full build | **24,811 (over)** | 21,275 |
+| worst-case headroom | **-235** | **+2,409** |
+
+The lens is stateless — the registry is a call parameter, not an immutable — so it
+has no constructor arguments and no deployment ordering constraint, and one
+deployment serves every `TokenList`. The renderer/registry coupling already means
+mining one salt wrong invalidates both; there was nothing to gain from a third link
+in that chain.
+
+## The guard now asks the right question
+
+`TokenListMinedDeploy`'s staleness check compares recorded source hashes
+(`deploy/TokenList.sources.txt`) instead of `vm.getCode`. Whether the source drifted
+is true or false regardless of how the caller built, so the test runs under both
+build modes and skips only when the code genuinely changed. Verified: from a clean
+`out/`, a full `forge test` runs it and it passes.
+
+## Also done
+
+- All three salts mined. Registry `0x0000000fc6abe3eB907a6F6335EC6f5b1e987564`
+  (four leading zero bytes), renderer `0x000000f7269197d82ADB734aCaed9Fe978760067`,
+  lens `0x0000002F54FA973183Bca49681659488c4033951`.
 - `script/mine_create2_salt.js` allocated a native keccak object per iteration.
-  Worker throughput decayed from 0.13M to 0.02M iter/sec and the process died
-  partway through long runs — which looks like "mining is slow" rather than a leak.
-  Reusing one hasher's state makes a 3-byte prefix take seconds. Digests verified
-  byte-identical, and both mined addresses independently re-derived with ethers.
-- `deploy/TokenList.md` corrected: compiler row said 200 runs where the build pins
-  20, and the headroom claim was stale by 4x.
+  Throughput decayed from 0.13M to 0.02M iter/sec and the process died partway
+  through long runs — which reads as "mining is slow" rather than as a leak.
+  Reusing one hasher's state made these three mines take 62 s, 22 s and 8 s.
+  Digests verified byte-identical; every mined address independently re-derived
+  with ethers.
+- `deploy/TokenList.md` corrected: the compiler row said 200 runs where the build
+  pins 20, and the headroom claim was stale by 4x.
+- 108 tests pass from a clean build, nothing skipped.

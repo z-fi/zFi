@@ -1,76 +1,61 @@
 # TokenList deterministic deployment manifest
 
-Status: **NOT DEPLOYED — DO NOT DEPLOY. ARTIFACTS RE-MINED 2026-08-03, BUT THE
-BUILD IS NOT REPRODUCIBLE. SEE "BUILD REPRODUCIBILITY" BELOW.**
+Status: **NOT DEPLOYED — ARTIFACTS RE-MINED 2026-08-03 (second pass)**
 
-> Re-mined after the renderer audit in
-> `audit/TokenList/renderer-claude-opus-5.md`. Both artifacts moved: the renderer
-> was substantially rewritten, and the registry's creation code embeds the
-> renderer address as a constructor argument, so the registry's salt is invalid
-> whenever the renderer's is. Salts, addresses, initcode and calldata below are
-> all regenerated from the current tree.
+> Re-mined after `TokenListLens` split ranking, rank-paging and search off the
+> registry. That move was not tidying: it is what made the registry fit under
+> EIP-170 in every build configuration rather than only in one. See "Build
+> reproducibility" below for what went wrong and what fixed it.
 >
-> Verified by `test/TokenListMinedDeploy.t.sol`, which now DEPLOYS the recorded
-> payload through the real SafeSummoner on a mainnet fork, checks it lands at the
-> address below, and then applies the post-deploy route to the full eleven-entry
-> list. That test had been silently skipping — the artifacts were stale for long
-> enough that its own staleness guard suppressed it — which is how it came to
-> still assert an eleven-token constructor after seeding was cut to four. It runs
-> and passes now; a skip here means the artifacts have drifted again.
->
-> Both addresses carry three leading zero bytes, the same target the previous
-> pair was mined for. Re-mine for four if a longer prefix is wanted — expect
-> hours rather than the seconds each of these took.
+> All three artifacts are regenerated from the current tree and verified by
+> `test/TokenListMinedDeploy.t.sol`, which deploys the recorded payload through
+> the real SafeSummoner on a mainnet fork, checks it lands at the address below,
+> wires the renderer, and applies the post-deploy route to the full eleven-entry
+> list. 108 tests pass from a clean build with nothing skipped.
 >
 > NOTE ON MINING: `script/mine_create2_salt.js` allocated a native keccak object
 > per iteration, so worker throughput decayed from 0.13M to 0.02M iter/sec and the
-> process died partway through long runs. Fixed in this change; a 3-byte prefix
-> now takes seconds. The script still prints a `napi_create_reference` FATAL
-> during teardown AFTER reporting a verified result — cosmetic, but it means the
-> exit code is not a reliable success signal. Read the `FOUND:` block.
+> process died partway through long runs. Fixed; these three took 62 s, 22 s and
+> 8 s. The script still prints a `napi_create_reference` FATAL during teardown
+> AFTER reporting a verified result — cosmetic, but the exit code is not a
+> reliable success signal. Read the `FOUND:` block.
 
-Frozen deterministic build targets for the token registry and its card renderer,
-derived from the exact recorded initcode and salts below. These are build targets,
-not evidence of mainnet deployment or of present address vacancy. Before deploying,
-require `eth_getCode(expectedAddress) == 0x`, simulate the exact calldata, and
-verify the receipt and runtime code afterward.
+## Build reproducibility
 
-## BUILD REPRODUCIBILITY — BLOCKING
-
-`TokenList`'s compiled size depends on WHICH OTHER FILES ARE IN THE BUILD, not
-only on the settings. Under `via_ir`, including the test suite puts the registry
-in a different compilation unit and the IR optimizer makes different decisions:
+Under `via_ir`, a contract compiles differently depending on which other files
+share its compilation unit. Identical source at identical settings, built two
+ways:
 
 | Command (from clean `out/`) | `TokenList` runtime |
 | --- | ---: |
-| `forge build src/utils/TokenList.sol src/utils/TokenListRenderer.sol` | 23,939 (fits) |
-| `forge build` / `forge test` | **24,817 — EXCEEDS EIP-170** |
+| `forge build src/utils/TokenList.sol src/utils/TokenListRenderer.sol src/utils/TokenListLens.sol` | 22,167 |
+| `forge build` / `forge test` | 21,275 |
 
-Three consequences, all bad:
+Roughly 900 B apart, and before the lens split the larger of the two was **24,811
+— over EIP-170**. Foundry does not enforce the limit inside tests, so the suite
+passed against a variant mainnet would have rejected, while the shipped artifact
+came from the other build and fit. Three things were wrong at once: a fresh clone
+could not produce a deployable registry, the tests validated bytecode that was not
+the deployed bytecode, and `TokenListMinedDeploy` compared the recorded initcode
+against `vm.getCode` — so under a full build it always mismatched and skipped
+itself, silently, for long enough to hide a stale assertion of its own.
 
-1. A fresh clone's default build produces a registry that **cannot be deployed at
-   all**. Foundry does not enforce EIP-170 inside tests, so the suite passes
-   against a variant that mainnet would reject.
-2. The suite therefore validates bytecode 872 B different from what ships. Green
-   tests on a fresh CI say nothing about the recorded payload.
-3. `test/TokenListMinedDeploy.t.sol` compares the recorded initcode against
-   `vm.getCode`, which in a full build returns the 24,817 variant — so it skips
-   itself on a fresh clone and the deploy package goes unverified exactly where
-   verification matters most.
+Resolved on all three counts:
 
-The recorded artifacts here ARE self-consistent: they were built with the isolated
-command, and `TokenListMinedDeploy` deploys those exact bytes through the real
-SafeSummoner on a mainnet fork, lands at the address below, wires the renderer and
-reaches the full eleven-entry list. That passes only when `out/` holds the isolated
-build.
+1. **Margin, not a build flag.** Ranking, rank-paging and search moved to
+   `TokenListLens`. The registry now fits in EVERY configuration — worst case
+   22,167 against 24,576, so 2,409 B spare. Lowering `max_optimizer_runs` was
+   tried first and does not help: 1, 10 and 20 all produced ~24,817.
+2. **The canonical build is the isolated one** (first row above). A deterministic
+   artifact should be a function of the source it deploys, not of every unrelated
+   file in the repo — under a full build, adding any test anywhere would move the
+   bytecode and silently invalidate a mined salt.
+3. **The staleness guard asks about the source, not the build.**
+   `deploy/TokenList.sources.txt` records the keccak of each source file the salts
+   were mined for, and `TokenListMinedDeploy` compares against that. It now runs
+   under both build modes and skips only when the source has genuinely drifted.
 
-This is the same class of defect as B-01 in `audit/TokenList/gpt5.6-sol-pro.md`:
-apparent headroom that is an artifact of a build setting rather than real margin.
-Lowering `max_optimizer_runs` does not help — 1, 10 and 20 all produce ~24,817 in
-the full build. The registry needs to actually shrink, or the build needs to
-guarantee a stable compilation unit, before this package is safe to deploy.
-
-## Fixed deployment context
+## Fixed deployment context## Fixed deployment context
 
 | Item | Value |
 | --- | --- |
@@ -93,35 +78,38 @@ and hands unrelated contracts Circle's branding. See audit finding M-05.
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
-| TokenListRenderer | NOT DEPLOYED | `0x000000F2CcbE111146ec4aa17c76BC1eCBa4f7C6` | `0x000000…0171eb16` | `0x6b8c29a0…b02fefc4` | 14,974 | 14,948 |
-| TokenList | NOT DEPLOYED | `0x000000e852c6513458C6ea2F99916d513E77edF9` | `0x000000…004803cc` | `0xf1c93fcd…bdc2b0c3` | 37,223 | 23,939 |
+| TokenListRenderer | NOT DEPLOYED | `0x00000087fee5Af18afE38a885ecDb939b1F92598` | `0x000000…00dec008` | `0x8020e970…178723e5` | 14,974 | 14,948 |
+| TokenListLens | NOT DEPLOYED | `0x0000007303EEc21C1ee953D90aD9486965825D77` | `0x000000…00d71fc7` | `0x47361379…58506b7a` | 4,243 | 4,217 |
+| TokenList | NOT DEPLOYED | `0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1` | `0x000000…01268730` | `0x91dac2a7…8afc2702` | 35,451 | 22,167 |
 
-Both runtimes are under EIP-170 (24,576 B) and both creation payloads are under
-EIP-3860 (49,152 B). `TokenListRenderer` retains 9,628 B of runtime headroom.
-`TokenList` retains **637 B** — measured, not inherited: the previous record here
-claimed 2,865 B, which was stale by a factor of four and predated changes that had
-already landed in the tree. Adding a seed or a large SVG needs a size check before
-it is accepted, and so does any fix to the registry itself, which is not
-upgradeable.
+All three runtimes are under EIP-170 (24,576 B) and all three creation payloads
+are under EIP-3860 (49,152 B). Headroom, measured against the LARGER of the two
+build modes above, which is the number that matters:
 
-Deployment gas, measured per transaction against EIP-7825's 16,777,216 cap —
-these deploy as TWO transactions, so the cap applies to each separately:
+| Contract | Worst-case runtime | Headroom |
+| --- | ---: | ---: |
+| `TokenList` | 22,167 | 2,409 |
+| `TokenListRenderer` | 15,050 | 9,526 |
+| `TokenListLens` | 4,217 | 20,359 |
+
+The registry's 2,409 B is the one to watch: it is not upgradeable, so that is the
+entire budget for ever shipping a security fix. The renderer and the lens can both
+be replaced, which is why the split put the replaceable work on their side of the
+line. Adding a seed or a large SVG needs a size check before it is accepted.
+
+Deployment gas, measured per transaction against EIP-7825's 16,777,216 cap. These
+deploy as separate transactions, so the cap applies to each one on its own:
 
 | Transaction | Gas |
 | --- | ---: |
 | `TokenListRenderer` | 3,049,658 |
-| `TokenList` (four seeded cards) | 12,947,134 |
-
-BUILD HAZARD: `src/dao/ZorgTokenListLens.sol` imports `TokenList`, and building it
-compiles the registry at 200 runs, producing a 24,811 B artifact that EXCEEDS
-EIP-170. That file is not on this branch, but if it lands, whichever artifact was
-written last wins in `out/`. Always build the registry alone and confirm
-`optimizer.runs == 20` in the artifact metadata before mining or deploying.
+| `TokenList` (four seeded cards) | 12,237,337 |
+| `TokenListLens` | well under; no constructor, no storage |
 
 Full values:
 
-- `deploy/TokenListRenderer.salt.txt` — `0x000000000000000000000000000000000000000000000000000000000171eb16`
-- `deploy/TokenList.salt.txt` — `0x00000000000000000000000000000000000000000000000000000000004803cc`
+- `deploy/TokenListRenderer.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000000dec008`
+- `deploy/TokenList.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000001268730`
 
 ## DEPLOY THE RENDERER FIRST
 
@@ -133,22 +121,32 @@ renderer that lands anywhere other than the address above, invalidates
 
 ```
 1. create2Deploy(TokenListRenderer.creation, TokenListRenderer.salt)
-   -> expect 0x000000F2CcbE111146ec4aa17c76BC1eCBa4f7C6
+   -> expect 0x00000087fee5Af18afE38a885ecDb939b1F92598
    -> require code.length > 0 before continuing
 
 2. create2Deploy(TokenList.creation, TokenList.salt)
-   -> expect 0x000000e852c6513458C6ea2F99916d513E77edF9
+   -> expect 0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1
+
+3. create2Deploy(TokenListLens.creation, TokenListLens.salt)   [any time]
+   -> expect 0x0000007303EEc21C1ee953D90aD9486965825D77
 ```
 
 The constructor reverts `BadInput()` if the renderer address has no code, so step 2
 cannot silently succeed against a missing renderer — but it will consume gas and
 fail, so confirm step 1 first.
 
+Step 3 has no ordering constraint at all. `TokenListLens` is stateless and takes
+the registry as a call parameter rather than a constructor argument, so its salt
+does not depend on either address above, and one deployment serves every
+`TokenList` on every chain. That is deliberate: the renderer/registry coupling
+already means mining one wrong invalidates both, and extending that chain to a
+third contract would have bought nothing.
+
 ## Constructor arguments (TokenList)
 
 ```
 initialOwner  0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2
-renderer_     0x000000F2CcbE111146ec4aa17c76BC1eCBa4f7C6
+renderer_     0x00000087fee5Af18afE38a885ecDb939b1F92598
 
 abi-encoded tail (already appended to TokenList.creation.txt):
 0x000000000000000000000000006cd14f36f65ecbb29b2519ccbe63a0dc8549f2

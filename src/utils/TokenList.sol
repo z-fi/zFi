@@ -5,7 +5,6 @@ import {TokenListRenderer} from "./TokenListRenderer.sol";
 import {ERC721} from "../../lib/solady/src/tokens/ERC721.sol";
 import {Ownable} from "../../lib/solady/src/auth/Ownable.sol";
 import {Base64} from "../../lib/solady/src/utils/Base64.sol";
-import {LibSort} from "../../lib/solady/src/utils/LibSort.sol";
 import {LibString} from "../../lib/solady/src/utils/LibString.sol";
 import {Multicallable} from "../../lib/solady/src/utils/Multicallable.sol";
 import {MetadataReaderLib} from "../../lib/solady/src/utils/MetadataReaderLib.sol";
@@ -806,44 +805,36 @@ contract TokenList is ERC721, Ownable, Multicallable {
         return _extraKeys[id];
     }
 
-    // NOTE: no `getMany(ids)`, for the same reason as `page()` below: `Multicallable`
-    // already batches `get(id)` over an ARBITRARY set in one eth_call, which is
-    // strictly more flexible than any fixed wrapper, and `summariesPaged` covers the
-    // contiguous case without the unbounded fields.
+    // NOTE: no `getMany(ids)`. `Multicallable` already batches `get(id)` over an
+    // ARBITRARY set in one eth_call, which is strictly more flexible than any fixed
+    // wrapper, and `summariesPaged` covers the contiguous case without the unbounded
+    // fields.
 
-    /// @notice A page of ranked ids alone, highest rank first.
-    /// @dev The read a dapp should actually build a list from. `rankedIds` returns
-    ///      every id at once, and a whole-struct page would be worse still — a logo
-    ///      can be 24 KB of base64, so a 20-row page of those is megabytes of
-    ///      returndata and hits provider `eth_call` limits long before the list feels
-    ///      large. That is why there is no struct-page read here at all.
-    ///      Page ids here, then batch `get`/`json` through `Multicallable` for exactly
-    ///      the rows on screen.
-    function rankedIdsPaged(uint256 start, uint256 count) public view returns (uint256[] memory out) {
-        uint256[] memory ranked = rankedIds();
-        if (start >= ranked.length) return out;
-        uint256 rest = ranked.length - start;
-        uint256 n = count < rest ? count : rest;
-        out = new uint256[](n);
-        for (uint256 i; i < n; ++i) {
-            out[i] = ranked[start + i];
-        }
-    }
-
-    /// @notice A page of listings WITHOUT the heavy fields, highest rank first.
-    /// @dev Everything a dropdown, a token picker or a scroll list renders, and none
-    ///      of what makes a whole-struct page unsafe at scale: no logo, no
-    ///      description, no links. Bounded per row, so a page has a predictable size.
+    /// @notice A page of listings WITHOUT the heavy fields, in LISTING order.
+    /// @dev The one bounded read everything else composes from, and the reason the
+    ///      registry needs no sort of its own. Everything a dropdown, a token picker
+    ///      or a scroll list renders, and none of what makes a whole-struct page
+    ///      unsafe at scale: no logo, no description, no links. Bounded per row, so a
+    ///      page has a predictable size.
+    ///
+    ///      LISTING ORDER, NOT RANK ORDER. Ranking, rank-paging and search moved to
+    ///      `TokenListLens`, which builds all three on top of this function. They are
+    ///      pure views over data this contract already exposes, so keeping them here
+    ///      bought nothing and cost EIP-170 headroom the registry cannot get back —
+    ///      it is not upgradeable, and it has to retain room to ship a security fix.
+    ///      A lens can be redeployed; this cannot. Each row carries its own `rank`,
+    ///      so a caller that wants rank order has everything it needs.
     function summariesPaged(uint256 start, uint256 count) public view returns (Summary[] memory out) {
-        uint256[] memory ranked = rankedIds();
-        if (start >= ranked.length) return out;
-        uint256 rest = ranked.length - start;
+        uint256 total_ = _ids.length;
+        if (start >= total_) return out;
+        uint256 rest = total_ - start;
         uint256 n = count < rest ? count : rest;
         out = new Summary[](n);
         for (uint256 i; i < n; ++i) {
-            Token storage t = _tokens[ranked[start + i]];
+            uint256 id = _ids[start + i];
+            Token storage t = _tokens[id];
             out[i] = Summary(
-                ranked[start + i],
+                id,
                 t.account,
                 t.chainId,
                 t.decimals,
@@ -898,46 +889,6 @@ contract TokenList is ERC721, Ownable, Multicallable {
 
     function themeOf(address token) public view returns (uint24, string memory) {
         return themeOf(idFor(token));
-    }
-
-    /// @notice Every listing id, highest rank first, ties broken by listing order.
-    /// @dev Packs rank and index into one word so a single sort orders both keys.
-    ///      Intended for `eth_call`; a dapp reads this once and pages the result.
-    function rankedIds() public view returns (uint256[] memory out) {
-        uint256 n = _ids.length;
-        uint256[] memory keys = new uint256[](n);
-        for (uint256 i; i < n; ++i) {
-            keys[i] = (uint256(_tokens[_ids[i]].rank) << 32) | (n - 1 - i);
-        }
-        LibSort.sort(keys);
-        LibSort.reverse(keys);
-        out = new uint256[](n);
-        for (uint256 i; i < n; ++i) {
-            out[i] = _ids[n - 1 - (keys[i] & 0xffffffff)];
-        }
-    }
-
-    /// @notice Case-insensitive substring search over symbol and name.
-    /// @dev View-only and linear; the list is curated, so it stays small enough that
-    ///      an exact index would cost more to maintain than this costs to run.
-    function search(string calldata query, uint256 limit) public view returns (uint256[] memory out) {
-        string memory needle = LibString.lower(query);
-        uint256 n = _ids.length;
-        // Bounded by the answer the caller asked for, not by the list size. A search
-        // capped at 10 rows had been allocating (and zeroing) one word per listing.
-        uint256[] memory hits = new uint256[](limit < n ? limit : n);
-        uint256 found;
-        for (uint256 i; i < n && found < limit; ++i) {
-            uint256 id = _ids[i];
-            Token storage t = _tokens[id];
-            if (LibString.lower(t.symbol).contains(needle) || LibString.lower(t.name).contains(needle)) {
-                hits[found++] = id;
-            }
-        }
-        out = hits;
-        assembly ("memory-safe") {
-            mstore(out, found)
-        }
     }
 
     // NOTE: there is deliberately no `page()` returning a JSON array. `Multicallable`
