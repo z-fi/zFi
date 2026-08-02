@@ -826,6 +826,13 @@ function ppBuildDepositedEventFilter(poolAddress, fromBlock, toBlock) {
   return { address: poolAddress, topics: [PP_POOL_EVENTS.getEvent('Deposited').topicHash], fromBlock, toBlock };
 }
 
+// Event caches are keyed per pool so historical pools keep their own snapshot.
+// Every reader must build the key the same way or a cache miss silently reads
+// as "this pool has no deposits".
+function ppEventCacheKey(asset, poolAddress) {
+  return poolAddress ? asset + ':' + String(poolAddress).toLowerCase() : asset;
+}
+
 function ppGetCachedPoolEventLogs(asset, includeLeaves = false) {
   const cached = _ppwEventCache[asset];
   if (!cached) return null;
@@ -1465,10 +1472,12 @@ function ppLoadCachedEventLogs(asset) {
 function ppSlimLogEntry(l) { return { topics: l.topics, data: l.data, transactionHash: l.transactionHash, blockNumber: l.blockNumber, logIndex: l.index ?? l.logIndex ?? null }; }
 
 function ppDropCachedEventLogs(asset) {
-  // Drop caches for the asset key and all known pool-specific compound keys
-  const keys = [asset];
-  for (const { pool } of ppGetKnownPools(asset)) {
-    keys.push(asset + ':' + pool.toLowerCase());
+  // Drop caches for the given key plus the asset key and all known
+  // pool-specific compound keys. `asset` may already be a compound key.
+  const baseAsset = String(asset).split(':')[0];
+  const keys = [asset, baseAsset];
+  for (const { pool } of ppGetKnownPools(baseAsset)) {
+    keys.push(ppEventCacheKey(baseAsset, pool));
   }
   for (const k of keys) {
     try { localStorage.removeItem(PP_EVENT_CACHE_STORAGE_PREFIX + k); } catch {}
@@ -1500,7 +1509,7 @@ async function ppFetchPoolEventLogs(asset, includeLeaves = false, { poolAddress:
   const latestBlock = await ppReadWithRpc((rpc) => rpc.getBlockNumber());
   const poolAddress = explicitPool || ppGetPoolAddress(asset);
   const deployBlock = explicitDeployBlock || PP_DEPLOYMENT_BLOCKS[asset] || PP_DEPLOYMENT_BLOCKS.ETH;
-  const cacheKey = explicitPool ? (asset + ':' + explicitPool.toLowerCase()) : asset;
+  const cacheKey = ppEventCacheKey(asset, explicitPool);
   if (!_ppwEventCache[cacheKey]) _ppwEventCache[cacheKey] = ppLoadCachedEventLogs(cacheKey);
   const cached = _ppwEventCache[cacheKey] || null;
   const baseUpToBlock = cached?.upToBlock;
@@ -1583,7 +1592,10 @@ async function ppResolveNextSafeDepositIndex(address, asset, scope, keys) {
   // Always derive the next safe slot from recovered account history.
   // Local cached indices can drift across browsers, migrations, or other clients.
   try {
-    const { depositLogs, withdrawnLogs, ragequitLogs } = await ppFetchPoolEventLogs(asset, false);
+    // Share the loader's per-pool cache key so this does not refetch the whole
+    // history from the deploy block on every deposit.
+    const poolAddress = ppGetPoolAddress(asset);
+    const { depositLogs, withdrawnLogs, ragequitLogs } = await ppFetchPoolEventLogs(asset, false, { poolAddress });
     const depositEvents = ppBuildDepositEventsMap(depositLogs);
     const withdrawnMap = ppBuildWithdrawnEventsMap(withdrawnLogs);
     const ragequitMap = ppBuildRagequitEventsMap(ragequitLogs);
@@ -2229,9 +2241,13 @@ const PP_ERC20_APPROVE_ABI = ['function approve(address,uint256) returns (bool)'
 const PP_ERC20_APPROVE_IFACE = new ethers.Interface(PP_ERC20_APPROVE_ABI);
 const PP_DEPOSIT_GAS_BUFFER_BPS = 15000n; // 50% safety buffer
 const PP_DEPOSIT_NATIVE_DUST_BUFFER = 1_000000000000000n; // 0.001 ETH
-const PP_DEPOSIT_NATIVE_FALLBACK_GAS_RESERVE = 1_500000000000000n; // 0.0015 ETH
-const PP_DEPOSIT_ERC20_FALLBACK_GAS_RESERVE = 2_000000000000000n; // 0.002 ETH (approve + deposit)
-const PP_DEPOSIT_ZAP_FALLBACK_GAS_RESERVE = 3_000000000000000n; // 0.003 ETH (swap + approve + deposit)
+// Fallbacks used when gas estimation is unavailable. A Privacy Pools deposit
+// costs ~350k gas (Poseidon hashing + Merkle insert), so these must cover a
+// realistic worst case or the CTA lets a deposit through that leaves nothing
+// for gas.
+const PP_DEPOSIT_NATIVE_FALLBACK_GAS_RESERVE = 12_000000000000000n; // 0.012 ETH (~400k gas @ 30 gwei)
+const PP_DEPOSIT_ERC20_FALLBACK_GAS_RESERVE = 15_000000000000000n; // 0.015 ETH (approve + deposit)
+const PP_DEPOSIT_ZAP_FALLBACK_GAS_RESERVE = 25_000000000000000n; // 0.025 ETH (swap + approve + deposit)
 
 function ppGetDepositInputAsset() {
   return _ppZapMode ? 'ETH' : _ppSelectedAsset;
@@ -5980,7 +5996,7 @@ async function ppwFetchPoolEventsWithCacheFallback(asset) {
   const knownPools = ppGetKnownPools(asset);
   const poolFetches = knownPools.map(({ pool, deployBlock }) =>
     ppFetchPoolEventLogs(asset, true, { poolAddress: pool, deployBlock }).catch((e) => {
-      const cacheKey = knownPools.length > 1 ? (asset + ':' + pool.toLowerCase()) : asset;
+      const cacheKey = ppEventCacheKey(asset, pool);
       const cached = ppGetCachedPoolEventLogs(cacheKey, true);
       console.warn(`Load: failed to fetch ${asset} events for pool ${pool.slice(0, 10)}...:`, e);
       return {
@@ -6665,7 +6681,7 @@ async function ppwSimulateRagequitOnchain(poolAddress, pA, pB, pC, pubSigs) {
 }
 
 async function ppwParseChangeLeafIndex(receipt, poolAddress, expectedChangeCommitment, scope) {
-  for (const rlog of receipt.logs) {
+  for (const rlog of receipt?.logs || []) {
     try {
       if (rlog.address.toLowerCase() !== poolAddress.toLowerCase()) continue;
       const parsed = PP_POOL_EVENTS.parseLog({ topics: rlog.topics, data: rlog.data });
@@ -7534,7 +7550,7 @@ async function ppwSubmitWithdrawal(job, proofState, quoteState, run) {
   return { txHash, receipt, tx };
 }
 
-async function ppwFinalizeWithdrawalSuccess(_receipt, job, _proofState, submission, run) {
+async function ppwFinalizeWithdrawalSuccess(receipt, job, _proofState, submission, run) {
   run.setProgressStage('complete', _ppwMode);
   run.logHtml('<b>Withdrawal confirmed!</b> ' + ppwEscapeStatusLogText(fmt(ppFormatAmountWei(job.intent.withdrawnValue, job.intent.wAsset))) + ' ' + ppwEscapeStatusLogText(job.assetUnit) + ' sent to ' + ppwEscapeStatusLogText(job.intent.recipient.slice(0, 10)) + '...' + (job.intent.isRelayMode ? ' (via relay)' : ' (direct, no privacy benefit)'));
   _ppwReviewedRelayQuote = null;

@@ -1004,6 +1004,9 @@ test('accountsChanged with empty accounts array disconnects wallet', async () =>
   assert.equal(harness.context._connectedAddress, CONNECTED_ADDRESS);
 
   harness.eventHandlers.accountsChanged([]);
+  // Empty accounts are re-checked after a 500ms debounce before disconnecting,
+  // so wait past that window rather than only flushing microtasks.
+  await new Promise((resolve) => setTimeout(resolve, 700));
   await flushMicrotasks();
 
   assert.equal(harness.context._connectedAddress, null, 'address cleared');
