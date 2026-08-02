@@ -346,52 +346,109 @@ input {
 .links-row a:hover { color:var(--fg); }
 
 /* Proposals */
+/* The drawer body itself is flush (the holders table wants that); this list is
+   prose and cards, so it needs a gutter. */
+#proposalsContent { padding:4px 14px 14px; }
+/* Section heads carry a rule that runs to the right edge, so Discussion and
+   Proposals read as two bands rather than two paragraphs of small caps. */
 .prop-sec-head {
-  display:flex;align-items:center;gap:6px;margin:16px 0 6px;padding-top:12px;
-  border-top:1px solid var(--border-muted);
-  font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-dim);
+  display:flex;align-items:center;gap:8px;margin:22px 0 8px;
+  font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-muted);
 }
-.prop-sec-head.prop-sec-first { margin-top:0;padding-top:0;border-top:none; }
+.prop-sec-head.prop-sec-first { margin-top:2px; }
+.prop-sec-head::after {
+  content:'';flex:1;height:1px;background:var(--border-muted);
+}
 .prop-sec-head span {
-  font-size:9px;padding:1px 5px;border-radius:8px;background:var(--surface);color:var(--fg-muted);
+  font-size:9px;padding:1px 6px;border-radius:8px;border:1px solid var(--border-muted);
+  color:var(--fg-dim);font-variant-numeric:tabular-nums;letter-spacing:0.04em;
 }
-.prop-chat-list { margin-bottom:2px; }
+.prop-chat-list { margin-bottom:4px; }
+/* A message is a row, not a card: the thread should read top-to-bottom without
+   fifteen boxes competing with the proposal cards below it. */
 .prop-chat-item {
-  display:flex;gap:8px;padding:7px 0;font-size:12px;line-height:1.55;color:var(--fg-muted);
-  border-bottom:1px solid var(--border-muted);cursor:pointer;
+  display:flex;gap:10px;padding:8px 8px 8px 6px;margin:0 -8px 0 -6px;border-radius:6px;
+  font-size:12px;line-height:1.6;color:var(--fg-muted);
+  border-bottom:1px solid var(--border-muted);
+  transition:background 0.15s ease;
 }
 .prop-chat-item:last-child { border-bottom:none; }
+.prop-chat-item:hover { background:var(--surface); }
 .prop-chat-item:hover .prop-chat-body { color:var(--fg); }
 .prop-chat-idx {
-  flex:none;width:26px;color:var(--fg-dim);font-size:10px;padding-top:3px;
-  font-variant-numeric:tabular-nums;
+  flex:none;min-width:24px;color:var(--fg-dim);font-size:10px;padding-top:4px;
+  font-variant-numeric:tabular-nums;text-align:right;
 }
+.prop-chat-main { flex:1;min-width:0; }
 /* Long updates are common here; clamp them so the proposals below stay reachable
-   without nesting a scrollbar inside the drawer. Click expands. */
+   without nesting a scrollbar inside the drawer. */
 .prop-chat-body {
   white-space:pre-wrap;overflow-wrap:anywhere;transition:color 0.15s ease;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
-.prop-chat-item.open .prop-chat-body { -webkit-line-clamp:unset;overflow:visible; }
+/* The clamp only fades when there is genuinely more text, so a three-line message
+   does not look truncated. `has-more` is set after measuring. */
+.prop-chat-main.has-more:not(.open) .prop-chat-body {
+  -webkit-mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+.prop-chat-main.open .prop-chat-body { -webkit-line-clamp:unset;overflow:visible; }
+.prop-more {
+  margin-top:4px;padding:0;background:none;border:none;font:inherit;font-size:10px;
+  letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
+  opacity:0.7;transition:opacity 0.15s;
+}
+.prop-more:hover, .prop-more:focus-visible { opacity:1;color:var(--fg-muted); }
+.prop-showall {
+  display:block;width:100%;margin-top:8px;padding:8px;background:none;
+  border:1px dashed var(--border-muted);border-radius:6px;font:inherit;font-size:10px;
+  letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
+  transition:color 0.15s, border-color 0.15s;
+}
+.prop-showall:hover { color:var(--fg-muted);border-color:var(--fg-dim); }
 
-.prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
-.prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
-.prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word; }
+.prop-item {
+  position:relative;padding:12px 12px 12px 14px;border:1px solid var(--border-muted);
+  border-radius:8px;margin-bottom:8px;background:var(--surface);
+  transition:border-color 0.15s ease;
+}
+.prop-item:hover { border-color:var(--fg-dim); }
+/* One proposal is live at a time and it is the only one a reader can still act on:
+   give it an accent rail so it is findable in a list of fifteen settled ones. */
+.prop-item.is-active { border-color:var(--green); }
+.prop-item.is-active::before {
+  content:'';position:absolute;left:0;top:-1px;bottom:-1px;width:3px;
+  background:var(--green);border-radius:8px 0 0 8px;
+}
+.prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:10px; }
+.prop-desc { font-size:13px;font-weight:500;flex:1;min-width:0;word-break:break-word;line-height:1.55; }
+.prop-desc-body { display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden; }
+.prop-desc-body.clamped {
+  -webkit-line-clamp:3;
+  -webkit-mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+}
 .prop-state { font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;font-weight:600; }
 .prop-state.executed { border-color:var(--fg-dim);color:var(--fg-dim);background:var(--surface-hover); }
 .prop-state.active { border-color:var(--green);color:var(--green);background:var(--status-success); }
 .prop-state.succeeded,.prop-state.queued { border-color:var(--green);color:var(--green);background:var(--status-success); }
 .prop-state.defeated,.prop-state.expired { border-color:var(--red);color:var(--red);background:var(--status-error); }
 .prop-state.unopened { border-color:var(--fg-dim);color:var(--fg-dim); }
-.prop-votes { display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--fg-muted); }
+.prop-votes { display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px;font-size:11px;color:var(--fg-muted);font-variant-numeric:tabular-nums; }
 .prop-votes .for { color:var(--green); }
 .prop-votes .against { color:var(--red); }
-.prop-bar { position:relative;height:4px;border-radius:2px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
-.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--fg-muted);opacity:0.9; }
-.prop-turnout { margin-left:auto;color:var(--fg-dim); }
+/* A tally of zero is context, not a result — keep it readable but out of the way. */
+.prop-votes .zero { opacity:0.45; }
+.prop-bar { position:relative;height:5px;border-radius:3px;background:var(--border-muted);margin-top:8px;overflow:hidden;display:flex; }
+/* The quorum threshold is the number that decides the proposal, so it outranks the
+   tally visually. At a 5% quorum it sits near the left edge and a 1px hairline was
+   indistinguishable from the vote sliver beside it. */
+.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:0.8;border-radius:1px; }
+.prop-turnout { margin-left:auto;color:var(--fg-dim);white-space:nowrap; }
+.prop-turnout.met { color:var(--green); }
 .prop-clock { color:var(--fg-muted);font-variant-numeric:tabular-nums; }
 .prop-clock-ready { color:var(--green); }
-.prop-id { float:right;opacity:0.55;font-variant-numeric:tabular-nums; }
+.prop-id { margin-left:auto;opacity:0.55;font-variant-numeric:tabular-nums; }
 .stat-row-nav { border-top:1px solid var(--border-muted);margin-top:4px;padding-top:8px; }
 /* Derived treasury analysis — understated, collapsed by default */
 .stat-reveal { display:flex;align-items:center;gap:5px;width:100%;padding:7px 0 2px;margin-top:2px;background:none;border:none;font:inherit;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;opacity:0.65;transition:opacity 0.15s; }
@@ -399,11 +456,16 @@ input {
 .stat-reveal > span { font-size:9px; }
 .stat-reveal-body[hidden] { display:none; }
 .coin-desc-inline { margin:0 0 14px;font-size:13px;line-height:1.6;color:var(--fg-muted); }
-.prop-bar-for { background:var(--green); }
-.prop-bar-against { background:var(--red); }
-.prop-bar-abstain { background:var(--fg-dim); }
-.prop-meta { font-size:10px;color:var(--fg-dim);margin-top:4px; }
+/* A real but tiny vote (0.6% of supply) rounds to a sub-pixel sliver and reads as
+   "nobody voted". Non-zero tallies are emitted only when non-zero, so the floor
+   never manufactures a bar out of nothing. */
+.prop-bar-for { background:var(--green);min-width:2px; }
+.prop-bar-against { background:var(--red);min-width:2px; }
+.prop-bar-abstain { background:var(--fg-dim);min-width:2px; }
+.prop-meta { display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:10px;color:var(--fg-dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--border-muted); }
 .prop-meta a { color:var(--fg-dim); }
+.prop-meta a:hover { color:var(--fg-muted); }
+.prop-meta .sep { opacity:0.5; }
 
 .loading { text-align:center;padding:40px;color:var(--fg-muted);font-size:13px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -1788,6 +1850,24 @@ function toggleProposals() {
   }
 }
 
+// Hide everything past `keep` in a rendered list behind one "show all" button. The
+// hidden nodes stay in the DOM so countdowns and expanders wired elsewhere survive.
+function collapseList(root, selector, keep, label) {
+  const items = [...root.querySelectorAll(selector)];
+  if (items.length <= keep + 1) return;
+  const hidden = items.slice(keep);
+  hidden.forEach(el => { el.style.display = 'none'; });
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'prop-showall';
+  btn.textContent = `Show ${hidden.length} older ${label}`;
+  btn.addEventListener('click', () => {
+    hidden.forEach(el => { el.style.display = ''; });
+    btn.remove();
+  });
+  items[keep - 1].after(btn);
+}
+
 async function loadProposals(daoAddr) {
   const content = $('proposalsContent');
   if (!content) return;
@@ -1910,26 +1990,49 @@ async function loadProposals(daoAddr) {
         timeHTML = `<span class="prop-clock">Awaiting queue</span>`;
       }
 
-      propHtml += `<div class="prop-item">
+      // Long descriptions are clamped so one verbose proposal cannot bury the rest of
+      // the list. The threshold is roughly three lines at this width.
+      const isLong = desc.length > 180;
+
+      // "0.6% turnout / 5% quorum" makes the reader do the comparison that decides the
+      // proposal. State the verdict instead.
+      const quorumMet = quorumPct > 0 && turnoutPct >= quorumPct;
+      const turnoutText = quorumPct > 0
+        ? (quorumMet
+            ? `quorum met &middot; ${turnoutPct.toFixed(1)}% turnout`
+            : `${turnoutPct.toFixed(1)}% of ${quorumPct}% quorum`)
+        : `${turnoutPct.toFixed(1)}% turnout`;
+
+      const tally = (label, v, cls) =>
+        `<span class="${v > 0 ? '' : 'zero'}">${cls ? `<span class="${cls}">${label}</span>` : label} ${v.toLocaleString(undefined,{maximumFractionDigits:0})}</span>`;
+
+      const metaBits = [];
+      if (timeHTML) metaBits.push(timeHTML);
+      if (createdAt > 0) metaBits.push(`<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>`);
+      if (proposerShort) metaBits.push(`<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>`);
+
+      propHtml += `<div class="prop-item${state === 1 ? ' is-active' : ''}">
         <div class="prop-head">
-          <div class="prop-desc">${escText(desc)}</div>
+          <div class="prop-desc">
+            <div class="prop-desc-body${isLong ? ' clamped' : ''}">${escText(desc)}</div>
+            ${isLong ? `<button type="button" class="prop-more" data-prop-more>Show more</button>` : ''}
+          </div>
           <span class="prop-state ${stateClass}">${stateText}</span>
         </div>
         ${scale > 0 ? `<div class="prop-bar" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted${quorumPct > 0 ? ` &middot; ${quorumPct}% quorum` : ''}">
-          <div class="prop-bar-for" style="width:${w(forF)}%"></div>
-          <div class="prop-bar-against" style="width:${w(againstF)}%"></div>
-          <div class="prop-bar-abstain" style="width:${w(abstainF)}%"></div>
-          ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%"></div>` : ''}
+          ${forF > 0 ? `<div class="prop-bar-for" style="width:${w(forF)}%"></div>` : ''}
+          ${againstF > 0 ? `<div class="prop-bar-against" style="width:${w(againstF)}%"></div>` : ''}
+          ${abstainF > 0 ? `<div class="prop-bar-abstain" style="width:${w(abstainF)}%"></div>` : ''}
+          ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%" title="${quorumPct}% quorum"></div>` : ''}
         </div>` : ''}
         <div class="prop-votes">
-          <span><span class="for">For</span> ${forF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          <span><span class="against">Against</span> ${againstF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          <span>Abstain ${abstainF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          ${scale > 0 ? `<span class="prop-turnout">${turnoutPct.toFixed(1)}% turnout${quorumPct > 0 ? ` / ${quorumPct}% quorum` : ''}</span>` : ''}
+          ${tally('For', forF, 'for')}
+          ${tally('Against', againstF, 'against')}
+          ${tally('Abstain', abstainF, '')}
+          ${scale > 0 ? `<span class="prop-turnout${quorumMet ? ' met' : ''}" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted">${turnoutText}</span>` : ''}
         </div>
         <div class="prop-meta">
-          ${timeHTML ? `${timeHTML} &middot; ` : ''}${createdAt > 0 ? `<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>` : ''}
-          ${proposerShort ? `${createdAt > 0 || timeHTML ? ' &middot; ' : ''}<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>` : ''}
+          ${metaBits.join('<span class="sep">&middot;</span>')}
           <span class="prop-id" title="Proposal ID ${id.toString()}">#${shortId}</span>
         </div>
       </div>`;
@@ -1946,7 +2049,7 @@ async function loadProposals(daoAddr) {
       // Strip machine-readable tags; they are UI plumbing, not something to read.
       const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
       if (!body) continue;
-      chatHtml += `<div class="prop-chat-item" onclick="this.classList.toggle('open')" title="Click to expand"><span class="prop-chat-idx">#${Number(m.index)}</span><span class="prop-chat-body">${escText(body)}</span></div>`;
+      chatHtml += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span><div class="prop-chat-main"><div class="prop-chat-body">${escText(body)}</div></div></div>`;
     }
 
     // Chat first: it is what someone opening the drawer is here to read, and it dates the
@@ -1959,8 +2062,41 @@ async function loadProposals(daoAddr) {
     }
     html += `<div class="prop-sec-head${chatHtml ? '' : ' prop-sec-first'}">Proposals <span>${proposals.length}</span></div>`;
     html += propHtml;
-    html += `<div style="text-align:center;margin-top:10px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
+    html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
+
+    // Wired after render because the list is rebuilt wholesale via innerHTML, which
+    // discards any handler attached to the previous nodes.
+
+    // A message only gets an expander if its text actually overflows the clamp —
+    // measured, because the text length that overflows depends on the rendered width.
+    content.querySelectorAll('.prop-chat-main').forEach(main => {
+      const body = main.querySelector('.prop-chat-body');
+      if (!body || body.scrollHeight <= body.clientHeight + 1) return;
+      main.classList.add('has-more');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'prop-more';
+      btn.textContent = 'Show more';
+      btn.addEventListener('click', () => {
+        btn.textContent = main.classList.toggle('open') ? 'Show less' : 'Show more';
+      });
+      main.appendChild(btn);
+    });
+
+    content.querySelectorAll('[data-prop-more]').forEach(btn => {
+      const body = btn.previousElementSibling;
+      if (!body) return;
+      btn.addEventListener('click', () => {
+        btn.textContent = body.classList.toggle('clamped') ? 'Show more' : 'Show less';
+      });
+    });
+
+    // Fifteen settled proposals push the live one off the screen and make the drawer
+    // scroll for a page. Show the recent ones, keep the rest one click away.
+    collapseList(content, '.prop-chat-item', 4, 'discussion messages');
+    collapseList(content, '.prop-item', 5, 'proposals');
+
     startPropCountdowns();
   } catch (e) {
     console.error('loadProposals error:', e);
