@@ -8885,6 +8885,14 @@ function renderQuickTokens() {
 let _activeTab = 'swap';
 function syncSwapURL() {
   if (_activeTab !== 'swap') return; // privacy tab syncs its own URL
+  // A deeplinked token that hasn't resolved yet must not be overwritten with
+  // whatever the default pair happens to be. Init fires handleAmountChange on
+  // a 50ms timer, well before the async token lists land, so ?to=link was
+  // being rewritten to ?to=zorg — and if the list never loaded (CDN blip,
+  // offline) the rewrite was permanent, with replaceState leaving no way back.
+  // _retryPendingDeeplinks() calls this again once the token resolves, and a
+  // manual pick in selectToken() clears the hold.
+  if (_pendingDeeplinkFrom || _pendingDeeplinkTo) return;
   const _sp = new URLSearchParams();
   _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
   if (_inputMode === 'exactOut') {
@@ -9067,6 +9075,11 @@ function closeTokenModal() {
 const reQuoteDebounced = debounce(handleAmountChange, 600);
 
 function selectToken(symbol) {
+  // The user has taken over from the deeplink, so stop holding the URL for a
+  // token that may never resolve — otherwise syncSwapURL's pending-guard would
+  // suppress every later URL update for the rest of the session.
+  _pendingDeeplinkFrom = null;
+  _pendingDeeplinkTo = null;
   // Track real selections in Recent. Skip the DAICO from-side rejection so it
   // doesn't pollute the list with a token the user couldn't actually pick.
   if (!(tokens[symbol]?._isDaicoCoin && currentModal === "from")) {
@@ -9206,7 +9219,18 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("DOMContentLoaded", () => {
   // If #coin/#send hash present (no PP query params), switch tab immediately and skip swap deeplinks
   const _dlTabHash = window.location.hash;
-  const _hasppParam = new URLSearchParams(window.location.search).has('pp');
+  // Only a `pp` value the privacy deeplink below can actually act on may
+  // suppress the hash. has('pp') was true for an empty or unrecognised value
+  // too, so ?pp=usdc#privacy fell through to the swap tab AND had its URL
+  // rewritten to the default pair — the link was destroyed, not just ignored.
+  // Retiring a PP asset broke every link ever shared for it the same way.
+  // An unusable value now takes the plain #privacy path: privacy tab, default
+  // asset.
+  const _ppQuery = new URLSearchParams(window.location.search).get('pp') || '';
+  const _ppQueryLower = _ppQuery.toLowerCase();
+  const _ppQueryNorm = _ppQueryLower === 'wsteth' ? 'wstETH'
+    : _ppQueryLower === 'zap' ? 'ZAP' : _ppQuery.toUpperCase();
+  const _hasppParam = !!_ppQuery && (_ppQueryNorm === 'ZAP' || _isPPAsset(_ppQueryNorm));
   if (!_hasppParam && (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send')) {
     // Capture query params BEFORE updateTokenDisplay() → syncSwapURL() clobbers them
     const _sp = new URLSearchParams(window.location.search);
