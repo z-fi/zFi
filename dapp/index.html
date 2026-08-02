@@ -9394,32 +9394,6 @@ $("swapBtn").addEventListener("click", () => {
 });
 
 
-walletInit({
-  appName: 'zFi',
-  onConnect: [() => {
-    updateBalances();
-    handleAmountChange();
-    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadSlowTransfers(); }
-    ppHandlePrivacyWalletConnected();
-  }],
-  onDisconnect: [() => {
-    setText('swapBtn', 'Connect Wallet');
-    setDisabled('swapBtn', false);
-    setText('fromBalance', 'Balance: --');
-    setText('toBalance', 'Balance: --');
-    setShown('quoteInfo', false);
-    stopQuoteRefresh();
-    $('toAmount').value = '';
-    _erc20Read.clear();
-    _balanceCache.clear();
-    _allowCache.clear();
-    _modalFetchAt = 0;
-    _modalFetchInFlight = null;
-    if (typeof sendHandleDisconnect === 'function') sendHandleDisconnect();
-    ppHandlePrivacyWalletDisconnected();
-  }]
-});
-
 </script>
 <script src="./modules/privacy-pools.js"></script>
 <script src="./modules/send.js"></script>
@@ -9467,6 +9441,37 @@ function switchTab(tab) {
 <script src="./modules/curve-registry.js"></script>
 <script src="./modules/coin.js"></script>
 <script src="./modules/auction.js"></script>
+<script>
+
+// Wallet init runs last: an eager reconnect fires onConnect synchronously off
+// the microtask queue, so every module it touches must already be evaluated.
+walletInit({
+  appName: 'zFi',
+  onConnect: [() => {
+    updateBalances();
+    handleAmountChange();
+    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadSlowTransfers(); }
+    ppHandlePrivacyWalletConnected();
+  }],
+  onDisconnect: [() => {
+    setText('swapBtn', 'Connect Wallet');
+    setDisabled('swapBtn', false);
+    setText('fromBalance', 'Balance: --');
+    setText('toBalance', 'Balance: --');
+    setShown('quoteInfo', false);
+    stopQuoteRefresh();
+    $('toAmount').value = '';
+    _erc20Read.clear();
+    _balanceCache.clear();
+    _allowCache.clear();
+    _modalFetchAt = 0;
+    _modalFetchInFlight = null;
+    if (typeof sendHandleDisconnect === 'function') sendHandleDisconnect();
+    ppHandlePrivacyWalletDisconnected();
+  }]
+});
+
+</script>
 <div id="ipfsFooter" style="display:none;text-align:center;padding:24px 12px 12px;font-size:11px;color:var(--fg-muted);opacity:0.6;word-break:break-all">
   ipfs: <span id="ipfsCid"></span>
 </div>
