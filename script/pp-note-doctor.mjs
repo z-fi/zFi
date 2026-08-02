@@ -273,8 +273,19 @@ async function main() {
           console.log(`        ^ MISMATCH: event history blames tx ${spentEvent.txHash} but the pool says this note is unspent.`);
         }
         if (spentEvent) {
+          // Only a withdrawal that happened after the deposit can belong to this
+          // note's chain; for an earlier one the "change" would be arithmetic on
+          // two unrelated notes, which reads as fact and is not.
+          const sameChain = spentEvent.blockNumber >= deposit.blockNumber;
           const change = deposit.value - spentEvent.value;
-          console.log(`        withdrawal tx ${spentEvent.txHash} value=${ethers.formatUnits(spentEvent.value, 18)} change=${ethers.formatUnits(change < 0n ? 0n : change, 18)}`);
+          console.log(
+            `        withdrawal tx ${spentEvent.txHash} block=${spentEvent.blockNumber}` +
+            ` value=${ethers.formatUnits(spentEvent.value, 18)}` +
+            (sameChain ? ` change=${ethers.formatUnits(change < 0n ? 0n : change, 18)}` : '')
+          );
+          if (!sameChain) {
+            console.log(`        ^ that withdrawal PREDATES this deposit (block ${deposit.blockNumber}): the nullifier was already burned, so this note was never spendable.`);
+          }
         }
       }
     }
