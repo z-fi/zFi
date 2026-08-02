@@ -8015,6 +8015,28 @@ async function ppwPrepareProofJob(intent, state, quoteState, run) {
   } else {
     run.log('Downloading & verifying proving artifacts...');
     ({ wasmUrl, zkeyUrl } = await ppEnsureWithdrawArtifacts());
+  // Every withdrawal mints a change commitment, and it is unspendable if its
+  // nullifier is already burned — the same way a deposit is. Unlike the deposit
+  // case there is nothing to fall back to: the change index is fixed by this
+  // note's lineage, so refuse rather than mint a note that can never be spent.
+  try {
+    const { isSpent: changeSpent } = await ppwCheckNullifierUnspent(intent.poolAddress, changeKeys.nullifier);
+    if (changeSpent) {
+      console.error('Privacy: change nullifier for index ' + changeIdx + ' is already spent onchain; refusing to mint an unspendable change note.');
+      showStatus(
+        'Cannot withdraw safely: the change note this withdrawal would create is already spent onchain. ' +
+        'Withdraw the full amount instead, or contact support before retrying.',
+        'error',
+      );
+      run.log('Aborted: change nullifier at index ' + changeIdx + ' is already burned.');
+      return null;
+    }
+  } catch (changeCheckErr) {
+    console.warn('Privacy: could not verify the change nullifier is unspent', changeCheckErr);
+    showStatus('Could not verify the change note is safe to create. Retry when RPC connectivity is stable.', 'error');
+    return null;
+  }
+
     run.log('Artifacts verified & cached.');
   }
 
