@@ -1932,6 +1932,14 @@ async function searchDaicoCoins() {
 // The collector DAO holds the slot whenever the scan can see it; anything else only
 // gets it when the collector DAO is missing.
 const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
+// Its DAO metadata carries no image, and its phase-0 share sale is long closed — the
+// scan's sales[0] would report a stale "1.8 ETH raised / 100%". Shares now sell through
+// the continuous sale, so the live measures are whether that sale is open and how much
+// ETH backs the shares in the vault. Same icon and addresses the coin page uses.
+const FWC_ICON = 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico';
+const FWC_SALE = '0x824d11a46F32cd16cdF46380314343e9697e2491';
+const FWC_VAULT = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
+const FWC_SALE_IFACE = new ethers.Interface(['function paused() view returns (bool)']);
 async function loadLiveSale() {
   try {
     const daicos = await fetchDaicoScan();
@@ -1979,6 +1987,27 @@ async function loadLiveSale() {
         }
       } catch {}
     }
+    if (pinned && s.dao.toLowerCase() === DAICO_PINNED_DAO) {
+      s.icon = s.icon || FWC_ICON;
+      s.pct = 0;            // the closed phase-0 bar is not this DAO's progress
+      s.raisedETH = 0;
+      s.meta = 'Collector DAO';
+      try {
+        const rpc = new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
+        const res = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', await rpc.call({
+          to: MULTICALL3_ADDRESS,
+          data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [[
+            [MULTICALL3_ADDRESS, true, MULTICALL3_IFACE.encodeFunctionData('getEthBalance', [FWC_VAULT])],
+            [FWC_SALE, true, FWC_SALE_IFACE.encodeFunctionData('paused', [])],
+          ]])
+        }))[0];
+        const vaultEth = res[0].success
+          ? Number(ethers.formatEther(MULTICALL3_IFACE.decodeFunctionResult('getEthBalance', res[0].returnData)[0])) : 0;
+        const saleOpen = res[1].success && !FWC_SALE_IFACE.decodeFunctionResult('paused', res[1].returnData)[0];
+        s.meta = [saleOpen ? 'Sale open' : null, vaultEth > 0 ? vaultEth.toFixed(3) + ' ETH in vault' : null]
+          .filter(Boolean).join(' · ') || 'Collector DAO';
+      } catch {}
+    }
     const el = $('liveSalesSection');
     if (!el) return;
     const logo = s.icon
@@ -1990,7 +2019,7 @@ async function loadLiveSale() {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
-        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'}</div>
+        <div class="live-sale-meta">${esc(s.meta || (s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'))}</div>
       </div>
       ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
       <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
@@ -2148,10 +2177,12 @@ async function loadLiveCurveCoins() {
         contractURI: r.contractURI,
         tokenKey: key,
         perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated,
-        // A launch nobody has bought yet reads as dead on the tile. Tracked here and
-        // filtered at render time; the dropdown still carries every coin so they stay
-        // searchable and tradeable.
-        hasActivity: sold > 0n || raisedETH > 0n
+        // Heat ranks the tile: progress on the curve, decayed by age since launch, so a
+        // coin moving today outranks one that crawled to the same place months ago and a
+        // stalled launch fades out on its own. Computed from data the multicall already
+        // returned — no extra reads. Filtered at render time; the dropdown still carries
+        // every coin, so nothing here makes a coin unsearchable or untradeable.
+        heat: pct / (1 + Math.max(0, (Date.now() / 1000 - Number(curve.launchTime)) / 86400))
       });
     }
 
@@ -2159,9 +2190,10 @@ async function loadLiveCurveCoins() {
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
 
     if (!el || cards.length === 0) return;
-    // Feature only coins that have traded. If none of the recent launches have, drop the
-    // section rather than lead with a column of 0.0%.
-    const tileCards = cards.filter(c => c.hasActivity).slice(0, CURVE_TILE_MAX);
+    // Feature only coins with progress that renders as something (0.05% rounds to 0.1%),
+    // hottest first. If nothing clears the bar, drop the section rather than lead with a
+    // column of 0.0%.
+    const tileCards = cards.filter(c => c.pct >= 0.05).sort((a, b) => b.heat - a.heat).slice(0, CURVE_TILE_MAX);
     if (tileCards.length === 0) { el.style.display = 'none'; return; }
 
     // Resolve logos from contractURI metadata — visible cards only, so one tile costs
