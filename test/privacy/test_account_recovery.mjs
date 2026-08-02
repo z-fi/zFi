@@ -1570,5 +1570,57 @@ test('a reinstated note whose commitment is not yet in the tree reads as pending
   assert.equal(next.pending, true);
 });
 
+// ── Saved-note recovery ──────────────────────────────────────────────
+
+const { ppwParseRecoveryNoteInput } = api.load;
+
+test('note parsing accepts hex and decimal fields', () => {
+  const [note] = ppwParseRecoveryNoteInput(JSON.stringify({
+    nullifier: '0x07',
+    secret: '8',
+    label: '42',
+    value: '99500000000000000',
+  }));
+
+  assert.equal(note.nullifier, 7n);
+  assert.equal(note.secret, 8n);
+  assert.equal(note.label, 42n);
+  assert.equal(note.value, 99500000000000000n);
+});
+
+test('note parsing unwraps nested and array shapes', () => {
+  const wrapped = ppwParseRecoveryNoteInput(JSON.stringify({ note: { nullifier: '1', secret: '2' } }));
+  assert.equal(wrapped.length, 1);
+  assert.equal(wrapped[0].nullifier, 1n);
+
+  const list = ppwParseRecoveryNoteInput(JSON.stringify([
+    { nullifier: '1', secret: '2' },
+    { nullifier: '3', secret: '4' },
+  ]));
+  assert.equal(list.length, 2);
+  assert.equal(list[1].secret, 4n);
+});
+
+test('note parsing reads alternate field names and asset hints', () => {
+  const [note] = ppwParseRecoveryNoteInput(JSON.stringify({
+    Nullifier: '1',
+    Secret: '2',
+    amount: '5',
+    symbol: 'wstETH',
+    depositIndex: 3,
+  }));
+
+  assert.equal(note.value, 5n);
+  assert.equal(note.asset, 'wstETH');
+  assert.equal(note.depositIndex, 3);
+});
+
+test('note parsing rejects unusable input with actionable messages', () => {
+  assert.throws(() => ppwParseRecoveryNoteInput(''), /Paste your note JSON/);
+  assert.throws(() => ppwParseRecoveryNoteInput('not json'), /does not look like JSON/);
+  assert.throws(() => ppwParseRecoveryNoteInput('{"nullifier":"1"}'), /nullifier.*secret/);
+  assert.throws(() => ppwParseRecoveryNoteInput('{"nullifier":"-1","secret":"2"}'), /nullifier.*secret/);
+});
+
 
 await done();

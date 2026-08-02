@@ -1611,32 +1611,45 @@ async function ppFetchPoolEventLogs(asset, includeLeaves = false, { poolAddress:
     return ppGetCachedPoolEventLogs(cacheKey, includeLeaves);
   }
 
-  const depositPromise = needsBaseFetch
-    ? (() => {
-        const dFilter = ppBuildDepositedEventFilter(poolAddress, baseFromBlock, latestBlock);
-        return ppGetLogsChunked(dFilter, baseFromBlock, latestBlock);
-      })()
-    : Promise.resolve([]);
+  // One OR-filtered query per block range instead of one per event type. Four
+  // separate full-history scans per pool is what pushed public endpoints into
+  // rate limiting (HTTP 429), and the results are split by topic locally anyway.
+  const depositTopic = PP_POOL_EVENTS.getEvent('Deposited').topicHash;
+  const withdrawnTopic = PP_POOL_EVENTS.getEvent('Withdrawn').topicHash;
+  const ragequitTopic = PP_POOL_EVENTS.getEvent('Ragequit').topicHash;
+  const leafTopic = PP_POOL_EVENTS.getEvent('LeafInserted').topicHash;
+  const byTopic = (logs, topic) => (logs || []).filter(l => l.topics?.[0] === topic);
 
-  const basePromises = needsBaseFetch
-    ? (() => {
-        const wFilter = { address: poolAddress, topics: [PP_POOL_EVENTS.getEvent('Withdrawn').topicHash], fromBlock: baseFromBlock, toBlock: latestBlock };
-        const rFilter = { address: poolAddress, topics: [PP_POOL_EVENTS.getEvent('Ragequit').topicHash], fromBlock: baseFromBlock, toBlock: latestBlock };
-        return [
-          ppGetLogsChunked(wFilter, baseFromBlock, latestBlock),
-          ppGetLogsChunked(rFilter, baseFromBlock, latestBlock),
-        ];
-      })()
-    : [Promise.resolve([]), Promise.resolve([])];
+  const sameRange = needsBaseFetch && needsLeafFetch && baseFromBlock === leafFromBlock;
+  let newDLogs = [], newWLogs = [], newRLogs = [], newLLogs = [];
 
-  const leafPromise = needsLeafFetch
-    ? (() => {
-        const lFilter = { address: poolAddress, topics: [PP_POOL_EVENTS.getEvent('LeafInserted').topicHash], fromBlock: leafFromBlock, toBlock: latestBlock };
-        return ppGetLogsChunked(lFilter, leafFromBlock, latestBlock);
-      })()
-    : Promise.resolve([]);
-
-  const [newDLogs, newWLogs, newRLogs, newLLogs] = await Promise.all([depositPromise, ...basePromises, leafPromise]);
+  if (sameRange) {
+    const all = await ppGetLogsChunked(
+      { address: poolAddress, topics: [[depositTopic, withdrawnTopic, ragequitTopic, leafTopic]] },
+      baseFromBlock,
+      latestBlock,
+    );
+    newDLogs = byTopic(all, depositTopic);
+    newWLogs = byTopic(all, withdrawnTopic);
+    newRLogs = byTopic(all, ragequitTopic);
+    newLLogs = byTopic(all, leafTopic);
+  } else {
+    const basePromise = needsBaseFetch
+      ? ppGetLogsChunked(
+          { address: poolAddress, topics: [[depositTopic, withdrawnTopic, ragequitTopic]] },
+          baseFromBlock,
+          latestBlock,
+        )
+      : Promise.resolve([]);
+    const leafPromise = needsLeafFetch
+      ? ppGetLogsChunked({ address: poolAddress, topics: [leafTopic] }, leafFromBlock, latestBlock)
+      : Promise.resolve([]);
+    const [baseLogs, leafOnlyLogs] = await Promise.all([basePromise, leafPromise]);
+    newDLogs = byTopic(baseLogs, depositTopic);
+    newWLogs = byTopic(baseLogs, withdrawnTopic);
+    newRLogs = byTopic(baseLogs, ragequitTopic);
+    newLLogs = leafOnlyLogs;
+  }
   // Re-read cache after await so concurrent loads do not stomp each other's
   // shared event snapshots. Dedup by txHash to handle multi-tab races.
   const live = _ppwEventCache[cacheKey] || null;
@@ -5948,18 +5961,25 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
   if (!candidates.length) return rows;
 
   const verdicts = await Promise.all(candidates.map(async (row) => {
-    try {
-      const nullHash = poseidon1([row.preSpend.nullifier]);
-      const isSpent = await ppReadWithRpc(async (rpc) => {
-        const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
-        return await pool.nullifierHashes(nullHash);
-      });
-      return { row, isSpent };
-    } catch (err) {
-      // Unverifiable: leave the conservative "spent" verdict in place.
-      console.warn('Privacy: could not verify spent status on-chain for a pool account', err);
-      return { row, isSpent: true };
+    const nullHash = poseidon1([row.preSpend.nullifier]);
+    // Retry transient failures. A rate-limited RPC must not be what decides a
+    // note is spent — that would strand withdrawable funds behind a 429.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const isSpent = await ppReadWithRpc(async (rpc) => {
+          const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+          return await pool.nullifierHashes(nullHash);
+        });
+        return { row, isSpent };
+      } catch (err) {
+        if (attempt === 2 || !ppIsTransientRpcError(err)) {
+          console.warn('Privacy: could not verify spent status on-chain for a pool account', err);
+          return { row, isSpent: true, unverified: true };
+        }
+        await ppDelay(400 * (attempt + 1));
+      }
     }
+    return { row, isSpent: true, unverified: true };
   }));
 
   const reinstated = new Map();
@@ -6247,6 +6267,279 @@ async function ppwFetchPoolEventsWithCacheFallback(asset) {
     if (r._loadWarning) loadWarning = loadWarning || r._loadWarning;
   }
   return { asset, ...merged, loadWarning };
+}
+
+// ── Note recovery from a saved file ──────────────────────────────────
+// Escape hatch for when key-derivation scanning cannot find or correctly
+// classify a note: the owner supplies the note itself and it is validated
+// against the pool on-chain. Everything stays in the browser.
+
+function ppwParseNoteBigInt(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    return BigInt(value);
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  try {
+    const parsed = /^0x[0-9a-fA-F]+$/.test(raw) ? BigInt(raw) : (/^\d+$/.test(raw) ? BigInt(raw) : null);
+    if (parsed == null || parsed < 0n) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function ppwPickNoteField(source, names) {
+  if (!source || typeof source !== 'object') return undefined;
+  const lowered = new Map(Object.keys(source).map(key => [key.toLowerCase(), key]));
+  for (const name of names) {
+    const key = lowered.get(name.toLowerCase());
+    if (key !== undefined && source[key] != null && source[key] !== '') return source[key];
+  }
+  return undefined;
+}
+
+// Accepts the shapes a saved note realistically arrives in: a bare note object,
+// a wrapper such as { note: {...} } or { deposit: {...} }, or an array of them.
+function ppwExtractNoteCandidates(parsed) {
+  const out = [];
+  const visit = (node, depth) => {
+    if (!node || depth > 4) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const nullifier = ppwParseNoteBigInt(ppwPickNoteField(node, ['nullifier', 'nullifierValue', 'null']));
+    const secret = ppwParseNoteBigInt(ppwPickNoteField(node, ['secret', 'secretValue']));
+    if (nullifier != null && secret != null) {
+      out.push({ node, nullifier, secret });
+      return;
+    }
+    for (const value of Object.values(node)) visit(value, depth + 1);
+  };
+  visit(parsed, 0);
+  return out;
+}
+
+function ppwParseRecoveryNoteInput(text) {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('Paste your note JSON or choose a saved note file.');
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('That does not look like JSON. Paste the whole saved note file.');
+  }
+  const candidates = ppwExtractNoteCandidates(parsed);
+  if (!candidates.length) {
+    throw new Error('No note found in that file: it needs at least a "nullifier" and a "secret".');
+  }
+  return candidates.map(({ node, nullifier, secret }) => ({
+    nullifier,
+    secret,
+    label: ppwParseNoteBigInt(ppwPickNoteField(node, ['label'])),
+    value: ppwParseNoteBigInt(ppwPickNoteField(node, ['value', 'amount', 'balance'])),
+    scope: ppwParseNoteBigInt(ppwPickNoteField(node, ['scope'])),
+    asset: (() => {
+      const raw = ppwPickNoteField(node, ['asset', 'token', 'symbol']);
+      if (raw == null) return null;
+      const normalized = String(raw).trim().toLowerCase();
+      if (normalized === 'eth') return 'ETH';
+      if (normalized === 'bold') return 'BOLD';
+      if (normalized === 'wsteth') return 'wstETH';
+      return null;
+    })(),
+    depositIndex: (() => {
+      const raw = ppwPickNoteField(node, ['depositIndex', 'index']);
+      return raw == null ? null : ppParseNonNegativeInt(raw);
+    })(),
+    withdrawalIndex: (() => {
+      const raw = ppwPickNoteField(node, ['withdrawalIndex', 'changeIndex']);
+      return raw == null ? null : ppParseNonNegativeInt(raw);
+    })(),
+  }));
+}
+
+// Which pool does this note belong to? An explicit scope wins; otherwise the
+// asset hint; otherwise every pool is tried and the one holding the note's
+// commitment wins.
+function ppwResolveNoteAssetCandidates(note) {
+  const assets = ['ETH', 'BOLD', 'wstETH'];
+  if (note.scope != null) {
+    const matched = assets.filter(asset => ppComputeScope(asset) === note.scope);
+    if (matched.length) return matched;
+  }
+  if (note.asset) return [note.asset];
+  return assets;
+}
+
+async function ppwRecoverNoteForAsset(note, asset) {
+  const scope = ppComputeScope(asset);
+  const poolAddress = ppGetPoolAddress(asset);
+  const precommitment = poseidon2([note.nullifier, note.secret]);
+
+  const { depositLogs, leafLogs } = await ppwFetchPoolEventsWithCacheFallback(asset);
+  const depositEvents = ppBuildDepositEventsMap(depositLogs);
+  const depositEvent = depositEvents.get(ppHashHex(precommitment));
+
+  let label = note.label;
+  let value = note.value;
+  let depositor = null;
+  let depositTxHash = null;
+  let depositBlockNumber = null;
+  if (depositEvent) {
+    label = label ?? BigInt(depositEvent.label);
+    value = value ?? BigInt(depositEvent.value);
+    depositor = depositEvent.depositor;
+    depositTxHash = depositEvent.txHash;
+    depositBlockNumber = depositEvent.blockNumber;
+  }
+  if (label == null || value == null) {
+    return { ok: false, reason: 'missing-fields' };
+  }
+
+  const commitment = ppHashHex(poseidon3([value, label, precommitment]));
+  const insertedLeaves = new Set();
+  for (const log of leafLogs || []) {
+    try {
+      const parsed = PP_POOL_EVENTS.parseLog({ topics: log.topics, data: log.data });
+      if (parsed.name === 'LeafInserted') insertedLeaves.add(ppHashHex(parsed.args._leaf));
+    } catch { /* skip unparseable */ }
+  }
+  const inserted = insertedLeaves.has(commitment);
+  if (!depositEvent && !inserted) return { ok: false, reason: 'not-in-pool' };
+
+  const isSpent = await ppReadWithRpc(async (rpc) => {
+    const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+    return await pool.nullifierHashes(poseidon1([note.nullifier]));
+  });
+  if (isSpent) return { ok: false, reason: 'spent', asset };
+
+  return {
+    ok: true,
+    row: {
+      asset,
+      scope,
+      poolAddress,
+      nullifier: note.nullifier,
+      secret: note.secret,
+      precommitment,
+      commitment,
+      currentCommitment: commitment,
+      currentCommitmentInserted: inserted,
+      pending: !inserted,
+      value: value.toString(),
+      label,
+      depositIndex: note.depositIndex,
+      withdrawalIndex: note.withdrawalIndex,
+      source: note.withdrawalIndex != null ? 'change' : 'deposit',
+      derivation: 'safe',
+      depositor,
+      depositTxHash,
+      depositBlockNumber,
+      txHash: depositTxHash,
+      blockNumber: depositBlockNumber,
+      recoveredFromNote: true,
+    },
+  };
+}
+
+async function ppwRecoverNoteFromJson(text) {
+  const notes = ppwParseRecoveryNoteInput(text);
+  const added = [];
+  const failures = [];
+
+  for (const note of notes) {
+    let outcome = null;
+    for (const asset of ppwResolveNoteAssetCandidates(note)) {
+      const attempt = await ppwRecoverNoteForAsset(note, asset);
+      if (attempt.ok) { outcome = attempt; break; }
+      if (!outcome || attempt.reason === 'spent') outcome = attempt;
+    }
+    if (outcome?.ok) added.push(outcome.row);
+    else failures.push(outcome?.reason || 'not-in-pool');
+  }
+
+  if (!added.length) {
+    if (failures.includes('spent')) throw new Error('That note has already been spent: the pool reports its nullifier as used.');
+    if (failures.includes('missing-fields')) throw new Error('That note is missing its label or value, and no matching deposit was found in the pool.');
+    throw new Error('That note was not found in any pool. Check it is the right file for this network.');
+  }
+
+  const rows = await Promise.all(added.map(async (row) => {
+    try {
+      const [statusRows, aspRoot, mtData] = await Promise.all([
+        ppFetchDepositsByLabel(row.scope, [ppLoadedAccountLabelKey(row.label)]),
+        ppReadEntrypoint((ep) => ep.latestRoot()),
+        ppFetchMtLeaves(row.scope),
+      ]);
+      const aspLeaves = mtData?.aspLeaves || [];
+      const aspRootVerified = aspLeaves.length > 0 && leanIMTBuild(aspLeaves).root === BigInt(aspRoot);
+      const applied = ppApplyLoadedAccountReviewStatuses([row], aspLeaves, statusRows, {
+        statusFetchFailed: false,
+        aspRootVerified,
+      });
+      return applied.rows[0];
+    } catch (err) {
+      console.warn('Privacy: recovered a note but could not hydrate its review status', err);
+      const applied = ppApplyLoadedAccountReviewStatuses([row], [], [], { statusFetchFailed: true, aspRootVerified: false });
+      return applied.rows[0];
+    }
+  }));
+
+  // Replace any existing row for the same commitment so repeated imports do not
+  // stack duplicates of the same note.
+  const existing = Array.isArray(_ppwLoadResults) ? _ppwLoadResults : [];
+  const importedCommitments = new Set(rows.map(row => row.currentCommitment));
+  _ppwLoadResults = existing
+    .filter(row => !importedCommitments.has(row?.currentCommitment))
+    .concat(rows);
+  _ppwLoadResults.sort(ppCompareLoadedAccounts);
+  _ppwHasResolvedLoadState = true;
+  ppwRenderPoolAccounts();
+  ppwUpdateLoadButton();
+  return rows;
+}
+
+function ppwSetNoteRecoveryStatus(message, tone = 'muted') {
+  const el = $('ppwNoteRecoveryStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = tone === 'error' ? 'var(--error)' : (tone === 'success' ? 'var(--green, #22c55e)' : 'var(--fg-muted)');
+  setShown(el, !!message);
+}
+
+async function ppwReadNoteFileText() {
+  const input = $('ppwNoteFile');
+  const file = input?.files?.[0];
+  if (!file) return '';
+  return await file.text();
+}
+
+async function ppwRecoverNoteFromInput() {
+  const btn = $('ppwNoteRecoverBtn');
+  if (btn) setDisabled(btn, true);
+  ppwSetNoteRecoveryStatus('Checking the note against the pool…');
+  try {
+    const fileText = await ppwReadNoteFileText();
+    const text = fileText || $('ppwNoteJson')?.value || '';
+    const rows = await ppwRecoverNoteFromJson(text);
+    const summary = rows
+      .map(row => fmt(ppFormatAmountWei(BigInt(row.value), row.asset)) + ' ' + row.asset)
+      .join(', ');
+    ppwSetNoteRecoveryStatus(
+      'Recovered ' + summary + '. It is listed above' +
+      (rows.some(row => row.isWithdrawable) ? ' and ready to withdraw.' : '; its current status is shown there.'),
+      'success',
+    );
+  } catch (err) {
+    console.warn('Privacy: note recovery failed', err);
+    ppwSetNoteRecoveryStatus(err?.message || 'Could not recover that note.', 'error');
+  } finally {
+    if (btn) setDisabled(btn, false);
+  }
 }
 
 function ppwCreateEventLoader(assets, refreshLink, abortSignal) {
@@ -8221,6 +8514,9 @@ function ppRegisterInternalTestApi() {
       ppGetRecoveredSafeDepositIndex,
       ppTraceLoadedAccountChain,
       ppReinstateFalselySpentAccounts,
+      ppwParseRecoveryNoteInput,
+      ppwResolveNoteAssetCandidates,
+      ppwRecoverNoteFromJson,
       ppBuildDepositEventsMap,
       ppLoadCachedEventLogs,
       ppSaveCachedEventLogs,

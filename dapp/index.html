@@ -1396,6 +1396,18 @@ body.modal-open { overflow: hidden; }
       <a href="#" id="ppwRefreshLink" onclick="ppwLoadDeposits();return false" style="font-size:10px;color:var(--fg-muted);text-decoration:none">&#x21bb; Refresh</a>
     </div>
     <div id="ppwActivitySection" style="display:none;margin-top:12px"></div>
+
+    <details id="ppwNoteRecovery" style="margin-top:14px">
+      <summary style="font-size:11px;color:var(--fg-muted);cursor:pointer">Recover a note from a saved file</summary>
+      <p style="font-size:11px;color:var(--fg-muted);margin:8px 0;line-height:1.5">
+        If a Pool Account is missing or shows the wrong state, load the note you saved when depositing.
+        The note is checked against the pool on-chain and never leaves your browser.
+      </p>
+      <input type="file" id="ppwNoteFile" accept=".json,.txt,application/json,text/plain" style="font-size:11px;width:100%">
+      <textarea id="ppwNoteJson" rows="4" placeholder='Or paste the note JSON, e.g. {"nullifier":"0x...","secret":"0x...","label":"...","value":"..."}' style="width:100%;margin-top:8px;font-size:11px;font-family:inherit;padding:8px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted)"></textarea>
+      <button id="ppwNoteRecoverBtn" class="swap-btn" style="width:100%;margin-top:8px" onclick="ppwRecoverNoteFromInput()">Recover note</button>
+      <div id="ppwNoteRecoveryStatus" style="font-size:11px;margin-top:8px;color:var(--fg-muted);display:none"></div>
+    </details>
   </div>
 
 </div>
