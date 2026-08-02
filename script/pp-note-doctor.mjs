@@ -41,12 +41,13 @@ const TOPICS = {
 };
 
 function parseArgs(argv) {
-  const args = { asset: null, indices: 24, phraseFile: null };
+  const args = { asset: null, indices: 24, phraseFile: null, probeDerivations: false };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--phrase-file') args.phraseFile = argv[++i];
     else if (arg === '--asset') args.asset = argv[++i];
     else if (arg === '--indices') args.indices = Number(argv[++i]);
+    else if (arg === '--probe-derivations') args.probeDerivations = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
   }
   return args;
@@ -133,10 +134,37 @@ function hex32(value) {
   return '0x' + BigInt(value).toString(16).padStart(64, '0');
 }
 
+// Candidate master-key formulas. The dapp's derivation changed more than once
+// (original -> 0xbow's weak-entropy version -> the fixed version), and the
+// earliest form predates this repo's first commit. Notes made under a formula
+// the current app does not reproduce are invisible in My Pools. Testing each
+// candidate against real deposit events identifies which one made them.
+function buildDerivationCandidates(poseidon1, poseidon2, hdKey) {
+  const full0 = BigInt(hdKey(0));
+  const full1 = BigInt(hdKey(1));
+  const weak0 = BigInt(Number(full0));
+  const weak1 = BigInt(Number(full1));
+  const sdk = (preimage) => ({
+    masterNullifier: poseidon2([preimage, 1n]),
+    masterSecret: poseidon2([preimage, 2n]),
+  });
+  return {
+    'current-safe (hd0/hd1, full width)': { masterNullifier: poseidon1([full0]), masterSecret: poseidon1([full1]) },
+    'legacy-weak (hd0/hd1, Number-truncated)': { masterNullifier: poseidon1([weak0]), masterSecret: poseidon1([weak1]) },
+    'sdk-style, full seed': sdk(poseidon1([full0])),
+    'sdk-style, weak seed': sdk(poseidon1([weak0])),
+    'sdk-style, raw hd0 seed': sdk(full0),
+    'mixed: full nullifier, weak secret': { masterNullifier: poseidon1([full0]), masterSecret: poseidon1([weak1]) },
+    'mixed: weak nullifier, full secret': { masterNullifier: poseidon1([weak0]), masterSecret: poseidon1([full1]) },
+    'single-key hd0 (both from account 0)': { masterNullifier: poseidon1([full0]), masterSecret: poseidon1([poseidon1([full0])]) },
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
-    console.log('Usage: node script/pp-note-doctor.mjs --phrase-file <file> [--asset ETH] [--indices 24]');
+    console.log('Usage: node script/pp-note-doctor.mjs --phrase-file <file> [--asset ETH] [--indices 24] [--probe-derivations]');
+    console.log('  --probe-derivations  try historical key-derivation formulas against on-chain deposits');
     return;
   }
 
@@ -209,7 +237,12 @@ async function main() {
     console.log(`    events: ${deposits.size} deposits, ${withdrawn.size} withdrawals, ${leaves.size} leaves`);
 
     let matched = 0;
-    for (const [derivation, keys] of Object.entries(keysets)) {
+    const matchesByDerivation = {};
+    const activeKeysets = args.probeDerivations
+      ? buildDerivationCandidates(poseidon1, poseidon2, hdKey)
+      : keysets;
+
+    for (const [derivation, keys] of Object.entries(activeKeysets)) {
       for (let index = 0; index < args.indices; index++) {
         const nullifier = poseidon3([keys.masterNullifier, scope, BigInt(index)]);
         const secret = poseidon3([keys.masterSecret, scope, BigInt(index)]);
@@ -217,6 +250,7 @@ async function main() {
         const deposit = deposits.get(hex32(precommitment));
         if (!deposit) continue;
         matched++;
+        matchesByDerivation[derivation] = (matchesByDerivation[derivation] || 0) + 1;
 
         const nullHash = poseidon1([nullifier]);
         const spentEvent = withdrawn.get(hex32(nullHash));
@@ -244,8 +278,17 @@ async function main() {
         }
       }
     }
+    if (args.probeDerivations) {
+      const hits = Object.entries(matchesByDerivation).filter(([, n]) => n > 0);
+      console.log('    -- derivation probe --');
+      if (hits.length) {
+        for (const [name, n] of hits) console.log(`       MATCH  ${name}: ${n} deposit(s)`);
+      } else {
+        console.log('       no candidate formula reproduced any deposit in this pool');
+      }
+    }
     if (!matched) {
-      console.log(`    no notes for this phrase in the first ${args.indices} indices of either derivation`);
+      console.log(`    no notes for this phrase in the first ${args.indices} indices of ${Object.keys(activeKeysets).length} derivation(s)`);
       console.log('    (if you expect notes here, re-run with a larger --indices)');
     }
   }
