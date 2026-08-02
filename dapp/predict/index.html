@@ -1598,7 +1598,14 @@ const MASTER_ROUTER_ABI = [
   // collateralToWithdraw = 0 withdraws the whole resting balance; either way it
   // auto-claims any shares that already filled, so cancelling never loses a fill.
   'function withdrawFromBidPool(uint256 marketId, bool isYes, uint256 priceInBps, uint256 collateralToWithdraw, address to) returns (uint256 collateralWithdrawn, uint256 sharesClaimed)',
-  'function claimBidShares(uint256 marketId, bool isYes, uint256 priceInBps, address to) returns (uint256 sharesClaimed)'
+  'function claimBidShares(uint256 marketId, bool isYes, uint256 priceInBps, address to) returns (uint256 sharesClaimed)',
+  // Ask side — the mirror of the above for sells. Selling into a thin pool is
+  // worse than buying: the whole position clears against the tiny opposite
+  // reserve, so a resting ask is the only way out at a sane price.
+  'function sellWithAskFallback(uint256 marketId, bool sellYes, uint256 sharesIn, uint256 minPriceBps, uint256 askPriceBps, address to, uint256 deadline) returns (uint256 collOut, bytes32 askPoolId)',
+  'function getUserPosition(uint256 marketId, bool isYes, uint256 priceInBps, address user) view returns (uint256 userScaled, uint256 userWithdrawableShares, uint256 userPendingCollateral, uint256 userCollateralDebt)',
+  'function withdrawFromPool(uint256 marketId, bool isYes, uint256 priceInBps, uint256 sharesToWithdraw, address to) returns (uint256 sharesWithdrawn, uint256 collateralClaimed)',
+  'function claimProceeds(uint256 marketId, bool isYes, uint256 priceInBps, address to) returns (uint256 collateralClaimed)'
 ];
 
 
@@ -2398,6 +2405,7 @@ let _tradeSlippage = 15; // default 15% slippage tolerance (high due to thin AMM
 // order. Price in bps; null means "default to spot the next time we offer it".
 let _limitMode = false;
 let _limitPriceBps = null;
+let _limitKind = 'bid'; // 'bid' = resting buy, 'ask' = resting sell
 let _limitPreflightTimer = null;
 let _limitPreflightSeq = 0;
 let _galleryFilter = 'active'; // 'active' | 'resolved' | 'all'
@@ -3509,7 +3517,7 @@ function setTradeDir(dir) {
   if (tradeInput) { tradeInput.value = ''; }
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
-  _limitMode = false; _limitPriceBps = null;
+  _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
   // Update pay token button text when switching back to buy
   if (dir === 'buy') _updatePayTokenBtn();
@@ -3532,7 +3540,7 @@ function setTradeSide(side) {
   if (tradeInput) { tradeInput.value = ''; }
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
-  _limitMode = false; _limitPriceBps = null;
+  _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
 
   updateTradeLabels();
@@ -4007,7 +4015,7 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
   // thin pool the fill flatlines no matter how much collateral you send.
   // That is not a dead end — it is what limit orders are for.
   if (costF > 0 && sharesF < costF) {
-    renderLimitOffer({ costF, side, collSym, instantF: sharesF });
+    renderLimitOffer({ kind: 'bid', amountF: costF, side, collSym, instantF: sharesF });
     return;
   }
   _limitMode = false;
@@ -4040,73 +4048,108 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
 // resting asks and parks the remainder as a bid at your price, so you can put
 // real size on a market whose AMM is only a few dust shares deep.
 
-function _limitSharesIfFilled(costF, priceBps) {
-  return priceBps > 0 ? costF * 10000 / priceBps : 0;
+// A resting bid buys shares with collateral; a resting ask sells shares for
+// collateral. Both are priced in percent, so the arithmetic is one function.
+function _limitProceeds(kind, amountF, priceBps) {
+  if (!(priceBps > 0) || !(amountF > 0)) return 0;
+  return kind === 'ask' ? amountF * priceBps / 10000 : amountF * 10000 / priceBps;
 }
 
-function renderLimitOffer({ costF, side, collSym, instantF }) {
+function _limitOutHtml(kind, amountF, priceBps, side, collSym) {
+  const v = _limitProceeds(kind, amountF, priceBps);
+  return kind === 'ask'
+    ? `Gets <b>${v.toFixed(4)} ${escText(collSym)}</b> when filled`
+    : `Pays <b>${v.toFixed(4)} ${escText(collSym)}</b> if ${side.toUpperCase()} &mdash; ${v.toFixed(4)} shares`;
+}
+
+function _limitBtnLabel(kind, priceBps) {
+  return `Place limit ${kind === 'ask' ? 'sell' : 'bet'} at ${Math.round(priceBps / 100)}%`;
+}
+
+function renderLimitOffer({ kind, amountF, side, collSym, instantF }) {
   const el = $('tradeQuote');
   if (!el) return;
   const SIDE = side.toUpperCase();
-  if (!_limitPriceBps) _limitPriceBps = Math.max(1, Math.min(9999, _spotPct(side) * 100));
+  const isAsk = kind === 'ask';
+  if (!_limitPriceBps) {
+    _limitPriceBps = Math.max(100, Math.min(9900, Math.round(_spotPct(side)) * 100));
+  }
   const px = _limitPriceBps;
-  const out = _limitSharesIfFilled(costF, px);
 
   _limitMode = true;
+  _limitKind = kind;
   el.innerHTML = `<div class="lim-box">
-    <div class="lim-cap">Only about <b>${instantF.toFixed(6)} ${escText(collSym)}</b> fills instantly here — the pool is too thin to route the rest. Place it as a limit bet instead.</div>
+    <div class="lim-cap">${isAsk
+      ? `Selling now would return only <b>${instantF.toFixed(6)} ${escText(collSym)}</b> — the pool is too thin to absorb this position. Rest it as a limit sell instead.`
+      : `Only about <b>${instantF.toFixed(6)} ${escText(collSym)}</b> fills instantly here — the pool is too thin to route the rest. Place it as a limit bet instead.`}</div>
     <div class="lim-row">
-      <span>Bet <b>${costF.toFixed(4)} ${escText(collSym)}</b> on</span>
-      <span style="color:var(--${side});font-weight:700">${SIDE}</span>
+      <span>${isAsk ? 'Sell' : 'Bet'} <b>${amountF.toFixed(4)} ${isAsk ? SIDE + ' shares' : escText(collSym)}</b></span>
+      ${isAsk ? '' : `<span>on</span><span style="color:var(--${side});font-weight:700">${SIDE}</span>`}
       <span>at</span>
-      <input type="number" id="limitPx" min="1" max="99" step="1" value="${(px / 100).toFixed(0)}"
+      <input type="number" id="limitPx" min="1" max="99" step="1" value="${Math.round(px / 100)}"
              oninput="setLimitPrice(this.value)" aria-label="Limit price in percent">
       <span>%</span>
     </div>
-    <div class="lim-out" id="limitOut">Pays <b>${out.toFixed(4)} ${escText(collSym)}</b> if ${SIDE} &mdash; ${out.toFixed(4)} shares</div>
+    <div class="lim-out" id="limitOut">${_limitOutHtml(kind, amountF, px, side, collSym)}</div>
     <div class="lim-steps">
       ${[-5, -1, +1, +5].map(d => `<button onclick="nudgeLimitPrice(${d})">${d > 0 ? '+' : ''}${d}%</button>`).join('')}
     </div>
-    <div class="lim-foot" id="limitFoot">Rests on the book until someone takes the other side. Your ${escText(collSym)} stays yours &mdash; cancel any time from Open Bets.</div>
+    <div class="lim-foot" id="limitFoot">Rests on the book until someone takes the other side. ${isAsk ? 'Your shares stay yours' : `Your ${escText(collSym)} stays yours`} &mdash; cancel any time from Open Bets.</div>
   </div>`;
-  _setTradeBtn(`Place limit bet at ${(px / 100).toFixed(0)}%`, false);
-  _lastQuote = null; // limit bets execute from the form, not a sweep quote
-  preflightLimitBet();
+  _setTradeBtn(_limitBtnLabel(kind, px), false);
+  _lastQuote = null; // limit orders execute from the form, not a sweep quote
+  preflightLimitOrder();
 }
 
 // A handful of price levels on the deployed book revert even though they read
 // as empty. Rather than guess at which, simulate the exact call we are about to
 // send and only offer the button if it actually goes through.
-async function preflightLimitBet() {
+async function preflightLimitOrder() {
   clearTimeout(_limitPreflightTimer);
   const seq = ++_limitPreflightSeq;
-  const foot = $('limitFoot');
   _limitPreflightTimer = setTimeout(async () => {
     const marketId = $('app').dataset.marketId;
     const collateral = $('app').dataset.collateral;
     const raw = $('tradeInput')?.value.trim();
     if (!marketId || !raw || !parseFloat(raw)) return;
     const px = _limitPriceBps;
+    const kind = _limitKind;
+    const isYes = _tradeSide === 'yes';
+    const probe = _connectedAddress || '0x1111111111111111111111111111111111111111';
+
+    // An ask pulls shares via transferFrom, so simulating it needs a real
+    // holder who has already approved the router as operator. When we cannot
+    // simulate faithfully, say nothing rather than warn about the wrong thing.
+    if (kind === 'ask' && !_connectedAddress) return;
     let ok = true;
     try {
       const amountWei = parseColl(raw);
       const isETH = !collateral || collateral === ethers.ZeroAddress;
       await withRPC(async (rpc) => {
         const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, rpc);
-        await mr.buyWithBidFallback.staticCall(
-          marketId, _tradeSide === 'yes', amountWei, px, px,
-          _connectedAddress || '0x1111111111111111111111111111111111111111',
-          BigInt(Math.floor(Date.now() / 1000) + 1200),
-          isETH ? { value: amountWei, from: _connectedAddress || '0x1111111111111111111111111111111111111111' } : {}
-        );
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+        if (kind === 'ask') {
+          const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, rpc);
+          if (!await pamm.isOperator(_connectedAddress, CONTRACTS.MASTER_ROUTER)) return true; // cannot simulate yet
+          await mr.sellWithAskFallback.staticCall(
+            marketId, isYes, amountWei, px, px, _connectedAddress, deadline, { from: _connectedAddress }
+          );
+        } else {
+          await mr.buyWithBidFallback.staticCall(
+            marketId, isYes, amountWei, px, px, probe, deadline,
+            isETH ? { value: amountWei, from: probe } : { from: probe }
+          );
+        }
         return true;
       });
     } catch { ok = false; }
+
     if (seq !== _limitPreflightSeq || _limitPriceBps !== px || !_limitMode) return;
+    const foot = $('limitFoot');
     const pct = Math.round(px / 100);
     if (ok) {
       if (foot) foot.style.color = '';
-      _setTradeBtn(`Place limit bet at ${pct}%`, false);
+      _setTradeBtn(_limitBtnLabel(kind, px), false);
     } else {
       if (foot) {
         foot.style.color = 'var(--no)';
@@ -4120,27 +4163,26 @@ async function preflightLimitBet() {
 function setLimitPrice(v) {
   const pct = Math.max(1, Math.min(99, Math.round(parseFloat(v) || 0)));
   _limitPriceBps = pct * 100;
-  const input = $('tradeInput');
-  const costF = parseFloat(input?.value) || 0;
+  const amountF = parseFloat($('tradeInput')?.value) || 0;
   const out = $('limitOut');
   if (out) {
-    const collSym = getCollateralSymbol($('app').dataset.collateral);
-    const s = _limitSharesIfFilled(costF, _limitPriceBps);
-    out.innerHTML = `Pays <b>${s.toFixed(4)} ${escText(collSym)}</b> if ${_tradeSide.toUpperCase()} &mdash; ${s.toFixed(4)} shares`;
+    out.innerHTML = _limitOutHtml(
+      _limitKind, amountF, _limitPriceBps, _tradeSide,
+      getCollateralSymbol($('app').dataset.collateral)
+    );
   }
-  _setTradeBtn(`Place limit bet at ${pct}%`, false);
-  preflightLimitBet();
+  _setTradeBtn(_limitBtnLabel(_limitKind, _limitPriceBps), false);
+  preflightLimitOrder();
 }
 
 function nudgeLimitPrice(delta) {
-  const cur = Math.round(_limitPriceBps / 100);
-  const next = Math.max(1, Math.min(99, cur + delta));
+  const next = Math.max(1, Math.min(99, Math.round(_limitPriceBps / 100) + delta));
   const box = $('limitPx');
   if (box) box.value = next;
   setLimitPrice(next);
 }
 
-async function placeLimitBet() {
+async function placeLimitOrder() {
   if (_isTrading) return;
   const s = await connectWallet();
   if (!s) return;
@@ -4154,42 +4196,65 @@ async function placeLimitBet() {
 
   const amountWei = parseColl(raw);
   const isETH = !collateral || collateral === ethers.ZeroAddress;
-  const buyYes = _tradeSide === 'yes';
+  const isYes = _tradeSide === 'yes';
+  const isAsk = _limitKind === 'ask';
   const px = BigInt(_limitPriceBps);
   const origText = btn.textContent;
 
   _isTrading = true;
   btn.disabled = true;
   try {
-    if (!isETH) {
-      btn.textContent = 'Checking approval...';
-      const token = new ethers.Contract(collateral, ERC20_ABI, s);
-      const allowance = await token.allowance(_connectedAddress, CONTRACTS.MASTER_ROUTER);
-      if (allowance < amountWei) {
-        btn.textContent = 'Approve in wallet...';
-        const ap = await token.approve(CONTRACTS.MASTER_ROUTER, ethers.MaxUint256);
-        btn.textContent = 'Confirming approval...';
-        await ap.wait();
-      }
-    }
     const router = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
-    btn.textContent = 'Confirm in wallet...';
-    // Sweep any resting asks at or below the bid — never pay more than the
-    // price you just named — then rest the remainder at that price.
-    const tx = await router.buyWithBidFallback(
-      marketId, buyYes, amountWei, px, px, _connectedAddress, deadline,
-      isETH ? { value: amountWei } : {}
-    );
+    let tx;
+
+    if (isAsk) {
+      // Resting a sell means handing shares to the router, which pulls them
+      // with transferFrom — so it needs operator rights on PAMM first.
+      const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, s);
+      btn.textContent = 'Checking approval...';
+      if (!await pamm.isOperator(_connectedAddress, CONTRACTS.MASTER_ROUTER)) {
+        btn.textContent = 'Approve operator...';
+        const ap = await pamm.setOperator(CONTRACTS.MASTER_ROUTER, true);
+        btn.textContent = 'Confirming approval...';
+        await ap.wait();
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      btn.textContent = 'Confirm in wallet...';
+      // minPriceBps = the ask price: take any bid at or above what you asked,
+      // then rest the remainder there. Never sell below your own price.
+      tx = await router.sellWithAskFallback(
+        marketId, isYes, amountWei, px, px, _connectedAddress, deadline
+      );
+    } else {
+      if (!isETH) {
+        btn.textContent = 'Checking approval...';
+        const token = new ethers.Contract(collateral, ERC20_ABI, s);
+        const allowance = await token.allowance(_connectedAddress, CONTRACTS.MASTER_ROUTER);
+        if (allowance < amountWei) {
+          btn.textContent = 'Approve in wallet...';
+          const ap = await token.approve(CONTRACTS.MASTER_ROUTER, ethers.MaxUint256);
+          btn.textContent = 'Confirming approval...';
+          await ap.wait();
+        }
+      }
+      btn.textContent = 'Confirm in wallet...';
+      // Sweep any resting asks at or below the bid — never pay more than the
+      // price you just named — then rest the remainder at that price.
+      tx = await router.buyWithBidFallback(
+        marketId, isYes, amountWei, px, px, _connectedAddress, deadline,
+        isETH ? { value: amountWei } : {}
+      );
+    }
+
     btn.textContent = 'Placing...';
     await tx.wait();
     input.value = '';
     renderMarketPage(marketId);
   } catch (e) {
-    console.warn('Limit bet failed:', e);
-    const msg = decodeError(e);
+    console.warn('Limit order failed:', e);
     if (!/user rejected|user denied/i.test(String(e?.message || ''))) {
-      _quoteFailed('Could not place the bet: ' + msg);
+      _quoteFailed('Could not place the order: ' + decodeError(e));
     }
     btn.textContent = origText;
     btn.disabled = false;
@@ -4211,12 +4276,17 @@ async function loadOpenOrders(marketId, collSym) {
     const found = [];
     for (const isYes of [true, false]) {
       const ob = await mr.getOrderbook(marketId, isYes, prices);
-      const live = prices.filter((_, i) => BigInt(ob.bidDepths[i]) > 0n);
-      for (const p of live) {
+      for (const p of prices.filter((_, i) => BigInt(ob.bidDepths[i]) > 0n)) {
         const pos = await mr.getBidPosition(marketId, isYes, p, _connectedAddress);
-        const coll = BigInt(pos.userWithdrawableCollateral);
-        const pending = BigInt(pos.userPendingShares);
-        if (coll > 0n || pending > 0n) found.push({ isYes, priceBps: p, coll, pending });
+        const resting = BigInt(pos.userWithdrawableCollateral);
+        const filled = BigInt(pos.userPendingShares);
+        if (resting > 0n || filled > 0n) found.push({ kind: 'bid', isYes, priceBps: p, resting, filled });
+      }
+      for (const p of prices.filter((_, i) => BigInt(ob.askDepths[i]) > 0n)) {
+        const pos = await mr.getUserPosition(marketId, isYes, p, _connectedAddress);
+        const resting = BigInt(pos.userWithdrawableShares);
+        const filled = BigInt(pos.userPendingCollateral);
+        if (resting > 0n || filled > 0n) found.push({ kind: 'ask', isYes, priceBps: p, resting, filled });
       }
     }
     return found;
@@ -4228,16 +4298,25 @@ async function loadOpenOrders(marketId, collSym) {
   let rows = '';
   for (const o of orders) {
     const SIDE = o.isYes ? 'YES' : 'NO';
+    const isAsk = o.kind === 'ask';
     const pct = (o.priceBps / 100).toFixed(0);
     const parts = [];
-    if (o.coll > 0n) parts.push(`${fmtA(o.coll)} ${escText(collSym)} resting`);
-    if (o.pending > 0n) parts.push(`<b style="color:var(--fg)">${fmtA(o.pending)} shares filled</b>`);
+    if (o.resting > 0n) {
+      parts.push(isAsk
+        ? `${fmtA(o.resting)} shares resting`
+        : `${fmtA(o.resting)} ${escText(collSym)} resting`);
+    }
+    if (o.filled > 0n) {
+      parts.push(isAsk
+        ? `<b style="color:var(--fg)">${fmtA(o.filled)} ${escText(collSym)} filled</b>`
+        : `<b style="color:var(--fg)">${fmtA(o.filled)} shares filled</b>`);
+    }
     rows += `<div class="ord-row">
-      <span class="ord-px ${o.isYes ? 'pos-side yes' : 'pos-side no'}">${SIDE} @ ${pct}%</span>
+      <span class="ord-px pos-side ${o.isYes ? 'yes' : 'no'}">${isAsk ? 'Sell' : 'Buy'} ${SIDE} @ ${pct}%</span>
       <span class="pos-val">${parts.join(' &middot; ')}</span>
       <span style="display:flex;gap:3px">
-        ${o.pending > 0n ? `<button class="lp-withdraw-btn" onclick="claimBidFill('${marketId}',${o.isYes},${o.priceBps})">CLAIM</button>` : ''}
-        ${o.coll > 0n ? `<button class="lp-withdraw-btn" onclick="cancelLimitBet('${marketId}',${o.isYes},${o.priceBps})">CANCEL</button>` : ''}
+        ${o.filled > 0n ? `<button class="lp-withdraw-btn" onclick="claimLimitFill('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CLAIM</button>` : ''}
+        ${o.resting > 0n ? `<button class="lp-withdraw-btn" onclick="cancelLimitOrder('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CANCEL</button>` : ''}
       </span>
     </div>`;
   }
@@ -4250,24 +4329,28 @@ async function loadOpenOrders(marketId, collSym) {
   </div>`;
 }
 
-async function cancelLimitBet(marketId, isYes, priceBps) {
+async function cancelLimitOrder(marketId, kind, isYes, priceBps) {
   const s = await connectWallet();
   if (!s) return;
   try {
     const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
-    // 0 withdraws the full remaining balance at that level.
-    const tx = await mr.withdrawFromBidPool(marketId, isYes, priceBps, 0, _connectedAddress);
+    // 0 withdraws the whole resting balance; both calls auto-claim any fill.
+    const tx = kind === 'ask'
+      ? await mr.withdrawFromPool(marketId, isYes, priceBps, 0, _connectedAddress)
+      : await mr.withdrawFromBidPool(marketId, isYes, priceBps, 0, _connectedAddress);
     await tx.wait();
     renderMarketPage(marketId);
   } catch (e) { console.warn('Cancel failed:', decodeError(e)); }
 }
 
-async function claimBidFill(marketId, isYes, priceBps) {
+async function claimLimitFill(marketId, kind, isYes, priceBps) {
   const s = await connectWallet();
   if (!s) return;
   try {
     const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
-    const tx = await mr.claimBidShares(marketId, isYes, priceBps, _connectedAddress);
+    const tx = kind === 'ask'
+      ? await mr.claimProceeds(marketId, isYes, priceBps, _connectedAddress)
+      : await mr.claimBidShares(marketId, isYes, priceBps, _connectedAddress);
     await tx.wait();
     renderMarketPage(marketId);
   } catch (e) { console.warn('Claim failed:', decodeError(e)); }
@@ -4284,6 +4367,14 @@ function renderSellQuote({ collF, sharesF, side, collSym }) {
   _limitMode = false;
   const spot = _spotPct(side);
   const avg = sharesF > 0 ? (collF / sharesF) * 100 : 0;
+  // Selling into a dust pool clears the whole position against the tiny
+  // opposite reserve, so the realised price collapses far below spot — the
+  // 0.6153-share position on this market nets 0.01% of face. If the fill is
+  // worse than the slippage the user accepted, offer a resting ask instead.
+  if (spot > 0 && avg < spot * (1 - _tradeSlippage / 100)) {
+    renderLimitOffer({ kind: 'ask', amountF: sharesF, side, collSym, instantF: collF });
+    return;
+  }
   el.innerHTML = `<div class="q-box">`
     + `<div class="q-main">${collF.toFixed(4)} ${escText(collSym)}</div>`
     + `<div class="q-sub"><span>Avg price ${avg.toFixed(1)}% per share &middot; spot ${spot}%</span>`
@@ -4303,7 +4394,7 @@ function onTradeInput() {
   const raw = input.value.trim();
   const val = parseFloat(raw);
   if (!val || val <= 0) {
-    _limitMode = false; _limitPriceBps = null;
+    _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
     if (quoteEl) quoteEl.textContent = '';
     _lastQuote = null;
@@ -4582,7 +4673,7 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
 
 async function executeTrade() {
   if (_isTrading) return;
-  if (_limitMode) return placeLimitBet();
+  if (_limitMode) return placeLimitOrder();
   const s = await connectWallet();
   if (!s) return;
 
