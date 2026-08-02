@@ -1564,6 +1564,7 @@ const PAMM_ABI = [
   'function getMarket(uint256 marketId) view returns (address resolver, address collateral, bool resolved, bool outcome, bool canClose, uint64 close, uint256 collateralLocked, uint256 yesSupply, uint256 noSupply, string description)',
   'function splitAndAddLiquidity(uint256 marketId, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 liquidity)',
   'function removeLiquidityToCollateral(uint256 marketId, uint256 feeOrHook, uint256 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 minCollateralOut, address to, uint256 deadline) returns (uint256 collateralOut, uint256 leftoverYes, uint256 leftoverNo)',
+  'function createMarketAndSeed(string description, address resolver, address collateral, uint64 close, bool canClose, uint256 collateralIn, uint256 feeOrHook, uint256 minLiquidity, address to, uint256 deadline) payable returns (uint256 marketId, uint256 noId, uint256 liquidity)',
   'function resolverFeeBps(address) view returns (uint16)',
   'function setResolverFeeBps(uint16 bps)'
 ];
@@ -1845,14 +1846,27 @@ function safeParseUnits(valStr, decimals) {
 
 const PM_ROUTER_ABI = [
   'function buy(uint256 marketId, bool isYes, uint256 collateralIn, uint256 minSharesOut, uint256 feeOrHook, address to, uint256 deadline) payable returns (uint256)',
-  'function sell(uint256 marketId, bool isYes, uint256 sharesIn, uint256 minCollateralOut, uint256 feeOrHook, address to, uint256 deadline) returns (uint256)'
+  'function sell(uint256 marketId, bool isYes, uint256 sharesIn, uint256 minCollateralOut, uint256 feeOrHook, address to, uint256 deadline) returns (uint256)',
+  // Escrowed limit order. Price is implied by collateral/shares, so a partial
+  // AMM fill plus an order for the remainder is one multicall on one contract —
+  // and PMRouter references PMHookRouter nowhere, so neither the hook's price
+  // impact cap nor the vault mint gate is anywhere on this path.
+  'function placeOrder(uint256 marketId, bool isYes, bool isBuy, uint96 shares, uint96 collateral, uint56 deadline, bool partialFill) payable returns (bytes32 orderHash)',
+  'function cancelOrder(bytes32 orderHash)',
+  'function multicall(bytes[] data) payable returns (bytes[] results)'
 ];
+const PM_ROUTER_IFACE = new ethers.Interface(PM_ROUTER_ABI);
+
+// Plain-fee markets carry a bps value as feeOrHook instead of a hook address,
+// which keeps PMFeeHook and PMHookRouter out of the trade path entirely.
+const PLAIN_FEE_BPS = 30;
 
 const RESOLVER_ABI = [
   'function resolveMarket(uint256 marketId)',
   'function preview(uint256 marketId) view returns (uint256 value, bool condTrue, bool ready)',
   'function conditions(uint256) view returns (address targetA, address targetB, uint8 op, bool isRatio, uint256 threshold, uint256 threshold2, bytes callDataA, bytes callDataB)',
-  'function createNumericMarket(string observable, address collateral, address target, bytes callData, uint8 op, uint256 threshold, uint64 close, bool canClose) returns (uint256 marketId, uint256 noId)'
+  'function createNumericMarket(string observable, address collateral, address target, bytes callData, uint8 op, uint256 threshold, uint64 close, bool canClose) returns (uint256 marketId, uint256 noId)',
+  'function createNumericMarketAndSeed(string observable, address collateral, address target, bytes callData, uint8 op, uint256 threshold, uint64 close, bool canClose, tuple(uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address lpRecipient, uint256 deadline) seed) payable returns (uint256 marketId, uint256 noId, uint256 shares, uint256 liquidity)'
 ];
 
 const LEGACY_RESOLVER_ABI = [
@@ -1883,7 +1897,12 @@ const ERC20_ABI = [
   'function approve(address spender, uint256 amount) returns (bool)'
 ];
 
+const ERC20_IFACE = new ethers.Interface(ERC20_ABI);
+
 const PM_HOOK_ROUTER_ABI = [
+  // 0 means the market was never registered with a hook, i.e. it is a plain-fee
+  // market and none of the hook/vault machinery applies to it.
+  'function canonicalPoolId(uint256) view returns (uint256)',
   'function addLiquidity(uint256 marketId, address collateral, uint256 collateralIn, uint256 feeOrHook, uint256 amount0Min, uint256 amount1Min, uint256 minLiquidity, address lpRecipient, uint256 deadline) payable returns (uint256 shares, uint256 liquidity)',
   'function depositToVault(uint256 marketId, address collateral, uint256 amount, bool yesVault, address to) payable returns (uint256 vaultShares)',
   'function withdrawFromVault(uint256 marketId, bool isYes, uint256 vaultSharesToRedeem, address receiver, uint256 deadline) returns (uint256 sharesReturned, uint256 feesEarned)',
@@ -2406,6 +2425,7 @@ let _tradeSlippage = 15; // default 15% slippage tolerance (high due to thin AMM
 let _limitMode = false;
 let _limitPriceBps = null;
 let _limitKind = 'bid'; // 'bid' = resting buy, 'ask' = resting sell
+let _splitPlan = null; // {amm, rest, limitBps, side} when a buy spans AMM + book
 let _limitPreflightTimer = null;
 let _limitPreflightSeq = 0;
 let _galleryFilter = 'active'; // 'active' | 'resolved' | 'all'
@@ -2884,8 +2904,17 @@ async function renderMarketPage(marketId) {
         || description.startsWith('LEGACY|')
         || (markets.find(m => m.marketId === marketId)?.isLegacy === true);
       const isLegacyResolver = isLegacyMarket;
-      // All non-legacy markets use hooks (including open-resolver markets created via bootstrapper)
-      const isLabeled = !isLegacyMarket;
+      // Ask the hook router directly rather than inferring from the resolver or
+      // a hardcoded list: a market is hooked iff it registered a canonical pool.
+      // Markets seeded with a plain fee never did, so they trade on the simple
+      // PAMM + zAMM path with no impact cap and no vault.
+      let isLabeled = !isLegacyMarket;
+      if (isLabeled) {
+        try {
+          const hr = new ethers.Contract(CONTRACTS.PM_HOOK_ROUTER, PM_HOOK_ROUTER_ABI, rpc);
+          if (BigInt(await hr.canonicalPoolId(marketId)) === 0n) isLabeled = false;
+        } catch { /* keep the inferred value if the probe fails */ }
+      }
 
       // Parse user positions from first multicall
       let userYes = 0n, userNo = 0n, userYesVaultLP = 0n, userNoVaultLP = 0n;
@@ -3518,6 +3547,7 @@ function setTradeDir(dir) {
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
   _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
+  _splitPlan = null;
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
   // Update pay token button text when switching back to buy
   if (dir === 'buy') _updatePayTokenBtn();
@@ -3541,6 +3571,7 @@ function setTradeSide(side) {
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
   _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
+  _splitPlan = null;
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
 
   updateTradeLabels();
@@ -4043,6 +4074,81 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
   _setTradeBtn(`Buy ${sharesF.toFixed(2)} ${SIDE}`, false);
 }
 
+// ---- AMM up to your limit, remainder as a resting order -----------------
+// On a plain-fee pool there is no hook and therefore no price impact cap, so
+// the only ceiling on the AMM leg is the price the trader is willing to pay.
+// Buying mints X of both sides and swaps the unwanted leg, so
+//   shares(X) = X + X*g*rIn / (rOut + X*g),  g = 1 - fee
+// and solving avg = X/shares = P for X gives a closed form for the largest
+// spend whose average price lands exactly on the limit:
+//   X = P*rOut/(1-P) - rIn/g
+// Anything above that would breach the limit, so it rests as an order instead.
+function ammSpendUpToPrice(limitFrac, rOutWei, rInWei, feeBps) {
+  if (!(limitFrac > 0) || limitFrac >= 1) return 0n;
+  const g = 1 - (feeBps || PLAIN_FEE_BPS) / 10000;
+  const rOut = Number(rOutWei), rIn = Number(rInWei);
+  const x = (limitFrac * rOut) / (1 - limitFrac) - rIn / g;
+  if (!(x > 0) || !isFinite(x)) return 0n;
+  return BigInt(Math.floor(x));
+}
+
+function _isHookedMarket() {
+  return $('app').dataset.isLabeled === '1';
+}
+
+// Two legs, one price ceiling: what the AMM takes now, what waits on the book.
+function renderSplitBuyQuote(plan, amountWei, side, collSym) {
+  const el = $('tradeQuote');
+  if (!el) return;
+  const SIDE = side.toUpperCase();
+  const rYes = BigInt($('app').dataset.ammYesReserve || '0');
+  const rNo = BigInt($('app').dataset.ammNoReserve || '0');
+  const nowShares = plan.amm > 0n
+    ? (side === 'yes' ? quoteBuyYes(plan.amm, rYes, rNo, plan.feeBps) : quoteBuyNo(plan.amm, rYes, rNo, plan.feeBps))
+    : 0n;
+  const limitPct = plan.limit * 100;
+  const ammF = Number(fmtColl(plan.amm));
+  const restF = Number(fmtColl(plan.rest));
+  const nowF = Number(fmtColl(nowShares));
+  const restShares = restF / plan.limit;
+  const totalShares = nowF + restShares;
+
+  _limitMode = false;
+  _splitPlan = { amm: plan.amm, rest: plan.rest, limitBps: Math.round(limitPct * 100), side };
+  el.innerHTML = `<div class="q-box">
+    <div class="q-main">${totalShares.toFixed(4)} <span style="color:var(--${side})">${SIDE}</span> shares</div>
+    <div class="q-sub"><span>Capped at ${limitPct.toFixed(1)}% &mdash; your ${_tradeSlippage}% slippage</span><span>Spot ${_spotPct(side)}%</span></div>
+    <div class="q-payout"><span>Fills now</span><span><b>${nowF.toFixed(4)}</b> shares for ${ammF.toFixed(6)} ${escText(collSym)}</span></div>
+    <div class="q-payout" style="border-top:none;margin-top:2px;padding-top:0"><span>Rests as an order</span><span><b>${restShares.toFixed(4)}</b> shares for ${restF.toFixed(4)} ${escText(collSym)}</span></div>
+    <div class="q-note">The pool runs out of room at ${limitPct.toFixed(1)}%. The remainder waits on the book at that price instead of paying more &mdash; cancel it any time.</div>
+  </div>`;
+  _setTradeBtn(`Buy ${nowF.toFixed(2)} now, rest ${restF.toFixed(4)} ${collSym}`, false);
+  _lastQuote = null;
+}
+
+// The price the trader has already agreed to: spot plus their slippage.
+function _limitFracFromSlippage(side) {
+  const spot = _spotPct(side) / 100;
+  if (!(spot > 0)) return 0;
+  return Math.min(0.99, spot * (1 + _tradeSlippage / 100));
+}
+
+// Split a buy into the part the AMM can take within the limit and the part
+// that has to rest. Returns wei amounts.
+function planBuySplit(amountWei, side) {
+  const rYes = BigInt($('app').dataset.ammYesReserve || '0');
+  const rNo = BigInt($('app').dataset.ammNoReserve || '0');
+  const feeBps = Number($('app').dataset.feeBps || '0') || PLAIN_FEE_BPS;
+  const limit = _limitFracFromSlippage(side);
+  // Buying YES swaps the NO leg in against the YES reserve, and vice versa.
+  const rOut = side === 'yes' ? rYes : rNo;
+  const rIn = side === 'yes' ? rNo : rYes;
+  let amm = ammSpendUpToPrice(limit, rOut, rIn, feeBps);
+  if (amm > amountWei) amm = amountWei;
+  if (amm < 0n) amm = 0n;
+  return { amm, rest: amountWei - amm, limit, feeBps };
+}
+
 // ---- Limit bets ---------------------------------------------------------
 // The instant route caps out on thin markets. buyWithBidFallback sweeps any
 // resting asks and parks the remainder as a bid at your price, so you can put
@@ -4180,6 +4286,76 @@ function nudgeLimitPrice(delta) {
   const box = $('limitPx');
   if (box) box.value = next;
   setLimitPrice(next);
+}
+
+// AMM leg + resting order in one transaction. PMRouter.multicall delegatecalls
+// into itself, so buy and placeOrder share the msg.value we send.
+async function executeSplitBuy() {
+  if (_isTrading) return;
+  const signer = await connectWallet();
+  if (!signer) return;
+  const plan = _splitPlan;
+  const marketId = $('app').dataset.marketId;
+  const collateral = $('app').dataset.collateral;
+  const btn = $('tradeBtn');
+  if (!plan || !marketId || !btn) return;
+
+  const isETH = !collateral || collateral === ethers.ZeroAddress;
+  const isYes = plan.side === 'yes';
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+  const origText = btn.textContent;
+
+  _isTrading = true;
+  btn.disabled = true;
+  try {
+    if (!isETH) {
+      btn.textContent = 'Checking approval...';
+      const token = new ethers.Contract(collateral, ERC20_ABI, signer);
+      const total = plan.amm + plan.rest;
+      if (await token.allowance(_connectedAddress, CONTRACTS.PM_ROUTER) < total) {
+        btn.textContent = 'Approve in wallet...';
+        const ap = await token.approve(CONTRACTS.PM_ROUTER, ethers.MaxUint256);
+        btn.textContent = 'Confirming approval...';
+        await ap.wait();
+      }
+    }
+
+    const calls = [];
+    if (plan.amm > 0n) {
+      // Slippage is already expressed in the price cap, so the AMM leg only
+      // needs the split floor as its floor: X collateral always mints X shares.
+      calls.push(PM_ROUTER_IFACE.encodeFunctionData('buy', [
+        marketId, isYes, plan.amm, plan.amm, BigInt(PLAIN_FEE_BPS), _connectedAddress, deadline
+      ]));
+    }
+    // Shares wanted for the resting collateral, at the cap. Both are uint96.
+    const wantShares = plan.rest * 10000n / BigInt(plan.limitBps);
+    if (wantShares >= (1n << 96n) || plan.rest >= (1n << 96n)) {
+      throw new Error('Order too large to rest — reduce the amount');
+    }
+    calls.push(PM_ROUTER_IFACE.encodeFunctionData('placeOrder', [
+      marketId, isYes, true, wantShares, plan.rest, deadline, true
+    ]));
+
+    const router = new ethers.Contract(CONTRACTS.PM_ROUTER, PM_ROUTER_ABI, signer);
+    btn.textContent = 'Confirm in wallet...';
+    const tx = await router.multicall(calls, isETH ? { value: plan.amm + plan.rest } : {});
+    btn.textContent = 'Placing...';
+    await tx.wait();
+    const input = $('tradeInput');
+    if (input) input.value = '';
+    _splitPlan = null;
+    renderMarketPage(marketId);
+  } catch (e) {
+    console.warn('Split buy failed:', e);
+    if (!/user rejected|user denied/i.test(String(e?.message || ''))) {
+      _quoteFailed('Could not place the order: ' + decodeError(e));
+    }
+    btn.textContent = origText;
+    btn.disabled = false;
+  } finally {
+    _isTrading = false;
+  }
 }
 
 async function placeLimitOrder() {
@@ -4395,6 +4571,7 @@ function onTradeInput() {
   const val = parseFloat(raw);
   if (!val || val <= 0) {
     _limitMode = false; _limitPriceBps = null; _limitKind = 'bid';
+  _splitPlan = null;
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
     if (quoteEl) quoteEl.textContent = '';
     _lastQuote = null;
@@ -4434,6 +4611,15 @@ function onTradeInput() {
   // on-chain quote that replaces it a moment later.
   const feeBps = Number($('app').dataset.feeBps || '0') || undefined;
   if (_tradeDir === 'buy') {
+    // Plain-fee market: fill the AMM up to the trader's limit and rest the
+    // rest, rather than pushing the whole order through at any price.
+    if (!_isHookedMarket()) {
+      const plan = planBuySplit(amountWei, _tradeSide);
+      if (plan.rest > 0n) {
+        renderSplitBuyQuote(plan, amountWei, _tradeSide, collSym);
+        return;
+      }
+    }
     const est = _tradeSide === 'yes' ? quoteBuyYes(amountWei, rYes, rNo, feeBps) : quoteBuyNo(amountWei, rYes, rNo, feeBps);
     renderBuyQuote({
       sharesF: Number(fmtColl(est)), costF: Number(fmtColl(amountWei)),
@@ -4674,6 +4860,7 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
 async function executeTrade() {
   if (_isTrading) return;
   if (_limitMode) return placeLimitOrder();
+  if (_splitPlan) return executeSplitBuy();
   const s = await connectWallet();
   if (!s) return;
 
@@ -5732,11 +5919,20 @@ async function createPriceMarket(collateralForLP, deadline) {
   btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
-    const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    const tx = await bootstrapper.bootstrapPriceMarket(
-      description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-      collateralForLP, _connectedAddress, deadline,
-      CONTRACTS.CHAINLINK_ETH_USD, opCode, threshold,
+    // Seeded straight through Resolver into a plain-fee pool — same
+    // deterministic Chainlink resolution, no hook on the trade path.
+    const resolver = new ethers.Contract(CONTRACTS.RESOLVER, RESOLVER_ABI, _signer);
+    const tx = await resolver.createNumericMarketAndSeed(
+      description, ethers.ZeroAddress,
+      CONTRACTS.CHAINLINK_ETH_USD, '0x50d25bcd', // latestAnswer()
+      opCode, threshold, closeTimestamp, false,
+      {
+        collateralIn: collateralForLP,
+        feeOrHook: BigInt(PLAIN_FEE_BPS),
+        amount0Min: 0n, amount1Min: 0n, minLiquidity: 0n,
+        lpRecipient: _connectedAddress,
+        deadline
+      },
       { value: collateralForLP }
     );
 
@@ -5774,7 +5970,7 @@ async function createBalanceMarket(collateralForLP, deadline) {
   btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
-    const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
+    const resolver = new ethers.Contract(CONTRACTS.RESOLVER, RESOLVER_ABI, _signer);
     let tx;
 
     const opCode = _balanceDir === 'below' ? OP.LTE : OP.GTE;
@@ -5783,9 +5979,18 @@ async function createBalanceMarket(collateralForLP, deadline) {
     if (_balanceAssetType === 'eth') {
       const thresholdWei = ethers.parseEther(threshold.toString());
       const description = `ETHBAL|${walletAddr}|${opNum}|${threshold}|${closeTimestamp}`;
-      tx = await bootstrapper.bootstrapETHBalanceMarket(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline, walletAddr, opCode, thresholdWei,
+      // Empty callData against the wallet reads its ETH balance — the same
+      // shape this page already decodes when rendering the condition.
+      tx = await resolver.createNumericMarketAndSeed(
+        description, ethers.ZeroAddress, walletAddr, '0x',
+        opCode, thresholdWei, closeTimestamp, false,
+      {
+          collateralIn: collateralForLP,
+          feeOrHook: BigInt(PLAIN_FEE_BPS),
+          amount0Min: 0n, amount1Min: 0n, minLiquidity: 0n,
+          lpRecipient: _connectedAddress,
+          deadline
+        },
         { value: collateralForLP }
       );
     } else {
@@ -5794,9 +5999,17 @@ async function createBalanceMarket(collateralForLP, deadline) {
       const decimals = _balTokenData.decimals || 18;
       const thresholdUnits = ethers.parseUnits(threshold.toString(), decimals);
       const description = `TOKBAL|${tokenAddr}|${walletAddr}|${opNum}|${threshold}|${closeTimestamp}`;
-      tx = await bootstrapper.bootstrapTokenBalanceMarket(
-        description, ethers.ZeroAddress, closeTimestamp, CONTRACTS.PM_FEE_HOOK,
-        collateralForLP, _connectedAddress, deadline, tokenAddr, walletAddr, opCode, thresholdUnits,
+      const balCallData = ERC20_IFACE.encodeFunctionData('balanceOf', [walletAddr]);
+      tx = await resolver.createNumericMarketAndSeed(
+        description, ethers.ZeroAddress, tokenAddr, balCallData,
+        opCode, thresholdUnits, closeTimestamp, false,
+      {
+          collateralIn: collateralForLP,
+          feeOrHook: BigInt(PLAIN_FEE_BPS),
+          amount0Min: 0n, amount1Min: 0n, minLiquidity: 0n,
+          lpRecipient: _connectedAddress,
+          deadline
+        },
         { value: collateralForLP }
       );
     }
@@ -5844,13 +6057,19 @@ async function createSupplyMarket(collateralForLP, deadline) {
   btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
-    const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    const tx = await bootstrapper.bootstrapWithCondition(
-      description, ethers.ZeroAddress, closeTimestamp, true, CONTRACTS.PM_FEE_HOOK,
-      collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
-      tokenAddr, callData, op, thresholdUnits,
-      { value: collateralForLP }
-    );
+    const resolver = new ethers.Contract(CONTRACTS.RESOLVER, RESOLVER_ABI, _signer);
+    const tx = await resolver.createNumericMarketAndSeed(
+      description, ethers.ZeroAddress, tokenAddr, callData,
+      op, thresholdUnits, closeTimestamp, false,
+      {
+          collateralIn: collateralForLP,
+          feeOrHook: BigInt(PLAIN_FEE_BPS),
+          amount0Min: 0n, amount1Min: 0n, minLiquidity: 0n,
+          lpRecipient: _connectedAddress,
+          deadline
+        },
+        { value: collateralForLP }
+      );
 
     btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;font-size:11px">tx &#8599;</a>`;
     const receipt = await tx.wait();
@@ -6099,10 +6318,13 @@ async function createCustomMarket(collateralForLP, deadline) {
   btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
-    const bootstrapper = new ethers.Contract(CONTRACTS.BOOTSTRAPPER, BOOTSTRAPPER_ABI, _signer);
-    const tx = await bootstrapper.bootstrapMarket(
-      description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose, CONTRACTS.PM_FEE_HOOK,
-      collateralForLP, false, 0n, 0n, _connectedAddress, deadline,
+    // Plain-fee pool, created straight on PAMM. The Bootstrapper always
+    // registers PMFeeHook, which brings the price impact cap and the vault
+    // mint gate with it; going direct keeps both off the market for good.
+    const pamm = new ethers.Contract(CONTRACTS.PAMM, PAMM_ABI, _signer);
+    const tx = await pamm.createMarketAndSeed(
+      description, resolverAddr, ethers.ZeroAddress, closeTimestamp, canClose,
+      collateralForLP, BigInt(PLAIN_FEE_BPS), 0n, _connectedAddress, deadline,
       { value: collateralForLP }
     );
 
