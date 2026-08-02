@@ -1880,7 +1880,8 @@ async function ppProviderGetLogsWithRetry(request, attempts = 3) {
       return await ppReadWithRpc((rpc) => rpc.getLogs(request), { timeoutMs: PP_LOGS_RPC_TIMEOUT_MS });
     } catch (err) {
       if (attempt >= attempts - 1 || !ppIsTransientRpcError(err)) throw err;
-      await ppDelay(200 * (attempt + 1));
+      // Rate limits need real time to clear; 200ms just burns the retry budget.
+      await ppDelay(1200 * (attempt + 1));
     }
   }
 }
@@ -6503,6 +6504,50 @@ async function ppwRecoverNoteFromJson(text) {
   return rows;
 }
 
+// The backup this app hands out is a recovery phrase, not a note file, and it
+// had no import path at all: the phrase could only ever be re-derived from a
+// wallet signature. Accept it directly so the backup is actually usable.
+const PP_BIP39_PHRASE_LENGTHS = new Set([12, 15, 18, 21, 24]);
+
+function ppwExtractRecoveryPhrase(text) {
+  const raw = String(text || '').trim();
+  if (!raw || raw.startsWith('{') || raw.startsWith('[')) return null;
+  const words = raw.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.every(word => /^[a-z]+$/.test(word))) return null;
+  if (!PP_BIP39_PHRASE_LENGTHS.has(words.length)) return null;
+  return words.join(' ');
+}
+
+async function ppwRecoverFromRecoveryPhrase(phrase) {
+  let mnemonic;
+  try {
+    mnemonic = ethers.Mnemonic.fromPhrase(phrase);
+  } catch {
+    throw new Error('That is not a valid recovery phrase. Check for typos or missing words.');
+  }
+
+  const keys = ppDeriveWalletSeedKeys(mnemonic);
+  const assets = ['ETH', 'BOLD', 'wstETH'];
+  const allEvents = await Promise.all(assets.map((asset) => ppwFetchPoolEventsWithCacheFallback(asset)));
+  const scan = await ppBuildLoadedPoolAccountsFromEvents(allEvents, keys, 'recovery-phrase');
+  const rows = Array.isArray(scan?.results) ? scan.results : [];
+  if (!rows.length) {
+    throw new Error('That phrase is valid, but no pool accounts were found for it.');
+  }
+
+  const existing = Array.isArray(_ppwLoadResults) ? _ppwLoadResults : [];
+  const recovered = new Set(rows.map(row => row.currentCommitment).filter(Boolean));
+  _ppwLoadResults = existing
+    .filter(row => !row?.currentCommitment || !recovered.has(row.currentCommitment))
+    .concat(rows);
+  _ppwLoadResults.sort(ppCompareLoadedAccounts);
+  _ppwHasResolvedLoadState = true;
+  _ppwLoadWarnings = Array.isArray(scan.warnings) ? scan.warnings : [];
+  ppwRenderPoolAccounts();
+  ppwUpdateLoadButton();
+  return rows;
+}
+
 function ppwSetNoteRecoveryStatus(message, tone = 'muted') {
   const el = $('ppwNoteRecoveryStatus');
   if (!el) return;
@@ -6525,13 +6570,16 @@ async function ppwRecoverNoteFromInput() {
   try {
     const fileText = await ppwReadNoteFileText();
     const text = fileText || $('ppwNoteJson')?.value || '';
-    const rows = await ppwRecoverNoteFromJson(text);
+    const phrase = ppwExtractRecoveryPhrase(text);
+    const rows = phrase
+      ? await ppwRecoverFromRecoveryPhrase(phrase)
+      : await ppwRecoverNoteFromJson(text);
     const summary = rows
-      .map(row => fmt(ppFormatAmountWei(BigInt(row.value), row.asset)) + ' ' + row.asset)
+      .map(row => fmt(ppFormatAmountWei(BigInt(row.value ?? row.originalValue ?? 0), row.asset)) + ' ' + row.asset)
       .join(', ');
     ppwSetNoteRecoveryStatus(
-      'Recovered ' + summary + '. It is listed above' +
-      (rows.some(row => row.isWithdrawable) ? ' and ready to withdraw.' : '; its current status is shown there.'),
+      'Recovered ' + rows.length + (rows.length === 1 ? ' account' : ' accounts') + ': ' + summary +
+      (rows.some(row => row.isWithdrawable) ? '. Ready to withdraw above.' : '. Current status is shown above.'),
       'success',
     );
   } catch (err) {
@@ -8515,6 +8563,7 @@ function ppRegisterInternalTestApi() {
       ppTraceLoadedAccountChain,
       ppReinstateFalselySpentAccounts,
       ppwParseRecoveryNoteInput,
+      ppwExtractRecoveryPhrase,
       ppwResolveNoteAssetCandidates,
       ppwRecoverNoteFromJson,
       ppBuildDepositEventsMap,

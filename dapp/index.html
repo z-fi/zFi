@@ -1400,12 +1400,13 @@ body.modal-open { overflow: hidden; }
     <details id="ppwNoteRecovery" style="margin-top:14px">
       <summary style="font-size:11px;color:var(--fg-muted);cursor:pointer">Recover a note from a saved file</summary>
       <p style="font-size:11px;color:var(--fg-muted);margin:8px 0;line-height:1.5">
-        If a Pool Account is missing or shows the wrong state, load the note you saved when depositing.
-        The note is checked against the pool on-chain and never leaves your browser.
+        If a Pool Account is missing or shows the wrong state, load the recovery phrase this app gave you
+        (or a note file exported from another Privacy Pools client). Everything is checked against the pool
+        on-chain and never leaves your browser.
       </p>
       <input type="file" id="ppwNoteFile" accept=".json,.txt,application/json,text/plain" style="font-size:11px;width:100%">
-      <textarea id="ppwNoteJson" rows="4" placeholder='Or paste the note JSON, e.g. {"nullifier":"0x...","secret":"0x...","label":"...","value":"..."}' style="width:100%;margin-top:8px;font-size:11px;font-family:inherit;padding:8px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted)"></textarea>
-      <button id="ppwNoteRecoverBtn" class="swap-btn" style="width:100%;margin-top:8px" onclick="ppwRecoverNoteFromInput()">Recover note</button>
+      <textarea id="ppwNoteJson" rows="4" placeholder='Or paste your recovery phrase (12-24 words), or a note JSON such as {"nullifier":"0x...","secret":"0x..."}' style="width:100%;margin-top:8px;font-size:11px;font-family:inherit;padding:8px;background:var(--surface);color:var(--fg);border:1px solid var(--border-muted)"></textarea>
+      <button id="ppwNoteRecoverBtn" class="swap-btn" style="width:100%;margin-top:8px" onclick="ppwRecoverNoteFromInput()">Recover accounts</button>
       <div id="ppwNoteRecoveryStatus" style="font-size:11px;margin-top:8px;color:var(--fg-muted);display:none"></div>
     </details>
   </div>
@@ -3377,6 +3378,13 @@ function makeFallbackProvider(urls) {
       /502|503|504|ECONNRESET|ENETUNREACH|EAI_AGAIN|Failed to fetch/i.test(s) ||
       /failed to detect network|timeout|timed out|ETIMEDOUT/i.test(s);
   };
+  // Rate limiting is temporary and node-specific. Without this a 429 left the
+  // node "up", so it was retried immediately and kept failing, while the only
+  // nodes that can serve historical logs sat behind it.
+  const isRateLimitErr = (e) => {
+    const s = String(e?.message || "") + " " + String(e?.info?.responseStatus || "");
+    return /\b429\b|too many requests|rate limit/i.test(s);
+  };
   const isAuthErr = (e) => /Unauthorized|invalid api key|403|401/i.test(String(e?.message || ""));
   // Node gas-cap rejection. NOT deterministic: the identical call succeeds on a
   // higher-cap RPC. The heavy quoter builders need >100M gas, which several
@@ -3429,6 +3437,7 @@ function makeFallbackProvider(urls) {
           lastErr = e;
           if (isContractErr(e)) throw e; // deterministic — don't retry other RPCs
           if (isGasCapErr(e)) n.gasCapFails++; // demote, then fall through to next RPC
+          else if (isRateLimitErr(e)) n.downUntil = Date.now() + 5_000; // brief: it recovers
           else if (isAuthErr(e)) n.ok = false;
           else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
         }

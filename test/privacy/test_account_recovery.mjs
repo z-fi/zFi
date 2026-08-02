@@ -1622,5 +1622,16 @@ test('note parsing rejects unusable input with actionable messages', () => {
   assert.throws(() => ppwParseRecoveryNoteInput('{"nullifier":"-1","secret":"2"}'), /nullifier.*secret/);
 });
 
+test('a recovery phrase is detected and note JSON is not mistaken for one', () => {
+  const { ppwExtractRecoveryPhrase } = api.load;
+  const twelve = 'abandon ability able about above absent absorb abstract absurd abuse access accident';
+
+  assert.equal(ppwExtractRecoveryPhrase(twelve), twelve);
+  assert.equal(ppwExtractRecoveryPhrase('  ' + twelve.toUpperCase() + '  '), twelve);
+  assert.equal(ppwExtractRecoveryPhrase('{"nullifier":"1","secret":"2"}'), null);
+  assert.equal(ppwExtractRecoveryPhrase('abandon ability able'), null, 'too few words');
+  assert.equal(ppwExtractRecoveryPhrase(twelve + ' 0x1234'), null, 'non-word tokens');
+});
+
 
 await done();
