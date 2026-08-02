@@ -6507,15 +6507,34 @@ async function ppwRecoverNoteFromJson(text) {
 // The backup this app hands out is a recovery phrase, not a note file, and it
 // had no import path at all: the phrase could only ever be re-derived from a
 // wallet signature. Accept it directly so the backup is actually usable.
-const PP_BIP39_PHRASE_LENGTHS = new Set([12, 15, 18, 21, 24]);
+const PP_BIP39_PHRASE_LENGTHS = [24, 21, 18, 15, 12];
 
+// Pull the phrase out of whatever the words are wrapped in — a bare download, a
+// numbered list, quotes, or a note with a heading — by finding the first run of
+// words that is a checksum-valid BIP-39 mnemonic. Requiring the whole input to
+// be exactly N bare words rejected ordinary pastes.
 function ppwExtractRecoveryPhrase(text) {
   const raw = String(text || '').trim();
   if (!raw || raw.startsWith('{') || raw.startsWith('[')) return null;
-  const words = raw.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.every(word => /^[a-z]+$/.test(word))) return null;
-  if (!PP_BIP39_PHRASE_LENGTHS.has(words.length)) return null;
-  return words.join(' ');
+  const words = (raw.toLowerCase().match(/[a-z]+/g) || []);
+  if (words.length < 12) return null;
+  for (const length of PP_BIP39_PHRASE_LENGTHS) {
+    for (let start = 0; start + length <= words.length; start++) {
+      const candidate = words.slice(start, start + length).join(' ');
+      try {
+        if (ethers.Mnemonic.isValidMnemonic(candidate)) return candidate;
+      } catch { /* keep scanning */ }
+    }
+  }
+  return null;
+}
+
+// Distinguishes "this is meant to be a phrase" from "this is meant to be JSON"
+// so the failure message names the real problem.
+function ppwLooksLikeRecoveryPhraseAttempt(text) {
+  const raw = String(text || '').trim();
+  if (!raw || raw.startsWith('{') || raw.startsWith('[')) return false;
+  return (raw.toLowerCase().match(/[a-z]+/g) || []).length >= 12;
 }
 
 async function ppwRecoverFromRecoveryPhrase(phrase) {
@@ -6571,6 +6590,9 @@ async function ppwRecoverNoteFromInput() {
     const fileText = await ppwReadNoteFileText();
     const text = fileText || $('ppwNoteJson')?.value || '';
     const phrase = ppwExtractRecoveryPhrase(text);
+    if (!phrase && ppwLooksLikeRecoveryPhraseAttempt(text)) {
+      throw new Error('That looks like a recovery phrase but it is not valid — check for a mistyped, missing, or out-of-order word.');
+    }
     const rows = phrase
       ? await ppwRecoverFromRecoveryPhrase(phrase)
       : await ppwRecoverNoteFromJson(text);
@@ -8564,6 +8586,7 @@ function ppRegisterInternalTestApi() {
       ppReinstateFalselySpentAccounts,
       ppwParseRecoveryNoteInput,
       ppwExtractRecoveryPhrase,
+      ppwLooksLikeRecoveryPhraseAttempt,
       ppwResolveNoteAssetCandidates,
       ppwRecoverNoteFromJson,
       ppBuildDepositEventsMap,

@@ -80,7 +80,8 @@ async function readPhrase(phraseFile) {
         process.stdin.on('end', () => resolve(buf));
         process.stdin.on('error', reject);
       });
-  // Accept a bare phrase or a downloaded file that wraps it in JSON/labels.
+  // Accept a bare phrase, a JSON wrapper, or a phrase surrounded by headings,
+  // numbering or quotes: take the first checksum-valid BIP-39 run of words.
   const text = raw.trim();
   if (text.startsWith('{')) {
     const parsed = JSON.parse(text);
@@ -88,9 +89,20 @@ async function readPhrase(phraseFile) {
       if (typeof parsed?.[key] === 'string' && parsed[key].trim()) return parsed[key].trim();
     }
   }
-  const words = text.split(/\s+/).filter(w => /^[a-z]+$/i.test(w));
-  if (words.length >= 12) return words.slice(0, words.length >= 24 ? 24 : 12).join(' ');
   return text;
+}
+
+function extractValidPhrase(ethers, text) {
+  const words = (String(text || '').toLowerCase().match(/[a-z]+/g) || []);
+  for (const length of [24, 21, 18, 15, 12]) {
+    for (let start = 0; start + length <= words.length; start++) {
+      const candidate = words.slice(start, start + length).join(' ');
+      try {
+        if (ethers.Mnemonic.isValidMnemonic(candidate)) return candidate;
+      } catch { /* keep scanning */ }
+    }
+  }
+  return null;
 }
 
 let rpcCursor = 0;
@@ -129,9 +141,13 @@ async function main() {
   }
 
   const { poseidon1, poseidon2, poseidon3, ethers } = loadRuntimeLibs();
-  const phrase = await readPhrase(args.phraseFile);
-  if (!phrase || phrase.split(/\s+/).length < 12) {
-    console.error('Could not read a recovery phrase. Pass --phrase-file <file> or pipe it on stdin.');
+  const rawPhrase = await readPhrase(args.phraseFile);
+  const phrase = extractValidPhrase(ethers, rawPhrase);
+  if (!phrase) {
+    const wordCount = (String(rawPhrase || '').toLowerCase().match(/[a-z]+/g) || []).length;
+    console.error(wordCount >= 12
+      ? 'Found words but no valid BIP-39 phrase (checksum failed). Check for a mistyped, missing or out-of-order word.'
+      : 'Could not read a recovery phrase. Pass --phrase-file <file> or pipe it on stdin.');
     process.exitCode = 1;
     return;
   }
@@ -192,6 +208,7 @@ async function main() {
     }
     console.log(`    events: ${deposits.size} deposits, ${withdrawn.size} withdrawals, ${leaves.size} leaves`);
 
+    let matched = 0;
     for (const [derivation, keys] of Object.entries(keysets)) {
       for (let index = 0; index < args.indices; index++) {
         const nullifier = poseidon3([keys.masterNullifier, scope, BigInt(index)]);
@@ -199,6 +216,7 @@ async function main() {
         const precommitment = poseidon2([nullifier, secret]);
         const deposit = deposits.get(hex32(precommitment));
         if (!deposit) continue;
+        matched++;
 
         const nullHash = poseidon1([nullifier]);
         const spentEvent = withdrawn.get(hex32(nullHash));
@@ -225,6 +243,10 @@ async function main() {
           console.log(`        withdrawal tx ${spentEvent.txHash} value=${ethers.formatUnits(spentEvent.value, 18)} change=${ethers.formatUnits(change < 0n ? 0n : change, 18)}`);
         }
       }
+    }
+    if (!matched) {
+      console.log(`    no notes for this phrase in the first ${args.indices} indices of either derivation`);
+      console.log('    (if you expect notes here, re-run with a larger --indices)');
     }
   }
   console.log('\nDone. The output above contains no secrets and is safe to share.');
