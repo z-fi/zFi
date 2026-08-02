@@ -1759,8 +1759,8 @@ function ppIsTransientRpcError(err) {
   );
 }
 
-function ppReadWithRpc(work) {
-  return quoteRPC.call(work);
+function ppReadWithRpc(work, options) {
+  return quoteRPC.call(work, options);
 }
 
 function ppReadEntrypoint(fn) {
@@ -1771,11 +1771,15 @@ function ppReadEntrypoint(fn) {
 }
 
 const PP_LOG_CHUNK_MAX_DEPTH = 12;
+// Historical scans legitimately take much longer than a quote. The shared
+// provider's 4s default timed these out on every node in turn, which surfaced
+// as "Some pool data could not be loaded" and served a stale cache.
+const PP_LOGS_RPC_TIMEOUT_MS = 25_000;
 
 async function ppProviderGetLogsWithRetry(request, attempts = 3) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      return await ppReadWithRpc((rpc) => rpc.getLogs(request));
+      return await ppReadWithRpc((rpc) => rpc.getLogs(request), { timeoutMs: PP_LOGS_RPC_TIMEOUT_MS });
     } catch (err) {
       if (attempt >= attempts - 1 || !ppIsTransientRpcError(err)) throw err;
       await ppDelay(200 * (attempt + 1));
@@ -1792,12 +1796,78 @@ function ppIsRangeLimitedLogsError(err) {
     msg.includes('query exceeds') ||
     msg.includes('exceeded max allowed range') ||
     msg.includes('too many results') ||
+    msg.includes('more than 10000 results') ||
+    msg.includes('response size') ||
+    msg.includes('log limit') ||
     /limited to 0\s*-\s*\d+\s*blocks range/.test(msg) ||
-    /ranges? over \d+.*not supported/.test(msg)
+    /ranges? over \d+.*not supported/.test(msg) ||
+    // Free-tier nodes answer an over-large range with a plain timeout rather
+    // than a range error (eth.drpc.org returns HTTP 408 "Request timeout on
+    // the free plan"). Narrowing the window is the right response there too.
+    msg.includes('408') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out')
   );
 }
 
-async function ppGetLogsChunked(filter, fromBlock, toBlock, chunkSize = 1250000, depth = 0) {
+// Public nodes will not serve a multi-million-block eth_getLogs: some answer
+// with a range error, others just time out. Request at most this many blocks
+// per call instead of asking for the whole history and hoping to recover from
+// the error.
+const PP_LOG_CHUNK_BLOCKS = 250_000;
+
+// Free tiers advertise their cap in the error text ("ranges over 10000 blocks
+// are not supported", "eth_getLogs is limited to 0 - 50 blocks range"). Halving
+// blindly from 250k cannot reach a 50-block cap inside the depth limit, so read
+// the number off the error and jump straight to it.
+function ppParseLogRangeLimitFromError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  const patterns = [
+    /limited to 0\s*-\s*(\d+)\s*blocks/,
+    /ranges? over (\d+) blocks?/,
+    /(?:maximum|max)(?: allowed)? block range(?: is|:)?\s*(\d+)/,
+    /block range (?:limit|of|is)\s*(\d+)/,
+    /more than (\d+) blocks?/,
+    /exceeds? (?:the )?(?:maximum |max )?(?:of )?(\d+) blocks?/,
+  ];
+  for (const re of patterns) {
+    const m = msg.match(re);
+    if (m) {
+      const limit = Number(m[1]);
+      if (Number.isInteger(limit) && limit > 0) return limit;
+    }
+  }
+  // Some nodes answer a too-large result set with a suggested window instead of
+  // a block count, e.g. "try with this block range [0x1523efe, 0x186f391]".
+  const hinted = msg.match(/\[\s*(0x[0-9a-f]+)\s*,\s*(0x[0-9a-f]+)\s*\]/);
+  if (hinted) {
+    const span = Number(BigInt(hinted[2]) - BigInt(hinted[1])) + 1;
+    if (Number.isInteger(span) && span > 0) return span;
+  }
+  return null;
+}
+
+// Smallest range cap observed this session, so later chunks start at a size the
+// node will actually serve instead of rediscovering the cap every window.
+let _ppLearnedLogRangeLimit = null;
+
+function ppEffectiveLogChunkSize(chunkSize) {
+  return _ppLearnedLogRangeLimit != null
+    ? Math.max(1, Math.min(chunkSize, _ppLearnedLogRangeLimit))
+    : chunkSize;
+}
+
+async function ppGetLogsChunked(filter, fromBlock, toBlock, chunkSize = PP_LOG_CHUNK_BLOCKS, depth = 0) {
+  chunkSize = ppEffectiveLogChunkSize(chunkSize);
+  const span = toBlock - fromBlock + 1;
+  if (depth === 0 && span > chunkSize) {
+    const logs = [];
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, toBlock);
+      logs.push(...await ppGetLogsChunked(filter, start, end, chunkSize, depth));
+    }
+    return logs;
+  }
   try {
     return await ppProviderGetLogsWithRetry({ ...filter, fromBlock, toBlock });
   } catch (e) {
@@ -1807,8 +1877,16 @@ async function ppGetLogsChunked(filter, fromBlock, toBlock, chunkSize = 1250000,
       throw new Error('RPC log range limit persisted after maximum subdivision: ' + String(e?.message || e || 'unknown error'));
     }
     const logs = [];
-    const span = toBlock - fromBlock + 1;
-    const nextChunkSize = Math.max(1, Math.floor(Math.min(chunkSize, span - 1) / 2));
+    const advertisedLimit = ppParseLogRangeLimitFromError(e);
+    if (advertisedLimit != null) {
+      _ppLearnedLogRangeLimit = _ppLearnedLogRangeLimit == null
+        ? advertisedLimit
+        : Math.min(_ppLearnedLogRangeLimit, advertisedLimit);
+    }
+    const halved = Math.max(1, Math.floor(Math.min(chunkSize, span - 1) / 2));
+    const nextChunkSize = advertisedLimit != null
+      ? Math.max(1, Math.min(advertisedLimit, span - 1))
+      : halved;
     if (nextChunkSize >= span) throw e;
     for (let start = fromBlock; start <= toBlock; start += nextChunkSize) {
       const end = Math.min(start + nextChunkSize - 1, toBlock);
