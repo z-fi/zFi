@@ -4233,6 +4233,10 @@ async function handleAmountChange() {
       dstEl.placeholder = "0.0";
       return;
     }
+    // The quote the user is now looking at, and the object _selectRoute mutates
+    // when a route is picked by hand. Assigned only after the staleness checks
+    // above, so an overtaken quote can never become the selectable one.
+    _quoteResult = quote;
 
     const toData = tokens[toSnap];
     const fromDataQ = tokens[fromSnap];
@@ -7308,6 +7312,11 @@ async function withRetry(task, { tries = 2, base = 80 } = {}) {
 // Marks a request that was replaced by a newer one before it ever ran. Callers
 // treat it as "not my problem" rather than as a failed quote.
 const QUOTE_SUPERSEDED = Symbol('quote superseded');
+
+// The quote currently on screen. _selectRoute() reads it to apply a manually
+// picked route, so it must outlive the request that produced it. handleAmountChange
+// assigns it once a result survives the staleness checks.
+let _quoteResult = null;
 
 // Quote admission control.
 //

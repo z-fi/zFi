@@ -259,3 +259,30 @@ describe('external price fan-out deadline', () => {
     assert.ok(Date.now() - t0 < 300, 'blocked until the deadline even though all had settled');
   });
 });
+
+// A quote's result object outlives the request that produced it: _selectRoute()
+// reads module-level `_quoteResult` when the user picks a route by hand. That
+// binding was declared inside the old requestQuote block, so rewriting that
+// block silently removed it and every route click threw ReferenceError — the
+// route list rendered fine and simply refused to respond. Nothing else in the
+// page references it, so no syntax check or existing test noticed.
+describe('manual route selection wiring', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'dapp', 'index.html'), 'utf8');
+
+  test('_quoteResult is declared, not an implicit global', () => {
+    assert.match(html, /\blet _quoteResult\b/,
+      '_quoteResult must be declared at module level — _selectRoute reads it');
+  });
+
+  test('every state _selectRoute reads has a declaration', () => {
+    const body = html.slice(html.indexOf('function _selectRoute('));
+    const fn = body.slice(0, body.indexOf('\n}\n'));
+    // Module-level names the function reads. Assigning to an undeclared name
+    // would work in sloppy mode; reading one throws.
+    for (const name of ['_quoteResult', '_resetExtFlags', 'toToken', 'fromToken', 'tokens']) {
+      if (!fn.includes(name)) continue;
+      const declared = new RegExp(`\\b(let|const|var|function)\\s+${name}\\b`).test(html);
+      assert.ok(declared, `_selectRoute reads ${name} but nothing declares it`);
+    }
+  });
+});
