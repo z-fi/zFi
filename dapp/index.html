@@ -948,9 +948,6 @@ body.modal-open { overflow: hidden; }
 .live-sale-pct { font-size:12px;font-weight:600;color:var(--green, #22c55e);white-space:nowrap; }
 .live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;flex-shrink:0; }
 .live-sale-bar-fill { height:100%;background:var(--green, #22c55e);border-radius:2px; }
-.pm-odds-bar { height:4px;display:flex;border-radius:2px;overflow:hidden;width:100%;margin-top:4px; }
-.pm-odds-yes { background:var(--green, #22c55e); }
-.pm-odds-no { background:var(--red, #ef4444); }
 
 /* OTC order ticker */
 .otc-order {
@@ -1333,7 +1330,6 @@ body.modal-open { overflow: hidden; }
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
 <div id="liveCurveSection" class="live-sales" style="display:none"></div>
-<div id="featuredPmSection" class="live-sales" style="display:none"></div>
 <div id="privacyTab" style="display:none">
 <div id="ppWalletSeedBackupNotice" class="pp-notice" style="display:none;margin-bottom:16px"></div>
 <div class="swap-card">
@@ -1932,28 +1928,35 @@ async function searchDaicoCoins() {
   finally { _daicoScanBusy = false; }
 }
 
-// ---- Live sale banner (most recent active sale) ----
+// ---- DAICO highlight ----
+// The collector DAO holds the slot whenever the scan can see it; anything else only
+// gets it when the collector DAO is missing.
+const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
 async function loadLiveSale() {
   try {
     const daicos = await fetchDaicoScan();
     const now = BigInt(Math.floor(Date.now() / 1000));
-    // Find most recent active sale (highest index = newest)
-    let s = null;
-    for (let i = daicos.length - 1; i >= 0; i--) {
+    const asCard = (d) => {
+      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+      const total = sale ? sale.totalSupply : 0n;
+      const sold = sale ? total - sale.remainingSupply : 0n;
+      return {
+        dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
+        contractURI: d.meta.contractURI,
+        pct: total > 0n ? Number((sold * 10000n) / total) / 100 : 0,
+        raisedETH: sale && sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0,
+        hasSale: !!sale,
+      };
+    };
+    const pinned = daicos.find(d => d.dao.toLowerCase() === DAICO_PINNED_DAO);
+    let s = pinned ? asCard(pinned) : null;
+    // Fall back to the most recent active sale (highest index = newest).
+    for (let i = daicos.length - 1; !s && i >= 0; i--) {
       const d = daicos[i];
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
       if (!sale) continue;
       if (sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline))) {
-        const totalSale = sale.totalSupply;
-        const sold = totalSale - sale.remainingSupply;
-        const raisedETH = sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0;
-        s = {
-          dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
-          contractURI: d.meta.contractURI,
-          pct: totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0,
-          raisedETH
-        };
-        break;
+        s = asCard(d);
       }
     }
     if (!s) return;
@@ -1961,19 +1964,18 @@ async function loadLiveSale() {
     if (s.contractURI) {
       try {
         let url = s.contractURI;
-        if (url.trimStart().startsWith('{')) { const m = JSON.parse(url); if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; } return; }
-        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
-        else if (url.startsWith('data:')) {
-          const j = url.split(',').slice(1).join(',');
-          const m = JSON.parse(decodeURIComponent(j));
+        const applyMeta = m => {
           if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; }
           if (m.name) s.name = m.name;
-        }
-        if (!s.icon) {
-          const res = await fetch(url);
-          const m = await res.json();
-          if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; }
-          if (m.name) s.name = m.name;
+        };
+        // Raw on-chain JSON and data: URIs are already in hand; only an http/ipfs URL
+        // needs a fetch. (The old raw-JSON branch returned out of loadLiveSale itself,
+        // so those DAOs never rendered at all.)
+        if (url.trimStart().startsWith('{')) applyMeta(JSON.parse(url));
+        else if (url.startsWith('data:')) applyMeta(JSON.parse(decodeURIComponent(url.split(',').slice(1).join(','))));
+        else {
+          if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
+          applyMeta(await (await fetch(url)).json());
         }
       } catch {}
     }
@@ -1988,132 +1990,15 @@ async function loadLiveSale() {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
-        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : 'Sale live'}</div>
+        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'}</div>
       </div>
-      <div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
-      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>
+      ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
+      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
     </a>`;
     if (_activeTab === 'swap') el.style.display = '';
   } catch (e) { console.warn('Live sale load failed:', e); }
 }
-// ---- Featured prediction market (top active ETH market by TVL, from predict cache) ----
-function parsePmDesc(desc) {
-  if (!desc) return 'Prediction market';
-  const p = desc.split('|');
-  const type = p[0];
-  const fmtPrice = v => { v = parseInt(v); if (v >= 1e6) return `$${(v/1e6).toFixed(v%1e6===0?0:1)}M`; if (v >= 1000) return `$${(v/1000).toFixed(v%1000===0?0:1)}K`; return `$${v}`; };
-  const fmtDate = ts => { const d = new Date(parseInt(ts)*1000), n = new Date(); return d.getFullYear()===n.getFullYear() ? d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); };
-  const fmtBal = v => { v = parseFloat(v); if (v >= 1e9) return `${(v/1e9).toFixed(1)}B`; if (v >= 1e6) return `${(v/1e6).toFixed(1)}M`; if (v >= 1000) return `${(v/1000).toFixed(1)}K`; return v.toFixed(1); };
-  const shortAddr = a => `${a.slice(0,6)}...${a.slice(-4)}`;
-  if (type === 'PRICE' && p.length >= 6) { const [,asset,,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'drop to' : 'hit'; return `${asset} ${verb} ${fmtPrice(thresh)} by ${fmtDate(close)}?`; }
-  if (type === 'ETHBAL' && p.length >= 5) { const [,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${fmtBal(thresh)} ETH by ${fmtDate(close)}?`; }
-  if (type === 'TOKBAL' && p.length >= 6) { const [,token,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${fmtBal(thresh)} ${shortAddr(token)} by ${fmtDate(close)}?`; }
-  if (type === 'NFTBAL' && p.length >= 6) { const [,token,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${parseInt(p[4])} ${shortAddr(token)} NFTs by ${fmtDate(close)}?`; }
-  if (type === 'GAS' && p.length >= 4) { const [,subtype,...rest] = p; const date = fmtDate(rest[rest.length-1]); if (subtype === 'RANGE') return `Gas stay in ${rest[0]}-${rest[1]} gwei by ${date}?`; const labels = {TWAP:'avg',PEAK:'spike to',TROUGH:'dip to',VOL:'swing',VOLATILITY:'swing'}; return `Gas ${labels[subtype]||subtype.toLowerCase()} ${rest[0]} gwei by ${date}?`; }
-  if (type === 'SUPPLY' && p.length >= 5) { const [,token,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'drop below' : 'exceed'; return `${shortAddr(token)} supply ${verb} ${fmtBal(thresh)} by ${fmtDate(close)}?`; }
-  const qMatch = desc.match(/^(.+?\?)/);
-  if (qMatch) return qMatch[1];
-  return desc.length > 80 ? desc.slice(0, 77) + '...' : desc;
-}
-
-function renderFeaturedPm(m) {
-  const el = $('featuredPmSection');
-  if (!el) return;
-  const yRaw = typeof m.y === 'number' ? m.y : 50;
-  const yPct = Math.max(1, Math.min(99, Math.round(yRaw))), nPct = 100 - yPct;
-  const cheapPct = Math.min(yPct, nPct);
-  const cheapSide = yPct <= nPct ? 'YES' : 'NO';
-  const payout = cheapPct > 0 ? 0.01 / (cheapPct / 100) : 0;
-  const mult = payout > 0 ? (payout / 0.01).toFixed(1) : '?';
-  const hintHtml = payout > 0 ? `<div style="font-size:10px;color:var(--fg-muted);margin-top:3px">0.01 ETH &rarr; ${payout.toFixed(3)} ETH if ${cheapSide} <span style="color:var(--green, #22c55e)">(${mult}x)</span></div>` : '';
-  const tvlFmt = m.tvl >= 100 ? m.tvl.toFixed(2) : m.tvl >= 1 ? m.tvl.toFixed(4) : m.tvl.toFixed(6);
-  const collSym = (!m.collateral || m.collateral === ZERO_ADDRESS) ? 'ETH' : 'TOKEN';
-  const question = (m.rawDesc ? parsePmDesc(m.rawDesc) : (m.question || 'Prediction market').replace(/<[^>]*>/g, ''));
-  el.innerHTML = `<div class="sec-head"><span>Predictions</span><a href="predict/">View all &rarr;</a></div><a class="live-sale-card" href="predict/#${m.marketId}">
-    <div class="live-sale-info">
-      <div class="live-sale-name" style="white-space:normal;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${esc(question)}</div>
-      <div class="live-sale-meta">${tvlFmt} ${collSym} locked</div>
-      <div class="pm-odds-bar"><div class="pm-odds-yes" style="width:${yPct}%"></div><div class="pm-odds-no" style="flex:1"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px"><span style="color:var(--green, #22c55e)">YES ${yPct}%</span><span style="color:var(--red, #ef4444)">NO ${nPct}%</span></div>
-      ${hintHtml}
-    </div>
-  </a>`;
-  if (_activeTab === 'swap') el.style.display = '';
-}
-
-async function loadFeaturedPm() {
-  // Try localStorage cache first (instant)
-  try {
-    const raw = localStorage.getItem('zfi_predict_markets');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.data && parsed.data.length) {
-        const now = Math.floor(Date.now() / 1000);
-        const active = parsed.data.filter(m => !m.resolved && m.close > now && (m.tvl || 0) >= 0.01
-          && (!m.collateral || m.collateral === ZERO_ADDRESS)
-          && m.oddsLoaded && m.y > 0 && m.y < 100);
-        if (active.length) {
-          active.sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
-          renderFeaturedPm(active[0]);
-          return;
-        }
-      }
-    }
-  } catch {}
-  // No usable cache — lightweight on-chain fetch (paginated)
-  try {
-    const _PM_PAMM = '0x000000000044bfe6c2BBFeD8862973E0612f07C0';
-    const _PM_QUOTER = '0x8F4283c327afF696789e23589c8c79306909B2Be';
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-    const pamm = new ethers.Contract(_PM_PAMM, [
-      'function getMarkets(uint256 start, uint256 count) view returns (uint256[] marketIds, address[] resolvers, address[] collaterals, uint8[] states, uint64[] closes, uint256[] collateralAmounts, uint256[] yesSupplies, uint256[] noSupplies, string[] descs, uint256 next)'
-    ], rpc);
-    const now = Math.floor(Date.now() / 1000);
-    const candidates = [];
-    let start = 0, pages = 0;
-    while (pages < 20) {
-      let result;
-      try { result = await pamm.getMarkets(start, 50); } catch { if (start === 0) throw new Error('RPC failed'); break; }
-      if (result.marketIds.length === 0) break;
-      pages++;
-      for (let i = 0; i < result.marketIds.length; i++) {
-        const close = Number(result.closes[i]);
-        const states = Number(result.states[i]);
-        const resolved = (states & 1) !== 0;
-        const collateral = result.collaterals[i];
-        const tvl = Number(result.collateralAmounts[i]) / 1e18;
-        if (resolved || close <= now || tvl < 0.01) continue;
-        if (collateral !== ZERO_ADDRESS) continue;
-        const desc = result.descs[i] || '';
-        const question = parsePmDesc(desc);
-        candidates.push({ marketId: result.marketIds[i].toString(), question, rawDesc: desc, close, tvl, collateral });
-      }
-      start = Number(result.next);
-      if (start === 0) break;
-      // If we have a strong candidate (≥0.1 ETH TVL), stop paginating — good enough
-      if (candidates.length && candidates.reduce((best, c) => c.tvl > best.tvl ? c : best, candidates[0]).tvl >= 0.1) break;
-    }
-    if (!candidates.length) return;
-    candidates.sort((a, b) => b.tvl - a.tvl);
-    const best = candidates[0];
-    // Fetch odds for the top candidate
-    try {
-      const quoter = new ethers.Contract(_PM_QUOTER, [
-        'function getMarketSummary(uint256 marketId) view returns (uint112 ammYesReserve, uint112 ammNoReserve, uint256 ammPriceYesBps, uint256 feeBps, uint112 vaultYesShares, uint112 vaultNoShares, uint256 totalYesVaultLP, uint256 totalNoVaultLP, uint256 vaultBudget, uint256 twapPriceYesBps, uint64 closeTime, bool resolved, bool inCloseWindow)'
-      ], rpc);
-      const summary = await quoter.getMarketSummary(best.marketId);
-      best.y = Math.round(Number(summary.ammPriceYesBps) / 100);
-      best.oddsLoaded = true;
-    } catch {
-      best.y = 50; best.oddsLoaded = true;
-    }
-    if (best.y > 0 && best.y < 100) renderFeaturedPm(best);
-  } catch (e) { console.warn('Featured PM fetch failed:', e); }
-}
-
-// Load featured PM on page init (non-blocking)
-// setTimeout(loadLiveSale, 500); // DAICO banner hidden for now
-setTimeout(loadFeaturedPm, 100);
+setTimeout(loadLiveSale, 500);
 
 // ---- Curve coins tile + dropdown integration ----
 // Surfaces ClassicalCurveSale coins created via /coin so they're discoverable + swappable
@@ -2262,7 +2147,11 @@ async function loadLiveCurveCoins() {
         icon,
         contractURI: r.contractURI,
         tokenKey: key,
-        perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated
+        perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated,
+        // A launch nobody has bought yet reads as dead on the tile. Tracked here and
+        // filtered at render time; the dropdown still carries every coin so they stay
+        // searchable and tradeable.
+        hasActivity: sold > 0n || raisedETH > 0n
       });
     }
 
@@ -2270,7 +2159,10 @@ async function loadLiveCurveCoins() {
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
 
     if (!el || cards.length === 0) return;
-    const tileCards = cards.slice(0, CURVE_TILE_MAX);
+    // Feature only coins that have traded. If none of the recent launches have, drop the
+    // section rather than lead with a column of 0.0%.
+    const tileCards = cards.filter(c => c.hasActivity).slice(0, CURVE_TILE_MAX);
+    if (tileCards.length === 0) { el.style.display = 'none'; return; }
 
     // Resolve logos from contractURI metadata — visible cards only, so one tile costs
     // at most CURVE_TILE_MAX extra fetches.
@@ -8864,7 +8756,7 @@ function updateLpLink(quote) {
 }
 
 // ---- Quick-pick popular tokens ----
-const QUICK_TOKENS = ["BOLD", "DAI", "USDC", "stETH", "rETH"];
+const QUICK_TOKENS = ["FWC", "BOLD", "USDC", "stETH", "rETH"];
 
 function renderQuickTokens() {
   const el = $('quickTokens');
@@ -9565,8 +9457,6 @@ function switchTab(tab) {
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
   const lcEl = $('liveCurveSection');
   if (lcEl && lcEl.innerHTML) lcEl.style.display = tab === 'swap' ? '' : 'none';
-  const pmEl = $('featuredPmSection');
-  if (pmEl && pmEl.innerHTML) pmEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
@@ -9703,8 +9593,13 @@ walletInit({
       const provider = new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
       const viewAbi = ["function getAllActiveOrdersPaged(address,address,uint256,uint256,uint256,uint256) view returns (tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256,tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256)"];
       const viewContract = new ethers.Contract(OTC_VIEW, viewAbi, provider);
-      const [v1Orders,, v2Orders] = await viewContract.getAllActiveOrdersPaged(OTC_V1, OTC_PF, 0, 0, 3, 500);
-      for (const po of [...v1Orders, ...v2Orders].slice(0, 4)) {
+      // The paged read walks ids upward, so its first rows are the oldest orders still
+      // open — the opposite of what this section claims to show. Pull a wider window and
+      // sort by id descending per board (ids are only comparable within a board), current
+      // board first, so the four shown really are the most recent.
+      const [v1Orders,, v2Orders] = await viewContract.getAllActiveOrdersPaged(OTC_V1, OTC_PF, 0, 0, 25, 1000);
+      const byNewest = list => [...list].sort((a, b) => (b.orderId > a.orderId ? 1 : b.orderId < a.orderId ? -1 : 0));
+      for (const po of [...byNewest(v2Orders), ...byNewest(v1Orders)].slice(0, 4)) {
         const addrA = po.tokenA.toLowerCase(), addrB = po.tokenB.toLowerCase();
         const isV1 = po.board.toLowerCase() === OTC_V1.toLowerCase();
         const symA = addrA === OTC_WETH ? 'ETH' : (po.symbolA || otcSym(addrA));
