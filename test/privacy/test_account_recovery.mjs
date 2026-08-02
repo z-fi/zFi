@@ -1669,5 +1669,20 @@ test('phrase-shaped input is reported as a bad phrase, not as bad JSON', () => {
   assert.equal(ppwLooksLikeRecoveryPhraseAttempt('hello world'), false);
 });
 
+test('a note whose nullifier was burned before its deposit is identified as stranded', async () => {
+  const reinstate = loadReinstateApi(async (hash) => hash === 7n);
+  const stranded = createSpentRow({ spentByBlockNumber: 50, depositBlockNumber: 100 });
+  const genuine = createSpentRow({ spentByBlockNumber: 150, depositBlockNumber: 100 });
+
+  const rows = await reinstate([stranded, genuine], '0xpool', new Set());
+
+  // Both stay spent; only the impossible ordering is flagged.
+  assert.equal(rows[0].source, 'spent');
+  assert.equal(rows[1].source, 'spent');
+  assert.equal(api.load.ppIsNoteStrandedByPriorNullifier(rows[0]), true);
+  assert.equal(api.load.ppIsNoteStrandedByPriorNullifier(rows[1]), false);
+  assert.equal(api.load.ppIsNoteStrandedByPriorNullifier({}), false, 'missing blocks are not a claim');
+});
+
 
 await done();
