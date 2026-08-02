@@ -1624,13 +1624,30 @@ test('note parsing rejects unusable input with actionable messages', () => {
 
 test('a recovery phrase is detected and note JSON is not mistaken for one', () => {
   const { ppwExtractRecoveryPhrase } = api.load;
-  const twelve = 'abandon ability able about above absent absorb abstract absurd abuse access accident';
+  const valid = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
-  assert.equal(ppwExtractRecoveryPhrase(twelve), twelve);
-  assert.equal(ppwExtractRecoveryPhrase('  ' + twelve.toUpperCase() + '  '), twelve);
-  assert.equal(ppwExtractRecoveryPhrase('{"nullifier":"1","secret":"2"}'), null);
+  assert.equal(ppwExtractRecoveryPhrase(valid), valid);
+  assert.equal(ppwExtractRecoveryPhrase('  ' + valid.toUpperCase() + '  '), valid);
+  // Real pastes arrive wrapped in headings, numbering or quotes.
+  assert.equal(ppwExtractRecoveryPhrase('Recovery Phrase:\n"' + valid + '"'), valid);
+  assert.equal(
+    ppwExtractRecoveryPhrase(valid.split(' ').map((w, i) => `${i + 1}. ${w}`).join('\n')),
+    valid,
+  );
+
+  assert.equal(ppwExtractRecoveryPhrase('{"nullifier":"1","secret":"2"}'), null, 'JSON is not a phrase');
   assert.equal(ppwExtractRecoveryPhrase('abandon ability able'), null, 'too few words');
-  assert.equal(ppwExtractRecoveryPhrase(twelve + ' 0x1234'), null, 'non-word tokens');
+  // Right shape, wrong checksum: rejected rather than silently deriving junk.
+  const badChecksum = new Array(12).fill('abandon').join(' ');
+  assert.equal(ppwExtractRecoveryPhrase(badChecksum), null);
+});
+
+test('phrase-shaped input is reported as a bad phrase, not as bad JSON', () => {
+  const { ppwLooksLikeRecoveryPhraseAttempt } = api.load;
+
+  assert.equal(ppwLooksLikeRecoveryPhraseAttempt(new Array(12).fill('abandon').join(' ')), true);
+  assert.equal(ppwLooksLikeRecoveryPhraseAttempt('{"nullifier":"1","secret":"2"}'), false);
+  assert.equal(ppwLooksLikeRecoveryPhraseAttempt('hello world'), false);
 });
 
 
