@@ -5983,6 +5983,17 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
     return { row, isSpent: true, unverified: true };
   }));
 
+  // Always report the verdict. Reading it from the absence of a warning is how
+  // "the check failed" and "the pool says spent" became indistinguishable.
+  for (const { row, isSpent, unverified } of verdicts) {
+    console.warn(
+      'Privacy: spent-check ' + row.asset + ' deposit #' + row.depositIndex +
+      ' value=' + (row.originalValue ?? '?') +
+      ' poolSaysSpent=' + (unverified ? 'unverified' : String(isSpent)) +
+      ' eventBlamesTx=' + (row.spentByTxHash || 'none')
+    );
+  }
+
   const reinstated = new Map();
   for (const { row, isSpent, unverified } of verdicts) {
     if (isSpent) {
