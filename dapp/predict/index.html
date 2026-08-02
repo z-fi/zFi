@@ -215,6 +215,29 @@ input {
 .q-note { font-size:11px;color:var(--fg-dim);margin-top:6px;line-height:1.4; }
 .q-warn { font-size:11px;color:var(--no);margin-top:6px;line-height:1.4; }
 .q-pending { font-size:12px;color:var(--fg-dim);padding:10px 0; }
+/* Limit bet — shown when the instant route is too thin to fill the order */
+.lim-box { border:1px solid var(--border-muted);padding:12px;margin-bottom:2px; }
+.lim-cap { font-size:11px;color:var(--fg-dim);line-height:1.5;margin-bottom:10px; }
+.lim-row { display:flex;align-items:baseline;gap:6px;font-size:13px;flex-wrap:wrap; }
+.lim-row input {
+  width:52px;padding:2px 4px;font-size:14px;font-weight:700;text-align:center;
+  background:var(--surface);border:1px solid var(--border-muted);color:var(--fg);
+  font-family:inherit;border-radius:0;
+}
+.lim-row input:focus { border-color:var(--fg); }
+.lim-out { font-size:12px;color:var(--fg-muted);margin-top:8px; }
+.lim-out b { color:var(--fg);font-weight:700; }
+.lim-steps { display:flex;gap:4px;margin-top:8px; }
+.lim-steps button {
+  flex:1;padding:3px 0;font-size:10px;font-weight:600;border:1px solid var(--border-muted);
+  background:transparent;color:var(--fg-dim);cursor:pointer;font-family:inherit;letter-spacing:0.02em;
+  transition:border-color 0.15s,color 0.15s;
+}
+.lim-steps button:hover { border-color:var(--fg);color:var(--fg); }
+.lim-foot { font-size:10px;color:var(--fg-dim);margin-top:8px;line-height:1.5; }
+/* Open limit orders in the positions drawer */
+.ord-row { display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;gap:8px; }
+.ord-px { font-weight:600;min-width:70px;flex-shrink:0; }
 .quote-age { font-size:10px;margin-bottom:8px; }
 .quote-age:empty { display:none; }
 .trade-pct-row { display:flex;gap:4px;margin-top:6px; }
@@ -1564,7 +1587,18 @@ const MASTER_ROUTER_ABI = [
   'function buyWithSweep(uint256 marketId, bool buyYes, uint256 collateralIn, uint256 minSharesOut, uint256 maxPriceBps, address to, uint256 deadline) payable returns (uint256 totalSharesOut, uint256 poolSharesOut, uint256 poolLevelsFilled, bytes4[] sources)',
   'function sellWithSweep(uint256 marketId, bool sellYes, uint256 sharesIn, uint256 minCollateralOut, uint256 minPriceBps, address to, uint256 deadline) returns (uint256 totalCollateralOut, uint256 poolCollateralOut, uint256 poolLevelsFilled, bytes4[] sources)',
   'function multicall(bytes[] data) payable returns (bytes[] results)',
-  'function permit(address token, address owner, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)'
+  'function permit(address token, address owner, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+  // Limit orders. The AMM leg of buyWithSweep is capped by the hook's price
+  // impact limit, so on a thin pool it fills only dust. buyWithBidFallback
+  // sweeps whatever resting asks exist and parks the rest as a bid at your
+  // price — which is how you place a real-size bet on a market like this.
+  'function buyWithBidFallback(uint256 marketId, bool buyYes, uint256 collateralIn, uint256 maxSweepPriceBps, uint256 bidPriceBps, address to, uint256 deadline) payable returns (uint256 sharesOut, bytes32 bidPoolId)',
+  'function getOrderbook(uint256 marketId, bool isYes, uint256[] pricesInBps) view returns (uint256[] askDepths, uint256[] bidDepths)',
+  'function getBidPosition(uint256 marketId, bool buyYes, uint256 priceInBps, address user) view returns (uint256 userScaled, uint256 userWithdrawableCollateral, uint256 userPendingShares, uint256 userSharesDebt)',
+  // collateralToWithdraw = 0 withdraws the whole resting balance; either way it
+  // auto-claims any shares that already filled, so cancelling never loses a fill.
+  'function withdrawFromBidPool(uint256 marketId, bool isYes, uint256 priceInBps, uint256 collateralToWithdraw, address to) returns (uint256 collateralWithdrawn, uint256 sharesClaimed)',
+  'function claimBidShares(uint256 marketId, bool isYes, uint256 priceInBps, address to) returns (uint256 sharesClaimed)'
 ];
 
 
@@ -2360,6 +2394,12 @@ let _quoteAgeTimer = null;
 let _lastQuote = null;
 let _isTrading = false;
 let _tradeSlippage = 15; // default 15% slippage tolerance (high due to thin AMM liquidity; excess goes to vault depth via buyWithSweep)
+// Limit-bet mode: entered automatically when the instant route cannot fill the
+// order. Price in bps; null means "default to spot the next time we offer it".
+let _limitMode = false;
+let _limitPriceBps = null;
+let _limitPreflightTimer = null;
+let _limitPreflightSeq = 0;
 let _galleryFilter = 'active'; // 'active' | 'resolved' | 'all'
 let _currentMarketType = 'price'; // 'price' | 'balance' | 'supply'
 let _balanceAssetType = 'eth'; // 'eth' | 'token'
@@ -3389,6 +3429,7 @@ async function renderMarketPage(marketId) {
       <div class="pm-activity-body" style="display:none"><div id="pmActivityContent"><div class="pm-activity-empty">Click to load</div></div></div>
     </div>`;
 
+    html += `<div id="openOrders"></div>`;
     html += `<div class="details-group"><div class="details-label">Details</div>${detailsHtml}</div>`;
 
     app.innerHTML = html;
@@ -3405,6 +3446,9 @@ async function renderMarketPage(marketId) {
         _chartEventsCache = events;
       }
     }).catch(() => {});
+
+    // Resting limit bets, loaded after first paint
+    if (_connectedAddress) loadOpenOrders(marketId, collSym).catch(() => {});
 
     // Render user PNL from localStorage
     if (_connectedAddress && hasTradePos) {
@@ -3465,6 +3509,7 @@ function setTradeDir(dir) {
   if (tradeInput) { tradeInput.value = ''; }
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
+  _limitMode = false; _limitPriceBps = null;
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
   // Update pay token button text when switching back to buy
   if (dir === 'buy') _updatePayTokenBtn();
@@ -3487,6 +3532,7 @@ function setTradeSide(side) {
   if (tradeInput) { tradeInput.value = ''; }
   const tradeQuote = $('tradeQuote');
   if (tradeQuote) tradeQuote.textContent = '';
+  _limitMode = false; _limitPriceBps = null;
   _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
 
   updateTradeLabels();
@@ -3956,16 +4002,15 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
   const SIDE = side.toUpperCase();
   // Hard invariant: a buy splits X collateral into X YES + X NO and swaps the
   // unwanted side, so it can never rationally return fewer than X shares — the
-  // swap leg can only add. A quote below the split floor means the route is
-  // degenerate (a dust pool caps the sweep fill and the extra collateral buys
-  // nothing). Refuse it rather than let someone pay 100x for the same shares.
+  // swap leg can only add. A quote below the split floor means the instant route
+  // is degenerate: the hook caps the AMM leg at its price impact limit, so on a
+  // thin pool the fill flatlines no matter how much collateral you send.
+  // That is not a dead end — it is what limit orders are for.
   if (costF > 0 && sharesF < costF) {
-    _quoteFailed(`This market can only fill about ${sharesF.toFixed(6)} ${SIDE} shares right now, `
-      + `no matter how much you spend — the pool is too thin to route this trade. `
-      + `Try a much smaller amount, or add liquidity first.`);
-    _setTradeBtn('Insufficient liquidity', true);
+    renderLimitOffer({ costF, side, collSym, instantF: sharesF });
     return;
   }
+  _limitMode = false;
   const spot = _spotPct(side);
   const avg = costF > 0 ? (costF / sharesF) * 100 : 0;
   const impact = spot > 0 && avg > spot ? ((avg - spot) / spot) * 100 : 0;
@@ -3990,6 +4035,244 @@ function renderBuyQuote({ sharesF, costF, side, collSym, note }) {
   _setTradeBtn(`Buy ${sharesF.toFixed(2)} ${SIDE}`, false);
 }
 
+// ---- Limit bets ---------------------------------------------------------
+// The instant route caps out on thin markets. buyWithBidFallback sweeps any
+// resting asks and parks the remainder as a bid at your price, so you can put
+// real size on a market whose AMM is only a few dust shares deep.
+
+function _limitSharesIfFilled(costF, priceBps) {
+  return priceBps > 0 ? costF * 10000 / priceBps : 0;
+}
+
+function renderLimitOffer({ costF, side, collSym, instantF }) {
+  const el = $('tradeQuote');
+  if (!el) return;
+  const SIDE = side.toUpperCase();
+  if (!_limitPriceBps) _limitPriceBps = Math.max(1, Math.min(9999, _spotPct(side) * 100));
+  const px = _limitPriceBps;
+  const out = _limitSharesIfFilled(costF, px);
+
+  _limitMode = true;
+  el.innerHTML = `<div class="lim-box">
+    <div class="lim-cap">Only about <b>${instantF.toFixed(6)} ${escText(collSym)}</b> fills instantly here — the pool is too thin to route the rest. Place it as a limit bet instead.</div>
+    <div class="lim-row">
+      <span>Bet <b>${costF.toFixed(4)} ${escText(collSym)}</b> on</span>
+      <span style="color:var(--${side});font-weight:700">${SIDE}</span>
+      <span>at</span>
+      <input type="number" id="limitPx" min="1" max="99" step="1" value="${(px / 100).toFixed(0)}"
+             oninput="setLimitPrice(this.value)" aria-label="Limit price in percent">
+      <span>%</span>
+    </div>
+    <div class="lim-out" id="limitOut">Pays <b>${out.toFixed(4)} ${escText(collSym)}</b> if ${SIDE} &mdash; ${out.toFixed(4)} shares</div>
+    <div class="lim-steps">
+      ${[-5, -1, +1, +5].map(d => `<button onclick="nudgeLimitPrice(${d})">${d > 0 ? '+' : ''}${d}%</button>`).join('')}
+    </div>
+    <div class="lim-foot" id="limitFoot">Rests on the book until someone takes the other side. Your ${escText(collSym)} stays yours &mdash; cancel any time from Open Bets.</div>
+  </div>`;
+  _setTradeBtn(`Place limit bet at ${(px / 100).toFixed(0)}%`, false);
+  _lastQuote = null; // limit bets execute from the form, not a sweep quote
+  preflightLimitBet();
+}
+
+// A handful of price levels on the deployed book revert even though they read
+// as empty. Rather than guess at which, simulate the exact call we are about to
+// send and only offer the button if it actually goes through.
+async function preflightLimitBet() {
+  clearTimeout(_limitPreflightTimer);
+  const seq = ++_limitPreflightSeq;
+  const foot = $('limitFoot');
+  _limitPreflightTimer = setTimeout(async () => {
+    const marketId = $('app').dataset.marketId;
+    const collateral = $('app').dataset.collateral;
+    const raw = $('tradeInput')?.value.trim();
+    if (!marketId || !raw || !parseFloat(raw)) return;
+    const px = _limitPriceBps;
+    let ok = true;
+    try {
+      const amountWei = parseColl(raw);
+      const isETH = !collateral || collateral === ethers.ZeroAddress;
+      await withRPC(async (rpc) => {
+        const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, rpc);
+        await mr.buyWithBidFallback.staticCall(
+          marketId, _tradeSide === 'yes', amountWei, px, px,
+          _connectedAddress || '0x1111111111111111111111111111111111111111',
+          BigInt(Math.floor(Date.now() / 1000) + 1200),
+          isETH ? { value: amountWei, from: _connectedAddress || '0x1111111111111111111111111111111111111111' } : {}
+        );
+        return true;
+      });
+    } catch { ok = false; }
+    if (seq !== _limitPreflightSeq || _limitPriceBps !== px || !_limitMode) return;
+    const pct = Math.round(px / 100);
+    if (ok) {
+      if (foot) foot.style.color = '';
+      _setTradeBtn(`Place limit bet at ${pct}%`, false);
+    } else {
+      if (foot) {
+        foot.style.color = 'var(--no)';
+        foot.textContent = `${pct}% is not available on this book right now — try ${Math.max(1, pct - 1)}% or ${Math.min(99, pct + 1)}%.`;
+      }
+      _setTradeBtn(`${pct}% unavailable`, true);
+    }
+  }, 350);
+}
+
+function setLimitPrice(v) {
+  const pct = Math.max(1, Math.min(99, Math.round(parseFloat(v) || 0)));
+  _limitPriceBps = pct * 100;
+  const input = $('tradeInput');
+  const costF = parseFloat(input?.value) || 0;
+  const out = $('limitOut');
+  if (out) {
+    const collSym = getCollateralSymbol($('app').dataset.collateral);
+    const s = _limitSharesIfFilled(costF, _limitPriceBps);
+    out.innerHTML = `Pays <b>${s.toFixed(4)} ${escText(collSym)}</b> if ${_tradeSide.toUpperCase()} &mdash; ${s.toFixed(4)} shares`;
+  }
+  _setTradeBtn(`Place limit bet at ${pct}%`, false);
+  preflightLimitBet();
+}
+
+function nudgeLimitPrice(delta) {
+  const cur = Math.round(_limitPriceBps / 100);
+  const next = Math.max(1, Math.min(99, cur + delta));
+  const box = $('limitPx');
+  if (box) box.value = next;
+  setLimitPrice(next);
+}
+
+async function placeLimitBet() {
+  if (_isTrading) return;
+  const s = await connectWallet();
+  if (!s) return;
+  const marketId = $('app').dataset.marketId;
+  const collateral = $('app').dataset.collateral;
+  const input = $('tradeInput');
+  const btn = $('tradeBtn');
+  if (!marketId || !input || !btn) return;
+  const raw = input.value.trim();
+  if (!parseFloat(raw)) return;
+
+  const amountWei = parseColl(raw);
+  const isETH = !collateral || collateral === ethers.ZeroAddress;
+  const buyYes = _tradeSide === 'yes';
+  const px = BigInt(_limitPriceBps);
+  const origText = btn.textContent;
+
+  _isTrading = true;
+  btn.disabled = true;
+  try {
+    if (!isETH) {
+      btn.textContent = 'Checking approval...';
+      const token = new ethers.Contract(collateral, ERC20_ABI, s);
+      const allowance = await token.allowance(_connectedAddress, CONTRACTS.MASTER_ROUTER);
+      if (allowance < amountWei) {
+        btn.textContent = 'Approve in wallet...';
+        const ap = await token.approve(CONTRACTS.MASTER_ROUTER, ethers.MaxUint256);
+        btn.textContent = 'Confirming approval...';
+        await ap.wait();
+      }
+    }
+    const router = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    btn.textContent = 'Confirm in wallet...';
+    // Sweep any resting asks at or below the bid — never pay more than the
+    // price you just named — then rest the remainder at that price.
+    const tx = await router.buyWithBidFallback(
+      marketId, buyYes, amountWei, px, px, _connectedAddress, deadline,
+      isETH ? { value: amountWei } : {}
+    );
+    btn.textContent = 'Placing...';
+    await tx.wait();
+    input.value = '';
+    renderMarketPage(marketId);
+  } catch (e) {
+    console.warn('Limit bet failed:', e);
+    const msg = decodeError(e);
+    if (!/user rejected|user denied/i.test(String(e?.message || ''))) {
+      _quoteFailed('Could not place the bet: ' + msg);
+    }
+    btn.textContent = origText;
+    btn.disabled = false;
+  } finally {
+    _isTrading = false;
+  }
+}
+
+// Find the user's resting bids. Rather than probing all 99 price levels per
+// side, ask the orderbook which levels hold anything at all — usually a
+// handful — and only look up positions there.
+async function loadOpenOrders(marketId, collSym) {
+  const host = $('openOrders');
+  if (!host || !_connectedAddress) return;
+  const prices = Array.from({ length: 99 }, (_, i) => (i + 1) * 100);
+
+  const orders = await withRPC(async (rpc) => {
+    const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, rpc);
+    const found = [];
+    for (const isYes of [true, false]) {
+      const ob = await mr.getOrderbook(marketId, isYes, prices);
+      const live = prices.filter((_, i) => BigInt(ob.bidDepths[i]) > 0n);
+      for (const p of live) {
+        const pos = await mr.getBidPosition(marketId, isYes, p, _connectedAddress);
+        const coll = BigInt(pos.userWithdrawableCollateral);
+        const pending = BigInt(pos.userPendingShares);
+        if (coll > 0n || pending > 0n) found.push({ isYes, priceBps: p, coll, pending });
+      }
+    }
+    return found;
+  });
+
+  if (!orders || !orders.length) { host.innerHTML = ''; return; }
+
+  const fmtA = v => { const n = Number(fmtColl(v)); return n >= 1 ? n.toFixed(2) : n.toFixed(4); };
+  let rows = '';
+  for (const o of orders) {
+    const SIDE = o.isYes ? 'YES' : 'NO';
+    const pct = (o.priceBps / 100).toFixed(0);
+    const parts = [];
+    if (o.coll > 0n) parts.push(`${fmtA(o.coll)} ${escText(collSym)} resting`);
+    if (o.pending > 0n) parts.push(`<b style="color:var(--fg)">${fmtA(o.pending)} shares filled</b>`);
+    rows += `<div class="ord-row">
+      <span class="ord-px ${o.isYes ? 'pos-side yes' : 'pos-side no'}">${SIDE} @ ${pct}%</span>
+      <span class="pos-val">${parts.join(' &middot; ')}</span>
+      <span style="display:flex;gap:3px">
+        ${o.pending > 0n ? `<button class="lp-withdraw-btn" onclick="claimBidFill('${marketId}',${o.isYes},${o.priceBps})">CLAIM</button>` : ''}
+        ${o.coll > 0n ? `<button class="lp-withdraw-btn" onclick="cancelLimitBet('${marketId}',${o.isYes},${o.priceBps})">CANCEL</button>` : ''}
+      </span>
+    </div>`;
+  }
+
+  host.innerHTML = `<div class="market-chart-drawer open" id="openOrdersDrawer" style="margin-top:16px">
+    <button class="market-chart-toggle-btn" onclick="toggleDrawer('openOrdersDrawer')">
+      <span>Open Bets</span><span class="arrow">&#9660;</span>
+    </button>
+    <div class="drawer-body" style="padding:0 0 8px">${rows}</div>
+  </div>`;
+}
+
+async function cancelLimitBet(marketId, isYes, priceBps) {
+  const s = await connectWallet();
+  if (!s) return;
+  try {
+    const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
+    // 0 withdraws the full remaining balance at that level.
+    const tx = await mr.withdrawFromBidPool(marketId, isYes, priceBps, 0, _connectedAddress);
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) { console.warn('Cancel failed:', decodeError(e)); }
+}
+
+async function claimBidFill(marketId, isYes, priceBps) {
+  const s = await connectWallet();
+  if (!s) return;
+  try {
+    const mr = new ethers.Contract(CONTRACTS.MASTER_ROUTER, MASTER_ROUTER_ABI, s);
+    const tx = await mr.claimBidShares(marketId, isYes, priceBps, _connectedAddress);
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) { console.warn('Claim failed:', decodeError(e)); }
+}
+
 function renderSellQuote({ collF, sharesF, side, collSym }) {
   const el = $('tradeQuote');
   if (!el) return;
@@ -3998,6 +4281,7 @@ function renderSellQuote({ collF, sharesF, side, collSym }) {
     _setTradeBtn('Amount too small', true);
     return;
   }
+  _limitMode = false;
   const spot = _spotPct(side);
   const avg = sharesF > 0 ? (collF / sharesF) * 100 : 0;
   el.innerHTML = `<div class="q-box">`
@@ -4019,7 +4303,8 @@ function onTradeInput() {
   const raw = input.value.trim();
   const val = parseFloat(raw);
   if (!val || val <= 0) {
-    _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
+    _limitMode = false; _limitPriceBps = null;
+  _setTradeBtn(_connectedAddress ? 'Enter amount' : 'Connect Wallet', !!_connectedAddress);
     if (quoteEl) quoteEl.textContent = '';
     _lastQuote = null;
     return;
@@ -4297,6 +4582,7 @@ async function fetchRoutedBuyQuote(inputAmountStr) {
 
 async function executeTrade() {
   if (_isTrading) return;
+  if (_limitMode) return placeLimitBet();
   const s = await connectWallet();
   if (!s) return;
 
