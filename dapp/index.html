@@ -1187,7 +1187,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
+<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, OKX, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
 
 <!-- Swap card -->
 <div class="swap-card">
@@ -1787,8 +1787,12 @@ const INCH_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ONEINCHOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
-// Odos / Odosol integration
-const ODOSOL_ADDRESS = "0x55B867886dc6DB50d40712204b9BFc4e21DB5479";
+// Odos / Odosol integration — DISABLED 2026-08-03: api.odos.xyz no longer
+// resolves (Cloudflare 1033 "host not configured" on every path), so the
+// service appears to be shut down. The zero address short-circuits every Odos
+// helper in modules/aggregators.js, keeping it out of the quote race; restore
+// the wrapper address below if the API ever comes back.
+const ODOSOL_ADDRESS = "0x0000000000000000000000000000000000000000"; // was 0x55B867886dc6DB50d40712204b9BFc4e21DB5479
 const ODOS_API = "https://api.odos.xyz";
 const ODOS_ETH_SENTINEL = "0x0000000000000000000000000000000000000000";
 const ODOSOL_IFACE = new ethers.Interface([
@@ -1815,7 +1819,7 @@ const BEBOPOL_IFACE = new ethers.Interface([
 ]);
 // Enso integration
 const ENSOL_ADDRESS = "0xD6D4D5eE3139bF51Cbe06D7a2E116f4ab4d4Ee96";
-const ENSO_API = "https://api.enso.build/api/v1/shortcuts/route";
+const ENSO_API = "https://api.zfi.wei.is/enso/api/v1/shortcuts/route";
 const ENSO_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ENSOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",

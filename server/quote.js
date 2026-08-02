@@ -571,8 +571,15 @@ async function fetchKyberQuote(tokenIn, tokenOut, amount, taker) {
 }
 
 // --- Odos quote fetcher (two-step: quote → assemble) ---
+// DISABLED 2026-08-03: api.odos.xyz no longer resolves (Cloudflare 1033 "host
+// not configured" on every path) — the service appears to be shut down. The
+// fetcher is kept intact behind this guard so it can be re-enabled by deleting
+// the early return if the API comes back.
+
+const ODOS_ENABLED = false;
 
 async function fetchOdosQuote(tokenIn, tokenOut, amount, taker) {
+  if (!ODOS_ENABLED) return null;
   // Odos uses zero address for native ETH
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? ZERO : tokenIn;
   const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? ZERO : tokenOut;
