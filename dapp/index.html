@@ -2462,7 +2462,11 @@ const tokens = {
   ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
   WETH: { address: WETH_ADDRESS, symbol: "WETH", decimals: 18 },
   zOrg: { address: ZORG_DAO_TOKEN, symbol: "zOrg", decimals: 18, _isZOrg: true },
-  FWC: { address: FWC_DAO_TOKEN, symbol: "FWC", decimals: 18 },
+  // Same art the coin page and the coin gallery already use for this DAO, which take
+  // it from the continuous-sale config rather than the DAO metadata — FWC's
+  // contractURI carries no image. iconForSymbol falls back to a letter icon if the
+  // fetch ever fails, so a dead host degrades rather than breaks the row.
+  FWC: { address: FWC_DAO_TOKEN, symbol: "FWC", decimals: 18, icon: "https://www.s02.works/favicon.ico?favicon.179e78c5.ico" },
   ZAMM: { address: ZORG_PAY_TOKEN, symbol: "ZAMM", decimals: 18, _isZammStake: true },
   BOLD: { address: BOLD_ADDRESS, symbol: "BOLD", decimals: 18 },
   LUSD: { address: LUSD_ADDRESS, symbol: "LUSD", decimals: 18 },
