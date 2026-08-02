@@ -1531,7 +1531,9 @@ test('a note the pool reports as unspent is reinstated as live and withdrawable'
 });
 
 test('a note the pool reports as spent stays spent, and says the pool confirmed it', async () => {
-  const reinstate = loadReinstateApi(async () => true);
+  // True for this note's nullifier hash only (poseidon1 is stubbed to identity),
+  // so the control probe still reads false.
+  const reinstate = loadReinstateApi(async (hash) => hash === 7n);
   const row = createSpentRow();
 
   const [next] = await reinstate([row], '0xpool', new Set());
@@ -1563,6 +1565,18 @@ test('ragequit rows and rows without pre-spend state are never reinstated', asyn
 
   assert.equal(rows[0], ragequitRow);
   assert.equal(rows[1], noSnapshot);
+});
+
+test('a pool read that calls everything spent is rejected as unreliable', async () => {
+  // A control value that cannot belong to anyone must read unspent. When it does
+  // not, the read is broken and its verdicts must not strand notes.
+  const reinstate = loadReinstateApi(async () => true);
+  const row = createSpentRow();
+
+  const [next] = await reinstate([row], '0xpool', new Set());
+
+  assert.equal(next, row, 'rows pass through untouched');
+  assert.equal(next.spentVerifiedOnChain, undefined, 'no verdict is recorded');
 });
 
 test('a reinstated note whose commitment is not yet in the tree reads as pending', async () => {

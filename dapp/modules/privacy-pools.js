@@ -5961,6 +5961,28 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
     .filter(row => row && row.source === 'spent' && !row.ragequit && row.preSpend?.nullifier != null);
   if (!candidates.length) return rows;
 
+  // Control probe: a value that cannot be anyone's nullifier hash must come
+  // back unspent. If it does not, the read itself is wrong (wrong contract,
+  // ABI, or decoding) and every "spent" verdict from it is worthless.
+  let controlSaysSpent = null;
+  try {
+    const controlHash = poseidon1([BigInt(ethers.keccak256(ethers.toUtf8Bytes('zfi-pp-control-probe'))) % SNARK_FIELD]);
+    controlSaysSpent = await ppReadWithRpc(async (rpc) => {
+      const pool = new ethers.Contract(poolAddress, PP_POOL_ABI, rpc);
+      return await pool.nullifierHashes(controlHash);
+    });
+  } catch (err) {
+    console.warn('Privacy: spent-check control probe failed', err);
+  }
+  if (controlSaysSpent === true) {
+    console.error(
+      'Privacy: spent-check is unreliable for pool ' + poolAddress +
+      ' — a control value that cannot be spent reads as spent. Leaving notes as traced and skipping on-chain verification.'
+    );
+    return rows;
+  }
+  console.warn('Privacy: spent-check control probe on ' + poolAddress + ' → ' + String(controlSaysSpent) + ' (expected false)');
+
   const verdicts = await Promise.all(candidates.map(async (row) => {
     const nullHash = poseidon1([row.preSpend.nullifier]);
     // Retry transient failures. A rate-limited RPC must not be what decides a
