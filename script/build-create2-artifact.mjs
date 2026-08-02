@@ -26,6 +26,7 @@ const SOURCES = {
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
+  FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
 };
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {

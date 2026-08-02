@@ -348,7 +348,13 @@ input {
 /* Proposals */
 .prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
 .prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
-.prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word; }
+.prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word;min-width:0; }
+/* A long description must not turn one card into a wall while its neighbours are
+   two lines: clamp, and let the reader open the ones they care about. */
+.prop-desc-body { display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden; }
+.prop-desc-body.clamped { -webkit-line-clamp:3; }
+.prop-desc-more { margin-top:5px;padding:0;background:none;border:none;font:inherit;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;opacity:0.65;transition:opacity 0.15s; }
+.prop-desc-more:hover { opacity:1; }
 .prop-state { font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;font-weight:600; }
 .prop-state.executed { border-color:var(--fg-dim);color:var(--fg-dim);background:var(--surface-hover); }
 .prop-state.active { border-color:var(--green);color:var(--green);background:var(--status-success); }
@@ -358,9 +364,13 @@ input {
 .prop-votes { display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--fg-muted); }
 .prop-votes .for { color:var(--green); }
 .prop-votes .against { color:var(--red); }
-.prop-bar { position:relative;height:4px;border-radius:2px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
-.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--fg-muted);opacity:0.9; }
+.prop-bar { position:relative;height:5px;border-radius:3px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
+/* The quorum threshold is the number that decides the proposal, so it outranks the
+   tally visually. At a 5% quorum it sits near the left edge and a 1px hairline was
+   indistinguishable from the vote sliver beside it. */
+.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:0.8;border-radius:1px; }
 .prop-turnout { margin-left:auto;color:var(--fg-dim); }
+.prop-turnout.met { color:var(--green); }
 .prop-clock { color:var(--fg-muted);font-variant-numeric:tabular-nums; }
 .prop-clock-ready { color:var(--green); }
 .prop-id { float:right;opacity:0.55;font-variant-numeric:tabular-nums; }
@@ -371,9 +381,12 @@ input {
 .stat-reveal > span { font-size:9px; }
 .stat-reveal-body[hidden] { display:none; }
 .coin-desc-inline { margin:0 0 14px;font-size:13px;line-height:1.6;color:var(--fg-muted); }
-.prop-bar-for { background:var(--green); }
-.prop-bar-against { background:var(--red); }
-.prop-bar-abstain { background:var(--fg-dim); }
+/* A real but tiny vote (0.6% of supply) rounds to a sub-pixel sliver and reads as
+   "nobody voted". Non-zero tallies are emitted only when non-zero, so the floor
+   never manufactures a bar out of nothing. */
+.prop-bar-for { background:var(--green);min-width:2px; }
+.prop-bar-against { background:var(--red);min-width:2px; }
+.prop-bar-abstain { background:var(--fg-dim);min-width:2px; }
 .prop-meta { font-size:10px;color:var(--fg-dim);margin-top:4px; }
 .prop-meta a { color:var(--fg-dim); }
 
@@ -1820,22 +1833,38 @@ async function loadProposals(daoAddr) {
         timeHTML = `<span class="prop-clock">Awaiting queue</span>`;
       }
 
+      // Long descriptions are clamped so one verbose proposal cannot bury the rest of
+      // the list. The threshold is roughly three lines at this width.
+      const isLong = desc.length > 180;
+
+      // "0.6% turnout / 5% quorum" makes the reader do the comparison that decides the
+      // proposal. State the verdict instead.
+      const quorumMet = quorumPct > 0 && turnoutPct >= quorumPct;
+      const turnoutText = quorumPct > 0
+        ? (quorumMet
+            ? `quorum met &middot; ${turnoutPct.toFixed(1)}% turnout`
+            : `${turnoutPct.toFixed(1)}% of ${quorumPct}% quorum`)
+        : `${turnoutPct.toFixed(1)}% turnout`;
+
       html += `<div class="prop-item">
         <div class="prop-head">
-          <div class="prop-desc">${escText(desc)}</div>
+          <div class="prop-desc">
+            <div class="prop-desc-body${isLong ? ' clamped' : ''}">${escText(desc)}</div>
+            ${isLong ? `<button type="button" class="prop-desc-more" data-prop-more>Show more</button>` : ''}
+          </div>
           <span class="prop-state ${stateClass}">${stateText}</span>
         </div>
         ${scale > 0 ? `<div class="prop-bar" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted${quorumPct > 0 ? ` &middot; ${quorumPct}% quorum` : ''}">
-          <div class="prop-bar-for" style="width:${w(forF)}%"></div>
-          <div class="prop-bar-against" style="width:${w(againstF)}%"></div>
-          <div class="prop-bar-abstain" style="width:${w(abstainF)}%"></div>
-          ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%"></div>` : ''}
+          ${forF > 0 ? `<div class="prop-bar-for" style="width:${w(forF)}%"></div>` : ''}
+          ${againstF > 0 ? `<div class="prop-bar-against" style="width:${w(againstF)}%"></div>` : ''}
+          ${abstainF > 0 ? `<div class="prop-bar-abstain" style="width:${w(abstainF)}%"></div>` : ''}
+          ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%" title="${quorumPct}% quorum"></div>` : ''}
         </div>` : ''}
         <div class="prop-votes">
           <span><span class="for">For</span> ${forF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
           <span><span class="against">Against</span> ${againstF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
           <span>Abstain ${abstainF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          ${scale > 0 ? `<span class="prop-turnout">${turnoutPct.toFixed(1)}% turnout${quorumPct > 0 ? ` / ${quorumPct}% quorum` : ''}</span>` : ''}
+          ${scale > 0 ? `<span class="prop-turnout${quorumMet ? ' met' : ''}" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted">${turnoutText}</span>` : ''}
         </div>
         <div class="prop-meta">
           ${timeHTML ? `${timeHTML} &middot; ` : ''}${createdAt > 0 ? `<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>` : ''}
@@ -1847,6 +1876,15 @@ async function loadProposals(daoAddr) {
 
     html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote & manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
+    // Wired after render because the list is rebuilt wholesale via innerHTML, which
+    // discards any handler attached to the previous nodes.
+    content.querySelectorAll('[data-prop-more]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const body = btn.previousElementSibling;
+        if (!body) return;
+        btn.textContent = body.classList.toggle('clamped') ? 'Show more' : 'Show less';
+      });
+    });
     startPropCountdowns();
   } catch (e) {
     console.error('loadProposals error:', e);
