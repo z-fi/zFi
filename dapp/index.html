@@ -3320,7 +3320,10 @@ function makeLetterIcon(sym) {
 // buildBestSwapViaETHMulticall(ETH->USDC, 1e18): publicnode OK, 1rpc and drpc
 // out of gas. Nodes that fail that way are demoted below (see gasCapFails), so
 // ordering self-corrects at runtime rather than being hardcoded.
-// eth.llamarpc.com omitted: returning HTTP 521.
+// eth.llamarpc.com omitted: returning HTTP 521. 1rpc.io/eth omitted: it rate
+// limits browser origins and its 503 error pages carry no CORS headers, so a
+// throttled request surfaces as an "Access-Control-Allow-Origin" console error
+// rather than a clean failover.
 // Historical eth_getLogs matters for the Privacy Pools loader, and the three
 // legacy nodes cannot serve it: publicnode refuses archive queries without a
 // token, 1rpc caps eth_getLogs at 50 blocks, and drpc's free plan caps ranges
@@ -3335,7 +3338,6 @@ const RPCS = [
   "https://mainnet.gateway.tenderly.co",
   "https://gateway.tenderly.co/public/mainnet",
   "https://ethereum.publicnode.com",
-  "https://1rpc.io/eth",
   "https://eth.drpc.org",
 ];
 
@@ -3346,6 +3348,8 @@ function makeWalletReader() {
     return bp;
   } catch { return null; }
 }
+
+const HEDGE = Symbol('hedge');
 
 function makeFallbackProvider(urls) {
   const network = { chainId: CHAIN_ID, name: "mainnet" };
@@ -3378,11 +3382,15 @@ function makeFallbackProvider(urls) {
     });
   }
 
-  const withTimeout = (ms, work) =>
-    Promise.race([
-      work(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-    ]);
+  // The timeout handle must be cleared when the work settles first, or every
+  // call leaves a live timer for the full timeout window. On the 15s quote
+  // refresh that was hundreds of orphaned timers per minute, each holding its
+  // closure alive.
+  const withTimeout = (ms, work) => {
+    let tid;
+    const timer = new Promise((_, rej) => { tid = setTimeout(() => rej(new Error("timeout")), ms); });
+    return Promise.race([Promise.resolve().then(work), timer]).finally(() => clearTimeout(tid));
+  };
 
   const isInfraErr = (e) => {
     const s = String(e?.message || "");
@@ -3424,9 +3432,18 @@ function makeFallbackProvider(urls) {
     // timeoutMs is per-RPC-attempt. The 4s default suits quotes and single
     // reads; historical eth_getLogs scans need far longer, and timing them out
     // at 4s marks every node down in turn and hard-fails the whole load.
-    async call(fn, { timeoutMs = 4000 } = {}) {
+    //
+    // hedgeMs: if the leading node has not answered within this long, race the
+    // next candidate alongside it and take whichever replies first. Sequential
+    // failover alone means one stalled node costs the full timeoutMs before
+    // anything else is tried, which is where nearly all slow quotes came from —
+    // public nodes stall far more often than they error. Only the slow tail
+    // (~a tenth of calls) is ever duplicated, so request volume barely moves.
+    // Disabled for long-timeout work: doubling a 60s archive log scan wastes
+    // real quota for no latency win.
+    async call(fn, { timeoutMs = 4000, hedgeMs = timeoutMs <= 5000 ? 900 : 0 } = {}) {
       const now = Date.now();
-      let lastErr;
+      let lastErr, fatalErr;
       // Prefer RPCs that are up, ordered by capability first (nodes that have
       // rejected calls on gas go last, however fast they are) then by latency.
       // Sorting on latency alone actively favours the low-cap nodes.
@@ -3435,25 +3452,65 @@ function makeFallbackProvider(urls) {
       const down = nodes.filter(n => n.ok && n.downUntil > now);
       const candidates = up.concat(down);
 
-      for (const n of candidates) {
+      // Run one attempt, recording latency/health. Never throws: the caller
+      // needs both outcomes in hand to arbitrate a hedged race.
+      const runOn = async (n) => {
+        const t0 = Date.now();
         try {
-          const t0 = Date.now();
           const res = await withTimeout(timeoutMs, () => fn(n.p));
           n.downUntil = 0;
           // Update rolling average latency (exponential moving average, alpha=0.3)
           const elapsed = Date.now() - t0;
           n._calls++;
           n.avgMs = n._calls === 1 ? elapsed : n.avgMs * 0.7 + elapsed * 0.3;
-          return res;
+          return { ok: true, res };
         } catch (e) {
-          lastErr = e;
-          if (isContractErr(e)) throw e; // deterministic — don't retry other RPCs
+          if (isContractErr(e)) return { ok: false, err: e, fatal: true }; // deterministic
           if (isGasCapErr(e)) n.gasCapFails++; // demote, then fall through to next RPC
           else if (isRateLimitErr(e)) n.downUntil = Date.now() + 5_000; // brief: it recovers
           else if (isAuthErr(e)) n.ok = false;
           else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
+          return { ok: false, err: e };
         }
+      };
+
+      for (let i = 0; i < candidates.length; i++) {
+        let outcome;
+        const primary = runOn(candidates[i]);
+        const canHedge = hedgeMs > 0 && i + 1 < candidates.length;
+        if (canHedge) {
+          let hedgeTid;
+          const hedgeSignal = new Promise(r => { hedgeTid = setTimeout(() => r(HEDGE), hedgeMs); });
+          outcome = await Promise.race([primary, hedgeSignal]);
+          clearTimeout(hedgeTid);
+          if (outcome === HEDGE) {
+            // Leader is slow, not necessarily dead — keep it running and let the
+            // backup race it. First success wins; if both fail, report the
+            // leader's error, which is the more diagnostic of the two.
+            const backup = runOn(candidates[++i]);
+            outcome = await new Promise(resolve => {
+              let pending = 2;
+              for (const p of [primary, backup]) {
+                p.then(o => {
+                  if (o.ok) resolve(o);
+                  else if (--pending === 0) resolve(o);
+                });
+              }
+            });
+            if (!outcome.ok) {
+              // Prefer a fatal (contract revert) verdict from either racer.
+              const both = await Promise.all([primary, backup]);
+              outcome = both.find(o => o.fatal) || outcome;
+            }
+          }
+        } else {
+          outcome = await primary;
+        }
+        if (outcome.ok) return outcome.res;
+        if (outcome.fatal) { fatalErr = outcome.err; break; }
+        lastErr = outcome.err;
       }
+      if (fatalErr) throw fatalErr; // deterministic — no other RPC will differ
       throw lastErr || new Error("All RPCs failed");
     },
   };
@@ -3996,6 +4053,12 @@ function startQuoteRefresh() {
   _refreshCountdown = interval;
   setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
   _refreshTimer = setInterval(() => {
+    // Freeze the countdown while the tab is in the background. Re-running the
+    // whole fan-out — a dozen API calls plus two Multicall3 batches — every 15s
+    // for a quote nobody can see burns rate limit on every provider and is the
+    // fastest way to get 429'd on the tab the user is actually looking at.
+    // Coming back to the tab re-quotes immediately (see the listener below).
+    if (document.hidden) return;
     _refreshCountdown--;
     if (_refreshCountdown <= 0) {
       _refreshCountdown = interval;
@@ -4004,6 +4067,13 @@ function startQuoteRefresh() {
     setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
   }, 1000);
 }
+
+// Returning to a parked tab leaves a quote that is at least as old as the time
+// spent away, so refresh it up front rather than showing a stale price for up
+// to another full interval.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _refreshTimer) handleAmountChange();
+});
 
 function stopQuoteRefresh() {
   if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
@@ -4154,6 +4224,10 @@ async function handleAmountChange() {
     }
 
     const quote = await requestQuote(amtStr, fromSnap, toSnap, isExactOut);
+
+    // Dropped before it ran because newer edits overtook it. The handler for
+    // those edits owns the UI from here — touch nothing, not even the placeholder.
+    if (quote === QUOTE_SUPERSEDED) return;
 
     if (seq !== _quoteSeq || fromSnap !== fromToken || toSnap !== toToken) {
       dstEl.placeholder = "0.0";
@@ -6332,8 +6406,13 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ? Promise.resolve({ ok: false, reason: 'no_approval', expected: true })
       : _simulateRoute(rpc, result.multicall, result.msgValue, result.calls, result.isSplit);
 
-    // External APIs: resolve all in parallel
-    const [oxPrice, psPrice, ksPrice, cowPrice, inchPrice, odosPrice, okxPrice, bitgetPrice, bebopPrice, ensoPrice, ooPrice] = await Promise.all([ox0xPriceP, psPriceP, ksPriceP, cowPriceP, inchPriceP, odosPriceP, okxPriceP, bitgetPriceP, bebopPriceP, ensoPriceP, ooPriceP]);
+    // External APIs: resolve all in parallel, but under a deadline. They have
+    // already been in flight for the whole Multicall3 round trip by now, and
+    // bestResult above is guaranteed fulfilled, so a straggler can only ever
+    // improve on a quote the user already has — never gate it. Whatever lands
+    // late still populates _extPriceCache for the next refresh.
+    const [oxPrice, psPrice, ksPrice, cowPrice, inchPrice, odosPrice, okxPrice, bitgetPrice, bebopPrice, ensoPrice, ooPrice] =
+      await settleWithin(EXT_PRICE_DEADLINE_MS, [ox0xPriceP, psPriceP, ksPriceP, cowPriceP, inchPriceP, odosPriceP, okxPriceP, bitgetPriceP, bebopPriceP, ensoPriceP, ooPriceP]);
 
     // Helper to reset all external aggregator winner flags
     // _resetExtFlags is defined globally alongside _AGG_DEFS
@@ -7226,24 +7305,54 @@ async function withRetry(task, { tries = 2, base = 80 } = {}) {
   throw lastErr;
 }
 
-let _quoteLock = Promise.resolve();
-let _pendingQuoteArgs = null;
-let _pendingQuoteSeq = 0;
+// Marks a request that was replaced by a newer one before it ever ran. Callers
+// treat it as "not my problem" rather than as a failed quote.
+const QUOTE_SUPERSEDED = Symbol('quote superseded');
 
-let _quoteResult = null;
-function requestQuote(amtStr, fromSnap, toSnap, exactOut = false) {
-  const mySeq = ++_pendingQuoteSeq;
-  _pendingQuoteArgs = { amtStr, fromSnap, toSnap, exactOut, seq: mySeq };
-  _quoteLock = _quoteLock.catch(() => {}).then(async () => {
-    const args = _pendingQuoteArgs;
-    if (!args || args.seq !== mySeq) return _quoteResult;
-    _pendingQuoteArgs = null;
-    _quoteResult = await withRetry(() => args.exactOut
-      ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
-      : getQuote(args.amtStr, args.fromSnap, args.toSnap));
-    return _quoteResult;
+// Quote admission control.
+//
+// This used to be a strict lock: every request chained onto the previous one, so
+// the quote for the keystroke you just typed sat behind a quote whose result was
+// already destined for the bin — up to a couple of seconds of dead wait on every
+// edit after a pause. The lock was never about correctness; it exists to stop a
+// burst of edits stampeding the public RPCs.
+//
+// So bound the concurrency instead of serialising it. One quote runs, one newer
+// quote may start alongside it, and anything newer than that takes the single
+// parked slot, evicting whatever was parked there. Two in flight is enough to
+// hide the latency of the one being abandoned without multiplying RPC load.
+//
+// Running two at once is safe: everything a quote writes is keyed by pair and
+// amount (_spotCache, _extPriceCache, the allowance cache), and every UI effect
+// downstream is already gated on `seq === _quoteSeq` — the simulation and
+// aggregator follow-ups were written to be discarded when overtaken.
+const QUOTE_SLOTS = 2;
+let _pendingQuoteSeq = 0;
+let _quoteActive = 0;
+let _parkedQuote = null; // { args, resolve, reject } waiting for a slot
+
+function _runQuote(args) {
+  _quoteActive++;
+  return withRetry(() => args.exactOut
+    ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
+    : getQuote(args.amtStr, args.fromSnap, args.toSnap),
+  ).finally(() => {
+    _quoteActive--;
+    const parked = _parkedQuote;
+    if (parked) {
+      _parkedQuote = null;
+      _runQuote(parked.args).then(parked.resolve, parked.reject);
+    }
   });
-  return _quoteLock;
+}
+
+function requestQuote(amtStr, fromSnap, toSnap, exactOut = false) {
+  const args = { amtStr, fromSnap, toSnap, exactOut, seq: ++_pendingQuoteSeq };
+  if (_quoteActive < QUOTE_SLOTS) return _runQuote(args);
+  // Both slots busy. Whatever was parked is now two generations stale — its
+  // result would fail the caller's staleness check anyway, so drop it.
+  if (_parkedQuote) _parkedQuote.resolve(QUOTE_SUPERSEDED);
+  return new Promise((resolve, reject) => { _parkedQuote = { args, resolve, reject }; });
 }
 
 // ---- Aggregator descriptor table (single source of truth) ----
@@ -8605,10 +8714,14 @@ async function executeSwap() {
     }, 1500);
     }
   } catch (e) {
-    console.error("Swap error:", e);
     let msg = "Swap failed";
     const s = String(e?.data || e?.message || e?.reason || "");
-    if (e.code === 4001 || /user rejected|denied/i.test(s)) msg = "Transaction cancelled";
+    const rejected = e.code === 4001 || e.code === "ACTION_REJECTED" || /user rejected|denied/i.test(s);
+    // Declining the wallet prompt is a normal outcome, not a fault — logging it
+    // as an error buried real failures under a stack trace on every cancel.
+    if (rejected) console.info("Swap cancelled by user");
+    else console.error("Swap error:", e);
+    if (rejected) msg = "Transaction cancelled";
     else if (/insufficient funds/i.test(s) || /INSUFFICIENT_FUNDS/i.test(s)) msg = "Insufficient balance";
     else if (/7939f424/.test(s)) msg = `Insufficient ${fromToken} balance or approval`;
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
@@ -9425,9 +9538,14 @@ function switchTab(tab) {
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
   $('sendTab').style.display = tab === 'send' ? '' : 'none';
+  // The quote refresh timer used to keep ticking after the user left the swap
+  // tab, re-running the whole aggregator fan-out every 15s behind the privacy
+  // and send panes. Park it on the way out and re-quote on the way back in.
+  if (tab !== 'swap') stopQuoteRefresh();
   // Update hash for deeplink persistence (strip unrelated query params)
   if (tab === 'swap') {
     document.title = 'SWAP';
+    if (!_refreshTimer && $('fromAmount')?.value) handleAmountChange();
     if (window.location.hash === '#privacy' || window.location.hash === '#coin' || window.location.hash === '#send') history.replaceState(null, '', window.location.pathname + window.location.search);
     syncSwapURL();
   } else if (tab === 'privacy') {

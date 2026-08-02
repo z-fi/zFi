@@ -3,6 +3,9 @@ const _extPriceCache = new Map();
 const _extPriceInflight = new Map();
 const _extPriceTTL = 15_000;
 const _extPriceMaxSize = 100;
+// How long the quote will keep waiting on external aggregator prices once the
+// on-chain route is already decoded. See settleWithin below.
+const EXT_PRICE_DEADLINE_MS = 1500;
 function cachedFetch(key, fetchFn) {
   const cached = _extPriceCache.get(key);
   if (cached && Date.now() - cached.t < _extPriceTTL) {
@@ -29,6 +32,19 @@ function cachedFetch(key, fetchFn) {
   });
   _extPriceInflight.set(key, p);
   return p;
+}
+
+// Resolve a fan-out, but stop waiting after `ms` and report whatever has landed
+// (unfinished slots come back as null). The external aggregators each self-abort
+// on their own schedule, so a single slow API used to hold the entire quote —
+// the on-chain route could be decoded in 400ms and still sit behind a 4s API.
+// Nothing is wasted by cutting them off: the in-flight requests still settle
+// into _extPriceCache, so the next refresh serves them instantly from cache.
+function settleWithin(ms, promises) {
+  let tid;
+  const deadline = new Promise(r => { tid = setTimeout(() => r(null), ms); });
+  return Promise.all(promises.map(p => Promise.race([Promise.resolve(p).catch(() => null), deadline])))
+    .finally(() => clearTimeout(tid));
 }
 
 // ---- 0x / Matcha API helpers ----
