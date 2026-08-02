@@ -1684,5 +1684,37 @@ test('a note whose nullifier was burned before its deposit is identified as stra
   assert.equal(api.load.ppIsNoteStrandedByPriorNullifier({}), false, 'missing blocks are not a claim');
 });
 
+test('the pre-2026-03 pp_notes localStorage shape is importable', () => {
+  // Exactly what the old dapp wrote: an array of wrappers whose "note" field is
+  // a JSON *string*, produced by buildPPNote().
+  const legacyStore = JSON.stringify([
+    {
+      note: JSON.stringify({
+        nullifier: '0x' + (7n).toString(16).padStart(64, '0'),
+        secret: '0x' + (8n).toString(16).padStart(64, '0'),
+        asset: 'BOLD',
+        value: '24875000000000000000',
+        label: '0x' + (42n).toString(16).padStart(64, '0'),
+        leafIndex: 5,
+        commitment: '0x' + (99n).toString(16).padStart(64, '0'),
+      }),
+      amount: '24875000000000000000',
+      asset: 'BOLD',
+      timestamp: 1740000000000,
+      txHash: '0xdeadbeef',
+    },
+  ]);
+
+  const [note] = api.load.ppwParseRecoveryNoteInput(legacyStore);
+
+  assert.equal(note.nullifier, 7n);
+  assert.equal(note.secret, 8n);
+  assert.equal(note.label, 42n);
+  assert.equal(note.value, 24875000000000000000n);
+  assert.equal(note.asset, 'BOLD');
+  // leafIndex must not be mistaken for a deposit index.
+  assert.equal(note.depositIndex, null);
+});
+
 
 await done();

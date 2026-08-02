@@ -6373,6 +6373,15 @@ function ppwExtractNoteCandidates(parsed) {
       for (const item of node) visit(item, depth + 1);
       return;
     }
+    // The pre-2026-03 dapp stored notes as {note: "<json string>", amount, asset}
+    // in localStorage['pp_notes']. The inner note is a string, so walk into it.
+    if (typeof node === 'string') {
+      const trimmed = node.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try { visit(JSON.parse(trimmed), depth + 1); } catch { /* not a nested note */ }
+      }
+      return;
+    }
     if (typeof node !== 'object') return;
     const nullifier = ppwParseNoteBigInt(ppwPickNoteField(node, ['nullifier', 'nullifierValue', 'null']));
     const secret = ppwParseNoteBigInt(ppwPickNoteField(node, ['secret', 'secretValue']));
