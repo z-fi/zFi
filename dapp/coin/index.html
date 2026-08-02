@@ -421,11 +421,9 @@ input {
 /* The live proposals — open for votes, or queued and waiting on the timelock — are
    the only ones a reader can still act on: give them an accent rail so they are
    findable in a list of fifteen settled ones. */
-.prop-item.is-live { border-color:var(--green); }
-.prop-item.is-live::before {
-  content:'';position:absolute;left:0;top:-1px;bottom:-1px;width:3px;
-  background:var(--green);border-radius:8px 0 0 8px;
-}
+/* The rail is a thicker left border, not an overlaid pseudo-element: a 3px box with
+   an 8px radius bulges outside the card's own rounded corner. */
+.prop-item.is-live { border-color:var(--green);border-left-width:3px;padding-left:12px; }
 .prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:10px; }
 .prop-desc { font-size:13px;font-weight:500;flex:1;min-width:0;word-break:break-word;line-height:1.55; }
 .prop-desc-body { display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden; }
@@ -544,6 +542,31 @@ input {
   .coin-slippage-row { gap:4px; }
 }
 
+/* Keeper actions — permissionless DAO chores */
+.keeper-panel { margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border-muted); }
+.keeper-head {
+  display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);
+}
+.keeper-head a { color:var(--fg-muted);text-decoration:underline;text-underline-offset:2px; }
+.keeper-head a:hover { color:var(--fg); }
+.keeper-actions { display:flex;gap:10px;flex-wrap:wrap; }
+.keeper-action { flex:1 1 180px;min-width:0; }
+.keeper-btn {
+  width:100%;padding:9px 10px;font-size:12px;font-weight:600;cursor:pointer;
+  background:var(--surface);color:var(--fg-muted);
+  border:1px solid var(--border-muted);border-radius:6px;
+  transition:border-color 0.15s, color 0.15s, background 0.15s;
+}
+/* Only an action that would actually succeed right now gets the accent — the rest
+   stay legible but plainly inert, with the reason underneath. */
+.keeper-btn.ready { color:var(--green);border-color:var(--green); }
+.keeper-btn.ready:hover { background:var(--status-success); }
+.keeper-btn:disabled { cursor:not-allowed;opacity:0.55; }
+.keeper-why { margin-top:4px;font-size:10px;line-height:1.45;color:var(--fg-dim); }
+.keeper-status { margin-top:8px;font-size:11px;min-height:14px; }
+.keeper-status a { color:inherit;text-decoration:underline; }
+
 /* Vault collection gallery */
 .nft-tile {
   display:block;width:100%;padding:0;border:none;background:none;text-align:center;
@@ -631,9 +654,24 @@ const CONTINUOUS_SALES = {
   '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853': {
     sale: '0x824d11a46F32cd16cdF46380314343e9697e2491',
     vault: '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e',
+    // Holds the DAO's fee-claim and remint permits. Both actions are open to anyone:
+    // the payloads are fixed and everything lands in the vault, so the only thing a
+    // caller supplies is gas.
+    keeper: '0x002d1618D1a198F581a709837f25a88c951D515C',
     icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
   },
 };
+const KEEPER_ABI = [
+  'function claimFees() returns (uint256)',
+  'function remint()',
+  'function canClaim() view returns (bool)',
+  'function canRemint() view returns (bool)',
+  'function pendingFees() view returns (uint256)',
+  'function untilNextPass() view returns (uint256)',
+  'function remainingClaims() view returns (uint256)',
+  'function remainingRemints() view returns (uint256)',
+  'function stopped() view returns (bool)',
+];
 // Fixed mint rate of the continuous sale: 1 ETH buys 1M shares.
 const CONT_SALE_SHARES_PER_ETH = 1000000;
 // What one TokenWorks pass costs to acquire — the unit the vault saves up toward.
@@ -2135,6 +2173,88 @@ async function loadProposals(daoAddr) {
   }
 }
 
+// ---- Keeper panel ----
+// Renders the two permissionless chores and, when one is unavailable, why. A greyed
+// button with no reason attached is just a dead end; the reason is the useful half.
+let _keeperAddr = '';
+function renderKeeperPanel(keeperAddr, k, vaultBal) {
+  const el = $('keeperPanel');
+  if (!el || !keeperAddr || !k) return;
+  _keeperAddr = keeperAddr;
+
+  const pending = k.pendingFees ?? 0n;
+  const short = k.untilNextPass ?? 0n;
+  const claimsLeft = k.remainingClaims ?? 0n;
+  const remintsLeft = k.remainingRemints ?? 0n;
+  const stopped = !!k.stopped;
+  const canClaim = !!k.canClaim, canRemint = !!k.canRemint;
+
+  // A goal or a shortfall wants round numbers, not a balance's full precision.
+  const eth4 = wei => Number(ethers.formatEther(wei)).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+
+  // Why not, in the order a reader would hit them: paused beats spent permits beats
+  // "nothing to do yet".
+  const claimWhy = stopped ? 'Paused by the guardian'
+    : claimsLeft === 0n ? 'No claim permits left — needs a new grant'
+    : pending === 0n ? 'No fees have accrued since the last claim'
+    : `Sweeps pass #156 fees into the vault. You pay gas only.`;
+  const remintWhy = stopped ? 'Paused by the guardian'
+    : remintsLeft === 0n ? 'No remint permits left — needs a new grant'
+    : short > 0n ? `Vault needs ${eth4(short)} ETH more`
+    : `Spends 1 ETH of the vault on another pass. You pay gas only.`;
+
+  const action = (id, label, ok, why, fn, left) => `
+    <div class="keeper-action">
+      <button type="button" class="keeper-btn${ok ? ' ready' : ''}" id="${id}" ${ok ? '' : 'disabled'} onclick="${fn}()">${label}</button>
+      <div class="keeper-why">${why}${left > 0n && left < 1000n ? ` &middot; ${left} use${left === 1n ? '' : 's'} left` : ''}</div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="keeper-head">
+      <a href="https://etherscan.io/address/${escAttr(keeperAddr)}" target="_blank" rel="noopener" title="FWCKeeper — holds the DAO's fee-claim and remint permits">Keeper</a>
+      <span>&middot; governance approved these, anyone can run them</span>
+    </div>
+    <div class="keeper-actions">
+      ${action('keeperClaimBtn', pending > 0n ? `Claim ${eth4(pending)} ETH fees` : 'Claim fees', canClaim, claimWhy, 'keeperClaimFees', claimsLeft)}
+      ${action('keeperRemintBtn', 'Buy next pass', canRemint, remintWhy, 'keeperRemint', remintsLeft)}
+    </div>
+    <div class="keeper-status" id="keeperStatus"></div>`;
+  el.style.display = '';
+}
+
+async function _keeperSend(fnName, label) {
+  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
+  const statusEl = $('keeperStatus');
+  const set = html => { if (statusEl) statusEl.innerHTML = html; };
+  set(`<span>${zfiLoadingSVG(14)} Confirming...</span>`);
+  try {
+    const keeper = new ethers.Contract(_keeperAddr, KEEPER_ABI, _signer);
+    // Simulated first: both calls revert on a condition the panel already reads, so a
+    // stale button costs the reader a rejected wallet prompt instead of a failed tx.
+    await keeper[fnName].staticCall();
+    const tx = await keeper[fnName]();
+    set(`<span>${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></span>`);
+    await tx.wait();
+    set(`<span style="color:var(--green)">${label} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></span>`);
+    // The vault balance, the pass count and the progress bar all just moved.
+    setTimeout(() => { if (typeof _refreshVaultStats === 'function') _refreshVaultStats(); }, 2000);
+  } catch (e) {
+    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      set('<span style="color:var(--fg-dim)">Cancelled</span>');
+    } else {
+      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0] || '';
+      const known = /NothingPending/.test(msg) ? 'Nothing has accrued yet'
+        : /VaultUnderfunded/.test(msg) ? 'The vault is short of a full pass price'
+        : /NoPermit/.test(msg) ? 'The permit is spent — governance must grant another'
+        : /Stopped/.test(msg) ? 'The keeper is paused by the guardian'
+        : msg.length < 100 ? msg : 'Transaction failed';
+      set(`<span style="color:var(--red)">${escText(known)}</span>`);
+    }
+  }
+}
+function keeperClaimFees() { return _keeperSend('claimFees', 'Fees claimed into the vault.'); }
+function keeperRemint() { return _keeperSend('remint', 'Pass purchased for the vault.'); }
+
 function pctBar(pct, color) {
   color = color || 'var(--green)';
   return `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100).toFixed(1)}%;background:${color}"></div></div>`;
@@ -2311,6 +2431,8 @@ async function getEthUsd() {
 let _renderGen = 0;
 let _saleRefreshInterval = null;
 let _vaultRefreshTimer = null;
+// Set by the collector page so a keeper action can re-read the vault immediately.
+let _refreshVaultStats = null;
 let _saleCountdownInterval = null;
 
 async function refreshSaleStats() {
@@ -2383,6 +2505,7 @@ function route() {
   closeNftLightbox();
   _vaultGalleryItems = [];
   if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
+  _refreshVaultStats = null;
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
@@ -5519,6 +5642,7 @@ async function renderCoinPage(daoAddr) {
     const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
     const contSaleAddr = contSaleConfig?.sale;
     const contVaultAddr = contSaleConfig?.vault;
+    const contKeeperAddr = contSaleConfig?.keeper;
     // One multicall for every on-chain read this page needs up front — pool reserves, the
     // DAO's LP balance, the sale's paused flag and (only when its 5-minute cache is stale)
     // the ETH price. Metadata is HTTP, so it stays alongside rather than inside.
@@ -5796,7 +5920,8 @@ async function renderCoinPage(daoAddr) {
           <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
           <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
           <div id="nextPassProgress" style="display:none;margin:8px 0 10px"></div>
-          <div style="font-size:11px;line-height:1.6;color:var(--fg-muted);margin-top:10px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. ${rqNote}</div>
+          ${contKeeperAddr ? `<div id="keeperPanel" class="keeper-panel" style="display:none"></div>` : ''}
+          <div style="font-size:11px;line-height:1.6;color:var(--fg-muted);margin-top:10px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault, and once it clears a pass price anyone can trigger the purchase &mdash; governance approved the action, not the caller. ${rqNote}</div>
           <div style="font-size:10px;color:var(--fg-dim);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-muted)">
             <a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Sale ${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a>${contVaultAddr ? `
             &nbsp;&middot;&nbsp; <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Vault ${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a>` : ''}
@@ -5941,7 +6066,11 @@ async function renderCoinPage(daoAddr) {
           try {
             const nftIface = new ethers.Interface(VAULT_NFT_ABI);
             const feeIface = new ethers.Interface(VAULT_NFT_FEES_ABI);
-            const [vaultBal, nftLocked, nftPending, nftClaimed, tokenURIs] = await withRPC(async rpc => {
+            const keeperIface = new ethers.Interface(KEEPER_ABI);
+            const keeperViews = contKeeperAddr
+              ? ['canClaim', 'canRemint', 'pendingFees', 'untilNextPass', 'remainingClaims', 'remainingRemints', 'stopped']
+              : [];
+            const [vaultBal, nftLocked, nftPending, nftClaimed, tokenURIs, keeper] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
@@ -5951,6 +6080,9 @@ async function renderCoinPage(daoAddr) {
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('claimed', [id]) })),
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('tokenURI', [id]) })),
+                // Keeper state. Its own canClaim/canRemint decide whether the buttons are
+                // live, rather than the page re-deriving the rules and drifting from them.
+                ...keeperViews.map(fn => ({ target: contKeeperAddr, allowFailure: true, callData: keeperIface.encodeFunctionData(fn) })),
               ]);
               const n = VAULT_NFT_TOKEN_IDS.length;
               const sum = (offset, iface, fn) => res.slice(offset, offset + n).reduce(
@@ -5961,6 +6093,13 @@ async function renderCoinPage(daoAddr) {
                 sum(1 + n, feeIface, 'pending'),
                 sum(1 + 2 * n, feeIface, 'claimed'),
                 res.slice(1 + 3 * n, 1 + 4 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
+                // A failed call leaves the value undefined, and the panel treats a missing
+                // read as "cannot act" rather than showing a button that would revert.
+                keeperViews.reduce((acc, fn, i) => {
+                  const r = res[1 + 4 * n + i];
+                  if (r && r.success) { try { acc[fn] = keeperIface.decodeFunctionResult(fn, r.returnData)[0]; } catch {} }
+                  return acc;
+                }, {}),
               ];
             });
             // Navigating away mid-flight must not paint the old vault's numbers onto the
@@ -6065,6 +6204,12 @@ async function renderCoinPage(daoAddr) {
                 </div>`;
               nextEl.style.display = '';
             }
+            // Keeper actions. The DAO granted these permits to a contract anyone may poke,
+            // so the two chores that used to wait on whoever remembered to run them are
+            // now a button here: sweep the pass fees in, and spend a full vault on the
+            // next pass. A caller pays gas and nothing else — the payloads are fixed and
+            // the proceeds land in the vault either way.
+            renderKeeperPanel(contKeeperAddr, keeper, vaultBal);
           } catch (e) {
             console.error('vault stats load failed:', e);
             const el = $('vaultEthBal'); if (el) el.textContent = '--';
@@ -6072,6 +6217,9 @@ async function renderCoinPage(daoAddr) {
             const gc = $('vaultGalleryCard'); if (gc) gc.style.display = 'none';
           }
         };
+        // Exposed so a keeper action can pull fresh numbers the moment its tx lands,
+        // rather than leaving stale ones up until the next 30s tick.
+        _refreshVaultStats = loadVaultStats;
         loadVaultStats();
         if (_vaultRefreshTimer) clearInterval(_vaultRefreshTimer);
         _vaultRefreshTimer = setInterval(() => {
