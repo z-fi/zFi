@@ -16,6 +16,14 @@ no_rpc_rate_limit = true
 fs_permissions = [
     { access = "read", path = "./zSwap.html" },
     { access = "read", path = "./script/zSwapRegistry-setHtmlAsTarget.calldata.txt" },
+    # The TokenList suites read the frozen deterministic artifacts and write the
+    # preview page. Both paths are repo-local, and both tests fail closed without
+    # these - `vm.readFileBinary` and `vm.writeFile` are denied by default.
+    # Write, not just read: `TokenListPostDeploy` regenerates the owner calldata for
+    # the seven listings that no longer fit the constructor, so the file that gets
+    # broadcast is produced by the same test that proves it yields the right list.
+    { access = "read-write", path = "./deploy" },
+    { access = "read-write", path = "./dapp" },
 ]
 
 # zQuoter needs low runs + yul=false to stay under EIP-170 (24,576 bytes)
@@ -28,3 +36,30 @@ optimizer_runs = 20
 
 [profile.zquoter.optimizer_details]
 yul = false
+
+# The restriction below needs a profile that satisfies it; `forge` will not invent
+# one. 20 runs is the floor of the sweep in B-01 and buys ~350 B over 200. Runtime
+# gas is the right thing to trade here: the registry is read through `eth_call` and
+# written a handful of times per listing.
+[[profile.default.additional_compiler_profiles]]
+name = "tokenlist"
+via_ir = true
+optimizer = true
+optimizer_runs = 20
+
+# TokenList and its renderer are pinned by their deployment manifest
+# (deploy/TokenList.md), and B-01 in audit/TokenList/gpt5.6-sol-pro.md is the
+# reason: at the default runs the pair does not fit under EIP-170 at all, and the
+# headroom it appears to have at other settings is an optimizer artifact rather
+# than real margin. The mined salts are only valid for initcode built at these
+# settings, so expressing it here - rather than in a profile someone has to
+# remember to pass - is what keeps `forge build` producing the payload the salt
+# was actually mined for. Both files, because the renderer address is baked into
+# TokenList's creation code and a differently-optimized renderer moves it.
+[[profile.default.compilation_restrictions]]
+paths = "src/utils/TokenList.sol"
+max_optimizer_runs = 20
+
+[[profile.default.compilation_restrictions]]
+paths = "src/utils/TokenListRenderer.sol"
+max_optimizer_runs = 20
