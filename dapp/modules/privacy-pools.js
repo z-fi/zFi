@@ -5984,8 +5984,17 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
   }));
 
   const reinstated = new Map();
-  for (const { row, isSpent } of verdicts) {
-    if (isSpent) continue;
+  for (const { row, isSpent, unverified } of verdicts) {
+    if (isSpent) {
+      // Record how the verdict was reached so the row can say whether the pool
+      // confirmed it or the check simply could not be completed.
+      reinstated.set(row, {
+        ...row,
+        spentVerifiedOnChain: !unverified,
+        spentCheckUnverified: !!unverified,
+      });
+      continue;
+    }
     const pre = row.preSpend;
     console.warn(
       'Load: pool account was traced as spent by tx ' + (row.spentByTxHash || 'unknown') +
@@ -6836,10 +6845,26 @@ function ppwBuildPoolAccountRowHtml(row, index, totalRows = _ppwLoadResults.leng
       ? escText(fmt(ppFormatAmountWei(BigInt(row.originalValue), row.asset))) + ' ' + escText(row.asset)
       : escText(row.asset);
     const spentLabel = ppGetLoadedAccountStatusLabel(status);
+    // Say why this is marked spent and how sure we are. "Spent" with no
+    // explanation is indistinguishable from a bug, and the owner cannot check
+    // it without the withdrawal that supposedly consumed the note.
+    const spentEvidence = row.ragequit ? '' : (() => {
+      const spentTx = row.spentByTxHash
+        ? ppwBuildPoolAccountTxLink(row.spentByTxHash, 'spent in tx').replace(/^ <span[^>]*>&middot;<\/span> /, '')
+        : '';
+      if (row.spentCheckUnverified) {
+        return `<div style="font-size:10px;color:var(--warn);margin-top:2px">Could not confirm with the pool — refresh to re-check. ${spentTx}</div>`;
+      }
+      if (row.spentVerifiedOnChain) {
+        return `<div style="font-size:10px;color:var(--fg-muted);margin-top:2px">Confirmed spent by the pool. ${spentTx}</div>`;
+      }
+      return spentTx ? `<div style="font-size:10px;color:var(--fg-muted);margin-top:2px">${spentTx}</div>` : '';
+    })();
     return `<div style="padding:8px 0;opacity:0.5;${border}">
       <div>
         <div style="font-size:12px"><span style="font-weight:600">${escText(paLabel)}</span> <span style="color:var(--fg-dim)">&middot;</span> ${originalAmount}${txLink}</div>
         <div style="font-size:10px;color:${ppGetLoadedAccountStatusColor(status)};font-weight:600;margin-top:2px">${spentLabel}</div>
+        ${spentEvidence}
       </div>
     </div>`;
   }

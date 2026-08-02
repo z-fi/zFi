@@ -1530,23 +1530,28 @@ test('a note the pool reports as unspent is reinstated as live and withdrawable'
   assert.equal(next.withdrawalSteps, undefined);
 });
 
-test('a note the pool reports as spent stays spent', async () => {
+test('a note the pool reports as spent stays spent, and says the pool confirmed it', async () => {
   const reinstate = loadReinstateApi(async () => true);
   const row = createSpentRow();
 
   const [next] = await reinstate([row], '0xpool', new Set());
 
-  assert.equal(next, row);
   assert.equal(next.source, 'spent');
+  assert.equal(next.value, '0');
+  assert.equal(next.spentVerifiedOnChain, true);
+  assert.equal(next.spentCheckUnverified, false);
+  assert.equal(next.spentByTxHash, '0xwithdraw');
 });
 
-test('an unverifiable spent check leaves the conservative verdict in place', async () => {
+test('an unverifiable spent check stays spent but is flagged as unconfirmed', async () => {
   const reinstate = loadReinstateApi(async () => { throw new Error('rpc down'); });
   const row = createSpentRow();
 
   const [next] = await reinstate([row], '0xpool', new Set());
 
   assert.equal(next.source, 'spent');
+  assert.equal(next.spentCheckUnverified, true);
+  assert.equal(next.spentVerifiedOnChain, false);
 });
 
 test('ragequit rows and rows without pre-spend state are never reinstated', async () => {
