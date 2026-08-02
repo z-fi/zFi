@@ -393,6 +393,11 @@ input {
   mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 .prop-chat-main.open .prop-chat-body { -webkit-line-clamp:unset;overflow:visible; }
+.prop-chat-link {
+  color:var(--fg-muted);text-decoration:underline;text-decoration-color:var(--border);
+  text-underline-offset:2px;
+}
+.prop-chat-link:hover { color:var(--fg);text-decoration-color:var(--fg-dim); }
 .prop-more {
   margin-top:4px;padding:0;background:none;border:none;font:inherit;font-size:10px;
   letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
@@ -413,10 +418,11 @@ input {
   transition:border-color 0.15s ease;
 }
 .prop-item:hover { border-color:var(--fg-dim); }
-/* One proposal is live at a time and it is the only one a reader can still act on:
-   give it an accent rail so it is findable in a list of fifteen settled ones. */
-.prop-item.is-active { border-color:var(--green); }
-.prop-item.is-active::before {
+/* The live proposals — open for votes, or queued and waiting on the timelock — are
+   the only ones a reader can still act on: give them an accent rail so they are
+   findable in a list of fifteen settled ones. */
+.prop-item.is-live { border-color:var(--green); }
+.prop-item.is-live::before {
   content:'';position:absolute;left:0;top:-1px;bottom:-1px;width:3px;
   background:var(--green);border-radius:8px 0 0 8px;
 }
@@ -1850,6 +1856,31 @@ function toggleProposals() {
   }
 }
 
+// Chat is written by humans who paste raw links and 42-character addresses. Both are
+// unreadable inline and neither is clickable, so a message that cites a contract or a
+// source makes the reader copy it out by hand. Links open; addresses shorten and go to
+// Etherscan. Tokenised on the raw text and escaped per-segment, so nothing a message
+// contains can escape into markup.
+function linkifyChat(text) {
+  const PAT = /(https?:\/\/[^\s<>"']+)|(\b0x[0-9a-fA-F]{40}\b)/g;
+  let out = '', last = 0, m;
+  while ((m = PAT.exec(text)) !== null) {
+    out += escText(text.slice(last, m.index));
+    if (m[1]) {
+      // Trailing punctuation reads as sentence, not URL.
+      const url = m[1].replace(/[.,;:)\]]+$/, '');
+      const trail = m[1].slice(url.length);
+      const shown = url.replace(/^https?:\/\/(www\.)?/, '');
+      out += `<a href="${escAttr(url)}" target="_blank" rel="noopener noreferrer" class="prop-chat-link" title="${escAttr(url)}">${escText(shown.length > 48 ? shown.slice(0, 47) + '…' : shown)}</a>${escText(trail)}`;
+    } else {
+      const a = m[2];
+      out += `<a href="https://etherscan.io/address/${escAttr(a)}" target="_blank" rel="noopener noreferrer" class="prop-chat-link" title="${escAttr(a)}">${escText(a.slice(0, 6) + '…' + a.slice(-4))}</a>`;
+    }
+    last = m.index + m[0].length;
+  }
+  return out + escText(text.slice(last));
+}
+
 // Hide everything past `keep` in a rendered list behind one "show all" button. The
 // hidden nodes stay in the DOM so countdowns and expanders wired elsewhere survive.
 function collapseList(root, selector, keep, label) {
@@ -2011,7 +2042,7 @@ async function loadProposals(daoAddr) {
       if (createdAt > 0) metaBits.push(`<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>`);
       if (proposerShort) metaBits.push(`<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>`);
 
-      propHtml += `<div class="prop-item${state === 1 ? ' is-active' : ''}">
+      propHtml += `<div class="prop-item${state === 1 || state === 2 ? ' is-live' : ''}">
         <div class="prop-head">
           <div class="prop-desc">
             <div class="prop-desc-body${isLong ? ' clamped' : ''}">${escText(desc)}</div>
@@ -2049,7 +2080,7 @@ async function loadProposals(daoAddr) {
       // Strip machine-readable tags; they are UI plumbing, not something to read.
       const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
       if (!body) continue;
-      chatHtml += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span><div class="prop-chat-main"><div class="prop-chat-body">${escText(body)}</div></div></div>`;
+      chatHtml += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span><div class="prop-chat-main"><div class="prop-chat-body">${linkifyChat(body)}</div></div></div>`;
     }
 
     // Chat first: it is what someone opening the drawer is here to read, and it dates the
