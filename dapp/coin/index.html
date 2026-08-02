@@ -692,7 +692,6 @@ const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
 ];
-const SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
 // Fallback total supply (whole tokens) for a DAO with no sale record, where
 // sale.totalSupply isn't available. Matches COIN_SUPPLY in modules/coin.js — the
 // 1B convention every zFi launch uses. This was referenced in two places but never
@@ -1059,12 +1058,6 @@ function _fmtAuctionDur(sec) {
 // computeZammPoolKey / swapVZ infrastructure.
 
 const COINS_SINGLETON = '0x0000000000009710cd229bF635c4500029651eE8';
-// ZAMM staking coin's coinId — already swappable as the built-in `ZAMM` token,
-// so we hide it here to avoid a duplicate row.
-const ZAMM_STAKE_COIN_ID = '1334160193485309697971829933264346612480800613613';
-// Pull a generous page from the indexer so the gallery shows the same v0 set
-// as the swap dropdown (we don't slice further — feature them all).
-const ZAMM_GALLERY_FETCH_LIMIT = 100;
 
 async function fetchZammV0CoinsForGallery() {
   // ZAMM v0 gallery listing relied on the coinchan indexer (now retired). The
@@ -1165,7 +1158,6 @@ function renderNftAuctionCard(a, meta) {
 const ZORG_DAO = '0x5E58BA0e06ED0F5558f83bE732a4b899a674053E';
 const ZORG_TOKEN = '0x00a6bA94BBb5474725515De88fE04F854f2dCb12';
 const ZORG_VERIFY_THRESHOLD = 100000n * (10n ** 18n);
-const VERIFIED_BADGE = `<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle;margin-left:3px"><circle cx="8" cy="8" r="7.5" fill="#1d9bf0"/><path d="M5 8.2l2 2 4-4.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ZORG_CHAT_ABI = [
   'function chat(string) payable',
   'function badges() view returns (address)',
@@ -1363,9 +1355,6 @@ function toggleLowMcapCoins() {
 let rpcIdx = 0;
 // Reuse RPC providers instead of creating new ones per call
 const _rpcProviders = RPCS.map(url => new ethers.JsonRpcProvider(url, 1, { staticNetwork: true }));
-function getRPC() {
-  return _rpcProviders[rpcIdx % _rpcProviders.length];
-}
 // A public RPC that accepts the socket and then goes quiet never rejects, so without a
 // deadline the failover loop below never advances and the page sits on "Loading..."
 // forever. Each attempt races a timer; a timeout is a failure like any other and moves
@@ -2574,7 +2563,7 @@ async function refreshSaleStats() {
       try {
         // One multicall instead of three separate reads: this runs on a 20s timer, and
         // going through withRPC means a dead provider fails over instead of throwing
-        // every tick the way a raw getRPC() handle did.
+        // every tick the way a single pinned provider did.
         const minterI = new ethers.Interface(['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)']);
         const [nftCount, lockedEth, minterBal] = await withRPC(async rpc => {
           const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
@@ -3289,7 +3278,6 @@ let _swapDir = 'buy'; // buy = ETH→shares, sell = shares→ETH
 let _exactOut = false; // false = exact input, true = exact output
 let _coinData = null;
 let _coinMeta = null;
-let _quoteTimer = null;
 let _tradeMode = 'swap'; // 'sale' | 'swap' | 'ragequit' | 'lp'
 let _saleData = null; // sale object from getDAICO
 let _saleExactOut = false; // true when user typed in receive field
@@ -3332,13 +3320,6 @@ function formatEthPrice(val) {
   return (val / 1000000).toFixed(2) + 'M';
 }
 
-function formatTimeAgo(ms) {
-  const diff = Math.floor((Date.now() - ms) / 1000);
-  if (diff < 60) return diff + 's';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-  return Math.floor(diff / 86400) + 'd';
-}
 
 function formatPct(pct) {
   const abs = Math.abs(pct);
@@ -7949,6 +7930,44 @@ async function onOpsUnlock(token, to, coinId, amount, unlockTime) {
 }
 
 // ==================== INIT ====================
+
+// The per-coin caches below are keyed by CID and pool id, so they gain an entry for
+// every coin ever opened and never lose one. That is unbounded, and the way it breaks
+// is silent: once the origin hits its storage quota every setItem throws into a
+// `catch {}`, which takes the gallery's stale-while-revalidate snapshot down with it
+// and turns every subsequent visit into a cold 1-3s load with nothing to explain why.
+// lpSeed entries carry a TTL but only ever had it checked on read, so an expired key
+// still occupied its slot. Pruning once at startup keeps the caches doing their job.
+const _CACHE_LIMITS = [
+  { prefix: 'zfi_meta_', max: 300, ttl: 0 },              // IPFS metadata: content-addressed, so only size bounds it
+  { prefix: 'lpSeed:', max: 100, ttl: LP_SEED_TTL },
+];
+function pruneCoinCaches() {
+  try {
+    for (const { prefix, max, ttl } of _CACHE_LIMITS) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix)) keys.push(k);
+      }
+      // Drop expired first; whatever is left gets trimmed to the cap. Entries without a
+      // readable timestamp sort oldest, so unparseable junk is evicted before live data.
+      const live = [];
+      for (const k of keys) {
+        let ts = 0;
+        try { ts = JSON.parse(localStorage.getItem(k))?.ts || 0; } catch {}
+        if (ttl && ts && Date.now() - ts > ttl) { localStorage.removeItem(k); continue; }
+        live.push({ k, ts });
+      }
+      if (live.length > max) {
+        live.sort((a, b) => a.ts - b.ts);
+        for (const { k } of live.slice(0, live.length - max)) localStorage.removeItem(k);
+      }
+    }
+  } catch {} // storage disabled or partitioned — the caches are optional either way
+}
+pruneCoinCaches();
+
 // onConnect fires after tryAutoConnect resolves, which happens AFTER the initial
 // route()/renderGallery() runs. Without a re-render here, _userIsVerified stays
 // false and the spam buttons never paint on cold load.
