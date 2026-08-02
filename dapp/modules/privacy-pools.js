@@ -1297,11 +1297,29 @@ function ppTraceLoadedAccountChain(initial, withdrawnMap, legacyKeys, safeKeys) 
       }
     }
 
+    // The nullifier was spent but the change note it produced is not derivable
+    // from these master keys (for instance the withdrawal was made from another
+    // client). Terminate the chain as spent rather than dropping it: silently
+    // omitting the row leaves a real, funded deposit invisible in My Pools with
+    // no explanation.
     console.warn(
       'Load: change commitment mismatch for ' + current.derivation +
-      ' derivation at withdrawal index ' + nextIndex + '. Skipping chain.'
+      ' derivation at withdrawal index ' + nextIndex +
+      '. Showing the deposit as spent; the change note is not derivable here.'
     );
-    current = null;
+    current = {
+      value: '0',
+      source: 'spent',
+      txHash: w.txHash,
+      blockNumber: w.blockNumber,
+      depositTxHash,
+      depositBlockNumber,
+      originalValue: initialValue,
+      label: current.label,
+      derivation: current.derivation,
+      chainUnresolved: true,
+    };
+    break;
   }
 
   return { current, migrated, withdrawalSteps };
@@ -1487,21 +1505,35 @@ function ppDropCachedEventLogs(asset) {
 
 function ppSaveCachedEventLogs(asset, entry) {
   try {
-    const slim = {
+    const base = {
       depositLogs: (entry.depositLogs || []).map(ppSlimLogEntry),
       withdrawnLogs: (entry.withdrawnLogs || []).map(ppSlimLogEntry),
       ragequitLogs: (entry.ragequitLogs || []).map(ppSlimLogEntry),
-      leafLogs: (entry.leafLogs || []).map(ppSlimLogEntry),
       upToBlock: entry.upToBlock,
+    };
+    // Leaves are by far the largest bucket and the least valuable: they only
+    // drive the "pending" flag, and they carry their own leafUpToBlock, so they
+    // can be dropped on their own without invalidating the rest. The other
+    // three share upToBlock and must be persisted together or not at all.
+    const withLeaves = {
+      ...base,
+      leafLogs: (entry.leafLogs || []).map(ppSlimLogEntry),
       leafUpToBlock: entry.leafUpToBlock ?? null,
     };
-    const json = JSON.stringify(slim);
-    if (json.length > PP_EVENT_CACHE_MAX_BYTES) {
-      console.warn('Privacy Pools event cache is too large for ' + asset + '; dropping cache so the next load refetches full history.');
-      ppDropCachedEventLogs(asset);
-      return;
+    const candidates = [withLeaves, { ...base, leafLogs: [], leafUpToBlock: null }];
+    for (const candidate of candidates) {
+      const json = JSON.stringify(candidate);
+      if (json.length > PP_EVENT_CACHE_MAX_BYTES) continue;
+      try {
+        localStorage.setItem(PP_EVENT_CACHE_STORAGE_PREFIX + asset, json);
+        return;
+      } catch { /* quota exceeded — fall through to the smaller candidate */ }
     }
-    localStorage.setItem(PP_EVENT_CACHE_STORAGE_PREFIX + asset, json);
+    // Nothing fits. Keep whatever snapshot is already stored: it is internally
+    // consistent with its own upToBlock, so the next load resumes from there.
+    // Deleting it forced a full-history refetch on every single load, which is
+    // exactly what a pool with a long history cannot afford.
+    console.warn('Privacy Pools event history for ' + asset + ' exceeds the local cache budget; keeping the previous snapshot and serving this session from memory.');
   } catch {}
 }
 
@@ -1847,20 +1879,24 @@ function ppParseLogRangeLimitFromError(err) {
   return null;
 }
 
-// Smallest range cap observed this session, so later chunks start at a size the
-// node will actually serve instead of rediscovering the cap every window.
+// Smallest range cap observed this session, so later windows start at a size the
+// node will actually serve instead of rediscovering the cap every time.
+// Null means "no cap known yet": ask for the whole range in one call, which a
+// capable node answers in a couple of seconds. Pre-emptive windowing would turn
+// that single call into dozens.
 let _ppLearnedLogRangeLimit = null;
 
 function ppEffectiveLogChunkSize(chunkSize) {
   return _ppLearnedLogRangeLimit != null
     ? Math.max(1, Math.min(chunkSize, _ppLearnedLogRangeLimit))
-    : chunkSize;
+    : null;
 }
 
 async function ppGetLogsChunked(filter, fromBlock, toBlock, chunkSize = PP_LOG_CHUNK_BLOCKS, depth = 0) {
-  chunkSize = ppEffectiveLogChunkSize(chunkSize);
+  const windowSize = ppEffectiveLogChunkSize(chunkSize);
   const span = toBlock - fromBlock + 1;
-  if (depth === 0 && span > chunkSize) {
+  if (depth === 0 && windowSize != null && span > windowSize) {
+    chunkSize = windowSize;
     const logs = [];
     for (let start = fromBlock; start <= toBlock; start += chunkSize) {
       const end = Math.min(start + chunkSize - 1, toBlock);

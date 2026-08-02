@@ -3297,13 +3297,18 @@ function makeLetterIcon(sym) {
 // ordering self-corrects at runtime rather than being hardcoded.
 // eth.llamarpc.com omitted: returning HTTP 521.
 // Historical eth_getLogs matters for the Privacy Pools loader, and the three
-// nodes below cannot serve it: publicnode refuses archive queries without a
+// legacy nodes cannot serve it: publicnode refuses archive queries without a
 // token, 1rpc caps eth_getLogs at 50 blocks, and drpc's free plan caps ranges
-// at 10k and then times out. Measured 2026-08-02: rpc.mevblocker.io served the
-// ETH pool's full 3.5M-block Deposited history in ~2s, plus eth_call and
-// batched reads, so it leads the list.
+// at 10k and then times out.
+// Measured 2026-08-02 from a browser origin: gateway.tenderly.co answers the
+// ETH pool's full 3.5M-block Deposited history in ~2.8s and returns
+// Access-Control-Allow-Origin on both the preflight and the POST, so it leads.
+// rpc.mevblocker.io serves the same query but its CORS headers are unreliable
+// in-browser (observed "No 'Access-Control-Allow-Origin' header" on zfi.wei.is),
+// so it is not in this list.
 const RPCS = [
-  "https://rpc.mevblocker.io",
+  "https://mainnet.gateway.tenderly.co",
+  "https://gateway.tenderly.co/public/mainnet",
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
   "https://eth.drpc.org",
