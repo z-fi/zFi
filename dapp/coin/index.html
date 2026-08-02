@@ -826,6 +826,9 @@ const MC3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   'function getEthBalance(address) view returns (uint256)'
 ];
+// Shared singleton — ethers.Interface construction parses the whole ABI, and this one
+// was being rebuilt several times per multicall on timer-driven refresh paths.
+const _mc3Iface = new ethers.Interface(MC3_ABI);
 
 // ClassicalCurveSale
 const CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
@@ -1363,11 +1366,23 @@ const _rpcProviders = RPCS.map(url => new ethers.JsonRpcProvider(url, 1, { stati
 function getRPC() {
   return _rpcProviders[rpcIdx % _rpcProviders.length];
 }
-async function withRPC(fn) {
+// A public RPC that accepts the socket and then goes quiet never rejects, so without a
+// deadline the failover loop below never advances and the page sits on "Loading..."
+// forever. Each attempt races a timer; a timeout is a failure like any other and moves
+// us to the next provider.
+const RPC_TIMEOUT_MS = 12000;
+function _rpcDeadline(promise, ms) {
+  let t;
+  return Promise.race([
+    promise.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error('RPC timeout')), ms); })
+  ]);
+}
+async function withRPC(fn, timeoutMs) {
   for (let i = 0; i < _rpcProviders.length; i++) {
     try {
       const rpc = _rpcProviders[(rpcIdx + i) % _rpcProviders.length];
-      const result = await fn(rpc);
+      const result = await _rpcDeadline(Promise.resolve(fn(rpc)), timeoutMs || RPC_TIMEOUT_MS);
       rpcIdx = (rpcIdx + i) % _rpcProviders.length;
       return result;
     } catch(e) { if (i === _rpcProviders.length - 1) throw e; }
@@ -2509,6 +2524,22 @@ let _vaultRefreshTimer = null;
 let _refreshVaultStats = null;
 let _saleCountdownInterval = null;
 
+// Polling that only runs while the tab is on screen. A backgrounded coin page used to
+// keep spending its RPC budget on stats nobody was looking at, and the resulting
+// rate-limiting is what made reads start failing once the tab came back. Skipping the
+// hidden ticks and doing one catch-up refresh on re-show keeps the display just as
+// current from the user's point of view.
+const _pollers = new Set();
+function startPoller(fn, ms) {
+  const id = setInterval(() => { if (!document.hidden) fn(); }, ms);
+  _pollers.add(fn);
+  return id;
+}
+function stopPoller(fn) { _pollers.delete(fn); }
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) for (const fn of _pollers) { try { fn(); } catch {} }
+});
+
 async function refreshSaleStats() {
   const daoAddr = $('app')?.dataset?.dao;
   if (!daoAddr || !_coinData) return;
@@ -2541,10 +2572,23 @@ async function refreshSaleStats() {
     const minterAddr = tap && tap.ops && tap.ops !== ZERO ? tap.ops : null;
     if (minterAddr) {
       try {
-        const rpc = getRPC();
-        const mABI = ['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)'];
-        const mc = new ethers.Contract(minterAddr, mABI, rpc);
-        const [nftCount, lockedEth, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), rpc.getBalance(minterAddr)]);
+        // One multicall instead of three separate reads: this runs on a 20s timer, and
+        // going through withRPC means a dead provider fails over instead of throwing
+        // every tick the way a raw getRPC() handle did.
+        const minterI = new ethers.Interface(['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)']);
+        const [nftCount, lockedEth, minterBal] = await withRPC(async rpc => {
+          const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+          const res = await mc.aggregate3([
+            { target: minterAddr, allowFailure: true, callData: minterI.encodeFunctionData('nftCount', []) },
+            { target: minterAddr, allowFailure: true, callData: minterI.encodeFunctionData('totalLockedEth', []) },
+            { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [minterAddr]) },
+          ]);
+          return [
+            res[0].success ? minterI.decodeFunctionResult('nftCount', res[0].returnData)[0] : 0n,
+            res[1].success ? minterI.decodeFunctionResult('totalLockedEth', res[1].returnData)[0] : 0n,
+            res[2].success ? _mc3Iface.decodeFunctionResult('getEthBalance', res[2].returnData)[0] : 0n,
+          ];
+        });
         if (gen !== _renderGen) return;
         const mintProgress = $('saleMintProgress');
         if (mintProgress) {
@@ -2583,6 +2627,7 @@ function route() {
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
+  _pollers.clear();
   _causeBuyMode = 'shares';
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
@@ -5032,7 +5077,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const mc3Calls = [
     { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
     { target: TAP_VEST, allowFailure: true, callData: tvIface.encodeFunctionData('taps', [daoAddr]) },
-    { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [daoAddr]) },
+    { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
     { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
     // Remaining sale allowance — minting mode uses dao address as sentinel token
     { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
@@ -5066,7 +5111,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     try { tapData = tvIface.decodeFunctionResult('taps', mcRes[1].returnData); } catch {}
   }
   if (mcRes[2]?.success) {
-    try { treasuryETH = new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', mcRes[2].returnData)[0]; } catch {}
+    try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[2].returnData)[0]; } catch {}
   }
   if (mcRes[3]?.success) {
     try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[3].returnData)[0]; } catch {}
@@ -5339,10 +5384,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Auto-refresh sale stats every 30s (partial update, preserves inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
-  _causeRefreshTimer = setInterval(() => {
-    if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); return; }
+  const causeTick = () => {
+    if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); stopPoller(causeTick); return; }
     refreshCauseStats(daoAddr, metadata);
-  }, 30000);
+  };
+  _causeRefreshTimer = startPoller(causeTick, 30000);
 }
 
 let _causeRefreshTimer = null;
@@ -5357,7 +5403,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     const daoI = new ethers.Interface(['function allowance(address spender, address token) view returns (uint256)']);
     const mc3Calls = [
       { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
-      { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [daoAddr]) },
+      { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
       { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
       { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
     ];
@@ -5372,7 +5418,7 @@ async function refreshCauseStats(daoAddr, metadata) {
 
     let saleData = null, treasuryETH = 0n, sharesTotalSupply = 0n, saleAllowance = 0n, userBalance = 0n;
     if (mcRes[0]?.success) try { saleData = ssIface.decodeFunctionResult('sales', mcRes[0].returnData); } catch {}
-    if (mcRes[1]?.success) try { treasuryETH = new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
+    if (mcRes[1]?.success) try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
     if (mcRes[2]?.success) try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[2].returnData)[0]; } catch {}
     if (mcRes[3]?.success) try { saleAllowance = daoI.decodeFunctionResult('allowance', mcRes[3].returnData)[0]; } catch {}
     if (_connectedAddress && mcRes[4]?.success) try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[4].returnData)[0]; } catch {}
@@ -5661,6 +5707,10 @@ async function causeRagequit(daoAddr) {
 // ==================== DAICO COIN PAGE ====================
 async function renderCoinPage(daoAddr) {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
+  if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
+  if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
+  if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
+  _pollers.clear();
   const gen = ++_renderGen;
   // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
   // freshly-rendered detail page. renderCurveCoinPage bumps these on its own, but if we
@@ -6045,7 +6095,7 @@ async function renderCoinPage(daoAddr) {
         }, 0);
       }
       // Auto-refresh sale stats every 20s while sale is live
-      _saleRefreshInterval = setInterval(refreshSaleStats, 20000);
+      _saleRefreshInterval = startPoller(refreshSaleStats, 20000);
     } else if (hasDaicoSale) {
       html += saleEndedDrawer;
     }
@@ -6125,6 +6175,7 @@ async function renderCoinPage(daoAddr) {
         idle(async () => {
           try {
             const seed = await verifyLpSeeder(poolId.toString(), daoAddr);
+            if (gen !== _renderGen) return; // navigated away mid-scan
             const q = $('lpFeesQualifier'), row = $('lpFeesRow');
             // Unknown stays "(est.)" — the log scan not reaching inception is not evidence.
             if (!q || !row || !seed || seed.inconclusive) return;
@@ -6156,7 +6207,7 @@ async function renderCoinPage(daoAddr) {
             const [vaultBal, nftLocked, nftPending, nftClaimed, tokenURIs, keeper] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
-                { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
+                { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [contVaultAddr]) },
                 // Four groups of one call per pass, each in id order: locked ETH, pending
                 // fees, lifetime claimed fees, then the on-chain metadata URI.
                 ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
@@ -6171,7 +6222,7 @@ async function renderCoinPage(daoAddr) {
               const sum = (offset, iface, fn) => res.slice(offset, offset + n).reduce(
                 (acc, r) => acc + (r.success ? iface.decodeFunctionResult(fn, r.returnData)[0] : 0n), 0n);
               return [
-                res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
+                res[0].success ? _mc3Iface.decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
                 sum(1, nftIface, 'getRemainingLockedEth'),
                 sum(1 + n, feeIface, 'pending'),
                 sum(1 + 2 * n, feeIface, 'claimed'),
@@ -6305,10 +6356,11 @@ async function renderCoinPage(daoAddr) {
         _refreshVaultStats = loadVaultStats;
         loadVaultStats();
         if (_vaultRefreshTimer) clearInterval(_vaultRefreshTimer);
-        _vaultRefreshTimer = setInterval(() => {
-          if (gen !== _renderGen) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; return; }
+        const vaultTick = () => {
+          if (gen !== _renderGen) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; stopPoller(vaultTick); return; }
           loadVaultStats();
-        }, 30000);
+        };
+        _vaultRefreshTimer = startPoller(vaultTick, 30000);
       }
     }
 
@@ -6866,7 +6918,7 @@ async function loadBalances() {
   const daoAddr = $('app').dataset.dao;
   try {
     const erc20 = new ethers.Interface(ERC20_ABI);
-    const mc3i = new ethers.Interface(MC3_ABI);
+    const mc3i = _mc3Iface;
     const calls = [
       { target: MC3, allowFailure: false, callData: mc3i.encodeFunctionData('getEthBalance', [addr]) },
       { target: shares, allowFailure: true, callData: erc20.encodeFunctionData('balanceOf', [addr]) },
