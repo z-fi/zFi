@@ -1228,6 +1228,17 @@ function ppGetRecoveredSafeDepositIndex(migratedCount, safeRows) {
 // to (a) ask the pool whether that nullifier is genuinely spent and (b) put the
 // note back into service if it is not — a note wrongly declared spent is
 // otherwise unwithdrawable and unragequittable, with its funds still on-chain.
+// A withdrawal cannot spend a note that did not exist yet. When the nullifier
+// was already recorded before the deposit landed, the deposit was never
+// spendable: both withdraw() and ragequit() call _spend(), which reverts with
+// NullifierAlreadySpent. Saying "Spent" for that case is wrong and hides it.
+function ppIsNoteStrandedByPriorNullifier(row) {
+  const spentAt = Number(row?.spentByBlockNumber);
+  const depositedAt = Number(row?.depositBlockNumber);
+  if (!Number.isFinite(spentAt) || !Number.isFinite(depositedAt)) return false;
+  return spentAt < depositedAt;
+}
+
 function ppBuildPreSpendSnapshot(note, withdrawal) {
   return {
     preSpend: {
@@ -1244,6 +1255,7 @@ function ppBuildPreSpendSnapshot(note, withdrawal) {
       txHash: note.txHash,
     },
     spentByTxHash: withdrawal?.txHash || null,
+    spentByBlockNumber: withdrawal?.blockNumber ?? null,
   };
 }
 
@@ -6012,7 +6024,11 @@ async function ppReinstateFalselySpentAccounts(rows, poolAddress, insertedLeaves
       'Privacy: spent-check ' + row.asset + ' deposit #' + row.depositIndex +
       ' value=' + (row.originalValue ?? '?') +
       ' poolSaysSpent=' + (unverified ? 'unverified' : String(isSpent)) +
-      ' eventBlamesTx=' + (row.spentByTxHash || 'none')
+      ' eventBlamesTx=' + (row.spentByTxHash || 'none') +
+      (ppIsNoteStrandedByPriorNullifier(row)
+        ? ' STRANDED: that withdrawal is at block ' + row.spentByBlockNumber +
+          ', before this deposit at block ' + row.depositBlockNumber
+        : '')
     );
   }
 
@@ -6885,6 +6901,9 @@ function ppwBuildPoolAccountRowHtml(row, index, totalRows = _ppwLoadResults.leng
       const spentTx = row.spentByTxHash
         ? ppwBuildPoolAccountTxLink(row.spentByTxHash, 'spent in tx').replace(/^ <span[^>]*>&middot;<\/span> /, '')
         : '';
+      if (ppIsNoteStrandedByPriorNullifier(row)) {
+        return `<div style="font-size:10px;color:var(--error);margin-top:2px">Never spendable: this note's nullifier was already used at block ${escText(String(row.spentByBlockNumber))}, before the deposit at block ${escText(String(row.depositBlockNumber))}. The pool rejects both withdraw and ragequit for it. ${spentTx}</div>`;
+      }
       if (row.spentCheckUnverified) {
         return `<div style="font-size:10px;color:var(--warn);margin-top:2px">Could not confirm with the pool — refresh to re-check. ${spentTx}</div>`;
       }
@@ -8642,6 +8661,7 @@ function ppRegisterInternalTestApi() {
       ppGetRecoveredSafeDepositIndex,
       ppTraceLoadedAccountChain,
       ppReinstateFalselySpentAccounts,
+      ppIsNoteStrandedByPriorNullifier,
       ppwParseRecoveryNoteInput,
       ppwExtractRecoveryPhrase,
       ppwLooksLikeRecoveryPhraseAttempt,
