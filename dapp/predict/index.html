@@ -1853,13 +1853,16 @@ const PM_ROUTER_ABI = [
   // impact cap nor the vault mint gate is anywhere on this path.
   'function placeOrder(uint256 marketId, bool isYes, bool isBuy, uint96 shares, uint96 collateral, uint56 deadline, bool partialFill) payable returns (bytes32 orderHash)',
   'function cancelOrder(bytes32 orderHash)',
-  'function multicall(bytes[] data) payable returns (bytes[] results)'
+  'function multicall(bytes[] data) payable returns (bytes[] results)',
+  'function getUserOrderHashes(address user, uint256 offset, uint256 limit) view returns (bytes32[] orderHashes)',
+  'function getOrder(bytes32 orderHash) view returns (tuple(address owner, uint56 deadline, bool isYes, bool isBuy, bool partialFill, uint96 shares, uint96 collateral, uint256 marketId) order, uint96 sharesFilled, uint96 sharesRemaining, uint96 collateralFilled, uint96 collateralRemaining, bool active)'
 ];
 const PM_ROUTER_IFACE = new ethers.Interface(PM_ROUTER_ABI);
 
 // Plain-fee markets carry a bps value as feeOrHook instead of a hook address,
-// which keeps PMFeeHook and PMHookRouter out of the trade path entirely.
-const PLAIN_FEE_BPS = 30;
+// which keeps PMFeeHook and PMHookRouter out of the trade path entirely. Same
+// pool type the pre-hook markets used, so it is the same number.
+const PLAIN_FEE_BPS = LEGACY_FEE_BPS;
 
 const RESOLVER_ABI = [
   'function resolveMarket(uint256 marketId)',
@@ -2419,7 +2422,10 @@ let _quoteTimer = null;
 let _quoteAgeTimer = null;
 let _lastQuote = null;
 let _isTrading = false;
-let _tradeSlippage = 15; // default 15% slippage tolerance (high due to thin AMM liquidity; excess goes to vault depth via buyWithSweep)
+// On hooked markets this is plain slippage. On plain-fee markets it doubles as
+// the price ceiling for a buy: the AMM is filled up to spot*(1+slippage) and
+// whatever is left rests as an order at that price rather than paying more.
+let _tradeSlippage = 15;
 // Limit-bet mode: entered automatically when the instant route cannot fill the
 // order. Price in bps; null means "default to spot the next time we offer it".
 let _limitMode = false;
@@ -2692,38 +2698,47 @@ async function renderGallery() {
       if (needsOdds.length > 0) {
         try {
           await withRPC(async (rpc) => {
-            const calls = needsOdds.map(m => {
-              if (m.isLegacy) {
-                return {
-                  target: CONTRACTS.PAMM,
-                  callData: pammIface.encodeFunctionData('getPoolState', [BigInt(m.marketId), LEGACY_FEE_BPS]),
-                  decode: data => pammIface.decodeFunctionResult('getPoolState', data),
-                  market: m, isLabeled: false
-                };
-              } else {
-                // getMarketSummary works for both our resolver and open resolver markets
-                return {
-                  target: CONTRACTS.QUOTER,
+            // Markets seeded with a plain fee are not in LEGACY_MARKETS and carry
+            // no legacy resolver, so the old isLegacy guess calls getMarketSummary
+            // on them and gets nothing back — they would all read 50%. Ask both
+            // venues in the same batch and take whichever actually has reserves.
+            const calls = [];
+            for (const m of needsOdds) {
+              calls.push({
+                target: CONTRACTS.PAMM, allowFailure: true,
+                callData: pammIface.encodeFunctionData('getPoolState', [BigInt(m.marketId), PLAIN_FEE_BPS]),
+                decode: data => pammIface.decodeFunctionResult('getPoolState', data),
+                market: m, kind: 'plain'
+              });
+              if (!m.isLegacy) {
+                calls.push({
+                  target: CONTRACTS.QUOTER, allowFailure: true,
                   callData: quoterIface.encodeFunctionData('getMarketSummary', [m.marketId]),
                   decode: data => quoterIface.decodeFunctionResult('getMarketSummary', data),
-                  market: m, isLabeled: true
-                };
+                  market: m, kind: 'hooked'
+                });
               }
-            });
+            }
             const results = await multicall(calls, rpc);
             for (let i = 0; i < results.length; i++) {
               if (!results[i].success) continue;
+              const m = calls[i].market;
               try {
                 const decoded = results[i].decode();
-                if (calls[i].isLabeled) {
-                  calls[i].market.y = Math.round(Number(decoded.ammPriceYesBps) / 100);
+                let rYes, rNo;
+                if (calls[i].kind === 'hooked') {
+                  rYes = Number(decoded.ammYesReserve);
+                  rNo = Number(decoded.ammNoReserve);
                 } else {
-                  const rYes = Number(decoded.rYes);
-                  const rNo = Number(decoded.rNo);
-                  const total = rYes + rNo;
-                  calls[i].market.y = total > 0 ? Math.round((rNo / total) * 100) : 50;
+                  rYes = Number(decoded.rYes);
+                  rNo = Number(decoded.rNo);
                 }
-                calls[i].market.oddsLoaded = true;
+                const total = rYes + rNo;
+                if (total <= 0) continue; // empty venue — let the other one answer
+                m.y = Math.round((rNo / total) * 100);
+                m.isLabeled = calls[i].kind === 'hooked';
+                m.isLegacy = !m.isLabeled;
+                m.oddsLoaded = true;
               } catch {}
             }
             return true;
@@ -2865,6 +2880,9 @@ async function renderMarketPage(marketId) {
   _tradeDir = 'buy';
   _tradeSide = 'yes';
   _lastQuote = null;
+  _splitPlan = null;
+  _limitMode = false;
+  _limitPriceBps = null;
 
   try {
     // Load all market data with RPC fallback
@@ -4465,6 +4483,30 @@ async function loadOpenOrders(marketId, collSym) {
         if (resting > 0n || filled > 0n) found.push({ kind: 'ask', isYes, priceBps: p, resting, filled });
       }
     }
+
+    // PMRouter orders — where the AMM-plus-remainder split parks its leftover.
+    // These are escrowed by order hash rather than pooled by price level, so
+    // they need their own lookup or they would never show up here at all.
+    try {
+      const pmr = new ethers.Contract(CONTRACTS.PM_ROUTER, PM_ROUTER_ABI, rpc);
+      const hashes = await pmr.getUserOrderHashes(_connectedAddress, 0, 100);
+      for (const h of hashes) {
+        const o = await pmr.getOrder(h);
+        if (!o.active) continue;
+        if (BigInt(o.order.marketId) !== BigInt(marketId)) continue;
+        const shares = BigInt(o.order.shares);
+        found.push({
+          kind: o.order.isBuy ? 'pmbid' : 'pmask',
+          isYes: o.order.isYes,
+          // Price is implied by the escrowed ratio rather than stored.
+          priceBps: shares > 0n ? Number(BigInt(o.order.collateral) * 10000n / shares) : 0,
+          resting: o.order.isBuy ? BigInt(o.collateralRemaining) : BigInt(o.sharesRemaining),
+          filled: o.order.isBuy ? BigInt(o.sharesFilled) : BigInt(o.collateralFilled),
+          hash: h
+        });
+      }
+    } catch (e) { console.warn('PMRouter order scan failed:', e.message); }
+
     return found;
   });
 
@@ -4474,7 +4516,8 @@ async function loadOpenOrders(marketId, collSym) {
   let rows = '';
   for (const o of orders) {
     const SIDE = o.isYes ? 'YES' : 'NO';
-    const isAsk = o.kind === 'ask';
+    const isPM = o.kind === 'pmbid' || o.kind === 'pmask';
+    const isAsk = o.kind === 'ask' || o.kind === 'pmask';
     const pct = (o.priceBps / 100).toFixed(0);
     const parts = [];
     if (o.resting > 0n) {
@@ -4491,8 +4534,10 @@ async function loadOpenOrders(marketId, collSym) {
       <span class="ord-px pos-side ${o.isYes ? 'yes' : 'no'}">${isAsk ? 'Sell' : 'Buy'} ${SIDE} @ ${pct}%</span>
       <span class="pos-val">${parts.join(' &middot; ')}</span>
       <span style="display:flex;gap:3px">
-        ${o.filled > 0n ? `<button class="lp-withdraw-btn" onclick="claimLimitFill('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CLAIM</button>` : ''}
-        ${o.resting > 0n ? `<button class="lp-withdraw-btn" onclick="cancelLimitOrder('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CANCEL</button>` : ''}
+        ${!isPM && o.filled > 0n ? `<button class="lp-withdraw-btn" onclick="claimLimitFill('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CLAIM</button>` : ''}
+        ${isPM
+          ? `<button class="lp-withdraw-btn" onclick="cancelPMOrder('${marketId}','${o.hash}')">CANCEL</button>`
+          : (o.resting > 0n ? `<button class="lp-withdraw-btn" onclick="cancelLimitOrder('${marketId}','${o.kind}',${o.isYes},${o.priceBps})">CANCEL</button>` : '')}
       </span>
     </div>`;
   }
@@ -4514,6 +4559,17 @@ async function cancelLimitOrder(marketId, kind, isYes, priceBps) {
     const tx = kind === 'ask'
       ? await mr.withdrawFromPool(marketId, isYes, priceBps, 0, _connectedAddress)
       : await mr.withdrawFromBidPool(marketId, isYes, priceBps, 0, _connectedAddress);
+    await tx.wait();
+    renderMarketPage(marketId);
+  } catch (e) { console.warn('Cancel failed:', decodeError(e)); }
+}
+
+async function cancelPMOrder(marketId, orderHash) {
+  const s = await connectWallet();
+  if (!s) return;
+  try {
+    const pmr = new ethers.Contract(CONTRACTS.PM_ROUTER, PM_ROUTER_ABI, s);
+    const tx = await pmr.cancelOrder(orderHash);
     await tx.wait();
     renderMarketPage(marketId);
   } catch (e) { console.warn('Cancel failed:', decodeError(e)); }
@@ -4639,7 +4695,6 @@ function onTradeInput() {
 
 async function fetchOnchainQuote(amountWei) {
   const quoteEl = $('tradeQuote');
-  const btn = $('tradeBtn');
   const marketId = $('app').dataset.marketId;
   const isLabeled = $('app').dataset.isLabeled === '1';
   if (!marketId || !quoteEl) return;
@@ -4828,7 +4883,6 @@ async function getRoutedBuyQuote(inputAmountStr, marketId, buyYes) {
 
 async function fetchRoutedBuyQuote(inputAmountStr) {
   const quoteEl = $('tradeQuote');
-  const btn = $('tradeBtn');
   const marketId = $('app').dataset.marketId;
   if (!marketId || !quoteEl) return;
 
