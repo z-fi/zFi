@@ -9,6 +9,7 @@ const PRIVACY_RUNTIME_START_MARKER = '// ==================== PRIVACY POOLS RUNT
 const PRIVACY_RUNTIME_END_MARKER = '// ==================== PRIVACY POOLS RUNTIME END ====================';
 
 let _appSourceCache = null;
+let _privacyModuleSourceCache = null;
 let _privacyRuntimeSourceCache = null;
 let _privacyRuntimeLibs = null;
 
@@ -20,10 +21,18 @@ function getAppSource() {
   return _appSourceCache;
 }
 
+// The privacy runtime lives in its own module; dapp/index.html only loads it.
+function getPrivacyModuleSource() {
+  if (!_privacyModuleSourceCache) {
+    _privacyModuleSourceCache = readFileSync(path.join(ROOT, 'dapp/modules/privacy-pools.js'), 'utf8');
+  }
+  return _privacyModuleSourceCache;
+}
+
 function getPrivacyRuntimeSource() {
   if (!_privacyRuntimeSourceCache) {
     _privacyRuntimeSourceCache = sliceSourceByMarkers(
-      getAppSource(),
+      getPrivacyModuleSource(),
       PRIVACY_RUNTIME_START_MARKER,
       PRIVACY_RUNTIME_END_MARKER,
     );
@@ -44,7 +53,9 @@ function validateStatePatchKeys(statePatch, ctx) {
 }
 
 export function loadPrivacyMarkupSource() {
-  return getAppSource();
+  // Markup lives in dapp/index.html, the runtime copy lives in the privacy
+  // module; contract tests assert over both.
+  return getAppSource() + '\n' + getPrivacyModuleSource();
 }
 
 function sliceSourceByMarkers(source, startMarker, endMarker) {
@@ -452,11 +463,11 @@ export function createPoseidonContext({ withEthers = false } = {}) {
     Object.assign(globals, { globalThis: {}, btoa: (s) => Buffer.from(s, 'binary').toString('base64'), crypto: webcrypto, TextEncoder, TextDecoder });
   }
   const ctx = vm.createContext(globals);
-  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/poseidon1.min.js'), 'utf8'), ctx);
-  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/poseidon2.min.js'), 'utf8'), ctx);
-  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/poseidon3.min.js'), 'utf8'), ctx);
+  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/vendor/poseidon1.min.js'), 'utf8'), ctx);
+  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/vendor/poseidon2.min.js'), 'utf8'), ctx);
+  vm.runInContext(readFileSync(path.join(ROOT, 'dapp/vendor/poseidon3.min.js'), 'utf8'), ctx);
   if (withEthers) {
-    vm.runInContext(readFileSync(path.join(ROOT, 'dapp/ethers.min.js'), 'utf8'), ctx);
+    vm.runInContext(readFileSync(path.join(ROOT, 'dapp/vendor/ethers.min.js'), 'utf8'), ctx);
   }
   const result = { poseidon1: ctx.window.poseidon1, poseidon2: ctx.window.poseidon2, poseidon3: ctx.window.poseidon3 };
   if (withEthers) result.ethers = ctx.globalThis.ethers;
