@@ -4953,7 +4953,8 @@ async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
   const fee = toData._feeOrHook != null ? BigInt(toData._feeOrHook)
             : collector ? BigInt(collector.feeOrHook)
             : 30n;
-  const exactOut = !!_exactOut && !!collector; // pool-only coins stay exact-in
+  // `_inputMode` is the app's exact-out state; there is no `_exactOut` here.
+  const exactOut = _inputMode === 'exactOut' && !!collector; // pool-only coins stay exact-in
   const amountSpec = safeParseUnits(fromAmountStr, exactOut ? 18 : fromData.decimals);
 
   return await quoteRPC.call(async (rpc) => {
