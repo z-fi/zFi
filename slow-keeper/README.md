@@ -1,0 +1,71 @@
+# slow-keeper
+
+Settles expired **tipped** SLOW transfers through `SLOWGate` and collects the relayer tip.
+
+- `SLOW` — [0x000000000000888741b254d37e1b27128afeaabc](https://etherscan.io/address/0x000000000000888741b254d37e1b27128afeaabc)
+- `SLOWGate` — [0xb8B546b93a82f4Aa6f0345142dF5679B659ef3D4](https://etherscan.io/address/0xb8B546b93a82f4Aa6f0345142dF5679B659ef3D4)
+
+Ethereum mainnet only.
+
+## How it earns
+
+`SLOW.depositToWithTip` posts an ETH tip on the gate alongside a timelocked transfer.
+Once the timelock expires, anyone can call `gate.claim(transferId)`: the gate routes
+`slow.claimTipped`, the underlying is paid to the transfer's recipient, and the tip is
+forwarded to `msg.sender`. That tip is the only revenue — untipped transfers pay nothing.
+
+A claim is only valid when **both** hold at send time:
+
+1. `block.timestamp >= pt.timestamp + delay` (delay is packed above the token address in the id).
+2. `guardians[pt.to] == address(0)` — `_doClaim` reverts `ClaimBlockedByGuardian` otherwise.
+
+Condition 2 can flip in either direction *after* the tip is posted, so the bot re-checks
+it every pass rather than caching it.
+
+## Design notes
+
+**No database.** State is rebuilt from `TipPosted` logs at boot and reconciled against
+`slow.pendingTransfers` via multicall. `pendingTransfers` is deleted on every settlement
+path, so `timestamp == 0` means the tip is gone — claimed by another keeper, or the
+transfer was reversed/clawed back and the tip is now the depositor's to refund. A full
+re-read runs every 25 passes to evict those.
+
+**Flashbots Protect.** `gate.claim` is a first-come-first-served race with other keepers.
+Submitting through Flashbots Protect keeps the claim out of the public mempool and, more
+importantly, means a lost race is dropped rather than landing as a paid revert. A send
+that never gets included simply requeues.
+
+**Atomic batches.** `claimMany` reverts entirely on the first bad id. The bot simulates
+the exact batch via `eth_estimateGas` immediately before signing, and on failure splits to
+per-id simulation so one stale entry can't block the rest.
+
+**Profit gate.** Claims only when `tip >= gas * (baseFee + priorityFee) * MARGIN_MULTIPLE`.
+The margin absorbs basefee movement between simulation and inclusion.
+
+## Config
+
+| Var | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `RPC_URL` | yes | — | Must allow wide `eth_getLogs` ranges. Public endpoints that cap at 10 blocks **cannot backfill**. |
+| `PRIVATE_KEY` | yes | — | Keeper EOA. Gas float only. |
+| `SEND_RPC_URL` | no | `https://rpc.flashbots.net/fast` | Send-only endpoint. |
+| `MARGIN_MULTIPLE` | no | `1.25` | Required tip-to-cost ratio. |
+| `PRIORITY_GWEI` | no | `0.05` | Priority fee bid. |
+| `MAX_FEE_GWEI` | no | `50` | Hard ceiling on `maxFeePerGas`. |
+| `MAX_BATCH` | no | `10` | Max ids per `claimMany`. |
+| `POLL_MS` | no | `12000` | Poll interval. |
+| `START_BLOCK` | no | `24986598` | SLOW's deploy block. |
+| `DRY_RUN` | no | — | `true` logs decisions without sending. |
+
+## Local run
+
+```sh
+npm install
+RPC_URL=... PRIVATE_KEY=0x... npm run dry-run
+```
+
+## Security
+
+The keeper key cannot move user funds. The gate has no path to `safeTransferFrom` or
+`withdrawFrom`, and `_doClaim` pins the payout to `pt.to` — the caller only ever receives
+the tip. Worst case for a leaked key is loss of the ETH held for gas.

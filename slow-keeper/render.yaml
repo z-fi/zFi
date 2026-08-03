@@ -1,0 +1,30 @@
+services:
+  - type: worker
+    name: slow-keeper
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: slow-keeper
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: false
+    envVars:
+      # Must support unrestricted eth_getLogs ranges. Set in the Render dashboard.
+      - key: RPC_URL
+        sync: false
+      # Keeper EOA key. Fund with gas only -- claims pay the underlying to the
+      # transfer recipient, never to this address, so exposure is the gas float.
+      - key: PRIVATE_KEY
+        sync: false
+      - key: SEND_RPC_URL
+        value: https://rpc.flashbots.net/fast
+      - key: MARGIN_MULTIPLE
+        value: "1.25"
+      - key: PRIORITY_GWEI
+        value: "0.05"
+      - key: MAX_FEE_GWEI
+        value: "50"
+      - key: MAX_BATCH
+        value: "10"
+      - key: POLL_MS
+        value: "12000"
