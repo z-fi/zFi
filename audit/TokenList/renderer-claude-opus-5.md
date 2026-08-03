@@ -427,3 +427,45 @@ Sizes after the merge: registry 22,185 (2,391 B spare), renderer 16,519 (8,057),
 lens 4,217. All three salts re-mined. 119 tests pass from a clean build, nothing
 skipped — including the fork replay, which now deploys the pair and reads
 `contractURI` off the real wiring.
+
+# Merged: Bitcoin/confidential standards and the stranded-flag fixes
+
+A third round of work had again been developed against the pre-lens-split copy in the
+`precision-pools` working tree. Ported onto main's version rather than adopted
+wholesale, for the third time and the same reason: that copy predates the lens split,
+the text/attribute sanitiser split and the second layout pass, and taking it would
+silently revert all three. It also still dropped apostrophes.
+
+- **`Standard` gained `TACIT`, `RUNE`, `ORDINAL`, `BRC20`.** Named for the FORMAT
+  rather than the flagship ticker. The renderer names them on the card instead of
+  printing "TOKEN STANDARD UNVERIFIED", which describes a failure to check rather
+  than a deliberate attested listing — these list under `Kind.OTHER`, so the chain
+  line can only say `raw:0` and the detail row is the one place with room to identify
+  them.
+- **`setStandard` and `_pull` now clear `onchainSvg`** when the standard walks back to
+  a non-collection. The flag was not merely stale but IRREVERSIBLE: `setOnchainSvg`
+  re-runs the collection gate, so nothing could take it back. Reachable through a
+  reservation — `setStandard` accepts ERC721 while unsynced, the flag sticks, and
+  `activateReserved` pulls the real ERC-20 standard over it.
+- **`activateReserved` takes `_mustExist`, not `_mustEdit`.** A frozen reservation
+  could never be bound to its deployed token; the only exit was `delist`, which
+  destroys the stable id the reservation exists to preserve. Freezing seals what
+  governance wrote, not whether the subject shipped.
+- **`_hexColor` hand-rolled**, dropping two general-purpose LibString routines from
+  the runtime to produce seven fixed bytes. Output byte-identical.
+
+## The headroom finding
+
+That branch build measured **24,243 B runtime — 333 B under EIP-170** and its manifest
+called that margin the binding constraint. It is worse than that number suggests: the
+same source compiles differently depending on which files share its `via_ir`
+compilation unit, and the two modes have differed by 234–892 B across the builds
+measured here. At 333 B, one build mode plausibly does not deploy at all, and Foundry
+does not enforce EIP-170 in tests, so the suite would pass either way.
+
+Carrying the same changes on main's version — where ranking and search live in the
+lens — the registry measures **22,234 B isolated and 22,000 B in the full build**:
+2,342 and 2,576 B of margin, comfortable in both. The lens split is worth roughly
+2 KB, and it is what makes this round of additions affordable at all.
+
+All three salts re-mined. 133 tests pass from a clean build, nothing skipped.

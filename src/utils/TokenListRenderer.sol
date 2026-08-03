@@ -600,6 +600,10 @@ contract TokenListRenderer {
         if (standard == TokenList.Standard.ERC20) return "ERC-20";
         if (standard == TokenList.Standard.ERC721) return "ERC-721";
         if (standard == TokenList.Standard.ERC1155) return "ERC-1155";
+        if (standard == TokenList.Standard.TACIT) return "Tacit";
+        if (standard == TokenList.Standard.RUNE) return "Rune";
+        if (standard == TokenList.Standard.ORDINAL) return "Ordinal";
+        if (standard == TokenList.Standard.BRC20) return "BRC-20";
         return "Unknown";
     }
 
@@ -619,6 +623,19 @@ contract TokenListRenderer {
         }
         if (standard == TokenList.Standard.ERC20) {
             return string.concat("ERC-20 / ", LibString.toString(decimals), " DECIMALS");
+        }
+        // Named on the card rather than left as UNVERIFIED. These list under
+        // `Kind.OTHER`, so the chain line can only say `raw:0`; without this the one
+        // row with room to identify them read "TOKEN STANDARD UNVERIFIED", which
+        // describes a failure to check rather than a deliberate, attested listing.
+        if (standard == TokenList.Standard.TACIT) {
+            // The confidentiality is the point of the format, so the card says it.
+            return string.concat("TACIT CONFIDENTIAL / ", LibString.toString(decimals), " DECIMALS");
+        }
+        if (standard == TokenList.Standard.RUNE) return "BITCOIN RUNE";
+        if (standard == TokenList.Standard.ORDINAL) return "BITCOIN ORDINAL";
+        if (standard == TokenList.Standard.BRC20) {
+            return string.concat("BRC-20 / ", LibString.toString(decimals), " DECIMALS");
         }
         return "TOKEN STANDARD UNVERIFIED";
     }

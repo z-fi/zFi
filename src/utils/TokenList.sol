@@ -41,7 +41,23 @@ contract TokenList is ERC721, Ownable, Multicallable {
         NATIVE,
         ERC20,
         ERC721,
-        ERC1155
+        ERC1155,
+        // Tacit: a confidential asset whose amounts may be hidden. Keyed by its
+        // 32-byte `asset_id`, which drops into `account` verbatim.
+        //
+        // Named for the FORMAT, not for the flagship asset. `TAC` is a ticker and
+        // would sit in `symbol`; this field answers "what kind of thing is this",
+        // and TAC is one TACIT asset among others.
+        TACIT,
+        // Runes. The canonical id is `block:tx` text, so the account word carries an
+        // encoding of it and the human form belongs in an extension field.
+        RUNE,
+        // Ordinals. An inscription id is `<txid>i<index>`, which does NOT fit the
+        // account word; key by txid or a domain-separated hash and carry the full id
+        // as an extension field.
+        ORDINAL,
+        // BRC-20.
+        BRC20
     }
 
     struct Token {
@@ -552,8 +568,16 @@ contract TokenList is ERC721, Ownable, Multicallable {
     /// @dev This is a one-way state transition. It preserves the reservation's id,
     ///      but makes `get(token)` resolve to it and moves the soulbound card from the
     ///      registry to the token contract, restoring the normal ownership invariant.
+    ///
+    ///      `_mustExist`, not `_mustEdit`, for the reason `sync` is exempt too: this
+    ///      copies a fact from the chain — the token now exists at this address —
+    ///      rather than authoring one, and `_pull` below is the same read `sync`
+    ///      performs. Under `_mustEdit` a frozen reservation could never be bound to
+    ///      its deployed token, and the only exit was `delist`, which destroys the
+    ///      stable id the reservation exists to preserve. Freezing seals what
+    ///      governance wrote, not whether the subject shipped.
     function activateReserved(uint256 id, address token) public onlyOwner {
-        Token storage t = _mustEdit(id);
+        Token storage t = _mustExist(id);
         if (t.deployed || t.kind != Kind.EVM || t.chainId != block.chainid || t.account != bytes32(0)) {
             revert BadInput();
         }
@@ -622,6 +646,12 @@ contract TokenList is ERC721, Ownable, Multicallable {
         Token storage t = _mustEdit(id);
         if (t.synced) revert NotEditable();
         t.standard = standard_;
+        // `onchainSvg` only means anything on a collection, and it has to be cleared
+        // here for the same reason `_pull` clears it: `setOnchainSvg` re-runs the
+        // collection gate, so a flag left behind by a walk back to a fungible standard
+        // is not merely stale but IRREVERSIBLE — a fungible listing claiming per-token
+        // onchain art that no owner call can take back.
+        if (standard_ != Standard.ERC721 && standard_ != Standard.ERC1155) t.onchainSvg = false;
         _touch(id, "text");
     }
 
@@ -705,9 +735,12 @@ contract TokenList is ERC721, Ownable, Multicallable {
     ///      a commitment. After this the owner cannot touch art, links, rank, audit,
     ///      foreign text or extras for this id.
     ///
-    ///      Two things deliberately still work. `sync` does, because it copies facts
+    ///      Three things deliberately still work. `sync` does, because it copies facts
     ///      from the token itself rather than from the owner — freezing seals what
-    ///      governance authored, not what the token says. And `delist` does, because
+    ///      governance authored, not what the token says. `activateReserved` does, for
+    ///      the same reason: whether the subject shipped is not something governance
+    ///      authored, and blocking it would strand a frozen reservation with no exit
+    ///      but `delist`, which destroys its id. And `delist` does, because
     ///      a frozen listing whose project later rugs, or whose frozen link starts
     ///      serving malware, would otherwise be a permanent billboard nobody could
     ///      take down. Removing a listing is not misrepresenting it.
@@ -1059,7 +1092,18 @@ contract TokenList is ERC721, Ownable, Multicallable {
         // listing to ERC-20, which would also strip `onchainSvg` of its meaning in
         // the renderer and leave `setOnchainSvg` unable to restore it.
         Standard s_ = _standardOf(token);
-        if (s_ != Standard.UNKNOWN) t.standard = s_;
+        if (s_ != Standard.UNKNOWN) {
+            t.standard = s_;
+            // `onchainSvg` only means anything on a collection, and `setOnchainSvg`
+            // enforces exactly that on the way in. It has to be enforced on the way
+            // out too: a reservation is unsynced, so `setStandard` accepts ERC721 on
+            // it, `setOnchainSvg` then sticks, and `activateReserved` pulls the real
+            // ERC-20 standard back over it. That left a fungible listing claiming
+            // per-token onchain art, and IRREVERSIBLY so — clearing the flag re-runs
+            // the same collection gate and reverts. Same shape for any listing whose
+            // subject stops answering ERC-165.
+            if (s_ != Standard.ERC721 && s_ != Standard.ERC1155) t.onchainSvg = false;
+        }
         t.synced = true;
     }
 
@@ -1154,7 +1198,20 @@ contract TokenList is ERC721, Ownable, Multicallable {
         return string.concat("data:", mime, ";base64,", Base64.encode(bytes(body)));
     }
 
+    /// @dev Written out rather than `slice(toHexString(color, 3), 2)`. That form pulled
+    ///      two general-purpose LibString routines into the runtime — one formatting an
+    ///      arbitrary-width integer, one reslicing the result to drop a `0x` it had just
+    ///      written — to produce seven fixed bytes. This contract is within a few
+    ///      hundred bytes of EIP-170 and cannot be redeployed once live, so paying a
+    ///      general routine's code size for a single fixed-shape output is the wrong
+    ///      trade. Lowercase, matching what `toHexString` produced.
     function _hexColor(uint24 color) internal pure returns (string memory) {
-        return string.concat("#", LibString.slice(LibString.toHexString(uint256(color), 3), 2));
+        bytes memory out = new bytes(7);
+        out[0] = "#";
+        for (uint256 i; i < 6; ++i) {
+            uint8 nib = uint8((uint256(color) >> ((5 - i) * 4)) & 0xf);
+            out[i + 1] = bytes1(nib < 10 ? 48 + nib : 87 + nib);
+        }
+        return string(out);
     }
 }
