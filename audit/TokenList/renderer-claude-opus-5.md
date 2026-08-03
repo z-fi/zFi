@@ -346,3 +346,23 @@ geometry assertions could not.
   drift the card mis-centres silently.
 
 All three salts re-mined again. 109 tests pass from a clean build, nothing skipped.
+
+# Final visual pass
+
+Two things left, both found by looking at the rendered set rather than at code.
+
+- **ETH printed forty zeros under the word ADDRESS.** That is the registry's id
+  convention for the native asset, not a place ether lives, and it sat on the
+  highest-ranked card in the list where it was copyable. Native listings now read
+  `NONE - NATIVE ASSET`. `json` still reports the real word, because a program needs
+  the id and a person needs the truth about it.
+
+- **The Wei Name Service listing drew a blank white square.** Its logo was a
+  400x400 white rect with `wns.wei` set at 24px inside it; scaled into the card's
+  96px slot that type renders under six pixels tall. Replaced with a `.wei`
+  wordmark on a dark disc, legible at the size the card actually draws. This is
+  post-deploy calldata rather than contract code, so it changes
+  `deploy/TokenList.postdeploy.calldata.txt` and nothing that was mined.
+
+All three salts re-mined for the renderer change. 109 tests pass from a clean build,
+nothing skipped.

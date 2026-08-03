@@ -820,8 +820,13 @@ contract TokenListTest is Test, PostDeployListings {
 
         assertTrue(list.json(list.idOf(ZORGZ)).contains('"p":"ERC-721"'));
         assertTrue(list.json(list.idOf(WNS)).contains('"p":"ERC-721"'));
+        // The mark, not the placeholder. This used to assert `wns.wei`, which was the
+        // text of a 400x400 white rect with 24px type in it — at the 96px the card
+        // draws a logo that renders under six pixels tall, so the listing showed a
+        // blank white square.
         string memory wnsSvg = string(Base64.decode(w.logo.slice(26)));
-        assertTrue(wnsSvg.contains("wns.wei"));
+        assertTrue(wnsSvg.contains(".wei"), "carries the wordmark");
+        assertFalse(wnsSvg.contains('<rect width="400" height="400" fill="#fff"/>'), "not the blank placeholder");
     }
 
     /// @dev The whole point of the split: applying the seven reproduces exactly the

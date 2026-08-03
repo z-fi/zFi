@@ -356,7 +356,12 @@ contract TokenListRenderer {
             "' font-size='11' opacity='0.6'>ADDRESS</text><text x='32' y='",
             LibString.toString(top + 20),
             "' font-size='15'>",
-            _account(t),
+            // A NATIVE asset has no contract. Printing `_account` here rendered forty
+            // zeros under the word ADDRESS on the highest-ranked card in the list —
+            // copyable, and a plausible destination for someone who does not know
+            // that address(0) is this registry's id convention rather than somewhere
+            // ETH lives. `json` still reports the real word for machines.
+            t.standard == TokenList.Standard.NATIVE ? "NONE - NATIVE ASSET" : _account(t),
             "</text>",
             lines == 0 ? "" : _textBlock(desc, top + 42)
         );
