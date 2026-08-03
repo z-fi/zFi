@@ -174,7 +174,20 @@ contract TokenList is ERC721, Ownable, Multicallable {
     /// @dev ERC-4906's bulk form. A renderer swap restyles every card at once, and
     ///      emitting one event per listing would not fit in a block at any real size.
     event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
+    /// @dev ERC-5192. The interface id this contract advertises is the `locked`
+    ///      selector alone, so `supportsInterface` answering true was never evidence
+    ///      the event half existed — and it did not. An indexer that classifies
+    ///      soulbound collections from logs (rather than probing every id with an
+    ///      `eth_call`) saw an ordinary transferable collection, and would offer
+    ///      listings for sale on a card whose transfer always reverts. Every listing
+    ///      is born locked and stays locked, so this is emitted on mint and
+    ///      `Unlocked` deliberately does not exist.
+    event Locked(uint256 tokenId);
     event RendererSet(address indexed renderer);
+    /// @dev ERC-7572. The renderer authors `contractURI` too, so a swap restates the
+    ///      collection alongside every card; `BatchMetadataUpdate` only ever covered
+    ///      the cards.
+    event ContractURIUpdated();
     event RendererLocked();
     event Froze(uint256 indexed id);
     event Reserved(uint256 indexed id, bytes32 indexed key, string symbol);
@@ -308,7 +321,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
             "The native asset of Ethereum. Used for gas, and held at address zero."
         );
         _index(ethId);
-        _mint(address(this), ethId);
+        _mintListing(address(this), ethId);
         _emitListed(ethId, eth);
 
         _seed(
@@ -339,7 +352,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         _pull(t, token);
         _index(id);
         _boundLocalId[token] = id;
-        _mint(token, id);
+        _mintListing(token, id);
         _emitListed(id, t);
     }
 
@@ -443,7 +456,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         _pull(t, token);
         _index(id);
         _boundLocalId[token] = id;
-        _mint(token, id); // deliberately not _safeMint: the subject is the holder
+        _mintListing(token, id); // deliberately not _safeMint: the subject is the holder
         _emitListed(id, t);
     }
 
@@ -493,7 +506,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         // permanently non-transferable, so minting to the current owner freezes that
         // address into `ownerOf` forever: after an ownership handover the previous
         // curator still reads as the holder of every attested listing.
-        _mint(address(this), id);
+        _mintListing(address(this), id);
         _emitListed(id, t);
     }
 
@@ -530,7 +543,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         _index(id);
         // There is no subject contract to hold this card yet. Once activated it is
         // burned and reminted to the token in the same transaction.
-        _mint(address(this), id);
+        _mintListing(address(this), id);
         _emitListed(id, t);
         emit Reserved(id, key, t.symbol);
     }
@@ -554,7 +567,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         _pull(t, token);
         _boundLocalId[token] = id;
         _burn(id);
-        _mint(token, id);
+        _mintListing(token, id);
         _touch(id, "activate");
         emit Activated(id, token);
     }
@@ -734,6 +747,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         renderer = renderer_;
         emit RendererSet(address(renderer_));
         emit BatchMetadataUpdate(0, type(uint256).max);
+        emit ContractURIUpdated();
     }
 
     /// @notice Set a listing's sort weight. Higher sorts first; 0 is unranked.
@@ -923,6 +937,32 @@ contract TokenList is ERC721, Ownable, Multicallable {
         }
     }
 
+    /// @notice ERC-7572 collection metadata: what this list is, not what one listing is.
+    /// @dev Through the renderer, like the cards, and for the same reason: this
+    ///      contract is immutable, so a description baked into its bytecode could never
+    ///      be revised. NOTE that this makes `contractURI()` on the renderer part of
+    ///      the interface a replacement renderer must keep — a renderer without it
+    ///      leaves this reverting. `tokenURI` and `json` already carried that
+    ///      requirement; this adds a third member to the same set.
+    ///
+    ///      Forwarded in assembly rather than as `renderer.contractURI()`. The high
+    ///      level form decodes a dynamic string out of returndata and re-encodes the
+    ///      identical bytes to return them, and that round trip costs over 1,000 B of
+    ///      runtime — which this contract, 769 B under EIP-170 at the time, did not
+    ///      have. Returning the callee's returndata verbatim is the same value and a
+    ///      hundred-odd bytes. A failed call bubbles the callee's revert unchanged.
+    function contractURI() public view returns (string memory) {
+        address r = address(renderer);
+        assembly ("memory-safe") {
+            let m := mload(0x40)
+            mstore(m, 0xe8a3d485) // `contractURI()`
+            let ok := staticcall(gas(), r, add(m, 0x1c), 0x04, codesize(), 0x00)
+            returndatacopy(m, 0x00, returndatasize())
+            if iszero(ok) { revert(m, returndatasize()) }
+            return(m, returndatasize())
+        }
+    }
+
     // INTERNALS ------------------------------------------------------------
 
     /// @dev Existence plus "governance may still author this". Every owner-authored
@@ -952,6 +992,15 @@ contract TokenList is ERC721, Ownable, Multicallable {
     function _touch(uint256 id, bytes32 field) internal {
         emit Updated(id, field);
         emit MetadataUpdate(id);
+    }
+
+    /// @dev The only mint site, so a listing cannot come into existence without the
+    ///      ERC-5192 lock signal. `_mint`, never `_safeMint`: the holder is the subject
+    ///      contract itself, which has no receiver hook and must not be able to refuse
+    ///      the card that describes it.
+    function _mintListing(address to, uint256 id) internal {
+        _mint(to, id);
+        emit Locked(id);
     }
 
     function _emitListed(uint256 id, Token storage t) internal {

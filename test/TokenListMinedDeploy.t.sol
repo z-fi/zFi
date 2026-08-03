@@ -13,11 +13,11 @@ import {PostDeployListings} from "./PostDeployListings.sol";
 contract TokenListMinedDeployTest is Test, PostDeployListings {
     address constant SUMMONER = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant OWNER = 0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2;
-    address constant RENDERER = 0x00000090b395ECD5B48e840Bd1575C3c11c01419;
-    address constant LIST = 0x000000564c6b5A5066E0F3Cb6Defd367Ba56cb37;
+    address constant RENDERER = 0x000000fb961505e91c5Fd962f674f2FE62ab5D1e;
+    address constant LIST = 0x000000FdC4F4AdeFC3bfeA7Fb245c5c051e64247;
 
-    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000001052058;
-    bytes32 constant LIST_SALT = 0x0000000000000000000000000000000000000000000000000000000001466fb5;
+    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000000ac8378;
+    bytes32 constant LIST_SALT = 0x00000000000000000000000000000000000000000000000000000000004cc3b5;
 
     /// @dev The recorded initcode is a frozen artifact of a specific build, and the
     ///      salt was mined FOR that build. Editing the source invalidates both, so
@@ -121,6 +121,9 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
         assertEq(list.ownerOf(0), LIST, "attested listing held by the registry");
         assertTrue(list.supportsInterface(0x49064906) && list.supportsInterface(0xb45a3c0e));
         assertGt(bytes(list.tokenURI(0)).length, 1000, "card renders");
+        // ERC-7572 is forwarded to the renderer, so it only works once BOTH are
+        // deployed and wired — which is exactly what this test has just done.
+        assertGt(bytes(list.contractURI()).length, 200, "collection metadata renders");
         assertGt(bytes(list.json(0)).length, 100, "json renders");
 
         emit log_named_uint("TokenList runtime", LIST.code.length);

@@ -395,12 +395,35 @@ nothing skipped.
 - A header comment still said a source edit would invalidate "both mined salts".
   There are three.
 
-# Open, not addressed here
+# Merged: ERC-5192 and ERC-7572
 
-`TokenList` advertises ERC-5192 via `supportsInterface(0xb45a3c0e)` and implements
-`locked(uint256)`, but emits no `Locked` event. A contract claiming that interface
-should emit one per listing on mint. This is being implemented independently on the
-`precision-pools` branch, together with ERC-7572 `contractURI()` — see the note at
-the top of that branch's copy of this manifest. Main does not have either change and
-the two lines of work have not been merged; doing so needs a re-mine and a renderer
-that implements `contractURI`, since the registry forwards it.
+The two lines of work described above are now merged. They were developed in
+parallel against the same file — this audit's layout and EIP-170 work on `main`, the
+interface compliance in the `precision-pools` working tree — and neither side had
+the other. The compliance side was ported ONTO main's version rather than the file
+being taken wholesale, because that branch's copy predates the lens split, the
+sanitisation split and the whole second layout pass.
+
+- **ERC-5192 `Locked`.** The registry advertised `0xb45a3c0e` and implemented
+  `locked(uint256)` but emitted no event, so `supportsInterface` answering true was
+  never evidence the event half existed. An indexer classifying soulbound
+  collections from logs rather than probing every id saw an ordinary transferable
+  collection, and would offer listings for sale on cards whose transfer always
+  reverts. Every mint now routes through `_mintListing`, which emits it. `Unlocked`
+  deliberately does not exist: a listing is born locked and stays locked.
+
+- **ERC-7572 `contractURI`.** Nothing described the COLLECTION, so a marketplace
+  showing the registry itself had no name, description or mark for it. It is
+  authored by the renderer and forwarded from the registry in assembly — the
+  high-level form round-trips a dynamic string through decode and re-encode for over
+  1,000 B of runtime, which a contract with this much headroom cannot spend.
+  `ContractURIUpdated` fires on a renderer swap alongside `BatchMetadataUpdate`.
+
+This makes `contractURI()` a THIRD member of the interface any replacement renderer
+must implement, alongside `tokenURI` and `json`; one without it leaves the
+registry's `contractURI()` reverting. The test stub grew it for exactly that reason.
+
+Sizes after the merge: registry 22,185 (2,391 B spare), renderer 16,519 (8,057),
+lens 4,217. All three salts re-mined. 119 tests pass from a clean build, nothing
+skipped — including the fork replay, which now deploys the pair and reads
+`contractURI` off the real wiring.

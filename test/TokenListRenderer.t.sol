@@ -402,4 +402,14 @@ contract TokenListRendererTest is Test {
         assertEq(_quotes(_meta(r.tokenURI(1, t))) % 2, 0, "metadata document stays balanced");
         assertEq(_quotes(r.json(1, t)) % 2, 0, "compact json stays balanced");
     }
+
+    /// @dev ERC-7572 describes the LIST, not a listing, so it takes no arguments and
+    ///      is the one read here that is not about a single card.
+    function testCollectionMetadataIsSelfContained() public view {
+        string memory decoded =
+            string(Base64.decode(LibString.slice(r.contractURI(), bytes("data:application/json;base64,").length)));
+        assertTrue(LibString.contains(decoded, '"name":"Token Listing"'));
+        assertTrue(LibString.contains(decoded, '"image":"data:image/svg+xml;base64,'), "mark is inline, not a link");
+        assertEq(_quotes(decoded) % 2, 0, "parseable");
+    }
 }

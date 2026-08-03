@@ -115,6 +115,13 @@ contract StubRenderer {
     {
         return "STUB";
     }
+
+    /// @dev ERC-7572. `TokenList.contractURI()` forwards here, so this is now a THIRD
+    ///      member of the interface any replacement renderer has to implement —
+    ///      a renderer without it leaves the registry's `contractURI()` reverting.
+    function contractURI() public pure returns (string memory) {
+        return "STUBCOLLECTION";
+    }
 }
 
 contract TokenListTest is Test, PostDeployListings {
@@ -126,6 +133,9 @@ contract TokenListTest is Test, PostDeployListings {
     address stranger = address(0xB0B);
 
     string constant LOGO = "data:image/svg+xml;base64,PHN2Zy8+";
+
+    event Locked(uint256 tokenId);
+    event ContractURIUpdated();
 
     /// @dev ETH plus WETH, USDC and USDT. The other seven of the original eleven are
     ///      applied after deployment — see `PostDeployListings`.
@@ -1109,5 +1119,48 @@ contract TokenListTest is Test, PostDeployListings {
         vm.prank(owner);
         list.setRank(id, 42);
         assertEq(list.get(id).rank, 42);
+    }
+
+    /// @dev ERC-5192 was advertised through `supportsInterface(0xb45a3c0e)` but the
+    ///      event half did not exist, so an indexer classifying soulbound collections
+    ///      from logs saw an ordinary transferable one and would offer listings for
+    ///      sale on cards whose transfer always reverts. Every listing is born locked
+    ///      and stays locked, so `Locked` is emitted on mint and `Unlocked` is
+    ///      deliberately absent.
+    function testEveryListingEmitsLockedOnMint() public {
+        MockToken token = new MockToken("Locked Token", "LOCK", 18);
+        vm.expectEmit(true, true, true, true);
+        emit Locked(uint256(uint160(address(token))));
+        vm.prank(owner);
+        list.list(address(token), 0, 1, "", "", "");
+        assertTrue(list.locked(uint256(uint160(address(token)))));
+    }
+
+    /// @dev ERC-7572. Nothing described the COLLECTION before, so a marketplace showing
+    ///      the registry itself fell back to the bare ERC-721 name beside a blank tile.
+    function testContractURIDescribesTheCollection() public view {
+        string memory uri = list.contractURI();
+        assertTrue(LibString.startsWith(uri, "data:application/json;base64,"));
+        string memory decoded = string(Base64.decode(uri.slice(bytes("data:application/json;base64,").length)));
+        assertTrue(decoded.contains('"name":"Token Listing"'), "names the collection");
+        assertTrue(decoded.contains('"image":"data:image/svg+xml;base64,'), "carries a mark");
+    }
+
+    /// @dev It is forwarded to the renderer, so a swap restates the collection too —
+    ///      and a renderer that does not implement it leaves this reverting, which is
+    ///      why the stub had to grow a third function.
+    function testContractURIFollowsTheRenderer() public {
+        StubRenderer stub = new StubRenderer();
+        vm.prank(owner);
+        list.setRenderer(TokenListRenderer(address(stub)));
+        assertEq(list.contractURI(), "STUBCOLLECTION");
+    }
+
+    function testRendererSwapSignalsTheCollectionRefresh() public {
+        StubRenderer stub = new StubRenderer();
+        vm.expectEmit(false, false, false, false);
+        emit ContractURIUpdated();
+        vm.prank(owner);
+        list.setRenderer(TokenListRenderer(address(stub)));
     }
 }

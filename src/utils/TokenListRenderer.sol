@@ -158,6 +158,46 @@ contract TokenListRenderer {
         return json(id, t, new Extra[](0));
     }
 
+    /// @notice ERC-7572 collection metadata: what the LIST is, as opposed to what any
+    ///         one listing is.
+    /// @dev Every other read here describes a single card. Nothing described the
+    ///      collection, so a marketplace or wallet showing the registry itself had no
+    ///      name, no description and no mark for it, and fell back to the bare ERC-721
+    ///      `name()` beside a blank tile — for a collection whose entire purpose is to
+    ///      be the recognisable, canonical answer to "what is this token".
+    ///
+    ///      It lives here rather than in the registry for the reason the card does: the
+    ///      registry is immutable and this is presentation, so a renderer swap can
+    ///      restate the collection without the registry having baked a description into
+    ///      bytecode it can never revise.
+    function contractURI() public pure returns (string memory) {
+        return _dataURI(
+            "application/json",
+            string.concat(
+                '{"name":"Token Listing",'
+                '"description":"An onchain token list. Each listing is an ERC-721 minted to the token it '
+                "describes, carrying its logo, symbol, decimals and links. For tokens on this chain the name, "
+                "symbol and decimals are read from the token contract itself and cannot be authored by the "
+                'curator; anyone may refresh them.","image":"',
+                _dataURI("image/svg+xml", _mark()),
+                '"}'
+            )
+        );
+    }
+
+    /// @dev The collection mark: the same black frame and rules the cards use, so the
+    ///      collection tile and its listings read as one object.
+    function _mark() internal pure returns (string memory) {
+        return "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 420' role='img'>"
+            "<title>Token Listing</title><rect width='420' height='420' fill='#000'/>"
+            "<g fill='none' stroke='#fff' stroke-width='2'><rect x='18' y='18' width='384' height='384'/>"
+            "<path d='M18 128h384M18 312h384'/></g>"
+            "<g fill='#fff' font-family='Helvetica,Arial,sans-serif' text-anchor='middle'>"
+            "<text x='210' y='90' font-size='30' font-weight='700'>TOKEN</text>"
+            "<text x='210' y='232' font-size='58' font-weight='700'>LIST</text>"
+            "<text x='210' y='362' font-size='15' opacity='0.7'>ONCHAIN</text></g></svg>";
+    }
+
     /// @notice Live, self-contained listing card.
     /// @dev Same 720x420 terminal frame as the position receipts, so a wallet
     ///      showing zFi assets renders one visual family. The theme color is the
