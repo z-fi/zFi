@@ -73,7 +73,8 @@ async function boot() {
   w.fetch = (...a) => fetch(...a);
 
   const WANT = ['SALE_PAY_TOKENS', 'CONTINUOUS_SALES', 'ROUTER_IFACE', 'COLLECTOL_IFACE',
-                'quoteSalePayToken', 'onSalePayTokenChange', 'SALE_SLIP_BPS'];
+                'quoteSalePayToken', 'onSalePayTokenChange', 'SALE_SLIP_BPS',
+                'pickSalePayToken', 'toggleSalePayMenu'];
   const probe = w.document.createElement('script');
   probe.textContent = `window.__probe = {}; window.__missing = [];
     ${WANT.map(n => `try { window.__probe[${JSON.stringify(n)}] = ${n}; }
@@ -187,22 +188,34 @@ test('paying with USDC quotes a route and composes a sendable multicall', async 
   }
 });
 
-test('switching the pay asset clears the old amount', async (t) => {
+test('every pay option carries a mark, and picking one updates the button', async (t) => {
   const w = await boot();
   if (!w) return t.skip('page did not boot: ' + bootErr?.message);
-  seedApp(w);
-  // "100" means something very different in USDC than in ETH; carrying the
-  // number across would let a user buy a thousand times what they intended.
-  const sel = w.document.createElement('select');
-  sel.id = 'salePayToken';
-  for (const t2 of api.SALE_PAY_TOKENS) {
-    const o = w.document.createElement('option'); o.value = t2.sym; sel.appendChild(o);
+  for (const tok of api.SALE_PAY_TOKENS) {
+    assert.ok(tok.icon && /<svg/i.test(tok.icon), `${tok.sym} has no icon`);
   }
-  w.document.body.appendChild(sel);
+  seedApp(w);
+  // The picker is a button plus a popover, because a native <select> cannot
+  // render the token marks.
+  for (const [id, tag] of [['salePayTokenIcon', 'span'], ['salePayTokenSym', 'span'],
+                           ['salePayTokenBtn', 'button'], ['salePayMenu', 'div']]) {
+    if (!w.document.getElementById(id)) {
+      const el = w.document.createElement(tag); el.id = id;
+      if (id === 'salePayMenu') el.setAttribute('hidden', '');
+      w.document.body.appendChild(el);
+    }
+  }
   w.document.getElementById('salePayInput').value = '100';
   w.document.getElementById('saleReceiveInput').value = '100000000';
-  sel.value = 'ETH';
-  await api.onSalePayTokenChange();
+
+  // DAI, not USDC: an earlier test in this file leaves the pay token on USDC,
+  // and picking the token already selected is correctly a no-op.
+  api.pickSalePayToken('DAI');
+  assert.equal(w.document.getElementById('salePayTokenSym').textContent, 'DAI', 'label follows the pick');
+  assert.match(w.document.getElementById('salePayTokenIcon').innerHTML, /<svg/i, 'mark follows the pick');
+  // "100" means something very different in USDC than in ETH; carrying the
+  // number across would let someone buy a thousand times what they intended.
+  await new Promise(r => setTimeout(r, 50));
   assert.equal(w.document.getElementById('salePayInput').value, '', 'amount cleared');
   assert.equal(w.document.getElementById('saleReceiveInput').value, '', 'estimate cleared');
 });

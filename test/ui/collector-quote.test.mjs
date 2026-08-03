@@ -355,12 +355,16 @@ async function bootWith(search) {
     setTimeout(r, 8000);
   });
   w.fetch = (...a) => fetch(...a);
-  await new Promise(r => setTimeout(r, 500)); // the deeplink handler defers by 50ms
+  // The handler defers by 50ms and the quote race runs after that; a deep link
+  // that resolves its tokens but never prices anything is still broken.
+  await new Promise(r => setTimeout(r, 12000));
   const s = w.document.createElement('script');
   s.textContent = `window.__dl = { from: (typeof fromToken !== 'undefined') ? fromToken : null,
                                     to: (typeof toToken !== 'undefined') ? toToken : null,
                                     mode: (typeof _inputMode !== 'undefined') ? _inputMode : null,
-                                    amt: document.getElementById('fromAmount')?.value ?? null };`;
+                                    amt: document.getElementById('fromAmount')?.value ?? null,
+                                    out: document.getElementById('toAmount')?.value ?? null,
+                                    route: document.getElementById('routeInfo')?.textContent ?? null };`;
   w.document.body.appendChild(s);
   const dl = w.__dl;
   return { w, dl, close: () => { try { w.close(); } catch {} } };
@@ -374,6 +378,9 @@ test('deep link ?from=bold&to=fwc&amt=5 resolves both sides and the amount', asy
   assert.equal(dl.from, 'BOLD', `from side resolved, got ${dl.from}`);
   assert.equal(dl.mode, 'exactIn');
   assert.equal(dl.amt, '5', 'amount applied to the input');
+  // Resolving the pair is not enough - the link has to price.
+  assert.ok(dl.out && Number(dl.out) > 0, `no quote produced (toAmount=${dl.out}, route=${dl.route})`);
+  assert.match(dl.route ?? '', /sale/, `expected the mint in the route, got ${dl.route}`);
 });
 
 test('deep link ?from=eth&to=fwc&outamt=250000 switches to exact-out', async (t) => {
