@@ -1890,10 +1890,13 @@ async function searchDaicoCoins() {
     for (const d of daicos) {
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
       if (!sale) continue;
-      // graduated = sale ended (no remaining supply) and pool was seeded (feeOrHook > 0)
-      const saleEnded = sale.remainingSupply === 0n || sale.forAmt === 0n;
-      if (!saleEnded) continue;
       if (sale.feeOrHook === 0n) continue;
+      // Tradeable = the pool was seeded. Usually that means the sale ended, but a
+      // collector DAO runs its continuous sale alongside a live pool forever, so
+      // gating on "sale ended" alone hid the one coin with two venues to route
+      // between. Those are listed on the pool's existence instead.
+      const saleEnded = sale.remainingSupply === 0n || sale.forAmt === 0n;
+      if (!saleEnded && !COLLECTOR_SALES[d.meta.sharesToken.toLowerCase()]) continue;
       const sym = d.meta.symbol || 'TKN';
       graduated.push({
         symbol: sym, address: d.meta.sharesToken, decimals: 18,
@@ -4775,10 +4778,44 @@ function isZammCoinSellPath(fromSym, toSym) {
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
 }
-// DAICO graduated coin: ETH → coin buy only (via ZAMM hooked pool)
+// DAICO graduated coin: any token → coin buy (via ZAMM hooked pool)
 function isDaicoCoinBuyPath(fromSym, toSym) {
-  return tokens[fromSym]?.address === ZERO_ADDRESS && tokens[toSym]?._isDaicoCoin === true;
+  return !!tokens[toSym]?._isDaicoCoin && !tokens[fromSym]?._isDaicoCoin && fromSym !== toSym;
 }
+
+// ---- Collector DAOs with a continuous share sale ----
+// These coins have two venues, not one: a sale that mints at a flat rate and the
+// ordinary zAMM pool. Collectol buys either or both atomically and CollectolLens
+// solves the split; see deploy/Collectol.md.
+const COLLECTOL = "0x0000003b9DFB69a1c764b1b136EE93dEDcdB2EE3";
+const COLLECTOL_LENS = "0x000000eA30dd95Ed6A5734F3Df361b2f4D5acaf6";
+// Keyed by shares token (lowercase). `saleRate` is shares per 1e18 wei — the
+// deployed sale keeps it as a bytecode constant with no getter, so it is
+// configuration here rather than a read. It is only ever used to *plan*: the
+// route's floor is Collectol's own minTotalOut, derived from the pool curve and
+// checked against the delivered balance, so a stale rate costs a worse split or
+// a failed quote, never funds.
+const COLLECTOR_SALES = {
+  "0x883d646d0c8202aa23f01d4af45e4e73804c3a49": {
+    sale: "0x824d11a46F32cd16cdF46380314343e9697e2491",
+    collectol: COLLECTOL,
+    feeOrHook: 30n,
+    saleRate: 1000000000000000000000000n, // 1e24 = 1,000,000 shares per ETH
+  },
+};
+const COLLECTOL_IFACE = new ethers.Interface([
+  "function buy(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,address recipient,address refundTo,uint256 deadline) payable",
+]);
+const COLLECTOL_LENS_IFACE = new ethers.Interface([
+  "function maxSaleEth(address sale,uint256 saleRate) view returns (uint256)",
+  "function planExactIn(address shares,uint256 feeOrHook,uint256 ethIn,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))",
+  "function planExactOut(address shares,uint256 feeOrHook,uint256 sharesOut,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))",
+]);
+function collectorSaleFor(sym) {
+  const addr = tokens[sym]?.address;
+  return addr ? COLLECTOR_SALES[addr.toLowerCase()] || null : null;
+}
+
 // Curve coin (ClassicalCurveSale launch): ETH ↔ coin only.
 // Pre-graduation routes through CURVE_SALE.buyExactIn / .sell; post-graduation routes through
 // CURVE_SALE.swapExactIn (which forwards to the ZAMM hooked pool and skims the creator fee).
@@ -4796,57 +4833,241 @@ function isExactOutDisabled(fromSym, toSym) {
     || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
     || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
     || isZammCoinBuyPath(fromSym, toSym) || isZammCoinSellPath(fromSym, toSym)
-    || isDaicoCoinBuyPath(fromSym, toSym)
+    || (isDaicoCoinBuyPath(fromSym, toSym) && !collectorSaleFor(toSym))
     || isCurvePath(fromSym, toSym);
 }
 
-// ---- DAICO graduated coin buy: ETH → coin via ZAMM hooked pool ----
+// ---- Leg 1 for a collector-DAO route: whichever quoter is better ----
+// zQuoter's on-chain builder and the external aggregators are both candidates
+// for the hop to ETH, and neither wins every size. Race them and take the
+// better one, with two hard requirements the ordinary swap path does not have:
+// the proceeds must land in the ROUTER (not the user) so the second leg can
+// spend them, and the amount the second leg is planned on must be a floor the
+// leg is contractually held to, not an estimate.
+//
+// The external forwarders deliver WETH directly, so that path skips `wrap`.
+// zQuoter's builder yields ETH, which is wrapped. Either way leg 2 sees WETH.
+async function _buildCollectorLeg1(rpc, fromData, amountIn, exactOut, ethTarget, slipBps, deadline, callOpts) {
+  const quoter = getQuoterContract(rpc);
+  const onchain = await quoter.buildBestSwapViaETHMulticall(
+    ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), exactOut,
+    fromData.address, ZERO_ADDRESS,
+    exactOut ? ethTarget : amountIn, slipBps, deadline, callOpts
+  ).catch(() => null);
+
+  let best = null;
+  if (onchain) {
+    const gross = onchain.b.amountOut > 0n ? onchain.b.amountOut : onchain.a.amountOut;
+    best = {
+      source: AMM_NAMES[onchain.a.source] || "Unknown",
+      calls: Array.from(onchain.calls),
+      // The builder already bakes `slipBps` into its own per-leg limits, so this
+      // is the floor it is held to rather than a second haircut on an estimate.
+      ethFloor: exactOut ? ethTarget : gross * (10000n - slipBps) / 10000n,
+      spend: exactOut ? (onchain.a.amountIn + onchain.b.amountIn) * (10000n + slipBps) / 10000n : amountIn,
+      needsWrap: true,
+    };
+  }
+
+  // Exact-out is not offered by the external adapters in a form that pins a
+  // router-side floor, so it stays on the on-chain builder.
+  if (!exactOut) {
+    const ext = await _bestExternalToWeth(fromData.address, amountIn, slipBps).catch(() => null);
+    if (ext && (!best || ext.ethFloor > best.ethFloor)) best = ext;
+  }
+  return best;
+}
+
+// Firm quote from the external aggregators for tokenIn -> WETH, delivered to the
+// router. `minBuy` is the adapter's own guaranteed output, which is exactly the
+// floor leg 2 needs - no estimate is involved.
+//
+// Only the adapters that can price a pair from scratch are eligible. Most of
+// _AGG_DEFS is two-phase: the main quote race stashes route state on the quote
+// object (`psPriceRoute`, `ksRouteSummary`, `odosPathId`, ...) and the firm
+// fetch replays it. That state describes the user's from->to pair, not this
+// synthetic hop to WETH, so those adapters cannot be asked about a leg the race
+// never ran. Reaching them would mean running the whole price race a second time
+// for tokenIn -> WETH; until that exists they sit out and the on-chain builder
+// covers the pair.
+const _STATELESS_AGGS = new Set(["is0x", "is1inch"]);
+
+async function _bestExternalToWeth(tokenIn, amountIn, slipBps) {
+  const slippage = Number(slipBps);
+  const results = await settleWithin(EXT_PRICE_DEADLINE_MS, _AGG_DEFS.map(async def => {
+    if (!_STATELESS_AGGS.has(def.flag)) return null;
+    if (!def.addr || def.addr === ZERO_ADDRESS) return null;
+    const firm = await def.fetch(null, tokenIn, WETH_ADDRESS, amountIn, slippage).catch(() => null);
+    if (!def.ok(firm)) return null;
+    const built = def.build(firm, null, tokenIn, WETH_ADDRESS, ZROUTER_ADDRESS, slippage);
+    if (!built?.minBuy || built.minBuy === 0n) return null;
+    return {
+      source: def.ck,
+      // One snwap: pull the input from the user, run the adapter, and require
+      // the router's WETH balance to have grown by at least the firm minimum.
+      calls: [ROUTER_IFACE.encodeFunctionData("snwap", [
+        tokenIn, amountIn, ZROUTER_ADDRESS, WETH_ADDRESS, built.minBuy, built.olAddr, built.olData,
+      ])],
+      ethFloor: built.minBuy,
+      spend: amountIn,
+      needsWrap: false,
+    };
+  }));
+  let best = null;
+  for (const r of results) if (r && (!best || r.ethFloor > best.ethFloor)) best = r;
+  return best;
+}
+
+// ---- DAICO coin buy: any token -> coin, exact-in or exact-out ----
+// A plain DAICO coin has one venue (the zAMM hooked pool). A collector DAO has
+// two - a continuous sale minting at a flat rate and that same pool - and
+// Collectol buys the best split of both atomically, with CollectolLens solving
+// the split per size so the pool is used exactly when it beats the mint.
+//
+// Any ERC-20 gets there by hopping to ETH first. That hop cannot hand Collectol
+// native value: snwap funds a native route from msg.value, and every
+// delegatecalled multicall entry sees the same msg.value - zero when the user is
+// paying tokens. So leg 1's ETH is wrapped and swept in as WETH, which Collectol
+// unwraps on arrival. Everything unspent sweeps back to the user.
 async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
-  const toData = tokens[toSym];
-  const amountIn = safeParseUnits(fromAmountStr, 18);
+  const fromData = tokens[fromSym], toData = tokens[toSym];
   readSlippage(true);
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
   const receiver = getReceiver();
   const fee = BigInt(toData._feeOrHook);
+  const ethIn = fromData.address === ZERO_ADDRESS;
+  const collector = collectorSaleFor(toSym);
+  const exactOut = !!_exactOut && !!collector; // pool-only coins stay exact-in
+  const amountSpec = safeParseUnits(fromAmountStr, exactOut ? 18 : fromData.decimals);
 
   return await quoteRPC.call(async (rpc) => {
+    const callOpts = { blockTag: "latest" };
     const baseQuoter = getQuoterBaseContract(rpc);
-    const quoteResult = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, amountIn, { blockTag: "latest" });
-    const amountOut = quoteResult.amountOut;
-    const slipOut = amountOut * (10000n - BigInt(slippageBps)) / 10000n;
+    const quoter = getQuoterContract(rpc);
+    const lens = collector ? new ethers.Contract(COLLECTOL_LENS, COLLECTOL_LENS_IFACE, rpc) : null;
+
+    // Two legs compound drift, so the per-leg allowance widens rather than
+    // splitting one budget across both - same rule as getZammCoinBuyQuote.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
+    const legSlip = ethIn ? BigInt(slippageBps) : splitSlip;
+
+    let plan = null, amountOut, amountIn, ethBudget, firstLegCalls = null, firstLegSource = null, leg1 = null;
+
+    if (exactOut) {
+      // Work backwards: price the shares first, then buy exactly that much ETH.
+      const cap = await lens.maxSaleEth(collector.sale, collector.saleRate, callOpts).catch(() => 0n);
+      plan = await lens.planExactOut(
+        toData.address, collector.feeOrHook, amountSpec, collector.saleRate, cap, legSlip, callOpts
+      );
+      // snwap's balance-sweep path forwards `bal - 1`, keeping a wei back, so a
+      // WETH-funded route must be wrapped one wei above what the plan spends or
+      // the forwarder comes up exactly that much short.
+      ethBudget = ethIn ? plan.totalIn : plan.totalIn + 1n;
+      amountOut = plan.totalOut;
+      if (ethIn) {
+        amountIn = ethBudget;
+      } else {
+        leg1 = await _buildCollectorLeg1(rpc, fromData, 0n, true, ethBudget, splitSlip, deadline, callOpts);
+        if (!leg1) throw new Error("no route to ETH");
+        amountIn = leg1.spend;
+        firstLegCalls = leg1.calls;
+        firstLegSource = leg1.source;
+      }
+    } else {
+      amountIn = amountSpec;
+      if (ethIn) {
+        ethBudget = amountSpec;
+      } else {
+        // Plan on leg 1's guaranteed floor, never its estimate: the forwarder
+        // spends whatever actually arrives, and anything above the floor comes
+        // back as change rather than silently buying a bigger position.
+        leg1 = await _buildCollectorLeg1(rpc, fromData, amountSpec, false, 0n, splitSlip, deadline, callOpts);
+        if (!leg1) throw new Error("no route to ETH");
+        ethBudget = leg1.ethFloor;
+        firstLegCalls = leg1.calls;
+        firstLegSource = leg1.source;
+      }
+      if (ethBudget === 0n) throw new Error("no ETH from first leg");
+      if (collector) {
+        const cap = await lens.maxSaleEth(collector.sale, collector.saleRate, callOpts).catch(() => 0n);
+        // Same wei: on a WETH-funded route the forwarder receives one less than
+        // was wrapped, so the plan is solved for what actually arrives.
+        plan = await lens.planExactIn(
+          toData.address, collector.feeOrHook, ethIn ? ethBudget : ethBudget - 1n,
+          collector.saleRate, cap, legSlip, callOpts
+        );
+        amountOut = plan.totalOut;
+      }
+    }
 
     const calls = [];
-    // swapVZ: ETH → coin (zeroForOne=true, ids both 0 for ERC20)
-    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
-      ZROUTER_ADDRESS, false, fee,
-      ZERO_ADDRESS, toData.address, 0, 0,
-      0, slipOut, deadline
-    ]));
-    // Sweep coin tokens to receiver
-    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]));
-    // Safety sweep: remaining ETH back
-    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+    if (firstLegCalls) for (const c of firstLegCalls) calls.push(c);
 
-    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+    let sourceLabel;
+    if (collector) {
+      const both = plan.ethToSale > 0n && plan.poolAmount > 0n;
+      sourceLabel = both ? "sale+zAMM" : plan.poolAmount > 0n ? "zAMM" : "sale";
+      const buyData = COLLECTOL_IFACE.encodeFunctionData("buy", [
+        plan.ethToSale, plan.poolAmount, plan.poolLimit, plan.poolExactOut,
+        plan.minTotalOut, receiver, receiver, deadline
+      ]);
+      if (ethIn) {
+        calls.push(ROUTER_IFACE.encodeFunctionData("snwap", [
+          ZERO_ADDRESS, ethBudget, receiver, toData.address, plan.minTotalOut, COLLECTOL, buyData
+        ]));
+      } else {
+        // The on-chain builder yields ETH, so wrap it for snwap's ERC-20 funding
+        // path; the external adapters already delivered WETH to the router.
+        if (leg1?.needsWrap !== false) calls.push(ROUTER_IFACE.encodeFunctionData("wrap", [ethBudget]));
+        calls.push(ROUTER_IFACE.encodeFunctionData("snwap", [
+          WETH_ADDRESS, 0, receiver, toData.address, plan.minTotalOut, COLLECTOL, buyData
+        ]));
+      }
+    } else {
+      const q = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, ethBudget, callOpts);
+      amountOut = q.amountOut;
+      sourceLabel = "zAMM";
+      calls.push(ROUTER_IFACE.encodeFunctionData("swapVZ", [
+        ZROUTER_ADDRESS, false, fee,
+        ZERO_ADDRESS, toData.address, 0, 0,
+        ethIn ? 0 : ethBudget, amountOut * (10000n - legSlip) / 10000n, deadline
+      ]));
+      calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [toData.address, 0, 0, receiver]));
+    }
 
-    // Spot rate for display
+    // Sweep everything that could be left behind back to the user: WETH the
+    // forwarder did not need, ETH from an exact-out refund or leg-1 overshoot,
+    // and unspent input on a two-leg route.
+    if (!ethIn) calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [WETH_ADDRESS, 0, 0, receiver]));
+    calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [ZERO_ADDRESS, 0, 0, receiver]));
+    if (!ethIn) calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [fromData.address, 0, 0, receiver]));
+
+    const multicall = ROUTER_IFACE.encodeFunctionData("multicall", [calls]);
+    const msgValue = ethIn ? ethBudget : 0n;
+
+    // Spot rate for price impact. Single-leg only: a two-leg spot would have to
+    // thread through the first-leg AMM too.
     const refAmount = 10n ** 16n; // 0.01 ETH
     let spotOut = 0n;
-    try {
-      const spot = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, { blockTag: "latest" });
-      spotOut = spot.amountOut;
-    } catch {}
+    if (ethIn) {
+      try {
+        const spot = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, callOpts);
+        spotOut = spot.amountOut;
+      } catch {}
+    }
 
-    const _simP = _simulateRoute(rpc, multicall, amountIn, calls, false);
-
+    const _simP = _simulateRoute(rpc, multicall, msgValue, calls, exactOut);
+    const source = ethIn ? sourceLabel : `${firstLegSource} + ${sourceLabel}`;
     const result = {
       expectedOutput: amountOut,
-      multicall, calls, msgValue: amountIn,
-      isTwoHop: false, isSplit: false, splitLegs: null,
-      sourceA: "zAMM", sourceB: null,
-      allQuotes: [{ source: "zAMM", sourceId: 2, feeBps: fee, amountIn, amountOut }],
+      expectedInput: amountIn,
+      multicall, calls, msgValue,
+      isTwoHop: !ethIn, isSplit: false, splitLegs: null,
+      sourceA: ethIn ? sourceLabel : firstLegSource,
+      sourceB: ethIn ? null : sourceLabel,
+      allQuotes: [{ source, sourceId: 2, feeBps: fee, amountIn, amountOut }],
       spotRate: spotOut > 0n ? spotOut : null,
-      spotRefAmount: refAmount,
+      spotRefAmount: ethIn ? refAmount : null,
     };
 
     result._simP = _simP.then(sim => {
