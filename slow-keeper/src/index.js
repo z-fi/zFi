@@ -4,7 +4,7 @@ import { mainnet } from "viem/chains";
 
 import { config } from "./config.js";
 import { GATE_ABI, SLOW_ABI } from "./abi.js";
-import { LogPool, makeStateClient } from "./rpc.js";
+import { LogPool, makeStateClient, redact } from "./rpc.js";
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -158,7 +158,7 @@ async function simulate(ids) {
     return { ids, gas };
   } catch (err) {
     if (ids.length === 1) {
-      log(`id ${ids[0]} not claimable: ${shortErr(err)}`);
+      await explainFailure(ids[0], err);
       return null;
     }
     log(`batch of ${ids.length} failed simulation, splitting`);
@@ -169,6 +169,49 @@ async function simulate(ids) {
     }
     return good.length ? simulate(good) : null;
   }
+}
+
+/**
+ * Say why a single-id claim would revert, and evict the id when the answer is
+ * permanent.
+ *
+ * The revert itself is useless on its own: `gate.claim` on a cleared transfer
+ * bubbles up SLOW's `TransferDoesNotExist`, a custom error viem renders as
+ * "reverted for an unknown reason". Reading `pendingTransfers` answers it
+ * outright, and evicting keeps a settled id from being re-simulated on every
+ * pass forever -- the exact spam a claim landing on one instance while another
+ * instance held the same id in memory produced.
+ */
+async function explainFailure(id, err) {
+  const entry = tips.get(id);
+  try {
+    const [timestamp, , to] = await pub.readContract({
+      address: config.slow,
+      abi: SLOW_ABI,
+      functionName: "pendingTransfers",
+      args: [id],
+    });
+    if (timestamp === 0n) {
+      tips.delete(id);
+      log(`id ${id} already settled, evicted`);
+      return;
+    }
+    if (entry) {
+      const guardian = await pub.readContract({
+        address: config.slow,
+        abi: SLOW_ABI,
+        functionName: "guardians",
+        args: [to],
+      });
+      if (guardian !== "0x0000000000000000000000000000000000000000") {
+        log(`id ${id} blocked by recipient guardian, will retry if removed`);
+        return;
+      }
+    }
+  } catch {
+    // Fall through to the raw reason if the follow-up read fails.
+  }
+  log(`id ${id} not claimable: ${shortErr(err)}`);
 }
 
 /** Returns true if a claim was actually broadcast (or would be, in a dry run). */
@@ -219,7 +262,18 @@ async function settle(ids) {
     type: "eip1559",
   });
 
-  const hash = await sender.sendRawTransaction({ serializedTransaction: serialized });
+  let hash;
+  try {
+    hash = await sender.sendRawTransaction({ serializedTransaction: serialized });
+  } catch (err) {
+    // A rejected broadcast is an ordinary outcome, not a reason to abort the
+    // pass. The common case is a nonce already spent by another claim -- e.g.
+    // a second instance of this bot sharing the key, which the relay refuses
+    // with "Missing or invalid parameters". Nothing was spent; the ids stay
+    // queued and the next pass re-reads the nonce.
+    log(`send rejected, requeuing ${sim.ids.length} id(s): ${shortErr(err)}`);
+    return false;
+  }
   log(`submitted ${hash}`);
 
   try {
@@ -244,6 +298,7 @@ function shortErr(err) {
 }
 
 let ticks = 0;
+let inFlight = false;
 
 async function tick() {
   const head = await pub.getBlockNumber();
@@ -307,7 +362,7 @@ async function heartbeat() {
 async function main() {
   log(`keeper ${account.address}`);
   log(`slow ${config.slow} gate ${config.gate}`);
-  log(`send via ${config.sendRpcUrl}${config.dryRun ? " (DRY RUN)" : ""}`);
+  log(`send via ${redact(config.sendRpcUrl)}${config.dryRun ? " (DRY RUN)" : ""}`);
 
   const gate = await pub.readContract({
     address: config.slow,
@@ -327,11 +382,21 @@ async function main() {
   if (config.oneShot) return runOnce();
 
   for (;;) {
-    try {
-      await tick();
-      if (config.heartbeatEvery > 0 && ticks % config.heartbeatEvery === 0) await heartbeat();
-    } catch (err) {
-      log(`tick error: ${shortErr(err)}`);
+    if (inFlight) {
+      // Cannot happen with a sequential loop today, but a pass that outruns the
+      // interval must never be entered twice: two passes racing means two
+      // claims signed against the same nonce.
+      log("previous pass still running, skipping this interval");
+    } else {
+      inFlight = true;
+      try {
+        await tick();
+        if (config.heartbeatEvery > 0 && ticks % config.heartbeatEvery === 0) await heartbeat();
+      } catch (err) {
+        log(`tick error: ${shortErr(err)}`);
+      } finally {
+        inFlight = false;
+      }
     }
     await new Promise((r) => setTimeout(r, config.pollMs));
   }

@@ -47,8 +47,9 @@ round-robined as one list. Probed 2026-08-03 against this exact workload:
 
 | endpoint | `getLogs` range | state reads |
 | --- | --- | --- |
-| `mainnet.gateway.tenderly.co` | unlimited | ok |
-| `rpc.mevblocker.io` | unlimited | ok |
+| `rpc.mevblocker.io` (+`/fast`) | unlimited | ok |
+| `eth.api.onfinality.io/public` | unlimited | ok |
+| `gateway.tenderly.co/public/mainnet` | unlimited | ok |
 | `eth.drpc.org` | 10,000 | ok (throttles `estimateGas`) |
 | `eth-pokt.nodies.app`, `1rpc.io/eth` | 50 | ok |
 | `eth.blockrazor.xyz` | 25 | ok |
@@ -56,9 +57,14 @@ round-robined as one list. Probed 2026-08-03 against this exact workload:
 | `ethereum-rpc.publicnode.com` | archive-gated | ok |
 | `eth.rpc.blxrbdn.com` | unavailable | ok |
 
-Only the top two can serve a cold backfill. The rest are still useful: steady-state
-polling advances ~1 block per tick, which fits inside even a 10-block cap, and every one
-of them serves `eth_call`/Multicall3.
+**Every one of these is keyless.** Three independent operators serve the full range, which
+is what lets the bot run with no account anywhere. Rejected as unusable: `eth.meowrpc.com`
+(no `getLogs`), `eth.public-rpc.com` and `rpc.ankr.com` (key required), `cloudflare-eth.com`,
+`eth.llamarpc.com`, `rpc.payload.de`, blockpi, omniatech (dead or serving HTML).
+
+Only the unlimited tier can serve a cold backfill. The rest still carry steady state: a
+pass advances far fewer blocks than even a 10-block cap, and all of them serve
+`eth_call`/Multicall3.
 
 State reads go through viem's `fallback` transport in priority order. Log discovery uses
 its own pool that *learns* each endpoint's range limit from the error text and shrinks its
@@ -70,19 +76,38 @@ pins this against the real strings each provider returns).
 Backfill progress is consumed per window, so a source dying mid-scan costs only the
 unscanned remainder rather than the whole pass.
 
+**Endpoints are never logged verbatim.** Provider URLs carry the key in the path, and
+anything printed lands in the host's log store and in any transcript pasted for debugging.
+Only host plus a 4-character fingerprint is emitted.
+
+**Permanent failures evict.** A single-id simulation failure is diagnosed against
+`pendingTransfers` rather than guessed from the revert string — `gate.claim` on a cleared
+transfer surfaces SLOW's custom `TransferDoesNotExist`, which viem renders only as
+"reverted for an unknown reason". A settled id is dropped instead of being re-simulated
+every pass forever.
+
 **Sends never fall back.** Claims go to Flashbots Protect only. A public-mempool fallback
 would silently invert the economics — lost races would land as paid reverts instead of
 being dropped — so if Protect is unreachable the bot waits.
 
 ## Two ways to run it
 
-**Worker** (`npm start`) — polls every 12s, runs forever. Lowest latency to settlement.
+**Worker** (`npm start`) — polls every 3 minutes, runs forever.
 
-**Cron** (`npm run once`) — one pass, then exits. Given the delays SLOW deals in are hours
-to days, an hourly pass settles just as reliably as a 12-second poll, costs a fraction of
-a 24/7 worker, and cuts RPC usage roughly 300x. It also fails *loudly*: a non-zero exit
-lands in the scheduler's run history. A wedged worker just goes quiet, which at this tip
-volume is indistinguishable from a healthy idle one.
+**Cron** (`npm run once`) — one pass, then exits. It also fails *loudly*: a non-zero exit
+lands in the scheduler's run history, where a wedged worker just goes quiet — which at this
+tip volume is indistinguishable from a healthy idle one.
+
+Neither is in a hurry. SLOW's delays run hours to days, so claiming three minutes (or an
+hour) after expiry is indistinguishable from claiming in twelve seconds, and the slower
+cadence is what keeps request volume inside what free public endpoints tolerate
+indefinitely. The design goal is that tips get picked up *eventually and without
+supervision*, not that they get picked up fast.
+
+**Run exactly one instance.** Two processes sharing a key will sign competing claims
+against the same nonce; the relay rejects the loser with `Missing or invalid parameters`.
+That is handled gracefully — nothing is spent and the ids requeue — but it wastes passes
+and muddies the log.
 
 A cron pass keeps settling while passes still produce claims, so a backlog larger than one
 batch clears in a single run. Both modes are defined in `render.yaml` — run one, not both.
@@ -94,7 +119,7 @@ shape and gas balance, so the log distinguishes idle from stuck.
 
 | Var | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `RPC_URL` | yes | — | Primary, tried first. Must allow wide `eth_getLogs` ranges — endpoints capped at 10 blocks **cannot backfill**. |
+| `RPC_URL` | **no** | — | Optional. If set, tried first. Must allow wide `eth_getLogs` ranges. Unset is fine and fully supported — the built-in pool is keyless. |
 | `RPC_URLS` | no | — | Comma-separated extras, inserted ahead of the built-in public fallbacks. |
 | `RPC_URLS_STATE` / `RPC_URLS_LOGS` | no | — | Role-specific overrides for an endpoint good at only one job. |
 | `PRIVATE_KEY` | yes | — | Keeper EOA. Gas float only. |
@@ -103,17 +128,18 @@ shape and gas balance, so the log distinguishes idle from stuck.
 | `PRIORITY_GWEI` | no | `0.05` | Priority fee bid. |
 | `MAX_FEE_GWEI` | no | `50` | Hard ceiling on `maxFeePerGas`. |
 | `MAX_BATCH` | no | `10` | Max ids per `claimMany`. |
-| `POLL_MS` | no | `12000` | Poll interval. |
+| `LOG_CHUNK` | no | `250000` | Backfill window. Large on purpose — capped sources shrink themselves to fit. |
+| `POLL_MS` | no | `180000` | Poll interval. Three minutes; see below. |
 | `START_BLOCK` | no | `24986598` | SLOW's deploy block. |
 | `ONE_SHOT` | no | — | `true` runs a single pass and exits (cron mode). Exit code is the liveness signal. |
-| `HEARTBEAT_EVERY` | no | `100` | Passes between heartbeat lines in worker mode. `0` disables. |
+| `HEARTBEAT_EVERY` | no | `20` | Passes between heartbeat lines in worker mode. `0` disables. |
 | `DRY_RUN` | no | — | `true` logs decisions without sending. |
 
 ## Local run
 
 ```sh
 npm install
-RPC_URL=... PRIVATE_KEY=0x... npm run dry-run
+PRIVATE_KEY=0x... npm run dry-run     # no RPC_URL needed
 ```
 
 ## Security

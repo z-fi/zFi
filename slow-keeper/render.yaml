@@ -9,14 +9,11 @@ services:
     startCommand: npm start
     autoDeploy: false
     envVars:
-      # Primary endpoint, tried first. Must support unrestricted eth_getLogs
-      # ranges -- it has to be able to carry the boot backfill on its own.
-      # Set in the Render dashboard.
+      # OPTIONAL. The built-in endpoint pool is entirely keyless, so this can be
+      # left unset. If set, it is tried first and must support unrestricted
+      # eth_getLogs ranges. Comma-separated extras go in RPC_URLS.
       - key: RPC_URL
         sync: false
-      # Optional extra endpoints ahead of the built-in public fallbacks.
-      # Comma-separated. The bot already falls back to a vetted public pool
-      # without this, so it is only needed for a second paid provider.
       - key: RPC_URLS
         sync: false
       # Keeper EOA key. Fund with gas only -- claims pay the underlying to the
@@ -34,7 +31,7 @@ services:
       - key: MAX_BATCH
         value: "10"
       - key: POLL_MS
-        value: "12000"
+        value: "180000"
 
   # Alternative to the worker above -- run ONE of the two, not both.
   #
@@ -48,7 +45,7 @@ services:
     runtime: node
     region: oregon
     rootDir: slow-keeper
-    schedule: "0 * * * *"
+    schedule: "0 * * * *"   # hourly; nothing here is in a hurry
     buildCommand: npm install
     startCommand: npm run once
     autoDeploy: false

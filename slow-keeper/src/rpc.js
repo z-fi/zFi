@@ -12,12 +12,36 @@ import {
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 /**
+ * Never log an endpoint verbatim. Provider URLs carry the API key in the path
+ * or query (`.../v2/<key>`, `?apikey=`), and anything printed here lands in the
+ * host's log store and in any transcript pasted for debugging. Host plus a
+ * short fingerprint is enough to tell endpoints apart without disclosing one.
+ */
+export function redact(url) {
+  try {
+    const u = new URL(url);
+    const secretish = u.pathname.replace(/^\/+/, "") + u.search;
+    if (!secretish) return u.host;
+    // Keep well-known public path suffixes readable; they are not credentials.
+    if (/^(public|eth|v1\/rpc\/public|public\/mainnet|fast|noreverts)$/i.test(secretish)) {
+      return `${u.host}/${secretish}`;
+    }
+    return `${u.host}/…${secretish.slice(-4)}`;
+  } catch {
+    return "<malformed url>";
+  }
+}
+
+/**
  * Endpoints are NOT interchangeable, so they are pooled by role rather than
- * round-robined as one list. Probed 2026-08-03 against this workload:
+ * round-robined as one list. Every entry below is keyless -- no account, no
+ * quota to blow through, nothing to pay. Probed 2026-08-03 against this exact
+ * workload:
  *
  *   endpoint                          getLogs range   eth_call / multicall
- *   mainnet.gateway.tenderly.co       unlimited       ok
- *   rpc.mevblocker.io                 unlimited       ok
+ *   rpc.mevblocker.io (+/fast)        unlimited       ok
+ *   eth.api.onfinality.io/public      unlimited       ok
+ *   gateway.tenderly.co/public/…      unlimited       ok
  *   eth.drpc.org                      10_000          ok (rate-limits estimateGas)
  *   eth-pokt.nodies.app                    50         ok
  *   1rpc.io/eth                            50         ok
@@ -26,13 +50,24 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
  *   ethereum-rpc.publicnode.com       archive-gated   ok
  *   eth.rpc.blxrbdn.com               unavailable     ok
  *
- * Only the first two can serve the boot backfill. The rest are still useful:
- * steady-state polling advances ~1 block per tick, which fits inside even a
- * 10-block cap, and every one of them can serve state reads.
+ * Rejected as unusable: eth.meowrpc.com and eth.rpc.blxrbdn.com (no getLogs),
+ * eth.public-rpc.com and rpc.ankr.com (key required), cloudflare-eth.com,
+ * eth.llamarpc.com, rpc.payload.de, blockpi, omniatech (dead or HTML errors).
+ *
+ * Only the unlimited tier can serve a cold backfill, and three independent
+ * operators there is the whole basis for running without a provider. The
+ * narrow ones still carry steady state: a pass advances far fewer blocks than
+ * even a 10-block cap, and all of them serve state reads.
  */
 const DEFAULT_LOG_SOURCES = [
-  { url: "https://mainnet.gateway.tenderly.co", maxRange: null },
+  // Wide-range, keyless. These three are what make a no-provider deployment
+  // possible: any one of them can carry the whole boot backfill alone.
   { url: "https://rpc.mevblocker.io", maxRange: null },
+  { url: "https://eth.api.onfinality.io/public", maxRange: null },
+  { url: "https://gateway.tenderly.co/public/mainnet", maxRange: null },
+  { url: "https://rpc.mevblocker.io/fast", maxRange: null },
+  // Narrow, but fine for steady state: a pass advances far fewer blocks than
+  // even the tightest cap here, so these still carry incremental discovery.
   { url: "https://eth.drpc.org", maxRange: 10_000n },
   { url: "https://eth-pokt.nodies.app", maxRange: 50n },
   { url: "https://1rpc.io/eth", maxRange: 50n },
@@ -41,8 +76,9 @@ const DEFAULT_LOG_SOURCES = [
 ];
 
 const DEFAULT_STATE_URLS = [
-  "https://mainnet.gateway.tenderly.co",
   "https://rpc.mevblocker.io",
+  "https://eth.api.onfinality.io/public",
+  "https://gateway.tenderly.co/public/mainnet",
   "https://ethereum-rpc.publicnode.com",
   "https://eth.rpc.blxrbdn.com",
   "https://eth-mainnet.public.blastapi.io",
@@ -68,7 +104,7 @@ function dedupe(urls) {
  */
 export function makeStateClient() {
   const urls = dedupe([config.rpcUrl, ...config.extraStateUrls, ...DEFAULT_STATE_URLS]);
-  log(`state pool: ${urls.length} endpoint(s), primary ${urls[0]}`);
+  log(`state pool: ${urls.length} endpoint(s), primary ${redact(urls[0])}`);
   return createPublicClient({
     chain: mainnet,
     transport: fallback(
@@ -95,7 +131,7 @@ export class LogPool {
       cooldownUntil: 0,
       capable: true,
     }));
-    log(`log pool: ${this.sources.length} endpoint(s), primary ${this.sources[0]?.url}`);
+    log(`log pool: ${this.sources.length} endpoint(s), primary ${redact(this.sources[0]?.url ?? "")}`);
   }
 
   available() {
@@ -126,17 +162,17 @@ export class LogPool {
     if (isRangeError(msg)) {
       const halved = (source.maxRange ?? attempted) / 2n;
       source.maxRange = learned ?? (halved > 0n ? halved : 1n);
-      log(`log source ${source.url}: max range now ${source.maxRange} (${msg.slice(0, 80)})`);
+      log(`log source ${redact(source.url)}: max range now ${source.maxRange} (${msg.slice(0, 80)})`);
     } else if (isRateLimit(msg)) {
       // Throttling says nothing about capability -- rest the source, keep its range.
       source.cooldownUntil = Date.now() + COOLDOWN_MS;
-      log(`log source ${source.url}: rate limited, cooling down 60s (${msg.slice(0, 80)})`);
+      log(`log source ${redact(source.url)}: rate limited, cooling down 60s (${msg.slice(0, 80)})`);
     } else if (isCapabilityError(msg)) {
       source.capable = false;
-      log(`log source ${source.url}: cannot serve getLogs, dropped (${msg.slice(0, 80)})`);
+      log(`log source ${redact(source.url)}: cannot serve getLogs, dropped (${msg.slice(0, 80)})`);
     } else {
       source.cooldownUntil = Date.now() + COOLDOWN_MS;
-      log(`log source ${source.url}: error, cooling down 60s (${msg.slice(0, 80)})`);
+      log(`log source ${redact(source.url)}: error, cooling down 60s (${msg.slice(0, 80)})`);
     }
   }
 

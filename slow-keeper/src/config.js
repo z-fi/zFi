@@ -21,9 +21,11 @@ function list(...names) {
 }
 
 export const config = {
-  // Primary endpoint, tried first for both state reads and log discovery.
-  // Must serve wide eth_getLogs ranges to carry the boot backfill alone.
-  rpcUrl: req("RPC_URL"),
+  // Optional. When set, tried first for both state reads and log discovery.
+  // Not required: the built-in pool is entirely keyless, and the point of this
+  // bot is that tips get picked up eventually, not that they get picked up
+  // fast -- so there is nothing to pay a provider for.
+  rpcUrl: process.env.RPC_URL || "",
 
   // Optional extra endpoints, comma-separated, inserted ahead of the built-in
   // public fallbacks. RPC_URLS applies to both roles; the role-specific vars
@@ -45,9 +47,17 @@ export const config = {
 
   // SLOW's deploy block; the gate is created in its constructor, same block.
   startBlock: BigInt(process.env.START_BLOCK || "24986598"),
-  logChunk: BigInt(process.env.LOG_CHUNK || "10000"),
+  // Deliberately large. The wide-range sources serve the whole history in a
+  // couple of requests, and being frugal with free endpoints matters more than
+  // window size -- a capped source shrinks itself to fit on first contact, so
+  // this costs the narrow tier nothing.
+  logChunk: BigInt(process.env.LOG_CHUNK || "250000"),
 
-  pollMs: num("POLL_MS", 12_000),
+  // Minutes, not seconds. SLOW's delays run hours to days, so claiming a tip
+  // three minutes after expiry is indistinguishable from claiming it in twelve
+  // seconds -- and it keeps request volume inside what free public endpoints
+  // will tolerate indefinitely.
+  pollMs: num("POLL_MS", 180_000),
   maxBatch: num("MAX_BATCH", 10),
 
   // Claim only when tip >= gasCost * marginMultiple. 1.0 breaks even on paper;
@@ -68,8 +78,8 @@ export const config = {
   oneShot: process.env.ONE_SHOT === "true",
 
   // Passes between heartbeat lines in worker mode. At the default poll
-  // interval, 100 passes is roughly 20 minutes.
-  heartbeatEvery: num("HEARTBEAT_EVERY", 100),
+  // interval, 20 passes is roughly an hour.
+  heartbeatEvery: num("HEARTBEAT_EVERY", 20),
 
   dryRun: process.env.DRY_RUN === "true",
 };
