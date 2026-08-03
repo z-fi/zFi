@@ -264,4 +264,29 @@ contract TokenListAuditTest is Test {
         vm.expectRevert(TokenList.Unknown.selector);
         list.idAt(1);
     }
+
+    /// @dev The registry stores the apostrophe now; see `_clean`. Asserted here rather
+    ///      than only in the renderer because storage is what every other consumer
+    ///      reads, and the two have to agree.
+    function testCuratedTextKeepsItsApostrophes() public {
+        vm.prank(owner);
+        uint256 id = list.list(
+            address(erc20), 0, 1, "", "https://circle.com", "Circle's dollar, and it doesn't lose punctuation."
+        );
+        assertEq(list.get(id).description, "Circle's dollar, and it doesn't lose punctuation.");
+        assertTrue(LibString.contains(list.json(id), "Circle's dollar"));
+    }
+
+    /// @dev But the characters that genuinely break out of a JSON string or an SVG
+    ///      text node are still dropped on the way in.
+    function testMarkupCharactersAreStillStripped() public {
+        vm.prank(owner);
+        uint256 id = list.list(address(erc20), 0, 1, "", "", "<script>x</script> & \"quoted\" \\ end");
+        string memory d = list.get(id).description;
+        assertFalse(LibString.contains(d, "<"));
+        assertFalse(LibString.contains(d, ">"));
+        assertFalse(LibString.contains(d, "&"));
+        assertFalse(LibString.contains(d, '"'));
+        assertFalse(LibString.contains(d, "\\"));
+    }
 }

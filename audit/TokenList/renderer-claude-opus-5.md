@@ -366,3 +366,41 @@ Two things left, both found by looking at the rendered set rather than at code.
 
 All three salts re-mined for the renderer change. 109 tests pass from a clean build,
 nothing skipped.
+
+# Cleanup pass
+
+- **The manifest had drifted two re-mines behind.** `deploy/TokenList.md` carried the
+  registry and renderer addresses from an earlier round, and all three initcode-hash
+  suffixes from the round before that. The cause was maintaining it by chained string
+  substitution: one round wrote an address in the wrong checksum casing, the compiler
+  rejected it in the test file so that copy got fixed, and every later substitution
+  then missed the copy still sitting in the manifest. A deployer checking a recorded
+  hash against a fresh build would have rejected a correct artifact. The table and
+  the full-value list are now generated from the artifact files, and
+  `testManifestAgreesWithTheRecordedArtifacts` asserts every address, salt and hash
+  in the manifest is the one in the file it describes — so this cannot drift quietly
+  again.
+
+- **Apostrophes are no longer stripped from curated text.** `_clean` dropped `'`
+  alongside the quote because the renderer delimits its SVG attributes with single
+  quotes — but nothing it cleans is ever put in an attribute. Name, symbol, links,
+  description and extras all land in text nodes and JSON string values, where an
+  apostrophe is legal. The cost was every possessive and contraction: "Circle's
+  stablecoin" was stored, and rendered, as "Circles stablecoin". The renderer now
+  splits `_safe` (text) from `_safeAttr` (attribute-bound, still strict), and the one
+  field that reaches an attribute — the logo — still goes through the strict filter.
+  Tests cover both directions, including that a logo carrying `'` cannot close its
+  own `href`.
+
+- A header comment still said a source edit would invalidate "both mined salts".
+  There are three.
+
+# Open, not addressed here
+
+`TokenList` advertises ERC-5192 via `supportsInterface(0xb45a3c0e)` and implements
+`locked(uint256)`, but emits no `Locked` event. A contract claiming that interface
+should emit one per listing on mint. This is being implemented independently on the
+`precision-pools` branch, together with ERC-7572 `contractURI()` — see the note at
+the top of that branch's copy of this manifest. Main does not have either change and
+the two lines of work have not been merged; doing so needs a re-mine and a renderer
+that implements `contractURI`, since the registry forwards it.

@@ -298,7 +298,11 @@ contract TokenListTest is Test, PostDeployListings {
 
         TokenList.Token memory t = list.get(id);
         assertFalse(t.name.contains("<"));
-        assertFalse(t.name.contains("'"));
+        assertFalse(t.name.contains(">"));
+        // The apostrophe now survives — it is legal in a text node and in a JSON
+        // string, and dropping it cost every possessive a curator writes. What made
+        // this token hostile was the angle brackets, and those are still gone.
+        assertTrue(t.name.contains("'"), "an apostrophe is text, not markup");
         assertEq(t.decimals, 0); // reverting decimals() does not brick the listing
         // The card still renders, and nothing escaped into it.
         string memory uri = list.tokenURI(id);

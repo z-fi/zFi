@@ -1039,8 +1039,18 @@ contract TokenList is ERC721, Ownable, Multicallable {
     }
 
     /// @dev Labels are display text, not markup. Admit a printable ASCII subset and
-    ///      drop the characters that would break out of a JSON string or an SVG
-    ///      attribute, so a token cannot inject either through its own `name()`.
+    ///      drop the characters that would break out of a JSON string or an SVG TEXT
+    ///      NODE, so a token cannot inject either through its own `name()`.
+    ///
+    ///      The apostrophe is deliberately KEPT. It was dropped alongside the quote
+    ///      because the renderer delimits its SVG attributes with single quotes — but
+    ///      nothing this function cleans is ever interpolated into an attribute. Name,
+    ///      symbol, links, description and extras all land in text nodes and in JSON
+    ///      string values, and an apostrophe is legal in both. Dropping it cost every
+    ///      possessive and contraction a curator writes: "Circle's stablecoin" was
+    ///      stored, and rendered, as "Circles stablecoin". The one field that DOES
+    ///      reach an attribute is the logo, which goes through `_uri` below and is
+    ///      still checked strictly.
     function _clean(string memory input, uint256 maxLen) internal pure returns (string memory) {
         bytes memory raw = bytes(input);
         bytes memory out = new bytes(raw.length < maxLen ? raw.length : maxLen);
@@ -1048,7 +1058,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         for (uint256 i; i < raw.length && kept < maxLen; ++i) {
             bytes1 c = raw[i];
             if (c < 0x20 || c > 0x7E) continue;
-            if (c == '"' || c == "'" || c == "\\" || c == "<" || c == ">" || c == "&") continue;
+            if (c == '"' || c == "\\" || c == "<" || c == ">" || c == "&") continue;
             out[kept++] = c;
         }
         assembly ("memory-safe") {

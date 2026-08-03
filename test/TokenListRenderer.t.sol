@@ -235,7 +235,7 @@ contract TokenListRendererTest is Test {
         // the characters that would let it become markup, not the words. A reader
         // sees the mangled string; a parser sees one text node.
         assertTrue(LibString.contains(svg, "/textscriptalert(1)/script"), "defanged, not deleted");
-        assertTrue(LibString.contains(svg, "svg onload=x"), "an attribute with no tag to attach to");
+        assertTrue(LibString.contains(svg, "svg onload="), "an attribute with no tag to attach to");
         // Every `<` and `>` in the output is one this contract wrote: the filter drops
         // them, so the tag count is a property of the layout, not of the input.
         assertEq(_count(svg, "<"), _count(svg, ">"), "balanced angle brackets");
@@ -365,5 +365,41 @@ contract TokenListRendererTest is Test {
             }
             ++at;
         }
+    }
+
+    /// @dev The apostrophe used to be dropped alongside the quote, because this
+    ///      renderer delimits its SVG attributes with single quotes. Nothing carrying
+    ///      curated prose is ever put in an attribute though, so all that cost was
+    ///      every possessive and contraction a curator writes.
+    function testApostrophesSurviveInTextButNotInAnAttribute() public view {
+        TokenList.Token memory t = _token();
+        t.name = "Circle's Dollar";
+        t.description = "It's the issuer's own token, and it doesn't lose punctuation.";
+        string memory svg = _svg(r.tokenURI(1, t));
+        assertTrue(LibString.contains(svg, "Circle's Dollar"), "name keeps its apostrophe");
+        assertTrue(LibString.contains(svg, "It's the issuer's own token"), "so does the description");
+
+        // The logo is the one value interpolated into an attribute, where an
+        // apostrophe would close `href='` early.
+        t = _token();
+        t.logo = "data:image/svg+xml,x'/><script>alert(1)</script>";
+        svg = _svg(r.tokenURI(1, t));
+        assertFalse(LibString.contains(svg, "<script"), "no element the caller got to open");
+        assertEq(_count(svg, "<"), _count(svg, ">"), "balanced angle brackets");
+        uint256 at = LibString.indexOf(svg, "href='");
+        string memory tail = LibString.slice(svg, at + 6);
+        assertFalse(
+            LibString.contains(LibString.slice(tail, 0, LibString.indexOf(tail, "'")), "'"),
+            "the attribute cannot be closed early"
+        );
+    }
+
+    function testApostrophesDoNotUnbalanceEitherDocument() public view {
+        TokenList.Token memory t = _token();
+        t.name = "A'B'C";
+        t.symbol = "A'B";
+        t.url = "https://example.org/it's";
+        assertEq(_quotes(_meta(r.tokenURI(1, t))) % 2, 0, "metadata document stays balanced");
+        assertEq(_quotes(r.json(1, t)) % 2, 0, "compact json stays balanced");
     }
 }

@@ -16,7 +16,9 @@ import {TokenList} from "./TokenList.sol";
 ///      none. Current sizes and the deterministic deployment targets live in
 ///      `deploy/TokenList.md` — deliberately not repeated here, because a byte count
 ///      in a comment goes stale, and editing this file to correct one would change
-///      the metadata hash and invalidate both mined salts.
+///      the metadata hash and invalidate the mined salts for this contract AND for
+///      the registry, whose creation code carries this address as a constructor
+///      argument.
 ///
 ///      Every function here is `pure` and takes the listing BY VALUE. The renderer
 ///      cannot read or write registry state, has no owner, and no call into it can
@@ -645,13 +647,28 @@ contract TokenListRenderer {
     ///      to a character no display string needs. This mirrors `TokenList._clean`
     ///      exactly, so against the registry it removes nothing.
     function _safe(string memory input) internal pure returns (string memory) {
+        return _filter(input, false);
+    }
+
+    /// @dev The strict form, for anything interpolated into an SVG ATTRIBUTE. Drops
+    ///      the apostrophe as well, because this renderer delimits attributes with
+    ///      single quotes. Only the logo reaches an attribute; every other field on
+    ///      the card is text-node content, where an apostrophe is legal and wanted.
+    ///      A future layout that puts a name or a link into an attribute must use
+    ///      THIS and not `_safe`.
+    function _safeAttr(string memory input) internal pure returns (string memory) {
+        return _filter(input, true);
+    }
+
+    function _filter(string memory input, bool alsoApostrophe) internal pure returns (string memory) {
         bytes memory raw = bytes(input);
         bytes memory out = new bytes(raw.length);
         uint256 kept;
         for (uint256 i; i < raw.length; ++i) {
             bytes1 c = raw[i];
             if (c < 0x20 || c > 0x7E) continue;
-            if (c == '"' || c == "'" || c == "\\" || c == "<" || c == ">" || c == "&") continue;
+            if (c == '"' || c == "\\" || c == "<" || c == ">" || c == "&") continue;
+            if (alsoApostrophe && c == "'") continue;
             out[kept++] = c;
         }
         assembly ("memory-safe") {
@@ -677,7 +694,7 @@ contract TokenListRenderer {
     ///      attribute. Re-checked here for the same reason `_safe` exists: this
     ///      contract's output must be well-formed whoever calls it.
     function _uri(string memory logo) internal pure returns (string memory) {
-        return _safe(logo);
+        return _safeAttr(logo);
     }
 
     function _logo(string memory logo) internal pure returns (string memory) {

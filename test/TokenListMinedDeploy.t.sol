@@ -13,11 +13,11 @@ import {PostDeployListings} from "./PostDeployListings.sol";
 contract TokenListMinedDeployTest is Test, PostDeployListings {
     address constant SUMMONER = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant OWNER = 0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2;
-    address constant RENDERER = 0x0000003AD6018d3417260dda858A85033A5E890B;
-    address constant LIST = 0x0000003CaC32E084A75D79f58Bb81961278D053B;
+    address constant RENDERER = 0x00000090b395ECD5B48e840Bd1575C3c11c01419;
+    address constant LIST = 0x000000564c6b5A5066E0F3Cb6Defd367Ba56cb37;
 
-    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000001064d5e;
-    bytes32 constant LIST_SALT = 0x00000000000000000000000000000000000000000000000000000000003e7bba;
+    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000001052058;
+    bytes32 constant LIST_SALT = 0x0000000000000000000000000000000000000000000000000000000001466fb5;
 
     /// @dev The recorded initcode is a frozen artifact of a specific build, and the
     ///      salt was mined FOR that build. Editing the source invalidates both, so
@@ -125,5 +125,30 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
 
         emit log_named_uint("TokenList runtime", LIST.code.length);
         emit log_named_uint("Renderer runtime", RENDERER.code.length);
+    }
+
+    /// @dev The manifest is what a deployer reads before broadcasting, and it is
+    ///      maintained by hand while the artifacts beside it are generated. This pass
+    ///      found it carrying an address and three initcode hashes from two re-mines
+    ///      earlier — the values had been edited by string substitution, and each
+    ///      round's replacements silently missed what the previous round had left in
+    ///      the wrong letter case. A deployer checking the recorded hash against a
+    ///      fresh build would have rejected a correct artifact.
+    ///
+    ///      So assert it: every address, salt and initcode hash in `deploy/TokenList.md`
+    ///      must be the one in the artifact files it describes.
+    function testManifestAgreesWithTheRecordedArtifacts() public view {
+        string memory md = vm.readFile("deploy/TokenList.md");
+        string[3] memory names = ["TokenList", "TokenListRenderer", "TokenListLens"];
+        for (uint256 i; i < names.length; ++i) {
+            string memory addr = vm.trim(vm.readFile(string.concat("deploy/", names[i], ".address.txt")));
+            string memory salt = vm.trim(vm.readFile(string.concat("deploy/", names[i], ".salt.txt")));
+            bytes32 hash = keccak256(vm.readFileBinary(string.concat("deploy/", names[i], ".initcode.bin")));
+            assertTrue(vm.contains(md, addr), string.concat(names[i], ": address is stale in the manifest"));
+            assertTrue(vm.contains(md, salt), string.concat(names[i], ": salt is stale in the manifest"));
+            assertTrue(
+                vm.contains(md, vm.toString(hash)), string.concat(names[i], ": initcode hash is stale in the manifest")
+            );
+        }
     }
 }
