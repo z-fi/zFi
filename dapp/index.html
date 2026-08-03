@@ -4779,8 +4779,19 @@ function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
 }
 // DAICO graduated coin: any token → coin buy (via ZAMM hooked pool)
+//
+// A collector DAO qualifies on its ADDRESS, not on `_isDaicoCoin`. That flag is
+// only ever set inside `searchDaicoCoins`, which runs on the first token-search
+// keystroke - so a coin reached any other way arrives without it. FWC is a
+// BUILTIN here, so the quick-pick icon selects it having never gone near that
+// scan, and the route fell through to the generic aggregator: ETH quoted the
+// shallow zAMM pool instead of the sale, and an ERC-20 got no quote at all,
+// because zQuoter has no route to a coin whose venues are that pool and a sale
+// it knows nothing about.
 function isDaicoCoinBuyPath(fromSym, toSym) {
-  return !!tokens[toSym]?._isDaicoCoin && !tokens[fromSym]?._isDaicoCoin && fromSym !== toSym;
+  if (fromSym === toSym) return false;
+  if (collectorSaleFor(toSym)) return !collectorSaleFor(fromSym);
+  return !!tokens[toSym]?._isDaicoCoin && !tokens[fromSym]?._isDaicoCoin;
 }
 
 // ---- Collector DAOs with a continuous share sale ----
@@ -4934,9 +4945,14 @@ async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
   readSlippage(true);
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
   const receiver = getReceiver();
-  const fee = BigInt(toData._feeOrHook);
   const ethIn = fromData.address === ZERO_ADDRESS;
   const collector = collectorSaleFor(toSym);
+  // Same provenance problem as the flag above: a coin that never went through
+  // `searchDaicoCoins` has no `_feeOrHook`, and BigInt(undefined) throws - which
+  // took the entire quote down instead of falling back.
+  const fee = toData._feeOrHook != null ? BigInt(toData._feeOrHook)
+            : collector ? BigInt(collector.feeOrHook)
+            : 30n;
   const exactOut = !!_exactOut && !!collector; // pool-only coins stay exact-in
   const amountSpec = safeParseUnits(fromAmountStr, exactOut ? 18 : fromData.decimals);
 
