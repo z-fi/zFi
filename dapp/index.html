@@ -1187,7 +1187,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, Odos, OKX, Bitget, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
+<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, OKX, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
 
 <!-- Swap card -->
 <div class="swap-card">
@@ -1787,8 +1787,12 @@ const INCH_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ONEINCHOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
-// Odos / Odosol integration
-const ODOSOL_ADDRESS = "0x55B867886dc6DB50d40712204b9BFc4e21DB5479";
+// Odos / Odosol integration — DISABLED 2026-08-03: api.odos.xyz no longer
+// resolves (Cloudflare 1033 "host not configured" on every path), so the
+// service appears to be shut down. The zero address short-circuits every Odos
+// helper in modules/aggregators.js, keeping it out of the quote race; restore
+// the wrapper address below if the API ever comes back.
+const ODOSOL_ADDRESS = "0x0000000000000000000000000000000000000000"; // was 0x55B867886dc6DB50d40712204b9BFc4e21DB5479
 const ODOS_API = "https://api.odos.xyz";
 const ODOS_ETH_SENTINEL = "0x0000000000000000000000000000000000000000";
 const ODOSOL_IFACE = new ethers.Interface([
@@ -1815,7 +1819,7 @@ const BEBOPOL_IFACE = new ethers.Interface([
 ]);
 // Enso integration
 const ENSOL_ADDRESS = "0xD6D4D5eE3139bF51Cbe06D7a2E116f4ab4d4Ee96";
-const ENSO_API = "https://api.enso.build/api/v1/shortcuts/route";
+const ENSO_API = "https://api.zfi.wei.is/enso/api/v1/shortcuts/route";
 const ENSO_ETH_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const ENSOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
@@ -1887,10 +1891,13 @@ async function searchDaicoCoins() {
     for (const d of daicos) {
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
       if (!sale) continue;
-      // graduated = sale ended (no remaining supply) and pool was seeded (feeOrHook > 0)
-      const saleEnded = sale.remainingSupply === 0n || sale.forAmt === 0n;
-      if (!saleEnded) continue;
       if (sale.feeOrHook === 0n) continue;
+      // Tradeable = the pool was seeded. Usually that means the sale ended, but a
+      // collector DAO runs its continuous sale alongside a live pool forever, so
+      // gating on "sale ended" alone hid the one coin with two venues to route
+      // between. Those are listed on the pool's existence instead.
+      const saleEnded = sale.remainingSupply === 0n || sale.forAmt === 0n;
+      if (!saleEnded && !COLLECTOR_SALES[d.meta.sharesToken.toLowerCase()]) continue;
       const sym = d.meta.symbol || 'TKN';
       graduated.push({
         symbol: sym, address: d.meta.sharesToken, decimals: 18,
@@ -1926,26 +1933,35 @@ async function searchDaicoCoins() {
 }
 
 // ---- Live sale banner (most recent active sale) ----
+// Pinned DAO always wins the slot when it's discoverable — the collector DAO is the
+// house highlight, not just whatever launched last.
+const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
 async function loadLiveSale() {
   try {
     const daicos = await fetchDaicoScan();
     const now = BigInt(Math.floor(Date.now() / 1000));
-    // Find most recent active sale (highest index = newest)
+    const asCard = (d) => {
+      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+      const totalSale = sale ? sale.totalSupply : 0n;
+      const sold = sale ? totalSale - sale.remainingSupply : 0n;
+      return {
+        dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
+        contractURI: d.meta.contractURI,
+        pct: totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0,
+        raisedETH: sale && sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0,
+        hasSale: !!sale,
+      };
+    };
     let s = null;
-    for (let i = daicos.length - 1; i >= 0; i--) {
+    const pinned = daicos.find(d => d.dao.toLowerCase() === DAICO_PINNED_DAO);
+    if (pinned) s = asCard(pinned);
+    // Otherwise fall back to the most recent active sale (highest index = newest).
+    for (let i = daicos.length - 1; !s && i >= 0; i--) {
       const d = daicos[i];
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
       if (!sale) continue;
       if (sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline))) {
-        const totalSale = sale.totalSupply;
-        const sold = totalSale - sale.remainingSupply;
-        const raisedETH = sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0;
-        s = {
-          dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
-          contractURI: d.meta.contractURI,
-          pct: totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0,
-          raisedETH
-        };
+        s = asCard(d);
         break;
       }
     }
@@ -1954,19 +1970,15 @@ async function loadLiveSale() {
     if (s.contractURI) {
       try {
         let url = s.contractURI;
-        if (url.trimStart().startsWith('{')) { const m = JSON.parse(url); if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; } return; }
-        if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
-        else if (url.startsWith('data:')) {
-          const j = url.split(',').slice(1).join(',');
-          const m = JSON.parse(decodeURIComponent(j));
+        const applyMeta = m => {
           if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; }
           if (m.name) s.name = m.name;
-        }
-        if (!s.icon) {
-          const res = await fetch(url);
-          const m = await res.json();
-          if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; }
-          if (m.name) s.name = m.name;
+        };
+        if (url.trimStart().startsWith('{')) applyMeta(JSON.parse(url));
+        else {
+          if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
+          else if (url.startsWith('data:')) applyMeta(JSON.parse(decodeURIComponent(url.split(',').slice(1).join(','))));
+          if (!s.icon && !url.startsWith('data:')) applyMeta(await (await fetch(url)).json());
         }
       } catch {}
     }
@@ -1981,10 +1993,10 @@ async function loadLiveSale() {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
-        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : 'Sale live'}</div>
+        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'}</div>
       </div>
-      <div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
-      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>
+      ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
+      <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
     </a>`;
     if (_activeTab === 'swap') el.style.display = '';
   } catch (e) { console.warn('Live sale load failed:', e); }
@@ -2105,7 +2117,7 @@ async function loadFeaturedPm() {
 }
 
 // Load featured PM on page init (non-blocking)
-// setTimeout(loadLiveSale, 500); // DAICO banner hidden for now
+setTimeout(loadLiveSale, 500);
 setTimeout(loadFeaturedPm, 100);
 
 // ---- Curve coins tile + dropdown integration ----
@@ -2255,7 +2267,11 @@ async function loadLiveCurveCoins() {
         icon,
         contractURI: r.contractURI,
         tokenKey: key,
-        perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated
+        perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated,
+        // A launch with no buys and no ETH raised is dead weight on the lander — it reads
+        // as "nobody wants this". Tracked here, filtered at tile time (the dropdown still
+        // gets every coin so they stay searchable/tradeable).
+        hasActivity: sold > 0n || raisedETH > 0n
       });
     }
 
@@ -2263,7 +2279,10 @@ async function loadLiveCurveCoins() {
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
 
     if (!el || cards.length === 0) return;
-    const tileCards = cards.slice(0, CURVE_TILE_MAX);
+    // Only feature coins that have actually traded. If none of the recent launches have
+    // any activity, show no curve section at all rather than a wall of 0.0%.
+    const tileCards = cards.filter(c => c.hasActivity).slice(0, CURVE_TILE_MAX);
+    if (tileCards.length === 0) { el.style.display = 'none'; return; }
 
     // Resolve logos from contractURI metadata — visible cards only, so one tile costs
     // at most CURVE_TILE_MAX extra fetches.
@@ -3308,7 +3327,10 @@ function makeLetterIcon(sym) {
 // buildBestSwapViaETHMulticall(ETH->USDC, 1e18): publicnode OK, 1rpc and drpc
 // out of gas. Nodes that fail that way are demoted below (see gasCapFails), so
 // ordering self-corrects at runtime rather than being hardcoded.
-// eth.llamarpc.com omitted: returning HTTP 521.
+// eth.llamarpc.com omitted: returning HTTP 521. 1rpc.io/eth omitted: it rate
+// limits browser origins and its 503 error pages carry no CORS headers, so a
+// throttled request surfaces as an "Access-Control-Allow-Origin" console error
+// rather than a clean failover.
 // Historical eth_getLogs matters for the Privacy Pools loader, and the three
 // legacy nodes cannot serve it: publicnode refuses archive queries without a
 // token, 1rpc caps eth_getLogs at 50 blocks, and drpc's free plan caps ranges
@@ -3323,7 +3345,6 @@ const RPCS = [
   "https://mainnet.gateway.tenderly.co",
   "https://gateway.tenderly.co/public/mainnet",
   "https://ethereum.publicnode.com",
-  "https://1rpc.io/eth",
   "https://eth.drpc.org",
 ];
 
@@ -3334,6 +3355,8 @@ function makeWalletReader() {
     return bp;
   } catch { return null; }
 }
+
+const HEDGE = Symbol('hedge');
 
 function makeFallbackProvider(urls) {
   const network = { chainId: CHAIN_ID, name: "mainnet" };
@@ -3366,11 +3389,15 @@ function makeFallbackProvider(urls) {
     });
   }
 
-  const withTimeout = (ms, work) =>
-    Promise.race([
-      work(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-    ]);
+  // The timeout handle must be cleared when the work settles first, or every
+  // call leaves a live timer for the full timeout window. On the 15s quote
+  // refresh that was hundreds of orphaned timers per minute, each holding its
+  // closure alive.
+  const withTimeout = (ms, work) => {
+    let tid;
+    const timer = new Promise((_, rej) => { tid = setTimeout(() => rej(new Error("timeout")), ms); });
+    return Promise.race([Promise.resolve().then(work), timer]).finally(() => clearTimeout(tid));
+  };
 
   const isInfraErr = (e) => {
     const s = String(e?.message || "");
@@ -3412,9 +3439,18 @@ function makeFallbackProvider(urls) {
     // timeoutMs is per-RPC-attempt. The 4s default suits quotes and single
     // reads; historical eth_getLogs scans need far longer, and timing them out
     // at 4s marks every node down in turn and hard-fails the whole load.
-    async call(fn, { timeoutMs = 4000 } = {}) {
+    //
+    // hedgeMs: if the leading node has not answered within this long, race the
+    // next candidate alongside it and take whichever replies first. Sequential
+    // failover alone means one stalled node costs the full timeoutMs before
+    // anything else is tried, which is where nearly all slow quotes came from —
+    // public nodes stall far more often than they error. Only the slow tail
+    // (~a tenth of calls) is ever duplicated, so request volume barely moves.
+    // Disabled for long-timeout work: doubling a 60s archive log scan wastes
+    // real quota for no latency win.
+    async call(fn, { timeoutMs = 4000, hedgeMs = timeoutMs <= 5000 ? 900 : 0 } = {}) {
       const now = Date.now();
-      let lastErr;
+      let lastErr, fatalErr;
       // Prefer RPCs that are up, ordered by capability first (nodes that have
       // rejected calls on gas go last, however fast they are) then by latency.
       // Sorting on latency alone actively favours the low-cap nodes.
@@ -3423,25 +3459,65 @@ function makeFallbackProvider(urls) {
       const down = nodes.filter(n => n.ok && n.downUntil > now);
       const candidates = up.concat(down);
 
-      for (const n of candidates) {
+      // Run one attempt, recording latency/health. Never throws: the caller
+      // needs both outcomes in hand to arbitrate a hedged race.
+      const runOn = async (n) => {
+        const t0 = Date.now();
         try {
-          const t0 = Date.now();
           const res = await withTimeout(timeoutMs, () => fn(n.p));
           n.downUntil = 0;
           // Update rolling average latency (exponential moving average, alpha=0.3)
           const elapsed = Date.now() - t0;
           n._calls++;
           n.avgMs = n._calls === 1 ? elapsed : n.avgMs * 0.7 + elapsed * 0.3;
-          return res;
+          return { ok: true, res };
         } catch (e) {
-          lastErr = e;
-          if (isContractErr(e)) throw e; // deterministic — don't retry other RPCs
+          if (isContractErr(e)) return { ok: false, err: e, fatal: true }; // deterministic
           if (isGasCapErr(e)) n.gasCapFails++; // demote, then fall through to next RPC
           else if (isRateLimitErr(e)) n.downUntil = Date.now() + 5_000; // brief: it recovers
           else if (isAuthErr(e)) n.ok = false;
           else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
+          return { ok: false, err: e };
         }
+      };
+
+      for (let i = 0; i < candidates.length; i++) {
+        let outcome;
+        const primary = runOn(candidates[i]);
+        const canHedge = hedgeMs > 0 && i + 1 < candidates.length;
+        if (canHedge) {
+          let hedgeTid;
+          const hedgeSignal = new Promise(r => { hedgeTid = setTimeout(() => r(HEDGE), hedgeMs); });
+          outcome = await Promise.race([primary, hedgeSignal]);
+          clearTimeout(hedgeTid);
+          if (outcome === HEDGE) {
+            // Leader is slow, not necessarily dead — keep it running and let the
+            // backup race it. First success wins; if both fail, report the
+            // leader's error, which is the more diagnostic of the two.
+            const backup = runOn(candidates[++i]);
+            outcome = await new Promise(resolve => {
+              let pending = 2;
+              for (const p of [primary, backup]) {
+                p.then(o => {
+                  if (o.ok) resolve(o);
+                  else if (--pending === 0) resolve(o);
+                });
+              }
+            });
+            if (!outcome.ok) {
+              // Prefer a fatal (contract revert) verdict from either racer.
+              const both = await Promise.all([primary, backup]);
+              outcome = both.find(o => o.fatal) || outcome;
+            }
+          }
+        } else {
+          outcome = await primary;
+        }
+        if (outcome.ok) return outcome.res;
+        if (outcome.fatal) { fatalErr = outcome.err; break; }
+        lastErr = outcome.err;
       }
+      if (fatalErr) throw fatalErr; // deterministic — no other RPC will differ
       throw lastErr || new Error("All RPCs failed");
     },
   };
@@ -3984,6 +4060,12 @@ function startQuoteRefresh() {
   _refreshCountdown = interval;
   setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
   _refreshTimer = setInterval(() => {
+    // Freeze the countdown while the tab is in the background. Re-running the
+    // whole fan-out — a dozen API calls plus two Multicall3 batches — every 15s
+    // for a quote nobody can see burns rate limit on every provider and is the
+    // fastest way to get 429'd on the tab the user is actually looking at.
+    // Coming back to the tab re-quotes immediately (see the listener below).
+    if (document.hidden) return;
     _refreshCountdown--;
     if (_refreshCountdown <= 0) {
       _refreshCountdown = interval;
@@ -3992,6 +4074,13 @@ function startQuoteRefresh() {
     setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
   }, 1000);
 }
+
+// Returning to a parked tab leaves a quote that is at least as old as the time
+// spent away, so refresh it up front rather than showing a stale price for up
+// to another full interval.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _refreshTimer) handleAmountChange();
+});
 
 function stopQuoteRefresh() {
   if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
@@ -4142,6 +4231,10 @@ async function handleAmountChange() {
     }
 
     const quote = await requestQuote(amtStr, fromSnap, toSnap, isExactOut);
+
+    // Dropped before it ran because newer edits overtook it. The handler for
+    // those edits owns the UI from here — touch nothing, not even the placeholder.
+    if (quote === QUOTE_SUPERSEDED) return;
 
     if (seq !== _quoteSeq || fromSnap !== fromToken || toSnap !== toToken) {
       dstEl.placeholder = "0.0";
@@ -4761,78 +4854,275 @@ function isZammCoinSellPath(fromSym, toSym) {
 function isZOrgSellPath(fromSym, toSym) {
   return fromSym !== toSym && tokens[fromSym]?._isZOrg === true && !tokens[toSym]?._isZammStake && tokens[toSym] != null;
 }
-// DAICO graduated coin: ETH → coin buy only (via ZAMM hooked pool)
+// DAICO graduated coin: any token → coin buy (via ZAMM hooked pool)
 function isDaicoCoinBuyPath(fromSym, toSym) {
-  return tokens[fromSym]?.address === ZERO_ADDRESS && tokens[toSym]?._isDaicoCoin === true;
-}
-// Curve coin (ClassicalCurveSale launch): ETH ↔ coin only.
-// Pre-graduation routes through CURVE_SALE.buyExactIn / .sell; post-graduation routes through
-// CURVE_SALE.swapExactIn (which forwards to the ZAMM hooked pool and skims the creator fee).
-function isCurveBuyPath(fromSym, toSym) {
-  return tokens[fromSym]?.address === ZERO_ADDRESS && tokens[toSym]?._isCurveCoin === true;
-}
-function isCurveSellPath(fromSym, toSym) {
-  return tokens[fromSym]?._isCurveCoin === true && tokens[toSym]?.address === ZERO_ADDRESS;
-}
-function isCurvePath(fromSym, toSym) {
-  return isCurveBuyPath(fromSym, toSym) || isCurveSellPath(fromSym, toSym);
-}
-function isExactOutDisabled(fromSym, toSym) {
-  return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
-    || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
-    || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
-    || isZammCoinBuyPath(fromSym, toSym) || isZammCoinSellPath(fromSym, toSym)
-    || isDaicoCoinBuyPath(fromSym, toSym)
-    || isCurvePath(fromSym, toSym);
+  return !!tokens[toSym]?._isDaicoCoin && !tokens[fromSym]?._isDaicoCoin && fromSym !== toSym;
 }
 
-// ---- DAICO graduated coin buy: ETH → coin via ZAMM hooked pool ----
+// ---- Collector DAOs with a continuous share sale ----
+// These coins have two venues, not one: a sale that mints at a flat rate and the
+// ordinary zAMM pool. Collectol buys either or both atomically and CollectolLens
+// solves the split; see deploy/Collectol.md.
+const COLLECTOL = "0x0000003b9DFB69a1c764b1b136EE93dEDcdB2EE3";
+const COLLECTOL_LENS = "0x000000eA30dd95Ed6A5734F3Df361b2f4D5acaf6";
+// Keyed by shares token (lowercase). `saleRate` is shares per 1e18 wei — the
+// deployed sale keeps it as a bytecode constant with no getter, so it is
+// configuration here rather than a read. It is only ever used to *plan*: the
+// route's floor is Collectol's own minTotalOut, derived from the pool curve and
+// checked against the delivered balance, so a stale rate costs a worse split or
+// a failed quote, never funds.
+const COLLECTOR_SALES = {
+  "0x883d646d0c8202aa23f01d4af45e4e73804c3a49": {
+    sale: "0x824d11a46F32cd16cdF46380314343e9697e2491",
+    collectol: COLLECTOL,
+    feeOrHook: 30n,
+    saleRate: 1000000000000000000000000n, // 1e24 = 1,000,000 shares per ETH
+  },
+};
+const COLLECTOL_IFACE = new ethers.Interface([
+  "function buy(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,address recipient,address refundTo,uint256 deadline) payable",
+]);
+const COLLECTOL_LENS_IFACE = new ethers.Interface([
+  "function maxSaleEth(address sale,uint256 saleRate) view returns (uint256)",
+  "function planExactIn(address shares,uint256 feeOrHook,uint256 ethIn,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))",
+  "function planExactOut(address shares,uint256 feeOrHook,uint256 sharesOut,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))",
+]);
+function collectorSaleFor(sym) {
+  const addr = tokens[sym]?.address;
+  return addr ? COLLECTOR_SALES[addr.toLowerCase()] || null : null;
+}
+
+// ---- Leg 1 for a collector-DAO route: whichever quoter is better ----
+// zQuoter's on-chain builder and the external aggregators are both candidates
+// for the hop to ETH, and neither wins every size. Race them and take the
+// better one, with two hard requirements the ordinary swap path does not have:
+// the proceeds must land in the ROUTER (not the user) so the second leg can
+// spend them, and the amount the second leg is planned on must be a floor the
+// leg is contractually held to, not an estimate.
+//
+// The external forwarders deliver WETH directly, so that path skips `wrap`.
+// zQuoter's builder yields ETH, which is wrapped. Either way leg 2 sees WETH.
+async function _buildCollectorLeg1(rpc, fromData, amountIn, exactOut, ethTarget, slipBps, deadline, callOpts) {
+  const quoter = getQuoterContract(rpc);
+  const onchain = await quoter.buildBestSwapViaETHMulticall(
+    ZROUTER_ADDRESS, (_connectedAddress || _QUOTE_PREVIEW_ADDR), exactOut,
+    fromData.address, ZERO_ADDRESS,
+    exactOut ? ethTarget : amountIn, slipBps, deadline, callOpts
+  ).catch(() => null);
+
+  let best = null;
+  if (onchain) {
+    const gross = onchain.b.amountOut > 0n ? onchain.b.amountOut : onchain.a.amountOut;
+    best = {
+      source: AMM_NAMES[onchain.a.source] || "Unknown",
+      calls: Array.from(onchain.calls),
+      // The builder already bakes `slipBps` into its own per-leg limits, so this
+      // is the floor it is held to rather than a second haircut on an estimate.
+      ethFloor: exactOut ? ethTarget : gross * (10000n - slipBps) / 10000n,
+      spend: exactOut ? (onchain.a.amountIn + onchain.b.amountIn) * (10000n + slipBps) / 10000n : amountIn,
+      needsWrap: true,
+    };
+  }
+
+  // Exact-out is not offered by the external adapters in a form that pins a
+  // router-side floor, so it stays on the on-chain builder.
+  if (!exactOut) {
+    const ext = await _bestExternalToWeth(fromData.address, amountIn, slipBps).catch(() => null);
+    if (ext && (!best || ext.ethFloor > best.ethFloor)) best = ext;
+  }
+  return best;
+}
+
+// Firm quote from the external aggregators for tokenIn -> WETH, delivered to the
+// router. `minBuy` is the adapter's own guaranteed output, which is exactly the
+// floor leg 2 needs - no estimate is involved.
+//
+// Only the adapters that can price a pair from scratch are eligible. Most of
+// _AGG_DEFS is two-phase: the main quote race stashes route state on the quote
+// object (`psPriceRoute`, `ksRouteSummary`, `odosPathId`, ...) and the firm
+// fetch replays it. That state describes the user's from->to pair, not this
+// synthetic hop to WETH, so those adapters cannot be asked about a leg the race
+// never ran. Reaching them would mean running the whole price race a second time
+// for tokenIn -> WETH; until that exists they sit out and the on-chain builder
+// covers the pair.
+const _STATELESS_AGGS = new Set(["is0x", "is1inch"]);
+
+async function _bestExternalToWeth(tokenIn, amountIn, slipBps) {
+  const slippage = Number(slipBps);
+  const results = await settleWithin(EXT_PRICE_DEADLINE_MS, _AGG_DEFS.map(async def => {
+    if (!_STATELESS_AGGS.has(def.flag)) return null;
+    if (!def.addr || def.addr === ZERO_ADDRESS) return null;
+    const firm = await def.fetch(null, tokenIn, WETH_ADDRESS, amountIn, slippage).catch(() => null);
+    if (!def.ok(firm)) return null;
+    const built = def.build(firm, null, tokenIn, WETH_ADDRESS, ZROUTER_ADDRESS, slippage);
+    if (!built?.minBuy || built.minBuy === 0n) return null;
+    return {
+      source: def.ck,
+      // One snwap: pull the input from the user, run the adapter, and require
+      // the router's WETH balance to have grown by at least the firm minimum.
+      calls: [ROUTER_IFACE.encodeFunctionData("snwap", [
+        tokenIn, amountIn, ZROUTER_ADDRESS, WETH_ADDRESS, built.minBuy, built.olAddr, built.olData,
+      ])],
+      ethFloor: built.minBuy,
+      spend: amountIn,
+      needsWrap: false,
+    };
+  }));
+  let best = null;
+  for (const r of results) if (r && (!best || r.ethFloor > best.ethFloor)) best = r;
+  return best;
+}
+
+// ---- DAICO coin buy: any token -> coin, exact-in or exact-out ----
+// A plain DAICO coin has one venue (the zAMM hooked pool). A collector DAO has
+// two - a continuous sale minting at a flat rate and that same pool - and
+// Collectol buys the best split of both atomically, with CollectolLens solving
+// the split per size so the pool is used exactly when it beats the mint.
+//
+// Any ERC-20 gets there by hopping to ETH first. That hop cannot hand Collectol
+// native value: snwap funds a native route from msg.value, and every
+// delegatecalled multicall entry sees the same msg.value - zero when the user is
+// paying tokens. So leg 1's ETH is wrapped and swept in as WETH, which Collectol
+// unwraps on arrival. Everything unspent sweeps back to the user.
 async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
-  const toData = tokens[toSym];
-  const amountIn = safeParseUnits(fromAmountStr, 18);
+  const fromData = tokens[fromSym], toData = tokens[toSym];
   readSlippage(true);
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
   const receiver = getReceiver();
   const fee = BigInt(toData._feeOrHook);
+  const ethIn = fromData.address === ZERO_ADDRESS;
+  const collector = collectorSaleFor(toSym);
+  const exactOut = !!_exactOut && !!collector; // pool-only coins stay exact-in
+  const amountSpec = safeParseUnits(fromAmountStr, exactOut ? 18 : fromData.decimals);
 
   return await quoteRPC.call(async (rpc) => {
+    const callOpts = { blockTag: "latest" };
     const baseQuoter = getQuoterBaseContract(rpc);
-    const quoteResult = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, amountIn, { blockTag: "latest" });
-    const amountOut = quoteResult.amountOut;
-    const slipOut = amountOut * (10000n - BigInt(slippageBps)) / 10000n;
+    const quoter = getQuoterContract(rpc);
+    const lens = collector ? new ethers.Contract(COLLECTOL_LENS, COLLECTOL_LENS_IFACE, rpc) : null;
+
+    // Two legs compound drift, so the per-leg allowance widens rather than
+    // splitting one budget across both - same rule as getZammCoinBuyQuote.
+    const splitSlip = BigInt(Math.max(slippageBps, Math.min(Math.max(slippageBps * 3, 150), 500)));
+    const legSlip = ethIn ? BigInt(slippageBps) : splitSlip;
+
+    let plan = null, amountOut, amountIn, ethBudget, firstLegCalls = null, firstLegSource = null, leg1 = null;
+
+    if (exactOut) {
+      // Work backwards: price the shares first, then buy exactly that much ETH.
+      const cap = await lens.maxSaleEth(collector.sale, collector.saleRate, callOpts).catch(() => 0n);
+      plan = await lens.planExactOut(
+        toData.address, collector.feeOrHook, amountSpec, collector.saleRate, cap, legSlip, callOpts
+      );
+      // snwap's balance-sweep path forwards `bal - 1`, keeping a wei back, so a
+      // WETH-funded route must be wrapped one wei above what the plan spends or
+      // the forwarder comes up exactly that much short.
+      ethBudget = ethIn ? plan.totalIn : plan.totalIn + 1n;
+      amountOut = plan.totalOut;
+      if (ethIn) {
+        amountIn = ethBudget;
+      } else {
+        leg1 = await _buildCollectorLeg1(rpc, fromData, 0n, true, ethBudget, splitSlip, deadline, callOpts);
+        if (!leg1) throw new Error("no route to ETH");
+        amountIn = leg1.spend;
+        firstLegCalls = leg1.calls;
+        firstLegSource = leg1.source;
+      }
+    } else {
+      amountIn = amountSpec;
+      if (ethIn) {
+        ethBudget = amountSpec;
+      } else {
+        // Plan on leg 1's guaranteed floor, never its estimate: the forwarder
+        // spends whatever actually arrives, and anything above the floor comes
+        // back as change rather than silently buying a bigger position.
+        leg1 = await _buildCollectorLeg1(rpc, fromData, amountSpec, false, 0n, splitSlip, deadline, callOpts);
+        if (!leg1) throw new Error("no route to ETH");
+        ethBudget = leg1.ethFloor;
+        firstLegCalls = leg1.calls;
+        firstLegSource = leg1.source;
+      }
+      if (ethBudget === 0n) throw new Error("no ETH from first leg");
+      if (collector) {
+        const cap = await lens.maxSaleEth(collector.sale, collector.saleRate, callOpts).catch(() => 0n);
+        // Same wei: on a WETH-funded route the forwarder receives one less than
+        // was wrapped, so the plan is solved for what actually arrives.
+        plan = await lens.planExactIn(
+          toData.address, collector.feeOrHook, ethIn ? ethBudget : ethBudget - 1n,
+          collector.saleRate, cap, legSlip, callOpts
+        );
+        amountOut = plan.totalOut;
+      }
+    }
 
     const calls = [];
-    // swapVZ: ETH → coin (zeroForOne=true, ids both 0 for ERC20)
-    calls.push(ROUTER_IFACE.encodeFunctionData('swapVZ', [
-      ZROUTER_ADDRESS, false, fee,
-      ZERO_ADDRESS, toData.address, 0, 0,
-      0, slipOut, deadline
-    ]));
-    // Sweep coin tokens to receiver
-    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [toData.address, 0, 0, receiver]));
-    // Safety sweep: remaining ETH back
-    calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO_ADDRESS, 0, 0, receiver]));
+    if (firstLegCalls) for (const c of firstLegCalls) calls.push(c);
 
-    const multicall = ROUTER_IFACE.encodeFunctionData('multicall', [calls]);
+    let sourceLabel;
+    if (collector) {
+      const both = plan.ethToSale > 0n && plan.poolAmount > 0n;
+      sourceLabel = both ? "sale+zAMM" : plan.poolAmount > 0n ? "zAMM" : "sale";
+      const buyData = COLLECTOL_IFACE.encodeFunctionData("buy", [
+        plan.ethToSale, plan.poolAmount, plan.poolLimit, plan.poolExactOut,
+        plan.minTotalOut, receiver, receiver, deadline
+      ]);
+      if (ethIn) {
+        calls.push(ROUTER_IFACE.encodeFunctionData("snwap", [
+          ZERO_ADDRESS, ethBudget, receiver, toData.address, plan.minTotalOut, COLLECTOL, buyData
+        ]));
+      } else {
+        // The on-chain builder yields ETH, so wrap it for snwap's ERC-20 funding
+        // path; the external adapters already delivered WETH to the router.
+        if (leg1?.needsWrap !== false) calls.push(ROUTER_IFACE.encodeFunctionData("wrap", [ethBudget]));
+        calls.push(ROUTER_IFACE.encodeFunctionData("snwap", [
+          WETH_ADDRESS, 0, receiver, toData.address, plan.minTotalOut, COLLECTOL, buyData
+        ]));
+      }
+    } else {
+      const q = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, ethBudget, callOpts);
+      amountOut = q.amountOut;
+      sourceLabel = "zAMM";
+      calls.push(ROUTER_IFACE.encodeFunctionData("swapVZ", [
+        ZROUTER_ADDRESS, false, fee,
+        ZERO_ADDRESS, toData.address, 0, 0,
+        ethIn ? 0 : ethBudget, amountOut * (10000n - legSlip) / 10000n, deadline
+      ]));
+      calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [toData.address, 0, 0, receiver]));
+    }
 
-    // Spot rate for display
+    // Sweep everything that could be left behind back to the user: WETH the
+    // forwarder did not need, ETH from an exact-out refund or leg-1 overshoot,
+    // and unspent input on a two-leg route.
+    if (!ethIn) calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [WETH_ADDRESS, 0, 0, receiver]));
+    calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [ZERO_ADDRESS, 0, 0, receiver]));
+    if (!ethIn) calls.push(ROUTER_IFACE.encodeFunctionData("sweep", [fromData.address, 0, 0, receiver]));
+
+    const multicall = ROUTER_IFACE.encodeFunctionData("multicall", [calls]);
+    const msgValue = ethIn ? ethBudget : 0n;
+
+    // Spot rate for price impact. Single-leg only: a two-leg spot would have to
+    // thread through the first-leg AMM too.
     const refAmount = 10n ** 16n; // 0.01 ETH
     let spotOut = 0n;
-    try {
-      const spot = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, { blockTag: "latest" });
-      spotOut = spot.amountOut;
-    } catch {}
+    if (ethIn) {
+      try {
+        const spot = await baseQuoter.quoteZAMM(false, fee, ZERO_ADDRESS, toData.address, 0, 0, refAmount, callOpts);
+        spotOut = spot.amountOut;
+      } catch {}
+    }
 
-    const _simP = _simulateRoute(rpc, multicall, amountIn, calls, false);
-
+    const _simP = _simulateRoute(rpc, multicall, msgValue, calls, exactOut);
+    const source = ethIn ? sourceLabel : `${firstLegSource} + ${sourceLabel}`;
     const result = {
       expectedOutput: amountOut,
-      multicall, calls, msgValue: amountIn,
-      isTwoHop: false, isSplit: false, splitLegs: null,
-      sourceA: "zAMM", sourceB: null,
-      allQuotes: [{ source: "zAMM", sourceId: 2, feeBps: fee, amountIn, amountOut }],
+      expectedInput: amountIn,
+      multicall, calls, msgValue,
+      isTwoHop: !ethIn, isSplit: false, splitLegs: null,
+      sourceA: ethIn ? sourceLabel : firstLegSource,
+      sourceB: ethIn ? null : sourceLabel,
+      allQuotes: [{ source, sourceId: 2, feeBps: fee, amountIn, amountOut }],
       spotRate: spotOut > 0n ? spotOut : null,
-      spotRefAmount: refAmount,
+      spotRefAmount: ethIn ? refAmount : null,
     };
 
     result._simP = _simP.then(sim => {
@@ -6320,8 +6610,13 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ? Promise.resolve({ ok: false, reason: 'no_approval', expected: true })
       : _simulateRoute(rpc, result.multicall, result.msgValue, result.calls, result.isSplit);
 
-    // External APIs: resolve all in parallel
-    const [oxPrice, psPrice, ksPrice, cowPrice, inchPrice, odosPrice, okxPrice, bitgetPrice, bebopPrice, ensoPrice, ooPrice] = await Promise.all([ox0xPriceP, psPriceP, ksPriceP, cowPriceP, inchPriceP, odosPriceP, okxPriceP, bitgetPriceP, bebopPriceP, ensoPriceP, ooPriceP]);
+    // External APIs: resolve all in parallel, but under a deadline. They have
+    // already been in flight for the whole Multicall3 round trip by now, and
+    // bestResult above is guaranteed fulfilled, so a straggler can only ever
+    // improve on a quote the user already has — never gate it. Whatever lands
+    // late still populates _extPriceCache for the next refresh.
+    const [oxPrice, psPrice, ksPrice, cowPrice, inchPrice, odosPrice, okxPrice, bitgetPrice, bebopPrice, ensoPrice, ooPrice] =
+      await settleWithin(EXT_PRICE_DEADLINE_MS, [ox0xPriceP, psPriceP, ksPriceP, cowPriceP, inchPriceP, odosPriceP, okxPriceP, bitgetPriceP, bebopPriceP, ensoPriceP, ooPriceP]);
 
     // Helper to reset all external aggregator winner flags
     // _resetExtFlags is defined globally alongside _AGG_DEFS
@@ -7214,24 +7509,54 @@ async function withRetry(task, { tries = 2, base = 80 } = {}) {
   throw lastErr;
 }
 
-let _quoteLock = Promise.resolve();
-let _pendingQuoteArgs = null;
-let _pendingQuoteSeq = 0;
+// Marks a request that was replaced by a newer one before it ever ran. Callers
+// treat it as "not my problem" rather than as a failed quote.
+const QUOTE_SUPERSEDED = Symbol('quote superseded');
 
-let _quoteResult = null;
-function requestQuote(amtStr, fromSnap, toSnap, exactOut = false) {
-  const mySeq = ++_pendingQuoteSeq;
-  _pendingQuoteArgs = { amtStr, fromSnap, toSnap, exactOut, seq: mySeq };
-  _quoteLock = _quoteLock.catch(() => {}).then(async () => {
-    const args = _pendingQuoteArgs;
-    if (!args || args.seq !== mySeq) return _quoteResult;
-    _pendingQuoteArgs = null;
-    _quoteResult = await withRetry(() => args.exactOut
-      ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
-      : getQuote(args.amtStr, args.fromSnap, args.toSnap));
-    return _quoteResult;
+// Quote admission control.
+//
+// This used to be a strict lock: every request chained onto the previous one, so
+// the quote for the keystroke you just typed sat behind a quote whose result was
+// already destined for the bin — up to a couple of seconds of dead wait on every
+// edit after a pause. The lock was never about correctness; it exists to stop a
+// burst of edits stampeding the public RPCs.
+//
+// So bound the concurrency instead of serialising it. One quote runs, one newer
+// quote may start alongside it, and anything newer than that takes the single
+// parked slot, evicting whatever was parked there. Two in flight is enough to
+// hide the latency of the one being abandoned without multiplying RPC load.
+//
+// Running two at once is safe: everything a quote writes is keyed by pair and
+// amount (_spotCache, _extPriceCache, the allowance cache), and every UI effect
+// downstream is already gated on `seq === _quoteSeq` — the simulation and
+// aggregator follow-ups were written to be discarded when overtaken.
+const QUOTE_SLOTS = 2;
+let _pendingQuoteSeq = 0;
+let _quoteActive = 0;
+let _parkedQuote = null; // { args, resolve, reject } waiting for a slot
+
+function _runQuote(args) {
+  _quoteActive++;
+  return withRetry(() => args.exactOut
+    ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
+    : getQuote(args.amtStr, args.fromSnap, args.toSnap),
+  ).finally(() => {
+    _quoteActive--;
+    const parked = _parkedQuote;
+    if (parked) {
+      _parkedQuote = null;
+      _runQuote(parked.args).then(parked.resolve, parked.reject);
+    }
   });
-  return _quoteLock;
+}
+
+function requestQuote(amtStr, fromSnap, toSnap, exactOut = false) {
+  const args = { amtStr, fromSnap, toSnap, exactOut, seq: ++_pendingQuoteSeq };
+  if (_quoteActive < QUOTE_SLOTS) return _runQuote(args);
+  // Both slots busy. Whatever was parked is now two generations stale — its
+  // result would fail the caller's staleness check anyway, so drop it.
+  if (_parkedQuote) _parkedQuote.resolve(QUOTE_SUPERSEDED);
+  return new Promise((resolve, reject) => { _parkedQuote = { args, resolve, reject }; });
 }
 
 // ---- Aggregator descriptor table (single source of truth) ----
@@ -8593,10 +8918,14 @@ async function executeSwap() {
     }, 1500);
     }
   } catch (e) {
-    console.error("Swap error:", e);
     let msg = "Swap failed";
     const s = String(e?.data || e?.message || e?.reason || "");
-    if (e.code === 4001 || /user rejected|denied/i.test(s)) msg = "Transaction cancelled";
+    const rejected = e.code === 4001 || e.code === "ACTION_REJECTED" || /user rejected|denied/i.test(s);
+    // Declining the wallet prompt is a normal outcome, not a fault — logging it
+    // as an error buried real failures under a stack trace on every cancel.
+    if (rejected) console.info("Swap cancelled by user");
+    else console.error("Swap error:", e);
+    if (rejected) msg = "Transaction cancelled";
     else if (/insufficient funds/i.test(s) || /INSUFFICIENT_FUNDS/i.test(s)) msg = "Insufficient balance";
     else if (/7939f424/.test(s)) msg = `Insufficient ${fromToken} balance or approval`;
     else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
@@ -9413,9 +9742,14 @@ function switchTab(tab) {
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
   $('sendTab').style.display = tab === 'send' ? '' : 'none';
+  // The quote refresh timer used to keep ticking after the user left the swap
+  // tab, re-running the whole aggregator fan-out every 15s behind the privacy
+  // and send panes. Park it on the way out and re-quote on the way back in.
+  if (tab !== 'swap') stopQuoteRefresh();
   // Update hash for deeplink persistence (strip unrelated query params)
   if (tab === 'swap') {
     document.title = 'SWAP';
+    if (!_refreshTimer && $('fromAmount')?.value) handleAmountChange();
     if (window.location.hash === '#privacy' || window.location.hash === '#coin' || window.location.hash === '#send') history.replaceState(null, '', window.location.pathname + window.location.search);
     syncSwapURL();
   } else if (tab === 'privacy') {
