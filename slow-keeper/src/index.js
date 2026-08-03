@@ -1,15 +1,10 @@
-import {
-  createPublicClient,
-  createWalletClient,
-  encodeFunctionData,
-  formatEther,
-  http,
-} from "viem";
+import { createWalletClient, encodeFunctionData, formatEther, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 
 import { config } from "./config.js";
 import { GATE_ABI, SLOW_ABI } from "./abi.js";
+import { LogPool, makeStateClient } from "./rpc.js";
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -17,7 +12,12 @@ const account = privateKeyToAccount(
   config.privateKey.startsWith("0x") ? config.privateKey : `0x${config.privateKey}`,
 );
 
-const pub = createPublicClient({ chain: mainnet, transport: http(config.rpcUrl) });
+// State reads rotate across a pool automatically. Claims deliberately do NOT
+// fall back: they go to Flashbots Protect only. A public-mempool fallback would
+// silently change the economics -- lost races would land as paid reverts
+// instead of being dropped -- so if Protect is unreachable the bot waits.
+const pub = makeStateClient();
+const logPool = new LogPool();
 const sender = createWalletClient({
   account,
   chain: mainnet,
@@ -40,29 +40,30 @@ const REHYDRATE_EVERY = 25;
 // -- discovery ---------------------------------------------------------------
 
 async function scanLogs(toBlock) {
-  let from = lastScanned + 1n;
+  if (lastScanned >= toBlock) return [];
   const found = [];
-  while (from <= toBlock) {
-    const to = from + config.logChunk - 1n > toBlock ? toBlock : from + config.logChunk - 1n;
-    const logs = await pub.getContractEvents({
-      address: config.gate,
-      abi: GATE_ABI,
-      eventName: "TipPosted",
-      fromBlock: from,
-      toBlock: to,
-    });
-    for (const l of logs) {
-      const { transferId, amount, to: recipient } = l.args;
-      // A transferId is unique per deposit, so a repeat log cannot occur; guard
-      // anyway so a re-org replay never doubles an entry.
-      if (!tips.has(transferId)) {
-        found.push(transferId);
-        tips.set(transferId, { tip: amount, to: recipient, readyAt: null });
+
+  // Tips are recorded and `lastScanned` advances per window, so a source dying
+  // partway through a long backfill costs only the unscanned remainder -- the
+  // next attempt resumes there instead of restarting.
+  await logPool.scan(
+    { address: config.gate, abi: GATE_ABI, eventName: "TipPosted" },
+    lastScanned + 1n,
+    toBlock,
+    (logs, covered) => {
+      for (const l of logs) {
+        const { transferId, amount, to: recipient } = l.args;
+        // A transferId is unique per deposit, so a repeat log cannot occur;
+        // guard anyway so a re-org replay never doubles an entry.
+        if (!tips.has(transferId)) {
+          found.push(transferId);
+          tips.set(transferId, { tip: amount, to: recipient, readyAt: null });
+        }
       }
-    }
-    lastScanned = to;
-    from = to + 1n;
-  }
+      lastScanned = covered;
+    },
+  );
+
   return found;
 }
 

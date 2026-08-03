@@ -11,10 +11,25 @@ function num(name, fallback) {
   return v === undefined || v === "" ? fallback : Number(v);
 }
 
+/** First non-empty of `names`, split on commas. */
+function list(...names) {
+  for (const n of names) {
+    const v = process.env[n];
+    if (v) return v.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 export const config = {
-  // Log-capable mainnet endpoint. Public RPCs that cap eth_getLogs at a 10-block
-  // range cannot backfill -- use Alchemy/QuickNode/drpc.
+  // Primary endpoint, tried first for both state reads and log discovery.
+  // Must serve wide eth_getLogs ranges to carry the boot backfill alone.
   rpcUrl: req("RPC_URL"),
+
+  // Optional extra endpoints, comma-separated, inserted ahead of the built-in
+  // public fallbacks. RPC_URLS applies to both roles; the role-specific vars
+  // override when an endpoint is only good for one of them.
+  extraStateUrls: list("RPC_URLS_STATE", "RPC_URLS"),
+  extraLogUrls: list("RPC_URLS_LOGS", "RPC_URLS"),
 
   // Send-only endpoint. Flashbots Protect keeps claims out of the public mempool
   // (no frontrunning) and drops reverting txs without charging gas, which is what

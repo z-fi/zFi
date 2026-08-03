@@ -42,11 +42,45 @@ per-id simulation so one stale entry can't block the rest.
 **Profit gate.** Claims only when `tip >= gas * (baseFee + priorityFee) * MARGIN_MULTIPLE`.
 The margin absorbs basefee movement between simulation and inclusion.
 
+**RPC failover, pooled by role.** Endpoints are not interchangeable, so they are not
+round-robined as one list. Probed 2026-08-03 against this exact workload:
+
+| endpoint | `getLogs` range | state reads |
+| --- | --- | --- |
+| `mainnet.gateway.tenderly.co` | unlimited | ok |
+| `rpc.mevblocker.io` | unlimited | ok |
+| `eth.drpc.org` | 10,000 | ok (throttles `estimateGas`) |
+| `eth-pokt.nodies.app`, `1rpc.io/eth` | 50 | ok |
+| `eth.blockrazor.xyz` | 25 | ok |
+| `eth-mainnet.public.blastapi.io` | 10 | ok |
+| `ethereum-rpc.publicnode.com` | archive-gated | ok |
+| `eth.rpc.blxrbdn.com` | unavailable | ok |
+
+Only the top two can serve a cold backfill. The rest are still useful: steady-state
+polling advances ~1 block per tick, which fits inside even a 10-block cap, and every one
+of them serves `eth_call`/Multicall3.
+
+State reads go through viem's `fallback` transport in priority order. Log discovery uses
+its own pool that *learns* each endpoint's range limit from the error text and shrinks its
+window to fit, so a capped endpoint is throttled rather than discarded. Rate-limit
+messages are deliberately distinguished from range-limit messages — conflating them
+permanently shrinks a healthy endpoint that was briefly throttled (`test/classify.test.mjs`
+pins this against the real strings each provider returns).
+
+Backfill progress is consumed per window, so a source dying mid-scan costs only the
+unscanned remainder rather than the whole pass.
+
+**Sends never fall back.** Claims go to Flashbots Protect only. A public-mempool fallback
+would silently invert the economics — lost races would land as paid reverts instead of
+being dropped — so if Protect is unreachable the bot waits.
+
 ## Config
 
 | Var | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `RPC_URL` | yes | — | Must allow wide `eth_getLogs` ranges. Public endpoints that cap at 10 blocks **cannot backfill**. |
+| `RPC_URL` | yes | — | Primary, tried first. Must allow wide `eth_getLogs` ranges — endpoints capped at 10 blocks **cannot backfill**. |
+| `RPC_URLS` | no | — | Comma-separated extras, inserted ahead of the built-in public fallbacks. |
+| `RPC_URLS_STATE` / `RPC_URLS_LOGS` | no | — | Role-specific overrides for an endpoint good at only one job. |
 | `PRIVATE_KEY` | yes | — | Keeper EOA. Gas float only. |
 | `SEND_RPC_URL` | no | `https://rpc.flashbots.net/fast` | Send-only endpoint. |
 | `MARGIN_MULTIPLE` | no | `1.25` | Required tip-to-cost ratio. |
