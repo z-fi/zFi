@@ -13,11 +13,11 @@ import {PostDeployListings} from "./PostDeployListings.sol";
 contract TokenListMinedDeployTest is Test, PostDeployListings {
     address constant SUMMONER = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant OWNER = 0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2;
-    address constant RENDERER = 0x00000087fee5Af18afE38a885ecDb939b1F92598;
-    address constant LIST = 0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1;
+    address constant RENDERER = 0x00000055575b57B427a9d279f569C42EFB9524B9;
+    address constant LIST = 0x00000071Aa8F9475C8f96F546E2d8c1d1ab522b4;
 
-    bytes32 constant RENDERER_SALT = 0x0000000000000000000000000000000000000000000000000000000000dec008;
-    bytes32 constant LIST_SALT = 0x0000000000000000000000000000000000000000000000000000000001268730;
+    bytes32 constant RENDERER_SALT = 0x00000000000000000000000000000000000000000000000000000000010dcbc0;
+    bytes32 constant LIST_SALT = 0x0000000000000000000000000000000000000000000000000000000000c4d0da;
 
     /// @dev The recorded initcode is a frozen artifact of a specific build, and the
     ///      salt was mined FOR that build. Editing the source invalidates both, so

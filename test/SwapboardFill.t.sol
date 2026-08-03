@@ -83,7 +83,8 @@ contract SwapboardFillTest is Test {
         vm.startPrank(maker);
         other.mint(maker, 50e18);
         other.approve(address(board), type(uint256).max);
-        uint256 id = board.createOrder(address(other), 50e18, address(weth), 5 ether, false, 0, false, false, address(0));
+        uint256 id =
+            board.createOrder(address(other), 50e18, address(weth), 5 ether, false, 0, false, false, address(0));
         vm.stopPrank();
 
         vm.deal(taker, 100 ether);

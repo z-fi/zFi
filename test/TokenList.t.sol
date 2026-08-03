@@ -438,9 +438,19 @@ contract TokenListTest is Test, PostDeployListings {
 
         string memory svg =
             string(Base64.decode(_imageOf(list.tokenURI(id)).slice(bytes("data:image/svg+xml;base64,").length)));
-        // Rendered as several bounded lines rather than one overflowing run.
-        assertTrue(svg.contains("y='300'"));
-        assertTrue(svg.contains("y='320'"));
+        // Rendered as several bounded lines rather than one overflowing run. The
+        // band's exact y moves with the layout — the block is centred on its line
+        // count — so pin the property, not the coordinates: the description is drawn
+        // as multiple monospace runs, each within the glyph budget.
+        uint256 runs;
+        uint256 at;
+        while (true) {
+            at = LibString.indexOf(svg, "ui-monospace", at);
+            if (at == LibString.NOT_FOUND) break;
+            ++runs;
+            ++at;
+        }
+        assertGt(runs, 1, "a long description wraps onto more than one line");
         for (uint256 i; i < 3; ++i) {
             assertTrue(bytes(_lineAt(svg, i)).length <= 84);
         }

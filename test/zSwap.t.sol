@@ -10,13 +10,11 @@ contract zSwapDeployTest is Test {
     bytes32 constant EXPECTED_HASH = 0x0cebca5a3920a7aac7aca78ae8a5de55602747d6da2affb07770fb79d2f7e832;
     uint256 constant EXPECTED_LEN = 49424;
 
-
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
     /// PUSH1 0x0a, PUSH0, CODECOPY, PUSH0, RETURN | payload).
     function _writeChunk(bytes memory data) internal returns (address p) {
-        bytes memory initcode =
-            bytes.concat(hex"61", bytes2(uint16(data.length)), hex"80600a5f395ff3", data);
+        bytes memory initcode = bytes.concat(hex"61", bytes2(uint16(data.length)), hex"80600a5f395ff3", data);
         assembly ("memory-safe") {
             p := create(0, add(initcode, 0x20), mload(initcode))
         }
@@ -33,7 +31,9 @@ contract zSwapDeployTest is Test {
             uint256 start = k * per;
             uint256 end = start + per > html.length ? html.length : start + per;
             bytes memory part = new bytes(end - start);
-            for (uint256 i; i < end - start; ++i) part[i] = html[start + i];
+            for (uint256 i; i < end - start; ++i) {
+                part[i] = html[start + i];
+            }
             p[k] = _writeChunk(part);
         }
         return new zSwap(p[0], p[1], p[2]);

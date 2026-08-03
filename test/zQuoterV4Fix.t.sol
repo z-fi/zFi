@@ -5,10 +5,7 @@ import "forge-std/Test.sol";
 import {zQuoterV4} from "../src/zQuoterV4.sol";
 
 interface IBaseQuoter {
-    function quoteV4(bool, address, address, uint24, int24, address, uint256)
-        external
-        view
-        returns (uint256, uint256);
+    function quoteV4(bool, address, address, uint24, int24, address, uint256) external view returns (uint256, uint256);
 }
 
 interface IV4Quoter {
@@ -58,7 +55,9 @@ contract zQuoterV4FixTest is Test {
         (address c0, address c1) = a < b ? (a, b) : (b, a);
         try CANON.quoteExactInputSingle(
             IV4Quoter.QuoteExactSingleParams(IV4Quoter.PoolKey(c0, c1, fee, sp, address(0)), a < b, amt, "")
-        ) returns (uint256 out, uint256) {
+        ) returns (
+            uint256 out, uint256
+        ) {
             return out;
         } catch {
             return 0;

@@ -310,3 +310,39 @@ build modes and skips only when the code genuinely changed. Verified: from a cle
 - `deploy/TokenList.md` corrected: the compiler row said 200 runs where the build
   pins 20, and the headroom claim was stale by 4x.
 - 108 tests pass from a clean build, nothing skipped.
+
+# Second visual pass
+
+Rendered every card to PNG and looked at them, which surfaced four things the
+geometry assertions could not.
+
+- **The logo well read as a coloured box.** At 0.12 fill and 0.5 stroke the tint is
+  the owner's theme, so how loud the square got varied per listing — invisible
+  behind ETH's blue, a solid orange square behind WBTC, red behind rETH — and all
+  three of those logos are circular, so the corners showed. Now 0.07 / 0.22 with
+  rounded corners: a recess the artwork sits in rather than a swatch it sits on.
+
+- **Provenance was themed, and a signal that means the same thing everywhere has to
+  look the same everywhere.** It rendered orange on one listing, green on the next
+  and red on rETH, where a red badge beside a red weight reads as a warning about
+  the token rather than a statement about where its text came from. Provenance, the
+  chip row and the sort weight are all neutral now. The theme colour survives only
+  on the symbol and the logo well — the listing's identity.
+
+- **Provenance was also badly placed**, wedged between the 25px title and the header
+  rule with four pixels of clearance, a whole band away from the symbol, name and
+  decimals it qualifies. It now leads the chip row directly beneath them, filled
+  rather than outlined so it still leads. Two chip systems doing the same visual job
+  in different places was one too many. Moving it exposed a collision the reserved
+  layout had inherited — its description started at y=250, inside the chip rect —
+  which is the kind of thing only a render shows.
+
+- **The bottom third was empty.** The address/description cluster was top-anchored in
+  a band sized for a full three-line description, so the common case left a
+  fifty-five pixel slab of dead black above the footer rule. The block is centred on
+  its line count now. That means the renderer positions it from a count computed
+  before the lines are drawn, so `_descLines` and `_textBlock` share one `_breakAt`
+  and a test asserts the count they actually produce at every length — if they ever
+  drift the card mis-centres silently.
+
+All three salts re-mined again. 109 tests pass from a clean build, nothing skipped.

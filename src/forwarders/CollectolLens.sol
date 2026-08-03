@@ -262,8 +262,5 @@ interface IERC20 {
 }
 
 interface IZAMM {
-    function pools(uint256 poolId)
-        external
-        view
-        returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256);
+    function pools(uint256 poolId) external view returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256);
 }

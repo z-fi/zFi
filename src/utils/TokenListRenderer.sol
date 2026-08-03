@@ -201,10 +201,9 @@ contract TokenListRenderer {
             "<path d='M18 88h684M18 356h684'/></g>",
             _well(theme),
             _logo(t.logo),
-            _provenanceChip(t.synced, theme),
-            _header(t.rank, chain, theme),
+            _header(t.rank, chain),
             _identity(t, sym, theme),
-            _chips(t.frozen, extras, theme),
+            _chips(t.synced, t.frozen, extras),
             _account(t, desc),
             _footer(_safe(t.url), _safe(t.audit)),
             "</g>",
@@ -263,25 +262,34 @@ contract TokenListRenderer {
     /// @dev The tinted well the logo sits in, drawn whether or not there is a logo:
     ///      an empty well reads as a listing without art, a missing one as a broken
     ///      layout.
+    ///
+    ///      Deliberately faint. At the original 0.12 fill and 0.5 stroke the well
+    ///      read as a coloured BOX behind the logo rather than as a recess it sits
+    ///      in — and because the tint is the owner's theme, how loud that box got
+    ///      varied per listing: barely visible behind ETH's blue, a solid orange
+    ///      square behind WBTC and a red one behind rETH, whose logos are circular
+    ///      and left the corners showing. Rounding the corners and dropping both
+    ///      opacities lets the artwork sit on the card instead of on a swatch.
     function _well(string memory theme) internal pure returns (string memory) {
         return string.concat(
-            "<rect x='32' y='110' width='112' height='112' fill='",
+            "<rect x='32' y='110' width='112' height='112' rx='8' fill='",
             theme,
-            "' opacity='0.12'/><rect x='32' y='110' width='112' height='112' fill='none' stroke='",
+            "' opacity='0.07'/><rect x='32' y='110' width='112' height='112' rx='8' fill='none' stroke='",
             theme,
-            "' stroke-width='1' opacity='0.5'/>"
+            "' stroke-width='1' opacity='0.22'/>"
         );
     }
 
     /// @dev Title, sort weight and namespace. Opens the `<g>` every text band below
     ///      inherits its fill and face from.
-    function _header(uint32 rank, string memory chain, string memory theme) internal pure returns (string memory) {
+    function _header(uint32 rank, string memory chain) internal pure returns (string memory) {
         return string.concat(
             "<g fill='#fff' font-family='Helvetica,Arial,sans-serif'>"
             "<text x='32' y='55' font-size='25' font-weight='700'>TOKEN LISTING</text>"
-            "<text x='688' y='55' text-anchor='end' font-size='12' fill='",
-            theme,
-            "'>WEIGHT ",
+            // Neutral for the same reason as the provenance pill: a sort weight is
+            // metadata, not identity, and in the theme colour it turned into a red
+            // number in the corner of the rETH card.
+            "<text x='688' y='55' text-anchor='end' font-size='12' opacity='0.75'>WEIGHT ",
             LibString.toString(rank),
             "</text><text x='688' y='77' text-anchor='end' font-size='12' opacity='0.6'>",
             chain,
@@ -328,46 +336,54 @@ contract TokenListRenderer {
     ///      onchain facts — and it was the one listing whose description could not be
     ///      read.
     function _account(TokenList.Token memory t, string memory desc) internal pure returns (string memory) {
-        if (!t.deployed) return _textBlock(desc, 250);
+        // Every card now carries a chip row at y=226..244, so both layouts below have
+        // to clear it. The reserved variant put its first description line at y=250,
+        // whose cap-height ran straight back up into the chip rect the moment
+        // provenance moved into that row.
+        if (!t.deployed) return _textBlock(desc, 262);
+        // CENTRED, NOT TOP-ANCHORED. The band from the chip row to the footer rule is
+        // sized for a full-length three-line description; pinning the block to the top
+        // of it meant every listing with a one-line description — which is most of
+        // them — left a fifty-five pixel slab of empty black above the rule and read
+        // as top-heavy. Centring spends the slack on both sides instead, so a short
+        // card looks composed rather than unfinished, and a full one is unchanged.
+        uint256 lines = _descLines(desc);
+        uint256 height = lines == 0 ? 20 : 42 + (lines - 1) * 20;
+        uint256 top = 252 + (100 - height) / 2;
         return string.concat(
-            "<text x='32' y='258' font-size='11' opacity='0.6'>ADDRESS</text>" "<text x='32' y='278' font-size='15'>",
+            "<text x='32' y='",
+            LibString.toString(top),
+            "' font-size='11' opacity='0.6'>ADDRESS</text><text x='32' y='",
+            LibString.toString(top + 20),
+            "' font-size='15'>",
             _account(t),
             "</text>",
-            _textBlock(desc, 300)
+            lines == 0 ? "" : _textBlock(desc, top + 42)
         );
     }
 
-    /// @dev The provenance line was 12px grey text under the title, which is the
-    ///      weight given to a footnote. It is the most consequential fact on the
-    ///      card — whether the name, symbol and decimals were read from the token or
-    ///      typed by a curator — so it gets a bordered pill in the theme color.
-    function _provenanceChip(bool synced, string memory theme) internal pure returns (string memory) {
-        string memory text = synced ? "METADATA READ ONCHAIN" : "OWNER ATTESTED";
-        string memory w = LibString.toString(14 + bytes(text).length * 7);
-        return string.concat(
-            "<g><rect x='32' y='64' height='20' rx='4' fill-opacity='0.16' stroke-opacity='0.55' width='",
-            w,
-            "' fill='",
-            theme,
-            "' stroke='",
-            theme,
-            "'/><text x='39' y='78' font-family='Helvetica,Arial,sans-serif' font-size='11' fill='",
-            theme,
-            "'>",
-            text,
-            "</text></g>"
-        );
-    }
-
-    /// @dev Curation state and extension fields as a chip row between the identity
-    ///      band and the account. SEALED is drawn only when true — an EDITABLE chip
-    ///      on every ordinary listing is noise, and the absence of the mark is
-    ///      already the ordinary case.
-    function _chips(bool frozen, Extra[] memory extras, string memory theme) internal pure returns (string memory out) {
+    /// @dev One row of metadata chips under the identity band: provenance first,
+    ///      then curation state, then extension fields.
+    ///
+    ///      Provenance used to be a pill at y=64, wedged between the 25px title and
+    ///      the header rule at y=88 with four pixels of clearance, and floating a
+    ///      whole band away from the fields it describes. It qualifies the symbol,
+    ///      the name and the decimals — so it belongs directly beneath them, and the
+    ///      card already had a chip row sitting there. Two chip systems doing the
+    ///      same visual job in different places is one too many.
+    ///
+    ///      It is filled rather than outlined so it still leads the row: of the
+    ///      things on this card it is the one a reader most needs to weigh. SEALED
+    ///      is drawn only when true — an EDITABLE chip on every ordinary listing is
+    ///      noise, and its absence is already the ordinary case.
+    function _chips(bool synced, bool frozen, Extra[] memory extras) internal pure returns (string memory out) {
         uint256 x = 32;
+        string memory provenance = synced ? "METADATA READ ONCHAIN" : "OWNER ATTESTED";
+        out = _chip(x, provenance, true);
+        x += 14 + bytes(provenance).length * 7 + 8;
         if (frozen) {
-            out = _chip(x, "SEALED", theme);
-            x += 14 + 6 * 7;
+            out = string.concat(out, _chip(x, "SEALED", false));
+            x += 14 + 6 * 7 + 8;
         }
         uint256 shown;
         for (uint256 i; i < extras.length && shown < CHIPS_MAX; ++i) {
@@ -379,24 +395,27 @@ contract TokenListRenderer {
             // Stop at the frame rather than drawing off the edge of the card. What
             // does not fit is still in `json` and in the card's attributes.
             if (x + w > 688) break;
-            out = string.concat(out, _chip(x, text, theme));
+            out = string.concat(out, _chip(x, text, false));
             x += w + 8;
             ++shown;
         }
     }
 
-    function _chip(uint256 x, string memory text, string memory theme) internal pure returns (string memory) {
-        string memory w = LibString.toString(14 + bytes(text).length * 7);
+    function _chip(uint256 x, string memory text, bool filled) internal pure returns (string memory) {
         return string.concat(
             "<g><rect x='",
             LibString.toString(x),
             "' y='226' width='",
-            w,
-            "' height='18' rx='3' fill='none' stroke='",
-            theme,
-            "' opacity='0.45'/><text x='",
+            LibString.toString(14 + bytes(text).length * 7),
+            "' height='18' rx='3' fill='#fff' fill-opacity='",
+            filled ? "0.09" : "0",
+            "' stroke='#fff' stroke-opacity='",
+            filled ? "0.4" : "0.28",
+            "'/><text x='",
             LibString.toString(x + 7),
-            "' y='239' font-family='Helvetica,Arial,sans-serif' font-size='11' opacity='0.75'>",
+            "' y='239' font-family='Helvetica,Arial,sans-serif' font-size='11' opacity='",
+            filled ? "0.9" : "0.72",
+            "'>",
             text,
             "</text></g>"
         );
@@ -443,22 +462,40 @@ contract TokenListRenderer {
     ///      description may be up to DESC_MAX, so laying it out as one run would send
     ///      it straight off the edge of every card that used the full length. Break it
     ///      into separate lines instead, on spaces where possible so words stay whole.
-    function _textBlock(string memory text, uint256 y) internal pure returns (string memory out) {
+    /// @dev How many lines `_textBlock` will draw. Both walk the text with the same
+    ///      `_breakAt`, so the count cannot drift from the layout — which matters,
+    ///      because the caller positions the whole block from this number.
+    function _descLines(string memory text) internal pure returns (uint256 lines) {
+        uint256 len = bytes(text).length;
+        uint256 start;
+        while (lines < DESC_LINES && start < len) {
+            (, start) = _breakAt(text, start, len);
+            ++lines;
+        }
+    }
+
+    /// @dev One line's end offset, and where the next line starts. Broken at the last
+    ///      space in the window so a word is not split; the space itself is consumed.
+    function _breakAt(string memory text, uint256 start, uint256 len)
+        internal
+        pure
+        returns (uint256 end, uint256 next)
+    {
         bytes memory raw = bytes(text);
-        uint256 len = raw.length;
+        end = start + LINE_CHARS;
+        if (end >= len) return (len, len);
+        uint256 brk = end;
+        while (brk > start && raw[brk] != " ") --brk;
+        if (brk > start) end = brk;
+        next = raw[end] == " " ? end + 1 : end;
+    }
+
+    function _textBlock(string memory text, uint256 y) internal pure returns (string memory out) {
+        uint256 len = bytes(text).length;
         uint256 start;
         for (uint256 line; line < DESC_LINES && start < len; ++line) {
-            uint256 end = start + LINE_CHARS;
-            if (end >= len) {
-                end = len;
-            } else {
-                // Back up to the last space in the window so a word is not split.
-                uint256 brk = end;
-                while (brk > start && raw[brk] != " ") --brk;
-                if (brk > start) end = brk;
-            }
+            (uint256 end, uint256 next) = _breakAt(text, start, len);
             string memory lineText = LibString.slice(text, start, end);
-            uint256 next = end < len && raw[end] == " " ? end + 1 : end;
             // DESC_MAX is 256 and this band holds DESC_LINES * LINE_CHARS = 252, so a
             // full-length description loses its tail. Say so with an ellipsis rather
             // than stopping mid-word and letting the card read as the whole text.

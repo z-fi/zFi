@@ -396,11 +396,7 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
     /// all-or-nothing (NFT on either side, or partialFill off) must arrive
     /// exactly paid, or _fill would settle the full amount out of WETH the board
     /// is holding as escrow for OTHER orders.
-    function fillOrderWithEth(uint256 orderId, uint256 deadline, address recipient)
-        external
-        payable
-        nonReentrant
-    {
+    function fillOrderWithEth(uint256 orderId, uint256 deadline, address recipient) external payable nonReentrant {
         _checkDeadline(deadline);
         if (msg.value == 0) revert ZeroETH();
         Order storage order = orders[orderId];
@@ -473,8 +469,9 @@ contract Swapboard is ReentrancyGuardTransient, Multicallable {
             tokenA.safeTransfer(to, outA);
         }
 
-        if (full) emit OrderFilled(orderId, msg.sender, maker, outA, fillAmountB);
-        else {
+        if (full) {
+            emit OrderFilled(orderId, msg.sender, maker, outA, fillAmountB);
+        } else {
             emit OrderPartiallyFilled(orderId, msg.sender, maker, outA, fillAmountB, order.amountA, order.amountB);
         }
     }

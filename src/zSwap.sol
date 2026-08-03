@@ -186,8 +186,8 @@ contract zSwap {
 
     constructor(address data1, address data2, address data3) {
         if (
-            data1 == data2 || data1 == data3 || data2 == data3 || data1.code.length == 0
-                || data2.code.length == 0 || data3.code.length == 0
+            data1 == data2 || data1 == data3 || data2 == data3 || data1.code.length == 0 || data2.code.length == 0
+                || data3.code.length == 0
         ) revert InvalidData();
         DATA1 = data1;
         DATA2 = data2;

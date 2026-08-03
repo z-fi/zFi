@@ -159,8 +159,8 @@ contract Collectol {
         // pool leg dead on a value the caller was told meant no limit.
         if (deadline == 0 || block.timestamp > deadline) revert DeadlineExpired();
         if (
-            recipient == address(0) || recipient == address(this) || refundTo == address(0)
-                || refundTo == address(this) || (ethToSale == 0 && poolAmount == 0)
+            recipient == address(0) || recipient == address(this) || refundTo == address(0) || refundTo == address(this)
+                || (ethToSale == 0 && poolAmount == 0)
         ) revert BadPlan();
 
         // Measured before the unwrap, so ETH already sitting here stays out of
@@ -204,21 +204,12 @@ contract Collectol {
 
         if (poolAmount != 0) {
             // token0 = ETH, token1 = shares, so buying shares is zeroForOne.
-            IZAMM.PoolKey memory key = IZAMM.PoolKey({
-                id0: 0,
-                id1: 0,
-                token0: address(0),
-                token1: shares,
-                feeOrHook: feeOrHook
-            });
+            IZAMM.PoolKey memory key =
+                IZAMM.PoolKey({id0: 0, id1: 0, token0: address(0), token1: shares, feeOrHook: feeOrHook});
             if (poolExactOut) {
-                IZAMM(ZAMM).swapExactOut{value: poolBudget}(
-                    key, poolAmount, poolLimit, true, address(this), deadline
-                );
+                IZAMM(ZAMM).swapExactOut{value: poolBudget}(key, poolAmount, poolLimit, true, address(this), deadline);
             } else {
-                IZAMM(ZAMM).swapExactIn{value: poolBudget}(
-                    key, poolAmount, poolLimit, true, address(this), deadline
-                );
+                IZAMM(ZAMM).swapExactIn{value: poolBudget}(key, poolAmount, poolLimit, true, address(this), deadline);
             }
         }
 
@@ -240,7 +231,9 @@ contract Collectol {
         if (amount == 0) return;
         uint256 ethBefore = address(this).balance;
         IWETH(WETH).withdraw(amount);
-        if (address(this).balance - ethBefore != amount) revert InputMismatch(amount, address(this).balance - ethBefore);
+        if (address(this).balance - ethBefore != amount) {
+            revert InputMismatch(amount, address(this).balance - ethBefore);
+        }
     }
 
     function _sendEthDelta(uint256 ethBase, address to) internal {
@@ -292,10 +285,7 @@ interface IZAMM {
         uint256 feeOrHook;
     }
 
-    function pools(uint256 poolId)
-        external
-        view
-        returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256);
+    function pools(uint256 poolId) external view returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256);
 
     function swapExactIn(
         PoolKey calldata poolKey,

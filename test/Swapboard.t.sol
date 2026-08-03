@@ -279,7 +279,9 @@ contract SwapboardTest is Test {
 
         n.mint(maker, 8);
         vm.prank(maker);
-        uint256 id2 = sb.createOrder(address(n), 8, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, address(0));
+        uint256 id2 = sb.createOrder(
+            address(n), 8, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, address(0)
+        );
         vm.warp(block.timestamp + 2 days);
         uint256[] memory ids = new uint256[](1);
         ids[0] = id2;
@@ -343,7 +345,9 @@ contract SwapboardTest is Test {
     function test_PrivateNftOrder() public {
         MockERC721 n = _nft();
         vm.prank(maker);
-        uint256 id = sb.createOrder(address(n), 7, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, taker);
+        uint256 id = sb.createOrder(
+            address(n), 7, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, taker
+        );
 
         B.mint(keeper, 1000e6);
         vm.prank(keeper);
@@ -360,7 +364,9 @@ contract SwapboardTest is Test {
     function test_PrivateNftOrderStillExpires() public {
         MockERC721 n = _nft();
         vm.prank(maker);
-        uint256 id = sb.createOrder(address(n), 7, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, taker);
+        uint256 id = sb.createOrder(
+            address(n), 7, address(B), 500e6, false, uint64(block.timestamp + 1 days), true, false, taker
+        );
         vm.warp(block.timestamp + 2 days);
         vm.prank(taker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderExpired.selector, id));

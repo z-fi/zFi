@@ -83,9 +83,15 @@ contract zQuoterExhaustiveTest is Test {
 
     /// Execute `cd` and verify delivery. `want` is the quoted output (exact-in)
     /// or the exact target (exact-out).
-    function _exec(string memory label, address tin, address tout, uint256 spend, bytes memory cd, uint256 mv, uint256 want)
-        internal
-    {
+    function _exec(
+        string memory label,
+        address tin,
+        address tout,
+        uint256 spend,
+        bytes memory cd,
+        uint256 mv,
+        uint256 want
+    ) internal {
         if (cd.length == 0 || want == 0) {
             refused++;
             return;
@@ -116,10 +122,10 @@ contract zQuoterExhaustiveTest is Test {
 
     function _exactIn(uint256 i, uint256 j, uint256 notional) internal {
         uint256 amt = _amt(i, notional);
-        string memory label =
-            string.concat(syms[i], "->", syms[j], " in $", vm.toString(notional));
-        try q.buildBestSwapViaETHMulticall(user, user, false, toks[i], toks[j], amt, 200, type(uint256).max)
-        returns (zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv) {
+        string memory label = string.concat(syms[i], "->", syms[j], " in $", vm.toString(notional));
+        try q.buildBestSwapViaETHMulticall(user, user, false, toks[i], toks[j], amt, 200, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
             _exec(label, toks[i], toks[j], amt, mc, mv, b.amountOut > 0 ? b.amountOut : a.amountOut);
         } catch {
             refused++;
@@ -128,10 +134,10 @@ contract zQuoterExhaustiveTest is Test {
 
     function _exactOut(uint256 i, uint256 j, uint256 notional) internal {
         uint256 want = _amt(j, notional);
-        string memory label =
-            string.concat(syms[i], "->", syms[j], " OUT $", vm.toString(notional));
-        try q.buildBestSwapViaETHMulticall(user, user, true, toks[i], toks[j], want, 200, type(uint256).max)
-        returns (zQuoter.Quote memory a, zQuoter.Quote memory, bytes[] memory, bytes memory mc, uint256 mv) {
+        string memory label = string.concat(syms[i], "->", syms[j], " OUT $", vm.toString(notional));
+        try q.buildBestSwapViaETHMulticall(user, user, true, toks[i], toks[j], want, 200, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
             // fund generously: exact-out spends up to amountIn plus slippage
             _exec(label, toks[i], toks[j], a.amountIn * 2 + 1, mc, mv, want);
         } catch {
@@ -155,7 +161,12 @@ contract zQuoterExhaustiveTest is Test {
         uint256 amt = _amt(i, notional);
         string memory label = string.concat(syms[i], "->", syms[j], " 3hop");
         try q.build3HopMulticall(user, false, toks[i], toks[j], amt, 300, type(uint256).max) returns (
-            zQuoter.Quote memory, zQuoter.Quote memory, zQuoter.Quote memory c, bytes[] memory, bytes memory mc, uint256 mv
+            zQuoter.Quote memory,
+            zQuoter.Quote memory,
+            zQuoter.Quote memory c,
+            bytes[] memory,
+            bytes memory mc,
+            uint256 mv
         ) {
             _exec(label, toks[i], toks[j], amt, mc, mv, c.amountOut);
         } catch {

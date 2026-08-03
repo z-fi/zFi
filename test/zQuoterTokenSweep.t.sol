@@ -25,7 +25,10 @@ contract zQuoterTokenSweepTest is Test {
     address constant V4H = 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6;
     address constant E = address(0);
     address u = address(0xB0B);
-    uint256 okBuy; uint256 okSell; uint256 skipped; uint256 bad;
+    uint256 okBuy;
+    uint256 okSell;
+    uint256 skipped;
+    uint256 bad;
 
     function setUp() public {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"), vm.envUint("FORK_BLOCK"));
@@ -43,34 +46,53 @@ contract zQuoterTokenSweepTest is Test {
         vm.deal(u, 10 ether);
         // BUY
         uint256 bought;
-        try q.buildBestSwapViaETHMulticall(u, u, false, E, tok, inAmt, 300, type(uint256).max)
-        returns (zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv) {
+        try q.buildBestSwapViaETHMulticall(u, u, false, E, tok, inAmt, 300, type(uint256).max) returns (
+            zQuoter.Quote memory a, zQuoter.Quote memory b, bytes[] memory, bytes memory mc, uint256 mv
+        ) {
             uint256 want = b.amountOut > 0 ? b.amountOut : a.amountOut;
-            if (mc.length == 0 || want == 0) { skipped++; return; }
+            if (mc.length == 0 || want == 0) skipped++;
+            return;
             uint256 pre = _bal(tok, u);
             vm.prank(u);
             (bool ok,) = ZR.call{value: mv}(mc);
-            if (!ok) { bad++; emit log_named_string(sym, "!!! BUY QUOTED BUT REVERTED"); return; }
+            if (!ok) bad++;
+            emit log_named_string(sym, "!!! BUY QUOTED BUT REVERTED");
+            return;
             bought = _bal(tok, u) - pre;
-            if (bought == 0) { bad++; emit log_named_string(sym, "!!! BUY DELIVERED NOTHING"); return; }
-            if (bought * 100 < want * 90) { bad++; emit log_named_string(sym, "!!! BUY UNDER-DELIVERED"); return; }
+            if (bought == 0) bad++;
+            emit log_named_string(sym, "!!! BUY DELIVERED NOTHING");
+            return;
+            if (bought * 100 < want * 90) bad++;
+            emit log_named_string(sym, "!!! BUY UNDER-DELIVERED");
+            return;
             okBuy++;
-        } catch { skipped++; return; }
+        } catch {
+            skipped++;
+            return;
+        }
 
         // SELL back
         vm.prank(u);
         IERC20x(tok).approve(ZR, type(uint256).max);
-        try q.buildBestSwapViaETHMulticall(u, u, false, tok, E, bought, 300, type(uint256).max)
-        returns (zQuoter.Quote memory a2, zQuoter.Quote memory b2, bytes[] memory, bytes memory mc2, uint256 mv2) {
+        try q.buildBestSwapViaETHMulticall(u, u, false, tok, E, bought, 300, type(uint256).max) returns (
+            zQuoter.Quote memory a2, zQuoter.Quote memory b2, bytes[] memory, bytes memory mc2, uint256 mv2
+        ) {
             uint256 want2 = b2.amountOut > 0 ? b2.amountOut : a2.amountOut;
-            if (mc2.length == 0 || want2 == 0) { skipped++; return; }
+            if (mc2.length == 0 || want2 == 0) skipped++;
+            return;
             uint256 pre2 = u.balance;
             vm.prank(u);
             (bool ok2,) = ZR.call{value: mv2}(mc2);
-            if (!ok2) { bad++; emit log_named_string(sym, "!!! SELL QUOTED BUT REVERTED"); return; }
-            if (u.balance <= pre2) { bad++; emit log_named_string(sym, "!!! SELL DELIVERED NOTHING"); return; }
+            if (!ok2) bad++;
+            emit log_named_string(sym, "!!! SELL QUOTED BUT REVERTED");
+            return;
+            if (u.balance <= pre2) bad++;
+            emit log_named_string(sym, "!!! SELL DELIVERED NOTHING");
+            return;
             okSell++;
-        } catch { skipped++; }
+        } catch {
+            skipped++;
+        }
     }
 
     function test_tokenListSweep() public {

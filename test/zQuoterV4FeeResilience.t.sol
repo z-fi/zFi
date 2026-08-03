@@ -87,7 +87,7 @@ contract zQuoterV4FeeResilienceTest is Test {
     function test_builder_survivesPoisonedTier() public {
         _setProtocolFee(ETH, _USDC, 3000, 60, FEE_500_BOTH);
 
-        (zQuoter.Quote memory a, zQuoter.Quote memory b, , bytes memory mc, uint256 mv) =
+        (zQuoter.Quote memory a, zQuoter.Quote memory b,, bytes memory mc, uint256 mv) =
             quoter.buildBestSwapViaETHMulticall(USER, USER, false, ETH, _USDC, 1 ether, 100, type(uint256).max);
 
         uint256 out = b.amountOut > 0 ? b.amountOut : a.amountOut;

@@ -107,8 +107,7 @@ contract SwapboardViewV2Test is Test {
         uint256 cursor;
         uint256 rows;
         for (uint256 guard; guard < 20; ++guard) {
-            (SwapboardView.OrderView[] memory page, uint256 next) =
-                lens.getRecentOrders(address(board), cursor, 3, 10);
+            (SwapboardView.OrderView[] memory page, uint256 next) = lens.getRecentOrders(address(board), cursor, 3, 10);
             for (uint256 i; i < page.length; ++i) {
                 assertFalse(seen[page[i].orderId], "order returned twice");
                 seen[page[i].orderId] = true;
@@ -231,8 +230,7 @@ contract SwapboardViewV2Test is Test {
     function test_noFilterMatchesEverything() public {
         _create(1e18, 0);
         _create(2e18, 0);
-        (SwapboardView.OrderView[] memory o,) =
-            lens.getOrdersForPair(address(board), address(0), address(0), 0, 10, 10);
+        (SwapboardView.OrderView[] memory o,) = lens.getOrdersForPair(address(board), address(0), address(0), 0, 10, 10);
         assertEq(o.length, 2);
     }
 
@@ -296,9 +294,7 @@ contract SwapboardViewLegacyTest is Test {
 
     function test_getAllActiveOrdersPaged() public {
         (bool ok, bytes memory data) = address(lens).staticcall{gas: 20_000_000}(
-            abi.encodeCall(
-                lens.getAllActiveOrdersPaged, (SWAPBOARD_V1, address(0), 0, 0, 5, 100)
-            )
+            abi.encodeCall(lens.getAllActiveOrdersPaged, (SWAPBOARD_V1, address(0), 0, 0, 5, 100))
         );
         assertTrue(ok, "staticcall should succeed");
         (SwapboardView.OrderView[] memory v1Orders,, SwapboardView.OrderView[] memory v2Orders,) =

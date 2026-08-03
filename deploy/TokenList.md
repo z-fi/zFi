@@ -78,9 +78,9 @@ and hands unrelated contracts Circle's branding. See audit finding M-05.
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
-| TokenListRenderer | NOT DEPLOYED | `0x00000087fee5Af18afE38a885ecDb939b1F92598` | `0x000000…00dec008` | `0x8020e970…178723e5` | 14,974 | 14,948 |
-| TokenListLens | NOT DEPLOYED | `0x0000007303EEc21C1ee953D90aD9486965825D77` | `0x000000…00d71fc7` | `0x47361379…58506b7a` | 4,243 | 4,217 |
-| TokenList | NOT DEPLOYED | `0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1` | `0x000000…01268730` | `0x91dac2a7…8afc2702` | 35,451 | 22,167 |
+| TokenListRenderer | NOT DEPLOYED | `0x000000244989957984A19F27F92eAeb36017D44b` | `0x000000…010dcbc0` | `0x974669ca…178723e5` | 15,032 | 15,006 |
+| TokenListLens | NOT DEPLOYED | `0x000000AA6F2d3D14680dAdd3E4563F96BcC13bCB` | `0x000000…00766582` | `0x2e89e39d…58506b7a` | 4,243 | 4,217 |
+| TokenList | NOT DEPLOYED | `0x00000054Fb325D187431A845bf8cBbD1eEc05C54` | `0x000000…00c4d0da` | `0xfb794a77…8afc2702` | 35,451 | 22,167 |
 
 All three runtimes are under EIP-170 (24,576 B) and all three creation payloads
 are under EIP-3860 (49,152 B). Headroom, measured against the LARGER of the two
@@ -89,7 +89,7 @@ build modes above, which is the number that matters:
 | Contract | Worst-case runtime | Headroom |
 | --- | ---: | ---: |
 | `TokenList` | 22,167 | 2,409 |
-| `TokenListRenderer` | 15,050 | 9,526 |
+| `TokenListRenderer` | 15,108 | 9,468 |
 | `TokenListLens` | 4,217 | 20,359 |
 
 The registry's 2,409 B is the one to watch: it is not upgradeable, so that is the
@@ -108,8 +108,8 @@ deploy as separate transactions, so the cap applies to each one on its own:
 
 Full values:
 
-- `deploy/TokenListRenderer.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000000dec008`
-- `deploy/TokenList.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000001268730`
+- `deploy/TokenListRenderer.salt.txt` — `0x00000000000000000000000000000000000000000000000000000000010dcbc0`
+- `deploy/TokenList.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000000c4d0da`
 
 ## DEPLOY THE RENDERER FIRST
 
@@ -121,14 +121,14 @@ renderer that lands anywhere other than the address above, invalidates
 
 ```
 1. create2Deploy(TokenListRenderer.creation, TokenListRenderer.salt)
-   -> expect 0x00000087fee5Af18afE38a885ecDb939b1F92598
+   -> expect 0x000000244989957984A19F27F92eAeb36017D44b
    -> require code.length > 0 before continuing
 
 2. create2Deploy(TokenList.creation, TokenList.salt)
-   -> expect 0x0000000346D65D05fa349c4D4dd0bC8a1A92aEf1
+   -> expect 0x00000054Fb325D187431A845bf8cBbD1eEc05C54
 
 3. create2Deploy(TokenListLens.creation, TokenListLens.salt)   [any time]
-   -> expect 0x0000007303EEc21C1ee953D90aD9486965825D77
+   -> expect 0x000000AA6F2d3D14680dAdd3E4563F96BcC13bCB
 ```
 
 The constructor reverts `BadInput()` if the renderer address has no code, so step 2
@@ -146,7 +146,7 @@ third contract would have bought nothing.
 
 ```
 initialOwner  0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2
-renderer_     0x00000087fee5Af18afE38a885ecDb939b1F92598
+renderer_     0x000000244989957984A19F27F92eAeb36017D44b
 
 abi-encoded tail (already appended to TokenList.creation.txt):
 0x000000000000000000000000006cd14f36f65ecbb29b2519ccbe63a0dc8549f2
