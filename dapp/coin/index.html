@@ -671,6 +671,13 @@ const CONTINUOUS_SALES = {
     // caller supplies is gas.
     keeper: '0x002d1618D1a198F581a709837f25a88c951D515C',
     icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
+    // Buying with anything but ETH goes through this forwarder. `saleRate` is
+    // shares per 1e18 wei and lives here rather than being read, because the
+    // deployed sale keeps it as a bytecode constant with no getter. It is only
+    // used to plan; the floor the transaction is held to comes from the lens.
+    collectol: '0x0000003b9DFB69a1c764b1b136EE93dEDcdB2EE3',
+    feeOrHook: 30n,
+    saleRate: 1000000000000000000000000n, // 1e24 = 1,000,000 shares per ETH
   },
 };
 const KEEPER_ABI = [
@@ -688,6 +695,60 @@ const KEEPER_ABI = [
 const CONT_SALE_SHARES_PER_ETH = 1000000;
 // What one TokenWorks pass costs to acquire — the unit the vault saves up toward.
 const PASS_PRICE_ETH = '1';
+// ---- Paying for a continuous sale with something other than ETH ----
+// The sale mints for ETH only, so any other asset hops to ETH first and reaches
+// the sale through Collectol, which also decides per size whether the DAO's zAMM
+// pool beats the flat mint rate. Same contracts the swap UI uses; see
+// deploy/Collectol.md for why funding arrives as WETH rather than as value.
+const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
+const ZQUOTER_FULL = '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13';
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+const COLLECTOL_LENS = '0x000000eA30dd95Ed6A5734F3Df361b2f4D5acaf6';
+
+// Deliberately short: assets with deep ETH liquidity, so leg 1 is never the
+// reason a purchase prices badly. Anything exotic is better served by the swap
+// page, which races every aggregator.
+const SALE_PAY_TOKENS = [
+  // The literal, not `ZERO`: that const is declared further down this block, and
+  // reading it here is a temporal-dead-zone throw that kills the whole script -
+  // every definition below it included, which takes the entire page with it.
+  { sym: 'ETH',  address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+  { sym: 'WETH', address: WETH, decimals: 18 },
+  { sym: 'USDC', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+  { sym: 'USDT', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+  { sym: 'DAI',  address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18 },
+];
+
+const ROUTER_IFACE = new ethers.Interface([
+  'function multicall(bytes[]) payable returns (bytes[])',
+  'function wrap(uint256) payable',
+  'function unwrap(uint256) payable',
+  'function sweep(address,uint256,uint256,address) payable',
+  'function snwap(address tokenIn,uint256 amountIn,address recipient,address tokenOut,uint256 amountOutMin,address executor,bytes executorData) payable returns (uint256)',
+]);
+const COLLECTOL_IFACE = new ethers.Interface([
+  'function buy(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,address recipient,address refundTo,uint256 deadline) payable',
+]);
+const COLLECTOL_LENS_IFACE = new ethers.Interface([
+  'function maxSaleEth(address sale,uint256 saleRate) view returns (uint256)',
+  'function planExactIn(address shares,uint256 feeOrHook,uint256 ethIn,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))',
+]);
+const ZQUOTER_BUILD_IFACE = new ethers.Interface([
+  'function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a,tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b,bytes[] calls,bytes multicall,uint256 msgValue)',
+]);
+
+// Slippage allowed on the ETH hop. Wider than a single-venue trade because two
+// legs compound, and the sale leg itself cannot slip at all.
+const SALE_SLIP_BPS = 300n;
+
+// Which asset the Sale tab is paying with, and the balance of it.
+let _salePayToken = SALE_PAY_TOKENS[0];
+let _salePayBalance = 0n;
+// Last plan quoted for a non-ETH purchase, reused by the buy button so the
+// transaction spends exactly what the user was shown.
+let _salePlan = null;
+let _salePlanSeq = 0;
+
 const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
@@ -6449,7 +6510,11 @@ async function renderCoinPage(daoAddr) {
             <div class="swap-section-head">
               <label>From</label>
               <span id="salePayBal" class="swap-balance"></span>
-              <span class="swap-token-tag">${ethSvg} ETH</span>
+              ${contSaleActive
+                ? `<select id="salePayToken" class="swap-token-tag" onchange="onSalePayTokenChange()" style="background:transparent;border:0;color:inherit;font:inherit;cursor:pointer">
+                     ${SALE_PAY_TOKENS.map(t => `<option value="${t.sym}">${t.sym}</option>`).join('')}
+                   </select>`
+                : `<span class="swap-token-tag">${ethSvg} ETH</span>`}
             </div>
             <input type="text" id="salePayInput" placeholder="0.0" oninput="onSalePayInput()" autocomplete="off">
             <div id="saleUsdEstimate" style="font-size:11px;color:var(--fg-dim);margin-top:2px;min-height:14px"></div>
@@ -6947,10 +7012,15 @@ async function loadBalances() {
       payEl.onclick = () => fillPct(100);
     }
 
-    // Sale mode balance (ETH)
+    // Sale mode balance — follows whichever asset the Sale tab is paying with.
     const salePayEl = $('salePayBal');
     if (salePayEl) {
-      salePayEl.textContent = Number(ethers.formatEther(ethBal)).toLocaleString(undefined, {maximumFractionDigits:6}) + ' ETH';
+      if (_salePayToken.address === ZERO) {
+        _salePayBalance = ethBal;
+        salePayEl.textContent = Number(ethers.formatEther(ethBal)).toLocaleString(undefined, {maximumFractionDigits:6}) + ' ETH';
+      } else {
+        refreshSalePayBalance();
+      }
       salePayEl.onclick = () => fillPct(100);
     }
 
@@ -6979,11 +7049,14 @@ async function loadBalances() {
 
 function fillPct(pct) {
   if (_tradeMode === 'sale') {
-    if (_ethBalance <= 0n) return;
-    let amt = _ethBalance * BigInt(pct) / 100n;
-    if (pct === 100 && amt > ethers.parseEther('0.005')) amt -= ethers.parseEther('0.005');
+    const isEth = _salePayToken.address === ZERO;
+    const bal = isEth ? _ethBalance : _salePayBalance;
+    if (bal <= 0n) return;
+    let amt = bal * BigInt(pct) / 100n;
+    // Only native ETH needs gas held back; spending 100% of an ERC-20 is fine.
+    if (isEth && pct === 100 && amt > ethers.parseEther('0.005')) amt -= ethers.parseEther('0.005');
     if (amt <= 0n) return;
-    $('salePayInput').value = ethers.formatEther(amt);
+    $('salePayInput').value = ethers.formatUnits(amt, _salePayToken.decimals);
     onSalePayInput();
   } else if (_tradeMode === 'ragequit') {
     if (_sharesBalance <= 0n) return;
@@ -7063,9 +7136,16 @@ function updateSaleBtnState() {
     return;
   }
   try {
-    const payAmt = ethers.parseEther(raw);
-    if (payAmt > _ethBalance) {
-      btn.textContent = 'Insufficient ETH';
+    const isEth = _salePayToken.address === ZERO;
+    const payAmt = ethers.parseUnits(raw, _salePayToken.decimals);
+    if (payAmt > (isEth ? _ethBalance : _salePayBalance)) {
+      btn.textContent = `Insufficient ${_salePayToken.sym}`;
+      btn.disabled = true;
+      return;
+    }
+    // A token purchase cannot be sent until its route has been quoted.
+    if (!isEth && !_salePlan) {
+      btn.textContent = 'Finding route…';
       btn.disabled = true;
       return;
     }
@@ -7110,9 +7190,117 @@ function updateSaleStake() {
   el.innerHTML = shares > 0n ? daoStakeHint(shares, true) : '';
 }
 
+// Switching the pay asset resets the amount: the old number was denominated in
+// the old token, and silently reinterpreting "100" from USDC to ETH is how a
+// user buys a thousand times what they meant to.
+async function onSalePayTokenChange() {
+  const sel = $('salePayToken');
+  _salePayToken = SALE_PAY_TOKENS.find(t => t.sym === sel.value) || SALE_PAY_TOKENS[0];
+  _salePlan = null;
+  $('salePayInput').value = '';
+  $('saleReceiveInput').value = '';
+  const q = $('saleQuote'); if (q) q.textContent = '';
+  await refreshSalePayBalance();
+  updateSaleBtnState();
+}
+
+async function refreshSalePayBalance() {
+  const el = $('salePayBal');
+  if (!el) return;
+  if (_salePayToken.address === ZERO) {
+    _salePayBalance = _ethBalance;
+  } else if (_connectedAddress) {
+    _salePayBalance = await withRPC(async rpc => {
+      const t = new ethers.Contract(_salePayToken.address, ERC20_ABI, rpc);
+      return await t.balanceOf(_connectedAddress);
+    }).catch(() => 0n);
+  } else {
+    _salePayBalance = 0n;
+  }
+  el.textContent = _connectedAddress
+    ? `Balance: ${fmtUnits(_salePayBalance, _salePayToken.decimals)} ${_salePayToken.sym}`
+    : '';
+}
+
+function fmtUnits(v, dec) {
+  const n = Number(ethers.formatUnits(v, dec));
+  if (n === 0) return '0';
+  if (n < 0.0001) return n.toExponential(2);
+  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
+}
+
+// Quote a non-ETH purchase: hop to ETH, then let the lens split that ETH between
+// the flat mint and the pool. Sequenced so a slow response cannot overwrite a
+// newer one - the displayed number and `_salePlan` must always agree.
+async function quoteSalePayToken() {
+  const raw = ($('salePayInput').value || '').trim();
+  const recvEl = $('saleReceiveInput'), quoteEl = $('saleQuote');
+  if (!raw || isNaN(raw) || Number(raw) <= 0) {
+    _salePlan = null;
+    if (recvEl) recvEl.value = '';
+    updateSaleBtnState();
+    return;
+  }
+  const seq = ++_salePlanSeq;
+  const cfg = CONTINUOUS_SALES[$('app').dataset.dao?.toLowerCase()];
+  const saleAddr = $('app').dataset.contSale;
+  const shares = $('app').dataset.shares;
+  if (!cfg || !saleAddr || !shares) return;
+
+  const amountIn = ethers.parseUnits(raw, _salePayToken.decimals);
+  if (quoteEl) quoteEl.textContent = 'Finding best route…';
+  try {
+    const plan = await withRPC(async rpc => {
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+      const lens = new ethers.Contract(COLLECTOL_LENS, COLLECTOL_LENS_IFACE, rpc);
+      const cap = await lens.maxSaleEth(saleAddr, cfg.saleRate).catch(() => 0n);
+
+      let ethBudget, legCalls = [], needsWrap = true, spend = amountIn;
+      if (_salePayToken.address === WETH) {
+        // Already WETH: no hop, and no wrap either - snwap sweeps it straight in.
+        ethBudget = amountIn;
+        needsWrap = false;
+      } else {
+        const q = new ethers.Contract(ZQUOTER_FULL, ZQUOTER_BUILD_IFACE, rpc);
+        const r = await q.buildBestSwapViaETHMulticall(
+          ZROUTER, _connectedAddress || ZERO, false,
+          _salePayToken.address, ZERO, amountIn, SALE_SLIP_BPS, deadline);
+        const gross = r.b.amountOut > 0n ? r.b.amountOut : r.a.amountOut;
+        if (gross === 0n) throw new Error('no route to ETH');
+        // Plan on the floor leg 1 is held to, never its estimate: the forwarder
+        // spends what actually arrives, and the excess is refunded.
+        ethBudget = gross * (10000n - SALE_SLIP_BPS) / 10000n;
+        legCalls = Array.from(r.calls);
+      }
+      // snwap forwards `balance - 1` when it funds an executor from the router's
+      // own token balance, so the forwarder always lands one wei short of what
+      // was wrapped. Solve for what arrives.
+      const planned = await lens.planExactIn(
+        shares, cfg.feeOrHook ?? 30n, ethBudget - 1n, cfg.saleRate, cap, SALE_SLIP_BPS);
+      return { planned, legCalls, ethBudget, needsWrap, amountIn: spend, deadline };
+    });
+    if (seq !== _salePlanSeq) return; // a newer keystroke won
+    _salePlan = plan;
+    if (recvEl) recvEl.value = ethers.formatEther(plan.planned.totalOut);
+    if (quoteEl) {
+      const mint = plan.planned.ethToSale, pool = plan.planned.poolAmount;
+      const via = mint > 0n && pool > 0n ? 'sale + pool'
+                : pool > 0n ? 'zAMM pool' : 'continuous sale';
+      quoteEl.textContent = `${raw} ${_salePayToken.sym} → ${fmtETH(plan.ethBudget)} via ${via}`;
+    }
+  } catch (e) {
+    if (seq !== _salePlanSeq) return;
+    _salePlan = null;
+    if (recvEl) recvEl.value = '';
+    if (quoteEl) quoteEl.textContent = 'No route for that amount';
+  }
+  updateSaleBtnState();
+}
+
 function onSalePayInput() {
   _saleExactOut = false;
   updateSaleUsd();
+  if (_salePayToken.address !== ZERO) { quoteSalePayToken(); return; }
   const raw = ($('salePayInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('saleReceiveInput').value = '';
@@ -7229,6 +7417,60 @@ async function onSaleBuyBtn() {
   executeSaleBuy();
 }
 
+// Buy shares with an ERC-20. The route is the swap page's, in miniature:
+//
+//   leg 1 (token -> ETH) -> wrap -> snwap(WETH, 0, ...) -> Collectol -> mint
+//
+// snwap cannot hand a forwarder native value here: it funds a native route from
+// msg.value, and every delegatecalled entry in a zRouter multicall sees the same
+// msg.value, which is zero on a token trade. So the ETH is wrapped and swept in
+// as WETH, which Collectol unwraps. Everything unspent sweeps back to the buyer.
+async function executeSaleBuyWithToken(signer, btn, daoAddr) {
+  const plan = _salePlan;
+  if (!plan) { $('saleQuote').textContent = 'Re-enter an amount'; btn.textContent = 'Buy'; btn.disabled = false; return; }
+  const cfg = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+  const shares = $('app').dataset.shares;
+  const me = await signer.getAddress();
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+
+  // zRouter pulls the input with transferFrom, so it needs an allowance.
+  const token = new ethers.Contract(_salePayToken.address, ERC20_ABI, signer);
+  const allowance = await token.allowance(me, ZROUTER);
+  if (allowance < plan.amountIn) {
+    btn.textContent = 'Approving…';
+    await (await token.approve(ZROUTER, ethers.MaxUint256)).wait();
+  }
+
+  const buyData = COLLECTOL_IFACE.encodeFunctionData('buy', [
+    plan.planned.ethToSale, plan.planned.poolAmount, plan.planned.poolLimit,
+    plan.planned.poolExactOut, plan.planned.minTotalOut, me, me, deadline,
+  ]);
+
+  const calls = [...plan.legCalls];
+  if (plan.needsWrap) calls.push(ROUTER_IFACE.encodeFunctionData('wrap', [plan.ethBudget]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('snwap', [
+    WETH, 0, me, shares, plan.planned.minTotalOut, cfg.collectol, buyData,
+  ]));
+  // Anything that can be left behind: WETH the forwarder did not need, ETH from
+  // a refund or leg-1 overshoot, and unspent input.
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [WETH, 0, 0, me]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO, 0, 0, me]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [_salePayToken.address, 0, 0, me]));
+
+  btn.textContent = 'Confirm in wallet...';
+  const router = new ethers.Contract(ZROUTER, ROUTER_IFACE, signer);
+  const tx = await router.multicall(calls);
+  btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+  await tx.wait();
+  $('saleQuote').innerHTML = `<span style="color:var(--green)">Purchase confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+  $('salePayInput').value = '';
+  $('saleReceiveInput').value = '';
+  _salePlan = null;
+  btn.textContent = 'Buy';
+  btn.disabled = false;
+  setTimeout(() => renderCoinPage(daoAddr), 2000);
+}
+
 async function executeSaleBuy() {
   const s = await connectWallet();
   if (!s) return;
@@ -7245,6 +7487,13 @@ async function executeSaleBuy() {
 
   try {
     const payAmt = ethers.parseEther(payRaw);
+
+    // Paying with something other than ETH: hop to ETH and reach the sale
+    // through Collectol, which also decides whether the pool beats the mint.
+    if (contSaleAddr && _salePayToken.address !== ZERO) {
+      await executeSaleBuyWithToken(s, btn, daoAddr);
+      return;
+    }
 
     // Route to Continuous Sale if available
     if (contSaleAddr) {

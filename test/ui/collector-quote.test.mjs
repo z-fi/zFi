@@ -73,6 +73,15 @@ async function boot() {
     resources: new LocalLoader(),
     pretendToBeVisual: true,
     virtualConsole: vc,
+    // The theme script reads matchMedia at parse time; jsdom has no such thing,
+    // and the throw takes out whatever else that block was going to define.
+    beforeParse(w) {
+      w.matchMedia = () => ({ matches: false, media: '', addListener() {}, removeListener() {},
+                              addEventListener() {}, removeEventListener() {}, onchange: null });
+      w.TextEncoder = TextEncoder;
+      w.TextDecoder = TextDecoder;
+      w.scrollTo = () => {};
+    },
   });
   const w = dom.window;
   w.TextEncoder ??= TextEncoder;
@@ -309,4 +318,92 @@ test('neighbouring quote helpers survived the edits', async (t) => {
                    'getCurveQuote', 'getZammCoinBuyQuote', 'getDaicoCoinBuyQuote']) {
     assert.ok(present.includes(n), `${n} is missing from the page`);
   }
+});
+
+// ---- Deep links ----
+// ?from=bold&to=fwc&amt=5 was reported flaky. It is the same root cause as the
+// quick-pick icon: `tokens.FWC` is a static builtin with no `_isDaicoCoin`, so
+// the deeplink resolved the pair fine and then the quote fell through to the
+// generic aggregator, which has no route to FWC. Cover resolution AND quoting.
+async function bootWith(search) {
+  const vc = new VirtualConsole();
+  class LocalLoader extends ResourceLoader {
+    fetch(url) {
+      const m = /^https:\/\/zfi\.wei\.is\/(.*)$/.exec(url.split('?')[0]);
+      if (!m) return null;
+      const file = path.join(ROOT, 'dapp', m[1]);
+      if (!fs.existsSync(file)) return null;
+      return Promise.resolve(fs.readFileSync(file));
+    }
+  }
+  const dom = new JSDOM(fs.readFileSync(PAGE, 'utf8'), {
+    url: 'https://zfi.wei.is/' + search,
+    runScripts: 'dangerously',
+    resources: new LocalLoader(),
+    pretendToBeVisual: true,
+    virtualConsole: vc,
+    beforeParse(w) {
+      w.matchMedia = () => ({ matches: false, media: '', addListener() {}, removeListener() {},
+                              addEventListener() {}, removeEventListener() {}, onchange: null });
+      w.TextEncoder = TextEncoder; w.TextDecoder = TextDecoder; w.scrollTo = () => {};
+    },
+  });
+  const w = dom.window;
+  await new Promise(r => {
+    if (w.document.readyState === 'complete') return r();
+    w.addEventListener('load', r);
+    setTimeout(r, 8000);
+  });
+  w.fetch = (...a) => fetch(...a);
+  await new Promise(r => setTimeout(r, 500)); // the deeplink handler defers by 50ms
+  const s = w.document.createElement('script');
+  s.textContent = `window.__dl = { from: (typeof fromToken !== 'undefined') ? fromToken : null,
+                                    to: (typeof toToken !== 'undefined') ? toToken : null,
+                                    mode: (typeof _inputMode !== 'undefined') ? _inputMode : null,
+                                    amt: document.getElementById('fromAmount')?.value ?? null };`;
+  w.document.body.appendChild(s);
+  const dl = w.__dl;
+  return { w, dl, close: () => { try { w.close(); } catch {} } };
+}
+
+test('deep link ?from=bold&to=fwc&amt=5 resolves both sides and the amount', async (t) => {
+  const { dl, close } = await bootWith('?from=bold&to=fwc&amt=5');
+  t.after(close);
+  if (!dl) return t.skip('page did not boot');
+  assert.equal(dl.to, 'FWC', `to side resolved, got ${dl.to}`);
+  assert.equal(dl.from, 'BOLD', `from side resolved, got ${dl.from}`);
+  assert.equal(dl.mode, 'exactIn');
+  assert.equal(dl.amt, '5', 'amount applied to the input');
+});
+
+test('deep link ?from=eth&to=fwc&outamt=250000 switches to exact-out', async (t) => {
+  const { w, dl, close } = await bootWith('?from=eth&to=fwc&outamt=250000');
+  t.after(close);
+  if (!dl) return t.skip('page did not boot');
+  assert.equal(dl.to, 'FWC');
+  assert.equal(dl.mode, 'exactOut', 'outamt must select exact-out');
+  const s = w.document.createElement('script');
+  s.textContent = `window.__out = document.getElementById('toAmount')?.value ?? null;`;
+  w.document.body.appendChild(s);
+  assert.equal(w.__out, '250000');
+});
+
+test('BOLD -> FWC actually quotes, which is what the deep link needs', async (t) => {
+  const w = await boot();
+  if (skipIfUnavailable(t, w, 'getDaicoCoinBuyQuote', 'tokens')) return;
+  const tokens = api.tokens;
+  if (!tokens.BOLD) return t.skip('BOLD not registered in this build');
+  // The builtin shape: exactly what a deeplink or the quick-pick hands over.
+  tokens.FWC = { address: FWC, symbol: 'FWC', decimals: 18 };
+
+  let q;
+  try {
+    q = await api.getDaicoCoinBuyQuote('5', 'BOLD', 'FWC');
+  } catch (e) {
+    if (/fetch|network|timeout|ECONN/i.test(String(e))) return t.skip(`RPC unavailable: ${e}`);
+    throw e;
+  }
+  assert.ok(q.expectedOutput > 0n, 'BOLD must produce a quote, not fall through');
+  assert.equal(q.msgValue, 0n, 'token input sends no value');
+  assert.equal(q.isTwoHop, true, 'BOLD hops through ETH');
 });
