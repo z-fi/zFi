@@ -171,9 +171,10 @@ async function simulate(ids) {
   }
 }
 
+/** Returns true if a claim was actually broadcast (or would be, in a dry run). */
 async function settle(ids) {
   const sim = await simulate(ids);
-  if (!sim) return;
+  if (!sim) return false;
 
   const block = await pub.getBlock({ blockTag: "latest" });
   const baseFee = block.baseFeePerGas ?? 0n;
@@ -193,7 +194,7 @@ async function settle(ids) {
       `skip ${sim.ids.length} id(s): tip ${formatEther(revenue)} ETH < ` +
         `cost ${formatEther(cost)} ETH x ${config.marginMultiple}`,
     );
-    return;
+    return false;
   }
 
   log(
@@ -203,7 +204,7 @@ async function settle(ids) {
 
   if (config.dryRun) {
     log("DRY_RUN set, not sending");
-    return;
+    return true;
   }
 
   const nonce = await pub.getTransactionCount({ address: account.address, blockTag: "pending" });
@@ -233,6 +234,7 @@ async function settle(ids) {
     // so a timeout means "not included" -- the ids stay queued for the next pass.
     log(`tx ${hash} not included within timeout, requeuing ids`);
   }
+  return true;
 }
 
 // -- main loop ---------------------------------------------------------------
@@ -263,15 +265,43 @@ async function tick() {
     .sort((a, b) => (b[1].tip > a[1].tip ? 1 : -1)) // richest first
     .map(([id]) => id);
 
-  if (!due.length) return;
+  if (!due.length) return { due: 0, claimable: 0, sent: false };
 
   const claimable = await filterClaimable(due);
   if (!claimable.length) {
     log(`${due.length} due but all blocked by recipient guardians`);
-    return;
+    return { due: due.length, claimable: 0, sent: false };
   }
 
-  await settle(claimable.slice(0, config.maxBatch));
+  const sent = await settle(claimable.slice(0, config.maxBatch));
+  return { due: due.length, claimable: claimable.length, sent };
+}
+
+/**
+ * Proof of life. Tips arrive rarely enough that "nothing happening" is the
+ * normal state, which makes a wedged worker indistinguishable from a healthy
+ * idle one. This prints the shape of the queue so the log answers the
+ * difference at a glance.
+ */
+async function heartbeat() {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const pending = [...tips.values()];
+  const waiting = pending.filter((e) => e.readyAt !== null && e.readyAt > now);
+  let soonest = null;
+  for (const e of waiting) if (soonest === null || e.readyAt < soonest) soonest = e.readyAt;
+
+  let balance = "unknown";
+  try {
+    balance = `${formatEther(await pub.getBalance({ address: account.address }))} ETH`;
+  } catch {
+    /* a heartbeat must never be the thing that kills the loop */
+  }
+
+  const next =
+    soonest === null
+      ? "none scheduled"
+      : `next in ${Math.round(Number(soonest - now) / 60)} min`;
+  log(`heartbeat: tracking ${tips.size} tip(s), ${waiting.length} awaiting expiry, ${next}, gas ${balance}`);
 }
 
 async function main() {
@@ -294,9 +324,12 @@ async function main() {
 
   log(`backfilling TipPosted from block ${config.startBlock}...`);
 
+  if (config.oneShot) return runOnce();
+
   for (;;) {
     try {
       await tick();
+      if (config.heartbeatEvery > 0 && ticks % config.heartbeatEvery === 0) await heartbeat();
     } catch (err) {
       log(`tick error: ${shortErr(err)}`);
     }
@@ -304,7 +337,31 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  log("fatal:", err);
-  process.exit(1);
-});
+/**
+ * Cron mode. Keeps settling while passes are still producing claims, so a
+ * backlog larger than one batch clears in a single run rather than waiting for
+ * the next schedule. Errors propagate: a non-zero exit is what makes a broken
+ * run visible in the scheduler's history.
+ */
+async function runOnce() {
+  let total = 0;
+  for (let pass = 0; pass < 10; pass++) {
+    const result = await tick();
+    if (!result.sent) {
+      if (pass === 0) log(`nothing to claim (${result.due} due, ${result.claimable} claimable)`);
+      break;
+    }
+    total++;
+  }
+  await heartbeat();
+  log(`one-shot complete, ${total} batch(es) claimed`);
+}
+
+main()
+  .then(() => {
+    if (config.oneShot) process.exit(0);
+  })
+  .catch((err) => {
+    log("fatal:", shortErr(err));
+    process.exit(1);
+  });

@@ -4,9 +4,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { __classify } from "../src/rpc.js";
-
-const { isRangeError, isRateLimit, isCapabilityError, parseMaxRange } = __classify;
+import {
+  isCapabilityError,
+  isRangeError,
+  isRateLimit,
+  parseMaxRange,
+} from "../src/classify.js";
 
 test("real range errors are recognised and their limit parsed", () => {
   const cases = [

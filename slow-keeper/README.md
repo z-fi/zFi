@@ -74,6 +74,22 @@ unscanned remainder rather than the whole pass.
 would silently invert the economics — lost races would land as paid reverts instead of
 being dropped — so if Protect is unreachable the bot waits.
 
+## Two ways to run it
+
+**Worker** (`npm start`) — polls every 12s, runs forever. Lowest latency to settlement.
+
+**Cron** (`npm run once`) — one pass, then exits. Given the delays SLOW deals in are hours
+to days, an hourly pass settles just as reliably as a 12-second poll, costs a fraction of
+a 24/7 worker, and cuts RPC usage roughly 300x. It also fails *loudly*: a non-zero exit
+lands in the scheduler's run history. A wedged worker just goes quiet, which at this tip
+volume is indistinguishable from a healthy idle one.
+
+A cron pass keeps settling while passes still produce claims, so a backlog larger than one
+batch clears in a single run. Both modes are defined in `render.yaml` — run one, not both.
+
+In worker mode a heartbeat line prints every `HEARTBEAT_EVERY` passes with the queue
+shape and gas balance, so the log distinguishes idle from stuck.
+
 ## Config
 
 | Var | Required | Default | Notes |
@@ -89,6 +105,8 @@ being dropped — so if Protect is unreachable the bot waits.
 | `MAX_BATCH` | no | `10` | Max ids per `claimMany`. |
 | `POLL_MS` | no | `12000` | Poll interval. |
 | `START_BLOCK` | no | `24986598` | SLOW's deploy block. |
+| `ONE_SHOT` | no | — | `true` runs a single pass and exits (cron mode). Exit code is the liveness signal. |
+| `HEARTBEAT_EVERY` | no | `100` | Passes between heartbeat lines in worker mode. `0` disables. |
 | `DRY_RUN` | no | — | `true` logs decisions without sending. |
 
 ## Local run

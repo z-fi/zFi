@@ -35,3 +35,35 @@ services:
         value: "10"
       - key: POLL_MS
         value: "12000"
+
+  # Alternative to the worker above -- run ONE of the two, not both.
+  #
+  # At observed tip volume (single digits since deploy) a 24/7 poller is heavy
+  # machinery. SLOW's delays are hours to days, so an hourly pass settles just
+  # as reliably, costs a fraction, and cuts RPC usage ~300x. It also fails
+  # loudly: a non-zero exit lands in the scheduler's run history, whereas a
+  # wedged worker just goes quiet.
+  - type: cron
+    name: slow-keeper-cron
+    runtime: node
+    region: oregon
+    rootDir: slow-keeper
+    schedule: "0 * * * *"
+    buildCommand: npm install
+    startCommand: npm run once
+    autoDeploy: false
+    envVars:
+      - key: RPC_URL
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: SEND_RPC_URL
+        value: https://rpc.flashbots.net/fast
+      - key: MARGIN_MULTIPLE
+        value: "1.25"
+      - key: PRIORITY_GWEI
+        value: "0.05"
+      - key: MAX_FEE_GWEI
+        value: "50"
+      - key: MAX_BATCH
+        value: "10"

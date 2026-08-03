@@ -60,5 +60,16 @@ export const config = {
 
   receiptTimeoutMs: num("RECEIPT_TIMEOUT_MS", 180_000),
 
+  // Run a single pass and exit instead of looping. Intended for a scheduled
+  // cron run: the delays SLOW deals in are hours to days, so an hourly pass
+  // settles just as reliably as a 12-second poll at a fraction of the cost.
+  // The exit code is the liveness signal -- a failed run shows up in the
+  // scheduler's history, where a wedged worker would just go quiet.
+  oneShot: process.env.ONE_SHOT === "true",
+
+  // Passes between heartbeat lines in worker mode. At the default poll
+  // interval, 100 passes is roughly 20 minutes.
+  heartbeatEvery: num("HEARTBEAT_EVERY", 100),
+
   dryRun: process.env.DRY_RUN === "true",
 };
