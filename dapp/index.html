@@ -9388,6 +9388,22 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
+  // Claim the swap deeplink FIRST, before anything else in init can throw.
+  //
+  // `syncSwapURL` holds off while a deeplinked token is unresolved, but that
+  // hold is only armed further down, after the params have been read. Anything
+  // that throws before that point skips the arming as well as the applying, so
+  // the default pair gets written over the user's link - and replaceState
+  // leaves no history entry to go back to, so the link is destroyed, not just
+  // ignored. Arming here means the worst case is a link that does not apply,
+  // not one that is overwritten.
+  try {
+    const _sp0 = new URLSearchParams(window.location.search);
+    const _f0 = _sp0.get('from'), _t0 = _sp0.get('to');
+    if (_f0) _pendingDeeplinkFrom = _f0;
+    if (_t0) _pendingDeeplinkTo = _t0;
+  } catch (_) {}
+
   // If #coin/#send hash present (no PP query params), switch tab immediately and skip swap deeplinks
   const _dlTabHash = window.location.hash;
   // Only a `pp` value the privacy deeplink below can actually act on may
@@ -9538,6 +9554,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_dlSymbol) _ogCoinTitle += ' ($' + _dlSymbol + ')';
       updateOGMeta(_ogCoinTitle, _dlDesc || 'Launch a coin on zFi');
     }
+    // This path never reaches the swap deeplink, so drop the hold armed above.
+    _pendingDeeplinkFrom = null;
+    _pendingDeeplinkTo = null;
     switchTab(_dlTabHash.slice(1));
     return;
   }
@@ -9562,8 +9581,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const _dlToRaw = _urlp.get('to');
   const _dlFrom = _findToken(_dlFromRaw);
   const _dlTo = _findToken(_dlToRaw);
-  if (_dlFrom) fromToken = _dlFrom;
-  if (_dlTo) toToken = _dlTo;
+  // Clearing matters now that the hold is armed up front: a resolved side must
+  // release it, or syncSwapURL would stay muted for the rest of the session.
+  if (_dlFrom) { fromToken = _dlFrom; _pendingDeeplinkFrom = null; }
+  if (_dlTo) { toToken = _dlTo; _pendingDeeplinkTo = null; }
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
   // Async lists (Uniswap, ZAMM v0 coins) load after DOMContentLoaded. If a
   // deeplink target wasn't resolved here, remember it and let the discovery
