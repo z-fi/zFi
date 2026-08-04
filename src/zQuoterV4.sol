@@ -5,7 +5,6 @@ uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 address constant V4_STATE_VIEW = 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227;
 
-
 /// @title zQuoterV4
 /// @notice Corrected Uniswap V4 single-hop quoting for zQuoter.
 ///
@@ -52,8 +51,7 @@ contract zQuoterV4 {
             if (swapAmount > uint256(type(int256).max)) return (0, 0);
 
             // Build v4 pool id (native ETH supported)
-            (bytes32 poolId, bool zeroForOne) =
-                _v4PoolId(tokenIn, tokenOut, fee, tickSpacing, hooks);
+            (bytes32 poolId, bool zeroForOne) = _v4PoolId(tokenIn, tokenOut, fee, tickSpacing, hooks);
 
             // Read core state
             (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee) =
@@ -68,14 +66,12 @@ contract zQuoterV4 {
             // The base quoter used `protocolFee + lpFee`, which is only correct while
             // protocol fees are zero. Compose them the way v4-core does instead.
             uint24 pf = zeroForOne ? (protocolFee & 0xfff) : (protocolFee >> 12);
-            uint24 swapFee =
-                pf == 0 ? lpFee : uint24(pf + lpFee - (uint256(pf) * uint256(lpFee)) / 1_000_000);
+            uint24 swapFee = pf == 0 ? lpFee : uint24(pf + lpFee - (uint256(pf) * uint256(lpFee)) / 1_000_000);
             // A malformed/absurd fee can only come from misparsing; refuse to quote.
             if (swapFee >= 1_000_000) return (0, 0);
 
             // Use open price limits (same “±1” convention as v3 constants)
-            uint160 sqrtPriceLimitX96 =
-                zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
+            uint160 sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
 
             // **** v4 SIGN CONVENTION ****
             // exact-in  => amountRemaining < 0
@@ -95,14 +91,11 @@ contract zQuoterV4 {
                 uint160 sqrtPriceNextX96 = TickMath.getSqrtPriceAtTick(tickNext);
 
                 // step within current tick (or to the limit)
-                (uint160 sqrtPriceNext, uint256 stepIn, uint256 stepOut, uint256 feeAmt) = SwapMath
-                    .computeSwapStep(
+                (uint160 sqrtPriceNext, uint256 stepIn, uint256 stepOut, uint256 feeAmt) = SwapMath.computeSwapStep(
                     sqrtPriceX96,
-                    (
-                        zeroForOne
-                            ? (sqrtPriceNextX96 < sqrtPriceLimitX96)
-                            : (sqrtPriceNextX96 > sqrtPriceLimitX96)
-                    ) ? sqrtPriceLimitX96 : sqrtPriceNextX96,
+                    (zeroForOne ? (sqrtPriceNextX96 < sqrtPriceLimitX96) : (sqrtPriceNextX96 > sqrtPriceLimitX96))
+                        ? sqrtPriceLimitX96
+                        : sqrtPriceNextX96,
                     liquidity,
                     amountRemaining,
                     swapFee
@@ -123,8 +116,7 @@ contract zQuoterV4 {
                 if (sqrtPriceNext == sqrtPriceNextX96) {
                     // crossed a tick
                     if (initialized) {
-                        (, int128 liqNet) =
-                            IStateViewV4(V4_STATE_VIEW).getTickLiquidity(poolId, tickNext);
+                        (, int128 liqNet) = IStateViewV4(V4_STATE_VIEW).getTickLiquidity(poolId, tickNext);
                         if (zeroForOne) liqNet = -liqNet; // mirror v3 sign flip when moving left
                         liquidity = LiquidityMath.addDelta(liquidity, liqNet);
                     }
@@ -181,13 +173,9 @@ function _v4PoolId(address tokenA, address tokenB, uint24 fee, int24 spacing, ad
 
 // General helpers:
 
-function _sortTokens(address tokenA, address tokenB)
-    pure
-    returns (address token0, address token1, bool zeroForOne)
-{
+function _sortTokens(address tokenA, address tokenB) pure returns (address token0, address token1, bool zeroForOne) {
     (token0, token1) = (zeroForOne = tokenA < tokenB) ? (tokenA, tokenB) : (tokenB, tokenA);
 }
-
 
 interface IStateViewV4 {
     function getSlot0(bytes32 poolId)
@@ -377,11 +365,7 @@ library TickMath {
             //     or price = int(2**128 / sqrt(1.0001)) if (absTick & 0x1) else 1 << 128
             uint256 price;
             assembly ("memory-safe") {
-                price :=
-                    xor(
-                        shl(128, 1),
-                        mul(xor(shl(128, 1), 0xfffcb933bd6fad37aa2d162d1a594001), and(absTick, 0x1))
-                    )
+                price := xor(shl(128, 1), mul(xor(shl(128, 1), 0xfffcb933bd6fad37aa2d162d1a594001), and(absTick, 0x1)))
             }
             if (absTick & 0x2 != 0) price = (price * 0xfff97272373d413259a46990580e213a) >> 128;
             if (absTick & 0x4 != 0) price = (price * 0xfff2e50f5f656932ef12357cf3c7fdcc) >> 128;
@@ -536,9 +520,7 @@ library TickMath {
             // is changed, this may need to be changed too
             int24 tickHi = int24((log_sqrt10001 + 291339464771989622907027621153398088495) >> 128);
 
-            tick = tickLow == tickHi
-                ? tickLow
-                : getSqrtPriceAtTick(tickHi) <= sqrtPriceX96 ? tickHi : tickLow;
+            tick = tickLow == tickHi ? tickLow : getSqrtPriceAtTick(tickHi) <= sqrtPriceX96 ? tickHi : tickLow;
         }
     }
 }
@@ -675,15 +657,10 @@ library CustomRevert {
 
             // Encode wrapped error selector, address, function selector, offset, additional context, size, revert reason
             mstore(fmp, wrappedErrorSelector)
-            mstore(
-                add(fmp, 0x04), and(revertingContract, 0xffffffffffffffffffffffffffffffffffffffff)
-            )
+            mstore(add(fmp, 0x04), and(revertingContract, 0xffffffffffffffffffffffffffffffffffffffff))
             mstore(
                 add(fmp, 0x24),
-                and(
-                    revertingFunctionSelector,
-                    0xffffffff00000000000000000000000000000000000000000000000000000000
-                )
+                and(revertingFunctionSelector, 0xffffffff00000000000000000000000000000000000000000000000000000000)
             )
             // offset revert reason
             mstore(add(fmp, 0x44), 0x80)
@@ -698,10 +675,7 @@ library CustomRevert {
             // additional context
             mstore(
                 add(fmp, add(0xc4, encodedDataSize)),
-                and(
-                    additionalContext,
-                    0xffffffff00000000000000000000000000000000000000000000000000000000
-                )
+                and(additionalContext, 0xffffffff00000000000000000000000000000000000000000000000000000000)
             )
             revert(fmp, add(0xe4, encodedDataSize))
         }
@@ -719,11 +693,11 @@ library SwapMath {
     /// @param sqrtPriceLimitX96 The Q64.96 sqrt price limit. If zero for one, the price cannot be less than this value
     /// after the swap. If one for zero, the price cannot be greater than this value after the swap
     /// @return sqrtPriceTargetX96 The price target for the next swap step
-    function getSqrtPriceTarget(
-        bool zeroForOne,
-        uint160 sqrtPriceNextX96,
-        uint160 sqrtPriceLimitX96
-    ) internal pure returns (uint160 sqrtPriceTargetX96) {
+    function getSqrtPriceTarget(bool zeroForOne, uint160 sqrtPriceNextX96, uint160 sqrtPriceLimitX96)
+        internal
+        pure
+        returns (uint160 sqrtPriceTargetX96)
+    {
         assembly ("memory-safe") {
             // a flag to toggle between sqrtPriceNextX96 and sqrtPriceLimitX96
             // when zeroForOne == true, nextOrLimit reduces to sqrtPriceNextX96 >= sqrtPriceLimitX96
@@ -756,32 +730,23 @@ library SwapMath {
         uint128 liquidity,
         int256 amountRemaining,
         uint24 feePips
-    )
-        internal
-        pure
-        returns (uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, uint256 feeAmount)
-    {
+    ) internal pure returns (uint160 sqrtPriceNextX96, uint256 amountIn, uint256 amountOut, uint256 feeAmount) {
         unchecked {
             uint256 _feePips = feePips; // upcast once and cache
             bool zeroForOne = sqrtPriceCurrentX96 >= sqrtPriceTargetX96;
             bool exactIn = amountRemaining < 0;
 
             if (exactIn) {
-                uint256 amountRemainingLessFee = FullMath.mulDiv(
-                    uint256(-amountRemaining), MAX_SWAP_FEE - _feePips, MAX_SWAP_FEE
-                );
+                uint256 amountRemainingLessFee =
+                    FullMath.mulDiv(uint256(-amountRemaining), MAX_SWAP_FEE - _feePips, MAX_SWAP_FEE);
                 amountIn = zeroForOne
-                    ? SqrtPriceMath.getAmount0Delta(
-                        sqrtPriceTargetX96, sqrtPriceCurrentX96, liquidity, true
-                    )
-                    : SqrtPriceMath.getAmount1Delta(
-                        sqrtPriceCurrentX96, sqrtPriceTargetX96, liquidity, true
-                    );
+                    ? SqrtPriceMath.getAmount0Delta(sqrtPriceTargetX96, sqrtPriceCurrentX96, liquidity, true)
+                    : SqrtPriceMath.getAmount1Delta(sqrtPriceCurrentX96, sqrtPriceTargetX96, liquidity, true);
                 if (amountRemainingLessFee >= amountIn) {
                     // `amountIn` is capped by the target price
                     sqrtPriceNextX96 = sqrtPriceTargetX96;
                     feeAmount = _feePips == MAX_SWAP_FEE
-                        ? amountIn // amountIn is always 0 here, as amountRemainingLessFee == 0 and amountRemainingLessFee >= amountIn
+                        ? amountIn  // amountIn is always 0 here, as amountRemainingLessFee == 0 and amountRemainingLessFee >= amountIn
                         : FullMath.mulDivRoundingUp(amountIn, _feePips, MAX_SWAP_FEE - _feePips);
                 } else {
                     // exhaust the remaining amount
@@ -793,37 +758,24 @@ library SwapMath {
                     feeAmount = uint256(-amountRemaining) - amountIn;
                 }
                 amountOut = zeroForOne
-                    ? SqrtPriceMath.getAmount1Delta(
-                        sqrtPriceNextX96, sqrtPriceCurrentX96, liquidity, false
-                    )
-                    : SqrtPriceMath.getAmount0Delta(
-                        sqrtPriceCurrentX96, sqrtPriceNextX96, liquidity, false
-                    );
+                    ? SqrtPriceMath.getAmount1Delta(sqrtPriceNextX96, sqrtPriceCurrentX96, liquidity, false)
+                    : SqrtPriceMath.getAmount0Delta(sqrtPriceCurrentX96, sqrtPriceNextX96, liquidity, false);
             } else {
                 amountOut = zeroForOne
-                    ? SqrtPriceMath.getAmount1Delta(
-                        sqrtPriceTargetX96, sqrtPriceCurrentX96, liquidity, false
-                    )
-                    : SqrtPriceMath.getAmount0Delta(
-                        sqrtPriceCurrentX96, sqrtPriceTargetX96, liquidity, false
-                    );
+                    ? SqrtPriceMath.getAmount1Delta(sqrtPriceTargetX96, sqrtPriceCurrentX96, liquidity, false)
+                    : SqrtPriceMath.getAmount0Delta(sqrtPriceCurrentX96, sqrtPriceTargetX96, liquidity, false);
                 if (uint256(amountRemaining) >= amountOut) {
                     // `amountOut` is capped by the target price
                     sqrtPriceNextX96 = sqrtPriceTargetX96;
                 } else {
                     // cap the output amount to not exceed the remaining output amount
                     amountOut = uint256(amountRemaining);
-                    sqrtPriceNextX96 = SqrtPriceMath.getNextSqrtPriceFromOutput(
-                        sqrtPriceCurrentX96, liquidity, amountOut, zeroForOne
-                    );
+                    sqrtPriceNextX96 =
+                        SqrtPriceMath.getNextSqrtPriceFromOutput(sqrtPriceCurrentX96, liquidity, amountOut, zeroForOne);
                 }
                 amountIn = zeroForOne
-                    ? SqrtPriceMath.getAmount0Delta(
-                        sqrtPriceNextX96, sqrtPriceCurrentX96, liquidity, true
-                    )
-                    : SqrtPriceMath.getAmount1Delta(
-                        sqrtPriceCurrentX96, sqrtPriceNextX96, liquidity, true
-                    );
+                    ? SqrtPriceMath.getAmount0Delta(sqrtPriceNextX96, sqrtPriceCurrentX96, liquidity, true)
+                    : SqrtPriceMath.getAmount1Delta(sqrtPriceCurrentX96, sqrtPriceNextX96, liquidity, true);
                 // `feePips` cannot be `MAX_SWAP_FEE` for exact out
                 feeAmount = FullMath.mulDivRoundingUp(amountIn, _feePips, MAX_SWAP_FEE - _feePips);
             }
@@ -838,11 +790,7 @@ library FullMath {
     /// @param denominator The divisor
     /// @return result The 256-bit result
     /// @dev Credit to Remco Bloemen under MIT license https://xn--2-umb.com/21/muldiv
-    function mulDiv(uint256 a, uint256 b, uint256 denominator)
-        internal
-        pure
-        returns (uint256 result)
-    {
+    function mulDiv(uint256 a, uint256 b, uint256 denominator) internal pure returns (uint256 result) {
         unchecked {
             // 512-bit multiply [prod1 prod0] = a * b
             // Compute the product mod 2**256 and mod 2**256 - 1
@@ -937,11 +885,7 @@ library FullMath {
     /// @param b The multiplier
     /// @param denominator The divisor
     /// @return result The 256-bit result
-    function mulDivRoundingUp(uint256 a, uint256 b, uint256 denominator)
-        internal
-        pure
-        returns (uint256 result)
-    {
+    function mulDivRoundingUp(uint256 a, uint256 b, uint256 denominator) internal pure returns (uint256 result) {
         unchecked {
             result = mulDiv(a, b, denominator);
             if (mulmod(a, b, denominator) != 0) {
@@ -987,12 +931,11 @@ library SqrtPriceMath {
     /// @param amount How much of currency0 to add or remove from virtual reserves
     /// @param add Whether to add or remove the amount of currency0
     /// @return The price after adding or removing amount, depending on add
-    function getNextSqrtPriceFromAmount0RoundingUp(
-        uint160 sqrtPX96,
-        uint128 liquidity,
-        uint256 amount,
-        bool add
-    ) internal pure returns (uint160) {
+    function getNextSqrtPriceFromAmount0RoundingUp(uint160 sqrtPX96, uint128 liquidity, uint256 amount, bool add)
+        internal
+        pure
+        returns (uint160)
+    {
         // we short circuit amount == 0 because the result is otherwise not guaranteed to equal the input price
         if (amount == 0) return sqrtPX96;
         uint256 numerator1 = uint256(liquidity) << FixedPoint96.RESOLUTION;
@@ -1019,10 +962,7 @@ library SqrtPriceMath {
                 assembly ("memory-safe") {
                     if iszero(
                         and(
-                            eq(
-                                div(product, amount),
-                                and(sqrtPX96, 0xffffffffffffffffffffffffffffffffffffffff)
-                            ),
+                            eq(div(product, amount), and(sqrtPX96, 0xffffffffffffffffffffffffffffffffffffffff)),
                             gt(numerator1, product)
                         )
                     ) {
@@ -1046,28 +986,25 @@ library SqrtPriceMath {
     /// @param amount How much of currency1 to add, or remove, from virtual reserves
     /// @param add Whether to add, or remove, the amount of currency1
     /// @return The price after adding or removing `amount`
-    function getNextSqrtPriceFromAmount1RoundingDown(
-        uint160 sqrtPX96,
-        uint128 liquidity,
-        uint256 amount,
-        bool add
-    ) internal pure returns (uint160) {
+    function getNextSqrtPriceFromAmount1RoundingDown(uint160 sqrtPX96, uint128 liquidity, uint256 amount, bool add)
+        internal
+        pure
+        returns (uint160)
+    {
         // if we're adding (subtracting), rounding down requires rounding the quotient down (up)
         // in both cases, avoid a mulDiv for most inputs
         if (add) {
-            uint256 quotient = (
-                amount <= type(uint160).max
+            uint256 quotient =
+                (amount <= type(uint160).max
                     ? (amount << FixedPoint96.RESOLUTION) / liquidity
-                    : FullMath.mulDiv(amount, FixedPoint96.Q96, liquidity)
-            );
+                    : FullMath.mulDiv(amount, FixedPoint96.Q96, liquidity));
 
             return (uint256(sqrtPX96) + quotient).toUint160();
         } else {
-            uint256 quotient = (
-                amount <= type(uint160).max
+            uint256 quotient =
+                (amount <= type(uint160).max
                     ? UnsafeMath.divRoundingUp(amount << FixedPoint96.RESOLUTION, liquidity)
-                    : FullMath.mulDivRoundingUp(amount, FixedPoint96.Q96, liquidity)
-            );
+                    : FullMath.mulDivRoundingUp(amount, FixedPoint96.Q96, liquidity));
 
             // equivalent: if (sqrtPX96 <= quotient) revert NotEnoughLiquidity();
             assembly ("memory-safe") {
@@ -1090,12 +1027,11 @@ library SqrtPriceMath {
     /// @param amountIn How much of currency0, or currency1, is being swapped in
     /// @param zeroForOne Whether the amount in is currency0 or currency1
     /// @return uint160 The price after adding the input amount to currency0 or currency1
-    function getNextSqrtPriceFromInput(
-        uint160 sqrtPX96,
-        uint128 liquidity,
-        uint256 amountIn,
-        bool zeroForOne
-    ) internal pure returns (uint160) {
+    function getNextSqrtPriceFromInput(uint160 sqrtPX96, uint128 liquidity, uint256 amountIn, bool zeroForOne)
+        internal
+        pure
+        returns (uint160)
+    {
         // equivalent: if (sqrtPX96 == 0 || liquidity == 0) revert InvalidPriceOrLiquidity();
         assembly ("memory-safe") {
             if or(
@@ -1120,12 +1056,11 @@ library SqrtPriceMath {
     /// @param amountOut How much of currency0, or currency1, is being swapped out
     /// @param zeroForOne Whether the amount out is currency1 or currency0
     /// @return uint160 The price after removing the output amount of currency0 or currency1
-    function getNextSqrtPriceFromOutput(
-        uint160 sqrtPX96,
-        uint128 liquidity,
-        uint256 amountOut,
-        bool zeroForOne
-    ) internal pure returns (uint160) {
+    function getNextSqrtPriceFromOutput(uint160 sqrtPX96, uint128 liquidity, uint256 amountOut, bool zeroForOne)
+        internal
+        pure
+        returns (uint160)
+    {
         // equivalent: if (sqrtPX96 == 0 || liquidity == 0) revert InvalidPriceOrLiquidity();
         assembly ("memory-safe") {
             if or(
@@ -1151,12 +1086,11 @@ library SqrtPriceMath {
     /// @param liquidity The amount of usable liquidity
     /// @param roundUp Whether to round the amount up or down
     /// @return uint256 Amount of currency0 required to cover a position of size liquidity between the two passed prices
-    function getAmount0Delta(
-        uint160 sqrtPriceAX96,
-        uint160 sqrtPriceBX96,
-        uint128 liquidity,
-        bool roundUp
-    ) internal pure returns (uint256) {
+    function getAmount0Delta(uint160 sqrtPriceAX96, uint160 sqrtPriceBX96, uint128 liquidity, bool roundUp)
+        internal
+        pure
+        returns (uint256)
+    {
         unchecked {
             if (sqrtPriceAX96 > sqrtPriceBX96) {
                 (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
@@ -1205,12 +1139,11 @@ library SqrtPriceMath {
     /// @param liquidity The amount of usable liquidity
     /// @param roundUp Whether to round the amount up, or down
     /// @return amount1 Amount of currency1 required to cover a position of size liquidity between the two passed prices
-    function getAmount1Delta(
-        uint160 sqrtPriceAX96,
-        uint160 sqrtPriceBX96,
-        uint128 liquidity,
-        bool roundUp
-    ) internal pure returns (uint256 amount1) {
+    function getAmount1Delta(uint160 sqrtPriceAX96, uint160 sqrtPriceBX96, uint128 liquidity, bool roundUp)
+        internal
+        pure
+        returns (uint256 amount1)
+    {
         uint256 numerator = absDiff(sqrtPriceAX96, sqrtPriceBX96);
         uint256 denominator = FixedPoint96.Q96;
         uint256 _liquidity = uint256(liquidity);

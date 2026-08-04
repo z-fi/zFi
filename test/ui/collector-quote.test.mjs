@@ -414,3 +414,61 @@ test('BOLD -> FWC actually quotes, which is what the deep link needs', async (t)
   assert.equal(q.msgValue, 0n, 'token input sends no value');
   assert.equal(q.isTwoHop, true, 'BOLD hops through ETH');
 });
+
+// Reported symptom: opening ?from=bold&to=fwc&amt=5 lands on the default pair
+// and the URL itself is rewritten to ?from=eth&to=zorg. That rewrite is the
+// damaging part - replaceState leaves no history entry, so the shared link is
+// destroyed rather than merely ignored.
+//
+// The URL sync holds off while a deeplinked token is unresolved, but that hold
+// used to be armed only after the params were read. Anything throwing earlier
+// in init skipped both, and the default pair went to the URL. Simulate that by
+// breaking a function init calls before the swap deeplink runs.
+test('a deep link survives an unrelated failure earlier in init', async (t) => {
+  const html = fs.readFileSync(PAGE, 'utf8');
+  const vc = new VirtualConsole();
+  class LocalLoader extends ResourceLoader {
+    fetch(url) {
+      const m = /^https:\/\/zfi\.wei\.is\/(.*)$/.exec(url.split('?')[0]);
+      if (!m) return null;
+      const file = path.join(ROOT, 'dapp', m[1]);
+      if (!fs.existsSync(file)) return null;
+      return Promise.resolve(fs.readFileSync(file));
+    }
+  }
+  const dom = new JSDOM(html, {
+    url: 'https://zfi.wei.is/?from=bold&to=fwc&amt=5',
+    runScripts: 'dangerously',
+    resources: new LocalLoader(),
+    pretendToBeVisual: true,
+    virtualConsole: vc,
+    beforeParse(w) {
+      w.matchMedia = () => ({ matches: false, media: '', addListener() {}, removeListener() {},
+                              addEventListener() {}, removeEventListener() {}, onchange: null });
+      w.TextEncoder = TextEncoder; w.TextDecoder = TextDecoder; w.scrollTo = () => {};
+      // Break something init touches before the swap deeplink is parsed.
+      w.addEventListener('DOMContentLoaded', () => {
+        try { w.eval('loadWeiLists = function () { throw new Error("simulated init failure"); };'); } catch (_) {}
+      }, { once: true });
+    },
+  });
+  const w = dom.window;
+  await new Promise(r => {
+    if (w.document.readyState === 'complete') return r();
+    w.addEventListener('load', r);
+    setTimeout(r, 8000);
+  });
+  await new Promise(r => setTimeout(r, 1500));
+  const s = w.document.createElement('script');
+  s.textContent = `window.__u = { search: location.search,
+    pf: typeof _pendingDeeplinkFrom !== 'undefined' ? _pendingDeeplinkFrom : 'n/a',
+    pt: typeof _pendingDeeplinkTo !== 'undefined' ? _pendingDeeplinkTo : 'n/a' };`;
+  w.document.body.appendChild(s);
+  const u = w.__u;
+  try { w.close(); } catch {}
+
+  assert.ok(!/from=eth&to=zorg/.test(u.search),
+    `the link was overwritten with the default pair: ${u.search}`);
+  assert.match(u.search, /from=bold/, `from param lost: ${u.search}`);
+  assert.match(u.search, /to=fwc/, `to param lost: ${u.search}`);
+});

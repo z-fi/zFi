@@ -99,19 +99,31 @@ contract CollectolRouteTest is Test {
         console.log("FWC expected    :", p.totalOut);
 
         bytes memory buyData = abi.encodeCall(
-            Collectol.buy,
-            (p.ethToSale, p.poolAmount, p.poolLimit, p.poolExactOut, p.minTotalOut, user, user, deadline)
+            Collectol.buy, (p.ethToSale, p.poolAmount, p.poolLimit, p.poolExactOut, p.minTotalOut, user, user, deadline)
         );
 
         bytes[] memory calls = new bytes[](6);
         calls[0] = abi.encodeWithSignature(
             "swapV3(address,bool,uint24,address,address,uint256,uint256,uint256)",
-            ZROUTER, false, uint24(500), USDC, address(0), amountIn, uint256(0), deadline
+            ZROUTER,
+            false,
+            uint24(500),
+            USDC,
+            address(0),
+            amountIn,
+            uint256(0),
+            deadline
         );
         calls[1] = abi.encodeWithSignature("wrap(uint256)", ethFloor);
         calls[2] = abi.encodeWithSignature(
             "snwap(address,uint256,address,address,uint256,address,bytes)",
-            WETH, uint256(0), user, SHARES, p.minTotalOut, col, buyData
+            WETH,
+            uint256(0),
+            user,
+            SHARES,
+            p.minTotalOut,
+            col,
+            buyData
         );
         calls[3] = abi.encodeWithSignature("sweep(address,uint256,uint256,address)", WETH, 0, 0, user);
         calls[4] = abi.encodeWithSignature("sweep(address,uint256,uint256,address)", address(0), 0, 0, user);
@@ -130,5 +142,4 @@ contract CollectolRouteTest is Test {
         assertEq(col.balance, 0, "ETH stranded in forwarder");
         assertGt(p.ethToSale, 0, "sale leg skipped");
     }
-
 }

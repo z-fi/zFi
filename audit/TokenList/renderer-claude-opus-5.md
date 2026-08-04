@@ -236,6 +236,272 @@ Three existing tests were updated, all for intentional interface changes:
   sandbox SVG and block external subresources, so these can fail to load too — but
   unlike `ipfs://` they *can* work, and there is no gateway rewrite that would help.
   Curators should prefer `data:image/svg+xml`, as every seeded listing does.
-- **The mined salts.** Re-mining is a deliberate release step the manifest says to
-  perform from a completed tree; doing it mid-review would only invalidate it again.
-  `deploy/TokenList.md` is marked stale instead.
+- **`https://` logo rewriting.** See above.
+
+# Post-review deployment prep
+
+Done after the fixes landed, on a worktree off `origin/main`.
+
+## The registry did not actually fit
+
+The headroom in this document's first pass — 637 B — was measured from an isolated
+`forge build` of the two source files. A full `forge build` (what `forge test`
+does) produced **24,811 B, over EIP-170**, from identical source at identical
+settings. Under `via_ir` a contract optimises differently depending on which other
+files share its compilation unit, and the two builds sat ~900 B apart.
+
+That meant three things were wrong simultaneously:
+
+- a fresh clone's default build produced a registry that could not be deployed;
+- Foundry does not enforce EIP-170 inside tests, so the suite passed against a
+  variant mainnet would have rejected — green tests said nothing about the shipped
+  bytes;
+- `TokenListMinedDeploy` compared the recorded initcode against `vm.getCode`, so
+  under a full build it always mismatched and **skipped itself**. It had been
+  skipping long enough to hide a stale assertion of its own: it still expected an
+  eleven-token constructor after seeding was cut to four.
+
+Lowering `max_optimizer_runs` does not help — 1, 10 and 20 all produce ~24,817.
+
+## What fixed it
+
+`TokenListLens` now owns `rankedIds`, `rankedIdsPaged`, `rankedSummaries` and
+`search`; `TokenList.summariesPaged` pages in listing order and the registry drops
+`LibSort` entirely. The split follows what can and cannot be replaced: the registry
+is immutable and must retain room to ship a security fix, while a lens can be
+redeployed at will, so the replaceable work moved to the replaceable contract.
+
+Measured savings were badly non-additive — removing `search` alone saved 1,471 B,
+removing `search` and `rankedIdsPaged` together saved only 472 — which is the same
+optimizer cliff B-01 described, so each candidate configuration had to be measured
+rather than reasoned about.
+
+| | before | after |
+| --- | ---: | ---: |
+| isolated build | 23,939 | 22,167 |
+| full build | **24,811 (over)** | 21,275 |
+| worst-case headroom | **-235** | **+2,409** |
+
+The lens is stateless — the registry is a call parameter, not an immutable — so it
+has no constructor arguments and no deployment ordering constraint, and one
+deployment serves every `TokenList`. The renderer/registry coupling already means
+mining one salt wrong invalidates both; there was nothing to gain from a third link
+in that chain.
+
+## The guard now asks the right question
+
+`TokenListMinedDeploy`'s staleness check compares recorded source hashes
+(`deploy/TokenList.sources.txt`) instead of `vm.getCode`. Whether the source drifted
+is true or false regardless of how the caller built, so the test runs under both
+build modes and skips only when the code genuinely changed. Verified: from a clean
+`out/`, a full `forge test` runs it and it passes.
+
+## Also done
+
+- All three salts mined. Registry `0x0000000fc6abe3eB907a6F6335EC6f5b1e987564`
+  (four leading zero bytes), renderer `0x000000f7269197d82ADB734aCaed9Fe978760067`,
+  lens `0x0000002F54FA973183Bca49681659488c4033951`.
+- `script/mine_create2_salt.js` allocated a native keccak object per iteration.
+  Throughput decayed from 0.13M to 0.02M iter/sec and the process died partway
+  through long runs — which reads as "mining is slow" rather than as a leak.
+  Reusing one hasher's state made these three mines take 62 s, 22 s and 8 s.
+  Digests verified byte-identical; every mined address independently re-derived
+  with ethers.
+- `deploy/TokenList.md` corrected: the compiler row said 200 runs where the build
+  pins 20, and the headroom claim was stale by 4x.
+- 108 tests pass from a clean build, nothing skipped.
+
+# Second visual pass
+
+Rendered every card to PNG and looked at them, which surfaced four things the
+geometry assertions could not.
+
+- **The logo well read as a coloured box.** At 0.12 fill and 0.5 stroke the tint is
+  the owner's theme, so how loud the square got varied per listing — invisible
+  behind ETH's blue, a solid orange square behind WBTC, red behind rETH — and all
+  three of those logos are circular, so the corners showed. Now 0.07 / 0.22 with
+  rounded corners: a recess the artwork sits in rather than a swatch it sits on.
+
+- **Provenance was themed, and a signal that means the same thing everywhere has to
+  look the same everywhere.** It rendered orange on one listing, green on the next
+  and red on rETH, where a red badge beside a red weight reads as a warning about
+  the token rather than a statement about where its text came from. Provenance, the
+  chip row and the sort weight are all neutral now. The theme colour survives only
+  on the symbol and the logo well — the listing's identity.
+
+- **Provenance was also badly placed**, wedged between the 25px title and the header
+  rule with four pixels of clearance, a whole band away from the symbol, name and
+  decimals it qualifies. It now leads the chip row directly beneath them, filled
+  rather than outlined so it still leads. Two chip systems doing the same visual job
+  in different places was one too many. Moving it exposed a collision the reserved
+  layout had inherited — its description started at y=250, inside the chip rect —
+  which is the kind of thing only a render shows.
+
+- **The bottom third was empty.** The address/description cluster was top-anchored in
+  a band sized for a full three-line description, so the common case left a
+  fifty-five pixel slab of dead black above the footer rule. The block is centred on
+  its line count now. That means the renderer positions it from a count computed
+  before the lines are drawn, so `_descLines` and `_textBlock` share one `_breakAt`
+  and a test asserts the count they actually produce at every length — if they ever
+  drift the card mis-centres silently.
+
+All three salts re-mined again. 109 tests pass from a clean build, nothing skipped.
+
+# Final visual pass
+
+Two things left, both found by looking at the rendered set rather than at code.
+
+- **ETH printed forty zeros under the word ADDRESS.** That is the registry's id
+  convention for the native asset, not a place ether lives, and it sat on the
+  highest-ranked card in the list where it was copyable. Native listings now read
+  `NONE - NATIVE ASSET`. `json` still reports the real word, because a program needs
+  the id and a person needs the truth about it.
+
+- **The Wei Name Service listing drew a blank white square.** Its logo was a
+  400x400 white rect with `wns.wei` set at 24px inside it; scaled into the card's
+  96px slot that type renders under six pixels tall. Replaced with a `.wei`
+  wordmark on a dark disc, legible at the size the card actually draws. This is
+  post-deploy calldata rather than contract code, so it changes
+  `deploy/TokenList.postdeploy.calldata.txt` and nothing that was mined.
+
+All three salts re-mined for the renderer change. 109 tests pass from a clean build,
+nothing skipped.
+
+# Cleanup pass
+
+- **The manifest had drifted two re-mines behind.** `deploy/TokenList.md` carried the
+  registry and renderer addresses from an earlier round, and all three initcode-hash
+  suffixes from the round before that. The cause was maintaining it by chained string
+  substitution: one round wrote an address in the wrong checksum casing, the compiler
+  rejected it in the test file so that copy got fixed, and every later substitution
+  then missed the copy still sitting in the manifest. A deployer checking a recorded
+  hash against a fresh build would have rejected a correct artifact. The table and
+  the full-value list are now generated from the artifact files, and
+  `testManifestAgreesWithTheRecordedArtifacts` asserts every address, salt and hash
+  in the manifest is the one in the file it describes — so this cannot drift quietly
+  again.
+
+- **Apostrophes are no longer stripped from curated text.** `_clean` dropped `'`
+  alongside the quote because the renderer delimits its SVG attributes with single
+  quotes — but nothing it cleans is ever put in an attribute. Name, symbol, links,
+  description and extras all land in text nodes and JSON string values, where an
+  apostrophe is legal. The cost was every possessive and contraction: "Circle's
+  stablecoin" was stored, and rendered, as "Circles stablecoin". The renderer now
+  splits `_safe` (text) from `_safeAttr` (attribute-bound, still strict), and the one
+  field that reaches an attribute — the logo — still goes through the strict filter.
+  Tests cover both directions, including that a logo carrying `'` cannot close its
+  own `href`.
+
+- A header comment still said a source edit would invalidate "both mined salts".
+  There are three.
+
+# Merged: ERC-5192 and ERC-7572
+
+The two lines of work described above are now merged. They were developed in
+parallel against the same file — this audit's layout and EIP-170 work on `main`, the
+interface compliance in the `precision-pools` working tree — and neither side had
+the other. The compliance side was ported ONTO main's version rather than the file
+being taken wholesale, because that branch's copy predates the lens split, the
+sanitisation split and the whole second layout pass.
+
+- **ERC-5192 `Locked`.** The registry advertised `0xb45a3c0e` and implemented
+  `locked(uint256)` but emitted no event, so `supportsInterface` answering true was
+  never evidence the event half existed. An indexer classifying soulbound
+  collections from logs rather than probing every id saw an ordinary transferable
+  collection, and would offer listings for sale on cards whose transfer always
+  reverts. Every mint now routes through `_mintListing`, which emits it. `Unlocked`
+  deliberately does not exist: a listing is born locked and stays locked.
+
+- **ERC-7572 `contractURI`.** Nothing described the COLLECTION, so a marketplace
+  showing the registry itself had no name, description or mark for it. It is
+  authored by the renderer and forwarded from the registry in assembly — the
+  high-level form round-trips a dynamic string through decode and re-encode for over
+  1,000 B of runtime, which a contract with this much headroom cannot spend.
+  `ContractURIUpdated` fires on a renderer swap alongside `BatchMetadataUpdate`.
+
+This makes `contractURI()` a THIRD member of the interface any replacement renderer
+must implement, alongside `tokenURI` and `json`; one without it leaves the
+registry's `contractURI()` reverting. The test stub grew it for exactly that reason.
+
+Sizes after the merge: registry 22,185 (2,391 B spare), renderer 16,519 (8,057),
+lens 4,217. All three salts re-mined. 119 tests pass from a clean build, nothing
+skipped — including the fork replay, which now deploys the pair and reads
+`contractURI` off the real wiring.
+
+# Merged: Bitcoin/confidential standards and the stranded-flag fixes
+
+A third round of work had again been developed against the pre-lens-split copy in the
+`precision-pools` working tree. Ported onto main's version rather than adopted
+wholesale, for the third time and the same reason: that copy predates the lens split,
+the text/attribute sanitiser split and the second layout pass, and taking it would
+silently revert all three. It also still dropped apostrophes.
+
+- **`Standard` gained `TACIT`, `RUNE`, `ORDINAL`, `BRC20`.** Named for the FORMAT
+  rather than the flagship ticker. The renderer names them on the card instead of
+  printing "TOKEN STANDARD UNVERIFIED", which describes a failure to check rather
+  than a deliberate attested listing — these list under `Kind.OTHER`, so the chain
+  line can only say `raw:0` and the detail row is the one place with room to identify
+  them.
+- **`setStandard` and `_pull` now clear `onchainSvg`** when the standard walks back to
+  a non-collection. The flag was not merely stale but IRREVERSIBLE: `setOnchainSvg`
+  re-runs the collection gate, so nothing could take it back. Reachable through a
+  reservation — `setStandard` accepts ERC721 while unsynced, the flag sticks, and
+  `activateReserved` pulls the real ERC-20 standard over it.
+- **`activateReserved` takes `_mustExist`, not `_mustEdit`.** A frozen reservation
+  could never be bound to its deployed token; the only exit was `delist`, which
+  destroys the stable id the reservation exists to preserve. Freezing seals what
+  governance wrote, not whether the subject shipped.
+- **`_hexColor` hand-rolled**, dropping two general-purpose LibString routines from
+  the runtime to produce seven fixed bytes. Output byte-identical.
+
+## The headroom finding
+
+That branch build measured **24,243 B runtime — 333 B under EIP-170** and its manifest
+called that margin the binding constraint. It is worse than that number suggests: the
+same source compiles differently depending on which files share its `via_ir`
+compilation unit, and the two modes have differed by 234–892 B across the builds
+measured here. At 333 B, one build mode plausibly does not deploy at all, and Foundry
+does not enforce EIP-170 in tests, so the suite would pass either way.
+
+Carrying the same changes on main's version — where ranking and search live in the
+lens — the registry measures **22,234 B isolated and 22,000 B in the full build**:
+2,342 and 2,576 B of margin, comfortable in both. The lens split is worth roughly
+2 KB, and it is what makes this round of additions affordable at all.
+
+All three salts re-mined. 133 tests pass from a clean build, nothing skipped.
+
+# Deployed — and what shipped instead
+
+`TokenList` and `TokenListRenderer` went live on Ethereum mainnet on 2026-08-04 at
+`0x0000006013dF75A31678B786061C2B54bf531524` and
+`0x000000d595e36Dd0228c4040D981A01A59DbbE87`, owned by the 2-of-3 multisig behind a
+timelock, with all eleven listings applied. Both are verified on Etherscan and both
+reproduce byte-for-byte from the sources committed with them.
+
+What shipped is the variant developed in the working tree, NOT the one this document
+had been describing. The difference matters enough to record:
+
+- **`TokenListLens` was not deployed, and has been deleted.** It existed only to buy
+  EIP-170 headroom by moving `rankedIds`, `rankedIdsPaged` and `search` out of the
+  registry. The deployed registry keeps all three — confirmed live: `rankedIds()`
+  returns eleven ids, `search("eth", 10)` returns five — so the lens had no job, and
+  routing through it would have been strictly worse: an extra call that fans back
+  into `summariesPaged` to recompute an answer the registry gives directly, with a
+  different tie-break, from a page that is rank-ordered here and listing-ordered in
+  the version the lens was written against. Two sources of truth that agree until
+  they do not.
+- **The registry shipped at 24,243 B — 333 B under EIP-170.** The concern recorded
+  above stands: the same source compiles 234–892 B differently depending on
+  compilation-unit membership, and Foundry does not enforce EIP-170 in tests. It
+  deployed, so the question is settled for THIS bytecode. It is not settled for the
+  next change, and the registry is not upgradeable.
+- **The second layout pass did not ship.** The live card is the earlier layout:
+  provenance pill under the title in the theme colour, the square logo well, forty
+  zeros under ADDRESS on the ETH card, and the content block top-anchored. The chip
+  row, neutral signal colours, centred block, `NONE - NATIVE ASSET`, calmer well and
+  IPFS gateway rewriting are all still available as a renderer swap —
+  `rendererLocked` is false — and need no registry change.
+- **Apostrophes are stripped permanently.** `_clean` in the deployed registry drops
+  `'`, and it is immutable. A renderer swap cannot recover text that was never
+  stored, so every curated description will read "Circles stablecoin" rather than
+  "Circle's stablecoin" for the life of this deployment.

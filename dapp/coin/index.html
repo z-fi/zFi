@@ -180,6 +180,17 @@ input {
 .coin-detail-title .coin-symbol-row { display:flex;align-items:center;gap:6px; }
 .coin-detail-title .coin-symbol-row span { font-size:13px;color:var(--fg-muted); }
 .coin-user-balance { margin-left:auto;font-size:12px;color:var(--fg-muted);white-space:nowrap; }
+.coin-buy-cta {
+  align-self:center;flex:none;padding:8px 20px;font-size:13px;font-weight:700;
+  letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;
+  color:var(--green);background:none;border:1px solid var(--green);border-radius:6px;
+  transition:background 0.15s, color 0.15s;
+}
+.coin-buy-cta:hover { background:var(--green);color:var(--bg); }
+/* The target of the jump gets a brief ring, so the page does not just silently move. */
+@keyframes buyFlash { 0%,100% { box-shadow:0 0 0 0 transparent } 30% { box-shadow:0 0 0 2px var(--green) } }
+.swap-tile.flash { animation:buyFlash 1.1s ease; }
+@media (prefers-reduced-motion: reduce) { .swap-tile.flash { animation:none } }
 .coin-mcap-row { font-size:13px;color:var(--fg-muted);margin-bottom:12px;font-weight:500; }
 
 .section-card {
@@ -210,6 +221,72 @@ input {
   background:none; border:0; color:inherit; font:inherit; cursor:pointer; border-radius:6px; text-align:left; }
 .sale-pay-option:hover { background:var(--surface-hover, rgba(255,255,255,.06)); }
 .sale-pay-option[aria-selected="true"] { background:var(--surface-hover, rgba(255,255,255,.09)); }
+.swap-mode-tabs { display:flex;gap:6px;margin-bottom:14px; }
+.swap-mode-tabs button {
+  flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  border:none;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:var(--fg-muted);
+  cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;margin:0;
+}
+.swap-mode-tabs button:hover { color:var(--fg); }
+.swap-mode-tabs button.active { color:var(--fg);border-bottom-color:var(--fg); }
+.swap-dir { display:flex;gap:6px;margin-bottom:14px; }
+.swap-dir button {
+  flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  border:none;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:var(--fg-muted);
+  cursor:pointer;font-family:inherit;transition:color 0.15s,border-color 0.15s;margin:0;
+}
+.swap-dir button:hover { color:var(--fg); }
+.swap-dir button.active { color:var(--fg);border-bottom-color:var(--fg); }
+.swap-mode-content { display:none; }
+.swap-mode-content.active { display:block; }
+.sale-lp-note { font-size:11px;color:var(--fg-muted);margin-top:4px; }
+.rq-estimate { font-size:14px;color:var(--fg);margin:12px 0;text-align:center; }
+.rq-estimate small { font-size:11px;color:var(--fg-muted);display:block;margin-top:2px; }
+.swap-section { margin-bottom:8px; }
+.swap-section-head {
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;
+}
+.swap-section-head label { font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--fg-muted);margin:0;flex-shrink:0; }
+.swap-balance { font-size:11px;color:var(--fg-muted);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:right;margin:0 8px; }
+.swap-balance:hover { color:var(--fg); }
+.swap-pct-row { display:flex;gap:6px;margin-top:6px; }
+.swap-pct-btn {
+  flex:1;padding:4px 0;font-size:10px;font-weight:600;letter-spacing:0.05em;
+  border:none;border-radius:0;background:var(--surface);color:var(--fg-muted);
+  cursor:pointer;font-family:inherit;transition:background 0.15s,color 0.15s;
+}
+.swap-pct-btn:hover { background:var(--surface-hover);color:var(--fg); }
+.swap-token-tag {
+  display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--fg);flex-shrink:0;
+}
+.swap-token-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
+.swap-token-tag .eth-icon { width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center; }
+.swap-section input {
+  width:100%;padding:8px 0;font-size:22px;font-weight:400;font-family:inherit;
+  border:none;border-bottom:1.5px solid var(--border);outline:none;background:transparent;color:var(--fg);
+}
+.swap-section input::placeholder { color:var(--input-ph); }
+.swap-section input:focus { border-bottom-width:2.5px;margin-bottom:-1px; }
+.swap-arrow-row { display:flex;justify-content:center;margin:2px 0 8px; }
+.swap-arrow-btn {
+  background:var(--bg);border:1px solid var(--border);width:32px;height:32px;
+  display:inline-flex;align-items:center;justify-content:center;padding:0;margin:0;
+  cursor:pointer;transition:transform 0.3s ease,background 0.2s,border-color 0.2s;
+}
+.swap-arrow-btn:hover { transform:rotate(180deg);background:var(--btn-bg);border-color:var(--btn-bg); }
+.swap-arrow-btn:hover svg { stroke:var(--btn-fg); }
+.swap-arrow-btn svg { stroke:var(--fg);transition:stroke 0.2s; }
+.swap-quote { font-size:12px;color:var(--fg-muted);min-height:18px;margin-bottom:10px; }
+.action-btn {
+  width:100%;margin:0;padding:12px;font-size:13px;font-weight:600;letter-spacing:0.05em;
+  text-transform:uppercase;cursor:pointer;background:var(--btn-bg);color:var(--btn-fg);
+  border:none;font-family:inherit;transition:background 0.2s;
+}
+.action-btn:hover:not(:disabled) { background:var(--btn-hover); }
+.action-btn:disabled { background:var(--btn-dis-bg);border:1px solid var(--btn-dis-border);color:var(--btn-dis-fg);cursor:not-allowed; }
+
 .swap-mode-tabs { display:flex;gap:6px;margin-bottom:14px; }
 .swap-mode-tabs button {
   flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
@@ -359,34 +436,113 @@ input {
 .links-row a:hover { color:var(--fg); }
 
 /* Proposals */
-.prop-item { padding:12px;border:1px solid var(--border-muted);border-radius:8px;margin-bottom:8px;background:var(--surface); }
-.prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:8px; }
-.prop-desc { font-size:13px;font-weight:500;flex:1;word-break:break-word;min-width:0; }
-/* A long description must not turn one card into a wall while its neighbours are
-   two lines: clamp, and let the reader open the ones they care about. */
+/* The drawer body itself is flush (the holders table wants that); this list is
+   prose and cards, so it needs a gutter. */
+#proposalsContent { padding:4px 14px 14px; }
+/* Section heads carry a rule that runs to the right edge, so Discussion and
+   Proposals read as two bands rather than two paragraphs of small caps. */
+.prop-sec-head {
+  display:flex;align-items:center;gap:8px;margin:22px 0 8px;
+  font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-muted);
+}
+.prop-sec-head.prop-sec-first { margin-top:2px; }
+.prop-sec-head::after {
+  content:'';flex:1;height:1px;background:var(--border-muted);
+}
+.prop-sec-head span {
+  font-size:9px;padding:1px 6px;border-radius:8px;border:1px solid var(--border-muted);
+  color:var(--fg-dim);font-variant-numeric:tabular-nums;letter-spacing:0.04em;
+}
+.prop-chat-list { margin-bottom:4px; }
+/* A message is a row, not a card: the thread should read top-to-bottom without
+   fifteen boxes competing with the proposal cards below it. */
+.prop-chat-item {
+  display:flex;gap:10px;padding:8px 8px 8px 6px;margin:0 -8px 0 -6px;border-radius:6px;
+  font-size:12px;line-height:1.6;color:var(--fg-muted);
+  border-bottom:1px solid var(--border-muted);
+  transition:background 0.15s ease;
+}
+.prop-chat-item:last-child { border-bottom:none; }
+.prop-chat-item:hover { background:var(--surface); }
+.prop-chat-item:hover .prop-chat-body { color:var(--fg); }
+.prop-chat-idx {
+  flex:none;min-width:24px;color:var(--fg-dim);font-size:10px;padding-top:4px;
+  font-variant-numeric:tabular-nums;text-align:right;
+}
+.prop-chat-main { flex:1;min-width:0; }
+/* Long updates are common here; clamp them so the proposals below stay reachable
+   without nesting a scrollbar inside the drawer. */
+.prop-chat-body {
+  white-space:pre-wrap;overflow-wrap:anywhere;transition:color 0.15s ease;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+/* The clamp only fades when there is genuinely more text, so a three-line message
+   does not look truncated. `has-more` is set after measuring. */
+.prop-chat-main.has-more:not(.open) .prop-chat-body {
+  -webkit-mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+.prop-chat-main.open .prop-chat-body { -webkit-line-clamp:unset;overflow:visible; }
+.prop-chat-link {
+  color:var(--fg-muted);text-decoration:underline;text-decoration-color:var(--border);
+  text-underline-offset:2px;
+}
+.prop-chat-link:hover { color:var(--fg);text-decoration-color:var(--fg-dim); }
+.prop-more {
+  margin-top:4px;padding:0;background:none;border:none;font:inherit;font-size:10px;
+  letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
+  opacity:0.7;transition:opacity 0.15s;
+}
+.prop-more:hover, .prop-more:focus-visible { opacity:1;color:var(--fg-muted); }
+.prop-showall {
+  display:block;width:100%;margin-top:8px;padding:8px;background:none;
+  border:1px dashed var(--border-muted);border-radius:6px;font:inherit;font-size:10px;
+  letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
+  transition:color 0.15s, border-color 0.15s;
+}
+.prop-showall:hover { color:var(--fg-muted);border-color:var(--fg-dim); }
+
+.prop-item {
+  position:relative;padding:12px 12px 12px 14px;border:1px solid var(--border-muted);
+  border-radius:8px;margin-bottom:8px;background:var(--surface);
+  transition:border-color 0.15s ease;
+}
+.prop-item:hover { border-color:var(--fg-dim); }
+/* The live proposals — open for votes, or queued and waiting on the timelock — are
+   the only ones a reader can still act on: give them an accent rail so they are
+   findable in a list of fifteen settled ones. */
+/* The rail is a thicker left border, not an overlaid pseudo-element: a 3px box with
+   an 8px radius bulges outside the card's own rounded corner. */
+.prop-item.is-live { border-color:var(--green);border-left-width:3px;padding-left:12px; }
+.prop-head { display:flex;justify-content:space-between;align-items:flex-start;gap:10px; }
+.prop-desc { font-size:13px;font-weight:500;flex:1;min-width:0;word-break:break-word;line-height:1.55; }
 .prop-desc-body { display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden; }
-.prop-desc-body.clamped { -webkit-line-clamp:3; }
-.prop-desc-more { margin-top:5px;padding:0;background:none;border:none;font:inherit;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;opacity:0.65;transition:opacity 0.15s; }
-.prop-desc-more:hover { opacity:1; }
+.prop-desc-body.clamped {
+  -webkit-line-clamp:3;
+  -webkit-mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
+}
 .prop-state { font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;font-weight:600; }
 .prop-state.executed { border-color:var(--fg-dim);color:var(--fg-dim);background:var(--surface-hover); }
 .prop-state.active { border-color:var(--green);color:var(--green);background:var(--status-success); }
 .prop-state.succeeded,.prop-state.queued { border-color:var(--green);color:var(--green);background:var(--status-success); }
 .prop-state.defeated,.prop-state.expired { border-color:var(--red);color:var(--red);background:var(--status-error); }
 .prop-state.unopened { border-color:var(--fg-dim);color:var(--fg-dim); }
-.prop-votes { display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--fg-muted); }
+.prop-votes { display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px;font-size:11px;color:var(--fg-muted);font-variant-numeric:tabular-nums; }
 .prop-votes .for { color:var(--green); }
 .prop-votes .against { color:var(--red); }
-.prop-bar { position:relative;height:5px;border-radius:3px;background:var(--border-muted);margin-top:6px;overflow:hidden;display:flex; }
+/* A tally of zero is context, not a result — keep it readable but out of the way. */
+.prop-votes .zero { opacity:0.45; }
+.prop-bar { position:relative;height:5px;border-radius:3px;background:var(--border-muted);margin-top:8px;overflow:hidden;display:flex; }
 /* The quorum threshold is the number that decides the proposal, so it outranks the
    tally visually. At a 5% quorum it sits near the left edge and a 1px hairline was
    indistinguishable from the vote sliver beside it. */
 .prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:0.8;border-radius:1px; }
-.prop-turnout { margin-left:auto;color:var(--fg-dim); }
+.prop-turnout { margin-left:auto;color:var(--fg-dim);white-space:nowrap; }
 .prop-turnout.met { color:var(--green); }
 .prop-clock { color:var(--fg-muted);font-variant-numeric:tabular-nums; }
 .prop-clock-ready { color:var(--green); }
-.prop-id { float:right;opacity:0.55;font-variant-numeric:tabular-nums; }
+.prop-id { margin-left:auto;opacity:0.55;font-variant-numeric:tabular-nums; }
 .stat-row-nav { border-top:1px solid var(--border-muted);margin-top:4px;padding-top:8px; }
 /* Derived treasury analysis — understated, collapsed by default */
 .stat-reveal { display:flex;align-items:center;gap:5px;width:100%;padding:7px 0 2px;margin-top:2px;background:none;border:none;font:inherit;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;opacity:0.65;transition:opacity 0.15s; }
@@ -400,8 +556,10 @@ input {
 .prop-bar-for { background:var(--green);min-width:2px; }
 .prop-bar-against { background:var(--red);min-width:2px; }
 .prop-bar-abstain { background:var(--fg-dim);min-width:2px; }
-.prop-meta { font-size:10px;color:var(--fg-dim);margin-top:4px; }
+.prop-meta { display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:10px;color:var(--fg-dim);margin-top:7px;padding-top:7px;border-top:1px solid var(--border-muted); }
 .prop-meta a { color:var(--fg-dim); }
+.prop-meta a:hover { color:var(--fg-muted); }
+.prop-meta .sep { opacity:0.5; }
 
 .loading { text-align:center;padding:40px;color:var(--fg-muted);font-size:13px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -473,6 +631,83 @@ input {
   .coin-preset-row button { padding:8px 6px !important; }
   .coin-slippage-row { gap:4px; }
 }
+
+.swap-stake { margin-top:4px;font-size:11px;color:var(--green);font-variant-numeric:tabular-nums; }
+
+/* Keeper actions — permissionless DAO chores */
+.keeper-panel { margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--border-muted); }
+.keeper-head {
+  display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);
+}
+.keeper-head a { color:var(--fg-muted);text-decoration:underline;text-underline-offset:2px; }
+.keeper-head a:hover { color:var(--fg); }
+.keeper-actions { display:flex;gap:10px;flex-wrap:wrap; }
+.keeper-action { flex:1 1 180px;min-width:0; }
+.keeper-btn {
+  width:100%;padding:9px 10px;font-size:12px;font-weight:600;cursor:pointer;
+  background:var(--surface);color:var(--fg-muted);
+  border:1px solid var(--border-muted);border-radius:6px;
+  transition:border-color 0.15s, color 0.15s, background 0.15s;
+}
+/* Only an action that would actually succeed right now gets the accent — the rest
+   stay legible but plainly inert, with the reason underneath. */
+.keeper-btn.ready { color:var(--green);border-color:var(--green); }
+.keeper-btn.ready:hover { background:var(--status-success); }
+.keeper-btn:disabled { cursor:not-allowed;opacity:0.55; }
+.keeper-why { margin-top:4px;font-size:10px;line-height:1.45;color:var(--fg-dim); }
+.keeper-status { margin-top:8px;font-size:11px;min-height:14px; }
+.keeper-status a { color:inherit;text-decoration:underline; }
+
+/* Vault collection gallery */
+.nft-tile {
+  display:block;width:100%;padding:0;border:none;background:none;text-align:center;
+  cursor:zoom-in;border-radius:8px;outline-offset:3px;
+}
+.nft-tile:hover { background:none; }
+.nft-tile img {
+  width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:8px;
+  background:var(--surface);border:1px solid var(--border-muted);
+  transition:transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.nft-tile:hover img, .nft-tile:focus-visible img {
+  transform:translateY(-2px) scale(1.03);border-color:var(--fg-muted);
+  box-shadow:0 6px 18px rgba(0,0,0,0.18);
+}
+.nft-tile-label {
+  font-size:10px;color:var(--fg-muted);margin-top:4px;letter-spacing:0.03em;
+  transition:color 0.18s ease;
+}
+.nft-tile:hover .nft-tile-label, .nft-tile:focus-visible .nft-tile-label { color:var(--fg); }
+.nft-skel {
+  aspect-ratio:1;border-radius:8px;background:var(--surface);
+  animation:nftPulse 1.4s ease-in-out infinite;
+}
+@keyframes nftPulse { 0%,100% { opacity:0.4 } 50% { opacity:0.75 } }
+/* Lightbox */
+.nft-lb {
+  position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(0,0,0,0.72);backdrop-filter:blur(3px);
+  animation:nftFade 0.15s ease;
+}
+@keyframes nftFade { from { opacity:0 } to { opacity:1 } }
+.nft-lb-inner { max-width:min(520px,92vw);width:100%;text-align:center; }
+.nft-lb img {
+  width:100%;max-height:70vh;object-fit:contain;border-radius:10px;background:var(--surface);
+  display:block;margin:0 auto;
+}
+.nft-lb-meta { margin-top:12px;font-size:12px;color:#fff;opacity:0.9; }
+.nft-lb-meta a { color:#fff;text-decoration:underline; }
+.nft-lb-close {
+  position:absolute;top:16px;right:20px;background:none;color:#fff;font-size:22px;
+  line-height:1;padding:6px 10px;opacity:0.8;
+}
+.nft-lb-close:hover { background:none;opacity:1; }
+@media (prefers-reduced-motion: reduce) {
+  .nft-tile img { transition:none }
+  .nft-tile:hover img, .nft-tile:focus-visible img { transform:none }
+  .nft-skel, .nft-lb { animation:none }
+}
 </style>
 </head>
 <body>
@@ -510,6 +745,10 @@ const CONTINUOUS_SALES = {
   '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853': {
     sale: '0x824d11a46F32cd16cdF46380314343e9697e2491',
     vault: '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e',
+    // Holds the DAO's fee-claim and remint permits. Both actions are open to anyone:
+    // the payloads are fixed and everything lands in the vault, so the only thing a
+    // caller supplies is gas.
+    keeper: '0x002d1618D1a198F581a709837f25a88c951D515C',
     icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
     // Buying with anything but ETH goes through this forwarder. `saleRate` is
     // shares per 1e18 wei and lives here rather than being read, because the
@@ -520,6 +759,21 @@ const CONTINUOUS_SALES = {
     saleRate: 1000000000000000000000000n, // 1e24 = 1,000,000 shares per ETH
   },
 };
+const KEEPER_ABI = [
+  'function claimFees() returns (uint256)',
+  'function remint()',
+  'function canClaim() view returns (bool)',
+  'function canRemint() view returns (bool)',
+  'function pendingFees() view returns (uint256)',
+  'function untilNextPass() view returns (uint256)',
+  'function remainingClaims() view returns (uint256)',
+  'function remainingRemints() view returns (uint256)',
+  'function stopped() view returns (bool)',
+];
+// Fixed mint rate of the continuous sale: 1 ETH buys 1M shares.
+const CONT_SALE_SHARES_PER_ETH = 1000000;
+// What one TokenWorks pass costs to acquire — the unit the vault saves up toward.
+const PASS_PRICE_ETH = '1';
 // ---- Paying for a continuous sale with something other than ETH ----
 // The sale mints for ETH only, so any other asset hops to ETH first and reaches
 // the sale through Collectol, which also decides per size whether the DAO's zAMM
@@ -585,7 +839,6 @@ const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
 ];
-const SUMMONER = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
 // Fallback total supply (whole tokens) for a DAO with no sale record, where
 // sale.totalSupply isn't available. Matches COIN_SUPPLY in modules/coin.js — the
 // 1B convention every zFi launch uses. This was referenced in two places but never
@@ -698,14 +951,23 @@ const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 // backing/share values the NFT at its locked ETH rather than at cost or at zero. The
 // resale value on top of the locked portion is not counted.
 const VAULT_NFT_CONTRACT = '0xb33d806a94B6770C9d309E0842a75f8E6edCd5A6';
-const VAULT_NFT_TOKEN_ID = 156;
-const VAULT_NFT_ABI = ['function getRemainingLockedEth(uint256 tokenId) view returns (uint256)'];
-// Fee accumulator for the TokenWorks pass: pending() is ETH earned by the pass but not
-// yet claimed into the vault. Claimed fees already show up in the vault ETH balance, so
-// this is the missing piece — counted in backing, and shown separately since realising it
-// takes a claim.
+const VAULT_NFT_TOKEN_IDS = [156, 343, 352];
+const VAULT_NFT_ABI = [
+  'function getRemainingLockedEth(uint256 tokenId) view returns (uint256)',
+  // Fully on-chain metadata: data:application/json;base64 wrapping a data:image/svg+xml image.
+  'function tokenURI(uint256 tokenId) view returns (string)',
+];
+// Fee accumulator for the TokenWorks pass. pending() is ETH the pass has earned but not
+// yet claimed; claimed() is everything ever taken into the vault, which is what funds the
+// next purchase. Showing only pending makes a collection that has been claimed down and
+// reinvested look like it never earned anything, so the page reads both.
+// Backing counts pending only — claimed ETH is already in the vault balance or spent on a
+// pass, and adding it again would double count.
 const VAULT_NFT_FEES = '0x1C175b9F0e8C73eD3e677e1cBb1B5A2DD4373Bfe';
-const VAULT_NFT_FEES_ABI = ['function pending(uint256 tokenId) view returns (uint256)'];
+const VAULT_NFT_FEES_ABI = [
+  'function pending(uint256 tokenId) view returns (uint256)',
+  'function claimed(uint256 tokenId) view returns (uint256)',
+];
 const MC3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   'function getEthBalance(address) view returns (uint256)'
@@ -943,12 +1205,6 @@ function _fmtAuctionDur(sec) {
 // computeZammPoolKey / swapVZ infrastructure.
 
 const COINS_SINGLETON = '0x0000000000009710cd229bF635c4500029651eE8';
-// ZAMM staking coin's coinId — already swappable as the built-in `ZAMM` token,
-// so we hide it here to avoid a duplicate row.
-const ZAMM_STAKE_COIN_ID = '1334160193485309697971829933264346612480800613613';
-// Pull a generous page from the indexer so the gallery shows the same v0 set
-// as the swap dropdown (we don't slice further — feature them all).
-const ZAMM_GALLERY_FETCH_LIMIT = 100;
 
 async function fetchZammV0CoinsForGallery() {
   // ZAMM v0 gallery listing relied on the coinchan indexer (now retired). The
@@ -1049,7 +1305,6 @@ function renderNftAuctionCard(a, meta) {
 const ZORG_DAO = '0x5E58BA0e06ED0F5558f83bE732a4b899a674053E';
 const ZORG_TOKEN = '0x00a6bA94BBb5474725515De88fE04F854f2dCb12';
 const ZORG_VERIFY_THRESHOLD = 100000n * (10n ** 18n);
-const VERIFIED_BADGE = `<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle;margin-left:3px"><circle cx="8" cy="8" r="7.5" fill="#1d9bf0"/><path d="M5 8.2l2 2 4-4.4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ZORG_CHAT_ABI = [
   'function chat(string) payable',
   'function badges() view returns (address)',
@@ -1247,9 +1502,6 @@ function toggleLowMcapCoins() {
 let rpcIdx = 0;
 // Reuse RPC providers instead of creating new ones per call
 const _rpcProviders = RPCS.map(url => new ethers.JsonRpcProvider(url, 1, { staticNetwork: true }));
-function getRPC() {
-  return _rpcProviders[rpcIdx % _rpcProviders.length];
-}
 // A public RPC that accepts the socket and then goes quiet never rejects, so without a
 // deadline the failover loop below never advances and the page sits on "Loading..."
 // forever. Each attempt races a timer; a timeout is a failure like any other and moves
@@ -1805,6 +2057,49 @@ function toggleProposals() {
   }
 }
 
+// Chat is written by humans who paste raw links and 42-character addresses. Both are
+// unreadable inline and neither is clickable, so a message that cites a contract or a
+// source makes the reader copy it out by hand. Links open; addresses shorten and go to
+// Etherscan. Tokenised on the raw text and escaped per-segment, so nothing a message
+// contains can escape into markup.
+function linkifyChat(text) {
+  const PAT = /(https?:\/\/[^\s<>"']+)|(\b0x[0-9a-fA-F]{40}\b)/g;
+  let out = '', last = 0, m;
+  while ((m = PAT.exec(text)) !== null) {
+    out += escText(text.slice(last, m.index));
+    if (m[1]) {
+      // Trailing punctuation reads as sentence, not URL.
+      const url = m[1].replace(/[.,;:)\]]+$/, '');
+      const trail = m[1].slice(url.length);
+      const shown = url.replace(/^https?:\/\/(www\.)?/, '');
+      out += `<a href="${escAttr(url)}" target="_blank" rel="noopener noreferrer" class="prop-chat-link" title="${escAttr(url)}">${escText(shown.length > 48 ? shown.slice(0, 47) + '…' : shown)}</a>${escText(trail)}`;
+    } else {
+      const a = m[2];
+      out += `<a href="https://etherscan.io/address/${escAttr(a)}" target="_blank" rel="noopener noreferrer" class="prop-chat-link" title="${escAttr(a)}">${escText(a.slice(0, 6) + '…' + a.slice(-4))}</a>`;
+    }
+    last = m.index + m[0].length;
+  }
+  return out + escText(text.slice(last));
+}
+
+// Hide everything past `keep` in a rendered list behind one "show all" button. The
+// hidden nodes stay in the DOM so countdowns and expanders wired elsewhere survive.
+function collapseList(root, selector, keep, label) {
+  const items = [...root.querySelectorAll(selector)];
+  if (items.length <= keep + 1) return;
+  const hidden = items.slice(keep);
+  hidden.forEach(el => { el.style.display = 'none'; });
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'prop-showall';
+  btn.textContent = `Show ${hidden.length} older ${label}`;
+  btn.addEventListener('click', () => {
+    hidden.forEach(el => { el.style.display = ''; });
+    btn.remove();
+  });
+  items[keep - 1].after(btn);
+}
+
 async function loadProposals(daoAddr) {
   const content = $('proposalsContent');
   if (!content) return;
@@ -1813,22 +2108,21 @@ async function loadProposals(daoAddr) {
     const PROP_ABI = [
       'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string,string,string,address,address,address,address) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256,uint256,uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address,uint256,uint256,uint16,uint256,address[],uint32[])[] members, tuple(uint256 id, address proposer, uint8 state, uint48 snapshotBlock, uint64 createdAt, uint64 queuedAt, uint256 supplySnapshot, uint96 forVotes, uint96 againstVotes, uint96 abstainVotes, tuple(bool,address,uint256,bool,uint8,uint256,uint256) futarchy, tuple(address,uint8,uint256)[] voters)[] proposals, tuple(uint256 index, string text)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
     ];
-    const [result, daoConfig] = await withRPC(async rpc => {
-      const helper = new ethers.Contract(VIEW_HELPER, PROP_ABI, rpc);
-      const moloch = new ethers.Contract(daoAddr, ['function config() view returns (uint64)'], rpc);
-      return Promise.all([
-        helper.getDAOWithDAICO(daoAddr, 0, 50, 0, 200, [], [ZERO]),
-        moloch.config()
-      ]);
-    });
+    // Both reads ride in one aggregate3 rather than two parallel eth_calls, each of which
+    // would walk the RPC fallback list on its own.
+    const helperIface = new ethers.Interface(PROP_ABI);
+    const cfgIface = new ethers.Interface(['function config() view returns (uint64)']);
+    const propRes = await mcAggregate([
+      { target: VIEW_HELPER, allowFailure: true, callData: helperIface.encodeFunctionData('getDAOWithDAICO', [daoAddr, 0, 50, 0, 200, [], [ZERO]]) },
+      { target: daoAddr, allowFailure: true, callData: cfgIface.encodeFunctionData('config') },
+    ]);
+    const result = mcDecode(propRes[0], helperIface, 'getDAOWithDAICO', null)?.[0];
+    if (!result) throw new Error('DAO read failed');
+    const daoConfig = mcDecode(propRes[1], cfgIface, 'config', [0n])[0];
     const proposals = result.base.proposals || [];
     const messages = result.base.messages || [];
     const currentConfig = Number(daoConfig);
 
-    if (proposals.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No proposals yet</div>';
-      return;
-    }
 
     // Decode proposal messages to get descriptions
     function decodePropMsg(text) {
@@ -1873,7 +2167,7 @@ async function loadProposals(daoAddr) {
     // Reverse to show newest first
     const sorted = [...proposals].reverse();
 
-    let html = '';
+    let propHtml = '';
     for (const p of sorted) {
       const id = p.id;
       const proposer = p.proposer;
@@ -1941,11 +2235,19 @@ async function loadProposals(daoAddr) {
             : `${turnoutPct.toFixed(1)}% of ${quorumPct}% quorum`)
         : `${turnoutPct.toFixed(1)}% turnout`;
 
-      html += `<div class="prop-item">
+      const tally = (label, v, cls) =>
+        `<span class="${v > 0 ? '' : 'zero'}">${cls ? `<span class="${cls}">${label}</span>` : label} ${v.toLocaleString(undefined,{maximumFractionDigits:0})}</span>`;
+
+      const metaBits = [];
+      if (timeHTML) metaBits.push(timeHTML);
+      if (createdAt > 0) metaBits.push(`<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>`);
+      if (proposerShort) metaBits.push(`<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>`);
+
+      propHtml += `<div class="prop-item${state === 1 || state === 2 ? ' is-live' : ''}">
         <div class="prop-head">
           <div class="prop-desc">
             <div class="prop-desc-body${isLong ? ' clamped' : ''}">${escText(desc)}</div>
-            ${isLong ? `<button type="button" class="prop-desc-more" data-prop-more>Show more</button>` : ''}
+            ${isLong ? `<button type="button" class="prop-more" data-prop-more>Show more</button>` : ''}
           </div>
           <span class="prop-state ${stateClass}">${stateText}</span>
         </div>
@@ -1956,36 +2258,221 @@ async function loadProposals(daoAddr) {
           ${quorumPct > 0 && quorumPct < 100 ? `<div class="prop-bar-quorum" style="left:${quorumPct}%" title="${quorumPct}% quorum"></div>` : ''}
         </div>` : ''}
         <div class="prop-votes">
-          <span><span class="for">For</span> ${forF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          <span><span class="against">Against</span> ${againstF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-          <span>Abstain ${abstainF.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+          ${tally('For', forF, 'for')}
+          ${tally('Against', againstF, 'against')}
+          ${tally('Abstain', abstainF, '')}
           ${scale > 0 ? `<span class="prop-turnout${quorumMet ? ' met' : ''}" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted">${turnoutText}</span>` : ''}
         </div>
         <div class="prop-meta">
-          ${timeHTML ? `${timeHTML} &middot; ` : ''}${createdAt > 0 ? `<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>` : ''}
-          ${proposerShort ? `${createdAt > 0 || timeHTML ? ' &middot; ' : ''}<a href="https://etherscan.io/address/${proposer}" target="_blank">${proposerShort}</a>` : ''}
+          ${metaBits.join('<span class="sep">&middot;</span>')}
           <span class="prop-id" title="Proposal ID ${id.toString()}">#${shortId}</span>
         </div>
       </div>`;
     }
 
-    html += `<div style="text-align:center;margin-top:8px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote & manage proposals in DAO page</a></div>`;
+    if (!propHtml) propHtml = '<div class="activity-empty">No proposals yet</div>';
+
+    // Discussion — the same response already carried the DAO's messages, so this is free.
+    // Messages that are proposal payloads are skipped: each is already on screen below as
+    // the proposal it encodes, and its raw JSON is several hundred characters of noise.
+    const chat = messages.filter(m => !/<<<PROPOSAL_DATA[\s\S]*PROPOSAL_DATA>>>/.test(m.text || ''));
+    let chatHtml = '';
+    for (const m of [...chat].reverse()) {
+      // Strip machine-readable tags; they are UI plumbing, not something to read.
+      const body = String(m.text || '').replace(/<<<[\s\S]*?>>>/g, '').trim();
+      if (!body) continue;
+      chatHtml += `<div class="prop-chat-item"><span class="prop-chat-idx">#${Number(m.index)}</span><div class="prop-chat-main"><div class="prop-chat-body">${linkifyChat(body)}</div></div></div>`;
+    }
+
+    // Chat first: it is what someone opening the drawer is here to read, and it dates the
+    // proposals underneath. Each message clamps to three lines so a long thread cannot
+    // bury them.
+    let html = '';
+    if (chatHtml) {
+      html += `<div class="prop-sec-head prop-sec-first">Discussion <span>${chat.length}</span></div>`;
+      html += `<div class="prop-chat-list">${chatHtml}</div>`;
+    }
+    html += `<div class="prop-sec-head${chatHtml ? '' : ' prop-sec-first'}">Proposals <span>${proposals.length}</span></div>`;
+    html += propHtml;
+    html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
+
     // Wired after render because the list is rebuilt wholesale via innerHTML, which
     // discards any handler attached to the previous nodes.
-    content.querySelectorAll('[data-prop-more]').forEach(btn => {
+
+    // A message only gets an expander if its text actually overflows the clamp —
+    // measured, because the text length that overflows depends on the rendered width.
+    content.querySelectorAll('.prop-chat-main').forEach(main => {
+      const body = main.querySelector('.prop-chat-body');
+      if (!body || body.scrollHeight <= body.clientHeight + 1) return;
+      main.classList.add('has-more');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'prop-more';
+      btn.textContent = 'Show more';
       btn.addEventListener('click', () => {
-        const body = btn.previousElementSibling;
-        if (!body) return;
+        btn.textContent = main.classList.toggle('open') ? 'Show less' : 'Show more';
+      });
+      main.appendChild(btn);
+    });
+
+    content.querySelectorAll('[data-prop-more]').forEach(btn => {
+      const body = btn.previousElementSibling;
+      if (!body) return;
+      btn.addEventListener('click', () => {
         btn.textContent = body.classList.toggle('clamped') ? 'Show more' : 'Show less';
       });
     });
+
+    // Fifteen settled proposals push the live one off the screen and make the drawer
+    // scroll for a page. Show the recent ones, keep the rest one click away.
+    collapseList(content, '.prop-chat-item', 4, 'discussion messages');
+    collapseList(content, '.prop-item', 5, 'proposals');
+
     startPropCountdowns();
   } catch (e) {
     console.error('loadProposals error:', e);
     content.innerHTML = '<div class="activity-empty">Failed to load proposals</div>';
   }
 }
+
+// What a buy actually buys: a share of the DAO. The quote answers "how many tokens",
+// which is the wrong unit for a collective that votes and holds a treasury — a number
+// with no denominator tells you nothing about what you would own.
+//
+// Minting dilutes, so the new shares enlarge the supply they are measured against; a
+// pool buy moves existing shares and leaves supply alone. Getting that wrong would
+// overstate a mint, which is the route most buys here take.
+function daoStakeHint(sharesWei, minting) {
+  try {
+    if (!sharesWei || sharesWei <= 0n) return '';
+    const supply = BigInt($('app')?.dataset?.totalSupply || '0');
+    if (supply <= 0n) return '';
+    const after = minting ? supply + sharesWei : supply;
+    const pct = Number((sharesWei * 1000000n) / after) / 10000;
+    if (!isFinite(pct) || pct <= 0) return '';
+    const fmtPct = p => p >= 1 ? p.toFixed(2) + '%' : p >= 0.01 ? p.toFixed(3) + '%' : '<0.01%';
+    // If they already hold shares, the number that matters is where they land, not the
+    // size of this one purchase.
+    const held = _sharesBalance || 0n;
+    const total = held > 0n ? Number(((held + sharesWei) * 1000000n) / after) / 10000 : 0;
+    return `<div class="swap-stake">&asymp; ${fmtPct(pct)} of the DAO`
+      + (held > 0n ? ` &middot; you would hold ${fmtPct(total)}` : '')
+      + `</div>`;
+  } catch { return ''; }
+}
+
+// Jump to the trade card with a starter amount already in it. A visitor who taps Buy
+// has decided to buy; landing them on an empty input to type a number they have no
+// reference for is a second decision they did not ask for. 0.01 ETH is small enough to
+// be a try rather than a commitment, and it is theirs to edit before confirming.
+const QUICK_BUY_ETH = '0.01';
+function coinQuickBuy() {
+  const tile = document.querySelector('.swap-tile');
+  if (!tile) return;
+  // The sale tab exists only while a DAICO sale is open; otherwise buying is the Swap
+  // tab, which routes between the continuous mint and the pool on its own.
+  const useSale = !!$('modeTabSale');
+  if (typeof setTradeMode === 'function') setTradeMode(useSale ? 'sale' : 'swap');
+  if (!useSale && typeof setSwapDir === 'function') setSwapDir('buy');
+
+  const input = $(useSale ? 'salePayInput' : 'swapPayInput');
+  if (input) {
+    if (!input.value) {
+      input.value = QUICK_BUY_ETH;
+      if (typeof (useSale ? onSalePayInput : onPayInput) === 'function') (useSale ? onSalePayInput : onPayInput)();
+    }
+  }
+  tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  tile.classList.remove('flash');
+  void tile.offsetWidth;   // restart the animation on a repeat tap
+  tile.classList.add('flash');
+  // Focus after the scroll settles: focusing first makes the browser jump instantly and
+  // fight the smooth scroll. Selected, so typing over the starter amount is one action.
+  setTimeout(() => { if (input) { input.focus({ preventScroll: true }); input.select?.(); } }, 450);
+}
+
+// ---- Keeper panel ----
+// Renders the two permissionless chores and, when one is unavailable, why. A greyed
+// button with no reason attached is just a dead end; the reason is the useful half.
+let _keeperAddr = '';
+function renderKeeperPanel(keeperAddr, k, vaultBal) {
+  const el = $('keeperPanel');
+  if (!el || !keeperAddr || !k) return;
+  _keeperAddr = keeperAddr;
+
+  const pending = k.pendingFees ?? 0n;
+  const short = k.untilNextPass ?? 0n;
+  const claimsLeft = k.remainingClaims ?? 0n;
+  const remintsLeft = k.remainingRemints ?? 0n;
+  const stopped = !!k.stopped;
+  const canClaim = !!k.canClaim, canRemint = !!k.canRemint;
+
+  // A goal or a shortfall wants round numbers, not a balance's full precision.
+  const eth4 = wei => Number(ethers.formatEther(wei)).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+
+  // Why not, in the order a reader would hit them: paused beats spent permits beats
+  // "nothing to do yet".
+  const claimWhy = stopped ? 'Paused by the guardian'
+    : claimsLeft === 0n ? 'No claim permits left — needs a new grant'
+    : pending === 0n ? 'No fees have accrued since the last claim'
+    : `Sweeps pass #156 fees into the vault. You pay gas only.`;
+  const remintWhy = stopped ? 'Paused by the guardian'
+    : remintsLeft === 0n ? 'No remint permits left — needs a new grant'
+    : short > 0n ? `Vault needs ${eth4(short)} ETH more`
+    : `Spends 1 ETH of the vault on another pass. You pay gas only.`;
+
+  const action = (id, label, ok, why, fn, left) => `
+    <div class="keeper-action">
+      <button type="button" class="keeper-btn${ok ? ' ready' : ''}" id="${id}" ${ok ? '' : 'disabled'} onclick="${fn}()">${label}</button>
+      <div class="keeper-why">${why}${left > 0n && left < 1000n ? ` &middot; ${left} use${left === 1n ? '' : 's'} left` : ''}</div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="keeper-head">
+      <a href="https://etherscan.io/address/${escAttr(keeperAddr)}" target="_blank" rel="noopener" title="FWCKeeper — holds the DAO's fee-claim and remint permits">Keeper</a>
+      <span>&middot; anyone can run these</span>
+    </div>
+    <div class="keeper-actions">
+      ${action('keeperClaimBtn', pending > 0n ? `Claim ${eth4(pending)} ETH fees` : 'Claim fees', canClaim, claimWhy, 'keeperClaimFees', claimsLeft)}
+      ${action('keeperRemintBtn', 'Buy next pass', canRemint, remintWhy, 'keeperRemint', remintsLeft)}
+    </div>
+    <div class="keeper-status" id="keeperStatus"></div>`;
+  el.style.display = '';
+}
+
+async function _keeperSend(fnName, label) {
+  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
+  const statusEl = $('keeperStatus');
+  const set = html => { if (statusEl) statusEl.innerHTML = html; };
+  set(`<span>${zfiLoadingSVG(14)} Confirming...</span>`);
+  try {
+    const keeper = new ethers.Contract(_keeperAddr, KEEPER_ABI, _signer);
+    // Simulated first: both calls revert on a condition the panel already reads, so a
+    // stale button costs the reader a rejected wallet prompt instead of a failed tx.
+    await keeper[fnName].staticCall();
+    const tx = await keeper[fnName]();
+    set(`<span>${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></span>`);
+    await tx.wait();
+    set(`<span style="color:var(--green)">${label} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></span>`);
+    // The vault balance, the pass count and the progress bar all just moved.
+    setTimeout(() => { if (typeof _refreshVaultStats === 'function') _refreshVaultStats(); }, 2000);
+  } catch (e) {
+    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
+      set('<span style="color:var(--fg-dim)">Cancelled</span>');
+    } else {
+      const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0] || '';
+      const known = /NothingPending/.test(msg) ? 'Nothing has accrued yet'
+        : /VaultUnderfunded/.test(msg) ? 'The vault is short of a full pass price'
+        : /NoPermit/.test(msg) ? 'The permit is spent — governance must grant another'
+        : /Stopped/.test(msg) ? 'The keeper is paused by the guardian'
+        : msg.length < 100 ? msg : 'Transaction failed';
+      set(`<span style="color:var(--red)">${escText(known)}</span>`);
+    }
+  }
+}
+function keeperClaimFees() { return _keeperSend('claimFees', 'Fees claimed into the vault.'); }
+function keeperRemint() { return _keeperSend('remint', 'Pass purchased for the vault.'); }
 
 function pctBar(pct, color) {
   color = color || 'var(--green)';
@@ -2066,9 +2553,15 @@ function causeRunwayHTML(treasuryWei, ratePerSec) {
   return `<span style="color:${days < 14 ? 'var(--red)' : 'inherit'}">${txt} of runway at this rate</span>`;
 }
 
+// A balance is read, not computed against: six decimals of ETH is noise nobody acts on,
+// and it fights the four-decimal figures the progress bar and the keeper panel show for
+// the same money. Dust still gets the precision it needs, or it would read as zero.
+function fmtEthBal(v) {
+  if (v >= 0.0001) return v.toFixed(4);
+  return fmtNum(v);
+}
 function fmtETH(wei) {
-  const v = Number(ethers.formatEther(wei));
-  return fmtNum(v) + ' ETH';
+  return fmtEthBal(Number(ethers.formatEther(wei))) + ' ETH';
 }
 function fmtNum(v) {
   if (v >= 1) return v.toFixed(4);
@@ -2117,6 +2610,34 @@ function fmtEthPrice(v) {
 
 let _ethUsdPrice = 0;
 let _ethUsdTs = 0;
+// Every read below is an eth_call, so they belong in one aggregate3 rather than as
+// separate requests that each walk the RPC fallback list independently.
+async function mcAggregate(calls) {
+  if (!calls.length) return [];
+  return await withRPC(async rpc => {
+    const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+    return await mc.aggregate3(calls);
+  });
+}
+// Decode one aggregate3 slot, or fall back if the call reverted.
+function mcDecode(res, iface, fn, fallback) {
+  try {
+    return (res && res.success) ? iface.decodeFunctionResult(fn, res.returnData) : fallback;
+  } catch { return fallback; }
+}
+
+// Read the cached ETH price without issuing a call (0 when stale), and fill the cache
+// from an answer the page already fetched in a batch.
+function ethUsdCached() {
+  return (_ethUsdPrice > 0 && Date.now() - _ethUsdTs < 5 * 60 * 1000) ? _ethUsdPrice : 0;
+}
+function setEthUsdFromAnswer(answer) {
+  if (answer === null || answer === undefined) return _ethUsdPrice;
+  _ethUsdPrice = Number(answer) / 1e8;
+  _ethUsdTs = Date.now();
+  return _ethUsdPrice;
+}
+
 async function getEthUsd() {
   if (_ethUsdPrice > 0 && Date.now() - _ethUsdTs < 5 * 60 * 1000) return _ethUsdPrice;
   try {
@@ -2134,6 +2655,9 @@ async function getEthUsd() {
 
 let _renderGen = 0;
 let _saleRefreshInterval = null;
+let _vaultRefreshTimer = null;
+// Set by the collector page so a keeper action can re-read the vault immediately.
+let _refreshVaultStats = null;
 let _saleCountdownInterval = null;
 
 // Polling that only runs while the tab is on screen. A backgrounded coin page used to
@@ -2141,7 +2665,7 @@ let _saleCountdownInterval = null;
 // rate-limiting is what made reads start failing once the tab came back. Skipping the
 // hidden ticks and doing one catch-up refresh on re-show keeps the display just as
 // current from the user's point of view.
-let _pollers = new Set();
+const _pollers = new Set();
 function startPoller(fn, ms) {
   const id = setInterval(() => { if (!document.hidden) fn(); }, ms);
   _pollers.add(fn);
@@ -2178,7 +2702,7 @@ async function refreshSaleStats() {
     const barEl = $('salePctBar');
     if (barEl) barEl.innerHTML = pctBar(salePct, 'var(--green)');
     const rEl = $('saleRaisedRow');
-    if (rEl) rEl.innerHTML = ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : '';
+    if (rEl) rEl.innerHTML = ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)}</span></div>` : '';
     // Refresh mint progress for FW Collector
     const tap = data.tap;
     const minterAddr = tap && tap.ops && tap.ops !== ZERO ? tap.ops : null;
@@ -2186,7 +2710,7 @@ async function refreshSaleStats() {
       try {
         // One multicall instead of three separate reads: this runs on a 20s timer, and
         // going through withRPC means a dead provider fails over instead of throwing
-        // every tick the way a raw getRPC() handle did.
+        // every tick the way a single pinned provider did.
         const minterI = new ethers.Interface(['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)']);
         const [nftCount, lockedEth, minterBal] = await withRPC(async rpc => {
           const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
@@ -2217,19 +2741,8 @@ async function refreshSaleStats() {
               <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
             </div>`;
         }
-        const fwEl = $('fwCollectorInfo');
-        if (fwEl) {
-          const nfts = Number(nftCount);
-          const mBal = Number(ethers.formatEther(minterBal));
-          const lEth = Number(ethers.formatEther(lockedEth));
-          fwEl.innerHTML = `
-            <div class="stat-row"><span class="stat-label"><a href="https://etherscan.io/address/${minterAddr}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--fg-muted)">Minter</a> balance</span><span class="stat-value">${fmtNum(mBal)} ${ethIco}</span></div>
-            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">NFTs in vault</span><span class="stat-value">${nfts}</span></div>` : ''}
-            ${nfts > 0 ? `<div class="stat-row"><span class="stat-label">Locked ETH</span><span class="stat-value">${fmtNum(lEth)} ${ethIco}</span></div>` : ''}
-          `;
-        }
         const tmEl = $('treasuryMinterBal');
-        if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)} ${ethIco}`;
+        if (tmEl) tmEl.innerHTML = `${fmtETH(minterBal)}`;
       } catch (e) { console.error('Mint progress refresh failed:', e); }
     }
     loadBalances();
@@ -2242,6 +2755,11 @@ function route() {
   // with the indexer-backed Pool Activity table, but this reference didn't — and an
   // undeclared identifier throws ReferenceError rather than reading as undefined,
   // so route() died before rendering and every coin page came up blank.
+  // A route change must not leave the gallery overlay pinned over the next page.
+  closeNftLightbox();
+  _vaultGalleryItems = [];
+  if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
+  _refreshVaultStats = null;
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
@@ -2907,7 +3425,6 @@ let _swapDir = 'buy'; // buy = ETH→shares, sell = shares→ETH
 let _exactOut = false; // false = exact input, true = exact output
 let _coinData = null;
 let _coinMeta = null;
-let _quoteTimer = null;
 let _tradeMode = 'swap'; // 'sale' | 'swap' | 'ragequit' | 'lp'
 let _saleData = null; // sale object from getDAICO
 let _saleExactOut = false; // true when user typed in receive field
@@ -2950,13 +3467,6 @@ function formatEthPrice(val) {
   return (val / 1000000).toFixed(2) + 'M';
 }
 
-function formatTimeAgo(ms) {
-  const diff = Math.floor((Date.now() - ms) / 1000);
-  if (diff < 60) return diff + 's';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-  return Math.floor(diff / 86400) + 'd';
-}
 
 function formatPct(pct) {
   const abs = Math.abs(pct);
@@ -5047,8 +5557,11 @@ async function refreshCauseStats(daoAddr, metadata) {
     const cap = sold + saleAllowance;
     const saleDeadline = saleData ? Number(saleData.deadline) : 0;
     const now = Math.floor(Date.now() / 1000);
-    const saleActive = saleDeadline === 0 || now < saleDeadline;
-    const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
+    // A live continuous sale keeps minting open regardless of the DAICO's own deadline or
+    // cap. Without this the 30s refresh flips Status back to "Ended" under an open sale.
+    const contSaleLive = !!$('app')?.dataset?.contSale;
+    const saleActive = contSaleLive || saleDeadline === 0 || now < saleDeadline;
+    const isOpenCap = contSaleLive || cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
     const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
     const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
     const raisedEth = Number(ethers.formatEther(raisedWei));
@@ -5324,6 +5837,7 @@ async function renderCoinPage(daoAddr) {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
+  if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
   _pollers.clear();
   const gen = ++_renderGen;
   // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
@@ -5343,17 +5857,15 @@ async function renderCoinPage(daoAddr) {
 
   // Try ClassicalCurveSale and DAICO path in parallel — use whichever matches
   try {
-    const [curveData, daicoData] = await Promise.all([
-      withRPC(async rpc => {
-        const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
-        const c = await cs.curves(daoAddr);
-        return (c.creator && c.creator !== ZERO) ? c : null;
-      }).catch(() => null),
-      withRPC(async rpc => {
-        const helper = new ethers.Contract(VIEW_HELPER, GET_DAICO_ABI, rpc);
-        return await helper.getDAICO(daoAddr, [ZERO]);
-      }).catch(() => null)
-    ]);
+    const curveIface = new ethers.Interface(CURVE_SALE_ABI);
+    const daicoIface = new ethers.Interface(GET_DAICO_ABI);
+    const routeRes = await mcAggregate([
+      { target: CURVE_SALE, allowFailure: true, callData: curveIface.encodeFunctionData('curves', [daoAddr]) },
+      { target: VIEW_HELPER, allowFailure: true, callData: daicoIface.encodeFunctionData('getDAICO', [daoAddr, [ZERO]]) },
+    ]).catch(() => []);
+    const curveDecoded = mcDecode(routeRes[0], curveIface, 'curves', null);
+    const curveData = (curveDecoded && curveDecoded.creator && curveDecoded.creator !== ZERO) ? curveDecoded : null;
+    const daicoData = mcDecode(routeRes[1], daicoIface, 'getDAICO', null)?.[0] ?? null;
     if (gen !== _renderGen) return;
 
     if (curveData) {
@@ -5377,32 +5889,47 @@ async function renderCoinPage(daoAddr) {
     const feeOrHookVal = sale ? BigInt(sale.feeOrHook) : 30n;
     const poolId = computePoolId(ZERO, sharesAddr, 0n, 0n, feeOrHookVal);
     const tapActive_ = tap && tap.ratePerSec > 0n;
-    // The continuous-sale paused() flag depends only on daoAddr, so it rides along here
-    // rather than costing its own serial round trip further down.
-    const _csAddrEarly = CONTINUOUS_SALES[daoAddr.toLowerCase()]?.sale;
-    const [metadata, poolResult, ethUsd, daoLpBal, csPausedEarly] = await Promise.all([
-      fetchMetadata(data.meta.contractURI),
-      withRPC(async rpc => {
-        const z = new ethers.Contract(ZAMM, ZAMM_POOLS_ABI, rpc);
-        return await z.pools(poolId);
-      }).catch(() => null),
-      getEthUsd(),
+    // Looked up before the fetch so the sale's paused() rides along with it instead of
+    // costing this page a second serial round trip.
+    const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+    const contSaleAddr = contSaleConfig?.sale;
+    const contVaultAddr = contSaleConfig?.vault;
+    const contKeeperAddr = contSaleConfig?.keeper;
+    // One multicall for every on-chain read this page needs up front — pool reserves, the
+    // DAO's LP balance, the sale's paused flag and (only when its 5-minute cache is stale)
+    // the ETH price. Metadata is HTTP, so it stays alongside rather than inside.
+    const poolsIface = new ethers.Interface(ZAMM_POOLS_ABI);
+    const lpIface = new ethers.Interface(ZAMM_LP_ABI);
+    const csIface = new ethers.Interface(CONTINUOUS_SALE_ABI);
+    const clIface = new ethers.Interface(CHAINLINK_ABI);
+    const cachedUsd = ethUsdCached();
+    const detailCalls = [
+      { target: ZAMM, allowFailure: true, callData: poolsIface.encodeFunctionData('pools', [poolId]) },
       // LP is ERC6909 on zAMM; a DAO that seeded its own pool owns part of the reserves
-      withRPC(async rpc => {
-        const z = new ethers.Contract(ZAMM, ZAMM_LP_ABI, rpc);
-        return await z.balanceOf(daoAddr, poolId);
-      }).catch(() => 0n),
-      _csAddrEarly
-        ? withRPC(async rpc => {
-            const cs = new ethers.Contract(_csAddrEarly, CONTINUOUS_SALE_ABI, rpc);
-            return await cs.paused();
-          }).catch(() => null)
-        : Promise.resolve(null)
+      { target: ZAMM, allowFailure: true, callData: lpIface.encodeFunctionData('balanceOf', [daoAddr, poolId]) },
+    ];
+    const pausedIdx = contSaleAddr ? detailCalls.push(
+      { target: contSaleAddr, allowFailure: true, callData: csIface.encodeFunctionData('paused') }) - 1 : -1;
+    // Minted shares, for expressing a purchase as a stake in the DAO. The sale's
+    // configured supply is not the same number and would understate every stake.
+    const supplyIdx = detailCalls.push(
+      { target: sharesAddr, allowFailure: true, callData: new ethers.Interface(ERC20_ABI).encodeFunctionData('totalSupply') }) - 1;
+    const usdIdx = cachedUsd > 0 ? -1 : detailCalls.push(
+      { target: CHAINLINK_ETH_USD, allowFailure: true, callData: clIface.encodeFunctionData('latestAnswer') }) - 1;
+
+    const [metadata, detailRes] = await Promise.all([
+      fetchMetadata(data.meta.contractURI),
+      mcAggregate(detailCalls).catch(() => []),
     ]);
+    const poolResult = mcDecode(detailRes[0], poolsIface, 'pools', null);
+    const daoLpBal = mcDecode(detailRes[1], lpIface, 'balanceOf', [0n])[0];
+    // null = the read failed, which is not the same as the sale being closed.
+    const csPaused = pausedIdx < 0 ? undefined : (mcDecode(detailRes[pausedIdx], csIface, 'paused', null)?.[0] ?? null);
+    const ethUsd = usdIdx < 0 ? cachedUsd : setEthUsdFromAnswer(mcDecode(detailRes[usdIdx], clIface, 'latestAnswer', null)?.[0]);
+    const sharesMinted = mcDecode(detailRes[supplyIdx], new ethers.Interface(ERC20_ABI), 'totalSupply', [0n])[0];
     if (gen !== _renderGen) return;
     // Override icon for DAOs with configured Continuous Sale icons
-    const _csConf = CONTINUOUS_SALES[daoAddr.toLowerCase()];
-    if (_csConf?.icon && metadata && !metadata.image) metadata.image = _csConf.icon;
+    if (contSaleConfig?.icon && metadata && !metadata.image) metadata.image = contSaleConfig.icon;
     _coinMeta = metadata;
 
     // Cause coin detection — render simplified sale page
@@ -5431,14 +5958,14 @@ async function renderCoinPage(daoAddr) {
     }
 
     // Continuous Sale: override saleActive if a continuous sale contract is active
-    const contSaleConfig = CONTINUOUS_SALES[daoAddr.toLowerCase()];
-    const contSaleAddr = contSaleConfig?.sale;
-    const contVaultAddr = contSaleConfig?.vault;
-    let contSaleActive = false;
+    // Keep the phase-0 answer: the DAICO sale being over is what makes the pool the honest
+    // price reference, and a live phase-1 sale must not drag the header back to phase 0's price.
+    const daicoSaleActive = saleActive;
+    let contSaleActive = false, contSaleUnknown = false;
     if (contSaleAddr) {
-      // Read alongside the metadata batch above; null means the read failed, and an
-      // unknown pause state should not be reported as a live sale.
-      if (csPausedEarly !== null) contSaleActive = !csPausedEarly;
+      // A failed read is not evidence the sale is closed — say so rather than imply it ended.
+      if (csPaused === null) contSaleUnknown = true;
+      else contSaleActive = !csPaused;
       if (contSaleActive) saleActive = true;
     }
 
@@ -5528,12 +6055,15 @@ async function renderCoinPage(daoAddr) {
     const circulating = detailTotalSupply - unsold - detailTeamLocked - daoPoolTokens;
     // Price: pool spot if sale ended or pool is deep, else sale price
     const poolDeep = hasPool && reserve1 > 0n && inLp > detailTotalSupply * 0.01;
-    const usePool = hasPool && (!saleActive || poolDeep);
+    const usePool = hasPool && (!daicoSaleActive || poolDeep);
     // Spot price per token: pool reserve ratio when the pool is the reference, else sale price
     let priceETH = 0, priceSrc = '';
     if (usePool && inLp > 0) {
       priceETH = Number(ethers.formatEther(reserve0)) / inLp;
       priceSrc = 'pool';
+    } else if (contSaleActive) {
+      priceETH = 1 / CONT_SALE_SHARES_PER_ETH;
+      priceSrc = 'sale';
     } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
       priceETH = Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt));
       priceSrc = 'sale';
@@ -5559,6 +6089,10 @@ async function renderCoinPage(daoAddr) {
             <div id="coinUserBalance" class="coin-user-balance" style="display:none"></div>
           </div>
         </div>
+        <!-- The trade card sits below the treasury and the collection, so on a long page
+             the one thing a visitor came to do is off screen. This carries them to it —
+             but only when there is in fact a way to buy. -->
+        ${(saleActive || contSaleActive || hasPool) ? `<button type="button" class="coin-buy-cta" onclick="coinQuickBuy()">Buy</button>` : ''}
       </div>
       ${contSaleActive
         ? `<div class="coin-mcap-row" style="color:var(--fg-dim)">Collector DAO &middot; continuous sale</div>`
@@ -5573,11 +6107,16 @@ async function renderCoinPage(daoAddr) {
     // A one-line description in a full bordered card outweighs the treasury visually;
     // drop the card chrome when there's little to hold.
     const terseDesc = !hasSocials && metadata.description && metadata.description.length <= 60;
-    if (metadata.description || hasSocials) {
+    // The collector label above already carries this text on FWC-style DAOs; repeating it
+    // verbatim one line down is noise, so drop the echo and keep anything else.
+    const descEchoesLabel = !!metadata.description && isCollect
+      && metadata.description.trim().toLowerCase() === 'collector dao';
+    const showDesc = !!metadata.description && !descEchoesLabel;
+    if (showDesc || hasSocials) {
       html += terseDesc ? `<div class="coin-desc-inline">` : `<div class="section-card">`;
-      if (metadata.description) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
+      if (showDesc) html += `<div class="desc-text">${escText(metadata.description)}</div>`;
       if (hasSocials) {
-        html += `<div class="socials-row"${metadata.description ? ' style="margin-top:10px"' : ''}>`;
+        html += `<div class="socials-row"${showDesc ? ' style="margin-top:10px"' : ''}>`;
         if (metadata.twitter) {
           const _tw = metadata.twitter.replace(/^@/, '').trim();
           const _twHandle = _tw.replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com)\//, '').replace(/\/.*$/, '');
@@ -5609,21 +6148,48 @@ async function renderCoinPage(daoAddr) {
     const saleContent = `
         <div class="stat-row"><span class="stat-label">Sold</span><span class="stat-value" id="saleSoldVal">${fmtShares(sold)} / ${fmtShares(totalSale)} <span style="color:var(--green);font-weight:600">(${salePct.toFixed(1)}%)</span></span></div>
         <div id="salePctBar">${pctBar(salePct, 'var(--green)')}</div>
-        <div id="saleRaisedRow">${ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)} ${ethIco}</span></div>` : ''}</div>
+        <div id="saleRaisedRow">${ethRaised > 0n ? `<div class="stat-row"><span class="stat-label">ETH raised</span><span class="stat-value">${fmtETH(ethRaised)}</span></div>` : ''}</div>
         <div id="saleMintProgress"></div>
         ${priceDisplay ? `<div class="stat-row"><span class="stat-label">Price</span><span class="stat-value">${priceDisplay} ${ethIco}/1M shares</span></div>` : ''}
         ${lpBps > 0 ? `<div class="stat-row"><span class="stat-label">LP seeding</span><span class="stat-value">${lpBps / 100}% of buys &rarr; zAMM${feeOrHook <= 10000n ? ` (${Number(feeOrHook) / 100}% fee)` : ''}</span></div>` : ''}
         ${sale && sale.deadline > 0n ? `<div id="saleDeadlineRow"></div>` : ''}`
+    // The DAICO sale is phase 0 of a collector DAO; once it closes a continuous sale can
+    // reopen minting as phase 1. When phase 1 is live the phase 0 record still stands, so
+    // it stays on the page as a collapsed drawer under the live card rather than vanishing.
+    const saleEndedDrawer = `
+        <div class="drawer" id="saleDrawer">
+          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
+            <span>${contSaleActive ? 'Phase 0 &middot; Sale (Ended)' : 'Sale (Ended)'}</span>
+            <span class="arrow">&#9660;</span>
+          </button>
+          <div class="drawer-body">
+            ${saleContent}
+          </div>
+        </div>
+      `;
+    // No price comparison here — the Swap tab quotes mint against pool per trade and routes
+    // to whichever is better, which is the comparison that actually decides anything.
+    const contSaleTip = 'Fixed mint rate. The Swap tab compares this against the pool for the size you enter and uses whichever gives more shares.';
+    // Ragequit pays out of the DAO's *own* ETH. A collector DAO parks its ETH in the vault,
+    // where a redemption cannot reach it, so only promise a refund when there is one.
+    const rqNote = treasuryETH > 0n
+      ? 'Shares are ragequittable for a pro-rata treasury refund.'
+      : 'Shares are ragequittable against the DAO’s own ETH; vault holdings are distributed by governance.';
     if (contSaleActive) {
       html += `
         <div class="section-card">
-          <div class="section-title">Continuous Sale (Live)</div>
-          <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
-          <div class="stat-row"><span class="stat-label">Sale</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a></span></div>
-          ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">Vault</span><span class="stat-value" style="font-size:11px"><a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="color:inherit;text-decoration:underline">${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a></span></div>` : ''}
-          <div style="font-size:11px;color:var(--fg-muted);margin-top:6px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault for governance-triggered minting. Shares are ragequittable for a pro-rata treasury refund.</div>
+          <div class="section-title">Phase 1 &middot; Continuous Sale (Live)</div>
+          <div class="stat-row"><span class="stat-label" title="${escAttr(contSaleTip)}">Rate</span><span class="stat-value">1 ETH = 1M shares</span></div>
+          <div id="nextPassProgress" style="display:none;margin:8px 0 10px"></div>
+          ${contKeeperAddr ? `<div id="keeperPanel" class="keeper-panel" style="display:none"></div>` : ''}
+          <div style="font-size:11px;line-height:1.6;color:var(--fg-muted);margin-top:10px">Buy shares with ETH to fund TokenWorks NFT acquisitions for this collector DAO. ETH flows to the vault, and once it clears a pass price anyone can trigger the purchase &mdash; governance approved the action, not the caller. ${rqNote}</div>
+          <div style="font-size:10px;color:var(--fg-dim);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-muted)">
+            <a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Sale ${contSaleAddr.slice(0,6)}&hellip;${contSaleAddr.slice(-4)}</a>${contVaultAddr ? `
+            &nbsp;&middot;&nbsp; <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Vault ${contVaultAddr.slice(0,6)}&hellip;${contVaultAddr.slice(-4)}</a>` : ''}
+          </div>
         </div>
       `;
+      if (hasDaicoSale) html += saleEndedDrawer;
     } else if (saleActive && hasDaicoSale) {
       html += `
         <div class="section-card">
@@ -5659,15 +6225,14 @@ async function renderCoinPage(daoAddr) {
       // Auto-refresh sale stats every 20s while sale is live
       _saleRefreshInterval = startPoller(refreshSaleStats, 20000);
     } else if (hasDaicoSale) {
+      html += saleEndedDrawer;
+    }
+    // The phase-1 status read failed, so the page cannot say whether minting is open.
+    // Say that, instead of leaving the ended drawer to imply the sale is over.
+    if (contSaleUnknown) {
       html += `
-        <div class="drawer" id="saleDrawer">
-          <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-            <span>Sale (Ended)</span>
-            <span class="arrow">&#9660;</span>
-          </button>
-          <div class="drawer-body">
-            ${saleContent}
-          </div>
+        <div class="section-card" style="background:var(--surface)">
+          <div style="font-size:11px;color:var(--fg-muted)">Continuous sale status unavailable &mdash; could not reach the <a href="https://etherscan.io/address/${contSaleAddr}" target="_blank" style="color:inherit;text-decoration:underline">sale contract</a>. Reload to try again.</div>
         </div>
       `;
     }
@@ -5695,12 +6260,12 @@ async function renderCoinPage(daoAddr) {
       html += `
         <div class="section-card">
           <div class="section-title">Treasury</div>
-          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)} ${ethIco}</span></div>` : ''}
+          ${treasuryETH > 0n ? `<div class="stat-row"><span class="stat-label">${ethIco} DAO Balance</span><span class="stat-value">${fmtETH(treasuryETH)}</span></div>` : ''}
           ${contVaultAddr ? `<div class="stat-row"><span class="stat-label">${ethIco} Vault</span><span class="stat-value"><span id="vaultEthBal">Loading...</span> <a href="https://etherscan.io/address/${contVaultAddr}" target="_blank" style="font-size:10px;color:var(--fg-muted);text-decoration:underline;margin-left:4px">view</a></span></div>
           <div class="stat-row"><span class="stat-label">NFTs</span><span class="stat-value"><span id="vaultNftBal">Loading...</span></span></div>
-          <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Fees earned by the vault's TokenWorks pass that have not been claimed into the vault yet. Claiming requires a proposal.">Unclaimed fees</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
+          <div class="stat-row" id="vaultFeesRow" style="display:none"><span class="stat-label" title="Everything the vault's passes have earned in fees since they were acquired, whether or not it has been claimed yet. Claimed fees have already been taken into the vault and largely reinvested into further passes; unclaimed fees still sit at the fee accumulator and need a claim to realise.">Fees earned</span><span class="stat-value" id="vaultFeesVal"></span></div>` : ''}
           ${hasPool ? `
-            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)} ${ethIco}</span></div>
+            <div class="stat-row"><span class="stat-label">Pool ${ethIco}${saleActive && !contSaleActive && lpBps > 0 ? ' <span style="font-weight:400;font-size:10px;opacity:0.6">(building...)</span>' : ''}</span><span class="stat-value">${fmtETH(reserve0)}</span></div>
             <div class="stat-row"><span class="stat-label">Pool $${escText(data.meta.symbol || '???')}</span><span class="stat-value">${fmtShares(reserve1)}</span></div>
           ` : ''}
           ${(daoLpFrac > 0 || navHTML || contVaultAddr) ? `
@@ -5716,6 +6281,21 @@ async function renderCoinPage(daoAddr) {
           </div>` : ''}
         </div>
       `;
+      // Gallery of the passes the vault has collected. The art comes from each token's
+      // on-chain SVG, so it is filled in by the vault fetch below and stays hidden if
+      // the tokenURI reads fail.
+      if (contVaultAddr) {
+        html += `
+          <div class="section-card" id="vaultGalleryCard">
+            <div class="section-title">Collection</div>
+            <!-- auto-fill with a max track width so a two-pass vault gets two small tiles,
+                 not two tiles stretched across the whole card. Seeded with one skeleton per
+                 known id so the card holds its space instead of appearing after the read. -->
+            <div id="vaultGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,132px));gap:10px;justify-content:start">${VAULT_NFT_TOKEN_IDS.map(() => '<div class="nft-skel"></div>').join('')}</div>
+            <div id="vaultGalleryCaption" style="font-size:10px;color:var(--fg-dim);margin-top:8px"></div>
+          </div>
+        `;
+      }
       // Date the DAO's LP once the page is idle, and say so on the row: confirmed seeder
       // means the fee estimate covers the pool's whole life; anything else is softened.
       if (daoLpFeesEth > 0) {
@@ -5739,43 +6319,115 @@ async function renderCoinPage(daoAddr) {
         });
       }
 
-      // Fetch vault balances async
+      // Fetch vault balances async, then keep them current: a pass purchase or a fee
+      // claim while the page sits open should not leave stale numbers on screen.
       if (contVaultAddr) {
-        (async () => {
+        const loadVaultStats = async () => {
           // NOTE: this runs before `content.innerHTML = html` below, so the treasury nodes
           // do not exist yet — every DOM write here must happen after an await.
           try {
             const nftIface = new ethers.Interface(VAULT_NFT_ABI);
             const feeIface = new ethers.Interface(VAULT_NFT_FEES_ABI);
-            const [vaultBal, nftLocked, nftPending] = await withRPC(async rpc => {
+            const keeperIface = new ethers.Interface(KEEPER_ABI);
+            const keeperViews = contKeeperAddr
+              ? ['canClaim', 'canRemint', 'pendingFees', 'untilNextPass', 'remainingClaims', 'remainingRemints', 'stopped']
+              : [];
+            const [vaultBal, nftLocked, nftPending, nftClaimed, tokenURIs, keeper] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
                 { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [contVaultAddr]) },
-                { target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [VAULT_NFT_TOKEN_ID]) },
-                { target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [VAULT_NFT_TOKEN_ID]) },
+                // Four groups of one call per pass, each in id order: locked ETH, pending
+                // fees, lifetime claimed fees, then the on-chain metadata URI.
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('claimed', [id]) })),
+                ...VAULT_NFT_TOKEN_IDS.map(id => ({ target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('tokenURI', [id]) })),
+                // Keeper state. Its own canClaim/canRemint decide whether the buttons are
+                // live, rather than the page re-deriving the rules and drifting from them.
+                ...keeperViews.map(fn => ({ target: contKeeperAddr, allowFailure: true, callData: keeperIface.encodeFunctionData(fn) })),
               ]);
+              const n = VAULT_NFT_TOKEN_IDS.length;
+              const sum = (offset, iface, fn) => res.slice(offset, offset + n).reduce(
+                (acc, r) => acc + (r.success ? iface.decodeFunctionResult(fn, r.returnData)[0] : 0n), 0n);
               return [
                 res[0].success ? _mc3Iface.decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
-                res[1].success ? nftIface.decodeFunctionResult('getRemainingLockedEth', res[1].returnData)[0] : 0n,
-                res[2].success ? feeIface.decodeFunctionResult('pending', res[2].returnData)[0] : 0n,
+                sum(1, nftIface, 'getRemainingLockedEth'),
+                sum(1 + n, feeIface, 'pending'),
+                sum(1 + 2 * n, feeIface, 'claimed'),
+                res.slice(1 + 3 * n, 1 + 4 * n).map(r => r.success ? nftIface.decodeFunctionResult('tokenURI', r.returnData)[0] : ''),
+                // A failed call leaves the value undefined, and the panel treats a missing
+                // read as "cannot act" rather than showing a button that would revert.
+                keeperViews.reduce((acc, fn, i) => {
+                  const r = res[1 + 4 * n + i];
+                  if (r && r.success) { try { acc[fn] = keeperIface.decodeFunctionResult(fn, r.returnData)[0]; } catch {} }
+                  return acc;
+                }, {}),
               ];
             });
-            // Guard before any DOM write: a re-render (or a hop to another coin) while
-            // this multicall was in flight would otherwise repaint the new page's
-            // treasury rows with the old DAO's vault figures.
+            // Navigating away mid-flight must not paint the old vault's numbers onto the
+            // page that replaced it.
             if (gen !== _renderGen) return;
             const el = $('vaultEthBal');
             if (el) el.textContent = fmtETH(vaultBal);
-            // Hardcoded NFT holding for the FWC vault (1 TokenWorks NFT currently held),
-            // annotated with the ETH still refundable from it.
+            // Hardcoded NFT holdings for the FWC vault (TokenWorks passes collected so far),
+            // annotated with the ETH still refundable across them.
             const nftLockedEth = Number(ethers.formatEther(nftLocked));
             const nftEl = $('vaultNftBal');
-            if (nftEl) nftEl.innerHTML = `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${VAULT_NFT_TOKEN_ID}" target="_blank" style="color:inherit;text-decoration:underline">1 TokenWorks NFT</a>${nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtNum(nftLockedEth)} ETH locked</span>` : ''}`;
+            const nftCountHeld = VAULT_NFT_TOKEN_IDS.length;
+            if (nftEl) nftEl.innerHTML = `${nftCountHeld} TokenWorks NFT${nftCountHeld > 1 ? 's' : ''} `
+              + VAULT_NFT_TOKEN_IDS.map(id => `<a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${id}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">#${id}</a>`).join(' ')
+              + (nftLockedEth > 0 ? ` <span style="color:var(--fg-dim);font-size:10px">${fmtEthBal(nftLockedEth)} ETH locked</span>` : '');
+            // Gallery: the pass art is a base64 data URI inside base64 JSON, both on-chain,
+            // so the image can go straight into an <img> with no gateway in the path.
+            const galleryEl = $('vaultGallery'), galleryCard = $('vaultGalleryCard');
+            if (galleryEl && galleryCard) {
+              _vaultGalleryItems = (tokenURIs || []).map((uri, i) => {
+                const id = VAULT_NFT_TOKEN_IDS[i];
+                let meta = null;
+                try {
+                  const b64 = String(uri).split('base64,')[1];
+                  if (b64) meta = JSON.parse(decodeURIComponent(escape(atob(b64))));
+                } catch {}
+                return (meta && meta.image) ? { id, name: meta.name || ('#' + id), image: meta.image } : null;
+              }).filter(Boolean);
+              // Tiles open the art in-page rather than jumping straight to a marketplace —
+              // the outbound links live in the lightbox, one step further in.
+              const cards = _vaultGalleryItems.map((it, i) => `
+                  <button type="button" class="nft-tile" onclick="openNftLightbox(${i})" aria-label="View ${escAttr(it.name)}">
+                    <img src="${escAttr(it.image)}" alt="${escAttr(it.name)}" loading="lazy" decoding="async">
+                    <div class="nft-tile-label">#${it.id}</div>
+                  </button>`);
+              if (!cards.length) { galleryCard.style.display = 'none'; }
+              else {
+                // The 30s refresh re-reads the same art; rewriting it would re-decode a few
+                // hundred KB of inline SVG and flicker. Only touch the DOM when the set changes.
+                const sig = _vaultGalleryItems.map(it => it.id).join(',');
+                if (galleryEl.dataset.sig !== sig) {
+                  galleryEl.dataset.sig = sig;
+                  galleryEl.innerHTML = cards.join('');
+                }
+                // Summarise what the collection is worth in ETH terms, so the art is not the
+                // only thing the card says.
+                const capEl = $('vaultGalleryCaption');
+                if (capEl) capEl.textContent = `${cards.length} pass${cards.length > 1 ? 'es' : ''}`
+                  + (nftLockedEth > 0 ? ` \u00b7 ${fmtEthBal(nftLockedEth)} ETH refundable` : '')
+                  + (nftPending + nftClaimed > 0n ? ` \u00b7 ${fmtNum(Number(ethers.formatEther(nftPending + nftClaimed)))} ETH fees earned to date` : '');
+              }
+            }
             // Unclaimed fees earned by the pass — claimable to the vault via proposal
             const pendingEth = Number(ethers.formatEther(nftPending));
+            const claimedEth = Number(ethers.formatEther(nftClaimed));
+            const earnedEth = pendingEth + claimedEth;
             const feeRowEl = $('vaultFeesRow'), feeValEl = $('vaultFeesVal');
-            if (feeRowEl && feeValEl && pendingEth > 0) {
-              feeValEl.innerHTML = `${fmtNum(pendingEth)} ${ethIco}${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(pendingEth * ethUsd)})</span>` : ''}`;
+            if (feeRowEl && feeValEl && earnedEth > 0) {
+              // Lead with lifetime earnings. A claimed-down collection otherwise reads as
+              // one that has never earned, when the claims are what funded the next pass.
+              const split = [
+                claimedEth > 0 ? `${fmtEthBal(claimedEth)} claimed &amp; reinvested` : '',
+                pendingEth > 0 ? `${fmtEthBal(pendingEth)} unclaimed` : ''
+              ].filter(Boolean).join(' &middot; ');
+              feeValEl.innerHTML = `${fmtEthBal(earnedEth)} ETH${ethUsd > 0 ? ` <span style="color:var(--fg-muted);font-weight:400">(${fmtUsd(earnedEth * ethUsd)})</span>` : ''}`
+                + (split ? `<div style="font-size:10px;color:var(--fg-dim);font-weight:400;margin-top:2px">${split}</div>` : '');
               feeRowEl.style.display = '';
             }
             // Backing = vault ETH + the NFT's still-refundable ETH + fees it has earned
@@ -5793,8 +6445,50 @@ async function renderCoinPage(daoAddr) {
               navValEl.innerHTML = navBody;
               navRowEl.style.display = '';
             }
-          } catch (e) { console.error('vault stats load failed:', e); if (gen === _renderGen) { const el = $('vaultEthBal'); if (el) el.textContent = '--'; } }
-        })();
+            // Progress to the next pass. This is the collector loop made visible: mint
+            // proceeds and claimed fees pool in the vault until they clear a pass price.
+            const nextEl = $('nextPassProgress');
+            if (nextEl) {
+              // A goal wants round numbers, not a balance's full precision.
+              const fmt4 = w => Number(ethers.formatEther(w)).toFixed(4);
+              const passPrice = ethers.parseEther(PASS_PRICE_ETH);
+              const haveWei = vaultBal + nftPending;      // claimable fees count toward it
+              const pct = Number((haveWei * 10000n) / passPrice) / 100;
+              const shortWei = haveWei >= passPrice ? 0n : passPrice - haveWei;
+              nextEl.innerHTML = `
+                <div class="stat-row"><span class="stat-label" style="font-size:12px">Toward pass #${VAULT_NFT_TOKEN_IDS.length + 1}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmt4(haveWei)} / ${PASS_PRICE_ETH} ETH</span></div>
+                ${pctBar(Math.min(pct, 100), 'var(--green)')}
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--fg-dim);margin-top:4px">
+                  <span>${shortWei > 0n
+                    ? `${fmt4(shortWei)} ETH to go${nftPending > 0n ? ' (incl. unclaimed fees)' : ''}`
+                    : 'Funded &mdash; ready for the next acquisition'}</span>
+                  <span>${Math.min(pct, 100).toFixed(0)}%</span>
+                </div>`;
+              nextEl.style.display = '';
+            }
+            // Keeper actions. The DAO granted these permits to a contract anyone may poke,
+            // so the two chores that used to wait on whoever remembered to run them are
+            // now a button here: sweep the pass fees in, and spend a full vault on the
+            // next pass. A caller pays gas and nothing else — the payloads are fixed and
+            // the proceeds land in the vault either way.
+            renderKeeperPanel(contKeeperAddr, keeper, vaultBal);
+          } catch (e) {
+            console.error('vault stats load failed:', e);
+            const el = $('vaultEthBal'); if (el) el.textContent = '--';
+            // Otherwise the placeholder tiles pulse forever, implying art still loading.
+            const gc = $('vaultGalleryCard'); if (gc) gc.style.display = 'none';
+          }
+        };
+        // Exposed so a keeper action can pull fresh numbers the moment its tx lands,
+        // rather than leaving stale ones up until the next 30s tick.
+        _refreshVaultStats = loadVaultStats;
+        loadVaultStats();
+        if (_vaultRefreshTimer) clearInterval(_vaultRefreshTimer);
+        const vaultTick = () => {
+          if (gen !== _renderGen) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; stopPoller(vaultTick); return; }
+          loadVaultStats();
+        };
+        _vaultRefreshTimer = startPoller(vaultTick, 30000);
       }
     }
 
@@ -5873,6 +6567,19 @@ async function renderCoinPage(daoAddr) {
     const canRagequit = treasuryETH > 0n;
     const defaultMode = saleActive ? 'sale' : hasPool ? 'swap' : canRagequit ? 'ragequit' : 'swap';
 
+    // The mint sets a reference price the pool tends to track. Worth a note when the pool
+    // has drifted meaningfully above it — but a fraction of a percent is just noise, and
+    // flagging that reads as a warning where there is nothing to warn about.
+    const poolSpotEth = (hasPool && inLp > 0) ? Number(ethers.formatEther(reserve0)) / inLp : 0;
+    const mintPriceEth = 1 / CONT_SALE_SHARES_PER_ETH;
+    const lpPremium = (contSaleActive && poolSpotEth > 0) ? poolSpotEth / mintPriceEth : 0;
+    const lpCappedWarning = lpPremium > 1.05
+      ? `<div style="font-size:11px;line-height:1.5;color:var(--fg-dim);margin-bottom:10px">
+           Shares mint at ${fmtEthPrice(mintPriceEth)}, so the pool tends to track that price.
+           The pool is currently ${((lpPremium - 1) * 100).toFixed(0)}% above it.
+         </div>`
+      : '';
+
     html += `
       <div class="section-card swap-tile">
         <div class="swap-mode-tabs">
@@ -5923,8 +6630,9 @@ async function renderCoinPage(daoAddr) {
             </div>
             <input type="text" id="saleReceiveInput" placeholder="0.0" oninput="onSaleReceiveInput()" autocomplete="off">
             <div class="sale-lp-note" id="saleLpNote"></div>
+            <div id="saleStake"></div>
           </div>
-          <div class="swap-quote" id="saleQuote">${contSaleActive ? 'Continuous sale: 1 ETH = 1M shares' : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
+          <div class="swap-quote" id="saleQuote">${contSaleActive ? `Continuous sale: 1 ETH = 1M shares` : (priceDisplay ? `Sale price: ${priceDisplay} ETH / 1M shares` : '')}</div>
           ${!contSaleActive ? `<button class="swap-pct-btn" onclick="fillSweep()" style="width:100%;margin-bottom:8px;font-size:11px;padding:6px">Sweep (buy all remaining)</button>` : ''}
           <button id="saleBuyBtn" class="action-btn" onclick="onSaleBuyBtn()">Connect Wallet</button>
           <button id="saleCopyLink" class="swap-pct-btn" onclick="copySaleLink()" style="width:100%;margin-top:6px;font-size:11px;padding:5px">Copy share link</button>
@@ -5989,6 +6697,7 @@ async function renderCoinPage(daoAddr) {
         <!-- LP MODE -->
         ${hasPool ? `
         <div id="lpMode" class="swap-mode-content">
+          ${lpCappedWarning}
           <div class="swap-dir">
             <button id="lpZapBtn" class="active" onclick="setLpSubMode('zap')">Zap (ETH only)</button>
             <button id="lpPairBtn" onclick="setLpSubMode('pair')">Add Both</button>
@@ -6096,7 +6805,7 @@ async function renderCoinPage(daoAddr) {
     html += `
       <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
         <button class="drawer-toggle" onclick="toggleProposals()">
-          <span>Proposals</span>
+          <span>Proposals &amp; Chat</span>
           <span class="arrow">&#9660;</span>
         </button>
         <div class="activity-body">
@@ -6124,6 +6833,7 @@ async function renderCoinPage(daoAddr) {
     app.dataset.feeOrHook = feeOrHook.toString();
     app.dataset.poolId = poolId.toString();
     app.dataset.hasPool = hasPool ? '1' : '';
+    app.dataset.totalSupply = (sharesMinted || 0n).toString();
     _poolReserve0 = reserve0;
     _poolReserve1 = reserve1;
     _poolSupply = poolResult ? (poolResult[6] ?? 0n) : 0n;
@@ -6178,6 +6888,7 @@ async function renderCoinPage(daoAddr) {
 function setTradeMode(mode) {
   _tradeMode = mode;
   _cachedQuote = null;
+  _bestRoute = 'pool';
   // Update tab active states
   const tabs = ['Sale','Swap','Ragequit','Lp'];
   tabs.forEach(t => {
@@ -6202,7 +6913,8 @@ function updateModeButton() {
     if (btn) btn.textContent = connected ? 'Buy' : 'Connect Wallet';
   } else if (_tradeMode === 'swap') {
     const btn = $('swapBtn');
-    if (btn) btn.textContent = connected ? 'Swap' : 'Connect Wallet';
+    // Name the action the button will actually take, since a buy may route to the mint.
+    if (btn) btn.textContent = connected ? (_bestRoute === 'mint' ? 'Mint' : 'Swap') : 'Connect Wallet';
   } else if (_tradeMode === 'ragequit') {
     const btn = $('rqBtn');
     if (btn) btn.textContent = connected ? 'Ragequit' : 'Connect Wallet';
@@ -6219,6 +6931,7 @@ function updateModeButton() {
 function setSwapDir(dir) {
   _swapDir = dir;
   _cachedQuote = null;
+  _bestRoute = 'pool'; // stale route must not label a sell as a mint
   $('swapBuyBtn').classList.toggle('active', dir === 'buy');
   $('swapSellBtn').classList.toggle('active', dir === 'sell');
   updateSwapLabels();
@@ -6247,6 +6960,7 @@ function updateSwapLabels() {
 let _lastQuoteId = 0;
 let _quoteDebounce = null;
 let _cachedQuote = null; // { exactOut, tokenIn, tokenOut, amount, result, ts }
+let _bestRoute = 'pool'; // 'pool' | 'mint' — which source the last buy quote picked
 
 function onPayInput() {
   _exactOut = false;
@@ -6267,39 +6981,68 @@ function scheduleQuote() {
 
 async function fetchQuote() {
   const raw = _exactOut ? $('swapReceiveInput').value.trim() : $('swapPayInput').value.trim();
-  if (!raw || isNaN(raw) || Number(raw) <= 0) { $('swapQuote').textContent = ''; return; }
+  if (!raw || isNaN(raw) || Number(raw) <= 0) { $('swapQuote').textContent = ''; _bestRoute = 'pool'; return; }
 
   const quoteId = ++_lastQuoteId;
   const shares = $('app').dataset.shares;
   const feeOrHook = BigInt($('app').dataset.feeOrHook || '30');
+  // Buying is a choice between two sources of shares: the pool, and the DAO's own mint
+  // at a fixed rate. Quote both and take whichever hands the user more. Selling has no
+  // second route — the sale only mints.
+  const isBuy = _swapDir === 'buy';
+  const canMint = isBuy && !!$('app').dataset.contSale;
+  _bestRoute = 'pool';
 
-  try {
-    const amount = ethers.parseEther(raw);
-    const isBuy = _swapDir === 'buy';
-    const tokenIn = isBuy ? ZERO : shares;
-    const tokenOut = isBuy ? shares : ZERO;
+  let amount;
+  try { amount = ethers.parseEther(raw); } catch { return; }
+  const tokenIn = isBuy ? ZERO : shares;
+  const tokenOut = isBuy ? shares : ZERO;
 
-    const result = await withRPC(async rpc => {
-      const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
-      return await quoter.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
-    });
-    _cachedQuote = { exactOut: _exactOut, tokenIn, tokenOut, amount, result, ts: Date.now() };
+  const result = await withRPC(async rpc => {
+    const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
+    return await quoter.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
+  }).catch(() => null);
+  if (quoteId !== _lastQuoteId) return;
+  if (result) _cachedQuote = { exactOut: _exactOut, tokenIn, tokenOut, amount, result, ts: Date.now() };
 
-    if (quoteId !== _lastQuoteId) return;
+  if (!result && !canMint) { $('swapQuote').textContent = 'No liquidity yet'; return; }
 
-    if (_exactOut) {
-      const val = Number(ethers.formatEther(result.amountIn)).toLocaleString(undefined, {maximumFractionDigits: 6});
-      $('swapPayInput').value = ethers.formatEther(result.amountIn);
-      $('swapQuote').textContent = `Estimated cost: ~${val}`;
-    } else {
-      const val = Number(ethers.formatEther(result.amountOut)).toLocaleString(undefined, {maximumFractionDigits: 6});
-      $('swapReceiveInput').value = ethers.formatEther(result.amountOut);
-      $('swapQuote').textContent = `Estimated output: ~${val}`;
-    }
-  } catch(e) {
-    if (quoteId !== _lastQuoteId) return;
-    $('swapQuote').textContent = 'No liquidity yet';
+  const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+  const sym = '$' + (_coinData?.meta?.symbol || '???');
+  const fmtEthAmt = v => Number(ethers.formatEther(v)).toLocaleString(undefined, {maximumFractionDigits: 6});
+
+  if (_exactOut) {
+    // Cheapest way to end up with the requested shares. The mint has no slippage or fee,
+    // so its cost is exact; round the ETH up so the mint covers the full amount.
+    const mintIn = canMint ? (amount + rate - 1n) / rate : 0n;
+    const poolIn = result ? result.amountIn : 0n;
+    const useMint = canMint && (!result || mintIn < poolIn);
+    const payIn = useMint ? mintIn : poolIn;
+    _bestRoute = useMint ? 'mint' : 'pool';
+    $('swapPayInput').value = ethers.formatEther(payIn);
+    const alt = (canMint && result)
+      ? ` <span style="color:var(--fg-dim)">(${useMint ? 'pool' : 'mint'}: ~${fmtEthAmt(useMint ? poolIn : mintIn)} ETH)</span>`
+      : '';
+    $('swapQuote').innerHTML = `Cost: ~${fmtEthAmt(payIn)} ETH via ${useMint ? 'mint' : 'pool'}${alt}` + (_swapDir === 'buy' ? daoStakeHint(amount, useMint) : '');
+  } else {
+    // Most shares for the ETH being spent.
+    const mintOut = canMint ? amount * rate : 0n;
+    const poolOut = result ? result.amountOut : 0n;
+    const useMint = canMint && mintOut > poolOut;
+    const out = useMint ? mintOut : poolOut;
+    _bestRoute = useMint ? 'mint' : 'pool';
+    $('swapReceiveInput').value = ethers.formatEther(out);
+    const alt = (canMint && result)
+      ? ` <span style="color:var(--fg-dim)">(${useMint ? 'pool' : 'mint'}: ~${fmtShares(useMint ? poolOut : mintOut)})</span>`
+      : '';
+    // Selling pays out ETH, not shares. Labelling it with the share symbol and running
+    // it through fmtShares reported a real sale of 50K shares as "~0 $FWC".
+    const outText = _swapDir === 'buy'
+      ? `${fmtShares(out)} ${escText(sym)}`
+      : `${fmtEthAmt(out)} ETH`;
+    $('swapQuote').innerHTML = `~${outText} via ${useMint ? 'mint' : 'pool'}${alt}` + (_swapDir === 'buy' ? daoStakeHint(out, useMint) : '');
   }
+  updateModeButton();
 }
 
 
@@ -6431,6 +7174,51 @@ function fillPct(pct) {
   }
 }
 
+// ==================== NFT GALLERY LIGHTBOX ====================
+
+let _vaultGalleryItems = [];   // { id, name, image } per decoded pass
+let _nftLbKeyHandler = null;
+
+function openNftLightbox(i) {
+  const it = _vaultGalleryItems[i];
+  if (!it) return;
+  closeNftLightbox();
+  const lb = document.createElement('div');
+  lb.className = 'nft-lb';
+  lb.id = 'nftLightbox';
+  lb.setAttribute('role', 'dialog');
+  lb.setAttribute('aria-modal', 'true');
+  lb.setAttribute('aria-label', it.name);
+  lb.innerHTML = `
+    <button type="button" class="nft-lb-close" aria-label="Close" onclick="closeNftLightbox()">&times;</button>
+    <div class="nft-lb-inner">
+      <img src="${escAttr(it.image)}" alt="${escAttr(it.name)}">
+      <div class="nft-lb-meta">
+        ${escText(it.name)}
+        &middot; <a href="https://opensea.io/item/ethereum/${VAULT_NFT_CONTRACT}/${it.id}" target="_blank" rel="noopener">OpenSea</a>
+        &middot; <a href="https://etherscan.io/token/${VAULT_NFT_CONTRACT}?a=${it.id}" target="_blank" rel="noopener">Etherscan</a>
+      </div>
+    </div>`;
+  // Backdrop closes; clicks on the art itself do not.
+  lb.addEventListener('click', e => { if (e.target === lb || e.target.closest('.nft-lb-inner') === null) closeNftLightbox(); });
+  _nftLbKeyHandler = e => {
+    if (e.key === 'Escape') closeNftLightbox();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const next = (i + (e.key === 'ArrowRight' ? 1 : -1) + _vaultGalleryItems.length) % _vaultGalleryItems.length;
+      openNftLightbox(next);
+    }
+  };
+  document.addEventListener('keydown', _nftLbKeyHandler);
+  document.body.appendChild(lb);
+  lb.querySelector('.nft-lb-close').focus();
+}
+
+function closeNftLightbox() {
+  const el = $('nftLightbox');
+  if (el) el.remove();
+  if (_nftLbKeyHandler) { document.removeEventListener('keydown', _nftLbKeyHandler); _nftLbKeyHandler = null; }
+}
+
 // ==================== SALE BUY ====================
 
 function updateSaleBtnState() {
@@ -6486,6 +7274,17 @@ function updateSaleUsd() {
   el.textContent = '~' + fmtUsd(Number(raw) * _ethUsdPrice);
 }
 
+// Sale shares are newly minted, so they dilute: the stake is measured against the
+// supply this purchase would create.
+function updateSaleStake() {
+  const el = $('saleStake');
+  if (!el) return;
+  const raw = ($('saleReceiveInput')?.value || '').trim();
+  let shares = 0n;
+  if (raw && !isNaN(raw) && Number(raw) > 0) { try { shares = ethers.parseEther(raw); } catch {} }
+  el.innerHTML = shares > 0n ? daoStakeHint(shares, true) : '';
+}
+
 function toggleSalePayMenu(ev) {
   if (ev) ev.stopPropagation();
   const menu = $('salePayMenu'), btn = $('salePayTokenBtn');
@@ -6525,6 +7324,7 @@ function pickSalePayToken(sym) {
 // user buys a thousand times what they meant to.
 async function onSalePayTokenChange(next) {
   _salePayToken = next || SALE_PAY_TOKENS[0];
+
   _salePlan = null;
   $('salePayInput').value = '';
   $('saleReceiveInput').value = '';
@@ -6634,6 +7434,7 @@ function onSalePayInput() {
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('saleReceiveInput').value = '';
     const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
+    updateSaleStake();
     updateSaleBtnState();
     return;
   }
@@ -6641,9 +7442,10 @@ function onSalePayInput() {
 
   // Continuous Sale: fixed rate (1 ETH = 1M shares)
   if ($('app').dataset.contSale) {
-    const shares = payAmt * 1000000n;
+    const shares = payAmt * BigInt(CONT_SALE_SHARES_PER_ETH);
     $('saleReceiveInput').value = ethers.formatEther(shares);
     const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
+    updateSaleStake();
     updateSaleBtnState();
     return;
   }
@@ -6659,6 +7461,7 @@ function onSalePayInput() {
   } else {
     $('saleLpNote').textContent = '';
   }
+  updateSaleStake();
   updateSaleBtnState();
 }
 
@@ -6669,15 +7472,19 @@ function onSaleReceiveInput() {
     $('salePayInput').value = '';
     updateSaleUsd();
     const lpEl = $('saleLpNote'); if (lpEl) lpEl.textContent = '';
+    updateSaleStake();
     return;
   }
 
-  // Continuous Sale: fixed rate (1M shares per ETH)
+  // Continuous Sale: fixed rate (1M shares per ETH). Round the ETH up — flooring it
+  // would quote a payment that mints fewer shares than the amount just typed.
   if ($('app').dataset.contSale) {
     const shares = ethers.parseEther(raw);
-    const ethNeeded = shares / 1000000n;
+    const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+    const ethNeeded = (shares + rate - 1n) / rate;
     $('salePayInput').value = ethers.formatEther(ethNeeded);
     updateSaleUsd();
+    updateSaleStake();
     updateSaleBtnState();
     return;
   }
@@ -6698,6 +7505,7 @@ function onSaleReceiveInput() {
   } else {
     $('saleLpNote').textContent = '';
   }
+  updateSaleStake();
   updateSaleBtnState();
 }
 
@@ -7327,6 +8135,39 @@ async function executeSwap() {
     const amount = ethers.parseEther(raw);
     const tokenIn = isBuy ? ZERO : shares;
     const tokenOut = isBuy ? shares : ZERO;
+
+    // Route the buy to whichever source gives more. Decided here rather than trusting the
+    // displayed quote, so an amount edited inside the debounce window still routes on its
+    // own numbers. Minting is fixed-rate: no slippage, no approval — just send the ETH.
+    const contSaleAddr = $('app').dataset.contSale;
+    let useMint = false, mintPay = 0n;
+    if (isBuy && contSaleAddr) {
+      const rate = BigInt(CONT_SALE_SHARES_PER_ETH);
+      mintPay = _exactOut ? (amount + rate - 1n) / rate : amount;
+      const fresh = _cachedQuote && Date.now() - _cachedQuote.ts < 15000
+        && _cachedQuote.exactOut === _exactOut && _cachedQuote.tokenIn === tokenIn
+        && _cachedQuote.tokenOut === tokenOut && _cachedQuote.amount === amount
+        ? _cachedQuote.result
+        : await withRPC(async rpc => {
+            const q = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
+            return await q.quoteZAMM(_exactOut, feeOrHook, tokenIn, tokenOut, 0, 0, amount);
+          }).catch(() => null);
+      // No pool quote at all (no liquidity) still leaves the mint as a route.
+      useMint = !fresh || (_exactOut ? mintPay < fresh.amountIn : amount * rate > fresh.amountOut);
+    }
+    if (useMint) {
+      const payAmt = mintPay;
+      btn.textContent = 'Confirm in wallet...';
+      const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, s);
+      const mintTx = await cs.buy({ value: payAmt });
+      btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${mintTx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+      await mintTx.wait();
+      $('swapQuote').innerHTML = `<span style="color:var(--green)">Minted!</span> <a href="https://etherscan.io/tx/${mintTx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+      $('swapPayInput').value = '';
+      $('swapReceiveInput').value = '';
+      setTimeout(() => renderCoinPage($('app').dataset.dao), 2000);
+      return;
+    }
     // ZAMM PoolKey: token0=ETH(ZERO), token1=shares. Buy=zeroForOne(true), Sell=zeroForOne(false)
     const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: shares, feeOrHook: feeOrHook };
 
@@ -7467,6 +8308,44 @@ async function onOpsUnlock(token, to, coinId, amount, unlockTime) {
 }
 
 // ==================== INIT ====================
+
+// The per-coin caches below are keyed by CID and pool id, so they gain an entry for
+// every coin ever opened and never lose one. That is unbounded, and the way it breaks
+// is silent: once the origin hits its storage quota every setItem throws into a
+// `catch {}`, which takes the gallery's stale-while-revalidate snapshot down with it
+// and turns every subsequent visit into a cold 1-3s load with nothing to explain why.
+// lpSeed entries carry a TTL but only ever had it checked on read, so an expired key
+// still occupied its slot. Pruning once at startup keeps the caches doing their job.
+const _CACHE_LIMITS = [
+  { prefix: 'zfi_meta_', max: 300, ttl: 0 },              // IPFS metadata: content-addressed, so only size bounds it
+  { prefix: 'lpSeed:', max: 100, ttl: LP_SEED_TTL },
+];
+function pruneCoinCaches() {
+  try {
+    for (const { prefix, max, ttl } of _CACHE_LIMITS) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix)) keys.push(k);
+      }
+      // Drop expired first; whatever is left gets trimmed to the cap. Entries without a
+      // readable timestamp sort oldest, so unparseable junk is evicted before live data.
+      const live = [];
+      for (const k of keys) {
+        let ts = 0;
+        try { ts = JSON.parse(localStorage.getItem(k))?.ts || 0; } catch {}
+        if (ttl && ts && Date.now() - ts > ttl) { localStorage.removeItem(k); continue; }
+        live.push({ k, ts });
+      }
+      if (live.length > max) {
+        live.sort((a, b) => a.ts - b.ts);
+        for (const { k } of live.slice(0, live.length - max)) localStorage.removeItem(k);
+      }
+    }
+  } catch {} // storage disabled or partitioned — the caches are optional either way
+}
+pruneCoinCaches();
+
 // onConnect fires after tryAutoConnect resolves, which happens AFTER the initial
 // route()/renderGallery() runs. Without a re-render here, _userIsVerified stays
 // false and the spam buttons never paint on cold load.

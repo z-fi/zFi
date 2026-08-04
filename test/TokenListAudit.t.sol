@@ -517,10 +517,7 @@ contract TokenListAuditTest is Test {
         list.sync(tac);
     }
 
-    function l_listOther(bytes32 account, string memory n, string memory sym, uint8 dec)
-        internal
-        returns (uint256)
-    {
+    function l_listOther(bytes32 account, string memory n, string memory sym, uint8 dec) internal returns (uint256) {
         return list.listForeign(TokenList.Kind.OTHER, 0, account, n, sym, dec, 0xF7931A, 900, "");
     }
 
@@ -535,7 +532,7 @@ contract TokenListAuditTest is Test {
 
     /// @dev The real flagship Tacit asset id, pinned. Tacit is the clean case for this
     ///      schema: a 32-byte `asset_id` is exactly the width of `account`, so it is
-    ///      stored and rendered verbatim with no encoding convention to agree on — 
+    ///      stored and rendered verbatim with no encoding convention to agree on —
     ///      unlike Runes (`block:tx` text) or Ordinals (`<txid>i<index>`, too long).
     ///
     ///      The listing id is asserted because it is PERMANENT and chain-independent:
@@ -551,7 +548,9 @@ contract TokenListAuditTest is Test {
 
         assertEq(id, 0xe64b4fb0dbc77241a053efc73e6e9fa65d5d15c48f4e018aa9d8fb0957086ae8);
         assertEq(list.get(id).account, tacAssetId, "asset_id must echo back verbatim");
-        assertTrue(LibString.contains(list.json(id), "0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b"));
+        assertTrue(
+            LibString.contains(list.json(id), "0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b")
+        );
 
         // Same id whatever chain the registry sits on.
         vm.chainId(1);
@@ -653,7 +652,8 @@ contract TokenListAuditTest is Test {
         list.setExtra(btc, "ref", "abc123i0");
 
         // 2. The EVM address it has not shipped yet.
-        uint256 evm = list.reserve(keccak256("bitcoin-puppets"), "Bitcoin Puppets", "PUPPETS", 18, 0xF7931A, 799, "", "", "");
+        uint256 evm =
+            list.reserve(keccak256("bitcoin-puppets"), "Bitcoin Puppets", "PUPPETS", 18, 0xF7931A, 799, "", "", "");
         list.setExtra(evm, "origin", "ordinals:abc123i0");
         vm.stopPrank();
 
@@ -730,7 +730,9 @@ contract TokenListAuditTest is Test {
     ///      because nothing about the provenance itself changed.
     function testNativeCardNamesTheReasonItCannotBeRead() public {
         vm.startPrank(owner);
-        uint256 id = list.listForeign(TokenList.Kind.EVM, uint64(block.chainid), bytes32(0), "Ether", "ETH", 18, 0x627EEA, 1_000_000, "");
+        uint256 id = list.listForeign(
+            TokenList.Kind.EVM, uint64(block.chainid), bytes32(0), "Ether", "ETH", 18, 0x627EEA, 1_000_000, ""
+        );
         list.setStandard(id, TokenList.Standard.NATIVE);
         vm.stopPrank();
 

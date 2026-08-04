@@ -39,11 +39,32 @@ Status: **DEPLOYED AND VERIFIED ON ETHEREUM MAINNET, 2026-08-04. LIST COMPLETE (
 > **Still open by choice:** `rendererLocked()` is false, so the card can still be
 > improved — including Bitcoin-aware labels reading the `protocol`/`origin` extras.
 
-Frozen deterministic build targets for the token registry and its card renderer,
-derived from the exact recorded initcode and salts below. These are build targets,
-not evidence of mainnet deployment or of present address vacancy. Before deploying,
-require `eth_getCode(expectedAddress) == 0x`, simulate the exact calldata, and
-verify the receipt and runtime code afterward.
+The recorded initcode and salts below are no longer build TARGETS — they are the
+record of what was deployed. Both addresses now hold code, so the vacancy checks
+this document used to insist on are spent: re-running the recorded calldata reverts.
+
+## Reproducing the deployed bytecode — THE COMMAND MATTERS
+
+```
+forge build src/utils/TokenList.sol src/utils/TokenListRenderer.sol
+```
+
+Those two paths, alone. A bare `forge build`, or any `forge test` run, compiles the
+sources in a unit that also holds the test contracts, and under `via_ir` that changes
+the optimiser's output — hundreds of bytes, from identical source at identical
+settings. The deployed bytecode came from the isolated build, so only the isolated
+build reproduces it. Foundry does not enforce EIP-170 in tests, so the full-build
+variant never announces itself either.
+
+Verified this way on 2026-08-04: renderer 17,025 B and registry 24,243 B, both
+byte-identical to `eth_getCode` at the addresses above.
+
+**DO NOT RUN `forge fmt` ON THESE TWO FILES.** Reformatting changes the source, which
+changes the metadata hash appended to the bytecode, which changes the deployed
+bytecode — a whitespace-only edit silently breaks reproduction against a live,
+immutable contract. They are committed exactly as deployed and are deliberately not
+`fmt`-clean. `test/TokenListMinedDeploy.t.sol` hashes both sources and skips loudly
+if either moves.
 
 ## Fixed deployment context
 
@@ -68,8 +89,8 @@ and hands unrelated contracts Circle's branding. See audit finding M-05.
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
-| TokenListRenderer | NOT DEPLOYED | `0x000000d595e36Dd0228c4040D981A01A59DbbE87` | `0x000000…01b888f4` | `0xe86dc3bd…45a9bd17` | 17,051 | 17,025 |
-| TokenList | NOT DEPLOYED | `0x0000006013dF75A31678B786061C2B54bf531524` | `0x000000…002febeb` | `0x7729b7f8…5460a3b0` | 37,711 | 24,243 |
+| TokenListRenderer | **DEPLOYED** | `0x000000d595e36Dd0228c4040D981A01A59DbbE87` | `0x000000…01b888f4` | `0xe86dc3bd…45a9bd17` | 17,051 | 17,025 |
+| TokenList | **DEPLOYED** | `0x0000006013dF75A31678B786061C2B54bf531524` | `0x000000…002febeb` | `0x7729b7f8…5460a3b0` | 37,711 | 24,243 |
 
 Both runtimes are under EIP-170 (24,576 B) and both creation payloads are under
 EIP-3860 (49,152 B). `TokenList` retains 11,441 B of initcode headroom and **333 B

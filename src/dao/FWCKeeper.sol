@@ -421,9 +421,7 @@ contract FWCKeeper {
 
     function _permitId(bytes memory payload, bytes32 nonce) internal view returns (uint256) {
         return uint256(
-            keccak256(
-                abi.encode(address(DAO), OP_CALL, VAULT, uint256(0), keccak256(payload), nonce, DAO.config())
-            )
+            keccak256(abi.encode(address(DAO), OP_CALL, VAULT, uint256(0), keccak256(payload), nonce, DAO.config()))
         );
     }
 }

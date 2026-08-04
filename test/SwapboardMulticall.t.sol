@@ -32,7 +32,15 @@ contract SwapboardMulticallTest is Test {
     function _create(uint256 amtA, uint256 amtB) internal returns (bytes memory) {
         return abi.encodeWithSignature(
             "createOrder(address,uint256,address,uint256,bool,uint64,bool,bool,address)",
-            address(A), amtA, address(B), amtB, false, uint64(0), false, false, address(0)
+            address(A),
+            amtA,
+            address(B),
+            amtB,
+            false,
+            uint64(0),
+            false,
+            false,
+            address(0)
         );
     }
 

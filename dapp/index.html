@@ -948,9 +948,6 @@ body.modal-open { overflow: hidden; }
 .live-sale-pct { font-size:12px;font-weight:600;color:var(--green, #22c55e);white-space:nowrap; }
 .live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;flex-shrink:0; }
 .live-sale-bar-fill { height:100%;background:var(--green, #22c55e);border-radius:2px; }
-.pm-odds-bar { height:4px;display:flex;border-radius:2px;overflow:hidden;width:100%;margin-top:4px; }
-.pm-odds-yes { background:var(--green, #22c55e); }
-.pm-odds-no { background:var(--red, #ef4444); }
 
 /* OTC order ticker */
 .otc-order {
@@ -1333,7 +1330,6 @@ body.modal-open { overflow: hidden; }
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
 <div id="liveCurveSection" class="live-sales" style="display:none"></div>
-<div id="featuredPmSection" class="live-sales" style="display:none"></div>
 <div id="privacyTab" style="display:none">
 <div id="ppWalletSeedBackupNotice" class="pp-notice" style="display:none;margin-bottom:16px"></div>
 <div class="swap-card">
@@ -1848,6 +1844,9 @@ const ZORG_ID = 1334160193485309697971829933264346612480800613613n;
 const ZORG_PAY_TOKEN = "0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"; // ERC20 equivalent of the ERC6909 swap output
 const ZORG_DAO = "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
+// FWC collector DAO shares. Built-in so the tile lists it without a search, the same
+// way zOrg is — a first-party DAO token with a live zAMM ETH pool.
+const FWC_DAO_TOKEN = "0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
 const IPFS_GATEWAYS = [
   "https://ipfs.io/ipfs/",
@@ -1855,7 +1854,7 @@ const IPFS_GATEWAYS = [
   "https://dweb.link/ipfs/",
   "https://w3s.link/ipfs/"
 ];
-const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, FWC_DAO_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
 // DAICO graduated coin discovery (search-triggered only)
 const DAICO_VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
 const DAICO_SCAN_ABI = ["function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"];
@@ -1932,37 +1931,43 @@ async function searchDaicoCoins() {
   finally { _daicoScanBusy = false; }
 }
 
-// ---- Live sale banner (most recent active sale) ----
-// Pinned DAO always wins the slot when it's discoverable — the collector DAO is the
-// house highlight, not just whatever launched last.
+// ---- DAICO highlight ----
+// The collector DAO holds the slot whenever the scan can see it; anything else only
+// gets it when the collector DAO is missing.
 const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
+// Its DAO metadata carries no image, and its phase-0 share sale is long closed — the
+// scan's sales[0] would report a stale "1.8 ETH raised / 100%". Shares now sell through
+// the continuous sale, so the live measures are whether that sale is open and how much
+// ETH backs the shares in the vault. Same icon and addresses the coin page uses.
+const FWC_ICON = 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico';
+const FWC_SALE = '0x824d11a46F32cd16cdF46380314343e9697e2491';
+const FWC_VAULT = '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e';
+const FWC_SALE_IFACE = new ethers.Interface(['function paused() view returns (bool)']);
 async function loadLiveSale() {
   try {
     const daicos = await fetchDaicoScan();
     const now = BigInt(Math.floor(Date.now() / 1000));
     const asCard = (d) => {
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
-      const totalSale = sale ? sale.totalSupply : 0n;
-      const sold = sale ? totalSale - sale.remainingSupply : 0n;
+      const total = sale ? sale.totalSupply : 0n;
+      const sold = sale ? total - sale.remainingSupply : 0n;
       return {
         dao: d.dao, name: d.meta.name, symbol: d.meta.symbol,
         contractURI: d.meta.contractURI,
-        pct: totalSale > 0n ? Number((sold * 10000n) / totalSale) / 100 : 0,
+        pct: total > 0n ? Number((sold * 10000n) / total) / 100 : 0,
         raisedETH: sale && sale.forAmt > 0n ? Number(ethers.formatEther(sold * sale.tribAmt / sale.forAmt)) : 0,
         hasSale: !!sale,
       };
     };
-    let s = null;
     const pinned = daicos.find(d => d.dao.toLowerCase() === DAICO_PINNED_DAO);
-    if (pinned) s = asCard(pinned);
-    // Otherwise fall back to the most recent active sale (highest index = newest).
+    let s = pinned ? asCard(pinned) : null;
+    // Fall back to the most recent active sale (highest index = newest).
     for (let i = daicos.length - 1; !s && i >= 0; i--) {
       const d = daicos[i];
       const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
       if (!sale) continue;
       if (sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline))) {
         s = asCard(d);
-        break;
       }
     }
     if (!s) return;
@@ -1974,12 +1979,36 @@ async function loadLiveSale() {
           if (m.image) { const _img = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image; if (_img.startsWith('https://') || _img.startsWith('data:image/')) s.icon = _img; }
           if (m.name) s.name = m.name;
         };
+        // Raw on-chain JSON and data: URIs are already in hand; only an http/ipfs URL
+        // needs a fetch. (The old raw-JSON branch returned out of loadLiveSale itself,
+        // so those DAOs never rendered at all.)
         if (url.trimStart().startsWith('{')) applyMeta(JSON.parse(url));
+        else if (url.startsWith('data:')) applyMeta(JSON.parse(decodeURIComponent(url.split(',').slice(1).join(','))));
         else {
           if (url.startsWith('ipfs://')) url = DAICO_IPFS_GW + url.slice(7);
-          else if (url.startsWith('data:')) applyMeta(JSON.parse(decodeURIComponent(url.split(',').slice(1).join(','))));
-          if (!s.icon && !url.startsWith('data:')) applyMeta(await (await fetch(url)).json());
+          applyMeta(await (await fetch(url)).json());
         }
+      } catch {}
+    }
+    if (pinned && s.dao.toLowerCase() === DAICO_PINNED_DAO) {
+      s.icon = s.icon || FWC_ICON;
+      s.pct = 0;            // the closed phase-0 bar is not this DAO's progress
+      s.raisedETH = 0;
+      s.meta = 'Collector DAO';
+      try {
+        const rpc = new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
+        const res = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', await rpc.call({
+          to: MULTICALL3_ADDRESS,
+          data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [[
+            [MULTICALL3_ADDRESS, true, MULTICALL3_IFACE.encodeFunctionData('getEthBalance', [FWC_VAULT])],
+            [FWC_SALE, true, FWC_SALE_IFACE.encodeFunctionData('paused', [])],
+          ]])
+        }))[0];
+        const vaultEth = res[0].success
+          ? Number(ethers.formatEther(MULTICALL3_IFACE.decodeFunctionResult('getEthBalance', res[0].returnData)[0])) : 0;
+        const saleOpen = res[1].success && !FWC_SALE_IFACE.decodeFunctionResult('paused', res[1].returnData)[0];
+        s.meta = [saleOpen ? 'Sale open' : null, vaultEth > 0 ? vaultEth.toFixed(3) + ' ETH in vault' : null]
+          .filter(Boolean).join(' · ') || 'Collector DAO';
       } catch {}
     }
     const el = $('liveSalesSection');
@@ -1993,7 +2022,7 @@ async function loadLiveSale() {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
-        <div class="live-sale-meta">${s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'}</div>
+        <div class="live-sale-meta">${esc(s.meta || (s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'))}</div>
       </div>
       ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
       <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
@@ -2001,124 +2030,7 @@ async function loadLiveSale() {
     if (_activeTab === 'swap') el.style.display = '';
   } catch (e) { console.warn('Live sale load failed:', e); }
 }
-// ---- Featured prediction market (top active ETH market by TVL, from predict cache) ----
-function parsePmDesc(desc) {
-  if (!desc) return 'Prediction market';
-  const p = desc.split('|');
-  const type = p[0];
-  const fmtPrice = v => { v = parseInt(v); if (v >= 1e6) return `$${(v/1e6).toFixed(v%1e6===0?0:1)}M`; if (v >= 1000) return `$${(v/1000).toFixed(v%1000===0?0:1)}K`; return `$${v}`; };
-  const fmtDate = ts => { const d = new Date(parseInt(ts)*1000), n = new Date(); return d.getFullYear()===n.getFullYear() ? d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); };
-  const fmtBal = v => { v = parseFloat(v); if (v >= 1e9) return `${(v/1e9).toFixed(1)}B`; if (v >= 1e6) return `${(v/1e6).toFixed(1)}M`; if (v >= 1000) return `${(v/1000).toFixed(1)}K`; return v.toFixed(1); };
-  const shortAddr = a => `${a.slice(0,6)}...${a.slice(-4)}`;
-  if (type === 'PRICE' && p.length >= 6) { const [,asset,,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'drop to' : 'hit'; return `${asset} ${verb} ${fmtPrice(thresh)} by ${fmtDate(close)}?`; }
-  if (type === 'ETHBAL' && p.length >= 5) { const [,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${fmtBal(thresh)} ETH by ${fmtDate(close)}?`; }
-  if (type === 'TOKBAL' && p.length >= 6) { const [,token,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${fmtBal(thresh)} ${shortAddr(token)} by ${fmtDate(close)}?`; }
-  if (type === 'NFTBAL' && p.length >= 6) { const [,token,addr,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'have under' : 'hold'; return `${shortAddr(addr)} ${verb} ${parseInt(p[4])} ${shortAddr(token)} NFTs by ${fmtDate(close)}?`; }
-  if (type === 'GAS' && p.length >= 4) { const [,subtype,...rest] = p; const date = fmtDate(rest[rest.length-1]); if (subtype === 'RANGE') return `Gas stay in ${rest[0]}-${rest[1]} gwei by ${date}?`; const labels = {TWAP:'avg',PEAK:'spike to',TROUGH:'dip to',VOL:'swing',VOLATILITY:'swing'}; return `Gas ${labels[subtype]||subtype.toLowerCase()} ${rest[0]} gwei by ${date}?`; }
-  if (type === 'SUPPLY' && p.length >= 5) { const [,token,op,thresh,close] = p; const verb = (parseInt(op)===0||parseInt(op)===2) ? 'drop below' : 'exceed'; return `${shortAddr(token)} supply ${verb} ${fmtBal(thresh)} by ${fmtDate(close)}?`; }
-  const qMatch = desc.match(/^(.+?\?)/);
-  if (qMatch) return qMatch[1];
-  return desc.length > 80 ? desc.slice(0, 77) + '...' : desc;
-}
-
-function renderFeaturedPm(m) {
-  const el = $('featuredPmSection');
-  if (!el) return;
-  const yRaw = typeof m.y === 'number' ? m.y : 50;
-  const yPct = Math.max(1, Math.min(99, Math.round(yRaw))), nPct = 100 - yPct;
-  const cheapPct = Math.min(yPct, nPct);
-  const cheapSide = yPct <= nPct ? 'YES' : 'NO';
-  const payout = cheapPct > 0 ? 0.01 / (cheapPct / 100) : 0;
-  const mult = payout > 0 ? (payout / 0.01).toFixed(1) : '?';
-  const hintHtml = payout > 0 ? `<div style="font-size:10px;color:var(--fg-muted);margin-top:3px">0.01 ETH &rarr; ${payout.toFixed(3)} ETH if ${cheapSide} <span style="color:var(--green, #22c55e)">(${mult}x)</span></div>` : '';
-  const tvlFmt = m.tvl >= 100 ? m.tvl.toFixed(2) : m.tvl >= 1 ? m.tvl.toFixed(4) : m.tvl.toFixed(6);
-  const collSym = (!m.collateral || m.collateral === ZERO_ADDRESS) ? 'ETH' : 'TOKEN';
-  const question = (m.rawDesc ? parsePmDesc(m.rawDesc) : (m.question || 'Prediction market').replace(/<[^>]*>/g, ''));
-  el.innerHTML = `<div class="sec-head"><span>Predictions</span><a href="predict/">View all &rarr;</a></div><a class="live-sale-card" href="predict/#${m.marketId}">
-    <div class="live-sale-info">
-      <div class="live-sale-name" style="white-space:normal;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${esc(question)}</div>
-      <div class="live-sale-meta">${tvlFmt} ${collSym} locked</div>
-      <div class="pm-odds-bar"><div class="pm-odds-yes" style="width:${yPct}%"></div><div class="pm-odds-no" style="flex:1"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:2px"><span style="color:var(--green, #22c55e)">YES ${yPct}%</span><span style="color:var(--red, #ef4444)">NO ${nPct}%</span></div>
-      ${hintHtml}
-    </div>
-  </a>`;
-  if (_activeTab === 'swap') el.style.display = '';
-}
-
-async function loadFeaturedPm() {
-  // Try localStorage cache first (instant)
-  try {
-    const raw = localStorage.getItem('zfi_predict_markets');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.data && parsed.data.length) {
-        const now = Math.floor(Date.now() / 1000);
-        const active = parsed.data.filter(m => !m.resolved && m.close > now && (m.tvl || 0) >= 0.01
-          && (!m.collateral || m.collateral === ZERO_ADDRESS)
-          && m.oddsLoaded && m.y > 0 && m.y < 100);
-        if (active.length) {
-          active.sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
-          renderFeaturedPm(active[0]);
-          return;
-        }
-      }
-    }
-  } catch {}
-  // No usable cache — lightweight on-chain fetch (paginated)
-  try {
-    const _PM_PAMM = '0x000000000044bfe6c2BBFeD8862973E0612f07C0';
-    const _PM_QUOTER = '0x8F4283c327afF696789e23589c8c79306909B2Be';
-    const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-    const pamm = new ethers.Contract(_PM_PAMM, [
-      'function getMarkets(uint256 start, uint256 count) view returns (uint256[] marketIds, address[] resolvers, address[] collaterals, uint8[] states, uint64[] closes, uint256[] collateralAmounts, uint256[] yesSupplies, uint256[] noSupplies, string[] descs, uint256 next)'
-    ], rpc);
-    const now = Math.floor(Date.now() / 1000);
-    const candidates = [];
-    let start = 0, pages = 0;
-    while (pages < 20) {
-      let result;
-      try { result = await pamm.getMarkets(start, 50); } catch { if (start === 0) throw new Error('RPC failed'); break; }
-      if (result.marketIds.length === 0) break;
-      pages++;
-      for (let i = 0; i < result.marketIds.length; i++) {
-        const close = Number(result.closes[i]);
-        const states = Number(result.states[i]);
-        const resolved = (states & 1) !== 0;
-        const collateral = result.collaterals[i];
-        const tvl = Number(result.collateralAmounts[i]) / 1e18;
-        if (resolved || close <= now || tvl < 0.01) continue;
-        if (collateral !== ZERO_ADDRESS) continue;
-        const desc = result.descs[i] || '';
-        const question = parsePmDesc(desc);
-        candidates.push({ marketId: result.marketIds[i].toString(), question, rawDesc: desc, close, tvl, collateral });
-      }
-      start = Number(result.next);
-      if (start === 0) break;
-      // If we have a strong candidate (≥0.1 ETH TVL), stop paginating — good enough
-      if (candidates.length && candidates.reduce((best, c) => c.tvl > best.tvl ? c : best, candidates[0]).tvl >= 0.1) break;
-    }
-    if (!candidates.length) return;
-    candidates.sort((a, b) => b.tvl - a.tvl);
-    const best = candidates[0];
-    // Fetch odds for the top candidate
-    try {
-      const quoter = new ethers.Contract(_PM_QUOTER, [
-        'function getMarketSummary(uint256 marketId) view returns (uint112 ammYesReserve, uint112 ammNoReserve, uint256 ammPriceYesBps, uint256 feeBps, uint112 vaultYesShares, uint112 vaultNoShares, uint256 totalYesVaultLP, uint256 totalNoVaultLP, uint256 vaultBudget, uint256 twapPriceYesBps, uint64 closeTime, bool resolved, bool inCloseWindow)'
-      ], rpc);
-      const summary = await quoter.getMarketSummary(best.marketId);
-      best.y = Math.round(Number(summary.ammPriceYesBps) / 100);
-      best.oddsLoaded = true;
-    } catch {
-      best.y = 50; best.oddsLoaded = true;
-    }
-    if (best.y > 0 && best.y < 100) renderFeaturedPm(best);
-  } catch (e) { console.warn('Featured PM fetch failed:', e); }
-}
-
-// Load featured PM on page init (non-blocking)
 setTimeout(loadLiveSale, 500);
-setTimeout(loadFeaturedPm, 100);
 
 // ---- Curve coins tile + dropdown integration ----
 // Surfaces ClassicalCurveSale coins created via /coin so they're discoverable + swappable
@@ -2268,10 +2180,12 @@ async function loadLiveCurveCoins() {
         contractURI: r.contractURI,
         tokenKey: key,
         perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated,
-        // A launch with no buys and no ETH raised is dead weight on the lander — it reads
-        // as "nobody wants this". Tracked here, filtered at tile time (the dropdown still
-        // gets every coin so they stay searchable/tradeable).
-        hasActivity: sold > 0n || raisedETH > 0n
+        // Heat ranks the tile: progress on the curve, decayed by age since launch, so a
+        // coin moving today outranks one that crawled to the same place months ago and a
+        // stalled launch fades out on its own. Computed from data the multicall already
+        // returned — no extra reads. Filtered at render time; the dropdown still carries
+        // every coin, so nothing here makes a coin unsearchable or untradeable.
+        heat: pct / (1 + Math.max(0, (Date.now() / 1000 - Number(curve.launchTime)) / 86400))
       });
     }
 
@@ -2279,9 +2193,10 @@ async function loadLiveCurveCoins() {
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
 
     if (!el || cards.length === 0) return;
-    // Only feature coins that have actually traded. If none of the recent launches have
-    // any activity, show no curve section at all rather than a wall of 0.0%.
-    const tileCards = cards.filter(c => c.hasActivity).slice(0, CURVE_TILE_MAX);
+    // Feature only coins with progress that renders as something (0.05% rounds to 0.1%),
+    // hottest first. If nothing clears the bar, drop the section rather than lead with a
+    // column of 0.0%.
+    const tileCards = cards.filter(c => c.pct >= 0.05).sort((a, b) => b.heat - a.heat).slice(0, CURVE_TILE_MAX);
     if (tileCards.length === 0) { el.style.display = 'none'; return; }
 
     // Resolve logos from contractURI metadata — visible cards only, so one tile costs
@@ -2478,6 +2393,11 @@ const tokens = {
   ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
   WETH: { address: WETH_ADDRESS, symbol: "WETH", decimals: 18 },
   zOrg: { address: ZORG_DAO_TOKEN, symbol: "zOrg", decimals: 18, _isZOrg: true },
+  // Same art the coin page and the coin gallery already use for this DAO, which take
+  // it from the continuous-sale config rather than the DAO metadata — FWC's
+  // contractURI carries no image. iconForSymbol falls back to a letter icon if the
+  // fetch ever fails, so a dead host degrades rather than breaks the row.
+  FWC: { address: FWC_DAO_TOKEN, symbol: "FWC", decimals: 18, icon: "https://www.s02.works/favicon.ico?favicon.179e78c5.ico" },
   ZAMM: { address: ZORG_PAY_TOKEN, symbol: "ZAMM", decimals: 18, _isZammStake: true },
   BOLD: { address: BOLD_ADDRESS, symbol: "BOLD", decimals: 18 },
   LUSD: { address: LUSD_ADDRESS, symbol: "LUSD", decimals: 18 },
@@ -4240,6 +4160,10 @@ async function handleAmountChange() {
       dstEl.placeholder = "0.0";
       return;
     }
+    // The quote the user is now looking at, and the object _selectRoute mutates
+    // when a route is picked by hand. Assigned only after the staleness checks
+    // above, so an overtaken quote can never become the selectable one.
+    _quoteResult = quote;
 
     const toData = tokens[toSnap];
     const fromDataQ = tokens[fromSnap];
@@ -4858,12 +4782,12 @@ function isZOrgSellPath(fromSym, toSym) {
 //
 // A collector DAO qualifies on its ADDRESS, not on `_isDaicoCoin`. That flag is
 // only ever set inside `searchDaicoCoins`, which runs on the first token-search
-// keystroke - so a coin reached any other way (a token list, a deeplink, a
-// pasted address, a page load that never searched) arrives without it and used
-// to fall through to the generic aggregator. For FWC that meant ETH quoted the
+// keystroke - so a coin reached any other way arrives without it. FWC is a
+// BUILTIN here, so the quick-pick icon selects it having never gone near that
+// scan, and the route fell through to the generic aggregator: ETH quoted the
 // shallow zAMM pool instead of the sale, and an ERC-20 got no quote at all,
-// because zQuoter has no route to a coin whose only venues are the pool and a
-// sale it knows nothing about.
+// because zQuoter has no route to a coin whose venues are that pool and a sale
+// it knows nothing about.
 function isDaicoCoinBuyPath(fromSym, toSym) {
   if (fromSym === toSym) return false;
   if (collectorSaleFor(toSym)) return !collectorSaleFor(fromSym);
@@ -7551,6 +7475,11 @@ async function withRetry(task, { tries = 2, base = 80 } = {}) {
 // treat it as "not my problem" rather than as a failed quote.
 const QUOTE_SUPERSEDED = Symbol('quote superseded');
 
+// The quote currently on screen. _selectRoute() reads it to apply a manually
+// picked route, so it must outlive the request that produced it. handleAmountChange
+// assigns it once a result survives the staleness checks.
+let _quoteResult = null;
+
 // Quote admission control.
 //
 // This used to be a strict lock: every request chained onto the previous one, so
@@ -9097,7 +9026,7 @@ function updateLpLink(quote) {
 }
 
 // ---- Quick-pick popular tokens ----
-const QUICK_TOKENS = ["BOLD", "DAI", "USDC", "stETH", "rETH"];
+const QUICK_TOKENS = ["FWC", "BOLD", "USDC", "stETH", "rETH"];
 
 function renderQuickTokens() {
   const el = $('quickTokens');
@@ -9127,6 +9056,14 @@ function renderQuickTokens() {
 let _activeTab = 'swap';
 function syncSwapURL() {
   if (_activeTab !== 'swap') return; // privacy tab syncs its own URL
+  // A deeplinked token that hasn't resolved yet must not be overwritten with
+  // whatever the default pair happens to be. Init fires handleAmountChange on
+  // a 50ms timer, well before the async token lists land, so ?to=link was
+  // being rewritten to ?to=zorg — and if the list never loaded (CDN blip,
+  // offline) the rewrite was permanent, with replaceState leaving no way back.
+  // _retryPendingDeeplinks() calls this again once the token resolves, and a
+  // manual pick in selectToken() clears the hold.
+  if (_pendingDeeplinkFrom || _pendingDeeplinkTo) return;
   const _sp = new URLSearchParams();
   _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
   if (_inputMode === 'exactOut') {
@@ -9309,6 +9246,11 @@ function closeTokenModal() {
 const reQuoteDebounced = debounce(handleAmountChange, 600);
 
 function selectToken(symbol) {
+  // The user has taken over from the deeplink, so stop holding the URL for a
+  // token that may never resolve — otherwise syncSwapURL's pending-guard would
+  // suppress every later URL update for the rest of the session.
+  _pendingDeeplinkFrom = null;
+  _pendingDeeplinkTo = null;
   // Track real selections in Recent. Skip the DAICO from-side rejection so it
   // doesn't pollute the list with a token the user couldn't actually pick.
   if (!(tokens[symbol]?._isDaicoCoin && currentModal === "from")) {
@@ -9446,9 +9388,36 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
+  // Claim the swap deeplink FIRST, before anything else in init can throw.
+  //
+  // `syncSwapURL` holds off while a deeplinked token is unresolved, but that
+  // hold is only armed further down, after the params have been read. Anything
+  // that throws before that point skips the arming as well as the applying, so
+  // the default pair gets written over the user's link - and replaceState
+  // leaves no history entry to go back to, so the link is destroyed, not just
+  // ignored. Arming here means the worst case is a link that does not apply,
+  // not one that is overwritten.
+  try {
+    const _sp0 = new URLSearchParams(window.location.search);
+    const _f0 = _sp0.get('from'), _t0 = _sp0.get('to');
+    if (_f0) _pendingDeeplinkFrom = _f0;
+    if (_t0) _pendingDeeplinkTo = _t0;
+  } catch (_) {}
+
   // If #coin/#send hash present (no PP query params), switch tab immediately and skip swap deeplinks
   const _dlTabHash = window.location.hash;
-  const _hasppParam = new URLSearchParams(window.location.search).has('pp');
+  // Only a `pp` value the privacy deeplink below can actually act on may
+  // suppress the hash. has('pp') was true for an empty or unrecognised value
+  // too, so ?pp=usdc#privacy fell through to the swap tab AND had its URL
+  // rewritten to the default pair — the link was destroyed, not just ignored.
+  // Retiring a PP asset broke every link ever shared for it the same way.
+  // An unusable value now takes the plain #privacy path: privacy tab, default
+  // asset.
+  const _ppQuery = new URLSearchParams(window.location.search).get('pp') || '';
+  const _ppQueryLower = _ppQuery.toLowerCase();
+  const _ppQueryNorm = _ppQueryLower === 'wsteth' ? 'wstETH'
+    : _ppQueryLower === 'zap' ? 'ZAP' : _ppQuery.toUpperCase();
+  const _hasppParam = !!_ppQuery && (_ppQueryNorm === 'ZAP' || _isPPAsset(_ppQueryNorm));
   if (!_hasppParam && (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send')) {
     // Capture query params BEFORE updateTokenDisplay() → syncSwapURL() clobbers them
     const _sp = new URLSearchParams(window.location.search);
@@ -9585,6 +9554,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_dlSymbol) _ogCoinTitle += ' ($' + _dlSymbol + ')';
       updateOGMeta(_ogCoinTitle, _dlDesc || 'Launch a coin on zFi');
     }
+    // This path never reaches the swap deeplink, so drop the hold armed above.
+    _pendingDeeplinkFrom = null;
+    _pendingDeeplinkTo = null;
     switchTab(_dlTabHash.slice(1));
     return;
   }
@@ -9609,8 +9581,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const _dlToRaw = _urlp.get('to');
   const _dlFrom = _findToken(_dlFromRaw);
   const _dlTo = _findToken(_dlToRaw);
-  if (_dlFrom) fromToken = _dlFrom;
-  if (_dlTo) toToken = _dlTo;
+  // Clearing matters now that the hold is armed up front: a resolved side must
+  // release it, or syncSwapURL would stay muted for the rest of the session.
+  if (_dlFrom) { fromToken = _dlFrom; _pendingDeeplinkFrom = null; }
+  if (_dlTo) { toToken = _dlTo; _pendingDeeplinkTo = null; }
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
   // Async lists (Uniswap, ZAMM v0 coins) load after DOMContentLoaded. If a
   // deeplink target wasn't resolved here, remember it and let the discovery
@@ -9774,8 +9748,6 @@ function switchTab(tab) {
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
   const lcEl = $('liveCurveSection');
   if (lcEl && lcEl.innerHTML) lcEl.style.display = tab === 'swap' ? '' : 'none';
-  const pmEl = $('featuredPmSection');
-  if (pmEl && pmEl.innerHTML) pmEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
@@ -9912,8 +9884,13 @@ walletInit({
       const provider = new ethers.JsonRpcProvider("https://ethereum.publicnode.com");
       const viewAbi = ["function getAllActiveOrdersPaged(address,address,uint256,uint256,uint256,uint256) view returns (tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256,tuple(uint256 orderId,address maker,bool partialFill,address tokenA,uint256 amountA,string symbolA,uint8 decimalsA,address tokenB,uint256 amountB,string symbolB,uint8 decimalsB,address board)[],uint256)"];
       const viewContract = new ethers.Contract(OTC_VIEW, viewAbi, provider);
-      const [v1Orders,, v2Orders] = await viewContract.getAllActiveOrdersPaged(OTC_V1, OTC_PF, 0, 0, 3, 500);
-      for (const po of [...v1Orders, ...v2Orders].slice(0, 4)) {
+      // The paged read walks ids upward, so its first rows are the oldest orders still
+      // open — the opposite of what this section claims to show. Pull a wider window and
+      // sort by id descending per board (ids are only comparable within a board), current
+      // board first, so the four shown really are the most recent.
+      const [v1Orders,, v2Orders] = await viewContract.getAllActiveOrdersPaged(OTC_V1, OTC_PF, 0, 0, 25, 1000);
+      const byNewest = list => [...list].sort((a, b) => (b.orderId > a.orderId ? 1 : b.orderId < a.orderId ? -1 : 0));
+      for (const po of [...byNewest(v2Orders), ...byNewest(v1Orders)].slice(0, 4)) {
         const addrA = po.tokenA.toLowerCase(), addrB = po.tokenB.toLowerCase();
         const isV1 = po.board.toLowerCase() === OTC_V1.toLowerCase();
         const symA = addrA === OTC_WETH ? 'ETH' : (po.symbolA || otcSym(addrA));

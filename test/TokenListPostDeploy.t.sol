@@ -93,17 +93,7 @@ contract TokenListPostDeployTest is Test, PostDeployListings {
         string[11] memory expected =
             ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD", "ZORG", "zzz", "WEI"];
         uint32[11] memory ranks = [
-            uint32(1_000_000),
-            999_000,
-            998_000,
-            997_000,
-            996_000,
-            995_000,
-            994_000,
-            993_000,
-            992_000,
-            991_000,
-            990_000
+            uint32(1_000_000), 999_000, 998_000, 997_000, 996_000, 995_000, 994_000, 993_000, 992_000, 991_000, 990_000
         ];
 
         uint256[] memory ranked = list.rankedIds();

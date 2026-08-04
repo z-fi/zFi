@@ -26,8 +26,6 @@ const SOURCES = {
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
-  Collectol: "src/forwarders/Collectol.sol",
-  CollectolLens: "src/forwarders/CollectolLens.sol",
   TokenList: "src/utils/TokenList.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",

@@ -25,11 +25,17 @@
   // Ordered by usable eth_getLogs range: nodes with tight caps still serve
   // eth_blockNumber/eth_getBlockByNumber, so they stay in the list as fallbacks.
   // Ranked by the eth_getLogs block range each one actually serves for free.
+  // cloudflare-eth.com was dropped 2026-08-03: Cloudflare wound the public
+  // gateway down, and it now answers every eth_getLogs with
+  // {"code":-32046,"message":"Cannot fulfill request"} — even at the 800-block
+  // range it was listed for — so it was a guaranteed-failing entry in the
+  // fallback chain. gateway.tenderly.co replaces it, measured serving a
+  // 100k-block getLogs from a browser origin with Access-Control-Allow-Origin: *.
   const RPCS = [
     { url: "https://rpc.mevblocker.io", span: 200000 },
     { url: "https://rpc.flashbots.net", span: 100000 },
-    { url: "https://eth.drpc.org", span: 9000 },
-    { url: "https://cloudflare-eth.com", span: 800 }
+    { url: "https://mainnet.gateway.tenderly.co", span: 100000 },
+    { url: "https://eth.drpc.org", span: 9000 }
   ];
 
   const DEFAULT_CHUNKS = 6;    // ~1.2M blocks ≈ 5 months on the widest node

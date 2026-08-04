@@ -83,6 +83,10 @@ fs_permissions = [
     # the seven listings that no longer fit the constructor, so the file that gets
     # broadcast is produced by the same test that proves it yields the right list.
     { access = "read-write", path = "./deploy" },
+    # `TokenListMinedDeploy` hashes the sources its salts were mined for, so the
+    # staleness check is a question about the source rather than about whichever
+    # build happens to be in `out/`. Read-only.
+    { access = "read", path = "./src/utils" },
     { access = "read-write", path = "./dapp" },
 ]
 

@@ -27,11 +27,29 @@ contract TokenListMinedDeployTest is Test, PostDeployListings {
     function testMinedDeploymentLandsAndWires() public {
         bytes memory recorded = vm.readFileBinary("deploy/TokenList.initcode.bin");
         bytes memory recordedRenderer = vm.readFileBinary("deploy/TokenListRenderer.initcode.bin");
-        bytes memory compiled = abi.encodePacked(vm.getCode("TokenList.sol:TokenList"), abi.encode(OWNER, RENDERER));
-        bytes memory compiledRenderer = vm.getCode("TokenListRenderer.sol:TokenListRenderer");
-        if (keccak256(recorded) != keccak256(compiled) || keccak256(recordedRenderer) != keccak256(compiledRenderer)) {
-            emit log("TokenList deployment artifacts are stale: re-mine both salts and re-record both initcodes");
-            vm.skip(true);
+        // Staleness is a question about the SOURCE, not about whichever build happens
+        // to be in `out/`.
+        //
+        // This compared the recorded initcode against `vm.getCode`, which made the
+        // check depend on how the caller had built: under `via_ir` a contract compiles
+        // differently depending on which other files share its compilation unit, and
+        // the isolated build these artifacts came from differs from a full `forge
+        // build` by hundreds of bytes. So this guard tripped on every full-suite run
+        // and skipped the one test that replays the real deployment — silently, which
+        // is how it came to carry a stale assertion of its own for so long.
+        //
+        // The recorded source hashes answer what this is actually asking: did the code
+        // these artifacts were mined for change? True or false regardless of build
+        // mode, so this test now runs everywhere.
+        string memory manifest = vm.readFile("deploy/TokenList.sources.txt");
+        string[2] memory sources = ["src/utils/TokenList.sol", "src/utils/TokenListRenderer.sol"];
+        for (uint256 i; i < sources.length; ++i) {
+            string memory entry = string.concat(sources[i], " ", vm.toString(keccak256(bytes(vm.readFile(sources[i])))));
+            if (!vm.contains(manifest, entry)) {
+                emit log_named_string("source changed since the salts were mined", sources[i]);
+                emit log("re-mine, re-record with script/build-create2-artifact.mjs, and update the constants here");
+                vm.skip(true);
+            }
         }
 
         assertGt(SUMMONER.code.length, 0, "SafeSummoner must exist on this fork");

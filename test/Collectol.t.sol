@@ -26,10 +26,7 @@ interface IZAMMSwap {
         uint256 feeOrHook;
     }
 
-    function swapExactIn(PoolKey calldata, uint256, uint256, bool, address, uint256)
-        external
-        payable
-        returns (uint256);
+    function swapExactIn(PoolKey calldata, uint256, uint256, bool, address, uint256) external payable returns (uint256);
 }
 
 contract CollectolTest is Test {
