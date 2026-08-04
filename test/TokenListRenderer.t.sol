@@ -46,47 +46,6 @@ contract TokenListRendererTest is Test {
         return string(Base64.decode(LibString.slice(tail, 0, LibString.indexOf(tail, '"'))));
     }
 
-    /// @dev y of the reserved banner's opaque bar. Keyed off its width, which is the
-    ///      only rect on the card 656 wide — matching on `<rect x='32'` alone finds
-    ///      the logo well at y=110 first.
-    function _bannerTop(string memory svg) internal pure returns (uint256) {
-        uint256 at = LibString.indexOf(svg, "width='656'");
-        require(at != LibString.NOT_FOUND, "no banner");
-        string memory head = LibString.slice(svg, 0, at);
-        uint256 y = LibString.lastIndexOf(head, "y='");
-        require(y != LibString.NOT_FOUND, "banner has no y");
-        return _uintAt(svg, y + 3);
-    }
-
-    /// @dev Baselines of the monospace description lines, in document order.
-    function _descBaselines(string memory svg) internal pure returns (uint256[] memory out) {
-        string memory needle = "<text x='32' y='";
-        uint256[] memory found = new uint256[](8);
-        uint256 n;
-        uint256 at;
-        while (n < 8) {
-            at = LibString.indexOf(svg, needle, at);
-            if (at == LibString.NOT_FOUND) break;
-            uint256 v = _uintAt(svg, at + bytes(needle).length);
-            // Only the wrapped description band uses the monospace stack.
-            uint256 tagEnd = LibString.indexOf(svg, ">", at);
-            if (LibString.contains(LibString.slice(svg, at, tagEnd), "ui-monospace")) found[n++] = v;
-            ++at;
-        }
-        out = found;
-        assembly ("memory-safe") {
-            mstore(out, n)
-        }
-    }
-
-    function _uintAt(string memory s, uint256 i) internal pure returns (uint256 v) {
-        bytes memory raw = bytes(s);
-        while (i < raw.length && raw[i] >= 0x30 && raw[i] <= 0x39) {
-            v = v * 10 + (uint8(raw[i]) - 48);
-            ++i;
-        }
-    }
-
     function _quotes(string memory s) internal pure returns (uint256 n) {
         bytes memory raw = bytes(s);
         for (uint256 i; i < raw.length; ++i) {
@@ -115,17 +74,9 @@ contract TokenListRendererTest is Test {
         t.deployed = false;
         t.account = bytes32(0);
         string memory svg = _svg(r.tokenURI(1, t));
-        // The property, not the coordinates: every description baseline sits above
-        // the banner's top edge, and the banner clears the chip row above it. Asserted
-        // by reading the numbers out of the markup so a layout tweak that preserves
-        // the ordering does not fail this test, and one that breaks it does.
-        uint256 bannerTop = _bannerTop(svg);
-        uint256[] memory baselines = _descBaselines(svg);
-        assertGt(baselines.length, 0, "description is drawn at all");
-        for (uint256 i; i < baselines.length; ++i) {
-            assertLt(baselines[i], bannerTop, "description line sits above the banner");
-        }
-        assertGt(baselines[0], 244, "first line clears the chip row");
+        // Description sits above the banner, which now starts at y=300.
+        assertTrue(LibString.contains(svg, "y='250'"), "description moved above the banner");
+        assertTrue(LibString.contains(svg, "<rect x='32' y='300'"), "banner below the description");
         // And the ADDRESS block is dropped rather than printed under the banner that
         // already says the address is pending.
         assertFalse(LibString.contains(svg, ">ADDRESS<"));
@@ -235,7 +186,7 @@ contract TokenListRendererTest is Test {
         // the characters that would let it become markup, not the words. A reader
         // sees the mangled string; a parser sees one text node.
         assertTrue(LibString.contains(svg, "/textscriptalert(1)/script"), "defanged, not deleted");
-        assertTrue(LibString.contains(svg, "svg onload="), "an attribute with no tag to attach to");
+        assertTrue(LibString.contains(svg, "svg onload=x"), "an attribute with no tag to attach to");
         // Every `<` and `>` in the output is one this contract wrote: the filter drops
         // them, so the tag count is a property of the layout, not of the input.
         assertEq(_count(svg, "<"), _count(svg, ">"), "balanced angle brackets");
@@ -311,105 +262,5 @@ contract TokenListRendererTest is Test {
         string memory svg = _svg(r.tokenURI(1, _token()));
         assertTrue(LibString.contains(svg, "<title>MOCK token listing</title>"));
         assertTrue(LibString.contains(svg, "role='img'"));
-    }
-
-    /// @dev The address/description cluster is centred in the band between the chip
-    ///      row and the footer rule, which means the renderer positions it from a
-    ///      line count computed BEFORE the lines are drawn. If `_descLines` and
-    ///      `_textBlock` ever disagree the card silently mis-centres, so assert the
-    ///      count they actually produce and that the block stays inside its band at
-    ///      every length.
-    function testDescriptionBlockIsCentredAndStaysInItsBand() public view {
-        string[4] memory descs = [
-            "",
-            "One short line.",
-            "A description long enough to need a second line once it is wrapped at the band width of the card.",
-            "Every text field at its schema maximum at once: a forty glyph name, a twelve glyph symbol, a two "
-            "hundred and fifty six character description that runs past the three lines this band has room for."
-        ];
-        uint256[4] memory expected = [uint256(0), 1, 2, 3];
-
-        uint256 previousTop;
-        for (uint256 i; i < descs.length; ++i) {
-            TokenList.Token memory t = _token();
-            t.description = descs[i];
-            string memory svg = _svg(r.tokenURI(1, t));
-            uint256[] memory lines = _descBaselines(svg);
-            assertEq(lines.length, expected[i], "line count the layout was positioned from");
-
-            if (lines.length != 0) {
-                assertGt(lines[0], 244, "first line clears the chip row");
-                assertLt(lines[lines.length - 1], 356, "last line stays above the footer rule");
-            }
-            // More lines must push the block UP, never down past its band.
-            uint256 top = _addressLabelY(svg);
-            if (i != 0) assertLt(top, previousTop + 1, "a longer description raises the block");
-            previousTop = top;
-            assertGt(top, 244, "ADDRESS clears the chip row");
-        }
-    }
-
-    /// @dev y of the ADDRESS label. Found by walking the `<text x='32' y='` runs
-    ///      forward and taking the one whose element is the label, rather than
-    ///      scanning backwards from the word — the same approach `_descBaselines`
-    ///      uses, and for the same reason.
-    function _addressLabelY(string memory svg) internal pure returns (uint256) {
-        string memory needle = "<text x='32' y='";
-        uint256 at;
-        while (true) {
-            at = LibString.indexOf(svg, needle, at);
-            require(at != LibString.NOT_FOUND, "no address label");
-            uint256 tagEnd = LibString.indexOf(svg, "</text>", at);
-            if (LibString.contains(LibString.slice(svg, at, tagEnd), ">ADDRESS")) {
-                return _uintAt(svg, at + bytes(needle).length);
-            }
-            ++at;
-        }
-    }
-
-    /// @dev The apostrophe used to be dropped alongside the quote, because this
-    ///      renderer delimits its SVG attributes with single quotes. Nothing carrying
-    ///      curated prose is ever put in an attribute though, so all that cost was
-    ///      every possessive and contraction a curator writes.
-    function testApostrophesSurviveInTextButNotInAnAttribute() public view {
-        TokenList.Token memory t = _token();
-        t.name = "Circle's Dollar";
-        t.description = "It's the issuer's own token, and it doesn't lose punctuation.";
-        string memory svg = _svg(r.tokenURI(1, t));
-        assertTrue(LibString.contains(svg, "Circle's Dollar"), "name keeps its apostrophe");
-        assertTrue(LibString.contains(svg, "It's the issuer's own token"), "so does the description");
-
-        // The logo is the one value interpolated into an attribute, where an
-        // apostrophe would close `href='` early.
-        t = _token();
-        t.logo = "data:image/svg+xml,x'/><script>alert(1)</script>";
-        svg = _svg(r.tokenURI(1, t));
-        assertFalse(LibString.contains(svg, "<script"), "no element the caller got to open");
-        assertEq(_count(svg, "<"), _count(svg, ">"), "balanced angle brackets");
-        uint256 at = LibString.indexOf(svg, "href='");
-        string memory tail = LibString.slice(svg, at + 6);
-        assertFalse(
-            LibString.contains(LibString.slice(tail, 0, LibString.indexOf(tail, "'")), "'"),
-            "the attribute cannot be closed early"
-        );
-    }
-
-    function testApostrophesDoNotUnbalanceEitherDocument() public view {
-        TokenList.Token memory t = _token();
-        t.name = "A'B'C";
-        t.symbol = "A'B";
-        t.url = "https://example.org/it's";
-        assertEq(_quotes(_meta(r.tokenURI(1, t))) % 2, 0, "metadata document stays balanced");
-        assertEq(_quotes(r.json(1, t)) % 2, 0, "compact json stays balanced");
-    }
-
-    /// @dev ERC-7572 describes the LIST, not a listing, so it takes no arguments and
-    ///      is the one read here that is not about a single card.
-    function testCollectionMetadataIsSelfContained() public view {
-        string memory decoded =
-            string(Base64.decode(LibString.slice(r.contractURI(), bytes("data:application/json;base64,").length)));
-        assertTrue(LibString.contains(decoded, '"name":"Token Listing"'));
-        assertTrue(LibString.contains(decoded, '"image":"data:image/svg+xml;base64,'), "mark is inline, not a link");
-        assertEq(_quotes(decoded) % 2, 0, "parseable");
     }
 }

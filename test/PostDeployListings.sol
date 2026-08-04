@@ -85,12 +85,8 @@ abstract contract PostDeployListings {
     string internal constant ZORGZ_LOGO =
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>';
 
-    /// @dev A wordmark rather than the previous placeholder, which was a plain white
-    ///      400x400 rect with `wns.wei` set at 24px inside it. Scaled into the card's
-    ///      96px logo slot that text renders under six pixels tall, so the listing
-    ///      drew a blank white square — the only card in the set that looked broken.
-    string internal constant WNS_LOGO = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 400 400"><circle cx="200" cy="200" r="192" fill="#0a0a0a" stroke="#fff" stroke-width="16"/>'
-        '<text x="200" y="252" font-family="Helvetica,Arial,sans-serif" font-size="130" font-weight="700" fill="#fff" text-anchor="middle">.wei</text></svg>';
+    string internal constant WNS_LOGO =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><rect width="400" height="400" fill="#fff"/><text x="200" y="200" font-family="sans-serif" font-size="24" text-anchor="middle" dominant-baseline="middle">wns.wei</text></svg>';
 
     /// @dev In descending rank order, which is the order they should be applied.
     function _postDeployListings() internal pure returns (Listing[] memory l) {
@@ -166,5 +162,24 @@ abstract contract PostDeployListings {
             TokenList.Standard.ERC721
         );
         l[6].onchainSvg = true;
+    }
+
+    /// @dev The owner transactions for one listing, as ONE `multicall`: list, set the
+    ///      art, and for a collection set the onchain-SVG hint. Atomic on purpose — a
+    ///      half-applied listing sits in the registry with no logo, which is exactly
+    ///      the broken-looking card the art exists to prevent.
+    ///
+    ///      Lives here rather than beside either caller because both the suite that
+    ///      proves the applied list and the suite that replays the mined deployment
+    ///      must broadcast byte-identical calldata; two copies would be two chances to
+    ///      diverge.
+    function _callsFor(Listing memory e) internal pure returns (bytes[] memory calls) {
+        uint256 id = uint256(uint160(e.token)); // a local listing id IS its address
+        calls = new bytes[](e.onchainSvg ? 3 : 2);
+        calls[0] = abi.encodeWithSignature(
+            "list(address,uint24,uint32,string,string,string)", e.token, e.color, e.rank, "", e.url, e.description
+        );
+        calls[1] = abi.encodeWithSignature("setLogoSVG(uint256,string)", id, e.logo);
+        if (e.onchainSvg) calls[2] = abi.encodeWithSignature("setOnchainSvg(uint256,bool)", id, true);
     }
 }

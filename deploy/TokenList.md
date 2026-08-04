@@ -1,61 +1,72 @@
 # TokenList deterministic deployment manifest
 
-Status: **NOT DEPLOYED — ARTIFACTS RE-MINED 2026-08-03 (second pass)**
+Status: **DEPLOYED AND VERIFIED ON ETHEREUM MAINNET, 2026-08-04. LIST COMPLETE (11/11).**
 
-> Re-mined after `TokenListLens` split ranking, rank-paging and search off the
-> registry. That move was not tidying: it is what made the registry fit under
-> EIP-170 in every build configuration rather than only in one. See "Build
-> reproducibility" below for what went wrong and what fixed it.
+> **DEPLOYED 2026-08-04.**
 >
-> All three artifacts are regenerated from the current tree and verified by
-> `test/TokenListMinedDeploy.t.sol`, which deploys the recorded payload through
-> the real SafeSummoner on a mainnet fork, checks it lands at the address below,
-> wires the renderer, and applies the post-deploy route to the full eleven-entry
-> list. 108 tests pass from a clean build with nothing skipped.
+> | | address | tx |
+> | --- | --- | --- |
+> | `TokenListRenderer` | `0x000000d595e36Dd0228c4040D981A01A59DbbE87` | deployed first; its address is a constructor arg to the registry |
+> | `TokenList` | `0x0000006013dF75A31678B786061C2B54bf531524` | `0xe5e00f9671a8ebe7a0812806d1ad2986e8c2f54f6bd81bef513cfc286c21dd38` |
 >
-> NOTE ON MINING: `script/mine_create2_salt.js` allocated a native keccak object
-> per iteration, so worker throughput decayed from 0.13M to 0.02M iter/sec and the
-> process died partway through long runs. Fixed; these three took 62 s, 22 s and
-> 8 s. The script still prints a `napi_create_reference` FATAL during teardown
-> AFTER reporting a verified result — cosmetic, but the exit code is not a
-> reliable success signal. Read the `FOUND:` block.
+> Registry deployed in block 25,675,344 for 13,469,118 gas at 0.292 gwei (0.003933 ETH).
+> Both contracts are **verified on Etherscan**, and each runtime bytecode hash was
+> checked against the local build before and after: registry
+> `0x10477f53…52897e7f`, matching exactly.
+>
+> Owner is the 2-of-3 `Multisig` at `0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2`
+> behind a 3600 s `TimelockExecutor`. Ownership was baked into the initcode, so it
+> never passed through an EOA and there was no window of single-key control.
+>
+> **Post-deploy listings, all applied.** The constructor seeded 4 (ETH, WETH, USDC,
+> USDT). wstETH was listed on its own; the remaining six (rETH, WBTC, BOLD, ZORG,
+> zOrgz, WNS) went through in ONE batched multisig transaction via the multisig's own
+> `batch(address[],uint256[],bytes[])` — target is the multisig itself, since `batch`
+> is `onlySelf`. That batch is recorded at `deploy/BATCH-remaining-6.calldata.txt`
+> (9,892 B, ~6.62M gas). `total()` is 11, in exact rank order.
+>
+> **Deployment gotcha worth remembering.** The registry deployment needs ~13.5M gas
+> against EIP-7825's 16,777,216 per-transaction cap — only 24% headroom. Any wallet
+> padding its gas estimate by 25% or more pushes past the cap, and the node rejects
+> it with an opaque `-32603 Internal error` rather than naming the cause. PIN THE GAS
+> LIMIT MANUALLY (15,000,000 was used) rather than letting a wallet estimate.
+>
+> **Interface additions in this build:** `contractURI()` (ERC-7572, forwarded from
+> the renderer in assembly), `Locked(uint256)` (ERC-5192, emitted on every listing
+> mint), `ContractURIUpdated()`. `contractURI()` is a third member of the interface
+> any replacement renderer must implement, alongside `tokenURI` and `json`.
+>
+> **Still open by choice:** `rendererLocked()` is false, so the card can still be
+> improved — including Bitcoin-aware labels reading the `protocol`/`origin` extras.
 
-## Build reproducibility
+The recorded initcode and salts below are no longer build TARGETS — they are the
+record of what was deployed. Both addresses now hold code, so the vacancy checks
+this document used to insist on are spent: re-running the recorded calldata reverts.
 
-Under `via_ir`, a contract compiles differently depending on which other files
-share its compilation unit. Identical source at identical settings, built two
-ways:
+## Reproducing the deployed bytecode — THE COMMAND MATTERS
 
-| Command (from clean `out/`) | `TokenList` runtime |
-| --- | ---: |
-| `forge build src/utils/TokenList.sol src/utils/TokenListRenderer.sol src/utils/TokenListLens.sol` | 22,167 |
-| `forge build` / `forge test` | 21,275 |
+```
+forge build src/utils/TokenList.sol src/utils/TokenListRenderer.sol
+```
 
-Roughly 900 B apart, and before the lens split the larger of the two was **24,811
-— over EIP-170**. Foundry does not enforce the limit inside tests, so the suite
-passed against a variant mainnet would have rejected, while the shipped artifact
-came from the other build and fit. Three things were wrong at once: a fresh clone
-could not produce a deployable registry, the tests validated bytecode that was not
-the deployed bytecode, and `TokenListMinedDeploy` compared the recorded initcode
-against `vm.getCode` — so under a full build it always mismatched and skipped
-itself, silently, for long enough to hide a stale assertion of its own.
+Those two paths, alone. A bare `forge build`, or any `forge test` run, compiles the
+sources in a unit that also holds the test contracts, and under `via_ir` that changes
+the optimiser's output — hundreds of bytes, from identical source at identical
+settings. The deployed bytecode came from the isolated build, so only the isolated
+build reproduces it. Foundry does not enforce EIP-170 in tests, so the full-build
+variant never announces itself either.
 
-Resolved on all three counts:
+Verified this way on 2026-08-04: renderer 17,025 B and registry 24,243 B, both
+byte-identical to `eth_getCode` at the addresses above.
 
-1. **Margin, not a build flag.** Ranking, rank-paging and search moved to
-   `TokenListLens`. The registry now fits in EVERY configuration — worst case
-   22,167 against 24,576, so 2,409 B spare. Lowering `max_optimizer_runs` was
-   tried first and does not help: 1, 10 and 20 all produced ~24,817.
-2. **The canonical build is the isolated one** (first row above). A deterministic
-   artifact should be a function of the source it deploys, not of every unrelated
-   file in the repo — under a full build, adding any test anywhere would move the
-   bytecode and silently invalidate a mined salt.
-3. **The staleness guard asks about the source, not the build.**
-   `deploy/TokenList.sources.txt` records the keccak of each source file the salts
-   were mined for, and `TokenListMinedDeploy` compares against that. It now runs
-   under both build modes and skips only when the source has genuinely drifted.
+**DO NOT RUN `forge fmt` ON THESE TWO FILES.** Reformatting changes the source, which
+changes the metadata hash appended to the bytecode, which changes the deployed
+bytecode — a whitespace-only edit silently breaks reproduction against a live,
+immutable contract. They are committed exactly as deployed and are deliberately not
+`fmt`-clean. `test/TokenListMinedDeploy.t.sol` hashes both sources and skips loudly
+if either moves.
 
-## Fixed deployment context## Fixed deployment context
+## Fixed deployment context
 
 | Item | Value |
 | --- | --- |
@@ -63,7 +74,7 @@ Resolved on all three counts:
 | CREATE2 factory | SafeSummoner `0x00000000004473e1f31C8266612e7FD5504e6f2a` |
 | Factory entry point | `create2Deploy(bytes creationCode, bytes32 salt)` |
 | Deployment call value | `0` |
-| Compiler | Solidity 0.8.36, `via_ir = true`, optimizer **20 runs** (pinned by `foundry.toml` compilation restrictions) |
+| Compiler | Solidity 0.8.36, `via_ir = true`, optimizer **20 runs** (pinned by `compilation_restrictions` in `foundry.toml`, for BOTH files) |
 | Solady revision | `acd959a` |
 | Owner (constructor arg) | `0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2` |
 
@@ -78,42 +89,21 @@ and hands unrelated contracts Circle's branding. See audit finding M-05.
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
-| TokenListRenderer | NOT DEPLOYED | `0x000000E4B2237D6688fF841F3E1BeF436d3966B4` | `0x000000…003c5b62` | `0x9e3dda1f…16e37b29` | 17,038 | 17,012 |
-| TokenListLens | NOT DEPLOYED | `0x000000361AA0aD214d82039A49C40dBaaAC563EC` | `0x000000…006cb489` | `0x2c3db46f…60c74441` | 4,243 | 4,217 |
-| TokenList | NOT DEPLOYED | `0x000000DCf78b250218dc9E34fBD282B1a508c9EB` | `0x000000…0176ce8c` | `0x7face006…0d7d9517` | 35,622 | 22,234 |
+| TokenListRenderer | **DEPLOYED** | `0x000000d595e36Dd0228c4040D981A01A59DbbE87` | `0x000000…01b888f4` | `0xe86dc3bd…45a9bd17` | 17,051 | 17,025 |
+| TokenList | **DEPLOYED** | `0x0000006013dF75A31678B786061C2B54bf531524` | `0x000000…002febeb` | `0x7729b7f8…5460a3b0` | 37,711 | 24,243 |
 
-All three runtimes are under EIP-170 (24,576 B) and all three creation payloads
-are under EIP-3860 (49,152 B). Headroom, measured against the LARGER of the two
-build modes above, which is the number that matters:
-
-| Contract | Worst-case runtime | Headroom |
-| --- | ---: | ---: |
-| `TokenList` | 22,234 | 2,342 |
-| `TokenListRenderer` | 17,012 | 7,564 |
-| `TokenListLens` | 4,217 | 20,359 |
-
-The registry's 2,409 B is the one to watch: it is not upgradeable, so that is the
-entire budget for ever shipping a security fix. The renderer and the lens can both
-be replaced, which is why the split put the replaceable work on their side of the
-line. Adding a seed or a large SVG needs a size check before it is accepted.
-
-Deployment gas, measured per transaction against EIP-7825's 16,777,216 cap. These
-deploy as separate transactions, so the cap applies to each one on its own:
-
-| Transaction | Gas |
-| --- | ---: |
-| `TokenListRenderer` | 3,049,658 |
-| `TokenList` (four seeded cards) | 12,237,337 |
-| `TokenListLens` | well under; no constructor, no storage |
+Both runtimes are under EIP-170 (24,576 B) and both creation payloads are under
+EIP-3860 (49,152 B). `TokenList` retains 11,441 B of initcode headroom and **333 B
+of runtime headroom**. That runtime margin is the binding constraint: the via_ir
+optimizer moves it NON-MONOTONICALLY with unrelated edits — one enum member cost
+601 B in this build while the next three cost 68 B between them — so ANY further
+source change needs a `forge build --force --sizes` check BEFORE a salt search, or
+the mining time is spent on a payload that cannot deploy.
 
 Full values:
 
-- `deploy/TokenListRenderer.salt.txt` — `0x00000000000000000000000000000000000000000000000000000000003c5b62`
-  initcode keccak — `0x9e3dda1fa9b00d05ff43ee79e1a8f20e4c3a6b94acba9eaef4dae45916e37b29`
-- `deploy/TokenListLens.salt.txt` — `0x00000000000000000000000000000000000000000000000000000000006cb489`
-  initcode keccak — `0x2c3db46fde899c50908d975ee7989d8f1e7f6a3d2b332006fccaa51d60c74441`
-- `deploy/TokenList.salt.txt` — `0x000000000000000000000000000000000000000000000000000000000176ce8c`
-  initcode keccak — `0x7face006def71f0f4e6c0dded530c88ac41236214743fb2c0e59cd700d7d9517`
+- `deploy/TokenListRenderer.salt.txt` — `0x0000000000000000000000000000000000000000000000000000000001b888f4`
+- `deploy/TokenList.salt.txt` — `0x00000000000000000000000000000000000000000000000000000000002febeb`
 
 ## DEPLOY THE RENDERER FIRST
 
@@ -125,39 +115,104 @@ renderer that lands anywhere other than the address above, invalidates
 
 ```
 1. create2Deploy(TokenListRenderer.creation, TokenListRenderer.salt)
-   -> expect 0x000000E4B2237D6688fF841F3E1BeF436d3966B4
+   -> expect 0x000000d595e36Dd0228c4040D981A01A59DbbE87
    -> require code.length > 0 before continuing
 
 2. create2Deploy(TokenList.creation, TokenList.salt)
-   -> expect 0x000000DCf78b250218dc9E34fBD282B1a508c9EB
-
-3. create2Deploy(TokenListLens.creation, TokenListLens.salt)   [any time]
-   -> expect 0x000000361AA0aD214d82039A49C40dBaaAC563EC
+   -> expect 0x0000006013dF75A31678B786061C2B54bf531524
 ```
 
 The constructor reverts `BadInput()` if the renderer address has no code, so step 2
 cannot silently succeed against a missing renderer — but it will consume gas and
 fail, so confirm step 1 first.
 
-Step 3 has no ordering constraint at all. `TokenListLens` is stateless and takes
-the registry as a call parameter rather than a constructor argument, so its salt
-does not depend on either address above, and one deployment serves every
-`TokenList` on every chain. That is deliberate: the renderer/registry coupling
-already means mining one wrong invalidates both, and extending that chain to a
-third contract would have bought nothing.
-
 ## Constructor arguments (TokenList)
 
 ```
 initialOwner  0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2
-renderer_     0x000000E4B2237D6688fF841F3E1BeF436d3966B4
+renderer_     0x000000d595e36Dd0228c4040D981A01A59DbbE87
 
 abi-encoded tail (already appended to TokenList.creation.txt):
 0x000000000000000000000000006cd14f36f65ecbb29b2519ccbe63a0dc8549f2
-  000000000000000000000000000000e4b2237d6688ff841f3e1bef436d3966b4
+  000000000000000000000000000000d595e36dd0228c4040d981a01a59dbbe87
 ```
 
 `TokenListRenderer` takes no constructor arguments.
+
+## Bitcoin-rooted listings
+
+`Standard` ships as `UNKNOWN, NATIVE, ERC20, ERC721, ERC1155, TACIT, RUNE, ORDINAL,
+BRC20`. **That set can never grow.** `setStandard` takes the enum by ABI and an
+out-of-range value reverts at decode, so unlike `_extra` there is no escape hatch —
+anything not named here must be carried as an extension field forever.
+
+All four Bitcoin formats list under `Kind.OTHER` with `chainId == 0` and a 32-byte
+account word, and can never be `synced`: no Bitcoin state is readable from the EVM,
+so their text is owner-attested and the card says OWNER ATTESTED.
+
+### Account convention — fixed before the first listing
+
+Listing ids are `keccak256(kind, chainId, account)` and permanent, and all four
+formats share the single `chainId == 0` namespace, so this cannot be revised later
+without orphaning every card minted under the old scheme. The registry cannot
+validate a Bitcoin identifier — it cannot see that chain — so this is curator
+discipline, pinned by `testBitcoinAccountConventionIsCollisionFree`.
+
+| format | `account` | notes |
+| --- | --- | --- |
+| Tacit | the 32-byte `asset_id`, verbatim | the only format with a native 32-byte id |
+| Runes | `keccak256("rune:<block>:<tx>")` | the Rune ID, decimal, no padding |
+| Ordinals | `keccak256("ord:<txid>i<index>")` | full inscription id; `i<index>` present even at 0 |
+| BRC-20 | `keccak256("brc20:<ticker>")` | **ticker lowercased** |
+
+Hashing rather than bit-packing, even for Runes where `block:tx` is 96 bits and would
+fit: a packed layout is bespoke to this project, still needs a domain tag to stay
+collision-free, and cannot be done at all for an inscription id. One rule covering all
+four is worth more to an indexer than a reversible layout for the two shortest.
+
+Two normalisations carry real risk if skipped:
+
+- **BRC-20 tickers are case-insensitive and first-deploy-wins.** Hashing them
+  unnormalised makes `CAT` and `cat` two listings for one token — the
+  duplicate-identity failure this schema already refuses for the native asset (M-01)
+  and for Solana mints.
+- **Use the Rune ID, never the rune name.** Names carry display-only spacers, so one
+  rune has several equally valid spellings and no single canonical string.
+
+For an ordinals COLLECTION rather than a single inscription, use the collection's
+parent inscription id, per the ordinals provenance standard.
+
+### Reserved extension keys
+
+Conventions, not contract features — `_extra` takes any `bytes32` key, so these cost
+nothing in bytecode or in the frozen ABI and can be set or corrected at any time.
+
+| key | holds |
+| --- | --- |
+| `ref` | the canonical id string the hashed `account` commits to |
+| `protocol` | the metaprotocol (`tacit`, `runes`, `ordinals`, `brc20`) |
+| `origin` | where the asset came from, e.g. `tacit:<asset_id>` |
+| `factory` | the contract that minted it, for bridged assets |
+
+`origin` and `factory` let a consumer VERIFY lineage itself: check the token was
+minted by the canonical factory and reflects the named origin.
+
+**They must never be read as provenance.** `synced` means one specific thing — this
+registry read name/symbol/decimals from the account's own contract on this chain, and
+anyone may re-run that read permissionlessly. An owner-written extra that could flip
+it would launder an assertion into a verified fact, which is the exact confusion this
+registry exists to prevent. Extras name WHERE TO LOOK; only `_pull` observing a real
+contract moves `synced`. Pinned by `testExtrasCannotUpgradeProvenance`.
+
+For a Bitcoin asset that will later have an EVM address, the honest upgrade path is
+`reserve` → `activateReserved`: owner-attested with a stable id while pending, then
+read from the bridged contract once it exists, keeping the same id and card. That is
+provenance EARNED rather than declared, and it stays live — anyone may `sync` it
+afterwards, forever, without the owner.
+
+Set `ref` and `protocol` on every Bitcoin listing, and `freeze` it once correct if the
+binding should be permanent: a hashed account is not reversible, so `ref` is the only
+record of what it commits to.
 
 ## Files
 
@@ -171,19 +226,27 @@ abi-encoded tail (already appended to TokenList.creation.txt):
 
 ## Verification performed
 
-At Ethereum block `25,660,327` on 2026-08-01, the following read-only mainnet-fork
-checks passed:
+Against a mainnet fork pinned at block `25,640,000` on 2026-08-03, from a completed
+`forge build --force` at the pinned 20-run setting:
 
-- Both expected addresses were vacant before the local replay.
-- `test/TokenListMinedDeploy.t.sol` deployed both recorded payloads through
-  SafeSummoner at their mined addresses.
-- The registry had all 11 expected entries, including zOrgz and WNS as ERC-721
-  collections with the onchain-SVG hint; renderer wiring and ownership also matched.
-- The generated TokenList gallery parsed every `tokenURI()` as JSON, including both
-  NFT collection cards.
+- `test/TokenListMinedDeploy.t.sol` **passes** (not skips). It compares each recorded
+  initcode against a fresh compile, deploys both through the real SafeSummoner at the
+  addresses above, asserts owner/renderer wiring, asserts the four constructor seeds,
+  applies the seven post-deploy `multicall`s, and asserts the resulting eleven-entry
+  list including zOrgz and WNS as ERC-721 collections carrying the onchain-SVG hint.
+- `test/TokenListPostDeploy.t.sol` regenerated `TokenList.postdeploy.calldata.txt`
+  and asserts every one of the seven transactions fits under EIP-7825's
+  16,777,216-gas per-transaction cap.
+- Full suites green: 111 TokenList/renderer tests, 57 ZorgConviction/lens tests,
+  0 failures, 0 skipped.
 
-Vacancy is time-sensitive: repeat `eth_getCode(expectedAddress) == 0x` immediately
-before broadcasting the two deployment transactions.
+Both addresses were vacant on the fork before the replay. **Vacancy is
+time-sensitive** — repeat `eth_getCode(expectedAddress) == 0x` against live mainnet
+immediately before broadcasting, since these addresses are only reserved by the fact
+that nobody else has mined the same payload to them.
+
+An archive RPC is required; `foundry.toml` documents which public endpoints actually
+serve archive state at this pin and which fail in ways that look like contract bugs.
 
 ## A salt is only valid for its exact payload
 

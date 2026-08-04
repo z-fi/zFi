@@ -4,7 +4,6 @@ pragma solidity ^0.8.36;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
-import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
@@ -19,7 +18,6 @@ contract TokenListPreviewTest is Test, PostDeployListings {
     using LibString for string;
 
     TokenList list;
-    TokenListLens lens;
     address owner = address(0xA11CE);
 
     /// @dev Every test in this repo runs against the mainnet fork pinned in
@@ -33,7 +31,6 @@ contract TokenListPreviewTest is Test, PostDeployListings {
     ///      still shows the full set and still proves every card renders.
     function setUp() public {
         list = new TokenList(owner, new TokenListRenderer());
-        lens = new TokenListLens();
         Listing[] memory l = _postDeployListings();
         vm.startPrank(owner);
         for (uint256 i; i < l.length; ++i) {
@@ -60,7 +57,7 @@ contract TokenListPreviewTest is Test, PostDeployListings {
         );
         vm.stopPrank();
 
-        uint256[] memory ids = lens.rankedIds(list);
+        uint256[] memory ids = list.rankedIds();
 
         string memory rows = "";
         for (uint256 i; i < ids.length; ++i) {

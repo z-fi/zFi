@@ -469,3 +469,39 @@ lens — the registry measures **22,234 B isolated and 22,000 B in the full buil
 2 KB, and it is what makes this round of additions affordable at all.
 
 All three salts re-mined. 133 tests pass from a clean build, nothing skipped.
+
+# Deployed — and what shipped instead
+
+`TokenList` and `TokenListRenderer` went live on Ethereum mainnet on 2026-08-04 at
+`0x0000006013dF75A31678B786061C2B54bf531524` and
+`0x000000d595e36Dd0228c4040D981A01A59DbbE87`, owned by the 2-of-3 multisig behind a
+timelock, with all eleven listings applied. Both are verified on Etherscan and both
+reproduce byte-for-byte from the sources committed with them.
+
+What shipped is the variant developed in the working tree, NOT the one this document
+had been describing. The difference matters enough to record:
+
+- **`TokenListLens` was not deployed, and has been deleted.** It existed only to buy
+  EIP-170 headroom by moving `rankedIds`, `rankedIdsPaged` and `search` out of the
+  registry. The deployed registry keeps all three — confirmed live: `rankedIds()`
+  returns eleven ids, `search("eth", 10)` returns five — so the lens had no job, and
+  routing through it would have been strictly worse: an extra call that fans back
+  into `summariesPaged` to recompute an answer the registry gives directly, with a
+  different tie-break, from a page that is rank-ordered here and listing-ordered in
+  the version the lens was written against. Two sources of truth that agree until
+  they do not.
+- **The registry shipped at 24,243 B — 333 B under EIP-170.** The concern recorded
+  above stands: the same source compiles 234–892 B differently depending on
+  compilation-unit membership, and Foundry does not enforce EIP-170 in tests. It
+  deployed, so the question is settled for THIS bytecode. It is not settled for the
+  next change, and the registry is not upgradeable.
+- **The second layout pass did not ship.** The live card is the earlier layout:
+  provenance pill under the title in the theme colour, the square logo well, forty
+  zeros under ADDRESS on the ETH card, and the content block top-anchored. The chip
+  row, neutral signal colours, centred block, `NONE - NATIVE ASSET`, calmer well and
+  IPFS gateway rewriting are all still available as a renderer swap —
+  `rendererLocked` is false — and need no registry change.
+- **Apostrophes are stripped permanently.** `_clean` in the deployed registry drops
+  `'`, and it is immutable. A renderer swap cannot recover text that was never
+  stored, so every curated description will read "Circles stablecoin" rather than
+  "Circle's stablecoin" for the life of this deployment.

@@ -5,7 +5,6 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Base64} from "../lib/solady/src/utils/Base64.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
-import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
@@ -115,27 +114,16 @@ contract StubRenderer {
     {
         return "STUB";
     }
-
-    /// @dev ERC-7572. `TokenList.contractURI()` forwards here, so this is now a THIRD
-    ///      member of the interface any replacement renderer has to implement —
-    ///      a renderer without it leaves the registry's `contractURI()` reverting.
-    function contractURI() public pure returns (string memory) {
-        return "STUBCOLLECTION";
-    }
 }
 
 contract TokenListTest is Test, PostDeployListings {
     using LibString for string;
 
     TokenList list;
-    TokenListLens lens;
     address owner = address(0xA11CE);
     address stranger = address(0xB0B);
 
     string constant LOGO = "data:image/svg+xml;base64,PHN2Zy8+";
-
-    event Locked(uint256 tokenId);
-    event ContractURIUpdated();
 
     /// @dev ETH plus WETH, USDC and USDT. The other seven of the original eleven are
     ///      applied after deployment — see `PostDeployListings`.
@@ -149,7 +137,6 @@ contract TokenListTest is Test, PostDeployListings {
     ///      do with the contract.
     function setUp() public {
         list = new TokenList(owner, new TokenListRenderer());
-        lens = new TokenListLens();
     }
 
     function _list(address token, uint32 rank) internal returns (uint256) {
@@ -299,7 +286,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(all.length, SEEDED);
         assertEq(list.summariesPaged(2, type(uint256).max).length, SEEDED - 2);
         assertEq(list.summariesPaged(SEEDED, type(uint256).max).length, 0);
-        assertEq(lens.rankedIdsPaged(list, 0, type(uint256).max).length, SEEDED);
+        assertEq(list.rankedIdsPaged(0, type(uint256).max).length, SEEDED);
     }
 
     function testHostileMetadataIsSanitized() public {
@@ -308,11 +295,7 @@ contract TokenListTest is Test, PostDeployListings {
 
         TokenList.Token memory t = list.get(id);
         assertFalse(t.name.contains("<"));
-        assertFalse(t.name.contains(">"));
-        // The apostrophe now survives — it is legal in a text node and in a JSON
-        // string, and dropping it cost every possessive a curator writes. What made
-        // this token hostile was the angle brackets, and those are still gone.
-        assertTrue(t.name.contains("'"), "an apostrophe is text, not markup");
+        assertFalse(t.name.contains("'"));
         assertEq(t.decimals, 0); // reverting decimals() does not brick the listing
         // The card still renders, and nothing escaped into it.
         string memory uri = list.tokenURI(id);
@@ -331,7 +314,7 @@ contract TokenListTest is Test, PostDeployListings {
 
     /// @dev Every seeded logo must be a self-contained, namespaced SVG document.
     function testSeededLogosAreStandaloneSVGs() public view {
-        uint256[] memory ids = lens.rankedIds(list);
+        uint256[] memory ids = list.rankedIds();
         for (uint256 i; i < ids.length; ++i) {
             string memory logo = list.logoOf(ids[i]);
             assertTrue(logo.startsWith("data:image/svg+xml;base64,"));
@@ -452,19 +435,9 @@ contract TokenListTest is Test, PostDeployListings {
 
         string memory svg =
             string(Base64.decode(_imageOf(list.tokenURI(id)).slice(bytes("data:image/svg+xml;base64,").length)));
-        // Rendered as several bounded lines rather than one overflowing run. The
-        // band's exact y moves with the layout — the block is centred on its line
-        // count — so pin the property, not the coordinates: the description is drawn
-        // as multiple monospace runs, each within the glyph budget.
-        uint256 runs;
-        uint256 at;
-        while (true) {
-            at = LibString.indexOf(svg, "ui-monospace", at);
-            if (at == LibString.NOT_FOUND) break;
-            ++runs;
-            ++at;
-        }
-        assertGt(runs, 1, "a long description wraps onto more than one line");
+        // Rendered as several bounded lines rather than one overflowing run.
+        assertTrue(svg.contains("y='300'"));
+        assertTrue(svg.contains("y='320'"));
         for (uint256 i; i < 3; ++i) {
             assertTrue(bytes(_lineAt(svg, i)).length <= 84);
         }
@@ -493,7 +466,7 @@ contract TokenListTest is Test, PostDeployListings {
 
         // The seeded defaults rank far above these, so they occupy the head; the
         // three added tokens must still sort among themselves by descending rank.
-        uint256[] memory ranked = lens.rankedIds(list);
+        uint256[] memory ranked = list.rankedIds();
         assertEq(ranked.length, SEEDED + 3);
         assertEq(ranked[SEEDED], idB);
         assertEq(ranked[SEEDED + 1], idC);
@@ -501,40 +474,37 @@ contract TokenListTest is Test, PostDeployListings {
 
         vm.prank(owner);
         list.setRank(idA, type(uint32).max);
-        assertEq(lens.rankedIds(list)[0], idA);
+        assertEq(list.rankedIds()[0], idA);
 
-        // The two pages differ deliberately: the registry pages in LISTING order and
-        // the lens sorts. Ranking left the registry to buy EIP-170 headroom — see
-        // the header on `TokenListLens`.
-        assertEq(lens.rankedSummaries(list, 0, 1)[0].symbol, "AAA", "lens pages by rank");
-        assertEq(list.summariesPaged(0, 1)[0].symbol, "ETH", "registry pages in listing order");
+        // The typed page is emitted in rank order too.
+        assertEq(list.summariesPaged(0, 1)[0].symbol, "AAA");
     }
 
     function testSearchIsCaseInsensitive() public {
         MockToken a = new MockToken("Zebra Coin", "ZEBRA", 18);
         uint256 idA = _list(address(a), 0);
 
-        uint256[] memory hits = lens.search(list, "zebra", 10);
+        uint256[] memory hits = list.search("zebra", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], idA);
 
-        hits = lens.search(list, "ZEBRA COIN", 10);
+        hits = list.search("ZEBRA COIN", 10);
         assertEq(hits.length, 1);
 
         // The seeded set is searchable straight out of the constructor.
-        hits = lens.search(list, "usdt", 10);
+        hits = list.search("usdt", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], list.idOf(0xdAC17F958D2ee523a2206206994597C13D831ec7));
 
         // ...and so is a post-deploy listing, through the same index.
         _applyPostDeployListings();
-        hits = lens.search(list, "wbtc", 10);
+        hits = list.search("wbtc", 10);
         assertEq(hits.length, 1);
         assertEq(hits[0], list.idOf(WBTC));
 
-        assertTrue(lens.search(list, "usd", 10).length >= 2); // USDC and USDT
-        assertEq(lens.search(list, "usd", 1).length, 1); // limit is respected
-        assertEq(lens.search(list, "nothinghere", 10).length, 0);
+        assertTrue(list.search("usd", 10).length >= 2); // USDC and USDT
+        assertEq(list.search("usd", 1).length, 1); // limit is respected
+        assertEq(list.search("nothinghere", 10).length, 0);
     }
 
     // OPEN-ENDED METADATA --------------------------------------------------
@@ -746,7 +716,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(list.idAt(0), ethId);
 
         string[4] memory expected = ["ETH", "WETH", "USDC", "USDT"];
-        uint256[] memory ranked = lens.rankedIds(list);
+        uint256[] memory ranked = list.rankedIds();
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);
         }
@@ -799,7 +769,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertTrue(t.synced);
         assertEq(t.rank, 992_000);
         assertEq(t.url, "https://zorg.wei.domains");
-        assertEq(lens.rankedIds(list)[8], list.idOf(ZORG));
+        assertEq(list.rankedIds()[8], list.idOf(ZORG));
 
         string memory svg = string(Base64.decode(t.logo.slice(26)));
         assertTrue(svg.contains("zorg-clip"));
@@ -829,18 +799,13 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(w.decimals, 0);
         assertEq(w.url, "https://opensea.io/collection/wei-name-service");
         assertTrue(w.synced);
-        assertEq(lens.rankedIds(list)[9], list.idOf(ZORGZ));
-        assertEq(lens.rankedIds(list)[10], list.idOf(WNS));
+        assertEq(list.rankedIds()[9], list.idOf(ZORGZ));
+        assertEq(list.rankedIds()[10], list.idOf(WNS));
 
         assertTrue(list.json(list.idOf(ZORGZ)).contains('"p":"ERC-721"'));
         assertTrue(list.json(list.idOf(WNS)).contains('"p":"ERC-721"'));
-        // The mark, not the placeholder. This used to assert `wns.wei`, which was the
-        // text of a 400x400 white rect with 24px type in it — at the 96px the card
-        // draws a logo that renders under six pixels tall, so the listing showed a
-        // blank white square.
         string memory wnsSvg = string(Base64.decode(w.logo.slice(26)));
-        assertTrue(wnsSvg.contains(".wei"), "carries the wordmark");
-        assertFalse(wnsSvg.contains('<rect width="400" height="400" fill="#fff"/>'), "not the blank placeholder");
+        assertTrue(wnsSvg.contains("wns.wei"));
     }
 
     /// @dev The whole point of the split: applying the seven reproduces exactly the
@@ -850,7 +815,7 @@ contract TokenListTest is Test, PostDeployListings {
         assertEq(list.total(), 11);
         string[11] memory expected =
             ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD", "ZORG", "zzz", "WEI"];
-        uint256[] memory ranked = lens.rankedIds(list);
+        uint256[] memory ranked = list.rankedIds();
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);
             assertTrue(list.tokenURI(ranked[i]).startsWith("data:application/json;base64,"));
@@ -879,7 +844,7 @@ contract TokenListTest is Test, PostDeployListings {
     }
 
     function testEverySeededCardRenders() public view {
-        uint256[] memory ids = lens.rankedIds(list);
+        uint256[] memory ids = list.rankedIds();
         for (uint256 i; i < ids.length; ++i) {
             assertTrue(list.tokenURI(ids[i]).startsWith("data:application/json;base64,"));
             assertTrue(bytes(list.logoOf(ids[i])).length > 100); // real art, not a stub
@@ -1000,13 +965,13 @@ contract TokenListTest is Test, PostDeployListings {
     ///      and `get(id)` batched through `Multicallable` covers the case — so the
     ///      unbounded side is measured against `get` itself.
     function testPagedReadsAreBoundedAndRanked() public {
-        uint256[] memory ids = lens.rankedIdsPaged(list, 0, 3);
+        uint256[] memory ids = list.rankedIdsPaged(0, 3);
         assertEq(ids.length, 3);
-        uint256[] memory all = lens.rankedIds(list);
+        uint256[] memory all = list.rankedIds();
         assertEq(ids[0], all[0]);
         assertEq(ids[2], all[2]);
-        assertEq(lens.rankedIdsPaged(list, SEEDED, 5).length, 0);
-        assertEq(lens.rankedIdsPaged(list, 0, type(uint256).max).length, SEEDED);
+        assertEq(list.rankedIdsPaged(SEEDED, 5).length, 0);
+        assertEq(list.rankedIdsPaged(0, type(uint256).max).length, SEEDED);
 
         TokenList.Summary[] memory page = list.summariesPaged(1, 2);
         assertEq(page.length, 2);
@@ -1119,48 +1084,5 @@ contract TokenListTest is Test, PostDeployListings {
         vm.prank(owner);
         list.setRank(id, 42);
         assertEq(list.get(id).rank, 42);
-    }
-
-    /// @dev ERC-5192 was advertised through `supportsInterface(0xb45a3c0e)` but the
-    ///      event half did not exist, so an indexer classifying soulbound collections
-    ///      from logs saw an ordinary transferable one and would offer listings for
-    ///      sale on cards whose transfer always reverts. Every listing is born locked
-    ///      and stays locked, so `Locked` is emitted on mint and `Unlocked` is
-    ///      deliberately absent.
-    function testEveryListingEmitsLockedOnMint() public {
-        MockToken token = new MockToken("Locked Token", "LOCK", 18);
-        vm.expectEmit(true, true, true, true);
-        emit Locked(uint256(uint160(address(token))));
-        vm.prank(owner);
-        list.list(address(token), 0, 1, "", "", "");
-        assertTrue(list.locked(uint256(uint160(address(token)))));
-    }
-
-    /// @dev ERC-7572. Nothing described the COLLECTION before, so a marketplace showing
-    ///      the registry itself fell back to the bare ERC-721 name beside a blank tile.
-    function testContractURIDescribesTheCollection() public view {
-        string memory uri = list.contractURI();
-        assertTrue(LibString.startsWith(uri, "data:application/json;base64,"));
-        string memory decoded = string(Base64.decode(uri.slice(bytes("data:application/json;base64,").length)));
-        assertTrue(decoded.contains('"name":"Token Listing"'), "names the collection");
-        assertTrue(decoded.contains('"image":"data:image/svg+xml;base64,'), "carries a mark");
-    }
-
-    /// @dev It is forwarded to the renderer, so a swap restates the collection too —
-    ///      and a renderer that does not implement it leaves this reverting, which is
-    ///      why the stub had to grow a third function.
-    function testContractURIFollowsTheRenderer() public {
-        StubRenderer stub = new StubRenderer();
-        vm.prank(owner);
-        list.setRenderer(TokenListRenderer(address(stub)));
-        assertEq(list.contractURI(), "STUBCOLLECTION");
-    }
-
-    function testRendererSwapSignalsTheCollectionRefresh() public {
-        StubRenderer stub = new StubRenderer();
-        vm.expectEmit(false, false, false, false);
-        emit ContractURIUpdated();
-        vm.prank(owner);
-        list.setRenderer(TokenListRenderer(address(stub)));
     }
 }

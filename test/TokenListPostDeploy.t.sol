@@ -4,7 +4,6 @@ pragma solidity ^0.8.36;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
-import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
@@ -34,14 +33,12 @@ contract TokenListPostDeployTest is Test, PostDeployListings {
     uint256 constant TX_GAS_CAP = 16_777_216;
 
     TokenList list;
-    TokenListLens lens;
     TokenListRenderer renderer;
     address owner = address(0xA11CE);
 
     function setUp() public {
         renderer = new TokenListRenderer();
         list = new TokenList(owner, renderer);
-        lens = new TokenListLens();
     }
 
     /// @dev The constructor's half of the split, restated here so the two halves are
@@ -49,7 +46,7 @@ contract TokenListPostDeployTest is Test, PostDeployListings {
     function testConstructorSeedsExactlyTheFourThatFit() public view {
         assertEq(list.total(), 4);
         string[4] memory expected = ["ETH", "WETH", "USDC", "USDT"];
-        uint256[] memory ranked = lens.rankedIds(list);
+        uint256[] memory ranked = list.rankedIds();
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);
         }
@@ -99,7 +96,7 @@ contract TokenListPostDeployTest is Test, PostDeployListings {
             uint32(1_000_000), 999_000, 998_000, 997_000, 996_000, 995_000, 994_000, 993_000, 992_000, 991_000, 990_000
         ];
 
-        uint256[] memory ranked = lens.rankedIds(list);
+        uint256[] memory ranked = list.rankedIds();
         for (uint256 i; i < expected.length; ++i) {
             TokenList.Token memory t = list.get(ranked[i]);
             assertEq(t.symbol, expected[i]);
@@ -167,16 +164,6 @@ contract TokenListPostDeployTest is Test, PostDeployListings {
 
         vm.writeFile("deploy/TokenList.postdeploy.calldata.txt", out);
         assertEq(list.total(), 11);
-    }
-
-    function _callsFor(Listing memory e) internal pure returns (bytes[] memory calls) {
-        uint256 id = uint256(uint160(e.token)); // a local listing id IS its address
-        calls = new bytes[](e.onchainSvg ? 3 : 2);
-        calls[0] = abi.encodeWithSignature(
-            "list(address,uint24,uint32,string,string,string)", e.token, e.color, e.rank, "", e.url, e.description
-        );
-        calls[1] = abi.encodeWithSignature("setLogoSVG(uint256,string)", id, e.logo);
-        if (e.onchainSvg) calls[2] = abi.encodeWithSignature("setOnchainSvg(uint256,bool)", id, true);
     }
 
     function _applyAll() internal {

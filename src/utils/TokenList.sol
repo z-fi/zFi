@@ -5,6 +5,7 @@ import {TokenListRenderer} from "./TokenListRenderer.sol";
 import {ERC721} from "../../lib/solady/src/tokens/ERC721.sol";
 import {Ownable} from "../../lib/solady/src/auth/Ownable.sol";
 import {Base64} from "../../lib/solady/src/utils/Base64.sol";
+import {LibSort} from "../../lib/solady/src/utils/LibSort.sol";
 import {LibString} from "../../lib/solady/src/utils/LibString.sol";
 import {Multicallable} from "../../lib/solady/src/utils/Multicallable.sol";
 import {MetadataReaderLib} from "../../lib/solady/src/utils/MetadataReaderLib.sol";
@@ -36,6 +37,18 @@ contract TokenList is ERC721, Ownable, Multicallable {
     /// @dev `Kind` identifies an account namespace; `Standard` identifies what the
     ///      account represents. They are independent: an EVM address may name a
     ///      native asset, ERC-20, ERC-721 or ERC-1155 collection.
+    ///      APPEND ONLY, AND ONLY BEFORE DEPLOY. Each member's `uint8` encoding is
+    ///      part of the stored struct and of every consumer's decoding, so a value may
+    ///      never be inserted or reordered once listings exist. After deploy this list
+    ///      cannot grow at all: `setStandard` takes the enum by ABI, and an
+    ///      out-of-range value reverts at decode, so there is no escape hatch here the
+    ///      way `_extra` is one for fields. Anything not named below has to be carried
+    ///      as an extension field instead.
+    ///
+    ///      The four Bitcoin-rooted formats share a shape: rules enforced by
+    ///      open-source indexers rather than by consensus, listed under `Kind.OTHER`
+    ///      with a 32-byte account word, and never `synced` — no Bitcoin state is
+    ///      readable from here, so their text is owner-attested and the card says so.
     enum Standard {
         UNKNOWN,
         NATIVE,
@@ -175,9 +188,10 @@ contract TokenList is ERC721, Ownable, Multicallable {
         bool synced
     );
 
-    /// @dev `field` names what changed ("art", "text", "rank", "audit", "sync",
-    ///      "freeze"), so an indexer can skip re-reading a listing it does not care
-    ///      about. Note "art" covers rank too, because `setArt` writes it.
+    /// @dev `field` names what changed — "art", "text", "rank", "audit", "nftArt",
+    ///      "extra", "sync", "activate" or "freeze" — so an indexer can skip re-reading
+    ///      a listing it does not care about. Note "art" covers rank and logo too,
+    ///      because `setArt` and `setLogoSVG` both write under it.
     event Updated(uint256 indexed id, bytes32 indexed field);
     event Delisted(uint256 indexed id, bytes32 indexed account);
 
@@ -759,6 +773,18 @@ contract TokenList is ERC721, Ownable, Multicallable {
     }
 
     /// @notice Give up the power to change the renderer, forever.
+    /// @dev THE THIRD, WIDEST FORM OF THIS IS INHERITED AND DELIBERATELY LEFT OPEN.
+    ///      `freeze` seals one listing, `lockRenderer` seals presentation, and
+    ///      `Ownable.renounceOwnership` seals the entire registry in one call: no
+    ///      further listing, delisting, correcting a link, or re-ranking, by anyone,
+    ///      ever. That is a real switch with a real use — declaring the list final —
+    ///      and it is kept for that. Understand what it forecloses before calling it:
+    ///      a project that later rugs, or a frozen link that starts serving malware,
+    ///      becomes a permanent billboard nobody can take down, which is precisely the
+    ///      outcome `delist` stays available on frozen listings to avoid. The
+    ///      constructor rejects a zero `initialOwner` to stop the list being BORN in
+    ///      that state by accident; reaching it deliberately is a governance decision,
+    ///      not an accident, and is left to governance.
     /// @dev The registry ships with a settable renderer so the card can be improved
     ///      after deploy. That convenience is also the last route by which governance
     ///      can alter what every listing appears to say, since a renderer may print
@@ -852,36 +878,44 @@ contract TokenList is ERC721, Ownable, Multicallable {
         return _extraKeys[id];
     }
 
-    // NOTE: no `getMany(ids)`. `Multicallable` already batches `get(id)` over an
-    // ARBITRARY set in one eth_call, which is strictly more flexible than any fixed
-    // wrapper, and `summariesPaged` covers the contiguous case without the unbounded
-    // fields.
+    // NOTE: no `getMany(ids)`, for the same reason as `page()` below: `Multicallable`
+    // already batches `get(id)` over an ARBITRARY set in one eth_call, which is
+    // strictly more flexible than any fixed wrapper, and `summariesPaged` covers the
+    // contiguous case without the unbounded fields.
 
-    /// @notice A page of listings WITHOUT the heavy fields, in LISTING order.
-    /// @dev The one bounded read everything else composes from, and the reason the
-    ///      registry needs no sort of its own. Everything a dropdown, a token picker
-    ///      or a scroll list renders, and none of what makes a whole-struct page
-    ///      unsafe at scale: no logo, no description, no links. Bounded per row, so a
-    ///      page has a predictable size.
-    ///
-    ///      LISTING ORDER, NOT RANK ORDER. Ranking, rank-paging and search moved to
-    ///      `TokenListLens`, which builds all three on top of this function. They are
-    ///      pure views over data this contract already exposes, so keeping them here
-    ///      bought nothing and cost EIP-170 headroom the registry cannot get back —
-    ///      it is not upgradeable, and it has to retain room to ship a security fix.
-    ///      A lens can be redeployed; this cannot. Each row carries its own `rank`,
-    ///      so a caller that wants rank order has everything it needs.
+    /// @notice A page of ranked ids alone, highest rank first.
+    /// @dev The read a dapp should actually build a list from. `rankedIds` returns
+    ///      every id at once, and a whole-struct page would be worse still — a logo
+    ///      can be 24 KB of base64, so a 20-row page of those is megabytes of
+    ///      returndata and hits provider `eth_call` limits long before the list feels
+    ///      large. That is why there is no struct-page read here at all.
+    ///      Page ids here, then batch `get`/`json` through `Multicallable` for exactly
+    ///      the rows on screen.
+    function rankedIdsPaged(uint256 start, uint256 count) public view returns (uint256[] memory out) {
+        uint256[] memory ranked = rankedIds();
+        if (start >= ranked.length) return out;
+        uint256 rest = ranked.length - start;
+        uint256 n = count < rest ? count : rest;
+        out = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            out[i] = ranked[start + i];
+        }
+    }
+
+    /// @notice A page of listings WITHOUT the heavy fields, highest rank first.
+    /// @dev Everything a dropdown, a token picker or a scroll list renders, and none
+    ///      of what makes a whole-struct page unsafe at scale: no logo, no
+    ///      description, no links. Bounded per row, so a page has a predictable size.
     function summariesPaged(uint256 start, uint256 count) public view returns (Summary[] memory out) {
-        uint256 total_ = _ids.length;
-        if (start >= total_) return out;
-        uint256 rest = total_ - start;
+        uint256[] memory ranked = rankedIds();
+        if (start >= ranked.length) return out;
+        uint256 rest = ranked.length - start;
         uint256 n = count < rest ? count : rest;
         out = new Summary[](n);
         for (uint256 i; i < n; ++i) {
-            uint256 id = _ids[start + i];
-            Token storage t = _tokens[id];
+            Token storage t = _tokens[ranked[start + i]];
             out[i] = Summary(
-                id,
+                ranked[start + i],
                 t.account,
                 t.chainId,
                 t.decimals,
@@ -938,6 +972,54 @@ contract TokenList is ERC721, Ownable, Multicallable {
         return themeOf(idFor(token));
     }
 
+    /// @notice Every listing id, highest rank first.
+    /// @dev Packs rank and index into one word so a single sort orders both keys.
+    ///      Intended for `eth_call`; a dapp reads this once and pages the result.
+    ///
+    ///      Ties break by position in the id array, which is listing order UNTIL a
+    ///      delisting: `delist` swap-pops, so the last entry takes the removed one's
+    ///      slot and inherits its place among equal ranks. The order of tied listings
+    ///      is therefore deterministic but not stable across removals. Rank is the
+    ///      only ordering this promises — give listings distinct ranks when the order
+    ///      between them matters, which is what the 1,000-wide gaps in the seeded
+    ///      weights are for.
+    function rankedIds() public view returns (uint256[] memory out) {
+        uint256 n = _ids.length;
+        uint256[] memory keys = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            keys[i] = (uint256(_tokens[_ids[i]].rank) << 32) | (n - 1 - i);
+        }
+        LibSort.sort(keys);
+        LibSort.reverse(keys);
+        out = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            out[i] = _ids[n - 1 - (keys[i] & 0xffffffff)];
+        }
+    }
+
+    /// @notice Case-insensitive substring search over symbol and name.
+    /// @dev View-only and linear; the list is curated, so it stays small enough that
+    ///      an exact index would cost more to maintain than this costs to run.
+    function search(string calldata query, uint256 limit) public view returns (uint256[] memory out) {
+        string memory needle = LibString.lower(query);
+        uint256 n = _ids.length;
+        // Bounded by the answer the caller asked for, not by the list size. A search
+        // capped at 10 rows had been allocating (and zeroing) one word per listing.
+        uint256[] memory hits = new uint256[](limit < n ? limit : n);
+        uint256 found;
+        for (uint256 i; i < n && found < limit; ++i) {
+            uint256 id = _ids[i];
+            Token storage t = _tokens[id];
+            if (LibString.lower(t.symbol).contains(needle) || LibString.lower(t.name).contains(needle)) {
+                hits[found++] = id;
+            }
+        }
+        out = hits;
+        assembly ("memory-safe") {
+            mstore(out, found)
+        }
+    }
+
     // NOTE: there is deliberately no `page()` returning a JSON array. `Multicallable`
     // lets a consumer batch `json(id)` for any set of ids in a single `eth_call`,
     // which is strictly more flexible, and a concatenating loop would make one call's
@@ -953,21 +1035,6 @@ contract TokenList is ERC721, Ownable, Multicallable {
     /// @notice Live, self-contained listing card.
     function tokenURI(uint256 id) public view override returns (string memory) {
         return renderer.tokenURI(id, _mustExist(id), _extrasOf(id));
-    }
-
-    /// @dev Flatten the extension mapping for the renderer, which is `pure` and so
-    ///      can never read it itself. Without this the escape hatch that exists so a
-    ///      new field costs a transaction rather than a redeploy was invisible on the
-    ///      card and in the JSON — no renderer, present or future, could reach it.
-    ///      Bounded by `EXTRA_KEYS_MAX`, the same cap that keeps `delist` finite.
-    function _extrasOf(uint256 id) internal view returns (TokenListRenderer.Extra[] memory out) {
-        bytes32[] storage keys = _extraKeys[id];
-        uint256 n = keys.length;
-        out = new TokenListRenderer.Extra[](n);
-        for (uint256 i; i < n; ++i) {
-            bytes32 key = keys[i];
-            out[i] = TokenListRenderer.Extra(key, _extra[id][key]);
-        }
     }
 
     /// @notice ERC-7572 collection metadata: what this list is, not what one listing is.
@@ -993,6 +1060,21 @@ contract TokenList is ERC721, Ownable, Multicallable {
             returndatacopy(m, 0x00, returndatasize())
             if iszero(ok) { revert(m, returndatasize()) }
             return(m, returndatasize())
+        }
+    }
+
+    /// @dev Flatten the extension mapping for the renderer, which is `pure` and so
+    ///      can never read it itself. Without this the escape hatch that exists so a
+    ///      new field costs a transaction rather than a redeploy was invisible on the
+    ///      card and in the JSON — no renderer, present or future, could reach it.
+    ///      Bounded by `EXTRA_KEYS_MAX`, the same cap that keeps `delist` finite.
+    function _extrasOf(uint256 id) internal view returns (TokenListRenderer.Extra[] memory out) {
+        bytes32[] storage keys = _extraKeys[id];
+        uint256 n = keys.length;
+        out = new TokenListRenderer.Extra[](n);
+        for (uint256 i; i < n; ++i) {
+            bytes32 key = keys[i];
+            out[i] = TokenListRenderer.Extra(key, _extra[id][key]);
         }
     }
 
@@ -1027,6 +1109,10 @@ contract TokenList is ERC721, Ownable, Multicallable {
         emit MetadataUpdate(id);
     }
 
+    function _emitListed(uint256 id, Token storage t) internal {
+        emit Listed(id, t.account, t.chainId, t.symbol, t.name, t.decimals, t.synced);
+    }
+
     /// @dev The only mint site, so a listing cannot come into existence without the
     ///      ERC-5192 lock signal. `_mint`, never `_safeMint`: the holder is the subject
     ///      contract itself, which has no receiver hook and must not be able to refuse
@@ -1034,10 +1120,6 @@ contract TokenList is ERC721, Ownable, Multicallable {
     function _mintListing(address to, uint256 id) internal {
         _mint(to, id);
         emit Locked(id);
-    }
-
-    function _emitListed(uint256 id, Token storage t) internal {
-        emit Listed(id, t.account, t.chainId, t.symbol, t.name, t.decimals, t.synced);
     }
 
     function _index(uint256 id) internal {
@@ -1132,18 +1214,8 @@ contract TokenList is ERC721, Ownable, Multicallable {
     }
 
     /// @dev Labels are display text, not markup. Admit a printable ASCII subset and
-    ///      drop the characters that would break out of a JSON string or an SVG TEXT
-    ///      NODE, so a token cannot inject either through its own `name()`.
-    ///
-    ///      The apostrophe is deliberately KEPT. It was dropped alongside the quote
-    ///      because the renderer delimits its SVG attributes with single quotes — but
-    ///      nothing this function cleans is ever interpolated into an attribute. Name,
-    ///      symbol, links, description and extras all land in text nodes and in JSON
-    ///      string values, and an apostrophe is legal in both. Dropping it cost every
-    ///      possessive and contraction a curator writes: "Circle's stablecoin" was
-    ///      stored, and rendered, as "Circles stablecoin". The one field that DOES
-    ///      reach an attribute is the logo, which goes through `_uri` below and is
-    ///      still checked strictly.
+    ///      drop the characters that would break out of a JSON string or an SVG
+    ///      attribute, so a token cannot inject either through its own `name()`.
     function _clean(string memory input, uint256 maxLen) internal pure returns (string memory) {
         bytes memory raw = bytes(input);
         bytes memory out = new bytes(raw.length < maxLen ? raw.length : maxLen);
@@ -1151,7 +1223,7 @@ contract TokenList is ERC721, Ownable, Multicallable {
         for (uint256 i; i < raw.length && kept < maxLen; ++i) {
             bytes1 c = raw[i];
             if (c < 0x20 || c > 0x7E) continue;
-            if (c == '"' || c == "\\" || c == "<" || c == ">" || c == "&") continue;
+            if (c == '"' || c == "'" || c == "\\" || c == "<" || c == ">" || c == "&") continue;
             out[kept++] = c;
         }
         assembly ("memory-safe") {

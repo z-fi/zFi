@@ -5,7 +5,6 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 import {Base64} from "../lib/solady/src/utils/Base64.sol";
 import {LibString} from "../lib/solady/src/utils/LibString.sol";
 import {TokenList} from "../src/utils/TokenList.sol";
-import {TokenListLens} from "../src/utils/TokenListLens.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 
 contract MockERC20 {
@@ -49,7 +48,6 @@ contract TokenListAuditTest is Test {
     address owner = address(0xA11CE);
     TokenList list;
     TokenListRenderer renderer;
-    TokenListLens lens;
     MockERC20 erc20;
     MockERC721 erc721;
     MockERC20 erc20b;
@@ -62,7 +60,6 @@ contract TokenListAuditTest is Test {
     function setUp() public {
         vm.chainId(8453);
         renderer = new TokenListRenderer();
-        lens = new TokenListLens();
         list = new TokenList(owner, renderer);
         erc20 = new MockERC20();
         erc721 = new MockERC721();
@@ -329,11 +326,11 @@ contract TokenListAuditTest is Test {
     function testSearchHonoursItsLimit() public {
         _listErc20();
         _listForeign();
-        assertEq(lens.search(list, "mock", 10).length, 1);
-        assertEq(lens.search(list, "o", 10).length, 2); // "Mock Token" and "Solana Thing"
-        assertEq(lens.search(list, "o", 1).length, 1);
-        assertEq(lens.search(list, "o", 0).length, 0);
-        assertEq(lens.search(list, "nothinghere", 10).length, 0);
+        assertEq(list.search("mock", 10).length, 1);
+        assertEq(list.search("o", 10).length, 2); // "Mock Token" and "Solana Thing"
+        assertEq(list.search("o", 1).length, 1);
+        assertEq(list.search("o", 0).length, 0);
+        assertEq(list.search("nothinghere", 10).length, 0);
     }
 
     /// @dev An index past the end is an unknown listing, not a panic.
@@ -408,7 +405,7 @@ contract TokenListAuditTest is Test {
         uint256 c = list.listForeign(TokenList.Kind.SVM, 0, bytes32(uint256(9)), "C", "C", 9, 0, 7, "");
         vm.stopPrank();
 
-        uint256[] memory before = lens.rankedIds(list);
+        uint256[] memory before = list.rankedIds();
         assertEq(before[0], a);
         assertEq(before[1], b);
         assertEq(before[2], c);
@@ -418,7 +415,7 @@ contract TokenListAuditTest is Test {
 
         // `c` was listed last, so the swap-pop moved it into `a`'s slot and it now
         // wins the tie it previously lost.
-        uint256[] memory afterIds = lens.rankedIds(list);
+        uint256[] memory afterIds = list.rankedIds();
         assertEq(afterIds[0], c);
         assertEq(afterIds[1], b);
     }
@@ -676,32 +673,82 @@ contract TokenListAuditTest is Test {
         // becomes ERC20. The Bitcoin origin lives in extras precisely because this
         // field cannot hold it once the subject is a real ERC-20.
         assertTrue(t.standard == TokenList.Standard.ERC20);
+        // The provenance UPGRADE is the point: the card was owner-attested while the
+        // address was pending and is now read from the contract itself — same id,
+        // same card, no re-listing. And it stays live rather than being a one-time
+        // blessing: anyone may re-verify it forever, without the owner.
+        vm.prank(address(0xBEEF));
+        list.sync(evm);
+        assertTrue(list.get(evm).synced);
+
         // And the Bitcoin card is untouched: two assets, two cards, both still true.
         assertTrue(list.get(btc).standard == TokenList.Standard.ORDINAL);
         assertTrue(list.isListed(btc) && list.isListed(evm));
     }
 
-    /// @dev The registry stores the apostrophe; see `_clean`. Asserted here because
-    ///      storage is what every other consumer reads, and the two have to agree.
-    function testCuratedTextKeepsItsApostrophes() public {
-        vm.prank(owner);
-        uint256 id = list.list(
-            address(erc20), 0, 1, "", "https://circle.com", "Circle's dollar, and it doesn't lose punctuation."
-        );
-        assertEq(list.get(id).description, "Circle's dollar, and it doesn't lose punctuation.");
-        assertTrue(LibString.contains(list.json(id), "Circle's dollar"));
+    /// @dev RESERVED EXTENSION KEYS, and the invariant that keeps them honest.
+    ///
+    ///      `ref` the canonical id string · `protocol` the metaprotocol ·
+    ///      `origin` where the asset came from · `factory` the contract that minted
+    ///      it. Together these let a consumer VERIFY lineage for itself: check that
+    ///      the token was minted by the canonical factory, and that it reflects the
+    ///      named Bitcoin origin.
+    ///
+    ///      The invariant: extras name WHERE TO LOOK, they never assert a conclusion.
+    ///      Writing `factory` or `origin` must not move `synced`, because `synced` is
+    ///      the one field that means "this registry read the text from the account's
+    ///      own contract, and anyone may re-run that read". An owner-written string
+    ///      that could flip it would launder an assertion into a verified fact, which
+    ///      is precisely the confusion this registry exists to prevent. Provenance is
+    ///      upgraded by `_pull` observing a real contract — never by curation.
+    function testExtrasCannotUpgradeProvenance() public {
+        vm.startPrank(owner);
+        uint256 id = l_listOther(keccak256("tacit-asset"), "Tacit", "TAC", 8);
+        list.setStandard(id, TokenList.Standard.TACIT);
+        list.setExtra(id, "protocol", "tacit");
+        list.setExtra(id, "origin", "bitcoin:etch:840000");
+        list.setExtra(id, "factory", "0x000000000000000000000000000000000000dEaD");
+        list.setExtra(id, "ref", "f0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b");
+        vm.stopPrank();
+
+        // Four extras claiming a trustless bridge, and the card still says ATTESTED.
+        assertFalse(list.get(id).synced, "curation must never move provenance");
+        assertTrue(LibString.contains(list.json(id), '"v":false'));
+        assertTrue(LibString.contains(_svgOf(id), "OWNER ATTESTED"));
+
+        // And there is no back door: this listing is not syncable at all, because
+        // nothing on this chain can read Bitcoin.
+        vm.expectRevert(TokenList.NotSyncable.selector);
+        list.sync(id);
     }
 
-    /// @dev But the characters that genuinely break out of a JSON string or an SVG
-    ///      text node are still dropped on the way in.
-    function testMarkupCharactersAreStillStripped() public {
+    /// @dev A native asset is not attested because a curator preferred to type its
+    ///      text — it is attested because there is no contract at `address(0)` to
+    ///      read. "OWNER ATTESTED" was true but flattened those two situations, and
+    ///      read as a warning that someone had chosen Ethereum's decimals. The card
+    ///      now gives the reason; the machine-readable `synced` flag is unchanged,
+    ///      because nothing about the provenance itself changed.
+    function testNativeCardNamesTheReasonItCannotBeRead() public {
+        vm.startPrank(owner);
+        uint256 id = list.listForeign(
+            TokenList.Kind.EVM, uint64(block.chainid), bytes32(0), "Ether", "ETH", 18, 0x627EEA, 1_000_000, ""
+        );
+        list.setStandard(id, TokenList.Standard.NATIVE);
+        vm.stopPrank();
+
+        string memory card = _svgOf(id);
+        assertTrue(LibString.contains(card, "NO CONTRACT TO READ"));
+        assertFalse(LibString.contains(card, "OWNER ATTESTED"), "the vaguer label must not also appear");
+        // The identity line already says NATIVE ASSET, so the chip does not repeat it.
+        assertTrue(LibString.contains(card, "NATIVE ASSET / 18 DECIMALS"));
+        // Provenance itself is unchanged: still not read from any contract.
+        assertFalse(list.get(id).synced);
+        assertTrue(LibString.contains(list.json(id), '"v":false'));
+
+        // A foreign (non-native) listing keeps the attested wording, because there
+        // IS a contract for it — just not one this chain can reach.
         vm.prank(owner);
-        uint256 id = list.list(address(erc20), 0, 1, "", "", "<script>x</script> & \"quoted\" \\ end");
-        string memory d = list.get(id).description;
-        assertFalse(LibString.contains(d, "<"));
-        assertFalse(LibString.contains(d, ">"));
-        assertFalse(LibString.contains(d, "&"));
-        assertFalse(LibString.contains(d, '"'));
-        assertFalse(LibString.contains(d, "\\"));
+        uint256 f = l_listOther(keccak256("some-btc-asset"), "Thing", "THING", 8);
+        assertTrue(LibString.contains(_svgOf(f), "OWNER ATTESTED"));
     }
 }
