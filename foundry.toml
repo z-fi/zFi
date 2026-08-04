@@ -10,12 +10,29 @@ optimizer_runs = 9_999_999
 # Override with FOUNDRY_ETH_RPC_URL env var for a faster/paid RPC.
 #
 # Probed 2026-07-31 for archive state at block 24_880_000:
-#   eth.drpc.org                        OK   <- current default
+#   eth.drpc.org                        OK   but see 2026-08-03 below
 #   eth.merkle.io                       OK   but rate-limits forge's request volume
 #   gateway.tenderly.co/public/mainnet  OK   but see below
 #   eth.llamarpc.com                    HTTP 521
 #   rpc.ankr.com/eth                    -32000 (no archive on the free tier)
 #   ethereum-rpc.publicnode.com         HTTP 403
+#
+# Re-probed 2026-08-03 for archive state at the current pin of 25_640_000, during the
+# TokenList re-mine. The list above had rotted, and the failures are worth naming
+# because two of them do NOT look like infrastructure:
+#   eth-mainnet.public.blastapi.io      OK   <- current default
+#   mainnet.gateway.tenderly.co         OK   (still fine for a single suite)
+#   eth.drpc.org                        HTTP 408 "upgrade to paid plan" on connect
+#   ethereum-rpc.publicnode.com         serves recent state, then 403s on ARCHIVE
+#                                       reads mid-test - so most suites pass and only
+#                                       the ones touching old accounts fail
+#   rpc.flashbots.net                   -32603 "state at block ... is pruned"
+#   eth.llamarpc.com / rpc.payload.de   HTTP 521 / connection error
+#
+# The publicnode mode is the nasty one: a suite fails with a plausible-looking EVM
+# error on one specific test while everything around it passes, which reads as a
+# contract bug rather than a pruned node. `TokenListMinedDeploy` is the canary — it
+# staticcalls SafeSummoner, deployed long before the pin.
 #
 # Tenderly was the default until it stopped being viable under whole-suite load: a full
 # `forge test` produced ~142 "operation timed out" / "connection reset" database errors,
@@ -27,7 +44,7 @@ optimizer_runs = 9_999_999
 # NOTE: several suites hardcode their own URL in vm.createSelectFork instead of reading
 # this key, so FOUNDRY_ETH_RPC_URL does not reach them. zQuoterFullMatrix reads
 # vm.envOr("ETH_RPC_URL", ...) and does. Grep before assuming an override took effect.
-eth_rpc_url = "https://eth.drpc.org"
+eth_rpc_url = "https://eth-mainnet.public.blastapi.io"
 # Must be AFTER the deployments the quoter depends on. zQuoter staticcalls the V4 helper
 # at 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6, and at the previous pin of 24_880_000 that
 # address had ZERO bytes of code (as did the live zQuoter at 0x0000002d...). A staticcall to
@@ -59,6 +76,14 @@ gas_limit = "18446744073709551615"
 fs_permissions = [
     { access = "read", path = "./zSwap.html" },
     { access = "read", path = "./script/zSwapRegistry-setHtmlAsTarget.calldata.txt" },
+    # The TokenList suites read the frozen deterministic artifacts and write the
+    # preview page. Both paths are repo-local, and both tests fail closed without
+    # these - `vm.readFileBinary` and `vm.writeFile` are denied by default.
+    # Write, not just read: `TokenListPostDeploy` regenerates the owner calldata for
+    # the seven listings that no longer fit the constructor, so the file that gets
+    # broadcast is produced by the same test that proves it yields the right list.
+    { access = "read-write", path = "./deploy" },
+    { access = "read-write", path = "./dapp" },
 ]
 
 # DIFFERENTIAL COMPILATION
@@ -99,8 +124,40 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 
+# TokenList sits within a few hundred bytes of EIP-170 and the via_ir optimizer
+# moves that figure NON-MONOTONICALLY with unrelated source edits - the same
+# contract measured 23,962 B with eleven constructor seeds, 24,268 B with three
+# and 24,854 B with four, none of which changes a line of runtime logic. 20 runs
+# is the floor of that sweep and buys ~350 B over 200. Runtime gas is the right
+# thing to trade here: the registry is read through eth_call and written a
+# handful of times per listing.
+[[profile.default.additional_compiler_profiles]]
+name = "tokenlist"
+via_ir = true
+optimizer = true
+optimizer_runs = 20
+
 [[profile.default.compilation_restrictions]]
 paths = "src/SwapboardView.sol"
+max_optimizer_runs = 200
+
+# Dutchboard and Floorboard both carry several public entry points over one
+# shared internal body - the listing/bid creators, their `For` variants, and on
+# Dutchboard the expiry-bearing overloads. At the default runs the optimizer
+# inlines that body into every one of them, which is what pushed both contracts
+# over EIP-170 (Dutchboard 25,539 B, Floorboard 33,253 B). Runtime gas is the
+# right thing to give up here: the duplicated code is creation-path, paid once
+# per listing, while the fill path that actually runs hot is thin.
+#
+# Same release invariant as the lens above: any edit to either board must be
+# followed by a deployed-size check, because the headroom is now a build
+# setting rather than slack in the source.
+[[profile.default.compilation_restrictions]]
+paths = "src/Dutchboard.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/Floorboard.sol"
 max_optimizer_runs = 200
 
 # PrecisionPoolFactory embeds PrecisionPool's creation code so it can deploy
@@ -111,6 +168,34 @@ max_optimizer_runs = 200
 # the factory OR the pool must be followed by a deployed-size check.
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionPoolFactory.sol"
+max_optimizer_runs = 200
+
+# TokenList and its renderer are pinned to 200 runs by their deployment manifest
+# (deploy/TokenList.md), and B-01 in audit/TokenList/gpt5.6-sol-pro.md is the
+# reason: at the default runs the pair does not fit under EIP-170 at all, and the
+# headroom it appears to have at other settings is an optimizer artifact rather
+# than real margin. The mined salts are only valid for initcode built at these
+# settings, so expressing it here - rather than in a profile someone has to
+# remember to pass - is what keeps `forge build` producing the payload the salt
+# was actually mined for. Both files, because the renderer address is baked into
+# TokenList's creation code and a differently-optimized renderer moves it.
+[[profile.default.compilation_restrictions]]
+paths = "src/utils/TokenList.sol"
+max_optimizer_runs = 20
+
+[[profile.default.compilation_restrictions]]
+paths = "src/utils/TokenListRenderer.sol"
+max_optimizer_runs = 20
+
+# ZorgConvictionRenderer is pure string concatenation that returns an HTML page,
+# reachable only through `eth_call` (ZorgConviction.html()). Runtime gas is
+# therefore free and size is the sole binding constraint - the same trade the
+# lens and TokenList entries make above. Most of the contract is literal page
+# text the optimizer cannot compress, so this buys hundreds of bytes rather than
+# thousands; the release invariant is the same either way, and any edit to the
+# page must be followed by a `forge build --force --sizes` check.
+[[profile.default.compilation_restrictions]]
+paths = "src/dao/ZorgConvictionRenderer.sol"
 max_optimizer_runs = 200
 
 # Swapboard reached ~437 B under EIP-170 after gaining replaceOrder, the push
@@ -157,3 +242,14 @@ optimizer_runs = 20
 
 [profile.zquoter.optimizer_details]
 yul = false
+
+# ZorgConviction carries ~40 public/external entry points over shared internal
+# bodies, and the default runs inline those bodies into every one of them. The
+# receipt metadata already moved to ZorgReceiptArt (see its header); this is the
+# rest of the gap. Runtime gas is the right thing to trade: the hot paths here
+# are dominated by storage writes and token transfers, not by inlining. Same
+# release invariant as the entries above - any edit must be followed by an
+# explicit `forge build --force --sizes` check.
+[[profile.default.compilation_restrictions]]
+paths = "src/dao/ZorgConviction.sol"
+max_optimizer_runs = 200
