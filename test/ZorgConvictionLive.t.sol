@@ -26,7 +26,7 @@ contract ZorgConvictionLiveTest is Test {
     address constant WNS = 0x0000000000696760E15f265e828DB644A0c242EB;
     address constant TOKENLIST = 0x0000006013dF75A31678B786061C2B54bf531524;
 
-    uint64 constant HALF_LIFE = 30 days;
+    uint64 constant HALF_LIFE = 3 days;
 
     function setUp() public {
         // After TokenList's deployment at 25,675,344 — the whole point of this suite.

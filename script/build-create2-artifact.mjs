@@ -29,12 +29,17 @@ const SOURCES = {
   TokenList: "src/utils/TokenList.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
+  ZorgPageStyle: "src/dao/ZorgPageStyle.sol",
+  ZorgReceiptArt: "src/dao/ZorgReceiptArt.sol",
+  ZorgConvictionRenderer: "src/dao/ZorgConvictionRenderer.sol",
+  ZorgConviction: "src/dao/ZorgConviction.sol",
+  ZorgTokenListLens: "src/dao/ZorgTokenListLens.sol",
 };
 // Contracts whose deployment manifest pins them below the default optimizer
 // runs. A salt is only valid for initcode built at the pinned setting, so
 // picking up an artifact compiled at any other one silently mines - or
 // verifies - the wrong payload.
-const PINNED_RUNS = {SwapboardView: 200, TokenList: 20, TokenListRenderer: 20};
+const PINNED_RUNS = {SwapboardView: 200, TokenList: 20, TokenListRenderer: 20, ZorgConviction: 200, ZorgConvictionRenderer: 200};
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   console.error(
