@@ -2,6 +2,44 @@
 
 Status: **DEPLOYED AND VERIFIED ON ETHEREUM MAINNET, 2026-08-04. LIST COMPLETE (11/11).**
 
+> **BRANCH `renderer-v2` — A RENDERER SWAP, NOT A REDEPLOY.**
+>
+> `TokenList` at `0x0000006013dF75A31678B786061C2B54bf531524` is NOT touched by this
+> branch. Its source is byte-identical to what is deployed; only the renderer moves,
+> through `setRenderer`, which is why this can ship at all — `rendererLocked` is
+> false.
+>
+> | | value |
+> | --- | --- |
+> | New renderer | `0x000000F1876d6A3914251aa81385172881e61B02` |
+> | Salt | `0x0000000000000000000000000000000000000000000000000000000000d5ee04` |
+> | Creation | 17,309 B / runtime 17,283 B |
+> | Deploy calldata | `deploy/TokenListRenderer.deploy.calldata.txt` |
+> | Then, from the owner multisig | `deploy/SWAP-setRenderer.calldata.txt` |
+>
+> Deploy the renderer through SafeSummoner, confirm it lands at the address above,
+> then call `setRenderer` from the owner. `setRenderer` emits `BatchMetadataUpdate`
+> and `ContractURIUpdated`, so wallets and marketplaces refresh every card.
+>
+> **What changes on the card.** Provenance leaves the header and leads a metadata
+> chip row directly beneath the identity band, where the fields it qualifies live —
+> it was wedged four pixels off the header rule. Provenance, curation state and sort
+> weight are drawn neutrally rather than in the owner's theme, because they mean the
+> same thing on every listing and were rendering orange on one and red on another.
+> The logo well is a faint recess rather than a saturated square behind circular
+> art. The address/description block is centred on its line count instead of leaving
+> a fifty-five pixel slab of dead black above the footer rule. A native asset reads
+> `NONE - NATIVE ASSET` rather than forty copyable zeros. `ipfs://` logos are
+> rewritten to a gateway for display, having previously drawn an empty well every
+> time. The reserved banner sits below the description instead of over it, and
+> extension fields reach the card at all.
+>
+> The sharper `NO CONTRACT TO READ` provenance label from the deployed renderer is
+> kept.
+>
+> **What a swap CANNOT fix:** `_clean` lives in the immutable registry, so the
+> apostrophes it strips are gone from storage and no renderer can recover them.
+
 > **DEPLOYED 2026-08-04.**
 >
 > | | address | tx |
