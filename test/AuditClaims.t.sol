@@ -24,7 +24,7 @@ contract AuditClaimsTest is Test {
     address trader = address(0x7AD);
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
         usdc = new MockERC20("USDC", 6);
         usdc.mint(lp, 100_000_000e6);

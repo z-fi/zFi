@@ -1,0 +1,510 @@
+/**
+ * Orders tab: placing fixed and Dutch orders, and the live orderbook list
+ * (fill, cancel, and the tags that tell a user what they are looking at).
+ */
+import { test, describe, after } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  A, SEL, MockChain, loadPage, fixedRateQuoter, word, wordAddr, selectorOf, closeAllPages,
+} from './harness.mjs';
+
+after(closeAllPages);
+
+const ETH = 10n ** 18n;
+const USDC = 10n ** 6n;
+
+async function setup(prep = () => {}) {
+  const chain = new MockChain();
+  chain.setNative(A.ACCOUNT, 100n * ETH);
+  chain.setErc20(A.USDC, A.ACCOUNT, 500_000n * USDC);
+  chain.setErc20(A.WETH, A.ACCOUNT, 100n * ETH);
+  chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+  prep(chain);
+  const p = await loadPage({ chain });
+  await p.connect();
+  p.click('tabBook');
+  await p.settle();
+  return p;
+}
+
+/** Pull the inner calls out of a multicall(bytes[]) payload. */
+function innerCalls(data) {
+  assert.equal(selectorOf(data), SEL.MULTICALL);
+  const body = data.replace(/^0x/, '').slice(8);
+  const n = Number(word('0x' + body, 1));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const off = Number(word('0x' + body, 2 + i)) / 32;
+    const len = Number(word('0x' + body, 2 + off));
+    const start = (2 + off + 1) * 64;
+    out.push('0x' + body.slice(start, start + len * 2));
+  }
+  return out;
+}
+
+/** The executor payload carried by an snwap(...) call. */
+function snwapPayload(data) {
+  assert.equal(selectorOf(data), SEL.SNWAP);
+  const body = data.replace(/^0x/, '').slice(8);
+  const off = Number(word('0x' + body, 6)) * 2;
+  const len = Number(word('0x' + body, off / 64)) * 2;
+  return '0x' + body.slice(off + 64, off + 64 + len);
+}
+
+/** Find the order-placement payload inside whatever wrapper the page used. */
+function placementPayload(tx) {
+  const calls = selectorOf(tx.data) === SEL.MULTICALL ? innerCalls(tx.data) : [tx.data];
+  for (const c of calls) {
+    if (selectorOf(c) !== SEL.SNWAP) continue;
+    const inner = snwapPayload(c);
+    if (selectorOf(inner) === SEL.ORDER_FIXED || selectorOf(inner) === SEL.ORDER_DUTCH) return inner;
+  }
+  throw Error('no order placement found in the transaction');
+}
+
+describe('orders tab layout', () => {
+  test('reuses the pay/receive panels as sell/want', async () => {
+    const p = await setup();
+    assert.equal(p.text('payL'), 'You sell');
+    assert.equal(p.text('rcvHdr'), 'You want');
+    assert.equal(p.visible('kindL'), true, 'order type must be choosable');
+    assert.equal(p.visible('fillL'), true, 'fixed orders choose partial vs all-or-nothing');
+    assert.equal(p.visible('floorL'), false, 'the floor only applies to a Dutch order');
+    assert.equal(p.visible('slipL'), false, 'a limit order has no slippage');
+    p.close();
+  });
+
+  test('switching to Dutch swaps the fill control for a decay floor', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    assert.equal(p.visible('floorL'), true);
+    assert.equal(p.visible('fillL'), false);
+    assert.equal(p.text('rcvHdr'), 'Start ask total');
+    assert.equal(p.visible('rc'), false, 'a Dutch auction cannot be made private');
+    p.close();
+  });
+
+  test('the expiry select is relabelled from the send-tab time lock', async () => {
+    const p = await setup();
+    assert.match(p.$('dlyL').textContent, /Expires/);
+    assert.equal(p.$('dly').options[0].textContent, 'Never');
+    p.close();
+  });
+});
+
+describe('order validation', () => {
+  test('needs both a sell and a want amount', async () => {
+    const p = await setup();
+    assert.equal(p.text('swap'), 'Place order');
+    assert.equal(p.disabled('swap'), true);
+    p.type('amt', '1');
+    await p.settle();
+    assert.equal(p.disabled('swap'), true, 'a price is still missing');
+    p.type('outAmt', '4000');
+    await p.settle();
+    assert.equal(p.disabled('swap'), false);
+    p.close();
+  });
+
+  test('previews the exact order on the button', async () => {
+    const p = await setup();
+    p.type('amt', '1');
+    p.type('outAmt', '4000');
+    await p.settle();
+    assert.match(p.text('swap'), /Place order — 1 ETH → 4000 USDC/);
+    p.close();
+  });
+
+  test('an order that wants ETH says it will settle in WETH', async () => {
+    const p = await setup();
+    p.click('flip');           // sell USDC, want ETH
+    await p.settle();
+    p.type('amt', '3000');
+    p.type('outAmt', '1');
+    await p.settle();
+    assert.match(p.text('swap'), /→ 1 WETH/,
+      'the board is a WETH book, and the button must not promise raw ETH');
+    p.close();
+  });
+
+  test('an all-or-nothing order says so before it is placed', async () => {
+    const p = await setup();
+    p.type('amt', '1');
+    p.type('outAmt', '4000');
+    p.select('fill', '0');
+    await p.settle();
+    assert.match(p.text('swap'), /all-or-nothing/);
+    p.close();
+  });
+
+  test('refuses to sell more than the balance', async () => {
+    const p = await setup();
+    p.type('amt', '9999');
+    p.type('outAmt', '1');
+    await p.settle();
+    assert.equal(p.text('swap'), 'Insufficient balance');
+    assert.equal(p.disabled('swap'), true);
+    p.close();
+  });
+
+  test('a Dutch floor above the starting ask is rejected', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    p.type('floorAmt', '4000');
+    await p.settle();
+    assert.equal(p.text('swap'), 'Floor exceeds start');
+    assert.equal(p.disabled('swap'), true);
+    p.close();
+  });
+
+  test('a Dutch order defaults to a real decay window rather than "Never"', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    assert.notEqual(p.value('dly'), '0', 'a decay with no duration is not an auction');
+    p.close();
+  });
+
+  test('a Dutch order with no duration cannot be placed', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.select('dly', '0');
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    assert.equal(p.text('swap'), 'Choose decay duration');
+    assert.equal(p.disabled('swap'), true);
+    p.close();
+  });
+});
+
+describe('placing orders', () => {
+  test('a fixed order routes through the adapter with the right terms', async () => {
+    const p = await setup();
+    p.type('amt', '2');
+    p.type('outAmt', '7000');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'placement is routed, not direct');
+    assert.equal(BigInt(tx.value), 2n * ETH, 'the sold ETH rides as msg.value');
+
+    const order = placementPayload(tx);
+    assert.equal(selectorOf(order), SEL.ORDER_FIXED);
+    const b = '0x' + order.slice(10);
+    assert.equal(wordAddr(b, 0).toLowerCase(), A.SB2.toLowerCase(), 'placed on the current board');
+    assert.equal(wordAddr(b, 1).toLowerCase(), A.ACCOUNT.toLowerCase(), 'maker is the connected account');
+    assert.equal(wordAddr(b, 3), A.ZERO, 'selling native ETH');
+    assert.equal(word(b, 4), 2n * ETH, 'sell amount');
+    assert.equal(wordAddr(b, 5).toLowerCase(), A.USDC.toLowerCase(), 'quote token');
+    assert.equal(word(b, 6), 7000n * USDC, 'want amount, in the quote token\'s units');
+    assert.equal(word(b, 7), 1n, 'partial fills allowed by default');
+    // The tab defaults to a 1-day expiry rather than "Never", so a forgotten
+    // order stops being fillable instead of lingering against a stale price.
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    assert.ok(word(b, 8) > now && word(b, 8) <= now + 86500n, 'default 1-day expiry');
+    assert.equal(wordAddr(b, 9), A.ZERO, 'public order');
+    p.close();
+  });
+
+  test('an all-or-nothing order sets the partial-fill flag off', async () => {
+    const p = await setup();
+    p.type('amt', '2');
+    p.type('outAmt', '7000');
+    p.select('fill', '0');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+    assert.equal(word('0x' + placementPayload(p.chain.lastSent).slice(10), 7), 0n);
+    p.close();
+  });
+
+  test('an expiry is written as an absolute deadline', async () => {
+    const p = await setup();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    p.select('dly', '3600');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const exp = word('0x' + placementPayload(p.chain.lastSent).slice(10), 8);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    assert.ok(exp > now && exp <= now + 3700n, `expiry ${exp} should be ~1h out, now ${now}`);
+    p.close();
+  });
+
+  test('a private order carries the resolved counterparty', async () => {
+    const p = await setup(c => c.names.set('bob.wei', A.OTHER));
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    p.type('rc', 'bob.wei');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const cp = wordAddr('0x' + placementPayload(p.chain.lastSent).slice(10), 9);
+    assert.equal(cp.toLowerCase(), A.OTHER.toLowerCase(),
+      'the name must be resolved to an address before it is booked');
+    p.close();
+  });
+
+  test('a Dutch order carries start, floor and duration', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '5');
+    p.type('outAmt', '20000');
+    p.type('floorAmt', '15000');
+    p.select('dly', '86400');
+    await p.settle();
+    assert.match(p.text('swap'), /Dutch 5 ETH · 20000 → 15000 USDC/);
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const order = placementPayload(p.chain.lastSent);
+    assert.equal(selectorOf(order), SEL.ORDER_DUTCH);
+    const b = '0x' + order.slice(10);
+    assert.equal(wordAddr(b, 0).toLowerCase(), A.DUTCH.toLowerCase());
+    assert.equal(wordAddr(b, 3), A.ZERO, 'selling ETH');
+    assert.equal(wordAddr(b, 4).toLowerCase(), A.USDC.toLowerCase(), 'quoted in USDC');
+    assert.equal(word(b, 5), 5n * ETH, 'lot size');
+    assert.equal(word(b, 6), 20000n * USDC, 'starting ask');
+    assert.equal(word(b, 7), 15000n * USDC, 'floor');
+    assert.equal(word(b, 9), 86400n, 'decay duration');
+    p.close();
+  });
+
+  test('an ERC-20 sale snapshots the adapter before funding it', async () => {
+    const p = await setup(c => c.setAllowance(A.USDC, A.ACCOUNT, A.ZROUTER, 10n ** 30n));
+    p.click('flip');   // sell USDC for ETH
+    await p.settle();
+    p.type('amt', '3000');
+    p.type('outAmt', '1');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const calls = innerCalls(p.chain.lastSent.data);
+    // Without the checkpoint, tokens already sitting in the adapter could be
+    // swept into this caller's order.
+    const checkpoint = calls.find(c =>
+      selectorOf(c) === SEL.SNWAP && selectorOf(snwapPayload(c)) === SEL.CHECKPOINT);
+    assert.ok(checkpoint, 'placement must checkpoint the adapter balance first');
+    assert.equal(p.chain.lastSent.value, '0x0', 'an ERC-20 sale sends no ether');
+    p.close();
+  });
+
+  test('refuses to place when the adapter is not deployed', async () => {
+    const p = await setup(c => c.undeploy(A.ORDERBOL));
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0);
+    assert.match(p.text('stat'), /not deployed/);
+    p.close();
+  });
+});
+
+describe('the orderbook drawer', () => {
+  const row = over => ({
+    id: 1, board: A.SB2, maker: A.OTHER, pf: true, exp: 0,
+    tA: A.USDC, aA: 3000n * USDC, symA: 'USDC', decA: 6,
+    tB: A.WETH, aB: ETH, symB: 'WETH', decB: 18,
+    ...over,
+  });
+
+  test('there is no control when the book is empty', async () => {
+    const p = await setup();
+    await p.settle();
+    assert.equal(p.visible('bkTog'), false, 'an empty book needs no caret');
+    p.close();
+  });
+
+  test('appears with a count once orders exist, and the list scrolls', async () => {
+    const p = await setup(c => { c.recent = [row({ id: 1 }), row({ id: 2 })]; });
+    await p.waitFor(() => p.visible('bkTog'), { label: 'caret' });
+    assert.match(p.text('bkTog'), /Orderbook \(2\)/);
+    assert.equal(p.visible('book'), true);
+    // Capped height with its own scroller, so a long book cannot stretch the tile.
+    const css = [...p.doc.querySelectorAll('style')].map(x => x.textContent).join('');
+    assert.match(css, /#book\{[^}]*max-height/);
+    assert.match(css, /#book\{[^}]*overflow-y:auto/);
+    p.close();
+  });
+
+  test('collapses and remembers the choice', async () => {
+    const p = await setup(c => { c.recent = [row()]; });
+    await p.waitFor(() => p.visible('bkTog'), { label: 'caret' });
+    p.click('bkTog');
+    assert.equal(p.visible('book'), false, 'the list hides');
+    assert.equal(p.$('bkTog').getAttribute('aria-expanded'), 'false');
+    assert.equal(p.window.localStorage.getItem('bk'), '0');
+    p.close();
+
+    // A fresh page with the stored preference must come back collapsed.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 100n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.recent = [row()];
+    const p2 = await loadPage({ chain, storage: { bk: '0' } });
+    await p2.connect();
+    p2.click('tabBook');
+    await p2.waitFor(() => p2.visible('bkTog'), { label: 'caret' });
+    assert.equal(p2.visible('book'), false, 'a collapsed book stays collapsed');
+    p2.close();
+  });
+
+  test('is absent on the swap and send tabs', async () => {
+    const p = await setup(c => { c.recent = [row()]; });
+    await p.waitFor(() => p.visible('bkTog'), { label: 'caret' });
+    p.click('tabSwap');
+    await p.settle();
+    assert.equal(p.visible('bkTog'), false);
+    p.close();
+  });
+});
+
+describe('the orderbook list', () => {
+  const order = over => ({
+    id: 1, board: A.SB2, maker: A.OTHER, pf: true, exp: 0,
+    tA: A.USDC, aA: 3000n * USDC, symA: 'USDC', decA: 6,
+    tB: A.WETH, aB: ETH, symB: 'WETH', decB: 18,
+    ...over,
+  });
+
+  test('lists other makers\' orders with a fill action', async () => {
+    const p = await setup(c => { c.recent = [order()]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    assert.match(p.$('book').textContent, /3000 USDC → 1 WETH/);
+    const btn = p.$('book').querySelector('button');
+    assert.equal(btn.textContent, 'Fill');
+    p.close();
+  });
+
+  test('separates your own orders and offers to cancel them', async () => {
+    const p = await setup(c => { c.recent = [order({ maker: A.ACCOUNT })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
+    assert.equal(p.$('book').querySelector('button').textContent, 'Cancel');
+    p.close();
+  });
+
+  test('tags all-or-nothing, private and Dutch rows', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1, pf: false }),
+        order({ id: 2, cp: A.ACCOUNT }),
+        order({ id: 3, dutch: true, board: A.DUTCH }),
+      ];
+    });
+    await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 3, { label: 'rows' });
+    const tags = [...p.$('book').querySelectorAll('.tg')].map(t => t.textContent);
+    assert.ok(tags.includes('AON'), 'an all-or-nothing order must be marked');
+    assert.ok(tags.includes('private'), 'a restricted order must be marked');
+    assert.ok(tags.includes('Dutch'), 'a decaying order must be marked');
+    p.close();
+  });
+
+  test('a native leg is not linked to the zero-address token page', async () => {
+    // Dutchboard can quote a lot in native ETH, and ETH has no token contract.
+    const p = await setup(c => { c.recent = [order({ tB: A.ZERO, symB: 'ETH', decB: 18 })]; });
+    await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
+    const links = [...p.$('book').querySelectorAll('a')].map(a => a.getAttribute('href'));
+    assert.ok(!links.some(h => /0x0{40}/.test(h || '')),
+      'a link to the zero address is a dead end, not a token page');
+    p.close();
+  });
+
+  test('warns on tokens that are not on the known list', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: 'SCAM' })];
+    });
+    await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
+    const warn = p.$('book').querySelector('.tg.w');
+    assert.ok(warn, 'an unrecognised token must carry a visible warning');
+    assert.equal(warn.textContent, 'unverified');
+    p.close();
+  });
+
+  test('hides orders private to somebody else', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 1 }), order({ id: 2, cp: '0x8888888888888888888888888888888888888888' })];
+    });
+    await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
+    assert.equal(p.$('book').querySelectorAll('.o').length, 1,
+      'an order you cannot fill must not be advertised to you');
+    p.close();
+  });
+
+  test('hides expired orders', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 1, exp: Math.floor(Date.now() / 1000) - 60 })];
+    });
+    await p.settle();
+    assert.equal(p.$('book').querySelectorAll('.o').length, 0);
+    p.close();
+  });
+
+  test('a hostile token symbol cannot inject markup into the list', async () => {
+    const evil = '<img src=x onerror=alert(1)>';
+    const p = await setup(c => {
+      c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: evil })];
+    });
+    await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
+    assert.equal(p.$('book').querySelectorAll('img').length, 0,
+      'lens-provided metadata is attacker-controlled and must never become markup');
+    assert.ok(!p.$('book').innerHTML.includes('onerror'));
+    p.close();
+  });
+
+  test('cancelling an order calls the board directly', async () => {
+    const p = await setup(c => { c.recent = [order({ id: 7, maker: A.ACCOUNT })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase());
+    assert.equal(word('0x' + tx.data.slice(10), 0), 7n, 'cancels the order that was clicked');
+    p.close();
+  });
+
+  test('filling a public order routes it and pays exactly the asking amount', async () => {
+    const p = await setup(c => { c.recent = [order({ id: 5 })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
+    // The order asks 1 WETH; paying from an ETH-selected wallet wraps on the way.
+    assert.equal(BigInt(tx.value), ETH, 'must send exactly the order\'s asking amount');
+    p.close();
+  });
+
+  test('an empty book renders nothing at all', async () => {
+    const p = await setup();
+    await p.settle();
+    assert.equal(p.text('book'), '', 'no rows, no header, no empty-state clutter');
+    assert.equal(p.visible('bkTog'), false);
+    p.close();
+  });
+});

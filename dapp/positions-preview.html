@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Position SVG preview</title>
+  <style>
+    :root { color-scheme:dark; background:#090909; color:#fff; font-family:Helvetica,Arial,sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:24px; }
+    header, .controls, section { max-width:1440px; margin:0 auto; }
+    header { border:1px solid #777; padding:22px 24px; }
+    h1 { margin:0 0 9px; font-size:22px; letter-spacing:.035em; }
+    p { margin:0; max-width:950px; color:#aaa; font-size:13px; line-height:1.5; }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; padding:18px 0 5px; }
+    button { appearance:none; padding:7px 10px; border:1px solid #555; background:#0b0b0b; color:#ddd; cursor:pointer; font:600 11px/1 Helvetica,Arial,sans-serif; letter-spacing:.04em; }
+    button:hover, button.active { border-color:#fff; background:#fff; color:#000; }
+    section { margin-top:25px; }
+    h2 { margin:0 0 10px; color:#aaa; font-size:11px; letter-spacing:.12em; font-weight:600; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+    figure { margin:0; overflow:hidden; border:1px solid #343434; background:#000; }
+    img { display:block; width:100%; height:auto; background:#000; }
+    figcaption { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid #343434; padding:10px 12px; font-size:12px; }
+    figcaption b { font-weight:600; }
+    .tag { padding:3px 6px; color:#000; font-size:10px; font-weight:700; letter-spacing:.04em; white-space:nowrap; }
+    figure[hidden] { display:none; }
+    .legend { display:flex; flex-wrap:wrap; gap:10px 15px; padding:16px 0 2px; color:#aaa; font-size:11px; }
+    .legend i { display:inline-block; width:8px; height:8px; margin-right:5px; vertical-align:baseline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>POSITION SVG / FINAL-STATE PREVIEW</h1>
+    <p>Simulated on-chain metadata at wallet scale. The art uses Helvetica with Arial fallback, plain SVG primitives, embedded data URIs, and no scripts, external fonts, gradients, masks, or remote dependencies inside the image.</p>
+  </header>
+  <nav class="controls" aria-label="Preview filters">
+    <button class="active" data-filter="all">ALL STATES</button>
+    <button data-filter="swap">SWAPBOARD</button>
+    <button data-filter="dutch">DUTCHBOARD</button>
+    <button data-filter="live">FILLABLE</button>
+    <button data-filter="terminal">TERMINAL</button>
+    <button data-filter="special">SPECIAL TERMS</button>
+    <span style="width:1px;background:#444;margin:0 3px"></span>
+    <button class="active" data-amount="decimal">DECIMAL SNAPSHOT</button>
+    <button data-amount="raw">RAW BASE UNITS</button>
+  </nav>
+  <div class="legend" aria-label="State colour key">
+    <span><i style="background:#43d69b"></i>live / open</span><span><i style="background:#6fa8ff"></i>scheduled / settled</span><span><i style="background:#c69cff"></i>frozen</span><span><i style="background:#ffb55b"></i>expired / floor</span><span><i style="background:#5ee6d2"></i>free</span><span><i style="background:#969da7"></i>cancelled / closed</span>
+  </div>
+  <section>
+    <h2>SWAPBOARD</h2>
+    <div class="cards" id="swapCards"></div>
+  </section>
+  <section>
+    <h2>DUTCHBOARD</h2>
+    <div class="cards" id="dutchCards"></div>
+  </section>
+
+  <script>
+    const COLOUR = { open:'#43d69b', scheduled:'#6fa8ff', filled:'#6fa8ff', frozen:'#c69cff', expired:'#ffb55b', floor:'#ffb55b', free:'#5ee6d2', closed:'#969da7', private:'#ffcf70' };
+    const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;' }[c]));
+    const short = address => `${address.slice(0, 6)}...${address.slice(-4)}`;
+    const dataUri = svg => `data:image/svg+xml;base64,${btoa(svg)}`;
+    const pct = value => `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`;
+    const A = { weth:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', usdc:'0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', wbtc:'0x2260FAC5E5542a773AA44fBCfeDf7C193bc2C599', uni:'0x1f9840a85d5aF5bf1D1762F925BDaFfA1F984', nft:'0x9Ff5c9F27c9d1e7A0C8E9Ff6D5E0aB3a95B82132' };
+    const DECIMALS = { [A.weth.toLowerCase()]:18, [A.usdc.toLowerCase()]:6, [A.wbtc.toLowerCase()]:8, [A.uni.toLowerCase()]:18 };
+    let amountMode = 'decimal';
+    let activeFilter = 'all';
+    const decimalFor = token => DECIMALS[token.toLowerCase()] ?? 18;
+    function amount(raw, kind, token) {
+      if (kind.includes('NFT')) return kind.includes('BUNDLE') ? `BUNDLE ${raw}` : `TOKEN #${raw}`;
+      if (amountMode === 'raw') return raw;
+      const decimals = decimalFor(token), value = String(raw).padStart(decimals + 1, '0');
+      const whole = value.slice(0, -decimals) || '0';
+      const fraction = value.slice(-decimals).replace(/0+$/, '');
+      if (whole === '0' && fraction) {
+        const first = fraction.search(/[1-9]/);
+        if (first >= 3) {
+          const significant = fraction.slice(first);
+          return `${significant[0]}${significant.length > 1 ? `.${significant.slice(1)}` : ''}e-${first + 1}`;
+        }
+      }
+      return fraction ? `${whole}.${fraction}` : whole;
+    }
+    function assetType(kind, token) {
+      return kind.includes('NFT') ? kind : `${kind} / ${decimalFor(token)} DEC`;
+    }
+
+    function swapSvg(o) {
+      const accent = COLOUR[o.tone];
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-label="Swapboard position ${esc(o.status)}"><rect width="720" height="420" fill="#000"/><g fill="none" stroke="#fff" stroke-width="2"><rect x="18" y="18" width="684" height="384"/><path d="M18 88h684M18 326h684M360 112v158"/><rect x="32" y="286" width="656" height="14"/><rect x="32" y="286" width="${Math.floor(656 * o.progress / 10000)}" height="14" fill="${accent}" stroke="none"/></g><g fill="#fff" font-family="Helvetica,Arial,sans-serif"><text x="32" y="55" font-size="25" font-weight="700">SWAPBOARD / POSITION #${esc(o.id)}</text><text x="32" y="77" font-size="12">ESCROW RECEIPT // <tspan fill="${accent}" font-weight="700">${esc(o.status)}</tspan></text><text x="32" y="132" font-size="12">ESCROW</text><text x="32" y="168" font-size="22">${esc(amount(o.escrow, o.kindA, o.tokenA))}</text><text x="32" y="190" font-size="13">${esc(short(o.tokenA))} / ${esc(o.symbolA || assetType(o.kindA, o.tokenA))}</text><path d="M316 191h28m-10-10 10 10-10 10" stroke="#fff" stroke-width="2" fill="none"/><text x="384" y="132" font-size="12">REQUEST</text><text x="384" y="168" font-size="22">${esc(amount(o.request, o.kindB, o.tokenB))}</text><text x="384" y="190" font-size="13">${esc(short(o.tokenB))} / ${esc(o.symbolB || assetType(o.kindB, o.tokenB))}</text><text x="32" y="270" font-size="12">FILL PROGRESS  <tspan fill="${accent}" font-weight="700">${pct(o.progress)}%</tspan></text><text x="32" y="350" font-size="12">MAKER  ${esc(o.maker)}</text><text x="32" y="374" font-size="12">EXPIRY  ${esc(o.expiry)}</text><text x="688" y="374" text-anchor="end" font-size="12">${esc(o.terms)}</text></g></svg>`;
+    }
+
+    function dutchSvg(o) {
+      const accent = COLOUR[o.tone];
+      const curveEnd = 258 + Number((46n * (BigInt(o.startPrice) - BigInt(o.endPrice))) / BigInt(o.startPrice));
+      const curve = `M32 258Q360 258 688 ${curveEnd}`;
+      const priceNow = o.terminal ? '--' : esc(o.quote === 'ETH' ? amount(o.price, 'ERC20', A.weth) : amount(o.price, 'ERC20', A.usdc));
+      const party = o.terminal ? 'HOLDER' : 'SELLER';
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-label="Dutchboard position ${esc(o.status)}"><rect width="720" height="420" fill="#000"/><g fill="none" stroke="#fff" stroke-width="2"><rect x="18" y="18" width="684" height="384"/><path d="M18 88h684M18 326h684M360 112v118"/><path id="c" d="${curve}" pathLength="100" opacity=".3"/><use href="#c" stroke="${accent}" opacity="1" stroke-linecap="round" stroke-dasharray="${pct(o.decayProgress)} 100"/></g><g fill="#fff" font-family="Helvetica,Arial,sans-serif"><text x="32" y="55" font-size="25" font-weight="700">DUTCHBOARD / POSITION #${esc(o.id)}</text><text x="32" y="77" font-size="12">DECAYING LOT // <tspan fill="${accent}" font-weight="700">${esc(o.status)}</tspan></text><text x="32" y="132" font-size="12">LOT REMAINING</text><text x="32" y="168" font-size="22">${esc(amount(o.lot, o.kind, o.token))}</text><text x="32" y="190" font-size="13">${esc(short(o.token))} / ${esc(o.symbol ? `NFT / ${o.symbol}` : assetType(o.kind, o.token))}</text><text x="384" y="132" font-size="12">PRICE NOW${amountMode === 'raw' ? ' / RAW' : ''}</text><text x="384" y="168" font-size="22">${priceNow}</text><text x="384" y="190" font-size="13">${esc(o.quote)}</text><text x="32" y="238" font-size="12">DUTCH CURVE  <tspan fill="${accent}" font-weight="700">${pct(o.decayProgress)}%</tspan></text><text x="384" y="238" font-size="12">LOT FILLED  <tspan fill="${accent}" font-weight="700">${pct(o.fillProgress)}%</tspan></text><text x="32" y="350" font-size="12">${party}  ${esc(o.maker)}</text><text x="32" y="374" font-size="12">END ${esc(o.end)}</text></g></svg>`;
+    }
+
+    function card(board, title, state, tags, svg, tone) {
+      return `<figure data-board="${board}" data-tags="${tags}"><img alt="${esc(title)} ${esc(state)} simulated SVG" src="${dataUri(svg)}"><figcaption><b>${esc(title)}</b><span class="tag" style="background:${COLOUR[tone]}">${esc(state)}</span></figcaption></figure>`;
+    }
+
+    const swap = [
+      ['Open partial', 'OPEN', 'live', 'open', { id:1842, status:'OPEN', escrow:'2500000000000000000', request:'825000000', tokenA:A.weth, tokenB:A.usdc, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'terminal.wei', expiry:'UNIX 1782864000', terms:'PARTIAL' }],
+      ['Partial fill', 'OPEN / 42.50%', 'live', 'open', { id:1843, status:'OPEN', escrow:'1437500000000000000', request:'474375000', tokenA:A.weth, tokenB:A.usdc, kindA:'ERC20', kindB:'ERC20', progress:4250, maker:'terminal.wei', expiry:'UNIX 1782864000', terms:'PARTIAL' }],
+      ['All-or-nothing', 'OPEN / AON', 'live special', 'open', { id:1844, status:'OPEN', escrow:'1000000000000000000', request:'1', tokenA:A.weth, tokenB:A.wbtc, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'0xA11C...0B0B', expiry:'NEVER', terms:'ALL OR NOTHING' }],
+      ['Private counterparty', 'OPEN / PRIVATE', 'live special', 'private', { id:1845, status:'OPEN / PRIVATE', escrow:'500000000', request:'1250000000000000000', tokenA:A.usdc, tokenB:A.weth, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'vault.wei', expiry:'UNIX 1782864000', terms:'RESTRICTED' }],
+      ['Frozen position', 'FROZEN', 'special', 'frozen', { id:1846, status:'FROZEN', escrow:'750000000000000000', request:'375000000', tokenA:A.weth, tokenB:A.usdc, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'terminal.wei', expiry:'UNIX 1782864000', terms:'ON HOLD' }],
+      ['Expired order', 'EXPIRED', 'terminal', 'expired', { id:1847, status:'EXPIRED', escrow:'1000000000000000000', request:'1', tokenA:A.weth, tokenB:A.wbtc, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'0xA11C...0B0B', expiry:'UNIX 1710000000', terms:'ALL OR NOTHING' }],
+      ['Filled receipt', 'FILLED', 'terminal', 'filled', { id:1848, status:'FILLED', escrow:'0', request:'0', tokenA:A.weth, tokenB:A.usdc, kindA:'ERC20', kindB:'ERC20', progress:10000, maker:'terminal.wei', expiry:'NEVER', terms:'SETTLED' }],
+      ['Cancelled receipt', 'CLOSED', 'terminal', 'closed', { id:1849, status:'CLOSED', escrow:'1000000000000000000', request:'200000000', tokenA:A.weth, tokenB:A.usdc, kindA:'ERC20', kindB:'ERC20', progress:0, maker:'0x0FfE...BEEF', expiry:'NEVER', terms:'CANCELLED' }],
+      ['NFT for ERC-20', 'OPEN / ATOMIC', 'live special', 'open', { id:1850, status:'OPEN', escrow:'721', request:'250000000', tokenA:A.nft, tokenB:A.usdc, kindA:'NFT', kindB:'ERC20', symbolA:'MIL', progress:0, maker:'art.wei', expiry:'UNIX 1782864000', terms:'ATOMIC' }],
+      ['NFT for NFT', 'OPEN / ATOMIC', 'live special', 'open', { id:1851, status:'OPEN', escrow:'42', request:'84', tokenA:A.nft, tokenB:'0x8F5c9F27c9d1e7A0C8E9Ff6D5E0aB3a95B82131', kindA:'NFT', kindB:'NFT', symbolA:'MIL', symbolB:'PUNK', progress:0, maker:'0x1DEA...C0DE', expiry:'NEVER', terms:'ATOMIC' }]
+    ];
+    const dutch = [
+      ['Scheduled ERC-20', 'SCHEDULED', 'special', 'scheduled', { id:305, status:'SCHEDULED', lot:'1000000000000000000000', token:A.uni, kind:'ERC20', price:'2000000000', startPrice:'2000000000', endPrice:'1000000000', quote:'0xA0b8...eB48', fillProgress:0, decayProgress:0, maker:'vault.wei', end:'1782864000' }],
+      ['Scheduled NFT bundle', 'SCHEDULED / NFT', 'special', 'scheduled', { id:306, status:'SCHEDULED', lot:'3', token:A.nft, kind:'NFT BUNDLE', symbol:'MIL', price:'3000000000000000000', startPrice:'3000000000000000000', endPrice:'1000000000000000000', quote:'ETH', fillProgress:0, decayProgress:0, maker:'vault.wei', end:'1782864000' }],
+      ['Live at start price', 'LIVE / 0% DECAY', 'live', 'open', { id:307, status:'LIVE', lot:'1000000000000000000000', token:A.uni, kind:'ERC20', price:'2000000000', startPrice:'2000000000', endPrice:'1000000000', quote:'0xA0b8...eB48', fillProgress:0, decayProgress:0, maker:'terminal.wei', end:'1782864000' }],
+      ['Partial, mid decay', 'LIVE / 42.50% FILLED', 'live', 'open', { id:308, status:'LIVE', lot:'575000000000000000000', token:A.uni, kind:'ERC20', price:'714500000', startPrice:'1000000000', endPrice:'543200000', quote:'0xA0b8...eB48', fillProgress:4250, decayProgress:6250, maker:'terminal.wei', end:'1782864000' }],
+      ['NFT at current price', 'LIVE / ATOMIC', 'live special', 'open', { id:309, status:'LIVE', lot:'1', token:A.nft, kind:'NFT', symbol:'MIL', price:'1250000000000000000', startPrice:'2000000000000000000', endPrice:'500000000000000000', quote:'ETH', fillProgress:0, decayProgress:5000, maker:'art.wei', end:'1782864000' }],
+      ['Reached paid floor', 'PRICE FLOOR', 'live', 'floor', { id:310, status:'FLOOR', lot:'100000000000000000000', token:A.uni, kind:'ERC20', price:'250000000', startPrice:'1000000000', endPrice:'250000000', quote:'0xA0b8...eB48', fillProgress:0, decayProgress:10000, maker:'0x0FfE...BEEF', end:'1782864000' }],
+      ['Free terminal lot', 'FREE', 'live', 'free', { id:311, status:'FREE', lot:'100000000000000000000', token:'0x6B175474E89094C44Da98b954EedeAC495271d0F', kind:'ERC20', price:'0', startPrice:'1000000000000000000', endPrice:'0', quote:'ETH', fillProgress:0, decayProgress:10000, maker:'terminal.wei', end:'1782864000' }],
+      ['Filled receipt', 'FILLED', 'terminal', 'filled', { id:312, status:'FILLED', lot:'0', token:A.uni, kind:'ERC20', price:'0', startPrice:'2000000000', endPrice:'0', quote:'0xA0b8...eB48', fillProgress:10000, decayProgress:7200, maker:'terminal.wei', end:'1782864000', terminal:true }],
+      ['Cancelled receipt', 'CLOSED', 'terminal', 'closed', { id:313, status:'CLOSED', lot:'0', token:A.nft, kind:'NFT', price:'0', startPrice:'2000000000000000000', endPrice:'0', quote:'ETH', fillProgress:0, decayProgress:1800, maker:'0x1DEA...C0DE', end:'1782864000', terminal:true }]
+    ];
+    function applyFilter() {
+      document.querySelectorAll('figure').forEach(figure => {
+        const tags = figure.dataset.tags.split(' ');
+        figure.hidden = activeFilter !== 'all' && figure.dataset.board !== activeFilter && !tags.includes(activeFilter);
+      });
+    }
+    function renderCards() {
+      document.querySelector('#swapCards').innerHTML = swap.map(([title, state, tags, tone, data]) => card('swap', title, state, tags, swapSvg({ ...data, tone }), tone)).join('');
+      document.querySelector('#dutchCards').innerHTML = dutch.map(([title, state, tags, tone, data]) => card('dutch', title, state, tags, dutchSvg({ ...data, tone }), tone)).join('');
+      applyFilter();
+    }
+    renderCards();
+    document.querySelectorAll('button[data-filter]').forEach(button => button.addEventListener('click', () => {
+      activeFilter = button.dataset.filter;
+      document.querySelectorAll('button[data-filter]').forEach(item => item.classList.toggle('active', item === button));
+      applyFilter();
+    }));
+    document.querySelectorAll('button[data-amount]').forEach(button => button.addEventListener('click', () => {
+      amountMode = button.dataset.amount;
+      document.querySelectorAll('button[data-amount]').forEach(item => item.classList.toggle('active', item === button));
+      renderCards();
+    }));
+  </script>
+</body>
+</html>

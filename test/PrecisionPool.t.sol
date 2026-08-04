@@ -169,6 +169,23 @@ contract PrecisionPoolTest is Test {
         });
     }
 
+    /// @dev The settlement a prefunded route commits to at checkpoint.
+    function _route(address pool_, address tokenIn, uint256 amountIn, address to)
+        internal
+        pure
+        returns (PrecisionPoolFactory.Route memory)
+    {
+        return PrecisionPoolFactory.Route({
+            pool: pool_,
+            originator: to,
+            tokenIn: tokenIn,
+            amountIn: amountIn,
+            minOut: 0,
+            to: to,
+            refundTo: to
+        });
+    }
+
     function _mktRaw(address t0, address t1, uint256 lo, uint256 hi, uint256 fee_, address hook_)
         internal
         pure
@@ -187,7 +204,7 @@ contract PrecisionPoolTest is Test {
     }
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         usdc = new MockERC20("USDC", 6);
 
         usdc.mint(lp, 10_000_000e6);
@@ -321,12 +338,12 @@ contract PrecisionPoolTest is Test {
     function test_UntrustedExecutorCannotSpendFactoryTokenDust() public {
         usdc.mint(address(factory), 5_000e6);
         vm.expectRevert(PrecisionPoolFactory.NotExecutor.selector);
-        factory.executePrefundedSwap(address(pool), trader, address(usdc), 5_000e6, 0, trader);
+        factory.executePrefundedSwap(_route(address(pool), address(usdc), 5_000e6, trader));
     }
 
     function test_PublicExecutorCannotSpendFactoryDustWithoutAFreshCheckpoint() public {
         PublicExecutor executor = new PublicExecutor();
-        PrecisionPoolFactory securedFactory = new PrecisionPoolFactory(address(executor));
+        PrecisionPoolFactory securedFactory = new PrecisionPoolFactory(address(executor), type(PrecisionPool).creationCode);
 
         vm.startPrank(lp);
         usdc.approve(address(securedFactory), type(uint256).max);
@@ -336,9 +353,8 @@ contract PrecisionPoolTest is Test {
 
         uint256 dust = 5_000e6;
         usdc.mint(address(securedFactory), dust);
-        bytes memory settlement = abi.encodeCall(
-            PrecisionPoolFactory.executePrefundedSwap, (securedPool, trader, address(usdc), dust, uint256(0), trader)
-        );
+        PrecisionPoolFactory.Route memory r = _route(securedPool, address(usdc), dust, trader);
+        bytes memory settlement = abi.encodeCall(PrecisionPoolFactory.executePrefundedSwap, (r));
 
         // Anyone can use the public executor, but old factory balances are not
         // route funding and are therefore unavailable to them.
@@ -347,7 +363,7 @@ contract PrecisionPoolTest is Test {
 
         // The normal route is explicit: checkpoint first, fund second, consume
         // the exact fresh delta. The old dust stays where it was.
-        executor.execute(address(securedFactory), abi.encodeCall(PrecisionPoolFactory.checkpoint, (address(usdc))));
+        executor.execute(address(securedFactory), abi.encodeCall(PrecisionPoolFactory.checkpoint, (r)));
         usdc.mint(address(securedFactory), dust);
         executor.execute(address(securedFactory), settlement);
         assertEq(usdc.balanceOf(address(securedFactory)), dust, "only fresh route input was spent");
@@ -464,7 +480,7 @@ contract PrecisionPoolTest is Test {
         factory.createPool(_mktRaw(address(0), address(usdc), SQRT_LOW, SQRT_HIGH, FEE, address(0xBEEF)));
 
         vm.expectRevert(PrecisionPoolFactory.Bad.selector);
-        new PrecisionPoolFactory(address(0xBEEF));
+        new PrecisionPoolFactory(address(0xBEEF), type(PrecisionPool).creationCode);
     }
 
     function test_InvertedOrEmptyRangeIsRefused() public {

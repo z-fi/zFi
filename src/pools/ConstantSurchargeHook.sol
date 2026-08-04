@@ -37,11 +37,11 @@ contract ConstantSurchargeHook {
     mapping(address pool => PendingSurcharge pending) public pendingSurchargeOf;
 
     error Bad();
-    error InvalidPool();
     error NotCreator();
-    error IncreaseRequiresDelay();
-    error NoPendingIncrease();
+    error InvalidPool();
     error IncreaseNotReady();
+    error NoPendingIncrease();
+    error IncreaseRequiresDelay();
 
     event SurchargeSet(address indexed pool, uint256 pips);
     event SurchargeIncreaseScheduled(address indexed pool, uint256 pips, uint256 validAfter);

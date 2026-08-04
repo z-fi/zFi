@@ -80,56 +80,241 @@ contract PrecisionPoolLens {
         view
         returns (uint256 amountOut)
     {
-        // Only quote pools registered by the factory.
-        if (amountIn == 0 || !factory.isPool(pool)) return 0;
+        (amountOut,) = _transition(pool, sender, tokenIn, amountIn);
+    }
 
+    /// @dev The pool's swap state, read once so a search can replay the
+    ///      transition many times without repeating the storage reads.
+    struct Book {
+        bool ok;
+        bool zeroForOne;
+        uint256 supply;
+        uint256 rIn;
+        uint256 rOut;
+        uint256 vIn;
+        uint256 vOut;
+        uint256 sl;
+        uint256 sh;
+        uint256 fee;
+        uint256 creatorFeeBps;
+        address hook;
+    }
+
+    /// @dev Load everything `_step` needs. `ok` is false when the pool is not
+    ///      quotable at all, which is distinct from a trade that cannot fill.
+    function _book(address pool, address tokenIn) internal view returns (Book memory b) {
+        if (!factory.isPool(pool)) return b;
         PrecisionPool p = PrecisionPool(payable(pool));
-        address token0 = p.token0();
-        address token1 = p.token1();
 
-        bool zeroForOne = tokenIn == token0;
-        if (!zeroForOne && tokenIn != token1) return 0;
+        b.zeroForOne = tokenIn == p.token0();
+        if (!b.zeroForOne && tokenIn != p.token1()) return b;
 
-        uint256 supply = p.totalSupply();
-        if (supply == 0) return 0;
+        b.supply = p.totalSupply();
+        if (b.supply == 0) return b;
 
+        (b.sl, b.sh) = (p.sqrtPLow(), p.sqrtPHigh());
         uint256 r0 = p.reserve0();
         uint256 r1 = p.reserve1();
-        uint256 sl = p.sqrtPLow();
-        uint256 sh = p.sqrtPHigh();
-        uint256 v0 = FixedPointMathLib.fullMulDiv(supply, WAD, sh);
-        uint256 v1 = FixedPointMathLib.fullMulDiv(supply, sl, WAD);
+        uint256 v0 = FixedPointMathLib.fullMulDiv(b.supply, WAD, b.sh);
+        uint256 v1 = FixedPointMathLib.fullMulDiv(b.supply, b.sl, WAD);
+        (b.rIn, b.rOut, b.vIn, b.vOut) = b.zeroForOne ? (r0, r1, v0, v1) : (r1, r0, v1, v0);
 
-        (uint256 rIn, uint256 rOut, uint256 vIn, uint256 vOut) = zeroForOne ? (r0, r1, v0, v1) : (r1, r0, v1, v0);
+        (b.fee, b.creatorFeeBps, b.hook) = (p.fee(), p.creatorFeeBps(), p.hook());
+        b.ok = true;
+    }
 
-        // The surcharge is taken first; the base fee applies to the remainder.
-        // MUST mirror the pool byte for byte. Both fees are derived as a
-        // DIFFERENCE from a rounded-down remainder, not floored directly -
-        // flooring rounds toward the trader and lets a split order avoid the
-        // fee entirely. Computing them the old way here still quotes, just
-        // slightly high, and the drift only surfaces as a failed amountOutMin
-        // at submission.
-        uint256 hookCut = amountIn
-            - FixedPointMathLib.fullMulDiv(
-                amountIn, FEE_DENOM - p.extraFee(sender, tokenIn, amountIn), FEE_DENOM
-            );
+    /// @dev Replay one swap against a loaded book.
+    ///
+    ///      MUST MIRROR `PrecisionPool._swapExact` EXACTLY. Two things that a
+    ///      reimplementation gets wrong by default, and both matter here
+    ///      because `maxAmountIn` bisects on this predicate and therefore
+    ///      lives entirely on the boundary where the approximations diverge:
+    ///
+    ///        - the fees and the creator cut round the way the pool rounds.
+    ///          Both fees are a DIFFERENCE from a floored remainder rather than
+    ///          a floored product, because flooring rounds toward the trader
+    ///          and lets a split order pay nothing; the creator cut rounds UP
+    ///          for the mirror-image reason. Rounding the creator cut down here
+    ///          overstates `kept` by a unit and quotes trades the pool refuses.
+    ///
+    ///        - the range test compares the SQUARED ratio, as the pool does,
+    ///          not a square root of it. `sqrt` floors, so a state fractionally
+    ///          outside the band reads as exactly on it and quotes as fillable.
+    ///
+    ///      FILLABILITY IS NOT MONOTONE IN SIZE, so it is returned in two
+    ///      pieces. `hasRoom` covers the reserve, overflow, and band checks,
+    ///      all of which turn OFF as size grows. `amountOut != 0` is the
+    ///      opposite: a trade too small to round to one output unit is refused,
+    ///      and that turns ON as size grows. The fillable set is therefore an
+    ///      INTERVAL, not a prefix or a suffix, and any search over it has to
+    ///      bisect the monotone half and check the other half at the end.
+    ///      Bisecting the conjunction directly finds nothing.
+    function _step(Book memory b, uint256 amountIn, uint256 surcharge)
+        internal
+        pure
+        returns (uint256 amountOut, bool hasRoom)
+    {
+        if (amountIn == 0) return (0, false);
+
+        uint256 hookCut =
+            b.hook == address(0) ? 0 : amountIn - FixedPointMathLib.fullMulDiv(amountIn, FEE_DENOM - surcharge, FEE_DENOM);
         uint256 net = amountIn - hookCut;
 
-        uint256 feeAmount = net - FixedPointMathLib.fullMulDiv(net, FEE_DENOM - p.fee(), FEE_DENOM);
-        uint256 creatorCut = FixedPointMathLib.fullMulDiv(feeAmount, p.creatorFeeBps(), BPS);
+        uint256 feeAmount = net - FixedPointMathLib.fullMulDiv(net, FEE_DENOM - b.fee, FEE_DENOM);
+        uint256 creatorCut =
+            b.creatorFeeBps == 0 ? 0 : FixedPointMathLib.fullMulDivUp(feeAmount, b.creatorFeeBps, BPS);
         uint256 kept = net - creatorCut;
-        if (kept > type(uint128).max - rIn) return 0;
+        if (kept > type(uint128).max - b.rIn) return (0, false);
 
         uint256 inAfterFee = net - feeAmount;
-        amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, rOut + vOut, rIn + vIn + inAfterFee);
+        amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, b.rOut + b.vOut, b.rIn + b.vIn + inAfterFee);
+        if (amountOut > b.rOut) return (0, false);
 
-        // The pool refuses trades that leave the configured range.
-        if (amountOut == 0 || amountOut > rOut) return 0;
+        uint256 nextIn = b.rIn + b.vIn + kept;
+        uint256 nextOut = b.rOut + b.vOut - amountOut;
+        (uint256 nextX, uint256 nextY) = b.zeroForOne ? (nextIn, nextOut) : (nextOut, nextIn);
+        if (!_inRange(nextX, nextY, b.sl, b.sh)) return (0, false);
+        hasRoom = true;
+    }
 
-        uint256 next0 = zeroForOne ? rIn + kept : rOut - amountOut;
-        uint256 next1 = zeroForOne ? rOut - amountOut : rIn + kept;
-        uint256 nextPrice = _sqrtPrice(supply, next0, next1, sl, sh);
-        if (nextPrice < sl || nextPrice > sh) return 0;
+    /// @dev The pool's own band test: compare the squared price directly.
+    function _inRange(uint256 vX, uint256 vY, uint256 sl, uint256 sh) internal pure returns (bool) {
+        if (vX == 0) return false;
+        uint256 ratio = FixedPointMathLib.fullMulDiv(vY, WAD * WAD, vX);
+        unchecked {
+            return ratio >= sl * sl && ratio < (sh + 1) * (sh + 1);
+        }
+    }
+
+    function _transition(address pool, address sender, address tokenIn, uint256 amountIn)
+        internal
+        view
+        returns (uint256 amountOut, bool fillable)
+    {
+        Book memory b = _book(pool, tokenIn);
+        if (!b.ok || amountIn == 0) return (0, false);
+        uint256 surcharge =
+            b.hook == address(0) ? 0 : PrecisionPool(payable(pool)).extraFee(sender, tokenIn, amountIn);
+        bool hasRoom;
+        (amountOut, hasRoom) = _step(b, amountIn, surcharge);
+        // The pool refuses a trade whose output rounds to zero.
+        if (!hasRoom || amountOut == 0) return (0, false);
+        fillable = true;
+    }
+
+    // ------------------------------------------------------- ROUTING PRIMITIVES
+
+    /// @notice The largest input this pool can absorb in one swap, and what it
+    ///         pays out.
+    /// @dev A band fills to its boundary and then refuses - it does not clamp -
+    ///      so a router that sizes a leg past this point gets a revert rather
+    ///      than a partial fill. This is the number that makes a leg safe to
+    ///      size, and the unit a split or a multi-pool route is built from.
+    ///
+    ///      Found by bisection rather than in closed form. The obvious
+    ///      algebraic solve - reserve room to the bound - is WRONG, because the
+    ///      input side grows by `kept`, which retains the LP fee, while the
+    ///      output is priced on `inAfterFee`, which does not. The two sides of
+    ///      the post-swap ratio therefore move under different quantities and
+    ///      the boundary condition does not separate. Bisection sidesteps that
+    ///      entirely and is exact: it replays the pool's own transition, so it
+    ///      agrees with execution by construction rather than by derivation.
+    ///
+    ///      This is a view call, so the ~128 iterations are free off-chain. Do
+    ///      not call it on-chain in a swap path.
+    ///
+    ///      ON A HOOKED POOL THE RESULT IS BEST-EFFORT. Bisection assumes
+    ///      fillability is monotone in size, which holds for the pool's own
+    ///      math but not for an arbitrary hook: a surcharge that varies
+    ///      non-monotonically with `amountIn` can make a larger trade fillable
+    ///      where a smaller one is not, and the search may then return a
+    ///      conservative answer. It never returns an unfillable one - every
+    ///      candidate it settles on has been replayed and accepted.
+    function maxAmountIn(address pool, address sender, address tokenIn)
+        public
+        view
+        returns (uint256 amountIn, uint256 amountOut)
+    {
+        Book memory b = _book(pool, tokenIn);
+        if (!b.ok) return (0, 0);
+
+        // Bisect the MONOTONE half only - the reserve, overflow, and band
+        // checks, which hold for small inputs and fail for large ones. The
+        // rounds-to-zero-output condition runs the other way and is applied
+        // once at the end; see `_step`.
+        (uint256 outLo, bool roomAt1) = _probe(b, pool, sender, tokenIn, 1);
+        if (!roomAt1) return (0, 0);
+
+        uint256 hi = type(uint128).max;
+        (uint256 outHi, bool roomAtHi) = _probe(b, pool, sender, tokenIn, hi);
+        if (roomAtHi) {
+            // The band cannot be exhausted within the pool's own input ceiling.
+            return outHi == 0 ? (0, 0) : (hi, outHi);
+        }
+
+        // Invariant: `lo` has room, `hi` does not.
+        uint256 lo = 1;
+        amountOut = outLo;
+        while (hi - lo > 1) {
+            uint256 mid = lo + (hi - lo) / 2;
+            (uint256 outMid, bool roomMid) = _probe(b, pool, sender, tokenIn, mid);
+            if (roomMid) {
+                lo = mid;
+                amountOut = outMid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        // `lo` is the largest input the band admits. If even that rounds its
+        // output to zero then no size fills at all, because output is
+        // nondecreasing in input - the interval is empty rather than merely
+        // missed by the search.
+        if (amountOut == 0) return (0, 0);
+        amountIn = lo;
+    }
+
+    /// @notice `maxAmountIn` for the caller as sender.
+    function maxAmountInFor(address pool, address tokenIn) external view returns (uint256, uint256) {
+        return maxAmountIn(pool, msg.sender, tokenIn);
+    }
+
+    function _probe(Book memory b, address pool, address sender, address tokenIn, uint256 amountIn)
+        internal
+        view
+        returns (uint256 amountOut, bool fillable)
+    {
+        uint256 surcharge =
+            b.hook == address(0) ? 0 : PrecisionPool(payable(pool)).extraFee(sender, tokenIn, amountIn);
+        return _step(b, amountIn, surcharge);
+    }
+
+    /// @notice Marginal output per 1e18 of input, net of fees, at current state.
+    /// @dev The price of the NEXT infinitesimal unit, not the average price of
+    ///      any particular trade. This is what a split-route solver compares
+    ///      across pools: sizing legs to equalise marginal price is what makes
+    ///      a split beat filling the best pool alone, and average prices cannot
+    ///      express that because each fill moves the pool it lands in.
+    ///
+    ///      Raw token1-per-token0 scaled by 1e18, decimals NOT normalised - the
+    ///      same convention as the pool's own bounds and tape. Returns zero for
+    ///      a pool that cannot quote this direction. `probe` is the size at
+    ///      which any hook surcharge is sampled; it does not otherwise affect
+    ///      the result.
+    function marginalOutPerIn(address pool, address sender, address tokenIn, uint256 probe)
+        public
+        view
+        returns (uint256)
+    {
+        Book memory b = _book(pool, tokenIn);
+        if (!b.ok) return 0;
+        uint256 denom = b.rIn + b.vIn;
+        if (denom == 0) return 0;
+        uint256 gross = FixedPointMathLib.fullMulDiv(b.rOut + b.vOut, WAD, denom);
+        uint256 surcharge =
+            b.hook == address(0) ? 0 : PrecisionPool(payable(pool)).extraFee(sender, tokenIn, probe);
+        uint256 effFee = b.fee + surcharge - FixedPointMathLib.fullMulDiv(b.fee, surcharge, FEE_DENOM);
+        return FixedPointMathLib.fullMulDiv(gross, FEE_DENOM - effFee, FEE_DENOM);
     }
 
     /// @notice Effective total fee in pips for a direction, sender, and size.

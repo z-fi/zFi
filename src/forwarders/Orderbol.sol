@@ -39,8 +39,8 @@ contract Orderbol {
     error ETHTransferFailed();
 
     error BadOrder();
-    error InputMismatch(uint256 expected, uint256 actual);
     error DeadlineExpired();
+    error InputMismatch(uint256 expected, uint256 actual);
 
     constructor(address swapboard_, address dutchboard_) {
         if (

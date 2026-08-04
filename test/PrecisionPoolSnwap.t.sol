@@ -82,7 +82,7 @@ contract PrecisionPoolSnwapTest is Test {
     }
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(ZROUTER_SAFE_EXECUTOR);
+        factory = new PrecisionPoolFactory(ZROUTER_SAFE_EXECUTOR, type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
 
         deal(USDC, lp, 1_000_000e6);
@@ -101,10 +101,25 @@ contract PrecisionPoolSnwapTest is Test {
         IERC20(USDC).approve(ZROUTER, type(uint256).max);
     }
 
+    /// @dev The settlement a prefunded route commits to at checkpoint.
+    function _route(address tokenIn, uint256 amountIn, address to)
+        internal
+        view
+        returns (PrecisionPoolFactory.Route memory)
+    {
+        return PrecisionPoolFactory.Route({
+            pool: address(pool),
+            originator: to,
+            tokenIn: tokenIn,
+            amountIn: amountIn,
+            minOut: 0,
+            to: to,
+            refundTo: to
+        });
+    }
+
     function _swapData(address tokenIn, uint256 amountIn, address to) internal view returns (bytes memory) {
-        return abi.encodeWithSelector(
-            PrecisionPoolFactory.executePrefundedSwap.selector, address(pool), to, tokenIn, amountIn, uint256(0), to
-        );
+        return abi.encodeCall(PrecisionPoolFactory.executePrefundedSwap, (_route(tokenIn, amountIn, to)));
     }
 
     /// @dev zRouter's SafeExecutor is public, so an ERC-20 precision route
@@ -124,7 +139,7 @@ contract PrecisionPoolSnwapTest is Test {
                 address(0),
                 uint256(0),
                 address(factory),
-                abi.encodeCall(PrecisionPoolFactory.checkpoint, (tokenIn))
+                abi.encodeCall(PrecisionPoolFactory.checkpoint, (_route(tokenIn, amountIn, to)))
             )
         );
         calls[1] = abi.encodeCall(
@@ -300,7 +315,13 @@ contract PrecisionPoolSnwapTest is Test {
                 address(0),
                 uint256(0),
                 address(zap),
-                abi.encodeCall(PrecisionZap.checkpoint, (address(pool)))
+                abi.encodeCall(
+                    PrecisionZap.checkpoint,
+                    (
+                        address(pool),
+                        keccak256(abi.encodeCall(PrecisionZap.exit, (address(pool), shares, 0, 0, lp)))
+                    )
+                )
             )
         );
         calls[1] = abi.encodeCall(

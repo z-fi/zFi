@@ -103,19 +103,19 @@ contract SwapboardPositionInvariantTest is Test {
         targetSender(address(0xC0FFEE));
     }
 
-    /// @dev The defining property: a receipt exists exactly while its order
-    /// does. A live order with no position is unclaimable; a position with no
-    /// order is a receipt for nothing.
-    function invariant_PositionExistsIffOrderIsLive() public view {
+    /// @dev A receipt, once minted, is never destroyed. It was previously
+    /// burned on close, which left any contract holding it pointing at a
+    /// nonexistent token - stranding whatever that contract held. `active` is
+    /// what carries liveness now; existence is permanent.
+    function invariant_EveryCreatedPositionStillExists() public view {
         uint256 n = handler.count();
         for (uint256 i; i < n; ++i) {
             uint256 id = handler.created(i);
-            (, bool active,,,,,,,,,) = sb.orders(id);
             bool exists;
             try sb.ownerOf(id) returns (address) {
                 exists = true;
             } catch {}
-            assertEq(exists, active, "receipt and order disagree about being live");
+            assertTrue(exists, "a receipt was destroyed");
         }
     }
 

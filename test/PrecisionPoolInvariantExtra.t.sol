@@ -93,7 +93,7 @@ abstract contract XBase is Test {
         uint256 creatorBps
     ) internal {
         (sl, sh) = (low, high);
-        if (address(factory) == address(0)) factory = new PrecisionPoolFactory(address(0));
+        if (address(factory) == address(0)) factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         tk = new MockERC20("TK", decimals);
 
         address maker = creator == address(0) ? address(0xC11) : creator;
@@ -157,7 +157,7 @@ abstract contract XBase is Test {
 /// split. The plain configuration never exercises fee accrual statefully.
 contract PrecisionPoolInvariantFeesTest is XBase {
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         ConstantSurchargeHook h = new ConstantSurchargeHook(address(factory));
         address creator = address(0xC0DE);
         _boot(42426406871192, 44721359549995, 46904157598234, 18, address(h), creator, 2500);
@@ -181,6 +181,9 @@ contract PrecisionPoolInvariantNarrowBandTest is XBase {
 contract PrecisionPoolInvariantDecimalGapTest is XBase {
     function setUp() public {
         // sqrt(raw price) for ~2000 units of a 2-decimal token per 1e18 wei.
-        _boot(400_000_000, 447_213_595, 500_000_000, 2, address(0), address(0), 0);
+        // Scaled so both virtual reserves clear MIN_RESOLUTION at the seed: a
+        // band this far from 1 needs the liquidity to match, or the thin side
+        // has too few raw units to represent the price it is meant to hold.
+        _boot(400_000_000_000, 447_213_595_000, 500_000_000_000, 2, address(0), address(0), 0);
     }
 }

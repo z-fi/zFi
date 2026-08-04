@@ -2,6 +2,7 @@
 pragma solidity ^0.8.36;
 
 import {PrecisionPool} from "./PrecisionPool.sol";
+import {SSTORE2} from "../../lib/solady/src/utils/SSTORE2.sol";
 import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 
 /// @title PrecisionPoolFactory
@@ -25,6 +26,21 @@ contract PrecisionPoolFactory {
         uint256 creatorFeeBps;
     }
 
+    /// @notice The complete settlement a prefunded route commits to up front.
+    /// @dev Every field the settlement can act on lives here, so `checkpoint`
+    ///      commits to the whole intent and not merely to a balance delta.
+    ///      `refundTo` is where `abortCheckpoint` may send the funding, and
+    ///      nowhere else is reachable.
+    struct Route {
+        address pool;
+        address originator;
+        address tokenIn;
+        uint256 amountIn;
+        uint256 minOut;
+        address to;
+        address refundTo;
+    }
+
     /// @dev `fee` is in pips; hook and creator-fee settings are also immutable.
     uint256 constant MAX_FEE = 100_000; // 10%, in pips
     uint256 constant MAX_CREATOR_SHARE = 5_000; // 50% of the base fee
@@ -35,19 +51,48 @@ contract PrecisionPoolFactory {
     /// @dev Transient slot guarding the prefunded route.
     uint256 constant _ROUTE_SLOT = 0x9e7d1a3c;
 
+    /// @dev Transient slot holding the open route's committed intent hash.
+    ///      One slot suffices because at most one route is ever open.
+    uint256 constant _INTENT_SLOT = 0x9e7d1a3d;
+
     error Bad();
     error Exists();
-    error Reentrancy();
     error NoPool();
     error NotCreator();
+    error Reentrancy();
     error NotExecutor();
     error BadCheckpoint();
+    error IntentMismatch();
 
     /// @notice Executor allowed to use the checkpointed prefunded route.
     ///         Address(0) disables that route.
     /// @dev ERC-20 settlement also checks a transient balance checkpoint, so
     ///      pre-existing factory balances cannot be spent by a route.
     address public immutable trustedExecutor;
+
+    /// @notice Data contract whose runtime IS the pool's creation code.
+    /// @dev The factory used to hold `type(PrecisionPool).creationCode` inline,
+    ///      which put the whole pool inside the factory's own deployed code: at
+    ///      ~24 KB of pool against a 24,576 B contract limit, the factory was
+    ///      1,528 B over EIP-170 and could not be deployed at all, and every
+    ///      byte the pool gained came straight off the factory's margin from a
+    ///      different file. Writing those bytes to a data contract in the
+    ///      constructor - from an argument, which never becomes runtime code -
+    ///      leaves the factory holding only its own ~2.2 KB of logic. Nothing
+    ///      about deployment changes: `createPool` copies the blob back out and
+    ///      CREATE2s the identical initcode, so addresses are still derived from
+    ///      the market tuple alone.
+    ///
+    ///      The factory cannot check that the blob really is a PrecisionPool -
+    ///      it no longer has a copy to compare against - so `poolInitCodeHash`
+    ///      is published for anyone verifying a deployment against the compiled
+    ///      artifact. A factory built over the wrong blob produces pools that
+    ///      are not pools, and `isPool` is what the zap, route and policy trust,
+    ///      so that hash is the thing to check before using a deployment.
+    address public immutable poolCode;
+
+    /// @notice keccak256 of the pool creation code this factory deploys.
+    bytes32 public immutable poolInitCodeHash;
 
     /// @dev Every pool ever created, in creation order.
     address[] public allPools;
@@ -64,33 +109,79 @@ contract PrecisionPoolFactory {
 
     event PoolCreated(address indexed pool, address indexed token0, address indexed token1, uint256 fee);
 
-    /// @dev Serialises the prefunded route. Each checkpoint is already cleared
-    ///      before its own token receives control, so the same funding cannot
-    ///      be spent twice. This closes the cross-token case: if an executor
-    ///      ever holds two live checkpoints, a callback from a token, the
-    ///      recipient, or `afterSwap` must not be able to re-enter and settle
-    ///      against the other one. The executor is external and immutable here,
-    ///      so the factory does not rely on it to be well behaved. A route is
-    ///      never legitimately nested - hops are sequential calls.
-    modifier routeLocked() {
+    /// @dev Route states. The lock spans the whole route rather than each call
+    ///      within it, because the dangerous interval is the one BETWEEN the
+    ///      calls: the executor takes a checkpoint, then moves the payer's
+    ///      tokens in, then settles. A lock that clears when `checkpoint`
+    ///      returns leaves the factory unlocked for exactly the transfer that
+    ///      funds it, and a callback-capable input token gets control there. If
+    ///      the executor ever holds a second live checkpoint, that callback can
+    ///      re-enter it and settle the OTHER route against a pool, recipient,
+    ///      slippage, and originator of the attacker's choosing.
+    ///
+    ///      Holding `_ROUTE_OPEN` from `checkpoint` until settlement makes a
+    ///      SECOND route unrepresentable: at most one exists at a time, so a
+    ///      reentrant `checkpoint` is rejected outright. That alone is not
+    ///      enough, because the open route is itself callable during the
+    ///      funding transfer - a callback that re-enters the public executor
+    ///      could settle or abort THIS route with a pool, recipient, slippage,
+    ///      originator, or refund address of its own choosing, and the lock
+    ///      would not notice: the checkpoint committed only to a balance delta.
+    ///
+    ///      So the checkpoint commits to the whole `Route`. Settlement and
+    ///      abortion must present the identical intent, which leaves a
+    ///      reentrant caller nothing to substitute: it can only perform the
+    ///      swap that was already authorized, to the recipient that was already
+    ///      named. Doing so early makes the outer settlement fail on a consumed
+    ///      checkpoint, which is a revert rather than a theft. The factory
+    ///      therefore does not depend on the executor being well behaved to be
+    ///      safe, only to be useful. Routes are never legitimately concurrent -
+    ///      hops are sequential calls, each opening and closing its own route.
+    ///
+    ///      For the record, what the canonical executor actually is (zRouter's
+    ///      SafeExecutor, 0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db, 206 bytes
+    ///      of runtime read on-chain): ONE function, `execute(address,bytes)`,
+    ///      with no caller check, no storage and no guard - so it is public,
+    ///      and a token callback firing during the funding transfer can re-enter
+    ///      it and reach this contract while the route is open. What saves that
+    ///      arrangement is not the executor's restraint but its rigidity: it
+    ///      bubbles every downstream revert (`returndatacopy; revert`), and
+    ///      zRouter's `multicall` and `snwap` bubble too, so there is no
+    ///      catch-and-continue anywhere on the path. A substituted settlement
+    ///      would therefore strand the outer one on a consumed checkpoint and
+    ///      take the whole transaction down with it.
+    ///
+    ///      That makes `trustedExecutor` a call-path label rather than
+    ///      authentication - anyone can drive this route through the public
+    ///      executor - and it makes the intent commitment the thing that holds
+    ///      the property locally, instead of inheriting it from a router that
+    ///      can be replaced without this immutable contract noticing.
+    uint256 constant _ROUTE_IDLE = 0;
+    uint256 constant _ROUTE_OPEN = 1;
+    uint256 constant _ROUTE_SETTLING = 2;
+
+    function _routeState() internal view returns (uint256 state) {
         assembly ("memory-safe") {
-            if tload(_ROUTE_SLOT) {
-                mstore(0x00, 0xab143c06) // `Reentrancy()`.
-                revert(0x1c, 0x04)
-            }
-            tstore(_ROUTE_SLOT, 1)
+            state := tload(_ROUTE_SLOT)
         }
-        _;
+    }
+
+    function _setRouteState(uint256 state) internal {
         assembly ("memory-safe") {
-            tstore(_ROUTE_SLOT, 0)
+            tstore(_ROUTE_SLOT, state)
         }
     }
 
     /// @param trustedExecutor_ Router allowed to call `executePrefundedSwap`.
     ///        Set to address(0) when only direct exact-input swaps are wanted.
-    constructor(address trustedExecutor_) {
+    /// @param poolInitCode `type(PrecisionPool).creationCode`, passed in rather
+    ///        than embedded. See `poolCode`.
+    constructor(address trustedExecutor_, bytes memory poolInitCode) {
         if (trustedExecutor_ != address(0) && trustedExecutor_.code.length == 0) revert Bad();
         trustedExecutor = trustedExecutor_;
+        if (poolInitCode.length == 0) revert Bad();
+        poolCode = SSTORE2.write(poolInitCode);
+        poolInitCodeHash = keccak256(poolInitCode);
     }
 
     /// @notice Deploy the pool for this market.
@@ -197,10 +288,9 @@ contract PrecisionPoolFactory {
         uint256 remaining = total - start;
         if (size > remaining) size = remaining;
         out = new address[](size);
-        for (uint256 i; i < size;) {
+        for (uint256 i; i < size; ++i) {
             unchecked {
                 out[i] = pools[start + i];
-                ++i;
             }
         }
     }
@@ -222,7 +312,22 @@ contract PrecisionPoolFactory {
         uint256 minLP,
         address to
     ) external payable returns (address pool, uint256 lp, uint256 used0, uint256 used1) {
-        pool = createPool(m);
+        // Deploying and seeding are separate powers, and anyone may deploy an
+        // unnamed market. Reverting here when the pool merely exists but has
+        // never been seeded would let a griefer squat a tuple by creating it
+        // and walking away: the address is CREATE2-derived, so the market
+        // cannot be redeployed, and the caller's create-and-seed would fail
+        // permanently even though the pool is empty and unclaimed. An empty
+        // pool is indistinguishable from one that does not exist yet, so seed
+        // it instead. A pool that already holds liquidity still reverts, and a
+        // named market still admits only its own creator.
+        address existing = poolFor(m);
+        if (isPool[existing] && PrecisionPool(payable(existing)).totalSupply() == 0) {
+            _checkCreator(m);
+            pool = existing;
+        } else {
+            pool = createPool(m);
+        }
         (lp, used0, used1) = _fund(pool, m.token0, m.token1, amount0, amount1, sqrtPriceInit, minLP, to);
     }
 
@@ -272,12 +377,36 @@ contract PrecisionPoolFactory {
         );
     }
 
-    /// @notice Snapshot an ERC-20 balance before a prefunded swap.
-    /// @dev Must be followed in the same transaction by `executePrefundedSwap`.
-    ///      The transient checkpoint binds settlement to the newly funded amount.
-    function checkpoint(address token) external routeLocked {
+    /// @dev Hash of the settlement a route commits to. The executor passes the
+    ///      same `Route` to all three calls; this is what ties them together,
+    ///      so nothing off-chain ever needs to reproduce it.
+    ///
+    ///      `Route` is seven static words and is the only argument of all three
+    ///      entry points, so the calldata after the selector IS its canonical
+    ///      encoding - hashing it directly avoids copying the struct back out
+    ///      to memory on every call.
+    function _routeHash() internal pure returns (bytes32 h) {
+        assembly ("memory-safe") {
+            let m := mload(0x40)
+            calldatacopy(m, 0x04, 0xe0)
+            h := keccak256(m, 0xe0)
+        }
+    }
+
+    /// @notice Snapshot an ERC-20 balance and open a prefunded route for `r`.
+    /// @dev Must be followed in the same transaction by `executePrefundedSwap`
+    ///      or `abortCheckpoint`, each carrying the SAME route. The transient
+    ///      checkpoint binds settlement to the newly funded amount, the
+    ///      committed intent binds it to this pool, recipient, slippage and
+    ///      refund address, and the route stays LOCKED across the funding
+    ///      transfer in between, so only one route can be in flight at a time.
+    function checkpoint(Route calldata r) external {
         if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (_routeState() != _ROUTE_IDLE) revert Reentrancy();
+        address token = r.tokenIn;
+        // Native input needs no checkpoint: it arrives with the settling call.
         if (token == address(0) || token.code.length == 0) revert Bad();
+        _checkRoute(r);
 
         bytes32 slot = _checkpointSlot(token);
         uint256 encoded;
@@ -291,45 +420,119 @@ contract PrecisionPoolFactory {
         unchecked {
             encoded = checkpointBalance + 1;
         }
+        bytes32 intent = _routeHash();
         assembly ("memory-safe") {
             tstore(slot, encoded)
+            tstore(_INTENT_SLOT, intent)
         }
+        _setRouteState(_ROUTE_OPEN);
+    }
+
+    /// @dev Shared validation for a committed route.
+    function _checkRoute(Route calldata r) internal view {
+        if (!isPool[r.pool]) revert NoPool();
+        if (r.amountIn == 0) revert Bad();
+        if (r.to == address(0) || r.to == address(this)) revert Bad();
+        if (r.refundTo == address(0) || r.refundTo == address(this)) revert Bad();
+    }
+
+    /// @dev Consume the open route's intent, requiring it to be the one that
+    ///      was committed. Cleared before any external call so the same route
+    ///      cannot be settled twice.
+    function _consumeIntent() internal {
+        bytes32 want = _routeHash();
+        bytes32 have;
+        assembly ("memory-safe") {
+            have := tload(_INTENT_SLOT)
+            tstore(_INTENT_SLOT, 0)
+        }
+        if (have != want) revert IntentMismatch();
+    }
+
+    /// @notice Close an open route without settling it, returning the funding.
+    /// @dev The counterpart to a failed settlement. Without it, an executor
+    ///      that funds the factory and then cannot settle - a reverting pool, a
+    ///      failed slippage check it wants to handle rather than bubble - has
+    ///      no way to give the tokens back: the transient checkpoint disappears
+    ///      at the end of the transaction and the balance simply stays here,
+    ///      with no authenticated recovery path. This refunds exactly the
+    ///      balance delta observed since the checkpoint, so it can return the
+    ///      route's own funding and nothing else - pre-existing factory
+    ///      balances are not reachable through it.
+    ///
+    ///      The refund goes to the `refundTo` COMMITTED AT CHECKPOINT, not to
+    ///      an address supplied here. An abort is therefore not a redirection
+    ///      primitive: whoever triggers it, including a token callback
+    ///      re-entering the executor mid-funding, can only hand the funding
+    ///      back to the party the route already named.
+    /// @param r The route opened by `checkpoint`; must match it exactly.
+    function abortCheckpoint(Route calldata r) external returns (uint256 refunded) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (_routeState() != _ROUTE_OPEN) revert BadCheckpoint();
+        _setRouteState(_ROUTE_SETTLING);
+        _consumeIntent();
+        (address token, address to) = (r.tokenIn, r.refundTo);
+
+        bytes32 slot = _checkpointSlot(token);
+        uint256 encoded;
+        assembly ("memory-safe") {
+            encoded := tload(slot)
+            tstore(slot, 0)
+        }
+        if (encoded == 0) revert BadCheckpoint();
+
+        uint256 base;
+        unchecked {
+            base = encoded - 1;
+        }
+        uint256 current = token.balanceOf(address(this));
+        if (current < base) revert BadCheckpoint();
+        unchecked {
+            refunded = current - base;
+        }
+        if (refunded != 0) _transferExact(token, to, refunded, current);
+        _setRouteState(_ROUTE_IDLE);
     }
 
     /// @notice Settle a swap after the trusted executor has funded this factory.
     /// @dev ERC-20 input requires a same-transaction `checkpoint`; native input
     ///      is authenticated by `msg.value`.
-    /// @param originator Reported to the pool's hook as the trader. NOT
-    ///        authenticated: snwap reaches this contract through a public
-    ///        executor that does not forward the payer, so no party on this
-    ///        path can prove who is trading. It exists so a hook sees something
-    ///        other than this factory on every routed swap, which would
-    ///        otherwise make sender-keyed hook logic uniformly wrong. Hooks
-    ///        must treat it as a label, never as authority.
-    function executePrefundedSwap(
-        address pool,
-        address originator,
-        address tokenIn,
-        uint256 amountIn,
-        uint256 minOut,
-        address to
-    )
-        external
-        payable
-        routeLocked
-        returns (uint256 amountOut)
-    {
+    ///      `r.originator` is reported to the pool's hook as the trader. NOT
+    ///      authenticated: snwap reaches this contract through a public
+    ///      executor that does not forward the payer, so no party on this
+    ///      path can prove who is trading. It exists so a hook sees something
+    ///      other than this factory on every routed swap, which would
+    ///      otherwise make sender-keyed hook logic uniformly wrong. Hooks
+    ///      must treat it as a label, never as authority. It is committed at
+    ///      checkpoint like every other field, so it cannot be swapped out at
+    ///      settlement time - but a committed label is still only a label.
+    /// @param r The route; for ERC-20 input it must match the one `checkpoint`
+    ///        committed to, field for field.
+    function executePrefundedSwap(Route calldata r) external payable returns (uint256 amountOut) {
         if (msg.sender != trustedExecutor) revert NotExecutor();
-        if (!isPool[pool]) revert NoPool();
-        PrecisionPool p = PrecisionPool(payable(pool));
-        if (tokenIn == address(0)) {
-            if (msg.value != amountIn) revert Bad();
-            return p.swapFromFactory{value: amountIn}(originator, tokenIn, amountIn, minOut, to);
+        _checkRoute(r);
+        PrecisionPool p = PrecisionPool(payable(r.pool));
+        if (r.tokenIn == address(0)) {
+            // Native input is authenticated by `msg.value` and arrives with the
+            // call, so it has no funding interval to guard and opens no route.
+            // Nothing is prefunded, so there is no intent to check either.
+            if (_routeState() != _ROUTE_IDLE) revert Reentrancy();
+            _setRouteState(_ROUTE_SETTLING);
+            if (msg.value != r.amountIn) revert Bad();
+            amountOut = p.swapFromFactory{value: r.amountIn}(r.originator, r.tokenIn, r.amountIn, r.minOut, r.to);
+            _setRouteState(_ROUTE_IDLE);
+            return amountOut;
         }
+        // Settles the route this executor opened with `checkpoint`, which has
+        // held the lock across the funding transfer in between.
+        if (_routeState() != _ROUTE_OPEN) revert BadCheckpoint();
+        _setRouteState(_ROUTE_SETTLING);
+        _consumeIntent();
         if (msg.value != 0) revert Bad();
-        uint256 senderBefore = _consumeCheckpoint(tokenIn, amountIn);
-        _transferExact(tokenIn, pool, amountIn, senderBefore);
-        return p.swapFromFactory(originator, tokenIn, amountIn, minOut, to);
+        uint256 senderBefore = _consumeCheckpoint(r.tokenIn, r.amountIn);
+        _transferExact(r.tokenIn, r.pool, r.amountIn, senderBefore);
+        amountOut = p.swapFromFactory(r.originator, r.tokenIn, r.amountIn, r.minOut, r.to);
+        _setRouteState(_ROUTE_IDLE);
     }
 
     function _consumeCheckpoint(address token, uint256 amount) internal returns (uint256 current) {
@@ -382,7 +585,7 @@ contract PrecisionPoolFactory {
 
     function _poolInitCode(Market calldata m) internal view returns (bytes memory) {
         return abi.encodePacked(
-            type(PrecisionPool).creationCode,
+            SSTORE2.read(poolCode),
             abi.encode(
                 address(this),
                 m.token0,

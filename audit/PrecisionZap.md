@@ -104,3 +104,14 @@ the inactive sentinel, and the checkpoint consumes less transient storage.
 pool authentication, checkpoint overwrite refusal, pre-existing dust,
 funding-amount mismatch, rollback after checkpoint and slippage failures,
 exact output delivery, and recipient callback reentrancy.
+
+Verification results:
+
+- `PrecisionZapAuditTest`: 7/7 tests passed.
+- `PrecisionPoolInvariantEdgeTest`: all four multi-pool invariants passed under
+  Foundry's default invariant campaign, including checkpointed zap exits.
+- `PrecisionPoolSnwapTest`: 9/9 mainnet-fork tests passed against the live
+  zRouter/SafeExecutor, including checkpointed LP redemption.
+- The production-profile `forge build --sizes` passed. `PrecisionZap` deployed
+  bytecode is 1,540 bytes (1,770-byte initcode).
+- `forge fmt --check` and `git diff --check` passed for the reviewed changes.

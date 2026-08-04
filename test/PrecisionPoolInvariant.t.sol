@@ -86,7 +86,7 @@ contract PrecisionPoolInvariantTest is Test {
     uint256 constant SQRT_HIGH = 46904157598234;
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         tk = new MockERC20("TK", 18);
         address lp = address(0xC11);
         tk.mint(lp, 1e30);

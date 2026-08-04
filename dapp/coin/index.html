@@ -197,6 +197,19 @@ input {
 
 /* Swap tile */
 .swap-tile { position:relative; }
+/* Pay-asset picker on the Sale tab. A native <select> cannot render the token
+   marks, so this is a button plus a popover list. */
+.sale-pay-picker { position:relative; display:inline-block; }
+.sale-pay-btn { display:inline-flex; align-items:center; gap:5px; cursor:pointer; background:none; border:0; color:inherit; font:inherit; padding:0; }
+.sale-pay-mark { display:inline-flex; width:16px; height:16px; }
+.sale-pay-mark svg, .sale-pay-mark img { width:16px; height:16px; border-radius:50%; }
+.sale-pay-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:30; min-width:118px;
+  background:var(--bg, #0d0d0d); border:1px solid var(--border, #2a2a2a); border-radius:8px;
+  padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+.sale-pay-option { display:flex; align-items:center; gap:8px; width:100%; padding:7px 9px;
+  background:none; border:0; color:inherit; font:inherit; cursor:pointer; border-radius:6px; text-align:left; }
+.sale-pay-option:hover { background:var(--surface-hover, rgba(255,255,255,.06)); }
+.sale-pay-option[aria-selected="true"] { background:var(--surface-hover, rgba(255,255,255,.09)); }
 .swap-mode-tabs { display:flex;gap:6px;margin-bottom:14px; }
 .swap-mode-tabs button {
   flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
@@ -483,9 +496,8 @@ function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&
 
 const RPCS = [
   'https://ethereum.publicnode.com',
-  'https://1rpc.io/eth',
-  'https://eth.drpc.org',
-  'https://eth.llamarpc.com'
+  'https://mainnet.gateway.tenderly.co',
+  'https://eth.drpc.org'
 ];
 
 const WEINS = "0x0000000000696760E15f265e828DB644A0c242EB";
@@ -499,8 +511,76 @@ const CONTINUOUS_SALES = {
     sale: '0x824d11a46F32cd16cdF46380314343e9697e2491',
     vault: '0xB3B3f4f1535305c5f40F9c0d6bCaf38032bF7F8e',
     icon: 'https://www.s02.works/favicon.ico?favicon.179e78c5.ico',
+    // Buying with anything but ETH goes through this forwarder. `saleRate` is
+    // shares per 1e18 wei and lives here rather than being read, because the
+    // deployed sale keeps it as a bytecode constant with no getter. It is only
+    // used to plan; the floor the transaction is held to comes from the lens.
+    collectol: '0x0000003b9DFB69a1c764b1b136EE93dEDcdB2EE3',
+    feeOrHook: 30n,
+    saleRate: 1000000000000000000000000n, // 1e24 = 1,000,000 shares per ETH
   },
 };
+// ---- Paying for a continuous sale with something other than ETH ----
+// The sale mints for ETH only, so any other asset hops to ETH first and reaches
+// the sale through Collectol, which also decides per size whether the DAO's zAMM
+// pool beats the flat mint rate. Same contracts the swap UI uses; see
+// deploy/Collectol.md for why funding arrives as WETH rather than as value.
+const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
+const ZQUOTER_FULL = '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13';
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+const COLLECTOL_LENS = '0x000000eA30dd95Ed6A5734F3Df361b2f4D5acaf6';
+
+// Token marks, same artwork the swap page uses.
+const ETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>`;
+const WETH_ICON = `<svg width="24" height="24" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="17" fill="none" stroke="#90CAF9" stroke-width="1.5" stroke-dasharray="4 2.5"/><g transform="translate(2,2)"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></g></svg>`;
+const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
+const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
+const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
+
+// Deliberately short: assets with deep ETH liquidity, so leg 1 is never the
+// reason a purchase prices badly. Anything exotic is better served by the swap
+// page, which races every aggregator.
+const SALE_PAY_TOKENS = [
+  // The literal, not `ZERO`: that const is declared further down this block, and
+  // reading it here is a temporal-dead-zone throw that kills the whole script -
+  // every definition below it included, which takes the entire page with it.
+  { sym: 'ETH',  address: '0x0000000000000000000000000000000000000000', decimals: 18, icon: ETH_ICON },
+  { sym: 'WETH', address: WETH, decimals: 18, icon: WETH_ICON },
+  { sym: 'USDC', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6, icon: USDC_ICON },
+  { sym: 'USDT', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6, icon: USDT_ICON },
+  { sym: 'DAI',  address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, icon: DAI_ICON },
+];
+
+const ROUTER_IFACE = new ethers.Interface([
+  'function multicall(bytes[]) payable returns (bytes[])',
+  'function wrap(uint256) payable',
+  'function unwrap(uint256) payable',
+  'function sweep(address,uint256,uint256,address) payable',
+  'function snwap(address tokenIn,uint256 amountIn,address recipient,address tokenOut,uint256 amountOutMin,address executor,bytes executorData) payable returns (uint256)',
+]);
+const COLLECTOL_IFACE = new ethers.Interface([
+  'function buy(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,address recipient,address refundTo,uint256 deadline) payable',
+]);
+const COLLECTOL_LENS_IFACE = new ethers.Interface([
+  'function maxSaleEth(address sale,uint256 saleRate) view returns (uint256)',
+  'function planExactIn(address shares,uint256 feeOrHook,uint256 ethIn,uint256 saleRate,uint256 maxSaleEth,uint256 slippageBps) view returns (tuple(uint256 ethToSale,uint256 poolAmount,uint256 poolLimit,bool poolExactOut,uint256 minTotalOut,uint256 totalOut,uint256 totalIn))',
+]);
+const ZQUOTER_BUILD_IFACE = new ethers.Interface([
+  'function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a,tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b,bytes[] calls,bytes multicall,uint256 msgValue)',
+]);
+
+// Slippage allowed on the ETH hop. Wider than a single-venue trade because two
+// legs compound, and the sale leg itself cannot slip at all.
+const SALE_SLIP_BPS = 300n;
+
+// Which asset the Sale tab is paying with, and the balance of it.
+let _salePayToken = SALE_PAY_TOKENS[0];
+let _salePayBalance = 0n;
+// Last plan quoted for a non-ETH purchase, reused by the buy button so the
+// transaction spends exactly what the user was shown.
+let _salePlan = null;
+let _salePlanSeq = 0;
+
 const CONTINUOUS_SALE_ABI = [
   'function buy() payable',
   'function paused() view returns (bool)',
@@ -630,6 +710,9 @@ const MC3_ABI = [
   'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   'function getEthBalance(address) view returns (uint256)'
 ];
+// Shared singleton — ethers.Interface construction parses the whole ABI, and this one
+// was being rebuilt several times per multicall on timer-driven refresh paths.
+const _mc3Iface = new ethers.Interface(MC3_ABI);
 
 // ClassicalCurveSale
 const CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
@@ -1167,11 +1250,23 @@ const _rpcProviders = RPCS.map(url => new ethers.JsonRpcProvider(url, 1, { stati
 function getRPC() {
   return _rpcProviders[rpcIdx % _rpcProviders.length];
 }
-async function withRPC(fn) {
+// A public RPC that accepts the socket and then goes quiet never rejects, so without a
+// deadline the failover loop below never advances and the page sits on "Loading..."
+// forever. Each attempt races a timer; a timeout is a failure like any other and moves
+// us to the next provider.
+const RPC_TIMEOUT_MS = 12000;
+function _rpcDeadline(promise, ms) {
+  let t;
+  return Promise.race([
+    promise.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error('RPC timeout')), ms); })
+  ]);
+}
+async function withRPC(fn, timeoutMs) {
   for (let i = 0; i < _rpcProviders.length; i++) {
     try {
       const rpc = _rpcProviders[(rpcIdx + i) % _rpcProviders.length];
-      const result = await fn(rpc);
+      const result = await _rpcDeadline(Promise.resolve(fn(rpc)), timeoutMs || RPC_TIMEOUT_MS);
       rpcIdx = (rpcIdx + i) % _rpcProviders.length;
       return result;
     } catch(e) { if (i === _rpcProviders.length - 1) throw e; }
@@ -2041,6 +2136,22 @@ let _renderGen = 0;
 let _saleRefreshInterval = null;
 let _saleCountdownInterval = null;
 
+// Polling that only runs while the tab is on screen. A backgrounded coin page used to
+// keep spending its RPC budget on stats nobody was looking at, and the resulting
+// rate-limiting is what made reads start failing once the tab came back. Skipping the
+// hidden ticks and doing one catch-up refresh on re-show keeps the display just as
+// current from the user's point of view.
+let _pollers = new Set();
+function startPoller(fn, ms) {
+  const id = setInterval(() => { if (!document.hidden) fn(); }, ms);
+  _pollers.add(fn);
+  return id;
+}
+function stopPoller(fn) { _pollers.delete(fn); }
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) for (const fn of _pollers) { try { fn(); } catch {} }
+});
+
 async function refreshSaleStats() {
   const daoAddr = $('app')?.dataset?.dao;
   if (!daoAddr || !_coinData) return;
@@ -2073,10 +2184,23 @@ async function refreshSaleStats() {
     const minterAddr = tap && tap.ops && tap.ops !== ZERO ? tap.ops : null;
     if (minterAddr) {
       try {
-        const rpc = getRPC();
-        const mABI = ['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)'];
-        const mc = new ethers.Contract(minterAddr, mABI, rpc);
-        const [nftCount, lockedEth, minterBal] = await Promise.all([mc.nftCount(), mc.totalLockedEth(), rpc.getBalance(minterAddr)]);
+        // One multicall instead of three separate reads: this runs on a 20s timer, and
+        // going through withRPC means a dead provider fails over instead of throwing
+        // every tick the way a raw getRPC() handle did.
+        const minterI = new ethers.Interface(['function nftCount() view returns (uint256)', 'function totalLockedEth() view returns (uint256)']);
+        const [nftCount, lockedEth, minterBal] = await withRPC(async rpc => {
+          const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
+          const res = await mc.aggregate3([
+            { target: minterAddr, allowFailure: true, callData: minterI.encodeFunctionData('nftCount', []) },
+            { target: minterAddr, allowFailure: true, callData: minterI.encodeFunctionData('totalLockedEth', []) },
+            { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [minterAddr]) },
+          ]);
+          return [
+            res[0].success ? minterI.decodeFunctionResult('nftCount', res[0].returnData)[0] : 0n,
+            res[1].success ? minterI.decodeFunctionResult('totalLockedEth', res[1].returnData)[0] : 0n,
+            res[2].success ? _mc3Iface.decodeFunctionResult('getEthBalance', res[2].returnData)[0] : 0n,
+          ];
+        });
         if (gen !== _renderGen) return;
         const mintProgress = $('saleMintProgress');
         if (mintProgress) {
@@ -2121,6 +2245,7 @@ function route() {
   if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
   if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
+  _pollers.clear();
   _causeBuyMode = 'shares';
   if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
   if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
@@ -4570,7 +4695,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const mc3Calls = [
     { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
     { target: TAP_VEST, allowFailure: true, callData: tvIface.encodeFunctionData('taps', [daoAddr]) },
-    { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [daoAddr]) },
+    { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
     { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
     // Remaining sale allowance — minting mode uses dao address as sentinel token
     { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
@@ -4604,7 +4729,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     try { tapData = tvIface.decodeFunctionResult('taps', mcRes[1].returnData); } catch {}
   }
   if (mcRes[2]?.success) {
-    try { treasuryETH = new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', mcRes[2].returnData)[0]; } catch {}
+    try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[2].returnData)[0]; } catch {}
   }
   if (mcRes[3]?.success) {
     try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[3].returnData)[0]; } catch {}
@@ -4877,10 +5002,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Auto-refresh sale stats every 30s (partial update, preserves inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
-  _causeRefreshTimer = setInterval(() => {
-    if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); return; }
+  const causeTick = () => {
+    if (location.hash.slice(1) !== daoAddr) { clearInterval(_causeRefreshTimer); stopPoller(causeTick); return; }
     refreshCauseStats(daoAddr, metadata);
-  }, 30000);
+  };
+  _causeRefreshTimer = startPoller(causeTick, 30000);
 }
 
 let _causeRefreshTimer = null;
@@ -4895,7 +5021,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     const daoI = new ethers.Interface(['function allowance(address spender, address token) view returns (uint256)']);
     const mc3Calls = [
       { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
-      { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [daoAddr]) },
+      { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
       { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
       { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
     ];
@@ -4910,7 +5036,7 @@ async function refreshCauseStats(daoAddr, metadata) {
 
     let saleData = null, treasuryETH = 0n, sharesTotalSupply = 0n, saleAllowance = 0n, userBalance = 0n;
     if (mcRes[0]?.success) try { saleData = ssIface.decodeFunctionResult('sales', mcRes[0].returnData); } catch {}
-    if (mcRes[1]?.success) try { treasuryETH = new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
+    if (mcRes[1]?.success) try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
     if (mcRes[2]?.success) try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[2].returnData)[0]; } catch {}
     if (mcRes[3]?.success) try { saleAllowance = daoI.decodeFunctionResult('allowance', mcRes[3].returnData)[0]; } catch {}
     if (_connectedAddress && mcRes[4]?.success) try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[4].returnData)[0]; } catch {}
@@ -5196,6 +5322,9 @@ async function causeRagequit(daoAddr) {
 // ==================== DAICO COIN PAGE ====================
 async function renderCoinPage(daoAddr) {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
+  if (_saleRefreshInterval) { clearInterval(_saleRefreshInterval); _saleRefreshInterval = null; }
+  if (_saleCountdownInterval) { clearInterval(_saleCountdownInterval); _saleCountdownInterval = null; }
+  _pollers.clear();
   const gen = ++_renderGen;
   // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
   // freshly-rendered detail page. renderCurveCoinPage bumps these on its own, but if we
@@ -5248,7 +5377,10 @@ async function renderCoinPage(daoAddr) {
     const feeOrHookVal = sale ? BigInt(sale.feeOrHook) : 30n;
     const poolId = computePoolId(ZERO, sharesAddr, 0n, 0n, feeOrHookVal);
     const tapActive_ = tap && tap.ratePerSec > 0n;
-    const [metadata, poolResult, ethUsd, daoLpBal] = await Promise.all([
+    // The continuous-sale paused() flag depends only on daoAddr, so it rides along here
+    // rather than costing its own serial round trip further down.
+    const _csAddrEarly = CONTINUOUS_SALES[daoAddr.toLowerCase()]?.sale;
+    const [metadata, poolResult, ethUsd, daoLpBal, csPausedEarly] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
       withRPC(async rpc => {
         const z = new ethers.Contract(ZAMM, ZAMM_POOLS_ABI, rpc);
@@ -5259,7 +5391,13 @@ async function renderCoinPage(daoAddr) {
       withRPC(async rpc => {
         const z = new ethers.Contract(ZAMM, ZAMM_LP_ABI, rpc);
         return await z.balanceOf(daoAddr, poolId);
-      }).catch(() => 0n)
+      }).catch(() => 0n),
+      _csAddrEarly
+        ? withRPC(async rpc => {
+            const cs = new ethers.Contract(_csAddrEarly, CONTINUOUS_SALE_ABI, rpc);
+            return await cs.paused();
+          }).catch(() => null)
+        : Promise.resolve(null)
     ]);
     if (gen !== _renderGen) return;
     // Override icon for DAOs with configured Continuous Sale icons
@@ -5298,13 +5436,9 @@ async function renderCoinPage(daoAddr) {
     const contVaultAddr = contSaleConfig?.vault;
     let contSaleActive = false;
     if (contSaleAddr) {
-      try {
-        const csPaused = await withRPC(async rpc => {
-          const cs = new ethers.Contract(contSaleAddr, CONTINUOUS_SALE_ABI, rpc);
-          return await cs.paused();
-        });
-        contSaleActive = !csPaused;
-      } catch {}
+      // Read alongside the metadata batch above; null means the read failed, and an
+      // unknown pause state should not be reported as a live sale.
+      if (csPausedEarly !== null) contSaleActive = !csPausedEarly;
       if (contSaleActive) saleActive = true;
     }
 
@@ -5523,7 +5657,7 @@ async function renderCoinPage(daoAddr) {
         }, 0);
       }
       // Auto-refresh sale stats every 20s while sale is live
-      _saleRefreshInterval = setInterval(refreshSaleStats, 20000);
+      _saleRefreshInterval = startPoller(refreshSaleStats, 20000);
     } else if (hasDaicoSale) {
       html += `
         <div class="drawer" id="saleDrawer">
@@ -5589,6 +5723,7 @@ async function renderCoinPage(daoAddr) {
         idle(async () => {
           try {
             const seed = await verifyLpSeeder(poolId.toString(), daoAddr);
+            if (gen !== _renderGen) return; // navigated away mid-scan
             const q = $('lpFeesQualifier'), row = $('lpFeesRow');
             // Unknown stays "(est.)" — the log scan not reaching inception is not evidence.
             if (!q || !row || !seed || seed.inconclusive) return;
@@ -5615,16 +5750,20 @@ async function renderCoinPage(daoAddr) {
             const [vaultBal, nftLocked, nftPending] = await withRPC(async rpc => {
               const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
               const res = await mc.aggregate3([
-                { target: MC3, allowFailure: true, callData: new ethers.Interface(MC3_ABI).encodeFunctionData('getEthBalance', [contVaultAddr]) },
+                { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [contVaultAddr]) },
                 { target: VAULT_NFT_CONTRACT, allowFailure: true, callData: nftIface.encodeFunctionData('getRemainingLockedEth', [VAULT_NFT_TOKEN_ID]) },
                 { target: VAULT_NFT_FEES, allowFailure: true, callData: feeIface.encodeFunctionData('pending', [VAULT_NFT_TOKEN_ID]) },
               ]);
               return [
-                res[0].success ? new ethers.Interface(MC3_ABI).decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
+                res[0].success ? _mc3Iface.decodeFunctionResult('getEthBalance', res[0].returnData)[0] : 0n,
                 res[1].success ? nftIface.decodeFunctionResult('getRemainingLockedEth', res[1].returnData)[0] : 0n,
                 res[2].success ? feeIface.decodeFunctionResult('pending', res[2].returnData)[0] : 0n,
               ];
             });
+            // Guard before any DOM write: a re-render (or a hop to another coin) while
+            // this multicall was in flight would otherwise repaint the new page's
+            // treasury rows with the old DAO's vault figures.
+            if (gen !== _renderGen) return;
             const el = $('vaultEthBal');
             if (el) el.textContent = fmtETH(vaultBal);
             // Hardcoded NFT holding for the FWC vault (1 TokenWorks NFT currently held),
@@ -5654,7 +5793,7 @@ async function renderCoinPage(daoAddr) {
               navValEl.innerHTML = navBody;
               navRowEl.style.display = '';
             }
-          } catch (e) { console.error('vault stats load failed:', e); const el = $('vaultEthBal'); if (el) el.textContent = '--'; }
+          } catch (e) { console.error('vault stats load failed:', e); if (gen === _renderGen) { const el = $('vaultEthBal'); if (el) el.textContent = '--'; } }
         })();
       }
     }
@@ -5750,7 +5889,20 @@ async function renderCoinPage(daoAddr) {
             <div class="swap-section-head">
               <label>From</label>
               <span id="salePayBal" class="swap-balance"></span>
-              <span class="swap-token-tag">${ethSvg} ETH</span>
+              ${contSaleActive
+                ? `<div class="sale-pay-picker">
+                     <button type="button" id="salePayTokenBtn" class="swap-token-tag sale-pay-btn" onclick="toggleSalePayMenu(event)" aria-haspopup="listbox" aria-expanded="false">
+                       <span id="salePayTokenIcon" class="sale-pay-mark">${SALE_PAY_TOKENS[0].icon}</span>
+                       <span id="salePayTokenSym">${SALE_PAY_TOKENS[0].sym}</span>
+                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:.5"><path d="M6 9l6 6 6-6"/></svg>
+                     </button>
+                     <div id="salePayMenu" class="sale-pay-menu" role="listbox" hidden>
+                       ${SALE_PAY_TOKENS.map(t => `<button type="button" role="option" class="sale-pay-option" data-sym="${t.sym}" onclick="pickSalePayToken('${t.sym}')">
+                            <span class="sale-pay-mark">${t.icon}</span><span>${t.sym}</span>
+                          </button>`).join('')}
+                     </div>
+                   </div>`
+                : `<span class="swap-token-tag">${ethSvg} ETH</span>`}
             </div>
             <input type="text" id="salePayInput" placeholder="0.0" oninput="onSalePayInput()" autocomplete="off">
             <div id="saleUsdEstimate" style="font-size:11px;color:var(--fg-dim);margin-top:2px;min-height:14px"></div>
@@ -6164,7 +6316,7 @@ async function loadBalances() {
   const daoAddr = $('app').dataset.dao;
   try {
     const erc20 = new ethers.Interface(ERC20_ABI);
-    const mc3i = new ethers.Interface(MC3_ABI);
+    const mc3i = _mc3Iface;
     const calls = [
       { target: MC3, allowFailure: false, callData: mc3i.encodeFunctionData('getEthBalance', [addr]) },
       { target: shares, allowFailure: true, callData: erc20.encodeFunctionData('balanceOf', [addr]) },
@@ -6212,10 +6364,15 @@ async function loadBalances() {
       payEl.onclick = () => fillPct(100);
     }
 
-    // Sale mode balance (ETH)
+    // Sale mode balance — follows whichever asset the Sale tab is paying with.
     const salePayEl = $('salePayBal');
     if (salePayEl) {
-      salePayEl.textContent = Number(ethers.formatEther(ethBal)).toLocaleString(undefined, {maximumFractionDigits:6}) + ' ETH';
+      if (_salePayToken.address === ZERO) {
+        _salePayBalance = ethBal;
+        salePayEl.textContent = Number(ethers.formatEther(ethBal)).toLocaleString(undefined, {maximumFractionDigits:6}) + ' ETH';
+      } else {
+        refreshSalePayBalance();
+      }
       salePayEl.onclick = () => fillPct(100);
     }
 
@@ -6244,11 +6401,14 @@ async function loadBalances() {
 
 function fillPct(pct) {
   if (_tradeMode === 'sale') {
-    if (_ethBalance <= 0n) return;
-    let amt = _ethBalance * BigInt(pct) / 100n;
-    if (pct === 100 && amt > ethers.parseEther('0.005')) amt -= ethers.parseEther('0.005');
+    const isEth = _salePayToken.address === ZERO;
+    const bal = isEth ? _ethBalance : _salePayBalance;
+    if (bal <= 0n) return;
+    let amt = bal * BigInt(pct) / 100n;
+    // Only native ETH needs gas held back; spending 100% of an ERC-20 is fine.
+    if (isEth && pct === 100 && amt > ethers.parseEther('0.005')) amt -= ethers.parseEther('0.005');
     if (amt <= 0n) return;
-    $('salePayInput').value = ethers.formatEther(amt);
+    $('salePayInput').value = ethers.formatUnits(amt, _salePayToken.decimals);
     onSalePayInput();
   } else if (_tradeMode === 'ragequit') {
     if (_sharesBalance <= 0n) return;
@@ -6283,9 +6443,16 @@ function updateSaleBtnState() {
     return;
   }
   try {
-    const payAmt = ethers.parseEther(raw);
-    if (payAmt > _ethBalance) {
-      btn.textContent = 'Insufficient ETH';
+    const isEth = _salePayToken.address === ZERO;
+    const payAmt = ethers.parseUnits(raw, _salePayToken.decimals);
+    if (payAmt > (isEth ? _ethBalance : _salePayBalance)) {
+      btn.textContent = `Insufficient ${_salePayToken.sym}`;
+      btn.disabled = true;
+      return;
+    }
+    // A token purchase cannot be sent until its route has been quoted.
+    if (!isEth && !_salePlan) {
+      btn.textContent = 'Finding route…';
       btn.disabled = true;
       return;
     }
@@ -6319,9 +6486,150 @@ function updateSaleUsd() {
   el.textContent = '~' + fmtUsd(Number(raw) * _ethUsdPrice);
 }
 
+function toggleSalePayMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const menu = $('salePayMenu'), btn = $('salePayTokenBtn');
+  if (!menu) return;
+  const open = menu.hasAttribute('hidden');
+  if (open) {
+    menu.removeAttribute('hidden');
+    for (const o of menu.querySelectorAll('.sale-pay-option')) {
+      o.setAttribute('aria-selected', String(o.dataset.sym === _salePayToken.sym));
+    }
+    // One-shot: dismiss on the next click anywhere else.
+    setTimeout(() => document.addEventListener('click', closeSalePayMenu, { once: true }), 0);
+  } else {
+    menu.setAttribute('hidden', '');
+  }
+  if (btn) btn.setAttribute('aria-expanded', String(open));
+}
+
+function closeSalePayMenu() {
+  const menu = $('salePayMenu'), btn = $('salePayTokenBtn');
+  if (menu) menu.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function pickSalePayToken(sym) {
+  closeSalePayMenu();
+  const next = SALE_PAY_TOKENS.find(t => t.sym === sym);
+  if (!next || next.sym === _salePayToken.sym) return;
+  const icon = $('salePayTokenIcon'), label = $('salePayTokenSym');
+  if (icon) icon.innerHTML = next.icon;
+  if (label) label.textContent = next.sym;
+  onSalePayTokenChange(next);
+}
+
+// Switching the pay asset resets the amount: the old number was denominated in
+// the old token, and silently reinterpreting "100" from USDC to ETH is how a
+// user buys a thousand times what they meant to.
+async function onSalePayTokenChange(next) {
+  _salePayToken = next || SALE_PAY_TOKENS[0];
+  _salePlan = null;
+  $('salePayInput').value = '';
+  $('saleReceiveInput').value = '';
+  const q = $('saleQuote'); if (q) q.textContent = '';
+  await refreshSalePayBalance();
+  updateSaleBtnState();
+}
+
+async function refreshSalePayBalance() {
+  const el = $('salePayBal');
+  if (!el) return;
+  if (_salePayToken.address === ZERO) {
+    _salePayBalance = _ethBalance;
+  } else if (_connectedAddress) {
+    _salePayBalance = await withRPC(async rpc => {
+      const t = new ethers.Contract(_salePayToken.address, ERC20_ABI, rpc);
+      return await t.balanceOf(_connectedAddress);
+    }).catch(() => 0n);
+  } else {
+    _salePayBalance = 0n;
+  }
+  el.textContent = _connectedAddress
+    ? `Balance: ${fmtUnits(_salePayBalance, _salePayToken.decimals)} ${_salePayToken.sym}`
+    : '';
+}
+
+function fmtUnits(v, dec) {
+  const n = Number(ethers.formatUnits(v, dec));
+  if (n === 0) return '0';
+  if (n < 0.0001) return n.toExponential(2);
+  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
+}
+
+// Quote a non-ETH purchase: hop to ETH, then let the lens split that ETH between
+// the flat mint and the pool. Sequenced so a slow response cannot overwrite a
+// newer one - the displayed number and `_salePlan` must always agree.
+async function quoteSalePayToken() {
+  const raw = ($('salePayInput').value || '').trim();
+  const recvEl = $('saleReceiveInput'), quoteEl = $('saleQuote');
+  if (!raw || isNaN(raw) || Number(raw) <= 0) {
+    _salePlan = null;
+    if (recvEl) recvEl.value = '';
+    updateSaleBtnState();
+    return;
+  }
+  const seq = ++_salePlanSeq;
+  const cfg = CONTINUOUS_SALES[$('app').dataset.dao?.toLowerCase()];
+  const saleAddr = $('app').dataset.contSale;
+  const shares = $('app').dataset.shares;
+  if (!cfg || !saleAddr || !shares) return;
+
+  const amountIn = ethers.parseUnits(raw, _salePayToken.decimals);
+  if (quoteEl) quoteEl.textContent = 'Finding best route…';
+  try {
+    const plan = await withRPC(async rpc => {
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+      const lens = new ethers.Contract(COLLECTOL_LENS, COLLECTOL_LENS_IFACE, rpc);
+      const cap = await lens.maxSaleEth(saleAddr, cfg.saleRate).catch(() => 0n);
+
+      let ethBudget, legCalls = [], needsWrap = true, spend = amountIn;
+      if (_salePayToken.address === WETH) {
+        // Already WETH: no hop, and no wrap either - snwap sweeps it straight in.
+        ethBudget = amountIn;
+        needsWrap = false;
+      } else {
+        const q = new ethers.Contract(ZQUOTER_FULL, ZQUOTER_BUILD_IFACE, rpc);
+        const r = await q.buildBestSwapViaETHMulticall(
+          ZROUTER, _connectedAddress || ZERO, false,
+          _salePayToken.address, ZERO, amountIn, SALE_SLIP_BPS, deadline);
+        const gross = r.b.amountOut > 0n ? r.b.amountOut : r.a.amountOut;
+        if (gross === 0n) throw new Error('no route to ETH');
+        // Plan on the floor leg 1 is held to, never its estimate: the forwarder
+        // spends what actually arrives, and the excess is refunded.
+        ethBudget = gross * (10000n - SALE_SLIP_BPS) / 10000n;
+        legCalls = Array.from(r.calls);
+      }
+      // snwap forwards `balance - 1` when it funds an executor from the router's
+      // own token balance, so the forwarder always lands one wei short of what
+      // was wrapped. Solve for what arrives.
+      const planned = await lens.planExactIn(
+        shares, cfg.feeOrHook ?? 30n, ethBudget - 1n, cfg.saleRate, cap, SALE_SLIP_BPS);
+      return { planned, legCalls, ethBudget, needsWrap, amountIn: spend, deadline };
+    });
+    if (seq !== _salePlanSeq) return; // a newer keystroke won
+    _salePlan = plan;
+    if (recvEl) recvEl.value = ethers.formatEther(plan.planned.totalOut);
+    if (quoteEl) {
+      const mint = plan.planned.ethToSale, pool = plan.planned.poolAmount;
+      const via = mint > 0n && pool > 0n ? 'sale + pool'
+                : pool > 0n ? 'zAMM pool' : 'continuous sale';
+      quoteEl.textContent = `${raw} ${_salePayToken.sym} → ${fmtETH(plan.ethBudget)} via ${via}`;
+    }
+  } catch (e) {
+    if (seq !== _salePlanSeq) return;
+    _salePlan = null;
+    if (recvEl) recvEl.value = '';
+    if (quoteEl) quoteEl.textContent = 'No route for that amount';
+  }
+  updateSaleBtnState();
+}
+
 function onSalePayInput() {
   _saleExactOut = false;
   updateSaleUsd();
+  if (_salePayToken.address !== ZERO) { quoteSalePayToken(); return; }
   const raw = ($('salePayInput').value || '').trim();
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
     $('saleReceiveInput').value = '';
@@ -6430,6 +6738,60 @@ async function onSaleBuyBtn() {
   executeSaleBuy();
 }
 
+// Buy shares with an ERC-20. The route is the swap page's, in miniature:
+//
+//   leg 1 (token -> ETH) -> wrap -> snwap(WETH, 0, ...) -> Collectol -> mint
+//
+// snwap cannot hand a forwarder native value here: it funds a native route from
+// msg.value, and every delegatecalled entry in a zRouter multicall sees the same
+// msg.value, which is zero on a token trade. So the ETH is wrapped and swept in
+// as WETH, which Collectol unwraps. Everything unspent sweeps back to the buyer.
+async function executeSaleBuyWithToken(signer, btn, daoAddr) {
+  const plan = _salePlan;
+  if (!plan) { $('saleQuote').textContent = 'Re-enter an amount'; btn.textContent = 'Buy'; btn.disabled = false; return; }
+  const cfg = CONTINUOUS_SALES[daoAddr.toLowerCase()];
+  const shares = $('app').dataset.shares;
+  const me = await signer.getAddress();
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+
+  // zRouter pulls the input with transferFrom, so it needs an allowance.
+  const token = new ethers.Contract(_salePayToken.address, ERC20_ABI, signer);
+  const allowance = await token.allowance(me, ZROUTER);
+  if (allowance < plan.amountIn) {
+    btn.textContent = 'Approving…';
+    await (await token.approve(ZROUTER, ethers.MaxUint256)).wait();
+  }
+
+  const buyData = COLLECTOL_IFACE.encodeFunctionData('buy', [
+    plan.planned.ethToSale, plan.planned.poolAmount, plan.planned.poolLimit,
+    plan.planned.poolExactOut, plan.planned.minTotalOut, me, me, deadline,
+  ]);
+
+  const calls = [...plan.legCalls];
+  if (plan.needsWrap) calls.push(ROUTER_IFACE.encodeFunctionData('wrap', [plan.ethBudget]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('snwap', [
+    WETH, 0, me, shares, plan.planned.minTotalOut, cfg.collectol, buyData,
+  ]));
+  // Anything that can be left behind: WETH the forwarder did not need, ETH from
+  // a refund or leg-1 overshoot, and unspent input.
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [WETH, 0, 0, me]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [ZERO, 0, 0, me]));
+  calls.push(ROUTER_IFACE.encodeFunctionData('sweep', [_salePayToken.address, 0, 0, me]));
+
+  btn.textContent = 'Confirm in wallet...';
+  const router = new ethers.Contract(ZROUTER, ROUTER_IFACE, signer);
+  const tx = await router.multicall(calls);
+  btn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px;color:inherit;opacity:0.7">View tx</a>`;
+  await tx.wait();
+  $('saleQuote').innerHTML = `<span style="color:var(--green)">Purchase confirmed!</span> <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="font-size:11px">View tx</a>`;
+  $('salePayInput').value = '';
+  $('saleReceiveInput').value = '';
+  _salePlan = null;
+  btn.textContent = 'Buy';
+  btn.disabled = false;
+  setTimeout(() => renderCoinPage(daoAddr), 2000);
+}
+
 async function executeSaleBuy() {
   const s = await connectWallet();
   if (!s) return;
@@ -6446,6 +6808,13 @@ async function executeSaleBuy() {
 
   try {
     const payAmt = ethers.parseEther(payRaw);
+
+    // Paying with something other than ETH: hop to ETH and reach the sale
+    // through Collectol, which also decides whether the pool beats the mint.
+    if (contSaleAddr && _salePayToken.address !== ZERO) {
+      await executeSaleBuyWithToken(s, btn, daoAddr);
+      return;
+    }
 
     // Route to Continuous Sale if available
     if (contSaleAddr) {

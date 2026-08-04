@@ -72,24 +72,24 @@ contract Swapbatch {
     /// @dev Transient reentrancy flag. `uint32(bytes4(keccak256("Reentrancy()")))`.
     uint256 constant REENTRANCY_GUARD_SLOT = 0xab143c07;
 
-    error Reentrancy();
-    error LengthMismatch();
     error NoOrders();
-    error InsufficientValue(uint256 required, uint256 sent);
+    error Reentrancy();
     error ZeroAddress();
-    error NotAContract(address token);
-    error UnknownBoard(address board);
+    error BadRecipient();
+    error InvalidResult();
+    error LengthMismatch();
+    error BoardCallFailed();
+    error TokensOutRequired();
+    error SlippageUnsupported();
+    error TokensOutUnexpected();
     error BoardVersionMismatch();
     error TokensOutLengthMismatch();
-    error TokensOutMismatch(uint256 index, address expected, address actual);
-    error TokensOutRequired();
-    error TokensOutUnexpected();
+    error NotAContract(address token);
+    error UnknownBoard(address board);
     error ZeroFillAmount(uint256 index);
-    error BadRecipient();
-    error BoardCallFailed();
-    error SlippageUnsupported();
+    error InsufficientValue(uint256 required, uint256 sent);
     error WETHAmountMismatch(uint256 expected, uint256 actual);
-    error InvalidResult();
+    error TokensOutMismatch(uint256 index, address expected, address actual);
 
     constructor(address _weth, address _legacyBoard, address _modernBoard) {
         if (_weth == address(0)) revert ZeroAddress();

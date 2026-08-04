@@ -193,9 +193,10 @@ contract SwapboardCoverageTest is Test {
         uint256 id = sb.createOrder(address(A), 10e18, address(fee), 100e18, false, 0, false, false, address(0));
 
         vm.prank(taker);
-        vm.expectRevert(
-            abi.encodeWithSelector(Swapboard.BalanceDeltaMismatch.selector, address(fee), maker, 100e18, 99e18)
-        );
+        // The credit leg reports BalanceMismatch on every fungible pull now
+        // that creation and payment share one measured helper; a SENDER-side
+        // shortfall is what carries the BalanceDeltaMismatch form.
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.BalanceMismatch.selector, 100e18, 99e18));
         sb.fillOrder(id, 0, 100e18, 0, address(0));
 
         assertEq(A.balanceOf(taker), 0, "short payment releases no escrow");

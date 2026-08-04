@@ -2,13 +2,15 @@
 // Ported from a Cloudflare Worker to run under Node (see ./index.js). Uses only
 // Web-standard APIs (fetch, FormData, crypto.subtle), so the handler is unchanged.
 // Secrets are read from process.env: FILEBASE_KEY / FILEBASE_SECRET / FILEBASE_BUCKET
-// / OX_API_KEY / INCH_API_KEY / OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE.
+// / OX_API_KEY / INCH_API_KEY / OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE
+// / ENSO_API_KEY.
 
 const FILEBASE_S3 = 's3.filebase.com';
 const FILEBASE_REGION = 'us-east-1';
 const OX_API = 'https://api.0x.org';
 const INCH_API = 'https://api.1inch.dev';
 const OKX_API = 'https://web3.okx.com';
+const ENSO_API = 'https://api.enso.build';
 const MAX_IMAGE = 5 * 1024 * 1024; // 5MB
 const MAX_JSON = 64 * 1024; // 64KB
 
@@ -166,6 +168,21 @@ export default {
           'OK-ACCESS-PASSPHRASE': env.OKX_PASSPHRASE,
         },
       });
+      return new Response(res.body, {
+        status: res.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      });
+    }
+
+    // GET /enso/*  — proxy to the Enso shortcuts API (attaches the API key that
+    // its route endpoint now requires; unauthenticated calls get a 403).
+    if (url.pathname.startsWith('/enso/')) {
+      if (request.method !== 'GET') return json(request, { error: 'GET only' }, 405);
+      const ensoPath = url.pathname.slice(5); // strip "/enso" prefix
+      if (!ensoPath.startsWith('/api/v1/shortcuts/')) return json(request, { error: 'forbidden path' }, 403);
+      const headers = { 'Accept': 'application/json' };
+      if (env.ENSO_API_KEY) headers['Authorization'] = `Bearer ${env.ENSO_API_KEY}`;
+      const res = await fetch(`${ENSO_API}${ensoPath}?${url.searchParams}`, { headers });
       return new Response(res.body, {
         status: res.status,
         headers: { ...cors(request), 'Content-Type': 'application/json' },

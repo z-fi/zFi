@@ -20,7 +20,7 @@ contract PrecisionPoolDomainTest is Test {
     uint256 constant U128 = type(uint128).max;
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         tk = new MockERC20("TK", 18);
         tk.mint(lp, type(uint256).max / 2);
         vm.deal(lp, U128);

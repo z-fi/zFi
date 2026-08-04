@@ -34,9 +34,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HTML_PATH = path.join(ROOT, 'zSwap.html');
 const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
+const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 4;
+const CHUNKS = 5;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -161,7 +162,7 @@ const HELPERS = [
   'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
   'encUint', 'encAddr', 'pad32', 'strip0x', 'keccak', 'namehash',
   'decodeString', 'idTok', 'idDelay',
-  'decViewPage', 'planBookExactIn', 'planBookExactOut',
+  'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
   'encPermit2Hybrid', 'impactBps', 'safeSym',
 ];
@@ -230,6 +231,7 @@ if (exported) {
   const {
     decQ, parseUnits, formatUnits, trimAmt, maxAmt, merge, hasAtomicBatch, encCalls, keccak, namehash,
     decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
+    decBar, rollUp, mergeTapes,
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
     encPermit2Hybrid, impactBps, safeSym,
   } = exported;
@@ -576,6 +578,74 @@ if (exported) {
     if (fn(HTML_PATH) !== fn(demo)) throw Error('impactBps body differs between page and demo');
     return `tiers ${a} match`;
   });
+
+  // ---- the price tape, against bars the CONTRACT packed ----
+  // Two independent implementations of one codec drift silently, and both ways
+  // it has drifted so far produced a chart that looked plausible and was wrong:
+  // a 24-bit mask that dropped the float exponent, and bars drawn newest-first
+  // so time ran backwards. This is the guard for both.
+  if (!fs.existsSync(TAPE_FIXTURES)) {
+    fail('price tape fixtures present', `${path.relative(ROOT, TAPE_FIXTURES)} missing`);
+  } else {
+    const tf = JSON.parse(fs.readFileSync(TAPE_FIXTURES, 'utf8'));
+
+    check('decBar decodes bars packed by PriceTape.sol', () => {
+      for (const want of tf.bars) {
+        const got = decBar(BigInt(want.word));
+        if (!got) throw Error(`bucket ${want.bucket} decoded as empty`);
+        eq(got.b, want.bucket, 'bucket');
+        // The float keeps ~7 significant digits, so compare within its bound
+        // rather than exactly; a dropped exponent is orders of magnitude out.
+        for (const [k, f] of [['open', 'o'], ['high', 'h'], ['low', 'l'], ['close', 'c'], ['volume', 'v']]) {
+          const exp = Number(want[k]);
+          if (exp === 0) { eq(got[f], 0, k); continue; }
+          const rel = Math.abs(got[f] - exp) / exp;
+          if (!(rel < 1e-6)) throw Error(`${k}: got ${got[f]}, want ${exp} (rel ${rel})`);
+        }
+        eq(got.n, want.count, 'count');
+      }
+      return `${tf.bars.length} bars`;
+    });
+
+    check('decBar reads the full 32-bit float field, exponent included', () => {
+      // A value large enough to need an exponent: masking to 24 bits returns
+      // the mantissa alone and silently divides the price by 2**exp.
+      const big = tf.bars.map(b => Number(b.close)).sort((a, b) => b - a)[0];
+      if (big < 1 << 24) throw Error('fixtures no longer exercise the exponent — regenerate them');
+      const got = decBar(BigInt(tf.bars.find(b => Number(b.close) === big).word));
+      if (Math.abs(got.c - big) / big > 1e-6) throw Error(`exponent dropped: ${got.c} vs ${big}`);
+    });
+
+    check('rollUp aggregates without reordering or losing volume', () => {
+      // The fixture is written oldest-first as the contract printed it; the
+      // clients receive tapes newest-first, which is what rollUp expects.
+      const bars = tf.bars.map(b => decBar(BigInt(b.word))).filter(Boolean).reverse();
+      const up = rollUp(bars, tf.period, tf.period * 4);
+      if (!up.length) throw Error('roll-up produced nothing');
+      // Newest first in, newest first out: the drawer reverses once, at the end.
+      for (let i = 1; i < up.length; i++) {
+        if (up[i - 1].b <= up[i].b) throw Error('roll-up is not newest-first');
+      }
+      const volIn = bars.reduce((a, b) => a + b.v, 0);
+      const volOut = up.reduce((a, b) => a + b.v, 0);
+      if (Math.abs(volIn - volOut) / volIn > 1e-9) throw Error('roll-up lost volume');
+      const hiIn = Math.max(...bars.map(b => b.h)), hiOut = Math.max(...up.map(b => b.h));
+      if (hiIn !== hiOut) throw Error('roll-up lost the high');
+      return `${bars.length} -> ${up.length} bars`;
+    });
+
+    check('mergeTapes volume-weights and keeps the extremes', () => {
+      const bucket = 100;
+      const bar = (c, v) => ({b: bucket, o: c, h: c, l: c, c, v, n: 1});
+      const merged = mergeTapes([[bar(100, 99)], [bar(1, 1)]]);
+      eq(merged.length, 1, 'one bucket');
+      const m = merged[0];
+      if (!(m.c > 90)) throw Error(`thin pool moved the print: close ${m.c}`);
+      eq(m.h, 100, 'high is the union');
+      eq(m.l, 1, 'low is the union');
+      eq(m.v, 100, 'volume sums');
+    });
+  }
 
   // ---- decQ against recorded mainnet quoter returns ----
   if (!fs.existsSync(FIXTURES)) {

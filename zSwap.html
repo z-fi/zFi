@@ -4,14 +4,16 @@
 <title>zSwap</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <style>
-:root{--b:#fafafa;--c:#fff;--p:#f6f6f6;--f:#000;--m:#888;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#ebebeb;--s:0 1px 3px #0000000a,0 8px 24px #0000000f}
-.d{--b:#101010;--c:#181818;--p:#242424;--f:#eee;--m:#999;--n:#999;--e:#3d3d3d;--k:#fff;--kf:#000;--kh:#ddd;--fh:#303030;--s:none}
+:root{color-scheme:light;--b:#fafafa;--c:#fff;--p:#f6f6f6;--f:#000;--m:#888;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#ebebeb;--s:0 1px 3px #0000000a,0 8px 24px #0000000f}
+.d{color-scheme:dark;--b:#101010;--c:#181818;--p:#242424;--f:#eee;--m:#999;--n:#999;--e:#3d3d3d;--k:#fff;--kf:#000;--kh:#ddd;--fh:#303030;--s:none}
+:focus-visible{outline:2px solid var(--m);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}.flip:hover{transform:none}}
 body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-height:100vh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
 .card{border:1px solid var(--e);border-radius:.5em;padding:.9em;background:var(--c);max-width:22em;width:100%;margin:auto;box-shadow:var(--s);box-sizing:border-box}
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #addr.on{cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
-.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
+.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 #th,#lk{border:0;border-radius:.4em;background:transparent;cursor:pointer;font-size:1.05em;color:var(--n);width:1.8em;height:1.8em;line-height:1}
@@ -49,7 +51,7 @@ svg{vertical-align:middle;flex-shrink:0}
 .tabs button:hover:not(.on),.tabs button:focus-visible:not(.on){background:var(--fh);color:var(--f)}
 .tabs button.on:hover,.tabs button.on:focus-visible{background:var(--kh)}
 .hide{display:none!important}
-#book{margin-top:.4em}
+#book{margin-top:.4em;max-height:17em;overflow-y:auto;overscroll-behavior:contain}
 #book:empty{display:none}
 #book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin:.6em 0 .3em;font-weight:600;display:flex;justify-content:space-between}
 .o{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.5em .7em;background:var(--p);border-radius:.6em;margin-bottom:.3em;font-size:.75em}
@@ -80,15 +82,35 @@ svg{vertical-align:middle;flex-shrink:0}
 #bal,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
 #bal:empty,#rate:empty{display:none}
 #bal a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
-@media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}}
+.meta input.warn{color:#c33;border-bottom-color:#c33}
+#th:focus-visible,#lk:focus-visible{background:var(--p);color:var(--f)}
+.chtog{width:100%;margin-top:.55em;padding:.5em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--n);cursor:pointer;font:inherit;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.chtog:hover{color:var(--f);border-color:var(--m)}
+.chtog span{display:inline-block;transition:transform .2s}
+.chtog[aria-expanded=true] span{transform:rotate(180deg)}
+#chBox{margin-top:.4em}
+.chtf{display:flex;gap:.18em;background:var(--p);padding:.18em;border-radius:.4em;margin-bottom:.4em}
+.chtf button{flex:1;padding:.35em;font:inherit;font-size:.65em;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border:0;border-radius:.3em;background:transparent;color:var(--m);cursor:pointer}
+.chtf button.on{background:var(--k);color:var(--kf)}
+.chtf .chk{flex:0 0 auto;padding:.35em .6em;border-left:1px solid var(--e);border-radius:0 .3em .3em 0;margin-left:.15em}
+.chtf .chk:hover{color:var(--f)}
+#chArt{position:relative;border:1px solid var(--e);border-radius:.45em;overflow:hidden;background:var(--p)}
+#chArt svg{display:block;width:100%;height:auto}
+#chArt .hd{position:absolute;top:.4em;left:.55em;font-size:.7em;color:var(--m);font-variant-numeric:tabular-nums;pointer-events:none}
+#chArt .hd b{color:var(--f);font-size:1.25em;font-weight:600}
+#chArt .hd .ohlc{display:block;font-size:.9em;opacity:.85}
+#chArt{touch-action:pan-y}
+#chArt .msg{padding:2.2em .8em;text-align:center;font-size:.72em;color:var(--m);line-height:1.6}
+#chNote{display:block;font-size:.65em;color:var(--m);margin-top:.35em;text-align:right;font-variant-numeric:tabular-nums}
+@media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}.chtf button{padding:.5em}}
 </style>
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <div class="card">
-<div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lk" title="Copy link">⧉</button><button id="th" title="Theme">☾</button></div>
-<div class="tabs"><button id="tabSwap" class="on">Swap</button><button id="tabSend">Send</button><button id="tabBook">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="bal"></small></div>
-<button id="flip" class="flip" title="Flip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0"></div><small id="rate"></small></div>
+<div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lk" title="Copy shareable link" aria-label="Copy shareable link">⧉</button><button id="th" title="Toggle theme" aria-label="Toggle theme">☾</button></div>
+<div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
+<button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option></select></label>
@@ -96,8 +118,11 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <button id="swap" class="primary">Connect Wallet</button>
-<div id="stat"></div>
+<div id="stat" role="status" aria-live="polite"></div>
+<button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
+<div id="chBox" class="hide"><div class="chtf" id="chTf"></div><div id="chArt"></div><small id="chNote"></small></div>
 <div id="pos"></div>
+<button id="bkTog" class="chtog hide" aria-expanded="true">Orderbook <span>▾</span></button>
 <div id="book"></div>
 </div>
 <script>
@@ -111,6 +136,12 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+// Onchain token list (src/utils/TokenList.sol). PLACEHOLDER: set to the deployed
+// address once it is mined. While this is ZERO the built-in TOKENS below are used
+// unchanged, so the dapp behaves exactly as it did before the list existed.
+const TOKENLIST=ZERO;
+const SEL_RANKEDIDS="df7ca268";
+const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
 const SEL_RSLV="0178b8bf",SEL_EADDR="3b3b57de",SEL_ENAME="691f3431";
 const SEL_ALLOWANCE="dd62ed3e";
@@ -140,10 +171,41 @@ const TOKENS=[
 {sym:"USDT",  addr:"0xdAC17F958D2ee523a2206206994597C13D831ec7",dec:6, icon:USDT_ICON},
 {sym:"BOLD",  addr:"0x6440f144b7e50D6a8439336510312d2F54beB01D",dec:18,icon:BOLD_ICON},
 ];
+// The hardcoded TOKENS above are the fallback, not the source of truth: once
+// TOKENLIST points at a deployment, the list is read from chain so tokens can be
+// added or re-themed without shipping new HTML. Any failure - not deployed, wrong
+// chain, RPC hiccup, malformed entry - leaves the built-in list in place rather
+// than presenting an empty or half-populated token picker.
+async function loadTokenList(){
+if(TOKENLIST===ZERO)return;
+try{
+const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+if(!ids.length)return;
+const rows=await Promise.all(ids.slice(0,64).map(id=>
+rpc(C,[{to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)},L]).then(decStr).catch(()=>null)));
+const next=[];
+for(const row of rows){
+if(!row)continue;
+let t;try{t=JSON.parse(row)}catch{continue}
+// Trust nothing: a bad entry is skipped, it does not take the list down.
+if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
+if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
+if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
+const sym=String(t.s||"").slice(0,12)||"?";
+next.push({sym,addr:t.a,dec:t.d,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
+}
+if(next.length)TOKENS.splice(0,TOKENS.length,...next);
+}catch{}
+}
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
 const pad32=h=>strip0x(h).padStart(64,"0");
 const encUint=v=>pad32(BigInt(v).toString(16));
 const encAddr=a=>pad32(a.toLowerCase());
+// Head is the offset (always 32 for a lone dynamic return), then the length.
+const decStr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);let s="";
+for(let i=0;i<n;i++)s+=String.fromCharCode(parseInt(h.substr(128+i*2,2),16));return s};
+const decUintArr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);const o=[];
+for(let i=0;i<n;i++)o.push(BigInt("0x"+h.substr(128+i*64,64)));return o};
 const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
@@ -370,8 +432,9 @@ TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
 const QUOTE_TTL=45000;
 let account=null,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
 async function refreshBalance(){
-if(!account){bal.textContent="";fromBalance=0n;render();return}
 const f=TOKENS[fromSel.value];
+// fromSel transiently reads "__custom" while the token prompt is open.
+if(!account||!f){bal.textContent="";fromBalance=0n;render();return}
 const my=++bSeq;
 try{
 const hex=f.addr===ZERO
@@ -381,15 +444,18 @@ if(my!==bSeq)return;
 fromBalance=BigInt(hex);
 const n=+formatUnits(fromBalance,f.dec);
 const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
-bal.innerHTML=`Balance: <a href="#">${pretty}</a>`;
+bal.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for ETH)">Max</a>`;
 }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
 render();
 }
 const optsHtml=()=>TOKENS.map((t,i)=>`<option value="${i}">${t.sym}</option>`).join("")+`<option value="__custom">+ Custom token…</option>`;
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
+// Each swap side excludes the other's pick. Send has no output token, and
+// leaving the hidden pick disabled made that token impossible to send.
 const syncDisabled=()=>{
-for(const opt of fromSel.options)opt.disabled=(opt.value===toSel.value&&opt.value!=="__custom");
-for(const opt of toSel.options)opt.disabled=(opt.value===fromSel.value&&opt.value!=="__custom");
+const pair=tab!=="send";
+for(const opt of fromSel.options)opt.disabled=pair&&opt.value===toSel.value&&opt.value!=="__custom";
+for(const opt of toSel.options)opt.disabled=pair&&opt.value===fromSel.value&&opt.value!=="__custom";
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
@@ -404,7 +470,10 @@ const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
 const dutch=kind.value==="dutch";
 let sell=0n,want=0n,floor=0n,badOrderAmount=false;
-try{sell=parseUnits(amt.value.trim(),f.dec);want=parseUnits(outAmt.value.trim(),t.dec);
+// An untouched field is not a typo: parsing "" as an amount made a freshly
+// opened tab accuse the user of an invalid amount they had not yet entered.
+try{if(amt.value.trim())sell=parseUnits(amt.value.trim(),f.dec);
+  if(outAmt.value.trim())want=parseUnits(outAmt.value.trim(),t.dec);
   if(dutch&&floorAmt.value.trim())floor=parseUnits(floorAmt.value.trim(),t.dec)}
 catch{badOrderAmount=true}
 if(badOrderAmount){swap.textContent="Invalid order amount";swap.disabled=true;return}
@@ -445,15 +514,26 @@ catch(e){stat.textContent=isRejection(e)?"":"Switch to Ethereum mainnet.";return
 }
 if(!accs[0])return;
 account=accs[0];
+// Mainnet-only: TOKENLIST is a mainnet address, and the chain was just enforced.
+await loadTokenList();
+rebuild();
+// rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
+// onchain list shorter than the built-in one can leave a selection pointing past
+// its end. Restore both before anything reads the pair.
+if(!TOKENS[fromSel.value])fromSel.value=0;
+if(!TOKENS[toSel.value]||toSel.value===fromSel.value)toSel.value=TOKENS[1]?1:0;
+syncDisabled();syncIcons();
 showAddr();
 refreshBalance();
 update();
 loadPos();
+syncChart();
 }
 bal.addEventListener("click",async e=>{
 if(e.target.tagName!=="A")return;
 e.preventDefault();
 const f=TOKENS[fromSel.value];
+if(!f)return;
 let reserve=0n;
 if(f.addr===ZERO){
 try{reserve=BigInt(await rpc("eth_gasPrice",[]))*(tab!=="send"?900000n:+dly.value?200000n:30000n)}catch{}
@@ -748,9 +828,14 @@ const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(update,250)};
 const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
 amt.addEventListener("input",()=>{if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
 outAmt.addEventListener("input",()=>{if(tab==="book"){fitFont(outAmt);render();return}setMode("out");fitFont(outAmt);updateSoon()});
-slip.addEventListener("input",()=>{last=null;render();updateSoon()});
+// A slippage far from the default is the single easiest way to get sandwiched,
+// so it is worth colouring rather than leaving as a silent number.
+const slipWarn=()=>slip.classList.toggle("warn",+slip.value>=3);
+if(LS.slip&&+LS.slip>=.01&&+LS.slip<=10)slip.value=LS.slip;
+slipWarn();
+slip.addEventListener("input",()=>{last=null;slipWarn();render();updateSoon()});
 rc.addEventListener("input",()=>{last=null;sendReady=null;render();updateSoon()});
-slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5))});
+slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5));slipWarn();LS.slip=slip.value});
 for(const sel of [fromSel,toSel]){
 sel.dataset.prev=sel.value;
 sel.addEventListener("change",async()=>{
@@ -758,6 +843,7 @@ if(sel.value!=="__custom"){
 sel.dataset.prev=sel.value;
 syncDisabled();
 if(sel===fromSel)refreshBalance();
+loadChart();
 update();
 return;
 }
@@ -778,12 +864,16 @@ syncDisabled();
 refreshBalance();
 update();
 }catch(e){
-stat.textContent="Couldn't load token: "+(e.message||e);
+const msg="Couldn't load token: "+(e.message||e);
 sel.value=prev;
+// Restore the previous pair, then re-quote it; otherwise the form stays on a
+// cleared quote with a disabled button until the user touches something else.
+syncDisabled();refreshBalance();update();
+stat.textContent=msg;
 }
 });
 }
-flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();refreshBalance();update()};
+flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();refreshBalance();loadChart();update()};
 window.ethereum?.on?.("chainChanged",()=>location.reload());
 window.ethereum?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
@@ -794,7 +884,7 @@ const cid=await rpc(I,[]);
 if(accs[0]&&+cid===1){
 account=accs[0];
 showAddr();
-refreshBalance();update();
+refreshBalance();update();syncChart();
 }
 }catch{}
 })();
@@ -817,7 +907,7 @@ const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
 const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="fb910431",SEL_CHECKPOINT="a972985e";
 const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
 const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
-let bookSeq=0,bookRows=[],candCache={};
+let bookSeq=0,bookRows=[],candCache={},bkOpen=LS.bk!=="0";
 
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
@@ -831,7 +921,7 @@ async function leg(addr,amt,isNft,meta){
   const k=known(addr);
   if(isNft)return{ic:genIcon("#"),txt:`#${amt}`,ok:0,link:escan(addr,amt)};
   const raw=meta&&meta.sym?meta:await tokMeta(addr),m={...raw,sym:safeSym(raw.sym)};
-  return{ic:k?sm(k.icon):genIcon(m.sym),txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:escan(addr)};
+  return{ic:k?sm(k.icon):genIcon(m.sym),txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:addr===ZERO?"ETH":escan(addr)};
 }
 
 function decViewPage(hex){
@@ -1062,7 +1152,7 @@ async function lensBookRows(my){
 }
 
 async function loadBook(){
-  if(!account||tab!=="book"){book.innerHTML="";return}
+  if(!account||tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
   const my=++bookSeq;
   const live=[];
   for(const b of BOARDS){
@@ -1122,7 +1212,7 @@ async function loadBook(){
     });
   }
   bookRows=rows;
-  if(!rows.length){book.innerHTML='<h6><span>Orderbook</span><span>0</span></h6>';return}
+  if(!rows.length){book.innerHTML="";syncBook(0);return}
   const legs=await Promise.all(rows.map(r=>Promise.all([
     leg(r.tA,r.aA,r.nA,r.sA!=null?{sym:r.sA,dec:r.dA}:null),
     leg(r.tB,r.aB,r.nB,r.sB!=null?{sym:r.sB,dec:r.dB}:null)
@@ -1155,7 +1245,18 @@ async function loadBook(){
   if(nOwn)html+=`<h6><span>Your orders</span><span>${nOwn}</span></h6>`+own;
   if(nRest)html+=`<h6><span>Orderbook</span><span>${nRest}</span></h6>`+rest;
   book.innerHTML=html;
+  syncBook(nOwn+nRest);
 }
+// The book can run long, so it collapses to a caret and scrolls when open. With
+// nothing in it there is no control at all, the same rule the chart follows.
+function syncBook(n){
+  const on=tab==="book"&&n>0;
+  bkTog.classList.toggle("hide",!on);
+  bkTog.firstChild.nodeValue=n?`Orderbook (${n}) `:"Orderbook ";
+  bkTog.setAttribute("aria-expanded",on&&bkOpen?"true":"false");
+  book.classList.toggle("hide",!on||!bkOpen);
+}
+bkTog.onclick=()=>{bkOpen=!bkOpen;LS.bk=bkOpen?"1":"0";syncBook(bookRows.length)};
 
 book.addEventListener("click",async e=>{
   const b=e.target.closest("button[data-i]");
@@ -1413,9 +1514,18 @@ const send=t==="send",bk=t==="book";
 tabSwap.classList.toggle("on",t==="swap");
 tabSend.classList.toggle("on",send);
 tabBook.classList.toggle("on",bk);
+for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttribute("aria-selected",on?"true":"false");
 // the pay/receive panels already describe a limit order, so the orders tab
 // reuses them: sell this, want that. Only the labels and the slippage change.
 for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+// Send lets the pay side hold whatever the receive side holds. Coming back to a
+// pair-based tab with both sides equal would dead-end on "Pick different
+// tokens", so move the side the user was not just looking at.
+if(!send&&fromSel.value===toSel.value){
+const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value);
+if(alt>=0)toSel.value=String(alt);
+}
+syncDisabled();
 slipL.classList.toggle("hide",t!=="swap");
 dlyL.classList.toggle("hide",t==="swap");
 kindL.classList.toggle("hide",!bk);
@@ -1427,7 +1537,7 @@ rcvHdr.textContent=bk&&kind.value==="dutch"?"Start ask total":bk?"You want":"You
 rc.placeholder=send?"Recipient \u2014 0x or .eth/.(g)wei"
 :bk?"Private to (optional) \u2014 0x or .eth/.(g)wei"
 :"Recipient (optional) \u2014 0x or .eth/.(g)wei";
-syncOrderType();
+syncOrderType();syncChart();
 loadPos();loadBook();
 outAmt.value="";mode="in";
 update();
@@ -1449,6 +1559,219 @@ kind.onchange=()=>{syncOrderType();render()};
 floorAmt.addEventListener("input",()=>{fitFont(floorAmt);render()});
 tabBook.onclick=()=>setTab("book");
 setInterval(()=>{if(account&&!document.hidden){loadPos();if(tab==="book")loadBook()}},3e4);
+// Re-quote before QUOTE_TTL expires, never while a tx is in flight or hidden.
+setInterval(()=>{
+if(tab!=="swap"||!account||document.hidden||!last||swap.disabled)return;
+if(Date.now()>=last.exp-5000)update();
+},5e3);
+// ------------------------------------------------------------- PRICE TAPE
+// Candles read straight out of PrecisionPool storage: no indexer, no subgraph,
+// no server. One aggregate3 finds the pools for the pair and reads their tapes,
+// so opening the drawer costs a single round trip. Closed by default, and it
+// costs nothing at all until opened.
+const PPLENS="0x0000000000000000000000000000000000000000"; // set at deploy
+const SEL_MARKETS="29c21083",SEL_TAPE="29a65241";
+const FINE=300,COARSE=14400,TFS=[["5m",300],["1h",3600],["1d",86400]];
+// The fine ring only spans ~21h, so a daily candle built from it is a stub.
+// The pool also keeps a four-hour tape covering weeks; read both and pick the
+// one whose resolution the timeframe actually needs.
+const srcFor=tf=>tf>=COARSE?COARSE:FINE;
+// PoolInfo is a static struct, so the lens returns rows of 18 flat words.
+const PI_WORDS=18,PI_POOL=0,PI_LIQ=9,PI_HOOK=10;
+let chKind=LS.ck==="line"?"line":"candle",chPeriod=300,chBars=null,chSeq=0,chPools=0,chOpen=LS.ch==="1",chCache={};
+// value = mantissa << exponent, matching PriceTape.pack
+const unf=p=>(p&0xffffff)*2**(p>>>24);
+const decBar=w=>{if(!w)return null;const f=s=>Number((w>>BigInt(s))&0xffffffffn);
+return{b:Number(w&0xffffffffn),o:unf(f(32)),h:unf(f(64)),l:unf(f(96)),c:unf(f(128)),v:unf(f(160)),n:Number((w>>192n)&0xffffn)}};
+// Exact: a bar built from N sub-bars is the bar the trades would have produced.
+const rollUp=(bars,src,dst)=>{if(dst<=src)return bars.filter(Boolean);
+const out=[];let g=null,k=null;
+for(let i=bars.length-1;i>=0;i--){const b=bars[i];if(!b)continue;
+const key=Math.floor(b.b*src/dst);
+if(key!==k){if(g)out.push(g);k=key;g={b:key,o:b.o,h:b.h,l:b.l,c:b.c,v:b.v,n:b.n}}
+else{g.h=Math.max(g.h,b.h);g.l=Math.min(g.l,b.l);g.c=b.c;g.v+=b.v;g.n+=b.n}}
+if(g)out.push(g);return out.reverse()};
+// One pair can have several pools at different fee tiers. Arbitrage keeps them
+// on the same price, so the honest aggregate is the market: extremes are the
+// union, volume sums, and open/close are volume-weighted - which also means a
+// thin pool cannot drag the print away from where size actually traded.
+const mergeTapes=tapes=>{const m=new Map();
+for(const bars of tapes)for(const b of bars||[]){if(!b)continue;
+const e=m.get(b.b);
+if(!e)m.set(b.b,{b:b.b,o:b.o*b.v,h:b.h,l:b.l,c:b.c*b.v,v:b.v,n:b.n,w:b.v,fo:b.o,fc:b.c});
+else{e.h=Math.max(e.h,b.h);e.l=Math.min(e.l,b.l);e.o+=b.o*b.v;e.c+=b.c*b.v;e.v+=b.v;e.n+=b.n;e.w+=b.v}}
+const out=[...m.values()].sort((x,y)=>y.b-x.b);
+for(const e of out){if(e.w>0){e.o/=e.w;e.c/=e.w}else{e.o=e.fo;e.c=e.fc}delete e.w;delete e.fo;delete e.fc}
+return out};
+const chPair=()=>{const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
+if(!f||!t||f.addr===t.addr)return null;
+return f.addr.toLowerCase()<t.addr.toLowerCase()?[f,t]:[t,f]};
+async function loadChart(){
+chBars=null;chPools=0;
+const p=chPair();
+if(tab!=="swap"||!account||!p){syncChartUI();return}
+const my=++chSeq,[t0,t1]=p,key=t0.addr+":"+t1.addr;
+const hit=chCache[key];
+if(hit&&Date.now()-hit.at<30000){chBars=hit.bars;chPools=hit.pools;syncChartUI();return}
+try{
+if(PPLENS===ZERO||(await rpc("eth_getCode",[PPLENS,L])).length<5)return syncChartUI();
+// One lens call discovers every registered pool for the pair AND returns the
+// hook and liquidity needed to decide which of them may speak for its price.
+const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(t0.addr)+encAddr(t1.addr)
+  +encAddr(account)+encUint(0)+encUint(8)+encUint(0)}]);
+if(my!==chSeq)return;
+const pools=[];
+if(raw){const h=strip0x(raw),n=Number(BigInt("0x"+h.slice(64,128))),base=128;
+for(let i=0;i<n&&i<8;i++){const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
+// A hooked pool can charge a surcharge on top of the base fee, so its executed
+// prices are not the pair's market price - and the hook is free to make them
+// anything at all. Empty pools have no price to contribute either.
+if(at(PI_HOOK)!==0n||at(PI_LIQ)===0n)continue;
+pools.push("0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64))}}
+if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:0};return syncChartUI()}
+const reqs=[];
+for(const a of pools)reqs.push({to:a,data:"0x"+SEL_TAPE+encUint(FINE)+encUint(256)},
+  {to:a,data:"0x"+SEL_TAPE+encUint(COARSE)+encUint(256)});
+const tapes=await mc3(reqs);
+if(my!==chSeq)return;
+const dec1Tape=hex=>{if(!hex)return null;
+const h=strip0x(hex),n=Number(BigInt("0x"+h.slice(64,128))),bars=[];
+for(let j=0;j<n;j++)bars.push(decBar(BigInt("0x"+h.slice(128+j*64,128+(j+1)*64))));
+return bars};
+const decoded=tapes.map(dec1Tape);
+const fine=[],coarse=[];
+for(let i=0;i<pools.length;i++){fine.push(decoded[i*2]);coarse.push(decoded[i*2+1])}
+// The tape stores the pool's RAW convention: token1 per token0, 1e18-scaled,
+// with token decimals unnormalised. Undo both here so the axis reads in the
+// units a person trades in rather than in wei-per-wei.
+const sc=10**(t0.dec-t1.dec)/1e18;
+const build=set=>{const m=mergeTapes(set);
+for(const b of m){b.o*=sc;b.h*=sc;b.l*=sc;b.c*=sc}return m.length?m:null};
+const f=build(fine),c=build(coarse);
+chBars=f||c?{[FINE]:f,[COARSE]:c}:null;
+chPools=chBars?fine.filter(d=>d&&d.some(Boolean)).length:0;
+chCache[key]={at:Date.now(),bars:chBars,pools:chPools};
+}catch{chBars=null;chPools=0}
+if(my===chSeq)syncChartUI();
+}
+// Nothing to chart means no control at all - an empty drawer is worse than none.
+function syncChartUI(){
+const on=tab==="swap"&&!!account&&!!chBars;
+chTog.classList.toggle("hide",!on);
+chBox.classList.toggle("hide",!on||!chOpen);
+chTog.setAttribute("aria-expanded",on&&chOpen?"true":"false");
+if(!on||!chOpen)return;
+const p=chPair();
+chNote.textContent=p?`${p[1].sym} per ${p[0].sym} · ${chPools} pool${chPools===1?"":"s"}`:"";
+drawChart();
+}
+// Reading a single candle off a 340px strip is guesswork, so pointing at one
+// spells it out. Index -1 means "the latest", which is the resting state.
+const hudFor=i=>{
+if(!chDraw)return;
+const{pts,num,UP,DN,ch}=chDraw,hd=chArt.querySelector(".hd");
+if(!hd)return;
+if(i<0){const b=pts[pts.length-1];
+hd.innerHTML=`<b>${num(b.c)}</b> <span style="color:${ch>=0?UP:DN}">${ch>=0?"+":""}${ch.toFixed(2)}%</span>`;
+return}
+const b=pts[i],up=b.c>=b.o,d=new Date(b.b*chPeriod*1e3);
+const when=chPeriod>=86400
+  ?d.toLocaleDateString("en-US",{month:"short",day:"numeric"})
+  :d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});
+hd.innerHTML=`<b style="color:${up?UP:DN}">${num(b.c)}</b> <span>${when}</span>`
++`<span class="ohlc">H ${num(b.h)} L ${num(b.l)} · ${b.n} trade${b.n===1?"":"s"}</span>`;
+};
+const chPoint=e=>{
+if(!chDraw)return;
+const r=chArt.getBoundingClientRect();
+if(!r.width)return;
+const{pts,W,PL,st}=chDraw;
+const x=(e.clientX-r.left)/r.width*W;
+const i=Math.max(0,Math.min(pts.length-1,Math.round((x-PL)/st-.5)));
+hudFor(i);
+const cur=chArt.querySelector(".cross");
+if(cur)cur.remove();
+const svg=chArt.querySelector("svg");
+if(!svg)return;
+const el=document.createElementNS("http://www.w3.org/2000/svg","line");
+el.setAttribute("class","cross");
+el.setAttribute("x1",chDraw.X(i).toFixed(1));el.setAttribute("x2",chDraw.X(i).toFixed(1));
+el.setAttribute("y1","0");el.setAttribute("y2","150");
+el.setAttribute("stroke","currentColor");el.setAttribute("stroke-opacity",".35");
+el.setAttribute("stroke-width",".8");
+svg.appendChild(el);
+};
+chArt.addEventListener("pointermove",chPoint);
+chArt.addEventListener("pointerdown",chPoint);
+chArt.addEventListener("pointerleave",()=>{const c=chArt.querySelector(".cross");if(c)c.remove();hudFor(-1)});
+
+function drawChart(){
+if(!chBars)return;
+const W=340,H=150,PL=2,PR=42,PT=10,PB=14,VH=22;
+const pw=W-PL-PR,ph=H-PT-PB-VH;
+// The tape is stored newest-first. A chart that runs right-to-left is worse
+// than no chart, so flip it before anything is measured or drawn.
+const src=srcFor(chPeriod),base=chBars[src]||chBars[FINE]||chBars[COARSE];
+if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';return}
+const step=chBars[src]?src:(chBars[FINE]?FINE:COARSE);
+let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice().reverse();
+// Draw only what the width can resolve, keeping the most recent bars. Packing
+// 250 candles into 300px produces a smear, not information.
+const cap=Math.floor(pw/3);
+const clipped=pts.length>cap;
+if(clipped)pts=pts.slice(-cap);
+if(!pts.length){chArt.innerHTML='<div class="msg">No trades in this window.</div>';return}
+let hi=-Infinity,lo=Infinity,vm=0;
+for(const b of pts){if(b.h>hi)hi=b.h;if(b.l<lo)lo=b.l;if(b.v>vm)vm=b.v}
+if(hi===lo){hi*=1.001;lo*=0.999}
+let sp=hi-lo;hi+=sp*.09;lo-=sp*.09;sp=hi-lo;
+const n=pts.length,st=pw/n,bw=Math.max(1,Math.min(9,st*.68));
+const X=i=>PL+st*(i+.5),Y=p=>PT+ph*(1-(p-lo)/sp),vt=PT+ph+6,VY=v=>vt+(VH-6)*(1-(vm?v/vm:0));
+const num=v=>v>=1000?v.toLocaleString("en-US",{maximumFractionDigits:2}):v>=1?v.toFixed(3):v.toPrecision(3);
+const UP="#16a34a",DN="#c33";
+const p0=chPair(),lbl=p0?`${p0[1].sym} per ${p0[0].sym}`:"Price";
+let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${lbl}, ${n} bars, ${num(pts[n-1].c)} now, range ${num(lo)} to ${num(hi)}">`;
+for(let g=0;g<=3;g++){const p=lo+sp*g/3,y=Y(p).toFixed(1);
+s+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="currentColor" stroke-opacity=".1"/>`
++`<text x="${W-PR+4}" y="${(Y(p)+2.5).toFixed(1)}" font-size="7" fill="currentColor" fill-opacity=".5">${num(p)}</text>`}
+for(let i=0;i<n;i++){const b=pts[i],y=VY(b.v);
+s+=`<rect x="${(X(i)-bw/2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(.4,vt+VH-y).toFixed(1)}" fill="currentColor" fill-opacity=".18"/>`}
+const rise=pts[n-1].c>=pts[0].o;
+if(chKind==="line"){
+const d=pts.map((b,i)=>`${i?"L":"M"}${X(i).toFixed(1)} ${Y(b.c).toFixed(1)}`).join(" ");
+const col=rise?UP:DN;
+s+=`<path d="${d} L${X(n-1).toFixed(1)} ${(PT+ph).toFixed(1)} L${X(0).toFixed(1)} ${(PT+ph).toFixed(1)} Z" fill="${col}" fill-opacity=".1"/>`
++`<path d="${d}" fill="none" stroke="${col}" stroke-width="1.2" stroke-linejoin="round"/>`
++`<circle cx="${X(n-1).toFixed(1)}" cy="${Y(pts[n-1].c).toFixed(1)}" r="1.8" fill="${col}"/>`;
+}else{
+for(let i=0;i<n;i++){const b=pts[i],col=b.c>=b.o?UP:DN,x=X(i);
+const t=Y(Math.max(b.o,b.c)),bo=Y(Math.min(b.o,b.c));
+s+=`<line x1="${x.toFixed(1)}" y1="${Y(b.h).toFixed(1)}" x2="${x.toFixed(1)}" y2="${Y(b.l).toFixed(1)}" stroke="${col}" stroke-width=".8"/>`
++`<rect x="${(x-bw/2).toFixed(1)}" y="${t.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(.8,bo-t).toFixed(1)}" fill="${col}"/>`}
+}
+s+="</svg>";
+const last=pts[n-1],first=pts[0],ch=((last.c-first.o)/first.o)*100;
+chArt.innerHTML=s+'<div class="hd"></div>';
+chDraw={pts,X,W,PL,st,num,UP,DN,ch};
+hudFor(-1);
+const p=chPair();
+const span=rel((last.b-first.b+1)*chPeriod);
+chNote.textContent=p?`${p[1].sym} per ${p[0].sym} · ${chPools} pool${chPools===1?"":"s"} · ${clipped?"last ":""}${span}`:"";
+}
+for(const[label,secs]of TFS){const b=document.createElement("button");
+b.textContent=label;if(secs===chPeriod)b.className="on";
+b.onclick=()=>{chPeriod=secs;for(const c of chTf.children)if(c!==kindBtn)c.classList.toggle("on",c===b);drawChart()};
+chTf.appendChild(b)}
+// Labelled with the action, not the state: at this width a glyph would be a guess.
+const kindBtn=document.createElement("button");
+kindBtn.className="chk";
+const syncKind=()=>{kindBtn.textContent=chKind==="candle"?"Line":"Candle";
+kindBtn.title=`Switch to ${kindBtn.textContent.toLowerCase()} chart`};
+syncKind();
+kindBtn.onclick=()=>{chKind=chKind==="candle"?"line":"candle";LS.ck=chKind;syncKind();drawChart()};
+chTf.appendChild(kindBtn);
+const syncChart=()=>{loadChart()};
+chTog.onclick=()=>{chOpen=!chOpen;LS.ch=chOpen?"1":"0";syncChartUI()};
 // SHAREABLE LINKS  (prefill only - nothing is ever auto-submitted)
 //   #to=alice.wei&amount=10&token=USDC            request a payment
 //   #to=alice.wei&amount=1&token=ETH&lock=1d      request it time-locked via SLOW
@@ -1479,8 +1802,11 @@ if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 syncDisabled();
 const to=q.get("to");if(to)rc.value=to;
 const lk=lsecs(q.get("lock"));
+// setTab restores the tab's remembered duration, so writing only dly.value here
+// left `lock=` silently discarded: the link switched to Send and immediately
+// overwrote the choice with the default "Instant".
 if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
-dly.value=String(os.find(v=>v>=lk)??os[os.length-1])}
+sendD=String(os.find(v=>v>=lk)??os[os.length-1]);dly.value=sendD}
 setTab(q.get("out")?"swap":(to||!isNaN(lk))?"send":tab);
 const n=q.get("amount");
 if(n&&/^\d*\.?\d+$/.test(n)){
@@ -1752,6 +2078,8 @@ tx=await rpc(S,[txReq]);
 }
 await settle(tx);
 last=null;
+// You just traded: your own print belongs on your own chart, not in 30s.
+chCache={};loadChart();
 refreshBalance();
 render();
 }catch(e){err(e);render()}

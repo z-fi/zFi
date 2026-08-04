@@ -3,6 +3,7 @@ pragma solidity ^0.8.36;
 
 import {Test} from "forge-std/Test.sol";
 import {Ownable} from "../lib/solady/src/auth/Ownable.sol";
+import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {IPrecisionPoolFactoryRegistry, PrecisionPoolPolicy} from "../src/pools/PrecisionPoolPolicy.sol";
 import {MockERC20} from "./SwapboardMocks.sol";
@@ -50,7 +51,7 @@ contract PrecisionPoolPolicyTest is Test {
     );
 
     function setUp() external {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         token = new MockERC20("TKN", 18);
         hook = new PolicyHook();
 
@@ -83,6 +84,46 @@ contract PrecisionPoolPolicyTest is Test {
 
         vm.expectRevert(PrecisionPoolPolicy.InvalidOwner.selector);
         new PrecisionPoolPolicy(IPrecisionPoolFactoryRegistry(address(factory)), address(0));
+    }
+
+    function testConstructorRejectsWrongInterfaceRegistry() external {
+        // A contract that is not a pool registry: `isPool` is missing entirely.
+        vm.expectRevert(PrecisionPoolPolicy.InvalidFactory.selector);
+        new PrecisionPoolPolicy(IPrecisionPoolFactoryRegistry(address(token)), OWNER);
+
+        // A registry that answers but reverts on the probe.
+        TogglePoolRegistry registry = new TogglePoolRegistry();
+        registry.setReverts(true);
+        vm.expectRevert(PrecisionPoolPolicy.InvalidFactory.selector);
+        new PrecisionPoolPolicy(IPrecisionPoolFactoryRegistry(address(registry)), OWNER);
+
+        // A registry that claims the zero address is a pool is not credible.
+        TogglePoolRegistry loose = new TogglePoolRegistry();
+        loose.setPool(address(0), true);
+        vm.expectRevert(PrecisionPoolPolicy.InvalidFactory.selector);
+        new PrecisionPoolPolicy(IPrecisionPoolFactoryRegistry(address(loose)), OWNER);
+    }
+
+    function testIsRoutableBatchMatchesSingleReads() external {
+        vm.prank(OWNER);
+        policy.setPoolPolicy(hookedPool, PrecisionPoolPolicy.Policy.Approved);
+
+        address[] memory pools = new address[](4);
+        pools[0] = unhookedPool;
+        pools[1] = hookedPool;
+        pools[2] = address(0xCAFE);
+        pools[3] = unhookedPool;
+
+        bool[] memory out = policy.isRoutableBatch(pools);
+        assertEq(out.length, pools.length);
+        for (uint256 i; i < pools.length; ++i) {
+            assertEq(out[i], policy.isRoutable(pools[i]));
+        }
+        assertTrue(out[0]);
+        assertTrue(out[1]);
+        assertFalse(out[2]);
+
+        assertEq(policy.isRoutableBatch(new address[](0)).length, 0);
     }
 
     function testUnknownAddressFailsClosed() external {

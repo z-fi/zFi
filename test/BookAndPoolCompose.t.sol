@@ -49,13 +49,30 @@ contract BookAndPoolComposeTest is Test {
     address lp = address(0xC11);
     address user = address(0xBEEF);
 
+    /// @dev The settlement a prefunded route commits to at checkpoint.
+    function _route(address tokenIn, uint256 amountIn, address to)
+        internal
+        view
+        returns (PrecisionPoolFactory.Route memory)
+    {
+        return PrecisionPoolFactory.Route({
+            pool: address(pool),
+            originator: to,
+            tokenIn: tokenIn,
+            amountIn: amountIn,
+            minOut: 0,
+            to: to,
+            refundTo: to
+        });
+    }
+
     function setUp() public {
         board = new Swapboard(WETH);
         Swapboard legacy = new Swapboard(WETH);
         dutch = new Dutchboard(WETH);
         bol = new Swapbol(address(legacy), address(board), address(dutch));
 
-        factory = new PrecisionPoolFactory(EXEC);
+        factory = new PrecisionPoolFactory(EXEC, type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
 
         deal(USDC, maker, 10_000_000e6);
@@ -140,17 +157,14 @@ contract BookAndPoolComposeTest is Test {
             ISnwap.snwap,
             (
                 address(0), uint256(0), user, address(0), uint256(0), address(factory),
-                abi.encodeCall(PrecisionPoolFactory.checkpoint, (WBTC))
+                abi.encodeCall(PrecisionPoolFactory.checkpoint, (_route(WBTC, half, user)))
             )
         );
         calls[3] = abi.encodeCall(
             ISnwap.snwap,
             (
                 WBTC, half, user, USDC, uint256(0), address(factory),
-                abi.encodeCall(
-                    PrecisionPoolFactory.executePrefundedSwap,
-                    (address(pool), user, WBTC, half, uint256(0), user)
-                )
+                abi.encodeCall(PrecisionPoolFactory.executePrefundedSwap, (_route(WBTC, half, user)))
             )
         );
         vm.prank(user);

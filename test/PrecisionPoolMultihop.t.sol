@@ -46,7 +46,7 @@ contract PrecisionPoolMultihopTest is Test {
     address user = address(0xBEEF);
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(EXEC);
+        factory = new PrecisionPoolFactory(EXEC, type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
 
         deal(USDC, lp, 50_000_000e6);
@@ -109,9 +109,24 @@ contract PrecisionPoolMultihopTest is Test {
         pure
         returns (bytes memory)
     {
-        return abi.encodeCall(
-            PrecisionPoolFactory.executePrefundedSwap, (pool, to, tokenIn, amountIn, uint256(0), to)
-        );
+        return abi.encodeCall(PrecisionPoolFactory.executePrefundedSwap, (_route(pool, tokenIn, amountIn, to)));
+    }
+
+    /// @dev The settlement a prefunded route commits to at checkpoint.
+    function _route(address pool, address tokenIn, uint256 amountIn, address to)
+        internal
+        pure
+        returns (PrecisionPoolFactory.Route memory)
+    {
+        return PrecisionPoolFactory.Route({
+            pool: pool,
+            originator: to,
+            tokenIn: tokenIn,
+            amountIn: amountIn,
+            minOut: 0,
+            to: to,
+            refundTo: to
+        });
     }
 
     /// @dev WBTC -> USDC -> ETH across two factory pools in ONE transaction.
@@ -141,7 +156,9 @@ contract PrecisionPoolMultihopTest is Test {
             ISnwap.snwap,
             (
                 address(0), uint256(0), user, address(0), uint256(0), address(factory),
-                abi.encodeCall(PrecisionPoolFactory.checkpoint, (WBTC))
+                abi.encodeCall(
+                    PrecisionPoolFactory.checkpoint, (_route(address(usdcWbtc), WBTC, amountIn, ZROUTER))
+                )
             )
         );
         // Leg 1: WBTC in, USDC parked at the router.
@@ -156,7 +173,9 @@ contract PrecisionPoolMultihopTest is Test {
             ISnwap.snwap,
             (
                 address(0), uint256(0), user, address(0), uint256(0), address(factory),
-                abi.encodeCall(PrecisionPoolFactory.checkpoint, (USDC))
+                abi.encodeCall(
+                    PrecisionPoolFactory.checkpoint, (_route(address(ethUsdc), USDC, leg1 - 1, user))
+                )
             )
         );
         // Leg 2: spend the router's USDC, deliver ETH to the user.
@@ -213,7 +232,9 @@ contract PrecisionPoolMultihopTest is Test {
         calls[0] = abi.encodeCall(
             ISnwap.snwap,
             (address(0), uint256(0), user, address(0), uint256(0), address(factory),
-             abi.encodeCall(PrecisionPoolFactory.checkpoint, (WBTC)))
+             abi.encodeCall(
+                 PrecisionPoolFactory.checkpoint, (_route(legs[0].pool, WBTC, legs[0].amountIn, ZROUTER))
+             ))
         );
         calls[1] = abi.encodeCall(
             ISnwap.snwap,
@@ -223,7 +244,9 @@ contract PrecisionPoolMultihopTest is Test {
         calls[2] = abi.encodeCall(
             ISnwap.snwap,
             (address(0), uint256(0), user, address(0), uint256(0), address(factory),
-             abi.encodeCall(PrecisionPoolFactory.checkpoint, (USDC)))
+             abi.encodeCall(
+                 PrecisionPoolFactory.checkpoint, (_route(legs[1].pool, USDC, legs[1].amountIn, user))
+             ))
         );
         calls[3] = abi.encodeCall(
             ISnwap.snwap,
@@ -263,6 +286,49 @@ contract PrecisionPoolMultihopTest is Test {
         assertEq(address(router).balance, 0, "kept ETH");
         assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept the intermediate");
         assertEq(IERC20(WBTC).balanceOf(address(router)), 0, "kept the output");
+    }
+
+    /// @dev The ERC-20 side of the route executor, which native input never
+    /// exercises: checkpoint, fund, walk the hops. The checkpoint commits to
+    /// the exact call that will spend it, so the funding cannot be diverted by
+    /// anything that gets control while it is in flight - the executor is
+    /// public and holds no lock across that gap.
+    function test_RouteExecutorRunsACheckpointedErc20Route() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        deal(WBTC, user, 10e8);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(usdcWbtc); // WBTC -> USDC
+        pools[1] = address(ethUsdc);  // USDC -> ETH
+
+        uint256 amountIn = 1e8;
+        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, amountIn, 0, user));
+        uint256 before = user.balance;
+
+        vm.prank(EXEC);
+        router.checkpoint(WBTC, keccak256(call_));
+
+        vm.prank(user);
+        IERC20(WBTC).transfer(address(router), amountIn);
+
+        // A different route over the same funding is refused outright.
+        address[] memory theirs = new address[](1);
+        theirs[0] = address(usdcWbtc);
+        vm.prank(EXEC);
+        (bool ok, bytes memory err) = address(router).call(
+            abi.encodeCall(PrecisionRoute.route, (theirs, WBTC, amountIn, 0, address(0xBAD)))
+        );
+        assertFalse(ok, "an uncommitted route spent the funding");
+        assertEq(bytes4(err), PrecisionRoute.IntentMismatch.selector, "wrong rejection");
+
+        vm.prank(EXEC);
+        (ok,) = address(router).call(call_);
+        assertTrue(ok, "the committed route was refused");
+
+        assertGt(user.balance - before, 0, "route delivered nothing");
+        assertEq(IERC20(WBTC).balanceOf(address(router)), 0, "kept the input");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept the intermediate");
+        assertEq(address(router).balance, 0, "kept the output");
     }
 
     /// @dev Calldata cannot point a hop at something the factory never made.
@@ -318,6 +384,164 @@ contract PrecisionPoolMultihopTest is Test {
         assertEq(address(router).balance, 0, "kept ETH");
         assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept USDC");
         assertEq(ethUsdc.balanceOf(address(router)), 0, "kept LP shares");
+    }
+
+    /// @dev A route sized past what the tightest band on the path can take.
+    /// `route` refuses it outright - correct, but it is the stale-quote failure
+    /// `swapUpTo` exists to remove, and it is worse over a path because any one
+    /// of N hops can trigger it. `routeUpTo` clamps instead, and the remainder
+    /// comes back as the INPUT token: the search runs over the whole route, so
+    /// no hop is ever partially filled and no intermediate is ever stranded.
+    function test_RouteUpToClampsAtTheFrontAndRefundsTheInputToken() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 20_000 ether);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc);
+        pools[1] = address(usdcWbtc);
+
+        uint256 huge = 5_000 ether;
+
+        // All-or-nothing refuses the whole size.
+        vm.prank(EXEC);
+        vm.expectRevert();
+        router.route{value: huge}(pools, address(0), huge, 0, user);
+
+        uint256 wbtcBefore = IERC20(WBTC).balanceOf(user);
+        uint256 refundBefore = address(0xFEE1).balance;
+
+        vm.prank(EXEC);
+        (uint256 out, uint256 consumed) =
+            router.routeUpTo{value: huge}(pools, address(0), huge, 0, user, address(0xFEE1));
+
+        assertGt(out, 0, "delivered nothing");
+        assertGt(consumed, 0, "clamped to nothing");
+        assertLt(consumed, huge, "did not clamp at all");
+        assertEq(IERC20(WBTC).balanceOf(user) - wbtcBefore, out, "recipient got the output");
+
+        // The remainder is the caller's own input token, never an intermediate.
+        assertEq(address(0xFEE1).balance - refundBefore, huge - consumed, "remainder not refunded");
+        assertEq(IERC20(USDC).balanceOf(address(0xFEE1)), 0, "refunded an intermediate");
+
+        assertEq(address(router).balance, 0, "kept ETH");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept the intermediate");
+        assertEq(IERC20(WBTC).balanceOf(address(router)), 0, "kept the output");
+    }
+
+    /// @dev The clamp must be MAXIMAL, not merely safe - a search that is
+    /// conservative by even one unit silently underfills every route. Replay
+    /// the same state: the size it chose must execute all-or-nothing, and one
+    /// unit more must not.
+    function test_RouteUpToFindsTheLargestSizeThatFits() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 20_000 ether);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc);
+        pools[1] = address(usdcWbtc);
+
+        uint256 huge = 5_000 ether;
+        uint256 snap = vm.snapshotState();
+
+        vm.prank(EXEC);
+        (, uint256 consumed) = router.routeUpTo{value: huge}(pools, address(0), huge, 0, user, address(0xFEE1));
+        assertLt(consumed, huge, "nothing to prove: it fit whole");
+
+        vm.revertToState(snap);
+
+        // Exactly the chosen size clears the path as a plain all-or-nothing route.
+        vm.prank(EXEC);
+        uint256 out = router.route{value: consumed}(pools, address(0), consumed, 0, user);
+        assertGt(out, 0, "the chosen size did not execute");
+
+        vm.revertToState(snap);
+
+        // One unit more does not.
+        vm.prank(EXEC);
+        vm.expectRevert();
+        router.route{value: consumed + 1}(pools, address(0), consumed + 1, 0, user);
+    }
+
+    /// @dev A route that fits whole must not be clamped, and must cost only the
+    /// one probe that establishes it - no refund, no search.
+    function test_RouteUpToConsumesEverythingWhenTheRouteFits() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 100 ether);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc);
+        pools[1] = address(usdcWbtc);
+
+        uint256 refundBefore = address(0xFEE1).balance;
+
+        vm.prank(EXEC);
+        (uint256 out, uint256 consumed) =
+            router.routeUpTo{value: 1 ether}(pools, address(0), 1 ether, 0, user, address(0xFEE1));
+
+        assertEq(consumed, 1 ether, "clamped a route that fits");
+        assertGt(out, 0, "delivered nothing");
+        assertEq(address(0xFEE1).balance, refundBefore, "refunded from a full fill");
+    }
+
+    /// @dev `zapIn` returns what its own deposit could not take at the pool's
+    /// ratio - NOT whatever happens to be sitting here. The trailing sweep used
+    /// to send the raw balance, which is outside the checkpoint entirely: the
+    /// checkpoint bounds what may be SPENT, so an unbounded sweep hands a caller
+    /// any in-flight funding or mid-route intermediate belonging to somebody
+    /// else. The executor is public, so "somebody else's zap" is a call anyone
+    /// can make. Anything resting must still be resting afterwards.
+    function test_ZapInSweepsOnlyItsOwnLeftoversNotRestingBalances() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+
+        // Stand in for a victim's funding in flight, or an intermediate resting
+        // between two hops of a route that is still running.
+        deal(USDC, address(router), 1_000e6);
+        vm.deal(address(router), 5 ether);
+
+        // A perfectly ordinary zap, by an unrelated caller, to their own address.
+        // It legitimately receives its OWN leftovers, so the invariant that
+        // matters is on the other side: what was resting is still resting.
+        vm.prank(user);
+        ISnwap(ZROUTER).snwap{value: 2 ether}(
+            address(0), 2 ether, user, address(ethUsdc), 0, address(router),
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, address(0xDEAD)))
+        );
+
+        assertGt(ethUsdc.balanceOf(address(0xDEAD)), 0, "zap did not run");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 1_000e6, "swept resting USDC");
+        assertEq(address(router).balance, 5 ether, "swept resting ETH");
+    }
+
+    /// @dev The gap between `checkpoint` and the call that spends it is the
+    /// dangerous one: the input arrives there, and a callback-capable token gets
+    /// control while it is resting. A native-funded entry consumes no checkpoint,
+    /// so nothing in its own arguments constrains it - the route lock is what
+    /// keeps it from running during someone else's funding.
+    function test_NativeEntryIsRefusedWhileAnotherRouteIsOpen() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 10 ether);
+
+        address[] memory pools = new address[](1);
+        pools[0] = address(ethUsdc);
+        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, 1e8, 0, user));
+
+        vm.prank(EXEC);
+        router.checkpoint(WBTC, keccak256(call_));
+
+        // The victim's funding is now in flight. Anyone can reach these through
+        // the public executor.
+        vm.prank(EXEC);
+        vm.expectRevert(PrecisionRoute.Reentrancy.selector);
+        router.zapIn{value: 1 ether}(address(ethUsdc), address(0), 1 ether, 0, 0, address(0xDEAD));
+
+        vm.prank(EXEC);
+        vm.expectRevert(PrecisionRoute.Reentrancy.selector);
+        router.route{value: 1 ether}(pools, address(0), 1 ether, 0, address(0xDEAD));
+
+        // And a second checkpoint cannot be opened alongside the first.
+        vm.prank(EXEC);
+        vm.expectRevert(PrecisionRoute.Reentrancy.selector);
+        router.checkpoint(USDC, keccak256("whatever"));
     }
 
     function test_ZapInRefusesUnknownPools() public {

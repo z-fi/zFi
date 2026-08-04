@@ -51,7 +51,7 @@ contract DutchboardPositionTest is Test {
 
         vm.prank(seller);
         db.transferFrom(seller, buyer, id);
-        (address s,,,,,,,,,) = db.listings(id);
+        (address s,,,,,,,,,,) = db.listings(id);
         assertEq(s, buyer, "stored seller followed the position");
 
         // And the new owner can cancel to reclaim the unsold lot.
@@ -78,7 +78,7 @@ contract DutchboardPositionTest is Test {
     }
 
     /// @dev Partial fills leave the listing live, so the receipt survives.
-    function test_PartialFillKeepsThePositionAndExhaustionBurnsIt() public {
+    function test_PartialFillKeepsThePositionAndExhaustionSpendsIt() public {
         uint256 id = _list();
 
         vm.prank(buyer);
@@ -87,15 +87,15 @@ contract DutchboardPositionTest is Test {
 
         vm.prank(buyer);
         db.fill(id, 60e18, buyer, type(uint256).max);
-        vm.expectRevert();
-        db.ownerOf(id);
+        assertEq(db.ownerOf(id), seller, "receipt survives exhaustion as a spent ticket");
+        (address s2,,,,,,,,,,) = db.listings(id);
+        assertEq(s2, address(0), "but the listing itself is closed");
     }
 
-    function test_CancelBurnsThePosition() public {
+    function test_CancelLeavesASpentReceipt() public {
         uint256 id = _list();
         vm.prank(seller);
         db.cancel(id);
-        vm.expectRevert();
-        db.ownerOf(id);
+        assertEq(db.ownerOf(id), seller, "receipt survives cancellation");
     }
 }

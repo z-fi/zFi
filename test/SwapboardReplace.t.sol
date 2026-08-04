@@ -98,6 +98,16 @@ contract SwapboardReplaceTest is Test {
         assertEq(B.balanceOf(maker), 400e18, "maker was paid the new price");
     }
 
+    function test_RepricingResetsMetadataFillDenominator() public {
+        uint256 id = _order();
+        vm.prank(maker);
+        sb.replaceOrder(id, 100e18, 400e18, 0);
+
+        // The renderer previously subtracted the new ask from the creation ask
+        // and panicked. A replacement is a new live denominator.
+        assertNotEq(bytes(sb.tokenURI(id)).length, 0, "metadata remains readable after an upward reprice");
+    }
+
     function test_TakerMinimumOutputBlocksAReprice() public {
         uint256 id = _order();
         vm.prank(maker);

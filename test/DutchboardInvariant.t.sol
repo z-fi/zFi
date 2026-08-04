@@ -394,6 +394,59 @@ contract DutchboardInvariantTest is Test {
         assertEq(held, escrowed, "board holds an NFT outside any live bundle");
     }
 
+    /// @dev The central solvency property, and the one C-02 broke: the board's
+    ///      physical balance always covers BOTH of its ERC-20 liabilities. Asserted
+    ///      per token rather than per listing, because escrow here is pooled — any
+    ///      single listing's `remaining` says nothing about what the board owes.
+    function invariant_erc20BalanceCoversEveryLiability() public view {
+        _assertSolvent(address(lot));
+        _assertSolvent(address(quote));
+    }
+
+    function _assertSolvent(address token) internal view {
+        assertGe(
+            InvariantERC20(token).balanceOf(address(board)),
+            board.escrowed(token) + board.totalClaimable(token),
+            "balanceOf < escrowed + totalClaimable"
+        );
+    }
+
+    /// @dev Custody is exclusive: one board-held NFT backs exactly one liability.
+    ///      C-01 was, at bottom, a way of making a single NFT back two. The bundle
+    ///      side is covered by `invariant_nftEscrowMatchesLiveBundles`; this covers
+    ///      the overlap between that set and credited proceeds.
+    function invariant_nftIsNeverBothEscrowAndProceeds() public view {
+        uint256 n = handler.liveIdsLength();
+        for (uint256 i; i < n; ++i) {
+            uint256[] memory bundle = board.getListing(handler.liveIdAt(i)).ids;
+            for (uint256 j; j < bundle.length; ++j) {
+                assertFalse(
+                    board.heldAsProceeds(address(nft), bundle[j]), "NFT is both listing escrow and claimable proceeds"
+                );
+            }
+        }
+        // And anything owed out as proceeds is actually here to be claimed.
+        for (uint256 k = 1; k < handler.nextNftId(); ++k) {
+            if (board.heldAsProceeds(address(nft), k)) {
+                assertEq(nft.ownerOf(k), address(board), "credited NFT is not in custody");
+            }
+        }
+    }
+
+    /// @dev A frozen listing is unfillable but still recoverable: it keeps a live
+    ///      seller so `cancel` works and later settlements keep crediting it.
+    function invariant_frozenListingsStayQuotableAsUnfillable() public view {
+        uint256 n = handler.liveIdsLength();
+        for (uint256 i; i < n; ++i) {
+            uint256 id = handler.liveIdAt(i);
+            if (!board.frozen(id)) continue;
+            (bool fillable,) = board.quoteFill(id, 1);
+            assertFalse(fillable, "frozen listing is still fillable");
+            (address seller,,,,,,,,,,) = board.listings(id);
+            assertTrue(seller != address(0), "frozen listing lost its owner");
+        }
+    }
+
     /// @dev The live price of every open listing stays inside its declared bracket.
     function invariant_priceWithinDeclaredBracket() public view {
         uint256 n = handler.liveIdsLength();

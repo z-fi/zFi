@@ -26,8 +26,17 @@ const SOURCES = {
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
+  Collectol: "src/forwarders/Collectol.sol",
+  CollectolLens: "src/forwarders/CollectolLens.sol",
+  TokenList: "src/utils/TokenList.sol",
+  TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
 };
+// Contracts whose deployment manifest pins them below the default optimizer
+// runs. A salt is only valid for initcode built at the pinned setting, so
+// picking up an artifact compiled at any other one silently mines - or
+// verifies - the wrong payload.
+const PINNED_RUNS = {SwapboardView: 200, TokenList: 20, TokenListRenderer: 20};
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   console.error(
@@ -40,7 +49,7 @@ function findFreshArtifact(contractName) {
   const source = SOURCES[contractName];
   if (!source) throw Error(`no canonical source mapping for ${contractName}`);
   const sourceHash = keccak256(fs.readFileSync(path.join(ROOT, source)));
-  const expectedRuns = contractName === "SwapboardView" ? 200 : 9_999_999;
+  const expectedRuns = PINNED_RUNS[contractName] ?? 9_999_999;
   const candidates = [];
   function visit(dir) {
     if (!fs.existsSync(dir)) return;
@@ -106,6 +115,9 @@ fs.writeFileSync(path.join(dir, `${name}.creation.txt`), creation + "\n");
 fs.writeFileSync(path.join(dir, `${name}.salt.txt`), salt + "\n");
 fs.writeFileSync(path.join(dir, `${name}.address.txt`), address + "\n");
 fs.writeFileSync(path.join(dir, `${name}.deploy.calldata.txt`), calldata + "\n");
+// The raw payload, for tests and scripts that deploy the EXACT mined bytes
+// rather than re-encoding them and hoping the encoding matches.
+fs.writeFileSync(path.join(dir, `${name}.initcode.bin`), Buffer.from(creation.slice(2), "hex"));
 
 console.log(`${name}: ${address}`);
 console.log(`creation: ${(creation.length - 2) / 2} bytes`);

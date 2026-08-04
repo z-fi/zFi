@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TAPE</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="../theme.css">
+<script>
+(function(){var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+</script>
+<script src="../theme.js"></script>
+<style>
+:root{--green:#16a34a;--red:#dc2626;--vol:#94a3b8}
+.dark{--green:#22c55e;--red:#ef4444;--vol:#475569}
+body{max-width:960px}
+h1{font-size:14px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sub{font-size:11px;color:var(--fg-muted);margin-bottom:20px;letter-spacing:.02em}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+input[type=text]{font-family:inherit;font-size:12px;padding:7px 10px;border:1px solid var(--border);
+  background:var(--surface);color:var(--fg);flex:1;min-width:min(100%,320px)}
+.seg{display:inline-flex;border:1px solid var(--border)}
+.seg button{font-family:inherit;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  padding:6px 12px;border:none;cursor:pointer;background:transparent;color:var(--fg-muted)}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button.on{background:var(--fg);color:var(--bg)}
+.chart{position:relative;width:100%;border:1px solid var(--border);background:var(--surface)}
+.chart svg{display:block;width:100%;height:auto}
+.hud{position:absolute;top:8px;left:10px;font-size:11px;line-height:1.6;pointer-events:none;
+  color:var(--fg-muted);font-variant-numeric:tabular-nums}
+.hud b{color:var(--fg);font-weight:600}
+.note{font-size:11px;color:var(--fg-muted);margin-top:10px;line-height:1.6}
+.stat{display:flex;flex-wrap:wrap;gap:18px;margin:14px 0 0;font-size:11px;color:var(--fg-muted)}
+.stat b{display:block;font-size:15px;color:var(--fg);font-variant-numeric:tabular-nums;font-weight:600}
+.empty{padding:56px 20px;text-align:center;font-size:12px;color:var(--fg-muted);line-height:1.7}
+.demo-flag{display:inline-block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--border);padding:2px 6px;color:var(--fg-muted);margin-left:8px}
+</style>
+</head>
+<body>
+<h1>Tape<span id="flag" class="demo-flag" hidden>sample data</span></h1>
+<div class="sub" id="sub">On-chain OHLCV, read with one eth_call. No indexer.</div>
+
+<div class="bar">
+  <input type="text" id="addr" spellcheck="false" autocomplete="off"
+         placeholder="Pool address (0x…) — blank for sample data">
+  <span class="seg" id="tf"></span>
+  <span class="seg" id="kind">
+    <button data-k="candle" class="on">Candle</button>
+    <button data-k="line">Line</button>
+  </span>
+</div>
+
+<div class="chart" id="chart"></div>
+<div class="stat" id="stats"></div>
+<div class="note" id="note"></div>
+
+<script>
+/**
+ * Reads PrecisionPool's on-chain price tape and draws it.
+ *
+ * The point of the tape is that this file is the whole client: one eth_call
+ * returns the bars, and everything else — decoding, roll-up to coarser
+ * timeframes, drawing — happens here. No indexer, no subgraph, no API key, and
+ * nothing that can go down independently of Ethereum.
+ */
+(function () {
+  "use strict";
+
+  var RPCS = [
+    "https://rpc.mevblocker.io",
+    "https://eth.drpc.org",
+    "https://cloudflare-eth.com"
+  ];
+  var MC3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+
+  // IPriceTape + ERC-20 selectors.
+  var SELECTORS = {
+    tape: "0x29a65241",        // tape(uint256,uint256)
+    tapePair: "0x5acdfed5",    // tapePair()
+    tapePeriods: "0x293deca2"  // tapePeriods()
+  };
+  var SEL_SYMBOL = "0x95d89b41";
+
+  // ---------------------------------------------------------------- utilities
+  function pad(h) { h = h.replace(/^0x/, ""); return "0".repeat(64 - h.length) + h; }
+  function u256(n) { return pad(BigInt(n).toString(16)); }
+  function addrArg(a) { return pad(a.toLowerCase().replace(/^0x/, "")); }
+  function word(hex, i) { return BigInt("0x" + hex.slice(i * 64, (i + 1) * 64)); }
+
+  // -------------------------------------------------------------- tape codec
+  // Mirrors PriceTape.decode exactly. A bar is one 256-bit word:
+  //   0..31 bucket | 32..63 open | 64..95 high | 96..127 low
+  //   128..159 close | 160..191 volume | 192..207 count
+  function unpackFloat(p) {
+    // value = mantissa << exponent
+    var mant = p & 0xffffff, exp = p >>> 24;
+    return mant * Math.pow(2, exp);
+  }
+  function decodeBar(w) {
+    if (w === 0n) return null;
+    var f = function (shift) { return Number((w >> BigInt(shift)) & 0xffffffffn); };
+    return {
+      bucket: Number(w & 0xffffffffn),
+      open: unpackFloat(f(32)),
+      high: unpackFloat(f(64)),
+      low: unpackFloat(f(96)),
+      close: unpackFloat(f(128)),
+      volume: unpackFloat(f(160)),
+      count: Number((w >> 192n) & 0xffffn)
+    };
+  }
+
+  /**
+   * Roll fine bars up into a coarser timeframe. Exact: a bar built from N
+   * sub-bars is the bar the trades themselves would have produced, which is why
+   * the contract only stores two timeframes and the client derives the rest.
+   * `bars` is newest-first with nulls for buckets that saw no trades.
+   */
+  function rollUp(bars, srcPeriod, dstPeriod) {
+    if (dstPeriod <= srcPeriod) return bars;
+    var out = [], group = null, key = null;
+    // Walk oldest-first so open/close land the right way round.
+    for (var i = bars.length - 1; i >= 0; i--) {
+      var b = bars[i];
+      if (!b) continue;
+      var t = b.bucket * srcPeriod, k = Math.floor(t / dstPeriod);
+      if (k !== key) {
+        if (group) out.push(group);
+        key = k;
+        group = { bucket: k, open: b.open, high: b.high, low: b.low, close: b.close,
+                  volume: b.volume, count: b.count, period: dstPeriod };
+      } else {
+        group.high = Math.max(group.high, b.high);
+        group.low = Math.min(group.low, b.low);
+        group.close = b.close;
+        group.volume += b.volume;
+        group.count += b.count;
+      }
+    }
+    if (group) out.push(group);
+    return out.reverse();
+  }
+
+  // ------------------------------------------------------------------- rpc
+  var rpcIndex = 0;
+  function rpc(method, params) {
+    var url = RPCS[rpcIndex % RPCS.length];
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.error) throw new Error(j.error.message || "rpc error");
+      return j.result;
+    }).catch(function (e) {
+      rpcIndex++;
+      if (rpcIndex % RPCS.length === 0) throw e;
+      return rpc(method, params);
+    });
+  }
+
+  function ethCall(to, data) {
+    return rpc("eth_call", [{ to: to, data: data }, "latest"]);
+  }
+
+  /** aggregate3((address,bool,bytes)[]) — one round trip, one block, many reads. */
+  function multicall(calls) {
+    var n = calls.length, head = "", tail = "", off = n * 32;
+    calls.forEach(function (c) {
+      var d = c.data.replace(/^0x/, ""), len = d.length / 2;
+      var body = addrArg(c.to) + u256(1) + u256(96) + u256(len) +
+        d + "0".repeat((Math.ceil(d.length / 64) * 64) - d.length);
+      head += u256(off);
+      tail += body;
+      off += body.length / 2;
+    });
+    return ethCall(MC3, "0x82ad56cb" + u256(32) + u256(n) + head + tail)
+      .then(function (hex) {
+        var h = hex.replace(/^0x/, ""), out = [];
+        var count = Number(word(h, 1));
+        for (var i = 0; i < count; i++) {
+          var rel = Number(word(h, 2 + i)) / 32, w = 2 + rel;
+          var ok = word(h, w) === 1n, bo = Number(word(h, w + 1)) / 32, lw = w + bo;
+          var len = Number(word(h, lw));
+          out.push(ok ? h.slice((lw + 1) * 64, (lw + 1) * 64 + len * 2) : null);
+        }
+        return out;
+      });
+  }
+
+  function decodeString(h) {
+    if (!h) return "";
+    if (h.length <= 64) {
+      var s = "";
+      for (var i = 0; i < h.length; i += 2) {
+        var c = parseInt(h.substr(i, 2), 16);
+        if (c) s += String.fromCharCode(c);
+      }
+      return s;
+    }
+    var off = Number(word(h, 0)) * 2, len = Number(word(h, off / 64)) * 2, out = "";
+    for (var j = 0; j < len; j += 2) out += String.fromCharCode(parseInt(h.substr(off + 64 + j, 2), 16));
+    return out;
+  }
+
+
+  // ------------------------------------------------------------------ reading
+  var FINE = 300;
+  var COARSE = 14400;
+  var TIMEFRAMES = [
+    { label: "5m", secs: 300 },
+    { label: "15m", secs: 900 },
+    { label: "1h", secs: 3600 },
+    { label: "4h", secs: 14400 },
+    { label: "1d", secs: 86400 }
+  ];
+
+  /**
+   * Everything a chart needs, in ONE round trip: the bars, the pair, and both
+   * token symbols. This is the whole data layer.
+   */
+  function loadPool(pool, count) {
+    // Both tapes in one batch: the fine ring spans about a day, the coarse one
+    // weeks, and a daily candle built from the fine ring alone is a stub.
+    var calls = [
+      { to: pool, data: SELECTORS.tape + u256(FINE) + u256(count) },
+      { to: pool, data: SELECTORS.tapePair },
+      { to: pool, data: SELECTORS.tape + u256(COARSE) + u256(count) }
+    ];
+    return multicall(calls).then(function (res) {
+      if (!res[0] || !res[1]) throw new Error("not a price-tape contract");
+      var pairHex = res[1];
+      var base = "0x" + pairHex.slice(24, 64);
+      var quote = "0x" + pairHex.slice(64 + 24, 128);
+      // Second hop: symbols for the axis label. Native ETH has no contract.
+      var meta = [];
+      if (base !== "0x" + "0".repeat(40)) meta.push({ to: base, data: SEL_SYMBOL });
+      if (quote !== "0x" + "0".repeat(40)) meta.push({ to: quote, data: SEL_SYMBOL });
+      return multicall(meta).then(function (m) {
+        var k = 0;
+        var baseSym = base === "0x" + "0".repeat(40) ? "ETH" : decodeString(m[k++]) || "?";
+        var quoteSym = quote === "0x" + "0".repeat(40) ? "ETH" : decodeString(m[k++]) || "?";
+        return {
+          bars: decodeTapeReturn(res[0]),
+          coarse: res[2] ? decodeTapeReturn(res[2]) : [],
+          baseSym: baseSym, quoteSym: quoteSym
+        };
+      });
+    });
+  }
+
+  function decodeTapeReturn(hex) {
+    var h = hex.replace(/^0x/, "");
+    var len = Number(word(h, 1)), bars = [];
+    for (var i = 0; i < len; i++) bars.push(decodeBar(word(h, 2 + i)));
+    return bars; // newest first, nulls where nothing traded
+  }
+
+  // --------------------------------------------------------------- sample data
+  /**
+   * A believable tape, generated locally, so the chart can be seen before any
+   * pool has traded. Every value goes through the SAME float encoding the
+   * contract uses, so what is drawn here is exactly what chain data will look
+   * like — precision loss included, not an idealised mock.
+   */
+  function packFloat(v) {
+    if (v <= 0) return 0;
+    var e = 0, m = Math.floor(v);
+    while (m >= (1 << 24)) { m = Math.floor(m / 2); e++; }
+    return ((e << 24) | m) >>> 0;
+  }
+  function sampleBars(count) {
+    var now = Math.floor(Date.now() / 1000), bucket = Math.floor(now / FINE);
+    var price = 3000e18 / 1e18, bars = [], seed = 42;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    var series = [];
+    for (var i = 0; i < count; i++) {
+      var drift = (rnd() - 0.48) * 0.012;
+      var o = price;
+      price = Math.max(1, price * (1 + drift));
+      var c = price;
+      var wick = Math.abs(drift) * (0.6 + rnd()) + 0.0015;
+      var hi = Math.max(o, c) * (1 + wick * rnd());
+      var lo = Math.min(o, c) * (1 - wick * rnd());
+      var idle = rnd() < 0.13;                       // quiet bucket: a real hole
+      series.push(idle ? null : {
+        bucket: bucket - (count - 1 - i),
+        open: unpackFloat(packFloat(o * 1e18)) / 1e18,
+        high: unpackFloat(packFloat(hi * 1e18)) / 1e18,
+        low: unpackFloat(packFloat(lo * 1e18)) / 1e18,
+        close: unpackFloat(packFloat(c * 1e18)) / 1e18,
+        volume: unpackFloat(packFloat((5 + rnd() * 60) * 1e18)) / 1e18,
+        count: 1 + Math.floor(rnd() * 40)
+      });
+    }
+    return series.reverse(); // newest first, matching the contract's order
+  }
+
+  // ------------------------------------------------------------------ drawing
+  var W = 960, H = 380, PADL = 8, PADR = 62, PADT = 14, PADB = 26, VOLH = 54;
+
+  function fmt(n) {
+    if (!isFinite(n)) return "-";
+    if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    if (n >= 1) return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    return n.toPrecision(4);
+  }
+  function fmtTime(secs, period) {
+    var d = new Date(secs * 1000);
+    var day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (period >= 86400) return day;
+    return day + " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  function draw(el, bars, period, kind, baseSym, quoteSym) {
+    var pts = bars.filter(Boolean).slice().reverse(); // oldest -> newest
+    if (!pts.length) {
+      el.innerHTML = '<div class="empty">No trades recorded yet.<br>' +
+        'The tape fills as swaps happen — a pool with no volume has no chart.</div>';
+      return;
+    }
+
+    var hi = -Infinity, lo = Infinity, vmax = 0;
+    pts.forEach(function (b) {
+      if (b.high > hi) hi = b.high;
+      if (b.low < lo) lo = b.low;
+      if (b.volume > vmax) vmax = b.volume;
+    });
+    if (hi === lo) { hi *= 1.001; lo *= 0.999; }
+    var span = hi - lo;
+    hi += span * 0.08; lo -= span * 0.08; span = hi - lo;
+
+    var plotW = W - PADL - PADR;
+    var plotH = H - PADT - PADB - VOLH;
+    var n = pts.length;
+    var step = plotW / n;
+    var bw = Math.max(1, Math.min(14, step * 0.66));
+
+    var x = function (i) { return PADL + step * (i + 0.5); };
+    var y = function (p) { return PADT + plotH * (1 - (p - lo) / span); };
+    var vy = function (v) { return PADT + plotH + 18 + (VOLH - 18) * (1 - (vmax ? v / vmax : 0)); };
+
+    var s = ['<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" ' +
+             'aria-label="Price chart, ' + n + ' bars">'];
+
+    // Horizontal grid + price axis on the right.
+    var TICKS = 5;
+    for (var g = 0; g <= TICKS; g++) {
+      var p = lo + (span * g) / TICKS, gy = y(p);
+      s.push('<line x1="' + PADL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PADR) + '" y2="' + gy.toFixed(1) +
+             '" stroke="currentColor" stroke-opacity="0.09" stroke-width="1"/>');
+      s.push('<text x="' + (W - PADR + 6) + '" y="' + (gy + 3.5).toFixed(1) + '" font-size="10" ' +
+             'fill="currentColor" fill-opacity="0.5" font-family="ui-monospace,monospace">' + fmt(p) + '</text>');
+    }
+
+    // Volume, under the price panel.
+    pts.forEach(function (b, i) {
+      var up = b.close >= b.open;
+      var vh = PADT + plotH + VOLH - vy(b.volume);
+      s.push('<rect x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + vy(b.volume).toFixed(1) +
+             '" width="' + bw.toFixed(1) + '" height="' + Math.max(0.5, vh).toFixed(1) +
+             '" fill="var(--vol)" fill-opacity="' + (up ? 0.55 : 0.35) + '"/>');
+    });
+
+    if (kind === "line") {
+      var d = pts.map(function (b, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(b.close).toFixed(1); }).join(" ");
+      var area = d + " L" + x(n - 1).toFixed(1) + " " + (PADT + plotH) + " L" + x(0).toFixed(1) + " " + (PADT + plotH) + " Z";
+      s.push('<path d="' + area + '" fill="var(--green)" fill-opacity="0.10"/>');
+      s.push('<path d="' + d + '" fill="none" stroke="var(--green)" stroke-width="1.6" stroke-linejoin="round"/>');
+    } else {
+      pts.forEach(function (b, i) {
+        var up = b.close >= b.open, col = up ? "var(--green)" : "var(--red)";
+        var cx = x(i);
+        s.push('<line x1="' + cx.toFixed(1) + '" y1="' + y(b.high).toFixed(1) + '" x2="' + cx.toFixed(1) +
+               '" y2="' + y(b.low).toFixed(1) + '" stroke="' + col + '" stroke-width="1"/>');
+        var top = y(Math.max(b.open, b.close)), bot = y(Math.min(b.open, b.close));
+        s.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) +
+               '" height="' + Math.max(1, bot - top).toFixed(1) + '" fill="' + col + '"/>');
+      });
+    }
+
+    // Time axis: a few labels, not one per bar.
+    var LBL = Math.max(1, Math.floor(n / 6));
+    for (var i2 = 0; i2 < n; i2 += LBL) {
+      s.push('<text x="' + x(i2).toFixed(1) + '" y="' + (H - 8) + '" font-size="10" text-anchor="middle" ' +
+             'fill="currentColor" fill-opacity="0.45" font-family="ui-monospace,monospace">' +
+             fmtTime(pts[i2].bucket * period, period) + '</text>');
+    }
+    s.push("</svg>");
+
+    var last = pts[n - 1], first = pts[0];
+    var chg = ((last.close - first.open) / first.open) * 100;
+    el.innerHTML = s.join("") +
+      '<div class="hud"><b>' + fmt(last.close) + '</b> ' + quoteSym + ' / ' + baseSym +
+      ' <span style="color:' + (chg >= 0 ? "var(--green)" : "var(--red)") + '">' +
+      (chg >= 0 ? "+" : "") + chg.toFixed(2) + '%</span></div>';
+
+    return { last: last, first: first, hi: hi, lo: lo, pts: pts };
+  }
+
+  function stats(el, info, period, baseSym, quoteSym) {
+    if (!info) { el.innerHTML = ""; return; }
+    var pts = info.pts, vol = 0, trades = 0, hi = -Infinity, lo = Infinity;
+    pts.forEach(function (b) { vol += b.volume; trades += b.count; hi = Math.max(hi, b.high); lo = Math.min(lo, b.low); });
+    el.innerHTML =
+      '<div><b>' + fmt(hi) + '</b>High</div>' +
+      '<div><b>' + fmt(lo) + '</b>Low</div>' +
+      '<div><b>' + fmt(vol) + '</b>Volume (' + baseSym + ')</div>' +
+      '<div><b>' + trades.toLocaleString("en-US") + '</b>Trades</div>' +
+      '<div><b>' + pts.length + '</b>Bars</div>';
+  }
+
+  // ------------------------------------------------------------------- wiring
+  var state = { tf: 300, kind: "candle", bars: null, coarse: null,
+                baseSym: "TOKEN", quoteSym: "QUOTE", demo: true };
+  var chartEl = document.getElementById("chart");
+  var statsEl = document.getElementById("stats");
+  var noteEl = document.getElementById("note");
+  var flagEl = document.getElementById("flag");
+  var addrEl = document.getElementById("addr");
+
+  var tfEl = document.getElementById("tf");
+  TIMEFRAMES.forEach(function (t) {
+    var b = document.createElement("button");
+    b.textContent = t.label;
+    b.dataset.secs = t.secs;
+    if (t.secs === state.tf) b.className = "on";
+    b.onclick = function () {
+      state.tf = t.secs;
+      [].forEach.call(tfEl.children, function (c) { c.classList.toggle("on", c === b); });
+      render();
+    };
+    tfEl.appendChild(b);
+  });
+  [].forEach.call(document.getElementById("kind").children, function (b) {
+    b.onclick = function () {
+      state.kind = b.dataset.k;
+      [].forEach.call(b.parentNode.children, function (c) { c.classList.toggle("on", c === b); });
+      render();
+    };
+  });
+
+  function render() {
+    if (!state.bars) return;
+    // Use whichever stored resolution the timeframe actually needs.
+    var useCoarse = state.tf >= COARSE && state.coarse && state.coarse.some(Boolean);
+    var src = useCoarse ? state.coarse : state.bars;
+    var step = useCoarse ? COARSE : FINE;
+    var bars = state.tf === step ? src.filter(Boolean) : rollUp(src, step, state.tf);
+    var info = draw(chartEl, bars, state.tf, state.kind, state.baseSym, state.quoteSym);
+    stats(statsEl, info, state.tf, state.baseSym, state.quoteSym);
+    flagEl.hidden = !state.demo;
+    noteEl.textContent = state.demo
+      ? "Sample data, generated locally through the same float encoding the contract uses — so this is exactly what a real tape renders like. Paste a pool address to read the chain."
+      : "Read from chain state in one eth_call. " + state.bars.filter(Boolean).length +
+        " five-minute bars stored on-chain; coarser timeframes are aggregated here.";
+  }
+
+  function loadDemo() {
+    state.demo = true;
+    state.bars = sampleBars(256);
+    state.coarse = rollUp(state.bars, FINE, COARSE);
+    state.baseSym = "TOKEN";
+    state.quoteSym = "USDC";
+    document.getElementById("sub").textContent =
+      "On-chain OHLCV, read with one eth_call. No indexer, no subgraph, no server.";
+    render();
+  }
+
+  function load(pool) {
+    chartEl.innerHTML = '<div class="empty">Reading…</div>';
+    loadPool(pool, 256).then(function (r) {
+      state.demo = false;
+      state.bars = r.bars;
+      state.coarse = r.coarse;
+      state.baseSym = r.baseSym;
+      state.quoteSym = r.quoteSym;
+      document.getElementById("sub").textContent = pool;
+      render();
+    }).catch(function (e) {
+      chartEl.innerHTML = '<div class="empty">Could not read a tape at that address.<br>' +
+        (e.message || e) + '</div>';
+      statsEl.innerHTML = "";
+      noteEl.textContent = "";
+    });
+  }
+
+  addrEl.addEventListener("change", function () {
+    var v = addrEl.value.trim();
+    if (/^0x[0-9a-fA-F]{40}$/.test(v)) { location.hash = v; load(v); }
+    else if (!v) { location.hash = ""; loadDemo(); }
+  });
+
+  var initial = location.hash.replace(/^#/, "").trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(initial)) { addrEl.value = initial; load(initial); }
+  else loadDemo();
+})();
+</script>
+</body>
+</html>

@@ -95,13 +95,13 @@ contract Swapbol {
     error Reentrancy();
     error ETHTransferFailed();
 
-    error UnknownBoard(address board);
-    error InputMismatch(uint256 expected, uint256 actual);
-    error AmountTooLarge();
     error BadPlan();
     error BadVenue();
     error BadCheckpoint();
+    error AmountTooLarge();
     error DeadlineExpired();
+    error UnknownBoard(address board);
+    error InputMismatch(uint256 expected, uint256 actual);
     error WETHAmountMismatch(uint256 expected, uint256 actual);
 
     constructor(address boardV1_, address boardCurrent_, address dutchboard_) {

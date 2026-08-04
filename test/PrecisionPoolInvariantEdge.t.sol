@@ -78,8 +78,17 @@ contract MultiHandler is Test {
         PrecisionPool p = _p(s);
         amt = bound(amt, 1, 5 ether);
         vm.prank(EXEC);
-        try factory.executePrefundedSwap{value: amt}(address(p), actor, address(0), amt, 0, actor) {}
-            catch {}
+        try factory.executePrefundedSwap{value: amt}(
+            PrecisionPoolFactory.Route({
+                pool: address(p),
+                originator: actor,
+                tokenIn: address(0),
+                amountIn: amt,
+                minOut: 0,
+                to: actor,
+                refundTo: actor
+            })
+        ) {} catch {}
     }
 
     /// @dev The zap path: checkpoint shares, burn, deliver both sides.
@@ -91,7 +100,8 @@ contract MultiHandler is Test {
         // Checkpoint BEFORE funding: the zap consumes the balance delta taken
         // after the snapshot, which is the whole point of the mechanism.
         vm.prank(EXEC);
-        try zap.checkpoint(address(p)) {} catch { return; }
+        bytes32 intent = keccak256(abi.encodeCall(PrecisionZap.exit, (address(p), sh, 0, 0, actor)));
+        try zap.checkpoint(address(p), intent) {} catch { return; }
         vm.prank(actor);
         p.transfer(address(zap), sh);
         vm.prank(EXEC);
@@ -115,7 +125,7 @@ contract PrecisionPoolInvariantEdgeTest is Test {
         vm.deal(lp, 1_000_000 ether);
 
         address exec = address(new ExecStub());
-        factory = new PrecisionPoolFactory(exec);
+        factory = new PrecisionPoolFactory(exec, type(PrecisionPool).creationCode);
         vm.deal(exec, 1_000_000 ether);
 
         uint256[3] memory lows = [uint256(42426406871192), 44_700_000_000_000, 30_000_000_000_000];

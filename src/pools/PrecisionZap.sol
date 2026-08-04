@@ -13,6 +13,8 @@ import {PrecisionPoolFactory} from "./PrecisionPoolFactory.sol";
 contract PrecisionZap {
     uint256 constant CHECKPOINT_NAMESPACE = 1 << 255;
     uint256 constant REENTRANCY_SLOT = 1 << 254;
+    /// @dev Disjoint from both of the above for any 160-bit token address.
+    uint256 constant INTENT_NAMESPACE = (1 << 255) | (1 << 253);
 
     /// @notice The only immediate caller permitted to drive a prefunded redemption.
     /// @dev This is the executor that dispatches the route, not the router.
@@ -26,9 +28,10 @@ contract PrecisionZap {
 
     error Bad();
     error NoPool();
+    error Reentrancy();
     error NotExecutor();
     error BadCheckpoint();
-    error Reentrancy();
+    error IntentMismatch();
 
     event Exited(address indexed pool, address indexed to, uint256 shares, uint256 amount0, uint256 amount1);
 
@@ -56,9 +59,21 @@ contract PrecisionZap {
     /// @notice Snapshot this contract's share balance before the executor funds it.
     /// @dev The transient checkpoint is single-use and keyed by pool. There is
     ///      only one permitted immediate caller for this deployment.
-    function checkpoint(address token) external nonReentrant {
+    ///
+    ///      `intent` is `keccak256` of the exact `exit` calldata this checkpoint
+    ///      is for, and `exit` will not consume a checkpoint that does not
+    ///      match it. The balance snapshot alone is not enough: it says how MUCH
+    ///      may be spent, not what for. The shares arrive between these two
+    ///      calls, `nonReentrant` clears when each returns rather than spanning
+    ///      the gap, and the executor is publicly callable - so without this a
+    ///      callback firing during the funding transfer could call `exit` with
+    ///      the same fresh delta and a recipient of its own choosing. With it,
+    ///      the only exit that can consume the funding is the one that was
+    ///      already authorized.
+    function checkpoint(address token, bytes32 intent) external nonReentrant {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (token == address(0) || token.code.length == 0) revert Bad();
+        if (intent == bytes32(0)) revert Bad();
         if (!factory.isPool(token)) revert NoPool();
 
         bytes32 slot = _checkpointSlot(token);
@@ -73,8 +88,10 @@ contract PrecisionZap {
         unchecked {
             encoded = snapshot + 1;
         }
+        bytes32 intentSlot = _intentSlot(token);
         assembly ("memory-safe") {
             tstore(slot, encoded)
+            tstore(intentSlot, intent)
         }
     }
 
@@ -100,15 +117,22 @@ contract PrecisionZap {
     }
 
     /// @dev Cleared before the pool receives control, so a reentrant call
-    ///      cannot spend the same route funding twice.
+    ///      cannot spend the same route funding twice. The committed intent is
+    ///      this call's own calldata, so the checkpoint can only be spent by
+    ///      the exit it was taken for.
     function _consumeCheckpoint(address token, uint256 amount) internal {
         bytes32 slot = _checkpointSlot(token);
+        bytes32 intentSlot = _intentSlot(token);
         uint256 encoded;
+        bytes32 intent;
         assembly ("memory-safe") {
             encoded := tload(slot)
+            intent := tload(intentSlot)
             tstore(slot, 0)
+            tstore(intentSlot, 0)
         }
         if (encoded == 0) revert BadCheckpoint();
+        if (intent != keccak256(msg.data)) revert IntentMismatch();
 
         uint256 base;
         unchecked {
@@ -122,5 +146,9 @@ contract PrecisionZap {
     ///      addresses and is disjoint from the reentrancy slot.
     function _checkpointSlot(address token) internal pure returns (bytes32) {
         return bytes32(CHECKPOINT_NAMESPACE | uint256(uint160(token)));
+    }
+
+    function _intentSlot(address token) internal pure returns (bytes32) {
+        return bytes32(INTENT_NAMESPACE | uint256(uint160(token)));
     }
 }

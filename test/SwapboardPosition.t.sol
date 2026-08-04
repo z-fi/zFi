@@ -109,32 +109,39 @@ contract SwapboardPositionTest is Test {
         assertEq(remaining, 50e18, "and its claim shrank");
     }
 
-    function test_ClosingFillBurnsThePosition() public {
+    /// @dev The receipt SURVIVES a close, as a spent ticket. Burning it would
+    /// leave any contract holding it - an escrow, a marketplace - pointing at a
+    /// token that no longer exists, with no way to recover what it holds.
+    /// `active` is what says whether a claim remains.
+    function test_ClosingFillLeavesASpentReceipt() public {
         uint256 id = _order(true);
 
         vm.prank(taker);
         sb.fillOrder(id, block.timestamp, 200e18, 0, taker);
 
-        vm.expectRevert();
-        sb.ownerOf(id);
-        assertEq(sb.balanceOf(maker), 0, "receipt gone once the order closed");
+        assertEq(sb.ownerOf(id), maker, "receipt survives the close");
+        (, bool active,,,,,,,,,) = sb.orders(id);
+        assertFalse(active, "but the order carries no claim");
     }
 
-    function test_CancelBurnsThePosition() public {
+    function test_CancelAlsoLeavesASpentReceipt() public {
         uint256 id = _order(true);
         vm.prank(maker);
         sb.cancelOrder(id);
 
-        vm.expectRevert();
-        sb.ownerOf(id);
+        assertEq(sb.ownerOf(id), maker, "receipt survives cancellation");
+        (, bool active,,,,,,,,,) = sb.orders(id);
+        assertFalse(active);
     }
 
     // ------------------------------------------------------- composability
 
-    /// @dev The payoff: a resting order is now an asset, so it can be
-    /// auctioned. Dutchboard takes it through the same push path any NFT uses.
-    function test_APositionCanBeAuctionedOnDutchboard() public {
+    /// @dev A frozen position is inert and therefore safe to escrow, which is
+    /// what makes auctioning one a real feature rather than a trap.
+    function test_AFrozenPositionCanBeAuctioned() public {
         uint256 id = _order(true);
+        vm.prank(maker);
+        sb.setFrozen(id, true);
 
         vm.prank(maker);
         sb.safeTransferFrom(
@@ -143,9 +150,58 @@ contract SwapboardPositionTest is Test {
             id,
             abi.encode(Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
         );
+        assertEq(sb.ownerOf(id), address(dutch), "the auction holds it");
 
-        assertEq(sb.ownerOf(id), address(dutch), "the auction now holds the position");
-        (address m,,,,,,,,,,) = sb.orders(id);
-        assertEq(m, address(dutch), "and therefore the claim");
+        vm.prank(taker);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.OrderFrozen.selector, id));
+        sb.fillOrder(id, block.timestamp, 200e18, 0, taker);
+    }
+
+    /// @dev Transfers to ordinary holders are unaffected - the restriction is
+    /// on escrows that cannot account for proceeds, not on transferability.
+    function test_PositionsRemainFreelyTransferableToHolders() public {
+        uint256 id = _order(true);
+        vm.prank(maker);
+        sb.transferFrom(maker, buyer, id);
+        assertEq(sb.ownerOf(id), buyer);
+    }
+
+    /// @dev Settlement is UNCHANGED by positions. AON and partial fills pay
+    /// the same way they always did - a plain push to `maker` - and the only
+    /// difference is that `maker` now follows the position. Proceeds reach a
+    /// new owner exactly as they reached the original one.
+    function test_FillsPayWhoeverHoldsThePosition_AON() public {
+        vm.prank(maker);
+        uint256 id =
+            sb.createOrder(address(tka), 100e18, address(tkb), 200e18, false, 0, false, false, address(0));
+
+        vm.prank(maker);
+        sb.transferFrom(maker, buyer, id);
+
+        vm.prank(taker);
+        sb.fillOrder(id, block.timestamp, 200e18, 0, taker);
+
+        assertEq(tkb.balanceOf(buyer), 200e18, "proceeds went to the current holder");
+        assertEq(tkb.balanceOf(maker), 0, "and not to the original maker");
+        assertEq(tka.balanceOf(taker), 100e18, "escrow went to the taker as always");
+    }
+
+    function test_FillsPayWhoeverHoldsThePosition_PartialFill() public {
+        uint256 id = _order(true);
+
+        vm.prank(maker);
+        sb.transferFrom(maker, buyer, id);
+
+        vm.prank(taker);
+        sb.fillOrder(id, block.timestamp, 100e18, 0, taker);
+
+        assertEq(tkb.balanceOf(buyer), 100e18, "half the proceeds to the holder");
+        assertEq(tka.balanceOf(taker), 50e18, "proportional escrow to the taker");
+        assertEq(sb.ownerOf(id), buyer, "position still live for the remainder");
+
+        // And the remainder still pays the holder.
+        vm.prank(taker);
+        sb.fillOrder(id, block.timestamp, 100e18, 0, taker);
+        assertEq(tkb.balanceOf(buyer), 200e18, "rest of the proceeds followed too");
     }
 }

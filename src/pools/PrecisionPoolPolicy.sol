@@ -43,6 +43,13 @@ contract PrecisionPoolPolicy is Ownable {
     constructor(IPrecisionPoolFactoryRegistry factory_, address initialOwner) {
         if (address(factory_).code.length == 0) revert InvalidFactory();
         if (initialOwner == address(0)) revert InvalidOwner();
+        // Probe the registry so a wrong-interface address fails at deploy time
+        // rather than making every later `isRoutable` revert.
+        try factory_.isPool(address(0)) returns (bool listed) {
+            if (listed) revert InvalidFactory();
+        } catch {
+            revert InvalidFactory();
+        }
         factory = factory_;
         _initializeOwner(initialOwner);
     }
@@ -54,6 +61,15 @@ contract PrecisionPoolPolicy is Ownable {
         if (!factory.isPool(pool)) return false;
         if (policy == Policy.Approved) return true;
         return IPrecisionPoolPolicyView(pool).hook() == address(0);
+    }
+
+    /// @notice Routability for a batch of pools, in the given order.
+    /// @dev Single read for routers and interfaces filtering a candidate set.
+    function isRoutableBatch(address[] calldata pools) external view returns (bool[] memory out) {
+        out = new bool[](pools.length);
+        for (uint256 i; i < pools.length; ++i) {
+            out[i] = isRoutable(pools[i]);
+        }
     }
 
     /// @notice Revert unless `pool` is currently routable.

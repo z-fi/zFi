@@ -60,7 +60,7 @@ contract ConstantSurchargeHookTest is Test {
     address trader = address(0x7AD);
 
     function setUp() public {
-        factory = new PrecisionPoolFactory(address(0));
+        factory = new PrecisionPoolFactory(address(0), type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
         hook = new ConstantSurchargeHook(address(factory));
         usdc = new MockERC20("USDC", 6);
