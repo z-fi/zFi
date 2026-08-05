@@ -85,6 +85,66 @@ forge test --match-path test/zSwap.t.sol
 
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 
+## TokenList: the token registry as an NFT collection
+
+[TokenList](https://etherscan.io/address/0x0000006013dF75A31678B786061C2B54bf531524) ·
+[TokenListRenderer](https://etherscan.io/address/0x000000d595e36Dd0228c4040D981A01A59DbbE87) ·
+[source](src/utils/TokenList.sol)
+
+An onchain token list where each listing **is** an ERC-721. The card for a token on
+this chain is minted to the token's own address, so anyone looking at that contract
+on Etherscan sees a listing carrying its logo, symbol, decimals and links. Minting
+lists, burning delists, re-minting relists. Eleven entries are live.
+
+Curation is the only power the owner holds over *facts*. For local tokens
+`name`/`symbol`/`decimals` are read from the token contract itself and can never be
+typed in by the owner; `sync` is permissionless, so the owner is never the reason a
+stale name persists. The owner authors only what has no onchain source — logo, theme,
+links, and a sort weight.
+
+### Weight is a sort key, not a position
+
+`rank` is a weight: higher sorts first, `0` is unranked. The card prints `WEIGHT`, not
+`RANK`, because a renderer is handed one listing and cannot know an ordinal even in
+principle — position is the `rankedIds()` index. Seeded weights step by 1,000 so a
+token can be placed *between* two existing ones by picking a number in the gap,
+instead of renumbering everything below it.
+
+### Two orderings, chosen by the reader
+
+[ZorgConviction](src/dao/ZorgConviction.sol) layers conviction voting on top: zOrg
+holders bond shares to a listing id and support accrues on an exponential half-life.
+It **never writes to the registry** — no `setRank`, no permission over it — and
+`ZorgTokenListLens` can only ever return ids the registry already lists. Conviction
+permutes the curated set; it cannot add to it or surface something delisted.
+
+So the same registry serves both, and each consumer picks: `tokenList.rankedIds()`
+for the curator's order, or the lens for the earned order with the curator's as the
+tie-break. On an unvoted list the two are identical.
+
+### Why display text loses its apostrophes
+
+Text sourced from third-party token contracts is sanitised at the storage boundary
+with an allowlist: printable ASCII minus the characters that can terminate a string
+or an element in the two documents the registry emits.
+
+The filter **drops rather than escapes**, because the same text is rendered into both
+XML and JSON and correct escaping differs between them — `&amp;` is right for the
+SVG and wrong for the JSON, so no single escaping pass is correct for both. Dropping
+produces one output valid in both, unconditionally.
+
+Because the registry is immutable and its renderer is replaceable, sanitisation is
+deliberately stricter than any single renderer requires: the guarantee has to hold
+for renderers that do not exist yet. The current renderer puts curated text only in
+text nodes, where an apostrophe is legal — but it delimits its attributes with single
+quotes, and storage outlives renderers.
+
+The cost is typographic. `Circle's stablecoin` stores and renders as
+`Circles stablecoin`, and the same applies to a token whose own `name()` contains one.
+We took that over carrying an escaping bug we could never fix. It is deterministic,
+identical for every reader, and there is no ambiguity or collision — only missing
+punctuation.
+
 ## Precision DeFi
 
 Instead of building a generalized AMM that handles arbitrary token pairs — a singleton (Uniswap V4, Ekubo) or a factory (Uniswap V2/V3, Curve) — we build custom pool contracts for specific pairs. Everything the pool will ever need is known at compile time: token addresses, decimals, fee, and curve parameters are constants, not storage. No tick math, no bitmap traversal, no pool key lookups, no hook dispatch, no factory overhead.

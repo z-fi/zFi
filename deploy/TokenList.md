@@ -271,3 +271,46 @@ it clears `out/` and the artifacts can vanish mid-read.
    and can list, delist, re-rank and rewrite every logo and link.
 4. Consider `lockRenderer()` once the card is final. Until then the owner can change
    what every listing *appears* to say, even though storage stays honest.
+
+## Known limitation: display text loses its apostrophes
+
+`_clean` admits printable ASCII minus `" ' \ < > &`, and runs on every text field —
+`name`, `symbol`, `url`, `audit`, `description` and extension values — including the
+`name()`/`symbol()` read from the token itself. Apostrophes are therefore stripped
+BEFORE storage. Verified against the live contract: `Circle's dollar, MakerDAO's peg`
+stores as `Circles dollar, MakerDAOs peg`. The typographic `’` does not survive
+either, being outside printable ASCII, so there is no substitute character.
+
+A renderer swap CANNOT fix this. The text is filtered on the way in and the
+apostrophe never reaches storage, so nothing downstream can recover it. Rewriting a
+description re-runs the same filter, so the remedy is to rephrase — `Dollar
+stablecoin issued by Circle` rather than `Circle's dollar stablecoin`, which is what
+the seeded descriptions already do.
+
+Five of the six characters genuinely have to go: `"` and `\` break a JSON string,
+`<` `>` `&` break the XML. The apostrophe is stricter than the current renderer
+requires, and deliberately so — the registry is immutable, its renderer is
+replaceable, and a future renderer interpolating a name into a single-quoted
+attribute is exactly the failure this cannot be patched out of. See the README
+section for the full reasoning.
+
+## Editing a live listing: `setArt` is a FULL REPLACE
+
+There is no description-only setter. `description` is reachable only through
+`setArt`, which writes `color`, `rank`, `logo`, `url` and `description` together.
+Passing `""` for the logo does not mean "leave it alone" — it means "set it empty".
+Verified on a fork against the live WETH listing: `setArt` with an empty logo took it
+from 1,206 bytes to 0.
+
+To edit one field, read the others from `get(id)` first and re-supply them. To avoid
+carrying a multi-kilobyte logo inline, the safer shape is two calls batched
+atomically through the owner multisig:
+
+```
+1. setArt(id, color, rank, "", url, newDescription)
+2. setLogoSVG(id, svg)
+```
+
+`setLogoSVG` touches nothing but the logo, so it is safe on its own. `setRank`,
+`setAudit`, `setStandard`, `setOnchainSvg` and `setExtra` are likewise single-field.
+
