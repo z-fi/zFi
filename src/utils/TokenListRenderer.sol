@@ -223,7 +223,7 @@ contract TokenListRenderer {
         // carries the most weight — no account, no logo source, no onchain facts —
         // and it was the one listing whose description could not be read.
         string memory theme = _legible(t.color);
-        string memory chain = string.concat(_namespace(t.kind), ":", LibString.toString(t.chainId));
+        string memory chain = _chainLabel(t.kind, t.standard, t.chainId);
         string memory sym = _symbol(t.symbol);
         string memory desc = _safe(t.description);
         // Assembled in bands rather than as one forty-argument concatenation. The
@@ -240,8 +240,8 @@ contract TokenListRenderer {
             "<g fill='none' stroke='#fff' stroke-width='2'>" "<rect x='18' y='18' width='684' height='384'/>"
             "<path d='M18 88h684M18 356h684'/></g>",
             _well(theme),
-            _logo(t.logo),
-            _provenanceChip(t.synced, t.standard, theme),
+            bytes(t.logo).length == 0 ? _initials(sym, theme) : _logo(t.logo),
+            _provenanceChip(t.synced, t.standard),
             _header(t.rank, chain, theme),
             _identity(t, sym, theme),
             _chips(t.frozen, extras, theme),
@@ -384,8 +384,29 @@ contract TokenListRenderer {
     function _account(TokenList.Token memory t, string memory desc) internal pure returns (string memory) {
         if (!t.deployed) return _textBlock(desc, 250);
         return string.concat(
-            "<text x='32' y='258' font-size='11' opacity='0.6'>ADDRESS</text>" "<text x='32' y='278' font-size='15'>",
-            _account(t),
+            // A zero account is not an address anyone can use. Printing forty zeros
+            // invites a reader to copy them, and on the native asset that is the one
+            // listing where copying an address is meaningless. `json()` still answers
+            // the zero word — a machine keying by account needs it — this is only what
+            // a person is shown.
+            //
+            // The address band stays at 258/278. Moving it down 8px to open up the
+            // chips row above looked right in the coordinates and wrong on the card:
+            // the chips row renders only when a listing is frozen or carries extras,
+            // which is 0 of the 11 live listings, while the 8px came straight out of
+            // the gap between this value and the description on every one of them.
+            // Trading a real spacing on every card for a hypothetical one on none is
+            // the wrong way round, and the chips case is tight, not overlapping.
+            "<text x='32' y='258' font-size='11' opacity='0.6'>",
+            _accountLabel(t.kind, t.standard),
+            "</text>" "<text x='32' y='278' font-size='15'>",
+            t.account == bytes32(0)
+                ? (
+                    t.standard == TokenList.Standard.NATIVE
+                        ? "NONE - NATIVE ASSET"
+                        : "NONE - NO ACCOUNT"
+                )
+                : _account(t),
             "</text>",
             _textBlock(desc, 300)
         );
@@ -395,7 +416,7 @@ contract TokenListRenderer {
     ///      weight given to a footnote. It is the most consequential fact on the
     ///      card — whether the name, symbol and decimals were read from the token or
     ///      typed by a curator — so it gets a bordered pill in the theme color.
-    function _provenanceChip(bool synced, TokenList.Standard standard, string memory theme)
+    function _provenanceChip(bool synced, TokenList.Standard standard)
         internal
         pure
         returns (string memory)
@@ -410,15 +431,15 @@ contract TokenListRenderer {
             ? "METADATA READ ONCHAIN"
             : standard == TokenList.Standard.NATIVE ? "NO CONTRACT TO READ" : "OWNER ATTESTED";
         string memory w = LibString.toString(14 + bytes(text).length * 7);
+        // Neutral, NOT the owner's theme. This chip states where the metadata came
+        // from; drawn in the listing's brand colour it became an orange badge on WBTC
+        // and a red one on rETH, sitting beside a same-coloured weight, which reads as
+        // a warning about the token rather than a note about its provenance. Signal
+        // colour and brand colour are different jobs.
         return string.concat(
-            "<g><rect x='32' y='64' height='20' rx='4' fill-opacity='0.16' stroke-opacity='0.55' width='",
+            "<g><rect x='32' y='64' height='20' rx='4' fill-opacity='0.10' stroke-opacity='0.45' width='",
             w,
-            "' fill='",
-            theme,
-            "' stroke='",
-            theme,
-            "'/><text x='39' y='78' font-family='Helvetica,Arial,sans-serif' font-size='11' fill='",
-            theme,
+            "' fill='#fff' stroke='#fff'/><text x='39' y='78' font-family='Helvetica,Arial,sans-serif' font-size='11' fill='#fff' opacity='0.85",
             "'>",
             text,
             "</text></g>"
@@ -573,6 +594,25 @@ contract TokenListRenderer {
         return n <= 6 ? 40 : n <= 9 ? 32 : 26;
     }
 
+    /// @dev What the CARD prints on its chain line. Deliberately not `_namespace`,
+    ///      which also feeds `json()`'s `k` and must keep meaning "how the account word
+    ///      is encoded". A Bitcoin-rooted listing is `Kind.OTHER` with `chainId` forced
+    ///      to 0, so the namespace pair renders "raw:0" — the most identity-bearing
+    ///      line on the card, saying nothing. The chain is knowable from the standard,
+    ///      so say it. `k` stays "raw", because the account genuinely is a raw word.
+    function _chainLabel(TokenList.Kind kind, TokenList.Standard standard, uint64 chainId)
+        internal
+        pure
+        returns (string memory)
+    {
+        if (
+            standard == TokenList.Standard.TACIT || standard == TokenList.Standard.RUNE
+                || standard == TokenList.Standard.ORDINAL || standard == TokenList.Standard.BRC20
+        ) return "bitcoin";
+        if (kind != TokenList.Kind.EVM) return _namespace(kind);
+        return string.concat(_namespace(kind), ":", LibString.toString(chainId));
+    }
+
     function _namespace(TokenList.Kind kind) internal pure returns (string memory) {
         return kind == TokenList.Kind.EVM ? "eip155" : kind == TokenList.Kind.SVM ? "solana" : "raw";
     }
@@ -653,6 +693,28 @@ contract TokenListRenderer {
 
     /// @dev EVM addresses render as `0x…`, Solana mints as base58; anything else as
     ///      the raw 32-byte word, which any consumer can re-encode for its namespace.
+    /// @dev What the account word IS, per standard. Calling every one of them ADDRESS
+    ///      is wrong in both directions: a Tacit `asset_id` is the asset's canonical
+    ///      identifier and not an address at all, while a Rune or Ordinal key is a
+    ///      domain-separated hash this registry computed - useful for lookups here,
+    ///      but not something the asset itself would recognise. Naming each honestly
+    ///      costs a few bytes and stops the most identity-bearing row on the card from
+    ///      claiming to be something it is not.
+    function _accountLabel(TokenList.Kind kind, TokenList.Standard standard)
+        internal
+        pure
+        returns (string memory)
+    {
+        if (kind == TokenList.Kind.EVM) return "ADDRESS";
+        if (kind == TokenList.Kind.SVM) return "MINT";
+        if (standard == TokenList.Standard.TACIT) return "ASSET ID";
+        if (
+            standard == TokenList.Standard.RUNE || standard == TokenList.Standard.ORDINAL
+                || standard == TokenList.Standard.BRC20
+        ) return "REGISTRY KEY";
+        return "ACCOUNT";
+    }
+
     function _account(TokenList.Token memory t) internal pure returns (string memory) {
         if (t.kind == TokenList.Kind.SVM) return Base58.encodeWord(t.account);
         if (t.kind == TokenList.Kind.EVM) return LibString.toHexString(uint256(t.account), 20);
@@ -741,6 +803,25 @@ contract TokenListRenderer {
     ///      contract's output must be well-formed whoever calls it.
     function _uri(string memory logo) internal pure returns (string memory) {
         return _safe(logo);
+    }
+
+    /// @dev With no logo the well is a bare tinted square, and for assets that will
+    ///      rarely carry art - every Bitcoin-rooted standard - that square is most of
+    ///      the card. Fall back to the symbol's own opening glyphs: always present,
+    ///      needs no new stored field, and reads as deliberate rather than as a gap.
+    ///      Symbols are ASCII by construction (`TokenList._clean`), so slicing bytes
+    ///      cannot split a character.
+    function _initials(string memory sym, string memory theme) internal pure returns (string memory) {
+        uint256 n = bytes(sym).length;
+        if (n == 0) return "";
+        return string.concat(
+            "<text x='88' y='166' text-anchor='middle' dominant-baseline='central' font-size='34'"
+            " font-weight='700' opacity='0.45' fill='",
+            theme,
+            "'>",
+            LibString.slice(sym, 0, n < 2 ? n : 2),
+            "</text>"
+        );
     }
 
     function _logo(string memory logo) internal pure returns (string memory) {
