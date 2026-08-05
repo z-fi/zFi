@@ -1,0 +1,761 @@
+<!doctype html><html lang=en><meta charset=utf-8>
+<!--
+  token.list.wei — an onchain token list. This document renders client-side, so an
+  agent reading this HTML sees no listings. The data is not behind an API; it is three
+  eth_calls against one mainnet contract, no key and no indexer:
+
+    registry  0x0000006013df75a31678b786061c2b54bf531524   (Ethereum mainnet)
+    ids       rankedIds()(uint256[])            — every listing id, curation order
+    metadata  json(uint256)(string)             — one listing, already JSON
+    card art  tokenURI(uint256)(string)         — ERC-721 metadata; art is .image
+    batched   multicall(bytes[])(bytes[])       — all of the above in one call
+
+  If you can run scripts, `window.tokenlist` holds the decoded result after load:
+  {registry, chainId, source, fetchedAt, listings:[{...fields, art}]}. The same
+  shape is downloadable from the page as `raw json`.
+-->
+<meta name=description content="An onchain token list on Ethereum. Every listing is an NFT minted to the token it describes, with metadata and card art read from the chain."><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>token.list.wei</title>
+<link id=fav rel=icon href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Crect%20width%3D'32'%20height%3D'32'%20fill%3D'%23000'%2F%3E%3Cg%20fill%3D'none'%20stroke%3D'%23fff'%20stroke-width%3D'2'%3E%3Crect%20x%3D'3'%20y%3D'3'%20width%3D'26'%20height%3D'26'%2F%3E%3Cpath%20d%3D'M3%2012h26M3%2022h26'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<style>
+:root{color-scheme:light dark;--bg:#faf8f5;--pn:#fff;--ink:#1a1815;--mu:#6b6560;--hr:#e3ddd4;--ac:#4a63c4;--at:#b96908;--nt:#5e7a6b;
+--sa:"Helvetica Neue",Helvetica,Arial,sans-serif;--mo:ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(prefers-color-scheme:dark){:root{--bg:#121110;--pn:#1b1917;--ink:#efeae3;--mu:#9a928a;--hr:#2e2a26;--ac:#8ca0f0;--at:#f7931a;--nt:#8fb3a0}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sa);line-height:1.5;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
+.w{max-width:1180px;margin:0 auto;padding:clamp(20px,5vw,60px) max(16px,env(safe-area-inset-left)) calc(72px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-right))}
+@media(min-width:720px){.w{padding-left:clamp(24px,4vw,40px);padding-right:clamp(24px,4vw,40px)}}
+.eb{font-family:var(--mo);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--mu);margin:0 0 14px}
+header{display:flex;flex-wrap:wrap;gap:clamp(16px,4vw,40px);align-items:flex-start;padding-bottom:24px;border-bottom:1px solid var(--hr)}
+.mk{width:clamp(76px,15vw,152px);flex:none}.mk svg,.mk img{width:100%;height:auto;display:block}
+.ld{flex:1 1 340px;min-width:min(100%,260px);display:flex;flex-direction:column;gap:10px}
+h1{margin:0;font-size:clamp(21px,4.4vw,38px);font-weight:700;letter-spacing:-.022em;line-height:1.18;text-wrap:balance}
+.sb{margin:0;color:var(--mu);max-width:62ch;font-size:clamp(14px,1.4vw,15px)}
+.fx{display:flex;flex-wrap:wrap;gap:4px 16px;font-family:var(--mo);font-size:11.5px;color:var(--mu);font-variant-numeric:tabular-nums}
+.fx b{color:var(--ink);font-weight:500}.fx a{color:var(--ac)}
+/* REGISTER SUMMARY - every figure is counted from the listings already fetched, so it
+   costs no extra call and cannot disagree with the grid below it. */
+.sm{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;margin:18px 0 0;
+border:1px solid var(--hr);border-radius:3px;background:var(--hr);overflow:hidden}
+/* Grid + a 1px gap over a rule-coloured ground draws the hairlines: with flex and
+   border-right, a wrapped second row sat under the first with nothing between them. */
+.sm div{background:var(--pn);padding:10px 13px;display:flex;flex-direction:column;gap:3px}
+.sm b{font-family:var(--mo);font-size:17px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.sm span{font-family:var(--mo);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0 0}
+.fc{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.fc button{font-family:var(--mo);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:2px;
+border:1px solid var(--hr);background:none;color:var(--mu);cursor:pointer;min-height:28px}
+.fc button:hover{color:var(--ink)}
+.fc button[aria-pressed=true]{color:var(--ac);border-color:var(--ac)}
+.fc button:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.fc button b{font-weight:400;margin-left:6px;opacity:.6;font-variant-numeric:tabular-nums}
+/* A category with nothing in it is still worth showing — it says the register knows
+   the format. Muted so it reads as "none yet" rather than as a live filter. */
+/* Fading to .45 put these under the contrast floor on a dark ground. Keep them
+   clearly secondary, but readable — "bitcoin 0" is meant to be read. */
+.fc button.z{opacity:.7;border-style:dashed}
+/* The group that contains the active standard: related to the selection, but not
+   itself the filter, so it is marked without claiming aria-pressed. */
+.fc button.pa{border-color:var(--ac)}
+/* The sub-row is subordinate: inset behind a rule, so it reads as belonging to the
+   selection above rather than as a second, competing set of filters. */
+.fc2{margin-top:6px;padding-left:11px;border-left:2px solid var(--hr)}
+.fc2 button{font-size:10px}
+/* Native select chrome differs per browser and per platform — on iOS it adds its own
+   padding and can crowd the chevron into the text. Draw the chevron instead, the way
+   zSwap already does, so the control is the same everywhere and the arrow sits where
+   the reserved padding says it does. The chevron inherits currentColor, so it tracks
+   the theme without a second asset. */
+#sort{appearance:none;-webkit-appearance:none;font:inherit;font-family:var(--mo);font-size:11.5px;
+color:var(--ink);background:var(--pn);border:1px solid var(--hr);border-radius:3px;
+padding:5px 22px 5px 8px;min-height:28px;cursor:pointer;
+background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+background-position:calc(100% - 13px) calc(50% + 1px),calc(100% - 8px) calc(50% + 1px);
+background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+#sort:focus-visible{outline:2px solid var(--ac);outline-offset:-1px}
+#sort::-ms-expand{display:none}
+#q{flex:1 1 200px;min-width:0;background:var(--pn);color:var(--ink);border:1px solid var(--hr);border-radius:3px;padding:10px 12px;font-family:var(--mo);font-size:16px}
+@media(min-width:720px){#q{font-size:13px;padding:9px 12px}}
+#q:focus-visible{outline:2px solid var(--ac);outline-offset:-1px}
+.ct,.exp{font-family:var(--mo);font-size:11.5px;color:var(--mu);flex:none}
+#msg{margin:14px 0 0;font-family:var(--mo);font-size:12.5px;color:var(--at)}
+.g{display:grid;gap:clamp(14px,2.4vw,26px);grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));margin-top:20px}
+/* Every card carries a ~4KB inline SVG, so a long list means decoding all of them at
+   once. `content-visibility` defers that until a card nears the viewport; the
+   intrinsic size keeps the scrollbar honest in the meantime and is remembered once a
+   card has been laid out for real. Filtering still works: [hidden] wins over this. */
+.p{content-visibility:auto;contain-intrinsic-size:320px;contain-intrinsic-size:auto 320px;
+margin:0;background:var(--pn);border:1px solid var(--hr);border-radius:3px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
+transition:border-color .14s ease,transform .14s ease,box-shadow .14s ease}
+@media(hover:hover){.p:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 6px 20px -10px #0006}
+.p:hover .sy{color:var(--ac)}}
+.p:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.p:active{transform:none}
+@media(prefers-reduced-motion:reduce){.p{transition:none}.p:hover{transform:none}}
+/* The rail is the token's own `t` colour, straight from the registry - the one place
+   each card is allowed to look like itself rather than like the page. */
+.p::before{content:"";display:block;height:3px;background:var(--b,var(--hr))}
+.lg{width:16px;height:16px;border-radius:50%;flex:none;background:var(--hr)}
+/* Rank is a curation ordering, so it is drawn against the observed spread rather than
+   as a fraction of its raw value - the ranks cluster near 1e6 and a raw bar reads flat. */
+.rkw{display:flex;align-items:center;gap:8px}
+.rkn{font-family:var(--mo);font-size:10px;color:var(--mu);flex:none;font-variant-numeric:tabular-nums}
+.rk{height:2px;background:var(--hr);border-radius:1px;overflow:hidden;flex:1}
+.rk i{display:block;height:100%;background:var(--b,var(--ac));min-width:2px}
+.art{background:#000;line-height:0;aspect-ratio:12/7}
+.art img{width:100%;height:100%;display:block;animation:fi .18s ease both}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.art img{animation:none}}
+figcaption{padding:11px 13px 13px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--hr)}
+.r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sy{font-weight:700;font-size:15px;transition:color .14s ease}
+.sd{font-family:var(--mo);font-size:11.5px;color:var(--mu);margin-left:auto}
+.c{font-family:var(--mo);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.on{color:var(--ac)}.at{color:var(--at)}.nc{color:var(--nt)}
+.cp{background:none;border:0;padding:6px 0;margin:-6px 0 -4px;font-family:var(--mo);font-size:10.5px;color:var(--mu);line-height:1.45;cursor:copy;text-align:left;min-height:32px;width:100%}
+.cp:hover,.cp:focus-visible{color:var(--ink)}
+.ln{display:flex;flex-wrap:wrap;gap:0 6px;align-items:center;font-family:var(--mo);font-size:10.5px;margin:2px 0 0;color:var(--mu)}
+.ln a,.ln button{color:var(--ac);text-decoration:none;padding:3px 0;min-height:24px;display:inline-flex;align-items:center}
+@media(pointer:coarse){.ln a,.ln button{min-height:34px;padding:6px 0}.ln{gap:0 10px}}
+.ln a:hover,.ln button:hover,.ln a:focus-visible,.ln button:focus-visible{text-decoration:underline}
+.db .ln{font-size:11.5px;margin:0 0 12px}
+.sk{background:linear-gradient(90deg,var(--pn),var(--hr),var(--pn));background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.sk{animation:none}}
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--hr);color:var(--mu);font-size:12.5px;max-width:76ch}
+footer a,.lk{color:var(--ac)}
+footer code{font-family:var(--mo);font-size:11px}
+footer p{margin:0 0 8px}
+footer details{margin:10px 0 0}
+footer summary{cursor:pointer;color:var(--ac);font-family:var(--mo);font-size:11.5px}
+footer pre{margin:8px 0 0;padding:10px;background:var(--pn);border:1px solid var(--hr);border-radius:3px;font-family:var(--mo);font-size:10.5px;line-height:1.6;overflow-x:auto;white-space:pre;color:var(--mu)}
+.lk{background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline}
+.rw{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 0}
+#rpcu{flex:1 1 260px;min-width:0;background:var(--pn);color:var(--ink);border:1px solid var(--hr);border-radius:3px;padding:9px 10px;font-family:var(--mo);font-size:16px}
+@media(min-width:720px){#rpcu{font-size:12px;padding:7px 10px}}
+#rpcu:focus-visible{outline:2px solid var(--ac);outline-offset:-1px}
+.bt{background:none;border:1px solid var(--hr);color:var(--mu);border-radius:3px;padding:7px 12px;cursor:pointer;font-family:var(--mo);font-size:12px;min-height:36px}
+.bt:hover,.bt:focus-visible{color:var(--ink);border-color:var(--ac)}
+dialog{border:1px solid var(--hr);border-radius:4px;background:var(--pn);color:var(--ink);width:min(760px,100%);max-width:100%;padding:0;margin:auto}
+dialog::backdrop{background:#000a}
+@media(max-width:640px){dialog{margin:auto auto 0;border-radius:8px 8px 0 0;border-bottom:0;width:100%}}
+.dh{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--hr);position:sticky;top:0;background:var(--pn)}
+.dh b{font-size:15px}
+.dh>span{display:flex;gap:8px;align-items:center;font-family:var(--mo);font-size:12px;color:var(--mu)}
+#dla,#dda{display:contents}
+.db{padding:14px;max-height:min(70vh,560px);overflow:auto;-webkit-overflow-scrolling:touch}
+.db pre{margin:0;font-family:var(--mo);font-size:11px;white-space:pre-wrap;color:var(--mu);user-select:all;-webkit-user-select:all}
+.nb{margin:0 0 10px;font-family:var(--mo);font-size:11px;line-height:1.5;color:var(--at)}
+.dd{margin:0 0 12px;font-size:14px;line-height:1.55;max-width:64ch;color:var(--ink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-family:var(--mo);font-size:12px;margin-bottom:12px}
+.kv span:nth-child(odd){color:var(--mu)}
+</style>
+<div class=w>
+<p class=eb>token.list.wei / canonical onchain tokenlist</p>
+<header>
+  <div class=mk id=mark></div>
+  <div class=ld>
+    <h1>The whole list lives onchain</h1>
+    <p class=sb id=desc>An onchain token list. Each listing is an ERC-721 minted to the token it describes, carrying its logo, symbol, decimals and links. For tokens on this chain the name, symbol and decimals are read from the token contract itself and cannot be authored by the curator; anyone may refresh them.</p>
+    <div class=fx>
+      <span>registry <a id=lnk target=_blank rel=noopener><b id=addr></b></a></span>
+      <span>art + metadata <b>100% onchain</b></span>
+      <span>listings <b>non-transferable</b> (<a href="https://eip.tools/eip/5192" target=_blank rel="noopener noreferrer">ERC-5192</a>)</span>
+      <span id=pgf></span>
+    </div>
+  </div>
+</header>
+<div class=sm id=sm hidden></div>
+<div class=bar>
+  <input id=q placeholder="filter by symbol, name or address" autocomplete=off spellcheck=false aria-label="filter listings">
+  <label class=ct for=sort>sort</label>
+  <select id=sort aria-label="sort listings">
+    <option value=rank>curation weight</option>
+    <option value=standard>token standard</option>
+    <option value=symbol>symbol A–Z</option>
+    <option value=name>name A–Z</option>
+    <option value=decimals>decimals</option>
+  </select>
+  <span class=ct id=cnt></span>
+  <span class=exp><button class=lk id=exTL title="Uniswap token list schema">token list json</button> · <button class=lk id=exRaw title="every field the registry holds, plus each listing's rendered card art">raw json</button></span>
+</div>
+<div class=fc id=fc role=group aria-label="filter by category"></div>
+<div class="fc fc2" id=fc2 role=group aria-label="filter by standard" hidden></div>
+<p id=msg></p>
+<div class=g id=grid></div>
+<footer>
+  <p>Every card is rendered onchain by the registry's own renderer and decoded here — the same bytes a wallet or marketplace reads.</p>
+  <p id=routes></p>
+  <details><summary>Integrating</summary>
+  <p>Every read is an ordinary <code>eth_call</code>; no key, no wallet, no indexer.</p>
+  <pre id=devdoc></pre>
+  </details>
+  <p>Data source <span id=src>—</span> · <button class=lk id=setr aria-expanded=false aria-controls=rw>use your own RPC</button></p>
+  <div class=rw id=rw hidden>
+    <input id=rpcu type=url inputmode=url autocomplete=off spellcheck=false placeholder="https://your-node.example/rpc" aria-label="JSON-RPC endpoint for Ethereum mainnet">
+    <button class=bt id=rpcs>use it</button><button class=bt id=rpcc>reset</button>
+  </div>
+</footer>
+</div>
+<dialog id=dlg aria-label="listing detail"><div class=dh><b id=dt></b><span><span id=dla><button class=lk id=dsvg>svg</button> · <button class=lk id=djson>json</button> · </span><span id=dda hidden><button class=lk id=ddl>download</button> · <button class=lk id=dcp>copy</button> · </span><button class=bt id=dx>close</button></span></div><div class=db><p class=dd id=ddesc hidden></p><p class=ln id=dlk></p><div class=kv id=dkv></div><p class=nb id=dnote hidden></p><pre id=dj></pre></div></dialog>
+<script>
+const L='0x0000006013df75a31678b786061c2b54bf531524',
+/* Keyless endpoints, each verified against this registry. Popular ones are absent
+   where they answer eth_chainId but return nothing, or reject batches. */
+RPCS=['https://eth.blockrazor.xyz','https://eth-mainnet.public.blastapi.io','https://ethereum-rpc.publicnode.com','https://rpc.mevblocker.io','https://eth.merkle.io','https://0xrpc.io/eth','https://eth.rpc.blxrbdn.com','https://eth.drpc.org','https://mainnet.gateway.tenderly.co','https://eth-pokt.nodies.app','https://eth.api.onfinality.io/public'],
+S={ids:'0xdf7ca268',json:'0x74e18e96',uri:'0xc87b56dd',curi:'0xe8a3d485',mc:'0xac9650d8'},
+$=i=>document.getElementById(i),
+esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+z=n=>BigInt(n).toString(16).padStart(64,'0'),
+short=u=>String(u).replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+let RPC=null,ROWS=[],SEED=null,MARK='';const BAD=new Set();
+async function post(u,b){let c=AbortSignal.timeout?AbortSignal.timeout(12000):undefined;
+ let r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b),signal:c});
+ if(!r.ok)throw Error('HTTP '+r.status);let j=await r.json();if(j&&j.error)throw Error(j.error.message||'rpc error');return j.result}
+/* The registry inherits solady's Multicallable, so ONE eth_call to multicall(bytes[])
+   carries every read. Beats JSON-RPC batching twice over: it is an ordinary eth_call,
+   so endpoints that cap or reject batches still work - four below do - and it is one
+   round trip. No Multicall3, no extra contract to trust. */
+const W=x=>BigInt(x).toString(16).padStart(64,'0');
+function mc(calls){let n=calls.length,offs=[],body='',cur=n*32;
+ for(let c of calls){let d=c.slice(2),len=d.length/2,pad=(32-len%32)%32;
+  offs.push(cur);body+=W(len)+d+'0'.repeat(pad*2);cur+=32+len+pad}
+ return S.mc+W(32)+W(n)+offs.map(W).join('')+body}
+function unmc(hex){let h=(hex||'0x').slice(2);if(h.length<128)return[];
+ /* Offsets and lengths here come straight from an untrusted RPC, so bounds-check every
+    read: an out-of-range word must abort, not silently slice out garbage. */
+ const w=i=>{let s=h.slice(i*64,(i+1)*64);if(s.length<64)throw Error('short return');return Number(BigInt('0x'+s))};
+ let arr=w(0)/32,n=w(arr),out=[];
+ if(!Number.isSafeInteger(arr)||!Number.isSafeInteger(n)||n*64>h.length)throw Error('bad return');
+ for(let i=0;i<n;i++){let p=arr+1+w(arr+1+i)/32,len=w(p);
+  if(!Number.isSafeInteger(p)||(p+1)*64+len*2>h.length)throw Error('bad return');
+  out.push('0x'+h.slice((p+1)*64,(p+1)*64+len*2))}
+ return out}
+/* An injected provider can stall forever (locked wallet); bound it and fail over. */
+const deadline=(p,ms)=>Promise.race([p,new Promise((_,x)=>setTimeout(()=>x(Error('timeout')),ms))]);
+const wallet=(method,params)=>deadline(window.ethereum.request({method,params}),12000);
+async function raw(u,calls){let data=mc(calls);
+ if(u==='wallet')return unmc(await wallet('eth_call',[{to:L,data},'latest']));
+ return unmc(await post(u,{jsonrpc:'2.0',id:1,method:'eth_call',params:[{to:L,data},'latest']}))}
+/* Round-robin the starting point so visitors spread across the pool rather than all
+   leaning on the first entry, then fail over on error OR empty answer. */
+const saved=()=>{try{return localStorage.getItem('tl.rpc')||''}catch(e){return''}};
+function order(){let s=saved(),n=RPCS.length,o=Math.floor(Math.random()*n),
+ ring=Array.from({length:n},(_,i)=>RPCS[(o+i)%n]);
+ return (s?[s]:[]).concat(window.ethereum?['wallet']:[],ring.filter(u=>u!==s))}
+/* Concurrent chunk lanes all reach for an endpoint at once, and before they existed
+   only one probe could ever be in flight. Without this, a single blip has three lanes
+   walking the pool independently — three simultaneous probes, each able to mark a
+   different endpoint BAD, so one hiccup can burn three of them. Share the attempt. */
+let PICKING=null;
+function pick(){if(RPC&&SEED)return Promise.resolve(RPC);
+ return PICKING||(PICKING=_pick().finally(()=>{PICKING=null}))}
+async function _pick(){
+ for(let u of order()){if(BAD.has(u))continue;
+  /* Probe with the calls the page needs and keep the answer, so the probe IS wave one.
+     An endpoint can answer eth_chainId and still return nothing useful. */
+  /* CREATE2 means this address can hold something else entirely on another chain. */
+  try{if(u==='wallet'&&BigInt(await wallet('eth_chainId',[]))!==1n)throw Error('wrong chain');
+   let r=await raw(u,[S.curi,S.ids]);if(!r[1]||r[1].length<130)throw Error('empty');
+   SEED=r;RPC=u;$('src').textContent=u==='wallet'?'your wallet':short(u);return u}
+  catch(e){BAD.add(u)}}
+ throw Error('No endpoint returned registry data.')}
+async function callMany(calls){
+ /* Every failure marks the endpoint BAD, so pick() throws once the pool is spent. */
+ for(;;){let u=await pick();
+  try{return await raw(u,calls)}
+  catch(e){BAD.add(u);if(RPC===u){RPC=null;SEED=null}}}}
+/* One eth_call carries the whole registry only while the return fits an endpoint's
+   response cap. Chunk, so a large registry costs a few round trips rather than one
+   oversized call that every provider rejects. */
+const CHUNK=48;
+const LANES=3;
+async function callChunked(calls){
+ if(calls.length<=CHUNK)return callMany(calls);
+ /* Slice first, then run at most LANES in flight. Sequential was correct but slow —
+    a large registry paid one full round trip per chunk. More lanes than this turns a
+    single visitor into a burst against one keyless endpoint, which is how a pool
+    entry starts refusing everyone. Results are written back by index, so the order
+    the lanes finish in cannot reorder the listings. */
+ let parts=[];
+ for(let i=0;i<calls.length;i+=CHUNK)parts.push(calls.slice(i,i+CHUNK));
+ let out=new Array(parts.length),next=0,dead=null;
+ await Promise.all(Array.from({length:Math.min(LANES,parts.length)},async()=>{
+  for(let i=next++;i<parts.length&&!dead;i=next++){
+   try{out[i]=await callMany(parts[i])}catch(e){dead=e;throw e}}}));
+ return out.flat()}
+
+const cut=h=>(h||'0x').slice(2),
+ bytesOf=h=>Uint8Array.from((cut(h).match(/../g)||[]),x=>parseInt(x,16)),
+ utf8=u=>new TextDecoder().decode(u),
+ b64=s=>utf8(Uint8Array.from(atob(s),c=>c.charCodeAt(0)));
+function str(h){h=cut(h);if(h.length<128)return'';let o=Number(BigInt('0x'+h.slice(0,64)))*2,n=Number(BigInt('0x'+h.slice(o,o+64)));return utf8(bytesOf('0x'+h.slice(o+64,o+64+n*2)))}
+/* `n` is a length word from an untrusted RPC and it sizes an allocation: without this
+   bound a bogus word asks for an array of 2^64 entries and takes the tab down before
+   any of it can be parsed. Require the ids to actually be present in the payload. */
+function list(h){h=cut(h);if(h.length<128)return[];
+ let o=Number(BigInt('0x'+h.slice(0,64)))*2,n=Number(BigInt('0x'+h.slice(o,o+64)));
+ if(!Number.isSafeInteger(o)||!Number.isSafeInteger(n)||o+64+n*64>h.length)throw Error('bad id list');
+ return Array.from({length:n},(_,i)=>BigInt('0x'+h.slice(o+64+i*64,o+128+i*64)))}
+/* Accepts a bare JSON string or a data: URI in either encoding the renderer may emit. */
+function dataJson(u){if(!u.startsWith('data:'))return JSON.parse(u);
+ let[head,...rest]=u.split(','),d=rest.join(',');
+ return JSON.parse(/;base64/i.test(head)?b64(d):decodeURIComponent(d))}
+/* `sync` is permissionless but only possible for an EVM token on THIS chain with a
+   non-zero account; everything else is owner-attested by construction, not by
+   neglect. Naming which of those four cases applies is the honest version of a
+   single "owner attested" badge - a reservation and a Bitcoin-rooted listing are
+   unverifiable for very different reasons, and only one of them ever changes. */
+function chip(m){
+ /* A listing whose json() did not parse knows nothing about itself. Saying "not
+    readable from ethereum" here would assert a specific provenance — the Bitcoin
+    case — about a listing we simply failed to read. */
+ if(m.bad)return['at','metadata unreadable'];
+ if(m.v)return['on','metadata read onchain'];
+ if(m.p==='Native')return['nc','no contract to read'];
+ if(m.k!=='eip155')return['nc','not readable from ethereum'];
+ if(Number(m.c)!==1)return['nc','lives on chain '+esc(m.c)];
+ return['at','owner attested']}
+/* The registry's Standard enum, grouped by the chain each format is rooted in. Held
+   as a literal taxonomy rather than derived from the listings, so a category can be
+   offered before its first listing exists — the point of the whole exercise. Labels
+   match the renderer's `_standard()` exactly; a mismatch here would silently filter
+   to nothing. Anything the registry gains that is not named below surfaces under
+   `other` rather than vanishing from the filter. */
+const EVMS=['Native','ERC-20','ERC-721','ERC-1155'],BTCS=['Tacit','Rune','Ordinal','BRC-20'];
+/* Chains are open-ended, so they are NOT advertised at zero the way the Bitcoin
+   formats are — that list is a fixed contract enum, this one is not. A chain earns a
+   chip by having a listing, and gets a human name if we know one. Anything unknown
+   still groups correctly and reads "chain 999"; nothing has to be added here for a new
+   chain to work, the name is the only thing this table buys. */
+const CHAINS={1:'ethereum',10:'optimism',56:'bnb',100:'gnosis',130:'unichain',137:'polygon',
+ 324:'zksync',480:'world',1868:'soneium',5000:'mantle',8453:'base',34443:'mode',42161:'arbitrum',
+ 42220:'celo',43114:'avalanche',57073:'ink',59144:'linea',81457:'blast',534352:'scroll',7777777:'zora'};
+/* Grouping is by CHAIN for EVM listings and by rooted chain otherwise. Grouping ERC-20
+   under "ethereum" was fine while mainnet was the only chain and a lie the moment a
+   Base token is listed: a standard is not a chain. */
+const groupOf=m=>m.k==='eip155'?'c'+m.c:BTCS.includes(m.p)?'bitcoin':m.k==='solana'?'solana':'other';
+const GROUP=g=>g==='bitcoin'?BTCS:/^c\d+$/.test(g)?EVMS:null;
+const groupLabel=g=>/^c\d+$/.test(g)?(CHAINS[g.slice(1)]||'chain '+g.slice(1)):g;
+/* Art goes in an <img>, never innerHTML: SVG inside an img cannot run script or fire
+   event handlers, so no renderer - present or future - can inject here. */
+/* `t` is rendered from a uint24, so it is always #rrggbb - but it is injected into a
+   style attribute, so prove it rather than trust it. */
+const COLOR=/^#[0-9a-f]{6}$/i;
+const hue=m=>COLOR.test(m.t||'')?m.t:'';
+/* A listing's `url` is curator-authored and the renderer's `_safe` only strips quotes,
+   angle brackets and control characters - it does NOT constrain the scheme, so
+   `javascript:...` survives it intact. Escaping keeps that inside the attribute but
+   would still run it on click, so allow only schemes that can navigate. Anything else
+   is shown as text and never becomes a link. */
+const safeUrl=u=>/^(https?|ipfs):\/\/[^\s]+$/i.test(String(u||''))?String(u):'';
+/* Same reasoning for logos. Inside an <img src> a hostile scheme is inert, but this
+   value is also copied into the exported token list, where somebody else's app decides
+   what to do with it — so it is constrained before it leaves here, not just before it
+   is drawn. */
+const safeImg=u=>/^(https:\/\/|ipfs:\/\/|data:image\/)/i.test(String(u||''))?String(u):'';
+/* Flags the registry carries that the card never showed. Each is a real claim about
+   the listing's standing, not decoration: `pending` has no token behind it yet,
+   `sealed` can never be re-authored, and `o` says the LISTED COLLECTION's own token
+   ids resolve to data-SVG - a claim about that collection's art, not about this
+   card's. The contract only lets it mean anything on a collection, so the wording
+   follows the renderer's ("ERC-721 / ONCHAIN TOKEN SVG") rather than inventing one. */
+const COLL=m=>m.p==='ERC-721'||m.p==='ERC-1155';
+/* `raw:0` is what the registry stores for anything non-EVM, which is true but tells a
+   reader nothing; and an unreadable listing has no namespace at all. Name the chain
+   the taxonomy knows about instead of printing the raw pair. */
+const chainLabel=m=>m.k==='eip155'?(CHAINS[m.c]?CHAINS[m.c]+' · eip155:'+m.c:'eip155:'+m.c)
+ :m.k==='solana'?'solana':GROUP(groupOf(m))?groupLabel(groupOf(m)):(m.k||'—');
+/* Each listing IS an ERC-721, and for a deployed token on this chain it is minted to
+   that token's own address - so `ownerOf` is the subject itself. Native and reserved
+   listings have no subject address to hold anything, so the registry holds those.
+   Getting this wrong would point "holder" at address 0, which is a real listing id
+   here, so the zero account is checked rather than assumed absent. */
+const ZERO=/^0x0{40}$/i;
+const subject=m=>m.x&&m.a&&!ZERO.test(m.a)?m.a:'';
+const holder=m=>subject(m)||L;
+/* OpenSea renders the listing's own tokenURI, so this is the onchain SVG as a
+   marketplace draws it - the same bytes, somewhere else. */
+const osea=m=>'https://opensea.io/assets/ethereum/'+L+'/'+m.i;
+/* Point Etherscan at the token contract when there is one - that contract is also the
+   holder - and at the listing NFT otherwise, rather than at a zero address. */
+const escan=m=>subject(m)?'https://etherscan.io/token/'+subject(m):'https://etherscan.io/nft/'+L+'/'+m.i;
+function flags(m){let f=[];
+ /* A listing with no account yet: either its token is undeployed, or it exists
+    somewhere that has not been bridged here. The id is already permanent, which is
+    what a reservation is for, so it reads as RESERVED rather than as an error. */
+ if(m.x===false)f.push(['at','reserved']);
+ if(m.f)f.push(['nc','sealed']);
+ if(m.o&&COLL(m))f.push(['on','onchain token svg']);
+ return f}
+function card(r){let[cc,ct]=chip(r.m),m=r.m,a=m.a||'',c=hue(m),
+ pct=Math.round(r.rank*100),
+ badges=(r.img?'':`<span class="c ${cc}">${ct}</span>`)+flags(m).map(([k,t])=>`<span class="c ${k}">${t}</span>`).join('');
+/* The figure is no longer role=button: it holds real controls (copy, details and two
+   outbound links), and a button containing buttons is neither valid nor navigable.
+   Pointer users still get the whole card as a target; keyboard users tab to the
+   explicit `details` control instead of onto a figure pretending to be one. */
+return `<figure class=p data-i="${r.i}"${c?` style="--b:${c}"`:''}><div class="art${r.img?'':' sk'}">${r.img?`<img src="${esc(r.img)}" alt="${esc(m.s||'listing')} card" decoding=async>`:''}</div><figcaption>
+<div class=r>${safeImg(m.l)?`<img class=lg src="${esc(safeImg(m.l))}" alt="" decoding=async>`:''}<span class=sy>${esc(m.s||'--')}</span><span class=sd>${esc(m.p||'')}</span></div>
+${/* The rendered card already prints the provenance badge AND the weight, so echoing
+      either below the art states the same thing twice — and on a narrow screen the
+      lone right-aligned weight wrapped onto a line of its own with nothing beside it.
+      This row now carries only what the art does NOT say, and disappears when there
+      is nothing to say. The bar keeps the number in its tooltip. */''}
+${badges?`<div class=r>${badges}</div>`:''}
+${/* The art already prints the raw weight; what it cannot show is where this listing
+      sits among the others. An unlabelled bar at 100% also read as a divider rather
+      than a meter, so the ordinal both informs and explains the bar. */''}
+<div class=rkw><span class=rkn>#${r.pos}</span><div class=rk role=img aria-label="curation rank ${r.pos} of ${ROWS.length}, weight ${esc(m.r??'0')}" title="curation weight ${esc(m.r??'0')}"><i style="width:${pct}%"></i></div></div>
+<button class=cp data-a="${esc(a)}" title="${a?'copy address':'no account yet'}">${esc(a||'no account yet')}</button>
+<div class=ln><button class="lk dtl" data-i="${r.i}">details</button> · <a href="${esc(osea(m))}" target=_blank rel="noopener noreferrer" title="the listing NFT, rendered from its onchain SVG — non-transferable">opensea</a> · <a href="${esc(escan(m))}" target=_blank rel="noopener noreferrer" title="${subject(m)?'the token contract — also the holder of this listing':'the listing NFT'}">etherscan</a></div>
+</figcaption></figure>`}
+/* Counted from ROWS, so the strip can never drift from the grid it describes. */
+function summary(){let n=ROWS.length,by=k=>ROWS.filter(k).length,
+ kinds=[...new Set(ROWS.map(r=>r.m.p).filter(Boolean))],
+ /* `k:c` is not a chain identity outside EVM: the renderer's namespace is only
+    eip155 | solana | raw, and non-EVM listings are forced to chainId 0 — so every
+    Bitcoin-rooted format AND any future non-EVM kind would collapse into one bucket
+    called `raw:0`. Fall back to the taxonomy group, which does know that Runes,
+    Ordinals, BRC-20 and Tacit are all one chain. */
+ chains=new Set(ROWS.map(r=>groupOf(r.m))),
+ cells=[[n,'listings'],[by(r=>r.m.v),'read onchain'],[by(r=>r.m.p==='ERC-20'),'erc-20'],
+  [by(r=>COLL(r.m)),'collections'],[by(r=>r.m.f),'sealed'],[chains.size,chains.size===1?'chain':'chains']];
+ $('sm').innerHTML=cells.map(([v,l])=>`<div><b>${v}</b><span>${esc(l)}</span></div>`).join('');
+ $('sm').hidden=false;chips()}
+/* Counting is the same question at both tiers, so ask it once. */
+const tally=f=>ROWS.filter(f).length;
+/* Which group's standards the sub-row should show: the selected group, the group of
+   the selected standard, or this chain's as the resting default. */
+const curGroup=()=>KIND.includes('|')?KIND.split('|')[0]:GROUP(KIND)?KIND:'c1';
+function inGroup(m,g){return groupOf(m)===g}
+/* Two tiers, because the taxonomy has two. The top row is fixed so a category can be
+   advertised at zero — that is how someone learns Runes belong here before any Rune
+   is listed. The sub-row only unfolds for the selected group, so the fixed vocabulary
+   never costs the common case a wall of chips. A zero count is shown, not hidden:
+   "bitcoin 0" is information, an absent chip is not. */
+function chipHtml(k,label,n,on,owns){
+ return `<button data-f="${esc(k)}" aria-pressed="${on}" class="${n?'':'z'}${owns?' pa':''}">${esc(label)}<b>${n}</b></button>`}
+function chips(){
+ /* Chains present, mainnet first then by id, so the row does not reshuffle as counts
+     move. `bitcoin` is always offered because its formats are a closed enum; solana
+     and other only when something is actually there. */
+ let seen=new Set(ROWS.map(r=>groupOf(r.m))),
+  chainGroups=[...seen].filter(g=>/^c\d+$/.test(g))
+   .sort((a,b)=>(+a.slice(1)===1?-1:+b.slice(1)===1?1:+a.slice(1)-+b.slice(1))),
+  groups=[...new Set([...chainGroups,'c1','bitcoin',...(seen.has('solana')?['solana']:[]),
+   ...(seen.has('other')?['other']:[])])],
+  top=[['all','all',ROWS.length],
+   ...groups.map(g=>[g,groupLabel(g),tally(r=>inGroup(r.m,g))]),
+   ['reserved','reserved',tally(r=>r.m.x===false)],
+   ['v','read onchain',tally(r=>r.m.v)]];
+ /* Mark the group that owns the active standard, so `ethereum` does not read as
+    unselected while `erc-20` is the live filter one row below it. */
+ $('fc').innerHTML=top.map(([k,l,n])=>chipHtml(k,l,n,String(k===KIND),KIND.startsWith(k+'|'))).join('');
+ /* The sub-row is always on screen: narrowing to ERC-20 or ERC-721 is a thing people
+    come here to do, and it should not be reachable only by first discovering that
+    `ethereum` unfolds. It shows the selected group's standards, defaulting to the
+    Ethereum ones — so the common filters are visible at load, with none pressed. */
+ /* groupOf, not "is it present": selecting a standard with no listings yet must keep
+    its own group open, or clicking `rune 0` silently throws you back to Ethereum. */
+ /* A standard on its own is ambiguous once more than one chain is listed — "erc-20"
+    has to mean "erc-20 ON THIS CHAIN", or selecting it under `base` would show
+    mainnet's too and the sub-row counts would be global. So a sub-chip carries its
+    group: `c8453|ERC-20`. */
+ let g=curGroup();
+ $('fc2').innerHTML=GROUP(g).map(x=>chipHtml(g+'|'+x,x.toLowerCase(),
+  tally(r=>r.m.p===x&&groupOf(r.m)===g),String(KIND===g+'|'+x))).join('');
+ $('fc2').hidden=false}
+/* Built once; filtering only toggles [hidden]. Re-running innerHTML per keystroke would
+   re-decode every inline SVG - the costliest thing here - and re-flash the art. */
+let EMPTY=null,KIND='all';
+function render(){
+ /* A filter chosen against the previous data set would otherwise persist across a
+    reload and hide everything, with only "no listing matches" to explain it. */
+ KIND='all';summary();
+ $('grid').innerHTML=ROWS.map(card).join('');
+ EMPTY=document.createElement('p');EMPTY.className='ct';EMPTY.hidden=true;
+ EMPTY.textContent='No listing matches that filter.';$('grid').append(EMPTY);
+ paint()}
+/* Sorting sets each card's grid `order` rather than re-emitting the grid: the DOM and
+   its decoded art stay put, so re-sorting costs a style recalc instead of a rebuild. */
+/* Narrowing to one standard is a filter's job, so the standard chips are always on
+   screen rather than behind a drill-down. Sorting by standard stays for the
+   open-ended case — browsing a long list grouped by kind — and follows the
+   registry's enum order, not the alphabet: A-Z would wedge BRC-20 between ERC-1155
+   and ERC-20 and scatter the Bitcoin formats through the Ethereum ones. Anything
+   outside the taxonomy sorts last, so a future standard appears as a tail group
+   instead of displacing Native. */
+const ENUM=[...EVMS,...BTCS];
+const ord=p=>{let i=ENUM.indexOf(p);return i<0?ENUM.length:i};
+const SORTS={rank:(a,b)=>(b.m.r||0)-(a.m.r||0)||cmp(a,b),
+ symbol:cmp,name:(a,b)=>String(a.m.n||'').localeCompare(String(b.m.n||''))||cmp(a,b),
+ standard:(a,b)=>ord(a.m.p)-ord(b.m.p)||(b.m.r||0)-(a.m.r||0)||cmp(a,b),
+ decimals:(a,b)=>(Number(b.m.d)||0)-(Number(a.m.d)||0)||cmp(a,b)};
+function cmp(a,b){return String(a.m.s||'').localeCompare(String(b.m.s||''))}
+function paint(){let f=$('q').value.trim().toLowerCase(),n=0,
+ /* Only real cards: the loading skeletons share `.p` for layout but carry no
+    `data-i`, so a keystroke during the first load used to look them up in ROWS,
+    get undefined and throw. Select by the attribute that makes a card a card. */
+ els=$('grid').querySelectorAll('.p[data-i]'),
+ keep=r=>(!f||r.q.includes(f))&&(KIND==='all'||(KIND==='v'?r.m.v
+  :KIND==='reserved'?r.m.x===false
+  :KIND.includes('|')?(g=>inGroup(r.m,g[0])&&r.m.p===g[1])(KIND.split('|'))
+  :inGroup(r.m,KIND)));
+ for(let el of els){let r=ROWS[el.dataset.i];if(!r)continue;let show=keep(r);el.hidden=!show;if(show)n++}
+ let order=ROWS.slice().sort(SORTS[$('sort').value]||SORTS.rank);
+ /* Guard the lookup: a failed re-boot empties the grid, and without this the next
+    keystroke indexes past the end of an empty NodeList and throws. */
+ order.forEach((r,pos)=>{let el=els[r.i];if(el)el.style.order=pos});
+ if(EMPTY)EMPTY.hidden=!!n||!ROWS.length;
+ $('cnt').textContent=n+(n===ROWS.length?'':' of '+ROWS.length)+(n===1?' listing':' listings')}
+$('sort').onchange=paint;
+/* One handler for both rows: the tiers differ in what they offer, not in what a
+   click means. Re-rendering the chips keeps counts, pressed state and the unfolded
+   sub-row in agreement without three places having to remember each other. */
+function onChip(e){let b=e.target.closest('button');if(!b)return;
+ KIND=b.dataset.f;chips();paint()}
+$('fc').addEventListener('click',onChip);
+$('fc2').addEventListener('click',onChip);
+/* rAF-coalesced so a fast typist repaints once per frame, not once per keystroke. */
+let tick=0;
+$('q').oninput=()=>{if(tick)return;tick=requestAnimationFrame(()=>{tick=0;paint()})};
+function open_(i){let r=ROWS[i];if(!r)return;CUR=r;
+ $('dkv').hidden=$('dla').hidden=false;$('dda').hidden=$('dnote').hidden=true;
+ let m=r.m;
+ $('dt').textContent=(m.s||'--')+' · listing '+m.i;
+ /* The registry already carries desc, url, audit and extras; they were being fetched
+    on every load and then thrown away. Show them rather than re-read them elsewhere. */
+ $('ddesc').textContent=m.desc||'';$('ddesc').hidden=!m.desc;
+ let rows=[['name',m.n||'-'],['account',m.a||'(not deployed)'],['chain',chainLabel(m)],
+  ['standard',m.p||'unknown'],['decimals',m.d],['curation weight',m.r],
+  /* Same call the card makes, so the two can never disagree about a listing. */
+  ['provenance',chip(m)[1]],
+  ['authoring',m.f?'sealed — cannot be re-authored':'open to the curator'],
+  ['brand colour',hue(m)||'-']];
+ rows.push(['holder',holder(m)+(subject(m)?' — the token itself':' — the registry')]);
+ /* Stated plainly because this page links out to a marketplace: every listing is born
+    locked and stays locked, so a visitor who sees it on OpenSea should not have to
+    discover from a reverted transaction that it was never for sale. */
+ rows.push(['transfer','locked — soulbound (ERC-5192)']);
+ if(COLL(m))rows.push(['token art',m.o?'ids resolve to onchain svg':'not declared onchain']);
+ if(m.u)rows.push(['url',m.u]);
+ if(m.au)rows.push(['audit',m.au]);
+ /* Extras are curator-authored key/value pairs, so their count and keys are unknown
+    ahead of time - render whatever is there instead of a fixed set. */
+ for(let x of (Array.isArray(m.e)?m.e:[]))rows.push([x.k||'extra',x.v||'']);
+ $('dkv').innerHTML=rows.map(([k,v])=>`<span>${esc(k)}</span><span>${esc(v)}</span>`).join('');
+ $('dlk').innerHTML=`<a href="${esc(osea(m))}" target=_blank rel="noopener noreferrer">view on opensea</a> · <a href="${esc(escan(m))}" target=_blank rel="noopener noreferrer">${subject(m)?'token on etherscan':'listing on etherscan'}</a>${safeUrl(m.u)?` · <a href="${esc(safeUrl(m.u))}" target=_blank rel="noopener noreferrer">project site</a>`:''}`;
+ $('dj').textContent=JSON.stringify(r.m,null,1);
+ document.querySelector('.db').scrollTop=0;
+ if(!$('dlg').open)$('dlg').showModal()}
+/* Copying has two paths because the async Clipboard API is permission-gated: it is
+   refused outright in a sandboxed frame and in several in-app wallet browsers. The
+   legacy execCommand path is driven by the user gesture and needs no permission, so
+   it still lands in most of those. If both fail, select the text — a reader can
+   always copy a selection by hand, and "copy failed" with no recourse is a dead end. */
+async function copyText(t,el){
+ try{await navigator.clipboard.writeText(t);return true}catch(e){}
+ try{let ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');
+  ta.style.cssText='position:fixed;top:0;left:-9999px';
+  document.body.appendChild(ta);ta.select();
+  let ok=document.execCommand('copy');ta.remove();if(ok)return true}catch(e){}
+ try{window.getSelection().selectAllChildren(el)}catch(e){}
+ return false}
+/* Restore from data-a, never the live label: a second click while "copied" still shows
+   would otherwise latch that text in permanently. */
+async function copyAddr(c){let a=c.dataset.a;if(!a)return;
+ flash(c,await copyText(a,c)?'copied':'select and copy',a)}
+$('grid').addEventListener('click',e=>{
+ /* An outbound link must be allowed to navigate, not swallowed into opening a dialog. */
+ if(e.target.closest('a'))return;
+ let c=e.target.closest('.cp');if(c){copyAddr(c);return}
+ let p=e.target.closest('.p');if(p)open_(p.dataset.i)});
+$('dx').onclick=()=>$('dlg').close();
+/* Click outside the panel (the backdrop is the dialog's own box) dismisses. */
+$('dlg').addEventListener('click',e=>{if(e.target===$('dlg'))$('dlg').close()});
+/* Inline rather than prompt(): prompt is blocked in sandboxed frames and unreliable
+   in in-app wallet browsers - both ordinary ways to reach this page via a gateway. */
+$('setr').onclick=()=>{let open=$('rw').hidden;
+ $('rw').hidden=!open;$('setr').setAttribute('aria-expanded',String(open));
+ if(open){$('rpcu').value=saved();$('rpcu').focus()}};
+function useRpc(u){
+ /* An http:// endpoint is silently blocked by mixed-content when this page is served
+    over https, so reject it here rather than let the user watch every request fail. */
+ if(u&&!/^https:\/\/\S+$/i.test(u)){$('msg').textContent='Endpoint must be an https:// URL.';return}
+ try{u?localStorage.setItem('tl.rpc',u):localStorage.removeItem('tl.rpc')}catch(e){}
+ RPC=null;SEED=null;BAD.clear();$('msg').textContent='';$('src').textContent='—';boot()}
+$('rpcs').onclick=()=>useRpc($('rpcu').value.trim());
+$('rpcc').onclick=()=>{$('rpcu').value='';useRpc('')};
+$('rpcu').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('rpcs').click()}};
+/* EXPORTS - two shapes, two audiences. `token list json` is the tokenlist.org schema
+   every swap frontend ingests, so it is filtered to what that schema means: deployed
+   ERC-20s on an eip155 chain. The native asset and the ERC-721 collections are excluded
+   - address 0 or an NFT breaks consumers that assume otherwise. `raw json` is every
+   field the registry holds, for anyone building against the registry itself. */
+function dl(name,mime,text){let b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');
+ a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+/* Every export shows the payload before offering to save it. A bare <a download> is
+   blocked outright in a sandboxed frame and in most in-app wallet browsers, which
+   made these read as dead buttons; on screen, the bytes are always reachable and
+   download becomes one way out rather than the only one. */
+let DOC=null;
+function showDoc(name,mime,text){DOC={name,mime,text};
+ $('dt').textContent=name;$('dj').textContent=text;$('dnote').hidden=$('ddesc').hidden=true;
+ $('dkv').hidden=$('dla').hidden=true;$('dda').hidden=false;
+ document.querySelector('.db').scrollTop=0;if(!$('dlg').open)$('dlg').showModal()}
+function note(t){$('dnote').textContent=t;$('dnote').hidden=false}
+const flash=(b,t,back)=>{b.textContent=t;clearTimeout(b._t);b._t=setTimeout(()=>{b.textContent=back},900)};
+/* A blocked <a download> raises nothing - the click is simply dropped - so there is
+   no error to catch and report. When framed we cannot know whether it landed, so say
+   so once and point at the routes that always work: copy, or select the text below. */
+$('ddl').onclick=e=>{if(!DOC)return;dl(DOC.name,DOC.mime,DOC.text);flash(e.target,'saved','download');
+ if(window.top!==window.self)note('Saving '+DOC.name+'. If nothing arrived, this frame blocks downloads — use copy, or select the text below.')};
+$('dcp').onclick=async e=>{if(!DOC)return;
+ if(await copyText(DOC.text,$('dj')))flash(e.target,'copied','copy');
+ else{flash(e.target,'copy failed','copy');
+  note('Clipboard access is blocked here — the text below is selected; copy it by hand.')}};
+function tokenListJson(){
+ let toks=ROWS.filter(r=>r.m.p==='ERC-20'&&r.m.x&&r.m.k==='eip155'&&/^0x[0-9a-fA-F]{40}$/.test(r.m.a||''))
+  .map(r=>{let t={chainId:Number(r.m.c),address:r.m.a,name:String(r.m.n||r.m.s||'').slice(0,40),symbol:String(r.m.s||'').slice(0,20),decimals:Number(r.m.d)};
+   if(safeImg(r.m.l))t.logoURI=safeImg(r.m.l);return t})
+  /* The schema requires both, and a consumer that ingests a nameless or
+     zero-decimal-unknown entry will surface it as a broken row. */
+  .filter(t=>t.name&&t.symbol&&Number.isInteger(t.decimals));
+ /* tokenlist.org semver: minor bumps when tokens are added, major when removed.
+    Deriving minor from the count makes the version move with the registry instead
+    of sitting at a fixed 1.0.0 that tells a consumer nothing ever changed. */
+ let o={name:'TokenList',timestamp:new Date().toISOString(),
+  version:{major:1,minor:toks.length,patch:0},
+  keywords:['onchain','ethereum','erc20','tokenlist']};
+ if(safeImg(MARK))o.logoURI=safeImg(MARK);
+ o.tokens=toks;
+ return JSON.stringify(o,null,2)}
+$('exTL').onclick=()=>showDoc('tokenlist.json','application/json',tokenListJson());
+/* `art` is the rendered card from tokenURI — fetched on every load, shown on every
+   card, and until now reachable one listing at a time only. It goes last in each
+   entry so the readable fields still scan first. */
+$('exRaw').onclick=()=>showDoc('tokenlist-raw.json','application/json',
+ JSON.stringify(ROWS.map(r=>r.img?{...r.m,art:r.img}:r.m),null,2));
+let CUR=null;
+/* tokenURI art is a data: URI that may be base64 or percent-encoded; handle both
+   rather than silently downloading mojibake. */
+/* A symbol is copied from the token contract, so it is whatever that contract says -
+   an LP symbol with a slash, a space, or a script the filesystem will not take. Keep
+   the download name portable instead of handing it straight to the browser. */
+const fname=(s,ext)=>(String(s||'').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/^[-._]+|[-._]+$/g,'').slice(0,48)||'listing')+ext;
+/* Not every data: URI is base64 - percent-encoded is legal too, and decodeURIComponent
+   throws on a payload that is neither. Fall back to the raw text rather than let the
+   button die with nothing on screen. */
+function svgText(u){let[head,...rest]=u.split(','),d=rest.join(',');
+ if(/;base64/i.test(head))return b64(d);
+ try{return decodeURIComponent(d)}catch(e){return d}}
+$('dsvg').onclick=()=>{if(!CUR)return;
+ if(!CUR.img){note('This listing has no card art onchain yet.');return}
+ showDoc(fname(CUR.m.s,'.svg'),'image/svg+xml',svgText(CUR.img))};
+$('djson').onclick=()=>{if(CUR)showDoc(fname(CUR.m.s,'.json'),'application/json',JSON.stringify(CUR.m,null,2))};
+const SKEL='<figure class=p aria-hidden=true><div class="art sk"></div><figcaption><div class=r><span class=sy>&nbsp;</span></div><div class=r><span class="c nc" style="opacity:.22">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div><span class=cp>&nbsp;</span></figcaption></figure>';
+/* These are the exact calls this page makes. `ids()` was documented here and does not
+   exist - it reverts - while the selector the page actually sends is `rankedIds()`. */
+$('devdoc').textContent=`# every listing id, in curation order
+cast call ${L} "rankedIds()(uint256[])"
+
+# one listing's metadata, already JSON — no decoding needed
+cast call ${L} "json(uint256)(string)" <id>
+
+# the listing's ERC-721 metadata; the card art is its "image" field
+cast call ${L} "tokenURI(uint256)(string)" <id>
+
+# all of the above in a single eth_call (solady Multicallable)
+cast call ${L} "multicall(bytes[])(bytes[])" "[<calldata>,...]"
+
+# already-decoded, in a browser: everything above, plus each card's art
+window.tokenlist   // {registry, chainId, source, fetchedAt, listings:[…]}`;
+/* Switching endpoints re-enters boot while the previous one may still be awaiting a
+   response. Stamp each run and let a superseded one drop its results on the floor,
+   rather than have two runs interleave writes into ROWS and the grid. */
+let RUN=0;
+async function boot(){
+ const run=++RUN,live=()=>run===RUN;
+ try{
+  await pick();if(!live())return;
+  let [ci,idr]=SEED;
+  try{let c=dataJson(str(ci));if(c.description)$('desc').textContent=c.description;
+   if(safeImg(c.image)){MARK=safeImg(c.image);let im=new Image();im.src=MARK;im.alt='Token Listing';
+    $('mark').replaceChildren(im);$('fav').href=MARK}}catch(e){}
+  let ids=list(idr);
+  if(!ids.length){ROWS=[];$('sm').hidden=true;$('msg').textContent='The registry reports no listings.';$('grid').replaceChildren();$('cnt').textContent='';return}
+  $('grid').innerHTML=SKEL.repeat(ids.length);
+  /* Wave two: every json() and every tokenURI(), chunked into as few eth_calls as
+     the endpoint will carry. */
+  let n=ids.length,res=await callChunked(ids.map(id=>S.json+z(id)).concat(ids.map(id=>S.uri+z(id))));
+  if(!live())return;
+  ROWS=ids.map((id,i)=>{let m;try{m=JSON.parse(str(res[i]))}catch(e){m={i:String(id),s:'?',r:'0',p:'',a:'',bad:true}}
+   let img='';try{img=dataJson(str(res[n+i])).image||''}catch(e){}
+   /* Precomputed once so filtering is a substring test, not a join+lowercase per row
+      per keystroke. */
+   return{m,img,i,q:[m.s,m.n,m.a].filter(Boolean).join(' ').toLowerCase()}});
+  /* Ranks cluster just under 1e6, so a bar drawn as r/1e6 is 99% full for everything
+     and says nothing. Normalising against the observed spread makes the ordering the
+     registry actually encodes visible. A single listing, or an all-equal set, gets a
+     full bar rather than a division by zero. */
+  /* `Math.min(...rs)` spreads every rank as an argument and throws RangeError once the
+     registry outgrows the call-stack limit; reduce has no such ceiling. */
+  let rs=ROWS.map(r=>Number(r.m.r)||0),
+   lo=rs.reduce((a,b)=>b<a?b:a,Infinity),hi=rs.reduce((a,b)=>b>a?b:a,-Infinity);
+  ROWS.forEach(r=>{r.rank=hi>lo?((Number(r.m.r)||0)-lo)/(hi-lo)*.85+.15:1});
+  /* Position by curation weight, assigned once so it does not shuffle when the
+     visitor re-sorts the grid by symbol or decimals. */
+  ROWS.slice().sort((a,b)=>(b.m.r||0)-(a.m.r||0)).forEach((r,i)=>{r.pos=i+1});
+  render();
+  /* Everything this page fetched, in one place, for anything driving a browser: an
+     agent should not have to scrape the DOM to recover data the page already decoded.
+     Same shape as the `raw json` download, plus where and when it was read. */
+  window.tokenlist={registry:L,chainId:1,source:RPC==='wallet'?'wallet':RPC,
+   fetchedAt:new Date().toISOString(),
+   listings:ROWS.map(r=>r.img?{...r.m,art:r.img}:r.m)}
+ }catch(e){if(!live())return;
+  /* Clear ROWS too: leaving them behind describes a grid that no longer exists, and
+     the summary would keep asserting counts for listings that are not on screen. */
+  ROWS=[];$('sm').hidden=true;
+  $('msg').textContent=e.message+' — set your own endpoint below.';$('grid').replaceChildren();$('cnt').textContent=''}}
+/* The descriptive placeholder is cut off mid-word on a narrow screen, which reads as
+   a rendering fault; the aria-label keeps the full description for assistive tech. */
+try{let mq=matchMedia('(max-width:560px)'),setPh=()=>{$('q').placeholder=mq.matches?'filter listings':'filter by symbol, name or address'};
+ mq.addEventListener?mq.addEventListener('change',setPh):mq.addListener(setPh);setPh()}catch(e){}
+$('addr').textContent=L.slice(0,10)+'…'+L.slice(-4);$('lnk').href='https://etherscan.io/address/'+L;
+/* Two different contracts, and the footer used to conflate them: the registry holds
+   the listings and does NOT serve HTML - `html()` and `resolveMode()` both revert on
+   it - while this document is served by its own page contract.
+
+   That contract's address CANNOT be baked in here. Its address is CREATE2 over its
+   constructor args, which are the addresses of the data contracts holding these very
+   bytes: writing the address into the page changes the bytes, which changes the
+   chunks, which changes the address. No fixed point exists.
+   
+   So read it from the one place it is actually knowable — the gateway hostname a
+   reader arrived through, `<addr>.w4eth.io` for ERC-8244 or the same shape for
+   web3://. Served from anywhere else the page simply does not claim an address. */
+const PAGE=(()=>{try{
+ let m=/^(0x[0-9a-fA-F]{40})\./.exec(location.hostname);return m?m[1]:''}catch(e){return''}})();
+/* Every standard this page claims to implement is one click from its text. The page
+   asks to be taken at its word about provenance; the least it can do is show its
+   working. */
+const eip=(n,label)=>`<a href="https://eip.tools/eip/${n}" target=_blank rel="noopener noreferrer">${label||'ERC-'+n}</a>`;
+/* ERC-8244 is what makes this document a dapp rather than a page about one: a
+   gateway resolves any contract exposing `html()` straight from chain state. Said in
+   the header because it is the point, but gated on PAGE for the same reason the
+   footer is — until the page contract exists, this describes an intent, not a fact,
+   and the whole argument of the page is that it does not overstate provenance. */
+$('pgf').innerHTML='page <b>'+eip(8244)+' onchain HTML</b>'+(PAGE?' <a href="https://etherscan.io/address/'+PAGE+'" target=_blank rel="noopener noreferrer">'+PAGE.slice(0,10)+'…'+PAGE.slice(-4)+'</a>':'');
+$('routes').innerHTML='Listings are read from the registry at <code>'+L+'</code> on Ethereum. '+(PAGE
+ ?'You are reading it from <code>'+PAGE+'</code> — the same bytes come back from <code>cast call '+PAGE+' "html()(string)"</code>. The token list itself is served as JSON from <code>/tokenlist.json</code> on this contract.'
+ /* True whether or not the page contract exists yet, and true when this file is
+    opened straight off a disk — which is the case that made "not yet deployed"
+    wrong the moment it shipped. */
+ :'This page is served onchain from its own contract via <code>html()</code> and '+eip(5219)+'. Open it through an '+eip(8244)+' gateway (<code>&lt;addr&gt;.w4eth.io</code>) or '+eip(4804)+' <code>web3://</code> to read it from the chain, and its token list from <code>/tokenlist.json</code>.');
+boot();
+</script>

@@ -272,6 +272,21 @@ contract TokenListTest is Test, PostDeployListings {
         assertTrue(list.json(id).contains('"o":true'));
         assertTrue(_decodeJSON(list.tokenURI(id)).contains('"trait_type":"Per-token Artwork","value":"Onchain SVG"}'));
 
+        // The trait only exists where it can mean something. Emitted on every listing
+        // it read "Not declared" on fungibles too, which pools "collection that did not
+        // declare onchain art" with "ERC-20, where the question is undefined" — and a
+        // marketplace counts that as a shared trait across the whole collection.
+        MockToken plain = new MockToken("Plain", "PLN", 18);
+        uint256 plainId = _list(address(plain), 0);
+        string memory plainJson = _decodeJSON(list.tokenURI(plainId));
+        assertFalse(plainJson.contains("Per-token Artwork"), "artwork trait on a fungible listing");
+        assertTrue(plainJson.contains('"trait_type":"Token Standard","value":"ERC-20"'));
+
+        // Numeric traits must declare themselves numeric, or a marketplace buckets them
+        // as categories: every listing has a distinct rank, so every one reads "1, 9%".
+        assertTrue(plainJson.contains('"trait_type":"Sort Weight","value":'));
+        assertTrue(plainJson.contains('"display_type":"number"'));
+
         MockToken fungible = new MockToken("Fungible", "FNG", 18);
         uint256 fungibleId = _list(address(fungible), 0);
         vm.prank(owner);

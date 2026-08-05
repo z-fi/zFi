@@ -266,11 +266,21 @@ contract TokenListRenderer {
                 sym,
                 '"},{"trait_type":"Decimals","value":',
                 LibString.toString(t.decimals),
-                '},{"trait_type":"Token Standard","value":"',
+                // `display_type` makes a marketplace read this as a number rather than
+                // bucket it as a category. Without it OpenSea reports "Sort Weight
+                // 999000 — 1, 9%": every listing has a distinct rank, so every one
+                // shows 9% and the ordering the registry encodes is invisible. Key
+                // order in a JSON object is not significant, so it sits after `value`.
+                ',"display_type":"number"},{"trait_type":"Token Standard","value":"',
                 _standard(t.standard),
-                '"},{"trait_type":"Per-token Artwork","value":"',
-                _artHint(t.standard, t.onchainSvg),
-                '"},{"trait_type":"Chain","value":"',
+                '"',
+                // Only a collection can have per-token artwork. Emitted unconditionally
+                // this said "Not declared" on every ERC-20, pooling "collection that did
+                // not declare onchain art" with "fungible token, where the question is
+                // undefined" — and a marketplace counts that as a shared trait. Follows
+                // the same shape as `Audit` below: absent when it means nothing.
+                _artTrait(t.standard, t.onchainSvg),
+                '},{"trait_type":"Chain","value":"',
                 chain,
                 '"},{"trait_type":"Source","value":"',
                 t.synced
@@ -287,8 +297,10 @@ contract TokenListRenderer {
                 '"},{"trait_type":"Sort Weight","value":',
                 LibString.toString(t.rank),
                 bytes(t.audit).length == 0
-                    ? "}"
-                    : string.concat('},{"trait_type":"Audit","value":"', _safe(t.audit), '"}'),
+                    ? ',"display_type":"number"}'
+                    : string.concat(
+                        ',"display_type":"number"},{"trait_type":"Audit","value":"', _safe(t.audit), '"}'
+                    ),
                 _extraTraits(extras),
                 "]}"
             )
@@ -612,6 +624,24 @@ contract TokenListRenderer {
             return string.concat("BRC-20 / ", LibString.toString(decimals), " DECIMALS");
         }
         return "TOKEN STANDARD UNVERIFIED";
+    }
+
+    /// @dev The whole trait, or nothing. `_artHint` still answers the card, which has
+    ///      room to say "not declared"; a trait list does not, because an absent trait
+    ///      and a trait reading "Not declared" are different claims to a consumer.
+    function _artTrait(TokenList.Standard standard, bool onchainSvg)
+        internal
+        pure
+        returns (string memory)
+    {
+        if (standard != TokenList.Standard.ERC721 && standard != TokenList.Standard.ERC1155) {
+            return "";
+        }
+        return string.concat(
+            '},{"trait_type":"Per-token Artwork","value":"',
+            onchainSvg ? "Onchain SVG" : "Not declared",
+            '"'
+        );
     }
 
     function _artHint(TokenList.Standard standard, bool onchainSvg) internal pure returns (string memory) {
