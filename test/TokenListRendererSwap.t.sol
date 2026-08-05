@@ -77,8 +77,17 @@ contract TokenListRendererSwapTest is Test {
                 );
             }
 
-            // The card art is the expensive, user-visible part. It must not move.
-            assertEq(_image(now_), _image(before_[i]), "card art changed");
+            // The card art DOES move now - that is the point of the five card fixes -
+            // so asserting it is byte-identical would only be asserting that this
+            // change set does not exist. Gate on the intended changes instead: the
+            // provenance chip must be neutral rather than the owner's theme, and the
+            // pieces a reader identifies a listing by must survive.
+            string memory art = _decode(_imageUri(now_));
+            assertTrue(
+                _has(art, "fill='#fff' stroke='#fff'"), "provenance chip is not neutral"
+            );
+            assertTrue(_has(art, "TOKEN LISTING"), "card lost its header");
+            assertTrue(_has(art, "WEIGHT "), "card lost its weight");
         }
         emit log_named_uint("listings that gained display_type", gainedDisplayType);
         emit log_named_uint("listings that shed a meaningless artwork trait", lostArtworkTrait);
@@ -119,9 +128,8 @@ contract TokenListRendererSwapTest is Test {
         return string(Base64.decode(string(payload)));
     }
 
-    /// @dev The value of the `"image":"..."` field — the card art, which a trait-only
-    ///      change must leave untouched.
-    function _image(string memory json) internal pure returns (bytes32) {
+    /// @dev The `"image":"..."` value — the card art's own data: URI.
+    function _imageUri(string memory json) internal pure returns (string memory) {
         bytes memory h = bytes(json);
         bytes memory k = bytes('"image":"');
         for (uint256 i; i + k.length < h.length; ++i) {
@@ -138,7 +146,7 @@ contract TokenListRendererSwapTest is Test {
             while (end < h.length && h[end] != '"') ++end;
             bytes memory out = new bytes(end - start);
             for (uint256 j; j != out.length; ++j) out[j] = h[start + j];
-            return keccak256(out);
+            return string(out);
         }
         revert("no image field");
     }

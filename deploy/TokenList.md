@@ -314,3 +314,13 @@ atomically through the owner multisig:
 `setLogoSVG` touches nothing but the logo, so it is safe on its own. `setRank`,
 `setAudit`, `setStandard`, `setOnchainSvg` and `setExtra` are likewise single-field.
 
+
+## Listings
+
+| # | symbol | rank | listed |
+| --- | --- | --- | --- |
+| 1–11 | ETH, WETH, wstETH, rETH, WBTC, USDC, USDT, BOLD, ZORG, zzz, WEI | 1000000 … 990000 | at/after deploy |
+| 12 | FWA | 989000 | 2026-08-05 — see [FWA-list.md](./FWA-list.md) |
+
+Ranks are sort WEIGHTS, sparse by 1,000, so a listing slots between two others without
+renumbering. Next in line gets 988000.

@@ -72,10 +72,24 @@ done | tr -d '\n' > chunks.hex
 
 Confirmed 2026-08-05: concatenation == `html()` output == 56,855 B.
 
+## Renderer swap — done 2026-08-05
+
+The trait fixes (conditional `Per-token Artwork`, `display_type` on numerics, chain
+label for Bitcoin-rooted standards, per-standard account labels, symbol initials in an
+empty logo well, neutral provenance chip) shipped. `setRenderer` was executed by the
+multisig.
+
+    live      0x0000009650f4aEF08AdB2De98bdD2695A41eDcF4   (deploy/TokenListRenderer.*)
+    previous  0x000000d595e36Dd0228c4040D981A01A59DbbE87   (deploy/TokenListRenderer.previous.*)
+
+Confirmed on chain: `TokenList.renderer()` returns the live address. Both are
+Etherscan-verified. `json()` was byte-identical for all 11 listings across the swap —
+only the card art changed, which is the intended blast radius.
+
+The `.previous.*` artifacts are kept as a set (address, salt, initcode, calldata) so
+each address stays checkable against the salt it was mined for. Do not overwrite an
+`.address.txt` in place on a future swap — rotate the set.
+
 ## Not done here
 
-- `TokenListRenderer` trait fixes (conditional `Per-token Artwork`, `display_type` on
-  numerics) are in the source and tested but **not deployed**. They need a fresh
-  renderer plus `setRenderer`, which is owned by the 2-of-3 multisig
-  `0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2` behind a timelock.
 - Etherscan verification of `TokenListPage`.
