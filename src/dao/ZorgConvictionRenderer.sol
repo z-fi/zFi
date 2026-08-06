@@ -54,7 +54,8 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
     }
 
     function _body() internal pure returns (string memory) {
-        return "<main class=w><header><div><div class=k>zorg.wei / canonical TokenList</div>"
+        return "<link rel=icon href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='2' y='6' width='12' height='3' fill='%23c7ffa8'/%3E%3C/svg%3E\">"
+            "<main class=w><header><div><div class=k>zorg.wei / canonical TokenList</div>"
             "<h1>TokenList: 100% onchain token data</h1>"
             "<p class=sub>Every name, symbol, address, decimal and logo lives on Ethereum, not a server. "
             "Open a listing to read and copy its record.</p></div>"
@@ -74,7 +75,7 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
             "<button class='btn ghost' id=b_claim onclick=claim()>claim loyalty</button>"
             "<button class='btn ghost' id=b_wd onclick=withdraw()>withdraw ETH</button>"
             "<button class='btn ghost' id=b_redeem onclick=redeem()>redeem receipt</button>"
-            "<p class=gl>Permanent<i>Neither can be undone.</i></p>"
+            "<p class=gl>Permanent \u00b7 order matters<i>Hard lock FIRST. Eternalize freezes whatever rate the receipt holds and no lock can be added afterwards, so eternalizing an open bond commits it at 1.00x forever.</i></p>"
             "<button class='btn ghost danger' id=b_lock onclick=lock()>hard lock</button>"
             "<button class='btn ghost danger' id=b_etern onclick=eternal()>eternalize</button></div></details>"
             "<h2>Listings <span class=note id=cnt></span></h2><div id=list></div>"
@@ -206,7 +207,7 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
             // affordance sits on the value it copies, so nothing has to be
             // labelled twice and the logo is grabbed from the logo line.
             "IC=\"<svg width=12 height=12 viewBox='0 0 16 16' fill=none stroke=currentColor stroke-width=1.5>"
-            "<rect x=5.6 y=5.6 width=8.8 height=8.8/><path d='M10.4 3.4h-7.8v7.8'/></svg>\","
+            "<rect x=5.6 y=5.6 width=8.8 height='8.8'/><path d='M10.4 3.4h-7.8v7.8'/></svg>\","
             "dl=(k,v,c)=>'<div class=dl><span>'+k+'</span><code>'+esc(v==null?'':v)"
             "+(c?\"<button type=button class=ic title='Copy \"+k+\"' onclick=cp('\"+c+\"',this)>\"+IC+'</button>':'')+'</code></div>',"
             "lnk=(u,t)=>u?\" <a href='\"+esc(u)+\"' target=_blank rel=noopener>\"+t+'</a>':'';"
@@ -254,16 +255,18 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
             // page stays a token list and nothing else.
             "function paint(){ON=!!(A&&ME.w);show('me',ON);show('acts',ON);syncActions();if(!ON)return;"
             "$('me').classList.toggle('eternal-name',ME.eternal);"
-            "$('rstatus').innerHTML='<b>zOrgz #'+esc(R)+'</b> \\u00b7 '+(ME.eternal?'eternal':TIER[ME.tier])+' \\u00b7 '+f(ME.w)+' zOrg bonded';"
-            "$('credit').innerHTML='<b>'+f(ME.w-ME.used)+' zOrg</b> available \\u00b7 '+f(ME.used)+' allocated';"
-            "$('eth').innerHTML=eth(ME.principal)+' ETH principal \\u00b7 <b>'+eth(ME.loyalty)+' ETH</b> loyalty';"
+            "$('rstatus').innerHTML='<b>zOrgz #'+esc(R)+'</b> \\u00b7 '+(ME.eternal?'eternal':TIER[ME.tier])"
+            "+' \\u00b7 <b>'+(Number(ME.boost)/10000).toFixed(2)+'\\u00d7</b> rate \\u00b7 '+f(ME.w)+' zOrg bonded';"
+            "$('credit').innerHTML='<b>'+f(ME.w-ME.used)+' zOrg</b> left to allocate \\u00b7 '+f(ME.used)+' placed';"
+            "$('eth').innerHTML=(ME.eternal&&ME.principal===0n?'principal given to treasury':eth(ME.principal)+' ETH principal')"
+            "+' \\u00b7 <b>'+eth(ME.loyalty)+' ETH</b> loyalty';"
             "ROWS.forEach(t=>{let el=$('a_'+t.id);if(el&&document.activeElement!==el)el.value=t.mine?eth(t.mine,18):''})}"
             "const row=(t,i)=>'<div class=\\'r'+(ON?' on':'')+'\\' style=--s:'+(MX>0n?Number(t.score*100n/MX):0)+'% tabindex=0 data-i='+t.id+'>"
             "<span class=rank>'+String(i+1).padStart(2,'0')+'</span>"
             "<span class=top>'+lg(t)+'<span><b>'+esc(t.sym)+'</b><small>'+esc(t.name)+'</small></span></span>"
-            "<span class=score>'+f(t.score)+'<small>'+f(t.live)+' live \\u00b7 '+f(t.acc)+' accrued</small></span>'"
+            "<span class=score>'+f(t.score)+'<small>'+f(t.live)+' direct \\u00b7 '+f(t.acc)+' conviction</small></span>'"
             "+(ON?'<span class=alloc><input id=a_'+t.id+' inputmode=decimal placeholder=0 aria-label=\\'zOrg for '+esc(t.sym)+'\\'>"
-            "<button class=btn onclick=setWeight('+t.id+')>set</button></span>':'')+'</div>';"
+            "<button class=btn data-set>set</button></span>':'')+'</div>';"
             "async function listing(id){let j={};try{j=JSON.parse(str(await rpc(L,S.json+z(id).slice(2))))}catch(e){}"
             "let st=await rpc(C,S.state+z(id).slice(2)),score=num(st),live=word(st,1),mine=0n;"
             "if(R){try{mine=num(await rpc(C,S.allocOf+z(R).slice(2)+z(id).slice(2)))}catch(e){}}"
@@ -275,7 +278,9 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
             "$('cnt').textContent=ROWS.length+' onchain';paint()});"
             // Delegated, so the handlers do not repeat per row and a keyboard
             // user reaches the same dialog as a pointer.
-            "$('list').onclick=e=>{if(e.target.closest('.alloc'))return;let r=e.target.closest('.r');if(r)openToken(r.dataset.i)};"
+            "$('list').onclick=e=>{let r=e.target.closest('.r');if(!r)return;"
+            "if(e.target.closest('[data-set]'))return setWeight(r.dataset.i);"
+            "if(e.target.closest('.alloc'))return;openToken(r.dataset.i)};"
             "$('list').onkeydown=e=>{if(e.key!=='Enter')return;let r=e.target.closest('.r');if(r)openToken(r.dataset.i)};"
             "load();</script>";
     }
