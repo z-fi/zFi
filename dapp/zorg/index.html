@@ -125,11 +125,60 @@ async function read(sel,id){
   throw Error('read failed')}
 const word=(h,i)=>BigInt('0x'+h.slice(2).slice(i*64,i*64+64));
 
+/* ---------------------------------------------------------------------------
+   LOCAL HEALS for bugs in the currently-deployed renderer. Each one feature-
+   detects first, so when Moloch points setRenderer at the corrected contract
+   these become no-ops rather than double-fixes.
+--------------------------------------------------------------------------- */
+function heal(doc,win){
+  const fixed=[];
+  /* The framed document declares no icon, so browsers fall back to requesting
+     /favicon.ico from this origin and log a 404 on every load. */
+  try{
+    if(!doc.querySelector('link[rel~="icon"]')){
+      const l=doc.createElement('link');l.rel='icon';
+      l.href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='2' y='6' width='12' height='3' fill='%23c7ffa8'/%3E%3C/svg%3E";
+      doc.head.appendChild(l);fixed.push('favicon');
+    }
+  }catch(e){}
+  /* The copy icon's rect is written height=8.8/> - an unquoted attribute value
+     runs to whitespace or '>', so the height parses as "8.8/" and the box never
+     draws. width/height are SVG2 geometry properties, so CSS can restore it. */
+  try{
+    const st=doc.createElement('style');
+    st.textContent='.ic svg rect{height:8.8px}';
+    doc.head.appendChild(st);fixed.push('copy icon');
+  }catch(e){}
+  /* THE important one. The SET button is emitted as onclick=setWeight(<id>) with
+     the listing id as a bare JS number literal. Listing ids are keccak-derived
+     and far exceed Number.MAX_SAFE_INTEGER, so every id except ETH's zero
+     becomes a float and BigInt() throws - allocation silently does nothing on
+     11 of 12 listings. The row already carries the exact id as a string in
+     data-i, so re-issue the call with that. */
+  try{
+    const b=doc.querySelector('.alloc button');
+    if(b&&!b.hasAttribute('data-set')){
+      doc.addEventListener('click',ev=>{
+        const t=ev.target.closest&&ev.target.closest('.alloc button');
+        if(!t)return;
+        const r=t.closest('.r');
+        if(!r||!/^[0-9]+$/.test(r.dataset.i||''))return;   // digits only: this reaches eval
+        ev.preventDefault();ev.stopPropagation();
+        try{win.eval("setWeight('"+r.dataset.i+"')")}catch(e){console.warn('[heal]',e)}
+      },true);
+      fixed.push('allocation ids');
+    }
+  }catch(e){}
+  return fixed;
+}
+
 function guard(doc,win){
   if(!doc||!doc.getElementById('b_etern')||!doc.getElementById('rid')){
     console.warn('[guard] contract page shape changed; guard not installed');
     return}
-  $('prov').innerHTML+=' · <b>+1 local guard</b>';
+  const healed=heal(doc,win);
+  $('prov').innerHTML+=' · <b>+'+(healed.length+1)+' local fix'+(healed.length?'es':'')+'</b>'
+    +(healed.length?' <span title="'+healed.join(', ')+'">('+healed.join(', ')+')</span>':'');
   /* Capture on the document so this runs before the inline onclick on the button. */
   doc.addEventListener('click',async ev=>{
     const b=ev.target.closest&&ev.target.closest('#b_etern');
