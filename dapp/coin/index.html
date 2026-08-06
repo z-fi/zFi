@@ -1798,12 +1798,10 @@ function toggleCurveHolders() {
   }
 }
 
-// Holder discovery is DB-primary with an on-chain Transfer-event fallback:
-//   - The DB is populated from curveBuy/curveSell after every UI trade. It's fast (one HTTP),
-//     already keyed by trader address, and survives across visits.
-//   - When the DB returns no rows (worker miss, brand-new coin, or trades made outside this UI),
-//     we scan Transfer events from launchTime so the panel still finds real holders.
-// Once we have candidate addresses from either source, balances come from on-chain (always authoritative).
+// Holder discovery is entirely on-chain: candidates come from the token's own
+// Transfer logs (scanned back from launchTime), and balances come from a single
+// multicall of balanceOf. There is no off-chain index to fall out of sync — which
+// also means the panel is bounded by what the public RPCs will serve for eth_getLogs.
 async function loadCurveHolders(tokenAddr) {
   const content = $('curveHoldersContent');
   if (!content) return;
@@ -1819,7 +1817,6 @@ async function loadCurveHolders(tokenAddr) {
   };
   if (creatorAddr) TAG[creatorAddr] = { label: 'Creator', cls: 'holder-tag-badge' };
 
-  // Fallback: scan Transfer events when the DB has nothing for us.
   async function fallbackTransferScan() {
     const latestBlock = await withRPC(async rpc => rpc.getBlockNumber());
     const nowSec = Math.floor(Date.now() / 1000);

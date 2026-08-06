@@ -29,6 +29,39 @@
   const CACHE_KEY = "zfi_curve_tokens_v1";
   const CACHE_TTL = 5 * 60 * 1000;
 
+  // Addresses this browser just launched. Two things would otherwise hide a fresh
+  // coin from the list: the 5-minute sessionStorage cache, and the public RPCs
+  // lagging a block or two behind the launch tx. Both resolve on their own, so
+  // entries here are only a bridge and expire once a scan would have caught up.
+  const RECENT_KEY = "zfi_curve_recent_v1";
+  const RECENT_TTL = 60 * 60 * 1000;
+
+  function readRecent() {
+    try {
+      const list = JSON.parse(sessionStorage.getItem(RECENT_KEY) || "[]");
+      if (!Array.isArray(list)) return [];
+      return list.filter(e => e && typeof e.addr === "string" && Date.now() - (e.at || 0) < RECENT_TTL);
+    } catch { return []; }
+  }
+
+  // Record a launch so it shows up in the list immediately. Safe to call twice.
+  function note(addr) {
+    if (typeof addr !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(addr)) return;
+    const a = addr.toLowerCase();
+    try {
+      const list = readRecent().filter(e => e.addr !== a);
+      list.unshift({ addr: a, at: Date.now() });
+      sessionStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 50)));
+    } catch {}
+  }
+
+  // Newest-first, recent launches ahead of the scanned set, no duplicates.
+  function withRecent(tokens) {
+    const seen = new Set(tokens);
+    const head = readRecent().map(e => e.addr).filter(a => !seen.has(a));
+    return head.length ? head.concat(tokens) : tokens;
+  }
+
   let _inflight = null;
 
   async function rpc(node, method, params, timeoutMs) {
@@ -137,21 +170,21 @@
   async function tokens(opts) {
     if (!(opts && opts.force)) {
       const cached = readCache();
-      if (cached) return cached;
+      if (cached) return withRecent(cached);
     }
     if (_inflight) return _inflight;
     _inflight = (async () => {
       try {
         const list = await scan();
         writeCache(list);
-        return list;
+        return withRecent(list);
       } catch (e) {
         console.warn("curve-registry: scan failed", e);
-        return [];
+        return withRecent([]);
       } finally { _inflight = null; }
     })();
     return _inflight;
   }
 
-  window.curveRegistry = { tokens, CURVE_SALE, CONFIGURED_TOPIC: CONFIGURED, MIN_BLOCK };
+  window.curveRegistry = { tokens, note, CURVE_SALE, CONFIGURED_TOPIC: CONFIGURED, MIN_BLOCK };
 })();

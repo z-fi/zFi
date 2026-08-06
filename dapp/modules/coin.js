@@ -573,8 +573,22 @@ async function coinPinFile(file, cachedCID) {
   return data.cid;
 }
 
+// Inline fallbacks for when no pin service is configured. Both percent-encode.
+// The JSON one carries free text (name, description, socials), so it can't be
+// pasted raw into a URI — one space, quote, or `#` and the URI is truncated or
+// invalid. The SVG one only carries the sanitized symbol today, but it went
+// through btoa(), which throws on the first non-Latin1 character it is ever
+// handed. Encoding both the same way removes both edges.
+function coinDataUriJson(obj) {
+  return 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(obj));
+}
+
+function coinDataUriSvg(svg) {
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
 async function coinPinMetadata(metadata) {
-  if (!COIN_PIN_URL) return 'data:application/json;utf8,' + JSON.stringify(metadata);
+  if (!COIN_PIN_URL) return coinDataUriJson(metadata);
   const res = await fetch(COIN_PIN_URL + '/pin-json', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -670,7 +684,7 @@ async function coinLaunch() {
         const logoCID = await coinPinFile(coinSvgToFile(logoSvg, 'logo.svg'), null);
         metadata.image = 'ipfs://' + logoCID;
       } else {
-        metadata.image = 'data:image/svg+xml;base64,' + btoa(logoSvg);
+        metadata.image = coinDataUriSvg(logoSvg);
       }
     }
     if (_coinBannerFile) {
@@ -684,7 +698,7 @@ async function coinLaunch() {
         const bannerCID = await coinPinFile(coinSvgToFile(bannerSvg, 'banner.svg'), null);
         metadata.banner = 'ipfs://' + bannerCID;
       } else {
-        metadata.banner = 'data:image/svg+xml;base64,' + btoa(bannerSvg);
+        metadata.banner = coinDataUriSvg(bannerSvg);
       }
     }
     coinShowStatus('Pinning metadata...');
@@ -915,6 +929,11 @@ async function coinLaunch() {
           break;
         }
       }
+
+      // The coin list is rebuilt from the sale's launch logs and cached for five
+      // minutes, so without this a creator who just launched would not find their
+      // own coin on the list they get sent to.
+      if (tokenAddress) window.curveRegistry?.note(tokenAddress);
 
       launched = true;
       coinShowStatus(
