@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0xd2895580131a269c25e5f6a070b05d09ece8ecd700ebd109837af2abc8c9af24;
-    uint256 constant EXPECTED_LEN = 117592;
+    bytes32 constant EXPECTED_HASH = 0x140fa65d76b253815249f7bf8981290a67b2adaa36165bcb2c91e308f76a7dab;
+    uint256 constant EXPECTED_LEN = 120732;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -21,7 +21,7 @@ contract zSwapDeployTest is Test {
         require(p != address(0), "chunk deploy failed");
     }
 
-    uint256 constant CHUNKS = 5;
+    uint256 constant CHUNKS = 6;
 
     /// @dev Builds zSwap exactly as production does: split zSwap.html into
     /// CHUNKS parts, deploy each as its own data contract, pass them all in.
@@ -38,7 +38,7 @@ contract zSwapDeployTest is Test {
             }
             p[k] = _writeChunk(part);
         }
-        return new zSwap(p[0], p[1], p[2], p[3], p[4]);
+        return new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
     }
 
     function _contains(bytes memory haystack, bytes memory needle) internal pure returns (bool) {
@@ -71,15 +71,18 @@ contract zSwapDeployTest is Test {
         bytes memory c3 = z.DATA3().code;
         bytes memory c4 = z.DATA4().code;
         bytes memory c5 = z.DATA5().code;
+        bytes memory c6 = z.DATA6().code;
         assertEq(
-            c1.length + c2.length + c3.length + c4.length + c5.length,
+            c1.length + c2.length + c3.length + c4.length + c5.length + c6.length,
             EXPECTED_LEN,
             "chunk codesize mismatch"
         );
-        assertEq(keccak256(bytes.concat(c1, c2, c3, c4, c5)), EXPECTED_HASH, "chunk content mismatch");
+        assertEq(
+            keccak256(bytes.concat(c1, c2, c3, c4, c5, c6)), EXPECTED_HASH, "chunk content mismatch"
+        );
         assertTrue(
             c1.length <= 24576 && c2.length <= 24576 && c3.length <= 24576 && c4.length <= 24576
-                && c5.length <= 24576,
+                && c5.length <= 24576 && c6.length <= 24576,
             "chunk over EIP-170"
         );
     }
@@ -97,32 +100,28 @@ contract zSwapDeployTest is Test {
         address c = _writeChunk(bytes("c"));
         address d = _writeChunk(bytes("d"));
         address e = _writeChunk(bytes("e"));
+        address f = _writeChunk(bytes("f"));
 
-        // A zero address has no code, so every position must reject it.
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(address(0), b, c, d, e);
+        // A zero address has no code, so EVERY position must reject it. Written as
+        // a loop rather than one `new` per slot so a seventh chunk cannot be added
+        // with its guard silently untested - the case this file exists to catch.
+        for (uint256 i; i != CHUNKS; ++i) {
+            address[CHUNKS] memory p = [a, b, c, d, e, f];
+            p[i] = address(0);
+            vm.expectRevert(zSwap.InvalidData.selector);
+            new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
+        }
 
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, address(0), c, d, e);
-
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, address(0), d, e);
-
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, c, address(0), e);
-
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, c, d, address(0));
-
-        // A duplicate would serve one slice twice and drop another entirely.
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, a, c, d, e);
-
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, c, d, a);
-
-        vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(a, b, c, e, e);
+        // A duplicate would serve one slice twice and drop another entirely. Every
+        // unordered pair, for the same reason.
+        for (uint256 i; i != CHUNKS; ++i) {
+            for (uint256 j = i + 1; j != CHUNKS; ++j) {
+                address[CHUNKS] memory p = [a, b, c, d, e, f];
+                p[j] = p[i];
+                vm.expectRevert(zSwap.InvalidData.selector);
+                new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
+            }
+        }
     }
 
     function test_ResolveMode_Is5219() public {

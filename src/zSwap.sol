@@ -3,14 +3,20 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.2
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (117592 B) is the runtime bytecode of
-///      4 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (120732 B) is the runtime bytecode of
+///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 5 data contracts
+///      compatibility (ERC-4804). Splitting the page across 6 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 5288 B headroom).
+///      (24576 B per chunk, 26724 B headroom).
+///
+///      The count is a headroom decision, not a hard requirement: the page
+///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
+///      chosen once - it is fixed in the constructor arity, and the deployed
+///      page is immutable. Six leaves room to keep editing the dapp without
+///      the next feature forcing a redeploy of the whole stack.
 ///
 /// HOW TO READ THE DAPP
 ///   cast call <addr> "html()(string)" --rpc-url <rpc> > zSwap.html
@@ -167,7 +173,7 @@ contract zSwap {
     string public constant NAME = "zSwap";
     string public constant VERSION = "0.2";
 
-    /// @dev The HTML payload lives in five separate data contracts whose runtime
+    /// @dev The HTML payload lives in six separate data contracts whose runtime
     /// bytecode IS the markup. Splitting it removes EIP-170 as a ceiling on the
     /// dapp: the 24,576-byte limit now applies per chunk, not to the page. The
     /// chunks are deployed independently and passed in, so this wrapper's own
@@ -177,6 +183,7 @@ contract zSwap {
     address public immutable DATA3;
     address public immutable DATA4;
     address public immutable DATA5;
+    address public immutable DATA6;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -186,11 +193,18 @@ contract zSwap {
         string value;
     }
 
-    constructor(address data1, address data2, address data3, address data4, address data5) {
-        address[5] memory d = [data1, data2, data3, data4, data5];
-        for (uint256 i; i != 5; ++i) {
+    constructor(
+        address data1,
+        address data2,
+        address data3,
+        address data4,
+        address data5,
+        address data6
+    ) {
+        address[6] memory d = [data1, data2, data3, data4, data5, data6];
+        for (uint256 i; i != 6; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 5; ++j) {
+            for (uint256 j = i + 1; j != 6; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -199,6 +213,7 @@ contract zSwap {
         DATA3 = data3;
         DATA4 = data4;
         DATA5 = data5;
+        DATA6 = data6;
     }
 
     function html() external view returns (string memory) {
@@ -234,7 +249,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all five chunks in one pass: each chunk is
+    /// @dev Reassembles the page from all six chunks in one pass: each chunk is
     /// copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     function _html() private view returns (string memory s) {
@@ -243,16 +258,19 @@ contract zSwap {
         address d3 = DATA3;
         address d4 = DATA4;
         address d5 = DATA5;
+        address d6 = DATA6;
         assembly ("memory-safe") {
             let n1 := extcodesize(d1)
             let n2 := extcodesize(d2)
             let n3 := extcodesize(d3)
             let n4 := extcodesize(d4)
             let n5 := extcodesize(d5)
+            let n6 := extcodesize(d6)
             let n12 := add(n1, n2)
             let n123 := add(n12, n3)
             let n1234 := add(n123, n4)
-            let total := add(n1234, n5)
+            let n12345 := add(n1234, n5)
+            let total := add(n12345, n6)
             s := mload(0x40)
             mstore(s, total) // total string length
             let body := add(s, 0x20)
@@ -261,6 +279,7 @@ contract zSwap {
             extcodecopy(d3, add(body, n12), 0, n3)
             extcodecopy(d4, add(body, n123), 0, n4)
             extcodecopy(d5, add(body, n1234), 0, n5)
+            extcodecopy(d6, add(body, n12345), 0, n6)
             let padded := and(add(total, 0x1f), not(0x1f))
             mstore(0x40, add(body, padded)) // bump free memory pointer
         }
@@ -407,10 +426,11 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-// Onchain token list (src/utils/TokenList.sol). PLACEHOLDER: set to the deployed
-// address once it is mined. While this is ZERO the built-in TOKENS below are used
-// unchanged, so the dapp behaves exactly as it did before the list existed.
-const TOKENLIST=ZERO;
+// Onchain token list (src/utils/TokenList.sol), Ethereum mainnet. The built-in
+// TOKENS below remain the fallback: any failure - wrong chain, RPC hiccup, an
+// empty or malformed list - leaves them in place rather than presenting an empty
+// or half-populated picker. See `loadTokenList`.
+const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
 const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
@@ -459,13 +479,32 @@ for(const row of rows){
 if(!row)continue;
 let t;try{t=JSON.parse(row)}catch{continue}
 // Trust nothing: a bad entry is skipped, it does not take the list down.
+// The registry is a CURATED list, not a routing table: it carries assets this
+// dapp cannot act on at all. Two filters, for two different reasons.
+//
+// 1. Namespace. A non-EVM listing (Bitcoin, Solana) has no address here — the
+//    registry renders those accounts as 32 bytes, so the shape test below
+//    already rejects them, but say it outright rather than relying on a
+//    length coincidence to keep a Bitcoin asset out of an Ethereum picker.
+if(t.k!=="eip155")continue;
+// 2. Standard. ERC-20 and the native asset are swappable; ERC-721 is not, but
+//    IS auctionable through Swapboard/Dutchboard and needs to resolve in
+//    `known()` so orderbook NFT legs render with a symbol and icon. Anything
+//    else — UNKNOWN, or a standard added after this page was chunked — is
+//    something this dapp has no path for, so it is left out.
+const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
+if(!std)continue;
 if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
 if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
 if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 const sym=String(t.s||"").slice(0,12)||"?";
-next.push({sym,addr:t.a,dec:t.d,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
+next.push({sym,addr:t.a,dec:t.d,std,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
 }
-if(next.length)TOKENS.splice(0,TOKENS.length,...next);
+// Fungibles first, NFTs after, each keeping the registry's curation order. The
+// picker's default selections are indexes, so a stable partition matters: it
+// keeps a swappable token at index 0 no matter how many collections are listed.
+next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
+if(next.some(t=>t.std==="ft"))TOKENS.splice(0,TOKENS.length,...next);
 }catch{}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
@@ -688,7 +727,7 @@ let sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
 if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
 const dec=Number(BigInt(decRet));
 if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
-TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr:a,dec,std:"ft",icon:genIcon(sym)});
 if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
 return TOKENS.length-1;
 }
@@ -697,7 +736,7 @@ const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
 const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr,dec,std:"ft",icon:genIcon(sym)});
 }
 }}catch{}
 const QUOTE_TTL=45000;
@@ -719,14 +758,34 @@ bal.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for
 }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
 render();
 }
-const optsHtml=()=>TOKENS.map((t,i)=>`<option value="${i}">${t.sym}</option>`).join("")+`<option value="__custom">+ Custom token…</option>`;
+// NFTs stay in the picker — Swapboard and Dutchboard auction them — but they are
+// not swappable, so they sit under their own heading instead of being interleaved
+// with tokens the router can actually quote. `select.options` still enumerates
+// options inside an optgroup, so `syncDisabled` is unaffected.
+const optsHtml=()=>{
+const opt=(t,i)=>`<option value="${i}">${t.sym}</option>`;
+const ft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std!=="nft");
+const nft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std==="nft");
+return ft.map(([t,i])=>opt(t,i)).join("")
++(nft.length?`<optgroup label="NFT collections — auction only">${nft.map(([t,i])=>opt(t,i)).join("")}</optgroup>`:"")
++`<option value="__custom">+ Custom token…</option>`;
+};
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
+const isNft=v=>TOKENS[v]?.std==="nft";
+// A collection is listed on every tab so the picker does not reshuffle underneath
+// the user, but it is only SELECTABLE where something can act on it. Swapboard and
+// Dutchboard take NFT lots; the router cannot quote one and `send` prices its
+// transfer in decimals a collection does not have. Gating here rather than in the
+// quote path means the disabled state is visible before the click, instead of a
+// failed quote after it.
 const syncDisabled=()=>{
 const pair=tab!=="send";
-for(const opt of fromSel.options)opt.disabled=pair&&opt.value===toSel.value&&opt.value!=="__custom";
-for(const opt of toSel.options)opt.disabled=pair&&opt.value===fromSel.value&&opt.value!=="__custom";
+const nftOk=tab==="book";
+for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]])
+for(const opt of sel.options)
+opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
@@ -1789,11 +1848,23 @@ for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttri
 // the pay/receive panels already describe a limit order, so the orders tab
 // reuses them: sell this, want that. Only the labels and the slippage change.
 for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+// Leaving the orderbook with a collection selected would strand that side on an
+// option `syncDisabled` is about to disable — visibly greyed out, and every read
+// of the pair downstream would price an NFT as a fungible. Move it back to
+// something quotable first; the equal-sides fix below then resolves any collision
+// the move creates.
+if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
+if(!isNft(sel.value))continue;
+const alt=TOKENS.findIndex((t,i)=>t.std!=="nft"&&String(i)!==other.value);
+if(alt>=0)sel.value=String(alt);
+}
 // Send lets the pay side hold whatever the receive side holds. Coming back to a
 // pair-based tab with both sides equal would dead-end on "Pick different
 // tokens", so move the side the user was not just looking at.
 if(!send&&fromSel.value===toSel.value){
-const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value);
+// Off the orderbook this must not land on a collection, or it re-strands the
+// side the eviction above just rescued.
+const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value&&(bk||t.std!=="nft"));
 if(alt>=0)toSel.value=String(alt);
 }
 syncDisabled();

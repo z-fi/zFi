@@ -37,7 +37,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 5;
+const CHUNKS = 6;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
