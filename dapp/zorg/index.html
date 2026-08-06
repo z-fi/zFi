@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>zOrg — onchain TokenList governance</title>
+<title>ZLIST</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <!--
   ERC-8244 onchain pointer. This page hosts NOTHING: the interface below is the
   contract's own html(), fetched at runtime with a single eth_call and rendered
@@ -45,10 +46,10 @@
 </head><body>
 <div id="z-nav"></div>
 <div class="bar">
-  <span id="prov">Loading the interface from Ethereum…</span>
+  <span id="prov"></span>
   <span><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">get a zOrgz</a>
   · <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#code" target="_blank" rel="noopener">contract</a>
-  · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">w4eth.io</a></span>
+  · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a></span>
 </div>
 <iframe id="frame" title="zOrg onchain interface" hidden></iframe>
 <dialog id="warn">
@@ -138,7 +139,7 @@ function heal(doc,win){
   try{
     if(!doc.querySelector('link[rel~="icon"]')){
       const l=doc.createElement('link');l.rel='icon';
-      l.href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='2' y='6' width='12' height='3' fill='%23c7ffa8'/%3E%3C/svg%3E";
+      l.href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E";
       doc.head.appendChild(l);fixed.push('favicon');
     }
   }catch(e){}
@@ -157,18 +158,26 @@ function heal(doc,win){
      11 of 12 listings. The row already carries the exact id as a string in
      data-i, so re-issue the call with that. */
   try{
-    const b=doc.querySelector('.alloc button');
-    if(b&&!b.hasAttribute('data-set')){
-      doc.addEventListener('click',ev=>{
-        const t=ev.target.closest&&ev.target.closest('.alloc button');
-        if(!t)return;
-        const r=t.closest('.r');
-        if(!r||!/^[0-9]+$/.test(r.dataset.i||''))return;   // digits only: this reaches eval
-        ev.preventDefault();ev.stopPropagation();
-        try{win.eval("setWeight('"+r.dataset.i+"')")}catch(e){console.warn('[heal]',e)}
-      },true);
-      fixed.push('allocation ids');
-    }
+    doc.addEventListener('click',ev=>{
+      const t=ev.target.closest&&ev.target.closest('.alloc button');
+      if(!t||t.hasAttribute('data-set'))return;            // corrected renderer: leave it alone
+      const r=t.closest('.r');
+      if(!r||!/^[0-9]+$/.test(r.dataset.i||''))return;      // digits only: this reaches eval
+      ev.preventDefault();ev.stopPropagation();
+      try{win.eval("setWeight('"+r.dataset.i+"')")}catch(e){console.warn('[heal]',e)}
+    },true);
+    fixed.push('allocation ids');
+  }catch(e){}
+  /* The copy icon's rect carries height=8.8/> - the unquoted value runs to '>' so
+     it parses as "8.8/" and the browser logs a parse error every time the dialog
+     builds one. CSS restores the geometry but cannot stop the log, so rewrite the
+     attribute on the nodes themselves as they appear. */
+  try{
+    new win.MutationObserver(()=>{
+      doc.querySelectorAll('.ic svg rect:not([data-h])').forEach(r=>{
+        r.setAttribute('height','8.8');r.setAttribute('data-h','1');
+      });
+    }).observe(doc.body,{childList:true,subtree:true});
   }catch(e){}
   return fixed;
 }
@@ -177,9 +186,20 @@ function guard(doc,win){
   if(!doc||!doc.getElementById('b_etern')||!doc.getElementById('rid')){
     console.warn('[guard] contract page shape changed; guard not installed');
     return}
-  const healed=heal(doc,win);
-  $('prov').innerHTML+=' · <b>+'+(healed.length+1)+' local fix'+(healed.length?'es':'')+'</b>'
-    +(healed.length?' <span title="'+healed.join(', ')+'">('+healed.join(', ')+')</span>':'');
+  heal(doc,win);
+  /* Reframe the header for this surface. The contract page is written for a
+     visitor arriving cold at zorg.wei; here it sits inside zFi under its own
+     name, so the DAO eyebrow is noise and the copy should say what zList is.
+     Left in the reader because a setRenderer proposal is already queued and
+     editing the contract's source now would strand it. */
+  try{
+    const k=doc.querySelector('.k'), h=doc.querySelector('h1'), sub=doc.querySelector('.sub');
+    if(k) k.remove();
+    if(h) h.textContent='zList';
+    if(sub) sub.innerHTML='A curated token list that lives entirely on Ethereum \u2014 '
+      +'every name, symbol, address, decimal and logo read from a contract, not a server. '
+      +'Holders of bonded zOrgz curate the order. Open any listing to read and copy its record.';
+  }catch(e){}
   /* Capture on the document so this runs before the inline onclick on the button. */
   doc.addEventListener('click',async ev=>{
     const b=ev.target.closest&&ev.target.closest('#b_etern');
@@ -207,7 +227,7 @@ function guard(doc,win){
 (async()=>{
   try{
     const {html,via}=await pull();
-    $('prov').innerHTML='Interface served from <b>'+html.length.toLocaleString()+' bytes</b> of contract storage · read via '+via;
+    $('prov').textContent='';
     const f=$('frame');
     f.addEventListener('load',()=>{try{guard(f.contentDocument,f.contentWindow)}catch(e){console.warn('[guard]',e)}},{once:true});
     f.srcdoc=BRIDGE+html;
@@ -217,7 +237,7 @@ function guard(doc,win){
     $('fail').hidden=false;
     $('fail').innerHTML='<p>The interface lives at <code>'+C+'</code> and is fetched with one <code>eth_call</code> to <code>html()</code>. '+
       'Every public endpoint this page knows about failed just now, which is a connectivity problem rather than a contract one.</p>'+
-      '<p>You can reach the same page directly over <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">w4eth.io</a>, '+
+      '<p>You can reach the same page directly over <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a>, '+
       'or read <code>html()</code> (<code>0x33c34ac3</code>) yourself on <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#readContract" target="_blank" rel="noopener">Etherscan</a>.</p>';
   }
 })();
