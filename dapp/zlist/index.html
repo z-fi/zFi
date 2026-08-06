@@ -74,7 +74,7 @@
   .wsep{color:var(--fg-muted);font-size:15px;line-height:1;padding-bottom:18px}
   .wart{position:relative;display:block;width:100%}
   /* the receipt inverts the underlying art; this is that same inversion */
-  .wart img.winv{filter:invert(1)}
+  .wart.winv{filter:invert(1)}
   .wart .wglyph{position:absolute;inset:0;width:100%;height:100%}
   .warrow{font-size:15px;line-height:1;user-select:none}
   .wchk{display:flex;gap:9px;align-items:flex-start;font-size:13px}
@@ -345,21 +345,42 @@ const wArt=async(zorgz,id)=>{
   const meta=JSON.parse(atob(uri.slice(i+7)));
   return meta.image||null;
 };
-const WSTAR="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' class='wglyph'>"
- +"<path transform='translate(50 50) scale(.5) translate(-30 -44)' fill='#264cb5'"
- +" d='M32 50 l7 5 -2.7-8.2 7-5.1h-8.6L32 33.5l-2.7 8.2H20.7l7 5.1L25 55z'/></svg>";
+/* Byte-for-byte the glyph ZorgReceiptArt._receiptArtwork splices in, so the
+   preview cannot drift from the contract. It is the zFi Z, and it is drawn in
+   DEEP BLUE and inserted BEFORE the inversion - that is what turns it gold
+   (invert #264cb5 -> #d9b34a, the same gold as .wgold). */
+const WZGLYPH='<svg width="64" height="64" viewBox="8 8 16 16" opacity=".29">'
+ +'<path d="M10 10h12l-12 12h12M10 14h12M10 18h12" fill="none" stroke="#264cb5"'
+ +' stroke-width="1.6" stroke-linecap="square" stroke-linejoin="round"/></svg>';
+/* The same splice the contract performs: find zOrgz's opaque 64px background
+   rect and insert the glyph immediately after it, so the token's own later
+   layers still paint OVER the mark and traits like a third eye are never
+   covered. Laying the glyph on top of the finished image instead would cross
+   the face, which no real receipt does.
+   Returns null when there is no anchor to splice against - matching the
+   contract, which returns the underlying art unchanged and shows no glyph. */
+const wEternalArt=img=>{
+  const p='data:image/svg+xml;base64,';
+  if(!img||img.slice(0,p.length)!==p) return null;
+  let s; try{ s=atob(img.slice(p.length)); }catch(e){ return null; }
+  const at=s.indexOf('<rect width="64" height="64"');
+  if(at<0) return null;
+  const end=s.indexOf('/>',at);
+  if(end<0) return null;
+  try{ return p+btoa(s.slice(0,end+2)+WZGLYPH+s.slice(end+2)); }catch(e){ return null; }
+};
 const wStates=img=>{
   if(!img) return '';   /* art unavailable: show the form rather than a broken strip */
-  const panel=(cls,cap,glyph)=>
-    '<figure class="wstate"><span class="wart">'
-   +'<img alt="" class="'+cls+'" src="'+img+'">'+(glyph?WSTAR:'')+'</span>'
-   +'<figcaption'+(glyph?' class="wgold"':'')+'>'+cap+'</figcaption></figure>';
+  const panel=(src,inv,cap,gold)=>
+    '<figure class="wstate"><span class="wart'+(inv?' winv':'')+'">'
+   +'<img alt="" src="'+src+'"></span>'
+   +'<figcaption'+(gold?' class="wgold"':'')+'>'+cap+'</figcaption></figure>';
   return '<div class="wstates">'
-   +panel('','your zOrgz','')
+   +panel(img,0,'your zOrgz',0)
    +'<span class="wsep" aria-hidden="true">&rarr;</span>'
-   +panel('winv','bonded receipt','')
+   +panel(img,1,'bonded receipt',0)
    +'<span class="wsep" aria-hidden="true">&rarr;</span>'
-   +panel('winv','eternal',1)
+   +panel(wEternalArt(img)||img,1,'eternal',1)
    +'</div>';
 };
 /* Opportunistic: only one public endpoint we know of serves an unbounded
@@ -463,17 +484,28 @@ async function wizOpen(){
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
     /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
        slow or refusing endpoint costs nothing but a line of hint text. */
-    discoverZorgz(me,zorgz).then(owned=>{
+    /* Two discoveries, same helper: zOrgz still in the wallet are bondable, and
+       receipts held on the governor are zOrgz ALREADY in escrow. The two sets
+       are disjoint - bonding moves the token out of the wallet - so a bonded
+       zOrgz would otherwise just be missing from the picker with no explanation.
+       Listing them disabled answers "where did #9953 go?" without a lookup. */
+    Promise.all([discoverZorgz(me,zorgz), discoverZorgz(me,GOV).catch(()=>null)]).then(([owned,bonded])=>{
       const lab=$('wzfind'); if(!lab)return;
       if(owned&&owned.length){
         const cur=$('wzid').value;
-        $('wzid').outerHTML='<select id="wzid">'
-          +owned.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')
+        const free='<optgroup label="Ready to bond">'
+          +owned.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')+'</optgroup>';
+        const held=(bonded&&bonded.length)
+          ? '<optgroup label="Already bonded — held in escrow">'
+            +bonded.map(i=>'<option value="'+i+'" disabled>zOrgz #'+i+'</option>').join('')+'</optgroup>'
+          : '';
+        $('wzid').outerHTML='<select id="wzid">'+free+held
           +'<option value="__other">Another id…</option></select>';
         if(cur&&owned.includes(cur))$('wzid').value=cur;
-        lab.textContent = owned.length<WZ.nft
+        lab.textContent = (owned.length<WZ.nft
           ? ' ('+owned.length+' of '+WZ.nft+' found — pick “Another id…” for the rest)'
-          : ' ('+owned.length+' found)';
+          : ' ('+owned.length+' found)')
+          + (bonded&&bonded.length ? ', '+bonded.length+' already bonded' : '');
         $('wzid').onchange=()=>{
           if($('wzid').value==='__other'){
             $('wzid').outerHTML='<input id="wzid" inputmode="numeric" placeholder="zOrgz token id">';
