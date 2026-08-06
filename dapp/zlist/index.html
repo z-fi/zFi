@@ -71,6 +71,7 @@
   .wstate img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
   .wstate figcaption{font:italic 14px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
   .wstate .wgold{color:#d9b34a}
+  .wsep{color:var(--fg-muted);font-size:15px;line-height:1;padding-bottom:18px}
   .warrow{font-size:15px;line-height:1;user-select:none}
   .wchk{display:flex;gap:9px;align-items:flex-start;font-size:13px}
   .wchk input{min-height:0;margin-top:3px}
@@ -320,6 +321,35 @@ const wUnits=v=>{ v=String(v).trim();
 const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
 
 let WZ={}, wizWaiting=false, FRAME=null;
+
+/* The three states a zOrgz passes through, drawn rather than fetched: at this
+   point in the wizard the receipt does not exist yet, so there is no onchain
+   art to show for panels 2 and 3. The tiles mirror what ZorgReceiptArt actually
+   does - the receipt inverts the underlying art, and an eternal receipt splices
+   a #264cb5 glyph in after the background rect - so the preview matches the
+   thing the user ends up holding. Inline data URIs keep the page self-contained. */
+const wTile=(bg,fg,glyph)=>"data:image/svg+xml,"+encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' shape-rendering='crispEdges'>"
+ +"<rect width='64' height='64' fill='"+bg+"'/>"
+ +"<rect x='16' y='14' width='32' height='30' fill='"+fg+"'/>"
+ +"<rect x='22' y='24' width='6' height='6' fill='"+bg+"'/>"
+ +"<rect x='36' y='24' width='6' height='6' fill='"+bg+"'/>"
+ +"<rect x='24' y='36' width='16' height='4' fill='"+bg+"'/>"
+ +"<rect x='20' y='46' width='24' height='6' fill='"+fg+"'/>"
+ +(glyph?"<path transform='translate(50 50) scale(.5) translate(-30 -44)' fill='"+glyph
+        +"' d='M32 50 l7 5 -2.7-8.2 7-5.1h-8.6L32 33.5l-2.7 8.2H20.7l7 5.1L25 55z'/>":"")
+ +"</svg>");
+const WSTATES=
+  '<div class="wstates">'
+ +'<figure class="wstate"><img alt="" src="'+wTile('#e8e4da','#1b1b1b','')+'">'
+ +'<figcaption>your zOrgz</figcaption></figure>'
+ +'<span class="wsep" aria-hidden="true">&rarr;</span>'
+ +'<figure class="wstate"><img alt="" src="'+wTile('#1b1b1b','#e8e4da','')+'">'
+ +'<figcaption>bonded receipt</figcaption></figure>'
+ +'<span class="wsep" aria-hidden="true">&rarr;</span>'
+ +'<figure class="wstate"><img alt="" src="'+wTile('#1b1b1b','#e8e4da','#264cb5')+'">'
+ +'<figcaption class="wgold">eternal</figcaption></figure>'
+ +'</div>';
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
