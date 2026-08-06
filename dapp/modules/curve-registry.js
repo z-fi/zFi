@@ -1,16 +1,27 @@
 // ---- ClassicalCurveSale launch registry (indexer-free) ----
 // Curve launches announce themselves on-chain, so the token list is rebuilt from
 // the sale contract's own logs instead of an off-chain database:
-//   event Configured(address indexed creator, address indexed token, uint256 cap,
-//                    uint256 startPrice, uint256 endPrice,
-//                    uint256 graduationTarget, uint256 lpTokens)
+//   event TokenCreated(address indexed creator, address indexed token)
+//
+// TokenCreated is emitted only by launch(), which deploys the ERC20 itself and mints
+// the entire supply into the sale contract. That escrow is what makes a curve safe to
+// trade: the only sellable supply is supply somebody bought on the curve, so selling
+// back is just the redemption they paid for.
+//
+// The sale's other entry point, configure(), adopts a caller-supplied ERC20 and emits
+// only Configured. Nothing stops that token from having supply circulating outside the
+// curve, and that supply can be sold in to redeem other buyers' ETH. Configured is
+// emitted by both paths and so cannot tell them apart — indexing TokenCreated instead
+// restricts the list to the escrowed path. Both events carry the token in topics[2],
+// so this is a straight topic swap. See test/ClassicalCurveSaleDeployed.t.sol.
 //
 // Covering all history needs ~17 chunked eth_getLogs calls on the widest public
 // node, so the result is cached in sessionStorage and shared across pages.
 // Dependency-free (raw JSON-RPC over fetch) so pages that don't bundle ethers can use it.
 (function () {
   const CURVE_SALE = "0x000000005d9b18764E12E5aeefD6dA73110F85eb";
-  const CONFIGURED = "0x5caa2dd84b26b59fc617597b5c3e8f0a3fd2a777d517c3b46488a5a232305e6e";
+  // keccak256("TokenCreated(address,address)") — launch() only.
+  const TOKEN_CREATED = "0xd5f9bdf12adf29dab0248c349842c3822d53ae2bb4f36352f301630d018c8139";
   // ClassicalCurveSale deployment — no launch log can predate it.
   const MIN_BLOCK = 22361603;
 
@@ -26,7 +37,9 @@
   // in-flight window count low enough that it doesn't start returning 504s.
   const CONCURRENCY = 3;
 
-  const CACHE_KEY = "zfi_curve_tokens_v1";
+  // v2: v1 was keyed on Configured, so a cached v1 list can contain configure()-path
+  // tokens. Bumping the key retires those instead of serving them for another TTL.
+  const CACHE_KEY = "zfi_curve_tokens_v2";
   const CACHE_TTL = 5 * 60 * 1000;
 
   // Addresses this browser just launched. Two things would otherwise hide a fresh
@@ -110,7 +123,7 @@
           for (let lo = from; lo <= to; lo += n.span + 1) {
             const hi = Math.min(to, lo + n.span);
             const logs = await rpc(n, "eth_getLogs", [{
-              address: CURVE_SALE, fromBlock: hex(lo), toBlock: hex(hi), topics: [CONFIGURED]
+              address: CURVE_SALE, fromBlock: hex(lo), toBlock: hex(hi), topics: [TOKEN_CREATED]
             }]);
             out.push(...logs);
           }
@@ -186,5 +199,5 @@
     return _inflight;
   }
 
-  window.curveRegistry = { tokens, note, CURVE_SALE, CONFIGURED_TOPIC: CONFIGURED, MIN_BLOCK };
+  window.curveRegistry = { tokens, note, CURVE_SALE, TOKEN_CREATED_TOPIC: TOKEN_CREATED, MIN_BLOCK };
 })();
