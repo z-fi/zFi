@@ -9405,7 +9405,28 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (_) {}
 
   // If #coin/#send hash present (no PP query params), switch tab immediately and skip swap deeplinks
-  const _dlTabHash = window.location.hash;
+  //
+  // The fragment is the one part of a URL nothing downstream is obliged to keep:
+  // servers never receive it, and link shorteners and in-app browsers drop it on
+  // redirect. A shared ?name=..&symbol=..#coin link that arrives without its
+  // `#coin` doesn't just fail to open the coin tab — it falls through to the swap
+  // deeplink below, which replaceState-rewrites the URL to the default pair, so
+  // the link is destroyed rather than ignored (the same failure the `pp` note
+  // below describes). So infer the tab from the query when the hash is missing.
+  //
+  // Only params no other tab reads count as evidence, and only when there is no
+  // swap or privacy deeplink to contradict them — an ambiguous URL keeps its
+  // current behaviour rather than being rerouted on a guess.
+  const _dlTabHash = (() => {
+    const h = window.location.hash;
+    if (h) return h;
+    const q = new URLSearchParams(window.location.search);
+    if (q.has('from') || q.has('to') || q.has('pp')) return h;
+    const mode = (q.get('mode') || '').toLowerCase();
+    if (q.has('name') || q.has('symbol') || q.has('desc')
+      || mode === 'coin' || mode === 'curve' || mode === 'cause' || mode === 'nft') return '#coin';
+    return h;
+  })();
   // Only a `pp` value the privacy deeplink below can actually act on may
   // suppress the hash. has('pp') was true for an empty or unrecognised value
   // too, so ?pp=usdc#privacy fell through to the swap tab AND had its URL
