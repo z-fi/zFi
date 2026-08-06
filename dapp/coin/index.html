@@ -134,6 +134,21 @@ input {
   background:var(--surface);border:1px solid var(--border-muted);
   opacity:1;color:var(--fg-muted);
 }
+/* Marks a curve launched with non-template parameters. Hover gives the reason. */
+.coin-tpl-warn {
+  font-size:9px;font-weight:700;line-height:1;
+  padding:1px 5px;border-radius:3px;
+  background:transparent;border:1px solid #FF9800;
+  opacity:1;color:#FF9800;cursor:help;
+}
+/* Same signal at the top of a coin's own page, where there is room to spell it out. */
+.curve-param-notice {
+  margin:10px 0;padding:10px 12px;border-radius:6px;
+  border:1px solid #FF9800;background:color-mix(in srgb, #FF9800 8%, transparent);
+  font-size:13px;line-height:1.5;color:var(--fg);
+}
+.curve-param-notice strong { color:#FF9800; }
+.curve-param-notice ul { margin:6px 0 0;padding-left:18px; }
 
 /* Stacked duplicates: a single grid cell that renders the canonical card up
    front, with a paper-stack shadow hinting at hidden variants. The badge
@@ -1002,6 +1017,38 @@ const CURVE_SALE_ABI = [
   'error ZeroAmount()',       // 0x1f2a2005
   'error TransferFromFailed()'// 0x7939f424 — selling more tokens than you hold
 ];
+
+// The sale contract does not constrain launch parameters — it only bounds them
+// (feeBps up to 100%, lpTokens may be 0, lpRecipient may be any address). Our own
+// launcher hardcodes a safe template, but anyone can call launch() directly and the
+// result appears in this list looking identical. These checks read the values the
+// coin actually launched with, so a card never advertises properties it doesn't have.
+//
+// lpRecipient is deliberately re-read rather than trusted from an earlier load: the
+// creator can call setLpRecipient right up until the graduating buy lands, so a coin
+// can show burn-address LP for its whole bonding phase and still redirect it.
+const CURVE_BURN_ADDRS = new Set([ZERO, '0x000000000000000000000000000000000000dead']);
+
+function curveLpIsPermanent(curve) {
+  try { return CURVE_BURN_ADDRS.has(String(curve.lpRecipient).toLowerCase()) && BigInt(curve.lpTokens) > 0n; }
+  catch { return false; }
+}
+
+// Human-readable reasons this coin deviates from the standard template. Empty array
+// means it matches what the launcher produces.
+function curveParamWarnings(curve) {
+  const out = [];
+  try {
+    const feeBps = Number(curve.feeBps);
+    if (feeBps > 300) out.push(`${(feeBps / 100).toFixed(2)}% trading fee to the creator on every buy and sell`);
+    if (BigInt(curve.lpTokens) === 0n) {
+      out.push('no tokens reserved for liquidity — the creator receives the raised ETH instead of a pool being seeded');
+    } else if (!CURVE_BURN_ADDRS.has(String(curve.lpRecipient).toLowerCase())) {
+      out.push('LP tokens go to the creator on graduation, so the liquidity can be withdrawn');
+    }
+  } catch {}
+  return out;
+}
 
 // Custom-error name -> what actually went wrong, in the user's terms. Ethers gives
 // us the bare error name once the fragments above are present; this turns it into
@@ -3184,6 +3231,13 @@ async function _galleryRenderFresh(gen) {
         const isSpam = _spamSet.has(cCardAddr);
         if (isSpam) spamCount++;
 
+        // Only claim permanent LP when this coin actually burns it, and surface any
+        // other deviation from the standard template as a "!" badge on the card.
+        const cCurveWarnings = curveParamWarnings(curve);
+        const cCurveBadgeTitle = curveLpIsPermanent(curve)
+          ? 'bonding curve · permanent LP'
+          : 'bonding curve';
+
         const mcapDisplay = curveMcap > 1e-6 ? fmtMcap(curveMcap) : '';
         const mcapUsd = curveMcap > 1e-6 && ethUsd > 0 ? fmtUsd(curveMcap * ethUsd) : '';
         const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : `${progressPct.toFixed(1)}% bonded`;
@@ -3199,7 +3253,7 @@ async function _galleryRenderFresh(gen) {
               <div class="coin-logo">${logoEl}</div>
               <div>
                 <div class="coin-card-name">${escText(cName)}</div>
-                <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span></div>
+                <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(cCurveBadgeTitle)}">curve</span>${cCurveWarnings.length ? `<span class="coin-tpl-badge coin-tpl-warn" title="${escAttr(cCurveWarnings.join(' \u00b7 '))}">!</span>` : ''}</div>
               </div>
             </div>
             <div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(progressPct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(progressPct,100) / 10))}</div>
@@ -3656,7 +3710,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     <div class="coin-detail-head">
       <div class="coin-detail-logo">${curveMeta ? logoHTML({symbol: tokenSymbol}, curveMeta, 64) : symbolSVG(tokenSymbol, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
-        <h2>${escText(tokenName)} <span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span></h2>
+        <h2>${escText(tokenName)} <span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(curveLpIsPermanent(curve) ? 'bonding curve \u00b7 permanent LP' : 'bonding curve')}">curve</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(tokenSymbol)}</span>
           ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} tokens</div>` : ''}
@@ -3664,6 +3718,11 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
         <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${curve.creator}" target="_blank" style="color:inherit">${curve.creator.slice(0,6)}&hellip;${curve.creator.slice(-4)}</a></div>
       </div>
     </div>
+
+    ${(() => {
+      const w = curveParamWarnings(curve);
+      return w.length ? `<div class="curve-param-notice"><strong>Launched with non-standard settings.</strong> This coin was configured directly rather than through the launcher, so it does not carry the usual terms:<ul>${w.map(x => `<li>${escText(x)}</li>`).join('')}</ul></div>` : '';
+    })()}
 
     ${curveDesc || (curveMeta && (curveMeta.twitter || curveMeta.telegram || curveMeta.discord)) ? `<div class="section-card">${curveDesc ? `<div class="desc-text">${escText(curveDesc)}</div>` : ''}${curveMeta && (curveMeta.twitter || curveMeta.telegram || curveMeta.discord) ? renderSocials(curveMeta, !!curveDesc) : ''}</div>` : ''}
 
