@@ -19,6 +19,15 @@ interface IZRouter {
     ) external payable returns (uint256 amountIn, uint256 amountOut);
     function execute(address target, uint256 value, bytes calldata data) external payable returns (bytes memory);
     function trust(address target, bool ok) external payable;
+    function snwap(
+        address tokenIn,
+        uint256 amountIn,
+        address recipient,
+        address tokenOut,
+        uint256 amountOutMin,
+        address executor,
+        bytes calldata executorData
+    ) external payable returns (uint256 amountOut);
 }
 
 /// @notice Can zRouter reach a graduated curve coin?
@@ -125,6 +134,46 @@ contract ClassicalCurveSaleZRouterTest is Test {
         vm.prank(alice);
         ZROUTER.execute{value: 1 ether}(address(SALE), 1 ether, inner);
         assertGt(ERC20(token).balanceOf(alice) - balBefore, 0, "hop through the sale's router delivered tokens");
+    }
+
+    /// snwap is the generic executor and, unlike execute(), carries no allowlist. It
+    /// hands the call to SafeExecutor, which calls the sale, which calls zAMM as itself
+    /// -- so the hook is satisfied and the buy side needs no owner action at all.
+    function test_zRouter_snwap_buy_reachesGraduatedCoin() public {
+        _graduate(true, bytes32(uint256(34)));
+
+        bytes memory inner = abi.encodeWithSelector(
+            SALE.swapExactIn.selector, key, uint256(1 ether), uint256(0), true, alice, block.timestamp + 1
+        );
+        uint256 before = ERC20(token).balanceOf(alice);
+
+        vm.prank(alice);
+        uint256 out = ZROUTER.snwap{value: 1 ether}(
+            address(0), 0, alice, token, 0, address(SALE), inner
+        );
+
+        assertGt(out, 0, "snwap routed into a creator-fee pool");
+        assertEq(ERC20(token).balanceOf(alice) - before, out, "delta measured against the recipient");
+    }
+
+    /// The sell side does not compose the same way. snwap forwards the input tokens to
+    /// the executor, but the sale pulls its input from whoever called it -- SafeExecutor,
+    /// which holds nothing. It reverts as a whole rather than stranding the tokens, so
+    /// selling through zRouter needs an adapter rather than the sale as the raw executor.
+    function test_zRouter_snwap_sell_needsAnAdapter() public {
+        _graduate(true, bytes32(uint256(35)));
+
+        uint256 amt = ERC20(token).balanceOf(alice) / 100;
+        bytes memory inner = abi.encodeWithSelector(
+            SALE.swapExactIn.selector, key, amt, uint256(0), false, alice, block.timestamp + 1
+        );
+
+        vm.prank(alice);
+        vm.expectRevert();
+        ZROUTER.snwap(token, amt, alice, address(0), 0, address(SALE), inner);
+
+        // Nothing was left behind in the sale by the failed attempt.
+        assertEq(ERC20(token).balanceOf(address(SALE)), 0, "no tokens stranded in the sale");
     }
 
     /// Brute-force the owner slot rather than guessing at the storage layout.
