@@ -22,6 +22,27 @@ contract ConstantSurchargeHook {
     /// @notice Minimum notice before a surcharge increase can become active.
     uint256 public constant INCREASE_DELAY = 1 days;
 
+    /// @notice How long a matured increase stays applicable before it lapses.
+    ///
+    /// @dev The delay alone bounds only how SOON an increase can activate, not
+    ///      when it actually does. `applySurchargeIncrease` is permissionless
+    ///      and, without an upper bound, a matured increase never expires - so a
+    ///      creator could schedule one to the cap, let it ripen, and sit on it
+    ///      indefinitely as an option to be exercised at a moment of their
+    ///      choosing, including in the same block as somebody else's swap. The
+    ///      notice period would still have been served, and the header's promise
+    ///      that takers and routers can observe an increase before it becomes
+    ///      active would still be technically true, while being useless to
+    ///      anyone reading `surchargeOf` rather than `pendingSurchargeOf`.
+    ///
+    ///      A window closes that. An increase must be applied while it is fresh
+    ///      or be rescheduled - which restarts the notice - so the rate a pool
+    ///      can charge is never more than this far ahead of what an observer saw
+    ///      announced. Takers are not defenceless without it, since `minOut`
+    ///      turns a surprise surcharge into a failed trade rather than a loss;
+    ///      this makes the surprise itself short-lived.
+    uint256 public constant INCREASE_WINDOW = 7 days;
+
     struct PendingSurcharge {
         uint256 pips;
         uint256 validAfter;
@@ -39,6 +60,7 @@ contract ConstantSurchargeHook {
     error Bad();
     error NotCreator();
     error InvalidPool();
+    error IncreaseExpired();
     error IncreaseNotReady();
     error NoPendingIncrease();
     error IncreaseRequiresDelay();
@@ -77,11 +99,19 @@ contract ConstantSurchargeHook {
         emit SurchargeIncreaseScheduled(pool, pips, validAfter);
     }
 
-    /// @notice Activate a scheduled surcharge increase after its notice period.
+    /// @notice Activate a scheduled surcharge increase during its window.
+    /// @dev Permissionless, so activation does not depend on the creator. It is
+    ///      bounded on BOTH sides: not before the notice period, and not after
+    ///      `INCREASE_WINDOW` past it. A lapsed increase must be scheduled
+    ///      again, which serves the notice again.
     function applySurchargeIncrease(address pool) external {
         PendingSurcharge memory pending = pendingSurchargeOf[pool];
         if (pending.validAfter == 0) revert NoPendingIncrease();
         if (block.timestamp < pending.validAfter) revert IncreaseNotReady();
+        unchecked {
+            // `validAfter` is a timestamp plus a constant, so this cannot wrap.
+            if (block.timestamp >= pending.validAfter + INCREASE_WINDOW) revert IncreaseExpired();
+        }
         delete pendingSurchargeOf[pool];
         surchargeOf[pool] = pending.pips;
         emit SurchargeSet(pool, pending.pips);

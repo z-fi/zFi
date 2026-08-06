@@ -187,6 +187,71 @@ contract ConstantSurchargeHookTest is Test {
         assertEq(p.extraFee(trader, address(0), 1 ether), 5000, "keeper activated mature increase");
     }
 
+    /// @dev The notice period bounds how SOON an increase can activate. Without
+    /// an upper bound it would not bound WHEN: a matured increase would sit
+    /// indefinitely as an option the creator could exercise at a moment of their
+    /// choosing, including in the same block as somebody else's swap, having
+    /// served notice weeks earlier. The window makes the announcement mean what
+    /// the header says it means.
+    function test_MaturedIncreaseLapsesAfterItsWindow() public {
+        PrecisionPool p = _pool(FEE, creator);
+
+        vm.prank(creator);
+        hook.scheduleSurchargeIncrease(address(p), 5000);
+        (, uint256 validAfter) = hook.pendingSurchargeOf(address(p));
+
+        vm.warp(validAfter + hook.INCREASE_WINDOW());
+        vm.expectRevert(ConstantSurchargeHook.IncreaseExpired.selector);
+        hook.applySurchargeIncrease(address(p));
+
+        // Long after, it is still dead rather than merely late.
+        vm.warp(validAfter + 365 days);
+        vm.expectRevert(ConstantSurchargeHook.IncreaseExpired.selector);
+        hook.applySurchargeIncrease(address(p));
+        assertEq(p.extraFee(trader, address(0), 1 ether), 0, "lapsed increase must not apply");
+    }
+
+    /// @dev Both edges of the window, so neither bound is off by one.
+    function test_IncreaseAppliesThroughTheLastInstantOfItsWindow() public {
+        PrecisionPool p = _pool(FEE, creator);
+        vm.prank(creator);
+        hook.scheduleSurchargeIncrease(address(p), 5000);
+        (, uint256 validAfter) = hook.pendingSurchargeOf(address(p));
+
+        uint256 snap = vm.snapshotState();
+        vm.warp(validAfter + hook.INCREASE_WINDOW() - 1);
+        hook.applySurchargeIncrease(address(p));
+        assertEq(p.extraFee(trader, address(0), 1 ether), 5000, "last instant must still apply");
+        vm.revertToState(snap);
+
+        vm.warp(validAfter);
+        hook.applySurchargeIncrease(address(p));
+        assertEq(p.extraFee(trader, address(0), 1 ether), 5000, "first instant must apply");
+    }
+
+    /// @dev A lapsed increase is not a permanent block: rescheduling works, and
+    /// it serves the notice period again rather than inheriting the old one.
+    function test_LapsedIncreaseCanBeRescheduledAndServesNoticeAgain() public {
+        PrecisionPool p = _pool(FEE, creator);
+        vm.prank(creator);
+        hook.scheduleSurchargeIncrease(address(p), 5000);
+        (, uint256 firstValidAfter) = hook.pendingSurchargeOf(address(p));
+
+        vm.warp(firstValidAfter + hook.INCREASE_WINDOW() + 1);
+        vm.prank(creator);
+        hook.scheduleSurchargeIncrease(address(p), 5000);
+        (uint256 pips, uint256 secondValidAfter) = hook.pendingSurchargeOf(address(p));
+        assertEq(pips, 5000);
+        assertEq(secondValidAfter, block.timestamp + hook.INCREASE_DELAY(), "notice must restart");
+
+        vm.expectRevert(ConstantSurchargeHook.IncreaseNotReady.selector);
+        hook.applySurchargeIncrease(address(p));
+
+        vm.warp(secondValidAfter);
+        hook.applySurchargeIncrease(address(p));
+        assertEq(p.extraFee(trader, address(0), 1 ether), 5000);
+    }
+
     function test_DecreaseIsImmediateAndCancelsPendingIncrease() public {
         PrecisionPool p = _pool(FEE, creator);
         _increase(p, creator, 10_000);

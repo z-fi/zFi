@@ -154,7 +154,13 @@ contract PrecisionPoolLens {
         pure
         returns (uint256 amountOut, bool hasRoom)
     {
-        if (amountIn == 0) return (0, false);
+        // An empty trade moves no price, so the band trivially admits it - the
+        // same answer `PrecisionPool.quoteTransition` gives, and the invariant a
+        // search starting from a zero lower bound relies on. It is reported as
+        // unfillable through the zero output, not through the room flag. No
+        // caller here probes zero, but the two must agree: a search that assumed
+        // the other answer is exactly how the route's clamp went wrong.
+        if (amountIn == 0) return (0, true);
 
         uint256 hookCut =
             b.hook == address(0) ? 0 : amountIn - FixedPointMathLib.fullMulDiv(amountIn, FEE_DENOM - surcharge, FEE_DENOM);
@@ -279,10 +285,13 @@ contract PrecisionPoolLens {
         return maxAmountIn(pool, msg.sender, tokenIn);
     }
 
+    /// @dev Returns `hasRoom`, NOT fillability - the caller still has to check
+    ///      the zero-output half. Named for what it is, because conflating the
+    ///      two is precisely the mistake that broke the route's clamp.
     function _probe(Book memory b, address pool, address sender, address tokenIn, uint256 amountIn)
         internal
         view
-        returns (uint256 amountOut, bool fillable)
+        returns (uint256 amountOut, bool hasRoom)
     {
         uint256 surcharge =
             b.hook == address(0) ? 0 : PrecisionPool(payable(pool)).extraFee(sender, tokenIn, amountIn);
@@ -317,8 +326,27 @@ contract PrecisionPoolLens {
         return FixedPointMathLib.fullMulDiv(gross, FEE_DENOM - effFee, FEE_DENOM);
     }
 
-    /// @notice Effective total fee in pips for a direction, sender, and size.
-    /// @dev Includes the surcharge-first ordering used by the pool.
+    /// @notice NOMINAL total fee in pips for a direction, sender, and size.
+    ///
+    /// @dev The exact composition of two sequential multiplicative rates:
+    ///      `(1-total) = (1-surcharge)(1-fee)`. Note this is SYMMETRIC in the
+    ///      two, so it does not encode the pool's surcharge-first ordering and
+    ///      does not need to - ordering only becomes observable through
+    ///      rounding, and this expression does no rounding.
+    ///
+    ///      IT IS THE RATE, NOT THE PROPORTION A GIVEN TRADE PAYS. The pool
+    ///      takes each fee as the difference from a floored remainder, so it
+    ///      floors TWICE where this floors once, and it rounds the charge UP
+    ///      deliberately - a trade of a few raw units can pay an effective rate
+    ///      far above this number, up to two thirds on a hooked pool at the
+    ///      smallest sizes. See `MAX_TOTAL_FEE` on the pool, which calls this
+    ///      out as the thing a frontend quoting only the nominal rate gets
+    ///      wrong. The absolute overcharge is bounded by one raw unit of the
+    ///      input token per fee class per swap and is negligible at any size
+    ///      worth trading, so this is the right number to DISPLAY and the wrong
+    ///      number to settle against. For what a specific trade actually pays,
+    ///      difference the input against `quoteExactIn`'s inputs rather than
+    ///      applying this rate.
     function effectiveFeeFor(address pool, address sender, address tokenIn, uint256 amountIn)
         public
         view
