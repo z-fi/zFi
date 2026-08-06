@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="../theme.css"><link rel="stylesheet" href="../wallet.css">
 <script>try{if(localStorage.getItem('dark')==='1'||(localStorage.getItem('dark')===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(_){}</script>
 <script src="../theme.js"></script>
+<script src="../wallet.js"></script>
 <style>
   body{max-width:none;padding:64px 0 0}
   .bar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between;
@@ -40,6 +41,30 @@
                 background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
   .wbtns .wprimary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
   .wfoot{margin:16px 0 0!important;font-size:11px}
+  #wiz{max-width:560px;border:1px solid var(--border);border-radius:12px;padding:0;
+       background:var(--bg);color:var(--fg);font:14px/1.5 Helvetica,Arial,sans-serif}
+  #wiz::backdrop{background:rgba(0,0,0,.66)}
+  #wiz h3{margin:0;padding:18px 20px 14px;font-size:17px;border-bottom:1px solid var(--border)}
+  .wbody{padding:18px 20px;display:grid;gap:15px}
+  .wrow{display:grid;gap:6px}
+  .wrow label{font-size:12px;color:var(--fg-muted)}
+  .wrow input,.wrow select{background:transparent;color:var(--fg);border:1px solid var(--border);
+       border-radius:7px;padding:10px;font:14px inherit;min-height:42px}
+  .whint{font-size:12px;color:var(--fg-muted);margin:0}
+  .wplan{border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12.5px;
+       background:var(--bg-soft,transparent)}
+  .wplan ol{margin:6px 0 0;padding-left:20px}
+  .wplan li{margin:3px 0}
+  .wplan .done{opacity:.45;text-decoration:line-through}
+  .wnote{font-size:12px;color:var(--fg-muted);border-left:2px solid var(--border);padding-left:11px;margin:0}
+  .wfoot2{display:flex;gap:9px;justify-content:flex-end;padding:0 20px 18px;flex-wrap:wrap}
+  .wfoot2 button{padding:10px 15px;border:1px solid var(--border);border-radius:8px;background:transparent;
+       color:var(--fg);font:13px inherit;cursor:pointer}
+  .wfoot2 .prim{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:500}
+  .wfoot2 button:disabled{opacity:.45;cursor:not-allowed}
+  .wchk{display:flex;gap:9px;align-items:flex-start;font-size:13px}
+  .wchk input{min-height:0;margin-top:3px}
+  #wstat{font-size:12.5px;color:var(--fg-muted);padding:0 20px;min-height:18px}
   #fail{max-width:640px;margin:60px auto;padding:0 18px;color:var(--fg-muted);font-size:14px;line-height:1.6}
   #fail code{color:var(--fg)}
 </style>
@@ -52,6 +77,15 @@
   · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a></span>
 </div>
 <iframe id="frame" title="zOrg onchain interface" hidden></iframe>
+<dialog id="wiz">
+  <h3>Bond a zOrgz</h3>
+  <div class="wbody" id="wizbody"></div>
+  <div id="wstat"></div>
+  <div class="wfoot2">
+    <button id="wizcancel">Cancel</button>
+    <button id="wizgo" class="prim">Continue</button>
+  </div>
+</dialog>
 <dialog id="warn">
   <h3>This would freeze the weakest support rate — permanently</h3>
   <p>Receipt <b id="wrid"></b> is at <b>tier 0</b>, so its support rate is <b>1.00×</b>.
@@ -379,13 +413,13 @@ $('wizbtn').onclick=wizOpen;
 (async()=>{
   try{
     const {html,via}=await pull();
-    $('prov').textContent='';
+    // (no status line: the byte-count readout was removed as noise)
     const f=$('frame');
     f.addEventListener('load',()=>{try{guard(f.contentDocument,f.contentWindow)}catch(e){console.warn('[guard]',e)}},{once:true});
     f.srcdoc=BRIDGE+html;
     f.hidden=false;
   }catch(e){
-    $('prov').textContent='Could not reach Ethereum.';
+    $('fail').hidden=false;
     $('fail').hidden=false;
     $('fail').innerHTML='<p>The interface lives at <code>'+C+'</code> and is fetched with one <code>eth_call</code> to <code>html()</code>. '+
       'Every public endpoint this page knows about failed just now, which is a connectivity problem rather than a contract one.</p>'+
