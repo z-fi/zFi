@@ -20,6 +20,8 @@ interface IZRouter {
     function execute(address target, uint256 value, bytes calldata data) external payable returns (bytes memory);
     function trust(address target, bool ok) external payable;
     function sweep(address token, uint256 id, uint256 amount, address to) external payable;
+    function deposit(address token, uint256 id, uint256 amount) external payable;
+    function multicall(bytes[] calldata data) external payable returns (bytes[] memory);
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -218,6 +220,55 @@ contract ClassicalCurveSaleZRouterTest is Test {
         // The conclusion that matters: neither path is reachable when zRouter is empty,
         // which is the state it is designed to be in between transactions.
         assertEq(ERC20(token).balanceOf(address(ZROUTER)), 0, "zRouter left empty either way");
+    }
+
+    /// The clone hardcodes three allowance-exempt spenders -- the hook (this sale), zAMM
+    /// and zRouter -- so a holder never has to approve anything to trade a curve coin.
+    /// Asserted with allowance left at zero throughout.
+    function test_noApprovalNeeded_anywhere() public {
+        _graduate(true, bytes32(uint256(37)));
+        assertEq(ERC20(token).allowance(alice, address(SALE)), 0, "no allowance to the sale");
+        assertEq(ERC20(token).allowance(alice, address(ZROUTER)), 0, "no allowance to zRouter");
+
+        // Selling straight into the sale's router works with zero allowance.
+        uint256 amt = ERC20(token).balanceOf(alice) / 100;
+        uint256 ethBefore = alice.balance;
+        vm.prank(alice);
+        SALE.swapExactIn(key, amt, 0, false, alice, block.timestamp + 1);
+        assertGt(alice.balance, ethBefore, "sold with no approval");
+        assertEq(ERC20(token).allowance(alice, address(SALE)), 0, "still no allowance");
+    }
+
+    /// The sell leg does compose through zRouter after all, without any adapter: pull the
+    /// tokens into zRouter first, then let the trusted sale pull them back out. Both legs
+    /// ride the clone's exemptions -- zRouter for the deposit, the hook for the swap --
+    /// so the user approves nothing. multicall delegatecalls itself, so msg.sender stays
+    /// the user for the deposit leg.
+    function test_zRouter_sell_composesViaMulticallDeposit() public {
+        _graduate(true, bytes32(uint256(38)));
+
+        address owner = address(uint160(uint256(vm.load(address(ZROUTER), bytes32(uint256(_ownerSlot()))))));
+        vm.prank(owner);
+        ZROUTER.trust(address(SALE), true);
+
+        uint256 amt = ERC20(token).balanceOf(alice) / 100;
+        uint256 ethBefore = alice.balance;
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(IZRouter.deposit.selector, token, uint256(0), amt);
+        calls[1] = abi.encodeWithSelector(
+            IZRouter.execute.selector,
+            address(SALE),
+            uint256(0),
+            abi.encodeWithSelector(SALE.swapExactIn.selector, key, amt, uint256(0), false, alice, block.timestamp + 1)
+        );
+
+        assertEq(ERC20(token).allowance(alice, address(ZROUTER)), 0, "no approval given");
+        vm.prank(alice);
+        ZROUTER.multicall(calls);
+
+        assertGt(alice.balance, ethBefore, "sold through zRouter with no approval");
+        assertEq(ERC20(token).balanceOf(address(ZROUTER)), 0, "nothing left parked in zRouter");
     }
 
     /// Brute-force the owner slot rather than guessing at the storage layout.
