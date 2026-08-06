@@ -46,7 +46,7 @@
 </head><body>
 <div id="z-nav"></div>
 <div class="bar">
-  <span id="prov"></span>
+  <span><button id="wizbtn" style="background:var(--fg);color:var(--bg);border:0;border-radius:7px;padding:7px 13px;font:12px Helvetica,Arial,sans-serif;cursor:pointer">Bond a zOrgz</button></span>
   <span><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">get a zOrgz</a>
   · <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#code" target="_blank" rel="noopener">contract</a>
   · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a></span>
@@ -229,6 +229,152 @@ function guard(doc,win){
     d.showModal();
   },true);
 }
+
+/* ---------------------------------------------------------------------------
+   ONBOARDING WIZARD - parent side, zFi styling, deliberately not the contract's.
+
+   It exists to make one ordering impossible. bondZorgz(id, weight, tier) sets
+   the lock AT BOND TIME, so bonding at tier 3 and then eternalizing keeps the
+   1.50x rate forever. Bonding open and eternalizing later freezes 1.00x with no
+   way back, because eternalize never touches receiptLocks and selectLockTier
+   reverts PermanentBond once a bond is eternal. That cost the first eternal bond
+   in the system. Here the tier is chosen before the bond is built, so the wrong
+   order cannot be expressed.
+
+   Batches through EIP-5792 where the wallet supports it - wallet.js already
+   probes wallet_getCapabilities on connect - and walks the same calls one at a
+   time where it does not.
+--------------------------------------------------------------------------- */
+const GOV=C, SELS={
+  approve:'0x095ea7b3', getApproved:'0x081812fc', allowance:'0xdd62ed3e', balOf:'0x70a08231',
+  bondLock:'0xa86e18ca', eternal:'0x2fd4ecb0', zorgz:'0x0c8757f0', shares:'0x03314efa',
+  terms:'0x6bd16840', tiers:'0x322ee5de', ownerOf:'0x6352211e'
+};
+const w32=n=>BigInt(n).toString(16).padStart(64,'0');
+const wAddr=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
+const wRead=async(to,data)=>{
+  for(const u of RPCS){ try{
+    const r=await post(u,{jsonrpc:'2.0',id:1,method:'eth_call',params:[{to,data},'latest']});
+    if(r&&r!=='0x')return r;
+  }catch(e){} }
+  throw Error('read failed');
+};
+const wWord=(h,i)=>BigInt('0x'+h.slice(2).slice(i*64,i*64+64));
+const wUnits=v=>{ v=String(v).trim();
+  if(!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(v))throw Error('Enter an amount with up to 18 decimals.');
+  const[a,b='']=v.split('.'); return BigInt(a)*10n**18n+BigInt((b+'0'.repeat(18)).slice(0,18)); };
+const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
+
+let WZ={};
+/* Opportunistic: only one public endpoint we know of serves an unbounded
+   eth_getLogs, so treat discovery as a bonus and never block on it. */
+async function discoverZorgz(owner,zorgz){
+  const T='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+  for(const u of RPCS){ try{
+    const logs=await post(u,{jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
+      address:zorgz, topics:[T,null,'0x'+wAddr(owner)], fromBlock:'0x0', toBlock:'latest'}]});
+    if(!Array.isArray(logs))continue;
+    const seen=[...new Set(logs.map(l=>BigInt(l.topics[3]).toString()))];
+    const owned=[];
+    for(const id of seen){
+      try{ const o=await wRead(zorgz,SELS.ownerOf+w32(id));
+        if('0x'+o.slice(26).toLowerCase()===owner.toLowerCase())owned.push(id);
+      }catch(e){}
+      if(owned.length>=24)break;
+    }
+    return owned;
+  }catch(e){} }
+  return null;
+}
+async function wizOpen(){
+  const d=$('wiz'); const body=$('wizbody'); $('wstat').textContent='';
+  body.innerHTML='<p class="whint">Connecting…</p>'; d.showModal();
+  try{
+    if(!window._connectedAddress) await connectWallet();
+    const me=window._connectedAddress;
+    const zorgz=await wRead(GOV,SELS.zorgz).then(r=>'0x'+r.slice(26));
+    const shares=await wRead(GOV,SELS.shares).then(r=>'0x'+r.slice(26));
+    const [nftBal,zBal,terms,tier3]=await Promise.all([
+      wRead(zorgz,SELS.balOf+wAddr(me)), wRead(shares,SELS.balOf+wAddr(me)),
+      wRead(GOV,SELS.terms), wRead(GOV,SELS.tiers+w32(3))
+    ]);
+    WZ={me,zorgz,shares,minEth:wWord(terms,0),boost:Number(wWord(tier3,1)),
+        days:Number(wWord(tier3,0))/86400, zBal:wWord(zBal,0)};
+    if(wWord(nftBal,0)===0n){
+      body.innerHTML='<p>This wallet holds no zOrgz. Bonding escrows one per receipt, so you need at least one to start.</p>'
+        +'<p class="wnote">A zOrgz is a profile picture NFT. Bonding it — together with zOrg shares — is what lets you order this list.</p>';
+      $('wizgo').textContent='Get a zOrgz'; $('wizgo').onclick=()=>window.open('https://opensea.io/collection/zorgz','_blank');
+      return;
+    }
+    const owned=await discoverZorgz(me,zorgz);
+    const picker = owned&&owned.length
+      ? '<select id="wzid">'+owned.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')+'</select>'
+      : '<input id="wzid" inputmode="numeric" placeholder="zOrgz token id">';
+    body.innerHTML=
+      '<div class="wrow"><label>Which zOrgz to escrow'+(owned&&owned.length?' ('+owned.length+' found)':'')+'</label>'+picker+'</div>'
+     +'<div class="wrow"><label>zOrg shares to bond — you hold '+wFmt(WZ.zBal)+'</label>'
+     +'<input id="wzamt" inputmode="decimal" placeholder="10000"></div>'
+     +'<div class="wrow"><label>Commitment</label><select id="wztier">'
+     +'<option value="3">Maximum — '+WZ.days+' days, '+(WZ.boost/10000).toFixed(2)+'x support</option>'
+     +'<option value="0">None — withdraw any time, 1.00x support</option></select></div>'
+     +'<label class="wchk"><input type="checkbox" id="wzet"><span>Make it permanent (eternalize). '
+     +'Needs 10,000 zOrg. The zOrgz and the shares can never be redeemed.</span></label>'
+     +'<div class="wplan" id="wzplan"></div>'
+     +'<p class="wnote">The commitment is set as part of the bond, so an eternal receipt keeps the boosted rate. '
+     +'Eternalizing an uncommitted bond would freeze it at 1.00x with no way to raise it.</p>';
+    const plan=()=>{
+      const amt=$('wzamt').value||'0', et=$('wzet').checked, t=$('wztier').value;
+      let ok=true, amtW=0n; try{amtW=wUnits(amt)}catch(e){ok=false}
+      $('wzet').disabled = amtW < 10000n*10n**18n;
+      if($('wzet').disabled) $('wzet').checked=false;
+      const steps=['Approve the zOrgz for escrow','Approve '+(ok?wFmt(amtW):'—')+' zOrg',
+        'Bond at '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x for '+WZ.days+' days':'1.00x, no lock')
+        +' with '+(Number(WZ.minEth)/1e18)+' ETH'];
+      if(et&&!$('wzet').disabled) steps.push('Eternalize — permanent, keeps the '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x':'1.00x')+' rate');
+      $('wzplan').innerHTML='<b>'+(window._walletSendCalls?'One confirmation':steps.length+' confirmations')+'</b>'
+        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>';
+      $('wizgo').disabled = !ok || amtW===0n || amtW>WZ.zBal;
+      $('wstat').textContent = amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg — reduce the amount.' : '';
+    };
+    ['wzamt','wztier'].forEach(k=>$(k).oninput=plan);
+    $('wzet').onchange=plan; $('wzamt').onchange=plan; plan();
+    $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
+  }catch(e){ body.innerHTML='<p class="whint">'+(e.message||'Could not read the chain.')+'</p>'; }
+}
+async function wizRun(){
+  const go=$('wizgo'); go.disabled=true;
+  try{
+    const id=$('wzid').value.trim(), amt=wUnits($('wzamt').value), tier=$('wztier').value;
+    if(!/^[0-9]+$/.test(id))throw Error('Enter a whole zOrgz id.');
+    const calls=[];
+    const appr=await wRead(WZ.zorgz,SELS.getApproved+w32(id)).catch(()=>null);
+    if(!appr || '0x'+appr.slice(26).toLowerCase()!==GOV.toLowerCase())
+      calls.push({to:WZ.zorgz,data:SELS.approve+wAddr(GOV)+w32(id),value:'0x0'});
+    const alw=await wRead(WZ.shares,SELS.allowance+wAddr(WZ.me)+wAddr(GOV)).catch(()=>null);
+    if(!alw || wWord(alw,0)<amt)
+      calls.push({to:WZ.shares,data:SELS.approve+wAddr(GOV)+w32(amt),value:'0x0'});
+    calls.push({to:GOV,data:SELS.bondLock+w32(id)+w32(amt)+w32(tier),value:'0x'+WZ.minEth.toString(16)});
+    if($('wzet').checked && !$('wzet').disabled)
+      calls.push({to:GOV,data:SELS.eternal+w32(id),value:'0x0'});
+
+    const p=window._walletProvider;
+    if(window._walletSendCalls){
+      $('wstat').textContent='Confirm once in your wallet…';
+      await p.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',
+        from:WZ.me, atomicRequired:true, calls}]});
+      $('wstat').textContent='Submitted. Reload in a moment to see the receipt.';
+    }else{
+      for(let i=0;i<calls.length;i++){
+        $('wstat').textContent='Confirm '+(i+1)+' of '+calls.length+' in your wallet…';
+        await p.request({method:'eth_sendTransaction',params:[{from:WZ.me,...calls[i]}]});
+      }
+      $('wstat').textContent='All '+calls.length+' submitted.';
+    }
+  }catch(e){ $('wstat').textContent=e.message||'Cancelled.'; }
+  go.disabled=false;
+}
+$('wizcancel').onclick=()=>$('wiz').close();
+$('wizbtn').onclick=wizOpen;
 
 (async()=>{
   try{
