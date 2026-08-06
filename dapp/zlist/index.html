@@ -117,7 +117,7 @@
 const C='0x0000006d936ba3653b8854490e16e782cd32a9a8', HTML='0x33c34ac3',
 RPCS=['https://eth.blockrazor.xyz','https://eth-mainnet.public.blastapi.io','https://ethereum-rpc.publicnode.com','https://rpc.mevblocker.io','https://eth.merkle.io','https://0xrpc.io/eth','https://eth.rpc.blxrbdn.com','https://eth.drpc.org','https://mainnet.gateway.tenderly.co','https://eth-pokt.nodies.app','https://eth.api.onfinality.io/public'];
 const $=i=>document.getElementById(i);
-async function post(u,b){const c=AbortSignal.timeout?AbortSignal.timeout(12000):undefined;
+async function post(u,b,ms){const c=AbortSignal.timeout?AbortSignal.timeout(ms||12000):undefined;
   const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b),signal:c});
   if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();
   if(j&&j.error)throw Error(j.error.message||'rpc error');return j.result}
@@ -324,7 +324,7 @@ async function discoverZorgz(owner,zorgz){
   const T='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
   for(const u of RPCS){ try{
     const logs=await post(u,{jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
-      address:zorgz, topics:[T,null,'0x'+wAddr(owner)], fromBlock:'0x0', toBlock:'latest'}]});
+      address:zorgz, topics:[T,null,'0x'+wAddr(owner)], fromBlock:'0x0', toBlock:'latest'}]},6000);
     if(!Array.isArray(logs))continue;
     const seen=[...new Set(logs.map(l=>BigInt(l.topics[3]).toString()))];
     const owned=[];
@@ -373,7 +373,7 @@ async function wizOpen(){
       WSTATES
      +'<div class="wrow"><label>Which zOrgz to escrow'+(owned&&owned.length?' ('+owned.length+' found)':'')+'</label>'+picker+'</div>'
      +'<div class="wrow"><label>zOrg shares to bond — you hold '+wFmt(WZ.zBal)+'</label>'
-     +'<input id="wzamt" inputmode="decimal" placeholder="10000"></div>'
+     +'<input id="wzamt" inputmode="decimal" value="10000"></div>'
      +'<div class="wrow"><label>Commitment</label><select id="wztier">'
      +'<option value="3">Maximum — '+WZ.days+' days, '+(WZ.boost/10000).toFixed(2)+'x support</option>'
      +'<option value="0">None — withdraw any time, 1.00x support</option></select></div>'
@@ -391,14 +391,29 @@ async function wizOpen(){
         'Bond at '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x for '+WZ.days+' days':'1.00x, no lock')
         +' with '+(Number(WZ.minEth)/1e18)+' ETH'];
       if(et&&!$('wzet').disabled) steps.push('Eternalize — permanent, keeps the '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x':'1.00x')+' rate');
+      const bps=BigInt(t==='3'?WZ.boost:10000), eff=amtW*bps/10000n;
       $('wzplan').innerHTML='<b>'+(window._walletSendCalls?'One confirmation':steps.length+' confirmations')+'</b>'
-        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>';
+        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>'
+        +(ok&&amtW>0n?'<p style="margin:9px 0 0;opacity:.75">Directs <b>'+wFmt(eff)+'</b> of support'
+          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)+'</b> as conviction accrues.</p>':'');
       $('wizgo').disabled = !ok || amtW===0n || amtW>WZ.zBal;
       $('wstat').textContent = amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg — reduce the amount.' : '';
     };
     ['wzamt','wztier'].forEach(k=>$(k).oninput=plan);
     $('wzet').onchange=plan; $('wzamt').onchange=plan; plan();
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
+    /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
+       slow or refusing endpoint costs nothing but a line of hint text. */
+    discoverZorgz(me,zorgz).then(owned=>{
+      const lab=$('wzfind'); if(!lab)return;
+      if(owned&&owned.length){
+        const cur=$('wzid').value;
+        $('wzid').outerHTML='<select id="wzid">'+owned.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')+'</select>';
+        if(cur&&owned.includes(cur))$('wzid').value=cur;
+        lab.textContent=' — '+owned.length+' found';
+        $('wzid').onchange=plan; plan();
+      } else lab.textContent=' — enter the id';
+    }).catch(()=>{ const l=$('wzfind'); if(l)l.textContent=' — enter the id'; });
   }catch(e){ body.innerHTML='<p class="whint">'+(e.message||'Could not read the chain.')+'</p>'; }
 }
 async function wizRun(){
