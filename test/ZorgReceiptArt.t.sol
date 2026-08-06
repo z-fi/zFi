@@ -35,7 +35,7 @@ contract ZorgReceiptArtTest is Test {
     }
 
     function _bond(uint256 amount) internal {
-        string memory real = vm.readFile("./dapp/zorg/zorgz-9953.uri");
+        string memory real = vm.readFile("./dapp/zlist/zorgz-9953.uri");
         zorgz.mint(holder, ID, "");
         zorgz.setRawTokenURI(ID, real);
         shares.mint(holder, amount);
@@ -82,7 +82,7 @@ contract ZorgReceiptArtTest is Test {
         _bond(1200 ether);
         string memory image = _image(_metadata());
         assertGt(bytes(image).length, 0, "no image");
-        vm.writeFile("./dapp/zorg/receipt-9953.uri", image);
+        vm.writeFile("./dapp/zlist/receipt-9953.uri", image);
 
         string memory svg = string(Base64.decode(_drop(image, 26)));
         // The inversion is an SVG filter primitive, and it must embed the real
@@ -98,7 +98,7 @@ contract ZorgReceiptArtTest is Test {
         conviction.eternalize(ID);
 
         string memory image = _image(_metadata());
-        vm.writeFile("./dapp/zorg/receipt-9953-eternal.uri", image);
+        vm.writeFile("./dapp/zlist/receipt-9953-eternal.uri", image);
 
         // Unwrap the inversion to reach the source art the receipt embeds.
         string memory svg = string(Base64.decode(_drop(image, 26)));

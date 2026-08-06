@@ -45,4 +45,69 @@ contract ZorgClaimSimTest is Test {
         vm.expectRevert();
         WEI.approve(HOLDER, id);
     }
+
+    /// The name is custody, not a one-way burn: `_execute` protects only the two
+    /// escrowed assets by name, so the DAO can move zorg.wei back out whenever it
+    /// wants. Worth proving rather than assuming, since "the contract ate our
+    /// domain" would be discovered far too late.
+    function testMolochCanReclaimTheDomain() public {
+        uint256 id = GOV.zorgWeiId();
+        vm.startPrank(HOLDER);
+        WEI.approve(address(GOV), id);
+        GOV.claimZorgWei();
+        vm.stopPrank();
+        assertEq(WEI.ownerOf(id), address(GOV), "governor holds it");
+
+        // Moloch routes an ordinary transferFrom through the governor's escape hatch.
+        vm.prank(GOV.dao());
+        GOV.execute(
+            address(WEI), 0,
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", address(GOV), HOLDER, id)
+        );
+        emit log_named_address("owner after DAO reclaim", WEI.ownerOf(id));
+        assertEq(WEI.ownerOf(id), HOLDER, "returned to the holder");
+
+        // But the flag is one-way, so the contract cannot re-claim it by itself.
+        assertTrue(GOV.domainClaimed(), "domainClaimed stays true");
+        vm.startPrank(HOLDER);
+        WEI.approve(address(GOV), id);
+        vm.expectRevert(ZorgConviction.DomainAlreadyClaimed.selector);
+        GOV.claimZorgWei();
+        vm.stopPrank();
+    }
+
+    /// Ownership is the point: registering `exec.zorg.wei` is a subdomain mint on
+    /// the parent name, so the governor has to hold the parent to do it. Pointing
+    /// a resolver at the governor would not grant that.
+    function testExecRoleNeedsTheNameItself() public {
+        uint256 id = GOV.zorgWeiId();
+
+        // Before the claim, the DAO cannot install the role at all.
+        vm.prank(GOV.dao());
+        vm.expectRevert(ZorgConviction.DomainNotClaimed.selector);
+        GOV.installExecRoleName(address(0xE11C));
+
+        vm.startPrank(HOLDER);
+        WEI.approve(address(GOV), id);
+        GOV.claimZorgWei();
+        vm.stopPrank();
+
+        address execHolder = address(0xE11C);
+        vm.prank(GOV.dao());
+        GOV.installExecRoleName(execHolder);
+
+        uint256 execId = GOV.execZorgWeiId();
+        emit log_named_string("subdomain", WEI.getFullName(execId));
+        emit log_named_address("exec credential held by", WEI.ownerOf(execId));
+        assertEq(WEI.ownerOf(execId), execHolder, "exec.zorg.wei minted to the operator");
+        assertTrue(GOV.rolesInstalled(), "roles installed");
+
+        // And the credential is what gates the emergency pause.
+        vm.prank(execHolder);
+        GOV.emergencyPause();
+        assertTrue(GOV.paused(), "exec holder can pause");
+        vm.prank(GOV.dao());
+        GOV.resume();
+        assertFalse(GOV.paused(), "DAO resumes");
+    }
 }

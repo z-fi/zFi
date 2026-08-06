@@ -128,7 +128,7 @@ contract ZorgPreviewDumpTest is Test, PostDeployListings {
         _rec("owner", address(conviction), abi.encodeWithSignature("ownerOf(uint256)", RID));
         dump = string.concat(dump, "}");
 
-        vm.writeFile("./dapp/zorg/preview-state.json", dump);
+        vm.writeFile("./dapp/zlist/preview-state.json", dump);
         // Render the page against the DETERMINISTIC addresses rather than this
         // test's throwaway deploys, so the preview's OpenSea links and error
         // messages carry the addresses the contracts will actually occupy.
@@ -137,7 +137,7 @@ contract ZorgPreviewDumpTest is Test, PostDeployListings {
         string memory page = ZorgConvictionRenderer(address(conviction.renderer())).html(
             CREATE2_CONVICTION, 0x000000146057913eC6A42a961D2E6Cb179f16272
         );
-        vm.writeFile("./dapp/zorg/renderer-output.html", page);
+        vm.writeFile("./dapp/zlist/renderer-output.html", page);
         emit log_named_uint("listings", ids.length);
         emit log_named_uint("state bytes", bytes(dump).length);
         emit log_named_uint("html bytes", bytes(page).length);

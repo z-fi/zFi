@@ -99,10 +99,10 @@ contract ZorgLivePreviewTest is Test {
         _rec(ZORGZ, abi.encodeWithSignature("balanceOf(address)", holder), ZORGZ);
         _rec(ZORGZ, abi.encodeWithSignature("tokenURI(uint256)", RID), ZORGZ);
         dump = string.concat(dump, "}");
-        vm.writeFile("./dapp/zorg/live-state.json", dump);
+        vm.writeFile("./dapp/zlist/live-state.json", dump);
 
         string memory page = ZorgConvictionRenderer(RENDERER).html(CONVICTION, TOKENLIST);
-        vm.writeFile("./dapp/zorg/live-preview.html", page);
+        vm.writeFile("./dapp/zlist/live-preview.html", page);
         emit log_named_uint("page bytes", bytes(page).length);
         emit log_named_uint("recorded calls", n);
         emit log_named_address("wallet in preview", holder);
