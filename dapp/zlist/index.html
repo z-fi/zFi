@@ -72,6 +72,10 @@
   .wstate figcaption{font:italic 14px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
   .wstate .wgold{color:#d9b34a}
   .wsep{color:var(--fg-muted);font-size:15px;line-height:1;padding-bottom:18px}
+  .wart{position:relative;display:block;width:100%}
+  /* the receipt inverts the underlying art; this is that same inversion */
+  .wart img.winv{filter:invert(1)}
+  .wart .wglyph{position:absolute;inset:0;width:100%;height:100%}
   .warrow{font-size:15px;line-height:1;user-select:none}
   .wchk{display:flex;gap:9px;align-items:flex-start;font-size:13px}
   .wchk input{min-height:0;margin-top:3px}
@@ -303,7 +307,7 @@ function guard(doc,win){
 const GOV=C, SELS={
   approve:'0x095ea7b3', getApproved:'0x081812fc', allowance:'0xdd62ed3e', balOf:'0x70a08231',
   bondLock:'0xa86e18ca', eternal:'0x2fd4ecb0', zorgz:'0x0c8757f0', shares:'0x03314efa',
-  terms:'0x6bd16840', tiers:'0x322ee5de', ownerOf:'0x6352211e'
+  terms:'0x6bd16840', tiers:'0x322ee5de', ownerOf:'0x6352211e', tokenURI:'0xc87b56dd'
 };
 const w32=n=>BigInt(n).toString(16).padStart(64,'0');
 const wAddr=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
@@ -322,34 +326,42 @@ const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Nu
 
 let WZ={}, wizWaiting=false, FRAME=null;
 
-/* The three states a zOrgz passes through, drawn rather than fetched: at this
-   point in the wizard the receipt does not exist yet, so there is no onchain
-   art to show for panels 2 and 3. The tiles mirror what ZorgReceiptArt actually
-   does - the receipt inverts the underlying art, and an eternal receipt splices
-   a #264cb5 glyph in after the background rect - so the preview matches the
-   thing the user ends up holding. Inline data URIs keep the page self-contained. */
-const wTile=(bg,fg,glyph)=>"data:image/svg+xml,"+encodeURIComponent(
-  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' shape-rendering='crispEdges'>"
- +"<rect width='64' height='64' fill='"+bg+"'/>"
- +"<rect x='16' y='14' width='32' height='30' fill='"+fg+"'/>"
- +"<rect x='22' y='24' width='6' height='6' fill='"+bg+"'/>"
- +"<rect x='36' y='24' width='6' height='6' fill='"+bg+"'/>"
- +"<rect x='24' y='36' width='16' height='4' fill='"+bg+"'/>"
- +"<rect x='20' y='46' width='24' height='6' fill='"+fg+"'/>"
- +(glyph?"<path transform='translate(50 50) scale(.5) translate(-30 -44)' fill='"+glyph
-        +"' d='M32 50 l7 5 -2.7-8.2 7-5.1h-8.6L32 33.5l-2.7 8.2H20.7l7 5.1L25 55z'/>":"")
- +"</svg>");
-const WSTATES=
-  '<div class="wstates">'
- +'<figure class="wstate"><img alt="" src="'+wTile('#e8e4da','#1b1b1b','')+'">'
- +'<figcaption>your zOrgz</figcaption></figure>'
- +'<span class="wsep" aria-hidden="true">&rarr;</span>'
- +'<figure class="wstate"><img alt="" src="'+wTile('#1b1b1b','#e8e4da','')+'">'
- +'<figcaption>bonded receipt</figcaption></figure>'
- +'<span class="wsep" aria-hidden="true">&rarr;</span>'
- +'<figure class="wstate"><img alt="" src="'+wTile('#1b1b1b','#e8e4da','#264cb5')+'">'
- +'<figcaption class="wgold">eternal</figcaption></figure>'
- +'</div>';
+/* The three states a zOrgz passes through, shown with the wallet's OWN art
+   rather than a drawn stand-in - the point of the strip is "here is what
+   happens to YOUR pfp", which a generic face cannot make.
+   Only panel 1 exists onchain at this stage; the receipt is not minted yet. So
+   panels 2 and 3 reproduce what ZorgReceiptArt will do to that same image:
+   invert it, and on an eternal receipt add a #264cb5 glyph. The inversion is a
+   CSS filter over the real art, so it stays truthful to whatever the token
+   actually looks like. */
+const wArt=async(zorgz,id)=>{
+  const hex=await wRead(zorgz,SELS.tokenURI+w32(id));
+  /* ABI string: offset word, length word, then the bytes. */
+  const off=Number(wWord(hex,0))*2, len=Number(BigInt('0x'+hex.slice(2).slice(off,off+64)))*2;
+  const body=hex.slice(2).slice(off+64,off+64+len);
+  const uri=new TextDecoder().decode(Uint8Array.from(body.match(/../g).map(b=>parseInt(b,16))));
+  const i=uri.indexOf('base64,');
+  if(i<0) return null;
+  const meta=JSON.parse(atob(uri.slice(i+7)));
+  return meta.image||null;
+};
+const WSTAR="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' class='wglyph'>"
+ +"<path transform='translate(50 50) scale(.5) translate(-30 -44)' fill='#264cb5'"
+ +" d='M32 50 l7 5 -2.7-8.2 7-5.1h-8.6L32 33.5l-2.7 8.2H20.7l7 5.1L25 55z'/></svg>";
+const wStates=img=>{
+  if(!img) return '';   /* art unavailable: show the form rather than a broken strip */
+  const panel=(cls,cap,glyph)=>
+    '<figure class="wstate"><span class="wart">'
+   +'<img alt="" class="'+cls+'" src="'+img+'">'+(glyph?WSTAR:'')+'</span>'
+   +'<figcaption'+(glyph?' class="wgold"':'')+'>'+cap+'</figcaption></figure>';
+  return '<div class="wstates">'
+   +panel('','your zOrgz','')
+   +'<span class="wsep" aria-hidden="true">&rarr;</span>'
+   +panel('winv','bonded receipt','')
+   +'<span class="wsep" aria-hidden="true">&rarr;</span>'
+   +panel('winv','eternal',1)
+   +'</div>';
+};
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
@@ -402,13 +414,10 @@ async function wizOpen(){
       $('wizgo').textContent='Get a zOrgz'; $('wizgo').onclick=()=>window.open('https://opensea.io/collection/zorgz','_blank');
       return;
     }
-    const owned=await discoverZorgz(me,zorgz);
-    const picker = owned&&owned.length
-      ? '<select id="wzid">'+owned.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')+'</select>'
-      : '<input id="wzid" inputmode="numeric" placeholder="zOrgz token id">';
     body.innerHTML=
-      WSTATES
-     +'<div class="wrow"><label>Which zOrgz to escrow'+(owned&&owned.length?' ('+owned.length+' found)':'')+'</label>'+picker+'</div>'
+      '<div id="wzstrip"></div>'
+     +'<div class="wrow"><label>Which zOrgz to escrow<span id="wzfind"></span></label>'
+     +'<input id="wzid" inputmode="numeric" placeholder="zOrgz token id"></div>'
      +'<div class="wrow"><label>zOrg shares to bond (you hold '+wFmt(WZ.zBal)+')</label>'
      +'<input id="wzamt" inputmode="decimal" value="10000"></div>'
      +'<div class="wrow"><label>Commitment</label><select id="wztier">'
@@ -438,6 +447,19 @@ async function wizOpen(){
     };
     ['wzamt','wztier'].forEach(k=>$(k).oninput=plan);
     $('wzet').onchange=plan; $('wzamt').onchange=plan; plan();
+    /* Paint the before/after strip from the SELECTED token, so it shows the art
+       the user is actually about to escrow rather than a stand-in. Best effort
+       throughout: unreadable art collapses the strip and never blocks bonding.
+       `seq` guards against a slow fetch for an abandoned id landing last and
+       overwriting the art for the one now selected. */
+    let artSeq=0;
+    const paintArt=async()=>{
+      const id=($('wzid').value||'').trim(), n=++artSeq;
+      const strip=$('wzstrip'); if(!strip)return;
+      if(!/^\d+$/.test(id)){ strip.innerHTML=''; return; }
+      const img=await wArt(zorgz,id).catch(()=>null);
+      if(n===artSeq && $('wzstrip')) $('wzstrip').innerHTML=wStates(img);
+    };
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
     /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
        slow or refusing endpoint costs nothing but a line of hint text. */
@@ -455,13 +477,15 @@ async function wizOpen(){
         $('wzid').onchange=()=>{
           if($('wzid').value==='__other'){
             $('wzid').outerHTML='<input id="wzid" inputmode="numeric" placeholder="zOrgz token id">';
-            $('wzid').oninput=plan; $('wzid').focus();
+            $('wzid').oninput=()=>{plan();paintArt()}; $('wzid').focus();
           }
-          plan();
+          plan(); paintArt();
         };
-        plan();
+        plan(); paintArt();
       } else lab.textContent=' (enter the id)';
     }).catch(()=>{ const l=$('wzfind'); if(l)l.textContent=' (enter the id)'; });
+    /* Before discovery lands the field is a plain input, so follow typing too. */
+    $('wzid').oninput=()=>{plan();paintArt()};
   }catch(e){ body.innerHTML='<p class="whint">'+(e.message||'Could not read the chain.')+'</p>'; }
 }
 async function wizRun(){
