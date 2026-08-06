@@ -102,6 +102,8 @@ let _auctionNftMeta = null;      // resolved NFT (name, description, image, coll
 let _auctionFloorPct = 1;        // floor as % of start price (0..100)
 let _auctionDurationDays = 3;    // Dutch auction "lindy" default
 let _auctionFetchSeq = 0;        // race guard for tokenURI lookups
+let _auctionOwnerOk = false;     // connected wallet owns the resolved token
+let _auctionBlockMsg = '';       // why listing is blocked, if it is
 
 // Resolve a tokenURI/metadata URI to an HTTP(S) URL the browser can fetch.
 // Covers the three non-HTTP forms NFTs use in the wild: ipfs://, ar://, and
@@ -168,6 +170,8 @@ async function auctionOnNftChange() {
   const preview = $('nftPreview');
 
   _auctionNftMeta = null;
+  _auctionOwnerOk = false;
+  _auctionBlockMsg = '';
   setDisabled('coinLaunchBtn', true);
   // Any prior error ("not the owner", "could not read token", etc.) should
   // clear the moment the user edits the inputs — otherwise it looks stuck.
@@ -261,9 +265,9 @@ async function auctionOnNftChange() {
         }
       } catch {}
     }
-    setDisabled('coinLaunchBtn', !canList);
-    if (!canList) coinShowStatus(blockMsg, true);
-    else coinShowStatus('');
+    _auctionOwnerOk = canList;
+    _auctionBlockMsg = blockMsg;
+    auctionApplyGating();
 
     auctionUpdatePreview();
     if (typeof syncCoinURL === 'function') syncCoinURL();
@@ -291,26 +295,71 @@ function _activateChipByNumber(row, n) {
     b.classList.toggle('active', parseInt(b.textContent, 10) === n);
   });
 }
+// The chips only ever pass values the contract accepts, but ?mode=nft deeplinks
+// call these with whatever was in the URL. DutchAuction.listNFT rejects
+// duration == 0 and endPrice > startPrice, and a negative reaches ethers as an
+// out-of-range uint40/uint128 — so an unclamped link builds a form that can only
+// fail, after the wallet prompt, with a raw revert. Clamp at the setter so every
+// caller is covered rather than just the deeplink path.
+function _auctionClampFloor(pct) {
+  const n = Math.round(Number(pct));
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(100, Math.max(0, n));
+}
+
+function _auctionClampDuration(days) {
+  const n = Math.round(Number(days));
+  if (!Number.isFinite(n)) return 3;
+  // uint40 seconds is far larger than any useful auction; a year is the practical cap.
+  return Math.min(365, Math.max(1, n));
+}
+
 function auctionSetFloor(pct, btn) {
-  _auctionFloorPct = pct;
+  _auctionFloorPct = _auctionClampFloor(pct);
   if (btn) btn.parentElement.querySelectorAll('.nft-chip').forEach(b => b.classList.toggle('active', b === btn));
-  else _activateChipByNumber(_nftChipRow(0), pct);
+  else _activateChipByNumber(_nftChipRow(0), _auctionFloorPct);
   auctionUpdatePreview();
   if (typeof syncCoinURL === 'function') syncCoinURL();
 }
 
 function auctionSetDuration(days, btn) {
-  _auctionDurationDays = days;
+  _auctionDurationDays = _auctionClampDuration(days);
   if (btn) btn.parentElement.querySelectorAll('.nft-chip').forEach(b => b.classList.toggle('active', b === btn));
-  else _activateChipByNumber(_nftChipRow(1), days);
+  else _activateChipByNumber(_nftChipRow(1), _auctionDurationDays);
   auctionUpdatePreview();
   if (typeof syncCoinURL === 'function') syncCoinURL();
 }
 
 // Renders a monospace sparkline for the price decay plus the marker prices
 // at 25 / 50 / 75 / 100% elapsed. Hidden while inputs aren't valid.
+// Ownership is resolved asynchronously; the start price is typed. Both have to
+// hold before listing, so they are tracked separately and combined here — the
+// curve and cause tabs gate their CTA the same way through coinApplyValidation,
+// and without this the button stayed live with an empty price field and only
+// failed on click.
+function auctionApplyGating() {
+  if (_coinLaunchType !== 'nft') return;
+  const startPrice = coinParseEth(($('nftStartPrice')?.value || ''));
+  const priceOk = startPrice !== null && startPrice > 0n;
+  const ok = _auctionOwnerOk && !!_auctionNftMeta && priceOk;
+  setDisabled('coinLaunchBtn', !ok);
+  // _coinLaunched means the success banner is on screen for a listing that just
+  // went through; the form is empty by design at that point, so leave it alone.
+  if (!_coinLaunched) {
+    if (!_auctionOwnerOk && _auctionBlockMsg) coinShowStatus(_auctionBlockMsg, true);
+    else coinShowStatus('');
+  }
+  const hint = $('coinFormHint');
+  if (hint) {
+    const msg = (_auctionOwnerOk && _auctionNftMeta && !priceOk) ? 'Enter a start price greater than 0' : '';
+    hint.textContent = msg;
+    hint.style.display = msg ? '' : 'none';
+  }
+}
+
 function auctionUpdatePreview() {
   if (_coinLaunchType !== 'nft') return;
+  auctionApplyGating();
   const el = $('nftDecayPreview');
   if (!el) return;
   const start = parseFloat($('nftStartPrice').value) || 0;
