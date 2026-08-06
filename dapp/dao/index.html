@@ -6288,7 +6288,12 @@ body.modal-open { overflow: hidden; }
               0,  // daoStart
               50, // daoCount
               0,  // proposalStart
-              20, // proposalCount (increased for better visibility)
+              // WINDOW STARTS AT ZERO AND COUNTS FORWARD, so this is the OLDEST N
+              // proposals, not the newest. At 20 it silently hid everything past the
+              // twentieth: the DAO had 21, and the newest fell outside the window while
+              // still showing in chat, because proposals ride the same message stream
+              // and chat asks for 200. Must exceed getProposalCount() for any DAO in range.
+              200, // proposalCount
               0,  // messageStart
               200, // messageCount (fetch many to ensure we see recent ones)
               treasuryTokens
@@ -15952,7 +15957,7 @@ body.modal-open { overflow: hidden; }
               0,  // daoStart
               50, // daoCount
               0,  // proposalStart
-              20, // proposalCount
+              200, // proposalCount
               0,  // messageStart
               200, // messageCount (fetch many to ensure we see recent ones)
               treasuryTokens
