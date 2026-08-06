@@ -27,9 +27,12 @@ import {PrecisionPoolFactory} from "./PrecisionPoolFactory.sol";
 ///
 ///         IT USES THE PUBLIC POOL ENTRY POINT. Hops go through
 ///         `swapExactIn`, which pulls exactly what it is told from this
-///         contract. The factory-only `swapFromFactory` is deliberately not
-///         used: this contract is replaceable and should not need to be
-///         trusted by the pools.
+///         contract. The factory-only settlements - `swapFromFactory` and
+///         `swapUpToFromFactory` - are deliberately not used: this contract is
+///         replaceable and should not need to be trusted by the pools. Note
+///         `routeUpTo` does not reach for the pool's own `swapUpTo` either,
+///         and for a separate reason: clamping per hop strands intermediates.
+///         See `routeUpTo`.
 ///
 ///         FUNDING IS CHECKPOINTED AND BOUND, as everywhere else here. snwap
 ///         sends the input before calling, so a bare balance is not evidence of

@@ -12,9 +12,11 @@ interface IPrecisionPoolRegistry {
 /// @dev One hook can serve every pool from its immutable factory because
 ///      `feeFor` is keyed by the calling pool. Each pool's `feeRecipient`
 ///      controls its surcharge and may redirect collection when its own address
-///      cannot receive an accrued asset. Increases are delayed so takers and
-///      routers can observe them before they become active; decreases are
-///      immediate.
+///      cannot receive an accrued asset. Decreases are immediate. Increases are
+///      announced and then bounded on BOTH sides: they cannot apply before the
+///      notice period, so takers and routers can observe them, and they cannot
+///      apply after `INCREASE_WINDOW` past it, so an announcement cannot be
+///      banked and exercised much later against a trade in flight.
 contract ConstantSurchargeHook {
     /// @dev Maximum surcharge in pips (10%).
     uint256 public constant MAX_SURCHARGE = 100_000;
@@ -54,7 +56,10 @@ contract ConstantSurchargeHook {
     /// @notice Surcharge in pips, per pool. Zero means untaxed.
     mapping(address pool => uint256 pips) public surchargeOf;
 
-    /// @notice Scheduled surcharge increase and its earliest activation time.
+    /// @notice Scheduled surcharge increase and the time it becomes applicable.
+    /// @dev Applicable from `validAfter` until `validAfter + INCREASE_WINDOW`.
+    ///      A zero `validAfter` means none is scheduled; a stored entry past its
+    ///      window is inert and must be scheduled again, which restarts notice.
     mapping(address pool => PendingSurcharge pending) public pendingSurchargeOf;
 
     error Bad();

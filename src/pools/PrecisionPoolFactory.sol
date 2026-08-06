@@ -29,8 +29,11 @@ contract PrecisionPoolFactory {
     /// @notice The complete settlement a prefunded route commits to up front.
     /// @dev Every field the settlement can act on lives here, so `checkpoint`
     ///      commits to the whole intent and not merely to a balance delta.
-    ///      `refundTo` is where `abortCheckpoint` may send the funding, and
-    ///      nowhere else is reachable.
+    ///      `refundTo` is the only address any input can come back to: it
+    ///      receives the whole funding from `abortCheckpoint`, and the
+    ///      unconsumed remainder from `executePrefundedSwapUpTo`. Nowhere else
+    ///      is reachable, which is what stops an abort or a partial fill from
+    ///      being a redirection primitive.
     struct Route {
         address pool;
         address originator;
@@ -78,7 +81,9 @@ contract PrecisionPoolFactory {
     ///      byte the pool gained came straight off the factory's margin from a
     ///      different file. Writing those bytes to a data contract in the
     ///      constructor - from an argument, which never becomes runtime code -
-    ///      leaves the factory holding only its own ~2.2 KB of logic. Nothing
+    ///      leaves the factory holding only its own logic - ~7.6 KB at the time
+    ///      of writing, against a pool whose creation code alone is ~22.8 KB and
+    ///      would not have fitted beside it under any arrangement. Nothing
     ///      about deployment changes: `createPool` copies the blob back out and
     ///      CREATE2s the identical initcode, so addresses are still derived from
     ///      the market tuple alone.
@@ -172,7 +177,8 @@ contract PrecisionPoolFactory {
         }
     }
 
-    /// @param trustedExecutor_ Router allowed to call `executePrefundedSwap`.
+    /// @param trustedExecutor_ Router allowed to drive a prefunded route:
+    ///        `checkpoint`, `abortCheckpoint`, and either settlement.
     ///        Set to address(0) when only direct exact-input swaps are wanted.
     /// @param poolInitCode `type(PrecisionPool).creationCode`, passed in rather
     ///        than embedded. See `poolCode`.
@@ -378,10 +384,11 @@ contract PrecisionPoolFactory {
     }
 
     /// @dev Hash of the settlement a route commits to. The executor passes the
-    ///      same `Route` to all three calls; this is what ties them together,
+    ///      same `Route` to every call of a route - `checkpoint`, then either
+    ///      settlement or `abortCheckpoint`; this is what ties them together,
     ///      so nothing off-chain ever needs to reproduce it.
     ///
-    ///      `Route` is seven static words and is the only argument of all three
+    ///      `Route` is seven static words and is the only argument of all four
     ///      entry points, so the calldata after the selector IS its canonical
     ///      encoding - hashing it directly avoids copying the struct back out
     ///      to memory on every call.
@@ -394,8 +401,9 @@ contract PrecisionPoolFactory {
     }
 
     /// @notice Snapshot an ERC-20 balance and open a prefunded route for `r`.
-    /// @dev Must be followed in the same transaction by `executePrefundedSwap`
-    ///      or `abortCheckpoint`, each carrying the SAME route. The transient
+    /// @dev Must be followed in the same transaction by a settlement -
+    ///      `executePrefundedSwap` or `executePrefundedSwapUpTo` - or by
+    ///      `abortCheckpoint`, each carrying the SAME route. The transient
     ///      checkpoint binds settlement to the newly funded amount, the
     ///      committed intent binds it to this pool, recipient, slippage and
     ///      refund address, and the route stays LOCKED across the funding
