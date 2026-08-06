@@ -11,6 +11,13 @@ const COIN_CLONE_SUFFIX = '0x5af43d5f5f3e6029573d5ffd5b3d5ff3';
 
 const COIN_SUPPLY = 1_000_000_000n;
 const COIN_SEC_PER_MONTH = 2_629_746n;
+// "Fast" tap: seconds of accrual to withdraw the whole raise. Also fixes the
+// smallest claimable treasury at raise / COIN_TAP_FAST_SEC — see the tap branch
+// of coinLaunch() for why the two are the same number.
+const COIN_TAP_FAST_SEC = 3600n;
+// Ongoing causes have no goal to scale from, so the fast rate is absolute:
+// ~86 ETH/day, claimable from 0.001 ETH in the treasury.
+const COIN_TAP_FAST_ONGOING_RATE = 10n ** 15n;
 const COIN_SHARE_BURNER = '0x000000000040084694F7B6fb2846D067B4c3Aa9f';
 
 const COIN_PIN_URL = 'https://api.zfi.wei.is';
@@ -455,7 +462,7 @@ function coinUpdatePreview() {
     let tapDesc = '';
     if (tapOn) {
       if (tapInstant) {
-        tapDesc = 'Instant (all funds to beneficiary)';
+        tapDesc = 'Fast (no vesting; full raise withdrawable in ~1h)';
       } else if (ongoing) {
         const rateWei = tapRateWei / COIN_SEC_PER_MONTH;
         tapDesc = `~${perDay(rateWei)} ${ethMini}/day (~${ethers.formatEther(tapRateWei)} ${ethMini}/mo)`;
@@ -745,11 +752,20 @@ async function coinLaunch() {
         if (!beneficiary) throw new Error('Beneficiary address is not yet resolved — wait for it, or paste a 0x address');
         let budgetWei, rate;
         if (tapInstant) {
-          // All funds flow directly to beneficiary — use raise/sec rate so entire
-          // treasury drains in 1 second. TapVest requires advance = claimed/rate >= 1,
-          // so rate must be <= expected treasury to avoid NothingToClaim revert.
+          // TapVest pays out min(ratePerSec * elapsed, budget, treasury) and needs
+          // that to come to at least one whole second of vesting, so the treasury has
+          // to hold >= ratePerSec before any of it is claimable. ratePerSec therefore
+          // sets both the drain speed and the smallest claimable treasury, and the two
+          // trade off directly: a rate equal to the full raise only unlocks once the
+          // sale has filled completely.
+          //
+          // COIN_TAP_FAST_SEC drains the whole raise over an hour of accrual and keeps
+          // any treasury above 1/3600th of the goal claimable, so a partly-filled
+          // sale still reaches its beneficiary. test/CauseLaunchSim.t.sol pins both
+          // the gate and this arithmetic.
           budgetWei = ongoing ? ethers.MaxUint256 : raiseWei;
-          rate = ongoing ? ethers.parseEther('1000') : raiseWei; // raise ETH/sec
+          rate = ongoing ? COIN_TAP_FAST_ONGOING_RATE : raiseWei / COIN_TAP_FAST_SEC;
+          if (rate === 0n) rate = 1n;
         } else if (ongoing) {
           // Ongoing: user-specified ETH/month rate, unlimited budget
           budgetWei = ethers.MaxUint256;
@@ -836,7 +852,7 @@ async function coinLaunch() {
       let tapSummary = '';
       if (tapEnabled) {
         if (tapInstant) {
-          tapSummary = 'Tap: Instant (all funds to beneficiary)<br>';
+          tapSummary = 'Tap: Fast &middot; no vesting, full raise withdrawable in ~1h<br>';
         } else {
           const perDayEth = Number(tapModule.ratePerSec * 86400n) / 1e18;
           const perMoEth = Number(tapModule.ratePerSec * COIN_SEC_PER_MONTH) / 1e18;
