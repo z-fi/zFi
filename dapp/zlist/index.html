@@ -217,6 +217,7 @@ function heal(doc,win){
 }
 
 function guard(doc,win){
+  FRAME=win;
   if(!doc||!doc.getElementById('b_etern')||!doc.getElementById('rid')){
     console.warn('[guard] contract page shape changed; guard not installed');
     return}
@@ -303,7 +304,7 @@ const wUnits=v=>{ v=String(v).trim();
   const[a,b='']=v.split('.'); return BigInt(a)*10n**18n+BigInt((b+'0'.repeat(18)).slice(0,18)); };
 const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
 
-let WZ={}, wizWaiting=false;
+let WZ={}, wizWaiting=false, FRAME=null;
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
@@ -423,7 +424,10 @@ $('wizbtn').onclick=wizOpen;
    connectWallet() without it dereferences an element that does not exist. This
    also gives zList the same connect control as every other zFi page. */
 if(window.walletInit) window.walletInit({appName:'zList',
-  onConnect:()=>{ if(wizWaiting||$('wiz').open) wizOpen(); },
+  onConnect:()=>{
+    try{ if(FRAME) FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); }
+    if(wizWaiting||$('wiz').open) wizOpen();
+  },
   onDisconnect:()=>{ wizWaiting=false; if($('wiz').open) $('wiz').close(); }});
 
 (async()=>{
@@ -431,7 +435,10 @@ if(window.walletInit) window.walletInit({appName:'zList',
     const {html,via}=await pull();
     // (no status line: the byte-count readout was removed as noise)
     const f=$('frame');
-    f.addEventListener('load',()=>{try{guard(f.contentDocument,f.contentWindow)}catch(e){console.warn('[guard]',e)}},{once:true});
+    f.addEventListener('load',()=>{
+      try{ guard(f.contentDocument,f.contentWindow) }catch(e){ console.warn('[guard]',e) }
+      if(window._connectedAddress){ try{ f.contentWindow.eval('connect()') }catch(e){} }
+    },{once:true});
     f.srcdoc=BRIDGE+html;
     f.hidden=false;
   }catch(e){
