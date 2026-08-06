@@ -233,6 +233,10 @@ function guard(doc,win){
       +'header h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;font-weight:600}'
       +'header .sub{font-size:15px;line-height:1.5;max-width:46ch}';
     doc.head.appendChild(st);
+    /* zFi's wallet button already sits on this page, so the framed document's
+       own connect is a duplicate control for the same wallet. Hide it and let
+       the site-level one own connection. */
+    const bc=doc.getElementById('b_conn'); if(bc) bc.style.display='none';
     const k=doc.querySelector('.k'), h=doc.querySelector('h1'), sub=doc.querySelector('.sub');
     if(k) k.remove();
     if(h) h.innerHTML='zList <small style="display:block;font-size:13px;font-weight:400;'
@@ -324,7 +328,15 @@ async function wizOpen(){
   const d=$('wiz'); const body=$('wizbody'); $('wstat').textContent='';
   body.innerHTML='<p class="whint">Connecting…</p>'; d.showModal();
   try{
-    if(!window._connectedAddress) await connectWallet();
+    if(!window._connectedAddress){
+      await connectWallet();
+      if(!window._connectedAddress){
+        body.innerHTML='<p class="whint">Choose a wallet to continue. This will pick up where it left off.</p>';
+        $('wizgo').disabled=true;
+        return;                       // walletInit onConnect re-enters wizOpen
+      }
+    }
+    $('wizgo').disabled=false;
     const me=window._connectedAddress;
     const zorgz=await wRead(GOV,SELS.zorgz).then(r=>'0x'+r.slice(26));
     const shares=await wRead(GOV,SELS.shares).then(r=>'0x'+r.slice(26));
