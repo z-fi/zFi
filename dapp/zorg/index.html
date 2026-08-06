@@ -27,6 +27,18 @@
   .bar a{color:inherit;text-underline-offset:3px}
   .bar b{color:var(--fg);font-weight:500}
   #frame{display:block;width:100%;height:calc(100dvh - 108px);border:0;border-top:1px solid var(--border);background:#09090b}
+  #warn{max-width:520px;border:1px solid var(--border);border-radius:10px;padding:22px;
+        background:var(--bg);color:var(--fg);font:14px/1.55 inherit}
+  #warn::backdrop{background:rgba(0,0,0,.6)}
+  #warn h3{margin:0 0 12px;font-size:16px;line-height:1.3}
+  #warn p{margin:0 0 12px;color:var(--fg-muted)}
+  #warn b{color:var(--fg)}
+  #warn code{font-size:12px}
+  .wbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .wbtns button{padding:9px 12px;border:1px solid var(--border);border-radius:7px;
+                background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
+  .wbtns .wprimary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+  .wfoot{margin:16px 0 0!important;font-size:11px}
   #fail{max-width:640px;margin:60px auto;padding:0 18px;color:var(--fg-muted);font-size:14px;line-height:1.6}
   #fail code{color:var(--fg)}
 </style>
@@ -38,6 +50,22 @@
   · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">w4eth.io</a></span>
 </div>
 <iframe id="frame" title="zOrg onchain interface" hidden></iframe>
+<dialog id="warn">
+  <h3>This would freeze the weakest support rate — permanently</h3>
+  <p>Receipt <b id="wrid"></b> is at <b>tier 0</b>, so its support rate is <b>1.00×</b>.
+     <code>eternalize</code> does not change that rate, and once a bond is eternal a
+     hard lock can never be added — <code>selectLockTier</code> reverts
+     <code>PermanentBond</code>.</p>
+  <p>Eternalizing now permanently commits <b id="wamt"></b> at <b>1.00×</b>. Hard locking
+     tier 3 <em>first</em> commits the same zOrg at <b>1.50×</b>, forever, at no extra cost.</p>
+  <div class="wbtns">
+    <button id="wlock" class="wprimary">Hard lock tier 3 first</button>
+    <button id="wgo">Eternalize at 1.00× anyway</button>
+    <button id="wno">Cancel</button>
+  </div>
+  <p class="wfoot">This warning is added by zFi. It is not part of the onchain page, which
+     lets the call through unguarded.</p>
+</dialog>
 <div id="fail" hidden></div>
 <script>
 const C='0x0000006d936ba3653b8854490e16e782cd32a9a8', HTML='0x33c34ac3',
@@ -66,11 +94,72 @@ async function pull(){
    prepended shim is the ONLY byte this site adds to the contract's output. */
 const BRIDGE="<script>try{if(!window.ethereum&&parent!==window&&parent.ethereum)"+
   "Object.defineProperty(window,'ethereum',{value:parent.ethereum,configurable:true,writable:true})}catch(e){}<\/script>";
+
+/* ---------------------------------------------------------------------------
+   LOCAL SAFETY GUARD — not part of the contract's page.
+
+   eternalize() is the strongest commitment in the system but it never touches
+   receiptLocks, so it freezes whatever support rate the receipt happens to hold.
+   Take the obvious path — bond, then eternalize — and you permanently lock the
+   WEAKEST rate (1.00x), because selectLockTier reverts PermanentBond once a bond
+   is eternal. The ordering is invisible in the UI and irreversible once wrong.
+   It cost the first eternal bond in the system exactly this.
+
+   Fixing it properly means a new governor. This intercepts the click instead, at
+   the reader rather than the contract, so the onchain page stays canonical.
+
+   Everything here is anchored on ids the contract's page owns. If a setRenderer
+   swap changes them, every lookup fails and the guard silently declines to
+   install — the dapp must never be broken by its own safety rail.
+--------------------------------------------------------------------------- */
+const SEL={locks:'0x10feefe2',weight:'0xe0fb17b2',eternal:'0x467339e2'};
+const w256=n=>BigInt(n).toString(16).padStart(64,'0');
+async function read(sel,id){
+  for(const u of RPCS){
+    try{
+      const r=await post(u,{jsonrpc:'2.0',id:1,method:'eth_call',
+        params:[{to:C,data:sel+w256(id)},'latest']});
+      if(r&&r!=='0x')return r;
+    }catch(e){}
+  }
+  throw Error('read failed')}
+const word=(h,i)=>BigInt('0x'+h.slice(2).slice(i*64,i*64+64));
+
+function guard(doc,win){
+  if(!doc||!doc.getElementById('b_etern')||!doc.getElementById('rid')){
+    console.warn('[guard] contract page shape changed; guard not installed');
+    return}
+  $('prov').innerHTML+=' · <b>+1 local guard</b>';
+  /* Capture on the document so this runs before the inline onclick on the button. */
+  doc.addEventListener('click',async ev=>{
+    const b=ev.target.closest&&ev.target.closest('#b_etern');
+    if(!b||b.disabled)return;
+    const rid=(doc.getElementById('rid')||{}).value;
+    if(!rid||!/^[0-9]+$/.test(rid))return;            // page reports its own error
+    let tier,weight,already;
+    try{
+      tier=Number(word(await read(SEL.locks,rid),3));
+      weight=word(await read(SEL.weight,rid),0);
+      already=word(await read(SEL.eternal,rid),0)===1n;
+    }catch(e){return}                                  // cannot verify -> do not block
+    if(already||tier!==0)return;                       // nothing to warn about
+    ev.preventDefault();ev.stopPropagation();
+    $('wrid').textContent='#'+rid;
+    $('wamt').textContent=(weight/1000000000000000000n).toLocaleString()+' zOrg';
+    const d=$('warn');
+    $('wno').onclick=()=>d.close();
+    $('wgo').onclick=()=>{d.close();try{win.eval('eternal()')}catch(e){console.warn(e)}};
+    $('wlock').onclick=()=>{d.close();try{win.eval('lock()')}catch(e){console.warn(e)}};
+    d.showModal();
+  },true);
+}
+
 (async()=>{
   try{
     const {html,via}=await pull();
     $('prov').innerHTML='Interface served from <b>'+html.length.toLocaleString()+' bytes</b> of contract storage · read via '+via;
     const f=$('frame');
+    f.addEventListener('load',()=>{try{guard(f.contentDocument,f.contentWindow)}catch(e){console.warn('[guard]',e)}},{once:true});
     f.srcdoc=BRIDGE+html;
     f.hidden=false;
   }catch(e){

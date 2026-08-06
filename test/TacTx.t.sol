@@ -41,6 +41,24 @@ contract TacTxTest is Test {
         assertEq(t.url, "https://tacit.finance");
         assertGt(bytes(t.logo).length, 0, "logo empty");
         assertGt(bytes(t.description).length, 0, "description empty");
+        assertEq(t.audit, "https://tacit.finance/verify", "audit link missing");
+
+        // The description says TAC is provable "from the etch transaction alone".
+        // That claim is only actionable if the listing says WHICH transaction, so the
+        // etch txid is carried as an extension field rather than left implicit.
+        assertEq(
+            TokenList(payable(REG)).getExtra(ID, bytes32("etch tx")),
+            "e2d10be19c2b73b86e14be99dc237a3d999ba3dfbe6f3e3714590acee2ca481e",
+            "etch txid missing"
+        );
+        assertEq(
+            TokenList(payable(REG)).getExtra(ID, bytes32("issued")),
+            "21,000,000 non-mintable",
+            "supply extra missing"
+        );
+        bytes32[] memory keys = TokenList(payable(REG)).extraKeys(ID);
+        assertEq(keys.length, 2, "unexpected extension key count");
+        emit log_named_uint("extension keys", keys.length);
         assertEq(TokenList(payable(REG)).ownerOf(ID), REG, "must be held by the registry");
 
         // integrators untouched
