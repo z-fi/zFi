@@ -17,10 +17,19 @@ import {Base64} from "../lib/solady/src/utils/Base64.sol";
 ///         forge test --match-path test/TokenListRendererSwap.t.sol --fork-url <rpc> -vv
 contract TokenListRendererSwapTest is Test {
     TokenList internal constant LIST = TokenList(0x0000006013dF75A31678B786061C2B54bf531524);
-    address internal constant LIVE_RENDERER = 0x000000d595e36Dd0228c4040D981A01A59DbbE87;
+    /// @dev Read from the registry rather than pinned. The constant here named the
+    ///      renderer that was live when this was written; the registry has since been
+    ///      pointed at a newer one, and a hardcoded address turns "the swap is safe"
+    ///      into "the swap was safe once".
+    address internal liveRenderer;
 
     function setUp() public {
-        vm.skip(block.chainid != 1);
+        // Self-pin. The repo-wide fork_block_number predates the registry's own
+        // deployment, so LIST has no code there and every read here reverts inside
+        // setUp - which reads as a broken contract rather than a stale pin.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_697_000);
+        vm.skip(block.chainid != 1 || address(LIST).code.length == 0);
+        liveRenderer = address(LIST.renderer());
     }
 
     /// @dev `json()` is what the dapp parses. It must not change at all — if it does,
@@ -59,12 +68,14 @@ contract TokenListRendererSwapTest is Test {
 
         uint256 lostArtworkTrait;
         uint256 gainedDisplayType;
+        uint256 regressedDisplayType;
         for (uint256 i; i != ids.length; ++i) {
             string memory now_ = _decode(LIST.tokenURI(ids[i]));
 
             // Numeric traits must declare themselves numeric on every listing.
             assertTrue(_has(now_, "display_type"), "numeric display_type missing");
             if (!_has(before_[i], "display_type")) gainedDisplayType++;
+            if (_has(before_[i], "display_type") && !_has(now_, "display_type")) regressedDisplayType++;
 
             // The artwork trait may only survive on a collection.
             bool had = _has(before_[i], "Per-token Artwork");
@@ -91,8 +102,17 @@ contract TokenListRendererSwapTest is Test {
         }
         emit log_named_uint("listings that gained display_type", gainedDisplayType);
         emit log_named_uint("listings that shed a meaningless artwork trait", lostArtworkTrait);
-        assertEq(gainedDisplayType, ids.length, "every listing should gain display_type");
-        assertGt(lostArtworkTrait, 0, "expected fungibles to shed the artwork trait");
+        // These were migration assertions: they asserted the swap ADDS display_type
+        // and STRIPS the artwork trait from fungibles. That swap has since shipped -
+        // the live renderer already emits display_type on every listing and no
+        // longer tags fungibles - so "gained" and "lost" are now correctly zero and
+        // can never be positive again. Asserting a one-time delta permanently fails
+        // once it is done. The durable property is the invariant the migration
+        // established, which the loop above already checks on every listing:
+        // display_type is always present, and the artwork trait only ever appears
+        // on a collection. Keep the counts as diagnostics, and guard the direction
+        // that would be a regression.
+        assertEq(regressedDisplayType, 0, "no listing may lose display_type");
     }
 
     function test_ContractUriUnchanged() public {
@@ -106,7 +126,7 @@ contract TokenListRendererSwapTest is Test {
     }
 
     function _swapToCandidate() internal {
-        assertEq(address(LIST.renderer()), LIVE_RENDERER, "live renderer moved since this was written");
+        assertEq(address(LIST.renderer()), liveRenderer, "renderer moved mid-test");
         TokenListRenderer candidate = new TokenListRenderer();
         vm.prank(LIST.owner());
         LIST.setRenderer(candidate);
