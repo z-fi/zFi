@@ -125,3 +125,39 @@ records their hashes and the fork replay skips loudly if any of them moves.
 Two separately-keyed organisations, either able to neutralise a bad outcome from its
 own side, and no path by which conviction can alter what the registry stores.
 
+
+## Pending Moloch proposal: `setRenderer`
+
+Queued and waiting on the timelock. Recorded here because the execution arguments
+are NOT recoverable from the proposal itself: the Moloch stores only
+`proposalId = keccak(op, to, value, data, nonce)`, so `executeByVotes` has to be
+handed the preimage. Ours survives only as a `chat` message inside the proposing
+multicall (block 25,696,967) — reconstructing it meant scraping printable ASCII
+out of that calldata, which is not a procedure to rely on twice.
+
+| field | value |
+| --- | --- |
+| Moloch | `0x5E58BA0e06ED0F5558f83bE732a4b899a674053E` |
+| proposal id | `0xe78a45cec2e9fb4d8c06e31588e61751ee8b01496673519361606ad5c9707d25` |
+| `op` | `0` |
+| `to` | `0x0000006D936bA3653b8854490E16E782cd32a9a8` (the governor) |
+| `value` | `0` |
+| `data` | `0x56d3163d0000000000000000000000000000006b980ae5e796b3ef484e767993d0e29979` |
+| `nonce` | `0x238f613abfc45402e05ca6cef98099e02b872c173c1ba5ce06c88ea6947acef0` |
+| queued | block 25,698,163 — 2026-08-06 20:00 UTC |
+
+Verified: `proposalId(op,to,value,data,nonce)` returns the id above, and the renderer
+being installed (`0x0000006b980ae5e796b3ef484e767993d0e29979`) holds 19,700 bytes of code.
+
+```sh
+cast send 0x5E58BA0e06ED0F5558f83bE732a4b899a674053E \
+  'executeByVotes(uint8,address,uint256,bytes,bytes32)' \
+  0 0x0000006D936bA3653b8854490E16E782cd32a9a8 0 \
+  0x56d3163d0000000000000000000000000000006b980ae5e796b3ef484e767993d0e29979 \
+  0x238f613abfc45402e05ca6cef98099e02b872c173c1ba5ce06c88ea6947acef0
+```
+
+**The window is 24 hours wide.** `timelockDelay` and `proposalTTL` are both 86,400,
+so this is executable from 2026-08-07 20:00 UTC and expires at 2026-08-08 20:00 UTC.
+Miss it and the proposal has to go through voting and queueing again. Check with
+`state(id)` before sending rather than trusting the arithmetic above.
