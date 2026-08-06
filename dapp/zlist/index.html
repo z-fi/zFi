@@ -303,7 +303,7 @@ const wUnits=v=>{ v=String(v).trim();
   const[a,b='']=v.split('.'); return BigInt(a)*10n**18n+BigInt((b+'0'.repeat(18)).slice(0,18)); };
 const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
 
-let WZ={};
+let WZ={}, wizWaiting=false;
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
@@ -329,14 +329,12 @@ async function wizOpen(){
   body.innerHTML='<p class="whint">Connecting…</p>'; d.showModal();
   try{
     if(!window._connectedAddress){
+      wizWaiting=true;
+      d.close();                      // the picker is a plain overlay; a modal dialog would cover it
       await connectWallet();
-      if(!window._connectedAddress){
-        body.innerHTML='<p class="whint">Choose a wallet to continue. This will pick up where it left off.</p>';
-        $('wizgo').disabled=true;
-        return;                       // walletInit onConnect re-enters wizOpen
-      }
+      return;                         // onConnect re-enters wizOpen once a wallet is chosen
     }
-    $('wizgo').disabled=false;
+    wizWaiting=false; $('wizgo').disabled=false;
     const me=window._connectedAddress;
     const zorgz=await wRead(GOV,SELS.zorgz).then(r=>'0x'+r.slice(26));
     const shares=await wRead(GOV,SELS.shares).then(r=>'0x'+r.slice(26));
@@ -425,8 +423,8 @@ $('wizbtn').onclick=wizOpen;
    connectWallet() without it dereferences an element that does not exist. This
    also gives zList the same connect control as every other zFi page. */
 if(window.walletInit) window.walletInit({appName:'zList',
-  onConnect:()=>{ if($('wiz').open) wizOpen(); },
-  onDisconnect:()=>{ if($('wiz').open) $('wiz').close(); }});
+  onConnect:()=>{ if(wizWaiting||$('wiz').open) wizOpen(); },
+  onDisconnect:()=>{ wizWaiting=false; if($('wiz').open) $('wiz').close(); }});
 
 (async()=>{
   try{
