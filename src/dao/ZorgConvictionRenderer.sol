@@ -220,8 +220,14 @@ contract ZorgConvictionRenderer is IZorgConvictionRenderer {
             // the logo, which is stored as onchain SVG for essentially every
             // listing, so wstETH appeared to deny art it plainly has. Report the
             // logo's own storage, and only mention per-token art where it exists.
-            "+dl('Logo',j.l?(j.l.startsWith('data:')?'onchain SVG':'external URL'):'none',j.l?'s':0)"
-            "+(j.l&&j.l.startsWith('data:')?dl('Data URI','base64 SVG','u'):'')"
+            // Report the logo's ACTUAL media type. Treating every data URI as
+            // SVG mislabels the PNG-backed listings in the live registry, and
+            // the copy icon beside it then hands over PNG bytes under an SVG
+            // heading. `svgOf` already unwraps only real SVG, so the payload was
+            // never wrong - only the label was.
+            "+dl('Logo',j.l?(j.l.startsWith('data:image/svg')?'onchain SVG':j.l.startsWith('data:')"
+            "?'onchain '+j.l.slice(11).split(';')[0]:'external URL'):'none',j.l?'s':0)"
+            "+(j.l&&j.l.startsWith('data:')?dl('Data URI',j.l.slice(5).split(';')[0],'u'):'')"
             "+(j.o?dl('Token art','onchain SVG per token id'):'')"
             "+dl('Support',f(t.score)+' ('+f(t.live)+' live / '+f(t.acc)+' accrued)')"
             "+dl('Listing id',t.id,'i');"
