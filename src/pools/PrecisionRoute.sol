@@ -200,12 +200,17 @@ contract PrecisionRoute {
     ///
     ///      Found by bisection, for the same reason `PrecisionPool._maxIn`
     ///      bisects rather than solving: composing per-hop boundary conditions
-    ///      closed-form is worse than intractable, it is fragile. The predicate
-    ///      is monotone and therefore bisectable - a pool's `fits` is monotone
-    ///      decreasing in its own input, output is monotone increasing in
-    ///      input, so hop `i`'s input is monotone increasing in the route's
-    ///      input and its fit monotone decreasing in it; a conjunction of
-    ///      monotone-decreasing predicates is monotone decreasing.
+    ///      closed-form is worse than intractable, it is fragile.
+    ///
+    ///      What is bisected is the BAND, not executability. A pool's `fits` is
+    ///      NOT monotone - it is the conjunction of a band condition that closes
+    ///      as size grows and a zero-output refusal that opens as size grows, so
+    ///      the fillable set is an interval and halving against it can step over
+    ///      that interval entirely. Only the band half is monotone decreasing,
+    ///      and it composes: each hop's room is monotone decreasing in its
+    ///      input, output is monotone increasing in input, so hop `i`'s input is
+    ///      monotone increasing in the route's and its room monotone decreasing
+    ///      in it. See `_maxRouteIn`.
     ///
     ///      It is paid only on the clamping path: a route that fits whole
     ///      returns on the first probe. When it does bisect, it costs about
@@ -289,22 +294,75 @@ contract PrecisionRoute {
     /// @dev Largest starting amount at or below `amountIn` that every hop
     ///      admits. Zero when even the smallest useful trade cannot clear the
     ///      path.
+    ///
+    ///      BISECTS THE BAND ALONE, NOT EXECUTABILITY. Whether a hop fills is
+    ///      the conjunction of two conditions running in opposite directions:
+    ///      the band closes as size grows, and the zero-output refusal opens as
+    ///      size grows. The fillable set is therefore an INTERVAL `[a,b]`, not a
+    ///      prefix, and halving against the conjunction can step straight over
+    ///      it - probing above `b`, then below `a`, and concluding nothing fills
+    ///      while every size in between would have. `PrecisionPool` documents
+    ///      the same trap on `_transitionAt` and avoids it the same way.
+    ///
+    ///      So: bisect `_routeRoom`, which is monotone decreasing and genuinely
+    ///      true at zero, to find `b`. Then test the zero-output half ONCE
+    ///      there. Output is monotone increasing in size, so a zero at `b` means
+    ///      no smaller size fills either, and `b` is the answer whenever any
+    ///      size does.
     function _maxRouteIn(address[] calldata pools, address tokenIn, uint256 amountIn)
         internal
         view
         returns (uint256)
     {
+        // Fast path: the whole request fits, so there is nothing to clamp.
         if (_routeOut(pools, tokenIn, amountIn) != 0) return amountIn;
 
-        // Invariant: `lo` fits, `hi` does not. Zero trivially fits.
+        // The band admits the full size, so the only thing that stopped it was
+        // a zero output - which only gets worse as the size falls.
+        if (_routeRoom(pools, tokenIn, amountIn)) return 0;
+
+        // Invariant: `lo` has room, `hi` does not. Zero has room.
         uint256 lo;
         uint256 hi = amountIn;
         while (hi - lo > 1) {
             uint256 mid = lo + (hi - lo) / 2;
-            if (_routeOut(pools, tokenIn, mid) != 0) lo = mid;
+            if (_routeRoom(pools, tokenIn, mid)) lo = mid;
             else hi = mid;
         }
-        return lo;
+        if (lo == 0) return 0;
+        // The largest size the band takes is only useful if it also produces
+        // something. `_routeOut` folds in every hop's zero-output refusal.
+        return _routeOut(pools, tokenIn, lo) == 0 ? 0 : lo;
+    }
+
+    /// @dev Whether every hop's BAND admits the route at this size, ignoring
+    ///      whether the outputs round to zero. Monotone decreasing in
+    ///      `amountIn`, which is what makes it bisectable: each hop's own room
+    ///      is monotone decreasing in its input, and its input is monotone
+    ///      increasing in the route's, so the conjunction is too.
+    ///
+    ///      Chains `amountOut` even when it is zero. A hop handed nothing simply
+    ///      does not move its own price, so it reports room - and the caller's
+    ///      single zero-output check at the end is what rejects that size.
+    function _routeRoom(address[] calldata pools, address tokenIn, uint256 amountIn)
+        internal
+        view
+        returns (bool)
+    {
+        address tin = tokenIn;
+        uint256 amt = amountIn;
+        for (uint256 i; i < pools.length; ++i) {
+            PrecisionPool p = PrecisionPool(payable(pools[i]));
+            address t0 = p.token0();
+            address tout = tin == t0 ? p.token1() : t0;
+
+            (uint256 out, bool hasRoom) = p.quoteTransition(address(this), tin, amt);
+            if (!hasRoom) return false;
+
+            amt = out;
+            tin = tout;
+        }
+        return true;
     }
 
     /// @dev Replays the path as a view, chaining each hop's exact output into

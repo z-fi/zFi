@@ -535,6 +535,76 @@ contract PrecisionPoolFactory {
         _setRouteState(_ROUTE_IDLE);
     }
 
+    /// @notice Settle a PARTIAL-FILL swap after the trusted executor has funded
+    ///         this factory, returning the unconsumed input to `r.refundTo`.
+    /// @dev The routed counterpart to the pool's `swapUpTo`, and the reason that
+    ///      function has a factory-facing form at all. `executePrefundedSwap` is
+    ///      all-or-nothing: a leg sized from a quote taken two blocks ago reverts
+    ///      when the band has moved under it, which is precisely the failure
+    ///      partial fill exists to remove — and a revert on hop `i` of a route
+    ///      takes the whole route down. This fills what the band can take and
+    ///      hands the rest back, so a stale-quoted leg degrades to a smaller fill
+    ///      at a price the caller already accepted.
+    ///
+    ///      `r.minOut` still applies to the output actually produced, so an
+    ///      executor wanting all-or-nothing keeps it by setting `minOut` — this
+    ///      entry point does not weaken slippage protection, it only changes what
+    ///      happens to the input that did not fit. Callers chaining hops must
+    ///      read `consumed`: the leftover is returned in the INPUT token, so a
+    ///      router that ignores it strands funds at `refundTo` rather than
+    ///      carrying them forward.
+    ///
+    ///      NOT AVAILABLE ON A HOOKED POOL — the pool reverts `UnsupportedToken`,
+    ///      because the surcharge is sampled once at the requested size and would
+    ///      be wrong at the clamped one. Hooked pools stay on
+    ///      `executePrefundedSwap` and are sized from the lens.
+    ///
+    ///      Authentication, locking, and the committed intent are identical to
+    ///      `executePrefundedSwap`, and deliberately share the same checkpoint:
+    ///      `_routeHash` covers the `Route` calldata and NOT the selector, so one
+    ///      checkpoint admits either settlement. That is safe rather than an
+    ///      oversight — both entry points act only on the committed pool,
+    ///      recipient, slippage, originator and refund address, so substituting
+    ///      one for the other changes nothing an attacker controls, and doing it
+    ///      reentrantly still strands the outer settlement on a consumed
+    ///      checkpoint and reverts the transaction.
+    /// @param r The route; for ERC-20 input it must match the one `checkpoint`
+    ///        committed to, field for field.
+    /// @return amountOut Output produced by the portion that filled.
+    /// @return consumed Input actually swapped; `r.amountIn - consumed` went back
+    ///         to `r.refundTo`.
+    function executePrefundedSwapUpTo(Route calldata r)
+        external
+        payable
+        returns (uint256 amountOut, uint256 consumed)
+    {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        _checkRoute(r);
+        PrecisionPool p = PrecisionPool(payable(r.pool));
+        if (r.tokenIn == address(0)) {
+            // Native input is authenticated by `msg.value` and arrives with the
+            // call, so it has no funding interval to guard and opens no route.
+            // The pool returns the unconsumed remainder as ETH to `refundTo`.
+            if (_routeState() != _ROUTE_IDLE) revert Reentrancy();
+            _setRouteState(_ROUTE_SETTLING);
+            if (msg.value != r.amountIn) revert Bad();
+            (amountOut, consumed) = p.swapUpToFromFactory{value: r.amountIn}(
+                r.originator, r.tokenIn, r.amountIn, r.minOut, r.to, r.refundTo
+            );
+            _setRouteState(_ROUTE_IDLE);
+            return (amountOut, consumed);
+        }
+        if (_routeState() != _ROUTE_OPEN) revert BadCheckpoint();
+        _setRouteState(_ROUTE_SETTLING);
+        _consumeIntent();
+        if (msg.value != 0) revert Bad();
+        uint256 senderBefore = _consumeCheckpoint(r.tokenIn, r.amountIn);
+        _transferExact(r.tokenIn, r.pool, r.amountIn, senderBefore);
+        (amountOut, consumed) =
+            p.swapUpToFromFactory(r.originator, r.tokenIn, r.amountIn, r.minOut, r.to, r.refundTo);
+        _setRouteState(_ROUTE_IDLE);
+    }
+
     function _consumeCheckpoint(address token, uint256 amount) internal returns (uint256 current) {
         bytes32 slot = _checkpointSlot(token);
         uint256 encoded;

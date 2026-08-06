@@ -254,6 +254,16 @@ contract PrecisionPool is ERC20, IPriceTape {
 
     /// @dev Native input is accepted only by an exact-input entry point. A
     ///      naked transfer would otherwise become anonymous balance surplus.
+    ///
+    ///      This does NOT make the balance unforgeable: `selfdestruct` and block
+    ///      rewards reach a contract without calling it, so a native-token0 pool
+    ///      can hold ETH no entry point ever credited. That surplus is stranded
+    ///      rather than stealable, and deliberately so - every entry point ties
+    ///      the amount it credits to `msg.value` or to a pull it performed
+    ///      itself, never to the balance it happens to find, so nobody can claim
+    ///      it by declaring it. The alternative, a sweep, would be a permission
+    ///      to move funds out of an otherwise permissionless immutable contract,
+    ///      which is a strictly worse thing to hold than the dust it recovers.
     receive() external payable {
         revert Bad();
     }
@@ -629,15 +639,63 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      the pool will SEE at execution as `sender`, not the end user: a
     ///      hook may key its surcharge on it, and the quote must sample the same
     ///      rate the swap will.
+    ///
+    ///      DO NOT BISECT `fits`. It is the conjunction of two conditions that
+    ///      run in OPPOSITE directions - the band closes as size grows, the
+    ///      zero-output refusal opens - so the fillable set is an interval, and
+    ///      a search that halves against `fits` can step over that interval
+    ///      entirely and report that nothing fills when something does. This is
+    ///      the same trap `_transitionAt` documents for the pool's own `_maxIn`,
+    ///      which is why that search bisects `hasRoom` alone. A chained caller
+    ///      wanting to size a route must do the same, against
+    ///      `quoteTransition` below, and check the zero-output half once at the
+    ///      end. `fits` is for asking about ONE size, not for searching sizes.
     function quoteExactIn(address sender, address tokenIn, uint256 amountIn)
         external
         view
         returns (uint256 amountOut, bool fits)
     {
+        bool hasRoom;
+        (amountOut, hasRoom) = _quote(sender, tokenIn, amountIn);
+        fits = hasRoom && amountOut != 0;
+        if (!fits) amountOut = 0;
+    }
+
+    /// @notice The raw transition: the output for `amountIn`, and whether the
+    ///         BAND alone admits it, with the zero-output refusal left to the
+    ///         caller.
+    ///
+    /// @dev The searchable half of `quoteExactIn`. `hasRoom` is MONOTONE
+    ///      DECREASING in `amountIn` - and true at zero - so it is the predicate
+    ///      a partial-fill search over a route bisects, exactly as the pool's
+    ///      own `_maxIn` bisects it for a single pool. Having found the largest
+    ///      size the band admits, check `amountOut != 0` there once: output is
+    ///      monotone increasing, so a zero at that size means no smaller size
+    ///      fills either.
+    ///
+    ///      `amountOut` is returned unmasked here even when it is zero or the
+    ///      band refuses, because a chained search needs the real figure to feed
+    ///      the next hop. `quoteExactIn` masks it; this does not.
+    function quoteTransition(address sender, address tokenIn, uint256 amountIn)
+        external
+        view
+        returns (uint256 amountOut, bool hasRoom)
+    {
+        return _quote(sender, tokenIn, amountIn);
+    }
+
+    function _quote(address sender, address tokenIn, uint256 amountIn)
+        internal
+        view
+        returns (uint256 amountOut, bool hasRoom)
+    {
         bool zeroForOne = _direction(tokenIn);
-        if (amountIn == 0) return (0, false);
         uint256 supply = totalSupply();
         if (supply == 0) return (0, false);
+        // Matches `_transitionAt`: an empty trade leaves the price where it is,
+        // so the band trivially admits it. `quoteExactIn` still reports it as
+        // not fitting, via the zero output.
+        if (amountIn == 0) return (0, true);
 
         Transition memory t;
         t.zeroForOne = zeroForOne;
@@ -646,10 +704,7 @@ contract PrecisionPool is ERC20, IPriceTape {
             : (uint256(reserve1), uint256(reserve0), _virtual1(supply, sqrtPLow), _virtual0(supply, sqrtPHigh));
         if (hook != address(0)) t.surcharge = extraFee(sender, tokenIn, amountIn);
 
-        bool hasRoom;
         (amountOut,,,, hasRoom) = _transitionAt(t, amountIn);
-        fits = hasRoom && amountOut != 0;
-        if (!fits) amountOut = 0;
     }
 
     function _swapExact(
@@ -741,6 +796,19 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      token1-per-token0 scaled by 1e18, the same convention as this
     ///      pool's own `sqrtPLow`/`sqrtPHigh`, so token decimals are NOT
     ///      normalised here and a reader applies them alongside the pair.
+    ///
+    ///      THE TAPE CANNOT REPRESENT A RAW PRICE BELOW 1e-18. The 1e18 scale is
+    ///      fixed because it is what makes one chart client work against every
+    ///      adopter of `IPriceTape`, so a pair whose raw token1-per-token0 price
+    ///      is under that floor records bars of zero. Reaching it takes an
+    ///      extreme decimal mismatch - roughly an 18-decimal token0 against a
+    ///      token1 worth less than 1e-18 of it per raw unit - which the band
+    ///      permits, since `sqrtPLow` only has to be nonzero. Nothing else is
+    ///      affected: pricing, reserves, and the range check never consult the
+    ///      tape, so such a pool trades correctly and merely charts flat. It is
+    ///      recorded here rather than repaired because the repair would be a
+    ///      per-pool scale factor, and a bar whose units depend on which pool
+    ///      emitted it is worse for readers than a bar that is legibly empty.
     function _record(bool zeroForOne, uint256 amountIn, uint256 amountOut) internal {
         uint256 price = zeroForOne
             ? FixedPointMathLib.fullMulDiv(amountOut, 1e18, amountIn)
