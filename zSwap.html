@@ -136,10 +136,11 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-// Onchain token list (src/utils/TokenList.sol). PLACEHOLDER: set to the deployed
-// address once it is mined. While this is ZERO the built-in TOKENS below are used
-// unchanged, so the dapp behaves exactly as it did before the list existed.
-const TOKENLIST=ZERO;
+// Onchain token list (src/utils/TokenList.sol), Ethereum mainnet. The built-in
+// TOKENS below remain the fallback: any failure - wrong chain, RPC hiccup, an
+// empty or malformed list - leaves them in place rather than presenting an empty
+// or half-populated picker. See `loadTokenList`.
+const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
 const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
@@ -482,10 +483,19 @@ return ft.map(([t,i])=>opt(t,i)).join("")
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
+const isNft=v=>TOKENS[v]?.std==="nft";
+// A collection is listed on every tab so the picker does not reshuffle underneath
+// the user, but it is only SELECTABLE where something can act on it. Swapboard and
+// Dutchboard take NFT lots; the router cannot quote one and `send` prices its
+// transfer in decimals a collection does not have. Gating here rather than in the
+// quote path means the disabled state is visible before the click, instead of a
+// failed quote after it.
 const syncDisabled=()=>{
 const pair=tab!=="send";
-for(const opt of fromSel.options)opt.disabled=pair&&opt.value===toSel.value&&opt.value!=="__custom";
-for(const opt of toSel.options)opt.disabled=pair&&opt.value===fromSel.value&&opt.value!=="__custom";
+const nftOk=tab==="book";
+for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]])
+for(const opt of sel.options)
+opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
@@ -1548,11 +1558,23 @@ for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttri
 // the pay/receive panels already describe a limit order, so the orders tab
 // reuses them: sell this, want that. Only the labels and the slippage change.
 for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+// Leaving the orderbook with a collection selected would strand that side on an
+// option `syncDisabled` is about to disable — visibly greyed out, and every read
+// of the pair downstream would price an NFT as a fungible. Move it back to
+// something quotable first; the equal-sides fix below then resolves any collision
+// the move creates.
+if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
+if(!isNft(sel.value))continue;
+const alt=TOKENS.findIndex((t,i)=>t.std!=="nft"&&String(i)!==other.value);
+if(alt>=0)sel.value=String(alt);
+}
 // Send lets the pay side hold whatever the receive side holds. Coming back to a
 // pair-based tab with both sides equal would dead-end on "Pick different
 // tokens", so move the side the user was not just looking at.
 if(!send&&fromSel.value===toSel.value){
-const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value);
+// Off the orderbook this must not land on a collection, or it re-strands the
+// side the eviction above just rescued.
+const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value&&(bk||t.std!=="nft"));
 if(alt>=0)toSel.value=String(alt);
 }
 syncDisabled();
