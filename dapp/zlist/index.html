@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ZLIST</title>
+<title>zList — powered by PFP bonds</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <!--
   ERC-8244 onchain pointer. This page hosts NOTHING: the interface below is the
@@ -189,16 +189,22 @@ function guard(doc,win){
   heal(doc,win);
   /* Reframe the header for this surface. The contract page is written for a
      visitor arriving cold at zorg.wei; here it sits inside zFi under its own
-     name, so the DAO eyebrow is noise and the copy should say what zList is.
+     name, so the DAO eyebrow is noise, the copy should say what zList is, and
+     the type should match the rest of the site rather than the page's monospace.
      Left in the reader because a setRenderer proposal is already queued and
      editing the contract's source now would strand it. */
   try{
+    const st=doc.createElement('style');
+    st.textContent='header h1,header .sub{font-family:Helvetica,Arial,sans-serif}'
+      +'header h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;font-weight:600}'
+      +'header .sub{font-size:15px;line-height:1.5;max-width:46ch}';
+    doc.head.appendChild(st);
     const k=doc.querySelector('.k'), h=doc.querySelector('h1'), sub=doc.querySelector('.sub');
     if(k) k.remove();
-    if(h) h.textContent='zList';
-    if(sub) sub.innerHTML='A curated token list that lives entirely on Ethereum \u2014 '
-      +'every name, symbol, address, decimal and logo read from a contract, not a server. '
-      +'Holders of bonded zOrgz curate the order. Open any listing to read and copy its record.';
+    if(h) h.innerHTML='zList <small style="display:block;font-size:13px;font-weight:400;'
+      +'letter-spacing:.02em;opacity:.62;margin-top:6px">powered by PFP bonds</small>';
+    if(sub) sub.textContent='A token list that lives in a contract, not on a server. '
+      +'Bonded zOrgz decide the order. Open any listing to copy its record.';
   }catch(e){}
   /* Capture on the document so this runs before the inline onclick on the button. */
   doc.addEventListener('click',async ev=>{
