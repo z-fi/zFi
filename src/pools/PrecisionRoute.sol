@@ -376,6 +376,18 @@ contract PrecisionRoute {
     ///      Pool membership is checked in `_walk`, not here: this is a view over
     ///      caller-supplied addresses, so a non-pool can only return junk that
     ///      makes the search pick a size `_walk` then rejects outright.
+    ///
+    ///      EVERY HOP IS QUOTED AGAINST PRE-ROUTE STATE, which is exact only
+    ///      because distinct pools do not move each other. A path that names the
+    ///      SAME pool twice breaks that: execution applies the first visit
+    ///      before the second, while this quotes both against the state before
+    ///      either. The clamp can then choose a size that reverts, and an exact
+    ///      `route` can return less than quoted - caught by its `minOut` rather
+    ///      than here. Nothing is at risk either way, so the path is not
+    ///      rejected: a duplicate hop is a strictly worse route than not taking
+    ///      it, paying two fees to move one price back and forth, and screening
+    ///      for it would charge every honest route a quadratic scan to prevent
+    ///      a caller from wasting their own money.
     function _routeOut(address[] calldata pools, address tokenIn, uint256 amountIn)
         internal
         view
