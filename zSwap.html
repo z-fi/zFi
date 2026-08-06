@@ -188,13 +188,32 @@ for(const row of rows){
 if(!row)continue;
 let t;try{t=JSON.parse(row)}catch{continue}
 // Trust nothing: a bad entry is skipped, it does not take the list down.
+// The registry is a CURATED list, not a routing table: it carries assets this
+// dapp cannot act on at all. Two filters, for two different reasons.
+//
+// 1. Namespace. A non-EVM listing (Bitcoin, Solana) has no address here — the
+//    registry renders those accounts as 32 bytes, so the shape test below
+//    already rejects them, but say it outright rather than relying on a
+//    length coincidence to keep a Bitcoin asset out of an Ethereum picker.
+if(t.k!=="eip155")continue;
+// 2. Standard. ERC-20 and the native asset are swappable; ERC-721 is not, but
+//    IS auctionable through Swapboard/Dutchboard and needs to resolve in
+//    `known()` so orderbook NFT legs render with a symbol and icon. Anything
+//    else — UNKNOWN, or a standard added after this page was chunked — is
+//    something this dapp has no path for, so it is left out.
+const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
+if(!std)continue;
 if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
 if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
 if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 const sym=String(t.s||"").slice(0,12)||"?";
-next.push({sym,addr:t.a,dec:t.d,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
+next.push({sym,addr:t.a,dec:t.d,std,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
 }
-if(next.length)TOKENS.splice(0,TOKENS.length,...next);
+// Fungibles first, NFTs after, each keeping the registry's curation order. The
+// picker's default selections are indexes, so a stable partition matters: it
+// keeps a swappable token at index 0 no matter how many collections are listed.
+next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
+if(next.some(t=>t.std==="ft"))TOKENS.splice(0,TOKENS.length,...next);
 }catch{}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
@@ -417,7 +436,7 @@ let sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
 if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
 const dec=Number(BigInt(decRet));
 if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
-TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr:a,dec,std:"ft",icon:genIcon(sym)});
 if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
 return TOKENS.length-1;
 }
@@ -426,7 +445,7 @@ const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
 const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr,dec,std:"ft",icon:genIcon(sym)});
 }
 }}catch{}
 const QUOTE_TTL=45000;
@@ -448,7 +467,18 @@ bal.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for
 }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
 render();
 }
-const optsHtml=()=>TOKENS.map((t,i)=>`<option value="${i}">${t.sym}</option>`).join("")+`<option value="__custom">+ Custom token…</option>`;
+// NFTs stay in the picker — Swapboard and Dutchboard auction them — but they are
+// not swappable, so they sit under their own heading instead of being interleaved
+// with tokens the router can actually quote. `select.options` still enumerates
+// options inside an optgroup, so `syncDisabled` is unaffected.
+const optsHtml=()=>{
+const opt=(t,i)=>`<option value="${i}">${t.sym}</option>`;
+const ft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std!=="nft");
+const nft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std==="nft");
+return ft.map(([t,i])=>opt(t,i)).join("")
++(nft.length?`<optgroup label="NFT collections — auction only">${nft.map(([t,i])=>opt(t,i)).join("")}</optgroup>`:"")
++`<option value="__custom">+ Custom token…</option>`;
+};
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
