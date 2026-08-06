@@ -19,6 +19,7 @@ interface IZRouter {
     ) external payable returns (uint256 amountIn, uint256 amountOut);
     function execute(address target, uint256 value, bytes calldata data) external payable returns (bytes memory);
     function trust(address target, bool ok) external payable;
+    function sweep(address token, uint256 id, uint256 amount, address to) external payable;
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -174,6 +175,49 @@ contract ClassicalCurveSaleZRouterTest is Test {
 
         // Nothing was left behind in the sale by the failed attempt.
         assertEq(ERC20(token).balanceOf(address(SALE)), 0, "no tokens stranded in the sale");
+    }
+
+    /// Governance check: does trusting the sale for execute() hand anyone a new way to
+    /// take zRouter's balances?
+    ///
+    /// It does let an attacker pull tokens out of zRouter -- the sale is the clone's
+    /// hook, so its transferFrom needs no approval, and swapExactIn lets the caller name
+    /// the recipient. What matters is that this is not a NEW capability: sweep() is
+    /// already permissionless, so an idle balance in zRouter is takeable today. The
+    /// safety of trusting the sale rests entirely on zRouter holding nothing at rest.
+    function test_zRouter_trustingSale_grantsNoNewReach() public {
+        _graduate(true, bytes32(uint256(36)));
+
+        address attacker = address(uint160(0xBAD));
+        vm.deal(attacker, 1 ether);
+
+        // Park a balance in zRouter, as would exist mid-multicall.
+        uint256 planted = 1_000_000e18;
+        vm.prank(alice);
+        ERC20(token).transfer(address(ZROUTER), planted);
+
+        // Baseline: sweep() already lets anyone take it, with no allowlist involved.
+        uint256 snap = vm.snapshotState();
+        vm.prank(attacker);
+        ZROUTER.sweep(token, 0, planted, attacker);
+        assertEq(ERC20(token).balanceOf(attacker), planted, "sweep() already drains an idle balance");
+        vm.revertToState(snap);
+
+        // Now via the trusted sale: same reach, no more.
+        address owner = address(uint160(uint256(vm.load(address(ZROUTER), bytes32(uint256(_ownerSlot()))))));
+        vm.prank(owner);
+        ZROUTER.trust(address(SALE), true);
+
+        bytes memory inner = abi.encodeWithSelector(
+            SALE.swapExactIn.selector, key, planted, uint256(0), false, attacker, block.timestamp + 1
+        );
+        vm.prank(attacker);
+        ZROUTER.execute(address(SALE), 0, inner);
+        assertGt(attacker.balance, 1 ether, "sale route reaches the same idle balance");
+
+        // The conclusion that matters: neither path is reachable when zRouter is empty,
+        // which is the state it is designed to be in between transactions.
+        assertEq(ERC20(token).balanceOf(address(ZROUTER)), 0, "zRouter left empty either way");
     }
 
     /// Brute-force the owner slot rather than guessing at the storage layout.
