@@ -1006,6 +1006,7 @@ const CURVE_SALE_ABI = [
   // Same signature as ZAMM.swapExactIn — CURVE_SALE forwards to ZAMM and skims the creator fee.
   'function swapExactIn(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountIn, uint256 amountOutMin, bool zeroForOne, address to, uint256 deadline) payable returns (uint256 amountOut)',
   'function creatorFees(address token) view returns (address beneficiary, uint16 buyBps, uint16 sellBps, bool buyOnInput, bool sellOnInput)',
+  'function creatorVests(address token) view returns (uint128 total, uint128 claimed, uint40 start, uint40 cliff, uint40 duration)',
   // Custom errors. Without these fragments ethers can't decode a revert and every
   // failure surfaces as a bare "execution reverted" — which also silently killed
   // the Graduated() auto-recovery in curveBuy(), since it matches on the message
@@ -1036,7 +1037,10 @@ function curveLpIsPermanent(curve) {
 
 // Human-readable reasons this coin deviates from the standard template. Empty array
 // means it matches what the launcher produces.
-function curveParamWarnings(curve) {
+//
+// `vest` is the creatorVests entry and is optional -- callers that haven't read it
+// pass nothing and simply get the checks that curves() alone can answer.
+function curveParamWarnings(curve, vest) {
   const out = [];
   try {
     const feeBps = Number(curve.feeBps);
@@ -1046,8 +1050,37 @@ function curveParamWarnings(curve) {
     } else if (!CURVE_BURN_ADDRS.has(String(curve.lpRecipient).toLowerCase())) {
       out.push('LP tokens go to the creator on graduation, so the liquidity can be withdrawn');
     }
+    // Supply minted beyond cap + lpTokens is escrowed for the creator and unlocks on
+    // graduation, subject to whatever cliff and duration they chose. It is invisible
+    // in curves(), and it dilutes every buyer, so it belongs on the card.
+    if (vest) {
+      const total = BigInt(vest.total ?? vest[0] ?? 0);
+      if (total > 0n) {
+        const supply = BigInt(curve.cap) + BigInt(curve.lpTokens) + total;
+        const pct = supply > 0n ? Number((total * 10000n) / supply) / 100 : 0;
+        const cliff = Number(vest.cliff ?? vest[3] ?? 0);
+        const duration = Number(vest.duration ?? vest[4] ?? 0);
+        const when = duration === 0
+          ? (cliff === 0 ? 'unlocking in full at graduation' : `unlocking in full ${fmtDuration(cliff)} after graduation`)
+          : `vesting over ${fmtDuration(duration)}${cliff ? ` after a ${fmtDuration(cliff)} cliff` : ''}`;
+        out.push(`${pct.toFixed(1)}% of supply is allocated to the creator, ${when}`);
+      }
+    }
   } catch {}
   return out;
+}
+
+// Coarse duration for the vesting note -- "3 months" reads better than "7776000s".
+function fmtDuration(secs) {
+  if (!secs) return '0s';
+  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [name, size] of units) {
+    if (secs >= size) {
+      const n = Math.round(secs / size);
+      return `${n} ${name}${n === 1 ? '' : 's'}`;
+    }
+  }
+  return `${secs} seconds`;
 }
 
 // Custom-error name -> what actually went wrong, in the user's terms. Ethers gives
@@ -2992,6 +3025,9 @@ async function _galleryRenderFresh(gen) {
     const curveNameI = curveAddrs.length > 0 ? new ethers.Interface(['function name() view returns (string)', 'function symbol() view returns (string)']) : null;
     const curvePoolI = curveAddrs.length > 0 ? new ethers.Interface(ZAMM_POOLS_ABI) : null;
     let curveMcCalls = [];
+    // Per-token call count. Named so adding a read stays a one-line change instead of
+    // an off-by-one hunt through every curveMcRes[i * N + k] below.
+    const CURVE_MC_STRIDE = 6;
     for (const addr of curveAddrs) {
       curveMcCalls.push(
         { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('curves', [addr]) },
@@ -3001,7 +3037,10 @@ async function _galleryRenderFresh(gen) {
         // Post-graduation the curve's sold/virtualReserve freeze, so the card's mcap
         // (and the low-mcap filter and mcap sort that read it) would stay pinned to the
         // graduation price. Read the zAMM pool for the live number.
-        { target: ZAMM, allowFailure: true, callData: curvePoolI.encodeFunctionData('pools', [computePoolId(ZERO, addr, 0n, 0n, CURVE_HOOK_FEE)]) }
+        { target: ZAMM, allowFailure: true, callData: curvePoolI.encodeFunctionData('pools', [computePoolId(ZERO, addr, 0n, 0n, CURVE_HOOK_FEE)]) },
+        // A launch may mint more than cap + lpTokens and escrow the remainder as a
+        // creator allocation that unlocks at graduation. Nothing in curves() reveals it.
+        { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorVests', [addr]) }
       );
     }
 
@@ -3166,7 +3205,7 @@ async function _galleryRenderFresh(gen) {
     if (curveAddrs.length > 0 && curveMcRes.length > 0) {
       // Fetch all curve metadata in parallel
       const curveMetaPromises = curveAddrs.map((_, i) => {
-        const uriRes = curveMcRes[i * 5 + 1];
+        const uriRes = curveMcRes[i * CURVE_MC_STRIDE + 1];
         if (!uriRes || !uriRes.success) return Promise.resolve(null);
         try {
           const uri = curveUriI.decodeFunctionResult('contractURI', uriRes.returnData)[0];
@@ -3178,7 +3217,7 @@ async function _galleryRenderFresh(gen) {
 
       for (let i = 0; i < curveAddrs.length; i++) {
         const tokenAddr = curveAddrs[i];
-        const cRes = curveMcRes[i * 5];
+        const cRes = curveMcRes[i * CURVE_MC_STRIDE];
         if (!cRes.success) continue;
         let curve;
         try { curve = csIface.decodeFunctionResult('curves', cRes.returnData); } catch { continue; }
@@ -3186,8 +3225,8 @@ async function _galleryRenderFresh(gen) {
 
         const cMeta = curveMetadatas[i] || {};
         let cName, cSym;
-        try { cName = curveNameI.decodeFunctionResult('name', curveMcRes[i * 5 + 2].returnData)[0]; } catch { cName = cMeta.name || 'Unknown'; }
-        try { cSym = curveNameI.decodeFunctionResult('symbol', curveMcRes[i * 5 + 3].returnData)[0]; } catch { cSym = cMeta.symbol || '???'; }
+        try { cName = curveNameI.decodeFunctionResult('name', curveMcRes[i * CURVE_MC_STRIDE + 2].returnData)[0]; } catch { cName = cMeta.name || 'Unknown'; }
+        try { cSym = curveNameI.decodeFunctionResult('symbol', curveMcRes[i * CURVE_MC_STRIDE + 3].returnData)[0]; } catch { cSym = cMeta.symbol || '???'; }
 
         const sold = BigInt(curve.sold);
         const cap = BigInt(curve.cap);
@@ -3201,9 +3240,9 @@ async function _galleryRenderFresh(gen) {
         const remaining = virtualReserve - sold;
         let spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
         // Once seeded, price lives in the zAMM pool — the curve figures are frozen.
-        if (seeded && curveMcRes[i * 5 + 4]?.success) {
+        if (seeded && curveMcRes[i * CURVE_MC_STRIDE + 4]?.success) {
           try {
-            const pr = curvePoolI.decodeFunctionResult('pools', curveMcRes[i * 5 + 4].returnData);
+            const pr = curvePoolI.decodeFunctionResult('pools', curveMcRes[i * CURVE_MC_STRIDE + 4].returnData);
             const r0 = BigInt(pr[0]), r1 = BigInt(pr[1]);
             if (r0 > 0n && r1 > 0n) spotPrice = (r0 * (10n ** 18n)) / r1;
           } catch {}
@@ -3233,7 +3272,12 @@ async function _galleryRenderFresh(gen) {
 
         // Only claim permanent LP when this coin actually burns it, and surface any
         // other deviation from the standard template as a "!" badge on the card.
-        const cCurveWarnings = curveParamWarnings(curve);
+        let cVest = null;
+        try {
+          const vr = curveMcRes[i * CURVE_MC_STRIDE + 5];
+          if (vr?.success) cVest = csIface.decodeFunctionResult('creatorVests', vr.returnData);
+        } catch {}
+        const cCurveWarnings = curveParamWarnings(curve, cVest);
         const cCurveBadgeTitle = curveLpIsPermanent(curve)
           ? 'bonding curve · permanent LP'
           : 'bonding curve';
@@ -3604,6 +3648,10 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
   if (_connectedAddress) {
     mc3Calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
   }
+  // Appended last, after the optional balance, so the fixed indices above keep meaning
+  // what they say whether or not a wallet is connected.
+  const vestIdx = mc3Calls.length;
+  mc3Calls.push({ target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorVests', [tokenAddr]) });
 
   const mcRes = await withRPC(async rpc => {
     const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
@@ -3645,6 +3693,10 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     } catch {}
   }
   const tokenBalance = (_connectedAddress && mcRes[8]?.success) ? erc20I.decodeFunctionResult('balanceOf', mcRes[8].returnData)[0] : 0n;
+  let curveVest = null;
+  try {
+    if (mcRes[vestIdx]?.success) curveVest = csIface.decodeFunctionResult('creatorVests', mcRes[vestIdx].returnData);
+  } catch {}
 
   _curveEthUsd = ethUsd;
   _curveBalance = tokenBalance;
@@ -3720,7 +3772,7 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     </div>
 
     ${(() => {
-      const w = curveParamWarnings(curve);
+      const w = curveParamWarnings(curve, curveVest);
       return w.length ? `<div class="curve-param-notice"><strong>Launched with non-standard settings.</strong> This coin was configured directly rather than through the launcher, so it does not carry the usual terms:<ul>${w.map(x => `<li>${escText(x)}</li>`).join('')}</ul></div>` : '';
     })()}
 
