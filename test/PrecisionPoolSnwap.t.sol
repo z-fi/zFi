@@ -183,6 +183,59 @@ contract PrecisionPoolSnwapTest is Test {
         assertEq(user.balance - before, predicted, "ETH delivered to the recipient");
     }
 
+    /// @dev The PARTIAL-FILL settlement, driven by the LIVE router rather than a
+    /// mock executor. This is the production topology for the entry point: snwap
+    /// forwards the value, the factory clamps to what the band can take, and the
+    /// pool returns the remainder to the committed `refundTo`.
+    ///
+    /// Worth pinning here and not only against a stub, because the router
+    /// measures its own slippage at the recipient from the OUTPUT delta and is
+    /// indifferent to the input coming back - so a partial fill has to leave the
+    /// route consistent without the router knowing it happened.
+    function test_LiveRouterPartialFillClampsAndRefunds() public {
+        uint256 huge = 5_000 ether; // far past what the band can absorb
+        vm.deal(user, huge + 10 ether);
+
+        // The all-or-nothing settlement refuses the oversized leg outright.
+        vm.prank(user);
+        vm.expectRevert();
+        ISnwap(ZROUTER).snwap{value: huge}(
+            address(0), huge, user, USDC, 0, address(factory), _swapData(address(0), huge, user)
+        );
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(user);
+        uint256 ethBefore = user.balance;
+        // DELTAS, not absolutes. This suite runs against forked mainnet state,
+        // where the factory's CREATE address is a real account that already
+        // holds dust - so `balance == 0` is not a statement about this route.
+        uint256 factoryEthBefore = address(factory).balance;
+        uint256 factoryUsdcBefore = IERC20(USDC).balanceOf(address(factory));
+
+        vm.prank(user);
+        uint256 out = ISnwap(ZROUTER).snwap{value: huge}(
+            address(0),
+            huge,
+            user,
+            USDC,
+            0,
+            address(factory),
+            abi.encodeCall(PrecisionPoolFactory.executePrefundedSwapUpTo, (_route(address(0), huge, user)))
+        );
+
+        assertGt(out, 0, "partial fill produced no output");
+        assertEq(IERC20(USDC).balanceOf(user) - usdcBefore, out, "recipient got the filled side");
+
+        // The unconsumed ETH came back, so the round trip cost only the part
+        // that actually traded.
+        uint256 spent = ethBefore - user.balance;
+        assertLt(spent, huge, "the whole leg was consumed despite the clamp");
+        assertGt(spent, 0, "nothing was consumed at all");
+
+        // The factory retained nothing of this route's funding.
+        assertEq(address(factory).balance, factoryEthBefore, "factory kept ETH");
+        assertEq(IERC20(USDC).balanceOf(address(factory)), factoryUsdcBefore, "factory kept USDC");
+    }
+
     /// @dev The router's own guard, measured at the recipient, is what makes
     /// the pool safe to call without trusting it: an output that never arrives
     /// is caught one contract away.
