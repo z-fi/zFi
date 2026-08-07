@@ -869,8 +869,10 @@ async function wizOpen(){
         : (stop.days
             ? '<li><b>'+what+': locked until '+when(stop.days)+'</b> ('+stop.days+' days). No early exit at any price.</li>'
             : '<li><b>'+what+': withdrawable any time.</b></li>')
-          +'<li><b>'+eFmt(WZ.minEth)+' ETH: returned in full from '+when(WZ.ethDays)+'</b> ('
-          +WZ.ethDays+' days). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
+          /* "returned" was wrong: unbond credits the principal with _creditEth and
+             you pull it yourself with withdrawEthCredit. Nothing arrives on its own. */
+          +'<li><b>'+eFmt(WZ.minEth)+' ETH: yours to claim in full from '+when(WZ.ethDays)+'</b> ('
+          +WZ.ethDays+' days, then withdrawn on request). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
           +(stop.days?' \u2014 and the lock above outlasts this date.':'.')+'</li>';
 
       /* undefined = not looked up yet, so say "checking" rather than asserting a
