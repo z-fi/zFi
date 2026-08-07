@@ -2827,6 +2827,23 @@ body.modal-open { overflow: hidden; }
           .replace(/'/g, '&#039;');
       }
 
+      // escapeHtml is not enough inside onclick="f('...')": the browser HTML-decodes the
+      // attribute before JavaScript parses it, so an escaped quote (&#039;) turns back
+      // into a real one and closes the string. Escaping the ampersand first is what stops
+      // that, so this runs the JS escaping and then the HTML escaping over the result.
+      function escapeAttrJs(value) {
+        const js = String(value ?? '')
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/\r/g, '\\r')
+          .replace(/\n/g, '\\n');
+        return js
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
       // Create a safe <img> element via DOM API (prevents XSS from crafted URLs)
       function createSafeImg(url, alt, className) {
         const validScheme = /^(https?:|ipfs:|data:image\/)/i.test(url);
@@ -7312,7 +7329,7 @@ body.modal-open { overflow: hidden; }
             let daoBalance = '';
             if (sale.token.isCustom && saleBalances.has(sale.token.address)) {
               const balanceFormatted = parseFloat(ethers.formatUnits(saleBalances.get(sale.token.address), sale.token.decimals)).toFixed(2);
-              daoBalance = `<div style="font-size: 0.75rem; color: var(--fg-dim); margin-top: 0.25rem;">DAO Balance: ${balanceFormatted} ${sale.token.symbol}</div>`;
+              daoBalance = `<div style="font-size: 0.75rem; color: var(--fg-dim); margin-top: 0.25rem;">DAO Balance: ${balanceFormatted} ${escapeHtml(sale.token.symbol)}</div>`;
             }
 
             // Token contract link
@@ -7325,7 +7342,7 @@ body.modal-open { overflow: hidden; }
                       style="color: var(--fg-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;"
                       onmouseover="this.style.color='var(--fg)'; this.style.textDecoration='underline';"
                       onmouseout="this.style.color='var(--fg-dim)'; this.style.textDecoration='none';">
-                     <span>🔍</span> View ${sale.token.symbol} on Explorer
+                     <span>🔍</span> View ${escapeHtml(sale.token.symbol)} on Explorer
                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                        <polyline points="15 3 21 3 21 9"></polyline>
@@ -7344,7 +7361,7 @@ body.modal-open { overflow: hidden; }
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
                   <div>
                     <div style="font-size: 0.7rem; color: var(--fg-dim);">Price</div>
-                    <div style="font-size: 0.9rem; color: var(--fg);">${priceFormatted} ${sale.token.symbol}</div>
+                    <div style="font-size: 0.9rem; color: var(--fg);">${priceFormatted} ${escapeHtml(sale.token.symbol)}</div>
                   </div>
                   <div>
                     <div style="font-size: 0.7rem; color: var(--fg-dim);">Available</div>
@@ -7353,11 +7370,11 @@ body.modal-open { overflow: hidden; }
                 </div>
                 ${daoBalance}
                 ${tokenContractLink}
-                <button onclick="openPurchaseModal('${sale.token.address}', '${sale.token.symbol}', ${sale.token.decimals}, ${sale.isLoot})"
+                <button onclick="openPurchaseModal('${sale.token.address}', '${escapeAttrJs(sale.token.symbol)}', ${sale.token.decimals}, ${sale.isLoot})"
                         onmouseover="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--fg)';"
                         onmouseout="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)';"
                         style="width: 100%; padding: 0.75rem; background: var(--surface); border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.7rem; letter-spacing: 0.12em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600; min-height: 44px; margin-top: 0.75rem;">
-                  ${is1to1Upgrade ? 'Stake/Upgrade' : `Purchase ${tokenSymbol}`}
+                  ${is1to1Upgrade ? 'Stake/Upgrade' : `Purchase ${escapeHtml(tokenSymbol)}`}
                 </button>
               </div>
             `;
@@ -7418,7 +7435,7 @@ body.modal-open { overflow: hidden; }
                   </div>
                 </div>
                 <div style="font-size: 0.75rem; color: var(--fg); margin-bottom: 0.5rem;">
-                  Pay ${sale.token.symbol} → Receive ${tokenSymbol}
+                  Pay ${escapeHtml(sale.token.symbol)} → Receive ${escapeHtml(tokenSymbol)}
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
                   <div>
@@ -7431,7 +7448,7 @@ body.modal-open { overflow: hidden; }
                   </div>
                 </div>
                 <div style="font-size: 0.7rem; color: var(--fg-dim); margin-bottom: 0.5rem;">
-                  Ratio: ${tribAmtFormatted} ${sale.token.symbol} = ${forAmtFormatted} ${tokenSymbol}
+                  Ratio: ${tribAmtFormatted} ${escapeHtml(sale.token.symbol)} = ${forAmtFormatted} ${escapeHtml(tokenSymbol)}
                 </div>
                 ${(() => {
                   // Deadline display with countdown
@@ -7454,11 +7471,11 @@ body.modal-open { overflow: hidden; }
                   return '<div style="font-size: 0.7rem; color: var(--green); margin-bottom: 0.5rem;">⏳ Ends ' + dateStr + ' ' + timeStr + ' (' + countdown + ' left)</div>';
                 })()}
                 ${lpConfigHTML}
-                <button onclick="openDaicoPurchaseModal('${sale.token.address}', '${sale.token.symbol}', ${sale.token.decimals}, ${sale.isLoot}, '${sale.tribAmt}', '${sale.forAmt}', ${sale.lpConfig ? sale.lpConfig.lpBps : 0})"
+                <button onclick="openDaicoPurchaseModal('${sale.token.address}', '${escapeAttrJs(sale.token.symbol)}', ${sale.token.decimals}, ${sale.isLoot}, '${sale.tribAmt}', '${sale.forAmt}', ${sale.lpConfig ? sale.lpConfig.lpBps : 0})"
                         onmouseover="this.style.background='var(--status-success)'; this.style.borderColor='var(--green)';"
                         onmouseout="this.style.background='var(--status-success)'; this.style.borderColor='var(--border-muted)';"
                         style="width: 100%; padding: 0.75rem; background: var(--status-success); border: 1px solid var(--green); color: var(--fg); font-size: 0.7rem; letter-spacing: 0.12em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600; min-height: 44px; margin-top: 0.75rem;">
-                  Purchase ${tokenSymbol} via DAICO
+                  Purchase ${escapeHtml(tokenSymbol)} via DAICO
                 </button>
               </div>
             `;
@@ -7937,7 +7954,7 @@ body.modal-open { overflow: hidden; }
             <div id="customTokenSaleHint" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem; background: var(--surface); border-left: 3px solid var(--border); font-size: 0.85rem; color: var(--fg); line-height: 1.5;">
               <strong style="color: var(--fg);">Sale Preview:</strong> <span id="customTokenSaleHintText"></span>
             </div>
-            <button type="button" onclick="populateSaleProposalFromToggle('${symbol}', '${address}', ${decimals})"
+            <button type="button" onclick="populateSaleProposalFromToggle('${escapeAttrJs(symbol)}', '${address}', ${decimals})"
                     onmouseover="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--fg)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px var(--shadow)';"
                     onmouseout="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
                     style="width: 100%; padding: 0.75rem; background: var(--surface-hover); border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
@@ -8424,7 +8441,7 @@ body.modal-open { overflow: hidden; }
                      style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.95rem;" />
             </div>
           </div>
-          <button onclick="populateMintProposal('${tokenType}', '${tokenSymbol}', '${tokenAddress}')"
+          <button onclick="populateMintProposal('${tokenType}', '${escapeAttrJs(tokenSymbol)}', '${tokenAddress}')"
                   onmouseover="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--fg)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px var(--shadow)';"
                   onmouseout="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
                   style="width: 100%; padding: 0.75rem; background: var(--surface-hover); border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
@@ -9283,12 +9300,11 @@ body.modal-open { overflow: hidden; }
               && sale.forTkn.toLowerCase() === sharesAddress.toLowerCase() && !isExpired;
           });
           if (liveSales.length > 0) {
-            // The allowance is the same value whichever sale asked for it, so it is read
-            // once instead of per sale. Counting it once per sale is preserved rather than
-            // corrected here: it is one shared pool, so summing it per sale looks like it
-            // overstates the figure, but that is a behaviour change and not this pass.
-            const allowance = await sharesContract.allowance(daoAddress, DAICO_ADDRESS).catch(() => 0n);
-            daicoSharesAvailable += allowance * BigInt(liveSales.length);
+            // One ERC20 allowance is what the DAICO may pull from the DAO in total, not
+            // per sale — a DAO selling shares for both ETH and DAI has one pool, not two.
+            // This used to add it once per matching sale, inflating the ceiling the
+            // threshold input is capped to.
+            daicoSharesAvailable = await sharesContract.allowance(daoAddress, DAICO_ADDRESS).catch(() => 0n);
           }
         } catch (e) {
           logger.error('Error checking DAICO sales:', e);
@@ -10415,7 +10431,7 @@ body.modal-open { overflow: hidden; }
             </div>
             <div id="tapRatePreview" style="margin-top: 0.5rem; display: none;"></div>
           </div>
-          <button onclick="populateTapRateProposal('${daoAddress}', ${tribTknDecimals}, '${tribTknSymbol}')"
+          <button onclick="populateTapRateProposal('${daoAddress}', ${tribTknDecimals}, '${escapeAttrJs(tribTknSymbol)}')"
                   onmouseover="this.style.background='var(--warning-border)'; this.style.borderColor='var(--amber)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px var(--warning-border)';"
                   onmouseout="this.style.background='var(--status-warning)'; this.style.borderColor='var(--warning-border-dark)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
                   style="width: 100%; padding: 0.75rem; background: var(--status-warning); border: 1px solid var(--warning-border-dark); color: var(--fg); font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
@@ -10521,7 +10537,7 @@ body.modal-open { overflow: hidden; }
 
           <div style="margin-bottom: 0.75rem;">
             <label style="display: block; font-size: 0.75rem; color: var(--fg-dim); margin-bottom: 0.35rem;">Action</label>
-            <select id="saleActionSelect" onchange="updateSaleActionUI(${tribTknDecimals}, '${tribTknSymbol}', '${tokenSymbol}', ${tribAmtFormatted}, ${forAmtFormatted})"
+            <select id="saleActionSelect" onchange="updateSaleActionUI(${tribTknDecimals}, '${escapeAttrJs(tribTknSymbol)}', '${escapeAttrJs(tokenSymbol)}', ${tribAmtFormatted}, ${forAmtFormatted})"
                     style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid var(--green); color: var(--fg); font-size: 0.95rem;">
               <option value="cancel">Cancel Sale (disable purchasing)</option>
               <option value="adjust">Adjust Sale Terms</option>
@@ -10533,13 +10549,13 @@ body.modal-open { overflow: hidden; }
               <div>
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-dim); margin-bottom: 0.35rem;">Tribute Amount (${tribTknSymbol})</label>
                 <input type="text" id="saleTribAmtInput" placeholder="${tribAmtFormatted}" value="${tribAmtFormatted}"
-                       oninput="updateSalePreview(${tribTknDecimals}, '${tribTknSymbol}', '${tokenSymbol}')"
+                       oninput="updateSalePreview(${tribTknDecimals}, '${escapeAttrJs(tribTknSymbol)}', '${escapeAttrJs(tokenSymbol)}')"
                        style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid var(--green); color: var(--fg); font-size: 0.95rem;" />
               </div>
               <div>
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-dim); margin-bottom: 0.35rem;">For Amount (${tokenSymbol})</label>
                 <input type="text" id="saleForAmtInput" placeholder="${forAmtFormatted}" value="${forAmtFormatted}"
-                       oninput="updateSalePreview(${tribTknDecimals}, '${tribTknSymbol}', '${tokenSymbol}')"
+                       oninput="updateSalePreview(${tribTknDecimals}, '${escapeAttrJs(tribTknSymbol)}', '${escapeAttrJs(tokenSymbol)}')"
                        style="width: 100%; padding: 0.6rem; background: transparent; border: 1px solid var(--green); color: var(--fg); font-size: 0.95rem;" />
               </div>
             </div>
@@ -10558,7 +10574,7 @@ body.modal-open { overflow: hidden; }
             <strong>Warning:</strong> Cancelling the sale will prevent any further purchases. The DAO can create a new sale later via another proposal.
           </div>
 
-          <button onclick="populateSaleConfigProposal('${tribTknAddress}', '${tribTknSymbol}', ${tribTknDecimals}, '${forTkn}', ${isLoot}, '${tokenSymbol}')"
+          <button onclick="populateSaleConfigProposal('${tribTknAddress}', '${escapeAttrJs(tribTknSymbol)}', ${tribTknDecimals}, '${forTkn}', ${isLoot}, '${escapeAttrJs(tokenSymbol)}')"
                   onmouseover="this.style.background='var(--status-success)'; this.style.borderColor='var(--green)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px var(--border-muted)';"
                   onmouseout="this.style.background='var(--status-success)'; this.style.borderColor='var(--border-muted)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
                   style="width: 100%; padding: 0.75rem; background: var(--status-success); border: 1px solid var(--green); color: var(--fg); font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
@@ -10818,7 +10834,7 @@ body.modal-open { overflow: hidden; }
             <strong>Important:</strong> After this proposal passes, you must also grant DAICO minting permission for your shares/loot token via a separate setAuth proposal.
           </div>
 
-          <button onclick="populateNewDaicoSaleProposal('${sharesAddr}', '${lootAddr}', '${daoSymbol}')"
+          <button onclick="populateNewDaicoSaleProposal('${sharesAddr}', '${lootAddr}', '${escapeAttrJs(daoSymbol)}')"
                   onmouseover="this.style.background='var(--status-success)'; this.style.borderColor='var(--green)'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px var(--border-muted)';"
                   onmouseout="this.style.background='var(--status-success)'; this.style.borderColor='var(--border-muted)'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
                   style="width: 100%; padding: 0.75rem; background: var(--status-success); border: 1px solid var(--green); color: var(--fg); font-size: 0.75rem; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease; font-weight: 600;">
@@ -11859,7 +11875,7 @@ body.modal-open { overflow: hidden; }
                     <div style="font-size: 0.75rem; color: var(--fg-dim);">Available: ${formattedAmount}</div>
                   </div>
                 </div>
-                <button onclick="openSpendAllowanceModal('${a.address}', '${a.symbol}', ${a.decimals}, '${a.allowance.toString()}')"
+                <button onclick="openSpendAllowanceModal('${a.address}', '${escapeAttrJs(a.symbol)}', ${a.decimals}, '${a.allowance.toString()}')"
                         style="padding: 0.5rem 1rem; background: var(--surface-hover); border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease;"
                         onmouseover="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--fg)';"
                         onmouseout="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)';">
@@ -12393,7 +12409,7 @@ body.modal-open { overflow: hidden; }
           // Render attributes inline
           let attributesHTML = '';
           if (metadata.attributes && Array.isArray(metadata.attributes) && metadata.attributes.length > 0) {
-            attributesHTML = `<div class="badge-attributes">${metadata.attributes.map(attr => `<div class="badge-attribute"><span class="badge-attribute-label">${attr.trait_type || attr.type || 'Attribute'}</span><span class="badge-attribute-value">${attr.value}</span></div>`).join('')}</div>`;
+            attributesHTML = `<div class="badge-attributes">${metadata.attributes.map(attr => `<div class="badge-attribute"><span class="badge-attribute-label">${escapeHtml(attr.trait_type || attr.type || 'Attribute')}</span><span class="badge-attribute-value">${escapeHtml(attr.value)}</span></div>`).join('')}</div>`;
           }
 
           // OpenSea link (network-aware)
@@ -12405,7 +12421,7 @@ body.modal-open { overflow: hidden; }
               ${imageHTML}
             </div>
             <div class="badge-info">
-              <div class="badge-name">${metadata.name || `Badge #${seatId}`}</div>
+              <div class="badge-name">${escapeHtml(metadata.name || `Badge #${seatId}`)}</div>
               ${metadata.description ? `<div class="badge-description">${escapeHtml(metadata.description)}</div>` : ''}
               ${attributesHTML}
               <div class="badge-links">
@@ -13722,8 +13738,8 @@ body.modal-open { overflow: hidden; }
             <div class="nft-modal-attributes">
               ${metadata.attributes.map(attr => `
                 <div class="nft-modal-attribute">
-                  <div class="nft-modal-attribute-label">${attr.trait_type || attr.type || 'Attribute'}</div>
-                  <div class="nft-modal-attribute-value">${attr.value}</div>
+                  <div class="nft-modal-attribute-label">${escapeHtml(attr.trait_type || attr.type || 'Attribute')}</div>
+                  <div class="nft-modal-attribute-value">${escapeHtml(attr.value)}</div>
                 </div>
               `).join('')}
             </div>
@@ -13769,7 +13785,7 @@ body.modal-open { overflow: hidden; }
 
         modalBody.innerHTML = `
           ${imageHTML}
-          <div class="nft-modal-title">${metadata.name || title}</div>
+          <div class="nft-modal-title">${escapeHtml(metadata.name || title)}</div>
           ${metadata.description ? `<div class="nft-modal-description">${escapeHtml(metadata.description)}</div>` : ''}
           ${attributesHTML}
           ${futarchyClaimHTML}
@@ -14226,7 +14242,7 @@ body.modal-open { overflow: hidden; }
                       VOTE RECEIPT
                     </div>
                     <div style="font-size: 0.95rem; color: var(--fg); margin-bottom: 0.5rem;">
-                      ${metadata.name || 'Vote Receipt'}
+                      ${escapeHtml(metadata.name || 'Vote Receipt')}
                     </div>
                     <div style="font-size: 0.85rem; color: var(--fg); margin-bottom: 0.5rem;">
                       Proposal #${item.proposalId.toString().slice(0, 8)}...
