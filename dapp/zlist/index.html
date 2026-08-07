@@ -33,6 +33,9 @@
   .bar a{color:inherit;text-underline-offset:3px}
   .bar b{color:var(--fg);font-weight:500}
   #frame{display:block;width:100%;height:calc(100dvh - 108px);border:0;border-top:1px solid var(--border);background:#09090b}
+  /* Same trap as #wiz: `display:block` beats the UA [hidden] rule, so the frame
+     painted as an empty dark slab under the boot spinner until srcdoc landed. */
+  #frame[hidden]{display:none}
   #warn{margin:auto;max-width:520px;border:1px solid var(--border);border-radius:10px;padding:22px;
         background:var(--bg);color:var(--fg);font:14px/1.55 inherit}
   #warn::backdrop{background:rgba(0,0,0,.6)}
@@ -48,9 +51,15 @@
   /* Flex column with only the body scrolling: the plan block grows as options
      are chosen, and a plain dialog scrolled the title and the Bond button off
      with it. */
+  /* display MUST be scoped to [open]. The UA stylesheet hides a closed dialog with
+     dialog:not([open]){display:none}, and any unconditional author `display` beats
+     it - so close() dropped the open attribute and left the top layer while the
+     element stayed painted exactly where it was. Cancel, Escape, the close control
+     and the backdrop all ran and all looked like they did nothing. */
   #wiz{margin:auto;max-width:560px;max-height:min(90vh,940px);border:1px solid var(--border);
-       border-radius:12px;padding:0;display:flex;flex-direction:column;overflow:hidden;
+       border-radius:12px;padding:0;overflow:hidden;
        background:var(--bg);color:var(--fg);font:14px/1.5 Helvetica,Arial,sans-serif}
+  #wiz[open]{display:flex;flex-direction:column}
   #wiz::backdrop{background:rgba(0,0,0,.66)}
   #wiz h3{margin:0;padding:18px 20px 14px;font-size:17px;border-bottom:1px solid var(--border);flex:0 0 auto;
        display:flex;align-items:center;gap:12px}
