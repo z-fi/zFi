@@ -151,6 +151,31 @@
   .wtiers span:last-child{color:#d9b34a}
   .weth{margin:12px 0 0;font-size:12px;color:var(--fg-muted)}
   .weth.wshort{color:#e0736d}
+  /* STEPS. Collapsed while deciding, a live tracker once Bond is pressed. */
+  .wsteps{font-size:12.5px}
+  .wsteps summary{cursor:pointer;color:var(--fg-muted);font-size:11px;letter-spacing:.08em;
+       text-transform:uppercase;list-style:none;padding:2px 0}
+  .wsteps summary::-webkit-details-marker{display:none}
+  .wsteps summary::before{content:"\25b8 ";display:inline-block;transition:transform .15s}
+  .wsteps[open] summary::before{transform:rotate(90deg)}
+  .wsteps summary:hover{color:var(--fg)}
+  .wsteps ol{margin:8px 0 0;padding:0 0 0 18px;display:grid;gap:5px;color:var(--fg-muted)}
+  .wsteps.wrun{border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:14px}
+  .wsteps.wrun .wcommit{margin:0}
+  .wsteps.wrun ol{list-style:none;padding:0;gap:8px}
+  .wsteps.wrun li{display:flex;gap:9px;align-items:flex-start;line-height:1.4}
+  /* The marker column: an empty ring is pending, a filled pulse is now, a tick is
+     done. Shape carries the state as well as colour. */
+  .wdot{flex:0 0 15px;width:15px;height:15px;margin-top:1px;border-radius:50%;
+       border:1px solid var(--border);display:grid;place-items:center;font-size:10px;line-height:1}
+  .wsteps.wrun li.now{color:var(--fg)}
+  .wsteps.wrun li.now .wdot{border-color:var(--fg);background:var(--fg);animation:wpulse 1.4s ease-in-out infinite}
+  .wsteps.wrun li.done{color:var(--fg-muted)}
+  .wsteps.wrun li.done .wdot{border-color:#5c9f5c;color:#5c9f5c}
+  .wsteps.wrun li.fail{color:#e0736d}
+  .wsteps.wrun li.fail .wdot{border-color:#e0736d;color:#e0736d}
+  .wsnote{margin:11px 0 0;font-size:12px;color:var(--fg-muted)}
+  @media(prefers-reduced-motion:reduce){.wsteps.wrun li.now .wdot{animation:none}}
   .wart{position:relative;display:block;width:100%}
   /* the receipt inverts the underlying art; this is that same inversion */
   .wart.winv{filter:invert(1)}
@@ -583,6 +608,43 @@ const wWait=async(p,hash,step,total)=>{
 };
 
 let WZ={}, wizWaiting=false, FRAME=null, wizMode='bond';
+/* True from the moment Bond is pressed. plan() must not overwrite a live progress
+   tracker with its collapsed summary - checkAppr can still resolve mid-flight. */
+let WZBUSY=false;
+/* ONE renderer, three states, so the list you agreed to is literally the list you
+   watch execute:
+     idle  - collapsed behind a <summary>, out of the way of the decision
+     run   - open, with the current step marked and the finished ones ticked
+     done  - open, everything ticked
+   A wallet that batches gets a single grouped item instead of a numbered walk,
+   because that is genuinely what it will ask of you: one signature. Hiding the
+   difference would misreport the number of prompts about to appear. */
+function wzSteps(steps,cur,phase,note){
+  const el=$('wzsteps'); if(!el||!steps||!steps.length)return;
+  const batched=!!window._walletSendCalls;
+  const n=steps.length;
+  const head=batched
+    ? 'One signature'+(n>1?' \u2014 your wallet batches all '+n:'')
+    : (n===1?'One confirmation':n+' confirmations');
+  if(phase==='idle'){
+    el.innerHTML='<details class="wsteps"><summary>'+head
+      +'</summary><ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol></details>';
+    return;
+  }
+  /* Batched runs are one prompt, so a per-call walk would be fiction: the whole
+     group advances together. */
+  const state=i=> batched
+      ? (phase==='done'?'done':phase==='fail'?'fail':'now')
+      : (phase==='fail'&&i===cur?'fail':i<cur?'done':i===cur?'now':'');
+  const mark=st=>st==='done'?'\u2713':st==='fail'?'\u00d7':st==='now'?'':'';
+  el.innerHTML='<div class="wsteps wrun"><p class="wcommit">'+head+'</p><ol>'
+    +steps.map((x,i)=>{const st=state(i);
+      return '<li class="'+st+'"><span class="wdot">'+mark(st)+'</span><span>'+x+'</span></li>';}).join('')
+    +'</ol>'+(note?'<p class="wsnote">'+note+'</p>':'')+'</div>';
+  /* Last element of a scrolling body, so without this the tracker does its whole
+     job below the fold - the one moment the reader needs to see it. */
+  try{ el.scrollIntoView({block:'nearest'}) }catch(e){}
+}
 /* The account the open wizard was built for, so onConnect can tell a real account
    switch from the same wallet re-announcing itself. */
 let WIZACCT=window._connectedAddress||'';
@@ -799,13 +861,14 @@ async function wizOpen(){
         it names sits at 18% of a cubed track - a tick that lies is worse than no
         tick, and the permanent stop already states the floor where it applies. */
      +'<div class="wticks"><span>0</span><span>'+wFmt(WZ.zBal)+'</span></div>'
-     +'<p class="whint">You hold '+wFmt(WZ.zBal)+' zOrg. This is the only thing that buys support.</p></div>'
+     +'<p class="whint">Only zOrg buys support.</p></div>'
      +'<div class="wrow"><div class="wlab"><label for="wztier">How long to commit it</label>'
      +'<span class="wval" id="wztlab"></span></div>'
      +'<input type="range" id="wztier" min="0" max="'+(stops.length-1)+'" step="1" value="'+dflt+'">'
      +'<div class="wticks wtiers">'+stops.map(s=>'<span>'+(s.eternal?'forever':s.days?s.days+'d':'none')+'</span>').join('')+'</div>'
      +'<p class="whint" id="wzthint"></p></div>'
-     +'<div class="wplan" id="wzplan"></div>';
+     +'<div class="wplan" id="wzplan"></div>'
+     +'<div id="wzsteps"></div>';
     /* id -> is the governor already approved for it. Cached because the field is
        re-read on every keystroke and this must not become a read per character. */
     const APPRC={};
@@ -845,7 +908,7 @@ async function wizOpen(){
               +'-day lock forever. This is the last stop for a reason: made permanent from '
               +'<em>no lock</em> the rate would be frozen at 1.00\u00d7 with no way to raise it.')
         : stop.days
-            ? 'No early exit at any price until '+when(stop.days)+'.'
+            ? 'No early exit at any price. Redeemable in full afterwards.'
             : 'Withdrawable whenever you like, at the weakest rate.';
 
       /* --- the preview ---------------------------------------------------- */
@@ -857,54 +920,54 @@ async function wizOpen(){
         +'<div><dt>Directs</dt><dd><b>'+(ok?wFmt(eff):'\u2014')+'</b> now</dd></div>'
         +'<div><dt>Rises to</dt><dd><b>'+(ok?wFmt(eff*2n):'\u2014')+'</b>'
           +(WZ.halfDays?' \u00b7 half of the way in '+Math.round(WZ.halfDays)+' days':'')+'</dd></div>'
-        +'<div><dt>zOrgz</dt><dd>'+(hasId?'#'+id:'not chosen yet')+'</dd></div>'
         +'<div><dt>Redeemable</dt><dd>'+(et&&!etShort?'<b>never</b>':stop.days?'from '+when(stop.days):'any time')+'</dd></div>'
         +'</dl>';
 
       /* --- what it costs -------------------------------------------------- */
+      /* Two lines, and neither restates a date the drawer above already shows.
+         This block used to repeat the unlock date a third time, re-derive the
+         support figures the preview had just given, and carry the ETH deposit
+         both as a bullet and as its own paragraph. */
       const what=(ok&&amtW>0n?wFmt(amtW)+' zOrg':'your zOrg')+(hasId?' and zOrgz #'+id:' and the zOrgz');
       const locks = et&&!etShort
-        ? '<li><b>'+what+': never returned.</b> Eternal bonds cannot be redeemed.</li>'
-          +'<li><b>'+eFmt(WZ.minEth)+' ETH: given to the DAO treasury</b>, not returned.</li>'
+        ? '<li><b>'+what+'</b> \u2014 never returned</li>'
+          +'<li><b>'+eFmt(WZ.minEth)+' ETH</b> \u2014 given to the treasury, not returned</li>'
         : (stop.days
-            ? '<li><b>'+what+': locked until '+when(stop.days)+'</b> ('+stop.days+' days). No early exit at any price.</li>'
-            : '<li><b>'+what+': withdrawable any time.</b></li>')
+            ? '<li><b>'+what+'</b> \u2014 no exit before '+when(stop.days)+'</li>'
+            : '<li><b>'+what+'</b> \u2014 withdrawable any time</li>')
           /* "returned" was wrong: unbond credits the principal with _creditEth and
              you pull it yourself with withdrawEthCredit. Nothing arrives on its own. */
-          +'<li><b>'+eFmt(WZ.minEth)+' ETH: yours to claim in full from '+when(WZ.ethDays)+'</b> ('
-          +WZ.ethDays+' days, then withdrawn on request). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
-          +(stop.days?' \u2014 and the lock above outlasts this date.':'.')+'</li>';
+          +'<li><b>'+eFmt(WZ.minEth)+' ETH</b> \u2014 claimable from '+when(WZ.ethDays)
+          +', or '+(WZ.taxBps/100)+'% forfeit if you leave sooner</li>';
 
-      /* undefined = not looked up yet, so say "checking" rather than asserting a
+      /* The step list is the SAME list wizRun executes, so it is built once here
+         and rendered by one function in two states: collapsed while you are still
+         deciding, and a live tracker once you press Bond. It used to be four
+         always-open lines of wallet mechanics sitting between the reader and the
+         Bond button.
+         undefined = not looked up yet, so say "checking" rather than asserting a
          confirmation the wallet may never ask for. */
       const nftOk=hasId?APPRC[id]:undefined;
       const zOk=ok&&amtW>0n&&WZ.alw!==null&&WZ.alw>=amtW;
       const steps=[];
       if(nftOk!==true) steps.push('Approve the zOrgz for escrow'+(nftOk===undefined?' (checking\u2026)':''));
       if(!zOk) steps.push('Approve '+(ok?wFmt(amtW):'0')+' zOrg');
-      steps.push('Bond at '+rate+'\u00d7'+(stop.days?' for '+stop.days+' days':', no lock')
-        +' with '+eFmt(WZ.minEth)+' ETH');
-      if(et&&!etShort) steps.push('Eternalize: permanent, keeps the '+rate+'\u00d7 rate');
+      steps.push('Bond at '+rate+'\u00d7'+(stop.days?' for '+stop.days+' days':', no lock'));
+      if(et&&!etShort) steps.push('Make it permanent');
+      WZ.steps=steps;
+      if(!WZBUSY) wzSteps(steps,-1,'idle');
 
-      /* The ETH deposit is a fixed cost, so it is stated once as a cost rather
-         than offered as a range. Dragging it would be theatre: capacity is
+      /* The ETH deposit is a fixed cost, so it is stated once in the list above
+         rather than offered as a range. Dragging it would be theatre: capacity is
          bondedWeight x boostBps and loyalty accrues on bondedWeight, so every
          wei above the minimum buys no support and no dividend - it is refundable
          at maturity, taxed on an early exit, and donated outright if the bond is
-         made permanent. */
+         made permanent. The balance only earns a line when it is short. */
       const shortEth = WZ.ethBal!==null && WZ.ethBal < WZ.minEth+GAS_BUFFER;
       $('wzplan').innerHTML=
-         (ok&&amtW>0n?'<p class="wgain">Directs <b>'+wFmt(eff)+'</b> of support'
-          +(stop.boost>10000?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)
-          +'</b> as conviction accrues.</p>':'')
-        +'<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
-        +'<p class="weth'+(shortEth?' wshort':'')+'">'+eFmt(WZ.minEth)+' ETH deposit \u00b7 the protocol minimum, and the whole of it'
-          +(WZ.ethBal!==null
-            ? ' \u2014 you hold '+eFmt(WZ.ethBal)+' ETH'+(shortEth?', not enough to cover it and gas':'')
-            : '')+'</p>'
-        +'<p class="wcommit">'+(window._walletSendCalls||steps.length===1
-            ?'One confirmation':steps.length+' confirmations')+'</p>'
-        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>';
+         '<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
+        +(shortEth?'<p class="weth wshort">You hold '+eFmt(WZ.ethBal)
+            +' ETH \u2014 not enough for the deposit and gas.</p>':'');
 
       /* Say what is missing instead of offering an action that cannot work. */
       $('wizgo').disabled = !hasId || !ok || amtW===0n || amtW>WZ.zBal || etShort || shortEth;
@@ -1018,7 +1081,12 @@ async function wizOpen(){
   }catch(e){ body.innerHTML='<p class="whint">'+(e.message||'Could not read the chain.')+'</p>'; }
 }
 async function wizRun(){
-  const go=$('wizgo'); go.disabled=true;
+  const go=$('wizgo');
+  go.disabled=true; WZBUSY=true;
+  /* The form is the record of what you agreed to; freeze it rather than let a
+     drawer move under a transaction already in flight. */
+  ['wzid','wzamt','wzamtr','wztier','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=true});
+  let steps=(WZ.steps||[]).slice(), cur=0;
   try{
     const id=$('wzid').value.trim(), amt=wUnits($('wzamt').value);
     if(id==='__other')throw Error('Type the zOrgz id you want to bond.');
@@ -1031,47 +1099,65 @@ async function wizRun(){
     const tier=stop.tier;
     if(stop.eternal&&amt<ETERNAL_MIN)
       throw Error('Permanent needs at least '+wFmt(ETERNAL_MIN)+' zOrg.');
+
+    /* Each call carries the label it will be shown under, so the tracker cannot
+       drift from what is actually being sent. */
     const calls=[];
     const appr=await wRead(WZ.zorgz,SELS.getApproved+w32(id)).catch(()=>null);
     if(!appr || '0x'+appr.slice(26).toLowerCase()!==GOV.toLowerCase())
-      calls.push({to:WZ.zorgz,data:SELS.approve+wAddr(GOV)+w32(id),value:'0x0'});
+      calls.push({to:WZ.zorgz,data:SELS.approve+wAddr(GOV)+w32(id),value:'0x0',
+                  label:'Approve the zOrgz for escrow'});
     const alw=await wRead(WZ.shares,SELS.allowance+wAddr(WZ.me)+wAddr(GOV)).catch(()=>null);
     if(!alw || wWord(alw,0)<amt)
-      calls.push({to:WZ.shares,data:SELS.approve+wAddr(GOV)+w32(amt),value:'0x0'});
-    calls.push({to:GOV,data:SELS.bondLock+w32(id)+w32(amt)+w32(tier),value:'0x'+WZ.minEth.toString(16)});
+      calls.push({to:WZ.shares,data:SELS.approve+wAddr(GOV)+w32(amt),value:'0x0',
+                  label:'Approve '+wFmt(amt)+' zOrg'});
+    calls.push({to:GOV,data:SELS.bondLock+w32(id)+w32(amt)+w32(tier),
+                value:'0x'+WZ.minEth.toString(16),
+                label:'Bond at '+(stop.boost/10000).toFixed(2)+'\u00d7'
+                      +(stop.days?' for '+stop.days+' days':', no lock')});
     if(stop.eternal)
-      calls.push({to:GOV,data:SELS.eternal+w32(id),value:'0x0'});
+      calls.push({to:GOV,data:SELS.eternal+w32(id),value:'0x0',label:'Make it permanent'});
+    /* The approval probes above are the truth; the collapsed summary was only an
+       estimate, so re-render from what is really being sent. */
+    steps=calls.map(c=>c.label);
+    const send=c=>({to:c.to,data:c.data,value:c.value});
 
     const p=rpcProvider();
     if(window._walletSendCalls){
-      $('wstat').textContent='Confirm once in your wallet…';
+      wzSteps(steps,0,'run','Confirm once in your wallet.');
+      $('wstat').textContent='';
       await p.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',
-        from:WZ.me, atomicRequired:true, calls}]});
-      $('wstat').textContent='Submitted. Once it confirms, use receipt #'+id+' to place your support.';
+        from:WZ.me, atomicRequired:true, calls:calls.map(send)}]});
+      wzSteps(steps,steps.length,'done','Submitted as one batch.');
+      $('wstat').textContent='Once it confirms, use receipt #'+id+' to place your support.';
     }else{
-      for(let i=0;i<calls.length;i++){
-        $('wstat').textContent='Confirm '+(i+1)+' of '+calls.length+' in your wallet…';
-        const hash=await p.request({method:'eth_sendTransaction',params:[{from:WZ.me,...calls[i]}]});
+      for(cur=0;cur<calls.length;cur++){
+        wzSteps(steps,cur,'run','Confirm in your wallet\u2026');
+        const hash=await p.request({method:'eth_sendTransaction',params:[{from:WZ.me,...send(calls[cur])}]});
         /* Every step here depends on the one before it - bondZorgz needs both
            approvals mined, eternalize needs the receipt that bondZorgz mints.
            Firing them back to back asked the wallet to simulate each against a
            state that did not exist yet, so the wallet either refused to sign or
            signed a transaction that reverted on arrival. Wait for each. */
-        if(i<calls.length-1){
-          $('wstat').textContent='Step '+(i+1)+' of '+calls.length+' sent. Waiting for it to confirm…';
-          await wWait(p,hash,i+1,calls.length);
+        if(cur<calls.length-1){
+          wzSteps(steps,cur,'run','Waiting for it to confirm\u2026');
+          await wWait(p,hash,cur+1,calls.length);
         }
       }
-      /* The first N-1 are already confirmed by this point - only the last is
-         still in flight, and saying "all N submitted" hid that. */
-      $('wstat').textContent='All '+calls.length+' sent. Once the last one confirms, use receipt #'
-        +id+' to place your support.';
+      wzSteps(steps,steps.length,'done');
+      $('wstat').textContent='Once the last one confirms, use receipt #'+id+' to place your support.';
     }
     /* Terminal: the bond is placed. Leaving Bond live invited a second one,
        which reverts BondAlreadyExists after a wallet round trip. */
     go.disabled=true; $('wizcancel').textContent='Close';
     return;
-  }catch(e){ $('wstat').textContent=e.message||'Cancelled.'; }
+  }catch(e){
+    wzSteps(steps,cur,'fail');
+    $('wstat').textContent=e.message||'Cancelled.';
+  }
+  /* Only on failure: a placed bond must stay frozen. */
+  WZBUSY=false;
+  ['wzid','wzamt','wzamtr','wztier','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=false});
   go.disabled=false;
 }
 /* ---------------------------------------------------------------------------
