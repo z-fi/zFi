@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>DAO</title>
+<!-- Every visit reads chain state within a second: the deep link fetches its DAO
+     and the gallery its list, both through the first of these RPCs. -->
+<link rel="preconnect" href="https://ethereum.publicnode.com" crossorigin>
+<link rel="preconnect" href="https://mainnet.gateway.tenderly.co" crossorigin>
+<link rel="dns-prefetch" href="https://eth.drpc.org">
+<link rel="preload" href="../vendor/ethers.min.js" as="script">
 <link rel="stylesheet" href="../theme.css">
 <link rel="stylesheet" href="../wallet.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
@@ -2764,7 +2770,9 @@ body.modal-open { overflow: hidden; }
 
 
     <script src="../vendor/ethers.min.js"></script>
-    <script src="../vendor/walletconnect.min.js"></script>
+    <!-- WalletConnect (635KB) is fetched by wallet.js when the wallet picker opens
+         or a remembered WC session reconnects — see ensureWalletConnect(). It used
+         to block here on every visit, including the ones that never touch it. -->
     <script src="../wallet.js"></script>
     <!-- Web3 Integration Script -->
     <script>
@@ -3482,7 +3490,7 @@ body.modal-open { overflow: hidden; }
 
       // Batch all dashboard view calls into a single Multicall3 RPC round-trip
       async function batchDashboardData(daoAddress, userAddress) {
-        const molochIface = new ethers.Interface(MOLOCH_ABI);
+        const molochIface = molochInterface();
         const tributeIface = new ethers.Interface(TRIBUTE_ABI);
 
         const tokens = getNetworkTokens();
@@ -4350,6 +4358,13 @@ body.modal-open { overflow: hidden; }
         }
       ];
 
+      // Parsing this ABI builds a full Interface, and five call sites were each
+      // rebuilding it. Once is enough.
+      let _molochIface = null;
+      function molochInterface() {
+        return _molochIface || (_molochIface = new ethers.Interface(MOLOCH_ABI));
+      }
+
       // ERC20 ABI for token interactions
       const ERC20_ABI = [
         {
@@ -4843,9 +4858,17 @@ body.modal-open { overflow: hidden; }
       // Read-only provider for access without wallet
       // Cache RPC provider instances to avoid repeated construction overhead
       const rpcProviderCache = new Map();
+      // Declaring the network up front skips the eth_chainId round trip ethers
+      // otherwise makes before the first read on every provider it builds.
+      let _staticNetwork = null;
+      function staticNetwork() {
+        if (!_staticNetwork) _staticNetwork = ethers.Network.from(Number(getNetwork().chainId));
+        return _staticNetwork;
+      }
       function getRpcProvider(rpc) {
         if (!rpcProviderCache.has(rpc)) {
-          rpcProviderCache.set(rpc, new ethers.JsonRpcProvider(rpc));
+          const net = staticNetwork();
+          rpcProviderCache.set(rpc, new ethers.JsonRpcProvider(rpc, net, { staticNetwork: net }));
         }
         return rpcProviderCache.get(rpc);
       }
@@ -5042,24 +5065,28 @@ body.modal-open { overflow: hidden; }
         if (customSaleTokens.length > 0) {
           const existingAddrs = new Set(tokens.map(t => t.address.toLowerCase()));
           const existingSymbols = new Set(tokens.map(t => t.symbol.toLowerCase()));
-          for (const customToken of customSaleTokens) {
-            if (existingAddrs.has(customToken.address.toLowerCase())) continue;
-            if (existingSymbols.has(customToken.symbol.toLowerCase())) continue;
+          const newTokens = customSaleTokens.filter(t =>
+            !existingAddrs.has(t.address.toLowerCase()) && !existingSymbols.has(t.symbol.toLowerCase())
+          );
+          // One wave rather than one round trip per token, which the modal waited out
+          // before it could show a single row.
+          const fetched = await Promise.all(newTokens.map(async customToken => {
             try {
               const tokenContract = new ethers.Contract(customToken.address, ERC20_ABI, _walletProvider);
-              const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
-              tokens.push({
+              return {
                 symbol: customToken.symbol,
                 address: customToken.address,
-                balance: balance,
+                balance: await tokenContract.balanceOf(currentDAO.dao.dao),
                 decimals: customToken.decimals,
                 icon: TOKEN_ICONS.defaultCoin,
                 isCustomSale: true
-              });
+              };
             } catch (error) {
               logger.error(`Error fetching balance for custom sale token ${customToken.symbol}:`, error);
+              return null;
             }
-          }
+          }));
+          for (const t of fetched) if (t) tokens.push(t);
         }
 
         tokens.forEach(token => {
@@ -7255,6 +7282,18 @@ body.modal-open { overflow: hidden; }
 
           let salesHTML = '';
 
+          // Each custom-token card needs the DAO's balance of that token. Read them
+          // together up front — awaited inside the render loop they went one per card.
+          const saleBalances = new Map();
+          await Promise.all(activeSales.filter(sale => sale.token.isCustom).map(async sale => {
+            try {
+              const tokenContract = new ethers.Contract(sale.token.address, ERC20_ABI, _walletProvider);
+              saleBalances.set(sale.token.address, await tokenContract.balanceOf(currentDAO.dao.dao));
+            } catch (err) {
+              logger.error(`Error fetching DAO balance for ${sale.token.symbol}:`, err);
+            }
+          }));
+
           // Render internal sales first
           for (const sale of activeSales) {
             const tokenType = sale.isLoot ? 'LOOT' : 'SHARES';
@@ -7271,15 +7310,9 @@ body.modal-open { overflow: hidden; }
 
             // Fetch DAO balance for custom tokens
             let daoBalance = '';
-            if (sale.token.isCustom) {
-              try {
-                const tokenContract = new ethers.Contract(sale.token.address, ERC20_ABI, _walletProvider);
-                const balance = await tokenContract.balanceOf(currentDAO.dao.dao);
-                const balanceFormatted = parseFloat(ethers.formatUnits(balance, sale.token.decimals)).toFixed(2);
-                daoBalance = `<div style="font-size: 0.75rem; color: var(--fg-dim); margin-top: 0.25rem;">DAO Balance: ${balanceFormatted} ${sale.token.symbol}</div>`;
-              } catch (err) {
-                logger.error(`Error fetching DAO balance for ${sale.token.symbol}:`, err);
-              }
+            if (sale.token.isCustom && saleBalances.has(sale.token.address)) {
+              const balanceFormatted = parseFloat(ethers.formatUnits(saleBalances.get(sale.token.address), sale.token.decimals)).toFixed(2);
+              daoBalance = `<div style="font-size: 0.75rem; color: var(--fg-dim); margin-top: 0.25rem;">DAO Balance: ${balanceFormatted} ${sale.token.symbol}</div>`;
             }
 
             // Token contract link
@@ -7616,6 +7649,9 @@ body.modal-open { overflow: hidden; }
             return;
           }
 
+          // Same for every row, and it was being awaited once per tribute.
+          const userAddress = _signer ? await _signer.getAddress() : null;
+
           for (let i = 0; i < currentDaoTributes.length; i++) {
             const tribute = currentDaoTributes[i];
 
@@ -7648,7 +7684,6 @@ body.modal-open { overflow: hidden; }
             card.className = 'tribute-card';
 
             // Check if this is the user's own tribute and if they're a member
-            const userAddress = _signer ? await _signer.getAddress() : null;
             const isOwnTribute = userAddress && tribute.proposer.toLowerCase() === userAddress.toLowerCase();
             const isMember = currentDAO.member && (BigInt(currentDAO.member.shares || 0) > 0n || BigInt(currentDAO.member.loot || 0) > 0n);
 
@@ -9235,20 +9270,25 @@ body.modal-open { overflow: hidden; }
           ];
 
           const now = Math.floor(Date.now() / 1000);
-          for (const payToken of paymentTokens) {
-            try {
-              const sale = await daicoContract.sales(daoAddress, payToken);
-              // Check if sale is active (not expired)
-              const isExpired = sale.deadline > 0 && Number(sale.deadline) < now;
-              if (sale.tribAmt > 0n && sale.forAmt > 0n && sale.forTkn.toLowerCase() === sharesAddress.toLowerCase() && !isExpired) {
-                // This is a DAICO sale selling voting shares - get available allowance
-                const sharesContract = new ethers.Contract(sharesAddress, ERC20_ABI, _walletProvider);
-                const allowance = await sharesContract.allowance(daoAddress, DAICO_ADDRESS);
-                daicoSharesAvailable += allowance;
-              }
-            } catch (e) {
-              // Sale doesn't exist for this token, continue
-            }
+          // These reads do not depend on each other — awaiting them in sequence made
+          // the quorum figure wait out six round trips instead of one.
+          const sales = await Promise.all(paymentTokens.map(payToken =>
+            daicoContract.sales(daoAddress, payToken).catch(() => null)
+          ));
+          const sharesContract = new ethers.Contract(sharesAddress, ERC20_ABI, _walletProvider);
+          const liveSales = sales.filter(sale => {
+            if (!sale) return false;
+            const isExpired = sale.deadline > 0 && Number(sale.deadline) < now;
+            return sale.tribAmt > 0n && sale.forAmt > 0n
+              && sale.forTkn.toLowerCase() === sharesAddress.toLowerCase() && !isExpired;
+          });
+          if (liveSales.length > 0) {
+            // The allowance is the same value whichever sale asked for it, so it is read
+            // once instead of per sale. Counting it once per sale is preserved rather than
+            // corrected here: it is one shared pool, so summing it per sale looks like it
+            // overstates the figure, but that is a behaviour change and not this pass.
+            const allowance = await sharesContract.allowance(daoAddress, DAICO_ADDRESS).catch(() => 0n);
+            daicoSharesAvailable += allowance * BigInt(liveSales.length);
           }
         } catch (e) {
           logger.error('Error checking DAICO sales:', e);
@@ -12425,7 +12465,7 @@ body.modal-open { overflow: hidden; }
         // Batch all balanceOf calls into a single Multicall3 RPC
         if (voteData.length > 0) {
           try {
-            const molochIface = new ethers.Interface(MOLOCH_ABI);
+            const molochIface = molochInterface();
             const calls = voteData.map(({ receiptId }) => ({
               target: currentDAO.dao.dao,
               allowFailure: true,
@@ -12489,9 +12529,34 @@ body.modal-open { overflow: hidden; }
         const supportColors = ['var(--red)', 'var(--green)', 'var(--fg)'];
 
         // Fetch metadata for all receipts
-        const receiptPromises = receipts.map(async receipt => {
+        // The balances above already came back in one multicall; the URIs go the same
+        // way. One receipt per proposal voted on means this was a burst of eth_calls
+        // the size of the user's voting history — 21 round trips for the collection
+        // in the screenshot — where one aggregate3 does.
+        const receiptIface = molochInterface();
+        let tokenURIs = new Array(receipts.length).fill(null);
+        try {
+          const uriResults = await withRpcFallback(async (activeProvider) => {
+            const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL3_ABI, activeProvider);
+            return await multicall.aggregate3(receipts.map(r => ({
+              target: currentDAO.dao.dao,
+              allowFailure: true,
+              callData: receiptIface.encodeFunctionData('tokenURI', [r.receiptId])
+            })));
+          });
+          tokenURIs = uriResults.map(({ success, returnData }) => {
+            if (!success) return null;
+            try { return receiptIface.decodeFunctionResult('tokenURI', returnData)[0]; }
+            catch { return null; }
+          });
+        } catch (err) {
+          logger.warn('Receipt tokenURI multicall failed, falling back to per-receipt reads:', err.message);
+        }
+
+        const receiptPromises = receipts.map(async (receipt, i) => {
           try {
-            const tokenURI = await molochContract.tokenURI(receipt.receiptId);
+            // Falls back to a direct read only for the entries the batch could not fill.
+            const tokenURI = tokenURIs[i] ?? await molochContract.tokenURI(receipt.receiptId);
 
             // Parse metadata (could be data URI or IPFS)
             let metadata;
@@ -14017,7 +14082,7 @@ body.modal-open { overflow: hidden; }
 
         try {
           const molochContract = new ethers.Contract(currentDAO.dao.dao, MOLOCH_ABI, _walletProvider);
-          const molochIface = new ethers.Interface(MOLOCH_ABI);
+          const molochIface = molochInterface();
           const collectibles = [];
 
           // Phase 1: Batch all balanceOf calls via Multicall3
@@ -15829,7 +15894,7 @@ body.modal-open { overflow: hidden; }
           const proposalMessage = encodeProposalMessage(op, to, valueWei, data, nonce, description);
 
           // Create interface for encoding multicall data
-          const iface = new ethers.Interface(MOLOCH_ABI);
+          const iface = molochInterface();
 
           // Encode chat call
           const chatCalldata = iface.encodeFunctionData('chat', [proposalMessage]);
@@ -16903,8 +16968,10 @@ body.modal-open { overflow: hidden; }
         }
       });
 
-      // Auto-connect on load if already authorized
-      window.addEventListener('load', async () => {
+      // Auto-connect once the DOM is ready. This used to wait for 'load', which
+      // holds until every subresource has landed — so a deep link could not even
+      // start its read until the emblem images and wallet bundle were done.
+      document.addEventListener('DOMContentLoaded', async () => {
         // Initialize DOM cache for performance
         DOMCache.init();
 
@@ -16939,7 +17006,7 @@ body.modal-open { overflow: hidden; }
 
         // Initialize read-only provider for deep links and browsing without wallet
         try {
-          readOnlyProvider = new ethers.JsonRpcProvider(getNetwork().rpcs[0]);
+          readOnlyProvider = getRpcProvider(getNetwork().rpcs[0]);
         } catch (error) {
           logger.error('Failed to initialize read-only provider:', error);
         }
