@@ -868,6 +868,27 @@ let WANTWALLET=false;
 async function frameConnect(){
   if(!FRAME||!WANTWALLET)return false;
   try{ if(FRAME.eval('typeof A!=="undefined"&&!!A'))return true; }catch(e){ return false }
+  /* The frame's own connect() ends in eth_requestAccounts, and the wallet judges
+     that request by the frame rather than by this page - so it asked to connect
+     again to somebody already connected in the bar above. Everything that call
+     produces is either already known here (the account) or an ordinary read, so
+     hand the account across and do the reads instead. No prompt, because nothing
+     is being authorized that was not authorized already. */
+  const a=window._connectedAddress;
+  if(a){
+    try{
+      const ok=await FRAME.eval('(async()=>{try{'
+        +'A='+JSON.stringify(a)+';'
+        +'const b=document.getElementById("b_conn");'
+        +'if(b)b.textContent=A.slice(0,6)+"..."+A.slice(-4);'
+        +'ZA=addr(await rpc(C,S.zorgz));'      // peek() and the approvals need it
+        +'await refresh();'
+        +'return !!A}catch(e){A="";return false}})()');
+      if(ok)return true;
+    }catch(e){ console.warn('[sync]',e); }
+  }
+  /* No account to hand over, or the frame would not take it - ask it to connect
+     itself. This is still only ever reached from a press. */
   try{ await FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); return false }
   try{ return !!FRAME.eval('A') }catch(e){ return false }
 }
