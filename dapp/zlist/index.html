@@ -547,11 +547,21 @@ function guard(doc,win){
     if(k) k.remove();
     if(h) h.innerHTML='zList <small style="display:block;font-size:13px;font-weight:400;'
       +'letter-spacing:.02em;opacity:.62;margin-top:6px">powered by PFP bonds</small>';
+    /* The second sentence has to answer "why should I trust this order" for
+       someone who has never heard of us, in one breath. The honest answer is not
+       that a DAO decides it rather than a multisig - to a stranger those are the
+       same shape, a group deciding - it is that a rank has a PRICE and a CLOCK.
+       allocate() reverts Unauthorized for anyone who does not hold a receipt, and
+       a receipt costs an escrowed zOrgz, zOrg and ETH, so there is no seat from
+       which a rank can simply be granted. Moloch included: it would have to bond
+       like everybody else. That is the claim worth making, and it happens to be
+       the one the contract actually enforces. */
     if(sub) sub.innerHTML='A token list that lives in '
       +'<a href="https://etherscan.io/address/0x0000006013dF75A31678B786061C2B54bf531524#code" '
       +'target="_blank" rel="noopener">a contract</a>, not on a server. Bonded '
       +'<a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">zOrgz</a>'
-      +' decide the order. Open any listing to copy its record.';
+      +' set the order &mdash; a rank costs locked zOrg and time, and cannot be handed out. '
+      +'Open any listing to copy its record.';
   }catch(e){}
   /* Capture on the document so this runs before the inline onclick on the button. */
   doc.addEventListener('click',async ev=>{
