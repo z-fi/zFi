@@ -607,6 +607,10 @@ body.modal-open { overflow: hidden; }
   flex-shrink: 0;
 }
 .token-search-status.error { color: #e74c3c; }
+.tok-pending { opacity: .45; animation: zrankPulse 1.2s ease-in-out infinite; }
+.tok-dot { display:inline-block; width:24px; height:24px; border-radius:50%;
+           background: var(--border, #2a2a30); opacity:.5; animation: zrankPulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tok-pending, .tok-dot { animation: none; } }
 .token-group-label {
   font-size: 10px;
   text-transform: uppercase;
@@ -2627,10 +2631,17 @@ async function loadZListRanking() {
       mergeWeiListTokens(ZLIST_NAME, validated);
     }
     if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
+    _pairPending = false;              // cleared BEFORE the paint below
     applyZListDefaultPair();
   } catch (_) {
   } finally {
     _zlistLoading = false;
+    // Whatever happened, the placeholder does not outlive the attempt.
+    if (_pairPending) {
+      _pairPending = false;
+      if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
+    }
+    if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
   }
 }
 
@@ -2649,6 +2660,16 @@ async function loadZListRanking() {
 // Applied once, and only to an untouched page. A default that moved under
 // someone mid-swap would be worse than a stale one.
 let _pairTouched = false;
+// True only on a first-ever visit: no remembered ranking, no deeplink, nothing
+// yet known about what the to-side should be. Rather than paint a guess and
+// correct it in view, the to-side holds a placeholder for the moment it takes
+// to find out. The from-side is not deferred - it is ETH under the hardcoded
+// default AND rank #1 - so only the chip that is genuinely unknown waits.
+let _pairPending = false;
+// Nothing may wait on the network forever. If the ranking has not landed by
+// this point the hardcoded pair is painted after all: a slightly stale pair
+// beats a control that will not resolve.
+const PAIR_PENDING_MS = 1500;
 function applyZListDefaultPair(paint = true) {
   if (_pairTouched || _pendingDeeplinkFrom || _pendingDeeplinkTo) return;
   // Typing an amount is intent, even before a token is picked.
@@ -9399,8 +9420,11 @@ function updateTokenDisplay() {
   const fSym = fromToken, tSym = toToken;
   setHTML("fromTokenIcon", iconForSymbol(fSym));
   setText("fromTokenSymbol", tokens[fSym].symbol);
-  setHTML("toTokenIcon", iconForSymbol(tSym));
-  setText("toTokenSymbol", tokens[tSym].symbol);
+  const _pend = _pairPending && !_pairTouched;
+  setHTML("toTokenIcon", _pend ? '<span class="tok-dot"></span>' : iconForSymbol(tSym));
+  setText("toTokenSymbol", _pend ? '\u2009' : tokens[tSym].symbol);
+  const _tsEl = $("toTokenSymbol");
+  if (_tsEl) _tsEl.classList.toggle('tok-pending', _pend);
   renderQuickTokens();
   updateReceiverWarn();
   syncSwapURL();
@@ -9838,6 +9862,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // pair at all. No repaint here: init calls updateTokenDisplay a few lines on.
   loadZListRankCache();
   applyZListDefaultPair(false);
+  _pairPending = (ZRANK.size === 0 && !_pairTouched);
+  if (_pairPending) setTimeout(() => {
+    if (!_pairPending) return;
+    _pairPending = false;
+    if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
+  }, PAIR_PENDING_MS);
   const _dlAmt = _urlp.get('amt');
   const _dlOutAmt = _urlp.get('outamt');
   // Deeplink: ?pp=eth or ?pp=bold (Privacy Pools deposit)
