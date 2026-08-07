@@ -1903,6 +1903,19 @@ body.modal-open { overflow: hidden; }
   vertical-align: middle;
 }
 @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+/* Emitted by showStatus and the allowance button, which have both been drawing an
+   empty span since there was never a rule for it. */
+.spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: baseline;
+  margin-right: 5px;
+}
 
 /* Summoner toggle */
 .summoner-toggle {
@@ -2727,7 +2740,10 @@ body.modal-open { overflow: hidden; }
 
         <!-- Vote Receipts Panel -->
         <div class="receipts-panel">
-          <h3 class="dao-panel-title">Vote Receipts Collection</h3>
+          <div class="dao-panel-head">
+            <h3 class="dao-panel-title">Vote Receipts Collection</h3>
+            <button id="claimAllBtn" class="receipt-btn claim" style="display: none; flex: 0 0 auto; padding: 8px 14px;" onclick="claimAllFutarchyRewards()"></button>
+          </div>
           <div id="receiptsGrid" class="receipts-grid">
             <!-- Receipt cards will be dynamically rendered here -->
           </div>
@@ -12456,6 +12472,8 @@ body.modal-open { overflow: hidden; }
       // Render vote receipts collection
       async function renderVoteReceipts() {
         const receiptsGrid = document.getElementById('receiptsGrid');
+        _claimableReceipts = [];
+        updateClaimAllButton();
         if (!currentDAO || !_connectedAddress) {
           receiptsGrid.innerHTML = '';
           receiptsGrid.appendChild(createEmptyState(
@@ -12635,6 +12653,9 @@ body.modal-open { overflow: hidden; }
               const userSupport = Number(receipt.support);
 
               if (userSupport === winnerSupport) {
+                if (!receipt.claimed && receipt.balance > 0n) {
+                  _claimableReceipts.push({ proposalId: receipt.proposalId.toString(), amount: receipt.balance.toString() });
+                }
                 if (receipt.claimed || receipt.balance === 0n) {
                   // Already claimed - show claimed status
                   claimButtonHTML = `<div class="receipt-claimed">&check; Claimed</div>`;
@@ -12703,6 +12724,8 @@ body.modal-open { overflow: hidden; }
             logger.error('Error rendering receipt:', renderError);
           }
         });
+
+        updateClaimAllButton();
 
         // Check for emergency permits
         try {
@@ -14417,12 +14440,27 @@ body.modal-open { overflow: hidden; }
             const currentBlock = await activeProvider.getBlockNumber();
             const chunkSize = 10000;
 
-            // Query backwards until we find all senders or reach block 0
-            for (let toBlock = currentBlock; toBlock >= 0; toBlock -= chunkSize) {
-              const fromBlock = Math.max(0, toBlock - chunkSize + 1);
-              const events = await molochContract.queryFilter(molochContract.filters.Message(), fromBlock, toBlock);
-              events.forEach(e => { messageSenders[String(e.args.index)] = e.args.from; });
-              if (Object.keys(messageSenders).length >= messages.length || fromBlock === 0) break;
+            // Walk backwards until every sender is found or the chain runs out. This used
+            // to await one 10k-block chunk at a time, so a DAO whose messages predate the
+            // last few chunks paid a round trip per chunk all the way back — a wave at a
+            // time covers the same ground with a fraction of the latency.
+            const WAVE = 6;
+            let toBlock = currentBlock;
+            while (toBlock >= 0) {
+              const ranges = [];
+              for (let k = 0; k < WAVE && toBlock >= 0; k++) {
+                const fromBlock = Math.max(0, toBlock - chunkSize + 1);
+                ranges.push([fromBlock, toBlock]);
+                toBlock = fromBlock - 1;
+              }
+              const waves = await Promise.all(ranges.map(([from, to]) =>
+                molochContract.queryFilter(molochContract.filters.Message(), from, to).catch(() => [])
+              ));
+              for (const events of waves) {
+                events.forEach(e => { messageSenders[String(e.args.index)] = e.args.from; });
+              }
+              if (Object.keys(messageSenders).length >= messages.length) break;
+              if (ranges[ranges.length - 1][0] === 0) break;
             }
           });
         } catch (e) {
@@ -15171,6 +15209,100 @@ body.modal-open { overflow: hidden; }
       }
 
       // Claim futarchy rewards
+      // Every winning receipt is a separate cashOutFutarchy call, so a collection like the
+      // one in the screenshot meant five wallet confirmations to collect five rewards.
+      let _claimableReceipts = [];
+
+      function updateClaimAllButton() {
+        const btn = document.getElementById('claimAllBtn');
+        if (!btn) return;
+        const n = _claimableReceipts.length;
+        // One claimable receipt already has its own button on the card.
+        btn.style.display = n > 1 ? '' : 'none';
+        btn.textContent = `Claim all ${n}`;
+      }
+
+      async function claimAllFutarchyRewards() {
+        if (!currentDAO || !_signer) {
+          showStatus('Please connect wallet and select a DAO', true);
+          return;
+        }
+        const claims = [..._claimableReceipts];
+        if (claims.length === 0) return;
+
+        const btn = document.getElementById('claimAllBtn');
+        const originalText = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Claiming...'; }
+
+        const daoAddress = currentDAO.dao.dao;
+        const iface = molochInterface();
+        const calls = claims.map(c => ({
+          to: daoAddress,
+          data: iface.encodeFunctionData('cashOutFutarchy', [BigInt(c.proposalId), BigInt(c.amount)]),
+          value: '0x0'
+        }));
+
+        try {
+          // ERC-5792 puts the whole set behind one confirmation where the wallet supports
+          // it. wallet.js probes for that on connect; everything else claims in turn.
+          if (_walletSendCalls && _connectedWalletProvider) {
+            showStatus(`Batching ${claims.length} claims...`, false);
+            const raw = await _connectedWalletProvider.request({
+              method: 'wallet_sendCalls',
+              params: [{
+                version: '1',
+                from: _connectedAddress,
+                chainId: getNetwork().chainIdHex,
+                atomicRequired: true,
+                calls
+              }]
+            });
+            const batchId = typeof raw === 'object' && raw?.id ? raw.id : raw;
+            showStatus('Confirming batch...', false);
+            let result;
+            for (let i = 0; i < 90; i++) {
+              await new Promise(r => setTimeout(r, 2000));
+              try {
+                result = await _connectedWalletProvider.request({ method: 'wallet_getCallsStatus', params: [batchId] });
+              } catch (pollErr) {
+                // The batch is already on chain; stop rather than racing the fallback.
+                logger.warn('Batch poll failed:', pollErr);
+                showStatus('Batch submitted — check your wallet for status', false);
+                return;
+              }
+              const st = String(result?.status ?? '').toLowerCase();
+              const stn = parseInt(st, 10);
+              if (stn === 200 || st === 'confirmed' || stn >= 400 || st === 'reverted') break;
+            }
+            const st = result?.status;
+            const stn = typeof st === 'string' ? parseInt(st, 10) : st;
+            if (!(stn === 200 || String(st).toLowerCase() === 'confirmed')) {
+              throw new Error('Batch did not confirm');
+            }
+          } else {
+            const molochContract = new ethers.Contract(daoAddress, MOLOCH_ABI, _signer);
+            for (let i = 0; i < claims.length; i++) {
+              showStatus(`Claiming ${i + 1} of ${claims.length}...`, false);
+              const tx = await molochContract.cashOutFutarchy(
+                BigInt(claims[i].proposalId), BigInt(claims[i].amount), getWalletConnectTxOverrides()
+              );
+              await tx.wait();
+            }
+          }
+
+          showStatus(`✨ Claimed ${claims.length} rewards! Refreshing...`, false);
+          await refreshCurrentDAO(true);
+          await renderProposals();
+          await renderVoteReceipts();
+        } catch (error) {
+          logger.error('Error claiming futarchy rewards in batch:', error);
+          if (isUserRejection(error)) showStatus('Claim cancelled', false);
+          else showStatus(error.shortMessage || 'Failed to claim rewards', true);
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = originalText; }
+        }
+      }
+
       async function claimFutarchyReward(proposalId, amountStr) {
         if (!currentDAO || !_signer) {
           showStatus('Please connect wallet and select a DAO', true);
