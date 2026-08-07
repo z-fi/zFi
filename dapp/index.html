@@ -2567,7 +2567,7 @@ async function loadZListRanking() {
       // built-in and validateTokenList rejects the zero address, so it is ranked
       // above but never added as a token.
       if (!zlistSwappable(r)) continue;
-      ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals), id: r.id });
+      ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals) });
       logoTargets.push({ id: r.id, addr: addr.toLowerCase() });
     }
     ZRANK.clear();
@@ -2583,21 +2583,17 @@ async function loadZListRanking() {
     // something established, not whatever was listed most recently.
     _pairPending = false;
     applyZListDefaultPair();
-    // Anything ranked that we do not already know becomes a real row, so a
-    // listing added onchain reaches the picker with no deploy here - but it has
-    // to have been bonded behind first. Being LISTED is a different permission
-    // from being ranked: the registry's owner is not the DAO that ranks, so
-    // without this, whoever holds that key could put a row in the swap picker
-    // for free. Requiring support means a new row costs somebody an escrowed
-    // zOrgz and real zOrg, which is the same price every other position paid.
-    // Tokens we already ship are unaffected; this gates additions only.
-    const known = new Set(Object.keys(tokens).map(k => tokens[k].address.toLowerCase()));
-    const fresh2 = ranked.filter(t => !known.has(t.address.toLowerCase()));
-    if (fresh2.length) {
-      const backed = await zlistSupported(fresh2.map(t => t.id));
-      for (const t of fresh2) if (!backed.has(String(t.id))) t._unbacked = true;
-    }
-    const validated = validateTokenList(ranked.filter(t => !t._unbacked));
+    // The two layers do different jobs, and conflating them was a mistake:
+    //   the TokenList decides what EXISTS - curation, and the registry owner's call
+    //   conviction decides what RANKS - earned, and nobody's to hand out
+    // Gating membership on conviction made a listing invisible until somebody
+    // bonded to it, which is not a stricter version of the rule - it is a
+    // different rule. Only 4 of 17 listings carry any support, so it would have
+    // hidden almost every future listing from the picker and quietly undone the
+    // reason this reads the registry at all. Fake World Assets, registered with
+    // a name, an onchain logo and a URL, was the first casualty.
+    // Membership is therefore the list's, and this ships every ERC-20 on it.
+    const validated = validateTokenList(ranked);
     if (validated.length > 0) {
       weiLists.set(ZLIST_NAME, { tokens: validated, loadedAt: Date.now() });
       mergeWeiListTokens(ZLIST_NAME, validated);
@@ -2698,40 +2694,6 @@ function loadZLogoCache() {
     return Number(c.at) || 0;
   } catch (_) { return 0; }
 }
-// Which of these listings has any conviction behind it. One multicall, and only
-// ever asked about listings we do not already ship, so it is a handful of reads
-// at most. A failed read admits nothing: silence is not support.
-const ZORG_GOVERNOR = '0x0000006D936bA3653b8854490E16E782cd32a9a8';
-const ZLIST_SUPPORT_IFACE = new ethers.Interface([
-  'function supportOf(uint256 listingId) view returns (uint256)',
-]);
-async function zlistSupported(ids) {
-  const out = new Set();
-  try {
-    const calls = ids.map(id => [
-      ZORG_GOVERNOR, true, ZLIST_SUPPORT_IFACE.encodeFunctionData('supportOf', [id]),
-    ]);
-    const raw = await quoteRPC.call(
-      rpc => rpc.call({
-        to: MULTICALL3_ADDRESS,
-        data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls]),
-      }),
-      { timeoutMs: 8000 },
-    );
-    const res = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', raw)[0];
-    for (let i = 0; i < ids.length; i++) {
-      const r = res[i];
-      if (!r || !r.success || r.returnData === '0x') continue;
-      try {
-        if (ZLIST_SUPPORT_IFACE.decodeFunctionResult('supportOf', r.returnData)[0] > 0n) {
-          out.add(String(ids[i]));
-        }
-      } catch (_) {}
-    }
-  } catch (e) { console.warn('[zlist] supportOf failed; admitting no new tokens', e); }
-  return out;
-}
-
 async function loadZListLogos(targets) {
   if (!targets || targets.length === 0) return;
   const cachedAt = ZLOGOS.size ? loadZLogoCache() : loadZLogoCache();
