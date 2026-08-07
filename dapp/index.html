@@ -2605,6 +2605,7 @@ async function loadZListRanking() {
     // indices and scrambled the very order this is meant to fix.
     const fresh = new Map();
     const ranked = [];
+    const logoTargets = [];
     for (const r of rows) {
       // Everything EVM on this chain gets a rank, tradeable or not, so the order
       // the picker shows is the order the list actually holds. Only what passes
@@ -2618,6 +2619,7 @@ async function loadZListRanking() {
       // above but never added as a token.
       if (!zlistSwappable(r)) continue;
       ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals) });
+      logoTargets.push({ id: r.id, addr: addr.toLowerCase() });
     }
     ZRANK.clear();
     for (const [k, v] of fresh) ZRANK.set(k, v);
@@ -2633,6 +2635,7 @@ async function loadZListRanking() {
     if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
     _pairPending = false;              // cleared BEFORE the paint below
     applyZListDefaultPair();
+    loadZListLogos(logoTargets);       // not awaited: art must never gate a swap
   } catch (_) {
   } finally {
     _zlistLoading = false;
@@ -2691,6 +2694,76 @@ function applyZListDefaultPair(paint = true) {
   if (!paint) return;             // init paints once itself, right after this
   if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
   if (typeof updateBalances === 'function') updateBalances();
+}
+
+// ---- Onchain token art ------------------------------------------------------
+// The registry stores each logo as a self-contained data:image/svg+xml URI, so
+// the picker can show the token's own art rather than an icon we drew and ship.
+// Fetched in ONE multicall - the ranked summaries do not carry the logo, only
+// get(id) does - and cached, because art changes about as often as a token's
+// name does and this is the largest read on the page.
+const ZLOGO_CACHE_KEY = 'zfi_zlist_logos';
+const ZLOGO_TTL_MS = 24 * 60 * 60 * 1000;
+const ZLOGOS = new Map();               // address → data: URI
+const ZLIST_GET_IFACE = new ethers.Interface([
+  'function get(uint256 id) view returns (tuple(bytes32 account, uint64 chainId,'
+  + ' uint8 decimals, uint8 kind, uint8 standard, bool deployed, bool onchainSvg,'
+  + ' bool synced, uint24 color, uint32 rank, bool frozen, string name, string symbol,'
+  + ' string logo, string url, string audit, string description))',
+]);
+function loadZLogoCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(ZLOGO_CACHE_KEY) || 'null');
+    if (!c || typeof c.m !== 'object') return 0;
+    for (const [a, uri] of Object.entries(c.m)) {
+      // Only self-contained SVG data URIs. An https logo would be a request to
+      // somebody else's server on behalf of a page that fetches everything from
+      // the chain, and anything else is not art.
+      if (typeof uri === 'string' && uri.startsWith('data:image/svg+xml')) ZLOGOS.set(a, uri);
+    }
+    return Number(c.at) || 0;
+  } catch (_) { return 0; }
+}
+async function loadZListLogos(targets) {
+  if (!targets || targets.length === 0) return;
+  const cachedAt = ZLOGOS.size ? loadZLogoCache() : loadZLogoCache();
+  const missing = targets.some(t => !ZLOGOS.has(t.addr));
+  if (!missing && Date.now() - cachedAt < ZLOGO_TTL_MS) { applyZLogos(); return; }
+  try {
+    const calls = targets.map(t => [
+      ZLIST_LENS, true, ZLIST_GET_IFACE.encodeFunctionData('get', [t.id]),
+    ]);
+    const raw = await quoteRPC.call(
+      rpc => rpc.call({
+        to: MULTICALL3_ADDRESS,
+        data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls]),
+      }),
+      { timeoutMs: 12000 },
+    );
+    const res = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', raw)[0];
+    const out = {};
+    for (let i = 0; i < targets.length; i++) {
+      const r = res[i];
+      if (!r || !r.success || r.returnData === '0x') continue;
+      let tok;
+      try { tok = ZLIST_GET_IFACE.decodeFunctionResult('get', r.returnData)[0]; } catch (_) { continue; }
+      const logo = tok.logo;
+      if (typeof logo !== 'string' || !logo.startsWith('data:image/svg+xml')) continue;
+      ZLOGOS.set(targets[i].addr, logo);
+      out[targets[i].addr] = logo;
+    }
+    if (Object.keys(out).length) {
+      try { localStorage.setItem(ZLOGO_CACHE_KEY, JSON.stringify({ at: Date.now(), m: out })); } catch (_) {}
+    }
+    applyZLogos();
+  } catch (_) { applyZLogos(); }   // whatever landed from cache still applies
+}
+// iconForSymbol reads ZLOGOS directly, so this only has to force a repaint of
+// anything already on screen.
+function applyZLogos() {
+  if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
+  if (typeof renderQuickTokens === 'function') renderQuickTokens();
+  if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
 }
 
 let _bundledLoading = false;
@@ -3423,8 +3496,24 @@ const ICONS = {
 const _letterIconCache = new Map();
 function iconForSymbol(sym) {
   const s = String(sym);
-  if (ICONS[s]) return ICONS[s];
   const t = tokens[s];
+  // The registry's own art wins over anything we ship. ICONS are hand-drawn
+  // stand-ins for exactly these tokens, and on a page arguing that the list
+  // lives in a contract, a locally drawn WETH mark is the last thing that
+  // should outrank the one the contract holds.
+  // Into an <img>, never innerHTML: SVG inside an img cannot run script or fire
+  // handlers, so no logo the registry ever gains can inject here.
+  const onchain = t && ZLOGOS.get(t.address.toLowerCase());
+  if (onchain) {
+    const img = document.createElement('img');
+    img.src = onchain;
+    img.width = 24; img.height = 24;
+    img.style.borderRadius = '50%';
+    img.alt = s;
+    img.onerror = function () { this.outerHTML = ICONS[s] || makeLetterIcon(s); };
+    return img.outerHTML;
+  }
+  if (ICONS[s]) return ICONS[s];
   if (t?.icon) {
     const img = document.createElement('img');
     img.src = t.icon;
@@ -9861,6 +9950,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Before the first paint, so a returning visitor never sees the hardcoded
   // pair at all. No repaint here: init calls updateTokenDisplay a few lines on.
   loadZListRankCache();
+  loadZLogoCache();               // art on the first paint too, not after it
   applyZListDefaultPair(false);
   _pairPending = (ZRANK.size === 0 && !_pairTouched);
   if (_pairPending) setTimeout(() => {
