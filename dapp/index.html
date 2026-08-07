@@ -628,6 +628,18 @@ body.modal-open { overflow: hidden; }
 .token-group-label.zranking { opacity: .6; animation: zrankPulse 1.4s ease-in-out infinite; }
 @keyframes zrankPulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .token-group-label.zranking { animation: none; } }
+/* Long lists render their first TOKEN_GROUP_CAP rows; this opens the rest in
+   place, so a capped group never hides a token behind a dead end. */
+.token-group-more {
+  padding: 8px 16px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.token-group-more:hover { color: var(--fg); background: var(--list-hover); }
+.token-list-empty { padding: 16px 12px; color: var(--fg-dim); font-size: 13px; text-align: center; }
 .wei-list-remove {
   background: none;
   border: none;
@@ -3084,38 +3096,148 @@ function removeWeiList(listName) {
   saveWeiLists();
 }
 
+// Search scoring. Every group is ordered by relevance first and by its own
+// native order (conviction rank, liquidity, list order) second, so the picker
+// reads the same way whether you are browsing or typing: what the chain ranks
+// highest leads the browse, what you actually typed leads the search.
+// -1 means "not a match" and the token is not rendered at all.
+function tokenSearchScore(sym, t, q) {
+  if (!q) return 0;
+  const s = sym.toLowerCase();
+  const addr = t.address.toLowerCase();
+  const name = t.name ? String(t.name).toLowerCase() : '';
+  if (s === q || addr === q) return 6;
+  if (s.startsWith(q)) return 5;
+  if (name && name.startsWith(q)) return 4;
+  if (s.includes(q)) return 3;
+  if (name && name.includes(q)) return 2;
+  if (addr.includes(q)) return 1;
+  return -1;
+}
+
+// Rows held back per group before a "show all" row takes over. The Uniswap list
+// alone is ~600 tokens; building every row on every keystroke is the only thing
+// that made this picker feel slow. Nothing is unreachable — search sees the
+// whole map, and the row expands the group in place.
+const TOKEN_GROUP_CAP = 60;
+const _tokenGroupsExpanded = new Set();
+
 function renderTokenList(filter) {
   const list = $('tokenList');
   if (!list) return;
-  list.textContent = '';
-  const frag = document.createDocumentFragment();
   const q = (filter || '').toLowerCase().trim();
-
-  const builtInAddrs = BUILTIN_ADDRS;
 
   // Lazy-load DAICO coins on first search
   if (q && !_daicoCoinsCache && !_daicoScanBusy) {
     searchDaicoCoins().then(() => renderTokenList(q));
   }
 
-  function matchesFilter(sym, addr, name) {
-    if (!q) return true;
-    if (sym.toLowerCase().includes(q)) return true;
-    if (addr.toLowerCase().includes(q)) return true;
-    if (name && String(name).toLowerCase().includes(q)) return true;
-    return false;
+  // ---- One pass, one bucket per token --------------------------------------
+  // Each group used to re-scan the whole `tokens` map — eight passes over a map
+  // that is well past a thousand entries once Uniswap's list lands.
+  const recent = [], held = [], ranked = [], builtin = [],
+        daico = [], curve = [], zammCoins = [], custom = [];
+  const byWeiList = new Map();            // listName → syms
+  const score = new Map();                // sym → search score
+  const recentOrder = new Map();
+  loadRecentTokens().forEach((sym, i) => recentOrder.set(sym, i));
+
+  for (const sym of Object.keys(tokens)) {
+    const t = tokens[sym];
+    if (!t || !t.address) continue;
+    const sc = tokenSearchScore(sym, t, q);
+    if (sc < 0) continue;
+    score.set(sym, sc);
+    if (recentOrder.has(sym)) { recent.push(sym); continue; }
+    if (_connectedAddress) {
+      const cached = getCachedBalance(t.address);
+      if (cached != null && cached > 0n) { held.push(sym); continue; }
+    }
+    const addr = t.address.toLowerCase();
+    // Conviction rank is the primary shelf: a token the registry ranks belongs
+    // to the ranked group whether we ship it as a built-in or it arrived from
+    // the zList read itself. It used to be split — built-ins under "ranked by
+    // conviction" and the rest under a separate "zList" heading, two headings
+    // for one ordering that came from one call.
+    if (ZRANK.has(addr)) { ranked.push(sym); continue; }
+    if (BUILTIN_ADDRS.has(addr)) { builtin.push(sym); continue; }
+    const src = weiListTokenSource.get(sym);
+    if (src && weiLists.has(src)) {
+      const arr = byWeiList.get(src);
+      if (arr) arr.push(sym); else byWeiList.set(src, [sym]);
+      continue;
+    }
+    if (t._isDaicoCoin) { daico.push(sym); continue; }
+    if (t._isCurveCoin) { curve.push(sym); continue; }
+    if (t._isZammCoin) { zammCoins.push(sym); continue; }
+    custom.push(sym);
   }
 
-  // DAICO is buy-only (ETH → coin), so disable those rows when picking the from-side.
+  // Relevance first, then the group's own order. Array.sort is stable, so with
+  // no query and no native order a group keeps insertion order exactly as before.
+  const byScore = native => (a, b) => (score.get(b) - score.get(a)) || (native ? native(a, b) : 0);
+  recent.sort(byScore((a, b) => recentOrder.get(a) - recentOrder.get(b)));
+  held.sort(byScore());
+  const rankOf = sym => {
+    const r = ZRANK.get(tokens[sym].address.toLowerCase());
+    return r === undefined ? Number.MAX_SAFE_INTEGER : r;
+  };
+  ranked.sort(byScore((a, b) => rankOf(a) - rankOf(b)));
+  builtin.sort(byScore());
+  daico.sort(byScore());
+  curve.sort(byScore());
+  zammCoins.sort(byScore((a, b) => (tokens[b].liquidityEth || 0) - (tokens[a].liquidityEth || 0)));
+  custom.sort(byScore());
+
+  // ---- Group order ---------------------------------------------------------
+  const groups = [];
+  const push = (key, label, syms, opts) => {
+    if (syms.length > 0) groups.push({ key, label, syms, ...(opts || {}) });
+  };
+  push('recent', 'Recent', recent);
+  push('held', 'Your tokens', held);
+  // Pulses while the ranking is being re-read, so an order that changes under
+  // the reader is a thing they were told was happening rather than a glitch.
+  push('ranked', ZRANK.size > 0 ? 'Ranked by conviction' : 'Ranking…', ranked,
+       { extraClass: _zlistLoading ? 'zranking' : '' });
+  // Only reachable when the ranking is missing or a built-in was never listed.
+  push('builtin', ZRANK.size > 0 ? 'Also available' : 'Tokens', builtin);
+  for (const [listName] of weiLists) {
+    // zList's own rows live in the ranked group above; anything left here is a
+    // listing the ranking does not cover.
+    push('list:' + listName, listName, byWeiList.get(listName) || [], { listName });
+  }
+  push('daico', 'DAICO coins', daico);
+  push('curve', 'Curve coins', curve);
+  push('zamm', 'ZAMM coins', zammCoins);
+  push('custom', 'Custom', custom);
+
+  // Best match: highest-scoring selectable row, taken from the ordering above
+  // rather than from a second scan of the finished DOM.
   const isFromSide = currentModal === 'from';
-  const shown = new Set();
+  let bestSym = null;
+  if (q.length >= 2) {
+    let bestScore = 0;
+    for (const g of groups) {
+      for (const sym of g.syms) {
+        if (isFromSide && tokens[sym]._isDaicoCoin) continue;
+        const sc = score.get(sym);
+        if (sc > bestScore) { bestScore = sc; bestSym = sym; }
+        if (bestScore === 6) break;
+      }
+      if (bestScore === 6) break;
+    }
+  }
+
+  // ---- Render -------------------------------------------------------------
+  const frag = document.createDocumentFragment();
+  let bestRow = null;
 
   function makeRow(symbol) {
-    if (shown.has(symbol)) return null;
-    shown.add(symbol);
     const t = tokens[symbol];
     const row = document.createElement('div');
     row.className = 'token-list-item';
+    // DAICO is buy-only (ETH → coin), so disable those rows on the from-side.
     const disabled = isFromSide && t?._isDaicoCoin;
     if (disabled) row.classList.add('disabled');
     row.setAttribute('data-symbol', symbol);
@@ -3149,209 +3271,55 @@ function renderTokenList(filter) {
     return row;
   }
 
-  function appendRow(sym) {
-    const r = makeRow(sym);
-    if (r) frag.appendChild(r);
-    return r != null;
-  }
-
-  function appendGroupLabel(text, listName, extraClass) {
+  for (const g of groups) {
     const label = document.createElement('div');
-    label.className = 'token-group-label' + (extraClass ? ' ' + extraClass : '');
-    if (listName && listName.endsWith('.wei')) {
-      label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
+    label.className = 'token-group-label' + (g.extraClass ? ' ' + g.extraClass : '');
+    if (g.listName && g.listName.endsWith('.wei')) {
+      label.innerHTML = escText(g.label) + ' <button class="wei-list-remove" data-list="'
+        + escAttr(g.listName) + '" title="Remove list">&times;</button>';
     } else {
-      label.textContent = text || listName;
+      label.textContent = g.label;
     }
     frag.appendChild(label);
-  }
 
-  let hasAny = false;
-
-  // Recent picks (most-recently selected, persisted across sessions)
-  const recentSyms = loadRecentTokens()
-    .filter(sym => tokens[sym] && matchesFilter(sym, tokens[sym].address, tokens[sym].name));
-  if (recentSyms.length > 0) {
-    appendGroupLabel('Recent');
-    for (const sym of recentSyms) appendRow(sym);
-    hasAny = true;
-  }
-
-  // Tokens you hold (positive cached balance) — surface above everything else.
-  if (_connectedAddress) {
-    const heldSyms = [];
-    for (const sym of Object.keys(tokens)) {
-      if (shown.has(sym)) continue;
-      const t = tokens[sym];
-      if (!t) continue;
-      const cached = getCachedBalance(t.address);
-      if (cached == null || cached <= 0n) continue;
-      if (!matchesFilter(sym, t.address, t.name)) continue;
-      heldSyms.push(sym);
+    // Never truncate a group holding the best match out of view.
+    const expanded = _tokenGroupsExpanded.has(g.key)
+      || (bestSym !== null && g.syms.indexOf(bestSym) >= TOKEN_GROUP_CAP);
+    const shownSyms = expanded ? g.syms : g.syms.slice(0, TOKEN_GROUP_CAP);
+    for (const sym of shownSyms) {
+      const row = makeRow(sym);
+      if (sym === bestSym) bestRow = row;
+      frag.appendChild(row);
     }
-    if (heldSyms.length > 0) {
-      appendGroupLabel('Your tokens');
-      for (const sym of heldSyms) appendRow(sym);
-      hasAny = true;
+    const hidden = g.syms.length - shownSyms.length;
+    if (hidden > 0) {
+      const more = document.createElement('div');
+      more.className = 'token-group-more';
+      more.setAttribute('data-group', g.key);
+      more.textContent = 'Show all ' + g.syms.length + ' →';
+      frag.appendChild(more);
     }
   }
 
-  // Built-in tokens, in live conviction order.
-  // The order used to be whatever order the `tokens` literal happened to be
-  // written in. It is now whatever the zList registry says people have put the
-  // most zOrg behind - ZRANK is empty until that call lands and empty forever if
-  // it fails, and sort is stable, so the fallback is exactly the old order.
-  const builtinSyms = [];
-  for (const sym of Object.keys(tokens)) {
-    if (shown.has(sym)) continue;
-    if (!builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
-    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    builtinSyms.push(sym);
-  }
-  if (ZRANK.size > 0) {
-    // Unranked built-ins keep their relative order, after everything ranked.
-    const rankOf = sym => {
-      const r = ZRANK.get(tokens[sym].address.toLowerCase());
-      return r === undefined ? Number.MAX_SAFE_INTEGER : r;
-    };
-    builtinSyms.sort((a, b) => rankOf(a) - rankOf(b));
-  }
-  if (builtinSyms.length > 0 && (ZRANK.size > 0 || _zlistLoading)) {
-    // Says why this order is this order, and pulses while the ranking is being
-    // re-read - so an order that changes under the reader is a thing they were
-    // told was happening rather than a glitch.
-    appendGroupLabel(
-      ZRANK.size > 0 ? 'ranked by conviction' : 'ranking\u2026',
-      null,
-      _zlistLoading ? 'zranking' : '',
-    );
-  }
-  for (const sym of builtinSyms) if (appendRow(sym)) hasAny = true;
-
-  // Pre-index weiListTokenSource by list name (O(n) instead of O(n*m))
-  const _weiByList = new Map();
-  for (const [sym, src] of weiListTokenSource) {
-    if (!tokens[sym]) continue;
-    if (!_weiByList.has(src)) _weiByList.set(src, []);
-    _weiByList.get(src).push(sym);
-  }
-
-  // Per-.wei-list groups
-  for (const [listName] of weiLists) {
-    const srcTokens = _weiByList.get(listName) || [];
-    const listTokens = [];
-    for (const sym of srcTokens) {
-      if (shown.has(sym)) continue;
-      if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-      listTokens.push(sym);
-    }
-    if (listTokens.length === 0) continue;
-    appendGroupLabel(null, listName);
-    for (const sym of listTokens) appendRow(sym);
-    hasAny = true;
-  }
-
-  // DAICO graduated coins (ETH buy only)
-  const daicoTokens = [];
-  for (const sym of Object.keys(tokens)) {
-    if (shown.has(sym)) continue;
-    if (!tokens[sym]._isDaicoCoin) continue;
-    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    daicoTokens.push(sym);
-  }
-  if (daicoTokens.length > 0) {
-    appendGroupLabel('Coins');
-    for (const sym of daicoTokens) appendRow(sym);
-    hasAny = true;
-  }
-
-  // Curve coins (ClassicalCurveSale launches — ETH ↔ coin via curve sale or post-grad zAMM hook).
-  const curveTokens = [];
-  for (const sym of Object.keys(tokens)) {
-    if (shown.has(sym)) continue;
-    if (!tokens[sym]._isCurveCoin) continue;
-    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    curveTokens.push(sym);
-  }
-  if (curveTokens.length > 0) {
-    appendGroupLabel('Curve coins');
-    for (const sym of curveTokens) appendRow(sym);
-    hasAny = true;
-  }
-
-  // ZAMM v0 OG coins — top by liquidity, ERC6909 ids in COINS singleton.
-  // Discovery only for now; selection blocked via .disabled in makeRow.
-  const zammCoins = [];
-  for (const sym of Object.keys(tokens)) {
-    if (shown.has(sym)) continue;
-    if (!tokens[sym]._isZammCoin) continue;
-    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    zammCoins.push(sym);
-  }
-  if (zammCoins.length > 0) {
-    // Sort by liquidity desc so the top of the list is the most useful.
-    zammCoins.sort((a, b) => (tokens[b].liquidityEth || 0) - (tokens[a].liquidityEth || 0));
-    appendGroupLabel('ZAMM coins');
-    for (const sym of zammCoins) appendRow(sym);
-    hasAny = true;
-  }
-
-  // Custom tokens (not built-in, not from .wei lists, not DAICO/curve/ZAMM coins)
-  const customTokens = [];
-  for (const sym of Object.keys(tokens)) {
-    if (shown.has(sym)) continue;
-    if (tokens[sym]._isZammStake) continue; // ZAMM is in built-in section, skip here
-    if (tokens[sym]._isDaicoCoin) continue;
-    if (tokens[sym]._isCurveCoin) continue;
-    if (tokens[sym]._isZammCoin) continue;
-    if (builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
-    if (weiListTokenSource.has(sym)) continue;
-    if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    customTokens.push(sym);
-  }
-  if (customTokens.length > 0) {
-    appendGroupLabel('Custom');
-    for (const sym of customTokens) appendRow(sym);
-    hasAny = true;
-  }
-
-  if (!hasAny) {
+  if (groups.length === 0) {
     const empty = document.createElement('div');
-    empty.style.cssText = 'padding:16px 12px;color:#999;font-size:13px;text-align:center';
+    empty.className = 'token-list-empty';
     if (q && _weiResolving) {
-      empty.textContent = 'Resolving \u2026';
+      empty.textContent = 'Resolving …';
     } else if (q && !_bundledLoaded) {
-      empty.textContent = 'Loading token list \u2026';
+      empty.textContent = 'Loading token list …';
     } else {
-      empty.textContent = q ? 'No tokens match \u201c' + q + '\u201d' : 'No tokens';
+      empty.textContent = q ? 'No tokens match “' + q + '”' : 'No tokens';
     }
     frag.appendChild(empty);
   }
 
+  list.textContent = '';
   list.appendChild(frag);
 
-  // Highlight best match when searching
-  if (q && q.length >= 2) {
-    const rows = list.querySelectorAll('.token-list-item');
-    let bestRow = null;
-    for (const row of rows) {
-      if (row.classList.contains('disabled')) continue;
-      const sym = (row.getAttribute('data-symbol') || '').toLowerCase();
-      const t = tokens[row.getAttribute('data-symbol')];
-      // Exact symbol or address match gets priority
-      if (sym === q || (t && t.address.toLowerCase() === q)) {
-        bestRow = row;
-        break;
-      }
-      // First partial match as fallback
-      if (!bestRow && (sym.includes(q) || (t && t.address.toLowerCase().includes(q)))) {
-        bestRow = row;
-      }
-    }
-    if (bestRow) {
-      bestRow.classList.add('highlight');
-      bestRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+  if (bestRow) {
+    bestRow.classList.add('highlight');
+    bestRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
 
@@ -9455,6 +9423,16 @@ function initTokenListClick() {
       }
       return;
     }
+    // "Show all N" on a capped group
+    const more = e.target.closest('.token-group-more');
+    if (more) {
+      const key = more.getAttribute('data-group');
+      if (key) {
+        _tokenGroupsExpanded.add(key);
+        renderTokenList($('tokenSearchInput')?.value || '');
+      }
+      return;
+    }
     const row = e.target.closest(".token-list-item");
     if (!row) return;
     if (row.classList.contains('disabled')) return;
@@ -9465,6 +9443,7 @@ function initTokenListClick() {
 
 function openTokenModal(side) {
   currentModal = side;
+  _tokenGroupsExpanded.clear();   // each open starts from the capped view
   const searchInput = $('tokenSearchInput');
   if (searchInput) searchInput.value = '';
   const statusEl = $('weiListStatus');
