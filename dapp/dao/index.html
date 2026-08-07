@@ -1433,8 +1433,13 @@ body.modal-open { overflow: hidden; }
 .delegation-manage.hidden {
   display: none;
 }
+/* Was full-width, which reads as a banner now that the page is wide. */
 .delegation-manage-btn {
-  width: 100%;
+  width: auto;
+  min-width: 220px;
+}
+@media (max-width: 700px) {
+  .delegation-manage-btn { width: 100%; }
 }
 .delegation-total {
   margin-top: 12px;
@@ -1561,11 +1566,56 @@ body.modal-open { overflow: hidden; }
   gap: 10px;
 }
 .receipt-card {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-muted);
   padding: 10px;
   cursor: pointer;
   transition: border-color 0.2s;
   overflow: hidden;
+}
+/* Pin the buttons to the bottom so cards in a row line up whether or not
+   they have rewards to claim. */
+.receipt-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.receipt-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 4px;
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.receipt-btn.claim { background: var(--btn-bg); border: none; color: var(--btn-fg); font-weight: 600; }
+.receipt-btn.transfer { background: var(--surface); border: 1px solid var(--border-muted); color: var(--fg); }
+.receipt-btn.transfer:hover { background: var(--surface-hover); color: var(--fg); }
+.receipt-claimed {
+  flex: 1;
+  padding: 7px 4px;
+  background: var(--status-success);
+  border: 1px solid var(--border-muted);
+  color: var(--green);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+}
+.receipt-id {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 6px;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .receipt-card:hover { border-color: var(--fg); }
 .receipt-image {
@@ -1574,14 +1624,6 @@ body.modal-open { overflow: hidden; }
   object-fit: cover;
   display: block;
   margin-bottom: 8px;
-}
-.receipt-name {
-  font-size: 11px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .receipt-proposal {
   font-size: 10px;
@@ -12486,16 +12528,9 @@ body.modal-open { overflow: hidden; }
             const supportColor = supportColors[receipt.support];
 
             let imageHTML = '';
-            let nameHTML = '';
-
-            if (receipt.metadata) {
-              if (receipt.metadata.image) {
-                const imageUrl = toGatewayUrl(receipt.metadata.image);
-                imageHTML = `<img src="${imageUrl}" class="receipt-image" alt="Receipt" />`;
-              }
-              if (receipt.metadata.name) {
-                nameHTML = `<div class="receipt-name">${receipt.metadata.name}</div>`;
-              }
+            if (receipt.metadata?.image) {
+              const imageUrl = toGatewayUrl(receipt.metadata.image);
+              imageHTML = `<img src="${imageUrl}" class="receipt-image" alt="Receipt" />`;
             }
 
             // Check for futarchy claim eligibility
@@ -12509,17 +12544,13 @@ body.modal-open { overflow: hidden; }
               if (userSupport === winnerSupport) {
                 if (receipt.claimed || receipt.balance === 0n) {
                   // Already claimed - show claimed status
-                  claimButtonHTML = `
-                    <div style="width: 100%; margin-top: 0.75rem; padding: 0.6rem; background: var(--status-success); border: 1px solid var(--border-muted); color: var(--green); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; text-align: center; ">
-                      ✓ Rewards Claimed
-                    </div>
-                  `;
+                  claimButtonHTML = `<div class="receipt-claimed">&check; Claimed</div>`;
                 } else {
                   // Has unclaimed rewards
                   claimButtonHTML = `
-                    <button onclick="event.stopPropagation(); claimFutarchyReward('${receipt.proposalId.toString()}', '${receipt.balance.toString()}');"
-                            style="width: 100%; margin-top: 0.75rem; padding: 0.6rem; background: var(--btn-bg); border: none; color: var(--btn-fg); font-size: 0.65rem; letter-spacing: 0.1em; cursor: pointer; text-transform: uppercase; font-weight: 600; transition: all 0.2s ease;">
-                      Claim Rewards
+                    <button class="receipt-btn claim" title="Claim futarchy rewards for this receipt"
+                            onclick="event.stopPropagation(); claimFutarchyReward('${receipt.proposalId.toString()}', '${receipt.balance.toString()}');">
+                      Claim
                     </button>
                   `;
                 }
@@ -12527,9 +12558,10 @@ body.modal-open { overflow: hidden; }
             }
 
             // Handle display for claimed vs unclaimed receipts
+            const receiptCount = parseFloat(balanceFormatted);
             const amountDisplay = receipt.claimed || receipt.balance === 0n
-              ? '<div class="receipt-amount" style="opacity: 0.6;">Receipt Claimed</div>'
-              : `<div class="receipt-amount">${parseFloat(balanceFormatted).toFixed(4)} receipts</div>`;
+              ? '<div class="receipt-amount" style="opacity: 0.6;">Receipt claimed</div>'
+              : `<div class="receipt-amount">${receiptCount.toLocaleString(undefined, {maximumFractionDigits: 4})} receipt${receiptCount === 1 ? '' : 's'}</div>`;
 
             // Convert receipt ID from hex to decimal for display
             const receiptIdDecimal = BigInt(receipt.receiptId).toString();
@@ -12539,25 +12571,20 @@ body.modal-open { overflow: hidden; }
 
             // Add transfer button if user has balance
             const transferButtonHTML = receipt.balance > 0n
-              ? `
-                <button class="transfer-receipt-btn" data-receipt-index="${index}"
-                        style="width: 100%; margin-top: 0.5rem; padding: 0.6rem; background: var(--surface); border: 1px solid var(--border-muted); color: var(--fg); font-size: 0.65rem; letter-spacing: 0.1em; cursor: pointer; text-transform: uppercase; transition: all 0.2s ease;"
-                        onmouseover="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)'"
-                        onmouseout="this.style.background='var(--surface-hover)'; this.style.borderColor='var(--border-muted)'">
-                  Transfer Receipt
-                </button>
-              `
+              ? `<button class="receipt-btn transfer transfer-receipt-btn" data-receipt-index="${index}" title="Transfer this receipt">Transfer</button>`
+              : '';
+
+            const actionsHTML = (claimButtonHTML || transferButtonHTML)
+              ? `<div class="receipt-actions">${claimButtonHTML}${transferButtonHTML}</div>`
               : '';
 
             card.innerHTML = `
               ${imageHTML}
-              ${nameHTML}
               <div class="receipt-proposal">Proposal #${receipt.proposalId.toString().slice(0, 8)}...</div>
               <div class="receipt-vote" style="color: ${supportColor};">Voted ${supportLabel}</div>
               ${amountDisplay}
-              <div style="font-size: 0.65rem; opacity: 0.5; margin-top: 0.5rem; font-family: monospace;" title="Receipt ID (uint256): ${receiptIdDecimal}">ID: ${receiptIdTruncated}</div>
-              ${claimButtonHTML}
-              ${transferButtonHTML}
+              <div class="receipt-id" title="Receipt ID (uint256): ${receiptIdDecimal}">${receiptIdTruncated}</div>
+              ${actionsHTML}
             `;
 
             // Add event listener for transfer button
