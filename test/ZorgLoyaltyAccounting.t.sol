@@ -104,6 +104,41 @@ contract ZorgLoyaltyAccountingTest is Test {
         );
     }
 
+    /// The only route by which anyone - the DAO or a stranger - can push ETH to
+    /// bonded receipts from outside the tax: bond a throwaway position and exit
+    /// it immediately on purpose. Worth pinning because it is the sole path,
+    /// `loyaltyRewardPerWeight` having exactly one writer, and because the cost
+    /// is not what it looks like: most of the ETH comes straight back.
+    function testDeliberateSelfExitIsTheOnlyWayToFundLoyaltyFromOutside() public {
+        _bond(alice, 1, 10_000 ether, 0.1 ether, 0);      // the audience
+        uint256 before = conviction.loyaltyOf(1);
+
+        // A donor needs a zOrgz, ONE WEI of zOrg, and the ETH it wants to move.
+        address donor = address(0xD0);
+        zorgz.mint(donor, 9, "data:image/svg+xml;base64,PHN2Zy8+");
+        shares.mint(donor, 1);
+        vm.deal(donor, 1 ether);
+        vm.startPrank(donor);
+        shares.approve(address(conviction), type(uint256).max);
+        zorgz.approve(address(conviction), 9);
+        conviction.bondZorgz{value: 1 ether}(9, 1, 0);    // tier 0, so no lock blocks the exit
+        conviction.unbond(9);                             // same block
+        vm.stopPrank();
+
+        // 1 ETH in: 20% tax = 0.2, split 0.1 treasury / 0.1 to bonded receipts.
+        assertEq(conviction.ethCredits(donor), 0.8 ether, "80% comes straight back");
+        assertEq(conviction.loyaltyOf(1) - before, 0.1 ether, "0.1 reaches the audience");
+        assertEq(conviction.treasuryEth(), 0.1 ether, "0.1 to the treasury");
+
+        // Everything except the ETH is recycled, so the rig is reusable forever.
+        assertEq(zorgz.ownerOf(9), donor, "the zOrgz comes back");
+        assertEq(shares.balanceOf(donor), 1, "the one wei of zOrg comes back");
+        assertEq(conviction.bondedWeight(9), 0, "and the receipt id is free to bond again");
+
+        // The donor funds none of its own gift: its weight leaves before the split.
+        assertEq(conviction.loyaltyOf(9), 0, "donor claws nothing back");
+    }
+
     /// Arriving after the tax earns none of it, and claiming keeps the bond.
     function testNoRetroactiveEarningAndClaimingDoesNotExit() public {
         _bond(alice, 1, 10_000 ether, 0.1 ether, 0);
