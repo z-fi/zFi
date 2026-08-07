@@ -158,7 +158,7 @@ p code, li code {
     <li><code>tx.to</code> &mdash; <strong>not always zRouter.</strong> It is zRouter when an on-chain zQuoter route wins, and the aggregator's own settlement contract when one of them wins. Always send to the returned address</li>
     <li><code>tx.value</code> &mdash; wei to attach; <code>"0"</code> for ERC20 input</li>
     <li><code>allQuotes</code> &mdash; every venue that returned a price, sorted best-first</li>
-    <li><code>approvalTarget</code> &mdash; the contract to approve for ERC20 input. zRouter for on-chain routes, the aggregator's spender otherwise. <code>settlementAddress</code> is additionally present for aggregators that settle at a different address than the approval spender</li>
+    <li><code>approvalTarget</code> &mdash; the contract to approve for ERC20 input. zRouter for on-chain routes, the aggregator's spender otherwise. It is often <em>not</em> the same as <code>tx.to</code>: several aggregators pull tokens through a spender contract but settle at a different address (Paraswap, for one). Approve <code>approvalTarget</code>, send to <code>tx.to</code></li>
   </ul>
 
   <p style="margin-top:10px"><strong>Execute the swap:</strong></p>
@@ -334,7 +334,7 @@ return await quoter.build3HopMulticall(
   <div class="sig">build3HopMulticall(address to, bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, uint256 slippageBps, uint256 deadline) &rarr; (Quote a, Quote b, Quote c, bytes[] calls, bytes multicall, uint256 msgValue)</div>
 
   <h3>getQuotes<span class="pill">view</span></h3>
-  <p>Returns the best single-hop quote and all individual AMM quotes (V2, Sushi, zAMM, V3, V4). Useful for displaying price comparison across venues.</p>
+  <p>Returns the best single-hop quote and all individual AMM quotes across the fee-tier grid (V2, Sushi, zAMM, V3, V4). Useful for displaying price comparison across venues. Curve and Lido are <em>not</em> in this grid &mdash; quote those with <code>quoteCurve</code> / <code>quoteLido</code>, or use <code>buildBestSwap</code>, which weighs all seven sources.</p>
   <div class="sig">getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount) &rarr; (Quote best, Quote[] quotes)</div>
 
   <h3>quoteCurve<span class="pill">view</span></h3>
@@ -347,6 +347,7 @@ return await quoter.build3HopMulticall(
 
   <h3>Individual AMM Quotes<span class="pill">view</span></h3>
   <p>Low-level quoting for specific venues. Available on the base quoter at <code>0x658bF1A6608210FDE7310760f391AD4eC8006A5F</code>.</p>
+  <p style="font-size:12px;color:var(--fg-muted)">Do not call <code>quoteV4</code> on the base quoter. Its swap-fee expression breaks once a V4 pool has a protocol fee set (live since Uniswap enabled them at block 25623201), producing a bogus fee and either a revert or a garbage price. Call it on the corrected V4 quoter at <code>0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6</code> instead &mdash; same signature. The main zQuoter above already routes V4 through it, so <code>getQuotes</code> and every <code>build*</code> function are unaffected.</p>
   <div class="sig">quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV3(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV4(bool exactOut, address tokenIn, address tokenOut, uint24 fee, int24 tickSpacing, address hooks, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
@@ -358,8 +359,8 @@ return await quoter.build3HopMulticall(
 <div class="section">
   <h2>Quote Struct</h2>
 <pre>struct Quote {
-    AMM source;       // 0=V2, 1=Sushi, 2=zAMM, 3=V3, 4=V4,
-                      // 5=Curve, 6=Lido, 7=WETH_WRAP, 8=V4_HOOKED
+    AMM source;       // 0=UNI_V2,  1=SUSHI, 2=ZAMM, 3=UNI_V3,
+                      // 4=UNI_V4,  5=CURVE, 6=LIDO, 7=WETH_WRAP
     uint256 feeBps;   // pool fee in basis points
     uint256 amountIn;
     uint256 amountOut;
