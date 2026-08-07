@@ -985,8 +985,8 @@ body.modal-open { overflow: hidden; }
 }
 
 /* Shared section heading for the feed blocks below the card
-   (recent orders / curve coins / predictions) — these used to be three
-   near-identical inline styles that had drifted apart. */
+   (DAICO link / recent orders) — these used to be near-identical inline
+   styles that had drifted apart. */
 .sec-head {
   display: flex;
   align-items: baseline;
@@ -1355,7 +1355,6 @@ body.modal-open { overflow: hidden; }
 </div><!-- end swapTab -->
 
 <div id="liveSalesSection" class="live-sales" style="display:none"></div>
-<div id="liveCurveSection" class="live-sales" style="display:none"></div>
 <div id="privacyTab" style="display:none">
 <div id="ppWalletSeedBackupNotice" class="pp-notice" style="display:none;margin-bottom:16px"></div>
 <div class="swap-card">
@@ -2075,16 +2074,15 @@ const CURVE_SALE_IFACE = new ethers.Interface([
 ]);
 // Pool key for graduated curve coins on ZAMM: feeOrHook = uint160(CURVE_SALE) | (1<<255).
 const CURVE_HOOK_FEE = BigInt(CURVE_SALE) | (1n << 255n);
-const CURVE_TILE_IPFS_GW = IPFS_GATEWAYS[0];
-const CURVE_TILE_MAX = 3;
 const CURVE_TOKEN_IFACE = new ethers.Interface([
   'function name() view returns (string)',
   'function symbol() view returns (string)',
-  'function contractURI() view returns (string)',
 ]);
 
-async function loadLiveCurveCoins() {
-  const el = $('liveCurveSection');
+// Curve launches are not featured on the swap page — the lander's highlights are
+// the DAICO link and the orderbook ticker. This only registers the coins in the
+// token picker so they stay searchable and tradeable.
+async function registerCurveCoins() {
   try {
     // Recent curve launches come from the sale contract's own logs
     // (dapp/modules/curve-registry.js). Falls back silently to nothing if the
@@ -2106,14 +2104,13 @@ async function loadLiveCurveCoins() {
     const ordered = launched.filter(a => !spamSet.has(a.toLowerCase())).slice(0, 50);
     if (ordered.length === 0) return;
 
-    // Multicall curves() + name/symbol/contractURI for each token in one round-trip.
-    const CALLS_PER = 4;
+    // Multicall curves() + name/symbol for each token in one round-trip.
+    const CALLS_PER = 3;
     const calls = [];
     for (const addr of ordered) {
       calls.push([CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('curves', [addr])]);
       calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('name', [])]);
       calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('symbol', [])]);
-      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('contractURI', [])]);
     }
     const mcRaw = await rpc.call({
       to: MULTICALL3_ADDRESS,
@@ -2126,7 +2123,6 @@ async function loadLiveCurveCoins() {
       try { return CURVE_TOKEN_IFACE.decodeFunctionResult(fn, res.returnData)[0]; } catch { return null; }
     };
 
-    const cards = [];
     for (let i = 0; i < ordered.length; i++) {
       const tokenAddr = ordered[i];
       const base = i * CALLS_PER;
@@ -2138,46 +2134,22 @@ async function loadLiveCurveCoins() {
         token_address: tokenAddr,
         name: decode(mcRes[base + 1], 'name'),
         symbol: decode(mcRes[base + 2], 'symbol'),
-        contractURI: decode(mcRes[base + 3], 'contractURI'),
-        image: null,   // filled from contractURI metadata for the visible cards only
       };
       // Skip uninitialised slots (creator==0 means the token isn't actually configured here).
       if (!curve.creator || curve.creator === ethers.ZeroAddress) continue;
 
-      const sold = BigInt(curve.sold);
-      const cap = BigInt(curve.cap);
-      const vr = BigInt(curve.virtualReserve);
-      const startPrice = BigInt(curve.startPrice);
-      const raisedETH = BigInt(curve.raisedETH);
-      const graduationTarget = BigInt(curve.graduationTarget);
-      const remaining = vr - sold;
-      const spotPrice = remaining > 0n ? (startPrice * vr * vr) / (remaining * remaining) : 0n;
-      const perMilEth = (Number(spotPrice) / 1e18) * 1e6;
-      const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
-      // Use the binding graduation criterion (raisedETH/target if target-gated) — XYK pricing
-      // back-loads ETH so sold/cap alone under-reports proximity to graduation. Match the
-      // detail page so the user sees a consistent progress signal across views.
-      const ethPct = graduationTarget > 0n
-        ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
-        : 0;
-      const pct = Math.max(salePct, ethPct);
-      const status = curve.seeded ? 'graduated' : curve.graduated ? 'ready to LP' : 'live';
-
       const rawSym = String(r.symbol || '???').trim();
       // Sanitise symbol for use as a tokens[] key + URL param (matches validateTokenList rules).
       const safeSym = rawSym.replace(/[^A-Za-z0-9.$_-]/g, '').slice(0, 24) || 'COIN';
-      // Icons live in the contractURI metadata JSON; only the visible cards fetch it (below).
-      const icon = null;
       const displayName = r.name || rawSym;
 
       // Inject into the dropdown so users can search/select. Collide-safe key:
       // if the symbol is already taken by a different address, suffix with .curve-{addr-prefix}.
       // Keep `symbol` as the raw user-supplied string so non-ASCII symbols still display correctly
       // (the picker falls back to the key when sanitisation strips the symbol entirely).
-      let key = null;
       try {
         const checksummed = ethers.getAddress(r.token_address);
-        key = safeSym;
+        let key = safeSym;
         const existing = tokens[key];
         if (existing && existing.address.toLowerCase() !== checksummed.toLowerCase()) {
           key = safeSym + '.curve-' + r.token_address.slice(2, 6).toLowerCase();
@@ -2193,90 +2165,16 @@ async function loadLiveCurveCoins() {
             _curveSeeded: !!curve.seeded,
             _curveGraduated: !!curve.graduated,
           };
-        } else {
-          key = null;   // collided with a non-curve token; nothing of ours to decorate
         }
-      } catch {} // bad address — skip injection but still allow the tile card
-
-      cards.push({
-        addr: r.token_address,
-        name: r.name || curve.creator.slice(0, 8),
-        symbol: rawSym,
-        icon,
-        contractURI: r.contractURI,
-        tokenKey: key,
-        perMilEth, pct, status, seeded: curve.seeded, graduated: curve.graduated,
-        // Heat ranks the tile: progress on the curve, decayed by age since launch, so a
-        // coin moving today outranks one that crawled to the same place months ago and a
-        // stalled launch fades out on its own. Computed from data the multicall already
-        // returned — no extra reads. Filtered at render time; the dropdown still carries
-        // every coin, so nothing here makes a coin unsearchable or untradeable.
-        heat: pct / (1 + Math.max(0, (Date.now() / 1000 - Number(curve.launchTime)) / 86400))
-      });
+      } catch {} // bad address — skip injection
     }
 
     // Re-render an open token modal in case the user is searching while curves arrive.
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
-
-    if (!el || cards.length === 0) return;
-    // Feature only coins with progress that renders as something (0.05% rounds to 0.1%),
-    // hottest first. If nothing clears the bar, drop the section rather than lead with a
-    // column of 0.0%.
-    const tileCards = cards.filter(c => c.pct >= 0.05).sort((a, b) => b.heat - a.heat).slice(0, CURVE_TILE_MAX);
-    if (tileCards.length === 0) { el.style.display = 'none'; return; }
-
-    // Resolve logos from contractURI metadata — visible cards only, so one tile costs
-    // at most CURVE_TILE_MAX extra fetches.
-    await Promise.allSettled(tileCards.map(async c => {
-      if (!c.contractURI) return;
-      try {
-        let m;
-        if (c.contractURI.trimStart().startsWith('{')) {
-          // Raw on-chain JSON, no data: prefix — four early curve launches use this.
-          m = JSON.parse(c.contractURI);
-        } else if (c.contractURI.startsWith('data:')) {
-          m = JSON.parse(decodeURIComponent(c.contractURI.split(',').slice(1).join(',')));
-        } else {
-          const url = c.contractURI.startsWith('ipfs://')
-            ? CURVE_TILE_IPFS_GW + c.contractURI.slice(7) : c.contractURI;
-          if (!url.startsWith('https://')) return;
-          m = await (await fetch(url)).json();
-        }
-        if (!m || !m.image) return;
-        const img = m.image.startsWith('ipfs://') ? CURVE_TILE_IPFS_GW + m.image.slice(7) : m.image;
-        if (!img.startsWith('https://') && !img.startsWith('data:image/')) return;
-        c.icon = img;
-        if (c.tokenKey && tokens[c.tokenKey] && tokens[c.tokenKey]._isCurveCoin) {
-          tokens[c.tokenKey].icon = img;
-        }
-      } catch {}
-    }));
-
-    // Format: lowercase header (matches existing tiles) + stacked cards.
-    const fmtPrice = v => v >= 1 ? v.toFixed(3) : v >= 0.01 ? v.toFixed(4) : v >= 0.0001 ? v.toFixed(6) : v.toExponential(2);
-    let html = `<div class="sec-head"><span>Curve Coins</span><a href="coin/">Launch &rarr;</a></div>`;
-    for (const c of tileCards) {
-      const logo = c.icon
-        ? `<img class="live-sale-logo" src="${escAttr(c.icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${escAttr((c.symbol[0]||'?').toUpperCase())}</div>'">`
-        : `<div class="live-sale-logo-ph">${esc((c.symbol[0]||'?').toUpperCase())}</div>`;
-      // Color the % by status: green for live progress, muted once graduated.
-      const pctColor = c.seeded ? 'var(--fg-muted)' : 'var(--green, #22c55e)';
-      html += `<a class="live-sale-card" href="coin/#${c.addr}" style="margin-bottom:4px">
-        ${logo}
-        <div class="live-sale-info">
-          <div class="live-sale-name">${esc(c.name)} <span style="color:var(--fg-muted);font-weight:400">$${esc(c.symbol)}</span></div>
-          <div class="live-sale-meta">${fmtPrice(c.perMilEth)} ETH/1M &middot; ${esc(c.status)}</div>
-        </div>
-        <div class="live-sale-pct" style="color:${pctColor}">${c.pct.toFixed(1)}%</div>
-        <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(c.pct, 100).toFixed(1)}%;background:${pctColor}"></div></div>
-      </a>`;
-    }
-    el.innerHTML = html;
-    if (_activeTab === 'swap') el.style.display = '';
-  } catch (e) { console.warn('Curve tile load failed:', e); }
+  } catch (e) { console.warn('Curve coin registration failed:', e); }
 }
 
-setTimeout(loadLiveCurveCoins, 200);
+setTimeout(registerCurveCoins, 200);
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -10135,8 +10033,6 @@ function switchTab(tab) {
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
   const lsEl = $('liveSalesSection');
   if (lsEl && lsEl.innerHTML) lsEl.style.display = tab === 'swap' ? '' : 'none';
-  const lcEl = $('liveCurveSection');
-  if (lcEl && lcEl.innerHTML) lcEl.style.display = tab === 'swap' ? '' : 'none';
   $('privacyTab').style.display = tab === 'privacy' ? '' : 'none';
   $('coinTab').style.display = tab === 'coin' ? '' : 'none';
   if (tab === 'coin' && !$('coinLaunchAnim').innerHTML) { $('coinLaunchAnim').innerHTML = _coinAnimSVG(_coinLaunchType); }
