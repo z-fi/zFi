@@ -1048,6 +1048,24 @@ body.modal-open { overflow: hidden; }
   color: var(--fg-dim);
 }
 .swap-hint .info-icon { opacity: 0.55; }
+/* Sits at the far end of the hint row, quiet enough to be a credit rather than
+   a call to action - but it is the only thing on the swap page that says where
+   the picker's order comes from, so it is a link and not a caption. */
+.swap-hint .zlist-credit {
+  margin-left: auto;
+  color: inherit;
+  opacity: 0.55;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  white-space: nowrap;
+}
+.swap-hint .zlist-credit:hover,
+.swap-hint .zlist-credit:focus-visible { opacity: 1; border-bottom-color: currentColor; }
+/* On narrow screens the two halves stop competing for one line. */
+@media (max-width: 460px) {
+  .swap-hint { flex-wrap: wrap; }
+  .swap-hint .zlist-credit { margin-left: 0; flex-basis: 100%; }
+}
 
 /* Receiver accordion */
 .receiver-toggle {
@@ -1192,7 +1210,7 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div id="swapTab">
-<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, OKX, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span></div>
+<div class="swap-hint"><span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><a href="https://github.com/zammdefi/zrouter" target="_blank" rel="noopener" style="color:inherit;font-weight:600">zFi</a> is a meta DEX aggregator. Every quote races 10+ sources in parallel and picks the best price automatically — or you can choose manually.<br><br><b>External aggregators:</b> 0x, ParaSwap, KyberSwap, 1inch, OKX, CoW Protocol, Bebop, Enso, OpenOcean.<br><br><b>On-chain quoter (zQuoter):</b> Unlike off-chain APIs, zQuoter discovers routes directly on the blockchain via Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido — with atomic multi-hop, split routing, and per-leg slippage protection. No solvers, no servers, no API keys. Works even when every external API is down.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the pools.</span></span><span>Best price across 10+ sources</span><a class="zlist-credit" href="./zlist/" title="The order of this token picker is set onchain by bonded zOrgz">powered by conviction-ranked listings</a></div>
 
 <!-- Swap card -->
 <div class="swap-card">
