@@ -602,6 +602,22 @@ function guard(doc,win){
           : 'Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what '
             +'lets you place support on the listings below.';
         $('usebtn').classList.toggle('adone',on);
+        /* The contract's own management panel is a <details> that ships closed,
+           labelled "Bond and redeem" - so everything you can do to a bond you
+           have just loaded is one unexplained disclosure triangle away, on a page
+           that has otherwise told you the receipt is live. Open it once, when a
+           receipt arrives, and say what it manages. Never forced shut again: if
+           the reader collapses it, it stays collapsed. */
+        if(on){
+          const acts=doc.getElementById('acts');
+          if(acts&&!acts.dataset.zopened){
+            acts.dataset.zopened='1';
+            acts.open=true;
+            const sum=acts.querySelector('summary');
+            if(sum&&/^Bond and redeem$/.test((sum.textContent||'').trim()))
+              sum.textContent='Manage this bond';
+          }
+        }
         /* The greeting we rewrote above is only true before a receipt is
            loaded; afterwards it tells someone mid-allocation to go and bond.
            Cleared only when it is still our own sentence, so anything the
@@ -1520,10 +1536,30 @@ async function useOpen(){
     if(!held||!held.length){ lab.textContent=''; return; }
     const cur=$('urid').value;
     $('urid').outerHTML='<select id="urid">'
-      +held.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')
+      +held.map(i=>'<option value="'+i+'" data-i="'+i+'">zOrgz #'+i+'</option>').join('')
       +'<option value="__other">Another id…</option></select>';
     if(cur&&held.includes(cur))$('urid').value=cur;
     lab.textContent=' ('+held.length+' found)';
+    /* A list of bare ids makes you load a receipt to find out what it is, which
+       for a bond you cannot un-eternalize is a bad way to find out. Each option
+       now says what it holds. Enriched AFTER the picker is usable, so three
+       reads per receipt never stand between the reader and the field. */
+    held.forEach(async i=>{
+      const [w,ev,lk]=await Promise.all([
+        read(SEL.weight,i).then(r=>word(r,0)).catch(()=>null),
+        read(SEL.eternal,i).then(r=>word(r,0)===1n).catch(()=>false),
+        read(SEL.locks,i).then(r=>({tier:Number(word(r,3)),until:Number(word(r,1))})).catch(()=>null),
+      ]);
+      const sel=$('urid'); if(!sel||wizMode!=='use'||w===null)return;
+      const opt=sel.querySelector('option[data-i="'+i+'"]'); if(!opt)return;
+      const bits=[wFmt(w)+' zOrg'];
+      if(ev) bits.push('eternal');
+      else if(lk&&lk.tier&&lk.until>Date.now()/1000)
+        bits.push('locked to '+new Date(lk.until*1000).toLocaleDateString(undefined,
+          {year:'numeric',month:'short',day:'numeric'}));
+      else bits.push('unlocked');
+      opt.textContent='zOrgz #'+i+' \u2014 '+bits.join(' \u00b7 ');
+    });
     $('urid').onchange=()=>{
       if($('urid').value==='__other'){
         $('urid').outerHTML='<input id="urid" inputmode="numeric" placeholder="zOrgz token id">';
