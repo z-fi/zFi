@@ -65,7 +65,7 @@
        display:flex;align-items:center;gap:12px}
   /* An explicit way out, in the corner people look for one. Cancel sat at the far
      end of a footer that a long plan block pushes below the fold. */
-  #wizx{margin-left:auto;flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:7px;
+  #wizx{flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:7px;
        background:transparent;color:var(--fg-muted);font:20px/1 Helvetica,Arial,sans-serif;cursor:pointer}
   #wizx:hover,#wizx:focus-visible{background:var(--border);color:var(--fg)}
   .wbody{padding:18px 20px;display:grid;gap:15px;overflow:auto;flex:1 1 auto}
@@ -143,12 +143,52 @@
   .wrow input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--border)}
   .wrow input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--fg);border:0}
   .wrow input[type=range]:focus-visible{outline:2px solid var(--fg);outline-offset:4px;border-radius:4px}
-  /* Stop labels under the commitment track, last one emphasised: it is the one
-     that cannot be undone. */
+  /* Tick labels under the amount track. */
   .wticks{display:flex;justify-content:space-between;font-size:11px;color:var(--fg-muted);margin-top:-2px}
-  /* Gold marks the irreversible stop, so it belongs to the commitment track only -
-     unscoped it also gilded the zOrg balance, which is just a number. */
-  .wtiers span:last-child{color:#d9b34a}
+  /* THE COMMITMENT SEGMENTS. Each option carries what it costs you in time and
+     what it buys in rate, so the trade is legible without touching the control. */
+  .wseg{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}
+  .wsegi{position:relative;display:grid;gap:2px;justify-items:center;padding:9px 6px;cursor:pointer;
+       border:1px solid var(--border);border-radius:8px;text-align:center;line-height:1.25}
+  .wsegi input{position:absolute;opacity:0;width:0;height:0;margin:0}
+  .wsegt{font-size:12px;color:var(--fg-muted)}
+  .wsegr{font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .wsegi:hover{border-color:var(--fg-muted)}
+  /* Selected: the border and a filled face, so it reads at a glance which of the
+     five you are on without relying on colour alone. */
+  .wsegi.on{border-color:var(--fg);background:var(--fg);color:var(--bg)}
+  .wsegi.on .wsegt{color:var(--bg);opacity:.72}
+  .wsegi:focus-within{outline:2px solid var(--fg);outline-offset:2px}
+  /* Gold marks the one stop that cannot be undone, selected or not. */
+  .wsege .wsegr{color:#d9b34a}
+  .wsege.on{border-color:#d9b34a;background:#d9b34a}
+  .wsege.on .wsegr{color:#241c05}
+  .wsegi input:disabled{cursor:not-allowed}
+  .wsegi:active{transform:translateY(1px)}
+  /* --- motion. Small, and all of it switched off for reduced-motion. --- */
+  @keyframes wbump{0%{transform:none}30%{transform:scale(1.11)}100%{transform:none}}
+  .wbump{animation:wbump .34s cubic-bezier(.3,1.5,.5,1)}
+  .wsrate b{display:inline-block;transform-origin:left center}
+  @keyframes wflip{0%{transform:rotateY(0);filter:brightness(1)}
+                   50%{transform:rotateY(90deg);filter:brightness(2.2)}
+                   100%{transform:rotateY(0);filter:brightness(1)}}
+  .wpart.wflip .wart{animation:wflip .42s ease-in-out}
+  @keyframes wshake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(4px)}
+                    50%{transform:translateX(-4px)}}
+  .wshake{animation:wshake .38s}
+  /* Buttons should feel pressed, not merely clicked. */
+  .wfoot2 button:active:not(:disabled),.acts button:active:not(:disabled),
+  .wmax:active,#wizx:active,#wizsnd:active{transform:translateY(1px)}
+  .wfoot2 .prim{transition:transform .08s,box-shadow .15s}
+  .wfoot2 .prim:hover:not(:disabled){box-shadow:0 0 0 3px color-mix(in srgb,var(--fg) 18%,transparent)}
+  #wizsnd{margin-left:auto;flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:7px;background:transparent;
+       color:var(--fg-muted);font:15px/1 Helvetica,Arial,sans-serif;cursor:pointer}
+  #wizsnd:hover,#wizsnd:focus-visible{background:var(--border);color:var(--fg)}
+  #wizsnd.woff{opacity:.5}
+  @media(prefers-reduced-motion:reduce){
+    .wbump,.wpart.wflip .wart,.wshake{animation:none}
+    .wfoot2 button:active,.acts button:active,.wsegi:active{transform:none}
+  }
   .weth{margin:12px 0 0;font-size:12px;color:var(--fg-muted)}
   .weth.wshort{color:#e0736d}
   /* STEPS. Collapsed while deciding, a live tracker once Bond is pressed. */
@@ -214,7 +254,9 @@
 <div id="boot"></div>
 <iframe id="frame" title="zOrg onchain interface" hidden></iframe>
 <dialog id="wiz">
-  <h3><span id="wiztitle">Bond a zOrgz</span><button id="wizx" type="button" aria-label="Close" title="Close">&times;</button></h3>
+  <h3><span id="wiztitle">Bond a zOrgz</span>
+    <button id="wizsnd" type="button" aria-pressed="true" title="Sound">&#9834;</button>
+    <button id="wizx" type="button" aria-label="Close" title="Close">&times;</button></h3>
   <div class="wbody" id="wizbody"></div>
   <div id="wstat"></div>
   <div class="wfoot2">
@@ -615,6 +657,84 @@ const wWait=async(p,hash,step,total)=>{
   throw Error('Step '+step+' of '+total+' is still pending. Reopen this once it confirms.');
 };
 
+/* ---------------------------------------------------------------------------
+   SOUND. Synthesised with WebAudio rather than sampled, because this page ships
+   no assets by design - the whole point is that it hosts nothing. Every sound is
+   triggered by a gesture, so the context is always allowed to start.
+   Off is remembered. Unannounced audio on a page about irreversible commitments
+   is hostile, so the toggle sits in the header rather than in a settings menu.
+--------------------------------------------------------------------------- */
+let SNDON=true, ACTX=null;
+try{ SNDON = localStorage.getItem('zlist_snd')!=='0' }catch(e){}
+const actx=()=>{
+  if(!SNDON)return null;
+  try{ ACTX=ACTX||new (window.AudioContext||window.webkitAudioContext)();
+       if(ACTX.state==='suspended')ACTX.resume(); return ACTX }catch(e){ return null }
+};
+/* One voice: a shaped blip. Everything below is a chord of these. */
+function tone(f,dur,type,vol,to,delay){
+  const c=actx(); if(!c)return;
+  const t=c.currentTime+(delay||0);
+  const o=c.createOscillator(), g=c.createGain();
+  o.type=type||'triangle';
+  o.frequency.setValueAtTime(f,t);
+  if(to) o.frequency.exponentialRampToValueAtTime(to,t+dur);
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol||.05,t+.006);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t); o.stop(t+dur+.02);
+}
+const SFX={
+  /* Pitch climbs with the tier, so the commitment ladder is audible as a ladder. */
+  step:i=>tone(420*Math.pow(1.12,i||0),.07,'square',.045),
+  drag:v=>tone(300+v*260,.028,'sine',.022),
+  pick:()=>{tone(660,.06,'triangle',.05);tone(990,.07,'triangle',.03,null,.05)},
+  eternal:()=>[0,.07,.14,.23].forEach((d,i)=>tone([523,659,784,1319][i],.24,'triangle',.05,null,d)),
+  press:()=>tone(300,.11,'square',.06,620),
+  done:()=>[0,.09,.18].forEach((d,i)=>tone([784,1047,1568][i],.14,'triangle',.05,null,d)),
+  win:()=>[0,.1,.2,.32].forEach((d,i)=>tone([523,784,1047,1568][i],.42,'triangle',.06,null,d)),
+  err:()=>{tone(200,.24,'sawtooth',.05,120);tone(150,.26,'square',.03,90)}
+};
+const sfx=(k,a)=>{ if(SNDON&&SFX[k]) try{SFX[k](a)}catch(e){} };
+/* ---------------------------------------------------------------------------
+   Numbers that move. A figure that snaps from 169,131 to 338,262 is read as a
+   different figure; one that travels there is read as the same figure changing,
+   which is the entire point of a live preview.
+--------------------------------------------------------------------------- */
+const REDUCED = matchMedia('(prefers-reduced-motion:reduce)').matches;
+const TWEENS=new WeakMap();
+function tweenTo(el,to,fmt){
+  if(!el)return;
+  const prev=TWEENS.get(el);
+  if(prev){ cancelAnimationFrame(prev.raf); clearTimeout(prev.bs); }
+  const from = prev ? prev.cur : to;
+  /* The target is written by this, and this is reachable without rAF. An
+     animation frame is a nice-to-have; the correct figure is not. rAF does not
+     fire in a background tab, so without a backstop a number could be left
+     mid-travel - or, on the very first change, never updated at all. */
+  const finish=()=>{ const st=TWEENS.get(el);
+    if(st){ cancelAnimationFrame(st.raf); clearTimeout(st.bs); }
+    el.textContent=fmt(to); TWEENS.set(el,{cur:to,raf:0,bs:0}); };
+  if(REDUCED || from===to || document.hidden){ finish(); return; }
+  const t0=performance.now(), ms=420;
+  const tick=now=>{
+    /* Clamped at BOTH ends. performance.now() going backwards - a restored tab, a
+       clock adjustment - made k negative, the easing negative with it, and the
+       figure shot past zero into nonsense on its way to a larger number. */
+    const k=Math.max(0,Math.min(1,(now-t0)/ms)), e=1-Math.pow(1-k,3);   // ease-out cubic
+    if(k>=1){ finish(); return; }
+    const cur=from+(to-from)*e;
+    el.textContent=fmt(cur);
+    const st=TWEENS.get(el)||{};
+    st.cur=cur; st.raf=requestAnimationFrame(tick); TWEENS.set(el,st);
+  };
+  TWEENS.set(el,{cur:from,raf:requestAnimationFrame(tick),bs:setTimeout(finish,ms+150)});
+}
+/* A brief flash on the element that changed, so the eye is told where to look. */
+const bump=el=>{ if(!el||REDUCED)return; el.classList.remove('wbump');
+  void el.offsetWidth; el.classList.add('wbump'); };
+
 let WZ={}, wizWaiting=false, FRAME=null, wizMode='bond';
 /* True from the moment Bond is pressed. plan() must not overwrite a live progress
    tracker with its collapsed summary - checkAppr can still resolve mid-flight. */
@@ -854,11 +974,26 @@ async function wizOpen(){
        reach permanent means you have already passed through the best rate. */
     /* Whole zOrg; the drawer never needs sub-unit precision, the number field does. */
     const zMax=WZ.zBal/10n**18n;
+    /* ALL render state lives here, above every function that reads it. plan() runs
+       once to seed the form, and a `let` further down the body is still in its
+       temporal dead zone at that point - which is exactly how this crashed twice:
+       first on wzPaint, then on the art it reads. */
+    let artSeq=0, artImg=null, artId='', artWas='';
     const stops=WZ.tiers.concat([{tier:WZ.top.tier,days:WZ.top.days,boost:WZ.top.boost,eternal:true}]);
     WZ.stops=stops;
     const dflt=stops.length-2;                     // the longest lock, not permanent
     body.innerHTML=
-      '<div class="wprev" id="wzprev"></div>'
+      /* Built once, then updated in place. Re-rendering it wholesale meant every
+         figure snapped to its new value, which reads as a different number rather
+         than the same number changing. */
+      '<div class="wprev" id="wzprev"><div class="wpart" id="wzart"></div>'
+     +'<div class="wpstats">'
+     +'<div class="wsrate"><b id="wzrate">\u2014</b><span>support rate</span></div>'
+     +'<dl class="wsdl">'
+     +'<div><dt>Directs</dt><dd><b id="wznow">0</b> now</dd></div>'
+     +'<div><dt>Rises to</dt><dd><b id="wzceil">0</b><span id="wzhalf"></span></dd></div>'
+     +'<div><dt>Redeemable</dt><dd id="wzredeem">\u2014</dd></div>'
+     +'</dl></div></div>'
      +'<div class="wrow"><label>Which zOrgz to escrow'
      +'<span id="wzfind" class="wfind"> — looking through your wallet…</span></label>'
      +'<input id="wzid" inputmode="numeric" placeholder="zOrgz token id"></div>'
@@ -871,10 +1006,23 @@ async function wizOpen(){
         tick, and the permanent stop already states the floor where it applies. */
      +'<div class="wticks"><span>0</span><span>'+wFmt(WZ.zBal)+'</span></div>'
      +'<p class="whint">Only zOrg buys support.</p></div>'
-     +'<div class="wrow"><div class="wlab"><label for="wztier">How long to commit it</label>'
+     /* Segments, not a slider. bondZorgz takes a uint8 tier and reverts
+        LockTierUnavailable for anything unseeded, so these five ARE the choices -
+        a track you drag along implied a continuum the contract cannot express,
+        spaced 0/90/180/365 as though that were linear time, and showed the rate
+        for exactly one stop at a time when the rate is the whole decision.
+        Radios, so arrow keys walk the group and each option is one click.
+        #wztier stays as the hidden index everything downstream already reads. */
+     +'<div class="wrow"><div class="wlab"><span class="wlabel">How long to commit it</span>'
      +'<span class="wval" id="wztlab"></span></div>'
-     +'<input type="range" id="wztier" min="0" max="'+(stops.length-1)+'" step="1" value="'+dflt+'">'
-     +'<div class="wticks wtiers">'+stops.map(s=>'<span>'+(s.eternal?'forever':s.days?s.days+'d':'none')+'</span>').join('')+'</div>'
+     +'<input type="hidden" id="wztier" value="'+dflt+'">'
+     +'<div class="wseg" role="radiogroup" aria-label="How long to commit it">'
+     +stops.map((s,i)=>'<label class="wsegi'+(s.eternal?' wsege':'')+(i===dflt?' on':'')+'">'
+        +'<input type="radio" name="wzstop" value="'+i+'"'+(i===dflt?' checked':'')+'>'
+        +'<span class="wsegt">'+(s.eternal?'forever':s.days?s.days+' days':'no lock')+'</span>'
+        +'<span class="wsegr">'+(s.eternal?'permanent':(s.boost/10000).toFixed(2)+'\u00d7')+'</span>'
+        +'</label>').join('')
+     +'</div>'
      +'<p class="whint" id="wzthint"></p></div>'
      +'<div class="wplan" id="wzplan"></div>'
      +'<div id="wzsteps"></div>';
@@ -912,25 +1060,29 @@ async function wizOpen(){
       $('wztlab').textContent = et ? 'permanent' : stop.days ? stop.days+' days' : 'no lock';
       $('wzthint').innerHTML = et
         ? (etShort
-            ? '<b>Needs at least '+wFmt(ETERNAL_MIN)+' zOrg.</b> Raise the amount above, or step back one stop.'
-            : 'Never redeemable, and it keeps the <b>'+rate+'\u00d7</b> rate of the '+stop.days
-              +'-day lock forever. This is the last stop for a reason: made permanent from '
-              +'<em>no lock</em> the rate would be frozen at 1.00\u00d7 with no way to raise it.')
+            ? '<b>Needs at least '+wFmt(ETERNAL_MIN)+' zOrg.</b> Raise the amount, or pick a lock instead.'
+            /* The rationale that used to live here - that reaching permanent any
+               other way freezes 1.00x - is now carried by the control itself, which
+               only offers permanent past the longest lock. */
+            : 'Never redeemable, and keeps the <b>'+rate+'\u00d7</b> rate forever.')
         : stop.days
             ? 'No early exit at any price. Redeemable in full afterwards.'
             : 'Withdrawable whenever you like, at the weakest rate.';
 
-      /* --- the preview ---------------------------------------------------- */
+      /* --- the preview, updated in place so the figures travel ------------- */
       wzPaint(et&&!etShort);
-      const st=$('wzstats');
-      if(st) st.innerHTML=
-         '<div class="wsrate"><b>'+rate+'\u00d7</b><span>support rate</span></div>'
-        +'<dl class="wsdl">'
-        +'<div><dt>Directs</dt><dd><b>'+(ok?wFmt(eff):'\u2014')+'</b> now</dd></div>'
-        +'<div><dt>Rises to</dt><dd><b>'+(ok?wFmt(eff*2n):'\u2014')+'</b>'
-          +(WZ.halfDays?' \u00b7 half of the way in '+Math.round(WZ.halfDays)+' days':'')+'</dd></div>'
-        +'<div><dt>Redeemable</dt><dd>'+(et&&!etShort?'<b>never</b>':stop.days?'from '+when(stop.days):'any time')+'</dd></div>'
-        +'</dl>';
+      const int=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Math.round(x));
+      const rEl=$('wzrate');
+      if(rEl && rEl.textContent!==rate+'\u00d7'){ rEl.textContent=rate+'\u00d7'; bump(rEl); }
+      tweenTo($('wznow'), ok?Number(eff/10n**18n):0, int);
+      tweenTo($('wzceil'), ok?Number(eff*2n/10n**18n):0, int);
+      const hEl=$('wzhalf');
+      if(hEl) hEl.textContent = WZ.halfDays?' \u00b7 half of the way in '+Math.round(WZ.halfDays)+' days':'';
+      const dEl=$('wzredeem');
+      const redeem = et&&!etShort?'never':stop.days?'from '+when(stop.days):'any time';
+      if(dEl && dEl.textContent!==redeem){
+        dEl.innerHTML = et&&!etShort?'<b>never</b>':redeem; bump(dEl);
+      }
 
       /* --- what it costs -------------------------------------------------- */
       /* Two lines, and neither restates a date the drawer above already shows.
@@ -1011,9 +1163,23 @@ async function wizOpen(){
       else { const n=Math.floor(Number(a.value)); r.value=String(amtToT(Number.isFinite(n)?Math.max(0,n):0)); }
       plan();
     };
-    $('wzamtr').oninput=()=>syncAmt('r');
-    $('wzmax').onclick=()=>{ $('wzamt').value=String(WZ.zBal/10n**18n); syncAmt('a'); };
-    $('wztier').oninput=plan;
+    let dragT=0;
+    $('wzamtr').oninput=()=>{
+      const now=performance.now();
+      if(now-dragT>55){ dragT=now; sfx('drag',Number($('wzamtr').value)/AMTSTEPS); }
+      syncAmt('r');
+    };
+    $('wzmax').onclick=()=>{ $('wzamt').value=String(WZ.zBal/10n**18n); sfx('pick'); syncAmt('a'); };
+    /* Mirror the chosen segment into the hidden index, then render once. */
+    const segs=[...body.querySelectorAll('input[name=wzstop]')];
+    segs.forEach(r=>r.onchange=()=>{
+      $('wztier').value=r.value;
+      segs.forEach(o=>o.closest('.wsegi').classList.toggle('on',o.checked));
+      const i=Number(r.value);
+      /* The one stop that cannot be undone gets its own sound. */
+      sfx(WZ.stops[i]&&WZ.stops[i].eternal?'eternal':'step',i);
+      plan();
+    });
     $('wzamt').oninput=()=>syncAmt('a'); $('wzamt').onchange=()=>syncAmt('a');
     syncAmt('a');                                   // seed the track from the default
     /* The live preview. ONE panel showing the receipt as it would be under the
@@ -1024,21 +1190,21 @@ async function wizOpen(){
        eternal receipt additionally carries the glyph ZorgReceiptArt splices in.
        Both are reproduced here from the token's own art, so this is what the NFT
        will actually look like rather than an impression of it. */
-    let artSeq=0, artImg=null, artId='';
     function wzPaint(eternal){
-      const box=$('wzprev'); if(!box)return;
+      const box=$('wzart'); if(!box)return;
       const id=($('wzid').value||'').trim();
-      if(!/^\d+$/.test(id)){
-        box.innerHTML='<div class="wpart wpempty">?</div><div class="wpstats" id="wzstats"></div>';
-        return;
-      }
+      const key=id+'|'+(eternal?'e':'b')+'|'+(artImg?'a':'-');
+      if(key===artWas)return;                     // nothing visual changed
+      const flip = artWas && artWas.split('|')[1]!==key.split('|')[1];
+      artWas=key;
+      if(!/^\d+$/.test(id)){ box.className='wpart'; box.innerHTML='<span class="wpempty">?</span>'; return; }
       const art = artImg&&artId===id
         ? '<span class="wart winv">'
           +'<img alt="" src="'+((eternal&&wEternalArt(artImg))||artImg)+'"></span>'
         : '<span class="wskel"></span>';
-      box.innerHTML='<div class="wpart">'+art
-        +'<span class="wpcap'+(eternal?' wgold':'')+'">'+(eternal?'eternal receipt':'bonded receipt')+'</span></div>'
-        +'<div class="wpstats" id="wzstats"></div>';
+      box.className='wpart'+(flip?' wflip':'');
+      box.innerHTML=art+'<span class="wpcap'+(eternal?' wgold':'')+'">'
+        +(eternal?'eternal receipt':'bonded receipt')+'</span>';
     }
     /* Fetching the art is separate from painting it, so dragging a drawer re-paints
        instantly off the cached image instead of touching the network. `seq` guards
@@ -1058,6 +1224,7 @@ async function wizOpen(){
        three sites, and the approval probe would have been the fourth thing to keep
        in step. */
     const onId=()=>{plan();loadArt();checkAppr()};
+    const onIdPick=()=>{sfx('pick');onId()};
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
     /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
        slow or refusing endpoint costs nothing but a line of hint text. */
@@ -1089,13 +1256,16 @@ async function wizOpen(){
             $('wzid').outerHTML='<input id="wzid" inputmode="numeric" placeholder="zOrgz token id">';
             $('wzid').oninput=onId; $('wzid').focus();
           }
-          onId();
+          onIdPick();
         };
         onId();
       } else lab.textContent=' (enter the id)';
     }).catch(()=>{ const l=$('wzfind'); if(l){l.classList.remove('wfind');l.textContent=' (enter the id)'} });
     /* Before discovery lands the field is a plain input, so follow typing too. */
     $('wzid').oninput=onId;
+    /* A modal focuses its first focusable child, which since the header gained a
+       sound toggle is a control nobody opened this dialog to press. */
+    try{ $('wzid').focus({preventScroll:true}) }catch(e){}
   }catch(e){ body.innerHTML='<p class="whint">'+(e.message||'Could not read the chain.')+'</p>'; }
 }
 async function wizRun(){
@@ -1103,7 +1273,8 @@ async function wizRun(){
   go.disabled=true; WZBUSY=true;
   /* The form is the record of what you agreed to; freeze it rather than let a
      drawer move under a transaction already in flight. */
-  ['wzid','wzamt','wzamtr','wztier','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=true});
+  ['wzid','wzamt','wzamtr','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=true});
+  document.querySelectorAll('input[name=wzstop]').forEach(e=>e.disabled=true);
   let steps=(WZ.steps||[]).slice(), cur=0;
   try{
     const id=$('wzid').value.trim(), amt=wUnits($('wzamt').value);
@@ -1141,12 +1312,13 @@ async function wizRun(){
     const send=c=>({to:c.to,data:c.data,value:c.value});
 
     const p=rpcProvider();
+    sfx('press');
     if(window._walletSendCalls){
       wzSteps(steps,0,'run','Confirm once in your wallet.');
       $('wstat').textContent='';
       await p.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',
         from:WZ.me, atomicRequired:true, calls:calls.map(send)}]});
-      wzSteps(steps,steps.length,'done','Submitted as one batch.');
+      wzSteps(steps,steps.length,'done','Submitted as one batch.'); sfx('win');
       $('wstat').textContent='Once it confirms, use receipt #'+id+' to place your support.';
     }else{
       for(cur=0;cur<calls.length;cur++){
@@ -1160,9 +1332,10 @@ async function wizRun(){
         if(cur<calls.length-1){
           wzSteps(steps,cur,'run','Waiting for it to confirm\u2026');
           await wWait(p,hash,cur+1,calls.length);
+          sfx('done');                         // one pip per step that lands
         }
       }
-      wzSteps(steps,steps.length,'done');
+      wzSteps(steps,steps.length,'done'); sfx('win');
       $('wstat').textContent='Once the last one confirms, use receipt #'+id+' to place your support.';
     }
     /* Terminal: the bond is placed. Leaving Bond live invited a second one,
@@ -1170,12 +1343,14 @@ async function wizRun(){
     go.disabled=true; $('wizcancel').textContent='Close';
     return;
   }catch(e){
-    wzSteps(steps,cur,'fail');
+    wzSteps(steps,cur,'fail'); sfx('err');
+    const w=$('wiz'); if(w&&!REDUCED){ w.classList.remove('wshake'); void w.offsetWidth; w.classList.add('wshake'); }
     $('wstat').textContent=e.message||'Cancelled.';
   }
   /* Only on failure: a placed bond must stay frozen. */
   WZBUSY=false;
-  ['wzid','wzamt','wzamtr','wztier','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=false});
+  ['wzid','wzamt','wzamtr','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=false});
+  document.querySelectorAll('input[name=wzstop]').forEach(e=>e.disabled=false);
   go.disabled=false;
 }
 /* ---------------------------------------------------------------------------
@@ -1264,6 +1439,16 @@ async function useRun(){
 }
 $('wizcancel').onclick=wizClose;
 $('wizx').onclick=wizClose;
+/* Reflected in the button rather than buried, and remembered. */
+const sndSync=()=>{ const b=$('wizsnd');
+  b.textContent = SNDON?'\u266a':'\u266a\u0338';
+  b.setAttribute('aria-pressed',String(SNDON));
+  b.title = SNDON?'Sound on':'Sound off';
+  b.classList.toggle('woff',!SNDON); };
+$('wizsnd').onclick=()=>{ SNDON=!SNDON;
+  try{ localStorage.setItem('zlist_snd',SNDON?'1':'0') }catch(e){}
+  sndSync(); if(SNDON) sfx('pick'); };
+sndSync();
 /* On a <dialog>, a click that lands on the backdrop reports the dialog itself as
    the target - every child fills it edge to edge. */
 $('wiz').addEventListener('click',e=>{ if(e.target===$('wiz')) wizClose(); });
