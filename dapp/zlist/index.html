@@ -193,6 +193,20 @@
     .wbump,.wpart.wflip .wart,.wshake{animation:none}
     .wfoot2 button:active,.acts button:active,.wsegi:active{transform:none}
   }
+  /* THE BOND LIST. One card per receipt, so every position is legible at once
+     instead of one at a time through a dropdown. */
+  .ubond{border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px}
+  .ubhead{display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+  .ubstate{font-size:12px;color:var(--fg-muted)}
+  .ubdl{margin:8px 0 0;display:grid;gap:4px;font-size:12.5px}
+  .ubdl>div{display:flex;justify-content:space-between;gap:10px}
+  .ubdl dt{color:var(--fg-muted)}
+  .ubdl dd{margin:0;text-align:right}
+  .ubwhy{margin:8px 0 0;font-size:12px;color:var(--fg-muted)}
+  .ubuse{margin-top:10px;padding:7px 13px;border:1px solid var(--border);border-radius:7px;
+       background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
+  .ubuse:hover{border-color:var(--fg)}
+  .ubuse:active{transform:translateY(1px)}
   .weth{margin:12px 0 0;font-size:12px;color:var(--fg-muted)}
   .weth.wshort{color:#e0736d}
   /* STEPS. Collapsed while deciding, a live tracker once Bond is pressed. */
@@ -354,7 +368,8 @@ const BRIDGE="<script>try{if(!window.ethereum&&parent!==window&&parent.ethereum)
    swap changes them, every lookup fails and the guard silently declines to
    install — the dapp must never be broken by its own safety rail.
 --------------------------------------------------------------------------- */
-const SEL={locks:'0x10feefe2',weight:'0xe0fb17b2',eternal:'0x467339e2'};
+const SEL={locks:'0x10feefe2',weight:'0xe0fb17b2',eternal:'0x467339e2',
+  allocated:'0x09807420',loyalty:'0x1827ac8f'};
 const w256=n=>BigInt(n).toString(16).padStart(64,'0');
 async function read(sel,id){
   for(const u of RPCS){
@@ -1524,6 +1539,7 @@ async function useOpen(){
   body.innerHTML=
      '<p class="whint">A receipt is the zOrgz you bonded. Loading it turns on the SET box on '
     +'every listing, so you can put your zOrg behind the ones you want ranked.</p>'
+    +'<div id="ulist"></div>'
     +'<div class="wrow"><label>Receipt id — the zOrgz you bonded'
     +'<span id="ufind" class="wfind"> — looking for yours…</span></label>'
     +'<input id="urid" inputmode="numeric" placeholder="zOrgz token id"></div>'
@@ -1534,31 +1550,52 @@ async function useOpen(){
     const lab=$('ufind'); if(!lab||wizMode!=='use')return;   // dialog moved on
     lab.classList.remove('wfind');
     if(!held||!held.length){ lab.textContent=''; return; }
-    const cur=$('urid').value;
-    $('urid').outerHTML='<select id="urid">'
-      +held.map(i=>'<option value="'+i+'" data-i="'+i+'">zOrgz #'+i+'</option>').join('')
-      +'<option value="__other">Another id…</option></select>';
-    if(cur&&held.includes(cur))$('urid').value=cur;
     lab.textContent=' ('+held.length+' found)';
-    /* A list of bare ids makes you load a receipt to find out what it is, which
-       for a bond you cannot un-eternalize is a bad way to find out. Each option
-       now says what it holds. Enriched AFTER the picker is usable, so three
-       reads per receipt never stand between the reader and the field. */
+    /* A list of bare ids made you load a receipt one at a time to find out what
+       it was - a bad way to learn about a position you may be about to make
+       permanent. Every bond is shown at once now, with the state that decides
+       which actions the contract will even accept. The mutations themselves stay
+       in the contract's own panel: two implementations of unbond is one more than
+       this page should carry. */
+    const list=$('ulist'); if(!list)return;
+    list.innerHTML=held.map(i=>'<div class="ubond" data-i="'+i+'">'
+      +'<div class="ubhead"><b>zOrgz #'+i+'</b><span class="ubstate wfind">reading…</span></div>'
+      +'<div class="ubbody"></div>'
+      +'<button type="button" class="ubuse">Use it</button></div>').join('');
+    list.onclick=ev=>{
+      const b=ev.target.closest&&ev.target.closest('.ubuse'); if(!b)return;
+      const row=b.closest('.ubond'); if(!row)return;
+      $('urid').value=row.dataset.i; sfx('pick'); useRun();
+    };
     held.forEach(async i=>{
-      const [w,ev,lk]=await Promise.all([
+      const [w,ev2,lk,al,ly]=await Promise.all([
         read(SEL.weight,i).then(r=>word(r,0)).catch(()=>null),
         read(SEL.eternal,i).then(r=>word(r,0)===1n).catch(()=>false),
         read(SEL.locks,i).then(r=>({tier:Number(word(r,3)),until:Number(word(r,1))})).catch(()=>null),
+        read(SEL.allocated,i).then(r=>word(r,0)).catch(()=>0n),
+        read(SEL.loyalty,i).then(r=>word(r,0)).catch(()=>0n),
       ]);
-      const sel=$('urid'); if(!sel||wizMode!=='use'||w===null)return;
-      const opt=sel.querySelector('option[data-i="'+i+'"]'); if(!opt)return;
-      const bits=[wFmt(w)+' zOrg'];
-      if(ev) bits.push('eternal');
-      else if(lk&&lk.tier&&lk.until>Date.now()/1000)
-        bits.push('locked to '+new Date(lk.until*1000).toLocaleDateString(undefined,
-          {year:'numeric',month:'short',day:'numeric'}));
-      else bits.push('unlocked');
-      opt.textContent='zOrgz #'+i+' \u2014 '+bits.join(' \u00b7 ');
+      if(wizMode!=='use')return;
+      const row=list.querySelector('.ubond[data-i="'+i+'"]'); if(!row||w===null)return;
+      const now=Math.floor(Date.now()/1000);
+      const locked=!!(lk&&lk.tier&&lk.until>now);
+      const when=t=>new Date(t*1000).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+      row.querySelector('.ubstate').outerHTML='<span class="ubstate'+(ev2?' wgold':'')+'">'
+        +(ev2?'eternal':locked?'locked to '+when(lk.until):'unlocked')+'</span>';
+      /* Why an action is unavailable, in the contract's own terms. unbond
+         reverts PermanentBond when eternal, ReceiptLocked before unlockAt, and
+         BondHasActiveAllocations while anything is still placed - so all three
+         are worth saying before somebody sends a transaction to find out. */
+      const why = ev2 ? 'Never redeemable. It can still allocate, top up and claim.'
+        : locked ? 'Cannot be redeemed before '+when(lk.until)+'.'
+        : al>0n ? 'Set its allocations to 0 to redeem it.'
+        : 'Redeemable now.';
+      row.querySelector('.ubbody').innerHTML=
+        '<dl class="ubdl">'
+        +'<div><dt>Bonded</dt><dd>'+wFmt(w)+' zOrg</dd></div>'
+        +'<div><dt>Allocated</dt><dd>'+wFmt(al)+' \u00b7 '+wFmt(w-al)+' free</dd></div>'
+        +(ly>0n?'<div><dt>Loyalty</dt><dd><b>'+eFmt(ly)+' ETH</b> to claim</dd></div>':'')
+        +'</dl><p class="ubwhy">'+why+'</p>';
     });
     $('urid').onchange=()=>{
       if($('urid').value==='__other'){
