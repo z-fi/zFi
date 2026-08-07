@@ -433,8 +433,19 @@ function heal(doc,win){
      Eternal is read from #me's own class, which paint() sets from ME.eternal - no
      second source of truth. */
   try{
-    const ethEl=doc.getElementById('eth'), meEl2=doc.getElementById('me');
-    if(ethEl&&meEl2){
+    const ethEl=doc.getElementById('eth'), meEl2=doc.getElementById('me'),
+          rstEl=doc.getElementById('rstatus');
+    /* Two ways to know a bond is eternal, because the two renderers say it
+       differently. The corrected one toggles .eternal-name on #me; the DEPLOYED
+       one never does - its only mention of that class is a CSS rule inherited
+       from ZorgPageStyle, with nothing to apply it - and instead writes the word
+       into #rstatus between separators. Keying on the class alone meant this heal
+       was dead against the renderer actually serving the page, which is the only
+       renderer it was written for. */
+    const isEternal=()=>
+      (meEl2&&meEl2.classList.contains('eternal-name'))
+      || (rstEl&&/\u00b7\s*eternal\s*\u00b7/.test(rstEl.textContent||''));
+    if(ethEl){
       const fix=()=>{
         let h=ethEl.innerHTML;
         /* Loyalty is paid out of OTHER people's early exits, so a new bond has
@@ -446,13 +457,16 @@ function heal(doc,win){
         h=h.replace(/\s*\u00b7\s*<b>0 ETH<\/b>\s*loyalty\s*$/i,'');
         /* Only the deployed renderer prints a bare zero here; the corrected one
            already says it, and a real principal never matches. */
-        if(/^0 ETH principal/.test(h.replace(/<[^>]*>/g,''))
-           && meEl2.classList.contains('eternal-name')) {
+        if(/^0 ETH principal/.test(h.replace(/<[^>]*>/g,'')) && isEternal()) {
           h=h.replace(/^0 ETH principal/,'principal given to treasury');
         }
         if(h!==ethEl.innerHTML) ethEl.innerHTML=h;   // idempotent: no match, no write
       };
-      new win.MutationObserver(fix).observe(ethEl,{childList:true,characterData:true,subtree:true});
+      const mo=new win.MutationObserver(fix);
+      mo.observe(ethEl,{childList:true,characterData:true,subtree:true});
+      /* #rstatus too, so this does not depend on paint() writing the two spans
+         in a particular order. */
+      if(rstEl) mo.observe(rstEl,{childList:true,characterData:true,subtree:true});
       fix();
       fixed.push('eternal principal');
     }
