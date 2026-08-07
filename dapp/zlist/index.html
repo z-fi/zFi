@@ -421,6 +421,30 @@ function heal(doc,win){
     },true);
     fixed.push('allocation ids');
   }catch(e){}
+  /* An eternal bond reads "0 ETH principal", which is true and reads like a loss.
+     eternalize moves the whole principal to treasuryEth and zeroes the bond's, so
+     the zero is the DAO holding it, not the holder losing track of it - and it is
+     the one line an eternal holder sees describing the thing they gave.
+     The corrected renderer already prints "principal given to treasury"; the
+     deployed one prints the number unconditionally. Matching its wording exactly
+     means the swap-over is invisible, and the regex stops matching the moment
+     either the renderer is fixed or a real principal exists, so this heal expires
+     by itself.
+     Eternal is read from #me's own class, which paint() sets from ME.eternal - no
+     second source of truth. */
+  try{
+    const ethEl=doc.getElementById('eth'), meEl2=doc.getElementById('me');
+    if(ethEl&&meEl2){
+      const fix=()=>{
+        if(!/^0 ETH principal/.test(ethEl.textContent||''))return;   // fixed, or real principal
+        if(!meEl2.classList.contains('eternal-name'))return;          // not an eternal bond
+        ethEl.innerHTML=ethEl.innerHTML.replace(/^0 ETH principal/,'principal given to treasury');
+      };
+      new win.MutationObserver(fix).observe(ethEl,{childList:true,characterData:true,subtree:true});
+      fix();
+      fixed.push('eternal principal');
+    }
+  }catch(e){}
   /* The copy icon's rect carries height=8.8/> - the unquoted value runs to '>' so
      it parses as "8.8/" and the browser logs a parse error every time the dialog
      builds one. CSS restores the geometry but cannot stop the log, so rewrite the
