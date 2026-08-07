@@ -9064,6 +9064,7 @@ async function executeSwap() {
 
 // ---- Token swap direction ----
 function swapTokens() {
+  _pairTouched = true;          // reversing the pair is choosing it
   if (fromToken === toToken) return;
   if (_ppSwapEnabled) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
   const prevFrom = fromToken, prevTo = toToken;
@@ -9217,7 +9218,16 @@ function syncSwapURL() {
   // manual pick in selectToken() clears the hold.
   if (_pendingDeeplinkFrom || _pendingDeeplinkTo) return;
   const _sp = new URLSearchParams();
-  _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
+  // The pair goes in the URL only once somebody has actually chosen it. Init
+  // fires this on a 50ms timer, long before the conviction ranking lands, so
+  // stamping the default meant the page wrote ?from=eth&to=zorg into its own
+  // address bar - and on the NEXT load that self-authored URL came back as a
+  // deeplink, read as intent, and suppressed the ranking permanently. A bare
+  // link now means "open on whatever is ranked", which is also the better thing
+  // to share; a link with a pair means somebody picked that pair.
+  if (_pairTouched) {
+    _sp.set('from', fromToken.toLowerCase()); _sp.set('to', toToken.toLowerCase());
+  }
   if (_inputMode === 'exactOut') {
     const _ta = $("toAmount");
     if (_ta && _ta.value && +_ta.value > 0) _sp.set('outamt', _ta.value);
