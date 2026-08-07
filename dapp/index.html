@@ -1774,9 +1774,6 @@ body.modal-open { overflow: hidden; }
      or a remembered WC session reconnects — see ensureWalletConnect(). It used
      to block here on every visit, including the ones that never touch it. -->
 <script src="./wallet.js"></script>
-<script defer src="./vendor/poseidon2.min.js"></script>
-<script defer src="./vendor/poseidon1.min.js"></script>
-<script defer src="./vendor/poseidon3.min.js"></script>
 <script src="./theme.js"></script>
 <script>
 
@@ -2577,6 +2574,15 @@ async function loadZListRanking() {
     for (const [k, v] of fresh) ZRANK.set(k, v);
     saveZListRank();
     _zlistLoaded = true;
+    // The pair depends on ZRANK and nothing else, and ZRANK is complete here. It
+    // used to be applied after the support gate below, so the opening pair - and
+    // on a first visit the placeholder standing in for it - waited on an extra
+    // multicall it had no need of. Resolve it the moment it is knowable.
+    // A brand-new listing therefore cannot become the opening pair, only a row.
+    // That is the right way round: the pair a stranger lands on should be
+    // something established, not whatever was listed most recently.
+    _pairPending = false;
+    applyZListDefaultPair();
     // Anything ranked that we do not already know becomes a real row, so a
     // listing added onchain reaches the picker with no deploy here - but it has
     // to have been bonded behind first. Being LISTED is a different permission
@@ -2597,8 +2603,6 @@ async function loadZListRanking() {
       mergeWeiListTokens(ZLIST_NAME, validated);
     }
     if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
-    _pairPending = false;              // cleared BEFORE the paint below
-    applyZListDefaultPair();
     loadZListLogos(logoTargets);       // not awaited: art must never gate a swap
   } catch (e) {
     // Loud on purpose. A silent catch here already cost a release: passing
@@ -9736,6 +9740,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (h) return h;
     const q = new URLSearchParams(window.location.search);
     if (q.has('from') || q.has('to') || q.has('pp')) return h;
+    // ?tab=privacy|coin|send names its tab outright. privacy-pools.js has always
+    // had a reader for it, but it runs on DOMContentLoaded after this handler has
+    // already replaceState'd the query away, so it read an empty search string
+    // and the tab never opened. Reading it here, where the hash forms are read,
+    // is the one place that still sees it.
+    const tabParam = (q.get('tab') || '').toLowerCase();
+    if (tabParam === 'privacy' || tabParam === 'coin' || tabParam === 'send') return '#' + tabParam;
     const mode = (q.get('mode') || '').toLowerCase();
     if (q.has('name') || q.has('symbol') || q.has('desc')
       || mode === 'coin' || mode === 'curve' || mode === 'cause' || mode === 'nft') return '#coin';
@@ -10121,7 +10132,10 @@ $("swapBtn").addEventListener("click", () => {
       typeof guard in ppSwapOn().
 --------------------------------------------------------------------------- */
 const TAB_MODULES = {
-  privacy: ['./modules/privacy-pools.js'],
+  // The poseidon hashes are used by nothing but the privacy runtime's key
+  // derivation, so they travel with it. They load before it, since it calls them.
+  privacy: ['./vendor/poseidon1.min.js', './vendor/poseidon2.min.js',
+            './vendor/poseidon3.min.js', './modules/privacy-pools.js'],
   send: ['./modules/send.js'],
   coin: ['./modules/coin.js', './modules/auction.js'],
 };
