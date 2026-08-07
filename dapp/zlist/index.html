@@ -21,11 +21,15 @@
 <link rel="stylesheet" href="../theme.css"><link rel="stylesheet" href="../wallet.css">
 <script>try{if(localStorage.getItem('dark')==='1'||(localStorage.getItem('dark')===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(_){}</script>
 <script src="../theme.js"></script>
-<!-- wallet.js builds providers with ethers and WalletConnect; without these the
-     picker still renders and then dies the moment a wallet is chosen. -->
-<script src="../vendor/ethers.min.js"></script>
-<script src="../vendor/walletconnect.min.js"></script>
-<script src="../wallet.js"></script>
+<!-- The wallet stack - ethers, WalletConnect, wallet.js - is 1.1 MB and used by
+     exactly two buttons. It is NOT loaded here. Reading this page needs none of
+     it: the interface comes from one eth_call made with fetch, and every ABI
+     value on the read path is encoded and decoded by hand a few hundred lines
+     below. Blocking the first paint of a read-only page on a megabyte of signing
+     machinery, so that somebody who only wants to look at a token list pays for
+     the ability to bond one, is the wrong way round.
+     ensureWallet() pulls it in on demand, and idle-loads it once the list is up
+     so the connect control still appears on its own. -->
 <style>
   body{max-width:none;padding:64px 0 0}
   .bar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between;
@@ -488,7 +492,11 @@ function guard(doc,win){
        its own - on a value you are meant to copy, that is the one thing on the
        row you cannot see. */
       +'#tk .ic{padding:2px 6px;margin-left:4px;color:var(--d);vertical-align:-3px}'
-      +'#tk .ic:hover,#tk .ic:focus-visible{color:var(--a)}';
+      +'#tk .ic:hover,#tk .ic:focus-visible{color:var(--a)}'
+    /* Reads as the sentence it sits in, until you point at it. */
+      +'.zbond{background:none;border:0;padding:0;font:inherit;color:var(--a);'
+        +'text-decoration:underline;text-underline-offset:3px;cursor:pointer}'
+      +'.zbond:hover,.zbond:focus-visible{color:var(--fg)}';
     doc.head.appendChild(st);
     /* Name the score column. The h2 is static markup, present before load(). */
     try{
@@ -510,14 +518,24 @@ function guard(doc,win){
        on the path where guard() has already confirmed #rid exists to drive. */
     const ir=doc.querySelector('.idrow'); if(ir) ir.style.display='none';
     /* The contract greets a connected holder with "N zOrgz held - enter one to
-       bond", which pointed at the field just hidden. Same fact, current
-       instruction. Rewritten on mutation because connect() writes it late. */
+       bond", pointing at the field just hidden. Rewriting it to "bond one above"
+       only moved the problem: an instruction to go and find a control is worse
+       than the control. It IS the control now, and it presses the same button
+       the bar owns rather than carrying a second copy of the same flow.
+       Rewritten on mutation because connect() writes it late; the replacement
+       does not match the pattern, so the observer settles. */
     const msg=doc.getElementById('msg');
     if(msg) new win.MutationObserver(()=>{
       const t=msg.textContent||'';
       const m=t.match(/^(\d+) zOrgz held - enter one to bond\.$/);
-      if(m) msg.textContent=m[1]+' zOrgz held. Bond one above to help order the list.';
+      if(m) msg.innerHTML=m[1]+' zOrgz held. <button type="button" class="zbond">Bond one</button>'
+        +' to help order the list.';
     }).observe(msg,{childList:true,characterData:true,subtree:true});
+    doc.addEventListener('click',ev=>{
+      if(!(ev.target.closest&&ev.target.closest('.zbond')))return;
+      ev.preventDefault();
+      $('wizbtn').click();          // the bar's button: wallet gate and all
+    });
     /* The bar's hint explained bonding and stopped there, so it went on
        explaining step one to someone already standing in step three. The framed
        page reveals #me the moment a receipt is loaded - that is the signal that
@@ -538,7 +556,7 @@ function guard(doc,win){
            loaded; afterwards it tells someone mid-allocation to go and bond.
            Cleared only when it is still our own sentence, so anything the
            contract has since said - an error, a submitted hash - survives. */
-        if(on&&msg&&/^\d+ zOrgz held\. Bond one above/.test(msg.textContent||'')) msg.textContent='';
+        if(on&&msg&&/^\d+ zOrgz held\. Bond one/.test(msg.textContent||'')) msg.textContent='';
       };
       new win.MutationObserver(sync).observe(meEl,{attributes:true,attributeFilter:['class'],
         childList:true,subtree:true,characterData:true});
@@ -557,14 +575,18 @@ function guard(doc,win){
        which a rank can simply be granted. Moloch included: it would have to bond
        like everybody else. That is the claim worth making, and it happens to be
        the one the contract actually enforces. */
+    /* Three sentences: where it lives, why the order can be trusted, and that
+       something real depends on it. "A rank costs locked zOrg and time, and
+       cannot be handed out" says one thing twice - earned IS the cost - and
+       "open any listing to copy its record" was instructions for a row that is
+       already obviously clickable. */
     if(sub) sub.innerHTML='A token list that lives in '
       +'<a href="https://etherscan.io/address/0x0000006013dF75A31678B786061C2B54bf531524#code" '
       +'target="_blank" rel="noopener">a contract</a>, not on a server. Bonded '
       +'<a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">zOrgz</a>'
-      +' set the order &mdash; a rank costs locked zOrg and time, and cannot be handed out. '
-      +'The same order fills the token picker in '
-      +'<a href="../" target="_blank" rel="noopener">zFi swap</a>. '
-      +'Open any listing to copy its record.';
+      +' set the order &mdash; ranks are earned, not handed out. '
+      +'It powers the token picker in '
+      +'<a href="../" target="_blank" rel="noopener">zFi swap</a>.';
   }catch(e){}
   /* Capture on the document so this runs before the inline onclick on the button. */
   doc.addEventListener('click',async ev=>{
@@ -1473,6 +1495,32 @@ async function useRun(){
     $('wstat').textContent=e.message||'Could not load that receipt.';
   }finally{ go.disabled=false }
 }
+/* ---------------------------------------------------------------------------
+   The wallet stack, fetched only when something needs to sign.
+   Order matters: wallet.js reads ethers and WalletConnect at call time, so they
+   go first. Loaded once - concurrent callers share the same promise - and a
+   failure is not cached, so a dropped connection can be retried by pressing the
+   button again.
+--------------------------------------------------------------------------- */
+let _walletLoad=null;
+const loadScript=src=>new Promise((res,rej)=>{
+  const el=document.createElement('script');
+  el.src=src; el.async=false;                 // preserve execution order
+  el.onload=res; el.onerror=()=>rej(Error('failed to load '+src));
+  document.head.appendChild(el);
+});
+function ensureWallet(){
+  if(window.walletInit) return Promise.resolve();
+  if(_walletLoad) return _walletLoad;
+  _walletLoad=(async()=>{
+    await loadScript('../vendor/ethers.min.js');
+    await loadScript('../vendor/walletconnect.min.js');
+    await loadScript('../wallet.js');
+    if(window.walletInit) window.walletInit(WALLET_OPTS);
+  })().catch(e=>{ _walletLoad=null; throw e; });   // let the next press retry
+  return _walletLoad;
+}
+
 $('wizcancel').onclick=wizClose;
 $('wizx').onclick=wizClose;
 /* Reflected in the button rather than buried, and remembered. */
@@ -1494,12 +1542,30 @@ $('wiz').addEventListener('click',e=>{ if(e.target===$('wiz')) wizClose(); });
    which matters because wizOpen closes the dialog ON PURPOSE to hand off to the
    wallet picker and must keep wizWaiting set across that. */
 $('wiz').addEventListener('cancel',()=>{ wizWaiting=false; });
-$('wizbtn').onclick=wizOpen;
-$('usebtn').onclick=useOpen;
+/* Both buttons now wait on the wallet stack before they can do anything, so
+   they say so rather than sitting inert while a megabyte arrives. */
+const withWallet=fn=>async()=>{
+  const d=$('wiz');
+  $('wiztitle').textContent='Loading…';
+  $('wizbody').innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
+    +'<p class="whint wfind" style="margin:12px 0 0">Getting your wallet ready…</p></div>';
+  $('wstat').textContent=''; $('wizgo').disabled=true;
+  wizShow();
+  try{ await ensureWallet(); }
+  catch(e){
+    $('wizbody').innerHTML='<p class="whint">Could not load the wallet library. '
+      +'Check your connection and try again.</p>';
+    return;
+  }
+  $('wizgo').disabled=false;
+  return fn();
+};
+$('wizbtn').onclick=withWallet(wizOpen);
+$('usebtn').onclick=withWallet(useOpen);
 /* wallet.js injects #walletBtn and the wallet modal from walletInit(); calling
    connectWallet() without it dereferences an element that does not exist. This
    also gives zList the same connect control as every other zFi page. */
-if(window.walletInit) window.walletInit({appName:'zList',
+const WALLET_OPTS={appName:'zList',
   onConnect:()=>{
     try{ if(FRAME) FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); }
     /* wallet.js fires onConnect for more than a user pressing connect: silent
@@ -1514,7 +1580,8 @@ if(window.walletInit) window.walletInit({appName:'zList',
     WIZACCT=acct;
     if(wizWaiting||(moved&&$('wiz').open)) (wizMode==='use'?useOpen:wizOpen)();
   },
-  onDisconnect:wizClose});
+  onDisconnect:wizClose};
+if(window.walletInit) window.walletInit(WALLET_OPTS);
 
 /* ---------------------------------------------------------------------------
    THE STANDING TOTALS. Two numbers with very different costs, so they are not
@@ -1613,6 +1680,11 @@ bstatLoad();                                   // independent of the frame
     },{once:true});
     f.srcdoc=BRIDGE+html;
     f.hidden=false;
+    /* The list is up and readable; now fetch the signing machinery in the
+       background so the connect control appears and the first press of Bond is
+       instant. Deliberately after the paint, and deliberately silent - nothing
+       on this page stops working if it never arrives. */
+    (window.requestIdleCallback||(fn=>setTimeout(fn,1200)))(()=>{ ensureWallet().catch(()=>{}); });
   }catch(e){
     $('fail').hidden=false;
     $('fail').innerHTML='<p>The interface lives at <code>'+C+'</code> and is fetched with one <code>eth_call</code> to <code>html()</code>. '+
