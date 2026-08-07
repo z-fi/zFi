@@ -60,6 +60,9 @@
   .wplan ol{margin:6px 0 0;padding-left:20px}
   .wplan li{margin:3px 0}
   .wplan .done{opacity:.45;text-decoration:line-through}
+  .wcommit{margin:11px 0 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+  .wlocks{margin:5px 0 0;padding-left:20px}
+  .wlocks li{margin:4px 0}
   .wnote{font-size:12px;color:var(--fg-muted);border-left:2px solid var(--border);padding-left:11px;margin:0}
   .wfoot2{display:flex;gap:9px;justify-content:flex-end;padding:0 20px 18px;flex-wrap:wrap}
   .wfoot2 button{padding:10px 15px;border:1px solid var(--border);border-radius:8px;background:transparent;
@@ -450,8 +453,12 @@ async function wizOpen(){
       wRead(zorgz,SELS.balOf+wAddr(me)), wRead(shares,SELS.balOf+wAddr(me)),
       wRead(GOV,SELS.terms), wRead(GOV,SELS.tiers+w32(3))
     ]);
+    /* ethBondTerms: (minimumBond, maturity, earlyExitTaxBps, treasuryShareBps).
+       The maturity and the tax were being read and thrown away, which is why
+       the wizard could not say what "early" means. */
     WZ={me,zorgz,shares,nft:Number(wWord(nftBal,0)),minEth:wWord(terms,0),boost:Number(wWord(tier3,1)),
-        days:Number(wWord(tier3,0))/86400, zBal:wWord(zBal,0)};
+        days:Number(wWord(tier3,0))/86400, zBal:wWord(zBal,0),
+        ethDays:Number(wWord(terms,1))/86400, taxBps:Number(wWord(terms,2))};
     if(wWord(nftBal,0)===0n){
       body.innerHTML='<p>This wallet holds no zOrgz. Bonding escrows one per receipt, so you need at least one to start.</p>'
         +'<p class="wnote">A zOrgz is a profile picture NFT. Bonding it, together with zOrg shares, is what lets you order this list.</p>';
@@ -465,8 +472,8 @@ async function wizOpen(){
      +'<div class="wrow"><label>zOrg shares to bond (you hold '+wFmt(WZ.zBal)+')</label>'
      +'<input id="wzamt" inputmode="decimal" value="10000"></div>'
      +'<div class="wrow"><label>Commitment</label><select id="wztier">'
-     +'<option value="3">Maximum: '+WZ.days+' days, '+(WZ.boost/10000).toFixed(2)+'x support</option>'
-     +'<option value="0">None: withdraw any time, 1.00x support</option></select></div>'
+     +'<option value="3">Locked '+WZ.days+' days &mdash; '+(WZ.boost/10000).toFixed(2)+'&times; support</option>'
+     +'<option value="0">No lock, withdraw any time &mdash; 1.00&times; support</option></select></div>'
      +'<label class="wchk"><input type="checkbox" id="wzet"><span>Make it permanent (eternalize). '
      +'Needs 10,000 zOrg. The zOrgz and the shares can never be redeemed.</span></label>'
      +'<div class="wplan" id="wzplan"></div>'
@@ -482,15 +489,35 @@ async function wizOpen(){
         +' with '+(Number(WZ.minEth)/1e18)+' ETH'];
       if(et&&!$('wzet').disabled) steps.push('Eternalize: permanent, keeps the '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x':'1.00x')+' rate');
       const bps=BigInt(t==='3'?WZ.boost:10000), eff=amtW*bps/10000n;
+      /* TWO clocks, and conflating them is the easiest way to be surprised by
+         this contract: the ETH maturity decides whether an exit is TAXED, the
+         lock tier decides whether it is PERMITTED AT ALL. A tier-3 bond stays
+         locked long after its ETH has matured. Spell both out, with dates. */
+      const when=d=>new Date(Date.now()+d*86400000)
+        .toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+      const id=($('wzid').value||'').trim();
+      const what=(ok&&amtW>0n?wFmt(amtW)+' zOrg':'your zOrg')+(/^\d+$/.test(id)?' and zOrgz #'+id:' and the zOrgz');
+      const locks = et&&!$('wzet').disabled
+        ? '<li><b>'+what+': never returned.</b> Eternal bonds cannot be redeemed.</li>'
+          +'<li><b>'+(Number(WZ.minEth)/1e18)+' ETH: given to the DAO treasury</b>, not returned.</li>'
+        : (t==='3'
+            ? '<li><b>'+what+': locked until '+when(WZ.days)+'</b> ('+WZ.days+' days). No early exit at any price.</li>'
+            : '<li><b>'+what+': withdrawable any time.</b></li>')
+          +'<li><b>'+(Number(WZ.minEth)/1e18)+' ETH: returned in full from '+when(WZ.ethDays)+'</b> ('
+          +WZ.ethDays+' days). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
+          +(t==='3'?' &mdash; and the lock above outlasts this date.':'.')+'</li>';
       $('wzplan').innerHTML='<b>'+(window._walletSendCalls?'One confirmation':steps.length+' confirmations')+'</b>'
         +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>'
+        +'<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
         +(ok&&amtW>0n?'<p style="margin:9px 0 0;opacity:.75">Directs <b>'+wFmt(eff)+'</b> of support'
-          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)+'</b> as conviction accrues.</p>':'');
+          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)+'</b> over ~3 weeks as conviction accrues.</p>':'');
       $('wizgo').disabled = !ok || amtW===0n || amtW>WZ.zBal;
       $('wstat').textContent = amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.' : '';
     };
-    ['wzamt','wztier'].forEach(k=>$(k).oninput=plan);
-    $('wzet').onchange=plan; $('wzamt').onchange=plan; plan();
+    /* wzid included: the commitment block names the token by id, so it has to
+       update as the field is typed, not only once discovery replaces it. */
+    ['wzamt','wztier','wzid'].forEach(k=>$(k).oninput=plan);
+    $('wzet').onchange=plan; $('wzamt').onchange=plan; $('wztier').onchange=plan; plan();
     /* Paint the before/after strip from the SELECTED token, so it shows the art
        the user is actually about to escrow rather than a stand-in. Best effort
        throughout: unreadable art collapses the strip and never blocks bonding.
