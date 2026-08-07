@@ -1328,20 +1328,20 @@ body.modal-open { overflow: hidden; }
 </div>
 
 <div>
-  <div class="receiver-toggle" onclick="togglePPSwap()">
+  <div class="receiver-toggle" onclick="ppSwapDisclose()">
     <span class="chevron" id="ppSwapChevron" style="font-size:9px;color:var(--fg-muted)">&#9654;</span>
     <label style="margin:0;cursor:pointer;pointer-events:none">Deposit to Privacy Pools</label>
   </div>
   <div id="ppSwapWrap" style="max-height:0px;opacity:0;overflow:hidden;transition:max-height .2s ease,opacity .2s ease;margin-top:4px">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted);cursor:pointer;margin-bottom:0;text-transform:none;letter-spacing:0">
-      <input type="checkbox" id="ppSwapToggle" onchange="onPPSwapToggle()"> Deposit swap output into <a href="https://privacypools.com" target="_blank" rel="noopener" style="color:var(--link-fg)">Privacy Pools</a>
+      <input type="checkbox" id="ppSwapToggle" onchange="ppSwapToggleChanged()"> Deposit swap output into <a href="https://privacypools.com" target="_blank" rel="noopener" style="color:var(--link-fg)">Privacy Pools</a>
     </label>
     <div id="ppSwapAssetWrap" style="display:none;margin-top:6px">
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--fg-muted)">Deposit as:</span>
-        <button id="ppSwapAssetETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid var(--btn-bg);cursor:pointer;background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSwapSelectAsset('ETH')"><span class="pp-icon-16" data-icon="ETH"></span>ETH</button>
-        <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
-        <button id="ppSwapAssetWSTETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapSelectAsset('wstETH')"><span class="pp-icon-16" data-icon="wstETH"></span>wstETH</button>
+        <button id="ppSwapAssetETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid var(--btn-bg);cursor:pointer;background:var(--btn-bg);color:var(--btn-fg)" onclick="ppSwapPick('ETH')"><span class="pp-icon-16" data-icon="ETH"></span>ETH</button>
+        <button id="ppSwapAssetBOLD" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapPick('BOLD')"><span class="pp-icon-16" data-icon="BOLD"></span>BOLD</button>
+        <button id="ppSwapAssetWSTETH" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;border-radius:0;border:2px solid transparent;cursor:pointer;background:var(--surface);color:var(--fg-muted)" onclick="ppSwapPick('wstETH')"><span class="pp-icon-16" data-icon="wstETH"></span>wstETH</button>
       </div>
       <div id="ppSwapNote" style="font-size:11px;color:var(--fg-muted);margin-top:4px">You can withdraw via the Privacy tab or <a href="https://privacypools.com" target="_blank" rel="noopener" style="color:var(--link-fg)">privacypools.com</a>.</div>
       <div id="ppSwapStepNotice" style="font-size:11px;color:var(--fg-muted);margin-top:6px;padding:8px;background:var(--surface);border:1px solid var(--border-muted)">Two wallet confirmations required: swap, then Privacy Pools deposit.</div>
@@ -2570,7 +2570,7 @@ async function loadZListRanking() {
       // built-in and validateTokenList rejects the zero address, so it is ranked
       // above but never added as a token.
       if (!zlistSwappable(r)) continue;
-      ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals) });
+      ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals), id: r.id });
       logoTargets.push({ id: r.id, addr: addr.toLowerCase() });
     }
     ZRANK.clear();
@@ -2578,8 +2578,20 @@ async function loadZListRanking() {
     saveZListRank();
     _zlistLoaded = true;
     // Anything ranked that we do not already know becomes a real row, so a
-    // listing added onchain reaches the picker with no deploy here.
-    const validated = validateTokenList(ranked);
+    // listing added onchain reaches the picker with no deploy here - but it has
+    // to have been bonded behind first. Being LISTED is a different permission
+    // from being ranked: the registry's owner is not the DAO that ranks, so
+    // without this, whoever holds that key could put a row in the swap picker
+    // for free. Requiring support means a new row costs somebody an escrowed
+    // zOrgz and real zOrg, which is the same price every other position paid.
+    // Tokens we already ship are unaffected; this gates additions only.
+    const known = new Set(Object.keys(tokens).map(k => tokens[k].address.toLowerCase()));
+    const fresh2 = ranked.filter(t => !known.has(t.address.toLowerCase()));
+    if (fresh2.length) {
+      const backed = await zlistSupported(fresh2.map(t => t.id));
+      for (const t of fresh2) if (!backed.has(String(t.id))) t._unbacked = true;
+    }
+    const validated = validateTokenList(ranked.filter(t => !t._unbacked));
     if (validated.length > 0) {
       weiLists.set(ZLIST_NAME, { tokens: validated, loadedAt: Date.now() });
       mergeWeiListTokens(ZLIST_NAME, validated);
@@ -2588,7 +2600,13 @@ async function loadZListRanking() {
     _pairPending = false;              // cleared BEFORE the paint below
     applyZListDefaultPair();
     loadZListLogos(logoTargets);       // not awaited: art must never gate a swap
-  } catch (_) {
+  } catch (e) {
+    // Loud on purpose. A silent catch here already cost a release: passing
+    // quoteRPC.call a transaction object instead of a function threw on the
+    // first line, was swallowed, and the whole ranking simply never ran - with
+    // the picker showing its hardcoded order and nothing anywhere to say a read
+    // had failed. A degraded page should still say it is degraded.
+    console.warn('[zlist] ranking unavailable; keeping built-in order', e);
   } finally {
     _zlistLoading = false;
     // Whatever happened, the placeholder does not outlive the attempt.
@@ -2676,6 +2694,40 @@ function loadZLogoCache() {
     return Number(c.at) || 0;
   } catch (_) { return 0; }
 }
+// Which of these listings has any conviction behind it. One multicall, and only
+// ever asked about listings we do not already ship, so it is a handful of reads
+// at most. A failed read admits nothing: silence is not support.
+const ZORG_GOVERNOR = '0x0000006D936bA3653b8854490E16E782cd32a9a8';
+const ZLIST_SUPPORT_IFACE = new ethers.Interface([
+  'function supportOf(uint256 listingId) view returns (uint256)',
+]);
+async function zlistSupported(ids) {
+  const out = new Set();
+  try {
+    const calls = ids.map(id => [
+      ZORG_GOVERNOR, true, ZLIST_SUPPORT_IFACE.encodeFunctionData('supportOf', [id]),
+    ]);
+    const raw = await quoteRPC.call(
+      rpc => rpc.call({
+        to: MULTICALL3_ADDRESS,
+        data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls]),
+      }),
+      { timeoutMs: 8000 },
+    );
+    const res = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', raw)[0];
+    for (let i = 0; i < ids.length; i++) {
+      const r = res[i];
+      if (!r || !r.success || r.returnData === '0x') continue;
+      try {
+        if (ZLIST_SUPPORT_IFACE.decodeFunctionResult('supportOf', r.returnData)[0] > 0n) {
+          out.add(String(ids[i]));
+        }
+      } catch (_) {}
+    }
+  } catch (e) { console.warn('[zlist] supportOf failed; admitting no new tokens', e); }
+  return out;
+}
+
 async function loadZListLogos(targets) {
   if (!targets || targets.length === 0) return;
   const cachedAt = ZLOGOS.size ? loadZLogoCache() : loadZLogoCache();
@@ -2708,7 +2760,10 @@ async function loadZListLogos(targets) {
       try { localStorage.setItem(ZLOGO_CACHE_KEY, JSON.stringify({ at: Date.now(), m: out })); } catch (_) {}
     }
     applyZLogos();
-  } catch (_) { applyZLogos(); }   // whatever landed from cache still applies
+  } catch (e) {                    // whatever landed from cache still applies
+    console.warn('[zlist] token art unavailable; using shipped icons', e);
+    applyZLogos();
+  }
 }
 // iconForSymbol reads ZLOGOS directly, so this only has to force a repaint of
 // anything already on screen.
@@ -4267,7 +4322,7 @@ async function handleAmountChange() {
   }
   syncSwapURL();
 
-  if (fromToken === toToken && !_ppSwapEnabled) {
+  if (fromToken === toToken && !ppSwapOn()) {
     dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
@@ -4275,7 +4330,7 @@ async function handleAmountChange() {
     setDisabled(swapBtn, true);
     return;
   }
-  if (_ppSwapEnabled && fromToken === toToken && _isPPAsset(fromToken)) {
+  if (ppSwapOn() && fromToken === toToken && _isPPAsset(fromToken)) {
     dstEl.value = amtStr;
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
@@ -4305,7 +4360,7 @@ async function handleAmountChange() {
   const _receiverRaw = ($("receiverAddress")?.value || "").trim();
   const _resolvedAddr = getReceiver();
   const _hasCustomReceiver = _receiverRaw && (isReceiverPending() || (_resolvedAddr && _resolvedAddr !== _connectedAddress));
-  const wrapDir = !_hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
+  const wrapDir = !_hasCustomReceiver && !ppSwapOn() ? isWrapUnwrap(fromToken, toToken) : null;
   if (wrapDir) {
     const fromData = tokens[fromToken];
     try {
@@ -4337,7 +4392,7 @@ async function handleAmountChange() {
   }
 
   // WETH→ETH + PP: can't route through quoter, user should unwrap first
-  if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
+  if (ppSwapOn() && isWrapUnwrap(fromToken, toToken)) {
     dstEl.value = "";
     setShown(quoteInfoEl, false);
     setText(swapBtn, "Unwrap WETH first");
@@ -4648,7 +4703,7 @@ async function handleAmountChange() {
       : isLidoStake ? "Stake"
       : isZOrgSwap(toSnap) ? "Swap & Stake"
       : isZOrgSell ? "Ragequit & Sell"
-      : _ppSwapEnabled ? "Swap & Deposit"
+      : ppSwapOn() ? "Swap & Deposit"
       : "Swap";
     if (fromData.address !== ZERO_ADDRESS && _connectedAddress) {
       const amountIn = isExactOut ? quote.requiredInput : safeParseUnits(amtStr, fromData.decimals);
@@ -7896,13 +7951,13 @@ async function executeSwap() {
       _swapBusy = false;
       return;
     }
-    if (fromToken === toToken && !_ppSwapEnabled) {
+    if (fromToken === toToken && !ppSwapOn()) {
       showStatus("Select different tokens", "error");
       _swapBusy = false;
       return;
     }
     // Direct deposit (no swap needed — from === to for the PP asset)
-    if (_ppSwapEnabled && fromToken === toToken && _isPPAsset(fromToken)) {
+    if (ppSwapOn() && fromToken === toToken && _isPPAsset(fromToken)) {
       _ppSelectedAsset = fromToken;
       ppSyncAssetUI(fromToken);
       $('ppAmount').value = amtStr;
@@ -7923,7 +7978,7 @@ async function executeSwap() {
     // ETH ↔ WETH wrap/unwrap: direct contract call, no DEX (only when sending to self)
     const resolvedAddr = getReceiver();
     const hasCustomReceiver = receiverRaw && (isReceiverPending() || (resolvedAddr && resolvedAddr !== _connectedAddress));
-    const wrapDir = !hasCustomReceiver && !_ppSwapEnabled ? isWrapUnwrap(fromToken, toToken) : null;
+    const wrapDir = !hasCustomReceiver && !ppSwapOn() ? isWrapUnwrap(fromToken, toToken) : null;
     if (wrapDir) {
       const fromData = tokens[fromToken];
       const amountIn = safeParseUnits(amtStr, fromData.decimals);
@@ -7964,12 +8019,12 @@ async function executeSwap() {
     }
 
     // WETH→ETH + PP: quoter can't route a pure unwrap — user should unwrap first
-    if (_ppSwapEnabled && isWrapUnwrap(fromToken, toToken)) {
+    if (ppSwapOn() && isWrapUnwrap(fromToken, toToken)) {
       showStatus("Unwrap WETH to ETH first, then deposit into Privacy Pools", "error");
       _swapBusy = false;
       return;
     }
-    if (_ppSwapEnabled && _isPPAsset(toToken)) {
+    if (ppSwapOn() && _isPPAsset(toToken)) {
       swapBtn.textContent = "Checking wallet...";
       swapBtn.disabled = true;
       await ppEnsureWalletCompatibility();
@@ -8082,7 +8137,7 @@ async function executeSwap() {
 
     // ---- zOrg → token sell: two-step (ragequit then ZAMM swap) ----
     if (isZOrgSellPath(fromToken, toToken)) {
-      if (_ppSwapEnabled) {
+      if (ppSwapOn()) {
         showStatus("Privacy Pools deposit not supported for zOrg sells. Sell zOrg first, then deposit the output.", "error");
         return;
       }
@@ -8399,7 +8454,7 @@ async function executeSwap() {
 
         // --- Try 0: ERC-5792 wallet_sendCalls (batch approve+swap, single confirmation) ---
         // Skip for Privacy Pools swaps — they build a separate deposit tx after approval
-        if (_walletSendCalls && !(_ppSwapEnabled && _isPPAsset(toSnap))) {
+        if (_walletSendCalls && !(ppSwapOn() && _isPPAsset(toSnap))) {
           let _batchSubmitted = false;
           try {
             swapBtn.textContent = "Batching approve + swap...";
@@ -8690,7 +8745,7 @@ async function executeSwap() {
       }
     }
 
-    if (_ppSwapEnabled && _isPPAsset(toSnap)) {
+    if (ppSwapOn() && _isPPAsset(toSnap)) {
       const ppAsset = toSnap;
       const ppIsBOLD = ppAsset === 'BOLD';
       const ppIsWSTETH = ppAsset === 'wstETH';
@@ -9138,7 +9193,7 @@ async function executeSwap() {
 function swapTokens() {
   _pairTouched = true;          // reversing the pair is choosing it
   if (fromToken === toToken) return;
-  if (_ppSwapEnabled) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
+  if (ppSwapOn()) { showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
   const prevFrom = fromToken, prevTo = toToken;
   const fAmt = $("fromAmount").value;
   const tAmt = $("toAmount").value;
@@ -9309,7 +9364,7 @@ function syncSwapURL() {
   }
   const _rv = ($("receiverAddress")?.value || "").trim();
   if (_rv) _sp.set('recv', _rv);
-  if (_ppSwapEnabled) _sp.set('pp', _ppSelectedAsset.toLowerCase());
+  if (ppSwapOn()) _sp.set('pp', _ppSelectedAsset.toLowerCase());
   // An empty param set must not leave a bare "?" hanging off the URL. That could
   // not happen while the pair was always written; now that an untouched page
   // writes nothing, it is the normal case for a first visit.
@@ -9573,14 +9628,14 @@ function selectToken(symbol) {
     if (symbol === toToken) toToken = fromToken;
     fromToken = symbol;
     // If PP swap is on and new from matches PP deposit asset, flip to the other
-    if (_ppSwapEnabled && _isPPAsset(fromToken) && fromToken === _ppSelectedAsset) {
+    if (ppSwapOn() && _isPPAsset(fromToken) && fromToken === _ppSelectedAsset) {
       const alt = PP_ASSETS.find(a => a !== fromToken) || 'ETH';
       _ppSelectedAsset = alt;
       toToken = alt;
       ppSyncAssetUI(alt);
     }
   } else {
-    if (_ppSwapEnabled) { closeTokenModal(); showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
+    if (ppSwapOn()) { closeTokenModal(); showStatus(`Output locked to ${_ppSelectedAsset} for Privacy Pools deposit`, "error"); return; }
     if (symbol === fromToken) fromToken = toToken;
     toToken = symbol;
   }
@@ -10031,11 +10086,119 @@ $("swapBtn").addEventListener("click", () => {
 
 
 </script>
-<script src="./modules/privacy-pools.js"></script>
-<script src="./modules/send.js"></script>
+<script>
+/* ---------------------------------------------------------------------------
+   Tab modules, fetched when a tab is actually reached.
+
+   privacy-pools.js is 354KB (84KB over the wire), coin.js + auction.js + send.js
+   another 105KB, and none of it is touched by a visit that swaps and leaves -
+   which is most visits. They used to load on every one.
+
+   Two loading paths, because two different guarantees are needed:
+
+   1. A URL that names a tab (#privacy / #send / #coin, ?pp=, or the coin-ish
+      params the deeplink reader infers a tab from) writes the original blocking
+      tags right here, at the position they used to occupy. The deeplink handler
+      runs inside DOMContentLoaded and calls into these modules synchronously -
+      _isPPAsset before it has even chosen a tab - so on those URLs the modules
+      must be evaluated before it, exactly as before. document.write is the only
+      thing that still gives a parser-time synchronous include; the alternative
+      is making that handler async, which would let the default pair paint over
+      a deeplink.
+
+   2. Anything else loads on demand: switchTab awaits the tab's modules before
+      touching them, and the private-swap toggle awaits privacy-pools before it
+      can be switched on. The swap path itself reads _ppSwapEnabled on every
+      quote, so that flag has to exist before a swap can happen - it does,
+      because nothing can turn privacy on without loading the module that
+      declares it, and until then the reads that matter are all `!_ppSwapEnabled`
+      guards that a missing module would make throw rather than pass. Hence the
+      typeof guard in ppSwapOn().
+--------------------------------------------------------------------------- */
+const TAB_MODULES = {
+  privacy: ['./modules/privacy-pools.js'],
+  send: ['./modules/send.js'],
+  coin: ['./modules/coin.js', './modules/auction.js'],
+};
+// Which tab, if any, this URL is already pointed at. Same evidence the deeplink
+// reader uses further down, kept deliberately loose: guessing wrong here costs
+// one script fetch, while missing a real deeplink costs the deeplink.
+const _urlTab = (() => {
+  try {
+    const h = (location.hash || '').replace(/^#/, '').split('?')[0];
+    if (h === 'privacy' || h === 'send' || h === 'coin') return h;
+    const q = new URLSearchParams(location.search);
+    // ?tab=privacy / ?tab=coin are handled inside privacy-pools.js's own
+    // bootstrap, which cannot run if this misses them.
+    const t = (q.get('tab') || '').toLowerCase();
+    if (t === 'privacy' || t === 'send' || t === 'coin') return t;
+    if (q.has('pp')) return 'privacy';
+    if (q.has('xfer') || q.has('delay')) return 'send';
+    const mode = (q.get('mode') || '').toLowerCase();
+    if (q.has('name') || q.has('symbol') || q.has('desc')
+      || mode === 'coin' || mode === 'curve' || mode === 'cause' || mode === 'nft') return 'coin';
+  } catch (_) {}
+  return null;
+})();
+const _modLoaded = new Set();
+const _modLoading = new Map();
+if (_urlTab) {
+  for (const src of TAB_MODULES[_urlTab]) {
+    _modLoaded.add(src);
+    document.write('<script src="' + src + '"><\/script>');
+  }
+}
+function loadModuleScript(src) {
+  if (_modLoaded.has(src)) return Promise.resolve(true);
+  const inflight = _modLoading.get(src);
+  if (inflight) return inflight;
+  const p = new Promise(resolve => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.async = false;              // preserve order within a tab's module list
+    el.onload = () => { _modLoaded.add(src); resolve(true); };
+    // Not cached on failure: the next tab click retries rather than leaving the
+    // tab permanently dead.
+    el.onerror = () => { _modLoading.delete(src); resolve(false); };
+    document.head.appendChild(el);
+  });
+  _modLoading.set(src, p);
+  return p;
+}
+function tabModulesReady(tab) {
+  return (TAB_MODULES[tab] || []).every(src => _modLoaded.has(src));
+}
+function ensureTabModules(tab) {
+  const srcs = TAB_MODULES[tab] || [];
+  if (srcs.every(src => _modLoaded.has(src))) return Promise.resolve(true);
+  return Promise.all(srcs.map(loadModuleScript)).then(rs => rs.every(Boolean));
+}
+window.ensureTabModules = ensureTabModules;
+// Privacy state lives in privacy-pools.js, so every read outside that module has
+// to tolerate its absence. This is the only such read on the swap path.
+function ppSwapOn() { return typeof _ppSwapEnabled !== 'undefined' && _ppSwapEnabled; }
+// The swap card's Privacy Pools disclosure is the only privacy control that lives
+// outside the privacy tab, so it is the other door the module has to load through.
+// The click that opens it is the click that fetches it.
+function withPrivacyModule(fn) {
+  if (tabModulesReady('privacy')) { fn(); return; }
+  ensureTabModules('privacy').then(ok => { if (ok) fn(); });
+}
+function ppSwapDisclose() { withPrivacyModule(() => togglePPSwap()); }
+function ppSwapToggleChanged() { withPrivacyModule(() => onPPSwapToggle()); }
+function ppSwapPick(asset) { withPrivacyModule(() => ppSwapSelectAsset(asset)); }
+</script>
 <script>
 
 function switchTab(tab) {
+  // Almost every branch below calls into the tab's module, so the switch waits
+  // for it rather than half-applying. Already-loaded tabs (and swap, which has
+  // no module) take the synchronous path, so deeplinks and rapid clicks behave
+  // exactly as before.
+  if (!tabModulesReady(tab)) {
+    ensureTabModules(tab).then(ok => { if (ok) switchTab(tab); });
+    return;
+  }
   _activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   $('swapTab').style.display = tab === 'swap' ? '' : 'none';
@@ -10071,13 +10234,12 @@ function switchTab(tab) {
     sendLoadSlowTransfers();
     syncSendURL();
   }
-  ppwSyncBackgroundRefreshLoop();
+  // Runs for every tab, including swap, where privacy may never be loaded.
+  if (typeof ppwSyncBackgroundRefreshLoop === 'function') ppwSyncBackgroundRefreshLoop();
 }
 
 </script>
 <script src="./modules/curve-registry.js"></script>
-<script src="./modules/coin.js"></script>
-<script src="./modules/auction.js"></script>
 <script>
 
 // Wallet init runs last: an eager reconnect fires onConnect synchronously off
@@ -10087,8 +10249,12 @@ walletInit({
   onConnect: [() => {
     updateBalances();
     handleAmountChange();
-    if ($('sendTab')?.style.display !== 'none') { sendUpdateBalance(); sendUpdateButton(); sendLoadSlowTransfers(); }
-    ppHandlePrivacyWalletConnected();
+    // An eager reconnect fires this on any tab, and the send and privacy modules
+    // only exist once their tab has been reached.
+    if (typeof sendUpdateBalance === 'function' && $('sendTab')?.style.display !== 'none') {
+      sendUpdateBalance(); sendUpdateButton(); sendLoadSlowTransfers();
+    }
+    if (typeof ppHandlePrivacyWalletConnected === 'function') ppHandlePrivacyWalletConnected();
   }],
   onDisconnect: [() => {
     setText('swapBtn', 'Connect Wallet');
@@ -10104,7 +10270,7 @@ walletInit({
     _modalFetchAt = 0;
     _modalFetchInFlight = null;
     if (typeof sendHandleDisconnect === 'function') sendHandleDisconnect();
-    ppHandlePrivacyWalletDisconnected();
+    if (typeof ppHandlePrivacyWalletDisconnected === 'function') ppHandlePrivacyWalletDisconnected();
   }]
 });
 
