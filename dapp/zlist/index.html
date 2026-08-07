@@ -857,6 +857,20 @@ const bump=el=>{ if(!el||REDUCED)return; el.classList.remove('wbump');
   void el.offsetWidth; el.classList.add('wbump'); };
 
 let WZ={}, wizWaiting=false, FRAME=null, wizMode='bond';
+/* The framed page's connect() calls eth_requestAccounts against the frame's own
+   provider, and a wallet treats that frame as a site it has not met - so driving
+   it on load raised a connect prompt over a page that had asked for nothing. It
+   is now only ever reached from something the reader pressed: the site connect
+   button, Bond, or Use a receipt. Nothing here connects on its own. */
+let WANTWALLET=false;
+/* Idempotent: connect() is safe to re-enter and the frame ignores it once A is
+   set, but going through the provider again costs a round trip per press. */
+async function frameConnect(){
+  if(!FRAME||!WANTWALLET)return false;
+  try{ if(FRAME.eval('typeof A!=="undefined"&&!!A'))return true; }catch(e){ return false }
+  try{ await FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); return false }
+  try{ return !!FRAME.eval('A') }catch(e){ return false }
+}
 /* True from the moment Bond is pressed. plan() must not overwrite a live progress
    tracker with its collapsed summary - checkAppr can still resolve mid-flight. */
 let WZBUSY=false;
@@ -1646,7 +1660,15 @@ async function useRun(){
     }
     const fdoc=FRAME&&FRAME.document, el=fdoc&&fdoc.getElementById('rid');
     if(!el) throw Error('The onchain interface has not finished loading. Reload the page and try again.');
-    el.value=v; FRAME.eval('useReceipt()');
+    /* The framed page shows a loaded receipt only when its OWN account is set -
+       paint() gates #me and every SET box on `A && ME.w`. Loading the receipt
+       without connecting the frame first therefore read the bond and then
+       displayed nothing, which is indistinguishable from the receipt failing.
+       This is the reader's press, so the prompt it may raise is expected. */
+    $('wstat').textContent='Connecting the onchain page…';
+    if(!await frameConnect()) throw Error('The onchain page needs the same wallet connected. Approve the connection and press Use it again.');
+    $('wstat').textContent='Checking the bond…';
+    el.value=v; await FRAME.eval('useReceipt()');
     wizClose();
   }catch(e){
     /* Distinguished, because these fail for opposite reasons and only one of
@@ -1704,6 +1726,7 @@ $('wiz').addEventListener('cancel',()=>{ wizWaiting=false; });
 /* Both buttons now wait on the wallet stack before they can do anything, so
    they say so rather than sitting inert while a megabyte arrives. */
 const withWallet=fn=>async()=>{
+  WANTWALLET=true;                                  // pressed, therefore asked for
   /* Already here - the idle load usually wins this race - so go straight in
      rather than flashing an interstitial for a promise that is already resolved. */
   if(window.walletInit) return fn();
@@ -1727,9 +1750,17 @@ $('usebtn').onclick=withWallet(useOpen);
 /* wallet.js injects #walletBtn and the wallet modal from walletInit(); calling
    connectWallet() without it dereferences an element that does not exist. This
    also gives zList the same connect control as every other zFi page. */
+/* wallet.js injects #walletBtn after this runs, so the intent is caught by
+   delegation rather than by binding to an element that does not exist yet.
+   Capture, because wallet.js's own handler stops nothing but runs first. */
+document.addEventListener('click',e=>{
+  if(e.target.closest&&e.target.closest('#walletBtn')) WANTWALLET=true;
+},true);
 const WALLET_OPTS={appName:'zList',
   onConnect:()=>{
-    try{ if(FRAME) FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); }
+    /* Gated: wallet.js fires this on silent auto-connect too, and that path runs
+       with no reader involved at all. */
+    frameConnect();
     /* wallet.js fires onConnect for more than a user pressing connect: silent
        auto-connect on load, and every accountsChanged re-derive. Rebuilding an
        OPEN wizard on any of those threw away a half-filled form and restarted a
@@ -1836,7 +1867,9 @@ bstatLoad();                                   // independent of the frame
          guard() assigns FRAME before its shape check, so this stays drivable. */
       $('usebtn').disabled=false; $('usebtn').removeAttribute('title');
       try{ guard(f.contentDocument,f.contentWindow) }catch(e){ console.warn('[guard]',e) }
-      if(window._connectedAddress){ try{ f.contentWindow.eval('connect()') }catch(e){} }
+      /* Only when the reader had already asked for a wallet before the frame
+         finished arriving - never as part of loading the page. */
+      if(window._connectedAddress&&WANTWALLET) frameConnect();
     },{once:true});
     f.srcdoc=BRIDGE+html;
     f.hidden=false;
