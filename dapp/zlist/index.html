@@ -553,9 +553,17 @@ const GOV=C, SELS={
 /* eternalize() reverts BadInput below ETERNAL_MIN_ZORG, a hard constant. */
 const ETERNAL_MIN=10000n*10n**18n;
 const AMTSTEPS=1000;                 // drawer resolution, not a zOrg amount
-/* Held back from the ETH the deposit may consume, so the wizard never proposes a
-   bond that leaves nothing to pay for it with. */
-const GAS_BUFFER=2n*10n**15n;   // 0.002 ETH
+/* Gas allowances per call, priced at the CURRENT gas price rather than held back
+   as a flat sum. A fixed 0.002 ETH buffer is roughly right at 5 gwei and close to
+   meaningless at 100 - which is exactly when someone is most likely to be short.
+   These are ceilings for the calls this wizard sends, not estimates from the
+   chain: eth_estimateGas cannot price bondZorgz before its approvals are mined,
+   so it would revert rather than answer. */
+const GAS_APPROVE=60000n, GAS_BOND=380000n, GAS_ETERNAL=120000n;
+/* Deliberately slim. This check only gates the button, so overshooting refuses a
+   bond someone can actually afford, while undershooting merely lets the wallet
+   give a better-informed refusal. Err toward letting them try. */
+const GAS_MARGIN_BPS=110n;
 const w32=n=>BigInt(n).toString(16).padStart(64,'0');
 const wAddr=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
 const wRead=async(to,data)=>{
@@ -799,7 +807,7 @@ async function wizOpen(){
        ladder is read rather than written down, and a tier the DAO has retired
        (exitDelay 0, or a boost outside [BPS, MAX_BOOST_BPS], which _bondZorgz
        rejects with LockTierUnavailable) simply does not appear. */
-    const [nftBal,zBal,terms,t1,t2,t3,half,ethBal,alw]=await Promise.all([
+    const [nftBal,zBal,terms,t1,t2,t3,half,ethBal,gasPx,alw]=await Promise.all([
       wRead(zorgz,SELS.balOf+wAddr(me)), wRead(shares,SELS.balOf+wAddr(me)),
       wRead(GOV,SELS.terms),
       wRead(GOV,SELS.tiers+w32(1)).catch(()=>null),
@@ -809,6 +817,7 @@ async function wizOpen(){
       /* The ETH deposit is fixed at the minimum, so the balance is an
          affordability check rather than a range to drag. */
       post(RPCS[0],{jsonrpc:'2.0',id:1,method:'eth_getBalance',params:[me,'latest']}).catch(()=>null),
+      post(RPCS[0],{jsonrpc:'2.0',id:1,method:'eth_gasPrice',params:[]}).catch(()=>null),
       /* Read the standing allowance HERE, so the plan can count the confirmations
          the wallet will actually ask for. wizRun already skips an approval it does
          not need, so the block promised "3 confirmations" and then the wallet
@@ -828,7 +837,7 @@ async function wizOpen(){
     WZ={me,zorgz,shares,nft:Number(wWord(nftBal,0)),minEth:wWord(terms,0),
         tiers, top:tiers[tiers.length-1], zBal:wWord(zBal,0),
         halfDays:half?Number(wWord(half,0))/86400:null,
-        ethBal:ethBal?BigInt(ethBal):null,
+        ethBal:ethBal?BigInt(ethBal):null, gasPx:gasPx?BigInt(gasPx):null,
         ethDays:Number(wWord(terms,1))/86400, taxBps:Number(wWord(terms,2)),
         alw:alw?wWord(alw,0):null};
     if(wWord(nftBal,0)===0n){
@@ -963,11 +972,20 @@ async function wizOpen(){
          wei above the minimum buys no support and no dividend - it is refundable
          at maturity, taxed on an early exit, and donated outright if the bond is
          made permanent. The balance only earns a line when it is short. */
-      const shortEth = WZ.ethBal!==null && WZ.ethBal < WZ.minEth+GAS_BUFFER;
+      /* Priced from the calls this selection will actually send, so adding the
+         permanent step raises the bar and a standing approval lowers it. With no
+         gas price to hand, gate on the deposit alone rather than on a number
+         made up here. */
+      const gasUnits=(nftOk!==true?GAS_APPROVE:0n)+(!zOk?GAS_APPROVE:0n)
+        +GAS_BOND+(et&&!etShort?GAS_ETERNAL:0n);
+      const gasCost=WZ.gasPx===null?0n:WZ.gasPx*gasUnits*GAS_MARGIN_BPS/100n;
+      const need=WZ.minEth+gasCost;
+      const shortEth = WZ.ethBal!==null && WZ.ethBal < need;
       $('wzplan').innerHTML=
          '<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
-        +(shortEth?'<p class="weth wshort">You hold '+eFmt(WZ.ethBal)
-            +' ETH \u2014 not enough for the deposit and gas.</p>':'');
+        +(shortEth?'<p class="weth wshort">You hold '+eFmt(WZ.ethBal)+' ETH. This needs '
+            +eFmt(need)+(gasCost>0n?' \u2014 the '+eFmt(WZ.minEth)+' deposit plus about '
+              +eFmt(gasCost)+' of gas at the current price':'')+'.</p>':'');
 
       /* Say what is missing instead of offering an action that cannot work. */
       $('wizgo').disabled = !hasId || !ok || amtW===0n || amtW>WZ.zBal || etShort || shortEth;
@@ -977,7 +995,7 @@ async function wizOpen(){
         : amtW===0n ? 'Bond a positive amount of zOrg.'
         : amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.'
         : etShort   ? 'Permanent needs at least '+wFmt(ETERNAL_MIN)+' zOrg.'
-        : shortEth  ? 'You need '+eFmt(WZ.minEth+GAS_BUFFER)+' ETH to cover the deposit and gas.' : '';
+        : shortEth  ? 'You need about '+eFmt(need)+' ETH for the deposit and gas.' : '';
     }
     /* Number field and drawer are two views of one value, and the drawer is NOT
        linear. A linear track across a 1,589,036 balance puts 10,000 and 25,000 on
