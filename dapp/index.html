@@ -2552,10 +2552,20 @@ async function loadZListRanking() {
     const iface = new ethers.Interface(ZLIST_ABI);
     const rows = [];
     for (let start = 0; start < 1000; start += ZLIST_PAGE) {
-      const res = await quoteRPC.call({
-        to: ZLIST_LENS,
-        data: iface.encodeFunctionData('summariesPaged', [start, ZLIST_PAGE]),
-      });
+      // quoteRPC.call takes a FUNCTION and hands it a provider - it is the
+      // dapp's failover racer, not an ethers provider. Passing it a transaction
+      // object threw "fn is not a function" straight into the catch, which
+      // swallowed it, so the ranking silently never loaded and the picker kept
+      // its hardcoded order with nothing to show that anything had failed.
+      // 8s rather than the 4s default: summariesPaged sorts the whole list and
+      // reads supportOf for every listing inside one call.
+      const res = await quoteRPC.call(
+        rpc => rpc.call({
+          to: ZLIST_LENS,
+          data: iface.encodeFunctionData('summariesPaged', [start, ZLIST_PAGE]),
+        }),
+        { timeoutMs: 8000 },
+      );
       const page = iface.decodeFunctionResult('summariesPaged', res)[0];
       for (const r of page) rows.push(r);
       if (page.length < ZLIST_PAGE) break;      // short page: that was the last
@@ -9763,6 +9773,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   const _dlFromRaw = _urlp.get('from');
   const _dlToRaw = _urlp.get('to');
+  // A pair in the URL is intent, whether or not it resolves here. Resolving one
+  // clears the pending flag a few lines down, so without this the conviction
+  // default would arrive later and overwrite the pair the link actually asked
+  // for - and, because the pair is no longer written to the URL unless chosen,
+  // it would erase the link from the address bar on the way past.
+  if (_dlFromRaw || _dlToRaw) _pairTouched = true;
   const _dlFrom = _findToken(_dlFromRaw);
   const _dlTo = _findToken(_dlToRaw);
   // Clearing matters now that the hold is armed up front: a resolved side must
