@@ -1529,13 +1529,24 @@ const SEL_TOTAL='0xde9e5054';        // totalLoyaltyWeight()
    excluded from it, by releaseTreasuryEth and from execute alike. */
 const SEL_TREAS='0x00c7f3fb';        // treasuryEth()
 const TOPIC_ETERNAL='0xe455960660c1ef893c89fcdc7f8bf823955fa9e01ba33a97a74f1af8d215ce0e';
-let BSTAKE=null, BPERM=null, BTREAS=null;
+/* TreasuryEthReleased(address indexed recipient, uint256 amount). Every way ETH
+   leaves the DAO's share emits this, and every way it arrives already lands in
+   treasuryEth - so lifetime accrued is exactly the balance plus everything ever
+   released. That makes "accrued" a true word rather than a nicer name for a
+   balance, at the cost of nothing: eth_getLogs takes an array of alternatives
+   for topic0, so it rides along in the scan the permanent count already makes. */
+const TOPIC_RELEASED='0x78dfe3fed047c00cfeb4254ecad21440695df92b05e9cbca8216ae3d1d6d953b';
+let BSTAKE=null, BPERM=null, BTREAS=null, BACCRUED=null;
 function bstatRender(){
   const el=$('bstat'); if(!el||BSTAKE===null)return;
   el.hidden=false;
+  /* Two different figures with two different names. With the release history in
+     hand this is genuinely everything the DAO has ever taken; without it, all
+     that can be said honestly is what is sitting there now. */
+  const eth = BACCRUED!==null ? ' · <b>'+eFmt(BACCRUED)+'</b> ETH accrued to zOrg'
+            : BTREAS!==null   ? ' · <b>'+eFmt(BTREAS)+'</b> ETH in treasury' : '';
   el.innerHTML='<b>'+wFmt(BSTAKE)+'</b> zOrg bonded'
-    +(BPERM===null?'':' · <b class="bperm">'+BPERM+'</b> permanent')
-    +(BTREAS===null?'':' · <b>'+eFmt(BTREAS)+'</b> ETH in treasury');
+    +(BPERM===null?'':' · <b class="bperm">'+BPERM+'</b> permanent')+eth;
 }
 async function bstatLoad(){
   /* Independent reads, so a treasury that will not answer cannot take the bond
@@ -1547,16 +1558,25 @@ async function bstatLoad(){
   BSTAKE=wWord(tot,0); bstatRender();
   /* Deliberately not awaited by anything. */
   const body={jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
-    address:C, topics:[TOPIC_ETERNAL], fromBlock:'0x0', toBlock:'latest'}]};
+    address:C, topics:[[TOPIC_ETERNAL,TOPIC_RELEASED]], fromBlock:'0x0', toBlock:'latest'}]};
   try{
     const logs=await Promise.any(RPCS.map(u=>post(u,body,25000).then(r=>{
       if(!Array.isArray(r))throw Error('unsupported');
       return r;
     })));
+    const t0=l=>((l.topics&&l.topics[0])||'').toLowerCase();
     /* By receiptId, so a reorg replay or a duplicated log cannot inflate it. */
-    BPERM=new Set(logs.map(l=>l.topics&&l.topics[2]).filter(Boolean)).size;
+    BPERM=new Set(logs.filter(l=>t0(l)===TOPIC_ETERNAL)
+                      .map(l=>l.topics[2]).filter(Boolean)).size;
+    if(BTREAS!==null){
+      let out=0n;
+      for(const l of logs) if(t0(l)===TOPIC_RELEASED){
+        try{ if(l.data&&l.data.length>=66) out+=BigInt(l.data.slice(0,66)) }catch(e){}
+      }
+      BACCRUED=BTREAS+out;
+    }
     bstatRender();
-  }catch(e){ /* the exact half stands on its own */ }
+  }catch(e){ /* the exact halves stand on their own */ }
 }
 
 const LOAD=(n=48)=>typeof zfiLoadingSVG==='function'?zfiLoadingSVG(n):'';
