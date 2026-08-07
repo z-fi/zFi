@@ -193,7 +193,7 @@ dialog::backdrop{background:#000a}
   <p>Every read is an ordinary <code>eth_call</code>; no key, no wallet, no indexer.</p>
   <pre id=devdoc></pre>
   </details>
-  <p>Data source <span id=src>—</span> · <button class=lk id=setr aria-expanded=false aria-controls=rw>use your own RPC</button></p>
+  <p>Data source <span id=src>—</span> · <button class=lk id=setr aria-expanded=false aria-controls=rw>use your own RPC</button><span id=cww hidden> · <button class=lk id=cw>connect wallet</button></span></p>
   <div class=rw id=rw hidden>
     <input id=rpcu type=url inputmode=url autocomplete=off spellcheck=false placeholder="https://your-node.example/rpc" aria-label="JSON-RPC endpoint for Ethereum mainnet">
     <button class=bt id=rpcs>use it</button><button class=bt id=rpcc>reset</button>
@@ -212,6 +212,10 @@ esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'
 z=n=>BigInt(n).toString(16).padStart(64,'0'),
 short=u=>String(u).replace(/^https?:\/\//,'').replace(/\/.*$/,'');
 let RPC=null,ROWS=[],SEED=null,MARK='';const BAD=new Set();
+/* The injected provider is never touched until the visitor asks for it. Reaching for
+   it on load is what makes a wallet throw up its connect prompt over a page that only
+   ever reads - so `wallet` joins the endpoint ring only after the button below. */
+let WALLET_OK=false;
 async function post(u,b){let c=AbortSignal.timeout?AbortSignal.timeout(12000):undefined;
  let r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b),signal:c});
  if(!r.ok)throw Error('HTTP '+r.status);let j=await r.json();if(j&&j.error)throw Error(j.error.message||'rpc error');return j.result}
@@ -245,7 +249,7 @@ async function raw(u,calls){let data=mc(calls);
 const saved=()=>{try{return localStorage.getItem('tl.rpc')||''}catch(e){return''}};
 function order(){let s=saved(),n=RPCS.length,o=Math.floor(Math.random()*n),
  ring=Array.from({length:n},(_,i)=>RPCS[(o+i)%n]);
- return (s?[s]:[]).concat(window.ethereum?['wallet']:[],ring.filter(u=>u!==s))}
+ return (s?[s]:[]).concat(WALLET_OK?['wallet']:[],ring.filter(u=>u!==s))}
 /* Concurrent chunk lanes all reach for an endpoint at once, and before they existed
    only one probe could ever be in flight. Without this, a single blip has three lanes
    walking the pool independently — three simultaneous probes, each able to mark a
@@ -588,6 +592,15 @@ function useRpc(u){
  if(u&&!/^https:\/\/\S+$/i.test(u)){$('msg').textContent='Endpoint must be an https:// URL.';return}
  try{u?localStorage.setItem('tl.rpc',u):localStorage.removeItem('tl.rpc')}catch(e){}
  RPC=null;SEED=null;BAD.clear();$('msg').textContent='';$('src').textContent='—';boot()}
+/* Only offered when there is something to connect to, and the prompt is raised by this
+   click and nothing else. On success the wallet becomes the preferred endpoint. */
+if(window.ethereum)$('cww').hidden=false;
+$('cw').onclick=async()=>{
+ $('cw').disabled=true;
+ try{await wallet('eth_requestAccounts',[]);
+  WALLET_OK=true;BAD.delete('wallet');RPC=null;SEED=null;
+  $('cww').hidden=true;$('msg').textContent='';$('src').textContent='—';boot()}
+ catch(e){$('cw').disabled=false;$('msg').textContent='Wallet connection was rejected.'}};
 $('rpcs').onclick=()=>useRpc($('rpcu').value.trim());
 $('rpcc').onclick=()=>{$('rpcu').value='';useRpc('')};
 $('rpcu').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('rpcs').click()}};
