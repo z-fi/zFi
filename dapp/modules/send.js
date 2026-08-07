@@ -236,8 +236,19 @@ async function sendUpdateTipPreview() {
   }
 }
 
+// This module is fetched when its tab is first reached, which is usually after
+// DOMContentLoaded has already fired - so the bootstrap has to run on its own
+// rather than wait for an event that will never come again. Deferred by a tick
+// even then, because it reads state this file has not finished declaring yet.
+// Both branches require a document that reports a readyState; the source-slicing
+// tests evaluate this runtime with neither, and must keep seeing no bootstrap.
+function _onDomReady(fn) {
+  const st = typeof document !== 'undefined' && document.readyState;
+  if (st === 'loading') document.addEventListener('DOMContentLoaded', fn);
+  else if (st === 'interactive' || st === 'complete') setTimeout(fn, 0);
+}
 // Recipient resolution
-document.addEventListener("DOMContentLoaded", () => {
+_onDomReady(() => {
   const el = $('sendTo');
   if (!el) return;
   el.addEventListener('input', () => {

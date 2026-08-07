@@ -253,6 +253,11 @@ export function createHarness({
   };
   const documentStub = {
     title: '',
+    // The runtime registers its bootstrap on DOMContentLoaded only while the
+    // document is still parsing; loaded late (its tab reached after load) it
+    // schedules itself instead. This harness models the parsing case, which is
+    // the one that hands back a domReadyHandler to call.
+    readyState: 'loading',
     body: {
       appendChild() {},
       removeChild() {},

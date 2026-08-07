@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://mainnet.gateway.tenderly.co" crossorigin>
 <link rel="preconnect" href="https://ethereum.publicnode.com" crossorigin>
 <link rel="dns-prefetch" href="https://eth.drpc.org">
-<link rel="preload" href="./token-list.json" as="fetch">
+<link rel="preload" href="./token-list.json" as="fetch" crossorigin="anonymous">
 <link rel="preload" href="./vendor/ethers.min.js" as="script">
 <link rel="stylesheet" href="./theme.css">
 <link rel="stylesheet" href="./wallet.css">
@@ -2860,6 +2860,11 @@ function _gatewayIpfs(url) {
   return null;
 }
 
+// The deeplink reader runs before any tab has been chosen and asks whether the
+// URL names a Privacy Pools asset. On a pp URL privacy-pools.js was written in at
+// parse time and this is exactly _isPPAsset; on every other URL there is no pp
+// value to classify, so the answer is no without the module.
+function isPPAssetName(t) { return typeof _isPPAsset === 'function' && _isPPAsset(t); }
 // Pending deeplink fragments — set by the DOMContentLoaded resolver when an
 // `?from=` or `?to=` couldn't be matched against the currently-registered
 // tokens (because Uniswap/ZAMM-coin lists load asynchronously). The discovery
@@ -9747,7 +9752,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const _ppQueryLower = _ppQuery.toLowerCase();
   const _ppQueryNorm = _ppQueryLower === 'wsteth' ? 'wstETH'
     : _ppQueryLower === 'zap' ? 'ZAP' : _ppQuery.toUpperCase();
-  const _hasppParam = !!_ppQuery && (_ppQueryNorm === 'ZAP' || _isPPAsset(_ppQueryNorm));
+  const _hasppParam = !!_ppQuery && (_ppQueryNorm === 'ZAP' || isPPAssetName(_ppQueryNorm));
   if (!_hasppParam && (_dlTabHash === '#coin' || _dlTabHash === '#privacy' || _dlTabHash === '#send')) {
     // Capture query params BEFORE updateTokenDisplay() → syncSwapURL() clobbers them
     const _sp = new URLSearchParams(window.location.search);
@@ -9947,7 +9952,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const _dlPPRaw = (_urlp.get('pp') || '');
   const _dlPPLower = _dlPPRaw.toLowerCase();
   const _dlPP = _dlPPLower === 'wsteth' ? 'wstETH' : _dlPPLower === 'zap' ? 'ZAP' : _dlPPRaw.toUpperCase();
-  const _ppIsDirect = (_isPPAsset(_dlPP) || _dlPP === 'ZAP') && !_dlFrom;
+  const _ppIsDirect = (isPPAssetName(_dlPP) || _dlPP === 'ZAP') && !_dlFrom;
   if (!_ppIsDirect && _dlOutAmt && !isNaN(+_dlOutAmt) && +_dlOutAmt > 0) {
     _inputMode = 'exactOut';
     const ta = $("toAmount");
@@ -9973,7 +9978,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (_dlAmt && !isNaN(+_dlAmt) && +_dlAmt > 0) $('ppAmount').value = _dlAmt;
     ppSetZap(true);
     switchTab('privacy');
-  } else if (_isPPAsset(_dlPP)) {
+  } else if (isPPAssetName(_dlPP)) {
     _ppSelectedAsset = _dlPP;
     if (_ppIsDirect) {
       // Direct deposit — skip swap panel, go straight to privacy tab
@@ -10052,10 +10057,10 @@ document.addEventListener("DOMContentLoaded", () => {
     })();
   }
   // Update OG meta for swap / privacy pool social cards
-  if (_dlPP === 'ZAP' || (_isPPAsset(_dlPP) && _ppIsDirect)) {
+  if (_dlPP === 'ZAP' || (isPPAssetName(_dlPP) && _ppIsDirect)) {
     const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
     updateOGMeta('Deposit ' + _ogAmt2 + (_dlPP === 'ZAP' ? 'ZAP' : _dlPP), 'Privacy Pools deposit on zFi');
-  } else if (_isPPAsset(_dlPP)) {
+  } else if (isPPAssetName(_dlPP)) {
     const _ogAmt2 = (_dlAmt && +_dlAmt > 0) ? _dlAmt + ' ' : '';
     updateOGMeta('Swap ' + _ogAmt2 + fromToken + ' → ' + _dlPP + ' (PP)', 'Swap and deposit into Privacy Pools on zFi');
   } else {
