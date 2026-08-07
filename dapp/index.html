@@ -620,6 +620,10 @@ body.modal-open { overflow: hidden; }
   align-items: center;
   opacity: 0.6;
 }
+/* The ranking is being re-read; the order below may shift when it lands. */
+.token-group-label.zranking { opacity: .6; animation: zrankPulse 1.4s ease-in-out infinite; }
+@keyframes zrankPulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .token-group-label.zranking { animation: none; } }
 .wei-list-remove {
   background: none;
   border: none;
@@ -2540,6 +2544,25 @@ function zlistSwappable(row) {
 }
 // address → rank. Empty until the call lands, which is exactly the fallback.
 const ZRANK = new Map();
+// Remembered between visits so the FIRST paint is already ranked. The call
+// cannot beat first paint - init renders the pair on a 50ms timer and this is a
+// network round trip - so without a cache every visit opened on the hardcoded
+// pair and visibly flipped a second later. The cache is refreshed on every load,
+// so the worst it can be is one paint stale, and it doubles as the fallback when
+// the read fails.
+const ZLIST_CACHE_KEY = 'zfi_zlist_rank';
+function saveZListRank() {
+  try { localStorage.setItem(ZLIST_CACHE_KEY, JSON.stringify([...ZRANK.keys()])); } catch (_) {}
+}
+function loadZListRankCache() {
+  if (ZRANK.size) return;                     // a live read already won
+  try {
+    const a = JSON.parse(localStorage.getItem(ZLIST_CACHE_KEY) || '[]');
+    if (Array.isArray(a)) for (const addr of a) {
+      if (typeof addr === 'string' && addr.startsWith('0x')) ZRANK.set(addr, ZRANK.size);
+    }
+  } catch (_) {}
+}
 let _zlistLoaded = false, _zlistLoading = false;
 const ZLIST_ABI = ['function summariesPaged(uint256 start, uint256 count) view returns ('
   + 'tuple(uint256 id, bytes32 account, uint64 chainId, uint8 decimals, uint8 kind,'
@@ -2548,6 +2571,7 @@ const ZLIST_ABI = ['function summariesPaged(uint256 start, uint256 count) view r
 async function loadZListRanking() {
   if (_zlistLoaded || _zlistLoading) return;
   _zlistLoading = true;
+  if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
   try {
     const iface = new ethers.Interface(ZLIST_ABI);
     const rows = [];
@@ -2571,6 +2595,11 @@ async function loadZListRanking() {
       if (page.length < ZLIST_PAGE) break;      // short page: that was the last
     }
     if (rows.length === 0) return;
+    // Built aside and swapped in. ZRANK may already hold the cached order, and
+    // Map.set on an existing key keeps its original position while size stays
+    // put - so filling it in place would have handed later entries duplicate
+    // indices and scrambled the very order this is meant to fix.
+    const fresh = new Map();
     const ranked = [];
     for (const r of rows) {
       // Everything EVM on this chain gets a rank, tradeable or not, so the order
@@ -2579,13 +2608,16 @@ async function loadZListRanking() {
       if (Number(r.kind) !== ZLIST_KIND_EVM || Number(r.chainId) !== CHAIN_ID) continue;
       // bytes32, left-padded: the address is the low 20 bytes.
       const addr = ethers.getAddress('0x' + r.account.slice(26));
-      ZRANK.set(addr.toLowerCase(), ZRANK.size);
+      fresh.set(addr.toLowerCase(), fresh.size);
       // Native ETH is listed with a zero account. It is already the first
       // built-in and validateTokenList rejects the zero address, so it is ranked
       // above but never added as a token.
       if (!zlistSwappable(r)) continue;
       ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals) });
     }
+    ZRANK.clear();
+    for (const [k, v] of fresh) ZRANK.set(k, v);
+    saveZListRank();
     _zlistLoaded = true;
     // Anything ranked that we do not already know becomes a real row, so a
     // listing added onchain reaches the picker with no deploy here.
@@ -2617,7 +2649,7 @@ async function loadZListRanking() {
 // Applied once, and only to an untouched page. A default that moved under
 // someone mid-swap would be worse than a stale one.
 let _pairTouched = false;
-function applyZListDefaultPair() {
+function applyZListDefaultPair(paint = true) {
   if (_pairTouched || _pendingDeeplinkFrom || _pendingDeeplinkTo) return;
   // Typing an amount is intent, even before a token is picked.
   const amt = $('fromAmount');
@@ -2635,6 +2667,7 @@ function applyZListDefaultPair() {
   if (!to) return;
   fromToken = from;
   toToken = to;
+  if (!paint) return;             // init paints once itself, right after this
   if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
   if (typeof updateBalances === 'function') updateBalances();
 }
@@ -3112,9 +3145,9 @@ function renderTokenList(filter) {
     return r != null;
   }
 
-  function appendGroupLabel(text, listName) {
+  function appendGroupLabel(text, listName, extraClass) {
     const label = document.createElement('div');
-    label.className = 'token-group-label';
+    label.className = 'token-group-label' + (extraClass ? ' ' + extraClass : '');
     if (listName && listName.endsWith('.wei')) {
       label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
     } else {
@@ -3172,6 +3205,16 @@ function renderTokenList(filter) {
       return r === undefined ? Number.MAX_SAFE_INTEGER : r;
     };
     builtinSyms.sort((a, b) => rankOf(a) - rankOf(b));
+  }
+  if (builtinSyms.length > 0 && (ZRANK.size > 0 || _zlistLoading)) {
+    // Says why this order is this order, and pulses while the ranking is being
+    // re-read - so an order that changes under the reader is a thing they were
+    // told was happening rather than a glitch.
+    appendGroupLabel(
+      ZRANK.size > 0 ? 'ranked by conviction' : 'ranking\u2026',
+      null,
+      _zlistLoading ? 'zranking' : '',
+    );
   }
   for (const sym of builtinSyms) if (appendRow(sym)) hasAny = true;
 
@@ -9791,6 +9834,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // loaders retry once they finish registering tokens.
   if (_dlFromRaw && !_dlFrom) _pendingDeeplinkFrom = _dlFromRaw;
   if (_dlToRaw && !_dlTo) _pendingDeeplinkTo = _dlToRaw;
+  // Before the first paint, so a returning visitor never sees the hardcoded
+  // pair at all. No repaint here: init calls updateTokenDisplay a few lines on.
+  loadZListRankCache();
+  applyZListDefaultPair(false);
   const _dlAmt = _urlp.get('amt');
   const _dlOutAmt = _urlp.get('outamt');
   // Deeplink: ?pp=eth or ?pp=bold (Privacy Pools deposit)
