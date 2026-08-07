@@ -984,6 +984,11 @@ async function wizOpen(){
   /* A completed bond leaves the footer in its terminal state; reopening must not
      inherit it. */
   $('wizcancel').textContent='Cancel'; $('wizgo').disabled=false;
+  /* Cleared on the way IN. wizRun only clears it on failure, deliberately, so a
+     placed bond stays frozen - which meant a successful bond left it set for the
+     rest of the session and plan() then skipped the step summary on every later
+     open. Reopening is the moment that state stops being true. */
+  WZBUSY=false;
   wizMode='bond'; $('wiztitle').textContent='Bond a zOrgz';
   /* Name the stage. The wizard opens on four chained reads and a blank spinner
      gives the reader nothing to tell "working" from "hung". */
@@ -1376,6 +1381,8 @@ async function wizOpen(){
 async function wizRun(){
   const go=$('wizgo');
   go.disabled=true; WZBUSY=true;
+  sfx('press');            // on the press, not after two chain reads
+  let sent=false;          // has anything been handed to the wallet yet
   /* The form is the record of what you agreed to; freeze it rather than let a
      drawer move under a transaction already in flight. */
   ['wzid','wzamt','wzamtr','wzmax'].forEach(k=>{const e=$(k);if(e)e.disabled=true});
@@ -1417,10 +1424,10 @@ async function wizRun(){
     const send=c=>({to:c.to,data:c.data,value:c.value});
 
     const p=rpcProvider();
-    sfx('press');
     if(window._walletSendCalls){
       wzSteps(steps,0,'run','Confirm once in your wallet.');
       $('wstat').textContent='';
+      sent=true;
       await p.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',
         from:WZ.me, atomicRequired:true, calls:calls.map(send)}]});
       wzSteps(steps,steps.length,'done','Submitted as one batch.'); sfx('win');
@@ -1428,6 +1435,7 @@ async function wizRun(){
     }else{
       for(cur=0;cur<calls.length;cur++){
         wzSteps(steps,cur,'run','Confirm in your wallet\u2026');
+        sent=true;
         const hash=await p.request({method:'eth_sendTransaction',params:[{from:WZ.me,...send(calls[cur])}]});
         /* Every step here depends on the one before it - bondZorgz needs both
            approvals mined, eternalize needs the receipt that bondZorgz mints.
@@ -1451,7 +1459,10 @@ async function wizRun(){
     bstatLoad();
     return;
   }catch(e){
-    wzSteps(steps,cur,'fail'); sfx('err');
+    /* Only mark a step failed if a step was actually attempted. A bad id or a
+       short amount fails before anything is sent, and crossing out "Approve the
+       zOrgz for escrow" for it says the wallet rejected something it never saw. */
+    wzSteps(steps,cur,sent?'fail':'idle'); sfx('err');
     const w=$('wiz'); if(w&&!REDUCED){ w.classList.remove('wshake'); void w.offsetWidth; w.classList.add('wshake'); }
     $('wstat').textContent=e.message||'Cancelled.';
   }
@@ -1478,7 +1489,7 @@ async function wizRun(){
 async function useOpen(){
   const d=$('wiz'), body=$('wizbody');
   wizMode='use'; $('wiztitle').textContent='Use a receipt'; $('wstat').textContent='';
-  $('wizcancel').textContent='Cancel'; $('wizgo').disabled=false;
+  $('wizcancel').textContent='Cancel'; $('wizgo').disabled=false; WZBUSY=false;
   wizShow();
   if(!window._connectedAddress){
     /* Say why the dialog vanished. Dismissing the wallet picker used to leave
@@ -1595,6 +1606,9 @@ $('wiz').addEventListener('cancel',()=>{ wizWaiting=false; });
 /* Both buttons now wait on the wallet stack before they can do anything, so
    they say so rather than sitting inert while a megabyte arrives. */
 const withWallet=fn=>async()=>{
+  /* Already here - the idle load usually wins this race - so go straight in
+     rather than flashing an interstitial for a promise that is already resolved. */
+  if(window.walletInit) return fn();
   const d=$('wiz');
   $('wiztitle').textContent='Loading…';
   $('wizbody').innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
