@@ -608,7 +608,26 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 40px;
 }
 .dao-dashboard.show { display: block; }
-.dao-dashboard-header { margin-bottom: 16px; }
+.dao-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dao-identity { display: flex; align-items: center; gap: 12px; }
+.dao-identity-row { display: flex; align-items: center; gap: 6px; }
+.dao-icon-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  margin: 0;
+  color: var(--fg-dim);
+  cursor: pointer;
+  display: flex;
+}
+.dao-icon-btn:hover { background: none; color: var(--fg); }
 .dao-dashboard-title {
   font-size: 14px;
   font-weight: 400;
@@ -677,18 +696,20 @@ body.modal-open { overflow: hidden; }
 .dao-stats-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 8px 20px;
+  padding: 10px 0;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--border-muted);
+  border-bottom: 1px solid var(--border-muted);
   font-size: 12px;
 }
 .back-button {
   background: none;
   color: var(--fg-dim);
   border: none;
-  padding: 4px 0;
+  padding: 0;
   font-size: 11px;
-  margin-top: 0;
-  margin-bottom: 12px;
+  margin: 0 0 10px;
   text-transform: none;
   letter-spacing: normal;
 }
@@ -698,7 +719,6 @@ body.modal-open { overflow: hidden; }
 .dao-view-toggle {
   display: flex;
   gap: 0;
-  margin-bottom: 20px;
   border: 1px solid var(--border);
   width: fit-content;
 }
@@ -730,6 +750,55 @@ body.modal-open { overflow: hidden; }
   letter-spacing: 0.1em;
   margin-bottom: 12px;
 }
+
+.dao-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dao-panel-head .dao-panel-title { margin-bottom: 0; }
+.panel-actions { display: flex; gap: 6px; }
+
+/* Two-column dashboard: treasury on the left, proposals on the right */
+.dao-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 16px;
+  align-items: start;
+}
+.dao-columns > .dao-panel { margin-bottom: 0; }
+
+/* Collapsible sub-sections */
+.dao-fold {
+  border-top: 1px solid var(--border-muted);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.dao-fold-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-muted);
+}
+.dao-fold-title::-webkit-details-marker { display: none; }
+.dao-fold-title::before {
+  content: '+';
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+.dao-fold[open] > .dao-fold-title::before { content: '\2212'; }
+.dao-fold-title:hover { color: var(--fg); }
+.dao-fold[open] > .dao-fold-title { color: var(--fg); margin-bottom: 12px; }
+.dao-fold-action { color: var(--fg-dim); display: inline-flex; margin-left: auto; }
+.dao-fold-action:hover { color: var(--fg); }
 
 /* Dashboard content toggle */
 .dao-dashboard-content, .dao-membership-content, .dao-members-content {
@@ -776,18 +845,6 @@ body.modal-open { overflow: hidden; }
 .chatroom-button:hover { background: var(--btn-hover); }
 
 /* Treasury */
-.treasury-section {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-muted);
-}
-.treasury-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 8px;
-}
 .treasury-assets {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -920,12 +977,22 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 16px;
 }
 .proposal-form-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  margin-bottom: 12px;
+  color: var(--fg-muted);
 }
+.proposal-form-title::-webkit-details-marker { display: none; }
+.proposal-form-title::before { content: '+'; font-weight: 400; color: var(--fg-dim); }
+.proposal-form[open] > .proposal-form-title::before { content: '\2212'; }
+.proposal-form-title:hover { color: var(--fg); }
+.proposal-form[open] > .proposal-form-title { color: var(--fg); margin-bottom: 12px; }
 .proposal-form-group { margin-bottom: 12px; }
 .proposal-form-label {
   display: block;
@@ -1780,7 +1847,11 @@ body.modal-open { overflow: hidden; }
 
 
 /* Responsive */
+@media (max-width: 1000px) {
+  .dao-columns { grid-template-columns: 1fr; }
+}
 @media (max-width: 700px) {
+  .dao-columns > .dao-panel { margin-bottom: 0; }
   body { padding: 80px 16px 20px; }
   h1 { font-size: 13px; margin-bottom: 16px; }
   .dao-tiles { grid-template-columns: 1fr; }
@@ -2205,21 +2276,16 @@ body.modal-open { overflow: hidden; }
 
     <!-- DAO DASHBOARD SECTION -->
     <section class="dao-dashboard" id="daoDashboard">
+      <button class="back-button" onclick="backToGallery()">&larr; Back to Gallery</button>
       <div class="dao-dashboard-header">
-        <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="dao-identity">
           <div id="daoEmblem" class="dao-emblem" style="display: none;" title="DAO Contract URI">
             <!-- DAO emblem will be rendered here -->
           </div>
-          <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div class="dao-identity-text">
+            <div class="dao-identity-row">
               <h2 class="dao-dashboard-title" id="dashboardTitle">DAO Dashboard</h2>
-              <button
-                onclick="manualRefreshDAO()"
-                id="refreshButton"
-                title="Refresh DAO state"
-                style="background: none; border: none; color: var(--fg-dim); cursor: pointer; padding: 0.15rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;"
-                onmouseover="this.style.color='var(--fg-muted)'; this.style.transform='rotate(90deg)';"
-                onmouseout="this.style.color='var(--fg-dim)'; this.style.transform='rotate(0deg)';">
+              <button onclick="manualRefreshDAO()" id="refreshButton" class="dao-icon-btn" title="Refresh DAO state">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="23 4 23 10 17 10"></polyline>
                   <polyline points="1 20 1 14 7 14"></polyline>
@@ -2227,143 +2293,138 @@ body.modal-open { overflow: hidden; }
                 </svg>
               </button>
             </div>
-            <a class="dao-etherscan-link" id="daoEtherscanLink" href="#" target="_blank" rel="noopener noreferrer">
-              <span id="daoAddressText">0x...</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-              </svg>
-            </a>
-            <button class="dao-copy-link-btn" id="daoCopyLinkBtn" onclick="copyDAOLink()" title="Copy shareable link to this DAO">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-              </svg>
-              <span>Copy Link</span>
-            </button>
-            <div class="dao-stats-bar" id="daoStatsBar">
-              <!-- Stats will be dynamically rendered here -->
+            <div class="dao-identity-row">
+              <a class="dao-etherscan-link" id="daoEtherscanLink" href="#" target="_blank" rel="noopener noreferrer">
+                <span id="daoAddressText">0x...</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </a>
+              <button class="dao-copy-link-btn" id="daoCopyLinkBtn" onclick="copyDAOLink()" title="Copy shareable link to this DAO">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
-        <button class="back-button" onclick="backToGallery()">← Back to Gallery</button>
+
+        <!-- View Toggle -->
+        <div class="dao-view-toggle">
+          <button class="view-toggle-btn active" id="viewToggleDao" onclick="switchDaoView('dao')">Dashboard</button>
+          <button class="view-toggle-btn" id="viewToggleMembership" onclick="switchDaoView('membership')">Membership</button>
+          <button class="view-toggle-btn" id="viewToggleMembers" onclick="switchDaoView('members')">Members</button>
+        </div>
       </div>
 
-      <!-- View Toggle -->
-      <div class="dao-view-toggle">
-        <button class="view-toggle-btn active" id="viewToggleDao" onclick="switchDaoView('dao')">DAO Dashboard</button>
-        <button class="view-toggle-btn" id="viewToggleMembership" onclick="switchDaoView('membership')">My Membership</button>
-        <button class="view-toggle-btn" id="viewToggleMembers" onclick="switchDaoView('members')">Members</button>
+      <div class="dao-stats-bar" id="daoStatsBar">
+        <!-- Stats will be dynamically rendered here -->
       </div>
 
       <!-- DAO Dashboard Content -->
       <div class="dao-dashboard-content show" id="daoDashboardView">
-        <!-- Chatroom Panel -->
+        <div class="dao-columns">
+
+        <!-- Treasury & organization column -->
         <div class="dao-panel">
-          <h3 class="dao-panel-title">Chatroom</h3>
-          <div class="chatroom-messages" id="chatroomMessages">
-            <!-- Messages will be dynamically rendered here -->
-          </div>
-          <div class="chatroom-send">
-            <input
-              type="text"
-              id="chatInput"
-              class="chatroom-input"
-              placeholder="Type a message..."
-            />
-            <button class="chatroom-button" onclick="sendChatMessage()">Send</button>
-          </div>
-
-          <!-- Treasury Section -->
-          <div class="treasury-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h4 class="treasury-title" style="margin-bottom: 0;">Treasury</h4>
-              <div style="display: flex; gap: 0.5rem;">
-                <button onclick="prepareInternalSaleProposal()" class="deposit-button" title="Internal sale: 1:1 upgrade or DAI continuous" style="background: var(--surface); border-color: var(--fg-muted);">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button onclick="prepareNewDaicoSaleProposal()" class="deposit-button" title="DAICO sale: external OTC fundraise" style="background: var(--status-success); border-color: var(--green);">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-                    <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-                <button onclick="openDepositModal()" class="deposit-button" title="Deposit assets to treasury">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="treasury-assets" id="treasuryAssets">
-              <!-- Treasury assets will be dynamically rendered here -->
-            </div>
-            <button class="ragequit-button" id="ragequitBtn" onclick="openRagequitModal()">Ragequit</button>
-          </div>
-
-          <!-- Tributes Section -->
-          <div class="treasury-section" style="margin-top: 1.5rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h4 class="treasury-title" style="margin-bottom: 0;">Incoming Tributes</h4>
-              <button onclick="openTributeModal()" class="deposit-button" title="Make a tribute offer">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M7 7h10l-4 5 4 5H7l4-5-4-5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <div class="dao-panel-head">
+            <h3 class="dao-panel-title">Treasury</h3>
+            <div class="panel-actions">
+              <button onclick="prepareInternalSaleProposal()" class="deposit-button" title="Internal sale: 1:1 upgrade or DAI continuous">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button onclick="prepareNewDaicoSaleProposal()" class="deposit-button" title="DAICO sale: external OTC fundraise">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+                  <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button onclick="openDepositModal()" class="deposit-button" title="Deposit assets to treasury">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
               </button>
             </div>
-            <div class="tribute-offers" id="tributeOffers">
-              <!-- Tributes will be dynamically rendered here -->
-            </div>
           </div>
 
-          <!-- Governance Info Section -->
-          <div class="treasury-section" style="margin-top: 1.5rem;">
-            <h4 class="treasury-title">Governance</h4>
-            <div id="governanceInfo" style="font-size: 0.85rem; color: var(--fg); line-height: 1.6;">
-              <!-- Governance info will be dynamically rendered here -->
-            </div>
+          <div class="treasury-assets" id="treasuryAssets">
+            <!-- Treasury assets will be dynamically rendered here -->
           </div>
+          <button class="ragequit-button" id="ragequitBtn" onclick="openRagequitModal()">Ragequit</button>
 
-          <!-- Sales Section -->
-          <div id="salesSection" class="treasury-section" style="margin-top: 1.5rem; display: none;">
-            <h4 class="treasury-title">Active Sales</h4>
+          <!-- Active Sales (revealed by JS when the DAO has one) -->
+          <details id="salesSection" class="dao-fold" style="display: none;" open>
+            <summary class="dao-fold-title">Active Sales</summary>
             <div id="salesInfo">
               <!-- Active sales will be dynamically rendered here -->
             </div>
-          </div>
+          </details>
 
-          <!-- Allowances Section (My Spending Allowances) -->
-          <div id="allowancesSection" class="treasury-section" style="margin-top: 1.5rem; display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h4 class="treasury-title" style="margin-bottom: 0;">
-                My Allowances
-                <a href="#" onclick="event.preventDefault(); prepareAllowanceProposal(); switchDaoView('dao');" title="Propose new allowance" onmouseover="this.style.opacity='1';" onmouseout="this.style.opacity='0.5';" style="margin-left: 0.5rem; color: var(--fg); opacity: 0.5; transition: all 0.2s; font-size: 0.75rem; text-decoration: none;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                  </svg>
-                </a>
-              </h4>
-            </div>
+          <!-- My Allowances (revealed by JS when the user has one) -->
+          <details id="allowancesSection" class="dao-fold" style="display: none;" open>
+            <summary class="dao-fold-title">
+              My Allowances
+              <a href="#" class="dao-fold-action" title="Propose new allowance"
+                 onclick="event.preventDefault(); event.stopPropagation(); prepareAllowanceProposal(); switchDaoView('dao');">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+              </a>
+            </summary>
             <div id="allowancesInfo" style="font-size: 0.85rem; color: var(--fg);">
               <!-- User's allowances will be dynamically rendered here -->
             </div>
-          </div>
+          </details>
+
+          <details class="dao-fold">
+            <summary class="dao-fold-title">
+              Incoming Tributes
+              <a href="#" class="dao-fold-action" title="Make a tribute offer"
+                 onclick="event.preventDefault(); event.stopPropagation(); openTributeModal();">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                  <path d="M7 7h10l-4 5 4 5H7l4-5-4-5z"/>
+                </svg>
+              </a>
+            </summary>
+            <div class="tribute-offers" id="tributeOffers">
+              <!-- Tributes will be dynamically rendered here -->
+            </div>
+          </details>
+
+          <details class="dao-fold">
+            <summary class="dao-fold-title">Governance</summary>
+            <div id="governanceInfo" style="font-size: 0.85rem; color: var(--fg); line-height: 1.6;">
+              <!-- Governance info will be dynamically rendered here -->
+            </div>
+          </details>
+
+          <details class="dao-fold">
+            <summary class="dao-fold-title">Chatroom</summary>
+            <div class="chatroom-messages" id="chatroomMessages">
+              <!-- Messages will be dynamically rendered here -->
+            </div>
+            <div class="chatroom-send">
+              <input type="text" id="chatInput" class="chatroom-input" placeholder="Type a message..." />
+              <button class="chatroom-button" onclick="sendChatMessage()">Send</button>
+            </div>
+          </details>
         </div>
 
-        <!-- Proposals Panel -->
+        <!-- Proposals column -->
         <div class="dao-panel">
           <h3 class="dao-panel-title">Proposals</h3>
 
-          <!-- New Proposal Form -->
-          <div class="proposal-form">
-            <h4 class="proposal-form-title">Create Proposal</h4>
+          <!-- New Proposal Form (collapsed until needed) -->
+          <details class="proposal-form" id="proposalFormDetails">
+            <summary class="proposal-form-title">New Proposal</summary>
             <input type="hidden" id="proposalOp" value="0" />
             <div class="proposal-form-group">
               <label class="proposal-form-label">Target Address</label>
@@ -2382,11 +2443,7 @@ body.modal-open { overflow: hidden; }
               <div id="calldataTranslation" style="margin-top: 0.5rem; display: none; padding: 0.75rem; background: var(--surface); border-left: 3px solid var(--fg); font-size: 0.85rem;"></div>
               <div id="calldataPreview" style="margin-top: 0.5rem; display: none;">
                 <a id="calldataPreviewLink" href="#" target="_blank" rel="noopener noreferrer"
-                   style="font-size: 0.75rem; color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; opacity: 0.75; transition: opacity 0.3s ease;"
-                   onmouseover="this.style.opacity='1'"
-                   onmouseout="this.style.opacity='0.75'">
-                  <span>🔍</span> Decode calldata on SwissKnife
-                </a>
+                   style="font-size: 0.75rem; color: var(--fg-muted); text-decoration: none;">Decode calldata on SwissKnife &rarr;</a>
               </div>
             </div>
             <div class="proposal-form-group">
@@ -2396,11 +2453,11 @@ body.modal-open { overflow: hidden; }
                 <div style="padding: 0.75rem; background: var(--surface); border: 1px solid var(--border-muted); font-size: 0.85rem; color: var(--fg-muted); line-height: 1.5; white-space: pre-wrap; ">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <span style="font-size: 0.7rem; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.1em;">Proposal Summary (auto-generated)</span>
-                    <button onclick="clearLockedDescription()" style="background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.4rem;" title="Clear and edit manually">✕ Clear</button>
+                    <button onclick="clearLockedDescription()" style="background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.4rem;" title="Clear and edit manually">&times; Clear</button>
                   </div>
                   <div id="proposalDescriptionLockedText"></div>
                 </div>
-                <label class="proposal-form-label" style="margin-top: 0.75rem; font-size: 0.8rem;">Additional Notes (optional)</label>
+                <label class="proposal-form-label" style="margin-top: 0.75rem;">Additional Notes (optional)</label>
                 <textarea id="proposalDescriptionNotes" class="proposal-form-input proposal-form-textarea" placeholder="Add any additional context or notes..." style="min-height: 60px;"></textarea>
               </div>
               <!-- Regular description textarea (shown when no locked description) -->
@@ -2409,21 +2466,17 @@ body.modal-open { overflow: hidden; }
               <input type="hidden" id="proposalDescriptionFull" value="">
             </div>
             <div id="proposalTTLInfo" style="margin-bottom: 0.75rem; padding: 0.65rem; background: var(--surface); border-left: 3px solid var(--border-muted); display: none;">
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7; flex-shrink: 0;">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span id="proposalTTLInfoText" style="font-size: 0.8rem; color: var(--fg); line-height: 1.4;"></span>
-              </div>
+              <span id="proposalTTLInfoText" style="font-size: 0.8rem; color: var(--fg); line-height: 1.4;"></span>
             </div>
-            <button class="chatroom-button" onclick="createProposal()">Create & Publish</button>
-          </div>
+            <button class="chatroom-button" onclick="createProposal()">Create &amp; Publish</button>
+          </details>
 
           <!-- Proposals List -->
           <div id="proposalsList">
             <!-- Proposals will be dynamically rendered here -->
           </div>
+        </div>
+
         </div>
       </div>
 
@@ -2678,6 +2731,13 @@ body.modal-open { overflow: hidden; }
 
       // Optimized DOM access - uses cache when available
       const getEl = (id) => DOMCache.get(id);
+
+      // Reveal the collapsed proposal form and hand it back to the helper that populates it
+      function openProposalForm() {
+        const form = document.getElementById('proposalFormDetails');
+        if (form) form.open = true;
+        return form;
+      }
 
       // HTML escape function to prevent XSS attacks
       function fmtBal(v) { const n = parseFloat(v); return n === 0 ? '0' : n < 0.01 ? '<0.01' : n.toLocaleString(undefined, {maximumFractionDigits: 2}); }
@@ -6070,7 +6130,7 @@ body.modal-open { overflow: hidden; }
           clearTributeHelper();
 
           // Scroll to proposal form
-          const proposalForm = document.querySelector('.proposal-form');
+          const proposalForm = openProposalForm();
           if (proposalForm) {
             proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
@@ -7607,7 +7667,7 @@ body.modal-open { overflow: hidden; }
         clearLockedDescription();
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -7874,7 +7934,7 @@ body.modal-open { overflow: hidden; }
         clearSaleHelper();
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8219,7 +8279,7 @@ body.modal-open { overflow: hidden; }
         }
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8365,7 +8425,7 @@ body.modal-open { overflow: hidden; }
         const daoAddress = dao.dao;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8508,7 +8568,7 @@ body.modal-open { overflow: hidden; }
         const currentRenderer = dao.meta.renderer;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8618,7 +8678,7 @@ body.modal-open { overflow: hidden; }
         const currentQuorum = (Number(dao.gov.quorumBps) / 100).toFixed(2);
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8809,7 +8869,7 @@ body.modal-open { overflow: hidden; }
         const currentTTL = Number(dao.gov.proposalTTL || 0);
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -8943,7 +9003,7 @@ body.modal-open { overflow: hidden; }
         const currentDelay = Number(dao.gov.timelockDelay || 0);
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -9125,7 +9185,7 @@ body.modal-open { overflow: hidden; }
         const circulatingFormatted = parseFloat(ethers.formatUnits(circulatingShares, 18)).toFixed(2);
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -9252,7 +9312,7 @@ body.modal-open { overflow: hidden; }
         const currentRagequit = dao.gov.ragequittable;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -9356,7 +9416,7 @@ body.modal-open { overflow: hidden; }
         const { sharesLocked, lootLocked } = currentDAO._transferLocks;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -9512,7 +9572,7 @@ body.modal-open { overflow: hidden; }
         const daoAddress = dao.dao;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -10197,7 +10257,7 @@ body.modal-open { overflow: hidden; }
         const currentRatePerMonth = parseFloat(ethers.formatUnits(currentRateBn * SECONDS_PER_MONTH, tribTknDecimals));
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -10308,7 +10368,7 @@ body.modal-open { overflow: hidden; }
         const currentPricePerToken = tribAmtFormatted / forAmtFormatted;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -10533,7 +10593,7 @@ body.modal-open { overflow: hidden; }
         // Switch to DAO view and scroll to proposal form
         switchDaoView('dao');
 
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           setTimeout(() => {
             proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -10552,7 +10612,7 @@ body.modal-open { overflow: hidden; }
         helperDiv.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: var(--status-success); border: 1px solid var(--green); ';
 
         setTimeout(() => {
-          const proposalFormEl = document.querySelector('.proposal-form');
+          const proposalFormEl = openProposalForm();
           if (proposalFormEl) {
             proposalFormEl.insertBefore(helperDiv, proposalFormEl.querySelector('.proposal-form-group'));
           }
@@ -10814,7 +10874,7 @@ body.modal-open { overflow: hidden; }
         // Switch to DAO view and scroll to proposal form
         switchDaoView('dao');
 
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           setTimeout(() => {
             proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -10834,7 +10894,7 @@ body.modal-open { overflow: hidden; }
         helperDiv.style.cssText = 'margin-bottom: 1rem; padding: 1rem; background: var(--surface); border: 1px solid var(--border-muted); ';
 
         setTimeout(() => {
-          const proposalFormEl = document.querySelector('.proposal-form');
+          const proposalFormEl = openProposalForm();
           if (proposalFormEl) {
             proposalFormEl.insertBefore(helperDiv, proposalFormEl.querySelector('.proposal-form-group'));
           }
@@ -11120,7 +11180,7 @@ body.modal-open { overflow: hidden; }
         const currentOpsShort = currentOps.slice(0, 10) + '...' + currentOps.slice(-8);
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -11498,7 +11558,7 @@ body.modal-open { overflow: hidden; }
         const daoAddress = currentDAO.dao.dao;
 
         // Scroll to proposal form
-        const proposalForm = document.querySelector('.proposal-form');
+        const proposalForm = openProposalForm();
         if (proposalForm) {
           proposalForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
