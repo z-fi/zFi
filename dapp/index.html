@@ -2585,10 +2585,48 @@ async function loadZListRanking() {
       mergeWeiListTokens(ZLIST_NAME, validated);
     }
     if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
+    applyZListDefaultPair();
   } catch (_) {
   } finally {
     _zlistLoading = false;
   }
+}
+
+// ---- Default pair, decided by conviction rather than by us -----------------
+// The opening pair was hardcoded ETH -> zOrg. Every other ordering on this page
+// now defers to the ranking, and keeping our own token pinned in the default
+// slot is precisely the handed-out position zList exists to argue against: if
+// zOrg deserves that slot it can be bonded into it, like anything else.
+//
+// "#1 into #2" is the obvious convention and it is wrong on this list. #1 and #2
+// are ETH and WETH, which isWrapUnwrap classifies as a wrap - the page would
+// open on a pair that is not a swap at all. So: #1 into the highest-ranked
+// listing that is a DIFFERENT ASSET, which is the same intent with the
+// degenerate case removed.
+//
+// Applied once, and only to an untouched page. A default that moved under
+// someone mid-swap would be worse than a stale one.
+let _pairTouched = false;
+function applyZListDefaultPair() {
+  if (_pairTouched || _pendingDeeplinkFrom || _pendingDeeplinkTo) return;
+  // Typing an amount is intent, even before a token is picked.
+  const amt = $('fromAmount');
+  if (amt && amt.value) return;
+  const byAddr = new Map();
+  for (const k of Object.keys(tokens)) byAddr.set(tokens[k].address.toLowerCase(), k);
+  const syms = [];
+  for (const addr of ZRANK.keys()) {         // Map keeps rank order
+    const sym = byAddr.get(addr);
+    if (sym) syms.push(sym);
+  }
+  if (syms.length < 2) return;
+  const from = syms[0];
+  const to = syms.slice(1).find(sym => sym !== from && !isWrapUnwrap(from, sym));
+  if (!to) return;
+  fromToken = from;
+  toToken = to;
+  if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
+  if (typeof updateBalances === 'function') updateBalances();
 }
 
 let _bundledLoading = false;
@@ -2707,6 +2745,7 @@ function _retryPendingDeeplinks() {
     if (k) { toToken = k; _pendingDeeplinkTo = null; changed = true; }
   }
   if (!changed) return;
+  _pairTouched = true;                        // the URL asked for this pair
   if (fromToken === toToken) toToken = fromToken === 'ETH' ? 'zOrg' : 'ETH';
   if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
   if (typeof updateBalances === 'function') updateBalances();
@@ -9359,6 +9398,7 @@ function closeTokenModal() {
 const reQuoteDebounced = debounce(handleAmountChange, 600);
 
 function selectToken(symbol) {
+  _pairTouched = true;          // conviction must not move the pair under them now
   // The user has taken over from the deeplink, so stop holding the URL for a
   // token that may never resolve — otherwise syncSwapURL's pending-guard would
   // suppress every later URL update for the rest of the session.
