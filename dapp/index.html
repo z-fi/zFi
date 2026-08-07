@@ -2746,6 +2746,7 @@ function applyZLogos() {
   if (typeof updateTokenDisplay === 'function') updateTokenDisplay();
   if (typeof renderQuickTokens === 'function') renderQuickTokens();
   if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
+  if (typeof window.repaintOtcTicker === 'function') window.repaintOtcTicker();
 }
 
 let _bundledLoading = false;
@@ -10314,13 +10315,37 @@ walletInit({
     const w = whole.toLocaleString ? Number(whole).toLocaleString() : whole.toString();
     return w + (frac ? '.' + frac : '');
   }
-  function otcIcon(sym) {
-    // Reuse swap page icon infrastructure (18px for ticker)
-    if (typeof iconForSymbol === 'function') {
-      const html = iconForSymbol(sym);
-      return html.replace(/width="24"/g, 'width="18"').replace(/height="24"/g, 'height="18"');
+  const otcShrink = html =>
+    html.replace(/width="24"/g, 'width="18"').replace(/height="24"/g, 'height="18"');
+  function otcIcon(sym, addr) {
+    // An order names its tokens by whatever symbol they were listed with, and
+    // iconForSymbol is keyed by the swap page's own symbols - so "ZORG" missed
+    // every shipped icon and every piece of registry art and came out as a
+    // generated letter circle, next to tokens that had rendered their real logo.
+    // The address is the thing both sides agree on, so resolve on that first.
+    const a = (addr || '').toLowerCase();
+    if (a && typeof ZLOGOS !== 'undefined') {
+      const onchain = ZLOGOS.get(a);
+      if (onchain) {
+        // Into an <img>, never innerHTML - same reason as iconForSymbol: an SVG
+        // in an img cannot run script, and this art comes from the registry.
+        const img = document.createElement('img');
+        img.src = onchain;
+        img.width = 18; img.height = 18;
+        img.style.borderRadius = '50%';
+        img.alt = sym;
+        return img.outerHTML;
+      }
     }
-    return '';
+    if (typeof iconForSymbol !== 'function') return '';
+    // Fall back through the swap page's own symbol for this address before the
+    // order's: `zOrg` is the key that carries the shipped mark, `ZORG` is not.
+    if (a && typeof tokens === 'object') {
+      for (const k in tokens) {
+        if ((tokens[k].address || '').toLowerCase() === a) return otcShrink(iconForSymbol(k));
+      }
+    }
+    return otcShrink(iconForSymbol(sym));
   }
 
   async function loadOtcTicker() {
@@ -10346,7 +10371,7 @@ walletInit({
         const symB = addrB === OTC_WETH ? 'ETH' : (po.symbolB || otcSym(addrB));
         const prefix = isV1 ? 'sb-' : 'pf-';
         orders.push({
-          symIn: symA, symOut: symB,
+          symIn: symA, symOut: symB, addrIn: addrA, addrOut: addrB,
           amtIn: otcFmt(po.amountA.toString(), Number(po.decimalsA) || 18),
           amtOut: otcFmt(po.amountB.toString(), Number(po.decimalsB) || 18),
           src: 'otc',
@@ -10355,15 +10380,25 @@ walletInit({
       }
 
       if (orders.length === 0) return;
-      const display = orders.slice(0, 4);
+      SHOWN = orders.slice(0, 4);
+      render();
+    } catch {}
+  }
 
-      // Render
+  // Registry art arrives on its own multicall and can land after this section has
+  // already painted, which left the ticker showing fallbacks for logos the rest of
+  // the page had by then resolved. Kept as a re-render off the same rows rather
+  // than a refetch: the orders have not changed, only what we can draw for them.
+  let SHOWN = [];
+  function render() {
+      const display = SHOWN;
+      if (!display.length) return;
       const el = document.getElementById('otcTickerList');
       if (!el) return;
       let html = '';
       for (const o of display) {
         html += `<a class="otc-order" href="${o.href}">
-          <span class="otc-icons">${otcIcon(o.symIn)}<span class="otc-ic1">${otcIcon(o.symOut)}</span></span>
+          <span class="otc-icons">${otcIcon(o.symIn, o.addrIn)}<span class="otc-ic1">${otcIcon(o.symOut, o.addrOut)}</span></span>
           <div class="otc-info">
             <div class="otc-pair">${o.amtIn} ${o.symIn} &rarr; ${o.amtOut} ${o.symOut}</div>
           </div>
@@ -10372,8 +10407,10 @@ walletInit({
       }
       el.innerHTML = html;
       document.getElementById('otcTicker').style.display = '';
-    } catch {}
   }
+  // applyZLogos() calls this once the registry's art is in ZLOGOS; a no-op until
+  // there are rows to redraw, so the order the two loads finish in does not matter.
+  window.repaintOtcTicker = render;
 
   // Load after a short delay to not block swap page init
   setTimeout(loadOtcTicker, 1500);
