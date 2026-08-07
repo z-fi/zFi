@@ -33,6 +33,11 @@
 body {
   max-width: 620px;
 }
+/* The DAO dashboard is the one dense page here: it gets the full width, and
+   the header and nav widen with it so everything shares a left edge. */
+body.dao-open { max-width: 1180px; }
+/* Summoning a new DAO is not what you came for while looking at one. */
+body.dao-open .summoner-section { display: none; }
 h1 {
   font-size: 14px;
   font-weight: 400;
@@ -764,10 +769,6 @@ body.modal-open { overflow: hidden; }
 /* Two-column dashboard: treasury on the left, proposals on the right.
    The rest of the app reads in a 620px column; this page is dense enough
    to need the room, so it breaks out and re-centers itself. */
-.dao-dashboard.show {
-  width: min(1180px, calc(100vw - 40px));
-  margin-left: calc((min(1180px, 100vw - 40px) - 100%) / -2);
-}
 .dao-columns {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
@@ -1226,15 +1227,18 @@ body.modal-open { overflow: hidden; }
 .chatroom-sender-link:hover { text-decoration: underline; }
 
 /* Membership */
+/* The badge is one tall image and the balances are three short rows, so the
+   badge takes a narrow column of its own and the rest stacks beside it. */
 .membership-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
-.membership-grid .delegation-card { grid-column: 1 / -1; }
+.membership-grid .badge-card { grid-row: span 2; }
 @media (max-width: 1000px) {
   .membership-grid { grid-template-columns: 1fr; }
+  .membership-grid .badge-card { grid-row: auto; }
 }
 .badge-card, .balance-card, .delegation-card {
   border: 1px solid var(--border);
@@ -1951,7 +1955,7 @@ body.modal-open { overflow: hidden; }
 <h1>DAO</h1>
 
 <div class="nav-links">
-  <button onclick="const b=getEl('summonerBody');if(b&&b.style.display==='none')toggleSummoner();getEl('summoner').scrollIntoView({behavior:'smooth'});">Summon</button> &middot;
+  <button onclick="openSummoner()">Summon</button> &middot;
   <button onclick="scrollToYourDAOs()">Your DAOs</button> &middot;
   <button onclick="scrollToAllDAOs()">Find DAO</button> &middot;
   <a href="https://wp.majeurdao.eth.limo" target="_blank" rel="noopener noreferrer">Lite Paper</a> &middot;
@@ -3160,6 +3164,15 @@ body.modal-open { overflow: hidden; }
         body.style.display = open ? 'none' : 'block';
         toggle.textContent = (open ? '\u25B6' : '\u25BC') + ' Summon New DAO';
         toggle.classList.toggle('open', !open);
+      }
+
+      // The summoner is hidden while a DAO dashboard is open, so leave the
+      // dashboard first — otherwise this scrolls to nothing.
+      function openSummoner() {
+        if (document.body.classList.contains('dao-open')) backToGallery();
+        const body = getEl('summonerBody');
+        if (body && body.style.display === 'none') toggleSummoner();
+        getEl('summoner').scrollIntoView({ behavior: 'smooth' });
       }
 
       function scrollToYourDAOs() {
@@ -12084,6 +12097,7 @@ body.modal-open { overflow: hidden; }
         DOMCache.daoGallery.classList.remove('show');
         DOMCache.allDaosGallery.classList.remove('show');
         DOMCache.daoDashboard.classList.add('show');
+        document.body.classList.add('dao-open');
 
         // Fire-and-forget (no downstream dependencies)
         renderChatroom().catch(e => logger.error('renderChatroom failed:', e));
@@ -12148,6 +12162,7 @@ body.modal-open { overflow: hidden; }
         const _navOb = document.getElementById('navOrderbook');
         if (_navOb) _navOb.href = '../orderbook/';
         DOMCache.daoDashboard.classList.remove('show');
+        document.body.classList.remove('dao-open');
         DOMCache.daoGallery.classList.add('show');
 
         // Search section stays hidden until user explicitly opens it
