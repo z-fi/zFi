@@ -34,6 +34,19 @@ button {
 button:hover { background:var(--btn-hover); }
 button:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
 
+/* Toast */
+.toast {
+  position:fixed; left:50%; bottom:24px; transform:translate(-50%, 12px);
+  z-index:3000; pointer-events:none; opacity:0;
+  padding:10px 16px; border-radius:var(--ob-radius);
+  background:var(--fg); color:var(--bg);
+  font-size:12px; letter-spacing:0.02em; max-width:calc(100vw - 32px);
+  box-shadow:0 8px 28px rgba(0,0,0,.28);
+  transition:opacity .18s, transform .18s;
+}
+.toast.show { opacity:1; transform:translate(-50%, 0); }
+@media (prefers-reduced-motion:reduce) { .toast { transition:none; } }
+
 /* Modal overlay */
 .modal-overlay {
   display:none; position:fixed; top:0; left:0; right:0; bottom:0;
@@ -180,10 +193,29 @@ body.modal-open { overflow:hidden; }
   letter-spacing:0.06em;
 }
 
+.book-row.is-mine { box-shadow:inset 2px 0 0 #e6a020; }
+.dark .book-row.is-mine { box-shadow:inset 2px 0 0 #ffcc55; }
+
+.book-more {
+  padding:7px 12px; text-align:center; cursor:pointer;
+  font-size:10px; letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--fg-dim); background:var(--surface);
+  transition:color 0.15s, background 0.15s;
+}
+.book-more:hover { color:var(--fg); background:var(--surface-hover); }
+
 .book-empty {
   padding:24px 12px; text-align:center;
   font-size:12px; color:var(--fg-dim);
 }
+
+.amm-compare {
+  display:inline-block; font-size:10px; font-weight:600; letter-spacing:0.05em;
+  text-transform:uppercase; padding:3px 7px; border-radius:5px;
+  background:var(--surface); color:var(--fg-muted); white-space:nowrap;
+}
+.amm-compare.up { background:var(--red-bg); color:var(--red); }
+.amm-compare.down { background:var(--green-bg); color:var(--green); }
 
 .book-footer {
   display:flex; align-items:center; justify-content:space-between;
@@ -218,6 +250,19 @@ body.modal-open { overflow:hidden; }
   display:block; font-size:11px; color:var(--fg-muted); text-transform:uppercase;
   letter-spacing:0.1em; margin-bottom:4px;
 }
+.field-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.field-aux { font-size:10px; color:var(--fg-dim); font-family:monospace; white-space:nowrap; }
+.field-aux .link { cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+.field-aux .link:hover { color:var(--fg); }
+.pct-row { display:flex; gap:4px; margin-top:8px; }
+.pct-btn {
+  flex:1; padding:5px 0; font-size:10px; font-weight:600;
+  letter-spacing:0.05em; text-transform:uppercase; border-radius:5px;
+  border:1px solid var(--border-muted); background:transparent;
+  color:var(--fg-muted); cursor:pointer; transition:all 0.15s; margin:0;
+}
+.pct-btn:hover:not(:disabled) { color:var(--fg); border-color:var(--fg-muted); background:var(--surface-hover); }
+.pct-btn:disabled { opacity:0.35; cursor:not-allowed; }
 .field-row { display:flex; align-items:center; gap:8px; }
 .field-input {
   font-family:inherit; font-size:20px; padding:4px 0;
@@ -515,6 +560,7 @@ body.modal-open { overflow:hidden; }
 <body>
 
 <div id="z-nav"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <div class="page-header">
   <div class="pair-row">
@@ -523,6 +569,7 @@ body.modal-open { overflow:hidden; }
     <div class="sub-links">
       <a class="sub-link" id="chartLink" href="#" title="View chart" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Chart</a>
       <a class="sub-link" id="lpLink" href="#" title="Manage LP" style="display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v12M6 12h12"/></svg>LP</a>
+      <a class="sub-link" id="copyLink" href="#" title="Copy link to this pair" onclick="event.preventDefault();copyPairLink()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Link</a>
       <a class="sub-link" id="allOrdersLink" href="./" title="All orders"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>All</a>
       <a class="sub-link" id="swapLink" href="../" title="Swap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Swap</a>
     </div>
@@ -534,6 +581,7 @@ body.modal-open { overflow:hidden; }
   <div>
     <div class="amm-price" id="ammPrice">--</div>
     <div class="amm-price-label" id="ammPriceLabel">AMM Price</div>
+    <span class="amm-compare" id="ammCompare" style="display:none;margin-top:6px"></span>
   </div>
   <div class="amm-reserves" id="ammReserves"></div>
 </div>
@@ -575,21 +623,33 @@ body.modal-open { overflow:hidden; }
     </div>
     <div class="order-form-inner">
       <div class="field">
-        <div class="field-label">Price</div>
+        <div class="field-head">
+          <span class="field-label">Price</span>
+          <span class="field-aux" id="priceHints"></span>
+        </div>
         <div class="field-row">
-          <input class="field-input" id="orderPrice" type="number" step="any" min="0" placeholder="0.0">
+          <input class="field-input" id="orderPrice" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal">
           <span class="field-suffix" id="orderPriceUnit">--</span>
         </div>
       </div>
       <div class="field">
-        <div class="field-label">Amount</div>
+        <div class="field-head">
+          <span class="field-label">Amount</span>
+          <span class="field-aux" id="balanceLine"></span>
+        </div>
         <div class="field-row">
-          <input class="field-input" id="orderAmt" type="number" step="any" min="0" placeholder="0.0">
+          <input class="field-input" id="orderAmt" type="number" step="any" min="0" placeholder="0.0" inputmode="decimal">
           <span class="field-suffix" id="orderAmtUnit">--</span>
+        </div>
+        <div class="pct-row" id="pctRow">
+          <button type="button" class="pct-btn" onclick="setAmtPct(25)">25%</button>
+          <button type="button" class="pct-btn" onclick="setAmtPct(50)">50%</button>
+          <button type="button" class="pct-btn" onclick="setAmtPct(75)">75%</button>
+          <button type="button" class="pct-btn" onclick="setAmtPct(100)">Max</button>
         </div>
       </div>
       <div class="field-row-between">
-        <span class="label">Total</span>
+        <span class="label" id="orderTotalLabel">Total</span>
         <span class="value" id="orderTotal">--</span>
       </div>
       <div class="venue-row">
@@ -1135,13 +1195,31 @@ async function obAddCustomToken() {
   }
 }
 
-// Multiply two decimal strings precisely using BigInt (18-decimal fixed-point)
-function mulDecimals(a, b, decimals) {
-  const d = BigInt(decimals || 18);
-  const BASE = 10n ** d;
-  const aw = ethers.parseUnits(a, d);
-  const bw = ethers.parseUnits(b, d);
-  return (aw * bw) / BASE;
+// Multiply two decimal strings precisely using BigInt, returning a value scaled
+// to `decimals`. The intermediate work runs at 36 places so a low-decimal quote
+// (USDC at 6) cannot reject an ordinary price like 3421.557 for "too many
+// decimals" — only the final, correctly-scaled result is checked for underflow.
+function mulDecimals(a, b, decimals, label) {
+  const d = Number(decimals);
+  const outDec = Number.isInteger(d) && d >= 0 && d <= 36 ? d : 18;
+  const WORK = 36n;
+  const aw = ethers.parseUnits(toDecimalString(a, 36), WORK);
+  const bw = ethers.parseUnits(toDecimalString(b, 36), WORK);
+  const product = (aw * bw) / (10n ** WORK);            // still at WORK scale
+  const scaled = product / (10n ** (WORK - BigInt(outDec)));
+  if (product > 0n && scaled === 0n) {
+    throw new Error('Total is below the smallest unit of ' + (label || 'the quote token'));
+  }
+  return scaled;
+}
+
+// Wallet rejections are a normal outcome, not a failure worth shouting about;
+// everything else keeps its revert reason.
+function txError(e) {
+  const code = e?.code || e?.info?.error?.code;
+  if (code === 'ACTION_REJECTED' || code === 4001) return 'Transaction rejected in wallet';
+  const msg = e?.reason || e?.shortMessage || e?.message || 'Transaction failed';
+  return msg.length > 200 ? msg.slice(0, 200) + '…' : msg;
 }
 
 // ---- Token Icons ----
@@ -1196,6 +1274,9 @@ let _poolData = null;
 let _allOrders = [];
 let _refreshCountdown = 30;
 let _activeTab = 'book';
+let _bookExpanded = false;
+let _bookMid = null;
+let _ammPrice = null;
 let _orderSide = 'buy';
 let _orderVenue = 'swapboard';
 let _globalMode = false;
@@ -1207,24 +1288,55 @@ function escText(s) { return String(s).replace(/[&<>]/g, m => _escTextMap[m]); }
 function escAttr(s) { return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function srcTag(o) { return o._source === 'swapboard-pf' ? '<span class="src-tag swapboard">PF</span>' : '<span class="src-tag swapboard">OTC</span>'; }
 
+let _toastTimer = null;
+function toast(msg) {
+  const el = $('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+async function copyPairLink() {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast('Link copied');
+  } catch {
+    toast('Could not copy — copy from the address bar');
+  }
+}
+
 // ---- Pool ID from hash ----
 function getPoolId() {
   const m = location.hash.match(/^#\/(\d+)$/);
   return m ? m[1] : null;
 }
 
+// Only https/data image URLs may reach an <img src> built from a link someone
+// else shared — an arbitrary URL here is a beacon fired at whoever opens it.
+function safeLogoParam(v) {
+  const s = (v || '').trim();
+  return (s.startsWith('https://') || s.startsWith('data:image/')) ? s : '';
+}
+
 function getTokenParams() {
   const p = new URLSearchParams(location.search);
   const token0 = p.get('token0');
   const token1 = p.get('token1');
+  // A malformed link must not throw its way out of init() and leave the page
+  // frozen on "Loading..." — fall back to the global view instead.
   if (!token0 || !token1) return null;
-  const id0 = p.get('id0') || '0';
-  const id1 = p.get('id1') || '0';
-  const price = p.get('price');
-  const label0 = p.get('label0') || '';
-  const label1 = p.get('label1') || '';
-  const logo0 = p.get('logo0') || '';
-  const logo1 = p.get('logo1') || '';
+  if (!ethers.isAddress(token0) || !ethers.isAddress(token1)) return null;
+  const numeric = /^\d+$/;
+  const id0 = numeric.test(p.get('id0') || '') ? p.get('id0') : '0';
+  const id1 = numeric.test(p.get('id1') || '') ? p.get('id1') : '0';
+  const rawPrice = p.get('price');
+  const price = rawPrice && Number.isFinite(Number(rawPrice)) && Number(rawPrice) > 0 ? rawPrice : null;
+  const label0 = (p.get('label0') || '').slice(0, 24);
+  const label1 = (p.get('label1') || '').slice(0, 24);
+  const logo0 = safeLogoParam(p.get('logo0'));
+  const logo1 = safeLogoParam(p.get('logo1'));
   // Sort by address, then by id when addresses are equal
   let sorted0, sorted1, sId0, sId1, sLabel0, sLabel1, sLogo0, sLogo1;
   const a = token0.toLowerCase(), b = token1.toLowerCase();
@@ -1245,6 +1357,7 @@ function switchTab(tab) {
     document.querySelector(`.tab-btn[data-tab="${t}"]`).classList.toggle('active', t === tab);
   });
   if (tab === 'mine') renderMyOrders();
+  if (tab === 'make') { renderPriceHints(); refreshBalances(); }
 }
 
 // ---- Fetch pool data (on-chain, via the shared zAMM pool registry) ----
@@ -1347,9 +1460,23 @@ function filterOrdersForPool(orders, pool) {
 // Convention: token0=base, token1=quote. Prices in quote/base.
 // Bid = maker deposited token1 (quote) to buy token0 (base).
 // Ask = maker deposited token0 (base) to sell for token1 (quote).
+//
+// Decimal-aware price in quote/base for an order already known to be a bid or
+// ask. The raw wei ratio is NOT usable here: a 6-decimal quote against an 18-decimal
+// base collapses to zero under integer division, which silently ties every row
+// and destroys both the sort order and the best-bid/best-ask used for the spread.
+function orderPriceFor(o, isBid, pool) {
+  const isInBase = _tokMatch(o.tokenIn, pool.token0);
+  const d0 = pool.coin0?.decimals || 18, d1 = pool.coin1?.decimals || 18;
+  const baseDec = isInBase ? (o._decIn || d0) : (o._decOut || d0);
+  const quoteDec = isInBase ? (o._decOut || d1) : (o._decIn || d1);
+  const base = Number(BigInt(isBid ? o.amtOut : o.amtIn)) / (10 ** baseDec);
+  const quote = Number(BigInt(isBid ? o.amtIn : o.amtOut)) / (10 ** quoteDec);
+  return base > 0 ? quote / base : 0;
+}
+
 function classifyOrders(orders, pool) {
   if (!pool) return { bids: [], asks: [] };
-  const id0 = pool.coin0 ? pool.coin0.id : "0";
   const bids = [], asks = [];
   for (const o of orders) {
     if (_tokMatch(o.tokenIn, pool.token0)) {
@@ -1358,31 +1485,71 @@ function classifyOrders(orders, pool) {
       bids.push(o); // depositing quote → buying base → bid
     }
   }
-  // Price in quote/base: for bids, price = amtIn(quote)/amtOut(base); for asks, price = amtOut(quote)/amtIn(base)
-  const price = (o, isBid) => {
-    const inAmt = BigInt(o.amtIn), outAmt = BigInt(o.amtOut);
-    if (isBid) return outAmt > 0n ? Number(inAmt * 10000n / outAmt) / 10000 : 0;
-    return inAmt > 0n ? Number(outAmt * 10000n / inAmt) / 10000 : 0;
-  };
-  bids.sort((a, b) => price(b, true) - price(a, true)); // highest bid first
-  asks.sort((a, b) => price(a, false) - price(b, false)); // lowest ask first
+  bids.sort((a, b) => orderPriceFor(b, true, pool) - orderPriceFor(a, true, pool)); // highest bid first
+  asks.sort((a, b) => orderPriceFor(a, false, pool) - orderPriceFor(b, false, pool)); // lowest ask first
   return { bids, asks };
 }
 
 // ---- Format helpers ----
+// Render a wei amount without ever losing a non-zero value to truncation: keep
+// 5 fractional digits for amounts >= 1, and for dust keep going until 4
+// significant digits have appeared so sub-0.00001 balances don't display "0".
 function fmt(wei, decimals) {
-  if (!wei || wei === "0") return "0";
-  const d = decimals || 18;
-  const n = BigInt(wei);
-  const whole = n / (10n ** BigInt(d));
-  const frac = n % (10n ** BigInt(d));
-  const fracStr = frac.toString().padStart(d, '0').slice(0, 5).replace(/0+$/, '');
-  return whole.toString() + (fracStr ? '.' + fracStr : '');
+  if (wei == null || wei === "" || wei === "0") return "0";
+  const d = Number(decimals);
+  const dec = Number.isInteger(d) && d >= 0 && d <= 36 ? d : 18;
+  let n;
+  try { n = BigInt(wei); } catch { return "0"; }
+  const neg = n < 0n;
+  if (neg) n = -n;
+  const unit = 10n ** BigInt(dec);
+  const whole = n / unit;
+  const frac = n % unit;
+  let fracStr = '';
+  if (frac > 0n) {
+    const full = frac.toString().padStart(dec, '0');
+    let keep = 5;
+    if (whole === 0n) {
+      // Advance past the leading zeros, then keep 4 significant digits.
+      let lead = 0;
+      while (lead < full.length && full[lead] === '0') lead++;
+      keep = Math.min(full.length, lead + 4);
+    }
+    fracStr = full.slice(0, keep).replace(/0+$/, '');
+  }
+  return (neg ? '-' : '') + whole.toString() + (fracStr ? '.' + fracStr : '');
+}
+
+// Plain decimal string — never scientific notation, which both `number` inputs
+// and ethers.parseUnits reject. toFixed flips to exponent form at 1e21 and
+// toPrecision does so outside roughly 1e-7..1e21, so round to significant
+// digits with toPrecision (which is float-noise free) and expand any exponent
+// by hand.
+function expandExponential(s) {
+  const m = /^(-?)(\d+)(?:\.(\d+))?e([+-]\d+)$/i.exec(s);
+  if (!m) return s;
+  const [, sign, int, frac = '', expStr] = m;
+  const exp = parseInt(expStr, 10);
+  const digits = int + frac;
+  const pointAt = int.length + exp; // position of the decimal point in `digits`
+  if (pointAt <= 0) return sign + '0.' + '0'.repeat(-pointAt) + digits;
+  if (pointAt >= digits.length) return sign + digits + '0'.repeat(pointAt - digits.length);
+  return sign + digits.slice(0, pointAt) + '.' + digits.slice(pointAt);
+}
+
+function toPlainDecimal(n, sig) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num === 0) return '0';
+  // Doubles carry ~17 significant digits; asking for more only surfaces noise.
+  const p = Math.max(1, Math.min(17, Math.round(sig) || 6));
+  let out = expandExponential(num.toPrecision(p));
+  if (out.includes('.')) out = out.replace(/0+$/, '').replace(/\.$/, '');
+  return out || '0';
 }
 
 function fmtCompact(n) {
-  if (n >= 1) return n.toPrecision(6);
-  return n.toPrecision(4);
+  if (!Number.isFinite(n) || n === 0) return '0';
+  return toPlainDecimal(n, Math.abs(n) >= 1 ? 6 : 4);
 }
 
 function shortAddr(a) {
@@ -1418,65 +1585,94 @@ function fillPctLabel(o) {
 }
 
 // ---- Render book (exchange-style) ----
+function toggleBookExpanded() { _bookExpanded = !_bookExpanded; renderBook(); }
+
+// Compare the book's mid against the AMM's spot so a trader can see at a glance
+// whether resting liquidity is cheaper than routing through the pool.
+function renderAmmCompare() {
+  const el = $('ammCompare');
+  if (!el) return;
+  if (!_ammPrice || !_bookMid || _ammPrice <= 0) { el.style.display = 'none'; return; }
+  const diff = (_bookMid - _ammPrice) / _ammPrice * 100;
+  const sign = diff >= 0 ? '+' : '';
+  el.textContent = 'Book mid ' + sign + diff.toFixed(2) + '% vs AMM';
+  el.className = 'amm-compare ' + (Math.abs(diff) < 0.5 ? 'flat' : diff > 0 ? 'up' : 'down');
+  el.style.display = '';
+}
+
 function renderBook() {
   if (!_poolData) return;
+  const ROWS_PER_SIDE = _bookExpanded ? 50 : 12;
   const filtered = filterOrdersForPool(_allOrders, _poolData);
   const { bids, asks } = classifyOrders(filtered, _poolData);
   const label0 = tokenLabel(_poolData, 0);
   const label1 = tokenLabel(_poolData, 1);
   const dec0 = _poolData.coin0?.decimals || 18;
-  const dec1 = _poolData.coin1?.decimals || 18;
 
   // Convention: token0=base, token1=quote. Prices in quote/base.
   // Asks: maker deposited token0(base), wants token1(quote) → tokenIn=token0, tokenOut=token1
   // Bids: maker deposited token1(quote), wants token0(base) → tokenIn=token1, tokenOut=token0
 
-  // base/quote decimals for an order
-  function baseDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return isInBase ? (o._decIn||dec0) : (o._decOut||dec0); }
-  function quoteDec(o) { const isInBase = _tokMatch(o.tokenIn, _poolData.token0); return isInBase ? (o._decOut||dec1) : (o._decIn||dec1); }
-  // base/quote amounts: for asks tokenIn=base, for bids tokenOut=base
+  // Base-side decimals and amount for an order: asks escrow the base (tokenIn),
+  // bids request it (tokenOut).
+  function baseDec(o) { return _tokMatch(o.tokenIn, _poolData.token0) ? (o._decIn||dec0) : (o._decOut||dec0); }
   function baseAmt(o, isBid) { return isBid ? o.amtOut : o.amtIn; }
-  function quoteAmt(o, isBid) { return isBid ? o.amtIn : o.amtOut; }
+  const orderPrice = (o, isBid) => orderPriceFor(o, isBid, _poolData);
 
   $('hdrPrice').textContent = 'Price (' + label1 + ')';
   $('hdrSize').textContent = 'Size (' + label0 + ')';
-  $('hdrTotal').textContent = 'Total (' + label1 + ')';
-  $('orderCount').textContent = (bids.length + asks.length) + ' orders';
+  $('hdrTotal').textContent = 'Cum. (' + label0 + ')';
+  $('orderCount').textContent = (bids.length + asks.length) + ' order' + (bids.length + asks.length === 1 ? '' : 's');
 
-  function orderPrice(o, isBid) {
-    const bd = baseDec(o), qd = quoteDec(o);
-    const base = Number(BigInt(baseAmt(o, isBid))) / (10 ** bd);
-    const quote = Number(BigInt(quoteAmt(o, isBid))) / (10 ** qd);
-    return base > 0 ? quote / base : 0; // quote per base
+  const me = (_connectedAddress || '').toLowerCase();
+  const size = (o, isBid) => Number(BigInt(baseAmt(o, isBid))) / (10 ** baseDec(o));
+
+  // Cumulative depth, walking outward from the spread — the standard reading of
+  // a book's depth bar: "how much is available at this price or better".
+  function cumulate(list, isBid) {
+    let run = 0;
+    return list.map(o => { run += size(o, isBid); return { o, cum: run }; });
+  }
+  const askRows = cumulate(asks, false);
+  const bidRows = cumulate(bids, true);
+  const maxCum = Math.max(
+    askRows.length ? askRows[Math.min(askRows.length, ROWS_PER_SIDE) - 1].cum : 0,
+    bidRows.length ? bidRows[Math.min(bidRows.length, ROWS_PER_SIDE) - 1].cum : 0,
+    1e-12
+  );
+
+  function rowHtml({ o, cum }, isBid) {
+    const price = orderPrice(o, isBid);
+    const depth = Math.min(100, cum / maxCum * 100).toFixed(1);
+    const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
+    const mine = me && o.maker.toLowerCase() === me;
+    const yours = mine ? '<span class="yours-tag">Yours</span>' : '';
+    const sz = fmtCompact(size(o, isBid));
+    const tip = (mine ? 'Your order — click to cancel' : 'Click to fill')
+      + ' · ' + shortAddr(o.maker)
+      + (o.partialFill ? ' · partial fill' : ' · all-or-nothing');
+    return `<div class="book-row ${isBid ? 'bid' : 'ask'}-row${mine ? ' is-mine' : ''}" onclick="showFillModal('${o.id}')" title="${escAttr(tip)}">
+      <span class="depth" style="width:${depth}%"></span>
+      <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'${sz}','${isBid ? 'sell' : 'buy'}')" title="Load this price and size into the trade form">${fmtCompact(price)}</span>
+      <span class="size">${escText(sz)}${aon}${srcTag(o)}${yours}</span>
+      <span class="total">${fmtCompact(cum)}</span>
+    </div>`;
   }
 
-  // Depth bars based on base size
-  const bidBaseSizes = bids.map(o => Number(BigInt(baseAmt(o, true))) / (10 ** baseDec(o)));
-  const askBaseSizes = asks.map(o => Number(BigInt(baseAmt(o, false))) / (10 ** baseDec(o)));
-  const maxBid = Math.max(...bidBaseSizes, 0.0001);
-  const maxAsk = Math.max(...askBaseSizes, 0.0001);
+  // "Show less" belongs on one edge of the book only, so it does not bracket
+  // the rows twice once both sides are fully expanded.
+  function moreHtml(n, side, allowCollapse) {
+    if (n > 0) return `<div class="book-more" onclick="toggleBookExpanded()">+${n} more ${side} &middot; show all</div>`;
+    if (_bookExpanded && allowCollapse) return `<div class="book-more" onclick="toggleBookExpanded()">Show less</div>`;
+    return '';
+  }
 
   // Asks (reversed: lowest ask at bottom, closest to spread)
-  const displayAsks = asks.slice(0, 12).reverse();
-  if (displayAsks.length === 0) {
-    $('asksSection').innerHTML = '<div class="book-empty">No asks</div>';
-  } else {
-    let html = '';
-    for (const o of displayAsks) {
-      const price = orderPrice(o, false);
-      const bd = baseDec(o), qd = quoteDec(o);
-      const baseSize = Number(BigInt(baseAmt(o, false))) / (10 ** bd);
-      const depth = (baseSize / maxAsk * 100).toFixed(1);
-      const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row ask-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o.deadline === '9999999999' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
-        <span class="depth" style="width:${depth}%"></span>
-        <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'buy')" title="Trade at this price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(baseAmt(o, false), bd)}${aon}${srcTag(o)}</span>
-        <span class="total">${fmt(quoteAmt(o, false), qd)}</span>
-      </div>`;
-    }
-    $('asksSection').innerHTML = html;
-  }
+  const shownAsks = askRows.slice(0, ROWS_PER_SIDE);
+  $('asksSection').innerHTML = shownAsks.length
+    ? moreHtml(askRows.length - shownAsks.length, 'asks', false)
+      + shownAsks.slice().reverse().map(r => rowHtml(r, false)).join('')
+    : '<div class="book-empty">No asks</div>';
 
   // Spread
   if (bids.length > 0 && asks.length > 0) {
@@ -1487,41 +1683,37 @@ function renderBook() {
     $('spreadPrice').textContent = fmtCompact(mid);
     $('spreadLabel').textContent = spreadPct + '% spread';
     $('spreadRow').style.display = '';
+    _bookMid = mid;
   } else {
     $('spreadRow').style.display = 'none';
+    _bookMid = null;
   }
+  renderAmmCompare();
 
   // Bids (highest bid at top, closest to spread)
-  const displayBids = bids.slice(0, 12);
-  if (displayBids.length === 0) {
-    $('bidsSection').innerHTML = '<div class="book-empty">No bids</div>';
-  } else {
-    let html = '';
-    for (const o of displayBids) {
-      const price = orderPrice(o, true);
-      const bd = baseDec(o), qd = quoteDec(o);
-      const baseSize = Number(BigInt(baseAmt(o, true))) / (10 ** bd);
-      const depth = (baseSize / maxBid * 100).toFixed(1);
-      const aon = o.partialFill ? '' : '<span class="aon-tag" title="All-or-nothing">AON</span>';
-      html += `<div class="book-row bid-row" onclick="showFillModal('${o.id}')" title="Click to fill &middot; ${shortAddr(o.maker)} &middot; ${o.deadline === '9999999999' ? 'no expiry' : timeLeft(o.deadline)}${o.partialFill ? '' : ' &middot; All-or-nothing'} &middot; ${o._source}">
-        <span class="depth" style="width:${depth}%"></span>
-        <span class="price" onclick="event.stopPropagation();bookToTrade(${price},'sell')" title="Trade at this price">${fmtCompact(price)}</span>
-        <span class="size">${fmt(baseAmt(o, true), bd)}${aon}${srcTag(o)}</span>
-        <span class="total">${fmt(quoteAmt(o, true), qd)}</span>
-      </div>`;
-    }
-    $('bidsSection').innerHTML = html;
-  }
+  const shownBids = bidRows.slice(0, ROWS_PER_SIDE);
+  $('bidsSection').innerHTML = shownBids.length
+    ? shownBids.map(r => rowHtml(r, true)).join('')
+      + moreHtml(bidRows.length - shownBids.length, 'bids', true)
+    : '<div class="book-empty">No bids</div>';
+
+  // Badge the My Orders tab with the count for this pair
+  const mineCount = me ? filtered.filter(o => o.maker.toLowerCase() === me).length : 0;
+  const mineTab = document.querySelector('.tab-btn[data-tab="mine"]');
+  if (mineTab) mineTab.textContent = mineCount ? 'My Orders (' + mineCount + ')' : 'My Orders';
 }
 
-function bookToTrade(price, side) {
+// Clicking a price loads the whole resting order into the trade form: a taker
+// wants the size too, not just the level.
+function bookToTrade(price, sizeStr, side) {
   if (!Number.isFinite(price) || price <= 0) return;
   setSide(side);
-  // Avoid scientific notation (e.g. "1e-7") which ethers.parseUnits rejects
-  $('orderPrice').value = price >= 1 ? price.toPrecision(6) : price.toFixed(18).replace(/0+$/, '').replace(/\.$/, '.0');
-  $('orderAmt').focus();
-  updateOrderTotal();
+  $('orderPrice').value = toPlainDecimal(price, 8);
+  if (sizeStr) $('orderAmt').value = sizeStr;
   switchTab('make');
+  updateOrderTotal();
+  $('orderAmt').focus();
+  $('orderAmt').select();
 }
 
 // ---- Order side toggle ----
@@ -1540,6 +1732,115 @@ function setSide(side) {
   btn.className = 'submit-btn ' + side;
   btn.textContent = side === 'buy' ? 'Buy ' + base : 'Sell ' + base;
 
+  renderPriceHints();
+  updateOrderTotal();
+  refreshBalances();
+}
+
+// ---- Balances for the token the current side spends ----
+// Keyed by "side" rather than token so a stale in-flight read for the other
+// side cannot overwrite the number the trader is looking at.
+const ERC20_BAL_ABI = ["function balanceOf(address) view returns (uint256)"];
+let _balances = { buy: null, sell: null };
+let _balanceSeq = 0;
+
+function spendToken() {
+  if (!_poolData) return null;
+  const buying = _orderSide === 'buy';
+  return {
+    address: buying ? _poolData.token1 : _poolData.token0,
+    decimals: (buying ? _poolData.coin1?.decimals : _poolData.coin0?.decimals) || 18,
+    symbol: tokenLabel(_poolData, buying ? 1 : 0),
+  };
+}
+
+async function refreshBalances() {
+  const line = $('balanceLine');
+  if (!line) return;
+  const tok = spendToken();
+  if (!_connectedAddress || !tok) {
+    line.textContent = '';
+    _balances[_orderSide] = null;
+    updateSubmitState();
+    return;
+  }
+  const side = _orderSide;
+  const cached = _balances[side];
+  if (cached) renderBalanceLine(cached);
+
+  const seq = ++_balanceSeq;
+  try {
+    const provider = _walletProvider || new ethers.JsonRpcProvider(RPC_URL);
+    let wei;
+    if (tok.address === ZERO) {
+      wei = await provider.getBalance(_connectedAddress);
+    } else {
+      wei = await new ethers.Contract(tok.address, ERC20_BAL_ABI, provider).balanceOf(_connectedAddress);
+    }
+    if (seq !== _balanceSeq || side !== _orderSide) return;
+    _balances[side] = { wei, decimals: tok.decimals, symbol: tok.symbol };
+    renderBalanceLine(_balances[side]);
+    updateSubmitState();
+  } catch (e) {
+    if (seq !== _balanceSeq) return;
+    line.textContent = '';
+  }
+}
+
+function renderBalanceLine(bal) {
+  const line = $('balanceLine');
+  if (!line || !bal) return;
+  line.innerHTML = 'Balance <span class="link" onclick="setAmtPct(100)">'
+    + escText(fmt(bal.wei.toString(), bal.decimals)) + ' ' + escText(bal.symbol) + '</span>';
+}
+
+// Set the Amount field to a percentage of spendable balance. When buying, the
+// balance is denominated in the quote token, so it must be divided by the
+// price to land back in base units — which means a price is required first.
+const ETH_GAS_RESERVE = 5000000000000000n; // 0.005 ETH
+
+function setAmtPct(pct) {
+  const bal = _balances[_orderSide];
+  if (!bal) { showMakeStatus('Connect a wallet to use balance shortcuts', 'info'); return; }
+  const tok = spendToken();
+  // Escrowing the whole native balance leaves nothing to pay for the very
+  // transaction that would escrow it. Hold back a gas reserve.
+  let wei = bal.wei;
+  if (tok && tok.address === ZERO) {
+    wei = wei > ETH_GAS_RESERVE ? wei - ETH_GAS_RESERVE : 0n;
+    if (wei === 0n) { showMakeStatus('Not enough ETH left over for gas', 'error'); return; }
+  }
+  const spendable = Number(ethers.formatUnits(wei, bal.decimals)) * pct / 100;
+  if (_orderSide === 'sell') {
+    $('orderAmt').value = spendable > 0 ? toPlainDecimal(spendable, 12) : '';
+  } else {
+    const price = parseFloat($('orderPrice').value);
+    if (!(price > 0)) { showMakeStatus('Enter a price first', 'info'); $('orderPrice').focus(); return; }
+    const base = spendable / price;
+    $('orderAmt').value = base > 0 ? toPlainDecimal(base, 12) : '';
+  }
+  updateOrderTotal();
+}
+
+// Quick reference prices a maker actually wants: the AMM spot and the current
+// best quote on the side they'd be crossing.
+function renderPriceHints() {
+  const el = $('priceHints');
+  if (!el || !_poolData) return;
+  const filtered = filterOrdersForPool(_allOrders, _poolData);
+  const { bids, asks } = classifyOrders(filtered, _poolData);
+  const parts = [];
+  if (_ammPrice > 0) parts.push({ label: 'AMM', v: _ammPrice });
+  if (bids.length) parts.push({ label: 'Bid', v: orderPriceFor(bids[0], true, _poolData) });
+  if (asks.length) parts.push({ label: 'Ask', v: orderPriceFor(asks[0], false, _poolData) });
+  el.innerHTML = parts.filter(p => p.v > 0).map(p =>
+    p.label + ' <span class="link" onclick="usePrice(' + p.v + ')">' + escText(fmtCompact(p.v)) + '</span>'
+  ).join(' &middot; ');
+}
+
+function usePrice(p) {
+  if (!(p > 0)) return;
+  $('orderPrice').value = toPlainDecimal(p, 8);
   updateOrderTotal();
 }
 
@@ -1605,80 +1906,179 @@ async function renderMyOrders() {
 }
 
 // ---- Order form ----
+function showMakeStatus(msg, type) {
+  const el = $('makeStatus');
+  el.textContent = msg;
+  el.className = 'status-msg show ' + type;
+}
+function clearMakeStatus() {
+  const el = $('makeStatus');
+  el.textContent = '';
+  el.className = 'status-msg';
+}
+
 function updateOrderTotal() {
   const amt = parseFloat($('orderAmt').value) || 0;
   const price = parseFloat($('orderPrice').value) || 0;
   const quote = _poolData ? tokenLabel(_poolData, 1) : 'USD';
   const total = amt * price;
-  $('orderTotal').textContent = total > 0 ? total.toPrecision(6) + ' ' + quote : '--';
+  // Buying spends quote and receives base; selling is the mirror.
+  $('orderTotal').textContent = total > 0 ? fmtCompact(total) + ' ' + quote : '--';
+  $('orderTotalLabel').textContent = _orderSide === 'buy'
+    ? 'You pay (' + quote + ')'
+    : 'You receive (' + quote + ')';
+  updateSubmitState();
 }
 
-$('orderAmt').addEventListener('input', updateOrderTotal);
-$('orderPrice').addEventListener('input', updateOrderTotal);
+// Keep the submit button honest about why it will not work, rather than letting
+// the trader discover it from a wallet-side revert.
+function updateSubmitState() {
+  const btn = $('makeOrderBtn');
+  if (!btn || btn.dataset.busy === '1') return;
+  const base = _poolData ? tokenLabel(_poolData, 0) : '';
+  const amt = parseFloat($('orderAmt').value) || 0;
+  const price = parseFloat($('orderPrice').value) || 0;
+  const label = _orderSide === 'buy' ? 'Buy ' + base : 'Sell ' + base;
+
+  if (!_connectedAddress) { btn.disabled = false; btn.textContent = 'Connect Wallet'; return; }
+  if (!(amt > 0) || !(price > 0)) { btn.disabled = true; btn.textContent = label; return; }
+
+  const bal = _balances[_orderSide];
+  if (bal) {
+    const spendNeeded = _orderSide === 'buy' ? amt * price : amt;
+    const tok = spendToken();
+    const usable = tok && tok.address === ZERO && bal.wei > ETH_GAS_RESERVE
+      ? bal.wei - ETH_GAS_RESERVE
+      : bal.wei;
+    const have = Number(ethers.formatUnits(usable, bal.decimals));
+    if (spendNeeded > have) {
+      btn.disabled = true;
+      btn.textContent = spendNeeded <= Number(ethers.formatUnits(bal.wei, bal.decimals))
+        ? 'Leave ETH for gas'
+        : 'Insufficient ' + bal.symbol;
+      return;
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = label;
+}
+
+const _onFormInput = () => { clearMakeStatus(); updateOrderTotal(); };
+$('orderAmt').addEventListener('input', _onFormInput);
+$('orderPrice').addEventListener('input', _onFormInput);
+
+// Enter anywhere in the form submits, the way an exchange ticket behaves.
+for (const id of ['orderAmt', 'orderPrice']) {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !$('makeOrderBtn').disabled) { e.preventDefault(); doMakeOrder(); }
+  });
+}
+
+// parseUnits throws on more decimal places than the token supports, and on the
+// scientific notation a `number` input happily produces. Both used to escape as
+// uncaught exceptions that left the form dead with no message.
+//
+// An already-plain decimal string is passed through untouched: routing an exact
+// 18-place amount through a double would quietly round the trader's input.
+function toDecimalString(value, maxDecimals) {
+  const s = String(value ?? '').trim();
+  const plain = /^-?\d*\.?\d*$/.test(s) && /\d/.test(s);
+  // For a number, String() is the shortest round-tripping form ("1e-7"), which
+  // is the value the user meant. Re-rounding it to N significant digits instead
+  // would surface the double's true expansion (0.0000000999...95).
+  let out = plain ? s : expandExponential(String(Number(s)));
+  if (out === 'NaN' || out === 'Infinity' || out === '-Infinity') out = '0';
+  if (maxDecimals != null) {
+    const dot = out.indexOf('.');
+    // Truncate rather than round: an extra place must never inflate the amount
+    // a maker is about to escrow.
+    if (dot >= 0 && out.length - dot - 1 > maxDecimals) {
+      out = maxDecimals === 0 ? out.slice(0, dot) : out.slice(0, dot + 1 + maxDecimals);
+    }
+  }
+  return out;
+}
+
+function safeParseUnits(value, decimals, fieldName) {
+  const plain = toDecimalString(value);
+  const dot = plain.indexOf('.');
+  if (dot >= 0 && plain.length - dot - 1 > decimals) {
+    throw new Error(fieldName + ' has more than ' + decimals + ' decimal places');
+  }
+  return ethers.parseUnits(plain, decimals);
+}
 
 async function doMakeOrder() {
-  const statusEl = $('makeStatus');
-  function showStatus(msg, type) {
-    statusEl.textContent = msg;
-    statusEl.className = 'status-msg show ' + type;
-  }
-
   if (!_signer) { showWalletModal(); return; }
-  if (!_poolData) { showStatus('No pool loaded', 'error'); return; }
+  if (!_poolData) { showMakeStatus('No pool loaded', 'error'); return; }
 
-  const side = _orderSide;
   const amt = $('orderAmt').value;
   const price = $('orderPrice').value;
-  if (!amt || !price || parseFloat(amt) <= 0 || parseFloat(price) <= 0) {
-    showStatus('Enter valid amount and price', 'error');
+  if (!amt || !price || !(parseFloat(amt) > 0) || !(parseFloat(price) > 0)) {
+    showMakeStatus('Enter valid amount and price', 'error');
     return;
   }
 
   if (_orderVenue === 'swapboard') {
-    return doMakeSwapboardOrder(showStatus);
+    return doMakeSwapboardOrder(showMakeStatus);
   }
   if (_orderVenue === 'swapboard-pf') {
-    return doMakeSwapboardPFOrder(showStatus);
+    return doMakeSwapboardPFOrder(showMakeStatus);
   }
 }
 
-// ---- Make Swapboard order ----
-async function doMakeSwapboardOrder(showStatus) {
+// Shared leg construction for both boards: which token is escrowed, which is
+// requested, and whether the maker pays native ETH. Throws a human-readable
+// error for over-precise input instead of letting parseUnits escape uncaught.
+function buildOrderLegs() {
   const side = _orderSide;
   const amt = $('orderAmt').value;
   const price = $('orderPrice').value;
 
   const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
   const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
+  const base = tokenLabel(_poolData, 0), quote = tokenLabel(_poolData, 1);
+
+  const baseWei = safeParseUnits(amt, dec0, 'Amount (' + base + ')');
   // amt = base (token0) amount, price = quote/base, total = quote (token1)
-  const totalWei = mulDecimals(amt, price, dec1);
+  const totalWei = mulDecimals(amt, price, dec1, quote);
 
   // Swapboard uses WETH internally — map ETH zero address to WETH
   const t0 = _poolData.token0 === ZERO ? SWAPBOARD_WETH : _poolData.token0;
   const t1 = _poolData.token1 === ZERO ? SWAPBOARD_WETH : _poolData.token1;
 
-  let tokenA, amountA, tokenB, amountB, isPayingEth;
-
-  if (side === 'buy') {
+  const legs = side === 'buy'
     // Buy base: deposit quote (token1) to get base (token0)
-    tokenA = t1; amountA = totalWei;
-    tokenB = t0; amountB = ethers.parseUnits(amt, dec0);
-    isPayingEth = _poolData.token1 === ZERO;
-  } else {
+    ? { tokenA: t1, amountA: totalWei, tokenB: t0, amountB: baseWei, isPayingEth: _poolData.token1 === ZERO }
     // Sell base: deposit base (token0) to get quote (token1)
-    tokenA = t0; amountA = ethers.parseUnits(amt, dec0);
-    tokenB = t1; amountB = totalWei;
-    isPayingEth = _poolData.token0 === ZERO;
-  }
+    : { tokenA: t0, amountA: baseWei, tokenB: t1, amountB: totalWei, isPayingEth: _poolData.token0 === ZERO };
 
-  if (amountA === 0n || amountB === 0n) {
-    showStatus('Amount too small', 'error');
-    $('makeOrderBtn').disabled = false;
+  if (legs.amountA === 0n || legs.amountB === 0n) {
+    throw new Error('Amount rounds to zero at this token’s precision');
+  }
+  return legs;
+}
+
+function setMakeBusy(busy) {
+  const btn = $('makeOrderBtn');
+  btn.dataset.busy = busy ? '1' : '0';
+  btn.disabled = busy;
+  for (const b of $('pctRow').querySelectorAll('.pct-btn')) b.disabled = busy;
+  if (!busy) updateSubmitState();
+}
+
+// ---- Make Swapboard order ----
+async function doMakeSwapboardOrder(showStatus) {
+  let tokenA, amountA, tokenB, amountB, isPayingEth;
+  try {
+    ({ tokenA, amountA, tokenB, amountB, isPayingEth } = buildOrderLegs());
+  } catch (e) {
+    showStatus(e.message || 'Invalid amount or price', 'error');
     return;
   }
 
   try {
-    $('makeOrderBtn').disabled = true;
+    setMakeBusy(true);
     showStatus('Preparing transaction...', 'info');
 
     if (!_swapboard) { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); }
@@ -1709,45 +2109,24 @@ async function doMakeSwapboardOrder(showStatus) {
     $('orderTotal').textContent = '--';
     setTimeout(refresh, 4000);
   } catch (e) {
-    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+    showStatus(txError(e), 'error');
   } finally {
-    $('makeOrderBtn').disabled = false;
+    setMakeBusy(false);
   }
 }
 
 // ---- Make Swapboard PF (partial fill) order ----
 async function doMakeSwapboardPFOrder(showStatus) {
-  const side = _orderSide;
-  const amt = $('orderAmt').value;
-  const price = $('orderPrice').value;
-
-  const dec0 = _poolData.coin0 ? Number(_poolData.coin0.decimals) : 18;
-  const dec1 = _poolData.coin1 ? Number(_poolData.coin1.decimals) : 18;
-  const totalWei = mulDecimals(amt, price, dec1);
-
-  const t0 = _poolData.token0 === ZERO ? SWAPBOARD_WETH : _poolData.token0;
-  const t1 = _poolData.token1 === ZERO ? SWAPBOARD_WETH : _poolData.token1;
-
   let tokenA, amountA, tokenB, amountB, isPayingEth;
-
-  if (side === 'buy') {
-    tokenA = t1; amountA = totalWei;
-    tokenB = t0; amountB = ethers.parseUnits(amt, dec0);
-    isPayingEth = _poolData.token1 === ZERO;
-  } else {
-    tokenA = t0; amountA = ethers.parseUnits(amt, dec0);
-    tokenB = t1; amountB = totalWei;
-    isPayingEth = _poolData.token0 === ZERO;
-  }
-
-  if (amountA === 0n || amountB === 0n) {
-    showStatus('Amount too small', 'error');
-    $('makeOrderBtn').disabled = false;
+  try {
+    ({ tokenA, amountA, tokenB, amountB, isPayingEth } = buildOrderLegs());
+  } catch (e) {
+    showStatus(e.message || 'Invalid amount or price', 'error');
     return;
   }
 
   try {
-    $('makeOrderBtn').disabled = true;
+    setMakeBusy(true);
     showStatus('Preparing transaction...', 'info');
 
     if (!_swapboardPF) { _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); }
@@ -1778,9 +2157,9 @@ async function doMakeSwapboardPFOrder(showStatus) {
     $('orderTotal').textContent = '--';
     setTimeout(refresh, 4000);
   } catch (e) {
-    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+    showStatus(txError(e), 'error');
   } finally {
-    $('makeOrderBtn').disabled = false;
+    setMakeBusy(false);
   }
 }
 
@@ -1835,8 +2214,13 @@ async function doNewOrder() {
     showStatus('Enter valid amounts', 'error'); return;
   }
 
-  const amountA = ethers.parseUnits(rawA, tA.decimals);
-  const amountB = ethers.parseUnits(rawB, tB.decimals);
+  let amountA, amountB;
+  try {
+    amountA = safeParseUnits(rawA, tA.decimals, 'Send amount (' + tA.symbol + ')');
+    amountB = safeParseUnits(rawB, tB.decimals, 'Receive amount (' + tB.symbol + ')');
+  } catch (e) {
+    showStatus(e.message || 'Invalid amount', 'error'); return;
+  }
   if (amountA === 0n || amountB === 0n) { showStatus('Amount too small', 'error'); return; }
 
   // Same-token check (compare after ETH→WETH mapping)
@@ -1886,7 +2270,7 @@ async function doNewOrder() {
     showStatus('Order created!', 'success');
     setTimeout(() => { closeNewOrderModal(); refresh(); }, 2000);
   } catch (e) {
-    showStatus(e.reason || e.message || 'Transaction failed', 'error');
+    showStatus(txError(e), 'error');
   } finally {
     btn.disabled = false;
   }
@@ -1964,7 +2348,7 @@ async function doFillSwapboardOrder(o) {
     closeFillModal();
     setTimeout(refresh, 4000);
   } catch (e) {
-    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
+    _fillStatus(txError(e), 'error');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1983,14 +2367,21 @@ async function doFillSwapboardPFOrder(o) {
 
   const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
   const outDec = coinLabelForOrder(o, 'out').decimals;
-  let fillAmountB = 0n; // 0 = full fill
+  // Always send an explicit amount. Zero is a full-fill sentinel only for NFT
+  // legs; for a fungible order the board rejects it (ZeroFillAmount) so the
+  // maker cannot reprice under a taker who signed an open-ended amount.
+  let fillAmountB = remaining;
 
   const fillInput = $('fillAmtInput');
   if (o.partialFill && fillInput && fillInput.value) {
-    const parsed = ethers.parseUnits(fillInput.value, outDec);
+    let parsed;
+    try {
+      parsed = safeParseUnits(fillInput.value, outDec, 'Fill amount');
+    } catch (e) {
+      _fillStatus(e.message || 'Enter a valid fill amount', 'error'); return;
+    }
     if (parsed <= 0n) { _fillStatus('Enter a valid fill amount', 'error'); return; }
     fillAmountB = parsed > remaining ? remaining : parsed;
-    if (fillAmountB >= remaining) fillAmountB = 0n; // full fill
   }
 
   const btn = $('fillOrderBtn');
@@ -1998,7 +2389,7 @@ async function doFillSwapboardPFOrder(o) {
     if (btn) btn.disabled = true;
     _fillStatus('Preparing...', 'info');
     const addr = await _signer.getAddress();
-    const payAmount = fillAmountB === 0n ? BigInt(o.amtOut) : fillAmountB;
+    const payAmount = fillAmountB;
 
     if (isPayingEth) {
       _fillStatus('Confirm in wallet...', 'info');
@@ -2033,7 +2424,7 @@ async function doFillSwapboardPFOrder(o) {
     closeFillModal();
     setTimeout(refresh, 4000);
   } catch (e) {
-    _fillStatus(e.reason || e.message || 'Fill failed', 'error');
+    _fillStatus(txError(e), 'error');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -2044,7 +2435,7 @@ async function doCancelOrder(orderId) {
   if (!_signer) { showWalletModal(); return; }
 
   const o = _allOrders.find(x => x.id === orderId);
-  if (!o) { alert('Order not found'); return; }
+  if (!o) { toast('That order is no longer available'); refresh(); return; }
 
   const statusEl = $('cancelStatus');
   function showStatus(msg, type) {
@@ -2060,7 +2451,7 @@ async function doCancelOrder(orderId) {
     showStatus('Order cancelled!', 'success');
     setTimeout(refresh, 4000);
   } catch (e) {
-    showStatus(e.reason || e.message || 'Cancel failed', 'error');
+    showStatus(txError(e), 'error');
   }
 }
 
@@ -2093,7 +2484,7 @@ async function doCancelOrderFromModal(orderId) {
     closeFillModal();
     setTimeout(refresh, 4000);
   } catch (e) {
-    _fillStatus(e.reason || e.message || 'Cancel failed', 'error');
+    _fillStatus(txError(e), 'error');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -2296,10 +2687,12 @@ function filterGlobalOrders() {
 // ---- Fill confirmation modal ----
 function showFillModal(orderId) {
   const o = _allOrders.find(x => x.id === orderId);
-  if (!o) { alert('Order not found'); return; }
+  // The book is a 30s snapshot, so a row can outlive its order. Say so in the
+  // page and re-sync rather than firing a modal dialog at the trader.
+  if (!o) { toast('That order is no longer available'); refresh(); return; }
 
   const remaining = BigInt(o.amtOut) - BigInt(o.outDone);
-  if (remaining <= 0n) { alert('Order already filled'); return; }
+  if (remaining <= 0n) { toast('That order has already been filled'); refresh(); return; }
 
   const inL = coinLabelForOrder(o, 'in');
   const outL = coinLabelForOrder(o, 'out');
@@ -2350,7 +2743,8 @@ function showFillModal(orderId) {
     <div class="fill-modal-details">
       <div class="row"><span class="label">Maker</span><span class="value">${escText(shortAddr(o.maker))}${isMine ? ' (you)' : ''}</span></div>
       <div class="row"><span class="label">Type</span><span class="value">${o.partialFill ? 'Partial fill' : 'All or nothing'}</span></div>
-      <div class="row"><span class="label">Expires</span><span class="value">Never</span></div>
+      <div class="row"><span class="label">Expires</span><span class="value">${o.deadline === '9999999999' ? 'Never' : escText(tl)}</span></div>
+      ${!isMine ? `<div class="row"><span class="label">Your balance</span><span class="value" id="fillBalance">&hellip;</span></div>` : ''}
       ${o.txHash ? `<div class="row"><span class="label">Tx</span><span class="value"><a href="https://etherscan.io/tx/${escAttr(o.txHash)}" target="_blank" rel="noopener" style="color:inherit">${escText(o.txHash.slice(0,10))}&hellip;</a></span></div>` : ''}
     </div>
     ${_globalMode && !isMine ? `<a href="?token0=${encodeURIComponent(o.tokenIn)}&token1=${encodeURIComponent(o.tokenOut)}&id0=${encodeURIComponent(o.idIn)}&id1=${encodeURIComponent(o.idOut)}&label0=${encodeURIComponent(inL.symbol)}&label1=${encodeURIComponent(outL.symbol)}" style="display:block;text-align:center;font-size:11px;color:var(--fg-muted);margin-bottom:12px;text-decoration:underline">View ${escText(inL.symbol)}/${escText(outL.symbol)} orderbook &rarr;</a>` : ''}
@@ -2361,14 +2755,59 @@ function showFillModal(orderId) {
     <div class="status-msg" id="fillStatus" style="margin-top:8px"></div>
   `;
 
+  // The preview and the balance check both need the order's live numbers, and
+  // an all-or-nothing order still needs the check even without an input box.
+  window._fillOrder = { remaining, remainingIn, outDecimals: outL.decimals, inDecimals: inL.decimals, outSymbol: outL.symbol, payToken: o.tokenOut };
   if (!isMine && canPartial) {
-    // Store order data for the preview updater
-    window._fillOrder = { remaining, remainingIn, outDecimals: outL.decimals, inDecimals: inL.decimals };
     $('fillAmtInput').addEventListener('input', updateFillPreview);
   }
+  if (!isMine) checkFillBalance();
 
   $('fillModal').classList.add('active');
   document.body.classList.add('modal-open');
+}
+
+// Tell the taker up front that they cannot afford this fill. Swapboard holds
+// tokenB in WETH, so a native-ETH filler is really spending their ETH balance.
+async function checkFillBalance() {
+  const f = window._fillOrder;
+  const el = $('fillBalance');
+  if (!f || !el) return;
+  if (!_connectedAddress) { el.textContent = 'not connected'; return; }
+  const payingEth = f.payToken.toLowerCase() === SWAPBOARD_WETH.toLowerCase();
+  try {
+    const provider = _walletProvider || new ethers.JsonRpcProvider(RPC_URL);
+    const wei = payingEth
+      ? await provider.getBalance(_connectedAddress)
+      : await new ethers.Contract(f.payToken, ERC20_BAL_ABI, provider).balanceOf(_connectedAddress);
+    if (window._fillOrder !== f) return; // modal moved on
+    f.balance = wei;
+    el.textContent = fmt(wei.toString(), f.outDecimals) + ' ' + f.outSymbol;
+    updateFillAffordability();
+  } catch {
+    el.textContent = 'unavailable';
+  }
+}
+
+function updateFillAffordability() {
+  const f = window._fillOrder;
+  const btn = $('fillOrderBtn');
+  if (!f || !btn || f.balance == null || btn.dataset.busy === '1') return;
+  const input = $('fillAmtInput');
+  let need = f.remaining;
+  if (input && input.value) {
+    try {
+      const parsed = ethers.parseUnits(toDecimalString(input.value, f.outDecimals), f.outDecimals);
+      if (parsed > 0n) need = parsed > f.remaining ? f.remaining : parsed;
+    } catch { /* mid-typing; fall back to the full remaining */ }
+  }
+  if (f.balance < need) {
+    btn.disabled = true;
+    btn.textContent = 'Insufficient ' + f.outSymbol;
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Fill Order';
+  }
 }
 
 function updateFillPreview() {
@@ -2380,9 +2819,15 @@ function updateFillPreview() {
     $('fillGetAmt').textContent = '--';
     return;
   }
-  const fillWei = ethers.parseUnits(val, f.outDecimals);
+  let fillWei;
+  // Typing "0.0000001" against a 6-decimal token used to throw straight out of
+  // this input handler and freeze the preview at a stale number.
+  try {
+    fillWei = ethers.parseUnits(toDecimalString(val, f.outDecimals), f.outDecimals);
+  } catch { return; }
   const clamped = fillWei > f.remaining ? f.remaining : fillWei;
   const proportionalIn = (f.remainingIn * clamped) / f.remaining;
+  updateFillAffordability();
   $('fillPayAmt').textContent = fmt(clamped.toString(), f.outDecimals);
   $('fillGetAmt').textContent = fmt(proportionalIn.toString(), f.inDecimals);
 }
@@ -2396,15 +2841,30 @@ function closeFillModal() {
 // ---- Refresh loop ----
 let _pendingFill = new URLSearchParams(location.search).get('fill');
 
+const REFRESH_SECONDS = 30;
+let _refreshing = false;
+
+// Re-render whatever view is on screen from the orders already in memory.
+function renderAll() {
+  if (_globalMode) {
+    renderGlobalOrders();
+  } else {
+    renderBook();
+    renderPriceHints();
+    if (_activeTab === 'mine') renderMyOrders();
+  }
+}
+
 async function refresh() {
+  // The countdown ticks every second but a fetch can take several. Resetting it
+  // up front (and latching _refreshing) stops the timer from stacking a new RPC
+  // round-trip on top of every second the previous one is still in flight.
+  if (_refreshing) return;
+  _refreshing = true;
+  _refreshCountdown = REFRESH_SECONDS;
   try {
     _allOrders = await fetchOrders();
-    if (_globalMode) {
-      renderGlobalOrders();
-    } else {
-      renderBook();
-      if (_activeTab === 'mine') renderMyOrders();
-    }
+    renderAll();
     // Auto-open fill modal if deep-linked
     if (_pendingFill) {
       const id = _pendingFill;
@@ -2413,18 +2873,43 @@ async function refresh() {
     }
   } catch (e) {
     console.error('Refresh failed:', e);
+    const el = $(_globalMode ? 'globalRefreshCountdown' : 'refreshCountdown');
+    if (el) el.textContent = 'offline';
+  } finally {
+    _refreshing = false;
+    _refreshCountdown = REFRESH_SECONDS;
   }
-  _refreshCountdown = 30;
 }
 
 function startRefreshLoop() {
   refresh();
   setInterval(() => {
+    if (_refreshing) return;
     _refreshCountdown--;
-    if (_refreshCountdown <= 0) refresh();
+    if (_refreshCountdown <= 0) { refresh(); return; }
     const el = $(_globalMode ? 'globalRefreshCountdown' : 'refreshCountdown');
     if (el) el.textContent = _refreshCountdown + 's';
   }, 1000);
+  // A trader who tabs away comes back to a stale book; catch up immediately.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refresh();
+  });
+}
+
+// Connecting or disconnecting changes what the whole page should show — which
+// rows are yours, whether balances exist, whether the book can be cancelled
+// from. Re-render everything rather than only the (often hidden) orders tab.
+function onWalletChange() {
+  if (_signer) {
+    _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer);
+    _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer);
+  } else {
+    _swapboard = null;
+    _swapboardPF = null;
+    _balances = { buy: null, sell: null };
+  }
+  renderAll();
+  if (!_globalMode) refreshBalances();
 }
 
 // ---- Build synthetic pool data from token addresses ----
@@ -2471,7 +2956,7 @@ async function init() {
     $('priceBanner').style.display = 'none';
     $('globalView').style.display = '';
     startRefreshLoop();
-    walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _swapboard = null; _swapboardPF = null; renderMyOrders(); }] });
+    walletInit({ appName: 'zFi Orderbook', onConnect: [onWalletChange], onDisconnect: [onWalletChange] });
     return;
   }
 
@@ -2515,6 +3000,7 @@ async function init() {
       const r1 = Number(BigInt(_poolData.reserve1)) / (10 ** d1);
       if (r0 > 0) {
         const ammPx = r1 / r0;
+        _ammPrice = ammPx;
         $('ammPrice').textContent = fmtCompact(ammPx);
         $('ammPriceLabel').textContent = label1 + ' per ' + label0 + ' (AMM)';
         $('priceBanner').style.display = '';
@@ -2537,7 +3023,7 @@ async function init() {
   }
 
   startRefreshLoop();
-  walletInit({ appName: 'zFi Orderbook', onConnect: [() => { _swapboard = new ethers.Contract(SWAPBOARD, SWAPBOARD_ABI, _signer); _swapboardPF = new ethers.Contract(SWAPBOARD_PF, SWAPBOARD_PF_ABI, _signer); renderMyOrders(); }], onDisconnect: [() => { _swapboard = null; _swapboardPF = null; renderMyOrders(); }] });
+  walletInit({ appName: 'zFi Orderbook', onConnect: [onWalletChange], onDisconnect: [onWalletChange] });
 }
 
 document.addEventListener('keydown', (e) => {
