@@ -45,11 +45,15 @@
                 background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
   .wbtns .wprimary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
   .wfoot{margin:16px 0 0!important;font-size:11px}
-  #wiz{margin:auto;max-width:560px;border:1px solid var(--border);border-radius:12px;padding:0;
+  /* Flex column with only the body scrolling: the plan block grows as options
+     are chosen, and a plain dialog scrolled the title and the Bond button off
+     with it. */
+  #wiz{margin:auto;max-width:560px;max-height:min(90vh,940px);border:1px solid var(--border);
+       border-radius:12px;padding:0;display:flex;flex-direction:column;overflow:hidden;
        background:var(--bg);color:var(--fg);font:14px/1.5 Helvetica,Arial,sans-serif}
   #wiz::backdrop{background:rgba(0,0,0,.66)}
-  #wiz h3{margin:0;padding:18px 20px 14px;font-size:17px;border-bottom:1px solid var(--border)}
-  .wbody{padding:18px 20px;display:grid;gap:15px}
+  #wiz h3{margin:0;padding:18px 20px 14px;font-size:17px;border-bottom:1px solid var(--border);flex:0 0 auto}
+  .wbody{padding:18px 20px;display:grid;gap:15px;overflow:auto;flex:1 1 auto}
   .wrow{display:grid;gap:6px}
   .wrow label{font-size:12px;color:var(--fg-muted)}
   .wrow input,.wrow select{background:transparent;color:var(--fg);border:1px solid var(--border);
@@ -60,16 +64,37 @@
   .wplan ol{margin:6px 0 0;padding-left:20px}
   .wplan li{margin:3px 0}
   .wplan .done{opacity:.45;text-decoration:line-through}
-  .wcommit{margin:11px 0 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+  .wplan>:first-child{margin-top:0}
+  .wgain{margin:0;font-size:13.5px;line-height:1.5}
+  .wgain b{font-size:15px}
+  .wcommit{margin:14px 0 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+  /* Loading is a state worth drawing. Discovery walks every RPC in the pool and
+     can take the better part of ten seconds; a field that simply sits there
+     empty reads as broken, and art that pops in with no reserved space makes
+     the dialog jump under the cursor. */
+  @keyframes wshim{to{background-position:-200% 0}}
+  @keyframes wpulse{50%{opacity:.42}}
+  .wskel{background:linear-gradient(90deg,var(--border) 25%,var(--bg-soft,#8884) 50%,var(--border) 75%);
+       background-size:200% 100%;animation:wshim 1.4s linear infinite;border-radius:6px}
+  .wfind{animation:wpulse 1.6s ease-in-out infinite}
+  @media(prefers-reduced-motion:reduce){.wskel,.wfind{animation:none}}
+  .wstate .wskel{aspect-ratio:1;width:100%}
   .wlocks{margin:5px 0 0;padding-left:20px}
   .wlocks li{margin:4px 0}
   .wnote{font-size:12px;color:var(--fg-muted);border-left:2px solid var(--border);padding-left:11px;margin:0}
-  .wfoot2{display:flex;gap:9px;justify-content:flex-end;padding:0 20px 18px;flex-wrap:wrap}
+  /* Pinned, and bordered so that the body scrolling under it reads as a scroll
+     rather than as content that has been cut off. */
+  .wfoot2{display:flex;gap:9px;justify-content:flex-end;padding:14px 20px;flex-wrap:wrap;
+       flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg)}
+  #wstat{flex:0 0 auto}
   .wfoot2 button{padding:10px 15px;border:1px solid var(--border);border-radius:8px;background:transparent;
        color:var(--fg);font:13px inherit;cursor:pointer}
   .wfoot2 .prim{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:500}
   .wfoot2 button:disabled{opacity:.45;cursor:not-allowed}
-  .wstates{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:9px;align-items:center;margin:0}
+  /* Capped: at full dialog width the three panels ran to 150px each and pushed
+     every field the reader came here to fill below the fold. */
+  .wstates{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:9px;align-items:center;
+       margin:0 auto;max-width:340px}
   .wstate{display:grid;gap:7px;justify-items:center;margin:0}
   .wstate img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
   .wstate figcaption{font:italic 14px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
@@ -458,6 +483,15 @@ const wEternalArt=img=>{
   if(end<0) return null;
   try{ return p+btoa(s.slice(0,end+2)+WZGLYPH+s.slice(end+2)); }catch(e){ return null; }
 };
+/* The same three panels with the art not yet in them, so the strip occupies its
+   final height from the moment an id is valid. Reading tokenURI is an 11 KB
+   call that may walk several endpoints, and without this the dialog silently
+   grew by ~150px whenever it landed. */
+const wSkel=()=>'<div class="wstates">'
+ +['your zOrgz','bonded receipt','eternal'].map((c,i)=>
+     (i?'<span class="wsep" aria-hidden="true">&rarr;</span>':'')
+    +'<figure class="wstate"><span class="wskel"></span><figcaption>'+c+'</figcaption></figure>').join('')
+ +'</div>';
 const wStates=img=>{
   if(!img) return '';   /* art unavailable: show the form rather than a broken strip */
   const panel=(src,inv,cap,gold)=>
@@ -500,7 +534,11 @@ async function discoverZorgz(owner,zorgz){
 }
 async function wizOpen(){
   const d=$('wiz'); const body=$('wizbody'); $('wstat').textContent='';
-  body.innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)+'</div>'; d.showModal();
+  /* Name the stage. The wizard opens on four chained reads and a blank spinner
+     gives the reader nothing to tell "working" from "hung". */
+  body.innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
+    +'<p class="whint wfind" style="margin:12px 0 0">Reading your zOrg and zOrgz balances…</p></div>';
+  d.showModal();
   try{
     if(!window._connectedAddress){
       wizWaiting=true;
@@ -530,23 +568,27 @@ async function wizOpen(){
     }
     body.innerHTML=
       '<div id="wzstrip"></div>'
-     +'<div class="wrow"><label>Which zOrgz to escrow<span id="wzfind"></span></label>'
+     +'<div class="wrow"><label>Which zOrgz to escrow'
+     +'<span id="wzfind" class="wfind"> — looking through your wallet…</span></label>'
      +'<input id="wzid" inputmode="numeric" placeholder="zOrgz token id"></div>'
-     +'<div class="wrow"><label>zOrg shares to bond (you hold '+wFmt(WZ.zBal)+')</label>'
+     +'<div class="wrow"><label>How much zOrg to bond (you hold '+wFmt(WZ.zBal)+')</label>'
      +'<input id="wzamt" inputmode="decimal" value="10000"></div>'
-     +'<div class="wrow"><label>Commitment</label><select id="wztier">'
-     +'<option value="3">Locked '+WZ.days+' days &mdash; '+(WZ.boost/10000).toFixed(2)+'&times; support</option>'
-     +'<option value="0">No lock, withdraw any time &mdash; 1.00&times; support</option></select></div>'
-     +'<label class="wchk"><input type="checkbox" id="wzet"><span>Make it permanent (eternalize). '
-     +'Needs 10,000 zOrg. The zOrgz and the shares can never be redeemed.</span></label>'
+     +'<div class="wrow"><label>How long to commit it</label><select id="wztier">'
+     +'<option value="3">Lock for '+WZ.days+' days &mdash; '+(WZ.boost/10000).toFixed(2)+'&times; support</option>'
+     +'<option value="0">Stay free to withdraw &mdash; 1.00&times; support</option></select></div>'
+     +'<label class="wchk"><input type="checkbox" id="wzet"><span>Make it permanent. '
+     +'The zOrgz and the zOrg are never returned, and the rate you pick above is kept forever.'
+     +'<span id="wzethint" class="whint"></span></span></label>'
      +'<div class="wplan" id="wzplan"></div>'
-     +'<p class="wnote">The commitment is set as part of the bond, so an eternal receipt keeps the boosted rate. '
-     +'Eternalizing an uncommitted bond would freeze it at 1.00x with no way to raise it.</p>';
+     +'<p class="wnote">Pick the lock now, not later: a bond made permanent while unlocked '
+     +'is stuck at 1.00&times; and can never be raised.</p>';
     const plan=()=>{
       const amt=$('wzamt').value||'0', et=$('wzet').checked, t=$('wztier').value;
       let ok=true, amtW=0n; try{amtW=wUnits(amt)}catch(e){ok=false}
       $('wzet').disabled = amtW < 10000n*10n**18n;
       if($('wzet').disabled) $('wzet').checked=false;
+      /* A checkbox that will not tick and does not say why is a dead control. */
+      $('wzethint').textContent = $('wzet').disabled ? ' Needs at least 10,000 zOrg.' : '';
       const steps=['Approve the zOrgz for escrow','Approve '+(ok?wFmt(amtW):'0')+' zOrg',
         'Bond at '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x for '+WZ.days+' days':'1.00x, no lock')
         +' with '+(Number(WZ.minEth)/1e18)+' ETH'];
@@ -569,13 +611,29 @@ async function wizOpen(){
           +'<li><b>'+(Number(WZ.minEth)/1e18)+' ETH: returned in full from '+when(WZ.ethDays)+'</b> ('
           +WZ.ethDays+' days). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
           +(t==='3'?' &mdash; and the lock above outlasts this date.':'.')+'</li>';
-      $('wzplan').innerHTML='<b>'+(window._walletSendCalls?'One confirmation':steps.length+' confirmations')+'</b>'
-        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>'
+      /* Order matters here. The old block opened with the wallet mechanics -
+         "3 confirmations", then the numbered approvals - so the two things the
+         reader is actually deciding (what this buys, what it costs to leave)
+         sat in the middle of a wall of same-sized grey text. What you get, then
+         what you give up, then how it is signed. */
+      $('wzplan').innerHTML=
+         (ok&&amtW>0n?'<p class="wgain">Directs <b>'+wFmt(eff)+'</b> of support'
+          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)
+          +'</b> over ~3 weeks as conviction accrues.</p>':'')
         +'<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
-        +(ok&&amtW>0n?'<p style="margin:9px 0 0;opacity:.75">Directs <b>'+wFmt(eff)+'</b> of support'
-          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)+'</b> over ~3 weeks as conviction accrues.</p>':'');
-      $('wizgo').disabled = !ok || amtW===0n || amtW>WZ.zBal;
-      $('wstat').textContent = amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.' : '';
+        +'<p class="wcommit">'+(window._walletSendCalls?'One confirmation':steps.length+' confirmations')+'</p>'
+        +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>';
+      /* The primary action used to be live on an empty form: pressing Bond with
+         no zOrgz chosen got as far as wizRun before throwing "Enter a whole
+         zOrgz id" into the status line. Say what is missing instead of offering
+         an action that cannot work. */
+      const hasId=/^\d+$/.test(id);
+      $('wizgo').disabled = !hasId || !ok || amtW===0n || amtW>WZ.zBal;
+      $('wstat').textContent =
+          !hasId    ? 'Choose which zOrgz to escrow.'
+        : !ok       ? 'Enter a zOrg amount with up to 18 decimals.'
+        : amtW===0n ? 'Bond a positive amount of zOrg.'
+        : amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.' : '';
     };
     /* wzid included: the commitment block names the token by id, so it has to
        update as the field is typed, not only once discovery replaces it. */
@@ -591,6 +649,7 @@ async function wizOpen(){
       const id=($('wzid').value||'').trim(), n=++artSeq;
       const strip=$('wzstrip'); if(!strip)return;
       if(!/^\d+$/.test(id)){ strip.innerHTML=''; return; }
+      strip.innerHTML=wSkel();
       const img=await wArt(zorgz,id).catch(()=>null);
       if(n!==artSeq || !$('wzstrip')) return;
       /* Say so rather than rendering nothing: a strip that silently disappears
@@ -608,6 +667,7 @@ async function wizOpen(){
        Listing them disabled answers "where did #9953 go?" without a lookup. */
     Promise.all([discoverZorgz(me,zorgz), discoverZorgz(me,GOV).catch(()=>null)]).then(([owned,bonded])=>{
       const lab=$('wzfind'); if(!lab)return;
+      lab.classList.remove('wfind');            // resolved either way: stop pulsing
       if(owned&&owned.length){
         const cur=$('wzid').value;
         const free='<optgroup label="Ready to bond">'
