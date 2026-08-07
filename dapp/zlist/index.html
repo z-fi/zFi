@@ -237,6 +237,11 @@
   .aghost{background:transparent;color:var(--fg);border:1px solid var(--border)}
   .acts button:disabled{opacity:.45;cursor:not-allowed}
   .ahint{flex-basis:100%;font-size:11.5px;color:var(--fg-muted)}
+  /* Deliberately quiet: a reading of the system, not a call to action. */
+  .bstat{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+  .bstat b{font-weight:500}
+  .bstat .bperm{color:#d9b34a}
+  .bstat[hidden]{display:none}
 </style>
 </head><body>
 <div id="z-nav"></div>
@@ -247,6 +252,7 @@
     <span class="ahint" id="ahint">Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what
       lets you place support on the listings below.</span>
   </span>
+  <span class="bstat" id="bstat" hidden></span>
   <span><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">get a zOrgz</a>
   · <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#code" target="_blank" rel="noopener">contract</a>
   · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a></span>
@@ -1355,6 +1361,9 @@ async function wizRun(){
     /* Terminal: the bond is placed. Leaving Bond live invited a second one,
        which reverts BondAlreadyExists after a wallet round trip. */
     go.disabled=true; $('wizcancel').textContent='Close';
+    /* The reader just moved this number; a stale total in the bar would be the
+       one place the page disagrees with what they were told happened. */
+    bstatLoad();
     return;
   }catch(e){
     wzSteps(steps,cur,'fail'); sfx('err');
@@ -1494,8 +1503,53 @@ if(window.walletInit) window.walletInit({appName:'zList',
   },
   onDisconnect:wizClose});
 
+/* ---------------------------------------------------------------------------
+   THE STANDING TOTALS. Two numbers with very different costs, so they are not
+   fetched together and the cheap one never waits on the expensive one.
+
+   totalLoyaltyWeight is exact and costs one eth_call: it is incremented by
+   _bondZorgz and _increaseBond and decremented by decreaseBond and unbond, so
+   it is the live sum of every bonded zOrg.
+
+   The eternal count has no counter to read - eternalBonds is a bare mapping -
+   so it comes from Eternalized logs, which only one endpoint we know of will
+   serve over an unbounded range. Opportunistic, therefore, and never blocking.
+   The count is exact despite being a log scan: eternalize reverts PermanentBond
+   on a second call, and unbond - the only thing that clears the flag - reverts
+   PermanentBond first, so a receipt can be eternalized exactly once and never
+   un-eternalized. One event, one permanent bond, forever.
+--------------------------------------------------------------------------- */
+const SEL_TOTAL='0xde9e5054';        // totalLoyaltyWeight()
+const TOPIC_ETERNAL='0xe455960660c1ef893c89fcdc7f8bf823955fa9e01ba33a97a74f1af8d215ce0e';
+let BSTAKE=null, BPERM=null;
+function bstatRender(){
+  const el=$('bstat'); if(!el||BSTAKE===null)return;
+  el.hidden=false;
+  el.innerHTML='<b>'+wFmt(BSTAKE)+'</b> zOrg bonded'
+    +(BPERM===null?'':' · <b class="bperm">'+BPERM+'</b> permanent');
+}
+async function bstatLoad(){
+  try{
+    const r=await wRead(C,SEL_TOTAL);
+    BSTAKE=wWord(r,0); bstatRender();
+  }catch(e){ return }                                  // no total, no line
+  /* Deliberately not awaited by anything. */
+  const body={jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
+    address:C, topics:[TOPIC_ETERNAL], fromBlock:'0x0', toBlock:'latest'}]};
+  try{
+    const logs=await Promise.any(RPCS.map(u=>post(u,body,25000).then(r=>{
+      if(!Array.isArray(r))throw Error('unsupported');
+      return r;
+    })));
+    /* By receiptId, so a reorg replay or a duplicated log cannot inflate it. */
+    BPERM=new Set(logs.map(l=>l.topics&&l.topics[2]).filter(Boolean)).size;
+    bstatRender();
+  }catch(e){ /* the exact half stands on its own */ }
+}
+
 const LOAD=(n=48)=>typeof zfiLoadingSVG==='function'?zfiLoadingSVG(n):'';
 $('boot').innerHTML=LOAD(56)+'<div>Reading the interface from Ethereum…</div>';
+bstatLoad();                                   // independent of the frame
 (async()=>{
   try{
     const {html,via}=await pull();
