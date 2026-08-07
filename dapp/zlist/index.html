@@ -436,9 +436,21 @@ function heal(doc,win){
     const ethEl=doc.getElementById('eth'), meEl2=doc.getElementById('me');
     if(ethEl&&meEl2){
       const fix=()=>{
-        if(!/^0 ETH principal/.test(ethEl.textContent||''))return;   // fixed, or real principal
-        if(!meEl2.classList.contains('eternal-name'))return;          // not an eternal bond
-        ethEl.innerHTML=ethEl.innerHTML.replace(/^0 ETH principal/,'principal given to treasury');
+        let h=ethEl.innerHTML;
+        /* Loyalty is paid out of OTHER people's early exits, so a new bond has
+           none for reasons that have nothing to do with it. "0 ETH loyalty" is
+           a running total of something that has not happened yet - it says
+           nothing until it is non-zero, at which point it says it by appearing.
+           Unlike the principal line this is a presentation choice, not a heal,
+           so it holds against the corrected renderer too. */
+        h=h.replace(/\s*\u00b7\s*<b>0 ETH<\/b>\s*loyalty\s*$/i,'');
+        /* Only the deployed renderer prints a bare zero here; the corrected one
+           already says it, and a real principal never matches. */
+        if(/^0 ETH principal/.test(h.replace(/<[^>]*>/g,''))
+           && meEl2.classList.contains('eternal-name')) {
+          h=h.replace(/^0 ETH principal/,'principal given to treasury');
+        }
+        if(h!==ethEl.innerHTML) ethEl.innerHTML=h;   // idempotent: no match, no write
       };
       new win.MutationObserver(fix).observe(ethEl,{childList:true,characterData:true,subtree:true});
       fix();
