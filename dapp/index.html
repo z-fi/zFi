@@ -2468,6 +2468,7 @@ function pushRecentToken(symbol) {
 const weiLists = new Map();       // name → { tokens: [...], loadedAt }
 const weiListTokenSource = new Map(); // symbol → listName
 const BUNDLED_TOKEN_LIST = 'token-list';
+const ZLIST_NAME = 'zList';
 let _bundledLoaded = false;
 
 function saveWeiLists() {
@@ -2492,7 +2493,102 @@ function loadWeiLists() {
       }
     }
   } catch (_) {}
+  // Claim the first group slot before the bundled fetch can take it: group order
+  // follows weiLists insertion order, and the onchain list should sit above a
+  // file we shipped. An empty group is skipped by the renderer, so holding the
+  // slot before the call lands costs nothing.
+  if (!weiLists.has(ZLIST_NAME)) weiLists.set(ZLIST_NAME, { tokens: [], loadedAt: 0 });
   loadBundledTokenList();
+}
+
+// ---- zList: the onchain ranked token list ----------------------------------
+// The order of this dropdown is not ours to choose. ZorgTokenListLens returns the
+// registry's listings sorted by live zOrg conviction, so the picker asks the chain
+// what people have actually put weight behind rather than shipping a hand-written
+// order that drifts the moment anyone bonds.
+//
+// One eth_call for the whole thing: summariesPaged returns id, address, decimals,
+// symbol and type flags in a single response, already ranked. Never awaited by
+// anything - if it fails the picker keeps the built-in order it has always had.
+const ZLIST_LENS = '0x000000cEa3AB048d59473F3fb116A8D7F1abd247';
+const ZLIST_URL = 'https://zfi.eth.limo/zlist/';
+const ZLIST_PAGE = 100;
+// The registry's Standard enum, matching the renderer's `_standard()` and the
+// taxonomy in dapp/tokenlist/page.html. It is a TOKEN list, not an ERC-20 list:
+// it carries NFTs and Bitcoin-rooted formats alongside fungible EVM tokens.
+const ZLIST_STD = { NATIVE: 1, ERC20: 2, ERC721: 3, ERC1155: 4,
+                    TACIT: 5, RUNE: 6, ORDINAL: 7, BRC20: 8 };
+const ZLIST_KIND_EVM = 0;            // eip155; other kinds are bitcoin / solana
+//
+// ONE GATE for every DEX-side integration. Swapping needs a fungible ERC-20 that
+// exists on the chain we are trading on, and the list currently contains three
+// things that are none of those: zzz and WEI are ERC-721 with 0 decimals, and TAC
+// is Tacit, a Bitcoin format that has no EVM contract to call at all. Each would
+// be a row that looks tradeable and cannot be traded.
+//
+// Written as an ALLOW-list on purpose. The registry gains standards over time -
+// it already advertises categories before their first listing - and a deny-list
+// would silently admit each new one into the swap picker on the day it appears.
+// The cost of that asymmetry is a token missing from a dropdown; the cost the
+// other way is a quote against something that cannot be quoted.
+function zlistSwappable(row) {
+  if (Number(row.kind) !== ZLIST_KIND_EVM) return false;      // not an EVM token
+  if (Number(row.chainId) !== CHAIN_ID) return false;         // foreign chain
+  if (Number(row.standard) !== ZLIST_STD.ERC20) return false; // NFT, native, non-EVM
+  if (!row.deployed) return false;                            // no contract yet
+  return true;
+}
+// address → rank. Empty until the call lands, which is exactly the fallback.
+const ZRANK = new Map();
+let _zlistLoaded = false, _zlistLoading = false;
+const ZLIST_ABI = ['function summariesPaged(uint256 start, uint256 count) view returns ('
+  + 'tuple(uint256 id, bytes32 account, uint64 chainId, uint8 decimals, uint8 kind,'
+  + ' uint8 standard, bool deployed, bool onchainSvg, bool synced, uint24 color,'
+  + ' uint32 rank, bool frozen, string name, string symbol)[])'];
+async function loadZListRanking() {
+  if (_zlistLoaded || _zlistLoading) return;
+  _zlistLoading = true;
+  try {
+    const iface = new ethers.Interface(ZLIST_ABI);
+    const rows = [];
+    for (let start = 0; start < 1000; start += ZLIST_PAGE) {
+      const res = await quoteRPC.call({
+        to: ZLIST_LENS,
+        data: iface.encodeFunctionData('summariesPaged', [start, ZLIST_PAGE]),
+      });
+      const page = iface.decodeFunctionResult('summariesPaged', res)[0];
+      for (const r of page) rows.push(r);
+      if (page.length < ZLIST_PAGE) break;      // short page: that was the last
+    }
+    if (rows.length === 0) return;
+    const ranked = [];
+    for (const r of rows) {
+      // Everything EVM on this chain gets a rank, tradeable or not, so the order
+      // the picker shows is the order the list actually holds. Only what passes
+      // the gate becomes a row.
+      if (Number(r.kind) !== ZLIST_KIND_EVM || Number(r.chainId) !== CHAIN_ID) continue;
+      // bytes32, left-padded: the address is the low 20 bytes.
+      const addr = ethers.getAddress('0x' + r.account.slice(26));
+      ZRANK.set(addr.toLowerCase(), ZRANK.size);
+      // Native ETH is listed with a zero account. It is already the first
+      // built-in and validateTokenList rejects the zero address, so it is ranked
+      // above but never added as a token.
+      if (!zlistSwappable(r)) continue;
+      ranked.push({ address: addr, symbol: r.symbol, decimals: Number(r.decimals) });
+    }
+    _zlistLoaded = true;
+    // Anything ranked that we do not already know becomes a real row, so a
+    // listing added onchain reaches the picker with no deploy here.
+    const validated = validateTokenList(ranked);
+    if (validated.length > 0) {
+      weiLists.set(ZLIST_NAME, { tokens: validated, loadedAt: Date.now() });
+      mergeWeiListTokens(ZLIST_NAME, validated);
+    }
+    if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || '');
+  } catch (_) {
+  } finally {
+    _zlistLoading = false;
+  }
 }
 
 let _bundledLoading = false;
@@ -2515,6 +2611,9 @@ async function loadBundledTokenList() {
   } finally {
     _bundledLoading = false;
   }
+  // Independent of the bundled fetch: one is a same-origin file, the other an
+  // eth_call, and chaining them would make the picker wait on the slower.
+  loadZListRanking();
   loadUniswapTokenList();
   // Kick ZAMM v0 discovery in parallel with Uniswap rather than chaining behind it —
   // they're independent endpoints, and a slow Uniswap fetch would otherwise delay
@@ -3005,13 +3104,27 @@ function renderTokenList(filter) {
     }
   }
 
-  // Built-in tokens
+  // Built-in tokens, in live conviction order.
+  // The order used to be whatever order the `tokens` literal happened to be
+  // written in. It is now whatever the zList registry says people have put the
+  // most zOrg behind - ZRANK is empty until that call lands and empty forever if
+  // it fails, and sort is stable, so the fallback is exactly the old order.
+  const builtinSyms = [];
   for (const sym of Object.keys(tokens)) {
     if (shown.has(sym)) continue;
     if (!builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
     if (!matchesFilter(sym, tokens[sym].address, tokens[sym].name)) continue;
-    if (appendRow(sym)) hasAny = true;
+    builtinSyms.push(sym);
   }
+  if (ZRANK.size > 0) {
+    // Unranked built-ins keep their relative order, after everything ranked.
+    const rankOf = sym => {
+      const r = ZRANK.get(tokens[sym].address.toLowerCase());
+      return r === undefined ? Number.MAX_SAFE_INTEGER : r;
+    };
+    builtinSyms.sort((a, b) => rankOf(a) - rankOf(b));
+  }
+  for (const sym of builtinSyms) if (appendRow(sym)) hasAny = true;
 
   // Pre-index weiListTokenSource by list name (O(n) instead of O(n*m))
   const _weiByList = new Map();
