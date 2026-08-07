@@ -308,7 +308,7 @@
 <div id="fail" hidden></div>
 <script>
 const C='0x0000006d936ba3653b8854490e16e782cd32a9a8', HTML='0x33c34ac3',
-RPCS=['https://eth.blockrazor.xyz','https://eth-mainnet.public.blastapi.io','https://ethereum-rpc.publicnode.com','https://rpc.mevblocker.io','https://eth.merkle.io','https://0xrpc.io/eth','https://eth.rpc.blxrbdn.com','https://eth.drpc.org','https://mainnet.gateway.tenderly.co','https://eth-pokt.nodies.app','https://eth.api.onfinality.io/public'];
+RPCS=['https://eth.blockrazor.xyz','https://eth-mainnet.public.blastapi.io','https://ethereum-rpc.publicnode.com','https://rpc.mevblocker.io','https://0xrpc.io/eth','https://eth.rpc.blxrbdn.com','https://eth.drpc.org','https://mainnet.gateway.tenderly.co','https://eth-pokt.nodies.app','https://eth.api.onfinality.io/public'];
 const $=i=>document.getElementById(i);
 async function post(u,b,ms){const c=AbortSignal.timeout?AbortSignal.timeout(ms||12000):undefined;
   const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b),signal:c});
@@ -665,8 +665,7 @@ function guard(doc,win){
       +'<a href="https://etherscan.io/address/0x0000006013dF75A31678B786061C2B54bf531524#code" '
       +'target="_blank" rel="noopener">a contract</a>, not on a server. Bonded '
       +'<a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">zOrgz</a>'
-      +' set the order &mdash; ranks are earned, not handed out. '
-      +'It powers the token picker in '
+      +' set the order. It powers the token picker in '
       +'<a href="../" target="_blank" rel="noopener">zFi swap</a>.';
   }catch(e){}
   /* Capture on the document so this runs before the inline onclick on the button. */
@@ -963,6 +962,37 @@ const wEternalArt=img=>{
   if(end<0) return null;
   try{ return p+btoa(s.slice(0,end+2)+WZGLYPH+s.slice(end+2)); }catch(e){ return null; }
 };
+/* ---------------------------------------------------------------------------
+   LOG SCANS. Measured across the pool: eth_call works on ten endpoints, an
+   unbounded eth_getLogs works on ONE. The rest answer 400, 403, "pruned history
+   unavailable", "method not available", a block-range cap, or a timeout.
+
+   Racing all of them therefore produced ten loud failures per scan, three scans
+   per page, for one useful answer - a console full of red that says nothing is
+   wrong. This walks them instead and stops at the first that answers, so the
+   normal case is one request. The winner is remembered, so the next visit asks
+   it first and the walk usually never happens.
+
+   No endpoint is hardcoded as the good one. Which nodes keep full history is
+   not ours to decide and will change; the remembered winner is a cache, not a
+   configuration. */
+const LOGS_RPC_KEY='zlist_logs_rpc';
+async function getLogsFirst(body){
+  let order=RPCS.slice();
+  try{
+    const won=localStorage.getItem(LOGS_RPC_KEY);
+    if(won&&order.includes(won)) order=[won,...order.filter(u=>u!==won)];
+  }catch(e){}
+  for(const u of order){
+    try{
+      const r=await post(u,body,25000);
+      if(!Array.isArray(r))throw Error('unsupported');
+      try{ localStorage.setItem(LOGS_RPC_KEY,u) }catch(e){}
+      return r;
+    }catch(e){ /* next endpoint; most of the pool cannot serve this at all */ }
+  }
+  return null;
+}
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
@@ -974,13 +1004,8 @@ async function discoverZorgz(owner,zorgz){
      spent eight refusals before reaching it. The refusals are fast; the scan
      that works takes ~8.5s, so it needs a generous timeout of its own - a 6s
      cap silently killed the only endpoint that could answer. */
-  let logs=null;
-  try{
-    logs=await Promise.any(RPCS.map(u=>post(u,body,25000).then(r=>{
-      if(!Array.isArray(r))throw Error('unsupported');
-      return r;
-    })));
-  }catch(e){ return null; }
+  const logs=await getLogsFirst(body);
+  if(!logs) return null;
   const seen=[...new Set(logs.map(l=>BigInt(l.topics[3]).toString()))].slice(0,40);
   /* Verify in parallel: a transfer in does not mean it is still held. */
   const checked=await Promise.all(seen.map(id=>
@@ -1777,10 +1802,8 @@ async function bstatLoad(){
   const body={jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
     address:C, topics:[[TOPIC_ETERNAL,TOPIC_RELEASED]], fromBlock:'0x0', toBlock:'latest'}]};
   try{
-    const logs=await Promise.any(RPCS.map(u=>post(u,body,25000).then(r=>{
-      if(!Array.isArray(r))throw Error('unsupported');
-      return r;
-    })));
+    const logs=await getLogsFirst(body);
+    if(!logs) return;
     const t0=l=>((l.topics&&l.topics[0])||'').toLowerCase();
     /* By receiptId, so a reorg replay or a duplicated log cannot inflate it. */
     BPERM=new Set(logs.filter(l=>t0(l)===TOPIC_ETERNAL)

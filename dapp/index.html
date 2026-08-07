@@ -2675,6 +2675,18 @@ function applyZListDefaultPair(paint = true) {
 const ZLOGO_CACHE_KEY = 'zfi_zlist_logos';
 const ZLOGO_TTL_MS = 24 * 60 * 60 * 1000;
 const ZLOGOS = new Map();               // address → data: URI
+// Any self-contained image, not just SVG. The registry holds 16 SVGs and one
+// PNG - Fake World Assets - and accepting only SVG silently dropped it back to
+// a shipped icon for no reason a reader could see. Both are equally safe in an
+// <img>, which is where these go.
+// Still data: only. An https logo would be a request to somebody else's server
+// on behalf of a page that fetches everything else from the chain, and it would
+// leak the visit to whoever hosts it.
+// Capped, because this is cached in localStorage alongside the ranking and one
+// enormous logo should not be able to cost the picker its memory of the order.
+const ZLOGO_MAX = 96 * 1024;
+const zlistLogoOk = uri =>
+  typeof uri === 'string' && uri.startsWith('data:image/') && uri.length <= ZLOGO_MAX;
 const ZLIST_GET_IFACE = new ethers.Interface([
   'function get(uint256 id) view returns (tuple(bytes32 account, uint64 chainId,'
   + ' uint8 decimals, uint8 kind, uint8 standard, bool deployed, bool onchainSvg,'
@@ -2686,10 +2698,7 @@ function loadZLogoCache() {
     const c = JSON.parse(localStorage.getItem(ZLOGO_CACHE_KEY) || 'null');
     if (!c || typeof c.m !== 'object') return 0;
     for (const [a, uri] of Object.entries(c.m)) {
-      // Only self-contained SVG data URIs. An https logo would be a request to
-      // somebody else's server on behalf of a page that fetches everything from
-      // the chain, and anything else is not art.
-      if (typeof uri === 'string' && uri.startsWith('data:image/svg+xml')) ZLOGOS.set(a, uri);
+      if (typeof uri === 'string' && zlistLogoOk(uri)) ZLOGOS.set(a, uri);
     }
     return Number(c.at) || 0;
   } catch (_) { return 0; }
@@ -2718,7 +2727,7 @@ async function loadZListLogos(targets) {
       let tok;
       try { tok = ZLIST_GET_IFACE.decodeFunctionResult('get', r.returnData)[0]; } catch (_) { continue; }
       const logo = tok.logo;
-      if (typeof logo !== 'string' || !logo.startsWith('data:image/svg+xml')) continue;
+      if (!zlistLogoOk(logo)) continue;
       ZLOGOS.set(targets[i].addr, logo);
       out[targets[i].addr] = logo;
     }
