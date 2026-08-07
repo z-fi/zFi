@@ -1,6 +1,9 @@
 # ZorgConviction deterministic deployment manifest
 
-Status: **NOT DEPLOYED — ARTIFACTS FRESH, FORK-REPLAYED, READY TO BROADCAST**
+Status: **FULLY DEPLOYED AND VERIFIED ON MAINNET.** All five contracts are live — see
+[LIVE ADDRESSES](#live-addresses). Everything below that section is the pre-deploy
+plan, kept for provenance; two of its five addresses are wrong because the renderer
+and the governor were re-mined. Do not read the plan as a record of what shipped.
 
 Conviction voting over the live `TokenList`. zOrg holders bond shares to a listing
 id; support accrues, and `ZorgTokenListLens` returns a ranking driven by it.
@@ -30,7 +33,7 @@ LIVE registry in `test/ZorgConvictionLive.t.sol` and `test/ZorgMinedDeploy.t.sol
 | `zorgz_` | `0x00000000008835ceF3E0D2333695f288Ee6b63A6` | listed in the registry as zzz |
 | `weiNames_` | `0x0000000000696760E15f265e828DB644A0c242EB` | listed in the registry as WEI |
 | `tokenList_` | `0x0000006013dF75A31678B786061C2B54bf531524` | live, eleven entries |
-| `renderer_` | `0x000000fF3C0e5393AF82B1dba6a4a97b5FB1086B` | deployed at step 3 |
+| `renderer_` | ~~`0x000000fF3C0e5393AF82B1dba6a4a97b5FB1086B`~~ — LIVE is `0x000000115b1b95b9e04128a2bcd9ed9d24ab141c` | re-mined; `setRenderer` can replace it, so read `renderer()` |
 | `receiptArt_` | `0x0000007f4342bdddA2A951b9e181B42328DD1eD9` | deployed at step 2 |
 | `halfLife_` | `259200` (**3 days**) | see below |
 
