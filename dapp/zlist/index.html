@@ -115,7 +115,12 @@
      opposite corners in different typefaces - this one, and the contract's own
      `zOrgz id / USE` pair - with nothing saying they were the same subject. */
   .acts{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
-  .acts button{border-radius:7px;padding:7px 13px;font:12px Helvetica,Arial,sans-serif;cursor:pointer}
+  /* 34px floor: these were 28 and 30, under the threshold for a comfortable tap
+     and the two most important controls on the page. */
+  .acts button{border-radius:7px;padding:8px 14px;min-height:34px;font:12px Helvetica,Arial,sans-serif;cursor:pointer}
+  /* Loading a receipt is a step you finish. Once it is done the control stays
+     available - you may hold several - but it stops competing for attention. */
+  .acts .adone{opacity:.6}
   .aprim{background:var(--fg);color:var(--bg);border:0}
   .aghost{background:transparent;color:var(--fg);border:1px solid var(--border)}
   .acts button:disabled{opacity:.45;cursor:not-allowed}
@@ -127,7 +132,7 @@
   <span class="acts">
     <button id="wizbtn" class="aprim">Bond a zOrgz</button>
     <button id="usebtn" class="aghost" disabled title="Waiting for the onchain interface">Use a receipt</button>
-    <span class="ahint">Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what
+    <span class="ahint" id="ahint">Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what
       lets you place support on the listings below.</span>
   </span>
   <span><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">get a zOrgz</a>
@@ -366,9 +371,6 @@ function guard(doc,win){
        document because useReceipt() reads it; only the row is hidden, and only
        on the path where guard() has already confirmed #rid exists to drive. */
     const ir=doc.querySelector('.idrow'); if(ir) ir.style.display='none';
-    /* Only now is there something for it to drive. It ships disabled so that a
-       click during the eth_call cannot reach a null FRAME. */
-    $('usebtn').disabled=false; $('usebtn').removeAttribute('title');
     /* The contract greets a connected holder with "N zOrgz held - enter one to
        bond", which pointed at the field just hidden. Same fact, current
        instruction. Rewritten on mutation because connect() writes it late. */
@@ -378,6 +380,32 @@ function guard(doc,win){
       const m=t.match(/^(\d+) zOrgz held - enter one to bond\.$/);
       if(m) msg.textContent=m[1]+' zOrgz held. Bond one above to help order the list.';
     }).observe(msg,{childList:true,characterData:true,subtree:true});
+    /* The bar's hint explained bonding and stopped there, so it went on
+       explaining step one to someone already standing in step three. The framed
+       page reveals #me the moment a receipt is loaded - that is the signal that
+       the SET boxes are live, which is the one thing nothing on the page ever
+       said out loud. */
+    const meEl=doc.getElementById('me');
+    if(meEl){
+      const sync=()=>{
+        const on=!meEl.classList.contains('off');
+        const credit=(doc.getElementById('credit')||{}).textContent||'';
+        $('ahint').innerHTML = on
+          ? 'Receipt loaded'+(credit?' — <b>'+credit.split('·')[0].trim()+'</b>':'')
+            +'. Type an amount on any listing and press SET to place your support.'
+          : 'Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what '
+            +'lets you place support on the listings below.';
+        $('usebtn').classList.toggle('adone',on);
+        /* The greeting we rewrote above is only true before a receipt is
+           loaded; afterwards it tells someone mid-allocation to go and bond.
+           Cleared only when it is still our own sentence, so anything the
+           contract has since said - an error, a submitted hash - survives. */
+        if(on&&msg&&/^\d+ zOrgz held\. Bond one above/.test(msg.textContent||'')) msg.textContent='';
+      };
+      new win.MutationObserver(sync).observe(meEl,{attributes:true,attributeFilter:['class'],
+        childList:true,subtree:true,characterData:true});
+      sync();
+    }
     const k=doc.querySelector('.k'), h=doc.querySelector('h1'), sub=doc.querySelector('.sub');
     if(k) k.remove();
     if(h) h.innerHTML='zList <small style="display:block;font-size:13px;font-weight:400;'
@@ -781,32 +809,46 @@ async function wizRun(){
 async function useOpen(){
   const d=$('wiz'), body=$('wizbody');
   wizMode='use'; $('wiztitle').textContent='Use a receipt'; $('wstat').textContent='';
-  body.innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
-    +'<p class="whint wfind" style="margin:12px 0 0">Looking for your receipts…</p></div>';
   if(!d.open) d.showModal();
   if(!window._connectedAddress){
-    wizWaiting=true; d.close(); await connectWallet(); return;   // onConnect re-enters
+    /* Say why the dialog vanished. Dismissing the wallet picker used to leave
+       nothing on screen and no way to tell that from a crash. */
+    wizWaiting=true; d.close(); await connectWallet();
+    if(!window._connectedAddress) $('wstat').textContent='';
+    return;                                          // onConnect re-enters
   }
   wizWaiting=false; $('wizgo').disabled=false;
-  const held=await discoverZorgz(window._connectedAddress,GOV).catch(()=>null);
+  /* Render the working form FIRST. Discovery walks the RPC pool for an unbounded
+     getLogs and Promise.any only settles once every endpoint has failed, so it
+     can take 25 seconds - the modal used to spin for all of it with nothing to
+     type into, which is indistinguishable from a hang. Same shape as the bond
+     wizard: a usable field now, upgraded to a picker if discovery lands. */
   body.innerHTML=
      '<p class="whint">A receipt is the zOrgz you bonded. Loading it turns on the SET box on '
     +'every listing, so you can put your zOrg behind the ones you want ranked.</p>'
-    +(held&&held.length
-       ? '<div class="wrow"><label>Your receipts</label><select id="urid">'
-         +held.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')
-         +'<option value="__other">Another id…</option></select></div>'
-       : '<div class="wrow"><label>Receipt id — the zOrgz you bonded</label>'
-         +'<input id="urid" inputmode="numeric" placeholder="zOrgz token id"></div>')
+    +'<div class="wrow"><label>Receipt id — the zOrgz you bonded'
+    +'<span id="ufind" class="wfind"> — looking for yours…</span></label>'
+    +'<input id="urid" inputmode="numeric" placeholder="zOrgz token id"></div>'
     +'<p class="wnote">Nothing here spends anything. Loading a receipt is a read; '
     +'placing support is a separate transaction per listing.</p>';
-  if(held&&held.length) $('urid').onchange=()=>{
-    if($('urid').value==='__other'){
-      $('urid').outerHTML='<input id="urid" inputmode="numeric" placeholder="zOrgz token id">';
-      $('urid').focus();
-    }
-  };
   $('wizgo').textContent='Use it'; $('wizgo').onclick=useRun;
+  discoverZorgz(window._connectedAddress,GOV).then(held=>{
+    const lab=$('ufind'); if(!lab||wizMode!=='use')return;   // dialog moved on
+    lab.classList.remove('wfind');
+    if(!held||!held.length){ lab.textContent=''; return; }
+    const cur=$('urid').value;
+    $('urid').outerHTML='<select id="urid">'
+      +held.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')
+      +'<option value="__other">Another id…</option></select>';
+    if(cur&&held.includes(cur))$('urid').value=cur;
+    lab.textContent=' ('+held.length+' found)';
+    $('urid').onchange=()=>{
+      if($('urid').value==='__other'){
+        $('urid').outerHTML='<input id="urid" inputmode="numeric" placeholder="zOrgz token id">';
+        $('urid').focus();
+      }
+    };
+  }).catch(()=>{ const l=$('ufind'); if(l){l.classList.remove('wfind');l.textContent=''} });
 }
 async function useRun(){
   const v=($('urid').value||'').trim();
@@ -849,6 +891,12 @@ $('boot').innerHTML=LOAD(56)+'<div>Reading the interface from Ethereum…</div>'
     // (no status line: the byte-count readout was removed as noise)
     const f=$('frame');
     f.addEventListener('load',()=>{
+      /* Enabled on the frame existing, NOT inside guard(). guard() declines to
+         install whenever the renderer's shape changes - and a setRenderer swap
+         is queued - so gating a control the reader owns on the old shape would
+         leave it disabled forever with the contract's own id row still hidden.
+         guard() assigns FRAME before its shape check, so this stays drivable. */
+      $('usebtn').disabled=false; $('usebtn').removeAttribute('title');
       try{ guard(f.contentDocument,f.contentWindow) }catch(e){ console.warn('[guard]',e) }
       if(window._connectedAddress){ try{ f.contentWindow.eval('connect()') }catch(e){} }
     },{once:true});
