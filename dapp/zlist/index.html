@@ -111,12 +111,25 @@
   #boot{display:grid;place-items:center;gap:14px;height:calc(100dvh - 200px);color:var(--fg-muted);font-size:13px}
   #fail{max-width:640px;margin:60px auto;padding:0 18px;color:var(--fg-muted);font-size:14px;line-height:1.6}
   #fail code{color:var(--fg)}
-  #fail code{color:var(--fg)}
+  /* The two halves of one flow, kept together and in order. They used to sit in
+     opposite corners in different typefaces - this one, and the contract's own
+     `zOrgz id / USE` pair - with nothing saying they were the same subject. */
+  .acts{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+  .acts button{border-radius:7px;padding:7px 13px;font:12px Helvetica,Arial,sans-serif;cursor:pointer}
+  .aprim{background:var(--fg);color:var(--bg);border:0}
+  .aghost{background:transparent;color:var(--fg);border:1px solid var(--border)}
+  .acts button:disabled{opacity:.45;cursor:not-allowed}
+  .ahint{flex-basis:100%;font-size:11.5px;color:var(--fg-muted)}
 </style>
 </head><body>
 <div id="z-nav"></div>
 <div class="bar">
-  <span><button id="wizbtn" style="background:var(--fg);color:var(--bg);border:0;border-radius:7px;padding:7px 13px;font:12px Helvetica,Arial,sans-serif;cursor:pointer">Bond a zOrgz</button></span>
+  <span class="acts">
+    <button id="wizbtn" class="aprim">Bond a zOrgz</button>
+    <button id="usebtn" class="aghost" disabled title="Waiting for the onchain interface">Use a receipt</button>
+    <span class="ahint">Bonding escrows a zOrgz and gives you a receipt. Using the receipt is what
+      lets you place support on the listings below.</span>
+  </span>
   <span><a href="https://opensea.io/collection/zorgz" target="_blank" rel="noopener">get a zOrgz</a>
   · <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#code" target="_blank" rel="noopener">contract</a>
   · <a href="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/" target="_blank" rel="noopener">ERC-8244</a></span>
@@ -124,7 +137,7 @@
 <div id="boot"></div>
 <iframe id="frame" title="zOrg onchain interface" hidden></iframe>
 <dialog id="wiz">
-  <h3>Bond a zOrgz</h3>
+  <h3 id="wiztitle">Bond a zOrgz</h3>
   <div class="wbody" id="wizbody"></div>
   <div id="wstat"></div>
   <div class="wfoot2">
@@ -346,6 +359,25 @@ function guard(doc,win){
        own connect is a duplicate control for the same wallet. Hide it and let
        the site-level one own connection. */
     const bc=doc.getElementById('b_conn'); if(bc) bc.style.display='none';
+    /* Same argument for the `zOrgz id / USE` pair beside it. It loads a bonded
+       receipt, which is the second half of the flow the bar now owns end to
+       end - kept here it was an unlabelled duplicate of "Use a receipt" in a
+       different typeface at the other end of the page. #rid stays in the
+       document because useReceipt() reads it; only the row is hidden, and only
+       on the path where guard() has already confirmed #rid exists to drive. */
+    const ir=doc.querySelector('.idrow'); if(ir) ir.style.display='none';
+    /* Only now is there something for it to drive. It ships disabled so that a
+       click during the eth_call cannot reach a null FRAME. */
+    $('usebtn').disabled=false; $('usebtn').removeAttribute('title');
+    /* The contract greets a connected holder with "N zOrgz held - enter one to
+       bond", which pointed at the field just hidden. Same fact, current
+       instruction. Rewritten on mutation because connect() writes it late. */
+    const msg=doc.getElementById('msg');
+    if(msg) new win.MutationObserver(()=>{
+      const t=msg.textContent||'';
+      const m=t.match(/^(\d+) zOrgz held - enter one to bond\.$/);
+      if(m) msg.textContent=m[1]+' zOrgz held. Bond one above to help order the list.';
+    }).observe(msg,{childList:true,characterData:true,subtree:true});
     const k=doc.querySelector('.k'), h=doc.querySelector('h1'), sub=doc.querySelector('.sub');
     if(k) k.remove();
     if(h) h.innerHTML='zList <small style="display:block;font-size:13px;font-weight:400;'
@@ -415,7 +447,7 @@ const wUnits=v=>{ v=String(v).trim();
   const[a,b='']=v.split('.'); return BigInt(a)*10n**18n+BigInt((b+'0'.repeat(18)).slice(0,18)); };
 const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
 
-let WZ={}, wizWaiting=false, FRAME=null;
+let WZ={}, wizWaiting=false, FRAME=null, wizMode='bond';
 
 /* The three states a zOrgz passes through, shown with the wallet's OWN art
    rather than a drawn stand-in - the point of the strip is "here is what
@@ -534,6 +566,7 @@ async function discoverZorgz(owner,zorgz){
 }
 async function wizOpen(){
   const d=$('wiz'); const body=$('wizbody'); $('wstat').textContent='';
+  wizMode='bond'; $('wiztitle').textContent='Bond a zOrgz';
   /* Name the stage. The wizard opens on four chained reads and a blank spinner
      gives the reader nothing to tell "working" from "hung". */
   body.innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
@@ -719,26 +752,91 @@ async function wizRun(){
       $('wstat').textContent='Confirm once in your wallet…';
       await p.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',
         from:WZ.me, atomicRequired:true, calls}]});
-      $('wstat').textContent='Submitted. Reload in a moment to see the receipt.';
+      $('wstat').textContent='Submitted. Once it confirms, use receipt #'+id+' to place your support.';
     }else{
       for(let i=0;i<calls.length;i++){
         $('wstat').textContent='Confirm '+(i+1)+' of '+calls.length+' in your wallet…';
         await p.request({method:'eth_sendTransaction',params:[{from:WZ.me,...calls[i]}]});
       }
-      $('wstat').textContent='All '+calls.length+' submitted.';
+      $('wstat').textContent='All '+calls.length+' submitted. Once they confirm, use receipt #'+id
+        +' to place your support.';
     }
   }catch(e){ $('wstat').textContent=e.message||'Cancelled.'; }
   go.disabled=false;
 }
+/* ---------------------------------------------------------------------------
+   USE A RECEIPT - the other half of the same flow.
+
+   Bonding gets you a receipt; loading that receipt is what turns on the per-row
+   SET boxes and lets you actually place support. The contract's page exposes
+   this as a bare `zOrgz id` field and a `USE` button in its top corner, with
+   nothing to say what it is for or that it is the step AFTER bonding. The pair
+   is hidden in guard() and driven from here instead, so both halves live in the
+   same bar in the order you do them.
+
+   discoverZorgz against the governor lists receipts, because a bond moves the
+   zOrgz into the governor's custody - the same read the bond wizard already
+   uses to show which of your tokens are spoken for.
+--------------------------------------------------------------------------- */
+async function useOpen(){
+  const d=$('wiz'), body=$('wizbody');
+  wizMode='use'; $('wiztitle').textContent='Use a receipt'; $('wstat').textContent='';
+  body.innerHTML='<div style="text-align:center;padding:22px 0">'+LOAD(44)
+    +'<p class="whint wfind" style="margin:12px 0 0">Looking for your receipts…</p></div>';
+  if(!d.open) d.showModal();
+  if(!window._connectedAddress){
+    wizWaiting=true; d.close(); await connectWallet(); return;   // onConnect re-enters
+  }
+  wizWaiting=false; $('wizgo').disabled=false;
+  const held=await discoverZorgz(window._connectedAddress,GOV).catch(()=>null);
+  body.innerHTML=
+     '<p class="whint">A receipt is the zOrgz you bonded. Loading it turns on the SET box on '
+    +'every listing, so you can put your zOrg behind the ones you want ranked.</p>'
+    +(held&&held.length
+       ? '<div class="wrow"><label>Your receipts</label><select id="urid">'
+         +held.map(i=>'<option value="'+i+'">zOrgz #'+i+'</option>').join('')
+         +'<option value="__other">Another id…</option></select></div>'
+       : '<div class="wrow"><label>Receipt id — the zOrgz you bonded</label>'
+         +'<input id="urid" inputmode="numeric" placeholder="zOrgz token id"></div>')
+    +'<p class="wnote">Nothing here spends anything. Loading a receipt is a read; '
+    +'placing support is a separate transaction per listing.</p>';
+  if(held&&held.length) $('urid').onchange=()=>{
+    if($('urid').value==='__other'){
+      $('urid').outerHTML='<input id="urid" inputmode="numeric" placeholder="zOrgz token id">';
+      $('urid').focus();
+    }
+  };
+  $('wizgo').textContent='Use it'; $('wizgo').onclick=useRun;
+}
+async function useRun(){
+  const v=($('urid').value||'').trim();
+  if(!/^[0-9]+$/.test(v)){ $('wstat').textContent='Enter the id of the zOrgz you bonded.'; return }
+  const go=$('wizgo'); go.disabled=true; $('wstat').textContent='Checking the bond…';
+  try{
+    /* Check before handing off: the framed page reports "No bond found" into a
+       small line the reader has to go find, and by then this dialog has closed
+       over it. */
+    if(word(await read(SEL.weight,v),0)===0n){
+      $('wstat').textContent='zOrgz #'+v+' is not bonded. Bond it first.'; return;
+    }
+    const fdoc=FRAME&&FRAME.document, el=fdoc&&fdoc.getElementById('rid');
+    if(!el) throw Error('interface not ready');
+    el.value=v; FRAME.eval('useReceipt()');
+    $('wiz').close();
+  }catch(e){
+    $('wstat').textContent='Could not load that receipt. Reload the page and try again.';
+  }finally{ go.disabled=false }
+}
 $('wizcancel').onclick=()=>$('wiz').close();
 $('wizbtn').onclick=wizOpen;
+$('usebtn').onclick=useOpen;
 /* wallet.js injects #walletBtn and the wallet modal from walletInit(); calling
    connectWallet() without it dereferences an element that does not exist. This
    also gives zList the same connect control as every other zFi page. */
 if(window.walletInit) window.walletInit({appName:'zList',
   onConnect:()=>{
     try{ if(FRAME) FRAME.eval('connect()'); }catch(e){ console.warn('[sync]',e); }
-    if(wizWaiting||$('wiz').open) wizOpen();
+    if(wizWaiting||$('wiz').open) (wizMode==='use'?useOpen:wizOpen)();
   },
   onDisconnect:()=>{ wizWaiting=false; if($('wiz').open) $('wiz').close(); }});
 
