@@ -9419,7 +9419,11 @@ function syncSwapURL() {
   const _rv = ($("receiverAddress")?.value || "").trim();
   if (_rv) _sp.set('recv', _rv);
   if (_ppSwapEnabled) _sp.set('pp', _ppSelectedAsset.toLowerCase());
-  history.replaceState(null, '', '?' + _sp.toString());
+  // An empty param set must not leave a bare "?" hanging off the URL. That could
+  // not happen while the pair was always written; now that an untouched page
+  // writes nothing, it is the normal case for a first visit.
+  const _qs = _sp.toString();
+  history.replaceState(null, '', _qs ? '?' + _qs : window.location.pathname);
 }
 function syncPrivacyURL() {
   const _sp = new URLSearchParams();
