@@ -86,6 +86,7 @@
   #boot{display:grid;place-items:center;gap:14px;height:calc(100dvh - 200px);color:var(--fg-muted);font-size:13px}
   #fail{max-width:640px;margin:60px auto;padding:0 18px;color:var(--fg-muted);font-size:14px;line-height:1.6}
   #fail code{color:var(--fg)}
+  #fail code{color:var(--fg)}
 </style>
 </head><body>
 <div id="z-nav"></div>
@@ -205,6 +206,19 @@ function heal(doc,win){
     st.textContent='.ic svg rect{height:8.8px}';
     doc.head.appendChild(st);fixed.push('copy icon');
   }catch(e){}
+  /* Rows whose support is exactly zero are 9 of the 13 listings, and the
+     renderer gives them the same weight as the ranked ones - so the page reads
+     as a wall of "0 live · 0 accrued" with the actual ordering signal lost in
+     it. There is no CSS selector for "custom property equals 0%", so tag them.
+     Re-run on every mutation: load() rebuilds #list from scratch. */
+  try{
+    const dim=()=>doc.querySelectorAll('#list .r').forEach(r=>{
+      const s=parseFloat((r.style.getPropertyValue('--s')||'0'));
+      r.classList.toggle('zdim',!(s>0));
+    });
+    const lst=doc.getElementById('list');
+    if(lst){ new win.MutationObserver(dim).observe(lst,{childList:true}); dim(); fixed.push('zero rows'); }
+  }catch(e){}
   /* THE important one. The SET button is emitted as onclick=setWeight(<id>) with
      the listing id as a bare JS number literal. Listing ids are keccak-derived
      and far exceed Number.MAX_SAFE_INTEGER, so every id except ETH's zero
@@ -252,8 +266,57 @@ function guard(doc,win){
     const st=doc.createElement('style');
     st.textContent='header h1,header .sub{font-family:Helvetica,Arial,sans-serif}'
       +'header h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;font-weight:600}'
-      +'header .sub{font-size:15px;line-height:1.5;max-width:46ch}';
+      +'header .sub{font-size:15px;line-height:1.5;max-width:46ch}'
+    /* THE LIST. The renderer paints support as `linear-gradient(90deg,#17171c
+       var(--s),#0000 0)` - a hard-edged block filling the row from the left. At
+       any value below 100% it terminates in a vertical seam somewhere in the
+       middle of the row, which reads as a rendering fault or a stuck hover
+       state rather than a meter, and it changes the backdrop the score sits on
+       so the top three numbers look like they belong to a different table.
+       Same data, drawn as a meter: a whisper of tint plus a real rule along the
+       bottom edge, so length is the only thing carrying the value. */
+      +'#list .r{background:none!important;position:relative}'
+      +'#list .r:hover,#list .r:focus-visible{background:var(--p)!important}'
+      +'#list .r::before,#list .r::after{content:"";position:absolute;left:0;'
+        +'width:var(--s,0);pointer-events:none}'
+      +'#list .r::before{top:0;bottom:0;background:rgba(199,255,168,.045)}'
+      +'#list .r::after{bottom:-1px;height:2px;background:var(--a);opacity:.5}'
+      +'#list .r>*{position:relative}'
+    /* Zero-support listings: still legible, no longer competing with the ranked
+       ones for attention. Hover restores them in full. */
+      +'#list .r.zdim{opacity:.45}#list .r.zdim:hover,#list .r.zdim:focus-within{opacity:1}'
+      +'#list .r.zdim .score{color:var(--d)}'
+    /* The score is the whole point of the ranking and the renderer sets it at
+       body size with no label anywhere on the page. */
+      +'.score{font-size:17px;line-height:1.2;padding-left:14px}'
+      +'.score small{font-size:10px;margin-top:2px}'
+      +'h2 .note{margin-left:0}'
+      +'h2 .zcol{margin-left:auto;font:inherit}'
+      +'@media(max-width:640px){.score{font-size:14px;padding-left:0}h2 .zcol{display:none}}'
+    /* THE RECORD DIALOG. 470px cannot hold a 42-character address next to an
+       86px label column, so the address ran to the very edge with its copy
+       button hanging off it, and the 78-digit listing id wrapped to a second
+       line holding a single orphaned digit. Widen it, let the long values wrap
+       as a block under their label instead of fighting the gutter. */
+      +'#tk{width:min(600px,94vw)}'
+      +'#tk .dbody{gap:11px;padding:15px}'
+      +'#tk .dl{grid-template-columns:92px minmax(0,1fr);align-items:start}'
+      +'#tk .dl code{word-break:break-all;line-height:1.45}'
+      +'#tk .dhead{padding:15px}#tk .dhead .logo{width:32px;height:32px;flex:0 0 32px}'
+    /* The copy control is a 12px outline glyph in #5f5f68 with no hit area of
+       its own - on a value you are meant to copy, that is the one thing on the
+       row you cannot see. */
+      +'#tk .ic{padding:2px 6px;margin-left:4px;color:var(--d);vertical-align:-3px}'
+      +'#tk .ic:hover,#tk .ic:focus-visible{color:var(--a)}';
     doc.head.appendChild(st);
+    /* Name the score column. The h2 is static markup, present before load(). */
+    try{
+      const h2=doc.querySelector('h2');
+      if(h2&&!h2.querySelector('.zcol')){
+        const s=doc.createElement('span');s.className='zcol';s.textContent='support';
+        h2.appendChild(s);
+      }
+    }catch(e){}
     /* zFi's wallet button already sits on this page, so the framed document's
        own connect is a duplicate control for the same wallet. Hide it and let
        the site-level one own connection. */
