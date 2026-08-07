@@ -51,7 +51,57 @@ second, which collapses conviction into a plain token-weighted vote of current
 holdings. That is inside the DAO's stated trust model, not a defect — but it means the
 guarantee is governance, not mechanism.
 
-## Artifact matrix
+## LIVE ADDRESSES
+
+These are what is actually on mainnet. Read this table, not the plan below it.
+
+| Contract | Live address | Matches plan? |
+| --- | --- | --- |
+| ZorgPageStyle | `0x000000507b8F2DEE4893269De45652B960061941` | yes |
+| ZorgReceiptArt | `0x0000007f4342bdddA2A951b9e181B42328DD1eD9` | yes |
+| ZorgConvictionRenderer | `0x000000115b1b95b9e04128a2bcd9ed9d24ab141c` | **no** — re-mined |
+| ZorgConviction (governor) | `0x0000006D936bA3653b8854490E16E782cd32a9a8` | **no** — re-mined |
+| ZorgTokenListLens | `0x000000B73c767CA6F490a666E88D43579579351b` | **no** — see below |
+| TokenList (pre-existing) | `0x0000006013dF75A31678B786061C2B54bf531524` | n/a |
+| zOrg shares | `0x00a6bA94BBb5474725515De88fE04F854f2dCb12` | n/a |
+| zOrgz | `0x00000000008835ceF3E0D2333695f288Ee6b63A6` | n/a |
+| zOrg Moloch | `0x5E58BA0e06ED0F5558f83bE732a4b899a674053E` | n/a |
+
+Verify any of these from the chain rather than from this file: the governor exposes
+`renderer()`, `receiptArt()`, `tokenList()`, `shares()` and `zorgz()`, and the renderer
+exposes `style()`. That is how this table was built after the plan below went stale.
+
+### The lens was deployed separately, and why its salt changed
+
+The governor did not land at its planned address, and the lens bakes the governor
+address into its creation code — so the mined salt `0x…0028c887` was dead the moment
+the governor moved, and `0x0000008d3e96…` has zero bytes of code. Nothing depended on
+the lens, so this went unnoticed until someone tried to read a ranking from it.
+
+Re-mined and deployed 2026-08-07 against the LIVE constructor args:
+
+| field | value |
+| --- | --- |
+| address | `0x000000B73c767CA6F490a666E88D43579579351b` |
+| salt | `0xfd48f3150f9ffc784abe2c9f1607a9d799050cff7d90bab760e189037577ac88` |
+| initcode hash | `0xfd284fbaf5181e96f7820c8f439d3fe6a7c10c1e61a01aa51ec40312b9b34a6d` |
+| args | `tokenList=0x0000006013dF75A31678B786061C2B54bf531524`, `conviction=0x0000006D936bA3653b8854490E16E782cd32a9a8` |
+| tx | `0x8daf2fe81aa7e8bc996ef476a6474faa3fe3c45129b02d45e2a0f85a67345975` (block 25,700,118, gas 1,334,629) |
+| runtime | 5,893 B — identical to the planned figure, so the source has not drifted |
+
+`SafeSummoner.create2Deploy` does NOT mix `msg.sender` into the salt — verified by
+comparing `predictCreate2` against a plain CREATE2 computation for the same salt. So
+mining with `cast create2 --deployer 0x00000000004473e1f31C8266612e7FD5504e6f2a` is
+correct and portable.
+
+Post-deploy check: `lens.rankedIds()` currently returns exactly the base list order.
+That is the RIGHT answer and not a no-op — the three allocated listings (ETH, WETH,
+wstETH) already occupy the first three base positions, and every other entry scores
+zero, so ties preserve source order. It confirms pass-through and tie-stability on
+live data but does NOT exercise reordering. To see the lens actually reorder, allocate
+to a listing further down the list.
+
+## Artifact matrix (HISTORICAL PLAN — superseded, see LIVE ADDRESSES above)
 
 | Contract | Status | Expected address | Salt | Initcode hash | Creation | Runtime |
 | --- | --- | --- | --- | --- | ---: | ---: |
@@ -67,11 +117,16 @@ isolated and full `forge build` — because `via_ir` output depends on which fil
 a compilation unit, and `TokenList` was re-mined twice over that. These are identical
 in both: no sensitivity.
 
-## DEPLOY IN THIS ORDER
+## DEPLOY IN THIS ORDER (historical — this is what was planned, not what happened)
 
 Each address is baked into the next contract's creation code, so a contract landing
 anywhere unexpected invalidates every salt below it. Confirm `code.length > 0` before
 each step.
+
+That warning turned out to be the story of this deploy: steps 3 and 4 landed
+elsewhere, which silently invalidated step 5's salt and left the lens undeployed for
+a week. If a contract moves, RE-MINE EVERYTHING BELOW IT and correct this file in the
+same change — a stale address table is worse than none, because it reads as verified.
 
 ```
 1. ZorgPageStyle           -> 0x000000507b8F2DEE4893269De45652B960061941
