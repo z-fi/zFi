@@ -93,7 +93,6 @@
        background-size:200% 100%;animation:wshim 1.4s linear infinite;border-radius:6px}
   .wfind{animation:wpulse 1.6s ease-in-out infinite}
   @media(prefers-reduced-motion:reduce){.wskel,.wfind{animation:none}}
-  .wstate .wskel{aspect-ratio:1;width:100%}
   .wlocks{margin:5px 0 0;padding-left:20px}
   .wlocks li{margin:4px 0}
   .wnote{font-size:12px;color:var(--fg-muted);border-left:2px solid var(--border);padding-left:11px;margin:0}
@@ -108,20 +107,53 @@
   .wfoot2 button:disabled{opacity:.45;cursor:not-allowed}
   /* Capped: at full dialog width the three panels ran to 150px each and pushed
      every field the reader came here to fill below the fold. */
-  .wstates{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:9px;align-items:center;
-       margin:0 auto;max-width:340px}
-  .wstate{display:grid;gap:7px;justify-items:center;margin:0}
-  .wstate img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
-  .wstate figcaption{font:italic 14px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
-  .wstate .wgold{color:#d9b34a}
-  .wsep{color:var(--fg-muted);font-size:15px;line-height:1;padding-bottom:18px}
+  /* THE PREVIEW. One panel, not the old three-state strip: it shows the receipt
+     as it would be under the settings currently chosen, so the drawers have
+     something to move. Art left, the numbers they change right. */
+  .wprev{display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:start;
+       border:1px solid var(--border);border-radius:10px;padding:14px}
+  .wpart{display:grid;gap:7px;justify-items:center}
+  .wpart .wskel{aspect-ratio:1;width:100%}
+  .wpart img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
+  .wpempty{aspect-ratio:1;width:100%;display:grid;place-items:center;border:1px dashed var(--border);
+       border-radius:6px;color:var(--fg-muted);font-size:26px}
+  .wpcap{font:italic 13px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
+  .wgold{color:#d9b34a}
+  /* The rate is the number the commitment drawer exists to move. */
+  .wsrate{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+  .wsrate b{font-size:26px;line-height:1;letter-spacing:-.02em}
+  .wsrate span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+  .wsdl{margin:0;display:grid;gap:5px;font-size:12.5px}
+  .wsdl>div{display:flex;gap:8px;justify-content:space-between;align-items:baseline}
+  .wsdl dt{color:var(--fg-muted)}
+  .wsdl dd{margin:0;text-align:right}
+  /* Drawers. A label row that carries the current value, then the track. */
+  .wlab{display:flex;gap:10px;align-items:baseline;justify-content:space-between}
+  .wval{font-size:13px;color:var(--fg);display:flex;align-items:center;gap:6px}
+  .wval input{width:9ch;text-align:right;padding:5px 7px;min-height:0;font:13px inherit;
+       background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:6px}
+  .wmax{padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:transparent;
+       color:var(--fg-muted);font:11px inherit;cursor:pointer}
+  .wmax:hover{color:var(--fg)}
+  .wrow input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;
+       background:transparent;border:0;padding:0;min-height:0;cursor:pointer}
+  .wrow input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--border)}
+  .wrow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;
+       margin-top:-7px;border-radius:50%;background:var(--fg);border:0}
+  .wrow input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--border)}
+  .wrow input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--fg);border:0}
+  .wrow input[type=range]:focus-visible{outline:2px solid var(--fg);outline-offset:4px;border-radius:4px}
+  /* Stop labels under the commitment track, last one emphasised: it is the one
+     that cannot be undone. */
+  .wticks{display:flex;justify-content:space-between;font-size:11px;color:var(--fg-muted);margin-top:-2px}
+  /* Gold marks the irreversible stop, so it belongs to the commitment track only -
+     unscoped it also gilded the zOrg balance, which is just a number. */
+  .wtiers span:last-child{color:#d9b34a}
+  .weth{margin:12px 0 0;font-size:12px;color:var(--fg-muted)}
+  .weth.wshort{color:#e0736d}
   .wart{position:relative;display:block;width:100%}
   /* the receipt inverts the underlying art; this is that same inversion */
   .wart.winv{filter:invert(1)}
-  .wart .wglyph{position:absolute;inset:0;width:100%;height:100%}
-  .warrow{font-size:15px;line-height:1;user-select:none}
-  .wchk{display:flex;gap:9px;align-items:flex-start;font-size:13px}
-  .wchk input{min-height:0;margin-top:3px}
   #wstat{font-size:12.5px;color:var(--fg-muted);padding:0 20px;min-height:18px}
   #boot{display:grid;place-items:center;gap:14px;height:calc(100dvh - 200px);color:var(--fg-muted);font-size:13px}
   #fail{max-width:640px;margin:60px auto;padding:0 18px;color:var(--fg-muted);font-size:14px;line-height:1.6}
@@ -490,8 +522,15 @@ function guard(doc,win){
 const GOV=C, SELS={
   approve:'0x095ea7b3', getApproved:'0x081812fc', allowance:'0xdd62ed3e', balOf:'0x70a08231',
   bondLock:'0xa86e18ca', eternal:'0x2fd4ecb0', zorgz:'0x0c8757f0', shares:'0x03314efa',
-  terms:'0x6bd16840', tiers:'0x322ee5de', ownerOf:'0x6352211e', tokenURI:'0xc87b56dd'
+  terms:'0x6bd16840', tiers:'0x322ee5de', ownerOf:'0x6352211e', tokenURI:'0xc87b56dd',
+  half:'0x7bc90d1c'
 };
+/* eternalize() reverts BadInput below ETERNAL_MIN_ZORG, a hard constant. */
+const ETERNAL_MIN=10000n*10n**18n;
+const AMTSTEPS=1000;                 // drawer resolution, not a zOrg amount
+/* Held back from the ETH the deposit may consume, so the wizard never proposes a
+   bond that leaves nothing to pay for it with. */
+const GAS_BUFFER=2n*10n**15n;   // 0.002 ETH
 const w32=n=>BigInt(n).toString(16).padStart(64,'0');
 const wAddr=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
 const wRead=async(to,data)=>{
@@ -506,6 +545,13 @@ const wUnits=v=>{ v=String(v).trim();
   if(!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(v))throw Error('Enter an amount with up to 18 decimals.');
   const[a,b='']=v.split('.'); return BigInt(a)*10n**18n+BigInt((b+'0'.repeat(18)).slice(0,18)); };
 const wFmt=x=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(Number(x/10n**18n));
+/* Wei -> a short ETH string. The deposit was printed with Number(x)/1e18, which
+   renders 0.01 fine and anything with real precision as a float artefact. */
+const eFmt=w=>{
+  const d=(w/10n**14n).toString().padStart(5,'0');          // 4 decimal places
+  const frac=d.slice(-4).replace(/0+$/,'');
+  return (d.slice(0,-4)||'0')+(frac?'.'+frac:'');
+};
 
 /* The EIP-1193 provider, which is NOT window._walletProvider: wallet.js wraps the
    injected provider in an ethers BrowserProvider and stores the raw one under
@@ -605,29 +651,6 @@ const wEternalArt=img=>{
   if(end<0) return null;
   try{ return p+btoa(s.slice(0,end+2)+WZGLYPH+s.slice(end+2)); }catch(e){ return null; }
 };
-/* The same three panels with the art not yet in them, so the strip occupies its
-   final height from the moment an id is valid. Reading tokenURI is an 11 KB
-   call that may walk several endpoints, and without this the dialog silently
-   grew by ~150px whenever it landed. */
-const wSkel=()=>'<div class="wstates">'
- +['your zOrgz','bonded receipt','eternal'].map((c,i)=>
-     (i?'<span class="wsep" aria-hidden="true">&rarr;</span>':'')
-    +'<figure class="wstate"><span class="wskel"></span><figcaption>'+c+'</figcaption></figure>').join('')
- +'</div>';
-const wStates=img=>{
-  if(!img) return '';   /* art unavailable: show the form rather than a broken strip */
-  const panel=(src,inv,cap,gold)=>
-    '<figure class="wstate"><span class="wart'+(inv?' winv':'')+'">'
-   +'<img alt="" src="'+src+'"></span>'
-   +'<figcaption'+(gold?' class="wgold"':'')+'>'+cap+'</figcaption></figure>';
-  return '<div class="wstates">'
-   +panel(img,0,'your zOrgz',0)
-   +'<span class="wsep" aria-hidden="true">&rarr;</span>'
-   +panel(img,1,'bonded receipt',0)
-   +'<span class="wsep" aria-hidden="true">&rarr;</span>'
-   +panel(wEternalArt(img)||img,1,'eternal',1)
-   +'</div>';
-};
 /* Opportunistic: only one public endpoint we know of serves an unbounded
    eth_getLogs, so treat discovery as a bonus and never block on it. */
 async function discoverZorgz(owner,zorgz){
@@ -708,20 +731,42 @@ async function wizOpen(){
     const me=window._connectedAddress;
     const zorgz=await wRead(GOV,SELS.zorgz).then(r=>'0x'+r.slice(26));
     const shares=await wRead(GOV,SELS.shares).then(r=>'0x'+r.slice(26));
-    const [nftBal,zBal,terms,tier3,alw]=await Promise.all([
+    /* Every tier, not just tier 3. The contract seeds FOUR - 90d/1.10x,
+       180d/1.25x, 365d/1.50x plus the unlocked 1.00x - and the wizard offered
+       two of them, hardcoded. They are DAO-mutable through setLockTier, so the
+       ladder is read rather than written down, and a tier the DAO has retired
+       (exitDelay 0, or a boost outside [BPS, MAX_BOOST_BPS], which _bondZorgz
+       rejects with LockTierUnavailable) simply does not appear. */
+    const [nftBal,zBal,terms,t1,t2,t3,half,ethBal,alw]=await Promise.all([
       wRead(zorgz,SELS.balOf+wAddr(me)), wRead(shares,SELS.balOf+wAddr(me)),
-      wRead(GOV,SELS.terms), wRead(GOV,SELS.tiers+w32(3)),
+      wRead(GOV,SELS.terms),
+      wRead(GOV,SELS.tiers+w32(1)).catch(()=>null),
+      wRead(GOV,SELS.tiers+w32(2)).catch(()=>null),
+      wRead(GOV,SELS.tiers+w32(3)).catch(()=>null),
+      wRead(GOV,SELS.half).catch(()=>null),
+      /* The ETH deposit is fixed at the minimum, so the balance is an
+         affordability check rather than a range to drag. */
+      post(RPCS[0],{jsonrpc:'2.0',id:1,method:'eth_getBalance',params:[me,'latest']}).catch(()=>null),
       /* Read the standing allowance HERE, so the plan can count the confirmations
          the wallet will actually ask for. wizRun already skips an approval it does
          not need, so the block promised "3 confirmations" and then the wallet
          asked for one - the one number in the plan the reader can check. */
       wRead(shares,SELS.allowance+wAddr(me)+wAddr(GOV)).catch(()=>null)
     ]);
+    const tiers=[{tier:0,days:0,boost:10000}];
+    [t1,t2,t3].forEach((r,i)=>{
+      if(!r)return;
+      const days=Number(wWord(r,0))/86400, boost=Number(wWord(r,1));
+      if(days>0 && boost>=10000 && boost<=15000) tiers.push({tier:i+1,days,boost});
+    });
+    tiers.sort((a,b)=>a.days-b.days);
     /* ethBondTerms: (minimumBond, maturity, earlyExitTaxBps, treasuryShareBps).
        The maturity and the tax were being read and thrown away, which is why
        the wizard could not say what "early" means. */
-    WZ={me,zorgz,shares,nft:Number(wWord(nftBal,0)),minEth:wWord(terms,0),boost:Number(wWord(tier3,1)),
-        days:Number(wWord(tier3,0))/86400, zBal:wWord(zBal,0),
+    WZ={me,zorgz,shares,nft:Number(wWord(nftBal,0)),minEth:wWord(terms,0),
+        tiers, top:tiers[tiers.length-1], zBal:wWord(zBal,0),
+        halfDays:half?Number(wWord(half,0))/86400:null,
+        ethBal:ethBal?BigInt(ethBal):null,
         ethDays:Number(wWord(terms,1))/86400, taxBps:Number(wWord(terms,2)),
         alw:alw?wWord(alw,0):null};
     if(wWord(nftBal,0)===0n){
@@ -730,22 +775,37 @@ async function wizOpen(){
       $('wizgo').textContent='Get a zOrgz'; $('wizgo').onclick=()=>window.open('https://opensea.io/collection/zorgz','_blank');
       return;
     }
+    /* The stops on the commitment drawer: every live tier, then PERMANENT at the
+       terminus. Putting eternal at the far end of the same axis is what makes the
+       ordering hazard unexpressable - eternalize never touches receiptLocks and
+       selectLockTier reverts PermanentBond afterwards, so a bond made permanent
+       while unlocked is stuck at 1.00x forever. Dragging past the longest lock to
+       reach permanent means you have already passed through the best rate. */
+    /* Whole zOrg; the drawer never needs sub-unit precision, the number field does. */
+    const zMax=WZ.zBal/10n**18n;
+    const stops=WZ.tiers.concat([{tier:WZ.top.tier,days:WZ.top.days,boost:WZ.top.boost,eternal:true}]);
+    WZ.stops=stops;
+    const dflt=stops.length-2;                     // the longest lock, not permanent
     body.innerHTML=
-      '<div id="wzstrip"></div>'
+      '<div class="wprev" id="wzprev"></div>'
      +'<div class="wrow"><label>Which zOrgz to escrow'
      +'<span id="wzfind" class="wfind"> — looking through your wallet…</span></label>'
      +'<input id="wzid" inputmode="numeric" placeholder="zOrgz token id"></div>'
-     +'<div class="wrow"><label>How much zOrg to bond (you hold '+wFmt(WZ.zBal)+')</label>'
-     +'<input id="wzamt" inputmode="decimal" value="10000"></div>'
-     +'<div class="wrow"><label>How long to commit it</label><select id="wztier">'
-     +'<option value="3">Lock for '+WZ.days+' days &mdash; '+(WZ.boost/10000).toFixed(2)+'&times; support</option>'
-     +'<option value="0">Stay free to withdraw &mdash; 1.00&times; support</option></select></div>'
-     +'<label class="wchk"><input type="checkbox" id="wzet"><span>Make it permanent. '
-     +'The zOrgz and the zOrg are never returned, and the rate you pick above is kept forever.'
-     +'<span id="wzethint" class="whint"></span></span></label>'
-     +'<div class="wplan" id="wzplan"></div>'
-     +'<p class="wnote">Pick the lock now, not later: a bond made permanent while unlocked '
-     +'is stuck at 1.00&times; and can never be raised.</p>';
+     +'<div class="wrow"><div class="wlab"><label for="wzamt">How much zOrg to bond</label>'
+     +'<span class="wval"><input id="wzamt" inputmode="decimal" value="10000">'
+     +'<button type="button" id="wzmax" class="wmax">max</button></span></div>'
+     +'<input type="range" id="wzamtr" min="0" max="'+AMTSTEPS+'" step="1" value="0">'
+     /* Two ticks only. A midpoint label would have to sit at 50% while the value
+        it names sits at 18% of a cubed track - a tick that lies is worse than no
+        tick, and the permanent stop already states the floor where it applies. */
+     +'<div class="wticks"><span>0</span><span>'+wFmt(WZ.zBal)+'</span></div>'
+     +'<p class="whint">You hold '+wFmt(WZ.zBal)+' zOrg. This is the only thing that buys support.</p></div>'
+     +'<div class="wrow"><div class="wlab"><label for="wztier">How long to commit it</label>'
+     +'<span class="wval" id="wztlab"></span></div>'
+     +'<input type="range" id="wztier" min="0" max="'+(stops.length-1)+'" step="1" value="'+dflt+'">'
+     +'<div class="wticks wtiers">'+stops.map(s=>'<span>'+(s.eternal?'forever':s.days?s.days+'d':'none')+'</span>').join('')+'</div>'
+     +'<p class="whint" id="wzthint"></p></div>'
+     +'<div class="wplan" id="wzplan"></div>';
     /* id -> is the governor already approved for it. Cached because the field is
        re-read on every keystroke and this must not become a read per character. */
     const APPRC={};
@@ -758,93 +818,163 @@ async function wizOpen(){
       APPRC[id] = !!r && '0x'+r.slice(26).toLowerCase()===GOV.toLowerCase();
       if($('wzplan')) plan();
     };
-    const plan=()=>{
-      const amt=$('wzamt').value||'0', et=$('wzet').checked, t=$('wztier').value;
+    /* One render for the whole dialog. The preview, the drawer labels and the
+       commitment block are all the same function of (id, amount, stop), so they
+       are computed together and cannot disagree with each other. */
+    function plan(){
+      const amt=$('wzamt').value||'0';
       let ok=true, amtW=0n; try{amtW=wUnits(amt)}catch(e){ok=false}
-      $('wzet').disabled = amtW < 10000n*10n**18n;
-      if($('wzet').disabled) $('wzet').checked=false;
-      /* A checkbox that will not tick and does not say why is a dead control. */
-      $('wzethint').textContent = $('wzet').disabled ? ' Needs at least 10,000 zOrg.' : '';
-      const id=($('wzid').value||'').trim();
-      /* undefined = not looked up yet, so say "checking" rather than asserting a
-         confirmation the wallet may never ask for. */
-      const nftOk=/^\d+$/.test(id)?APPRC[id]:undefined;
-      const zOk=ok&&amtW>0n&&WZ.alw!==null&&WZ.alw>=amtW;
-      const steps=[];
-      if(nftOk!==true) steps.push('Approve the zOrgz for escrow'+(nftOk===undefined?' (checking…)':''));
-      if(!zOk) steps.push('Approve '+(ok?wFmt(amtW):'0')+' zOrg');
-      steps.push('Bond at '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x for '+WZ.days+' days':'1.00x, no lock')
-        +' with '+(Number(WZ.minEth)/1e18)+' ETH');
-      if(et&&!$('wzet').disabled) steps.push('Eternalize: permanent, keeps the '+(t==='3'?(WZ.boost/10000).toFixed(2)+'x':'1.00x')+' rate');
-      const bps=BigInt(t==='3'?WZ.boost:10000), eff=amtW*bps/10000n;
-      /* TWO clocks, and conflating them is the easiest way to be surprised by
-         this contract: the ETH maturity decides whether an exit is TAXED, the
-         lock tier decides whether it is PERMITTED AT ALL. A tier-3 bond stays
-         locked long after its ETH has matured. Spell both out, with dates. */
+      const id=($('wzid').value||'').trim(), hasId=/^\d+$/.test(id);
+      const si=Math.min(WZ.stops.length-1,Math.max(0,Number($('wztier').value)||0));
+      const stop=WZ.stops[si], et=!!stop.eternal;
+      /* Permanent is the only stop with a floor under it, and the floor is on the
+         AMOUNT, not the tier: eternalize reverts BadInput below ETERNAL_MIN_ZORG.
+         Refuse the stop rather than let the last call of four revert. */
+      const etShort = et && amtW < ETERNAL_MIN;
+      const bps=BigInt(stop.boost), eff=amtW*bps/10000n;
+      const rate=(stop.boost/10000).toFixed(2);
       const when=d=>new Date(Date.now()+d*86400000)
         .toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
-      const what=(ok&&amtW>0n?wFmt(amtW)+' zOrg':'your zOrg')+(/^\d+$/.test(id)?' and zOrgz #'+id:' and the zOrgz');
-      const locks = et&&!$('wzet').disabled
+
+      /* --- the drawers describe themselves ------------------------------- */
+      $('wztlab').textContent = et ? 'permanent' : stop.days ? stop.days+' days' : 'no lock';
+      $('wzthint').innerHTML = et
+        ? (etShort
+            ? '<b>Needs at least '+wFmt(ETERNAL_MIN)+' zOrg.</b> Raise the amount above, or step back one stop.'
+            : 'Never redeemable, and it keeps the <b>'+rate+'\u00d7</b> rate of the '+stop.days
+              +'-day lock forever. This is the last stop for a reason: made permanent from '
+              +'<em>no lock</em> the rate would be frozen at 1.00\u00d7 with no way to raise it.')
+        : stop.days
+            ? 'No early exit at any price until '+when(stop.days)+'.'
+            : 'Withdrawable whenever you like, at the weakest rate.';
+
+      /* --- the preview ---------------------------------------------------- */
+      wzPaint(et&&!etShort);
+      const st=$('wzstats');
+      if(st) st.innerHTML=
+         '<div class="wsrate"><b>'+rate+'\u00d7</b><span>support rate</span></div>'
+        +'<dl class="wsdl">'
+        +'<div><dt>Directs</dt><dd><b>'+(ok?wFmt(eff):'\u2014')+'</b> now</dd></div>'
+        +'<div><dt>Rises to</dt><dd><b>'+(ok?wFmt(eff*2n):'\u2014')+'</b>'
+          +(WZ.halfDays?' \u00b7 half of the way in '+Math.round(WZ.halfDays)+' days':'')+'</dd></div>'
+        +'<div><dt>zOrgz</dt><dd>'+(hasId?'#'+id:'not chosen yet')+'</dd></div>'
+        +'<div><dt>Redeemable</dt><dd>'+(et&&!etShort?'<b>never</b>':stop.days?'from '+when(stop.days):'any time')+'</dd></div>'
+        +'</dl>';
+
+      /* --- what it costs -------------------------------------------------- */
+      const what=(ok&&amtW>0n?wFmt(amtW)+' zOrg':'your zOrg')+(hasId?' and zOrgz #'+id:' and the zOrgz');
+      const locks = et&&!etShort
         ? '<li><b>'+what+': never returned.</b> Eternal bonds cannot be redeemed.</li>'
-          +'<li><b>'+(Number(WZ.minEth)/1e18)+' ETH: given to the DAO treasury</b>, not returned.</li>'
-        : (t==='3'
-            ? '<li><b>'+what+': locked until '+when(WZ.days)+'</b> ('+WZ.days+' days). No early exit at any price.</li>'
+          +'<li><b>'+eFmt(WZ.minEth)+' ETH: given to the DAO treasury</b>, not returned.</li>'
+        : (stop.days
+            ? '<li><b>'+what+': locked until '+when(stop.days)+'</b> ('+stop.days+' days). No early exit at any price.</li>'
             : '<li><b>'+what+': withdrawable any time.</b></li>')
-          +'<li><b>'+(Number(WZ.minEth)/1e18)+' ETH: returned in full from '+when(WZ.ethDays)+'</b> ('
+          +'<li><b>'+eFmt(WZ.minEth)+' ETH: returned in full from '+when(WZ.ethDays)+'</b> ('
           +WZ.ethDays+' days). Leaving before then forfeits '+(WZ.taxBps/100)+'%'
-          +(t==='3'?' &mdash; and the lock above outlasts this date.':'.')+'</li>';
-      /* Order matters here. The old block opened with the wallet mechanics -
-         "3 confirmations", then the numbered approvals - so the two things the
-         reader is actually deciding (what this buys, what it costs to leave)
-         sat in the middle of a wall of same-sized grey text. What you get, then
-         what you give up, then how it is signed. */
+          +(stop.days?' \u2014 and the lock above outlasts this date.':'.')+'</li>';
+
+      /* undefined = not looked up yet, so say "checking" rather than asserting a
+         confirmation the wallet may never ask for. */
+      const nftOk=hasId?APPRC[id]:undefined;
+      const zOk=ok&&amtW>0n&&WZ.alw!==null&&WZ.alw>=amtW;
+      const steps=[];
+      if(nftOk!==true) steps.push('Approve the zOrgz for escrow'+(nftOk===undefined?' (checking\u2026)':''));
+      if(!zOk) steps.push('Approve '+(ok?wFmt(amtW):'0')+' zOrg');
+      steps.push('Bond at '+rate+'\u00d7'+(stop.days?' for '+stop.days+' days':', no lock')
+        +' with '+eFmt(WZ.minEth)+' ETH');
+      if(et&&!etShort) steps.push('Eternalize: permanent, keeps the '+rate+'\u00d7 rate');
+
+      /* The ETH deposit is a fixed cost, so it is stated once as a cost rather
+         than offered as a range. Dragging it would be theatre: capacity is
+         bondedWeight x boostBps and loyalty accrues on bondedWeight, so every
+         wei above the minimum buys no support and no dividend - it is refundable
+         at maturity, taxed on an early exit, and donated outright if the bond is
+         made permanent. */
+      const shortEth = WZ.ethBal!==null && WZ.ethBal < WZ.minEth+GAS_BUFFER;
       $('wzplan').innerHTML=
          (ok&&amtW>0n?'<p class="wgain">Directs <b>'+wFmt(eff)+'</b> of support'
-          +(t==='3'?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)
-          +'</b> over ~3 weeks as conviction accrues.</p>':'')
+          +(stop.boost>10000?' from '+wFmt(amtW)+' zOrg':'')+', rising toward <b>'+wFmt(eff*2n)
+          +'</b> as conviction accrues.</p>':'')
         +'<p class="wcommit">You are committing</p><ul class="wlocks">'+locks+'</ul>'
+        +'<p class="weth'+(shortEth?' wshort':'')+'">'+eFmt(WZ.minEth)+' ETH deposit \u00b7 the protocol minimum, and the whole of it'
+          +(WZ.ethBal!==null
+            ? ' \u2014 you hold '+eFmt(WZ.ethBal)+' ETH'+(shortEth?', not enough to cover it and gas':'')
+            : '')+'</p>'
         +'<p class="wcommit">'+(window._walletSendCalls||steps.length===1
             ?'One confirmation':steps.length+' confirmations')+'</p>'
         +'<ol>'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>';
-      /* The primary action used to be live on an empty form: pressing Bond with
-         no zOrgz chosen got as far as wizRun before throwing "Enter a whole
-         zOrgz id" into the status line. Say what is missing instead of offering
-         an action that cannot work. */
-      const hasId=/^\d+$/.test(id);
-      $('wizgo').disabled = !hasId || !ok || amtW===0n || amtW>WZ.zBal;
+
+      /* Say what is missing instead of offering an action that cannot work. */
+      $('wizgo').disabled = !hasId || !ok || amtW===0n || amtW>WZ.zBal || etShort || shortEth;
       $('wstat').textContent =
           !hasId    ? 'Choose which zOrgz to escrow.'
         : !ok       ? 'Enter a zOrg amount with up to 18 decimals.'
         : amtW===0n ? 'Bond a positive amount of zOrg.'
-        : amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.' : '';
+        : amtW>WZ.zBal ? 'You hold '+wFmt(WZ.zBal)+' zOrg. Reduce the amount.'
+        : etShort   ? 'Permanent needs at least '+wFmt(ETERNAL_MIN)+' zOrg.'
+        : shortEth  ? 'You need '+eFmt(WZ.minEth+GAS_BUFFER)+' ETH to cover the deposit and gas.' : '';
+    }
+    /* Number field and drawer are two views of one value, and the drawer is NOT
+       linear. A linear track across a 1,589,036 balance puts 10,000 and 25,000 on
+       the same pixel at the far left - every amount a person actually types lives
+       in the first half a percent of the range. Cubing the position spends most of
+       the track on the small end while still reaching the balance at the top. */
+    const tToAmt=t=>BigInt(Math.floor(Number(zMax)*Math.pow(t/AMTSTEPS,3)));
+    const amtToT=v=>zMax===0n?0
+      :Math.round(AMTSTEPS*Math.cbrt(Math.max(0,Math.min(1,Number(v)/Number(zMax)))));
+    const syncAmt=src=>{
+      const a=$('wzamt'), r=$('wzamtr');
+      if(src==='r') a.value=String(tToAmt(Number(r.value)));
+      else { const n=Math.floor(Number(a.value)); r.value=String(amtToT(Number.isFinite(n)?Math.max(0,n):0)); }
+      plan();
     };
-    /* wzid included: the commitment block names the token by id, so it has to
-       update as the field is typed, not only once discovery replaces it. */
-    ['wzamt','wztier'].forEach(k=>$(k).oninput=plan);
-    $('wzet').onchange=plan; $('wzamt').onchange=plan; $('wztier').onchange=plan; plan();
-    /* Paint the before/after strip from the SELECTED token, so it shows the art
-       the user is actually about to escrow rather than a stand-in. Best effort
-       throughout: unreadable art collapses the strip and never blocks bonding.
-       `seq` guards against a slow fetch for an abandoned id landing last and
-       overwriting the art for the one now selected. */
-    let artSeq=0;
-    const paintArt=async()=>{
+    $('wzamtr').oninput=()=>syncAmt('r');
+    $('wzmax').onclick=()=>{ $('wzamt').value=String(WZ.zBal/10n**18n); syncAmt('a'); };
+    $('wztier').oninput=plan;
+    $('wzamt').oninput=()=>syncAmt('a'); $('wzamt').onchange=()=>syncAmt('a');
+    syncAmt('a');                                   // seed the track from the default
+    /* The live preview. ONE panel showing the receipt as it would be under the
+       settings currently selected, rather than the old three-panel before/after
+       strip - the strip showed every state at once, including the two you had not
+       chosen, so nothing on it responded to the drawers.
+       The mutation is truthful: the receipt inverts the underlying art, and an
+       eternal receipt additionally carries the glyph ZorgReceiptArt splices in.
+       Both are reproduced here from the token's own art, so this is what the NFT
+       will actually look like rather than an impression of it. */
+    let artSeq=0, artImg=null, artId='';
+    function wzPaint(eternal){
+      const box=$('wzprev'); if(!box)return;
+      const id=($('wzid').value||'').trim();
+      if(!/^\d+$/.test(id)){
+        box.innerHTML='<div class="wpart wpempty">?</div><div class="wpstats" id="wzstats"></div>';
+        return;
+      }
+      const art = artImg&&artId===id
+        ? '<span class="wart winv">'
+          +'<img alt="" src="'+((eternal&&wEternalArt(artImg))||artImg)+'"></span>'
+        : '<span class="wskel"></span>';
+      box.innerHTML='<div class="wpart">'+art
+        +'<span class="wpcap'+(eternal?' wgold':'')+'">'+(eternal?'eternal receipt':'bonded receipt')+'</span></div>'
+        +'<div class="wpstats" id="wzstats"></div>';
+    }
+    /* Fetching the art is separate from painting it, so dragging a drawer re-paints
+       instantly off the cached image instead of touching the network. `seq` guards
+       against a slow fetch for an abandoned id landing last. */
+    async function loadArt(){
       const id=($('wzid').value||'').trim(), n=++artSeq;
-      const strip=$('wzstrip'); if(!strip)return;
-      if(!/^\d+$/.test(id)){ strip.innerHTML=''; return; }
-      strip.innerHTML=wSkel();
+      if(!/^\d+$/.test(id)){ artImg=null; artId=''; plan(); return; }
+      if(artId===id && artImg) return;
+      artImg=null; artId=id; plan();                  // skeleton while it lands
       const img=await wArt(zorgz,id).catch(()=>null);
-      if(n!==artSeq || !$('wzstrip')) return;
-      /* Say so rather than rendering nothing: a strip that silently disappears
-         is indistinguishable from one that was never meant to be there. */
-      $('wzstrip').innerHTML = img ? wStates(img)
-        : '<p class="whint">Could not load the art for #'+id+' right now. Bonding is unaffected.</p>';
-    };
+      if(n!==artSeq)return;
+      artImg=img; artId=id;
+      if($('wzprev')) plan();
+    }
     /* One handler for the id field wherever it currently lives - input, picker, or
        the input the picker swaps back in. It used to be re-spelled at each of those
        three sites, and the approval probe would have been the fourth thing to keep
        in step. */
-    const onId=()=>{plan();paintArt();checkAppr()};
+    const onId=()=>{plan();loadArt();checkAppr()};
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
     /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
        slow or refusing endpoint costs nothing but a line of hint text. */
@@ -888,9 +1018,17 @@ async function wizOpen(){
 async function wizRun(){
   const go=$('wizgo'); go.disabled=true;
   try{
-    const id=$('wzid').value.trim(), amt=wUnits($('wzamt').value), tier=$('wztier').value;
+    const id=$('wzid').value.trim(), amt=wUnits($('wzamt').value);
     if(id==='__other')throw Error('Type the zOrgz id you want to bond.');
     if(!/^[0-9]+$/.test(id))throw Error('Enter a whole zOrgz id.');
+    /* The drawer index is not the tier. Permanent rides on the LONGEST lock -
+       that is the whole point of putting it at the terminus - so the tier sent to
+       bondZorgz comes from the stop, and eternalize is appended rather than
+       replacing anything. */
+    const stop=WZ.stops[Math.min(WZ.stops.length-1,Math.max(0,Number($('wztier').value)||0))];
+    const tier=stop.tier;
+    if(stop.eternal&&amt<ETERNAL_MIN)
+      throw Error('Permanent needs at least '+wFmt(ETERNAL_MIN)+' zOrg.');
     const calls=[];
     const appr=await wRead(WZ.zorgz,SELS.getApproved+w32(id)).catch(()=>null);
     if(!appr || '0x'+appr.slice(26).toLowerCase()!==GOV.toLowerCase())
@@ -899,7 +1037,7 @@ async function wizRun(){
     if(!alw || wWord(alw,0)<amt)
       calls.push({to:WZ.shares,data:SELS.approve+wAddr(GOV)+w32(amt),value:'0x0'});
     calls.push({to:GOV,data:SELS.bondLock+w32(id)+w32(amt)+w32(tier),value:'0x'+WZ.minEth.toString(16)});
-    if($('wzet').checked && !$('wzet').disabled)
+    if(stop.eternal)
       calls.push({to:GOV,data:SELS.eternal+w32(id),value:'0x0'});
 
     const p=rpcProvider();
