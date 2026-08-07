@@ -2303,7 +2303,6 @@ body.modal-open { overflow: hidden; }
           </div>
         </form>
 
-        <div id="statusMessage"></div>
         </div>
       </div>
     </section>
@@ -2827,6 +2826,19 @@ body.modal-open { overflow: hidden; }
           .replace(/'/g, '&#039;');
       }
 
+      // Symbols and names come off chain, where anyone can put anything in them, and they
+      // are printed into HTML, into handler attributes and into proposal descriptions that
+      // get written back on chain. Escaping suits the first two and corrupts the third, so
+      // the characters that carry meaning in markup are dropped at the point the value is
+      // read instead. A symbol has no legitimate use for them.
+      function safeSymbol(value) {
+        return String(value ?? '')
+          .replace(/[<>"'&\\`]/g, '')
+          .replace(/[\u0000-\u001f\u007f]/g, '')
+          .trim()
+          .slice(0, 32);
+      }
+
       // escapeHtml is not enough inside onclick="f('...')": the browser HTML-decodes the
       // attribute before JavaScript parses it, so an escaped quote (&#039;) turns back
       // into a real one and closes the string. Escaping the ampersand first is what stops
@@ -3014,7 +3026,7 @@ body.modal-open { overflow: hidden; }
       window.addEventListener('offline', () => {
         isOnline = false;
         logger.warn('Network connection lost');
-        alert('Network connection lost. Please check your internet connection.');
+        showStatus('Network connection lost — reads will fail until it is back.', true);
       });
 
 
@@ -3122,7 +3134,7 @@ body.modal-open { overflow: hidden; }
       function daoImagePicked(input) {
         const file = input.files[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) { alert('Too large (5 MB max)'); input.value = ''; return; }
+        if (file.size > 5 * 1024 * 1024) { showStatus('Logo is too large (5 MB max)', true); input.value = ''; return; }
         _daoImageFile = file;
         _daoImageCID = null;
         const btn = input.previousElementSibling;
@@ -7117,7 +7129,7 @@ body.modal-open { overflow: hidden; }
                   // Resolve decimals and symbol from the actual token contract
                   // Never trust chat-derived values for calldata (decimal poisoning defense)
                   let resolvedDecimals = parseInt(chatDecimals);
-                  let resolvedSymbol = escapeHtml(chatSymbol);
+                  let resolvedSymbol = safeSymbol(chatSymbol);
                   try {
                     const saleTokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, _walletProvider || await withRpcFallback(p => p));
                     const [onChainDecimals, onChainSymbol] = await Promise.all([
@@ -7125,7 +7137,7 @@ body.modal-open { overflow: hidden; }
                       saleTokenContract.symbol().catch(() => chatSymbol)
                     ]);
                     resolvedDecimals = Number(onChainDecimals);
-                    resolvedSymbol = escapeHtml(String(onChainSymbol));
+                    resolvedSymbol = safeSymbol(onChainSymbol);
                   } catch (e) {
                     logger.warn('Failed to resolve SALE tag token on-chain, using chat values:', e);
                   }
@@ -7314,7 +7326,7 @@ body.modal-open { overflow: hidden; }
           // Render internal sales first
           for (const sale of activeSales) {
             const tokenType = sale.isLoot ? 'LOOT' : 'SHARES';
-            const tokenSymbol = sale.isLoot ? `${currentDAO.dao.meta.symbol}-LOOT` : currentDAO.dao.meta.symbol;
+            const tokenSymbol = safeSymbol(currentDAO.dao.meta.symbol) + (sale.isLoot ? '-LOOT' : '');
             // pricePerShare is a simple integer ratio (token-wei per share-wei)
             const priceRatio = sale.pricePerShare.toString();
             const priceFormatted = `${priceRatio}:1`;
@@ -7383,7 +7395,7 @@ body.modal-open { overflow: hidden; }
           // Render DAICO sales
           for (const sale of activeDaicoSales) {
             const tokenType = sale.isUnverifiedERC20 ? `UNVERIFIED ERC20 (${sale.forTkn.slice(0, 10)}…)` : (sale.isLoot ? 'LOOT' : 'SHARES');
-            const tokenSymbol = sale.isUnverifiedERC20 ? sale.forTkn.slice(0, 10) + '…' : (sale.isLoot ? `${currentDAO.dao.meta.symbol}-LOOT` : currentDAO.dao.meta.symbol);
+            const tokenSymbol = sale.isUnverifiedERC20 ? sale.forTkn.slice(0, 10) + '…' : safeSymbol(currentDAO.dao.meta.symbol) + (sale.isLoot ? '-LOOT' : '');
 
             // Format the ratio: tribAmt of payment token -> forAmt of shares/loot
             // Example: 1 ETH for 1000 shares = "0.001 ETH per token" or "1 ETH : 1000 tokens"
@@ -7756,7 +7768,7 @@ body.modal-open { overflow: hidden; }
         try {
           return await withRpcFallback(async (rpcProvider) => {
             const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, rpcProvider);
-            return await tokenContract.symbol();
+            return safeSymbol(await tokenContract.symbol());
           });
         } catch (error) {
           return tokenAddress.slice(0, 6);
@@ -8399,7 +8411,7 @@ body.modal-open { overflow: hidden; }
 
         const dao = currentDAO.dao;
         const tokenAddress = tokenType === 'shares' ? dao.meta.sharesToken : dao.meta.lootToken;
-        const tokenSymbol = tokenType === 'shares' ? dao.meta.symbol : `${dao.meta.symbol}-LOOT`;
+        const tokenSymbol = safeSymbol(dao.meta.symbol) + (tokenType === 'shares' ? '' : '-LOOT');
 
         if (!tokenAddress) {
           showStatus(`${tokenType} token address not found`, true);
@@ -9871,7 +9883,7 @@ body.modal-open { overflow: hidden; }
         const content = document.getElementById('purchaseModalContent');
 
         const tokenType = isLoot ? 'LOOT' : 'SHARES';
-        const daoSymbol = currentDAO.dao.meta.symbol;
+        const daoSymbol = safeSymbol(currentDAO.dao.meta.symbol);
         const targetSymbol = isLoot ? `${daoSymbol}-LOOT` : daoSymbol;
 
         // Show loading state
@@ -10071,7 +10083,7 @@ body.modal-open { overflow: hidden; }
         const content = document.getElementById('purchaseModalContent');
 
         const tokenType = isLoot ? 'LOOT' : 'SHARES';
-        const daoSymbol = currentDAO.dao.meta.symbol;
+        const daoSymbol = safeSymbol(currentDAO.dao.meta.symbol);
         const targetSymbol = isLoot ? `${daoSymbol}-LOOT` : daoSymbol;
 
         // Show loading state
@@ -10492,7 +10504,7 @@ body.modal-open { overflow: hidden; }
 
         const daoAddress = currentDAO.dao.dao;
         const tokenType = isLoot ? 'LOOT' : 'SHARES';
-        const tokenSymbol = isLoot ? `${currentDAO.dao.meta.symbol}-LOOT` : currentDAO.dao.meta.symbol;
+        const tokenSymbol = safeSymbol(currentDAO.dao.meta.symbol) + (isLoot ? '-LOOT' : '');
 
         // Calculate current price per token
         const tribAmtFormatted = parseFloat(ethers.formatUnits(currentTribAmt, tribTknDecimals));
@@ -10752,7 +10764,7 @@ body.modal-open { overflow: hidden; }
 
         const sharesAddr = currentDAO.dao.shares;
         const lootAddr = currentDAO.dao.loot;
-        const daoSymbol = currentDAO.dao.meta.symbol;
+        const daoSymbol = safeSymbol(currentDAO.dao.meta.symbol);
 
         helperDiv.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -11032,7 +11044,7 @@ body.modal-open { overflow: hidden; }
           }
         }, 150);
 
-        const daoSymbol = currentDAO.dao.meta.symbol;
+        const daoSymbol = safeSymbol(currentDAO.dao.meta.symbol);
 
         helperDiv.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -11134,7 +11146,7 @@ body.modal-open { overflow: hidden; }
         const customFields = document.getElementById('customSaleFields');
         const previewDiv = document.getElementById('internalSalePreview');
         const tokenType = document.getElementById('internalSaleTokenType')?.value || 'shares';
-        const daoSymbol = currentDAO?.dao?.meta?.symbol || 'TOKEN';
+        const daoSymbol = safeSymbol(currentDAO?.dao?.meta?.symbol) || 'TOKEN';
         const tokenSymbol = tokenType === 'loot' ? `${daoSymbol}-LOOT` : daoSymbol;
 
         if (!descriptionDiv) return;
@@ -11197,7 +11209,7 @@ body.modal-open { overflow: hidden; }
             // Update preview
             const previewDiv = document.getElementById('internalSalePreview');
             const tokenType = document.getElementById('internalSaleTokenType')?.value || 'shares';
-            const daoSymbol = currentDAO?.dao?.meta?.symbol || 'TOKEN';
+            const daoSymbol = safeSymbol(currentDAO?.dao?.meta?.symbol) || 'TOKEN';
             const tokenSymbol = tokenType === 'loot' ? `${daoSymbol}-LOOT` : daoSymbol;
             if (previewDiv && document.getElementById('internalSaleType')?.value !== 'custom') {
               previewDiv.innerHTML = `
@@ -11222,7 +11234,7 @@ body.modal-open { overflow: hidden; }
           const tokenType = document.getElementById('internalSaleTokenType').value;
           const status = document.getElementById('internalSaleStatus').value;
           const isLoot = tokenType === 'loot';
-          const daoSymbol = currentDAO.dao.meta.symbol;
+          const daoSymbol = safeSymbol(currentDAO.dao.meta.symbol);
           const tokenSymbol = isLoot ? `${daoSymbol}-LOOT` : daoSymbol;
 
           let payTokenAddr, price, cap;
@@ -13274,7 +13286,7 @@ body.modal-open { overflow: hidden; }
         const currentCount = container.children.length;
 
         if (currentCount >= 4) {
-          alert('Maximum 4 delegates allowed');
+          showStatus('Maximum 4 delegates allowed', true);
           return;
         }
 
@@ -15270,17 +15282,17 @@ body.modal-open { overflow: hidden; }
         // Add shares and loot tokens if currentDAO is available
         if (currentDAO && currentDAO.dao && currentDAO.dao.meta) {
           if (currentDAO.dao.meta.sharesToken) {
-            tokenMap[currentDAO.dao.meta.sharesToken.toLowerCase()] = `${currentDAO.dao.meta.symbol} Shares`;
+            tokenMap[currentDAO.dao.meta.sharesToken.toLowerCase()] = `${safeSymbol(currentDAO.dao.meta.symbol)} Shares`;
           }
           if (currentDAO.dao.meta.lootToken) {
-            tokenMap[currentDAO.dao.meta.lootToken.toLowerCase()] = `${currentDAO.dao.meta.symbol} Loot`;
+            tokenMap[currentDAO.dao.meta.lootToken.toLowerCase()] = `${safeSymbol(currentDAO.dao.meta.symbol)} Loot`;
           }
         }
 
         // Add the DAO's own address for self-calls
         if (currentDAO && currentDAO.dao && currentDAO.dao.dao) {
           if (address === currentDAO.dao.dao.toLowerCase()) {
-            tokenMap[address] = `${currentDAO.dao.meta.symbol} DAO (Self-Call)`;
+            tokenMap[address] = `${safeSymbol(currentDAO.dao.meta.symbol)} DAO (Self-Call)`;
           }
         }
 
@@ -15330,13 +15342,13 @@ body.modal-open { overflow: hidden; }
         if (currentDAO && currentDAO.dao && currentDAO.dao.meta) {
           if (currentDAO.dao.meta.sharesToken) {
             tokenInfo[currentDAO.dao.meta.sharesToken.toLowerCase()] = {
-              symbol: currentDAO.dao.meta.symbol,
+              symbol: safeSymbol(currentDAO.dao.meta.symbol),
               decimals: 18
             };
           }
           if (currentDAO.dao.meta.lootToken) {
             tokenInfo[currentDAO.dao.meta.lootToken.toLowerCase()] = {
-              symbol: `${currentDAO.dao.meta.symbol}-LOOT`,
+              symbol: `${safeSymbol(currentDAO.dao.meta.symbol)}-LOOT`,
               decimals: 18
             };
           }
@@ -16619,49 +16631,14 @@ body.modal-open { overflow: hidden; }
         }
       });
 
-      let statusTimeout = null;
-
+      // Status used to be written into #statusMessage, which sits inside the collapsed
+      // summoner body — so it was visible while summoning a DAO and nowhere else. Every
+      // "Loading DAO…", every load failure and every error raised from the dashboard
+      // rendered into a hidden div. The toast container is at page level and already
+      // styled, so status goes there. Errors linger longer than confirmations.
       function showStatus(message, isError = false, type = 'info', autoDismiss = true) {
-        const statusEl = document.getElementById('statusMessage');
-
-        // Clear existing timeout
-        if (statusTimeout) {
-          clearTimeout(statusTimeout);
-          statusTimeout = null;
-        }
-
-        // Determine status class
-        let statusClass = 'status-message';
-        if (isError) {
-          statusClass += ' error-message';
-        } else if (type === 'success') {
-          statusClass += ' success';
-        } else if (type === 'warning') {
-          statusClass += ' warning';
-        }
-
-        // Add spinner for loading states
-        const spinner = message.includes('...') && !message.includes('✨') && !message.includes('href=')
-          ? '<span class="spinner"></span>'
-          : '';
-
-        statusEl.innerHTML = `<div class="${statusClass}">${spinner}${message}</div>`;
-
-        // Auto-dismiss success messages after delay
-        if (autoDismiss && !isError) {
-          const delay = message.includes('✨') ? 8000 : 6000;
-          statusTimeout = setTimeout(() => {
-            const msgEl = statusEl.querySelector('.status-message');
-            if (msgEl) {
-              msgEl.style.animation = 'fadeOut 0.3s ease-out forwards';
-              setTimeout(() => {
-                statusEl.innerHTML = '';
-              }, 300);
-            }
-          }, delay);
-        }
+        showToast(message, isError ? 'error' : type, isError ? 8000 : (autoDismiss ? 5000 : 15000));
       }
-
       function copyProposalId(proposalId, proposalIdForButton) {
         // Use modern clipboard API
         navigator.clipboard.writeText(proposalId).then(() => {
