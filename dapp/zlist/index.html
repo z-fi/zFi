@@ -1520,19 +1520,31 @@ if(window.walletInit) window.walletInit({appName:'zList',
    un-eternalized. One event, one permanent bond, forever.
 --------------------------------------------------------------------------- */
 const SEL_TOTAL='0xde9e5054';        // totalLoyaltyWeight()
+/* treasuryEth(): the DAO's own share, sitting in the governor. It rises on
+   eternalize (the whole principal), on the treasury half of an early-exit tax,
+   and when an emptied loyalty reserve is swept - and it FALLS when Moloch calls
+   releaseTreasuryEth. So it is what the DAO holds here, not what it has ever
+   earned, and the label has to say so or the first withdrawal will read as the
+   figure breaking. User principal, the loyalty reserve and credited ETH are all
+   excluded from it, by releaseTreasuryEth and from execute alike. */
+const SEL_TREAS='0x00c7f3fb';        // treasuryEth()
 const TOPIC_ETERNAL='0xe455960660c1ef893c89fcdc7f8bf823955fa9e01ba33a97a74f1af8d215ce0e';
-let BSTAKE=null, BPERM=null;
+let BSTAKE=null, BPERM=null, BTREAS=null;
 function bstatRender(){
   const el=$('bstat'); if(!el||BSTAKE===null)return;
   el.hidden=false;
   el.innerHTML='<b>'+wFmt(BSTAKE)+'</b> zOrg bonded'
-    +(BPERM===null?'':' · <b class="bperm">'+BPERM+'</b> permanent');
+    +(BPERM===null?'':' · <b class="bperm">'+BPERM+'</b> permanent')
+    +(BTREAS===null?'':' · <b>'+eFmt(BTREAS)+'</b> ETH in treasury');
 }
 async function bstatLoad(){
-  try{
-    const r=await wRead(C,SEL_TOTAL);
-    BSTAKE=wWord(r,0); bstatRender();
-  }catch(e){ return }                                  // no total, no line
+  /* Independent reads, so a treasury that will not answer cannot take the bond
+     total down with it. */
+  const [tot,tre]=await Promise.all([
+    wRead(C,SEL_TOTAL).catch(()=>null), wRead(C,SEL_TREAS).catch(()=>null)]);
+  if(tre) BTREAS=wWord(tre,0);
+  if(!tot){ bstatRender(); return }                    // no total, no line
+  BSTAKE=wWord(tot,0); bstatRender();
   /* Deliberately not awaited by anything. */
   const body={jsonrpc:'2.0',id:1,method:'eth_getLogs',params:[{
     address:C, topics:[TOPIC_ETERNAL], fromBlock:'0x0', toBlock:'latest'}]};
