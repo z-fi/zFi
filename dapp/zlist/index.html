@@ -334,16 +334,39 @@ let WZ={}, wizWaiting=false, FRAME=null;
    invert it, and on an eternal receipt add a #264cb5 glyph. The inversion is a
    CSS filter over the real art, so it stays truthful to whatever the token
    actually looks like. */
+/* tokenURI is ~11 KB of hex, which is where the generic reader fails us: wRead
+   accepts the first response that is merely non-empty, and an endpoint that
+   truncates a payload this size returns exactly that - something non-empty
+   which then decodes to garbage. The throw lands in paintArt's catch and the
+   strip silently vanishes. Whichever endpoint answers first varies per call,
+   so the preview appeared or did not at random.
+   So this walks the pool itself and only accepts a response that survives the
+   ENTIRE decode, treating a partial one as a failed endpoint rather than as
+   failed art. Successes are cached: re-selecting a token must not re-run an
+   11 KB read, and must not be able to give a different answer the second time. */
+const ARTC={};
 const wArt=async(zorgz,id)=>{
-  const hex=await wRead(zorgz,SELS.tokenURI+w32(id));
-  /* ABI string: offset word, length word, then the bytes. */
-  const off=Number(wWord(hex,0))*2, len=Number(BigInt('0x'+hex.slice(2).slice(off,off+64)))*2;
-  const body=hex.slice(2).slice(off+64,off+64+len);
-  const uri=new TextDecoder().decode(Uint8Array.from(body.match(/../g).map(b=>parseInt(b,16))));
-  const i=uri.indexOf('base64,');
-  if(i<0) return null;
-  const meta=JSON.parse(atob(uri.slice(i+7)));
-  return meta.image||null;
+  const key=zorgz+':'+id;
+  if(key in ARTC) return ARTC[key];
+  const data=SELS.tokenURI+w32(id);
+  for(const u of RPCS){
+    try{
+      const hex=await post(u,{jsonrpc:'2.0',id:1,method:'eth_call',params:[{to:zorgz,data},'latest']},20000);
+      if(typeof hex!=='string'||hex.length<130) continue;
+      /* Guard the length BEFORE decoding: str() will happily decode a short
+         read into plausible-looking garbage, which is the whole failure. */
+      const off=Number(wWord(hex,0))*2, len=Number(BigInt('0x'+hex.slice(2).slice(off,off+64)))*2;
+      if(hex.slice(2).length < off+64+len) continue;   /* truncated: bad endpoint, not bad art */
+      const uri=str(hex);
+      const i=uri.indexOf('base64,');
+      if(i<0) continue;
+      const img=JSON.parse(atob(uri.slice(i+7))).image;
+      if(!img) continue;
+      ARTC[key]=img;                           /* only successes are cached, so a */
+      return img;                              /* transient outage is not remembered */
+    }catch(e){ /* next endpoint */ }
+  }
+  return null;
 };
 /* Byte-for-byte the glyph ZorgReceiptArt._receiptArtwork splices in, so the
    preview cannot drift from the contract. It is the zFi Z, and it is drawn in
@@ -479,7 +502,11 @@ async function wizOpen(){
       const strip=$('wzstrip'); if(!strip)return;
       if(!/^\d+$/.test(id)){ strip.innerHTML=''; return; }
       const img=await wArt(zorgz,id).catch(()=>null);
-      if(n===artSeq && $('wzstrip')) $('wzstrip').innerHTML=wStates(img);
+      if(n!==artSeq || !$('wzstrip')) return;
+      /* Say so rather than rendering nothing: a strip that silently disappears
+         is indistinguishable from one that was never meant to be there. */
+      $('wzstrip').innerHTML = img ? wStates(img)
+        : '<p class="whint">Could not load the art for #'+id+' right now. Bonding is unaffected.</p>';
     };
     $('wizgo').textContent='Bond'; $('wizgo').onclick=wizRun;
     /* Upgrade the id field to a picker if discovery lands. Never awaited, so a
