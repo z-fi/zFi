@@ -10,6 +10,39 @@ const WEINS = '0x0000000000696760E15f265e828DB644A0c242EB';
 const WEINS_ABI = ['function reverseResolve(address) view returns (string)'];
 const WC_PROJECT_ID = '1e8390ef1c1d8a185e035912a1409749';
 
+// --- WalletConnect, loaded when it is asked for ---------------------------
+// The provider bundle is 635KB and is used by exactly two things: showing the
+// WalletConnect row in the picker, and connecting through it. Pages that load it
+// with a blocking <script> pay for it on every visit, including every visit that
+// ends in an injected wallet or no wallet at all. Resolved from this file's own
+// URL so it works from subdirectory pages, and a failure is not cached, so
+// pressing the button again retries.
+// Pages that still ship the eager tag are unaffected: the module is already
+// there, so this resolves immediately without touching the network.
+const _wcSrc = (() => {
+  try {
+    const self = document.currentScript && document.currentScript.src;
+    if (self) return new URL('./vendor/walletconnect.min.js', self).href;
+  } catch (e) {}
+  return './vendor/walletconnect.min.js';
+})();
+let _wcLoad = null;
+function wcLoaded() { return !!globalThis['@walletconnect/ethereum-provider']?.EthereumProvider; }
+function ensureWalletConnect() {
+  if (wcLoaded()) return Promise.resolve(true);
+  if (_wcLoad) return _wcLoad;
+  _wcLoad = new Promise(resolve => {
+    const el = document.createElement('script');
+    el.src = _wcSrc;
+    el.async = true;
+    el.onload = () => resolve(wcLoaded());
+    el.onerror = () => { _wcLoad = null; resolve(false); };
+    document.head.appendChild(el);
+  });
+  return _wcLoad;
+}
+window.ensureWalletConnect = ensureWalletConnect;
+
 const _escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 function _esc(s) { return String(s).replace(/[&<>]/g, m => _escMap[m]); }
 function _escA(s) { return _esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -114,6 +147,14 @@ function showWalletModal() {
     if (!wallets.some(w => w.key !== 'walletconnect') && attempt < 2) setTimeout(() => doDetect(attempt + 1), 250);
     else renderWalletModal(wallets);
   };
+  // The picker cannot list WalletConnect before its bundle exists, so the fetch
+  // starts with the modal rather than with the page. It is not awaited: injected
+  // wallets render on the same 150ms beat they always did, and the row is filled
+  // in by a re-render when the bundle lands.
+  ensureWalletConnect().then(ok => {
+    const open = document.getElementById('walletModal')?.classList.contains('active');
+    if (ok && open && !_connectedAddress && !_isConnecting) doDetect();
+  });
   setTimeout(() => doDetect(), 150);
 }
 
@@ -154,6 +195,9 @@ async function connectWithWallet(walletKey, options = {}) {
     closeWalletModal();
     let walletProvider;
     if (walletKey === 'walletconnect') {
+      // Covers the silent reconnect path too: a remembered WC session asks for
+      // the bundle here rather than having it preloaded on every page.
+      await ensureWalletConnect();
       const wcModule = globalThis['@walletconnect/ethereum-provider'];
       const WCProvider = wcModule?.EthereumProvider;
       if (!WCProvider?.init) throw new Error('WalletConnect not available');

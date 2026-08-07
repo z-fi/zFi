@@ -14,6 +14,15 @@
 <meta name="twitter:description" content="Swap tokens on zFi - the most secure-by-default exchange">
 <meta name="twitter:image" content="">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<!-- The connections this page opens within a second of loading: the quote RPCs
+     race each other on the first quote, and the token list is fetched as soon as
+     the picker's loader runs. Warming the sockets and starting the list early
+     costs nothing when they are needed and one idle socket when they are not. -->
+<link rel="preconnect" href="https://mainnet.gateway.tenderly.co" crossorigin>
+<link rel="preconnect" href="https://ethereum.publicnode.com" crossorigin>
+<link rel="dns-prefetch" href="https://eth.drpc.org">
+<link rel="preload" href="./token-list.json" as="fetch">
+<link rel="preload" href="./vendor/ethers.min.js" as="script">
 <link rel="stylesheet" href="./theme.css">
 <link rel="stylesheet" href="./wallet.css">
 <script>
@@ -1761,7 +1770,9 @@ body.modal-open { overflow: hidden; }
 
 
 <script src="./vendor/ethers.min.js"></script>
-<script src="./vendor/walletconnect.min.js"></script>
+<!-- WalletConnect (635KB) is fetched by wallet.js when the wallet picker opens
+     or a remembered WC session reconnects — see ensureWalletConnect(). It used
+     to block here on every visit, including the ones that never touch it. -->
 <script src="./wallet.js"></script>
 <script defer src="./vendor/poseidon2.min.js"></script>
 <script defer src="./vendor/poseidon1.min.js"></script>
@@ -2094,7 +2105,9 @@ const CURVE_TOKEN_IFACE = new ethers.Interface([
 // Curve launches are not featured on the swap page — the lander's highlights are
 // the DAICO link and the orderbook ticker. This only registers the coins in the
 // token picker so they stay searchable and tradeable.
+let _curveLoading = false;
 async function registerCurveCoins() {
+  _curveLoading = true;
   try {
     // Recent curve launches come from the sale contract's own logs
     // (dapp/modules/curve-registry.js). Falls back silently to nothing if the
@@ -2184,9 +2197,20 @@ async function registerCurveCoins() {
     // Re-render an open token modal in case the user is searching while curves arrive.
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
   } catch (e) { console.warn('Curve coin registration failed:', e); }
+  finally { _curveLoading = false; }
 }
 
-setTimeout(registerCurveCoins, 200);
+// Nothing on the swap page renders curve coins any more — they exist so the
+// picker can find them. So the log scan and its multicall no longer fire 200ms
+// into the load, ahead of the quote and the ranking: they go with the rest of the
+// list loading (idle, after the bundled fetch), and the modal asks again in case
+// it opens first. Idempotent, so both paths are safe.
+let _curveCoinsStarted = false;
+function ensureCurveCoins() {
+  if (_curveCoinsStarted) return;
+  _curveCoinsStarted = true;
+  registerCurveCoins();
+}
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -2718,6 +2742,7 @@ async function loadBundledTokenList() {
   // eth_call, and chaining them would make the picker wait on the slower.
   loadZListRanking();
   loadUniswapTokenList();
+  ensureCurveCoins();
   // Kick ZAMM v0 discovery in parallel with Uniswap rather than chaining behind it —
   // they're independent endpoints, and a slow Uniswap fetch would otherwise delay
   // ZAMM-coin deeplink resolution. Internal idempotency guard prevents double-fire.
@@ -9458,6 +9483,7 @@ function openTokenModal(side) {
   // the modal before requestIdleCallback fires).
   if (!_uniswapLoaded && !_uniswapLoading) loadUniswapTokenList();
   if (!_zammCoinsLoaded && !_zammCoinsLoading) loadZammV0Coins();
+  ensureCurveCoins();
 }
 
 function closeTokenModal() {
@@ -9941,7 +9967,10 @@ document.addEventListener("DOMContentLoaded", () => {
           // No match yet — exit the wait early once all discovery loaders have settled.
           const stillLoading = (typeof _bundledLoading !== 'undefined' && _bundledLoading)
             || (typeof _uniswapLoading !== 'undefined' && _uniswapLoading)
-            || (typeof _zammCoinsLoading !== 'undefined' && _zammCoinsLoading);
+            || (typeof _zammCoinsLoading !== 'undefined' && _zammCoinsLoading)
+            // Curve registration no longer runs on a fixed 200ms timer, so an
+            // address deeplink to a curve coin has to wait on it explicitly.
+            || (typeof _curveLoading !== 'undefined' && _curveLoading);
           if (!stillLoading && waited >= 800) break;
         }
         // Final check before falling back to on-chain reads.
