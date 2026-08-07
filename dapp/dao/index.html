@@ -761,14 +761,28 @@ body.modal-open { overflow: hidden; }
 .dao-panel-head .dao-panel-title { margin-bottom: 0; }
 .panel-actions { display: flex; gap: 6px; }
 
-/* Two-column dashboard: treasury on the left, proposals on the right */
+/* Two-column dashboard: treasury on the left, proposals on the right.
+   The rest of the app reads in a 620px column; this page is dense enough
+   to need the room, so it breaks out and re-centers itself. */
+.dao-dashboard.show {
+  width: min(1180px, calc(100vw - 40px));
+  margin-left: calc((min(1180px, 100vw - 40px) - 100%) / -2);
+}
 .dao-columns {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  gap: 20px;
   align-items: start;
 }
 .dao-columns > .dao-panel { margin-bottom: 0; }
+/* The proposal list runs long and the treasury does not — pin it so the
+   left side does not become a column of dead space. */
+.dao-columns > .dao-panel:first-child {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
 
 /* Collapsible sub-sections */
 .dao-fold {
@@ -1214,7 +1228,13 @@ body.modal-open { overflow: hidden; }
 /* Membership */
 .membership-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
+}
+.membership-grid .delegation-card { grid-column: 1 / -1; }
+@media (max-width: 1000px) {
+  .membership-grid { grid-template-columns: 1fr; }
 }
 .badge-card, .balance-card, .delegation-card {
   border: 1px solid var(--border);
@@ -1849,6 +1869,7 @@ body.modal-open { overflow: hidden; }
 /* Responsive */
 @media (max-width: 1000px) {
   .dao-columns { grid-template-columns: 1fr; }
+  .dao-columns > .dao-panel:first-child { position: static; max-height: none; overflow: visible; }
 }
 @media (max-width: 700px) {
   .dao-columns > .dao-panel { margin-bottom: 0; }
@@ -7227,9 +7248,9 @@ body.modal-open { overflow: hidden; }
 
             salesHTML += `
               <div style="padding: 0.75rem; background: var(--surface); border: 1px solid var(--border-muted); margin-bottom: 0.75rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                  <div style="font-size: 0.85rem; color: var(--fg); letter-spacing: 0.1em;">${displayTitle}</div>
-                  <div style="font-size: 0.75rem; color: var(--fg-dim);">${sourceText}</div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; margin-bottom: 0.5rem;">
+                  <div style="font-size: 0.85rem; color: var(--fg); letter-spacing: 0.08em; min-width: 0;">${displayTitle}</div>
+                  <div style="font-size: 0.75rem; color: var(--fg-dim); white-space: nowrap; flex-shrink: 0;">${sourceText}</div>
                 </div>
                 ${is1to1Upgrade ? '<div style="font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 0.5rem; font-style: italic;">1:1 token upgrade • Ragequit to reclaim</div>' : ''}
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
