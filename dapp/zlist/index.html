@@ -951,11 +951,22 @@ async function wizOpen(){
       if(days>0 && boost>=10000 && boost<=15000) tiers.push({tier:i+1,days,boost});
     });
     tiers.sort((a,b)=>a.days-b.days);
+    /* Permanent rides the BEST RATE, not the longest lock. Those are the same
+       tier only while boostBps happens to rise with exitDelay, and setLockTier
+       does not require that - Moloch may legitimately price tier 3 at 90 days
+       /1.50x and tier 2 at 365 days/1.10x, at which point "the last stop" by
+       duration would freeze the WORST rate forever. That is the exact accident
+       putting permanent at the terminus exists to prevent.
+       Once a bond is eternal its exitDelay is dead weight - it can never be
+       redeemed at any date - so boost is the only term that still means
+       anything, and ties break toward the shorter lock purely for tidiness. */
+    const best=tiers.reduce((a,b)=>
+      b.boost>a.boost || (b.boost===a.boost && b.days<a.days) ? b : a, tiers[0]);
     /* ethBondTerms: (minimumBond, maturity, earlyExitTaxBps, treasuryShareBps).
        The maturity and the tax were being read and thrown away, which is why
        the wizard could not say what "early" means. */
     WZ={me,zorgz,shares,nft:Number(wWord(nftBal,0)),minEth:wWord(terms,0),
-        tiers, top:tiers[tiers.length-1], zBal:wWord(zBal,0),
+        tiers, top:best, zBal:wWord(zBal,0),
         halfDays:half?Number(wWord(half,0))/86400:null,
         ethBal:ethBal?BigInt(ethBal):null, gasPx:gasPx?BigInt(gasPx):null,
         ethDays:Number(wWord(terms,1))/86400, taxBps:Number(wWord(terms,2)),
@@ -1020,7 +1031,10 @@ async function wizOpen(){
      +stops.map((s,i)=>'<label class="wsegi'+(s.eternal?' wsege':'')+(i===dflt?' on':'')+'">'
         +'<input type="radio" name="wzstop" value="'+i+'"'+(i===dflt?' checked':'')+'>'
         +'<span class="wsegt">'+(s.eternal?'forever':s.days?s.days+' days':'no lock')+'</span>'
-        +'<span class="wsegr">'+(s.eternal?'permanent':(s.boost/10000).toFixed(2)+'\u00d7')+'</span>'
+        /* The rate is shown on permanent too. It is the same multiplier as the
+           tier it rides, and someone assuming "forever" also means "better rate"
+           should be able to see that it does not from the ladder alone. */
+        +'<span class="wsegr">'+(s.boost/10000).toFixed(2)+'\u00d7</span>'
         +'</label>').join('')
      +'</div>'
      +'<p class="whint" id="wzthint"></p></div>'
