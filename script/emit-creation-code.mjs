@@ -23,6 +23,7 @@ const SOURCES = {
   SwapboardView: "src/SwapboardView.sol",
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
+  Cowol: "src/forwarders/Cowol.sol",
 };
 // Mirrors foundry.toml's compilation_restrictions. See the sibling tables in
 // check-create2-artifacts.mjs and build-create2-artifact.mjs.
@@ -33,6 +34,7 @@ const PINNED_RUNS = {
   SwapboardView: 200,
   Orderbol: 9_999_999,
   Swapbol: 9_999_999,
+  Cowol: 9_999_999,
 };
 
 const [name, argsJson = "[]"] = process.argv.slice(2);

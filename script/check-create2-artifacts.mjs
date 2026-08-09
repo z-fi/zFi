@@ -24,6 +24,7 @@ const SOURCES = {
   SwapboardView: "src/SwapboardView.sol",
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
+  Cowol: "src/forwarders/Cowol.sol",
 };
 
 // Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
@@ -43,6 +44,7 @@ const OPTIMIZER_RUNS = {
   SwapboardView: 200,
   Orderbol: 9_999_999,
   Swapbol: 9_999_999,
+  Cowol: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -101,9 +103,32 @@ const specs = [
       artifactAddress("Dutchboard"),
     ],
   },
+  {name: "Cowol", args: []},
 ];
 
 let failed = false;
+
+// A contract listed in SOURCES but absent from `specs` is not checked - it is
+// merely mentioned. Cowol sat in that gap: named at the top of the file, so it
+// read as covered, while nothing ever recompiled it or compared its stored
+// payload, right up until it was deployed. The three tables have to agree, and
+// disagreeing is itself a failure rather than a silent omission.
+for (const name of Object.keys(SOURCES)) {
+  if (!specs.some((spec) => spec.name === name)) {
+    failed = true;
+    console.error(`FAIL ${name}: in SOURCES but has no entry in specs, so it is never checked`);
+  }
+  if (OPTIMIZER_RUNS[name] === undefined) {
+    failed = true;
+    console.error(`FAIL ${name}: in SOURCES but has no optimizer_runs declared`);
+  }
+}
+for (const {name} of specs) {
+  if (!SOURCES[name]) {
+    failed = true;
+    console.error(`FAIL ${name}: in specs but has no source mapping`);
+  }
+}
 for (const {name, args} of specs) {
   try {
     const artifact = findFreshArtifact(name);
