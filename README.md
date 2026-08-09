@@ -40,6 +40,10 @@ they carry no vanity prefix and are not deployed separately:
 | Orderbol | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | zRouter → Swapboard / Dutchboard |
 | Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
+| Swapbatch | [`0x0000005471EEF58dD16Aeccda21C37758E36a0b6`](https://etherscan.io/address/0x0000005471EEF58dD16Aeccda21C37758E36a0b6) | batch board fills paying native ETH |
+
+Swapbatch binds `legacyBoard = address(0)`: no legacy board is reachable through
+it, so `tokensOut` must be empty and `legacyBoardMode` false on every call.
 
 
 ### Reproducing an address
