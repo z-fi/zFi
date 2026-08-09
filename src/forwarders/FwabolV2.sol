@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-/// @title Fwabol2
+/// @title Fwabol
 /// @notice Buys AND sells FWAToken, by talking to the v4 PoolManager directly.
 ///
-/// @dev WHAT THIS SUPERSEDES. `Fwabol` (0x000000F2303C64Ad38956B38917Ade68b7a604FE)
-///      routes buys through the Uniswap Universal Router, and every awkward part
-///      of it is a workaround for that choice: `TAKE` instead of `TAKE_ALL`
+/// @dev WHAT THIS SUPERSEDES. the first Fwabol (0x000000F2303C64Ad38956B38917Ade68b7a604FE)
+///      routes buys through the Uniswap Universal Router, and every awkward part of it is a workaround for that choice: `TAKE` instead of `TAKE_ALL`
 ///      because the router infers a recipient from its own caller; a `SWEEP`
 ///      command because unspent input would otherwise rest in the router; a
 ///      balance snapshot and a refund hop because the router pays change to ITS
@@ -43,7 +42,7 @@ pragma solidity ^0.8.36;
 ///      finds no allowance and the sell reverts, which is the safe failure. A
 ///      routed sell wants a per-trade Permit2 signature instead, and that is a
 ///      deliberate later addition, not an oversight.
-contract Fwabol2 {
+contract Fwabol {
     address internal constant PM = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     address internal constant FWA = 0xa0Df17B5aC76ABaBA36E1450E2cbCd18A620C845;
     address internal constant HOOK = 0x2C67ebA8A50AF0dB5Fba55F725247a75CbDA6444;

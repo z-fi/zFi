@@ -2,8 +2,8 @@
 pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
-import {Fwabol2} from "../src/forwarders/Fwabol2.sol";
-import {Fwabol} from "../src/forwarders/Fwabol.sol";
+import {Fwabol as FwabolV2} from "../src/forwarders/FwabolV2.sol";
+import {Fwabol as FwabolV1} from "../src/forwarders/Fwabol.sol";
 import {V4QuoteLens} from "../src/V4QuoteLens.sol";
 
 interface IERC20 {
@@ -12,19 +12,19 @@ interface IERC20 {
     function transfer(address, uint256) external returns (bool);
 }
 
-/// @notice Fwabol2 against the real pool, both directions.
+/// @notice The new Fwabol against the real pool, both directions.
 ///
 /// @dev Balances are compared as DELTAS and the adapter is etched to a named
 ///      address, because mainnet already holds ETH at the addresses Foundry
 ///      deploys test contracts to - a pre-existing balance there once got read
 ///      as a fund-loss bug that did not exist.
-abstract contract Fwabol2ForkBase is Test {
+abstract contract FwabolV2ForkBase is Test {
     address constant PM = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     address constant FWA = 0xa0Df17B5aC76ABaBA36E1450E2cbCd18A620C845;
     address constant HOOK = 0x2C67ebA8A50AF0dB5Fba55F725247a75CbDA6444;
     address constant UR = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
 
-    Fwabol2 fw;
+    FwabolV2 fw;
     address user = makeAddr("user");
 
     function setUp() public virtual {
@@ -33,9 +33,9 @@ abstract contract Fwabol2ForkBase is Test {
         if (pin == 0) vm.createSelectFork(rpc);
         else vm.createSelectFork(rpc, pin);
 
-        fw = new Fwabol2();
+        fw = new FwabolV2();
         vm.etch(makeAddr("fwabol2"), address(fw).code);
-        fw = Fwabol2(payable(makeAddr("fwabol2")));
+        fw = FwabolV2(payable(makeAddr("fwabol2")));
         assertEq(address(fw).balance, 0, "the adapter starts empty");
 
         vm.deal(user, 100 ether);
@@ -47,7 +47,7 @@ abstract contract Fwabol2ForkBase is Test {
     }
 }
 
-contract Fwabol2ForkTest is Fwabol2ForkBase {
+contract FwabolV2ForkTest is FwabolV2ForkBase {
     // ---- buying ----------------------------------------------------------
 
     function test_buyPaysTheUserNotTheAdapter() public {
@@ -191,32 +191,32 @@ contract Fwabol2ForkTest is Fwabol2ForkBase {
 
     function test_deadlinesAreEnforcedOnBothSides() public {
         vm.prank(user);
-        vm.expectRevert(Fwabol2.Deadline.selector);
+        vm.expectRevert(FwabolV2.Deadline.selector);
         fw.buy{value: 0.001 ether}(user, 1, block.timestamp - 1);
 
         vm.prank(user);
-        vm.expectRevert(Fwabol2.Deadline.selector);
+        vm.expectRevert(FwabolV2.Deadline.selector);
         fw.sell(1e18, user, 1, block.timestamp - 1);
     }
 
     function test_badRecipientsAreRefusedOnBothSides() public {
         vm.startPrank(user);
-        vm.expectRevert(Fwabol2.BadRecipient.selector);
+        vm.expectRevert(FwabolV2.BadRecipient.selector);
         fw.buy{value: 0.001 ether}(address(0), 1, block.timestamp + 300);
-        vm.expectRevert(Fwabol2.BadRecipient.selector);
+        vm.expectRevert(FwabolV2.BadRecipient.selector);
         fw.buy{value: 0.001 ether}(address(fw), 1, block.timestamp + 300);
-        vm.expectRevert(Fwabol2.BadRecipient.selector);
+        vm.expectRevert(FwabolV2.BadRecipient.selector);
         fw.sell(1e18, address(0), 1, block.timestamp + 300);
-        vm.expectRevert(Fwabol2.BadRecipient.selector);
+        vm.expectRevert(FwabolV2.BadRecipient.selector);
         fw.sell(1e18, address(fw), 1, block.timestamp + 300);
         vm.stopPrank();
     }
 
     function test_emptyTradesAreRefused() public {
         vm.startPrank(user);
-        vm.expectRevert(Fwabol2.NothingIn.selector);
+        vm.expectRevert(FwabolV2.NothingIn.selector);
         fw.buy(user, 1, block.timestamp + 300);
-        vm.expectRevert(Fwabol2.NothingIn.selector);
+        vm.expectRevert(FwabolV2.NothingIn.selector);
         fw.sell(0, user, 1, block.timestamp + 300);
         vm.stopPrank();
     }
@@ -225,7 +225,7 @@ contract Fwabol2ForkTest is Fwabol2ForkBase {
     /// the lock, may reach it.
     function test_unlockCallbackIsPoolManagerOnly() public {
         vm.prank(user);
-        vm.expectRevert(Fwabol2.NotPoolManager.selector);
+        vm.expectRevert(FwabolV2.NotPoolManager.selector);
         fw.unlockCallback(abi.encode(false, user, user, uint128(1e18), uint128(0)));
     }
 
@@ -282,13 +282,13 @@ contract Fwabol2ForkTest is Fwabol2ForkBase {
         assertEq(got, quoted, "quote == delivery on the way out too");
     }
 
-    /// Fwabol2 must price a buy identically to the deployed Fwabol - same pool,
+    /// The new Fwabol must price a buy identically to the deployed Fwabol - same pool,
     /// same block. If these ever disagree, one of them is routing somewhere
     /// unintended.
     function test_agreesWithTheDeployedAdapterOnBuys() public {
-        Fwabol old = new Fwabol(UR);
+        FwabolV1 old = new FwabolV1(UR);
         vm.etch(makeAddr("old"), address(old).code);
-        old = Fwabol(payable(makeAddr("old")));
+        old = FwabolV1(payable(makeAddr("old")));
 
         uint256 snap = vm.snapshotState();
         uint256 viaNew = _buy(0.01 ether);
@@ -304,7 +304,7 @@ contract Fwabol2ForkTest is Fwabol2ForkBase {
 }
 
 contract Caller {
-    function sellVia(Fwabol2 fw, uint128 amountIn, address recipient) external {
+    function sellVia(FwabolV2 fw, uint128 amountIn, address recipient) external {
         fw.sell(amountIn, recipient, 1, block.timestamp + 300);
     }
 }

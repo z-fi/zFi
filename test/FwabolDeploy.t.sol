@@ -4,9 +4,11 @@ pragma solidity ^0.8.36;
 import "forge-std/Test.sol";
 import {Fwabol} from "../src/forwarders/Fwabol.sol";
 import {V4QuoteLens} from "../src/V4QuoteLens.sol";
+import {Fwabol as FwabolV2} from "../src/forwarders/FwabolV2.sol";
 
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
+    function approve(address, uint256) external returns (bool);
 }
 
 /// @notice The deployment itself, rehearsed against mainnet before it is paid for.
@@ -107,6 +109,29 @@ contract FwabolDeployTest is Test {
         fwabol.swapEthForFwa{value: 0.01 ether}(user, uint128(quoted), block.timestamp + 300);
 
         assertEq(IERC20(FWA).balanceOf(user) - before, quoted, "quote == delivery, at production addresses");
+    }
+
+    /// The superseding Fwabol: deployed from its own calldata, then made to buy
+    /// AND sell at its production address. The sell is the half the first one
+    /// could not do, so it is the half most worth proving off a fresh deploy.
+    function test_theSupersedingFwabolBuysAndSells() public {
+        FwabolV2 fw = FwabolV2(payable(_deploy("FwabolV2")));
+
+        uint256 fwaBefore = IERC20(FWA).balanceOf(user);
+        vm.prank(user);
+        uint256 got = fw.buy{value: 0.02 ether}(user, 1, block.timestamp + 300);
+        assertEq(IERC20(FWA).balanceOf(user) - fwaBefore, got, "bought");
+
+        vm.startPrank(user);
+        IERC20(FWA).approve(address(fw), type(uint256).max);
+        uint256 ethBefore = user.balance;
+        uint256 back = fw.sell(uint128(got), user, 1, block.timestamp + 300);
+        vm.stopPrank();
+
+        assertEq(user.balance - ethBefore, back, "and sold, straight back to the seller");
+        assertEq(IERC20(FWA).balanceOf(address(fw)), 0, "the adapter held no FWA");
+        assertEq(address(fw).balance, 0, "and no ETH");
+        emit log_named_decimal_uint("0.02 ETH round trip", back, 18);
     }
 
     /// Deploying twice must not be a way to get a different contract at the

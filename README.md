@@ -42,16 +42,33 @@ they carry no vanity prefix and are not deployed separately:
 | Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
 | Swapbatch | [`0x0000005471EEF58dD16Aeccda21C37758E36a0b6`](https://etherscan.io/address/0x0000005471EEF58dD16Aeccda21C37758E36a0b6) | batch board fills paying native ETH |
-| Fwabol | [`0x000000F2303C64Ad38956B38917Ade68b7a604FE`](https://etherscan.io/address/0x000000F2303C64Ad38956B38917Ade68b7a604FE) | buy-side only, ETH → FWA through the Universal Router |
+| Fwabol | [`0x000000798397834de6a60d9CCBfde0536A2699d9`](https://etherscan.io/address/0x000000798397834de6a60d9CCBfde0536A2699d9) | FWA both ways, straight to the v4 PoolManager |
+| Fwabol (superseded) | [`0x000000F2303C64Ad38956B38917Ade68b7a604FE`](https://etherscan.io/address/0x000000F2303C64Ad38956B38917Ade68b7a604FE) | buy-side only, via the Universal Router |
 
-Fwabol is the one forwarder that does not take delivery of its own output.
+Fwabol is the one forwarder that never takes delivery of its own output.
 FWAToken reverts every transfer that does not touch the PoolManager, its owner
 or a distributor, so an adapter that received FWA could never pass it on - the
-funds would be stuck at its address permanently. It therefore builds `TAKE`,
-which names the user, rather than `TAKE_ALL`, which would infer the adapter.
-The same asymmetry makes sells impossible to adapt: v4's `SETTLE` pays from the
-router's `_msgSender()`, so a selling adapter would have to hold FWA first. FWA
-sells go straight from the user to the Universal Router with Permit2.
+funds would be stuck at its address permanently. Fwabol therefore has the
+PoolManager pay the recipient directly on a buy, and the seller pay the
+PoolManager directly on a sell. FWA is never owed to it at any point.
+
+The superseded version routed buys through the Universal Router, and its every
+awkward feature was a workaround for that: `TAKE` hand-built because `TAKE_ALL`
+infers the router's caller, a `SWEEP` command because unspent input would
+otherwise rest in the router, a balance snapshot and a refund hop because the
+router pays change to its own caller. It could not sell at all, because the
+router's `SETTLE` pays from `_msgSender()` - the adapter - which would have had
+to hold FWA first.
+
+None of that is v4's rule. Settling in v4 is `sync()`, get the tokens to the
+PoolManager by any means, `settle()`; the credit is the measured balance change
+and the payer need not be the locker. Unlocking the PoolManager directly drops
+the router and every workaround with it, and the sell direction falls out.
+
+The seller is always `msg.sender`, never a parameter - otherwise an allowance to
+this contract would become a standing option any caller could exercise against
+the holder. A sell therefore cannot be wrapped in `snwap`, whose executor sees
+`SafeExecutor` as its caller; routing one wants a per-trade Permit2 signature.
 
 ### Quoting
 

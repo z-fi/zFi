@@ -27,8 +27,13 @@ const SOURCES = {
   Swapbatch: "src/forwarders/Swapbatch.sol",
   FloorboardView: "src/FloorboardView.sol",
   Fwabol: "src/forwarders/Fwabol.sol",
+  FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
 };
+// See the note in check-create2-artifacts.mjs: both Fwabols are named `Fwabol`
+// in Solidity, and only the key tells them apart.
+const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
+const artifactName = (n) => ARTIFACT_NAMES[n] ?? n;
 // Mirrors foundry.toml's compilation_restrictions. See the sibling tables in
 // check-create2-artifacts.mjs and build-create2-artifact.mjs.
 const PINNED_RUNS = {
@@ -42,6 +47,7 @@ const PINNED_RUNS = {
   Swapbatch: 9_999_999,
   FloorboardView: 9_999_999,
   Fwabol: 9_999_999,
+  FwabolV2: 9_999_999,
   V4QuoteLens: 9_999_999,
 };
 
@@ -61,7 +67,7 @@ const candidates = [];
   for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) visit(full);
-    else if (entry.name === `${name}.json`) candidates.push(full);
+    else if (entry.name === `${artifactName(name)}.json`) candidates.push(full);
   }
 })(path.join(ROOT, "out"));
 

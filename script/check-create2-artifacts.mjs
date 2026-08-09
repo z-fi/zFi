@@ -30,8 +30,18 @@ const SOURCES = {
   Swapbatch: "src/forwarders/Swapbatch.sol",
   FloorboardView: "src/FloorboardView.sol",
   Fwabol: "src/forwarders/Fwabol.sol",
+  FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
 };
+
+// A table key is not always the Solidity contract name. The second Fwabol IS
+// named `Fwabol` on chain - it supersedes the first and the page will call it
+// that - but the first is deployed and immutable, and its source cannot be
+// touched without changing its metadata hash and therefore its address. So the
+// two share a contract name and are told apart by their key. Anything absent
+// here is its own artifact name, which is the ordinary case.
+const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
+const artifactName = (name) => ARTIFACT_NAMES[name] ?? name;
 
 // Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
 // A contract with no restriction there compiles at the profile's own
@@ -54,6 +64,7 @@ const OPTIMIZER_RUNS = {
   Swapbatch: 9_999_999,
   FloorboardView: 9_999_999,
   Fwabol: 9_999_999,
+  FwabolV2: 9_999_999,
   V4QuoteLens: 9_999_999,
 };
 const deployInterface = new Interface([
@@ -74,7 +85,7 @@ function findFreshArtifact(name) {
     for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) visit(full);
-      else if (entry.name === `${name}.json`) candidates.push(full);
+      else if (entry.name === `${artifactName(name)}.json`) candidates.push(full);
     }
   }
   visit(path.join(ROOT, "out"));
@@ -126,6 +137,9 @@ const specs = [
   {name: "Fwabol", args: [UNIVERSAL_ROUTER]},
   // Everything it needs - the canonical V4Quoter - is a constant.
   {name: "V4QuoteLens", args: []},
+  // No constructor args: the PoolManager, the token, the hook and the pool
+  // parameters are all constants, so nothing can be pointed elsewhere.
+  {name: "FwabolV2", args: []},
 ];
 
 let failed = false;

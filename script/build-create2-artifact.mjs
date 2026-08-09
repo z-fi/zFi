@@ -38,8 +38,12 @@ const SOURCES = {
   ZorgConviction: "src/dao/ZorgConviction.sol",
   ZorgTokenListLens: "src/dao/ZorgTokenListLens.sol",
   Fwabol: "src/forwarders/Fwabol.sol",
+  FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
 };
+// See the note in check-create2-artifacts.mjs.
+const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
+const artifactName = (n) => ARTIFACT_NAMES[n] ?? n;
 // Contracts whose deployment manifest pins them below the default optimizer
 // runs. A salt is only valid for initcode built at the pinned setting, so
 // picking up an artifact compiled at any other one silently mines - or
@@ -79,7 +83,7 @@ function findFreshArtifact(contractName) {
     for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) visit(full);
-      else if (entry.name === `${contractName}.json`) candidates.push(full);
+      else if (entry.name === `${artifactName(contractName)}.json`) candidates.push(full);
     }
   }
   visit(path.join(ROOT, "out"));
