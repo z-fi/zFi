@@ -231,6 +231,20 @@
       return board === "0x000000da7bb4b2a9e3e80e9a4d4157e26ca6189b" ? bookPage(BOOK, board) : emptyBook();
     }
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
+    // The curated list, so the picker carries a COLLECTION and the NFT paths
+    // are reachable at all. Without this the page falls back to its hardcoded
+    // tokens, which are all fungible, and the Token ID field can never appear.
+    if (sel === "df7ca268") return "0x" + u256(32) + u256(2) + u256(0) + u256(1);
+    if (sel === "74e18e96") {
+      var which = Number(BigInt("0x" + data.slice(8, 72)));
+      return encStr(which === 0
+        ? '{"k":"eip155","p":"ERC-20","a":"' + A.USDC + '","d":6,"s":"USDC"}'
+        : '{"k":"eip155","p":"ERC-721","a":"' + NFTCOL + '","d":0,"s":"ZORB"}');
+    }
+    // One collection-wide floor bid: anyId true, empty ids. This is the row
+    // a blank Token ID resolves to, and the only kind SwapboardView could not
+    // have represented.
+    if (sel === "16bb24eb") return collectionBid();
     if (sel === "2a58b330") return "0x" + u256(0);
     // Name services: nothing is registered here, so every lookup resolves to
     // the zero address and the page falls back to the hex address.
@@ -300,6 +314,33 @@
     for (var i = 0; i < s.length; i++) hex += s.charCodeAt(i).toString(16).padStart(2, "0");
     return u256(s.length) + (hex + "0".repeat(Math.ceil(hex.length / 64) * 64 - hex.length));
   }
+  var NFTCOL = "0x00000000000000000000000000000000000000ff";
+
+  // (BidRow[] rows, uint256 nextCursor). BidRow holds dynamic members, so the
+  // array element is itself offset-encoded: the head is a POINTER to the row.
+  function collectionBid() {
+    var row = ""
+      + u256(1)                       // bidId
+      + addrw(A.ACCOUNT)              // bidder
+      + addrw(NFTCOL)                 // token  - what a seller delivers
+      + addrw(A.USDC)                 // quote  - what a seller receives
+      + u256(1)                       // isNFT
+      + u256(1)                       // anyId  <- the point
+      + u256(17 * 32)                 // ids offset, relative to the row
+      + u256(2)                       // remaining (a COUNT on an NFT bid)
+      + u256(2)                       // initial
+      + u256(4000000000n)             // price, 4000 USDC for both
+      + u256(4000000000n)             // proceedsForRemaining
+      + u256(0) + u256(0)             // startTime, expiry
+      + u256(0) + u256(7)             // tokenDecimals, quoteDecimals (6 + 1)
+      + u256(17 * 32 + 32)            // tokenSymbol offset
+      + u256(17 * 32 + 32 + 64)       // quoteSymbol offset
+      + u256(0)                       // ids: empty = ANY id
+      + u256(4) + Buffer.from("ZORB").toString("hex").padEnd(64, "0")
+      + u256(4) + Buffer.from("USDC").toString("hex").padEnd(64, "0");
+    return "0x" + u256(64) + u256(0) + u256(1) + u256(32) + row;
+  }
+
   function bookPage(rows, board) {
     // Each row: 16 head words (two of them offsets to the symbol strings).
     var heads = [], tails = [];
