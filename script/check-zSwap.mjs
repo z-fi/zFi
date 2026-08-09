@@ -116,7 +116,10 @@ check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)')) {
     throw Error('prepared outer snwap does not protect the routed output');
   }
-  if (!html.includes('SEL_FILL2_ETH="13092239"')) throw Error('direct native Swapboard fill selector missing');
+  // fillOrderWithEth(uint256,uint256,uint256,address) on the current board. This
+  // assertion carried the PREVIOUS selector, from before the fills grew their
+  // minAmountA floor, so it pinned an encoding the deployed board does not answer.
+  if (!html.includes('SEL_FILL2_ETH="6f608bab"')) throw Error('direct native Swapboard fill selector missing');
   if (!html.includes('if(!rv&&f.addr===WETH&&t.addr===ZERO)')) {
     throw Error('WETH -> ETH direct unwrap is not preserved');
   }

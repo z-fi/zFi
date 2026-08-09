@@ -3,14 +3,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.2
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (120732 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (121044 B) is the runtime bytecode of
 ///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 6 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 26724 B headroom).
+///      (24576 B per chunk, 26412 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement: the page
 ///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
@@ -1221,14 +1221,14 @@ refreshBalance();update();syncChart();
 const SEL_TRANSFER="a9059cbb";
 // -------------------------------------------------------------- ORDERBOOK
 // Current Swapboard + legacy v1. The deprecated 0x..85B831 board is excluded.
-const SB2="0xD3958F4f0610DEEff356193722ceb942BDd20d39";
+const SB2="0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b";
 const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
-const SBVIEW="0xF796EF7B108a8DbC8F9650579fAb88BBa00BD296";
-const SWAPBOL="0xa8429A3516E0ad2b0500b2bc7E85BE0262fb2154";
-const DUTCH="0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C";
-const ORDERBOL="0xf03bE3A900762D7D31e6d69809fd2D54Aa53b2BA";
+const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
+const SWAPBOL="0x0000003069053df109F47acac630e03C77804AD8";
+const DUTCH="0x000000a213b430D14Bae6062c176289B05e04489";
+const ORDERBOL="0x000000fADa565c5608570a4F66Fb5E0bD08ef91B";
 const SEL_NEXTID="2a58b330",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7";
-const SEL_FILL1="c37dfc5b",SEL_FILL2="8ab3bfc9",SEL_FILL2_UNWRAP="402ad677",SEL_FILL2_ETH="13092239";
+const SEL_FILL1="c37dfc5b",SEL_FILL2="9d136c7f",SEL_FILL2_UNWRAP="3987baf4",SEL_FILL2_ETH="6f608bab";
 const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
 const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
@@ -1651,7 +1651,11 @@ book.addEventListener("click",async e=>{
       ?"0x"+SEL_DUTCH_FILL+encUint(id)+encUint(r.nA?0n:r.aA)+encAddr(account)+encUint(r.aB)
       :r.v2
         ?"0x"+(nativeIn?SEL_FILL2_ETH:nativeOut?SEL_FILL2_UNWRAP:SEL_FILL2)
-          +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encAddr(ZERO) // 0 = full fill
+          +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encUint(0n)+encAddr(ZERO)
+          // fillAmountB 0 = full fill (omitted by the ETH entry point, which
+          // takes the amount as msg.value), then minAmountA 0 = no floor, then
+          // recipient 0 = the caller. The fills gained the middle two words when
+          // the board grew a slippage floor; the encoding still wrote four.
         :"0x"+SEL_FILL1+encUint(id)+encUint(dl);
     // Swapboard has a native prepaid fill. Dutch NFT lots are not routed
     // through snwap's ERC20 balance guard, so wrap + approve + fill them with
