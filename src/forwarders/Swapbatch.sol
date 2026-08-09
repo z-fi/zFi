@@ -69,12 +69,22 @@ contract Swapbatch {
     address public immutable legacyBoard;
     address public immutable modernBoard;
 
-    /// @dev Transient reentrancy flag. `uint32(bytes4(keccak256("Reentrancy()")))`.
+    /// @dev Transient reentrancy flag. One past the `Reentrancy()` selector, so the
+    ///      slot and the error the guard reverts with cannot be confused for each
+    ///      other. The comment here used to name the selector itself, which is the
+    ///      value on the line below MINUS one.
     uint256 constant REENTRANCY_GUARD_SLOT = 0xab143c07;
 
     error NoOrders();
     error Reentrancy();
     error ZeroAddress();
+    /// @dev Raised from assembly when the refund transfer fails. Declared so it is
+    ///      in the ABI: a caller cannot decode a selector the contract never names,
+    ///      and this one is the likeliest revert a contract recipient will hit.
+    error ETHTransferFailed();
+    /// @dev Only WETH may push ETH here. `NotAContract` used to stand in for this,
+    ///      which told a caller their EOA was not a contract - true, and not the reason.
+    error OnlyWETH();
     error BadRecipient();
     error InvalidResult();
     error LengthMismatch();
@@ -176,8 +186,11 @@ contract Swapbatch {
             outputBases = new uint256[](n);
             for (uint256 i; i < n; ++i) {
                 address expected = legacyOrders[i].tokenA;
+                // `legacyBoardMode` was also tested here, but this whole block is
+                // under `isLegacy` and line 150 already requires the two to agree,
+                // so that half of the condition could never be true.
                 if (expected == address(0)) {
-                    if (!legacyBoardMode || tokensOut[i] != address(0)) revert TokensOutMismatch(i, expected, tokensOut[i]);
+                    if (tokensOut[i] != address(0)) revert TokensOutMismatch(i, expected, tokensOut[i]);
                 } else if (tokensOut[i] != expected) {
                     revert TokensOutMismatch(i, expected, tokensOut[i]);
                 }
@@ -239,31 +252,40 @@ contract Swapbatch {
         // skipped leg unspent.
         safeApprove(weth, board, 0);
 
-        uint256 purchasedWeth;
-        if (isLegacy) {
-            for (uint256 i; i < n; ++i) {
-                // `tokensOut[i] == weth`, because `amountA` is denominated in
-                // THAT LEG'S output token, not in WETH. Summing it unconditionally
-                // reserved a quantity of some unrelated ERC-20 against the WETH
-                // balance, and `reserved` then exceeded `currentWeth` on any
-                // legacy batch that bought something other than WETH - which is
-                // every one of them in practice. The whole legacy path reverted
-                // with `WETHAmountMismatch`. It reads as a WETH accounting error
-                // because it is one: this is the only figure `_deliverLegacy`
-                // pays out without measuring a balance delta first, so it has to
-                // be the sum over WETH legs alone. `address(0)` legs (delivery
-                // deliberately skipped) fall out for free - `weth` is not zero.
-                if (filled[i] && tokensOut[i] == weth) purchasedWeth += legacyOrders[i].amountA;
-            }
-            _deliverLegacy(legacyOrders, filled, tokensOut, outputBases, purchasedWeth, to);
+        // What the board did NOT take. It pulls exactly `fillAmountsB[i]` for each
+        // leg it settles and nothing for one `tryFillOrders` skipped, so the unspent
+        // input is known exactly rather than inferred from a balance.
+        uint256 unspent = total;
+        for (uint256 i; i < n; ++i) {
+            if (filled[i]) unspent -= fillAmountsB[i];
         }
 
-        // Only WETH left from the current input allocation is refunded as ETH. Purchased
-        // WETH was delivered above and pre-existing WETH is never touched.
         uint256 currentWeth = balanceOf(weth, address(this));
-        uint256 reserved = wethBase + purchasedWeth;
+        uint256 reserved = wethBase + unspent;
         if (currentWeth < reserved) revert WETHAmountMismatch(reserved, currentWeth);
-        uint256 left = currentWeth - reserved;
+
+        // Anything above the untouched base and the unspent input is WETH this batch
+        // BOUGHT - measured, not predicted.
+        //
+        // The previous revision summed `legacyOrders[i].amountA`, the quote read
+        // BEFORE the fill, and made two mistakes with it. That figure is the whole
+        // order, not the part a partial fill actually buys. And it was reserved again
+        // here, below, after `_deliverLegacy` had already paid it out. Either alone
+        // breaks the path, so a legacy leg paying out WETH has never once settled: a
+        // full fill died on the double count, a partial one on transferring more WETH
+        // than it held. Nothing caught it because the mock legacy board in
+        // `Swapbatch.t.sol` only ever quotes tokenA as a plain ERC-20, so no test
+        // reaches this branch at all. See `SwapbatchWethLegProbe.t.sol`.
+        //
+        // Every other output is delivered by balance delta. This one now is too.
+        if (isLegacy) {
+            _deliverLegacy(legacyOrders, filled, tokensOut, outputBases, currentWeth - reserved, to);
+        }
+
+        // Only WETH left from the current input allocation is refunded as ETH.
+        // Re-measured after delivery, so purchased WETH is already gone and
+        // pre-existing WETH is never touched.
+        uint256 left = balanceOf(weth, address(this)) - wethBase;
         if (left != 0) {
             IWETH(weth).withdraw(left);
             uint256 received = address(this).balance - (ethBase + (msg.value - total));
@@ -329,7 +351,7 @@ contract Swapbatch {
     ///      else keeps the sweep's "whatever is here belongs to this caller" rule from
     ///      being a way to donate into someone else's batch.
     receive() external payable {
-        if (msg.sender != weth) revert NotAContract(msg.sender);
+        if (msg.sender != weth) revert OnlyWETH();
     }
 }
 
