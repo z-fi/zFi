@@ -62,13 +62,13 @@ own, because the board embeds their creation code.
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
 
-Current v0.2 deployment flow: deploy the six generated HTML data contracts, then deploy `zSwap(data1, data2, data3, data4)` with those addresses. Record the final wrapper address here after deployment.
+Current v0.1 deployment flow: deploy the six generated HTML data contracts, then deploy `zSwap(data1, data2, data3, data4)` with those addresses. Record the final wrapper address here after deployment.
 
 ### The permanent-HTML pattern
 
 The HTML payload is installed as the **runtime bytecode of six data contracts** created before the wrapper. The wrapper keeps six `immutable` pointers (`DATA1`…`DATA6`). At read time, `html()` copies all six chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 124,796 bytes across 6 data contracts (20,800 / 20,800 / 20,800 / 20,800 / 20,800 / 20,796 bytes), with 22,660 bytes of 6-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 126,177 bytes across 6 data contracts (21,030 / 21,030 / 21,030 / 21,030 / 21,030 / 21,027 bytes), with 21,279 bytes of 6-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 

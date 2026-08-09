@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-/// @title zSwap v0.2
+/// @title zSwap v0.1
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (124796 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (126177 B) is the runtime bytecode of
 ///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 6 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 22660 B headroom).
+///      (24576 B per chunk, 21279 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement: the page
 ///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
@@ -408,6 +408,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
+<small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
@@ -1274,6 +1275,29 @@ async function leg(addr,amt,isNft,meta){
 //
 // Every failure returns [] rather than throwing: an unreachable lens should
 // read as "no floor liquidity" and leave the rest of the quote intact.
+// What a collection is fetching right now, from the standing bids that will
+// take any id. Only meaningful while the Token ID is blank: name an id and the
+// question stops being "what does the floor pay" and becomes "who wants THAT
+// one", which is a different query against a different set of bids.
+let floorSeq=0;
+// Re-run when the id field changes: blank and filled are different questions.
+addEventListener("input",e=>{if(e.target&&e.target.id==="nftId")showFloor()});
+async function showFloor(){
+  const el=document.getElementById("floorNote");if(!el)return;
+  const side=isNft(fromSel.value)?fromSel.value:isNft(toSel.value)?toSel.value:null;
+  const live=tab==="book"&&side!==null&&!nftId.value.trim();
+  if(!live){el.classList.add("hide");el.textContent="";return}
+  const seq=++floorSeq,t=TOKENS[side];
+  el.classList.remove("hide");el.textContent="Checking floor bids…";
+  const rows=await collectionFloor(t.addr).catch(()=>[]);
+  // A slower earlier lookup must not overwrite a newer one.
+  if(seq!==floorSeq)return;
+  if(!rows.length){el.textContent="No standing bids on this collection.";return}
+  const best=rows[0],q=known(best.quote);
+  el.textContent=`${rows.length} collection bid${rows.length>1?"s":""} · best pays `
+    +`${trimAmt(best.proceeds,q?q.dec:18)} ${q?q.sym:"?"} for any ${t.sym}`;
+}
+
 function decBidRows(hex){
   try{
     const h=strip0x(hex),bytes=h.length/2;
@@ -1948,6 +1972,7 @@ syncDisabled();
 const anyNft=bk&&(isNft(fromSel.value)||isNft(toSel.value));
 nftIdL.classList.toggle("hide",!anyNft);
 if(!anyNft)nftId.value="";
+showFloor();
 slipL.classList.toggle("hide",t!=="swap");
 dlyL.classList.toggle("hide",t==="swap");
 kindL.classList.toggle("hide",!bk);
