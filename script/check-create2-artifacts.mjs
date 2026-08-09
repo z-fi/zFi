@@ -16,6 +16,7 @@ const DEPLOY = path.join(ROOT, "deploy");
 const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const LEGACY = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+const ZERO = "0x0000000000000000000000000000000000000000";
 const EIP170 = 24_576;
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
@@ -25,6 +26,7 @@ const SOURCES = {
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
   Cowol: "src/forwarders/Cowol.sol",
+  Swapbatch: "src/forwarders/Swapbatch.sol",
 };
 
 // Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
@@ -45,6 +47,7 @@ const OPTIMIZER_RUNS = {
   Orderbol: 9_999_999,
   Swapbol: 9_999_999,
   Cowol: 9_999_999,
+  Swapbatch: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -104,6 +107,10 @@ const specs = [
     ],
   },
   {name: "Cowol", args: []},
+  // No legacy board is bound: the zero address disables that whole path for
+  // this deployment, which the constructor permits so long as a modern board
+  // is set.
+  {name: "Swapbatch", args: [WETH, ZERO, artifactAddress("Swapboard")]},
 ];
 
 let failed = false;

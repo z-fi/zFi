@@ -140,45 +140,31 @@ contract TestCowol is Test {
         uint32 validTo = uint32(block.timestamp + 300);
         bytes32 appData = bytes32(0);
 
-        // Legitimate user deposits
+        // Legitimate user deposits and opens an order.
         _fundCowol(USDC, total);
-
-        // Legitimate user calls swap
         bytes memory legData =
             abi.encode(WETH, legitimateReceiver, sellAmount, uint256(0.3 ether), validTo, appData, feeAmount);
         vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), legData);
 
-        // Legitimate digest is approved
         bytes32 legDigest =
             _computeDigest(USDC, WETH, legitimateReceiver, sellAmount, 0.3 ether, validTo, appData, feeAmount);
         assertTrue(cowol.validDigests(legDigest), "legitimate digest should be approved");
+        assertEq(cowol.committed(USDC), total, "deposit reserved to that order");
 
-        // Attacker's digest (different receiver) is NOT approved
-        bytes32 attackDigest =
-            _computeDigest(USDC, WETH, attackerReceiver, sellAmount, 0.3 ether, validTo, appData, feeAmount);
-        assertFalse(cowol.validDigests(attackDigest), "attacker digest should NOT be approved");
-
-        // If attacker tries to call swap again with their receiver, it reverts
-        // because balanceOf(USDC) is still `total` but we already stored the
-        // legitimate digest. However the attacker CAN call swap again (no auth),
-        // but the balance check still passes since tokens are still there.
-        // This WOULD approve the attacker's digest too!
-        //
-        // BUT: at this point the legitimate order should settle first (it was
-        // posted to the API before the attacker acts). After settlement,
-        // VaultRelayer drains the tokens, so the attacker's order can't fill.
-        //
-        // If the attacker front-runs the settlement: both digests are approved,
-        // both orders are in the CoW API, and the solver picks one. The attacker's
-        // order sends output to attackerReceiver, but still uses the SAME input
-        // tokens that the legitimate user deposited. This is the residual race
-        // condition documented as MEDIUM risk.
+        // The attacker reaches `swap` through the same public SafeExecutor path
+        // and tries to open a second order over the SAME resting deposit. It is
+        // refused: the deposit is reserved, so the fresh balance is zero and no
+        // sellAmount can match it.
         bytes memory atkData =
             abi.encode(WETH, attackerReceiver, sellAmount, uint256(0.3 ether), validTo, appData, feeAmount);
         vm.prank(SAFE_EXECUTOR);
+        vm.expectRevert();
         cowol.swap(address(0), USDC, address(0), address(0), atkData);
-        assertTrue(cowol.validDigests(attackDigest), "attacker CAN approve digest when balance still present");
+
+        bytes32 attackDigest =
+            _computeDigest(USDC, WETH, attackerReceiver, sellAmount, 0.3 ether, validTo, appData, feeAmount);
+        assertFalse(cowol.validDigests(attackDigest), "attacker digest must NOT be approved");
     }
 
     // ---------------------------------------------------------------
@@ -205,47 +191,72 @@ contract TestCowol is Test {
     // ---------------------------------------------------------------
     //  8. Second swap with same token works (re-approval not needed)
     // ---------------------------------------------------------------
+    /// A second order on the same token must wait for the first order's
+    /// reservation to be released, even when the first has already SETTLED.
+    ///
+    /// This is deliberate. CoW pulls the sell tokens through VaultRelayer
+    /// without telling this contract, so from in here a drained balance and a
+    /// still-live order are indistinguishable from a live order plus a smaller
+    /// fresh deposit - and guessing in the permissive direction is exactly the
+    /// mistake that let one deposit be written over another. The reservation
+    /// therefore stands until the order's `validTo` passes, at which point
+    /// anyone may `recover` it: a settled order pays out nothing (its balance is
+    /// gone) and simply frees the token. `validTo` is capped at MAX_EXPIRY, so
+    /// the wait is bounded by twenty minutes.
     function test_swap_second_order() public {
         uint256 total1 = 500e6;
         uint256 total2 = 700e6;
+        uint32 validTo1 = uint32(block.timestamp + 300);
 
-        // First order
+        // First order.
         _fundCowol(USDC, total1);
-        bytes memory data1 = abi.encode(
-            WETH,
-            address(0xBEEF),
-            uint256(499e6),
-            uint256(0.1 ether),
-            uint32(block.timestamp + 300),
-            bytes32(0),
-            uint256(1e6)
-        );
+        bytes memory data1 =
+            abi.encode(WETH, address(0xBEEF), uint256(499e6), uint256(0.1 ether), validTo1, bytes32(0), uint256(1e6));
         vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data1);
+        assertEq(cowol.committed(USDC), total1, "first deposit reserved");
 
-        // Simulate settlement draining tokens
+        // Settlement drains the tokens, silently as far as this contract knows.
         vm.prank(VAULT_RELAYER);
         IERC20(USDC).transferFrom(address(cowol), address(this), total1);
         assertEq(IERC20(USDC).balanceOf(address(cowol)), 0, "cowol should be drained");
 
-        // Second order
-        _fundCowol(USDC, total2);
+        // A second order while that reservation still stands is refused. Tried
+        // WITHOUT funding first, deliberately: in the real flow snwap transfers
+        // and registers in one transaction, so a refusal unwinds the transfer
+        // too and an unregistered deposit never rests here. (One that somehow
+        // did would be unowned, and the next expiring order would absorb it -
+        // balance-based custody cannot attribute what was never registered.)
         bytes memory data2 = abi.encode(
-            WETH,
-            address(0xCAFE),
-            uint256(699e6),
-            uint256(0.2 ether),
-            uint32(block.timestamp + 600),
-            bytes32(0),
-            uint256(1e6)
+            WETH, address(0xCAFE), uint256(699e6), uint256(0.2 ether), uint32(block.timestamp + 600), bytes32(0), uint256(1e6)
         );
         vm.prank(SAFE_EXECUTOR);
+        vm.expectRevert();
         cowol.swap(address(0), USDC, address(0), address(0), data2);
 
-        bytes32 digest2 = _computeDigest(
-            USDC, WETH, address(0xCAFE), 699e6, 0.2 ether, uint32(block.timestamp + 600), bytes32(0), 1e6
+        // Once the settled order expires, anyone reaps it: no payout, because
+        // the balance already left, but the token is freed.
+        bytes32 digest1 =
+            _computeDigest(USDC, WETH, address(0xBEEF), 499e6, 0.1 ether, validTo1, bytes32(0), 1e6);
+        vm.warp(uint256(validTo1) + 1);
+        uint256 beefBefore = IERC20(USDC).balanceOf(address(0xBEEF));
+        cowol.recover(digest1);
+        assertEq(IERC20(USDC).balanceOf(address(0xBEEF)), beefBefore, "settled order pays nothing");
+        assertEq(cowol.committed(USDC), 0, "reservation freed");
+
+        _fundCowol(USDC, total2);
+
+        // Now the second order goes through against the full fresh balance.
+        uint32 validTo2 = uint32(block.timestamp + 600);
+        bytes memory data2b = abi.encode(
+            WETH, address(0xCAFE), uint256(699e6), uint256(0.2 ether), validTo2, bytes32(0), uint256(1e6)
         );
+        vm.prank(SAFE_EXECUTOR);
+        cowol.swap(address(0), USDC, address(0), address(0), data2b);
+
+        bytes32 digest2 = _computeDigest(USDC, WETH, address(0xCAFE), 699e6, 0.2 ether, validTo2, bytes32(0), 1e6);
         assertTrue(cowol.validDigests(digest2), "second digest should be approved");
+        assertEq(cowol.committed(USDC), total2, "second deposit reserved");
     }
 
     // ---------------------------------------------------------------
@@ -281,19 +292,24 @@ contract TestCowol is Test {
         vm.prank(SAFE_EXECUTOR);
         cowol.swap(address(0), USDC, address(0), address(0), data);
 
+        bytes32 digest = _computeDigest(USDC, WETH, receiver, sellAmount, 0.3 ether, validTo, bytes32(0), feeAmount);
+
         // Before expiry: recover should revert
         vm.expectRevert();
-        cowol.recover(USDC);
+        cowol.recover(digest);
 
         // Warp past expiry
         vm.warp(uint256(validTo) + 1);
 
         uint256 receiverBefore = IERC20(USDC).balanceOf(receiver);
-        cowol.recover(USDC);
+        cowol.recover(digest);
         uint256 receiverAfter = IERC20(USDC).balanceOf(receiver);
 
         assertEq(receiverAfter - receiverBefore, total, "receiver should get tokens back");
         assertEq(IERC20(USDC).balanceOf(address(cowol)), 0, "cowol should be empty");
+        assertEq(cowol.committed(USDC), 0, "reservation released");
+        // Returning the deposit must also revoke the signature.
+        assertFalse(cowol.validDigests(digest), "digest revoked on recovery");
     }
 
     // ---------------------------------------------------------------
@@ -301,7 +317,7 @@ contract TestCowol is Test {
     // ---------------------------------------------------------------
     function test_recover_no_order_reverts() public {
         vm.expectRevert();
-        cowol.recover(USDC);
+        cowol.recover(bytes32(uint256(1)));
     }
 
     // ---------------------------------------------------------------

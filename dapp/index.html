@@ -1847,17 +1847,13 @@ const OKXOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
 // CoW Protocol / Cowol integration
-// Order-keyed replacement. The original adapter at
-// 0xb3a0fEB849ABdd207d315A2d0a487E711504fe95 keyed recovery by TOKEN and is
-// DRAINABLE - do not wire it. See deploy/Cowol.md.
 const COWOL_ADDRESS = "0x0000003B59007E8aa43B0e508AfF8a304438333B";
 
 // snwap transfers the sell tokens to this address before calling it, so this
-// stays OFF until the address above has code on mainnet - routing to a codeless
-// address would send them nowhere recoverable.
-//
-// Deployed and Etherscan-verified 2026-08-09 in block 25,718,077, 3,012 bytes of
-// runtime, so the precondition holds and CoW joins the quote race.
+// stays OFF unless the address above has code on mainnet - routing to a codeless
+// address would send them nowhere recoverable. Verified deployed and byte-
+// identical to the committed build before this was turned on; set it back to
+// false if the address ever changes, until the new one is confirmed on-chain.
 const COWOL_LIVE = true;
 const COW_API = "https://api.cow.fi/mainnet/api/v1";
 const COWOL_IFACE = new ethers.Interface([

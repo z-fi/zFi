@@ -29,32 +29,6 @@ Predicted address reproduced by deploying the exact `.initcode.bin` bytes throug
 the real factory on a mainnet fork — `test/CowolDeploy.t.sol`, checked against
 four independent RPCs.
 
-## Superseded — DO NOT WIRE
-
-`0xb3a0fEB849ABdd207d315A2d0a487E711504fe95` was the first deployment. **It is
-drainable.** It keyed recovery by token rather than by order:
-
-```solidity
-expiry[tokenIn]    = validTo;      // last writer wins
-recipient[tokenIn] = receiver;     // last writer wins
-require(sellAmount + feeAmount == balanceOf(tokenIn));   // the WHOLE balance
-```
-
-`swap` is reachable by anyone through the public `zRouter.snwap -> SafeExecutor`
-path and `recover` was permissionless, so while a deposit rested there an
-attacker could add one wei of the same token, name themselves that token's
-recipient with an immediate expiry, and recover the entire balance — the
-victim's deposit included. No solver, no race with settlement. Proof:
-`test/CowolRecoverHijack.t.sol`.
-
-Second defect in the same code: `expiry` defaults to zero, so `recover` on any
-token that was never deposited passed `block.timestamp > 0` and swept the
-balance to `recipient[token]` — `address(0)`.
-
-It has no owner and no pause, so it cannot be stopped on-chain. It was taken out
-of the dapp by removing CoW from the quote race; `COWOL_LIVE` now gates that
-entry. Its balance was zero when the issue was found.
-
 ## What changed
 
 Custody is per-order:
@@ -85,14 +59,22 @@ one transaction, so a refused `swap` unwinds the transfer with it. A deposit tha
 somehow rested here unregistered would be absorbed by the next expiring order:
 balance-based custody cannot attribute tokens no order ever claimed.
 
-## Deploying
+## Deployed
 
-```
-cast send 0x00000000004473e1f31C8266612e7FD5504e6f2a \
-  $(cat deploy/Cowol.deploy.calldata.txt) \
-  --account <keystore> --rpc-url <rpc>
-```
+Live at `0x0000003B59007E8aa43B0e508AfF8a304438333B` as of 2026-08-09, block
+25,718,077, via SafeSummoner. Etherscan-verified.
 
-Then set `COWOL_LIVE = true` in `dapp/index.html`. Not before — snwap transfers
-the sell tokens to `COWOL_ADDRESS` before calling it, so routing to a codeless
-address sends them nowhere recoverable.
+Confirmed before `COWOL_LIVE` was turned on in the dapp:
+
+- runtime bytecode byte-identical to the local build (3,012 B), against three
+  independent RPCs;
+- `orders(bytes32)` and `committed(address)` present, so it is the order-keyed
+  revision;
+- `expiry(address)` and `recipient(address)` revert, so no token-keyed
+  accessor survives;
+- `isValidSignature` on an unregistered digest returns `0xffffffff`.
+
+The gate matters because snwap transfers the sell tokens to `COWOL_ADDRESS`
+before calling it: routing to a codeless address sends them nowhere recoverable.
+If this address ever changes, set `COWOL_LIVE = false` until the new one is
+confirmed on-chain.

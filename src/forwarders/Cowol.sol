@@ -9,8 +9,29 @@ pragma solidity ^0.8.36;
 ///         holds tokens between deposit and async CoW settlement. To prevent
 ///         a third party from approving rogue order digests via the public
 ///         SafeExecutor, swap() recomputes the EIP-712 order digest on-chain
-///         and enforces that sellAmount + feeAmount equals the contract's full
-///         token balance (the deposit that snwap just transferred in).
+///         and enforces that sellAmount + feeAmount equals the FRESH deposit -
+///         this contract's balance net of what earlier live orders already claim.
+///
+///         EVERYTHING IS KEYED BY ORDER DIGEST, NEVER BY TOKEN. `swap` is
+///         reachable by anyone through the public zRouter.snwap -> SafeExecutor
+///         path and `recover` is permissionless, so a deposit is only ever as
+///         safe as the record that says whose it is. `orders[digest]` owns an
+///         exact amount and an exact receiver, `committed[token]` reserves it
+///         against later deposits, and `recover` pays out that order's amount
+///         alone. Token-keyed bookkeeping cannot express that: two orders on one
+///         token share a slot, and whichever wrote last would speak for both.
+///
+///         WHAT THIS STILL ASSUMES: that every deposit is registered in the same
+///         transaction that transfers it, which is what snwap does - a refused
+///         `swap` unwinds the transfer with it. A deposit that somehow rested
+///         here unregistered would be unowned, and the next order to expire
+///         would absorb it, because balance-based custody cannot attribute
+///         tokens no order ever claimed.
+///
+///         RECOVERY ALSO REVOKES THE SIGNATURE. `isValidSignature` answers from
+///         the same mapping `recover` clears, so tokens cannot be returned to
+///         the depositor and then still be pulled by a solver filling the order
+///         that was just unwound.
 contract Cowol {
     address constant SAFE_EXECUTOR = 0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db;
     address constant VAULT_RELAYER = 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110; // GPv2VaultRelayer
@@ -27,12 +48,24 @@ contract Cowol {
 
     uint32 constant MAX_EXPIRY = 1200; // 20 minutes max order lifetime
 
-    /// @dev order digest → approved.
+    /// @dev A live order. `amount` is sellAmount + feeAmount, the exact deposit
+    ///      this order owns, and is what makes the struct non-empty.
+    struct Order {
+        address sellToken;
+        address receiver;
+        uint32 validTo;
+        uint256 amount;
+    }
+
+    /// @dev order digest → approved. Read by `isValidSignature`, cleared by
+    ///      `recover` so an unwound order cannot still be settled.
     mapping(bytes32 => bool) public validDigests;
-    /// @dev token → expiry timestamp for recovery.
-    mapping(address => uint32) public expiry;
-    /// @dev token → receiver for recovery.
-    mapping(address => address) public recipient;
+    /// @dev order digest → the deposit that order owns.
+    mapping(bytes32 => Order) public orders;
+    /// @dev token → sum of `amount` over live orders. Deposits are measured net
+    ///      of this, so a new order can never be written against tokens an
+    ///      existing one is already holding.
+    mapping(address => uint256) public committed;
 
     /// @notice Called via SafeExecutor from zRouter.snwap(). Tokens are already
     ///         in this contract (transferred by snwap before this call).
@@ -61,13 +94,26 @@ contract Cowol {
             uint256 feeAmount
         ) = abi.decode(data, (address, address, uint256, uint256, uint32, bytes32, uint256));
 
-        // The deposit must match sellAmount + feeAmount exactly.
-        require(sellAmount + feeAmount == balanceOf(tokenIn));
+        // Measured against the FRESH deposit, not the whole balance: whatever
+        // earlier live orders already claim is not this order's to sell.
+        //
+        // `committed` is clamped to the balance first because a filled order
+        // leaves its reservation behind - CoW pulls the tokens through
+        // VaultRelayer without telling this contract - and a stale reservation
+        // would otherwise wedge the token until somebody reaped it. Clamping is
+        // safe precisely because orders are `partiallyFillable = false`: a
+        // balance that dropped means an order settled in full, so the
+        // reservation it left really is gone.
+        uint256 balance = balanceOf(tokenIn);
+        uint256 reserved = committed[tokenIn];
+        if (reserved > balance) reserved = balance;
+        uint256 total = sellAmount + feeAmount;
+        require(total == balance - reserved);
 
-        // Cap expiry and store recovery info.
-        require(validTo <= uint32(block.timestamp) + MAX_EXPIRY);
-        expiry[tokenIn] = validTo;
-        recipient[tokenIn] = receiver;
+        require(receiver != address(0));
+        // Strictly in the future, so an order cannot be born recoverable, and
+        // capped so a deposit cannot be parked here indefinitely.
+        require(validTo > block.timestamp && validTo <= uint32(block.timestamp) + MAX_EXPIRY);
 
         // Compute the EIP-712 struct hash → order digest on-chain.
         bytes32 structHash = keccak256(
@@ -88,6 +134,12 @@ contract Cowol {
             )
         );
         bytes32 digest = keccak256(abi.encodePacked(bytes2(0x1901), DOMAIN_SEPARATOR, structHash));
+
+        // Identical parameters would otherwise overwrite a live order's record
+        // while leaving its reservation double-counted.
+        require(orders[digest].amount == 0);
+        orders[digest] = Order(tokenIn, receiver, validTo, total);
+        committed[tokenIn] += total;
         validDigests[digest] = true;
     }
 
@@ -97,10 +149,27 @@ contract Cowol {
         return validDigests[hash] ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
     }
 
-    /// @notice Recover tokens after an order expires unfilled.
-    function recover(address token) external {
-        require(block.timestamp > expiry[token]);
-        safeTransfer(token, recipient[token], balanceOf(token));
+    /// @notice Recover one expired order's deposit, to that order's own
+    ///         receiver. Permissionless by design - the destination is fixed at
+    ///         deposit time, so there is nothing for a caller to choose.
+    /// @dev Also reaps the reservation of an order that already SETTLED, which
+    ///      pays out nothing (the balance is gone) but frees the token for new
+    ///      deposits. That is why the payout is clamped rather than assumed.
+    function recover(bytes32 digest) external {
+        Order memory o = orders[digest];
+        require(o.amount != 0);
+        require(block.timestamp > o.validTo);
+
+        // Cleared before the transfer, and the signature with it: returning the
+        // deposit must also stop a solver from filling the order it belonged to.
+        delete orders[digest];
+        delete validDigests[digest];
+        uint256 reserved = committed[o.sellToken];
+        committed[o.sellToken] = reserved > o.amount ? reserved - o.amount : 0;
+
+        uint256 balance = balanceOf(o.sellToken);
+        uint256 payout = o.amount < balance ? o.amount : balance;
+        if (payout != 0) safeTransfer(o.sellToken, o.receiver, payout);
     }
 
     receive() external payable {}

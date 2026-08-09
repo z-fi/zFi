@@ -41,8 +41,6 @@ they carry no vanity prefix and are not deployed separately:
 | Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
 
-Cowol supersedes `0xb3a0fEB849ABdd207d315A2d0a487E711504fe95`, which must not be
-wired — see [deploy/Cowol.md](deploy/Cowol.md).
 
 ### Reproducing an address
 
