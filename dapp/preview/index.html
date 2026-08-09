@@ -1363,6 +1363,66 @@ async function leg(addr,amt,isNft,meta){
   return{ic:k?sm(k.icon):genIcon(m.sym),txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:addr===ZERO?"ETH":escan(addr)};
 }
 
+// Collection-wide floor bids for `collection`, from the Floorboard lens.
+//
+// A BidRow carries dynamic members (`ids` and two symbols), so each element of
+// the returned array is itself offset-encoded — the row head is a pointer, not
+// the row. Getting that wrong reads `bidder` out of an ABI offset, which
+// decodes to a plausible-looking address, so the walk below is written against
+// the pointer indirection explicitly and refuses anything inconsistent.
+//
+// Every failure returns [] rather than throwing: an unreachable lens should
+// read as "no floor liquidity" and leave the rest of the quote intact.
+function decBidRows(hex){
+  try{
+    const h=strip0x(hex),bytes=h.length/2;
+    const word=b=>{if(b<0||b+32>bytes)throw 0;return BigInt("0x"+h.slice(b*2,(b+32)*2))};
+    const num=b=>{const v=word(b);if(v>0xffffffffffffffffn)throw 0;return Number(v)};
+    const arr=num(0);                       // offset to rows[]
+    if(arr<64||arr+32>bytes)throw 0;
+    const n=num(arr),base=arr+32;
+    if(n>256||base+n*32>bytes)throw 0;
+    const out=[];
+    for(let i=0;i<n;i++){
+      const row=base+num(base+i*32);        // element pointer, then the row
+      if(row+17*32>bytes)throw 0;
+      const f=k=>word(row+k*32);
+      out.push({
+        id:f(0),
+        bidder:"0x"+h.slice((row+1*32+12)*2,(row+2*32)*2),
+        token:"0x"+h.slice((row+2*32+12)*2,(row+3*32)*2),
+        quote:"0x"+h.slice((row+3*32+12)*2,(row+4*32)*2),
+        isNFT:f(4)!==0n,
+        anyId:f(5)!==0n,
+        remaining:f(7),
+        initial:f(8),
+        price:f(9),
+        proceeds:f(10),
+        expiry:f(12),
+      });
+    }
+    return out;
+  }catch{return[]}
+}
+
+// What the collection-wide bids on `collection` will pay, right now. Backs the
+// blank Token ID: the user names a collection and no id, and this answers with
+// the standing bids that will take ANY of them. Paying asset unconstrained —
+// address(0) accepts whatever the bid escrowed.
+async function collectionFloor(collection){
+  if(FLOORVIEW===ZERO||FLOOR===ZERO)return[];
+  const data="0x"+SEL_COLL_BIDS+encAddr(FLOOR)+encAddr(collection)+encAddr(ZERO)
+    +encUint(0)+encUint(16)+encUint(256);
+  const raw=await rpc(C,[{to:FLOORVIEW,data},L]).catch(()=>null);
+  if(!raw)return[];
+  const rows=decBidRows(raw);
+  // Best unit price first. Cross-multiplied for the same reason the lens does
+  // it: proceeds and remaining are routinely twelve decimals apart, so a
+  // division truncates every row to zero and the sort becomes a no-op.
+  return rows.filter(r=>r.anyId&&r.remaining>0n)
+    .sort((a,b)=>{const l=b.proceeds*a.remaining,r=a.proceeds*b.remaining;return l>r?1:l<r?-1:0});
+}
+
 function decViewPage(hex){
   const h=strip0x(hex),bytes=h.length/2;
   const word=b=>{if(b<0||b+32>bytes)throw Error("bad lens page");return BigInt("0x"+h.slice(b*2,(b+32)*2))};
