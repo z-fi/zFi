@@ -27,6 +27,7 @@ const SOURCES = {
   Swapbol: "src/forwarders/Swapbol.sol",
   Cowol: "src/forwarders/Cowol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
+  FloorboardView: "src/FloorboardView.sol",
 };
 
 // Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
@@ -48,6 +49,7 @@ const OPTIMIZER_RUNS = {
   Swapbol: 9_999_999,
   Cowol: 9_999_999,
   Swapbatch: 9_999_999,
+  FloorboardView: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -107,6 +109,7 @@ const specs = [
     ],
   },
   {name: "Cowol", args: []},
+  {name: "FloorboardView", args: []},
   // No legacy board is bound: the zero address disables that whole path for
   // this deployment, which the constructor permits so long as a modern board
   // is set.

@@ -24,6 +24,7 @@ const SOURCES = {
   Dutchboard: "src/Dutchboard.sol",
   Floorboard: "src/Floorboard.sol",
   SwapboardView: "src/SwapboardView.sol",
+  FloorboardView: "src/FloorboardView.sol",
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
   Swapbol: "src/forwarders/Swapbol.sol",

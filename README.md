@@ -20,7 +20,8 @@ committed source.
 | Swapboard | [`0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b`](https://etherscan.io/address/0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b) | escrowed peer-to-peer orders |
 | Dutchboard | [`0x000000a213b430D14Bae6062c176289B05e04489`](https://etherscan.io/address/0x000000a213b430D14Bae6062c176289B05e04489) | descending-price lots |
 | Floorboard | [`0x00000080198137F790DA4C52bb902cf87c276748`](https://etherscan.io/address/0x00000080198137F790DA4C52bb902cf87c276748) | ascending-price standing bids |
-| SwapboardView | [`0x000000E0b25449F32f7D9259aC449bA88E78dFCE`](https://etherscan.io/address/0x000000E0b25449F32f7D9259aC449bA88E78dFCE) | read-only book aggregation |
+| SwapboardView | [`0x000000E0b25449F32f7D9259aC449bA88E78dFCE`](https://etherscan.io/address/0x000000E0b25449F32f7D9259aC449bA88E78dFCE) | read-only lens over Swapboard v1/v2 + Dutchboard |
+| FloorboardView | [`0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7`](https://etherscan.io/address/0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7) | read-only lens over Floorboard bids |
 
 A position on any board is an ERC-721 whose `tokenURI` is a self-contained SVG
 card, rendered onchain by an immutable contract the board deploys in its own
