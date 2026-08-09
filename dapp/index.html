@@ -1847,7 +1847,18 @@ const OKXOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
 // CoW Protocol / Cowol integration
-const COWOL_ADDRESS = "0xb3a0fEB849ABdd207d315A2d0a487E711504fe95";
+// Order-keyed replacement. The original adapter at
+// 0xb3a0fEB849ABdd207d315A2d0a487E711504fe95 keyed recovery by TOKEN and is
+// DRAINABLE - do not wire it. See deploy/Cowol.md.
+const COWOL_ADDRESS = "0x0000003B59007E8aa43B0e508AfF8a304438333B";
+
+// snwap transfers the sell tokens to this address before calling it, so this
+// stays OFF until the address above has code on mainnet - routing to a codeless
+// address would send them nowhere recoverable.
+//
+// Deployed and Etherscan-verified 2026-08-09 in block 25,718,077, 3,012 bytes of
+// runtime, so the precondition holds and CoW joins the quote race.
+const COWOL_LIVE = true;
 const COW_API = "https://api.cow.fi/mainnet/api/v1";
 const COWOL_IFACE = new ethers.Interface([
   "function swap(address, address tokenIn, address, address, bytes data)",
@@ -6492,7 +6503,13 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
     const ox0xPriceP = cachedFetch(`0x:${_cacheKey}`, () => get0xPrice(fromData.address, toData.address, amountIn)).catch(() => null);
     const psPriceP = cachedFetch(`ps:${_cacheKey}`, () => getParaswapPrice(fromData.address, toData.address, amountIn, fromData.decimals, toData.decimals, false)).catch(() => null);
     const ksPriceP = cachedFetch(`ks:${_cacheKey}`, () => getKyberPrice(fromData.address, toData.address, amountIn)).catch(() => null);
-    const cowPriceP = cachedFetch(`cow:${_cacheKey}`, () => getCowPrice(fromData.address, toData.address, amountIn)).catch(() => null);
+    // Gated on COWOL_LIVE. CoW is the only entrant that does not settle inside
+    // the user's own transaction - winning it parks the sell tokens in the Cowol
+    // adapter for up to twenty minutes - so it is the only one whose adapter has
+    // to be trusted with custody rather than just with a postcondition.
+    const cowPriceP = COWOL_LIVE
+      ? cachedFetch(`cow:${_cacheKey}`, () => getCowPrice(fromData.address, toData.address, amountIn)).catch(() => null)
+      : Promise.resolve(null);
     const inchPriceP = cachedFetch(`inch:${_cacheKey}`, () => get1inchPrice(fromData.address, toData.address, amountIn)).catch(() => null);
     const odosPriceP = cachedFetch(`odos:${_cacheKey}`, () => getOdosPrice(fromData.address, toData.address, amountIn)).catch(() => null);
     const okxPriceP = cachedFetch(`okx:${_cacheKey}`, () => getOkxPrice(fromData.address, toData.address, amountIn)).catch(() => null);
