@@ -59,13 +59,26 @@ contract Fwabol {
     int24 internal constant TICK_SPACING = 60;
 
     /// @dev Universal Router command and v4-periphery action ids.
-    bytes internal constant CMD_V4_SWAP = hex"10";
+    ///
+    ///      V4_SWAP then SWEEP. The sweep is the answer to the one way ETH could
+    ///      go missing that this contract cannot otherwise see: if the pool ever
+    ///      consumes less than the exact-in amount, `SETTLE_ALL` pays only what
+    ///      is owed and the remainder is left sitting in the ROUTER, not here -
+    ///      where this contract's own balance check would never find it, and
+    ///      where the next caller of the Universal Router would take it. Today
+    ///      the hook consumes the whole input and the sweep moves zero (see
+    ///      `test_theSweepIsANoOpWhileTheHookConsumesEverything`), so this is
+    ///      insurance against the hook's behaviour changing, bought for one
+    ///      command byte. Like `TAKE`, `SWEEP` names its recipient, so the
+    ///      remainder goes to the user rather than through this contract.
+    bytes internal constant COMMANDS = hex"1004"; // V4_SWAP, SWEEP
     bytes internal constant ACTIONS = hex"060c0e"; // SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE
 
     error BadRecipient();
     error BadRouter();
     error NothingIn();
-    error RouterFailed();
+    /// @dev No `RouterFailed`: a failing router call bubbles the router's own
+    ///      revert instead, which is the only part with any information in it.
     error RefundFailed();
 
     constructor(address _router) {
@@ -84,6 +97,12 @@ contract Fwabol {
 
         bytes[] memory params = new bytes[](3);
         // SWAP_EXACT_IN_SINGLE. currency0 is native ETH, so zeroForOne buys FWA.
+        //
+        // `uint128(msg.value)` cannot silently truncate into a smaller swap:
+        // uint128 tops out at 3.4e38 wei, some twelve orders of magnitude above
+        // the entire ETH supply. Were it somehow reached, SETTLE_ALL would owe
+        // the untruncated `msg.value` against a smaller swap and v4 would revert
+        // on the unsettled delta - loud, not lossy.
         params[0] = abi.encode(
             PoolKey(address(0), FWA, FEE, TICK_SPACING, HOOK), true, uint128(msg.value), minOut, bytes("")
         );
@@ -102,12 +121,16 @@ contract Fwabol {
         // enforced by `amountOutMinimum` inside the swap itself, above.
         params[2] = abi.encode(FWA, recipient, uint256(0));
 
-        bytes[] memory inputs = new bytes[](1);
+        bytes[] memory inputs = new bytes[](2);
         inputs[0] = abi.encode(ACTIONS, params);
+        // SWEEP(native, recipient, minAmount 0): hand back anything the swap did
+        // not spend. A zero minimum makes it a no-op when there is nothing to
+        // sweep, which is the normal case.
+        inputs[1] = abi.encode(address(0), recipient, uint256(0));
 
         uint256 base = address(this).balance - msg.value;
         (bool ok, bytes memory ret) = router.call{value: msg.value}(
-            abi.encodeWithSelector(0x3593564c, CMD_V4_SWAP, inputs, deadline)
+            abi.encodeWithSelector(0x3593564c, COMMANDS, inputs, deadline)
         );
         if (!ok) {
             // Bubble the router's own revert; a generic failure here would hide
@@ -117,11 +140,19 @@ contract Fwabol {
             }
         }
 
-        // The hook does not always consume the whole input, and the router
-        // refunds the remainder to ITS caller - which is this contract. On a
-        // 0.001 ETH buy that was 0.000577 ETH, well over half, left resting
-        // here for whoever called next to sweep. Anything above the balance
-        // this call started with goes back to the recipient.
+        // If the router ever refunds unspent ETH it refunds to ITS caller,
+        // which is this contract, so anything above the balance the call
+        // started with goes on to the recipient. On the live pool that refund
+        // is measured at zero: the hook prices the swap and consumes the whole
+        // exact-in amount, and `SETTLE_ALL` pays exactly that. An earlier read
+        // of this code claimed 0.000577 ETH of a 0.001 ETH buy was retained;
+        // that number was the balance mainnet already holds at the address
+        // Foundry deploys test contracts to, not a refund - see
+        // `test_adapterEthDeltaIsZero`. The sweep stays because "the hook
+        // consumes it all" is the pool's behaviour today, not a guarantee, and
+        // because `base` is a snapshot rather than a zero-check: pre-existing
+        // or force-sent ETH is excluded from the refund instead of being
+        // handed to whoever swaps next.
         uint256 refund = address(this).balance - base;
         if (refund != 0) {
             (bool sent,) = recipient.call{value: refund}("");

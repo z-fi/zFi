@@ -167,7 +167,7 @@ const HELPERS = [
   'decodeString', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
-  'encPermit2Hybrid', 'impactBps', 'safeSym',
+  'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'genIcon',
 ];
 
 function stub() {
@@ -236,7 +236,7 @@ if (exported) {
     decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
     decBar, rollUp, mergeTapes,
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
-    encPermit2Hybrid, impactBps, safeSym,
+    encPermit2Hybrid, impactBps, safeSym, safeUrl, genIcon,
   } = exported;
 
   check('keccak matches known vectors', () => {
@@ -269,6 +269,30 @@ if (exported) {
     eq(safeSym('<svg onload="x">&BAD`'), 'svg onload=xBAD', 'markup stripped');
     eq(safeSym('\u0000\u0008'), '?', 'controls collapse to fallback');
     eq(safeSym('ABCDEFGHIJKLMNOPQRST'), 'ABCDEFGHIJKLMNOP', 'symbol length cap');
+  });
+
+  check('safeUrl admits only https and inline images', () => {
+    eq(safeUrl('https://x.io/a.png'), 'https://x.io/a.png', 'https passes');
+    eq(safeUrl('data:image/svg+xml;base64,QUJD'), 'data:image/svg+xml;base64,QUJD', 'inline image passes');
+    eq(safeUrl('javascript:alert(1)'), '', 'javascript scheme refused');
+    eq(safeUrl('data:text/html;base64,QUJD'), '', 'non-image data URL refused');
+    eq(safeUrl('http://x.io/a.png'), '', 'plaintext http refused');
+    eq(safeUrl('https://x.io/a.png" onerror="alert(1)'), '', 'attribute cannot be closed');
+    eq(safeUrl('https://x.io/' + 'a'.repeat(4096)), '', 'length bounded');
+  });
+
+  // The registry is the one metadata source a list owner writes freely, and both
+  // of its rendered fields reach innerHTML. Assert the ingress normalizes them,
+  // not just that a normalizer exists somewhere in the file.
+  check('registry logo and symbol cannot inject markup', () => {
+    const hostile = '"><img src=x onerror=alert(1)>';
+    const body = genIcon(hostile).match(/>([^<]*)<\/text>/);
+    if (!body) throw Error('genIcon markup shape changed');
+    if (body[1] !== 'I') throw Error(`genIcon emitted raw metadata: ${JSON.stringify(body[1])}`);
+    const ingress = html.match(/const sym=safeSym\(t\.s\)[\s\S]{0,400}?next\.push\([^\n]*\n/);
+    if (!ingress) throw Error('loadTokenList ingress no longer sanitizes via safeSym/safeUrl');
+    if (!/const logo=safeUrl\(t\.l\);/.test(ingress[0])) throw Error('registry logo not passed through safeUrl');
+    if (/\$\{t\.[sl]\}/.test(ingress[0])) throw Error('raw registry field interpolated into markup');
   });
 
   check('executable quote retains its real bound and value', () => {

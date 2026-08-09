@@ -3,14 +3,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.1
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (126674 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (127705 B) is the runtime bytecode of
 ///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 6 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 20782 B headroom).
+///      (24576 B per chunk, 19751 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement: the page
 ///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
@@ -601,8 +601,13 @@ if(!std)continue;
 if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
 if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
 if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
-const sym=String(t.s||"").slice(0,12)||"?";
-next.push({sym,addr:t.a,dec:t.d,std,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
+// The symbol and the logo are the two fields a list owner writes freely, and
+// both reach innerHTML - the symbol through the picker's <option> and this
+// icon, the logo through an attribute. Normalize here, at the only point
+// where registry data enters TOKENS, so nothing downstream has to remember.
+const sym=safeSym(t.s).slice(0,12);
+const logo=safeUrl(t.l);
+next.push({sym,addr:t.a,dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym)});
 }
 // Fungibles first, NFTs after, each keeping the registry's curation order. The
 // picker's default selections are indexes, so a stable partition matters: it
@@ -816,7 +821,19 @@ const IMPACT_HIDE=50n, IMPACT_WARN=500n, IMPACT_CONFIRM=1500n, IMPACT_TYPED=3000
 const impactBps=(v,ref,eo)=>{if(!v||!ref)return null;const lin=ref*REF_N;
 if(lin===0n)return 0n;
 return eo?(v<=lin?0n:(v-lin)*10000n/lin):(v>=lin?0n:(lin-v)*10000n/lin)};
-const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(sym[0]||"?").toUpperCase()}</text></svg>`;
+// Token metadata is attacker-controlled and every consumer of it renders with
+// innerHTML, so it is normalized once here, before it is stored - not at each
+// render site, which is how the registry logo and symbol slipped past.
+const safeSym=s=>String(s??"").replace(/[<>&"'`]/g,"")
+  .replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,16)||"?";
+// A logo lands in an `src` attribute. Allowing only https and inline images -
+// and no character that could close the attribute or the tag - means a hostile
+// list entry can produce a broken image and nothing else.
+const safeUrl=u=>{u=String(u??"").trim();
+  return u.length<=2048&&/^(?:https:\/\/|data:image\/[a-z.+-]+;base64,)[^\s<>"'`\\]+$/i.test(u)?u:""};
+// Only ever emits one character, but it emits it into markup, so it takes the
+// same normalization as everything else rather than trusting its caller.
+const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(safeSym(sym)[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
 async function addCustomToken(a,keep=1){
 a=a.toLowerCase();
@@ -1352,9 +1369,10 @@ const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
 const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466",SEL_FILLPLAN="c277f67c";
 const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
-// collectionBids(address,address,address,uint256,uint256,uint256) and
-// hitNFT(uint256,uint256[],uint256,bool).
-const SEL_COLL_BIDS="16bb24eb",SEL_HIT_NFT="d001810f";
+// collectionBids(address,address,address,uint256,uint256,uint256). Floorboard
+// is READ-ONLY from this page: the floor answers what a collection is fetching,
+// and nothing here hits a bid. Acting on one needs `hitNFT`, which is not wired.
+const SEL_COLL_BIDS="16bb24eb";
 const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="fb910431",SEL_CHECKPOINT="a972985e";
 const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
 const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
@@ -1362,10 +1380,6 @@ let bookSeq=0,bookRows=[],candCache={},bkOpen=LS.bk!=="0";
 
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
-// Token metadata is attacker-controlled. Rows are rendered with innerHTML, so
-// normalize every lens-provided symbol before it reaches text or an SVG.
-const safeSym=s=>String(s??"").replace(/[<>&"'`]/g,"")
-  .replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,16)||"?";
 const escan=(a,id)=>`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
 
 async function leg(addr,amt,isNft,meta){
