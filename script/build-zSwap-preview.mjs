@@ -32,6 +32,20 @@ page = page
   .replace(/<title>[\s\S]*?<\/title>\s*/i, '')
   .replace(/<link rel="icon"[^>]*>\s*/i, '');
 
+// The fixture has to answer for whatever board the page actually asks about.
+// It used to hardcode one address, and that address was the pre-deploy
+// PREDICTION - so once the page was repointed at the real Swapboard the book
+// lens fell through to emptyBook() and the Orders tab rendered blank, which
+// reads as "no liquidity" rather than "the preview is stale". Read the
+// constants out of the page so the two cannot drift again.
+function pageConst(name) {
+  const m = page.match(new RegExp(name + '="(0x[0-9a-fA-F]{40})"'));
+  if (!m) throw Error(`preview cannot find ${name} in zSwap.html`);
+  return m[1].toLowerCase();
+}
+const SB2_ADDR = pageConst('SB2');
+const DUTCH_ADDR = pageConst('DUTCH');
+
 const before = page;
 page = page.replace(
   'const PPLENS="0x0000000000000000000000000000000000000000"',
@@ -48,7 +62,7 @@ if (providerRefs === 0) throw Error('no window.ethereum references — provider 
 page = page.split('window.ethereum').join('window.__PREVIEW');
 console.log(`rebound ${providerRefs} provider reference(s) to the simulation`);
 
-const MOCK = String.raw`
+const MOCK = ((SB2, DUTCH) => String.raw`
 <script>
 /**
  * Simulated chain for the zSwap preview.
@@ -245,8 +259,7 @@ const MOCK = String.raw`
     // Recent-orders lens for the current Swapboard: the book the Orders tab lists.
     if (sel === "6a9849c1") {
       var board = wordAddr(data.slice(8), 0);
-      return board === "0xd3958f4f0610deeff356193722ceb942bdd20d39"
-        ? bookPage(BOOK, board) : emptyBook();
+      return board === "${SB2}" ? bookPage(BOOK, board) : emptyBook();
     }
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
     if (sel === "2a58b330") return "0x" + u256(0);
@@ -409,7 +422,7 @@ const MOCK = String.raw`
   try { localStorage.setItem("ch", "1"); sessionStorage.removeItem("dc"); } catch (e) {}
 })();
 </script>
-`;
+`)(SB2_ADDR, DUTCH_ADDR);
 
 const GALLERY = String.raw`
 <h2 class="pv-h2">Precision pool charts</h2>

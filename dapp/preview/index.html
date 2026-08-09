@@ -228,8 +228,7 @@
     // Recent-orders lens for the current Swapboard: the book the Orders tab lists.
     if (sel === "6a9849c1") {
       var board = wordAddr(data.slice(8), 0);
-      return board === "0xd3958f4f0610deeff356193722ceb942bdd20d39"
-        ? bookPage(BOOK, board) : emptyBook();
+      return board === "0x000000da7bb4b2a9e3e80e9a4d4157e26ca6189b" ? bookPage(BOOK, board) : emptyBook();
     }
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
     if (sel === "2a58b330") return "0x" + u256(0);
@@ -526,10 +525,11 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-// Onchain token list (src/utils/TokenList.sol). PLACEHOLDER: set to the deployed
-// address once it is mined. While this is ZERO the built-in TOKENS below are used
-// unchanged, so the dapp behaves exactly as it did before the list existed.
-const TOKENLIST=ZERO;
+// Onchain token list (src/utils/TokenList.sol), Ethereum mainnet. The built-in
+// TOKENS below remain the fallback: any failure - wrong chain, RPC hiccup, an
+// empty or malformed list - leaves them in place rather than presenting an empty
+// or half-populated picker. See `loadTokenList`.
+const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
 const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
@@ -578,13 +578,32 @@ for(const row of rows){
 if(!row)continue;
 let t;try{t=JSON.parse(row)}catch{continue}
 // Trust nothing: a bad entry is skipped, it does not take the list down.
+// The registry is a CURATED list, not a routing table: it carries assets this
+// dapp cannot act on at all. Two filters, for two different reasons.
+//
+// 1. Namespace. A non-EVM listing (Bitcoin, Solana) has no address here — the
+//    registry renders those accounts as 32 bytes, so the shape test below
+//    already rejects them, but say it outright rather than relying on a
+//    length coincidence to keep a Bitcoin asset out of an Ethereum picker.
+if(t.k!=="eip155")continue;
+// 2. Standard. ERC-20 and the native asset are swappable; ERC-721 is not, but
+//    IS auctionable through Swapboard/Dutchboard and needs to resolve in
+//    `known()` so orderbook NFT legs render with a symbol and icon. Anything
+//    else — UNKNOWN, or a standard added after this page was chunked — is
+//    something this dapp has no path for, so it is left out.
+const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
+if(!std)continue;
 if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
 if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
 if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 const sym=String(t.s||"").slice(0,12)||"?";
-next.push({sym,addr:t.a,dec:t.d,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
+next.push({sym,addr:t.a,dec:t.d,std,icon:t.l?`<img src="${t.l}" width="20" height="20">`:genIcon(sym)});
 }
-if(next.length)TOKENS.splice(0,TOKENS.length,...next);
+// Fungibles first, NFTs after, each keeping the registry's curation order. The
+// picker's default selections are indexes, so a stable partition matters: it
+// keeps a swappable token at index 0 no matter how many collections are listed.
+next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
+if(next.some(t=>t.std==="ft"))TOKENS.splice(0,TOKENS.length,...next);
 }catch{}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
@@ -807,7 +826,7 @@ let sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
 if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
 const dec=Number(BigInt(decRet));
 if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
-TOKENS.push({sym,addr:a,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr:a,dec,std:"ft",icon:genIcon(sym)});
 if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
 return TOKENS.length-1;
 }
@@ -816,7 +835,7 @@ const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
 const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-TOKENS.push({sym,addr,dec,icon:genIcon(sym)});
+TOKENS.push({sym,addr,dec,std:"ft",icon:genIcon(sym)});
 }
 }}catch{}
 const QUOTE_TTL=45000;
@@ -838,14 +857,34 @@ bal.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for
 }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
 render();
 }
-const optsHtml=()=>TOKENS.map((t,i)=>`<option value="${i}">${t.sym}</option>`).join("")+`<option value="__custom">+ Custom token…</option>`;
+// NFTs stay in the picker — Swapboard and Dutchboard auction them — but they are
+// not swappable, so they sit under their own heading instead of being interleaved
+// with tokens the router can actually quote. `select.options` still enumerates
+// options inside an optgroup, so `syncDisabled` is unaffected.
+const optsHtml=()=>{
+const opt=(t,i)=>`<option value="${i}">${t.sym}</option>`;
+const ft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std!=="nft");
+const nft=TOKENS.map((t,i)=>[t,i]).filter(([t])=>t.std==="nft");
+return ft.map(([t,i])=>opt(t,i)).join("")
++(nft.length?`<optgroup label="NFT collections — auction only">${nft.map(([t,i])=>opt(t,i)).join("")}</optgroup>`:"")
++`<option value="__custom">+ Custom token…</option>`;
+};
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
+const isNft=v=>TOKENS[v]?.std==="nft";
+// A collection is listed on every tab so the picker does not reshuffle underneath
+// the user, but it is only SELECTABLE where something can act on it. Swapboard and
+// Dutchboard take NFT lots; the router cannot quote one and `send` prices its
+// transfer in decimals a collection does not have. Gating here rather than in the
+// quote path means the disabled state is visible before the click, instead of a
+// failed quote after it.
 const syncDisabled=()=>{
 const pair=tab!=="send";
-for(const opt of fromSel.options)opt.disabled=pair&&opt.value===toSel.value&&opt.value!=="__custom";
-for(const opt of toSel.options)opt.disabled=pair&&opt.value===fromSel.value&&opt.value!=="__custom";
+const nftOk=tab==="book";
+for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]])
+for(const opt of sel.options)
+opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
@@ -1281,14 +1320,14 @@ refreshBalance();update();syncChart();
 const SEL_TRANSFER="a9059cbb";
 // -------------------------------------------------------------- ORDERBOOK
 // Current Swapboard + legacy v1. The deprecated 0x..85B831 board is excluded.
-const SB2="0xD3958F4f0610DEEff356193722ceb942BDd20d39";
+const SB2="0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b";
 const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
-const SBVIEW="0xF796EF7B108a8DbC8F9650579fAb88BBa00BD296";
-const SWAPBOL="0xa8429A3516E0ad2b0500b2bc7E85BE0262fb2154";
-const DUTCH="0xbb84C1875BD0DbB0392Bd6A337E2690060A9321C";
-const ORDERBOL="0xf03bE3A900762D7D31e6d69809fd2D54Aa53b2BA";
+const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
+const SWAPBOL="0x0000003069053df109F47acac630e03C77804AD8";
+const DUTCH="0x000000a213b430D14Bae6062c176289B05e04489";
+const ORDERBOL="0x000000fADa565c5608570a4F66Fb5E0bD08ef91B";
 const SEL_NEXTID="2a58b330",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7";
-const SEL_FILL1="c37dfc5b",SEL_FILL2="8ab3bfc9",SEL_FILL2_UNWRAP="402ad677",SEL_FILL2_ETH="13092239";
+const SEL_FILL1="c37dfc5b",SEL_FILL2="9d136c7f",SEL_FILL2_UNWRAP="3987baf4",SEL_FILL2_ETH="6f608bab";
 const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
 const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
@@ -1711,7 +1750,11 @@ book.addEventListener("click",async e=>{
       ?"0x"+SEL_DUTCH_FILL+encUint(id)+encUint(r.nA?0n:r.aA)+encAddr(account)+encUint(r.aB)
       :r.v2
         ?"0x"+(nativeIn?SEL_FILL2_ETH:nativeOut?SEL_FILL2_UNWRAP:SEL_FILL2)
-          +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encAddr(ZERO) // 0 = full fill
+          +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encUint(0n)+encAddr(ZERO)
+          // fillAmountB 0 = full fill (omitted by the ETH entry point, which
+          // takes the amount as msg.value), then minAmountA 0 = no floor, then
+          // recipient 0 = the caller. The fills gained the middle two words when
+          // the board grew a slippage floor; the encoding still wrote four.
         :"0x"+SEL_FILL1+encUint(id)+encUint(dl);
     // Swapboard has a native prepaid fill. Dutch NFT lots are not routed
     // through snwap's ERC20 balance guard, so wrap + approve + fill them with
@@ -1908,11 +1951,23 @@ for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttri
 // the pay/receive panels already describe a limit order, so the orders tab
 // reuses them: sell this, want that. Only the labels and the slippage change.
 for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+// Leaving the orderbook with a collection selected would strand that side on an
+// option `syncDisabled` is about to disable — visibly greyed out, and every read
+// of the pair downstream would price an NFT as a fungible. Move it back to
+// something quotable first; the equal-sides fix below then resolves any collision
+// the move creates.
+if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
+if(!isNft(sel.value))continue;
+const alt=TOKENS.findIndex((t,i)=>t.std!=="nft"&&String(i)!==other.value);
+if(alt>=0)sel.value=String(alt);
+}
 // Send lets the pay side hold whatever the receive side holds. Coming back to a
 // pair-based tab with both sides equal would dead-end on "Pick different
 // tokens", so move the side the user was not just looking at.
 if(!send&&fromSel.value===toSel.value){
-const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value);
+// Off the orderbook this must not land on a collection, or it re-strands the
+// side the eviction above just rescued.
+const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value&&(bk||t.std!=="nft"));
 if(alt>=0)toSel.value=String(alt);
 }
 syncDisabled();
