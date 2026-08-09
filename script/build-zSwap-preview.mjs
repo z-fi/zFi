@@ -264,17 +264,18 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
     // NO token-list fixture here yet, deliberately.
     //
-    // `loadTokenList` SPLICES the page's TOKENS array, so serving a short list
+    // loadTokenList SPLICES the page's TOKENS array, so serving a short list
     // replaces the real one wholesale. A two-entry demo fixture threw away
     // seven good tokens, left both sides of the swap on the only survivor
     // ("Pick different tokens"), and dropped every inline SVG icon, because a
     // registry row carries a logo URL where the built-ins carry real markup.
     //
-    // The registry these selectors should answer with is captured verbatim in
-    // script/fixtures/tokenlist.json - 17 real rows including the two real
-    // ERC-721 collections, zOrgz and Wei Name Service. Wiring it needs care
-    // with the embedding: the mock is a template literal, so logo data URIs
-    // have to be neutralised for backticks and ${ before they go in.
+    // The list these selectors should answer with is captured verbatim in
+    // script/fixtures/tokenlist.json - 17 real rows, including the two real
+    // ERC-721 collections. Wiring it needs care this file has already got
+    // wrong twice: prose in here becomes browser JavaScript inside a template
+    // literal, so a backtick anywhere in a comment CLOSES the template and the
+    // build dies somewhere else entirely. Logo data URIs need the same care.
     // One collection-wide floor bid: anyId true, empty ids. This is the row
     // a blank Token ID resolves to, and the only kind SwapboardView could not
     // have represented.

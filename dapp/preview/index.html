@@ -231,16 +231,20 @@
       return board === "0x000000da7bb4b2a9e3e80e9a4d4157e26ca6189b" ? bookPage(BOOK, board) : emptyBook();
     }
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
-    // The curated list, so the picker carries a COLLECTION and the NFT paths
-    // are reachable at all. Without this the page falls back to its hardcoded
-    // tokens, which are all fungible, and the Token ID field can never appear.
-    if (sel === "df7ca268") return "0x" + u256(32) + u256(2) + u256(0) + u256(1);
-    if (sel === "74e18e96") {
-      var which = Number(BigInt("0x" + data.slice(8, 72)));
-      return encStr(which === 0
-        ? '{"k":"eip155","p":"ERC-20","a":"' + A.USDC + '","d":6,"s":"USDC"}'
-        : '{"k":"eip155","p":"ERC-721","a":"' + NFTCOL + '","d":0,"s":"ZORB"}');
-    }
+    // NO token-list fixture here yet, deliberately.
+    //
+    // loadTokenList SPLICES the page's TOKENS array, so serving a short list
+    // replaces the real one wholesale. A two-entry demo fixture threw away
+    // seven good tokens, left both sides of the swap on the only survivor
+    // ("Pick different tokens"), and dropped every inline SVG icon, because a
+    // registry row carries a logo URL where the built-ins carry real markup.
+    //
+    // The list these selectors should answer with is captured verbatim in
+    // script/fixtures/tokenlist.json - 17 real rows, including the two real
+    // ERC-721 collections. Wiring it needs care this file has already got
+    // wrong twice: prose in here becomes browser JavaScript inside a template
+    // literal, so a backtick anywhere in a comment CLOSES the template and the
+    // build dies somewhere else entirely. Logo data URIs need the same care.
     // One collection-wide floor bid: anyId true, empty ids. This is the row
     // a blank Token ID resolves to, and the only kind SwapboardView could not
     // have represented.
@@ -314,7 +318,8 @@
     for (var i = 0; i < s.length; i++) hex += s.charCodeAt(i).toString(16).padStart(2, "0");
     return u256(s.length) + (hex + "0".repeat(Math.ceil(hex.length / 64) * 64 - hex.length));
   }
-  var NFTCOL = "0x00000000000000000000000000000000000000ff";
+  // zOrgz, a REAL ERC-721 in the registry - not an invented collection.
+  var NFTCOL = "0x00000000008835cef3e0d2333695f288ee6b63a6";
 
   // (BidRow[] rows, uint256 nextCursor). BidRow holds dynamic members, so the
   // array element is itself offset-encoded: the head is a POINTER to the row.
@@ -336,7 +341,7 @@
       + u256(17 * 32 + 32)            // tokenSymbol offset
       + u256(17 * 32 + 32 + 64)       // quoteSymbol offset
       + u256(0)                       // ids: empty = ANY id
-      + u256(4) + "5a4f5242".padEnd(64, "0")   // "ZORB"
+      + u256(3) + "7a7a7a".padEnd(64, "0")     // "zzz" (zOrgz)
       + u256(4) + "55534443".padEnd(64, "0");  // "USDC"
     return "0x" + u256(64) + u256(0) + u256(1) + u256(32) + row;
   }
