@@ -294,11 +294,15 @@ contract zSwap {
     ///      Bounded, like `latest`, so a long chain degrades to an
     ///      underestimate instead of running out of gas.
     function generation() public view returns (uint256 n) {
-        address at = address(this);
+        // Cast to this contract's own type: a successor IS a zSwap, so no
+        // separate interface is needed - and one appended below the trailing
+        // source comment does not survive `build-zSwap.mjs`, which regenerates
+        // this file.
+        address cur = address(this);
         for (n = 1; n != 33; ++n) {
-            address prev = IzSwapLineage(at).PREVIOUS();
+            address prev = zSwap(cur).PREVIOUS();
             if (prev == address(0)) return n;
-            at = prev;
+            cur = prev;
         }
     }
 
@@ -308,7 +312,7 @@ contract zSwap {
     function latest() external view returns (address tip) {
         tip = address(this);
         for (uint256 i; i != 32; ++i) {
-            address next = IzSwapLineage(tip).successor();
+            address next = zSwap(tip).successor();
             if (next == address(0)) return tip;
             tip = next;
         }
