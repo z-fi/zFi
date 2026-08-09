@@ -66,6 +66,7 @@ contract Fwabol {
     error BadRouter();
     error NothingIn();
     error RouterFailed();
+    error RefundFailed();
 
     constructor(address _router) {
         if (_router == address(0) || _router.code.length == 0) revert BadRouter();
@@ -92,11 +93,19 @@ contract Fwabol {
         // the recipient from the router's caller - this contract - and strand
         // the output. Naming the user makes the PoolManager pay them directly,
         // which is the one transfer shape FWAToken permits.
-        params[2] = abi.encode(FWA, recipient, uint256(minOut));
+        //
+        // The amount is OPEN_DELTA (zero), meaning "everything this swap is
+        // owed", NOT `minOut`. TAKE moves an EXACT amount, so passing the floor
+        // takes the floor and leaves the surplus owing - and v4 refuses to close
+        // the lock with an unsettled delta, so every swap that did better than
+        // its own minimum reverted. The floor is not lost by this: it is
+        // enforced by `amountOutMinimum` inside the swap itself, above.
+        params[2] = abi.encode(FWA, recipient, uint256(0));
 
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = abi.encode(ACTIONS, params);
 
+        uint256 base = address(this).balance - msg.value;
         (bool ok, bytes memory ret) = router.call{value: msg.value}(
             abi.encodeWithSelector(0x3593564c, CMD_V4_SWAP, inputs, deadline)
         );
@@ -106,6 +115,17 @@ contract Fwabol {
             assembly ("memory-safe") {
                 revert(add(ret, 0x20), mload(ret))
             }
+        }
+
+        // The hook does not always consume the whole input, and the router
+        // refunds the remainder to ITS caller - which is this contract. On a
+        // 0.001 ETH buy that was 0.000577 ETH, well over half, left resting
+        // here for whoever called next to sweep. Anything above the balance
+        // this call started with goes back to the recipient.
+        uint256 refund = address(this).balance - base;
+        if (refund != 0) {
+            (bool sent,) = recipient.call{value: refund}("");
+            if (!sent) revert RefundFailed();
         }
     }
 
