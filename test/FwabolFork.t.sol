@@ -100,3 +100,22 @@ contract FwabolForkTest is Test {
         assertEq(IERC20(FWA).balanceOf(address(fwabol)), 0, "still nothing stuck mid-route");
     }
 }
+
+contract FwabolTraceTest is Test {
+    address constant UR = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
+    Fwabol fwabol;
+    address user = makeAddr("user2");
+    function setUp() public {
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum-rpc.publicnode.com")));
+        fwabol = new Fwabol(UR);
+        vm.deal(user, 10 ether);
+    }
+    function test_trace() public {
+        uint256 u0 = user.balance;
+        vm.prank(user);
+        fwabol.swapEthForFwa{value: 0.001 ether}(user, 1, block.timestamp + 300);
+        emit log_named_uint("adapter balance after", address(fwabol).balance);
+        emit log_named_uint("router balance", UR.balance);
+        emit log_named_int("user ETH delta", int256(user.balance) - int256(u0));
+    }
+}
