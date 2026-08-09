@@ -42,6 +42,31 @@ they carry no vanity prefix and are not deployed separately:
 | Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
 | Swapbatch | [`0x0000005471EEF58dD16Aeccda21C37758E36a0b6`](https://etherscan.io/address/0x0000005471EEF58dD16Aeccda21C37758E36a0b6) | batch board fills paying native ETH |
+| Fwabol | [`0x000000F2303C64Ad38956B38917Ade68b7a604FE`](https://etherscan.io/address/0x000000F2303C64Ad38956B38917Ade68b7a604FE) | buy-side only, ETH → FWA through the Universal Router |
+
+Fwabol is the one forwarder that does not take delivery of its own output.
+FWAToken reverts every transfer that does not touch the PoolManager, its owner
+or a distributor, so an adapter that received FWA could never pass it on - the
+funds would be stuck at its address permanently. It therefore builds `TAKE`,
+which names the user, rather than `TAKE_ALL`, which would infer the adapter.
+The same asymmetry makes sells impossible to adapt: v4's `SETTLE` pays from the
+router's `_msgSender()`, so a selling adapter would have to hold FWA first. FWA
+sells go straight from the user to the Universal Router with Permit2.
+
+### Quoting
+
+| | address | |
+|---|---|---|
+| V4QuoteLens | [`0x000000c3aE1692983941495162A4AAB40660E65F`](https://etherscan.io/address/0x000000c3aE1692983941495162A4AAB40660E65F) | Uniswap V4 pools priced by a hook |
+
+Route a pool here when its `hooks` address is non-zero and to `zQuoterV4`
+otherwise. Local tick math cannot quote a hooked pool - a hook may replace the
+curve, take a delta out of the output, or set the fee per swap, none of which
+is visible in slot0. This wraps Uniswap's canonical V4Quoter, which runs the
+hook for real through `PoolManager.unlock`. Not `view`, because `unlock` writes
+transient storage; `eth_call` simulates it fine. `solveExactOut` bisects
+exact-in quotes for hooks that implement only one direction, as the ETH/FWA
+hook does.
 
 Swapbatch binds `legacyBoard = address(0)`: no legacy board is reachable through
 it, so `tokensOut` must be empty and `legacyBoardMode` false on every call.
