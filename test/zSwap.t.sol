@@ -38,7 +38,7 @@ contract zSwapDeployTest is Test {
             }
             p[k] = _writeChunk(part);
         }
-        return new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
+        return new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5]);
     }
 
     function _contains(bytes memory haystack, bytes memory needle) internal pure returns (bool) {
@@ -90,7 +90,7 @@ contract zSwapDeployTest is Test {
     function test_NameAndVersion() public {
         zSwap z = _deploy();
         assertEq(z.NAME(), "zSwap");
-        assertEq(z.VERSION(), "0.2");
+        assertEq(z.VERSION(), "0.1");
     }
 
     function test_RejectsMissingOrDuplicatedChunks() public {
@@ -109,7 +109,7 @@ contract zSwapDeployTest is Test {
             address[CHUNKS] memory p = [a, b, c, d, e, f];
             p[i] = address(0);
             vm.expectRevert(zSwap.InvalidData.selector);
-            new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
+            new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5]);
         }
 
         // A duplicate would serve one slice twice and drop another entirely. Every
@@ -119,7 +119,7 @@ contract zSwapDeployTest is Test {
                 address[CHUNKS] memory p = [a, b, c, d, e, f];
                 p[j] = p[i];
                 vm.expectRevert(zSwap.InvalidData.selector);
-                new zSwap(p[0], p[1], p[2], p[3], p[4], p[5]);
+                new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5]);
             }
         }
     }

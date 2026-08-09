@@ -171,7 +171,7 @@ pragma solidity ^0.8.36;
 ///   BOLD->rETH priced ~$28 through a skewed V4 pool where 3-hop gave ~$36.
 contract zSwap {
     string public constant NAME = "zSwap";
-    string public constant VERSION = "0.2";
+    string public constant VERSION = "0.1";
 
     /// @dev The HTML payload lives in six separate data contracts whose runtime
     /// bytecode IS the markup. Splitting it removes EIP-170 as a ceiling on the
@@ -188,12 +188,57 @@ contract zSwap {
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
 
+    // ------------------------------------------------------------- LINEAGE
+    //
+    // `html()` is immutable and stays that way. The successor below is a CLAIM
+    // ABOUT LINEAGE, never a redirect: this contract serves its own six chunks
+    // forever, whatever the DAO deploys later. Making `html()` forward to a
+    // successor would have been the smaller change and it would have cost the
+    // one property this design exists for - an address whose bytes cannot move
+    // under an auditor, a bookmark, or a gateway cache that was told the answer
+    // is `immutable`. Mutability belongs in the naming layer, where an ENS
+    // contenthash can point wherever the DAO wants and everybody already
+    // expects the target to change.
+    //
+    // A client wanting the newest build walks `successor` until it reaches
+    // zero. A client wanting the bytes it audited stops where it is.
+
+    /// @notice The DAO permitted to deploy this version's successor.
+    address public immutable DAO;
+
+    /// @notice The version that deployed this one; zero for v0.1.
+    address public immutable PREVIOUS;
+
+
+    /// @notice The next version, once the DAO has deployed it.
+    /// @dev Write-once. A rewritable pointer is not lineage, it is a mutable
+    ///      redirect wearing lineage's clothes - and history that can be
+    ///      restated is not history. A successor set in error is not a dead
+    ///      end either: the DAO deploys v0.3 from v0.2 and the chain moves on.
+    address public successor;
+
+    error NotDAO();
+    error AlreadySucceeded();
+    error DeployFailed();
+
+    /// @notice Emitted once per version, by the version that created it.
+    event Succeeded(address indexed successor, uint256 indexed version);
+
     struct KeyValue {
         string key;
         string value;
     }
 
+    /// @param dao      Governance permitted to deploy the successor.
+    /// @param previous  The version deploying this one; `address(0)` for v0.1.
+    /// @dev `previous` cannot be misstated. Any non-zero value must equal
+    ///      `msg.sender`, and a successor is only ever created by `deployNext`,
+    ///      so the deployer IS the predecessor at construction time. No version
+    ///      NUMBER is stored: it is derived by walking, so there is no counter
+    ///      to pass in wrongly, skip, or repeat. The chain is the record.
     constructor(
+        address dao,
+        address previous,
         address data1,
         address data2,
         address data3,
@@ -201,6 +246,9 @@ contract zSwap {
         address data5,
         address data6
     ) {
+        if (previous != address(0) && msg.sender != previous) revert InvalidData();
+        DAO = dao;
+        PREVIOUS = previous;
         address[6] memory d = [data1, data2, data3, data4, data5, data6];
         for (uint256 i; i != 6; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
@@ -214,6 +262,56 @@ contract zSwap {
         DATA4 = data4;
         DATA5 = data5;
         DATA6 = data6;
+    }
+
+    /// @notice Deploy the next version, at an address known before it exists.
+    /// @dev CREATE2 from THIS contract, so the successor's constructor sees
+    ///      `msg.sender == address(this)` and its `previous` check passes only
+    ///      for the real predecessor. That is what makes the backward pointer
+    ///      unforgeable rather than merely recorded: nothing outside this
+    ///      function can produce a contract that names this one as its parent.
+    /// @param initcode Creation code for the successor, constructor args
+    ///                 appended. Its `previous` argument must be this address.
+    /// @param salt     CREATE2 salt, so the address is checkable in advance.
+    function deployNext(bytes calldata initcode, bytes32 salt) external returns (address next) {
+        if (msg.sender != DAO) revert NotDAO();
+        if (successor != address(0)) revert AlreadySucceeded();
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            calldatacopy(p, initcode.offset, initcode.length)
+            next := create2(0, p, initcode.length, salt)
+        }
+        if (next == address(0)) revert DeployFailed();
+        successor = next;
+        emit Succeeded(next, generation() + 1);
+    }
+
+    /// @notice How far along the chain this contract sits: 1 for v0.1.
+    /// @dev Counted by walking `PREVIOUS` to the root rather than stored. A
+    ///      number held in state is a second copy of what the pointers already
+    ///      say, and two records of one fact can disagree - the counter is the
+    ///      one that would be wrong, and nothing on chain could tell you.
+    ///      Bounded, like `latest`, so a long chain degrades to an
+    ///      underestimate instead of running out of gas.
+    function generation() public view returns (uint256 n) {
+        address at = address(this);
+        for (n = 1; n != 33; ++n) {
+            address prev = IzSwapLineage(at).PREVIOUS();
+            if (prev == address(0)) return n;
+            at = prev;
+        }
+    }
+
+    /// @notice The newest version reachable from here, following `successor`.
+    /// @dev Bounded: an unbounded walk is a gas bomb the DAO could arm by
+    ///      accident. Callers past the bound keep walking from what they get.
+    function latest() external view returns (address tip) {
+        tip = address(this);
+        for (uint256 i; i != 32; ++i) {
+            address next = IzSwapLineage(tip).successor();
+            if (next == address(0)) return tip;
+            tip = next;
+        }
     }
 
     function html() external view returns (string memory) {
