@@ -17,6 +17,7 @@ const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const LEGACY = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const ZERO = "0x0000000000000000000000000000000000000000";
+const UNIVERSAL_ROUTER = "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af";
 const EIP170 = 24_576;
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
@@ -28,6 +29,8 @@ const SOURCES = {
   Cowol: "src/forwarders/Cowol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
   FloorboardView: "src/FloorboardView.sol",
+  Fwabol: "src/forwarders/Fwabol.sol",
+  V4QuoteLens: "src/V4QuoteLens.sol",
 };
 
 // Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
@@ -50,6 +53,8 @@ const OPTIMIZER_RUNS = {
   Cowol: 9_999_999,
   Swapbatch: 9_999_999,
   FloorboardView: 9_999_999,
+  Fwabol: 9_999_999,
+  V4QuoteLens: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -114,6 +119,13 @@ const specs = [
   // this deployment, which the constructor permits so long as a modern board
   // is set.
   {name: "Swapbatch", args: [WETH, ZERO, artifactAddress("Swapboard")]},
+  // The Universal Router is bound at construction rather than passed per call:
+  // a caller-supplied router would let anyone pair this contract's ETH with
+  // arbitrary calldata. Mainnet UR, read off the Permit2 spender in the live
+  // FWA sell payload rather than guessed.
+  {name: "Fwabol", args: [UNIVERSAL_ROUTER]},
+  // Everything it needs - the canonical V4Quoter - is a constant.
+  {name: "V4QuoteLens", args: []},
 ];
 
 let failed = false;

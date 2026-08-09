@@ -37,6 +37,8 @@ const SOURCES = {
   ZorgConvictionRenderer: "src/dao/ZorgConvictionRenderer.sol",
   ZorgConviction: "src/dao/ZorgConviction.sol",
   ZorgTokenListLens: "src/dao/ZorgTokenListLens.sol",
+  Fwabol: "src/forwarders/Fwabol.sol",
+  V4QuoteLens: "src/V4QuoteLens.sol",
 };
 // Contracts whose deployment manifest pins them below the default optimizer
 // runs. A salt is only valid for initcode built at the pinned setting, so
