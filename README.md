@@ -5,6 +5,56 @@ the first onchain superdapp
 [zQuoter](https://etherscan.io/address/0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13)
 [zSwap source](src/zSwap.sol)
 
+## Canonical deployments
+
+Ethereum mainnet, all Etherscan-verified. Every address below was placed by
+SafeSummoner CREATE2 at [`0x00000000004473e1f31C8266612e7FD5504e6f2a`](https://etherscan.io/address/0x00000000004473e1f31C8266612e7FD5504e6f2a);
+salts and creation payloads live in [`deploy/`](deploy/), and
+`node script/check-create2-artifacts.mjs` reproduces each address from the
+committed source.
+
+### Orderbooks
+
+| | address | |
+|---|---|---|
+| Swapboard | [`0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b`](https://etherscan.io/address/0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b) | escrowed peer-to-peer orders |
+| Dutchboard | [`0x000000a213b430D14Bae6062c176289B05e04489`](https://etherscan.io/address/0x000000a213b430D14Bae6062c176289B05e04489) | descending-price lots |
+| Floorboard | [`0x00000080198137F790DA4C52bb902cf87c276748`](https://etherscan.io/address/0x00000080198137F790DA4C52bb902cf87c276748) | ascending-price standing bids |
+| SwapboardView | [`0x000000E0b25449F32f7D9259aC449bA88E78dFCE`](https://etherscan.io/address/0x000000E0b25449F32f7D9259aC449bA88E78dFCE) | read-only book aggregation |
+
+A position on any board is an ERC-721 whose `tokenURI` is a self-contained SVG
+card, rendered onchain by an immutable contract the board deploys in its own
+constructor. Those renderers are `CREATE`-derived at nonce 1 of each board, so
+they carry no vanity prefix and are not deployed separately:
+
+| | address |
+|---|---|
+| SwapboardMetadata | [`0xA94786d3Dfb08a661C28F00517c0cf98EfA93b9e`](https://etherscan.io/address/0xA94786d3Dfb08a661C28F00517c0cf98EfA93b9e) |
+| DutchboardMetadata | [`0xeC6d97A413f1e7268AeC383F501d6F9a7134176A`](https://etherscan.io/address/0xeC6d97A413f1e7268AeC383F501d6F9a7134176A) |
+| FloorboardMetadata | [`0x65c85E0ACfb3E1F3CF90F46b1155F24c8c509Bc8`](https://etherscan.io/address/0x65c85E0ACfb3E1F3CF90F46b1155F24c8c509Bc8) |
+
+### Forwarders
+
+| | address | |
+|---|---|---|
+| Orderbol | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | zRouter → Swapboard / Dutchboard |
+| Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
+| Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
+
+Cowol supersedes `0xb3a0fEB849ABdd207d315A2d0a487E711504fe95`, which must not be
+wired — see [deploy/Cowol.md](deploy/Cowol.md).
+
+### Reproducing an address
+
+Every board pins `max_optimizer_runs` in
+[foundry.toml](foundry.toml) — Dutchboard at 20, Swapboard, Floorboard and
+SwapboardView at 200 — because they do not otherwise fit EIP-170. A salt is only
+valid for initcode built at the pinned setting, so `forge verify-contract` needs
+`--num-of-optimizations` set to it explicitly; the default profile's 9,999,999
+produces bytecode Etherscan will reject. The same applies to the metadata
+renderers, which compile at their **parent board's** setting rather than their
+own, because the board embeds their creation code.
+
 ## zSwap: permanent onchain HTML dapp
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
