@@ -25,6 +25,14 @@ const LENS = '0x4444444444444444444444444444444444444444';
 
 let page = fs.readFileSync(path.join(ROOT, 'zSwap.html'), 'utf8');
 
+// The real zList registry, captured from mainnet into script/fixtures. It is
+// emitted as its own JSON script block rather than embedded in the mock, and
+// that is deliberate: the mock is a template literal, so a backtick or a
+// dollar-brace anywhere inside a logo data URI would close it and break the
+// build somewhere unrelated. JSON in a script tag only has to avoid `</script`.
+const REGISTRY = fs.readFileSync(path.join(ROOT, 'script', 'fixtures', 'tokenlist.json'), 'utf8')
+  .replace(/<\/script/gi, '<\\/script');
+
 // Strip the document-level tags: the preview supplies its own shell.
 page = page
   .replace(/<!doctype html>\s*/i, '')
@@ -262,20 +270,20 @@ const MOCK = ((SB2, DUTCH) => String.raw`
       return board === "${SB2}" ? bookPage(BOOK, board) : emptyBook();
     }
     if (sel === "5f452988" || sel === "eb33e466" || sel === "98035c9a") return emptyBook();
-    // NO token-list fixture here yet, deliberately.
-    //
-    // loadTokenList SPLICES the page's TOKENS array, so serving a short list
-    // replaces the real one wholesale. A two-entry demo fixture threw away
-    // seven good tokens, left both sides of the swap on the only survivor
-    // ("Pick different tokens"), and dropped every inline SVG icon, because a
-    // registry row carries a logo URL where the built-ins carry real markup.
-    //
-    // The list these selectors should answer with is captured verbatim in
-    // script/fixtures/tokenlist.json - 17 real rows, including the two real
-    // ERC-721 collections. Wiring it needs care this file has already got
-    // wrong twice: prose in here becomes browser JavaScript inside a template
-    // literal, so a backtick anywhere in a comment CLOSES the template and the
-    // build dies somewhere else entirely. Logo data URIs need the same care.
+    // The curated list, served exactly as mainnet returns it - real symbols,
+    // real logos, and the two real ERC-721 collections. Falling through instead
+    // would make loadTokenList fail and the page would show its built-in list,
+    // which has no collections in it at all.
+    if (sel === "df7ca268") {
+      var body = u256(32) + u256(REG.length);
+      REG.forEach(function (r) { body += u256(BigInt(r.id)); });
+      return "0x" + body;
+    }
+    if (sel === "74e18e96") {
+      var want = BigInt("0x" + data.slice(8, 72)).toString();
+      var hit = REG.filter(function (r) { return r.id === want; })[0];
+      return encStr(hit ? hit.json : "");
+    }
     // One collection-wide floor bid: anyId true, empty ids. This is the row
     // a blank Token ID resolves to, and the only kind SwapboardView could not
     // have represented.
@@ -349,6 +357,11 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     for (var i = 0; i < s.length; i++) hex += s.charCodeAt(i).toString(16).padStart(2, "0");
     return u256(s.length) + (hex + "0".repeat(Math.ceil(hex.length / 64) * 64 - hex.length));
   }
+  var REG = (function () {
+    try { return JSON.parse(document.getElementById("pv-registry").textContent); }
+    catch (e) { return []; }
+  })();
+
   // zOrgz, a REAL ERC-721 in the registry - not an invented collection.
   var NFTCOL = "0x00000000008835cef3e0d2333695f288ee6b63a6";
 
@@ -579,6 +592,7 @@ const SHELL = `<title>zSwap — live preview</title>
   The real zSwap page, running against a fake chain.
   <span>Balances, routes and candles are fixtures — no wallet, no network. Connect, quote, switch tabs and open the chart as you would on mainnet.</span>
 </div>
+<script type="application/json" id="pv-registry">${REGISTRY}</script>
 ${MOCK}
 ${page}
 ${GALLERY}`;
