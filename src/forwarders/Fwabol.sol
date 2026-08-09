@@ -29,6 +29,18 @@ pragma solidity ^0.8.36;
 ///      a recipient explicitly, instead of `TAKE_ALL` (0x0f), which infers one.
 ///      FWA is never owed to this contract at any point in the transaction.
 ///
+/// @dev SUPERSEDED BY `Fwabol2`, AND THE PARAGRAPH BELOW IS WRONG. It reasons
+///      from the Universal Router's rules as though they were v4's. Settling in
+///      v4 is `sync()`, get the tokens to the PoolManager by any means,
+///      `settle()` - the credit comes from the measured balance change, and the
+///      payer need not be the locker. Unlock the PoolManager directly and a
+///      sell works fine without the adapter ever holding FWA: the seller pays
+///      the PoolManager in one hop, which is a shape the token permits. That is
+///      what `Fwabol2` does, in both directions, and it is proven on a fork in
+///      `Fwabol2Fork.t.sol`. This contract remains live and correct for buys;
+///      it is simply doing through a router what it never needed a router for.
+///      The text below is kept as written because it is deployed.
+///
 /// @dev BUY ONLY, AND THAT IS NOT A LIMITATION THIS CONTRACT CHOSE. Selling FWA
 ///      needs the FWA to move user -> PoolManager, and v4's SETTLE pays from the
 ///      router's `_msgSender()`. Through an adapter that is the ADAPTER, so the

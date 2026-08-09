@@ -36,12 +36,20 @@ contract FwabolDeployTest is Test {
         vm.deal(user, 10 ether);
     }
 
+    /// @dev Deploys if the address is still free, and otherwise checks the code
+    ///      already there. The suite was written before the deploy and has to
+    ///      keep working after it - a rehearsal that turns red the moment it
+    ///      succeeds stops being run, and then stops being true.
     function _deploy(string memory name) internal returns (address deployed) {
         address expected = vm.parseAddress(vm.trim(vm.readFile(string.concat("deploy/", name, ".address.txt"))));
         bytes memory calldata_ =
             vm.parseBytes(vm.trim(vm.readFile(string.concat("deploy/", name, ".deploy.calldata.txt"))));
 
-        assertEq(expected.code.length, 0, "the address is still free on mainnet");
+        if (expected.code.length != 0) {
+            // Already live. Everything downstream still runs against it, which
+            // is the stronger check anyway: it is the real deployed runtime.
+            return expected;
+        }
 
         vm.prank(deployer);
         (bool ok, bytes memory ret) = SUMMONER.call(calldata_);
