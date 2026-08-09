@@ -68,7 +68,7 @@ Current v0.2 deployment flow: deploy the six generated HTML data contracts, then
 
 The HTML payload is installed as the **runtime bytecode of six data contracts** created before the wrapper. The wrapper keeps six `immutable` pointers (`DATA1`…`DATA6`). At read time, `html()` copies all six chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 121,044 bytes across 6 data contracts (20,174 / 20,174 / 20,174 / 20,174 / 20,174 / 20,174 bytes), with 26,412 bytes of 6-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 122,145 bytes across 6 data contracts (20,358 / 20,358 / 20,358 / 20,358 / 20,358 / 20,355 bytes), with 25,311 bytes of 6-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 

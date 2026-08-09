@@ -12,14 +12,18 @@ pragma solidity ^0.8.36;
 ///         and enforces that sellAmount + feeAmount equals the FRESH deposit -
 ///         this contract's balance net of what earlier live orders already claim.
 ///
-///         EVERYTHING IS KEYED BY ORDER DIGEST, NEVER BY TOKEN. `swap` is
-///         reachable by anyone through the public zRouter.snwap -> SafeExecutor
-///         path and `recover` is permissionless, so a deposit is only ever as
-///         safe as the record that says whose it is. `orders[digest]` owns an
-///         exact amount and an exact receiver, `committed[token]` reserves it
-///         against later deposits, and `recover` pays out that order's amount
-///         alone. Token-keyed bookkeeping cannot express that: two orders on one
-///         token share a slot, and whichever wrote last would speak for both.
+///         EVERYTHING IS KEYED BY ORDER DIGEST, NEVER BY TOKEN. The previous
+///         revision kept `expiry[token]` and `recipient[token]`, both
+///         last-writer-wins, and matched each deposit against the contract's
+///         WHOLE balance. Because `swap` is reachable by anyone through the
+///         public zRouter.snwap -> SafeExecutor path and `recover` was
+///         permissionless, an attacker could add one wei of a token somebody
+///         else's order was resting on, write themselves in as that token's
+///         recipient with an immediate expiry, and recover the entire balance.
+///         No solver, no race with settlement. Custody is per-order or it is not
+///         custody at all: `orders[digest]` owns an exact amount and an exact
+///         receiver, `committed[token]` reserves it against later deposits, and
+///         `recover` pays out that order's amount alone.
 ///
 ///         WHAT THIS STILL ASSUMES: that every deposit is registered in the same
 ///         transaction that transfers it, which is what snwap does - a refused
