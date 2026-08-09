@@ -3,7 +3,6 @@ pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 import {V4Port, PoolKey} from "../src/forwarders/V4Port.sol";
-import {V4PoolRegistry, PoolKey as RegKey} from "../src/V4PoolRegistry.sol";
 import {Fwabol as FwabolV2} from "../src/forwarders/FwabolV2.sol";
 import {V4QuoteLens} from "../src/V4QuoteLens.sol";
 
@@ -219,96 +218,5 @@ contract V4PortTest is Test {
 
         assertEq(IERC20(FWA).balanceOf(address(port)), 0, "no token ever rests here");
         assertEq(address(port).balance, 0, "no ETH ever rests here");
-    }
-}
-
-/// @notice The registry: a menu the page reads, not a gate the swap consults.
-contract V4PoolRegistryTest is Test {
-    address constant FWA = 0xa0Df17B5aC76ABaBA36E1450E2cbCd18A620C845;
-    address constant HOOK = 0x2C67ebA8A50AF0dB5Fba55F725247a75CbDA6444;
-    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-
-    V4PoolRegistry reg;
-    address dao = makeAddr("dao");
-
-    function setUp() public {
-        reg = new V4PoolRegistry(dao);
-    }
-
-    function _fwa() internal pure returns (RegKey memory) {
-        return RegKey(address(0), FWA, 0, 60, HOOK);
-    }
-
-    function test_theWholePointListingSurvivesWithoutARedeploy() public {
-        assertEq(reg.count(), 0, "starts empty");
-
-        vm.prank(dao);
-        bytes32 id = reg.list(_fwa(), "ETH/FWA");
-
-        (bytes32[] memory ids, V4PoolRegistry.Pool[] memory pools) = reg.all();
-        assertEq(ids.length, 1, "one pool listed");
-        assertEq(ids[0], id, "by its pool id");
-        assertEq(pools[0].key.hooks, HOOK, "with the hook the page needs");
-        assertEq(pools[0].label, "ETH/FWA", "and a name to show");
-
-        // The second popular hooked pool, a year later, costs one transaction.
-        vm.prank(dao);
-        reg.list(RegKey(address(0), USDC, 500, 10, address(0)), "ETH/USDC");
-        assertEq(reg.count(), 2, "no page redeploy involved");
-    }
-
-    function test_onlyTheOwnerCanListOrDelist() public {
-        vm.expectRevert(V4PoolRegistry.Unauthorized.selector);
-        reg.list(_fwa(), "ETH/FWA");
-
-        vm.prank(dao);
-        bytes32 id = reg.list(_fwa(), "ETH/FWA");
-
-        vm.expectRevert(V4PoolRegistry.Unauthorized.selector);
-        reg.delist(id);
-    }
-
-    /// The same pool under two spellings would show twice in the page and
-    /// quote twice for nothing.
-    function test_aPoolCannotBeListedTwice() public {
-        vm.startPrank(dao);
-        reg.list(_fwa(), "ETH/FWA");
-        vm.expectRevert(V4PoolRegistry.AlreadyListed.selector);
-        reg.list(_fwa(), "ETH/FWA again");
-        vm.stopPrank();
-    }
-
-    /// v4 keys must sort. An unsorted one addresses no pool at all, so it is
-    /// refused at listing rather than quietly never matching.
-    function test_unsortedKeysAreRefused() public {
-        vm.prank(dao);
-        vm.expectRevert(V4PoolRegistry.BadKey.selector);
-        reg.list(RegKey(FWA, address(0), 0, 60, HOOK), "backwards");
-    }
-
-    function test_delistCompactsTheList() public {
-        vm.startPrank(dao);
-        bytes32 a = reg.list(_fwa(), "A");
-        bytes32 b = reg.list(RegKey(address(0), USDC, 500, 10, address(0)), "B");
-        reg.delist(a);
-        vm.stopPrank();
-
-        (bytes32[] memory ids,) = reg.all();
-        assertEq(ids.length, 1, "one left");
-        assertEq(ids[0], b, "and it is the other one");
-
-        vm.expectRevert(V4PoolRegistry.NotListed.selector);
-        reg.get(a);
-    }
-
-    function test_ownershipCanMoveToTheDao() public {
-        address next = makeAddr("newDao");
-        vm.prank(dao);
-        reg.transferOwnership(next);
-        assertEq(reg.owner(), next, "handed off");
-
-        vm.prank(dao);
-        vm.expectRevert(V4PoolRegistry.Unauthorized.selector);
-        reg.list(_fwa(), "nope");
     }
 }

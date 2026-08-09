@@ -41,7 +41,6 @@ const SOURCES = {
   FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
-  V4PoolRegistry: "src/V4PoolRegistry.sol",
 };
 // See the note in check-create2-artifacts.mjs.
 const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
