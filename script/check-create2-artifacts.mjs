@@ -18,6 +18,7 @@ const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const LEGACY = "0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const UNIVERSAL_ROUTER = "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af";
+const DAO = "0xE7Aa6cA3a9Ca3fe92a425dFeaD24900B9BF49853";
 const EIP170 = 24_576;
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
@@ -32,6 +33,8 @@ const SOURCES = {
   Fwabol: "src/forwarders/Fwabol.sol",
   FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
+  V4Port: "src/forwarders/V4Port.sol",
+  V4PoolRegistry: "src/V4PoolRegistry.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -66,6 +69,8 @@ const OPTIMIZER_RUNS = {
   Fwabol: 9_999_999,
   FwabolV2: 9_999_999,
   V4QuoteLens: 9_999_999,
+  V4Port: 9_999_999,
+  V4PoolRegistry: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -140,6 +145,12 @@ const specs = [
   // No constructor args: the PoolManager, the token, the hook and the pool
   // parameters are all constants, so nothing can be pointed elsewhere.
   {name: "FwabolV2", args: []},
+  // Any pool, hooked or not: the key is a call argument. Safe because the
+  // only funds it can move are the caller's own - see the contract header.
+  {name: "V4Port", args: []},
+  // Owned by the DAO, which is what makes a new pool a transaction rather
+  // than a new zSwap deployment.
+  {name: "V4PoolRegistry", args: [DAO]},
 ];
 
 let failed = false;
