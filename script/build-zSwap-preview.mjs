@@ -367,8 +367,8 @@ const MOCK = ((SB2, DUTCH) => String.raw`
       + u256(17 * 32 + 32)            // tokenSymbol offset
       + u256(17 * 32 + 32 + 64)       // quoteSymbol offset
       + u256(0)                       // ids: empty = ANY id
-      + u256(4) + Buffer.from("ZORB").toString("hex").padEnd(64, "0")
-      + u256(4) + Buffer.from("USDC").toString("hex").padEnd(64, "0");
+      + u256(4) + "5a4f5242".padEnd(64, "0")   // "ZORB"
+      + u256(4) + "55534443".padEnd(64, "0");  // "USDC"
     return "0x" + u256(64) + u256(0) + u256(1) + u256(32) + row;
   }
 
