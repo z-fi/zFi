@@ -926,6 +926,14 @@ const cid=await rpc(I,[]);
 if(accs[0]&&+cid===1){
 account=accs[0];
 showAddr();
+// The registry has to load here too, not only in `connect`. This path runs
+// for anyone whose wallet is ALREADY authorised - a returning user, or the
+// preview, which boots connected - and without it they silently get the
+// built-in fallback list instead of the curated one. The symptom is a picker
+// that looks fine and is simply the wrong list, with no NFT collections in it
+// at all, which reads as "the registry has none" rather than "it never loaded".
+await loadTokenList();
+rebuild();
 refreshBalance();update();syncChart();
 }
 }catch{}

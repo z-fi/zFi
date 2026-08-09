@@ -3,14 +3,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.1
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (126177 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (126674 B) is the runtime bytecode of
 ///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 6 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 21279 B headroom).
+///      (24576 B per chunk, 20782 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement: the page
 ///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
@@ -1318,6 +1318,14 @@ const cid=await rpc(I,[]);
 if(accs[0]&&+cid===1){
 account=accs[0];
 showAddr();
+// The registry has to load here too, not only in `connect`. This path runs
+// for anyone whose wallet is ALREADY authorised - a returning user, or the
+// preview, which boots connected - and without it they silently get the
+// built-in fallback list instead of the curated one. The symptom is a picker
+// that looks fine and is simply the wrong list, with no NFT collections in it
+// at all, which reads as "the registry has none" rather than "it never loaded".
+await loadTokenList();
+rebuild();
 refreshBalance();update();syncChart();
 }
 }catch{}
