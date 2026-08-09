@@ -22,6 +22,7 @@ const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
   Dutchboard: "src/Dutchboard.sol",
+  Floorboard: "src/Floorboard.sol",
   SwapboardView: "src/SwapboardView.sol",
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbatch: "src/forwarders/Swapbatch.sol",
@@ -39,7 +40,22 @@ const SOURCES = {
 // runs. A salt is only valid for initcode built at the pinned setting, so
 // picking up an artifact compiled at any other one silently mines - or
 // verifies - the wrong payload.
-const PINNED_RUNS = {SwapboardView: 200, TokenList: 20, TokenListRenderer: 20, ZorgConviction: 200, ZorgConvictionRenderer: 200};
+//
+// Kept in step with `OPTIMIZER_RUNS` in check-create2-artifacts.mjs and with
+// foundry.toml itself. The three boards were absent from this table long after
+// they were pinned in foundry.toml, so a salt mined through here would have
+// been mined against 9,999,999-run initcode that the canonical build never
+// produces - the exact failure the paragraph above describes.
+const PINNED_RUNS = {
+  Swapboard: 200,
+  Dutchboard: 20,
+  Floorboard: 200,
+  SwapboardView: 200,
+  TokenList: 20,
+  TokenListRenderer: 20,
+  ZorgConviction: 200,
+  ZorgConvictionRenderer: 200,
+};
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   console.error(

@@ -20,9 +20,29 @@ const EIP170 = 24_576;
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
   Dutchboard: "src/Dutchboard.sol",
+  Floorboard: "src/Floorboard.sol",
   SwapboardView: "src/SwapboardView.sol",
   Orderbol: "src/forwarders/Orderbol.sol",
   Swapbol: "src/forwarders/Swapbol.sol",
+};
+
+// Must mirror `[[profile.default.compilation_restrictions]]` in foundry.toml.
+// A contract with no restriction there compiles at the profile's own
+// `optimizer_runs`, which is 9,999,999.
+//
+// This table used to be the single expression `name === "SwapboardView" ? 200
+// : 9_999_999`, written before the restrictions existed. Every board is
+// restricted now - Dutchboard and Swapboard because they do not otherwise fit
+// EIP-170 - so the check could never find a matching artifact and failed with
+// "run the canonical forge build first" no matter how recently you had. A
+// guard that cannot pass is not a guard; it trains you to skip it.
+const OPTIMIZER_RUNS = {
+  Swapboard: 200,
+  Dutchboard: 20,
+  Floorboard: 200,
+  SwapboardView: 200,
+  Orderbol: 9_999_999,
+  Swapbol: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -34,7 +54,8 @@ const artifactAddress = (name) => getAddress(read(`${name}.address.txt`));
 function findFreshArtifact(name) {
   const source = SOURCES[name];
   const sourceHash = keccak256(fs.readFileSync(path.join(ROOT, source)));
-  const expectedRuns = name === "SwapboardView" ? 200 : 9_999_999;
+  const expectedRuns = OPTIMIZER_RUNS[name];
+  if (expectedRuns === undefined) throw Error(`no optimizer_runs declared for ${name}`);
   const candidates = [];
   function visit(dir) {
     if (!fs.existsSync(dir)) return;
@@ -66,6 +87,7 @@ function findFreshArtifact(name) {
 const specs = [
   {name: "Swapboard", args: [WETH]},
   {name: "Dutchboard", args: [WETH]},
+  {name: "Floorboard", args: [WETH]},
   {name: "SwapboardView", args: []},
   {
     name: "Orderbol",
