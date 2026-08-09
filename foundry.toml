@@ -159,7 +159,34 @@ max_optimizer_runs = 200
 # setting rather than slack in the source.
 [[profile.default.compilation_restrictions]]
 paths = "src/Dutchboard.sol"
-max_optimizer_runs = 200
+# Dropped from 200 to 20 when the receipt gained the price a closed listing
+# settled at (`_priceAt`) and the quote-symbol snapshot: at 200 the contract
+# measured 24,637 B, 61 B OVER EIP-170. Same trade as the entries above and the
+# same release invariant - the headroom here is a build setting, so any edit
+# must be followed by `forge build --force --sizes`.
+#
+# Then 84 B for the push payload's magic word (`PUSH_TERMS_MAGIC`), which this
+# board needed more than Swapboard did: it discriminates its two term structs
+# BY LENGTH, so an unrelated 160- or 192-byte blob attached to a transfer had
+# two sizes to collide with rather than one.
+#
+# Margin: 309 B on a clean `--force` build (an incremental build reads ~100 B
+# larger; the clean number is the one that ships). The way it was won is worth
+# recording, because the obvious lever turned out not to be one. Adding the already-credited guard to
+# `afterOrderProceeds` cost 144 B and put the contract 59 B OVER. Lowering runs
+# recovered almost nothing - the floor of a 1..200 sweep is 24,621 B, still over,
+# and via_ir moves NON-MONOTONICALLY along the way (40 runs is larger than 60,
+# and hoisting three loop-invariant mapping lookups made the contract 18 B
+# BIGGER). What actually paid was shared code: binding a nested mapping once and
+# using the pointer twice, and factoring the payout-destination guard repeated at
+# four call sites into `_checkPayee` - that one alone was 212 B. So measure; do
+# not reason about size from the shape of the source.
+#
+# If it gets tight again, the lever Swapboard used is still available - `tokenURI`
+# assembles a twenty-three-field `RenderParams` in this contract - but it is a
+# larger move, because the renderer would also need the price and progress
+# helpers exposed.
+max_optimizer_runs = 20
 
 [[profile.default.compilation_restrictions]]
 paths = "src/Floorboard.sol"
@@ -203,11 +230,28 @@ max_optimizer_runs = 20
 paths = "src/dao/ZorgConvictionRenderer.sol"
 max_optimizer_runs = 200
 
-# Swapboard reached ~437 B under EIP-170 after gaining replaceOrder, the push
-# receiver and ERC-721 positions. Its per-call gas is dominated by storage and
-# transfers rather than by inlining, and the same restriction on the pool
-# factory measured LOWER runtime gas, not higher. Same release invariant as the
-# lens: any edit here must be followed by a deployed-size check.
+# Swapboard was the tightest contract in the repo: 135 B under EIP-170, then
+# 346 B OVER once the escrow registry landed (see `escrowedNFT`, which fixes a
+# push path that could mint an order over another order's backing).
+#
+# The headroom came from `tokenURI`. It used to assemble SwapboardMetadata's
+# twenty-field `RenderParams` here and encode it - two dynamic strings included
+# - into the call. That was 1,242 B of runtime code on the contract with none
+# to spare, spent so the RENDERER, which has thousands, would not have to read.
+# The board now exposes its snapshots as getters and the renderer does its own
+# reading; `tokenURI` is three lines. Net 636 B after the four new getters, and
+# it bought back the two checks the registry could not afford at the time (the
+# duplicate check on the pull path, and the push payload's magic word) AND the
+# return from runs=50 to runs=200.
+#
+# Runs is still the right dial if more is ever needed - its per-call gas is
+# dominated by storage and transfers rather than by inlining, and the same
+# restriction on the pool factory measured LOWER runtime gas, not higher. Note
+# that runs=10 and runs=1 do not resolve to a profile at all ("Missing profile
+# satisfying settings restrictions"); 20 does, which is where Dutchboard sits.
+#
+# Margin: 290 B. Same release invariant as the entries above - any edit here
+# must be followed by `forge build --force --sizes`.
 [[profile.default.compilation_restrictions]]
 paths = "src/Swapboard.sol"
 max_optimizer_runs = 200

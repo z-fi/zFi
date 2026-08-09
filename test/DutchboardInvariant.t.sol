@@ -140,7 +140,7 @@ contract Handler is Test {
         vm.startPrank(seller);
         lot.approve(address(board), amount);
         uint256 id =
-            board.listERC20(address(lot), ethQuote ? address(0) : address(quote), amount, 10 ether, 0, 0, 1 hours);
+            board.listERC20(address(lot), ethQuote ? address(0) : address(quote), amount, 10 ether, 0, 0, 1 hours, 0);
         vm.stopPrank();
         _addLive(id);
     }
@@ -169,6 +169,7 @@ contract Handler is Test {
         uint256 nid = nextNftId++;
         nft.mint(seller, nid);
         bytes memory terms = abi.encode(
+            keccak256("Dutchboard.PushTerms.v1"),
             Dutchboard.PushTerms(ethQuote ? address(0) : address(quote), 5 ether, 0, 0, 1 hours)
         );
         vm.prank(seller);

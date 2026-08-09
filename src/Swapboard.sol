@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {PositionSVG} from "./utils/PositionSVG.sol";
 import {ERC721} from "../lib/solady/src/tokens/ERC721.sol";
@@ -25,7 +25,7 @@ import {ReentrancyGuardTransient} from "../lib/solady/src/utils/ReentrancyGuardT
 ///      `fillOrderUnwrap`, wrapped and unwrapped against the immutable canonical
 ///      WETH at the edge. Orders themselves only ever reference tokens, so
 ///      settlement keeps one asset model and one set of exact-delta invariants,
-///      and permissionless paths like `sweepExpired` never make a value call to
+///      and permissionless paths like `cancelExpired` never make a value call to
 ///      arbitrary code. Integrators reading `tokenA`/`tokenB` see WETH where a
 ///      user deposited ETH; UIs should present that pair as ETH.
 ///
@@ -81,19 +81,58 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     uint256 public nextOrderId;
     mapping(uint256 orderId => Order order) public orders;
 
-    /// @dev The ask this order currently rests against, kept for the live SVG
-    ///      receipt. `amountB` is decremented on every partial fill, so it
-    ///      cannot be its own denominator; this is set at creation and reset by
-    ///      `replaceOrder`, which restarts the order's fill progress along with
-    ///      its price.
-    mapping(uint256 orderId => uint256 amount) internal initialAmountB;
+    /// @notice The ask this order was last written against.
+    /// @dev The live SVG receipt needs a denominator for fill progress, and
+    ///      `amountB` cannot be its own: it is decremented on every partial
+    ///      fill. This is set at creation and reset by `replaceOrder`, which
+    ///      restarts the order's fill progress along with its price. Public
+    ///      because the renderer reads it for itself; see `tokenURI`.
+    mapping(uint256 orderId => uint256 amount) public initialAmountB;
 
-    /// @dev `decimals + 1`, zero for an unavailable/non-standard response.
-    ///      Captured at creation so rendering never depends on token code.
-    mapping(address token => uint8 snapshot) internal tokenDecimals;
+    /// @notice `decimals + 1`, zero for an unavailable/non-standard response.
+    /// @dev Captured at creation so rendering never depends on token code, and
+    ///      read by the renderer rather than passed to it; see `tokenURI`.
+    mapping(address token => uint8 snapshot) public tokenDecimals;
 
-    /// @dev Optional, sanitised ERC-721 symbol captured at order creation.
-    mapping(address token => string symbol) internal tokenSymbols;
+    /// @notice Optional, sanitised symbol captured at order creation.
+    /// @dev Read by the renderer rather than passed to it; see `tokenURI`.
+    mapping(address token => string symbol) public tokenSymbols;
+
+    /// @notice Whether this board is escrowing `tokenId` of `collection` for a
+    ///         live order right now.
+    /// @dev `ownerOf` answers "is the board holding this token", which is NOT
+    ///      the question escrow solvency asks: a token the board is already
+    ///      holding for somebody else's order answers it just as affirmatively
+    ///      as one this call deposited. The push path moves nothing, so
+    ///      `ownerOf` was the only thing standing between a collection that can
+    ///      be induced to call the receiver hook with an arbitrary token id and
+    ///      a second order minted over an existing order's backing - whose
+    ///      cancellation hands the NFT away and leaves the first order
+    ///      permanently unfillable and uncancellable. A collection weird enough
+    ///      to produce the duplicate at all reaches that lock without anyone
+    ///      intending an attack.
+    ///
+    ///      So the board keeps its own record of what it escrows and treats
+    ///      that, not the collection's word, as the authority. Both creation
+    ///      paths consult it: the push path, which has no other backstop, and
+    ///      the pull path, where a collection whose `ownerOf` lies well enough
+    ///      to pass `_moveNFT`'s before/after check twice could otherwise rest
+    ///      two orders on one token.
+    ///
+    ///      A flag rather than the order id: nothing needs to know WHICH order
+    ///      holds it - `orders` already says that - only whether the slot is
+    ///      taken. One cold SSTORE per NFT order, cleared on the close that
+    ///      releases the token: a full fill, or a return of escrow.
+    mapping(address collection => mapping(uint256 tokenId => bool)) internal escrowedNFT;
+
+    /// @notice Whether a closed order was closed BY A FILL that took the whole
+    ///         thing, rather than cancelled.
+    /// @dev Public because the renderer reads it for itself; see `tokenURI`.
+    /// `Order` has no spare bit (slot 0 is exactly full), and the
+    ///      distinction cannot be recovered from the legs: a full fill zeroes
+    ///      both, but so does a CANCELLED order escrowing NFT token id 0 against
+    ///      NFT token id 0, which the receipt then drew as FILLED at 100%.
+    mapping(uint256 id => bool) public settled;
 
     /// @notice Orders soft-frozen against fills and repricing.
     /// @dev A position hands over an order's cash flows, but until it is frozen
@@ -131,22 +170,57 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      marketplace never takes custody before the buyer pays.
     ///
     ///      A commitment closes that window: while it stands the claim cannot
-    ///      change by any path, including the owner's own. It only ever extends,
-    ///      so a buyer who reads a commitment cannot have it shortened under
-    ///      them.
+    ///      change by any path, including the owner's own. It is also IMMUTABLE
+    ///      while it stands - not shortenable, and not lengthenable either - so
+    ///      the timestamp a buyer reads is the exact end of the window and not
+    ///      merely its floor. An extendable commitment would be a promise the
+    ///      seller could rewrite: commit three days, list the receipt, then
+    ///      front-run the buyer's purchase with a year, and the buyer settles
+    ///      for a position nobody can touch for a year. `MAX_COMMITMENT` bounds
+    ///      one window; unlimited re-extension would have made that bound
+    ///      meaningless.
     ///
-    ///      It CLEARS on transfer to a different owner, which is what keeps it
-    ///      from being a trap: the buyer receives an unbound position, and a
-    ///      seller who wants out early can hand it to another address of their
-    ///      own - at the cost of no longer owning the thing they listed, so the
-    ///      stale sale fails rather than settling on an emptied claim. A
-    ///      self-transfer clears nothing.
+    ///      It RIDES WITH THE TOKEN. An earlier design cleared it on transfer to
+    ///      a different owner, on the reasoning that a seller's only early exit
+    ///      cost them the thing they had listed, so a stale sale would fail
+    ///      rather than settle on an emptied claim. That reasoning was wrong:
+    ///      ownership is recoverable and escrow is not. Hand the receipt to a
+    ///      second wallet (clearing the commitment), cancel from there (taking
+    ///      the backing), hand it back - three transactions, bundleable ahead of
+    ///      the buyer's purchase, and the buyer pays for a spent ticket. The
+    ///      commitment therefore survives every transfer and lapses only on its
+    ///      own timestamp, which is the guarantee a buyer was reading in the
+    ///      first place.
+    ///
+    ///      Because there is now no early exit at all, the window is CAPPED: an
+    ///      unbounded commitment would be an irreversible burn of the escrow
+    ///      rather than a promise about a sale.
     mapping(uint256 orderId => uint64 until) public frozenUntil;
+
+    /// @dev The longest a commitment may run from the moment it is made. Long
+    ///      enough to outlast any sale, short enough that a mistake is a wait
+    ///      rather than a loss.
+    uint64 public constant MAX_COMMITMENT = 365 days;
 
     /// @notice True when `orderId` cannot be filled or repriced right now, by
     ///         either a soft freeze or a live commitment.
     /// @dev Same name and signature as the mapping getter it replaces, so a
     ///      caller reading `frozen(id)` still gets the question they asked.
+    ///
+    ///      IT IS NOT A GUARANTEE TO A BUYER, and folding both states into one
+    ///      boolean makes that easy to misread. A soft freeze can be lifted by
+    ///      the owner in the same block a marketplace settles, followed by a
+    ///      cancellation or a repricing down to dust. Anyone buying a position
+    ///      off this board must read the exact `frozenUntil` timestamp
+    ///      atomically at purchase and require it to cover the sale window -
+    ///      never this boolean. Note also that a seller with no live commitment
+    ///      can front-run a purchase with a fresh one: the buyer settles on a
+    ///      position that cannot be filled, repriced or cancelled by anyone
+    ///      until it lapses. That griefs rather than steals, and
+    ///      `MAX_COMMITMENT` bounds the wait, but a marketplace flow should
+    ///      pin the exact value it expects. Custody-first escrows - which take
+    ///      the receipt and become the maker - are immune to both and are the
+    ///      recommended path.
     function frozen(uint256 orderId) public view returns (bool) {
         return _softFrozen[orderId] || block.timestamp < frozenUntil[orderId];
     }
@@ -186,11 +260,11 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
 
     error ZeroETH();
     error BadMaker();
-    error UnexpectedETH();
     error SameToken();
     error ZeroAmount();
     error ZeroAddress();
     error BadRecipient();
+    error UnexpectedETH();
     error LengthMismatch();
     error ZeroFillAmount();
     error DeadlineExpired();
@@ -200,8 +274,6 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     error NotAContract(address token);
     error ExpectedERC20(address token);
     error OrderFrozen(uint256 orderId);
-    error CommitmentActive(uint256 orderId, uint64 until);
-    error CommitmentNotExtended(uint256 orderId, uint64 until);
     error OrderExpired(uint256 orderId);
     error OrderNotFound(uint256 orderId);
     error OrderNotActive(uint256 orderId);
@@ -210,6 +282,8 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     error LiveClaimNotEscrowable(address token);
     error PartialFillNotAllowed(uint256 orderId);
     error NotWETH(address expected, address actual);
+    error CommitmentTooLong(uint64 until, uint64 max);
+    error CommitmentActive(uint256 orderId, uint64 until);
     error ETHAmountMismatch(uint256 required, uint256 sent);
     error NFTTransferFailed(address token, uint256 tokenId);
     error BalanceMismatch(uint256 expected, uint256 received);
@@ -241,7 +315,8 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      declaring this; Swapboard does so at creation, on both legs.
     bytes4 internal constant LIVE_ORDER_POSITION = 0x28a93a2e;
 
-    /// @dev `bytes4(keccak256("ERC721"))` per ERC-165.
+    /// @dev The ERC-721 interface id: the XOR of the interface's function
+    ///      selectors, as ERC-165 defines it. NOT `keccak256("ERC721")`.
     bytes4 internal constant ERC721_INTERFACE = 0x80ac58cd;
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
@@ -260,7 +335,9 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
             let p := mload(0x40)
             mstore(p, shl(224, 0x01ffc9a7)) // supportsInterface(bytes4)
             mstore(add(p, 4), interfaceId)
-            if staticcall(30000, token, p, 0x24, 0, 0x20) { yes := and(eq(returndatasize(), 32), eq(mload(0), 1)) }
+            if staticcall(30000, token, p, 0x24, 0, 0x20) {
+                yes := and(eq(returndatasize(), 32), eq(mload(0), 1))
+            }
         }
     }
 
@@ -283,6 +360,20 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      fine where the buyer takes CUSTODY first - an escrow or auction
     ///      that holds the receipt becomes the maker, and the seller loses
     ///      exactly the control this check cannot verify.
+    ///
+    ///      WHAT THIS DOES NOT COVER. It catches contracts that VOLUNTARILY
+    ///      declare the interface, which makes it a defence against accidents
+    ///      between well-behaved boards and nothing more. The hazard it
+    ///      describes is far wider than the set it detects: a Uniswap V3 or V4
+    ///      LP NFT, a vault receipt, a staking or vesting position - any
+    ///      value-bearing NFT - can be emptied by its holder right up to
+    ///      delivery, and none of them declare anything here. A hostile board
+    ///      simply would not declare it, and the 30,000 gas cap means even an
+    ///      honest-looking one can force a `false` by making
+    ///      `supportsInterface` expensive. Makers asking for an NFT as payment
+    ///      must judge that asset themselves; a front end taking a
+    ///      value-bearing NFT as `tokenB` needs an allowlist and a warning, not
+    ///      this check.
     function _checkEscrowable(address token) internal view {
         if (_declares(token, LIVE_ORDER_POSITION)) revert LiveClaimNotEscrowable(token);
     }
@@ -299,6 +390,11 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      uint256)`, which no ERC-721 implements. The NFT is locked forever;
     ///      this board has no rescue path. One staticcall at creation is a
     ///      cheap price for that.
+    ///
+    ///      It only sees collections that implement ERC-165, so it is an
+    ///      accident guard rather than a guarantee. When it misses, the lock it
+    ///      describes is permanent and this board has no rescue path - which is
+    ///      the other half of why assets belong on an allowlist.
     function _checkFungible(address token) internal view {
         if (_declares(token, ERC721_INTERFACE)) revert ExpectedERC20(token);
     }
@@ -317,30 +413,12 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      metadata call and cannot go stale. WNS is best-effort only.
     function tokenURI(uint256 orderId) public view override returns (string memory) {
         ownerOf(orderId); // Standard ERC-721 behaviour: nonexistent IDs have no metadata.
-        Order storage o = orders[orderId];
-        return METADATA_RENDERER.tokenURI(
-            SwapboardMetadata.RenderParams({
-                id: orderId,
-                maker: o.maker,
-                tokenA: o.tokenA,
-                tokenB: o.tokenB,
-                amountA: o.amountA,
-                amountB: o.amountB,
-                initialAmountB: initialAmountB[orderId],
-                expiry: o.expiry,
-                decimalsA: o.nftA ? 0 : tokenDecimals[o.tokenA],
-                decimalsB: o.nftB ? 0 : tokenDecimals[o.tokenB],
-                symbolA: o.nftA ? tokenSymbols[o.tokenA] : "",
-                symbolB: o.nftB ? tokenSymbols[o.tokenB] : "",
-                frozenUntil: frozenUntil[orderId],
-                active: o.active,
-                partialFill: o.partialFill,
-                nftA: o.nftA,
-                nftB: o.nftB,
-                frozen: frozen(orderId),
-                restricted: o.counterparty != address(0)
-            })
-        );
+        // The renderer reads the order for itself through the getters above.
+        // Assembling its twenty-field parameter struct HERE, and encoding two
+        // dynamic strings into the call, cost 1,242 bytes of runtime code on
+        // the one contract in this pair with no EIP-170 headroom to spend. It
+        // is a view path either way; see `SwapboardMetadata.tokenURI`.
+        return METADATA_RENDERER.tokenURI(address(this), orderId);
     }
 
     function _rememberDecimals(address token) internal {
@@ -407,15 +485,20 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      and there is only ever one source of truth. Minting sets it in
     ///      `_store`; burning is a close, where it must not be cleared because
     ///      `maker == address(0)` is how a nonexistent order is recognised.
+    ///
+    ///      No separate event: makership changes exactly when the receipt
+    ///      moves, so the ERC-721 `Transfer` log IS the maker-change log, and a
+    ///      second one would be the same fact twice. Indexers should join
+    ///      `Transfer` against order state rather than expect an order event.
     function _afterTokenTransfer(address from, address to, uint256 id) internal override {
         if (from != address(0) && to != address(0)) {
             _checkMaker(to);
             orders[id].maker = to;
-            // A commitment binds the SELLER, so it ends with their ownership -
-            // the buyer receives a position they can act on immediately. A
-            // self-transfer is not a sale and clears nothing, or the commitment
-            // would be one transaction away from meaningless.
-            if (from != to && frozenUntil[id] != 0) delete frozenUntil[id];
+            // `frozenUntil` is deliberately NOT cleared here; see its docs. A
+            // commitment that ended with the seller's ownership could be voided
+            // by round-tripping the receipt through a second wallet and
+            // cancelling from there, which is exactly the move it exists to
+            // rule out.
         }
     }
 
@@ -424,9 +507,24 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         if (msg.sender != weth) revert NotWETH(weth, msg.sender);
     }
 
+    /// @dev The word a push payload must open with before this board reads the
+    ///      rest of it as terms.
+    ///
+    ///      LENGTH ALONE IS NOT CONSENT. A wallet, bridge or marketplace that
+    ///      attaches its own metadata to a `safeTransferFrom` and happens to
+    ///      land on the right size would have it decoded as an order, and a
+    ///      blob whose words happen to fall on a real `tokenB` with a small
+    ///      `amountB` becomes a live order at a price its sender never chose.
+    ///      Most such payloads revert on one of the checks below; "most" is not
+    ///      the standard an irreversible escrow should be held to. A
+    ///      domain-separated prefix makes the intent explicit and sends
+    ///      everything else back to the original refusal.
+    bytes32 internal constant PUSH_ORDER_MAGIC = keccak256("Swapboard.PushOrder.v1");
+
     /// @notice Terms carried in a pushed NFT's transfer data.
-    /// @dev Exactly five words. `tokenA` is not present: the collection is
-    ///      established by the call itself, not by anything the sender writes.
+    /// @dev Exactly five words, behind `PUSH_ORDER_MAGIC`. `tokenA` is not
+    ///      present: the collection is established by the call itself, not by
+    ///      anything the sender writes.
     struct PushOrder {
         address tokenB;
         uint256 amountB;
@@ -450,10 +548,11 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///
     ///      OWNERSHIP IS VERIFIED, NOT MOVED. The token is already here by the
     ///      time this runs, so there is nothing to transfer - and attempting a
-    ///      transfer would be the bug. A caller that moved nothing must not be
-    ///      able to mint an order over escrow that is already backing somebody
-    ///      else's, which is exactly what checking `ownerOf` prevents. The same
-    ///      reasoning as Dutchboard's push listing.
+    ///      transfer would be the bug. `ownerOf` establishes that the token
+    ///      arrived at all; `escrowedNFT` establishes that THIS call is what
+    ///      put it here rather than an earlier order, which is the part
+    ///      `ownerOf` alone cannot answer. See that mapping for why the
+    ///      difference matters.
     ///
     ///      A fabricated collection can of course report whatever it likes and
     ///      mint an order backed by its own worthless token. That is not an
@@ -470,8 +569,9 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     {
         // No terms means this was not a deliberate order, so keep the old
         // behaviour and refuse it.
-        if (data.length != 160) revert DirectNFTTransfer();
-        PushOrder memory o = abi.decode(data, (PushOrder));
+        if (data.length != 192) revert DirectNFTTransfer();
+        if (bytes32(data[:32]) != PUSH_ORDER_MAGIC) revert DirectNFTTransfer();
+        PushOrder memory o = abi.decode(data[32:], (PushOrder));
 
         address tokenA = msg.sender;
         // This board is itself an ERC-721 now, so a position pushed back here
@@ -496,7 +596,8 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         // payment leg's ownerOf preflight already does at fill time.
         _checkExpiry(o.expiry);
 
-        if (IERC721(tokenA).ownerOf(tokenId) != address(this)) {
+        // Not already backing a live order here, and actually present.
+        if (escrowedNFT[tokenA][tokenId] || IERC721(tokenA).ownerOf(tokenId) != address(this)) {
             revert NFTTransferFailed(tokenA, tokenId);
         }
 
@@ -524,6 +625,16 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
 
     /// @notice Create a fully funded order owned by `maker`.
     /// @dev The caller supplies the escrow; cancellation and payouts go to `maker`.
+    ///
+    ///      MAKERSHIP IS UNSOLICITED HERE. `maker` does not consent, so a
+    ///      position can appear in any wallet, and a contract maker that opts
+    ///      into `acceptsOrderProceeds` will receive `beforeOrderProceeds` /
+    ///      `afterOrderProceeds` for an order it never created, on a `tokenB`
+    ///      and `amountB` the attacker chose. `ownerOf(orderId) == address(this)`
+    ///      passes for that order too, so it is NOT a sufficient check: an
+    ///      integrating escrow or vault must validate `orderId` against its own
+    ///      records of orders it created, and treat anything else as a
+    ///      donation.
     function createOrderFor(
         address maker,
         address tokenA,
@@ -650,6 +761,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         _checkExpiry(expiry);
 
         if (nftA) {
+            if (escrowedNFT[tokenA][amountA]) revert NFTTransferFailed(tokenA, amountA);
             _moveNFT(tokenA, msg.sender, address(this), amountA);
         } else {
             // A fee-on-transfer token would leave the escrow short of amountA,
@@ -689,10 +801,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      rather than assumed because a fee-on-transfer token, on either
     ///      side, would otherwise leave pooled escrow short of what the orders
     ///      resting against it are owed.
-    function _expectDelta(address token, address account, uint256 previous, uint256 amount, bool credit)
-        internal
-        view
-    {
+    function _expectDelta(address token, address account, uint256 previous, uint256 amount, bool credit) internal view {
         uint256 current = _balanceOf(token, account);
         uint256 delta = credit ? _increase(previous, current) : _decrease(previous, current);
         if (delta != amount) revert BalanceDeltaMismatch(token, account, amount, delta);
@@ -721,8 +830,16 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      The arrival leg keeps `BalanceMismatch`, which is the error creation
     ///      and repricing have always reported for a short delivery; a
     ///      sender-side discrepancy is a `BalanceDeltaMismatch` naming the payer.
+    ///
     ///      The payer is always `msg.sender` - this board never moves tokens
     ///      between two third parties.
+    ///
+    ///      A maker filling their OWN fungible order lands here with payer and
+    ///      recipient equal, so the transfer nets to nothing and this reverts
+    ///      with `BalanceMismatch(amount, 0)`. That is the correct outcome -
+    ///      self-filling is a cancellation written the expensive way - but the
+    ///      error names the symptom rather than the cause; front ends should
+    ///      steer a maker to `cancelOrder` instead.
     function _pullToken(address token, address to, uint256 amount) internal {
         uint256 senderBefore = token.balanceOf(msg.sender);
         uint256 recipientBefore = token.balanceOf(to);
@@ -797,10 +914,15 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         orders[orderId] =
             Order(maker, true, partialFill, expiry, nftA, nftB, counterparty, tokenA, amountA, tokenB, amountB);
         initialAmountB[orderId] = amountB;
+        // The board's own record of what it holds, and for whom.
+        if (nftA) escrowedNFT[tokenA][amountA] = true;
+        // Both readings, for both legs. A ticker is what a reader recognises and
+        // a scale is what makes the amount above it parseable; a fungible leg
+        // used to carry only a truncated address and a decimal count.
         if (!nftA) _rememberDecimals(tokenA);
-        else _rememberSymbol(tokenA);
+        _rememberSymbol(tokenA);
         if (!nftB) _rememberDecimals(tokenB);
-        else _rememberSymbol(tokenB);
+        _rememberSymbol(tokenB);
 
         // The position itself is the receipt. Minted with `_mint`, never
         // `_safeMint`: a receiver hook here would hand control to the maker in
@@ -853,9 +975,22 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         }
     }
 
-    /// @dev Skips orders that are inactive, missing, expired, frozen, or reserved for a
-    /// different counterparty. Every other revert path still aborts the batch;
-    ///      minimum-output failures are not silently skipped.
+    /// @dev Skips orders that are inactive, missing, expired, frozen, or
+    ///      reserved for a different counterparty.
+    ///
+    ///      IT DOES NOT MAKE A HOSTILE ORDER SAFE. Every other revert path
+    ///      still aborts the batch, and a maker that opts into proceeds
+    ///      notification gets a full-gas call during settlement whose revert
+    ///      bubbles all the way out - so anyone willing to escrow a little dust
+    ///      can plant an order that kills a router's whole batch. Catching that
+    ///      needs an external self-call per leg, and this contract has no
+    ///      EIP-170 headroom left to buy one; see the size note in
+    ///      `foundry.toml`. Callers that fill orders they did not choose should
+    ///      screen makers themselves, or fill one at a time.
+    ///
+    ///      Minimum-output failures are deliberately NOT skipped either: the
+    ///      floor is the taker's own and silently stepping over it would turn a
+    ///      slippage guarantee into a partial route.
     function tryFillOrders(
         uint256[] calldata orderIds,
         uint256 deadline,
@@ -891,10 +1026,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         uint256 fillAmountB,
         uint256 minAmountA,
         address recipient
-    )
-        external
-        nonReentrant
-    {
+    ) external nonReentrant {
         _checkDeadline(deadline);
         _fill(orderId, fillAmountB, minAmountA, 1, _to(recipient));
     }
@@ -950,7 +1082,9 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         // so the floor applies only to fungible tokenA legs.
         if (!order.nftA && outA < minAmountA) revert InsufficientOutput(minAmountA, outA);
 
-        _settleFill(FillLegs(orderId, order.tokenA, order.tokenB, maker, to, outA, paidB, mode, order.nftA, order.nftB));
+        _settleFill(
+            FillLegs(orderId, order.tokenA, order.tokenB, maker, to, outA, paidB, mode, order.nftA, order.nftB)
+        );
 
         if (full) {
             emit OrderFilled(orderId, msg.sender, maker, outA, paidB);
@@ -971,14 +1105,11 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      quoting on the board rather than rederiving the rounding off chain.
     ///      It touches no storage: the caller reads the terms and, if it is
     ///      settling, writes the result back.
-    function _computeFill(
-        uint256 amountA,
-        uint256 amountB,
-        bool nftA,
-        bool nftB,
-        bool partialFill,
-        uint256 fillAmountB
-    ) internal pure returns (uint256 outA, uint256 paidB, bool full, uint256 err) {
+    function _computeFill(uint256 amountA, uint256 amountB, bool nftA, bool nftB, bool partialFill, uint256 fillAmountB)
+        internal
+        pure
+        returns (uint256 outA, uint256 paidB, bool full, uint256 err)
+    {
         // NFT orders always settle in full. Their amount fields may be token IDs,
         // so zero remains the explicit full-fill sentinel for either NFT side.
         // Fungible orders must receive an explicit payment amount: resolving zero
@@ -1016,6 +1147,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
 
         if (full) {
             order.active = false;
+            settled[orderId] = true;
             order.amountA = 0;
             order.amountB = 0;
             // Deliberately NOT burned. A holder may be a contract that reads
@@ -1065,6 +1197,9 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         // missing between creation and fill on a collection that leaves a stale
         // approval behind, and the taker has already paid by this point.
         if (f.nftA) {
+            // An NFT leg always settles in full, so the escrow record is
+            // released here, with the token it tracked.
+            delete escrowedNFT[f.tokenA][f.outA];
             _moveNFT(f.tokenA, address(this), f.to, f.outA);
         } else if ((f.mode & 1) != 0) {
             if (f.tokenA != weth) revert NotWETH(weth, f.tokenA);
@@ -1078,6 +1213,16 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     /// @dev Optional two-phase accounting for a maker that is also an escrow.
     ///      The bounded static probe preserves ordinary maker compatibility;
     ///      only an affirmative response opts into the stateful callbacks.
+    ///
+    ///      REVERT DATA IS COPIED WITH A BOUND. A maker that opts in and then
+    ///      reverts takes the fill down either way, so the reason is only ever
+    ///      read by a human - 256 bytes is enough to debug with, and copying
+    ///      more charges the TAKER quadratic memory-expansion gas for a blob the
+    ///      maker chose the size of. Bounding the copy is the part with no
+    ///      honest victim; capping gas would not be, since a callback doing real
+    ///      accounting needs it and a griefer who cannot burn gas can simply
+    ///      revert instead. Dutchboard's `_notifyBeforeProceeds` bounds the same
+    ///      copy for the same reason.
     function _beforeOrderProceeds(address maker, uint256 orderId, address token, uint256 amount, bool nft)
         internal
         returns (bool notify)
@@ -1097,8 +1242,10 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
                 mstore(add(p, 68), amount)
                 mstore(add(p, 100), nft)
                 if iszero(call(gas(), maker, 0, p, 0x84, 0, 0x20)) {
-                    returndatacopy(0, 0, returndatasize())
-                    revert(0, returndatasize())
+                    let n := returndatasize()
+                    if gt(n, 256) { n := 256 }
+                    returndatacopy(p, 0, n)
+                    revert(p, n)
                 }
                 notify := and(eq(returndatasize(), 32), eq(mload(0), 1))
             }
@@ -1114,8 +1261,10 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
             mstore(add(p, 68), amount)
             mstore(add(p, 100), nft)
             if iszero(call(gas(), maker, 0, p, 0x84, 0, 0)) {
-                returndatacopy(0, 0, returndatasize())
-                revert(0, returndatasize())
+                let n := returndatasize()
+                if gt(n, 256) { n := 256 }
+                returndatacopy(p, 0, n)
+                revert(p, n)
             }
         }
     }
@@ -1229,7 +1378,9 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     /// @dev A keeper reads the sweepable set, then submits; anything filled or
     /// swept in between would abort an all-or-nothing sweep and clean nothing.
     /// Same reasoning as tryFillOrders. Returns which ids were actually swept.
-    /// A settlement that reverts still aborts the batch - see _returnEscrow.
+    /// A settlement that reverts still aborts the batch - an escrow that cannot
+    /// be returned (a collection that refuses the transfer) strands the whole
+    /// sweep. Same EIP-170 reason as tryFillOrders above.
     function trySweepExpired(uint256[] calldata orderIds) external nonReentrant returns (bool[] memory swept) {
         swept = new bool[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
@@ -1256,7 +1407,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      A live commitment is not lifted by thawing here; it outranks this
     ///      flag until it lapses.
     function setFrozen(uint256 orderId, bool value) external nonReentrant {
-        (Order storage order, address maker) = _liveOwned(orderId);
+        _liveOwned(orderId);
         _softFrozen[orderId] = value;
         emit OrderFreezeSet(orderId, value);
     }
@@ -1264,25 +1415,34 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     /// @notice Owner-only. BIND the order until `until`: no fill, no sweep, no
     ///         repricing, no cancellation - by anyone, the owner included.
     ///
-    /// @dev The promise a soft freeze cannot make. It only ever extends, so a
-    ///      buyer who verifies `frozenUntil` cannot have the window shortened
-    ///      under them, and it clears the moment the position changes hands, so
-    ///      the buyer inherits an unbound claim rather than a locked one.
+    /// @dev The promise a soft freeze cannot make. A live commitment cannot be
+    ///      touched at all - not by the owner, not by a later owner - so the
+    ///      `frozenUntil` a buyer verifies is the whole window and not a floor
+    ///      the seller can raise between simulation and settlement. It survives
+    ///      transfer too, so it cannot be voided by handing the receipt to a
+    ///      second wallet and cancelling from there. A new window may only be
+    ///      opened once the previous one has lapsed.
     ///
-    ///      Pick a window that outlasts the sale, not the position: the escrow
-    ///      is immovable until it lapses, and the only early exit is to hand
-    ///      the receipt to another address - which is fine for a seller with a
-    ///      second wallet and fatal for a contract without one, so a contract
-    ///      committing on its own behalf should commit narrowly.
+    ///      Pick a window that outlasts the SALE, not the position, and pick it
+    ///      RIGHT THE FIRST TIME: there is no early exit by any path, the
+    ///      owner's included, and no way to lengthen it once made, so whatever
+    ///      is committed here is genuinely immovable for exactly that long.
+    ///      `MAX_COMMITMENT` bounds the damage of getting it wrong.
     function commitFrozen(uint256 orderId, uint64 until) external nonReentrant {
-        (Order storage order, address maker) = _liveOwned(orderId);
+        _liveOwned(orderId);
+        uint64 live = frozenUntil[orderId];
+        if (block.timestamp < live) revert CommitmentActive(orderId, live);
         if (until <= block.timestamp) revert ExpiryInPast(until);
-        if (until <= frozenUntil[orderId]) revert CommitmentNotExtended(orderId, frozenUntil[orderId]);
+        uint64 max = uint64(block.timestamp) + MAX_COMMITMENT;
+        if (until > max) revert CommitmentTooLong(until, max);
         frozenUntil[orderId] = until;
         emit OrderCommitmentSet(orderId, until);
     }
 
-    /// @dev Every owner-side mutation of a live claim passes through here.
+    /// @dev The cancellation path's commitment check. Repricing reaches the
+    ///      same rule through `frozen`, which folds in the soft flag as well;
+    ///      cancellation cannot use that helper because a soft freeze must
+    ///      still leave the owner their own escape.
     function _checkNotCommitted(uint256 orderId) internal view {
         uint64 until = frozenUntil[orderId];
         if (block.timestamp < until) revert CommitmentActive(orderId, until);
@@ -1302,6 +1462,14 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     /// @dev Close the order, then return the remaining escrow. Keeping the
     ///      last live terms makes the non-fungible receipt a useful terminal
     ///      record; `active` alone gates every state-changing path.
+    ///
+    ///      The amounts are deliberately NOT zeroed, unlike a full fill. That
+    ///      asymmetry is the only thing distinguishing the two closes: a filled
+    ///      order has both legs at zero. The receipt no longer infers the
+    ///      difference from that: slot 0 is exactly full, so the `settled` flag
+    ///      lives in its own mapping and `SwapboardMetadata` is told outright
+    ///      which kind of close this was. Integrators must read `active`, not
+    ///      `amountA`, to decide whether a claim is live.
     function _returnEscrow(Order storage order, address maker, bool unwrap) internal {
         address tokenA = order.tokenA;
         uint256 amountA = order.amountA;
@@ -1309,6 +1477,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
         order.active = false;
 
         if (nftA) {
+            delete escrowedNFT[tokenA][amountA];
             _returnNFT(tokenA, maker, amountA);
         } else if (unwrap) {
             if (tokenA != weth) revert NotWETH(weth, tokenA);
@@ -1388,11 +1557,7 @@ contract Swapboard is ERC721, ReentrancyGuardTransient, Multicallable {
     ///      For an NFT-sided order the returned pair is the whole lot, and
     ///      `outA` is a token ID rather than a quantity: NFT orders settle only
     ///      in full, which is exactly what makes them indivisible for a splitter.
-    function quoteFill(uint256 orderId, uint256 fillAmountB)
-        public
-        view
-        returns (uint256 outA, uint256 paidB)
-    {
+    function quoteFill(uint256 orderId, uint256 fillAmountB) public view returns (uint256 outA, uint256 paidB) {
         Order storage o = orders[orderId];
         if (o.maker == address(0) || !o.active || _expired(o.expiry) || frozen(orderId)) return (0, 0);
 

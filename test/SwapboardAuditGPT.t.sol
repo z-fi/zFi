@@ -71,40 +71,69 @@ contract SwapboardAuditGPTTest is Test {
         assertTrue(sb.frozen(id), "commitment outranks the soft flag");
     }
 
-    /// A commitment only ever extends, so a buyer reading it cannot have the
-    /// window shortened under them.
-    function test_CommitmentOnlyExtends() public {
+    /// A live commitment is immutable in BOTH directions, so the timestamp a
+    /// buyer reads is the exact end of the window rather than a floor the
+    /// seller can raise between simulation and settlement.
+    function test_LiveCommitmentCannotBeRewritten() public {
         uint256 id = _order();
+        uint64 until = uint64(block.timestamp + 1 days);
         vm.startPrank(maker);
-        sb.commitFrozen(id, uint64(block.timestamp + 1 days));
-        vm.expectRevert(
-            abi.encodeWithSelector(Swapboard.CommitmentNotExtended.selector, id, uint64(block.timestamp + 1 days))
-        );
+        sb.commitFrozen(id, until);
+
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.CommitmentActive.selector, id, until));
         sb.commitFrozen(id, uint64(block.timestamp + 1 hours));
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.CommitmentActive.selector, id, until));
         sb.commitFrozen(id, uint64(block.timestamp + 2 days));
         vm.stopPrank();
+        assertEq(sb.frozenUntil(id), until);
+
+        // A fresh window may only be opened once the previous one has lapsed.
+        vm.warp(uint256(until) + 1);
+        vm.prank(maker);
+        sb.commitFrozen(id, uint64(block.timestamp + 2 days));
         assertEq(sb.frozenUntil(id), uint64(block.timestamp + 2 days));
     }
 
-    /// It binds the SELLER, so it ends with their ownership: the buyer receives
-    /// a position they can act on, not a locked one.
-    function test_CommitmentClearsOnSaleAndNotOnSelfTransfer() public {
+    /// It rides with the token. Clearing on sale would let the seller void the
+    /// commitment by round-tripping the receipt through a second wallet, which
+    /// is the one thing it exists to prevent.
+    function test_CommitmentSurvivesTransfer() public {
         uint256 id = _order();
+        uint64 until = uint64(block.timestamp + 1 days);
         vm.startPrank(maker);
-        sb.commitFrozen(id, uint64(block.timestamp + 1 days));
+        sb.commitFrozen(id, until);
 
-        // Self-transfer is not a sale.
         sb.transferFrom(maker, maker, id);
-        assertGt(sb.frozenUntil(id), block.timestamp, "self-transfer clears nothing");
+        assertEq(sb.frozenUntil(id), until, "self-transfer clears nothing");
 
         sb.transferFrom(maker, buyer, id);
         vm.stopPrank();
 
-        assertEq(sb.frozenUntil(id), 0, "the buyer inherits an unbound claim");
+        assertEq(sb.frozenUntil(id), until, "and neither does a sale");
         assertEq(sb.ownerOf(id), buyer);
+
+        // The buyer holds a bound claim, exactly as advertised...
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.CommitmentActive.selector, id, until));
+        sb.cancelOrder(id);
+
+        // ...which lapses on its own timestamp, with the backing intact.
+        vm.warp(uint256(until) + 1);
         vm.prank(buyer);
         sb.cancelOrder(id);
         assertEq(tka.balanceOf(buyer), 100e18, "and the full backing was still there");
+    }
+
+    /// The window is bounded, so a mistake is a wait rather than a burn.
+    function test_CommitmentIsCapped() public {
+        uint256 id = _order();
+        uint64 max = uint64(block.timestamp) + sb.MAX_COMMITMENT();
+        vm.expectRevert(abi.encodeWithSelector(Swapboard.CommitmentTooLong.selector, max + 1, max));
+        vm.prank(maker);
+        sb.commitFrozen(id, max + 1);
+
+        vm.prank(maker);
+        sb.commitFrozen(id, max);
     }
 
     /// The commitment is not a trap: it lapses on its own timestamp.
@@ -122,7 +151,15 @@ contract SwapboardAuditGPTTest is Test {
     function test_CommittedOrderIsNotSweepable() public {
         vm.prank(maker);
         uint256 id = sb.createOrder(
-            address(tka), 100e18, address(tkb), 200e18, true, uint64(block.timestamp + 1 hours), false, false, address(0)
+            address(tka),
+            100e18,
+            address(tkb),
+            200e18,
+            true,
+            uint64(block.timestamp + 1 hours),
+            false,
+            false,
+            address(0)
         );
         vm.prank(maker);
         sb.commitFrozen(id, uint64(block.timestamp + 1 days));
@@ -241,7 +278,6 @@ contract SwapboardAuditGPTTest is Test {
         sb.createOrder(address(tax), 100e18, address(tkb), 200e18, false, 0, false, false, address(0));
         vm.stopPrank();
     }
-
 }
 
 /// @dev An ERC-721 that says so through ERC-165, as any real one does.

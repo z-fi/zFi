@@ -36,7 +36,7 @@ contract DutchboardPositionTest is Test {
 
     function _list() internal returns (uint256 id) {
         vm.prank(seller);
-        id = db.listERC20(address(lot), address(quote), 100e18, 1_000e18, 500e18, 0, uint40(1 days));
+        id = db.listERC20(address(lot), address(quote), 100e18, 1_000e18, 500e18, 0, uint40(1 days), 0);
     }
 
     function test_ListingMintsAPositionToTheSeller() public {

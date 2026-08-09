@@ -50,7 +50,7 @@ contract DutchboardExpiryTest is Test {
     ///      every pre-expiry caller was written against.
     function testZeroExpiryStillRestsAtEndPriceForever() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR);
+        uint256 id = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR, 0);
 
         vm.warp(block.timestamp + DUR * 100);
         assertEq(board.priceOf(id), END);
@@ -65,7 +65,7 @@ contract DutchboardExpiryTest is Test {
 
     function testZeroExpiryCannotBeSwept() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR);
+        uint256 id = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR, 0);
         vm.warp(block.timestamp + DUR * 100);
         vm.expectRevert(Dutchboard.NotExpired.selector);
         board.sweepExpired(id);
@@ -131,7 +131,7 @@ contract DutchboardExpiryTest is Test {
         uint40 expiry = uint40(block.timestamp + 10);
         uint256 dying = _list(expiry);
         vm.prank(seller);
-        uint256 living = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR);
+        uint256 living = board.listERC20(address(tkn), address(usdc), LOT, START, END, 0, DUR, 0);
 
         vm.warp(uint256(expiry) + 1);
 
@@ -214,8 +214,9 @@ contract DutchboardExpiryTest is Test {
         vm.prank(seller);
         nft.transferFrom(seller, address(board), 7);
 
-        // 160 bytes: the original terms, no expiry.
+        // 192 bytes: the magic word plus the original terms, no expiry.
         bytes memory legacy = abi.encode(
+            keccak256("Dutchboard.PushTerms.v1"),
             Dutchboard.PushTerms({
                 quote: address(usdc),
                 startPrice: START,
@@ -224,18 +225,19 @@ contract DutchboardExpiryTest is Test {
                 duration: DUR
             })
         );
-        assertEq(legacy.length, 160);
+        assertEq(legacy.length, 192);
         vm.prank(address(nft));
         board.onERC721Received(address(0), seller, 7, legacy);
         (,,,,,,,,,, uint40 noExpiry) = board.listings(0);
         assertEq(noExpiry, 0);
 
-        // 192 bytes: same terms plus a hard stop.
+        // 224 bytes: same terms plus a hard stop.
         nft.mint(seller, 8);
         vm.prank(seller);
         nft.transferFrom(seller, address(board), 8);
         uint40 expiry = uint40(block.timestamp + DUR);
         bytes memory extended = abi.encode(
+            keccak256("Dutchboard.PushTerms.v1"),
             Dutchboard.PushTermsExpiring({
                 quote: address(usdc),
                 startPrice: START,
@@ -245,7 +247,7 @@ contract DutchboardExpiryTest is Test {
                 expiry: expiry
             })
         );
-        assertEq(extended.length, 192);
+        assertEq(extended.length, 224);
         vm.prank(address(nft));
         board.onERC721Received(address(0), seller, 8, extended);
         (,,,,,,,,,, uint40 got) = board.listings(1);
@@ -323,7 +325,7 @@ contract DutchboardExpiryTest is Test {
     function testWithdrawUnwrapsAWETHLot() public {
         vm.deal(seller, 10 ether);
         vm.prank(seller);
-        uint256 id = board.listETH{value: 10 ether}(address(usdc), START, END, 0, DUR);
+        uint256 id = board.listETH{value: 10 ether}(address(usdc), START, END, 0, DUR, 0);
 
         uint256 before = seller.balance;
         vm.prank(seller);

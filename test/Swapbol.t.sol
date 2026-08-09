@@ -176,8 +176,11 @@ contract SwapbolTest is Test {
     /// would see no output and revert with a slippage error that hides the cause.
     function test_BoardRevertBubblesUp() public {
         _fund(1e18);
-        vm.expectRevert(bytes("board failed"));
         board.setShouldRevert(true);
+        // `expectRevert` applies to the NEXT call, so it has to sit against the
+        // fill - in front of `setShouldRevert` it was arming the stub setter,
+        // which of course succeeds, and the fill was never checked at all.
+        vm.expectRevert(bytes("board failed"));
         fwd.fill(address(board), address(tin), address(tout), user, user, abi.encodeCall(BoardStub.fillOrder, (0, 0, 1e18, 0, user)));
     }
 

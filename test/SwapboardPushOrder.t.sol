@@ -67,7 +67,7 @@ contract SwapboardPushOrderTest is Test {
         pure
         returns (bytes memory)
     {
-        return abi.encode(Swapboard.PushOrder(tokenB, amountB, expiry, nftB, cp));
+        return abi.encode(keccak256("Swapboard.PushOrder.v1"), Swapboard.PushOrder(tokenB, amountB, expiry, nftB, cp));
     }
 
     /// @dev The whole point: one transaction, no prior approval, order live.

@@ -188,7 +188,7 @@ contract DutchboardProceedsAuditTest is Test {
         });
         vm.prank(address(victimNFT));
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.onERC721Received(address(victimNFT), attacker, 101, abi.encode(t));
+        db.onERC721Received(address(victimNFT), attacker, 101, abi.encode(keccak256("Dutchboard.PushTerms.v1"), t));
     }
 
     // ------------------------------------------------------------------- C-02
@@ -201,7 +201,7 @@ contract DutchboardProceedsAuditTest is Test {
         lot.mint(honest, B);
         vm.startPrank(honest);
         lot.approve(address(db), type(uint256).max);
-        db.listERC20(address(lot), address(quote), uint128(B), 10e18, 10e18, 0, uint40(1 days));
+        db.listERC20(address(lot), address(quote), uint128(B), 10e18, 10e18, 0, uint40(1 days), 0);
         vm.stopPrank();
 
         assertEq(db.escrowed(address(lot)), B);
@@ -215,7 +215,7 @@ contract DutchboardProceedsAuditTest is Test {
         lot.mint(attacker, B);
         vm.startPrank(attacker);
         lot.approve(address(db), type(uint256).max);
-        db.listERC20For(attacker, address(lot), address(quote), uint128(B), 10e18, 10e18, 0, uint40(1 days));
+        db.listERC20For(attacker, address(lot), address(quote), uint128(B), 10e18, 10e18, 0, uint40(1 days), 0);
         vm.stopPrank();
 
         assertEq(lot.balanceOf(address(db)), 2 * B, "balance really did double");
@@ -264,7 +264,7 @@ contract DutchboardProceedsAuditTest is Test {
         quote.approve(address(db), type(uint256).max);
 
         vm.prank(honest);
-        uint256 id = db.listERC20(address(lot), address(quote), 500e18, 100e18, 100e18, 0, uint40(1 days));
+        uint256 id = db.listERC20(address(lot), address(quote), 500e18, 100e18, 100e18, 0, uint40(1 days), 0);
         assertEq(db.freeBalance(address(lot)), 0, "after list");
 
         vm.prank(buyer);
@@ -343,7 +343,7 @@ contract DutchboardProceedsAuditTest is Test {
         nft.mint(attacker, 1);
         vm.prank(attacker);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listERC20(address(nft), address(quote), 1, 1e18, 1e18, 0, uint40(1 days));
+        db.listERC20(address(nft), address(quote), 1, 1e18, 1e18, 0, uint40(1 days), 0);
     }
 
     function test_M01_standardERC721RejectedAsAQuoteAsset() public {
@@ -352,7 +352,7 @@ contract DutchboardProceedsAuditTest is Test {
         vm.startPrank(attacker);
         lot.approve(address(db), type(uint256).max);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listERC20(address(lot), address(nft), 1e18, 1, 1, 0, uint40(1 days));
+        db.listERC20(address(lot), address(nft), 1e18, 1, 1, 0, uint40(1 days), 0);
         vm.stopPrank();
     }
 
@@ -382,7 +382,7 @@ contract DutchboardProceedsAuditTest is Test {
         vm.prank(attacker);
         // Not rejected by the interface probe; it fails later, on the balance delta.
         vm.expectRevert();
-        db.listERC20(address(quiet), address(quote), 1, 1e18, 1e18, 0, uint40(1 days));
+        db.listERC20(address(quiet), address(quote), 1, 1e18, 1e18, 0, uint40(1 days), 0);
     }
 
     // -------------------------------------------------------------------- HELP

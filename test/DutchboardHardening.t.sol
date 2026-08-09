@@ -5,6 +5,20 @@ import "forge-std/Test.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
 import {MockERC20, MockNFT} from "./SwapboardMocks.sol";
 
+/// @dev `quoteOf`/`tokenOf` were removed from Dutchboard: `legOf` supersedes
+///      them for live listings, and the optimizer inlining their dispatch was
+///      part of what put the contract over EIP-170. These read the raw fields,
+///      which is what the old getters did - `legOf` reports zeroes for a closed
+///      listing and so cannot stand in where a test inspects a dead slot.
+function _quoteOf(Dutchboard b, uint256 id) view returns (address q) {
+    (,,,,,, q,,,,) = b.listings(id);
+}
+
+function _tokenOf(Dutchboard b, uint256 id) view returns (address t) {
+    (,,,, t,,,,,,) = b.listings(id);
+}
+
+
 /// @dev A seller contract with neither receive nor fallback.
 contract RejectETH {}
 
@@ -93,7 +107,7 @@ contract DutchboardHardeningTest is Test {
     function test_ScheduledErc20ListingIsClosedBeforeItOpens() public {
         uint40 start = uint40(block.timestamp + 1 days);
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours, 0);
 
         vm.prank(taker);
         vm.expectRevert(Dutchboard.Bad.selector);
@@ -107,7 +121,7 @@ contract DutchboardHardeningTest is Test {
     function test_ScheduledListingOpensAtItsStartTime() public {
         uint40 start = uint40(block.timestamp + 1 days);
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours, 0);
 
         vm.warp(start);
         assertEq(board.costOf(id, 100e18), 100e18, "did not open at startPrice");
@@ -124,7 +138,7 @@ contract DutchboardHardeningTest is Test {
     /// not have made every listing wait a second.
     function test_ImmediateListingIsFillableInTheSameBlock() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours, 0);
 
         vm.prank(taker);
         board.fill(id, 100e18, taker, type(uint256).max);
@@ -159,7 +173,7 @@ contract DutchboardHardeningTest is Test {
     function test_CostOfReportsZeroUntilTheWindowOpens() public {
         uint40 start = uint40(block.timestamp + 1 days);
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, start, 1 hours, 0);
 
         assertEq(board.costOf(id, 100e18), 0, "quoted a cost for a closed window");
         assertEq(board.priceOf(id), 100e18, "schedule price should still be readable");
@@ -172,10 +186,10 @@ contract DutchboardHardeningTest is Test {
     /// settling the rest around it.
     function test_FillManyAbortsOnAnUnopenedLeg() public {
         vm.startPrank(seller);
-        uint256 open = board.listERC20(address(lot), address(quote), 10e18, 10e18, 10e18, 0, 1 hours);
+        uint256 open = board.listERC20(address(lot), address(quote), 10e18, 10e18, 10e18, 0, 1 hours, 0);
         uint256 scheduled = board.listERC20(
             address(lot), address(quote), 10e18, 10e18, 10e18, uint40(block.timestamp + 1 days), 1 hours
-        );
+        , 0);
         vm.stopPrank();
 
         uint256[] memory ids = new uint256[](2);
@@ -198,7 +212,7 @@ contract DutchboardHardeningTest is Test {
     /// delivered there sits outside any accounting. Immutable contract, no recovery.
     function test_FillRefusesTheWrapperAsRecipient() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours, 0);
 
         vm.prank(taker);
         vm.expectRevert(Dutchboard.Bad.selector);
@@ -218,7 +232,7 @@ contract DutchboardHardeningTest is Test {
 
     function test_FillManyRefusesTheWrapperAsRecipient() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), 100e18, 100e18, 10e18, 0, 1 hours, 0);
 
         uint128[] memory takes = new uint128[](1);
         takes[0] = 100e18;
@@ -235,24 +249,24 @@ contract DutchboardHardeningTest is Test {
     function test_ListRefusesACodelessLotToken() public {
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(0xDEAD), address(quote), 100e18, 100e18, 10e18, 0, 1 hours);
+        board.listERC20(address(0xDEAD), address(quote), 100e18, 100e18, 10e18, 0, 1 hours, 0);
 
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(0), address(quote), 100e18, 100e18, 10e18, 0, 1 hours);
+        board.listERC20(address(0), address(quote), 100e18, 100e18, 10e18, 0, 1 hours, 0);
     }
 
     function test_ListRefusesACodelessQuote() public {
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(lot), address(0xDEAD), 100e18, 100e18, 10e18, 0, 1 hours);
+        board.listERC20(address(lot), address(0xDEAD), 100e18, 100e18, 10e18, 0, 1 hours, 0);
     }
 
     /// address(0) is native ETH, not a codeless token, and is the one exemption.
     function test_ListAcceptsNativeEthQuote() public {
         vm.prank(seller);
-        uint256 id = board.listERC20(address(lot), address(0), 100e18, 1 ether, 1 ether, 0, 1 hours);
-        assertEq(board.quoteOf(id), address(0), "native quote refused");
+        uint256 id = board.listERC20(address(lot), address(0), 100e18, 1 ether, 1 ether, 0, 1 hours, 0);
+        assertEq(_quoteOf(board, id), address(0), "native quote refused");
 
         uint256 before = seller.balance;
         vm.prank(taker);
@@ -267,7 +281,7 @@ contract DutchboardHardeningTest is Test {
     function test_CodelessQuoteCannotBeSmuggledInViaAFullyDecayedLot() public {
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(lot), address(0xDEAD), 100e18, 100e18, 0, 0, 1 hours);
+        board.listERC20(address(lot), address(0xDEAD), 100e18, 100e18, 0, 0, 1 hours, 0);
     }
 
     function test_ListNftRefusesCodelessAssets() public {
@@ -291,6 +305,7 @@ contract DutchboardHardeningTest is Test {
         nft.mint(seller, 1);
 
         bytes memory terms = abi.encode(
+            keccak256("Dutchboard.PushTerms.v1"),
             Dutchboard.PushTerms({
                 quote: address(0xDEAD),
                 startPrice: 100e18,
@@ -310,6 +325,7 @@ contract DutchboardHardeningTest is Test {
         nft.mint(seller, 1);
 
         bytes memory terms = abi.encode(
+            keccak256("Dutchboard.PushTerms.v1"),
             Dutchboard.PushTerms({
                 quote: address(quote),
                 startPrice: 100e18,
@@ -336,7 +352,7 @@ contract DutchboardHardeningTest is Test {
 
         lot.mint(address(this), 100e18);
         lot.approve(address(board), type(uint256).max);
-        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours);
+        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours, 0);
 
         vm.warp(block.timestamp + 1 hours + 1);
         assertEq(board.costOf(id, 100e18), 0, "did not decay to free");
@@ -355,7 +371,7 @@ contract DutchboardHardeningTest is Test {
 
         lot.mint(address(this), 100e18);
         lot.approve(address(board), type(uint256).max);
-        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours);
+        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours, 0);
 
         vm.prank(taker);
         vm.expectRevert();
@@ -369,7 +385,7 @@ contract DutchboardHardeningTest is Test {
 
         lot.mint(address(this), 100e18);
         lot.approve(address(board), type(uint256).max);
-        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours);
+        uint256 id = board.listERC20For(rejecting, address(lot), address(0), 100e18, 1 ether, 0, 0, 1 hours, 0);
 
         vm.warp(block.timestamp + 1 hours + 1);
         vm.prank(taker);

@@ -75,7 +75,7 @@ contract PositionSVGTest is Test {
 
     function test_DutchboardPositionHasLiveSvgURI() public {
         vm.prank(maker);
-        uint256 id = dutchboard.listERC20(address(lot), address(quote), 100e18, 200e18, 100e18, 0, 1 days);
+        uint256 id = dutchboard.listERC20(address(lot), address(quote), 100e18, 200e18, 100e18, 0, 1 days, 0);
         string memory beforeFill = dutchboard.tokenURI(id);
         _assertMetadataImage(beforeFill);
 
@@ -86,15 +86,18 @@ contract PositionSVGTest is Test {
 
     function test_DutchboardTerminalCurveFreezesAtSettlement() public {
         vm.prank(maker);
-        uint256 id = dutchboard.listERC20(address(lot), address(quote), 100e18, 200e18, 100e18, 0, 1 days);
+        uint256 id = dutchboard.listERC20(address(lot), address(quote), 100e18, 200e18, 100e18, 0, 1 days, 0);
 
         vm.warp(block.timestamp + 12 hours);
         vm.prank(taker);
         dutchboard.fill(id, 100e18, taker, type(uint256).max);
         bytes memory settledSvg = _svg(dutchboard.tokenURI(id));
         assertTrue(_contains(settledSvg, bytes("DUTCH CURVE")), "curve is rendered");
-        assertTrue(_contains(settledSvg, bytes("M32 258Q360 258 688 281")), "paid floor stays above zero");
-        assertTrue(_contains(settledSvg, bytes("stroke-dasharray='50.0 100'")), "curve shows settlement point");
+        assertTrue(_contains(settledSvg, bytes("M32 258Q360 258 688 278")), "paid floor stays above zero");
+        // Padded hundredths: 5000bps is 50.00, not 50.0. An unpadded split both
+        // misreports the number and draws the wrong length of curve (5bps would
+        // dash 50.5 rather than 50.05).
+        assertTrue(_contains(settledSvg, bytes("stroke-dasharray='50.00 100'")), "curve shows settlement point");
 
         vm.warp(block.timestamp + 7 days);
         assertEq(keccak256(settledSvg), keccak256(_svg(dutchboard.tokenURI(id))), "terminal curve stays fixed");
@@ -118,7 +121,12 @@ contract PositionSVGTest is Test {
         nft.setApprovalForAll(address(swapboard), true);
         vm.prank(maker);
         uint256 swapId = swapboard.createOrder(address(nft), 7, address(quote), 1e18, false, 0, true, false, address(0));
-        assertTrue(_contains(_svg(swapboard.tokenURI(swapId)), bytes(" / MIL")), "swap NFT symbol");
+        // `legLabel` leads with the ticker and follows it with the address:
+        // "MIL / 0x1234...cdef". The symbol is what a reader recognises, so it
+        // comes first; the address is what they verify it against. This
+        // assertion predates that ordering and used to look for the trailing
+        // form.
+        assertTrue(_contains(_svg(swapboard.tokenURI(swapId)), bytes("MIL / 0x")), "swap NFT symbol");
 
         vm.prank(maker);
         nft.setApprovalForAll(address(dutchboard), true);
@@ -126,7 +134,7 @@ contract PositionSVGTest is Test {
         ids[0] = 8;
         vm.prank(maker);
         uint256 dutchId = dutchboard.listNFT(address(nft), address(quote), ids, 1e18, 1e18, 0, 1 days);
-        assertTrue(_contains(_svg(dutchboard.tokenURI(dutchId)), bytes("NFT / MIL")), "dutch NFT symbol");
+        assertTrue(_contains(_svg(dutchboard.tokenURI(dutchId)), bytes("MIL / 0x")), "dutch NFT symbol");
     }
 
     function _assertMetadataImage(string memory uri) internal pure {

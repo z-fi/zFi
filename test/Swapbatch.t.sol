@@ -283,7 +283,9 @@ contract SwapbatchTest is Test {
             type(uint256).max, taker, false, true
         );
 
-        assertEq(A.balanceOf(taker), 300e18, "purchase swept to the user");
+        // Two legs at the mock board's flat 100e18 payout. The 300e18 minted
+        // above is the board's float, not the purchase.
+        assertEq(A.balanceOf(taker), 200e18, "purchase swept to the user");
         assertEq(before - taker.balance, 3 ether, "charged the sum of the legs");
         _assertClean();
     }

@@ -47,7 +47,7 @@ contract PositionAuctionHazardTest is Test {
         vm.prank(maker);
         sb.safeTransferFrom(
             maker, address(db), id,
-            abi.encode(Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
+            abi.encode(keccak256("Dutchboard.PushTerms.v1"), Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
         );
 
         // A taker cannot touch the claim while it is escrowed.
@@ -71,7 +71,7 @@ contract PositionAuctionHazardTest is Test {
         vm.prank(maker);
         sb.safeTransferFrom(
             maker, address(db), id,
-            abi.encode(Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
+            abi.encode(keccak256("Dutchboard.PushTerms.v1"), Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
         );
 
         vm.prank(taker);

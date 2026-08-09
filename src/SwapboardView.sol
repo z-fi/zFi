@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {FixedPointMathLib} from "../lib/solady/src/utils/FixedPointMathLib.sol";
 
@@ -970,11 +970,11 @@ contract SwapboardView {
             if (idx >= raw.length) continue;
             IDutchboard.ListingView memory l = raw[idx];
             if (l.seller == address(0)) continue; // closed or never listed
-            // A scheduled listing is not open yet, and Dutchboard refuses the fill.
-            // The schedule still reports startPrice before the window, so without
-            // this the lens would quote a row every planner would happily route
-            // through and every fill would revert.
-            if (block.timestamp < l.startTime) continue;
+            // The board's own answer to "would a fill succeed right now": it
+            // folds in the start window, the expiry and the freeze flag. The
+            // lens used to test `startTime` by hand, which surfaced frozen and
+            // expired listings as routable rows whose every fill then reverted.
+            if (!l.takeable) continue;
             if (!_pairMatch(l.token, l.quote, ta, tb)) continue;
             if (l.isNFT && l.ids.length != 1) continue; // bundle: not representable
 
@@ -982,6 +982,7 @@ contract SwapboardView {
             buf[k].maker = l.seller;
             buf[k].partialFill = !l.isNFT;
             buf[k].counterparty = address(0); // Dutchboard has no private listings
+            buf[k].expiry = l.expiry;
             buf[k].tokenA = l.token;
             buf[k].tokenB = l.quote;
             buf[k].board = board;
@@ -1223,6 +1224,12 @@ interface ISwapboardV2 {
 
 /// @dev Dutchboard. `ListingView` must match Dutchboard.ListingView field-for-field.
 interface IDutchboard {
+    /// @dev MUST match `Dutchboard.ListingView` field for field. `ids` is a
+    ///      dynamic array, so the struct is ABI-encoded with an offset head: a
+    ///      missing field does not simply read as zero, it shifts every later
+    ///      field by one word and `price` comes back holding an ABI offset.
+    ///      This copy silently lost `expiry` and `takeable` when Dutchboard
+    ///      gained them, which is exactly how it started quoting 0x1E0 as a cost.
     struct ListingView {
         uint256 id;
         address seller;
@@ -1235,8 +1242,10 @@ interface IDutchboard {
         uint96 endPrice;
         uint128 initial;
         uint128 remaining;
+        uint40 expiry;
         uint256[] ids;
         uint256 price;
+        bool takeable; // folds in start time, expiry and `frozen`
     }
 
     function nextId() external view returns (uint256);

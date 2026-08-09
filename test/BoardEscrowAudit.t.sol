@@ -49,13 +49,13 @@ contract BoardEscrowAuditTest is Test {
     /// the collateral backing it.
     function test_SurplusSweepCannotTakeAnotherListingsEscrow() public {
         vm.prank(alice);
-        db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days));
+        db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days), 0);
         assertEq(tka.balanceOf(address(db)), 500e18, "alice's escrow is here");
 
         // Mallory's own listing is in a DIFFERENT token, so the old per-listing
         // subtraction never applied to tka at all.
         vm.prank(mallory);
-        uint256 evil = db.listERC20(address(tkb), address(tka), 1e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 evil = db.listERC20(address(tkb), address(tka), 1e18, 100e18, 50e18, 0, uint40(1 days), 0);
 
         vm.prank(mallory);
         vm.expectRevert(Dutchboard.NoClaimableProceeds.selector);
@@ -68,11 +68,11 @@ contract BoardEscrowAuditTest is Test {
     /// The same hole via an NFT lot, where no subtraction applied either.
     function test_SurplusSweepCannotTakeEscrowViaAnUnrelatedLot() public {
         vm.prank(alice);
-        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days), 0);
 
         // Mallory holds a position in the very same token.
         vm.prank(mallory);
-        uint256 evil = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 evil = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days), 0);
 
         vm.prank(mallory);
         vm.expectRevert(Dutchboard.NoClaimableProceeds.selector);
@@ -88,7 +88,7 @@ contract BoardEscrowAuditTest is Test {
     /// ask. Only Swapboard's settlement callbacks create a claimable balance.
     function test_UnattributedSurplusIsNotClaimable() public {
         vm.prank(alice);
-        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days), 0);
 
         // Something pays the board in the escrowed token.
         tka.mint(address(db), 7e18);
@@ -101,7 +101,7 @@ contract BoardEscrowAuditTest is Test {
 
     function test_ProceedsAreBoundToTheEscrowedSwapboardPosition() public {
         vm.prank(mallory);
-        uint256 unrelated = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 unrelated = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days), 0);
 
         vm.prank(alice);
         uint256 order = sb.createOrder(address(tka), 100e18, address(tkb), 200e18, false, 0, false, false, address(0));
@@ -111,7 +111,7 @@ contract BoardEscrowAuditTest is Test {
             alice,
             address(db),
             order,
-            abi.encode(Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
+            abi.encode(keccak256("Dutchboard.PushTerms.v1"), Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
         );
 
         vm.prank(taker);
@@ -139,7 +139,7 @@ contract BoardEscrowAuditTest is Test {
             alice,
             address(db),
             order,
-            abi.encode(Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
+            abi.encode(keccak256("Dutchboard.PushTerms.v1"), Dutchboard.PushTerms(address(tkb), 300e18, 100e18, uint40(0), uint40(1 days)))
         );
 
         vm.prank(taker);
@@ -155,7 +155,7 @@ contract BoardEscrowAuditTest is Test {
     /// line drifts away from the truth in one direction or the other.
     function test_EscrowAccountingTracksFillsAndCancels() public {
         vm.prank(alice);
-        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 lot = db.listERC20(address(tka), address(tkb), 500e18, 100e18, 50e18, 0, uint40(1 days), 0);
         assertEq(db.escrowed(address(tka)), 500e18);
 
         vm.prank(taker);
@@ -175,7 +175,7 @@ contract BoardEscrowAuditTest is Test {
     /// in front of takers.
     function test_SpentReceiptDoesNotResurrectItsListing() public {
         vm.prank(alice);
-        uint256 lot = db.listERC20(address(tka), address(tkb), 10e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 lot = db.listERC20(address(tka), address(tkb), 10e18, 100e18, 50e18, 0, uint40(1 days), 0);
         vm.prank(taker);
         db.fill(lot, 10e18, taker, type(uint256).max);
 
@@ -201,7 +201,7 @@ contract BoardEscrowAuditTest is Test {
         assertEq(sb.ownerOf(order), mallory, "swapboard safe transfer works");
 
         vm.prank(alice);
-        uint256 lot = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days));
+        uint256 lot = db.listERC20(address(tka), address(tkb), 1e18, 100e18, 50e18, 0, uint40(1 days), 0);
         vm.prank(alice);
         db.safeTransferFrom(alice, mallory, lot);
         assertEq(db.ownerOf(lot), mallory, "dutchboard safe transfer works");

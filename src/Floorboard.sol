@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
-import {ERC721} from "../lib/solady/src/tokens/ERC721.sol";
 import {PositionSVG} from "./utils/PositionSVG.sol";
+import {ERC721} from "../lib/solady/src/tokens/ERC721.sol";
 import {FloorboardMetadata} from "./utils/FloorboardMetadata.sol";
 
 /// @title Floorboard
@@ -50,12 +50,20 @@ import {FloorboardMetadata} from "./utils/FloorboardMetadata.sol";
 ///
 ///      Exact balance-delta checks reject fee-on-transfer and no-op tokens;
 ///      rebasing, reflection, upgradeable, and otherwise non-standard tokens are
-///      outside the security model. The sell side is always a token: a bidder
-///      paying in ETH passes `quote == address(0)`, which wraps the attached value into a
-///      canonical-WETH escrow, and `cancelUnwrap` returns the remainder as ETH.
+///      outside the security model. Escrow is always a token, never native
+///      balance: a bidder paying in ETH passes `quote == address(0)`, which
+///      wraps the attached value into a canonical-WETH escrow, and
+///      `cancelUnwrap` returns the remainder as ETH.
 ///      Sellers may take their proceeds as ETH via the `unwrap` flag on `hit`.
-///      Bidder self-hits are permitted; indexers should not treat every `Hit`
-///      event as an arm's-length sale.
+///      Bidder self-hits are permitted on the ERC-20 path, where the delivery
+///      is a no-op and the escrow simply returns to the holder; indexers should
+///      not treat every `Hit` event as an arm's-length sale. They are REFUSED on
+///      the NFT path, where the same no-op would let one token be paid for
+///      repeatedly — see `_take`.
+///
+///      Force-fed ETH and donated ERC-20s are unrecoverable: there is no rescue
+///      path, by design, since one would be a claim on pooled escrow. Escrow
+///      widths are `uint96`, which caps an 18-decimal quote asset at ~79bn units.
 contract Floorboard is ERC721 {
     /// @dev Canonical WETH for this deployment; used for wrapping and unwrapping.
     address public immutable weth;
@@ -162,14 +170,14 @@ contract Floorboard is ERC721 {
     event Withdrawn(uint256 indexed id, uint256 amount, uint256 refund);
 
     error Bad();
+    error Expired();
     error NotBidder();
     error Reentrancy();
-    error Expired();
-    error NotWETH(address expected, address actual);
-    error ProceedsBelowMin(uint256 proceeds, uint256 minProceeds);
     error ZeroProceeds();
+    error NotWETH(address expected, address actual);
     error NotTargeted(address token, uint256 tokenId);
     error NFTTransferFailed(address token, uint256 tokenId);
+    error ProceedsBelowMin(uint256 proceeds, uint256 minProceeds);
     error BalanceDeltaMismatch(address token, address account, uint256 expected, uint256 actual);
 
     /// @dev EIP-1153 transient slot for the reentrancy guard.
@@ -211,6 +219,23 @@ contract Floorboard is ERC721 {
 
     /// @notice Open a bid funded by the caller while assigning bidder rights to
     ///         `bidder`, who receives the asset and may cancel.
+    /// @dev THIS IS A GIFT, NOT A BID PLACED ON SOMEONE'S BEHALF. The caller
+    ///      pays the whole escrow and keeps NO claim on it: `bidder` holds the
+    ///      receipt, every refund path (`cancel`, `cancelUnwrap`, `withdraw`,
+    ///      `sweep`, and the unspent remainder of a full fill) pays the HOLDER,
+    ///      and `bidder` may cancel in the next block and keep 100% of what was
+    ///      funded. Nothing here is recoverable by the payer. A frontend must
+    ///      present this as "fund a bid for X and hand X the money", never as
+    ///      "bid for X".
+    ///
+    ///      BIDDERSHIP IS ALSO UNSOLICITED. `bidder` does not consent, so a
+    ///      receipt can appear in any wallet and a contract bidder can be made
+    ///      the counterparty to terms it never chose. `ownerOf(id)` is true of
+    ///      such a bid as well, so an integrating contract must key off its own
+    ///      record of bids it opened rather than off makership alone. The
+    ///      receipt is minted, not safe-minted: a contract that cannot call
+    ///      `cancel` or move ERC-20s strands the escrow, since `sweep` returns
+    ///      it to that same contract.
     function bidFor(address bidder, Terms calldata terms) public payable nonReentrant returns (uint256 id) {
         id = _open(bidder, terms);
     }
@@ -230,7 +255,40 @@ contract Floorboard is ERC721 {
         // An ERC-721 must never reach the fungible path: it shares `balanceOf`
         // and `transferFrom(address,address,uint256)` with ERC-20, so token id 1
         // would satisfy every exact-delta check this board makes.
+        //
+        // THIS PROBE IS NOT A CLASSIFIER. It rejects only collections that
+        // affirmatively answer `supportsInterface(0x80ac58cd)` inside 30k gas;
+        // an ERC-721 without ERC-165, or with an expensive one, lands on the
+        // fungible path, where `give == 1` moves token id 1 and passes every
+        // delta check. The blast radius is one token per bid and the mistake is
+        // the bidder's own, but a quote-asset and collection ALLOWLIST at the
+        // dapp layer is what actually closes this, not the probe.
         if (!t.isNFT && _isERC721(t.token)) revert Bad();
+        // A LIVE CLAIM is not a thing this board can buy, and the reason is the
+        // one Swapboard's `_checkEscrowable` documents for its payment leg.
+        //
+        // A bid names an asset and escrows the quote for it; the asset is
+        // DELIVERED BY THE SELLER, seller to holder in one hop, with no custody
+        // step in between (see `_deliverNFT`). So the seller controls what the
+        // position is still worth right up to the moment they hit the bid:
+        // cancel it, or reprice it to dust, in the same transaction, hand over
+        // the spent ticket, and take the escrow. Nothing here can price a claim
+        // whose value its deliverer controls, so the bid is refused rather than
+        // funded with a warning.
+        //
+        // Dutchboard deliberately does NOT make this check, and the difference
+        // is custody: listing a position there moves it INTO escrow first, so
+        // the board becomes its owner and the seller loses exactly the control
+        // this check cannot verify. Buying without custody has no such moment.
+        //
+        // WHAT THIS CATCHES IS SIBLING BOARDS, AND ONLY THOSE. The custody
+        // argument applies just as well to V3 LP NFTs, vault share receipts,
+        // staked or locked positions, and ENS names with a pending change —
+        // none of which declare this interface, all of which are biddable, and
+        // any of which can be emptied in the same transaction that delivers the
+        // ticket. Collection safety is a dapp allowlist decision; acceptance
+        // here is not evidence of it.
+        if (t.isNFT && _declares(t.token, LIVE_ORDER_POSITION)) revert Bad();
         // This board is an ERC-721 now; a bid for its own receipts would have
         // the board brokering claims on itself.
         if (
@@ -243,6 +301,17 @@ contract Floorboard is ERC721 {
         if (t.isNFT) {
             if (t.ids.length > 100) revert Bad();
             if (t.ids.length != 0 && t.want > t.ids.length) revert Bad();
+            // A repeated id makes the set smaller than it reads: `[1,1,1]` with
+            // `want = 2` is a bid nobody but the holder can fill, since the
+            // first delivery of token 1 is the only one `_moveNFT` will accept.
+            // Rejecting it here keeps `ids.length` an honest upper bound on how
+            // many distinct tokens can settle the bid, and costs nothing after
+            // creation.
+            for (uint256 i; i < t.ids.length; ++i) {
+                for (uint256 j = i + 1; j < t.ids.length; ++j) {
+                    if (t.ids[i] == t.ids[j]) revert Bad();
+                }
+            }
         } else if (t.ids.length != 0) {
             revert Bad();
         }
@@ -265,9 +334,10 @@ contract Floorboard is ERC721 {
         b.remaining = t.want;
         if (t.ids.length != 0) b.ids = t.ids;
 
-        if (t.isNFT) _rememberSymbol(t.token);
-        else _rememberDecimals(t.token);
+        _rememberSymbol(t.token);
+        if (!t.isNFT) _rememberDecimals(t.token);
         _rememberDecimals(quote);
+        _rememberSymbol(quote);
 
         unchecked {
             escrowed[quote] += ep;
@@ -331,10 +401,11 @@ contract Floorboard is ERC721 {
     /// @dev The counterpart to Dutchboard's `tryFillMany`, and needed for the
     ///      same reason: a seller distributing size across a book read one block
     ///      earlier will find that some legs were taken, cancelled, expired, or
-    ///      have not climbed to their `minProceeds` entry yet. Only STALE-STATE
-    ///      refusals are skipped; a transfer that fails once started still
-    ///      aborts everything, because a failing transfer is a broken asset
-    ///      rather than a race.
+    ///      have not climbed to their `minProceeds` entry yet. Only refusals
+    ///      the seller cannot act on are skipped — stale state, plus an NFT bid
+    ///      that this fungible path could never have settled anyway. A transfer
+    ///      that fails once started still aborts everything, because a failing
+    ///      transfer is a broken asset rather than a race.
     function tryHitMany(uint256[] calldata ids, uint128[] calldata gives, uint256[] calldata minProceeds)
         public
         nonReentrant
@@ -345,6 +416,10 @@ contract Floorboard is ERC721 {
         hits = new bool[](n);
         proceeds = new uint256[](n);
         for (uint256 i; i < n; ++i) {
+            // An NFT bid cannot be settled through the fungible path at all, so
+            // it is a skip rather than an abort — `_take` would revert on the
+            // lot-kind mismatch and take every other leg down with it.
+            if (bids[ids[i]].isNFT) continue;
             (bool ok, uint256 pay) = _quote(ids[i], gives[i]);
             if (!ok || pay < minProceeds[i]) continue;
             proceeds[i] = _take(ids[i], gives[i], _emptyIds(), minProceeds[i], false);
@@ -371,6 +446,19 @@ contract Floorboard is ERC721 {
         uint128 rem = b.remaining;
         if (give == 0 || give > rem) revert Bad();
         if (b.isNFT != (ids.length != 0)) revert Bad();
+        // Checked at entry rather than at payout: the quote asset is known the
+        // moment the bid is read, so a caller asking for ETH out of a bid that
+        // is not WETH-quoted should not pay for the whole settlement first.
+        address quote = b.quote;
+        if (unwrap && quote != weth) revert NotWETH(weth, quote);
+        // An NFT self-hit delivers nothing. Seller and holder are the same
+        // address, so every `_moveNFT` is a no-op that passes its own
+        // ownership checks — including on a token already "delivered" in an
+        // earlier call, which is why a per-call duplicate scan could never
+        // close this. All it can do is drain the bid's escrow against tokens
+        // the hitter keeps, and under `bidFor` that escrow is someone else's.
+        // `cancel` is the way for a holder to take their escrow back.
+        if (b.isNFT && bidder == msg.sender) revert Bad();
 
         proceeds = _proceeds(_priceOf(b), give, b.initial);
         // Rounding down must never let a hit donate the asset outright.
@@ -378,7 +466,6 @@ contract Floorboard is ERC721 {
         if (proceeds < minProceeds) revert ProceedsBelowMin(proceeds, minProceeds);
 
         address token = b.token;
-        address quote = b.quote;
 
         // Update the bid before giving any asset control away.
         // Checked on purpose: escrow conservation must never wrap. `proceeds`
@@ -395,22 +482,31 @@ contract Floorboard is ERC721 {
             // burning under it strands whatever it holds. The receipt survives
             // as a spent ticket.
             if (newRem == 0) {
-                // The escrow was sized at `endPrice`, but a bid bought out
-                // before it finished climbing spent less than that. The
-                // difference belongs to the bidder and must leave with the
-                // close — `_close` zeroes `locked`, so nothing later can
-                // reclaim it.
                 refund = b.locked;
-                escrowed[quote] -= refund;
-                _close(id, true);
             } else {
                 b.remaining = newRem;
             }
         }
+        // The escrow was sized at `endPrice`, but a bid bought out before it
+        // finished climbing spent less than that. The difference belongs to the
+        // bidder and must leave with the close — `_close` zeroes `locked`, so
+        // nothing later can reclaim it. Checked, like the debit above: escrow
+        // conservation must never wrap, and an `unchecked` block around this
+        // subtraction would have been the one place it could.
+        if (refund != 0) {
+            escrowed[quote] -= refund;
+        }
+        if (rem == give) _close(id, true);
 
         // Deliver what was bought to the position holder.
         if (b.isNFT) {
             uint256[] memory allowed = b.ids;
+            // `give` is the COUNT of ids delivered, so a repeated id would be
+            // paid for twice. `_moveNFT` catches that for free: the first move
+            // flips ownership to the holder, and the second fails its
+            // `ownerOf == from` check. The one case with no flip to catch it —
+            // the self-hit, where seller and holder are the same address — is
+            // refused outright above.
             for (uint256 i; i < ids.length; ++i) {
                 // An empty allow-list is a floor bid: any id from the
                 // collection settles it. A non-empty one is a named set, and
@@ -424,14 +520,16 @@ contract Floorboard is ERC721 {
 
         // Then pay the seller out of escrow.
         if (unwrap) {
-            if (quote != weth) revert NotWETH(weth, quote);
             _unwrapETH(proceeds);
             safeTransferETH(msg.sender, proceeds);
         } else {
             _sendEscrowToken(quote, msg.sender, proceeds);
         }
 
-        // Finally, hand the bidder back whatever the climb never spent.
+        // Finally, hand the bidder back whatever the climb never spent. Always
+        // the QUOTE TOKEN, including for an ETH-funded bid, which is WETH-quoted
+        // from the moment it opens: `cancelUnwrap` and `withdraw(unwrap: true)`
+        // are the only paths that return native ETH.
         if (refund != 0) _deliverERC20Escrow(quote, bidder, refund, id);
 
         emit Hit(id, bidder, msg.sender, give, proceeds);
@@ -555,7 +653,24 @@ contract Floorboard is ERC721 {
         _close(id, false);
         if (refund != 0) {
             escrowed[quote] -= refund;
-            if (unwrap) {
+            // AN ESCROW HOLDER IS PAID IN CANONICAL WETH EVEN WHEN THE CALLER
+            // ASKED TO UNWRAP, which is the same choice Dutchboard's
+            // `_payQuoteETH` makes and for the same reason: a contract holding
+            // this receipt accounts for arrivals BY TOKEN, so native value
+            // either bounces off its `receive` or lands as unattributable dust.
+            //
+            // This replaces bracketing the native send as `address(0)`. That
+            // named the asset consistently with `_unwrapETH`'s delta error, but
+            // it is not an address a counterparty's callback can DO anything
+            // with: Dutchboard's `beforeOrderProceeds` reaches
+            // `_freeBalance(address(0))`, staticcalls `balanceOf` on an empty
+            // account, and reverts on the decode - so `cancelUnwrap` was
+            // unusable for exactly the holders the bracket existed to serve.
+            // Paying the token the escrow already tracks needs no convention.
+            //
+            // `quote == weth` is guaranteed here: `unwrap` is only ever true
+            // from `cancelUnwrap`, which checks it.
+            if (unwrap && !_accepts(holder, id)) {
                 _unwrapETH(refund);
                 safeTransferETH(holder, refund);
             } else {
@@ -599,6 +714,26 @@ contract Floorboard is ERC721 {
         super.safeTransferFrom(from, to, id, data);
     }
 
+    /// @dev Solady makes the ERC-721 mutators payable for the gas saving, and
+    ///      `receive()`'s WETH-only rule does not apply when calldata selects a
+    ///      payable function - so ETH attached to a transfer or an approval
+    ///      lands here, where this board has no rescue path for it. Refuse it.
+    ///
+    ///      Guarding `transferFrom` covers all three transfer entry points:
+    ///      solady's safe variants reach the move by calling this same function
+    ///      in the SAME frame, where `msg.value` is still whatever the caller
+    ///      attached. This is a VALUE check, not a reentrancy guard - that
+    ///      distinction is what keeps it from bricking safe transfers.
+    function transferFrom(address from, address to, uint256 id) public payable override {
+        if (msg.value != 0) revert Bad();
+        super.transferFrom(from, to, id);
+    }
+
+    function approve(address account, uint256 id) public payable override {
+        if (msg.value != 0) revert Bad();
+        super.approve(account, id);
+    }
+
     /// @dev Marks this collection as a LIVE CLAIM rather than an inert
     ///      collectible: `bytes4(keccak256("LiveOrderPosition()"))`.
     ///
@@ -609,6 +744,11 @@ contract Floorboard is ERC721 {
     ///      for. Floorboard brackets every delivery to a contract holder in the
     ///      same before/after proceeds callbacks Dutchboard uses, so an escrow
     ///      can attribute the arrival instead of finding an unexplained balance.
+    ///
+    ///      The constant reads in both directions. `supportsInterface` DECLARES
+    ///      it, for holders of this board's receipts; `_open` PROBES for it, to
+    ///      refuse bidding on somebody else's live claims — see the custody
+    ///      argument there.
     bytes4 internal constant LIVE_ORDER_POSITION = 0x28a93a2e;
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
@@ -635,8 +775,9 @@ contract Floorboard is ERC721 {
                 token: b.token,
                 quote: b.quote,
                 remaining: b.remaining,
+                initial: b.initial,
                 locked: b.locked,
-                price: live ? _priceOf(b) : 0,
+                price: live ? _priceOf(b) : _priceAt(b, closedAt[id]),
                 startPrice: b.startPrice,
                 endPrice: b.endPrice,
                 startTime: b.startTime,
@@ -646,6 +787,7 @@ contract Floorboard is ERC721 {
                 tokenDecimals: b.isNFT ? 0 : tokenDecimals[b.token],
                 quoteDecimals: tokenDecimals[b.quote],
                 tokenSymbol: tokenSymbols[b.token],
+                quoteSymbol: tokenSymbols[b.quote],
                 isNFT: b.isNFT,
                 live: live,
                 settled: settled[id]
@@ -706,9 +848,17 @@ contract Floorboard is ERC721 {
     /// @dev Callers check that the bid is live before calling this helper.
     ///      The other line that inverts Dutchboard: the schedule climbs.
     function _priceOf(Bid storage b) internal view returns (uint256) {
-        if (block.timestamp <= b.startTime) return b.startPrice;
+        return _priceAt(b, block.timestamp);
+    }
+
+    /// @dev The climb evaluated at an arbitrary instant. `tokenURI` walks it back
+    ///      to `closedAt` so a spent receipt can state the price its bid actually
+    ///      ended at instead of a placeholder. Closing does not clear the terms,
+    ///      so the curve is still there to be read.
+    function _priceAt(Bid storage b, uint256 at) internal view returns (uint256) {
+        if (at <= b.startTime) return b.startPrice;
         unchecked {
-            uint256 elapsed = block.timestamp - b.startTime;
+            uint256 elapsed = at - b.startTime;
             if (elapsed >= b.duration) return b.endPrice;
             return b.startPrice + ((uint256(b.endPrice) - b.startPrice) * elapsed) / b.duration;
         }
@@ -717,8 +867,11 @@ contract Floorboard is ERC721 {
     /// @notice Whether `give` units can be sold into `id` right now, and for
     ///         how much — the mirror of Dutchboard's `quoteFill`.
     /// @dev Returns `(false, 0)` for every stale-state refusal `_take` makes:
-    ///      closed, not yet started, EXPIRED, wrong lot kind, `give == 0`,
-    ///      `give > remaining`, or a split that rounds the payment to zero.
+    ///      closed, not yet started, EXPIRED, `give == 0`, `give > remaining`,
+    ///      or a split that rounds the payment to zero. Lot KIND is deliberately
+    ///      not folded in: `give` is a count on the NFT path too, so this quotes
+    ///      an NFT bid as usefully as a fungible one. Callers that can only
+    ///      settle one kind — `tryHitMany` — screen on `isNFT` themselves.
     function quoteHit(uint256 id, uint128 give) public view returns (bool takeable, uint256 proceeds) {
         return _quote(id, give);
     }
@@ -752,47 +905,83 @@ contract Floorboard is ERC721 {
 
         uint128 initial = b.initial;
         uint256 price = _priceOf(b);
-        // ceil(wantProceeds * initial / price) is the first quantity whose
-        // floored payment can reach the target; the floor can shave at most one
-        // unit of quote, so step up once if it did.
+        // `units = ceil(wantProceeds * initial / price)` already CLEARS the
+        // target, it does not merely approach it: `price * units >= want *
+        // initial`, so `price * units / initial >= want`, and flooring a value
+        // at or above an integer cannot land below it. No step-up pass is
+        // needed, and none is correct either — any `give` above this is simply
+        // a worse answer to "the SMALLEST quantity that pays at least".
+        //
+        // The clamp is the one place the ceiling is overridden, and it is safe
+        // for a different reason: `full >= wantProceeds` was checked above, and
+        // `full` is what the whole remainder pays.
         unchecked {
             uint256 units = (wantProceeds * initial + price - 1) / price;
-            if (units == 0) units = 1;
             if (units > b.remaining) units = b.remaining;
             give = uint128(units);
         }
         proceeds = _proceeds(price, give, initial);
-        if (proceeds < wantProceeds && give < b.remaining) {
-            unchecked {
-                give += 1;
-            }
-            proceeds = _proceeds(price, give, initial);
-        }
+        // Postcondition, not a fallback: the caller's guarantee is that feeding
+        // `give` to `hit` clears `wantProceeds`, so never return a pair that
+        // does not.
         if (proceeds < wantProceeds) return (0, 0);
     }
 
     /// @notice One packed read of everything an executor needs to route a leg.
+    /// @dev Zeroes out for anything not hittable RIGHT NOW — closed, not yet
+    ///      open, or past its window — so the refusals match `_quote`'s. A bid
+    ///      outside its window still reported live terms and a climbing price
+    ///      here, which read as routable to an executor and then reverted in
+    ///      `hit`. Unlike `_quote` this does not fold in the per-leg quantity,
+    ///      since the quantity is the caller's own argument.
+    ///
+    ///      `initial` is in the tuple because without it the read is not
+    ///      actually enough to size a leg: `price` is the bid for the FULL
+    ///      INITIAL LOT, and a leg of `give` units pays
+    ///      `price * give / initial`, not `price * give / remaining`. Reading
+    ///      `price` as the bid for `remaining` is the easy mistake, and it is
+    ///      wrong for every bid the holder has already partly filled.
     function legOf(uint256 id)
         external
         view
-        returns (address bidder, address token, address quote, bool isNFT, uint128 remaining, uint256 price)
+        returns (
+            address bidder,
+            address token,
+            address quote,
+            bool isNFT,
+            uint128 remaining,
+            uint128 initial,
+            uint256 price
+        )
     {
         Bid storage b = bids[id];
         bidder = b.bidder;
-        if (bidder == address(0)) return (address(0), address(0), address(0), false, 0, 0);
+        if (bidder == address(0) || block.timestamp < b.startTime) {
+            return (address(0), address(0), address(0), false, 0, 0, 0);
+        }
+        unchecked {
+            if (block.timestamp >= uint256(b.startTime) + b.duration) {
+                return (address(0), address(0), address(0), false, 0, 0, 0);
+            }
+        }
         token = b.token;
         quote = b.quote;
         isNFT = b.isNFT;
         remaining = b.remaining;
+        initial = b.initial;
         price = _priceOf(b);
     }
 
-    /// @notice Quote asset for a bid, or address(0) for an empty slot.
+    /// @notice Quote asset a bid pays in. NOT a liveness test: a closed bid
+    ///         keeps its terms, so this stays populated after cancel, sweep, or
+    ///         a full fill, and only a slot that was never bid reads address(0).
+    ///         `bids[id].bidder == address(0)` is the liveness marker.
     function quoteOf(uint256 id) external view returns (address) {
         return bids[id].quote;
     }
 
-    /// @notice Asset a bid wants to buy, or address(0) for an empty slot.
+    /// @notice Asset a bid wants to buy. Populated for closed bids too — see
+    ///         `quoteOf` on why this is not a liveness test.
     function tokenOf(uint256 id) external view returns (address) {
         return bids[id].token;
     }
@@ -802,7 +991,9 @@ contract Floorboard is ERC721 {
         return bids[id].isNFT;
     }
 
-    /// @notice The instant after which a bid is unhittable and sweepable.
+    /// @notice The instant AT which a bid becomes unhittable and sweepable. The
+    ///         window is half-open: `_take` and `sweep` both compare with `>=`,
+    ///         so the last hittable second is this value minus one.
     function expiryOf(uint256 id) public view returns (uint256) {
         Bid storage b = bids[id];
         unchecked {
@@ -811,9 +1002,12 @@ contract Floorboard is ERC721 {
     }
 
     /// @notice ERC-20 balance this board holds against no escrow liability.
-    /// @dev Reverts if the board is ever insolvent for `token`, which makes the
-    ///      conservation invariant `balanceOf >= escrowed` enforced rather than
-    ///      merely monitored.
+    /// @dev Reverts if the board is insolvent for `token`, so this MONITORS the
+    ///      conservation invariant `balanceOf >= escrowed` — a `view` enforces
+    ///      nothing, and no settlement path consults it. It is also only exact
+    ///      BETWEEN calls: `_open` credits `escrowed` before pulling the tokens
+    ///      and `_take` debits it before sending them, so a token with transfer
+    ///      hooks can observe this under-reporting or over-reporting mid-call.
     function freeBalance(address token) external view returns (uint256) {
         return IERC20(token).balanceOf(address(this)) - escrowed[token];
     }
@@ -823,9 +1017,21 @@ contract Floorboard is ERC721 {
     /// @dev ERC-165 probe for the ERC-721 interface id. Used only to REJECT, so
     ///      a collection that does not implement ERC-165 is not made unbiddable.
     function _isERC721(address token) internal view returns (bool) {
-        (bool ok, bytes memory ret) =
-            token.staticcall{gas: 30_000}(abi.encodeWithSelector(0x01ffc9a7, bytes4(0x80ac58cd)));
-        return ok && ret.length == 32 && abi.decode(ret, (bool));
+        return _declares(token, 0x80ac58cd);
+    }
+
+    /// @dev A bounded ERC-165 probe, used only to REJECT, so a contract that
+    ///      does not implement ERC-165 simply does not declare the interface.
+    ///
+    ///      The word is read as a NUMBER and compared to 1 rather than
+    ///      `abi.decode`d as a bool, because the decoder REVERTS on a
+    ///      noncanonical boolean - turning a malformed answer into a refusal of
+    ///      the whole call, which is the opposite of this probe's leniency. Only
+    ///      a clean 1 is affirmative. Same reading Swapboard's `_declares`
+    ///      documents at length.
+    function _declares(address token, bytes4 interfaceId) internal view returns (bool) {
+        (bool ok, bytes memory ret) = token.staticcall{gas: 30_000}(abi.encodeWithSelector(0x01ffc9a7, interfaceId));
+        return ok && ret.length == 32 && abi.decode(ret, (uint256)) == 1;
     }
 
     function _emptyIds() internal pure returns (uint256[] memory) {
@@ -925,26 +1131,82 @@ contract Floorboard is ERC721 {
     ///      stateful callbacks. Reverts inside an accepted callback bubble up —
     ///      an escrow that opted in and then refused the accounting must not be
     ///      paid anyway.
+    ///
+    ///      A HOLDER THAT OPTS IN AND THEN REVERTS BRICKS ITS OWN BID: `cancel`,
+    ///      `cancelUnwrap`, `sweep` and every `hit` fail for as long as the
+    ///      callback fails, and the only escape is transferring the receipt to
+    ///      an address that does not revert. This is the deliberate cost of
+    ///      bubbling: paying an escrow that rejected its own accounting is the
+    ///      worse failure. A contract holder must keep these callbacks total.
+    ///      REVERT AND RETURN DATA ARE COPIED WITH A BOUND, which is why this is
+    ///      assembly rather than a `.call` whose returndata Solidity copies in
+    ///      full before anything can inspect its length. 32 bytes is the entire
+    ///      answer and 256 is enough revert reason to debug with, so a holder
+    ///      returning or reverting with a multi-megabyte blob no longer charges
+    ///      the SELLER hitting the bid quadratic memory-expansion gas for a size
+    ///      the holder chose. Gas is deliberately NOT capped: an honest escrow's
+    ///      settlement accounting is real work, and a griefer who cannot burn gas
+    ///      can simply revert to the same effect. Bounding the copy is the part
+    ///      with no honest victim. Same treatment as Dutchboard's twin of this.
+    ///
+    ///      The reply word is read as a NUMBER and compared to 1, never
+    ///      `abi.decode`d as a bool: a noncanonical boolean makes the decoder
+    ///      REVERT, so a holder answering `2` would brick its own bid on every
+    ///      path rather than simply declining the callbacks.
     function _notifyBeforeProceeds(address to, uint256 id, address token, uint256 amount, bool nft)
         internal
-        returns (bool)
+        returns (bool notify)
     {
+        if (!_accepts(to, id)) return false;
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            mstore(p, shl(224, 0x8d27ed3f)) // beforeOrderProceeds(uint256,address,uint256,bool)
+            mstore(add(p, 4), id)
+            mstore(add(p, 36), token)
+            mstore(add(p, 68), amount)
+            mstore(add(p, 100), nft)
+            if iszero(call(gas(), to, 0, p, 0x84, 0x00, 0x20)) {
+                let n := returndatasize()
+                if gt(n, 256) { n := 256 }
+                returndatacopy(p, 0, n)
+                revert(p, n)
+            }
+            notify := and(eq(returndatasize(), 32), eq(mload(0x00), 1))
+        }
+    }
+
+    /// @dev The bounded static half: does `to` opt into proceeds accounting for
+    ///      `id` at all. Split out because `_release` has to know the answer
+    ///      BEFORE it decides whether to unwrap - see the note there.
+    function _accepts(address to, uint256 id) internal view returns (bool yes) {
         if (to.code.length == 0) return false;
-        (bool ok, bytes memory ret) = to.staticcall{gas: 30_000}(abi.encodeWithSelector(0x33dbef94, id));
-        if (!ok || ret.length != 32 || !abi.decode(ret, (bool))) return false;
-        (ok, ret) = to.call(abi.encodeWithSelector(0x8d27ed3f, id, token, amount, nft));
-        if (!ok) _bubbleRevert(ret);
-        return ret.length == 32 && abi.decode(ret, (bool));
+        assembly ("memory-safe") {
+            let p := mload(0x40)
+            mstore(p, shl(224, 0x33dbef94)) // acceptsOrderProceeds(uint256)
+            mstore(add(p, 4), id)
+            // The staticcall is bound to its own variable first: Yul evaluates
+            // an expression's arguments RIGHT TO LEFT, so folding it into
+            // `and(staticcall(...), eq(returndatasize(), 32))` reads
+            // `returndatasize()` from whatever call ran BEFORE this one.
+            let ok := staticcall(30000, to, p, 0x24, 0x00, 0x20)
+            yes := and(and(ok, eq(returndatasize(), 32)), eq(mload(0x00), 1))
+        }
     }
 
     function _notifyAfterProceeds(address to, uint256 id, address token, uint256 amount, bool nft) internal {
-        (bool ok, bytes memory ret) = to.call(abi.encodeWithSelector(0x2814c622, id, token, amount, nft));
-        if (!ok) _bubbleRevert(ret);
-    }
-
-    function _bubbleRevert(bytes memory ret) internal pure {
         assembly ("memory-safe") {
-            revert(add(ret, 0x20), mload(ret))
+            let p := mload(0x40)
+            mstore(p, shl(224, 0x2814c622)) // afterOrderProceeds(uint256,address,uint256,bool)
+            mstore(add(p, 4), id)
+            mstore(add(p, 36), token)
+            mstore(add(p, 68), amount)
+            mstore(add(p, 100), nft)
+            if iszero(call(gas(), to, 0, p, 0x84, 0x00, 0x00)) {
+                let n := returndatasize()
+                if gt(n, 256) { n := 256 }
+                returndatacopy(p, 0, n)
+                revert(p, n)
+            }
         }
     }
 

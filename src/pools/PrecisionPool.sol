@@ -234,7 +234,7 @@ contract PrecisionPool is ERC20, IPriceTape {
         address hook_,
         address feeRecipient_,
         uint256 creatorFeeBps_
-    ) payable {
+    ) {
         if (factory_.code.length == 0) revert Bad();
         if (token0_ >= token1_) revert Bad();
         if (token1_.code.length == 0 || (token0_ != address(0) && token0_.code.length == 0)) revert Bad();
@@ -249,21 +249,38 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (creatorFeeBps_ > MAX_CREATOR_SHARE) revert Bad();
         if (creatorFeeBps_ != 0 && feeRecipient_ == address(0)) revert Bad();
         (feeRecipient, creatorFeeBps) = (feeRecipient_, creatorFeeBps_);
-
     }
 
     /// @dev Native input is accepted only by an exact-input entry point. A
     ///      naked transfer would otherwise become anonymous balance surplus.
     ///
-    ///      This does NOT make the balance unforgeable: `selfdestruct` and block
-    ///      rewards reach a contract without calling it, so a native-token0 pool
-    ///      can hold ETH no entry point ever credited. That surplus is stranded
-    ///      rather than stealable, and deliberately so - every entry point ties
-    ///      the amount it credits to `msg.value` or to a pull it performed
-    ///      itself, never to the balance it happens to find, so nobody can claim
-    ///      it by declaring it. The alternative, a sweep, would be a permission
-    ///      to move funds out of an otherwise permissionless immutable contract,
-    ///      which is a strictly worse thing to hold than the dust it recovers.
+    ///      The constructor is deliberately NOT payable for the same reason. A
+    ///      payable one lets a deployment endow the pool with ETH before any
+    ///      entry point exists to credit it through, and the no-sweep policy
+    ///      below then strands it for good. The factory always deploys with
+    ///      zero value, but the factory is not a chokepoint: this constructor is
+    ///      public, direct deployment is a supported path (see its own note),
+    ///      and a pool with no `feeRecipient` can be seeded without the factory
+    ///      ever being involved. So the guarantee has to hold here, not upstream.
+    ///
+    ///      Payable is the cheaper of the two, and by almost nothing: measured
+    ///      A/B, it saves 15 gas and 5 bytes of creation code against the
+    ///      3,883,913 a `createPool` costs - 0.0004%, once, at deployment.
+    ///      Constructor code is never part of the runtime, so no swap and no
+    ///      deposit pays the difference either way. Recorded because that
+    ///      number is the whole argument for the other choice, and the next
+    ///      person to weigh it should not have to measure it again.
+    ///
+    ///      Closing this does NOT make the balance unforgeable: `selfdestruct`
+    ///      and block rewards reach a contract without calling it, so a
+    ///      native-token0 pool can still hold ETH no entry point ever credited.
+    ///      That surplus is stranded rather than stealable, and deliberately so
+    ///      - every entry point ties the amount it credits to `msg.value` or to
+    ///      a pull it performed itself, never to the balance it happens to find,
+    ///      so nobody can claim it by declaring it. The alternative, a sweep,
+    ///      would be a permission to move funds out of an otherwise
+    ///      permissionless immutable contract, which is a strictly worse thing
+    ///      to hold than the dust it recovers.
     receive() external payable {
         revert Bad();
     }

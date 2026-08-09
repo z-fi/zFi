@@ -70,6 +70,21 @@ contract PrecisionZap {
     ///      the same fresh delta and a recipient of its own choosing. With it,
     ///      the only exit that can consume the funding is the one that was
     ///      already authorized.
+    ///
+    ///      WHY A PER-CALL GUARD IS ENOUGH HERE, when `PrecisionRoute` and the
+    ///      factory both had to hold a lock ACROSS the funding gap instead. Their
+    ///      input is an arbitrary caller-named ERC-20, so a callback-capable
+    ///      token gets control inside the gap and something has to be holding the
+    ///      door. This contract's funding asset is not arbitrary: `isPool` above
+    ///      pins it to a pool this factory deployed, and those LP shares are
+    ///      Solady ERC-20 with no transfer hook, so nothing executes between
+    ///      `checkpoint` returning and `exit` being called. The gap is empty
+    ///      rather than guarded.
+    ///
+    ///      That makes the `isPool` check load-bearing for REENTRANCY, not only
+    ///      for pointing `removeLiquidity` at something real. Relaxing it to
+    ///      admit any share-like token would reopen the interval the intent
+    ///      commitment then has to carry alone.
     function checkpoint(address token, bytes32 intent) external nonReentrant {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (token == address(0) || token.code.length == 0) revert Bad();

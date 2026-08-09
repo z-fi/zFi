@@ -26,7 +26,7 @@ contract DutchUnwrapObserver {
     function list(address quote, uint128 amount) external {
         (bool ok,) = weth.call(abi.encodeWithSignature("approve(address,uint256)", address(board), amount));
         require(ok, "approve");
-        id = board.listERC20(weth, quote, amount, 1, 0, 0, 1 hours);
+        id = board.listERC20(weth, quote, amount, 1, 0, 0, 1 hours, 0);
     }
 
     function cancel() external {
@@ -72,7 +72,7 @@ contract DutchboardCancelUnwrapTest is Test {
         weth.mint(seller, amount);
         vm.startPrank(seller);
         weth.approve(address(board), amount);
-        id = board.listERC20(WETH, address(quote), amount, 1, 0, 0, 1 hours);
+        id = board.listERC20(WETH, address(quote), amount, 1, 0, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -115,7 +115,7 @@ contract DutchboardCancelUnwrapTest is Test {
         other.mint(maker, 2 ether);
         vm.startPrank(maker);
         other.approve(address(board), 2 ether);
-        uint256 id = board.listERC20(address(other), address(quote), 2 ether, 1, 0, 0, 1 hours);
+        uint256 id = board.listERC20(address(other), address(quote), 2 ether, 1, 0, 0, 1 hours, 0);
         vm.expectRevert(abi.encodeWithSelector(Dutchboard.NotWETH.selector, WETH, address(other)));
         board.cancelUnwrap(id);
         vm.stopPrank();

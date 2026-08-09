@@ -47,7 +47,7 @@ contract SwapboardPositionProbe is Test {
     function _dutchLot() internal returns (uint256 lot) {
         vm.startPrank(maker);
         tka.approve(address(dutch), type(uint256).max);
-        lot = dutch.listERC20(address(tka), address(tkb), 10e18, 100e18, 50e18, 0, uint40(1 days));
+        lot = dutch.listERC20(address(tka), address(tkb), 10e18, 100e18, 50e18, 0, uint40(1 days), 0);
         vm.stopPrank();
     }
 
@@ -72,7 +72,7 @@ contract SwapboardPositionProbe is Test {
         vm.prank(maker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.LiveClaimNotEscrowable.selector, address(dutch)));
         dutch.safeTransferFrom(
-            maker, address(sb), lot, abi.encode(Swapboard.PushOrder(address(tkb), 200e18, uint64(0), false, address(0)))
+            maker, address(sb), lot, abi.encode(keccak256("Swapboard.PushOrder.v1"), Swapboard.PushOrder(address(tkb), 200e18, uint64(0), false, address(0)))
         );
     }
 
@@ -126,7 +126,7 @@ contract SwapboardPositionProbe is Test {
         vm.prank(maker);
         vm.expectRevert(abi.encodeWithSelector(Swapboard.LiveClaimNotEscrowable.selector, address(dutch)));
         art.safeTransferFrom(
-            maker, address(sb), 7, abi.encode(Swapboard.PushOrder(address(dutch), lot, uint64(0), true, address(0)))
+            maker, address(sb), 7, abi.encode(keccak256("Swapboard.PushOrder.v1"), Swapboard.PushOrder(address(dutch), lot, uint64(0), true, address(0)))
         );
     }
 

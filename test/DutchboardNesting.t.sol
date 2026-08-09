@@ -48,7 +48,7 @@ contract DutchboardNestingTest is Test {
     ///      as an NFT lot on B.
     function _nest(address innerQuote) internal returns (uint256 aId, uint256 bId) {
         vm.startPrank(alice);
-        aId = boardA.listERC20(address(lot), innerQuote, 100e18, 10e18, 10e18, 0, uint40(1 days));
+        aId = boardA.listERC20(address(lot), innerQuote, 100e18, 10e18, 10e18, 0, uint40(1 days), 0);
         boardA.setApprovalForAll(address(boardB), true);
         uint256[] memory ids = new uint256[](1);
         ids[0] = aId;
@@ -104,7 +104,7 @@ contract DutchboardNestingTest is Test {
     /// @dev An ordinary seller must be unaffected by the new callback probe.
     function test_H02_ordinarySellersStillReceiveNativeETH() public {
         vm.prank(alice);
-        uint256 id = boardA.listERC20(address(lot), address(0), 100e18, 10e18, 10e18, 0, uint40(1 days));
+        uint256 id = boardA.listERC20(address(lot), address(0), 100e18, 10e18, 10e18, 0, uint40(1 days), 0);
 
         vm.deal(innerBuyer, 100e18);
         uint256 before = alice.balance;

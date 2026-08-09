@@ -241,7 +241,7 @@ contract SwapbolPlanTest is Test {
         out.approve(address(dutch), type(uint256).max);
         legacy.list(address(out), 10e18, address(pay), 20e18);
         current.createOrder(address(out), 15e18, address(pay), 30e18, true, 0, false, false, address(0));
-        dutch.listERC20(address(out), address(pay), 20e18, 40e18, 40e18, 0, 1 days);
+        dutch.listERC20(address(out), address(pay), 20e18, 40e18, 40e18, 0, 1 days, 0);
         vm.stopPrank();
     }
 
@@ -616,7 +616,7 @@ contract SwapbolPlanTest is Test {
         vm.startPrank(maker);
         uint256 legacyId = legacy.list(address(out), 10e18, WETH, 2 ether);
         uint256 currentId = current.createOrder(address(out), 15e18, WETH, 3 ether, true, 0, false, false, address(0));
-        uint256 dutchId = dutch.listERC20(address(out), address(0), 20e18, 4 ether, 4 ether, 0, 1 days);
+        uint256 dutchId = dutch.listERC20(address(out), address(0), 20e18, 4 ether, 4 ether, 0, 1 days, 0);
         vm.stopPrank();
 
         Swapbol.Fill[] memory legs = new Swapbol.Fill[](3);
@@ -638,7 +638,7 @@ contract SwapbolPlanTest is Test {
 
     function test_nativeInputAlsoPaysWethQuotedDutchAndRefundsUnusedMaximum() public {
         vm.prank(maker);
-        uint256 dutchId = dutch.listERC20(address(out), WETH, 20e18, 4 ether, 4 ether, 0, 1 days);
+        uint256 dutchId = dutch.listERC20(address(out), WETH, 20e18, 4 ether, 4 ether, 0, 1 days, 0);
 
         Swapbol.Fill[] memory legs = new Swapbol.Fill[](1);
         legs[0] = Swapbol.Fill(dutchId, address(dutch), 5 ether, 20e18, true);
@@ -657,7 +657,7 @@ contract SwapbolPlanTest is Test {
         MockERC20(WETH).mint(maker, 2 ether);
         vm.startPrank(maker);
         MockERC20(WETH).approve(address(dutch), 2 ether);
-        uint256 dutchId = dutch.listERC20(WETH, address(0), 2 ether, 1 ether, 1 ether, 0, 1 days);
+        uint256 dutchId = dutch.listERC20(WETH, address(0), 2 ether, 1 ether, 1 ether, 0, 1 days, 0);
         vm.stopPrank();
 
         MockERC20 constructorDependency = new MockERC20("wstETH", 18);
@@ -705,7 +705,7 @@ contract SwapbolPlanTest is Test {
         MockERC20(WETH).mint(maker, 2 ether);
         vm.startPrank(maker);
         MockERC20(WETH).approve(address(dutch), 2 ether);
-        uint256 dutchId = dutch.listERC20(WETH, address(0), 2 ether, 1 ether, 1 ether, 0, 1 days);
+        uint256 dutchId = dutch.listERC20(WETH, address(0), 2 ether, 1 ether, 1 ether, 0, 1 days, 0);
         vm.stopPrank();
 
         MockERC20 constructorDependency = new MockERC20("wstETH", 18);
@@ -756,14 +756,14 @@ contract SwapbolPlanTest is Test {
         executor.fillPlan(address(0), WETH, taker, taker, 0, legs);
 
         vm.prank(maker);
-        uint256 wrongLot = dutch.listERC20(address(out), address(0), 1 ether, 1 ether, 1 ether, 0, 1 days);
+        uint256 wrongLot = dutch.listERC20(address(out), address(0), 1 ether, 1 ether, 1 ether, 0, 1 days, 0);
         legs[0] = Swapbol.Fill(wrongLot, address(dutch), 1 ether, 1 ether, true);
 
         vm.expectRevert(Swapbol.BadPlan.selector);
         executor.fillPlan(address(0), WETH, taker, taker, 0, legs);
 
         vm.prank(maker);
-        uint256 wethQuoted = dutch.listERC20(address(out), WETH, 1 ether, 1 ether, 1 ether, 0, 1 days);
+        uint256 wethQuoted = dutch.listERC20(address(out), WETH, 1 ether, 1 ether, 1 ether, 0, 1 days, 0);
         legs[0] = Swapbol.Fill(wethQuoted, address(dutch), 1 ether, 1 ether, true);
 
         vm.expectRevert(Swapbol.BadPlan.selector);
@@ -795,7 +795,7 @@ contract SwapbolPlanTest is Test {
         MockERC20(WETH).approve(address(dutch), type(uint256).max);
         uint256 legacyId = legacy.list(WETH, 1 ether, address(pay), 2e18);
         uint256 currentId = current.createOrder(WETH, 2 ether, address(pay), 4e18, true, 0, false, false, address(0));
-        uint256 dutchId = dutch.listERC20(WETH, address(pay), 3 ether, 6e18, 6e18, 0, 1 days);
+        uint256 dutchId = dutch.listERC20(WETH, address(pay), 3 ether, 6e18, 6e18, 0, 1 days, 0);
         vm.stopPrank();
 
         Swapbol.Fill[] memory legs = new Swapbol.Fill[](3);

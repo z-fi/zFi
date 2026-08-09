@@ -159,10 +159,18 @@ contract Swapbol {
         uint256 ethBase = address(this).balance - msg.value;
         uint256 wethBase = balanceOf(WETH);
         if (board != boardV1 && board != boardCurrent && board != dutchboard) revert UnknownBoard(board);
+        // `tokenIn == tokenOut` unconditionally, which `_checkPlan` already
+        // requires and this guard used to exempt for the native/native case.
+        // ETH in and ETH out leaves output and unspent change in ONE balance
+        // with nothing to tell them apart, and `_sweep` resolves that tie by
+        // paying the whole delta to `recipient` - so the change silently goes to
+        // the party being paid out instead of the party who funded the route.
+        // On a relayed or exact-output fill those are different people. There is
+        // no accounting that splits it after the fact; the route shape has to go.
         if (
             recipient == address(0) || recipient == address(this) || refundTo == address(0)
-                || refundTo == address(this) || (tokenIn != address(0) && tokenIn == tokenOut)
-                || (tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))
+                || refundTo == address(this) || tokenIn == tokenOut || (tokenIn == address(0) && tokenOut == WETH)
+                || (tokenIn == WETH && tokenOut == address(0))
         ) revert BadPlan();
 
         _validateFillData(board, tokenIn, tokenOut, recipient, data);
@@ -473,6 +481,16 @@ contract Swapbol {
             // contract, not the final recipient, so the output can be unwrapped.
             if (tokenOut == address(0) && to != address(0) && to != address(this)) revert BadPlan();
             _validateDutchListing(orderId, tokenIn, tokenOut);
+            // `_validateDutchListing` accepts native input against a WETH-quoted
+            // listing because `_fillLegs` WRAPS each leg's `payIn` first. This
+            // entry point has no wrap step - it forwards `msg.value` as call
+            // value - and Dutchboard rejects value on a non-native quote, so the
+            // combination validated here and then reverted deep inside the board
+            // with the board's error. Refuse it where the reason is legible.
+            if (tokenIn == address(0)) {
+                (,, address quote,,,,) = IDutchQuote(dutchboard).legOf(orderId);
+                if (quote != address(0)) revert BadPlan();
+            }
             return;
         }
 
@@ -511,12 +529,19 @@ contract Swapbol {
         }
     }
 
+    /// @dev One packed read rather than three staticcalls. Three separate reads
+    ///      of a live book are three chances to see a listing that changed
+    ///      between them; `legOf` answers from a single storage view and reports
+    ///      zeroes for a listing that is closed, frozen or expired, so a stale
+    ///      leg fails validation here instead of at settlement.
     function _validateDutchListing(uint256 orderId, address tokenIn, address tokenOut) internal view {
-        if (
-            IDutchQuote(dutchboard).isNFTOf(orderId)
-                || IDutchQuote(dutchboard).quoteOf(orderId) != tokenIn
-                || IDutchQuote(dutchboard).tokenOf(orderId) != _dutchOutput(tokenOut)
-        ) revert BadPlan();
+        (, address token, address quote, bool isNFT,,,) = IDutchQuote(dutchboard).legOf(orderId);
+        if (isNFT || token != _dutchOutput(tokenOut)) revert BadPlan();
+        // Native input is WRAPPED at execution time, so a WETH-quoted listing is
+        // payable with it - see the `quote == WETH` branch in the leg builder,
+        // which wraps exactly `payIn`. Demanding `quote == tokenIn` here made
+        // that branch unreachable and refused every native-in/WETH-quoted route.
+        if (quote != tokenIn && !(tokenIn == address(0) && quote == WETH)) revert BadPlan();
     }
 
     function _swapboardInput(address token) internal pure returns (address) {
@@ -565,7 +590,7 @@ contract Swapbol {
                 if (leg.getOut > type(uint128).max) revert AmountTooLarge();
                 data = abi.encodeCall(IDutchFill.fill, (leg.orderId, uint128(leg.getOut), bookRecipient, leg.payIn));
                 if (tokenIn == address(0)) {
-                    address quote = IDutchQuote(dutchboard).quoteOf(leg.orderId);
+                    (,, address quote,,,,) = IDutchQuote(dutchboard).legOf(leg.orderId);
                     if (quote == address(0)) {
                         value = leg.payIn;
                     } else if (quote == WETH) {
@@ -739,9 +764,18 @@ interface IDutchFill {
 }
 
 interface IDutchQuote {
-    function quoteOf(uint256 id) external view returns (address);
-    function tokenOf(uint256 id) external view returns (address);
-    function isNFTOf(uint256 id) external view returns (bool);
+    function legOf(uint256 id)
+        external
+        view
+        returns (
+            address seller,
+            address token,
+            address quote,
+            bool isNFT,
+            uint128 remaining,
+            uint256 lotSize,
+            uint256 price
+        );
 }
 
 // Solady safe transfer helpers:

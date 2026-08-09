@@ -5,6 +5,20 @@ import "forge-std/Test.sol";
 import {Dutchboard, ETHTransferFailed} from "../src/Dutchboard.sol";
 import {MockERC20, MockNFT} from "./SwapboardMocks.sol";
 
+/// @dev `quoteOf`/`tokenOf` were removed from Dutchboard: `legOf` supersedes
+///      them for live listings, and the optimizer inlining their dispatch was
+///      part of what put the contract over EIP-170. These read the raw fields,
+///      which is what the old getters did - `legOf` reports zeroes for a closed
+///      listing and so cannot stand in where a test inspects a dead slot.
+function _quoteOf(Dutchboard b, uint256 id) view returns (address q) {
+    (,,,,,, q,,,,) = b.listings(id);
+}
+
+function _tokenOf(Dutchboard b, uint256 id) view returns (address t) {
+    (,,,, t,,,,,,) = b.listings(id);
+}
+
+
 /// @dev Rejects ETH — a seller contract with neither receive nor fallback.
 contract RejectETH {}
 
@@ -208,8 +222,8 @@ contract DutchboardNFTTest is Test {
         vm.stopPrank();
 
         assertEq(board.getListing(id).quote, address(quote));
-        assertEq(board.quoteOf(id), address(quote));
-        assertEq(board.tokenOf(id), address(nft));
+        assertEq(_quoteOf(board, id), address(quote));
+        assertEq(_tokenOf(board, id), address(nft));
     }
 
     function testListNFTRevertsEmpty() public {
@@ -713,7 +727,7 @@ contract DutchboardNFTTest is Test {
         pure
         returns (bytes memory)
     {
-        return abi.encode(Dutchboard.PushTerms(quoteAsset, sp, ep, st, dur));
+        return abi.encode(keccak256("Dutchboard.PushTerms.v1"), Dutchboard.PushTerms(quoteAsset, sp, ep, st, dur));
     }
 
     function testPushListCreatesListingWithoutApproval() public {

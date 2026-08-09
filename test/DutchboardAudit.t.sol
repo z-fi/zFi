@@ -39,7 +39,7 @@ contract DutchboardAuditTest is Test {
     function _listLot(address token, uint128 amount) internal returns (uint256 id) {
         vm.startPrank(maker);
         MockERC20(token).approve(address(board), type(uint256).max);
-        id = board.listERC20(token, address(quote), amount, 100e18, 100e18, 0, 1 hours);
+        id = board.listERC20(token, address(quote), amount, 100e18, 100e18, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -143,7 +143,7 @@ contract DutchboardAuditTest is Test {
                 Dutchboard.BalanceDeltaMismatch.selector, address(fee), address(board), 100e18, 99e18
             )
         );
-        board.listERC20(address(fee), address(quote), 100e18, 100e18, 100e18, 0, 1 hours);
+        board.listERC20(address(fee), address(quote), 100e18, 100e18, 100e18, 0, 1 hours, 0);
         vm.stopPrank();
 
         assertEq(fee.balanceOf(address(board)), 0, "failed listing left escrow");
@@ -200,7 +200,7 @@ contract DutchboardAuditTest is Test {
 
         vm.startPrank(victim);
         bad.approve(address(board), type(uint256).max);
-        uint256 victimId = board.listERC20(address(bad), address(quote), 100e18, 100e18, 100e18, 0, 1 hours);
+        uint256 victimId = board.listERC20(address(bad), address(quote), 100e18, 100e18, 100e18, 0, 1 hours, 0);
         vm.stopPrank();
 
         vm.prank(taker);
@@ -242,7 +242,7 @@ contract DutchboardAuditTest is Test {
 
         vm.startPrank(maker);
         lot.approve(address(board), type(uint256).max);
-        uint256 id = board.listERC20(address(lot), address(feeQuote), 100e18, 100e18, 100e18, 0, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(feeQuote), 100e18, 100e18, 100e18, 0, 1 hours, 0);
         vm.stopPrank();
         vm.prank(taker);
         feeQuote.approve(address(board), type(uint256).max);

@@ -4,6 +4,20 @@ pragma solidity ^0.8.36;
 import "forge-std/Test.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
 
+/// @dev `quoteOf`/`tokenOf` were removed from Dutchboard: `legOf` supersedes
+///      them for live listings, and the optimizer inlining their dispatch was
+///      part of what put the contract over EIP-170. These read the raw fields,
+///      which is what the old getters did - `legOf` reports zeroes for a closed
+///      listing and so cannot stand in where a test inspects a dead slot.
+function _quoteOf(Dutchboard b, uint256 id) view returns (address q) {
+    (,,,,,, q,,,,) = b.listings(id);
+}
+
+function _tokenOf(Dutchboard b, uint256 id) view returns (address t) {
+    (,,,, t,,,,,,) = b.listings(id);
+}
+
+
 contract FuzzERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -64,7 +78,7 @@ contract DutchboardFuzzTest is Test {
         lot.mint(maker, amount);
         vm.startPrank(maker);
         lot.approve(address(board), amount);
-        id = board.listERC20(address(lot), quoteAsset, amount, sp, ep, 0, dur);
+        id = board.listERC20(address(lot), quoteAsset, amount, sp, ep, 0, dur, 0);
         vm.stopPrank();
     }
 
@@ -354,7 +368,7 @@ contract DutchboardFuzzTest is Test {
         vm.startPrank(maker);
         lot.approve(address(board), amt);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(lot), address(quote), amt, s, 0, 0, 1 hours);
+        board.listERC20(address(lot), address(quote), amt, s, 0, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -366,7 +380,7 @@ contract DutchboardFuzzTest is Test {
         vm.startPrank(maker);
         lot.approve(address(board), amt);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(lot), address(quote), amt, s, e, 0, 1 hours);
+        board.listERC20(address(lot), address(quote), amt, s, e, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -378,7 +392,7 @@ contract DutchboardFuzzTest is Test {
         vm.startPrank(maker);
         lot.approve(address(board), amt);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(address(lot), address(quote), amt, 1 ether, 0, st, 1 hours);
+        board.listERC20(address(lot), address(quote), amt, 1 ether, 0, st, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -392,7 +406,7 @@ contract DutchboardFuzzTest is Test {
         lot.mint(maker, amt);
         vm.startPrank(maker);
         lot.approve(address(board), amt);
-        uint256 id = board.listERC20(address(lot), address(quote), amt, s, 0, st, 1 hours);
+        uint256 id = board.listERC20(address(lot), address(quote), amt, s, 0, st, 1 hours, 0);
         vm.stopPrank();
 
         skip(bound(dt, 0, uint256(wait_)));
@@ -539,7 +553,7 @@ contract DutchboardFuzzTest is Test {
 
         uint256 ethTotal;
         for (uint256 i; i < ids.length; ++i) {
-            if (board.quoteOf(ids[i]) == address(0)) ethTotal += board.costOf(ids[i], takes[i]);
+            if (_quoteOf(board, ids[i]) == address(0)) ethTotal += board.costOf(ids[i], takes[i]);
         }
 
         quote.mint(taker, type(uint128).max);
@@ -584,7 +598,7 @@ contract DutchboardFuzzTest is Test {
         makerQuote0 = quote.balanceOf(maker);
         for (uint256 i; i < idsB.length; ++i) {
             uint256 c = board.costOf(idsB[i], takesB[i]);
-            bool isEth = board.quoteOf(idsB[i]) == address(0);
+            bool isEth = _quoteOf(board, idsB[i]) == address(0);
             if (isEth) vm.deal(taker, c);
             vm.prank(taker);
             board.fill{value: isEth ? c : 0}(idsB[i], takesB[i], taker, type(uint256).max);

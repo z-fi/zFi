@@ -42,7 +42,7 @@ contract DutchboardMakerForTest is Test {
 
     function _sponsorListing() internal returns (uint256 id) {
         vm.prank(sponsor);
-        id = board.listERC20For(seller, address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days);
+        id = board.listERC20For(seller, address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days, 0);
     }
 
     function test_namedSellerIsNotDebitedAndCallerFundsEscrow() public {
@@ -89,21 +89,21 @@ contract DutchboardMakerForTest is Test {
     function test_zeroSellerRejected() public {
         vm.prank(sponsor);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20For(address(0), address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days);
+        board.listERC20For(address(0), address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days, 0);
     }
 
     function test_unreachableSellerAndZeroTokenRejected() public {
         vm.startPrank(sponsor);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20For(address(board), address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days);
+        board.listERC20For(address(board), address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days, 0);
 
         vm.expectRevert(Dutchboard.Bad.selector);
         board.listERC20For(
             0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, address(lot), address(quote), LOT, PRICE, PRICE, 0, 1 days
-        );
+        , 0);
 
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20For(seller, address(0), address(quote), LOT, PRICE, PRICE, 0, 1 days);
+        board.listERC20For(seller, address(0), address(quote), LOT, PRICE, PRICE, 0, 1 days, 0);
         vm.stopPrank();
     }
 }

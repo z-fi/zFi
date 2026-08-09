@@ -173,9 +173,13 @@ contract Orderbol {
             escrowBase = _consumeFunding(token, amount);
         }
 
-        safeApprove(escrowToken, board, amount);
+        // `dutchboard`, not `board`: they are provably equal (the guard above
+        // reverts otherwise), but naming the immutable on both the grant and the
+        // revoke keeps the scoped-allowance argument readable from one line
+        // rather than from two lines plus a check thirty lines up.
+        safeApprove(escrowToken, dutchboard, amount);
         listingId = IRelayedDutchboard(dutchboard)
-            .listERC20For(seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration);
+            .listERC20For(seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration, 0);
         safeApprove(escrowToken, dutchboard, 0);
 
         uint256 actual = balanceOf(escrowToken);
@@ -239,7 +243,7 @@ contract Orderbol {
         if (
             l.id != listingId || l.seller != seller || l.token != token || l.quote != quote || l.isNFT
                 || l.duration != duration || l.startPrice != startPrice || l.endPrice != endPrice || l.initial != amount
-                || l.remaining != amount || l.ids.length != 0
+                || l.remaining != amount || l.ids.length != 0 || l.expiry != 0
                 || l.startTime != (startTime == 0 ? uint40(block.timestamp) : startTime)
         ) revert BadOrder();
     }
@@ -334,6 +338,10 @@ interface IRelayedSwapboardView {
 }
 
 interface IRelayedDutchboard {
+    /// @dev Dutchboard's shorter overloads were removed - the optimizer inlined
+    ///      the whole listing body into each of them, which is what put the
+    ///      contract over EIP-170. `expiry == 0` is the resting-floor behaviour
+    ///      this relay has always created.
     function listERC20For(
         address seller,
         address token,
@@ -342,11 +350,18 @@ interface IRelayedDutchboard {
         uint256 startPrice,
         uint256 endPrice,
         uint40 startTime,
-        uint40 duration
+        uint40 duration,
+        uint40 expiry
     ) external returns (uint256 id);
 }
 
 interface IRelayedDutchboardView {
+    /// @dev MUST match `Dutchboard.ListingView` field for field. `ids` is a
+    ///      dynamic array, so the struct is ABI-encoded with an offset head: a
+    ///      missing field does not read as zero, it shifts every later field by
+    ///      one word and decodes an offset as data. This copy had fallen two
+    ///      fields behind (`expiry`, `takeable`), which made `_checkDutchListing`
+    ///      compare `ids.length` against a misaligned word.
     struct ListingView {
         uint256 id;
         address seller;
@@ -359,8 +374,10 @@ interface IRelayedDutchboardView {
         uint96 endPrice;
         uint128 initial;
         uint128 remaining;
+        uint40 expiry;
         uint256[] ids;
         uint256 price;
+        bool takeable;
     }
 
     function getListing(uint256 id) external view returns (ListingView memory);
@@ -378,6 +395,9 @@ function safeApprove(address token, address to, uint256 amount) {
         mstore(0x34, amount)
         mstore(0x00, 0x095ea7b3000000000000000000000000)
 
+        // USDT-style tokens require a zero transition before a new nonzero
+        // allowance. Clearing first preserves the call-scoped allowance model
+        // while remaining compatible with that common approval convention.
         if amount {
             mstore(0x34, 0)
             let reset := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
@@ -387,6 +407,14 @@ function safeApprove(address token, address to, uint256 amount) {
                     revert(0x1c, 0x04)
                 }
             }
+            // The reset call wrote its return data over 0x00..0x20, and the
+            // calldata being reused lives at 0x10..0x54 - so that write lands
+            // on the selector. Without rebuilding it here the approve below
+            // ships whatever the reset returned as its selector, which is why
+            // this path failed against every ordinary ERC-20 rather than only
+            // the USDT-style tokens it exists for.
+            mstore(0x14, to)
+            mstore(0x00, 0x095ea7b3000000000000000000000000)
         }
 
         mstore(0x34, amount)

@@ -482,17 +482,19 @@ contract PrecisionRoute {
         uint256 keep = amountIn - swapPortion;
         (uint256 a0, uint256 a1) = tokenIn == t0 ? (keep, received) : (received, keep);
 
+        // Canonical ordering puts address(0) first, so only `t0` can be native
+        // and `t1` is always an ERC-20.
         uint256 value;
         if (t0 == address(0)) value = a0;
         else t0.safeApproveWithRetry(pool, a0);
-        if (t1 != address(0)) t1.safeApproveWithRetry(pool, a1);
+        t1.safeApproveWithRetry(pool, a1);
 
         // `sqrtPriceInit` is ignored once the pool has supply, so a zap into an
         // unseeded band is refused rather than silently choosing its price.
         (lp,,) = p.addLiquidityExact{value: value}(0, a0, a1, minLP, to);
 
         if (t0 != address(0)) t0.safeApproveWithRetry(pool, 0);
-        if (t1 != address(0)) t1.safeApproveWithRetry(pool, 0);
+        t1.safeApproveWithRetry(pool, 0);
 
         _sweep(t0, pre0, to);
         _sweep(t1, pre1, to);

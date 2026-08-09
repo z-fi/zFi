@@ -34,7 +34,7 @@ contract SwapboardViewDutchTest is Test {
         SELL.mint(maker, LOT);
         vm.startPrank(maker);
         SELL.approve(address(board), LOT);
-        id = board.listERC20(address(SELL), address(PAY), LOT, startPrice, endPrice, 0, 1 hours);
+        id = board.listERC20(address(SELL), address(PAY), LOT, startPrice, endPrice, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -333,7 +333,7 @@ contract SwapboardViewDutchTest is Test {
         uint40 start = uint40(block.timestamp + 1 days);
         vm.startPrank(maker);
         SELL.approve(address(board), LOT);
-        uint256 id = board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours);
+        uint256 id = board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours, 0);
         vm.stopPrank();
 
         (SwapboardView.OrderView[] memory rows,) =
@@ -354,7 +354,7 @@ contract SwapboardViewDutchTest is Test {
         uint40 start = uint40(block.timestamp + 1 days);
         vm.startPrank(maker);
         SELL.approve(address(board), LOT);
-        board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours);
+        board.listERC20(address(SELL), address(PAY), LOT, 200e18, 100e18, start, 1 hours, 0);
         vm.stopPrank();
 
         (SwapboardView.OrderView[] memory paged,) = view_.getActiveDutchListingsPaged(address(board), 0, 10, 100);

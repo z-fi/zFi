@@ -63,7 +63,7 @@ contract DutchboardTest is Test {
         deal(_WETH, maker, _bal(_WETH, maker) + LOT);
         vm.startPrank(maker);
         _approve(_WETH, address(board), LOT);
-        id = board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, 0, 1 hours);
+        id = board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -201,7 +201,7 @@ contract DutchboardTest is Test {
         deal(_USDC, maker, 100_000e6);
         vm.startPrank(maker);
         _approve(_USDC, address(board), 100_000e6);
-        uint256 id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours);
+        uint256 id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours, 0);
         vm.stopPrank();
 
         skip(30 minutes);
@@ -228,7 +228,7 @@ contract DutchboardTest is Test {
         deal(_USDC, maker, 100_000e6);
         vm.startPrank(maker);
         _approve(_USDC, address(board), 100_000e6);
-        uint256 id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours);
+        uint256 id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours, 0);
         vm.stopPrank();
 
         uint256 cost = board.costOf(id, 25_000e6);
@@ -244,7 +244,7 @@ contract DutchboardTest is Test {
         vm.startPrank(maker);
         _approve(_WETH, address(board), LOT);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _USDC, LOT, uint256(type(uint96).max) + 1, ASK_LO, 0, 1 hours);
+        board.listERC20(_WETH, _USDC, LOT, uint256(type(uint96).max) + 1, ASK_LO, 0, 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -253,20 +253,20 @@ contract DutchboardTest is Test {
         _approve(_WETH, address(board), LOT);
         // startPrice < endPrice
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _USDC, LOT, ASK_LO, ASK_HI, 0, 1 hours);
+        board.listERC20(_WETH, _USDC, LOT, ASK_LO, ASK_HI, 0, 1 hours, 0);
         // zero startPrice
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _USDC, LOT, 0, 0, 0, 1 hours);
+        board.listERC20(_WETH, _USDC, LOT, 0, 0, 0, 1 hours, 0);
         // zero duration
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, 0, 0);
+        board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, 0, 0, 0);
         // token == quote
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _WETH, LOT, ASK_HI, ASK_LO, 0, 1 hours);
+        board.listERC20(_WETH, _WETH, LOT, ASK_HI, ASK_LO, 0, 1 hours, 0);
         // startTime in the past
         skip(100);
         vm.expectRevert(Dutchboard.Bad.selector);
-        board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, uint40(block.timestamp - 1), 1 hours);
+        board.listERC20(_WETH, _USDC, LOT, ASK_HI, ASK_LO, uint40(block.timestamp - 1), 1 hours, 0);
         vm.stopPrank();
     }
 
@@ -497,7 +497,7 @@ contract DutchboardTest is Test {
         deal(_USDC, maker, _bal(_USDC, maker) + 100_000e6);
         vm.startPrank(maker);
         _approve(_USDC, address(board), 100_000e6);
-        id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours);
+        id = board.listERC20(_USDC, ETH, 100_000e6, 30 ether, 20 ether, 0, 1 hours, 0);
         vm.stopPrank();
     }
 }

@@ -242,7 +242,18 @@ contract Swapbatch {
         uint256 purchasedWeth;
         if (isLegacy) {
             for (uint256 i; i < n; ++i) {
-                if (filled[i]) purchasedWeth += legacyOrders[i].amountA;
+                // `tokensOut[i] == weth`, because `amountA` is denominated in
+                // THAT LEG'S output token, not in WETH. Summing it unconditionally
+                // reserved a quantity of some unrelated ERC-20 against the WETH
+                // balance, and `reserved` then exceeded `currentWeth` on any
+                // legacy batch that bought something other than WETH - which is
+                // every one of them in practice. The whole legacy path reverted
+                // with `WETHAmountMismatch`. It reads as a WETH accounting error
+                // because it is one: this is the only figure `_deliverLegacy`
+                // pays out without measuring a balance delta first, so it has to
+                // be the sum over WETH legs alone. `address(0)` legs (delivery
+                // deliberately skipped) fall out for free - `weth` is not zero.
+                if (filled[i] && tokensOut[i] == weth) purchasedWeth += legacyOrders[i].amountA;
             }
             _deliverLegacy(legacyOrders, filled, tokensOut, outputBases, purchasedWeth, to);
         }
@@ -392,6 +403,9 @@ function safeApprove(address token, address to, uint256 amount) {
         mstore(0x14, to)
         mstore(0x00, 0x095ea7b3000000000000000000000000)
 
+        // USDT-style tokens require a zero transition before a new nonzero
+        // allowance. Clearing first preserves the call-scoped allowance model
+        // while remaining compatible with that common approval convention.
         if amount {
             mstore(0x34, 0)
             let reset := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
@@ -401,6 +415,14 @@ function safeApprove(address token, address to, uint256 amount) {
                     revert(0x1c, 0x04)
                 }
             }
+            // The reset call wrote its return data over 0x00..0x20, and the
+            // calldata being reused lives at 0x10..0x54 - so that write lands
+            // on the selector. Without rebuilding it here the approve below
+            // ships whatever the reset returned as its selector, which is why
+            // this path failed against every ordinary ERC-20 rather than only
+            // the USDT-style tokens it exists for.
+            mstore(0x14, to)
+            mstore(0x00, 0x095ea7b3000000000000000000000000)
         }
 
         mstore(0x34, amount)

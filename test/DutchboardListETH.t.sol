@@ -5,6 +5,20 @@ import "forge-std/Test.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
 import {MockERC20, MockWETH} from "./SwapboardMocks.sol";
 
+/// @dev `quoteOf`/`tokenOf` were removed from Dutchboard: `legOf` supersedes
+///      them for live listings, and the optimizer inlining their dispatch was
+///      part of what put the contract over EIP-170. These read the raw fields,
+///      which is what the old getters did - `legOf` reports zeroes for a closed
+///      listing and so cannot stand in where a test inspects a dead slot.
+function _quoteOf(Dutchboard b, uint256 id) view returns (address q) {
+    (,,,,,, q,,,,) = b.listings(id);
+}
+
+function _tokenOf(Dutchboard b, uint256 id) view returns (address t) {
+    (,,,, t,,,,,,) = b.listings(id);
+}
+
+
 /// @notice Coverage for the native-ETH sell side.
 ///
 /// @dev The board escrows tokens, never native balance, so `listETH` wraps at
@@ -34,18 +48,24 @@ contract DutchboardListETHTest is Test {
 
     function _list(uint256 value) internal returns (uint256 id) {
         vm.prank(seller);
-        id = db.listETH{value: value}(address(quote), 10e18, 10e18, 0, uint40(1 days));
+        id = db.listETH{value: value}(address(quote), 10e18, 10e18, 0, uint40(1 days), 0);
     }
 
     function test_listETHEscrowsWrappedValue() public {
+        // These suites run against a mainnet fork (see `fork_block_number` in
+        // foundry.toml), so a freshly deployed address can already hold dust
+        // belonging to whatever lives there on chain - this board's address
+        // carries 1 wei. "Retains no native balance" is a statement about what
+        // THIS call leaves behind, so measure the delta rather than the total.
+        uint256 boardEthBefore = address(db).balance;
         uint256 id = _list(5 ether);
 
-        assertEq(db.tokenOf(id), address(weth), "sold asset is canonical WETH");
-        assertEq(db.quoteOf(id), address(quote), "quote preserved");
+        assertEq(_tokenOf(db, id), address(weth), "sold asset is canonical WETH");
+        assertEq(_quoteOf(db, id), address(quote), "quote preserved");
         assertEq(db.ownerOf(id), seller, "receipt minted to the seller");
         assertEq(weth.balanceOf(address(db)), 5 ether, "board holds the wrapped lot");
         assertEq(db.escrowed(address(weth)), 5 ether, "escrow accounting matches");
-        assertEq(address(db).balance, 0, "no native balance retained");
+        assertEq(address(db).balance, boardEthBefore, "no native balance retained");
         assertEq(seller.balance, 95 ether, "value left the seller exactly once");
     }
 
@@ -82,7 +102,7 @@ contract DutchboardListETHTest is Test {
 
     function test_listETHForAssignsSellerRights() public {
         vm.prank(maker);
-        uint256 id = db.listETHFor{value: 1 ether}(seller, address(quote), 10e18, 10e18, 0, uint40(1 days));
+        uint256 id = db.listETHFor{value: 1 ether}(seller, address(quote), 10e18, 10e18, 0, uint40(1 days), 0);
 
         assertEq(db.ownerOf(id), seller, "receipt goes to the named seller");
         assertEq(maker.balance, 99 ether, "the caller supplied the escrow");
@@ -102,22 +122,22 @@ contract DutchboardListETHTest is Test {
     function test_nativeQuoteRejected() public {
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listETH{value: 1 ether}(address(0), 10e18, 10e18, 0, uint40(1 days));
+        db.listETH{value: 1 ether}(address(0), 10e18, 10e18, 0, uint40(1 days), 0);
     }
 
     function test_zeroValueRejected() public {
         vm.prank(seller);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listETH{value: 0}(address(quote), 10e18, 10e18, 0, uint40(1 days));
+        db.listETH{value: 0}(address(quote), 10e18, 10e18, 0, uint40(1 days), 0);
     }
 
     /// @dev The board itself is not a valid seller, and neither is the wrapper.
     function test_boardAndWrapperRejectedAsSeller() public {
         vm.startPrank(maker);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listETHFor{value: 1 ether}(address(db), address(quote), 10e18, 10e18, 0, uint40(1 days));
+        db.listETHFor{value: 1 ether}(address(db), address(quote), 10e18, 10e18, 0, uint40(1 days), 0);
         vm.expectRevert(Dutchboard.Bad.selector);
-        db.listETHFor{value: 1 ether}(address(weth), address(quote), 10e18, 10e18, 0, uint40(1 days));
+        db.listETHFor{value: 1 ether}(address(weth), address(quote), 10e18, 10e18, 0, uint40(1 days), 0);
         vm.stopPrank();
     }
 

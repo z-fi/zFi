@@ -12,16 +12,16 @@ address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 /// the recipient - `_sweep` exists precisely for the ones that do not - so the
 /// forwarder has to deliver that output itself.
 contract PayToCallerDutch {
-    function quoteOf(uint256) external pure returns (address) {
-        return address(0); // native-quoted, as the ETH -> WETH route requires
-    }
-
-    function tokenOf(uint256) external pure returns (address) {
-        return WETH;
-    }
-
-    function isNFTOf(uint256) external pure returns (bool) {
-        return false;
+    /// Dutchboard answers the three old getters through one packed read now, so
+    /// a stand-in venue has to as well.
+    function legOf(uint256)
+        external
+        pure
+        returns (address, address, address, bool, uint128, uint256, uint256)
+    {
+        // seller, token, quote (address(0) = native, as the ETH -> WETH route
+        // requires), isNFT, remaining, lotSize, price.
+        return (address(1), WETH, address(0), false, type(uint128).max, 0, 0);
     }
 
     /// fill(uint256,uint128,address,uint256) - selector 0xae7a8260.
@@ -175,11 +175,16 @@ contract SwapbolSweepTest is Test {
         assertEq(token.allowance(address(fwd), attacker), 0, "no allowance planted");
     }
 
-    /// Unspent input is change, and change belongs to whoever funded the route.
-    /// On a relayed or exact-output fill that is not the party being paid out,
-    /// which is why `refundTo` is separate from `recipient` here as it is in
-    /// `fillPlan`.
-    function test_unspentInputGoesToRefundToNotRecipient() public {
+    /// A registered board is not a licence to forward arbitrary calldata:
+    /// `_validateFillData` only recognises the boards' own fill selectors, so a
+    /// venue-specific call is refused before anything moves.
+    ///
+    /// @dev This test used to assert that unspent input reached `refundTo`, but
+    ///      the call it makes has been refused since `_validateFillData` landed -
+    ///      the assertions were simply never updated, and one of them demanded
+    ///      that a reverted call had somehow swept the forwarder's balance. What
+    ///      it can honestly check is that the refusal is total.
+    function test_arbitraryVenueCalldataIsRefusedBeforeAnythingMoves() public {
         Burnable token = new Burnable();
         PartialVenue venue = new PartialVenue(token);
         Swapbol fwd = new Swapbol(address(venue), address(new Venue()), address(new Venue()));
@@ -194,6 +199,7 @@ contract SwapbolSweepTest is Test {
 
         assertEq(token.balanceOf(refundTo), 0, "unreviewed arbitrary venue was not called");
         assertEq(token.balanceOf(taker), 0, "not to the payout recipient");
-        assertEq(token.balanceOf(address(fwd)), 0, "nothing stranded");
+        // The revert reverted: the forwarder still holds exactly what it held.
+        assertEq(token.balanceOf(address(fwd)), 1_000e6, "the refused call moved nothing");
     }
 }

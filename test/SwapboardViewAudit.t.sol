@@ -196,7 +196,7 @@ contract SwapboardViewAuditTest is Test {
         sell.mint(maker, 100e18);
         vm.startPrank(maker);
         sell.approve(address(board), 100e18);
-        board.listERC20(address(sell), address(0), 100e18, 10e18, 1e18, 0, 1 hours);
+        board.listERC20(address(sell), address(0), 100e18, 10e18, 1e18, 0, 1 hours, 0);
         vm.stopPrank();
 
         (SwapboardView.OrderView[] memory rows,) = lens.getRecentDutchListings(address(board), 0, 10, 100);
