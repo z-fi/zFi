@@ -1,5 +1,15 @@
 # Precision — broadcast sheet
 
+> **EXECUTED 2026-08-11. Do not re-run.** All six are live and verified; see
+> `deploy/Precision.md` for addresses, transaction hashes and the post-deploy
+> checks that were actually performed. Re-sending any of these would revert
+> `Create2Failed()` at the summoner, since the addresses are occupied — but the
+> factory transaction alone is ~6.3M gas to discover that.
+>
+> Kept as the record of what was broadcast, and as the template for a future
+> redeploy. A redeploy needs new salts: the addresses below are bound to this
+> exact bytecode.
+
 Everything below is frozen and reproduces from source
 (`node script/check-create2-artifacts.mjs`, 21/21 ok). Send these six
 transactions, in this order, to the SafeSummoner CREATE2 factory:
