@@ -4,7 +4,7 @@
  *
  * WHY CHUNKS
  * The page is stored as the runtime bytecode of data contracts, so a single
- * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across six
+ * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across seven
  * contracts moves that ceiling to ~147KB — the limit now applies per chunk, not
  * to the page. zSwap takes the chunk addresses as constructor args and
  * reassembles them in html(), so its own creation bytecode stays small.
@@ -16,6 +16,7 @@
  *   4. deploy chunk 4              -> address D
  *   5. deploy chunk 5              -> address E
  *   6. deploy chunk 6              -> address F
+ *   7. deploy chunk 7              -> address G
  *   7. deploy zSwap(A, B, C, D, E, F) (constructor args appended to the creation code)
  *
  * Each chunk's initcode is the classic data-contract stub:
@@ -30,7 +31,7 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 6;
+const n = 7;
 if (process.argv[2] && process.argv[2] !== String(n)) {
   console.error(`zSwap currently supports exactly ${n} data chunks; update the wrapper before changing this.`);
   process.exit(1);

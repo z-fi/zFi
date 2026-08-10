@@ -48,9 +48,12 @@ export const A = {
   SB2: '0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b',
   SB1: '0x000000fF3D7A2d373615141d7489Ca66683DbecF',
   SBVIEW: '0x000000E0b25449F32f7D9259aC449bA88E78dFCE',
-  SWAPBOL: '0x0000003069053df109F47acac630e03C77804AD8',
+  SWAPBOL: '0x00000087A6dc5071779Ed1F8274A39230768B976',
   DUTCH: '0x000000a213b430D14Bae6062c176289B05e04489',
-  ORDERBOL: '0x000000fADa565c5608570a4F66Fb5E0bD08ef91B',
+  ORDERBOL: '0x000000c1051acD54A03e967b647112FDe17f518C',
+  FLOOR: '0x00000080198137F790DA4C52bb902cf87c276748',
+  FLOORVIEW: '0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7',
+  TOKENLIST: '0x0000006013dF75A31678B786061C2B54bf531524',
   PPFACTORY: '0x0000000000000000000000000000000000000000',
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
@@ -71,6 +74,10 @@ export const SEL = {
   QUOTE: 'e453166e', QUOTE_MULTI: '4c464f59', SPLIT_A: '892af013', SPLIT_B: '85f86a90',
   ORDER_FIXED: 'bcdb7936', ORDER_DUTCH: 'fb910431',
   CANDS: '5f452988', DUTCH_CANDS: 'eb33e466', RECENT: '6a9849c1', RECENT_DUTCH: '98035c9a',
+  FLOOR_CANDS: 'c587d927', RECENT_FLOOR: 'a5edd13d', COLL_BIDS: '16bb24eb',
+  GETORDERS: '03652027', BIDS: '4423c5f1',
+  INITIAL_B: '878ea250', TOKENURI: 'c87b56dd', LOGOOF: '6ce273ac',
+  FLOOR_HIT: '309ce4ce', ORDER_FLOOR: '23e93357', BOL_FLOOR: 'b732d224',
   NEXTID: '2a58b330', CANCELORD: '514fcac7', CANCEL_UNWRAP: '21dd76f9',
   DUTCH_CANCEL: '40e58ee5', DUTCH_CANCEL_UNWRAP: '8382de65',
   FILL1: 'c37dfc5b', FILL2: '8ab3bfc9', FILL2_UNWRAP: '402ad677', FILL2_ETH: '13092239',
@@ -146,6 +153,37 @@ export function encodeViewPage(rows, next = 0n) {
 
 const encodeString = s => coder.encode(['string'], [s]);
 
+/**
+ * The 17-field FloorboardView.BidRow tuple.
+ *
+ * Three of its members are dynamic (`ids`, and both symbols), so each ELEMENT
+ * of the array is offset-encoded — the array head holds pointers to rows, not
+ * rows. That indirection is the thing the page's decoder has to get right, and
+ * encoding it here through a real ABI coder is what makes the test able to
+ * catch a decoder that reads a pointer as an address.
+ *
+ * `tokenDecimals`/`quoteDecimals` carry the board's `decimals + 1` convention,
+ * with 0 meaning "never snapshotted". Fixtures state the TRUE decimals and the
+ * bias is applied here, so a test never has to remember it.
+ */
+const BID_TUPLE =
+  'tuple(uint256,address,address,address,bool,bool,uint256[],uint128,uint128,' +
+  'uint256,uint256,uint40,uint40,uint8,uint8,string,string)[]';
+
+export function encodeBidPage(rows, next = 0n) {
+  const encoded = rows.map(r => [
+    BigInt(r.id), r.bidder || A.OTHER, r.token, r.quote,
+    !!r.isNFT, r.anyId ?? !!r.isNFT, (r.ids || []).map(BigInt),
+    BigInt(r.remaining), BigInt(r.initial ?? r.remaining),
+    BigInt(r.price), BigInt(r.proceeds),
+    BigInt(r.startTime || 0), BigInt(r.expiry ?? 0),
+    r.tokenDecimals == null ? 0 : r.tokenDecimals + 1,
+    r.quoteDecimals == null ? 0 : r.quoteDecimals + 1,
+    r.tokenSymbol || 'ASSET', r.quoteSymbol || 'QUOTE',
+  ]);
+  return coder.encode([BID_TUPLE, 'uint256'], [encoded, BigInt(next)]);
+}
+
 /** PrecisionPoolLens.PoolInfo[] — 18 static fields, so 18 flat words per row. */
 const POOL_INFO = 'tuple(address,address,address,uint256,uint256,uint256,uint256,uint256,' +
   'uint256,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256)[]';
@@ -211,10 +249,16 @@ export class MockChain {
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
+    this.floorBids = [];           // FloorboardView.BidRow fixtures
+    this.cards = {};               // `${board}:${id}` -> tokenURI JSON object
+    this.logos = {};               // token -> logoOf() string
+    this.initialAmountB = {};      // `${board}:${id}` -> original amountB
+    this.swapbolFloorboard = null; // null => the executor knows A.FLOOR
 
     // Every zSwap-relevant contract is deployed by default; tests that care
     // about "not deployed yet" branches clear these explicitly.
     for (const a of [A.SB2, A.SB1, A.SBVIEW, A.SWAPBOL, A.DUTCH, A.ORDERBOL,
+      A.FLOOR, A.FLOORVIEW, A.TOKENLIST,
       A.ZROUTER, A.ZQUOTER, A.SLOW, A.MC3, A.PERMIT2, A.WETH, A.USDC, A.USDT, A.WBTC]) {
       this.code.set(a.toLowerCase(), '0x60006000');
     }
@@ -361,6 +405,37 @@ export class MockChain {
     if (to === A.MC3.toLowerCase() && sel === SEL.AGG3) return this.aggregate3(data, block);
     if (to === A.ZQUOTER.toLowerCase()) return this.quote(sel, data);
     if (to === A.SBVIEW.toLowerCase()) return this.lens(sel, data);
+    if (to === A.FLOORVIEW.toLowerCase()) return this.floorLens(sel, data);
+    // The board's OWN storage, which the page reads back before sending as a
+    // last-moment staleness check. Served from the same fixtures as the lens,
+    // so a test never has to state a row twice.
+    if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
+    // TokenList.logoOf(address) REVERTS for an unlisted token rather than
+    // returning empty, which is what the page's allow-failure batch relies on.
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.LOGOOF) {
+      const logo = this.logos[wordAddr('0x' + data.slice(8), 0).toLowerCase()];
+      if (!logo) throw Error('not listed');
+      return encodeString(logo);
+    }
+    if (sel === SEL.TOKENURI) {
+      const c = this.cards[`${to}:${word('0x' + data.slice(8), 0)}`];
+      if (!c) throw Error('no card');
+      return encodeString('data:application/json;base64,' +
+        Buffer.from(JSON.stringify(c)).toString('base64'));
+    }
+    if (sel === SEL.INITIAL_B) {
+      const v = this.initialAmountB[`${to}:${word('0x' + data.slice(8), 0)}`];
+      return '0x' + u256(v ?? 0);
+    }
+    if ((to === A.SB2.toLowerCase() || to === A.SB1.toLowerCase()) && sel === SEL.GETORDERS) {
+      return this.boardOrders(to, data);
+    }
+    // Swapbol.floorboard(). The page probes this before it will plan a bid leg,
+    // because the page and the executor ship separately: an executor without
+    // the binding rejects the leg after the user has already signed.
+    if (to === A.SWAPBOL.toLowerCase() && sel === SEL.BOL_FLOOR) {
+      return '0x' + addrWord(this.swapbolFloorboard ?? A.FLOOR);
+    }
     if (to === A.DUTCH.toLowerCase() && sel === SEL.DUTCH_LISTING) return this.dutchListing(data);
     if (to === A.SLOW.toLowerCase()) return this.slow(sel, data);
     if (to === A.ZROUTER.toLowerCase()) return '0x';          // pre-flight eth_call
@@ -436,6 +511,74 @@ export class MockChain {
     if (sel === SEL.RECENT) return pick(this.recent, false);
     if (sel === SEL.RECENT_DUTCH) return pick(this.recent, true);
     throw Error(`MockChain: unhandled lens selector ${sel}`);
+  }
+
+  /**
+   * FloorboardView. `floorCandidatesFrom` is asked with the taker's own
+   * (tokenIn, tokenOut) and must answer with bids that BUY tokenIn — the
+   * mirror of an ask — so the filter here is deliberately written the same way
+   * round as the real lens rather than passing everything through.
+   */
+  floorLens(sel, data) {
+    const body = '0x' + data.slice(8);
+    if (sel === SEL.FLOOR_CANDS) {
+      const tokenIn = wordAddr(body, 1).toLowerCase();
+      const tokenOut = wordAddr(body, 2).toLowerCase();
+      return encodeBidPage(this.floorBids.filter(b =>
+        !b.isNFT
+        && b.token.toLowerCase() === tokenIn
+        && b.quote.toLowerCase() === tokenOut), 0n);
+    }
+    if (sel === SEL.RECENT_FLOOR) return encodeBidPage(this.floorBids, 0n);
+    if (sel === SEL.COLL_BIDS) {
+      const collection = wordAddr(body, 1).toLowerCase();
+      return encodeBidPage(this.floorBids.filter(b =>
+        b.isNFT && b.token.toLowerCase() === collection), 0n);
+    }
+    throw Error(`MockChain: unhandled floor lens selector ${sel}`);
+  }
+
+  /**
+   * `Floorboard.bids(id)` — the generated mapping getter, which DROPS the
+   * struct's trailing dynamic `ids`, so it is eleven flat words.
+   */
+  floorBid(data) {
+    const id = word('0x' + data.slice(8), 0);
+    const b = this.floorBids.find(x => BigInt(x.id) === id);
+    // A slot that never existed answers with a zero bidder rather than
+    // reverting — that is what the real getter does, and the page treats it
+    // as "closed".
+    if (!b) return '0x' + '0'.repeat(64 * 11);
+    return '0x' + [
+      addrWord(b.bidder || A.OTHER), u256(b.isNFT ? 1 : 0),
+      u256(b.startTime || 0), u256(b.expiry ?? 0),
+      addrWord(b.token), u256(b.price),
+      addrWord(b.quote), u256(b.price),
+      u256(b.price), u256(b.initial ?? b.remaining), u256(b.remaining),
+    ].join('');
+  }
+
+  /**
+   * `Swapboard.getOrders(uint256[])`. The struct is static, so it inlines: six
+   * words on the legacy board, eleven on the current one. Offset, length, body.
+   */
+  boardOrders(board, data) {
+    const body = '0x' + data.slice(8);
+    // (offset, length, id...) — the page asks for exactly one.
+    const id = word(body, 2);
+    const rows = [...this.recent, ...this.candidates];
+    const o = rows.find(r => BigInt(r.id) === id && r.board.toLowerCase() === board);
+    const v2 = board === A.SB2.toLowerCase();
+    const words = o
+      ? (v2
+        ? [addrWord(o.maker || A.OTHER), u256(1), u256(o.pf ? 1 : 0), u256(o.exp || 0),
+           u256(o.nA ? 1 : 0), u256(o.nB ? 1 : 0), addrWord(o.cp || A.ZERO),
+           addrWord(o.tA), u256(o.aA), addrWord(o.tB), u256(o.aB)]
+        : [addrWord(o.maker || A.OTHER), u256(1),
+           addrWord(o.tA), u256(o.aA), addrWord(o.tB), u256(o.aB)])
+      // `active = 0` is how the real board reports a filled or cancelled id.
+      : new Array(v2 ? 11 : 6).fill(u256(0));
+    return '0x' + u256(32) + u256(1) + words.join('');
   }
 
   dutchListing(data) {
@@ -727,7 +870,7 @@ export function assertAddressesMatchPage(assert) {
   const pinned = {
     ZQUOTER: 'ZQUOTER', ZROUTER: 'ZROUTER', PERMIT2: 'PERMIT2', SLOW: 'SLOW',
     SB2: 'SB2', SB1: 'SB1', SBVIEW: 'SBVIEW', SWAPBOL: 'SWAPBOL', DUTCH: 'DUTCH',
-    ORDERBOL: 'ORDERBOL', WETH: 'WETH',
+    ORDERBOL: 'ORDERBOL', WETH: 'WETH', FLOOR: 'FLOOR', FLOORVIEW: 'FLOORVIEW',
   };
   for (const [key, name] of Object.entries(pinned)) {
     const m = html.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));

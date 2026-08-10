@@ -31,6 +31,13 @@ const SOURCES = {
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
   zQuoterV4: "src/zQuoterV4.sol",
+  PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
+  PrecisionPool: "src/pools/PrecisionPool.sol",
+  PrecisionRoute: "src/pools/PrecisionRoute.sol",
+  PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
+  PrecisionZap: "src/pools/PrecisionZap.sol",
+  ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
+  PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
 };
 // See the note in check-create2-artifacts.mjs: both Fwabols are named `Fwabol`
 // in Solidity, and only the key tells them apart.
@@ -53,6 +60,13 @@ const PINNED_RUNS = {
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
   zQuoterV4: 9_999_999,
+  PrecisionPoolFactory: 200,
+  PrecisionPool: 200,
+  PrecisionRoute: 9_999_999,
+  PrecisionPoolLens: 9_999_999,
+  PrecisionZap: 9_999_999,
+  ConstantSurchargeHook: 9_999_999,
+  PrecisionPoolPolicy: 9_999_999,
 };
 
 const [name, argsJson = "[]"] = process.argv.slice(2);

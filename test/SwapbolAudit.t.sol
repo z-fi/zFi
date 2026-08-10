@@ -111,6 +111,7 @@ contract SwapbolAuditTest is Test {
     Swapbol fwd;
     Swapboard board;
     Refunder dutch;
+    Refunder floor;
     MockWETH weth;
     USD usd;
 
@@ -122,7 +123,8 @@ contract SwapbolAuditTest is Test {
         board = new Swapboard(address(weth));
         usd = new USD();
         dutch = new Refunder(); // a distinct third venue; the token must never be one
-        fwd = new Swapbol(address(weth), address(board), address(dutch));
+        floor = new Refunder(); // a distinct fourth venue
+        fwd = new Swapbol(address(weth), address(board), address(dutch), address(floor));
         vm.deal(address(fwd), 0); // neutralise the forked address's real balance
     }
 
@@ -131,7 +133,7 @@ contract SwapbolAuditTest is Test {
     /// That is the strongest form of these assertions anyway: even a venue this
     /// contract was built to trust must not be able to take anything.
     function _bind(address venue) internal returns (Swapbol bound) {
-        bound = new Swapbol(venue, address(board), address(dutch));
+        bound = new Swapbol(venue, address(board), address(dutch), address(floor));
         vm.deal(address(bound), 0);
     }
 

@@ -18,11 +18,11 @@ contract zSwapLineageTest is Test {
     address dao = makeAddr("dao");
     address stranger = makeAddr("stranger");
 
-    address[6] chunks;
+    address[7] chunks;
 
     function setUp() public {
-        for (uint256 i; i != 6; ++i) {
-            // Six distinct, NON-EMPTY data contracts. The content is irrelevant
+        for (uint256 i; i != 7; ++i) {
+            // Seven distinct, NON-EMPTY data contracts. The content is irrelevant
             // but the length is not: `6001` is valid initcode that returns
             // nothing, so the chunk deploys with zero code and the constructor
             // rejects it. This stub writes one byte and returns it.
@@ -40,12 +40,12 @@ contract zSwapLineageTest is Test {
     function _initcode(address previous) internal view returns (bytes memory) {
         return abi.encodePacked(
             type(zSwap).creationCode,
-            abi.encode(dao, previous, chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5])
+            abi.encode(dao, previous, chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5], chunks[6])
         );
     }
 
     function _root() internal returns (zSwap) {
-        return new zSwap(dao, address(0), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5]);
+        return new zSwap(dao, address(0), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5], chunks[6]);
     }
 
     // ------------------------------------------------------------- THE ROOT
@@ -117,7 +117,7 @@ contract zSwapLineageTest is Test {
     function test_cannotClaimAPredecessorThatDidNotDeployYou() public {
         zSwap v1 = _root();
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(dao, address(v1), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5]);
+        new zSwap(dao, address(v1), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5], chunks[6]);
     }
 
     function test_deployNextRevertsRatherThanRecordingAFailedDeploy() public {

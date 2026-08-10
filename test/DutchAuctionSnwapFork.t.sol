@@ -47,7 +47,7 @@ contract DutchAuctionSnwapForkTest is Test {
 
     function setUp() public {
         auction = new DutchAuction();
-        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction));
+        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction), address(new DutchAuction()));
         vm.label(address(auction), "DutchAuction");
         vm.label(address(swapbol), "Swapbol");
         vm.label(_ROUTER, "zRouter");
@@ -239,7 +239,7 @@ contract DutchAuctionSnwapForkTest is Test {
         );
         require(_QUOTER.code.length != 0, "zQuoter missing at anchor block");
         auction = new DutchAuction();
-        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction));
+        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction), address(new DutchAuction()));
         dust = address(swapbol).balance;
         vm.deal(taker, 1_000 ether);
 

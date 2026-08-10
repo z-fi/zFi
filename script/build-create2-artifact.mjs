@@ -42,6 +42,13 @@ const SOURCES = {
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
   zQuoterV4: "src/zQuoterV4.sol",
+  PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
+  PrecisionPool: "src/pools/PrecisionPool.sol",
+  PrecisionRoute: "src/pools/PrecisionRoute.sol",
+  PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
+  PrecisionZap: "src/pools/PrecisionZap.sol",
+  ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
+  PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
 };
 // See the note in check-create2-artifacts.mjs.
 const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
@@ -65,6 +72,8 @@ const PINNED_RUNS = {
   TokenListRenderer: 20,
   ZorgConviction: 200,
   ZorgConvictionRenderer: 200,
+  PrecisionPoolFactory: 200,
+  PrecisionPool: 200,
 };
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {

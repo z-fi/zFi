@@ -113,7 +113,7 @@ contract SwapbolSweepTest is Test {
     /// the user's proceeds to ETH and pay them out as change to `refundTo`.
     function test_wethOutputIsSweptToRecipientNotUnwrappedToRefundAddress() public {
         PayToCallerDutch dutch = new PayToCallerDutch();
-        Swapbol fwd = new Swapbol(address(new Venue()), address(new Venue()), address(dutch));
+        Swapbol fwd = new Swapbol(address(new Venue()), address(new Venue()), address(dutch), address(new Venue()));
         vm.deal(address(fwd), 0);
 
         MockWETH(payable(WETH)).deposit{value: 2 ether}();
@@ -138,7 +138,7 @@ contract SwapbolSweepTest is Test {
     function test_balanceBelowCheckpointRevertsRatherThanApprovingUnbounded() public {
         Burnable token = new Burnable();
         Peek venue = new Peek(token);
-        Swapbol fwd = new Swapbol(address(venue), address(new Venue()), address(new Venue()));
+        Swapbol fwd = new Swapbol(address(venue), address(new Venue()), address(new Venue()), address(new Venue()));
 
         token.mint(address(fwd), 1_000e6);
         fwd.checkpoint(address(token)); // base = 1_000e6
@@ -158,7 +158,7 @@ contract SwapbolSweepTest is Test {
     /// what stops it: there is no calldata this contract will send to a token.
     function test_arbitraryCallCannotPlantAnApproval() public {
         Burnable token = new Burnable();
-        Swapbol fwd = new Swapbol(address(new Venue()), address(new Venue()), address(new Venue()));
+        Swapbol fwd = new Swapbol(address(new Venue()), address(new Venue()), address(new Venue()), address(new Venue()));
         address attacker = address(0xBAD);
 
         vm.prank(attacker);
@@ -187,7 +187,7 @@ contract SwapbolSweepTest is Test {
     function test_arbitraryVenueCalldataIsRefusedBeforeAnythingMoves() public {
         Burnable token = new Burnable();
         PartialVenue venue = new PartialVenue(token);
-        Swapbol fwd = new Swapbol(address(venue), address(new Venue()), address(new Venue()));
+        Swapbol fwd = new Swapbol(address(venue), address(new Venue()), address(new Venue()), address(new Venue()));
 
         fwd.checkpoint(address(token));
         token.mint(address(fwd), 1_000e6);

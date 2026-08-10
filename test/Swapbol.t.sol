@@ -107,7 +107,7 @@ contract SwapbolTest is Test {
         tin = new TKN();
         tout = new TKN();
         board = new BoardStub(tin, tout, 2e18); // 1 in -> 2 out
-        fwd = new Swapbol(address(new VenueStub()), address(board), address(new VenueStub()));
+        fwd = new Swapbol(address(new VenueStub()), address(board), address(new VenueStub()), address(new VenueStub()));
         tout.mint(address(board), 1_000e18);
         // This repo pins a mainnet fork, and the address Forge derives for the
         // forwarder already holds ~0.000577 ETH on it. Zero it so the ETH

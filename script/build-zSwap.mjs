@@ -24,7 +24,7 @@ const HTML_PATH = path.join(ROOT, 'zSwap.html');
 const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 
 const EIP170_LIMIT = 24576;
-const CHUNKS = 6;
+const CHUNKS = 7;
 
 const html = fs.readFileSync(HTML_PATH);
 const htmlText = html.toString('utf8');

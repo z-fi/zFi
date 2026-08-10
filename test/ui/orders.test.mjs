@@ -486,7 +486,12 @@ describe('the orderbook list', () => {
     p.close();
   });
 
-  test('filling a public order routes it and pays exactly the asking amount', async () => {
+  // Which side of the native boundary a fill pays from is a property of the
+  // ORDER and of what the account holds — not of the swap pickers, which are
+  // set for an unrelated trade. So the same row has two correct executions,
+  // and both are pinned here.
+  test('filling a public order pays in WETH when the account holds enough', async () => {
+    // setup() funds the account with WETH, which covers the 1 WETH ask.
     const p = await setup(c => { c.recent = [order({ id: 5 })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     p.click(p.$('book').querySelector('button'));
@@ -495,7 +500,24 @@ describe('the orderbook list', () => {
 
     const tx = p.chain.lastSent;
     assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
-    // The order asks 1 WETH; paying from an ETH-selected wallet wraps on the way.
+    // No wrap step and no extra approval: the balance is already in the form
+    // the board wants, so nothing rides as value.
+    assert.equal(BigInt(tx.value), 0n, 'spent ETH while holding enough WETH');
+    p.close();
+  });
+
+  test('filling a public order sends ETH when the WETH balance cannot cover it', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, 0n);
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
     assert.equal(BigInt(tx.value), ETH, 'must send exactly the order\'s asking amount');
     p.close();
   });

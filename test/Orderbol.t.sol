@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {Orderbol} from "../src/forwarders/Orderbol.sol";
 import {Swapboard} from "../src/Swapboard.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
+import {Floorboard} from "../src/Floorboard.sol";
 import {MockERC20, MockWETH} from "./SwapboardMocks.sol";
 
 contract OrderbolTest is Test {
@@ -27,7 +28,7 @@ contract OrderbolTest is Test {
 
         swapboard = new Swapboard(WETH);
         dutchboard = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        executor = new Orderbol(address(swapboard), address(dutchboard));
+        executor = new Orderbol(address(swapboard), address(dutchboard), address(new Floorboard(WETH)));
         // A new contract inherits whatever balance already sits at its address,
         // and these forked tests deploy to deterministic CREATE addresses - one
         // of which (0x2e23...470b) holds 1 wei on mainnet at the pinned block.

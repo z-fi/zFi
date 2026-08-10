@@ -55,6 +55,13 @@ const artifactName = (name) => ARTIFACT_NAMES[name] ?? name;
 // EIP-170 - so the check could never find a matching artifact and failed with
 // "run the canonical forge build first" no matter how recently you had. A
 // guard that cannot pass is not a guard; it trains you to skip it.
+// The Precision suite is deliberately ABSENT from the tables here while it is
+// undeployed. This checker treats a name in SOURCES with no artifact as a
+// failure - correctly, since a contract that claims a canonical address and has
+// no frozen payload is exactly what it exists to catch. The names go in
+// alongside the mined salts, not before. `emit-creation-code.mjs`,
+// `emit-pool-blob.mjs` and `build-create2-artifact.mjs` already carry them,
+// which is what mining needs. See deploy/Precision.md.
 const OPTIMIZER_RUNS = {
   Swapboard: 200,
   Dutchboard: 20,
@@ -118,7 +125,11 @@ const specs = [
   {name: "SwapboardView", args: []},
   {
     name: "Orderbol",
-    args: [artifactAddress("Swapboard"), artifactAddress("Dutchboard")],
+    args: [
+      artifactAddress("Swapboard"),
+      artifactAddress("Dutchboard"),
+      artifactAddress("Floorboard"),
+    ],
   },
   {
     name: "Swapbol",
@@ -126,6 +137,7 @@ const specs = [
       LEGACY,
       artifactAddress("Swapboard"),
       artifactAddress("Dutchboard"),
+      artifactAddress("Floorboard"),
     ],
   },
   {name: "Cowol", args: []},

@@ -6,6 +6,7 @@ import {Swapbol} from "../src/forwarders/Swapbol.sol";
 import {SwapboardView} from "../src/SwapboardView.sol";
 import {Swapboard} from "../src/Swapboard.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
+import {Floorboard} from "../src/Floorboard.sol";
 import {zRouter} from "../src/zRouter.sol";
 import {zQuoter} from "../src/zQuoter.sol";
 import {MockERC20, MockWETH} from "./SwapboardMocks.sol";
@@ -209,6 +210,7 @@ contract SwapbolPlanTest is Test {
     Swapboard internal current;
     ExecutableLegacyV1 internal legacy;
     Dutchboard internal dutch;
+    Floorboard internal floor;
     MockERC20 internal pay;
     MockERC20 internal out;
     address internal constant META_AMM = 0x000000000000FB114709235f1ccBFfb925F600e4;
@@ -230,7 +232,8 @@ contract SwapbolPlanTest is Test {
         current = new Swapboard(WETH);
         legacy = new ExecutableLegacyV1();
         dutch = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        executor = new Swapbol(address(legacy), address(current), address(dutch));
+        floor = new Floorboard(WETH);
+        executor = new Swapbol(address(legacy), address(current), address(dutch), address(floor));
         pay = new MockERC20("PAY", 18);
         out = new MockERC20("OUT", 18);
 
@@ -850,13 +853,13 @@ contract SwapbolPlanTest is Test {
 
     function test_constructorRejectsUnboundOrAmbiguousVenues() public {
         vm.expectRevert(Swapbol.BadVenue.selector);
-        new Swapbol(address(0), address(current), address(dutch));
+        new Swapbol(address(0), address(current), address(dutch), address(floor));
 
         vm.expectRevert(Swapbol.BadVenue.selector);
-        new Swapbol(address(legacy), address(legacy), address(dutch));
+        new Swapbol(address(legacy), address(legacy), address(dutch), address(floor));
 
         vm.expectRevert(Swapbol.BadVenue.selector);
-        new Swapbol(address(0xBEEF), address(current), address(dutch));
+        new Swapbol(address(0xBEEF), address(current), address(dutch), address(floor));
     }
 
     function test_rejectsDeprecatedOrUnknownBoard() public {

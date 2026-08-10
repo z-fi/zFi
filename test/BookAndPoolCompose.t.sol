@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {Swapboard} from "../src/Swapboard.sol";
 import {Swapbol} from "../src/forwarders/Swapbol.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
+import {Floorboard} from "../src/Floorboard.sol";
 import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {PrecisionPoolLens} from "../src/pools/PrecisionPoolLens.sol";
@@ -70,7 +71,7 @@ contract BookAndPoolComposeTest is Test {
         board = new Swapboard(WETH);
         Swapboard legacy = new Swapboard(WETH);
         dutch = new Dutchboard(WETH);
-        bol = new Swapbol(address(legacy), address(board), address(dutch));
+        bol = new Swapbol(address(legacy), address(board), address(dutch), address(new Floorboard(WETH)));
 
         factory = new PrecisionPoolFactory(EXEC, type(PrecisionPool).creationCode);
         lens = new PrecisionPoolLens(factory);
