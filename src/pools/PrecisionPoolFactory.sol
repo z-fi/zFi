@@ -45,11 +45,17 @@ contract PrecisionPoolFactory {
     }
 
     /// @dev `fee` is in pips; hook and creator-fee settings are also immutable.
+    ///      The cap is EXCLUSIVE, so the highest admissible fee is one pip
+    ///      under 10%.
     uint256 constant MAX_FEE = 100_000; // 10%, in pips
     uint256 constant MAX_CREATOR_SHARE = 5_000; // 50% of the base fee
     uint256 constant MAX_PAGE_SIZE = 128;
     uint256 constant MAX_SQRT_PRICE = 1e36;
     uint256 constant CHECKPOINT_NAMESPACE = 1 << 255;
+
+    /// @dev Encoded size of `Route`: seven static words. Pinned in the
+    ///      constructor, because `_routeHash` reads calldata against it.
+    uint256 constant _ROUTE_BYTES = 0xe0;
 
     /// @dev Transient slot guarding the prefunded route.
     uint256 constant _ROUTE_SLOT = 0x9e7d1a3c;
@@ -171,6 +177,32 @@ contract PrecisionPoolFactory {
         }
     }
 
+    /// @dev Claims the factory for the body of a call and releases it after.
+    ///
+    ///      SEEDING NEEDS THIS AND USED NOT TO HAVE IT. `createAndSeed` and
+    ///      `seed` read `totalSupply() == 0` to decide a pool is unseeded, then
+    ///      make two external `_pullExact` transfers, then let the pool pick
+    ///      the seed or the proportional branch. A token that hands control to
+    ///      the payer during transfer - a hook, a callback, anything
+    ///      attacker-reachable - can re-enter on the SAME market inside that
+    ///      window and seed it first, at a price of its choosing. The outer
+    ///      call then finds a pool with supply and silently takes the
+    ///      proportional path: `sqrtPriceInit` is ignored, `minLP` bounds
+    ///      shares but not price, and the honest depositor lands in whichever
+    ///      corner of the band the attacker picked. That is the mempool squat
+    ///      the pool documents, compressed into one transaction, and
+    ///      `_checkCreator` only closes it for named markets.
+    ///
+    ///      It shares the route's slot rather than adding a second one, which
+    ///      also means a deposit cannot run inside an open prefunded route -
+    ///      the other half of the same window.
+    modifier locked() {
+        if (_routeState() != _ROUTE_IDLE) revert Reentrancy();
+        _setRouteState(_ROUTE_SETTLING);
+        _;
+        _setRouteState(_ROUTE_IDLE);
+    }
+
     function _setRouteState(uint256 state) internal {
         assembly ("memory-safe") {
             tstore(_ROUTE_SLOT, state)
@@ -186,6 +218,14 @@ contract PrecisionPoolFactory {
         if (trustedExecutor_ != address(0) && trustedExecutor_.code.length == 0) revert Bad();
         trustedExecutor = trustedExecutor_;
         if (poolInitCode.length == 0) revert Bad();
+        // `_routeHash` hashes the raw calldata after the selector on the
+        // assumption that `Route` is `_ROUTE_BYTES` of static words. If a field
+        // is ever added, or a static one turned dynamic, that assumption breaks
+        // SILENTLY - the hash would cover an offset instead of the value, and
+        // the intent commitment would stop committing to it. Deploying is the
+        // last moment anything can notice, so notice here.
+        Route memory probe;
+        if (abi.encode(probe).length != _ROUTE_BYTES) revert Bad();
         poolCode = SSTORE2.write(poolInitCode);
         poolInitCodeHash = keccak256(poolInitCode);
     }
@@ -196,23 +236,53 @@ contract PrecisionPoolFactory {
     ///        share of that fee rather than an addition to it.
     /// @dev If `feeRecipient` is nonzero, it must create the pool.
     function createPool(Market calldata m) public returns (address pool) {
+        bytes memory initCode = _poolInitCode(m);
+        bytes32 salt = _marketSalt(m);
+        return _create(m, initCode, salt, _poolAddress(salt, keccak256(initCode)));
+    }
+
+    /// @dev Deploy and index, given work a caller has already done. The init
+    ///      code is the ~20 KB pool blob copied out of the data contract and
+    ///      hashed, which is not free: `createAndSeed` has to derive the
+    ///      address before it can tell whether the pool exists, and would
+    ///      otherwise pay for the whole thing a second time to deploy it.
+    function _create(Market calldata m, bytes memory initCode, bytes32 salt, address predicted)
+        internal
+        returns (address pool)
+    {
         _check(m);
         _checkCreator(m);
-        bytes32 salt = _marketSalt(m);
-        bytes memory initCode = _poolInitCode(m);
-        address predicted = _poolAddress(salt, keccak256(initCode));
         if (predicted.code.length != 0) revert Exists();
 
         assembly ("memory-safe") {
             pool := create2(0, add(initCode, 0x20), mload(initCode), salt)
             if iszero(pool) {
                 let size := returndatasize()
+                // Empty returndata from a failed CREATE2 is ambiguous: it is
+                // what an address-already-occupied collision produces, and also
+                // what an out-of-gas constructor produces. `predicted.code.length`
+                // was checked a few lines up, so the collision case is already
+                // excluded by the time control reaches here and this is almost
+                // always the gas case - but the two are genuinely
+                // indistinguishable from inside, and `Exists()` is the more
+                // useful of the two names to surface for a caller who did race
+                // someone to the address.
                 if iszero(size) {
                     mstore(0x00, 0x846ec056) // `Exists()`.
                     revert(0x1c, 0x04)
                 }
-                returndatacopy(0, 0, size)
-                revert(0, size)
+                // Bubble the constructor's own revert, copied ABOVE the free
+                // memory pointer rather than over offset 0. Writing to 0 would
+                // clobber the FMP at 0x40 for any `size` past 0x40, which is
+                // not `memory-safe` however the block is annotated - and the
+                // annotation is a promise to the via-IR optimiser, not a
+                // comment. It happens to be unobservable here because `revert`
+                // is the very next opcode, but an assumption that only holds
+                // because of instruction order is exactly the kind the
+                // optimiser is entitled to break.
+                let ptr := mload(0x40)
+                returndatacopy(ptr, 0, size)
+                revert(ptr, size)
             }
         }
 
@@ -317,7 +387,7 @@ contract PrecisionPoolFactory {
         uint256 amount1,
         uint256 minLP,
         address to
-    ) external payable returns (address pool, uint256 lp, uint256 used0, uint256 used1) {
+    ) external payable locked returns (address pool, uint256 lp, uint256 used0, uint256 used1) {
         // Deploying and seeding are separate powers, and anyone may deploy an
         // unnamed market. Reverting here when the pool merely exists but has
         // never been seeded would let a griefer squat a tuple by creating it
@@ -327,12 +397,14 @@ contract PrecisionPoolFactory {
         // pool is indistinguishable from one that does not exist yet, so seed
         // it instead. A pool that already holds liquidity still reverts, and a
         // named market still admits only its own creator.
-        address existing = poolFor(m);
+        bytes memory initCode = _poolInitCode(m);
+        bytes32 salt = _marketSalt(m);
+        address existing = _poolAddress(salt, keccak256(initCode));
         if (isPool[existing] && PrecisionPool(payable(existing)).totalSupply() == 0) {
             _checkCreator(m);
             pool = existing;
         } else {
-            pool = createPool(m);
+            pool = _create(m, initCode, salt, existing);
         }
         (lp, used0, used1) = _fund(pool, m.token0, m.token1, amount0, amount1, sqrtPriceInit, minLP, to);
     }
@@ -349,6 +421,7 @@ contract PrecisionPoolFactory {
     function seed(Market calldata m, uint256 sqrtPriceInit, uint256 amount0, uint256 amount1, uint256 minLP, address to)
         external
         payable
+        locked
         returns (address pool, uint256 lp, uint256 used0, uint256 used1)
     {
         pool = poolFor(m);
@@ -391,12 +464,14 @@ contract PrecisionPoolFactory {
     ///      `Route` is seven static words and is the only argument of all four
     ///      entry points, so the calldata after the selector IS its canonical
     ///      encoding - hashing it directly avoids copying the struct back out
-    ///      to memory on every call.
+    ///      to memory on every call. The constructor pins that `Route` really
+    ///      does encode to `_ROUTE_BYTES`, so a later field addition fails the
+    ///      deployment instead of quietly dropping out of the commitment.
     function _routeHash() internal pure returns (bytes32 h) {
         assembly ("memory-safe") {
             let m := mload(0x40)
-            calldatacopy(m, 0x04, 0xe0)
-            h := keccak256(m, 0xe0)
+            calldatacopy(m, 0x04, _ROUTE_BYTES)
+            h := keccak256(m, _ROUTE_BYTES)
         }
     }
 
@@ -562,10 +637,20 @@ contract PrecisionPoolFactory {
     ///      router that ignores it strands funds at `refundTo` rather than
     ///      carrying them forward.
     ///
-    ///      NOT AVAILABLE ON A HOOKED POOL — the pool reverts `UnsupportedToken`,
-    ///      because the surcharge is sampled once at the requested size and would
-    ///      be wrong at the clamped one. Hooked pools stay on
-    ///      `executePrefundedSwap` and are sized from the lens.
+    ///      NOT AVAILABLE ON A HOOKED POOL — the pool reverts
+    ///      `HookedNoPartialFill()`, because the surcharge is sampled once at the
+    ///      requested size and would be wrong at the clamped one. Hooked pools
+    ///      stay on `executePrefundedSwap` and are sized from the lens
+    ///      (`PoolInfo.clampable`, which is exactly `hook == address(0)`).
+    ///
+    ///      That error name is load-bearing for anyone debugging a revert here,
+    ///      and this line named `UnsupportedToken` until an audit pass caught it.
+    ///      They are unrelated: `UnsupportedToken` is the pool's TOKEN-BEHAVIOUR
+    ///      error, raised when a transfer does not move exactly what was asked.
+    ///      Chasing it sends an integrator hunting a fee-on-transfer or rebasing
+    ///      token that is not there, when the real cause is a routing choice —
+    ///      this pool has a hook and cannot partial-fill, so screen it out of
+    ///      `UpTo` paths rather than looking at the token at all.
     ///
     ///      Authentication, locking, and the committed intent are identical to
     ///      `executePrefundedSwap`, and deliberately share the same checkpoint:

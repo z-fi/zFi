@@ -74,6 +74,11 @@ const PINNED_RUNS = {
   ZorgConvictionRenderer: 200,
   PrecisionPoolFactory: 200,
   PrecisionPool: 200,
+  PrecisionRoute: 200,
+  PrecisionPoolLens: 200,
+  PrecisionZap: 200,
+  ConstantSurchargeHook: 200,
+  PrecisionPoolPolicy: 200,
 };
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {

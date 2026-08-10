@@ -243,6 +243,43 @@ max_optimizer_runs = 200
 paths = "src/pools/PrecisionPoolFactory.sol"
 max_optimizer_runs = 200
 
+# The rest of the deployable suite, pinned for the same reason and to the same
+# value. None of these had an entry, so each inherited whatever compilation unit
+# it landed in: Route, Zap and the hook import the factory and so picked up 200,
+# while the lens ALSO appeared at 20 runs because some unit pulls it in beside
+# TokenList, which is pinned there. Two builds of the lens existed in out/ at
+# once.
+#
+# That is the same ambiguity documented above for the pool, and it matters for
+# the same reason: these are CREATE2 deployments whose salts are mined against
+# one exact payload. A second build of the same source is a second address, and
+# nothing warns you which artifact the mining script picked up.
+#
+# 200 across the board, matching what they already resolved to in their own
+# units and what the tests exercise. PrecisionPoolPolicy is included even though
+# it was unambiguous - it only touches interfaces, so nothing pulled it into a
+# restricted unit - because relying on that staying true is the same bet that
+# produced the two lens artifacts.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPoolLens.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionRoute.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionZap.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/ConstantSurchargeHook.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPoolPolicy.sol"
+max_optimizer_runs = 200
+
 # TokenList and its renderer are pinned to 200 runs by their deployment manifest
 # (deploy/TokenList.md), and B-01 in audit/TokenList/gpt5.6-sol-pro.md is the
 # reason: at the default runs the pair does not fit under EIP-170 at all, and the

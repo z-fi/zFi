@@ -1,6 +1,24 @@
 # Precision pool suite — deployment runbook
 
-**Status: NOT DEPLOYED. Nothing here has a mined salt or an address yet.**
+**Status: MINED, NOT BROADCAST.** Salts and artifacts are frozen in `deploy/`
+and every one reproduces from source via `node script/check-create2-artifacts.mjs`.
+Nothing is on chain.
+
+| contract | address | salt |
+|---|---|---|
+| `PrecisionPoolFactory` | `0x000000209724753c7D935DfcCa56D1fBF7187B5d` | `0x1fa448` |
+| `PrecisionRoute` | `0x00000080FDCEcf2D651B370069268294A030F81D` | see `deploy/PrecisionRoute.salt.txt` |
+| `PrecisionZap` | `0x00000015089893C4c6eCc5B7A3415333c7220f49` | see `deploy/PrecisionZap.salt.txt` |
+| `PrecisionPoolLens` | `0x0000001Dd410E47A5B217303e7cc2d357D8a7023` | see `deploy/PrecisionPoolLens.salt.txt` |
+| `ConstantSurchargeHook` | `0x000000548143c993D1f1dabcb0ebC426f81D2886` | see `deploy/ConstantSurchargeHook.salt.txt` |
+
+`PrecisionPoolPolicy` is NOT mined. It needs an `initialOwner`, which is a
+governance decision rather than a build input, and it is an advisory oracle no
+contract reads. Mine it when that owner is chosen, or drop it.
+
+Broadcast order is the mining order and for the same reason: the factory's
+address is a constructor argument to the other four, so deploying them against a
+factory that is not yet at its address gives contracts pointing at nothing.
 
 This file exists so the ordering constraints are written down before anything
 is mined, because two of them are load-bearing and neither is obvious from the
@@ -65,8 +83,8 @@ mined against one blob is worthless against another.
 | `trustedExecutor` | `0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db` (zRouter executor, live) |
 | pool creation code | 20,418 B (SSTORE2 cap 24,575) |
 | `poolInitCodeHash` | `0x514f8a233e2c54112e81ec5103bfe4181156cf384402045f4508bfafbac93650` |
-| factory creation code | 28,779 B (EIP-3860 cap 49,152) |
-| factory initcode hash | `0x00627ffe28db703145ac80d474490644c9df44a41913b9aaec5b6eef12550b64` |
+| factory creation code | 29,054 B (EIP-3860 cap 49,152) |
+| factory initcode hash | `0xc8c4b9c0be1c2e0899e61f950017e6bf700f533b8756804b1f2ed5b1c8c58418` |
 
 These rows are regenerated, not hand-written: `node script/precision-prep.mjs`
 emits both payloads and rewrites this table from the artifacts it just built.
@@ -77,6 +95,30 @@ produced by that script against the current tree.
 invalidates both hashes.** Re-run the prep script before mining. A salt is valid
 for exactly one bytecode, and `poolInitCodeHash` is a CREATE2 input, so a stale
 pool hash silently relocates every market address the factory will ever produce.
+
+### The executor, verified rather than assumed
+
+An audit pass flagged that the factory's safety argument rests on
+`trustedExecutor` bubbling every revert, and that this was unverifiable from
+source. It is verifiable on-chain, and it holds. `0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db`:
+
+| property | observed |
+|---|---|
+| runtime size | 252 bytes |
+| selectors | exactly one, `0x1cff79cd` (`execute(address,bytes)`); everything else reverts |
+| `SSTORE` / `DELEGATECALL` / `SELFDESTRUCT` / `CREATE` | none |
+| `CALL` | one |
+| failure path | `RETURNDATASIZE / RETURNDATACOPY / REVERT` — the standard bubble |
+| compiler | solc 0.8.33 |
+
+No storage means no admin and no upgrade path; no `DELEGATECALL` means no proxy
+target. The single `CALL` is followed by the bubble, so a reverting settlement
+cannot be swallowed and reported as success. That closes the scenario where a
+reentrant substitution completes the committed swap while the outer hop reports
+failure and desynchronises a router's accounting.
+
+`trustedExecutor` is immutable in both the factory and the route, so this needs
+re-checking only if that address is ever changed.
 
 `PrecisionPoolPolicy` additionally needs an `initialOwner`. It is an advisory
 oracle that no contract reads (see its header), so this is not a protocol

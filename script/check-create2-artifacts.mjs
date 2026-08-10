@@ -34,6 +34,11 @@ const SOURCES = {
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
   zQuoterV4: "src/zQuoterV4.sol",
+  PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
+  PrecisionRoute: "src/pools/PrecisionRoute.sol",
+  PrecisionZap: "src/pools/PrecisionZap.sol",
+  PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
+  ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -55,13 +60,10 @@ const artifactName = (name) => ARTIFACT_NAMES[name] ?? name;
 // EIP-170 - so the check could never find a matching artifact and failed with
 // "run the canonical forge build first" no matter how recently you had. A
 // guard that cannot pass is not a guard; it trains you to skip it.
-// The Precision suite is deliberately ABSENT from the tables here while it is
-// undeployed. This checker treats a name in SOURCES with no artifact as a
-// failure - correctly, since a contract that claims a canonical address and has
-// no frozen payload is exactly what it exists to catch. The names go in
-// alongside the mined salts, not before. `emit-creation-code.mjs`,
-// `emit-pool-blob.mjs` and `build-create2-artifact.mjs` already carry them,
-// which is what mining needs. See deploy/Precision.md.
+// PrecisionPool itself is absent by design: it is never deployed through the
+// CREATE2 factory. Its creation code is a constructor ARGUMENT to
+// PrecisionPoolFactory, and pools are deployed by the factory under its own
+// salt scheme. `emit-pool-blob.mjs` is what pins that payload.
 const OPTIMIZER_RUNS = {
   Swapboard: 200,
   Dutchboard: 20,
@@ -77,6 +79,11 @@ const OPTIMIZER_RUNS = {
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
   zQuoterV4: 9_999_999,
+  PrecisionPoolFactory: 200,
+  PrecisionRoute: 200,
+  PrecisionZap: 200,
+  PrecisionPoolLens: 200,
+  ConstantSurchargeHook: 200,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -118,7 +125,22 @@ function findFreshArtifact(name) {
   );
 }
 
+const PRECISION_EXECUTOR = "0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db";
+
 const specs = [
+  // The Precision suite. The factory carries the pool's creation code as its
+  // second constructor argument, so its spec reads the frozen blob rather than
+  // rebuilding it - `emit-pool-blob.mjs` is what guarantees that file came from
+  // the 200-run artifact. Every other member takes the factory's mined address,
+  // which is why they could not be mined until it existed.
+  {
+    name: "PrecisionPoolFactory",
+    args: [PRECISION_EXECUTOR, fs.readFileSync(path.join(ROOT, "out", "PrecisionPool.blob.txt"), "utf8").trim()],
+  },
+  {name: "PrecisionRoute", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_EXECUTOR]},
+  {name: "PrecisionZap", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_EXECUTOR]},
+  {name: "PrecisionPoolLens", args: [artifactAddress("PrecisionPoolFactory")]},
+  {name: "ConstantSurchargeHook", args: [artifactAddress("PrecisionPoolFactory")]},
   {name: "Swapboard", args: [WETH]},
   {name: "Dutchboard", args: [WETH]},
   {name: "Floorboard", args: [WETH]},

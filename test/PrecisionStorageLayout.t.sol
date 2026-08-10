@@ -57,6 +57,21 @@ contract PrecisionStorageLayoutTest is Test {
         pool = PrecisionPool(payable(p));
     }
 
+    /// @dev The pool's creation code has to fit in an SSTORE2 data contract,
+    ///      because that is where the factory keeps it - see `poolCode`. That
+    ///      moved the size constraint rather than removing it: the factory is
+    ///      comfortably under EIP-170 on its own, but a pool whose INIT code
+    ///      exceeds the 24,575-byte payload an SSTORE2 write can hold makes the
+    ///      factory constructor revert, and the factory is undeployable. The
+    ///      first symptom is a failed mainnet deploy, so assert the headroom
+    ///      here where it costs nothing to learn.
+    function test_PoolInitCodeStillFitsInAnSSTORE2Blob() public pure {
+        // SSTORE2 prepends a single STOP byte to the payload, so the usable
+        // room is one byte under the 24,576-byte contract limit.
+        uint256 size = type(PrecisionPool).creationCode.length;
+        assertLt(size, 24_576 - 1, "pool init code no longer fits in SSTORE2");
+    }
+
     /// @dev The declared slots, as `forge inspect` reports them. Reserves share
     ///      slot 0; the tapes occupy 5..261 and 262..518.
     function test_TheTapesOccupyTheSlotsTheyAreAssumedTo() public view {

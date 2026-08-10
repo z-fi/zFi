@@ -2,8 +2,19 @@
 pragma solidity ^0.8.36;
 
 /// @title Orderbol
-/// @notice Stateless zRouter executor for creating funded Swapboard and
-///         Dutchboard orders without making the router their owner.
+/// @notice Stateless zRouter executor for creating funded Swapboard orders,
+///         Dutchboard listings and Floorboard bids without making the router
+///         their owner.
+///
+/// @dev All three boards are opened through the same funding waterfall - permit,
+///      Permit2, an existing zRouter allowance, wallet batching, or a plain
+///      approval - rather than one of them needing a direct wallet approval to
+///      the board while the other two go through zRouter.
+///
+///      A bid escrows the PAYMENT, not the lot, which is the one structural
+///      difference the funding path has to respect: the amount transferred here
+///      is `endPrice` in the quote asset - the most the bid can ever owe - and
+///      not anything derived from `want`. See `placeFloor`.
 ///
 /// @dev zRouter.snwap transfers the maker's input to this executor before the
 ///      call. Orderbol grants the deployment-bound board an exact, call-scoped
@@ -30,6 +41,7 @@ contract Orderbol {
     /// would let it consume the full escrow while returning a fake id.
     address public immutable swapboard;
     address public immutable dutchboard;
+    address public immutable floorboard;
 
     uint256 constant REENTRANCY_GUARD_SLOT = 0x8c463a67;
     uint256 constant CHECKPOINT_SEED = 0x7a8bde8e;
@@ -42,13 +54,21 @@ contract Orderbol {
     error DeadlineExpired();
     error InputMismatch(uint256 expected, uint256 actual);
 
-    constructor(address swapboard_, address dutchboard_) {
-        if (
-            swapboard_ == address(0) || dutchboard_ == address(0) || swapboard_ == dutchboard_
-                || swapboard_.code.length == 0 || dutchboard_.code.length == 0
-        ) revert BadOrder();
+    /// @dev Every board must be a distinct, deployed contract. A pairwise loop
+    ///      rather than a flat conjunction: a third binding takes that from one
+    ///      comparison to three, which is where a hand-written chain starts
+    ///      silently missing one.
+    constructor(address swapboard_, address dutchboard_, address floorboard_) {
+        address[3] memory boards = [swapboard_, dutchboard_, floorboard_];
+        for (uint256 i; i < 3; ++i) {
+            if (boards[i] == address(0) || boards[i].code.length == 0) revert BadOrder();
+            for (uint256 j = i + 1; j < 3; ++j) {
+                if (boards[i] == boards[j]) revert BadOrder();
+            }
+        }
         swapboard = swapboard_;
         dutchboard = dutchboard_;
+        floorboard = floorboard_;
     }
 
     /// @notice Snapshot an ERC-20 balance immediately before funding.
@@ -91,7 +111,7 @@ contract Orderbol {
         if (
             board != swapboard || maker == address(0) || maker == address(this) || maker == WETH
                 || refundTo == address(0) || refundTo == address(this) || refundTo == WETH
-                || refundTo == swapboard || refundTo == dutchboard || amountA == 0 || amountB == 0
+                || refundTo == swapboard || refundTo == dutchboard || refundTo == floorboard || amountA == 0 || amountB == 0
                 || tokenB == address(0) || tokenB.code.length == 0
         ) revert BadOrder();
         if (deadline != 0 && block.timestamp > deadline) revert DeadlineExpired();
@@ -145,7 +165,7 @@ contract Orderbol {
         if (
             board != dutchboard || seller == address(0) || seller == address(this) || seller == WETH
                 || refundTo == address(0) || refundTo == address(this) || refundTo == WETH
-                || refundTo == swapboard || refundTo == dutchboard || amount == 0
+                || refundTo == swapboard || refundTo == dutchboard || refundTo == floorboard || amount == 0
         ) {
             revert BadOrder();
         }
@@ -187,6 +207,118 @@ contract Orderbol {
         _checkDutchListing(listingId, seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration);
         _sweepETH(refundTo, ethBase);
         _leave();
+    }
+
+    /// @notice Create a fungible Floorboard bid.
+    /// @dev The escrow is `endPrice` in `quote` - the ceiling of the climb, and
+    ///      the most the bid can ever owe - NOT a function of `want`. Sizing the
+    ///      transfer off `want` or `startPrice` is the one mistake this entry
+    ///      point exists to make impossible for a caller: the board would revert
+    ///      on the shortfall, but only after the route had already been funded.
+    ///
+    ///      `bidder` IS A GIFT RECIPIENT, exactly as on `Floorboard.bidFor`. The
+    ///      caller pays the whole escrow and keeps no claim on it: the bidder
+    ///      holds the receipt, every refund path pays the holder, and they may
+    ///      cancel in the next block and keep all of it. A frontend must present
+    ///      a `bidder` other than the payer as "fund a bid for X and hand X the
+    ///      money", never as "bid on X's behalf".
+    /// @param quote address(0) means native ETH; the board wraps it to canonical
+    ///              WETH, and the bid is WETH-quoted from the moment it opens.
+    /// @param deadline Optional placement deadline; zero disables it.
+    function placeFloor(
+        address board,
+        address bidder,
+        address refundTo,
+        address token,
+        address quote,
+        uint128 want,
+        uint256 startPrice,
+        uint256 endPrice,
+        uint40 startTime,
+        uint40 duration,
+        uint256 deadline
+    ) external payable returns (uint256 bidId) {
+        _enter();
+        uint256 ethBase = address(this).balance - msg.value;
+        // Eleven parameters is one more than this frame can hold alongside the
+        // call and its checks, so the terms are built FIRST and everything
+        // downstream reads them from memory. Passing the flat list on to the
+        // guard and the verifier instead is what put this one slot too deep.
+        IRelayedFloorboard.Terms memory terms = IRelayedFloorboard.Terms({
+            token: token,
+            quote: quote,
+            want: want,
+            startPrice: startPrice,
+            endPrice: endPrice,
+            startTime: startTime,
+            duration: duration,
+            isNFT: false,
+            ids: new uint256[](0)
+        });
+        _checkFloorTerms(board, bidder, refundTo, deadline, terms);
+
+        if (terms.quote == address(0)) {
+            // The board does the wrapping here, unlike `placeDutch` where the
+            // escrow is the lot and has to arrive as a token. It demands the
+            // exact ceiling as value and refunds nothing, so pass it straight
+            // through rather than sweeping a remainder that cannot exist.
+            if (msg.value != terms.endPrice) revert InputMismatch(terms.endPrice, msg.value);
+            bidId = IRelayedFloorboard(floorboard).bidFor{value: terms.endPrice}(bidder, terms);
+        } else {
+            if (msg.value != 0) revert InputMismatch(0, msg.value);
+            uint256 base = _consumeFunding(terms.quote, terms.endPrice);
+            safeApprove(terms.quote, floorboard, terms.endPrice);
+            bidId = IRelayedFloorboard(floorboard).bidFor(bidder, terms);
+            safeApprove(terms.quote, floorboard, 0);
+            uint256 actual = balanceOf(terms.quote);
+            if (actual != base) revert InputMismatch(base, actual);
+        }
+
+        _checkFloorBid(bidId, bidder, terms);
+        _sweepETH(refundTo, ethBase);
+        _leave();
+    }
+
+    function _checkFloorTerms(
+        address board,
+        address bidder,
+        address refundTo,
+        uint256 deadline,
+        IRelayedFloorboard.Terms memory t
+    ) internal view {
+        if (
+            board != floorboard || bidder == address(0) || bidder == address(this) || bidder == WETH
+                || refundTo == address(0) || refundTo == address(this) || refundTo == WETH
+                || refundTo == swapboard || refundTo == dutchboard || refundTo == floorboard || t.want == 0
+        ) {
+            revert BadOrder();
+        }
+        if (deadline != 0 && block.timestamp > deadline) revert DeadlineExpired();
+
+        // The climb is NONDECREASING - the mirror of Dutchboard's decay, and the
+        // one comparison that flips between `placeDutch` and this. Only the
+        // ceiling has to fit the uint96 escrow width, because it IS the escrow.
+        if (t.startPrice == 0 || t.endPrice < t.startPrice || t.endPrice > type(uint96).max) revert BadOrder();
+        if (t.duration == 0 || (t.startTime != 0 && t.startTime < block.timestamp)) revert BadOrder();
+        if (t.token == address(0) || t.token.code.length == 0) revert BadOrder();
+        if (t.quote != address(0) && t.quote.code.length == 0) revert BadOrder();
+        if (_escrowOf(t) == t.token) revert BadOrder();
+    }
+
+    /// @dev An ETH-quoted bid is WETH-quoted the moment it opens, so the escrow
+    ///      token is what the board will actually hold, not what was asked for.
+    function _escrowOf(IRelayedFloorboard.Terms memory t) internal pure returns (address) {
+        return t.quote == address(0) ? WETH : t.quote;
+    }
+
+    function _checkFloorBid(uint256 bidId, address bidder, IRelayedFloorboard.Terms memory t) internal view {
+        IRelayedFloorboardView.BidView memory b = IRelayedFloorboardView(floorboard).getBid(bidId);
+        if (
+            b.id != bidId || b.bidder != bidder || b.token != t.token || b.quote != _escrowOf(t) || b.isNFT
+                || b.duration != t.duration || b.startPrice != t.startPrice || b.endPrice != t.endPrice
+                || b.locked != t.endPrice || b.initial != t.want || b.remaining != t.want || b.ids.length != 0
+                || b.startTime != (t.startTime == 0 ? uint40(block.timestamp) : t.startTime)
+        ) revert BadOrder();
     }
 
     function _consumeFunding(address token, uint256 amount) internal returns (uint256 base) {
@@ -381,6 +513,51 @@ interface IRelayedDutchboardView {
     }
 
     function getListing(uint256 id) external view returns (ListingView memory);
+}
+
+interface IRelayedFloorboard {
+    /// @dev MUST match `Floorboard.Terms` field for field and in order.
+    struct Terms {
+        address token;
+        address quote;
+        uint128 want;
+        uint256 startPrice;
+        uint256 endPrice;
+        uint40 startTime;
+        uint40 duration;
+        bool isNFT;
+        uint256[] ids;
+    }
+
+    function bidFor(address bidder, Terms calldata terms) external payable returns (uint256 id);
+}
+
+interface IRelayedFloorboardView {
+    /// @dev MUST match `Floorboard.BidView` field for field. `ids` is a dynamic
+    ///      array, so the struct is ABI-encoded with an offset head: a missing
+    ///      field does not read as zero, it shifts every later field by one word
+    ///      and decodes an offset as data. This is the bug the Dutchboard copy
+    ///      below carried for two fields; keep the two structs in lockstep with
+    ///      their originals whenever either board changes.
+    struct BidView {
+        uint256 id;
+        address bidder;
+        address token;
+        address quote;
+        bool isNFT;
+        uint40 startTime;
+        uint40 duration;
+        uint96 startPrice;
+        uint96 endPrice;
+        uint96 locked;
+        uint128 initial;
+        uint128 remaining;
+        uint256[] ids;
+        uint256 price;
+        bool takeable;
+    }
+
+    function getBid(uint256 id) external view returns (BidView memory);
 }
 
 interface IWETH {

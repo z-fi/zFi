@@ -3,14 +3,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.1
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (135047 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (164657 B) is the runtime bytecode of
 ///      6 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 6 data contracts
+///      compatibility (ERC-4804). Splitting the page across 7 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 12409 B headroom).
+///      (24576 B per chunk, 7375 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement: the page
 ///      still fits in 5 (2148 B spare, 1.8%), but a chunk count can only be
@@ -184,6 +184,7 @@ contract zSwap {
     address public immutable DATA4;
     address public immutable DATA5;
     address public immutable DATA6;
+    address public immutable DATA7;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -191,7 +192,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own six chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own seven chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -244,15 +245,16 @@ contract zSwap {
         address data3,
         address data4,
         address data5,
-        address data6
+        address data6,
+        address data7
     ) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        address[6] memory d = [data1, data2, data3, data4, data5, data6];
-        for (uint256 i; i != 6; ++i) {
+        address[7] memory d = [data1, data2, data3, data4, data5, data6, data7];
+        for (uint256 i; i != 7; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 6; ++j) {
+            for (uint256 j = i + 1; j != 7; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -262,6 +264,7 @@ contract zSwap {
         DATA4 = data4;
         DATA5 = data5;
         DATA6 = data6;
+        DATA7 = data7;
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -351,7 +354,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all six chunks in one pass: each chunk is
+    /// @dev Reassembles the page from all seven chunks in one pass: each chunk is
     /// copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     function _html() private view returns (string memory s) {
@@ -361,6 +364,7 @@ contract zSwap {
         address d4 = DATA4;
         address d5 = DATA5;
         address d6 = DATA6;
+        address d7 = DATA7;
         assembly ("memory-safe") {
             let n1 := extcodesize(d1)
             let n2 := extcodesize(d2)
@@ -368,11 +372,13 @@ contract zSwap {
             let n4 := extcodesize(d4)
             let n5 := extcodesize(d5)
             let n6 := extcodesize(d6)
+            let n7 := extcodesize(d7)
             let n12 := add(n1, n2)
             let n123 := add(n12, n3)
             let n1234 := add(n123, n4)
             let n12345 := add(n1234, n5)
-            let total := add(n12345, n6)
+            let n123456 := add(n12345, n6)
+            let total := add(n123456, n7)
             s := mload(0x40)
             mstore(s, total) // total string length
             let body := add(s, 0x20)
@@ -382,6 +388,7 @@ contract zSwap {
             extcodecopy(d4, add(body, n123), 0, n4)
             extcodecopy(d5, add(body, n1234), 0, n5)
             extcodecopy(d6, add(body, n12345), 0, n6)
+            extcodecopy(d7, add(body, n123456), 0, n7)
             let padded := and(add(total, 0x1f), not(0x1f))
             mstore(0x40, add(body, padded)) // bump free memory pointer
         }
@@ -455,6 +462,16 @@ svg{vertical-align:middle;flex-shrink:0}
 .o a{color:var(--m)}
 .o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer}
 .o button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
+.ow{margin-bottom:.3em}
+.ow .o{margin-bottom:0}
+.o.ins{cursor:pointer}
+.o.ins:hover{background:var(--fh)}
+.ic:empty{display:none}
+.ic{padding:.5em .7em;border:1px solid var(--e);border-top:0;border-radius:0 0 .6em .6em;font-size:.72em;color:var(--n)}
+.ic img{display:block;width:100%;max-width:15em;margin:.5em auto 0;border-radius:.4em}
+.ic dl{display:grid;grid-template-columns:auto 1fr;gap:.15em .6em;margin:0}
+.ic dt{color:var(--m)}
+.ic dd{margin:0;color:var(--f);font-variant-numeric:tabular-nums;text-align:right}
 .tg{display:inline-block;font-size:.85em;padding:.05em .35em;border-radius:.35em;background:var(--e);color:var(--n);margin-left:.3em}
 .tg.w{background:#c33;color:#fff}
 .dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
@@ -505,11 +522,12 @@ svg{vertical-align:middle;flex-shrink:0}
 <div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
-<label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option></select></label>
+<label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
+<label class="dly hide" id="ethModeL">Wrapped ether<select id="ethMode"><option value="auto">Auto</option><option value="eth">Prefer ETH</option><option value="weth">Keep WETH</option></select></label>
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="stat" role="status" aria-live="polite"></div>
@@ -1002,16 +1020,39 @@ if(tab==="book"){
 // starting total ask and floorAmt is the ending total ask.
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
-const dutch=kind.value==="dutch";
+// A collection stays SELECTABLE here so the floor note can answer what it is
+// fetching, but nothing on this tab can place an order against one: every
+// encoder below writes an ERC-20 shaped order, and `approve(address,uint256)`
+// is the same selector on ERC-721 - so letting the click through would grant a
+// real approval for a token id and then revert. Say so before the click.
+if(f.std==="nft"||t.std==="nft"){
+swap.textContent="NFT orders not supported yet";swap.disabled=true;return}
+const dutch=kind.value==="dutch",bid=kind.value==="floor";
 let sell=0n,want=0n,floor=0n,badOrderAmount=false;
 // An untouched field is not a typo: parsing "" as an amount made a freshly
 // opened tab accuse the user of an invalid amount they had not yet entered.
+// On a bid the third field is the OPENING price, in the PAY side's asset - not
+// the bought one, the way a Dutch floor is. So the two cases do not share dec.
 try{if(amt.value.trim())sell=parseUnits(amt.value.trim(),f.dec);
   if(outAmt.value.trim())want=parseUnits(outAmt.value.trim(),t.dec);
-  if(dutch&&floorAmt.value.trim())floor=parseUnits(floorAmt.value.trim(),t.dec)}
+  if((dutch||bid)&&floorAmt.value.trim())floor=parseUnits(floorAmt.value.trim(),bid?f.dec:t.dec)}
 catch{badOrderAmount=true}
 if(badOrderAmount){swap.textContent="Invalid order amount";swap.disabled=true;return}
-if(!sell||!want){swap.textContent="Place order";swap.disabled=true;return}
+if(!sell||!want){swap.textContent=bid?"Place bid":"Place order";swap.disabled=true;return}
+if(bid){
+  // A bid BUYS a token, so the receive side cannot be native ETH - the board
+  // has no contract to call for it - and cannot be the escrow's own WETH alias.
+  if(t.addr===ZERO){swap.textContent="Pick a token to bid for";swap.disabled=true;return}
+  if((f.addr===ZERO?WETH:f.addr).toLowerCase()===t.addr.toLowerCase()){
+    swap.textContent="Pick different token";swap.disabled=true;return}
+  if(!floor){swap.textContent="Set an opening bid";swap.disabled=true;return}
+  // Mirror of the Dutch check below: this schedule CLIMBS.
+  if(floor>sell){swap.textContent="Opening exceeds maximum";swap.disabled=true;return}
+  if(+dly.value===0){swap.textContent="Choose a bid window";swap.disabled=true;return}
+  if(sell>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
+  swap.textContent=`Bid ${trimAmt(floor,f.dec)} → ${trimAmt(sell,f.dec)} ${f.sym} for ${trimAmt(want,t.dec)} ${t.sym}`;
+  swap.disabled=false;return;
+}
 if(f.addr===ZERO&&t.addr===WETH){swap.textContent="Pick different token";swap.disabled=true;return}
 if(!dutch&&f.addr===WETH&&t.addr===ZERO){swap.textContent="Pick different token";swap.disabled=true;return}
 if(dutch&&floor>want){swap.textContent="Floor exceeds start";swap.disabled=true;return}
@@ -1070,7 +1111,12 @@ const f=TOKENS[fromSel.value];
 if(!f)return;
 let reserve=0n;
 if(f.addr===ZERO){
-try{reserve=BigInt(await rpc("eth_gasPrice",[]))*(tab!=="send"?900000n:+dly.value?200000n:30000n)}catch{}
+// Sized to what this tab will actually spend: a routed swap can touch several
+// venues, placing an order is one escrow transfer plus a board write, and a
+// plain send is a bare transfer. One number for all three left the Orders tab
+// holding back a swap's worth of gas it was never going to need.
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))
+  *(tab==="swap"?900000n:tab==="book"?350000n:+dly.value?200000n:30000n)}catch{}
 }
 const max=fromBalance>reserve?fromBalance-reserve:0n;
 amt.value=formatUnits(max,f.dec);
@@ -1319,6 +1365,10 @@ if(acct){
           );
         }
         r={...r,best:{...r.best,amountIn:expectedIn,amountOut:expectedOut},callData,
+          // Carried onto the quote so the click can re-check these legs against
+          // the chain before it asks for an approval. A quote lives up to 45s
+          // and the books move inside that.
+          fills:p.fills,
           fundedCallData,amountLimit:isIn?minOut:totalBudget,msgValue:f.addr===ZERO?totalBudget:0n};
         hybrid=isIn
           ?{bookIn:p.bookIn,bookOut:p.bookOut,ammIn:p.ammIn}
@@ -1370,6 +1420,7 @@ if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msg
 to:r.to,spender:r.spender,
 amountIn:inApprove,from:f,exp:Date.now()+QUOTE_TTL,impact:imp,
 lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
+fills:r.fills||null,tokenIn:f.addr,tokenOut:t.addr,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
@@ -1402,6 +1453,7 @@ sel.addEventListener("change",async()=>{
 if(sel.value!=="__custom"){
 sel.dataset.prev=sel.value;
 syncDisabled();
+syncNftUI();
 if(sel===fromSel)refreshBalance();
 loadChart();
 update();
@@ -1409,7 +1461,14 @@ return;
 }
 last=null;render();
 const prev=sel.dataset.prev;
-const a=(prompt("Paste token address:")||"").trim();
+// Same stubbed-`prompt` hazard as the impact gate, with a different remedy:
+// there is a second way in, so name it instead of dead-ending on a picker
+// stuck displaying "+ Custom token…".
+let a;
+try{a=(prompt("Paste token address:")||"").trim()}
+catch{sel.value=prev;syncDisabled();
+stat.textContent="This browser blocked the address prompt — add the token with a #token=0x… link instead.";
+return}
 if(!a){sel.value=prev;update();return}
 stat.textContent="Loading token...";
 try{
@@ -1420,7 +1479,7 @@ if(String(idx)===otherSel.value){otherSel.value=prev;otherSel.dataset.prev=prev}
 sel.value=String(idx);
 sel.dataset.prev=sel.value;
 stat.textContent="";
-syncDisabled();
+syncDisabled();syncNftUI();
 refreshBalance();
 update();
 }catch(e){
@@ -1428,12 +1487,12 @@ const msg="Couldn't load token: "+(e.message||e);
 sel.value=prev;
 // Restore the previous pair, then re-quote it; otherwise the form stays on a
 // cleared quote with a disabled button until the user touches something else.
-syncDisabled();refreshBalance();update();
+syncDisabled();syncNftUI();refreshBalance();update();
 stat.textContent=msg;
 }
 });
 }
-flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();refreshBalance();loadChart();update()};
+flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
 window.ethereum?.on?.("chainChanged",()=>location.reload());
 window.ethereum?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
@@ -1462,9 +1521,9 @@ const SEL_TRANSFER="a9059cbb";
 const SB2="0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b";
 const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
-const SWAPBOL="0x0000003069053df109F47acac630e03C77804AD8";
+const SWAPBOL="0x00000087A6dc5071779Ed1F8274A39230768B976";
 const DUTCH="0x000000a213b430D14Bae6062c176289B05e04489";
-const ORDERBOL="0x000000fADa565c5608570a4F66Fb5E0bD08ef91B";
+const ORDERBOL="0x000000c1051acD54A03e967b647112FDe17f518C";
 // Floorboard: the standing-BID book. The mirror of every other book here -
 // the bidder is buying, so whoever acts on a bid is SELLING into it. Its lens
 // is separate from SBVIEW because an OrderView row cannot say "any id from
@@ -1478,24 +1537,217 @@ const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
 const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466",SEL_FILLPLAN="c277f67c";
 const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
-// collectionBids(address,address,address,uint256,uint256,uint256). Floorboard
-// is READ-ONLY from this page: the floor answers what a collection is fetching,
-// and nothing here hits a bid. Acting on one needs `hitNFT`, which is not wired.
+// The NFT side stays read-only: hitting one needs `hitNFT` and a chosen id.
 const SEL_COLL_BIDS="16bb24eb";
+// The fungible side routes. `floorCandidatesFrom` is the bid-side twin of
+// `candidatesFrom`, on the same (tokenIn, tokenOut) the router thinks in.
+const SEL_FLOOR_CANDS="c587d927",SEL_RECENT_FLOOR="a5edd13d";
+// `Orderbol.placeFloor`. No constant for `Floorboard.hit`: a take always goes
+// through Swapbol, so the fill and the settlement share one atomic budget.
+const SEL_ORDER_FLOOR="23e93357";
+// Cancel/cancelUnwrap are shared with Dutchboard. `Swapbol.floorboard()` is
+// probed because page and executor ship separately, and an executor without
+// the binding rejects the leg AFTER the user signs.
+const SEL_BOL_FLOOR="b732d224";
+let floorReady=null;
+async function floorRoutable(block){
+if(FLOOR===ZERO||FLOORVIEW===ZERO)return false;
+if(floorReady!==null)return floorReady;
+try{
+const h=await rpc(C,[{to:SWAPBOL,data:"0x"+SEL_BOL_FLOOR},block||L]);
+floorReady=("0x"+strip0x(h).slice(-40)).toLowerCase()===FLOOR.toLowerCase();
+// An RPC hiccup is not an answer: caching it would mean a session that never
+// routes a bid again. Leave the probe unanswered and skip this quote.
+}catch{return false}
+return floorReady;
+}
+// `Floorboard.bids(id)`. The generated getter DROPS the struct's trailing
+// dynamic `ids`, so the return is eleven flat words and decodes positionally -
+// the same shape, and the same reason, as `Swapbol.IFloorboardBid`.
+const SEL_BIDS="4423c5f1";
+// Swapboard.initialAmountB / ERC-721 tokenURI / TokenList.logoOf. All three
+// answer questions the routing lenses do not carry.
+const SEL_INITIAL_B="878ea250",SEL_TOKENURI="c87b56dd",SEL_LOGOOF="6ce273ac";
+// Everything the executor checks that this page can check first, for free.
+// `Swapbol._validateFloorBid` reverts `BadPlan` on a bid that is closed, NFT,
+// or pointed at the wrong pair, and an executor built without the floorboard
+// binding reverts `UnknownBoard` - all of them AFTER a signature. Ask the same
+// questions read-only, and the wallet never sees a doomed transaction.
+async function preflightLeg(row,routeIn,routeOut,pay){
+  if(!row.floor)return preflightAsk(row);
+  if(!await floorRoutable(L))throw Error("this executor cannot route bids yet");
+  const want=routeIn===ZERO?WETH:routeIn,gets=routeOut===ZERO?WETH:routeOut;
+  let h;
+  try{h=await rpc(C,[{to:FLOOR,data:"0x"+SEL_BIDS+encUint(row.id)},L])}
+  catch{throw Error("bid could not be read — refresh and retry")}
+  const at=i=>strip0x(h).slice(i*64,(i+1)*64);
+  if(strip0x(h).length<11*64)throw Error("bid could not be read — refresh and retry");
+  const addr=i=>"0x"+at(i).slice(24);
+  if(/^0x0{40}$/i.test(addr(0)))throw Error("bid is closed — refresh and retry");
+  if(BigInt("0x"+at(1)))throw Error("NFT bids are not routable from here");
+  if(addr(4).toLowerCase()!==want.toLowerCase()
+    ||addr(6).toLowerCase()!==gets.toLowerCase())
+    throw Error("bid changed — refresh and retry");
+  if(BigInt("0x"+at(10))<pay)throw Error("bid partly taken — refresh and retry");
+}
+// The same guarantee for a hybrid SWAP plan, which can carry several book legs
+// at once. One aggregate3 asks every board about every leg, so the whole check
+// is a single round trip on the click path.
+//
+// Liveness and the asset binding only. Price drift inside a still-live order is
+// deliberately left to the executor: `minOut` bounds the whole plan atomically,
+// which is both the correct place for it and a check this page cannot reproduce
+// per-leg without re-deriving three boards' arithmetic on the hot path.
+async function preflightFills(fills,tokenIn,tokenOut){
+  if(!fills||!fills.length)return;
+  const inA=(tokenIn===ZERO?WETH:tokenIn).toLowerCase();
+  const outA=(tokenOut===ZERO?WETH:tokenOut).toLowerCase();
+  const reads=fills.map(f=>f.board.toLowerCase()===FLOOR.toLowerCase()
+    ?{to:FLOOR,data:"0x"+SEL_BIDS+encUint(f.id)}
+    :f.board.toLowerCase()===DUTCH.toLowerCase()
+      ?{to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(f.id)}
+      :{to:f.board,data:"0x"+SEL_GETORDERS+encUint(32)+encUint(1)+encUint(f.id)});
+  let res;
+  try{res=await mc3(reads)}catch{return}   // unreachable node: let the tx speak
+  const stale=()=>{throw Error("an order in this route just changed — refreshing")};
+  for(let i=0;i<fills.length;i++){
+    const f=fills[i],raw=res[i];
+    if(!raw)stale();
+    const s=strip0x(raw),at=k=>BigInt("0x"+s.slice(k*64,(k+1)*64));
+    if(f.board.toLowerCase()===FLOOR.toLowerCase()){
+      if(s.length<11*64)stale();
+      const ad=k=>"0x"+s.slice(k*64+24,(k+1)*64);
+      if(/^0x0{40}$/i.test(ad(0))||at(1))stale();
+      // A bid BUYS what this route is selling, so its sides are the mirror.
+      if(ad(4).toLowerCase()!==inA||ad(6).toLowerCase()!==outA)stale();
+      if(at(10)<f.pay)stale();
+    }else if(f.board.toLowerCase()===DUTCH.toLowerCase()){
+      if(s.length<640||at(9)===0n)stale();
+    }else{
+      const wds=WORDS(f.board.toLowerCase()===SB2.toLowerCase()?1:0);
+      if(s.length<(2+wds)*64)stale();
+      const w=k=>at(2+k),ad=k=>"0x"+s.slice((2+k)*64+24,(3+k)*64);
+      if(w(1)!==1n)stale();
+      const v2=wds===11,iA=v2?7:2,iB=v2?9:4;
+      if(ad(iA).toLowerCase()!==outA||ad(iB).toLowerCase()!==inA)stale();
+      if(w(iB+1)<f.pay)stale();
+    }
+  }
+}
+// The ask side of the same guarantee. `UnknownBoard` is impossible here - these
+// boards are bound into the executor at construction - but `BadPlan` is not:
+// `_validateCurrentOrder` and `_validateV1Order` both reject an order that
+// closed between the render and the click, and the book only refreshes every
+// 30s. Same cost as the bid check, same reason: an approval must never be spent
+// on a plan that was already dead.
+async function preflightAsk(row){
+  if(row.dutch){
+    // A Dutch price moves with the block, so the amounts on the row are a
+    // snapshot by design and comparing them would fail on a working listing.
+    // Liveness is the only question worth asking, and the board answers it.
+    let h;
+    try{h=await rpc(C,[{to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(row.id)},L])}
+    catch{throw Error("listing could not be read — refresh and retry")}
+    const s=strip0x(h);
+    if(s.length<640)throw Error("listing could not be read — refresh and retry");
+    if(BigInt("0x"+s.slice(9*64,10*64))===0n)throw Error("listing is closed — refresh and retry");
+    return;
+  }
+  let h;
+  try{h=await rpc(C,[{to:row.board,
+    data:"0x"+SEL_GETORDERS+encUint(32)+encUint(1)+encUint(row.id)},L])}
+  catch{throw Error("order could not be read — refresh and retry")}
+  // Same positional walk the book's own fallback decoder uses: offset, length,
+  // then one static struct whose width is set by the board version.
+  const s=strip0x(h),wds=WORDS(row.v2);
+  if(s.length<(2+wds)*64)throw Error("order could not be read — refresh and retry");
+  const at=k=>BigInt("0x"+s.slice(128+k*64,128+(k+1)*64));
+  const ad=k=>"0x"+s.slice(128+k*64+24,128+(k+1)*64);
+  if(at(1)!==1n)throw Error("order is no longer active — refresh and retry");
+  const iA=row.v2?7:2,iB=row.v2?9:4;
+  // The two the executor itself checks.
+  if(ad(iA).toLowerCase()!==row.tA.toLowerCase()
+    ||ad(iB).toLowerCase()!==row.tB.toLowerCase())
+    throw Error("order changed — refresh and retry");
+  // And the two it leaves to the board. EQUALITY, because the plan this backs
+  // is a full fill (`part:false`) of exactly these amounts, and because a
+  // partial fill rewrites `amountA`/`amountB` in place rather than tracking a
+  // filled counter beside them - so a taken order reads SMALLER here, and
+  // paying the amount the row remembers would overpay an order that no longer
+  // owes it. The lens copies the same two fields, so there is no convention
+  // gap for equality to trip over.
+  if(at(iA+1)!==row.aA||at(iB+1)!==row.aB)throw Error("order changed — refresh and retry");
+}
 const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="fb910431",SEL_CHECKPOINT="a972985e";
 const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
 const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
 let bookSeq=0,bookRows=[],candCache={},bkOpen=LS.bk!=="0";
+// Depth of in-flight transaction flows. The order and position lists disable
+// their button for the duration of a click, but the 30s background refresh
+// rewrites `innerHTML` underneath it and hands back a FRESH, enabled button for
+// a fill or a claim that is still in the wallet - one impatient second click
+// and the same order is filled twice. The swap tab already guards this by
+// testing `swap.disabled`; these two lists had no equivalent.
+let busy=0;
 
+// Boards escrow WETH, wallets mostly hold ETH, and which one a fill touches is
+// a genuine preference - not something to infer, and not something to remove
+// because inferring it badly was a bug. One control, three honest answers,
+// remembered across sessions:
+//
+//   auto  pay from whichever balance covers the leg, receive ETH
+//   eth   pay in ether whenever it covers the leg, receive ETH
+//   weth  never wrap and never unwrap; the leg stays in WETH end to end
+//
+// It lives on the Orders tab because that is where the book is. The Swap tab
+// needs no such control: ETH and WETH are both in the picker there, so the
+// choice is already the thing being asked for.
+if(LS.wm==="eth"||LS.wm==="weth"||LS.wm==="auto")ethMode.value=LS.wm;
+ethMode.onchange=()=>{LS.wm=ethMode.value};
+// Unwrapping on the receive side has no failure mode, so it is pure preference.
+const wantsUnwrap=()=>ethMode.value!=="weth";
+// Funding does have one, so the preference is checked against the balances that
+// have to satisfy it. Read at click time and never cached: this decides how the
+// calldata is built, and a stale answer builds the wrong transaction. Any
+// failure answers "no" and leaves the leg on the wrapped path, whose
+// insufficient-balance revert is the legible one.
+const payWithEth=async need=>{
+  if(ethMode.value==="weth")return false;
+  try{
+    const[wh,eh]=await Promise.all([
+      rpc(C,[{to:WETH,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]),
+      rpc("eth_getBalance",[account,L])]);
+    const w=BigInt(wh),e=BigInt(eh);
+    // "Prefer ETH" still yields to WETH when ether alone cannot cover the leg -
+    // a preference that turns a fillable order into a revert is not a
+    // preference, it is a trap.
+    return ethMode.value==="eth"?e>=need:(w<need&&e>=need);
+  }catch{return false}
+};
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
 const escan=(a,id)=>`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
 
+// Curated logos for legs the picker never loaded. TOKENS holds the first 64
+// listings, so a book leg further down the registry drew a generated letter -
+// the logo was on chain the whole time. Still a generated icon when the token
+// is genuinely unlisted, and `ok` stays false either way: a logo is not the
+// same claim as being on the curated list.
+const logoCache={};
+async function loadLogos(addrs){
+  const want=[...new Set(addrs.map(a=>a.toLowerCase()))]
+    .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
+  if(!want.length||TOKENLIST===ZERO)return;
+  const raw=await mc3(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)}))).catch(()=>[]);
+  want.forEach((a,i)=>{let u="";try{if(raw[i])u=safeUrl(decodeString(raw[i]))}catch{}logoCache[a]=u});
+}
 async function leg(addr,amt,isNft,meta){
   const k=known(addr);
   if(isNft)return{ic:genIcon("#"),txt:`#${amt}`,ok:0,link:escan(addr,amt)};
   const raw=meta&&meta.sym?meta:await tokMeta(addr),m={...raw,sym:safeSym(raw.sym)};
-  return{ic:k?sm(k.icon):genIcon(m.sym),txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:addr===ZERO?"ETH":escan(addr)};
+  const lg=k?"":logoCache[addr.toLowerCase()];
+  const ic=k?sm(k.icon):lg?`<img src="${lg}" width="15" height="15">`:genIcon(m.sym);
+  return{ic,txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:addr===ZERO?"ETH":escan(addr)};
 }
 
 // Collection-wide floor bids for `collection`, from the Floorboard lens.
@@ -1545,6 +1797,12 @@ function decBidRows(hex){
       const row=base+num(base+i*32);        // element pointer, then the row
       if(row+17*32>bytes)throw 0;
       const f=k=>word(row+k*32);
+      // Symbol head words are offsets from the START OF THE ROW.
+      const txt=k=>{const p=row+num(row+k*32),n=num(p);
+        if(n>64||p+32+n>bytes)throw 0;
+        let s="";for(let j=0;j<n;j++)s+=String.fromCharCode(parseInt(h.slice((p+32+j)*2,(p+33+j)*2),16));
+        return safeSym(s)};
+      const dec=k=>{const v=num(row+k*32);return v>0&&v<=37?v-1:null};
       out.push({
         id:f(0),
         bidder:"0x"+h.slice((row+1*32+12)*2,(row+2*32)*2),
@@ -1557,6 +1815,10 @@ function decBidRows(hex){
         price:f(9),
         proceeds:f(10),
         expiry:f(12),
+        // The board stores `decimals + 1`, zero meaning "never read", and the
+        // lens passes that through. Un-biased here; null means unknown.
+        tDec:dec(13),qDec:dec(14),
+        tSym:txt(15),qSym:txt(16),
       });
     }
     return out;
@@ -1580,6 +1842,45 @@ async function collectionFloor(collection){
   return rows.filter(r=>r.anyId&&r.remaining>0n)
     .sort((a,b)=>{const l=b.proceeds*a.remaining,r=a.proceeds*b.remaining;return l>r?1:l<r?-1:0});
 }
+
+// Standing bids buying `tokenIn` and paying `tokenOut`, as planner rows.
+// The taker's view MIRRORS the bid's: `token` is what the bid buys, so it is
+// our pay leg (tB/aB); `quote` is what it pays out, our receive leg (tA/aA).
+// Backwards here routes the wrong direction, so Swapbol re-checks it on chain.
+// Prices climb, so a row is only true at the block it was read at.
+async function floorCandidates(tokenIn,tokenOut,block){
+  const bin=tokenIn===ZERO?WETH:tokenIn,bout=tokenOut===ZERO?WETH:tokenOut;
+  const data="0x"+SEL_FLOOR_CANDS+encAddr(FLOOR)+encAddr(bin)+encAddr(bout)
+    +encUint(0)+encUint(64)+encUint(512);
+  const raw=await rpc(C,[{to:FLOORVIEW,data},block]).catch(()=>null);
+  if(!raw)return[];
+  const out=[];
+  for(const b of decBidRows(raw)){
+    if(b.isNFT||b.remaining<=0n||b.initial<=0n||b.price<=0n||b.proceeds<=0n)continue;
+    if(b.token.toLowerCase()!==bin.toLowerCase())continue;
+    if(b.quote.toLowerCase()!==bout.toLowerCase())continue;
+    out.push({
+      id:b.id,board:FLOOR,floor:1,v2:0,dutch:0,
+      maker:b.bidder,pf:1,exp:b.expiry,nA:0,nB:0,cp:ZERO,
+      tA:b.quote,aA:b.proceeds,sA:b.qSym,dA:b.qDec,
+      tB:b.token,aB:b.remaining,sB:b.tSym,dB:b.tDec,
+      price:b.price,initial:b.initial,
+    });
+
+  }
+  return out;
+}
+// The board's own formula, not a rate: proceeds floor-divide against the size
+// the bid OPENED at, so an aA/aB rate can land a wei high and revert the leg.
+function floorGet(o,pay){return o.price*pay/o.initial}
+// The inverse, rounded the other way - `Floorboard.giveFor`, computed locally.
+function floorPay(o,want){
+  if(want<=0n)return 0n;
+  const g=(want*o.initial+o.price-1n)/o.price;
+  return g>o.aB?o.aB:g;
+}
+// Ask boards are linear in their own terms; only the bid board has a basis.
+function rowGet(o,pay){return o.floor?floorGet(o,pay):o.aA*pay/o.aB}
 
 function decViewPage(hex){
   const h=strip0x(hex),bytes=h.length/2;
@@ -1627,7 +1928,7 @@ function planBookExactIn(rows,amountIn,ammOut,ammIn){
       }
       const pay=o.aB<rem?o.aB:rem;
       if(!pay)return;
-      const get=o.pf?o.aA*pay/o.aB:o.aA;
+      const get=o.pf?(pay===o.aB?o.aA:rowGet(o,pay)):o.aA;
       if(!get)return;
       fills.push({id:o.id,board:o.board,pay,get,part:o.pf&&pay<o.aB});
       rem-=pay;bin+=pay;bout+=get;
@@ -1668,6 +1969,14 @@ function planBookExactOut(rows,amountOut,ammIn,ammOut){
       let pay,get;
       if(o.aB===0n){pay=0n;get=want}
       else if(want===o.aA){pay=o.aB;get=o.aA}
+      else if(o.floor){
+        // Invert the board's own round-down, then re-quote forwards through it.
+        // Deriving `get` from a rate here is what a floor bid punishes: the
+        // smallest delivery that clears `want` is not the one a linear inverse
+        // names, and the difference is exactly the leg's revert.
+        pay=floorPay(o,want);
+        get=floorGet(o,pay);
+      }
       else{
         pay=(want*o.aB+o.aA-1n)/o.aA;
         if(pay>o.aB)pay=o.aB;
@@ -1776,6 +2085,11 @@ async function swapCandidates(tokenIn,tokenOut,block){
   if(tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()){
     rows=rows.filter(r=>r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO);
   }
+  // The bid side, same block as the asks. Outside the ETH->WETH case above:
+  // that is a canonical wrap with a narrow Dutch exception, not a bid.
+  else if(await floorRoutable(block)){
+    rows=rows.concat(await floorCandidates(tokenIn,tokenOut,block).catch(()=>[]));
+  }
   const incomplete=groups.some(g=>g.incomplete);
   rows.incomplete=incomplete;
   rows.unavailable=groups.every(g=>g.failed&&!g.out.length);
@@ -1805,7 +2119,31 @@ async function lensBookRows(my){
     }while(cursor&&out.length<160&&++turns<64&&my===bookSeq);
     return out;
   }));
-  return pages.flat();
+  const rows=pages.flat();
+  // Own lens, own struct - an OrderView cannot hold a climbing price or an
+  // "any id" set - mapped onto the row shape the renderer already reads. Shown
+  // even when unroutable: a bid you placed is yours to see and cancel.
+  if(FLOOR!==ZERO&&FLOORVIEW!==ZERO){
+    await floorRoutable(L);
+    try{
+      const raw=await rpc(C,[{to:FLOORVIEW,
+        data:"0x"+SEL_RECENT_FLOOR+encAddr(FLOOR)+encUint(0)+encUint(80)+encUint(256)},L]);
+      for(const b of decBidRows(raw)){
+        if(b.remaining<=0n)continue;
+        rows.push({
+          id:b.id,board:FLOOR,floor:1,v2:0,dutch:0,
+          maker:b.bidder,pf:b.isNFT?0:1,exp:b.expiry,
+          // Not nB: that renders `aB` as a token id, but on a bid `remaining`
+          // is a COUNT - "wants 3 more", not "wants #3". Zero decimals says so.
+          nA:0,nB:0,cp:ZERO,
+          tA:b.quote,aA:b.proceeds,sA:b.qSym,dA:b.qDec,
+          tB:b.token,aB:b.remaining,sB:b.tSym,dB:b.isNFT?0:b.tDec,
+          price:b.price,initial:b.initial,anyId:b.anyId,isNFT:b.isNFT?1:0,
+        });
+      }
+    }catch{}
+  }
+  return rows;
 }
 
 async function loadBook(){
@@ -1859,29 +2197,65 @@ async function loadBook(){
       ||o.cp.toLowerCase()===account.toLowerCase()
       ||o.maker.toLowerCase()===account.toLowerCase();
   });
+  // Three per-row reads the lenses cannot answer, in ONE multicall with the
+  // Dutch listings that were already being fetched: a Dutch schedule, a bid's
+  // climb bounds, and a Swapboard order's original size. Each is a fact the
+  // board keeps and the row does not carry.
   const dutchRows=rows.filter(r=>r.dutch);
-  if(dutchRows.length){
-    const raw=await mc3(dutchRows.map(r=>({to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(r.id)})));
-    raw.forEach((x,i)=>{if(!x)return;const h=strip0x(x),w=n=>BigInt("0x"+h.slice(n*64,(n+1)*64));
-      if(h.length>=640)Object.assign(dutchRows[i],{
-        start:w(2),duration:w(3),startPrice:w(5),endPrice:w(7),initial:w(8),remaining:w(9)
-      });
-    });
+  const bidRows=rows.filter(r=>r.floor);
+  // `amountB` is REWRITTEN in place by a partial fill, so the row shows what is
+  // left and nothing says how big it started. That is the one number a taker
+  // cannot derive, and the board stores it.
+  const fillRows=rows.filter(r=>!r.dutch&&!r.floor&&r.v2&&r.pf&&!r.nA&&!r.nB);
+  if(dutchRows.length||bidRows.length||fillRows.length){
+    const reqs=[
+      ...dutchRows.map(r=>({to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(r.id)})),
+      ...bidRows.map(r=>({to:FLOOR,data:"0x"+SEL_BIDS+encUint(r.id)})),
+      ...fillRows.map(r=>({to:r.board,data:"0x"+SEL_INITIAL_B+encUint(r.id)})),
+    ];
+    const raw=await mc3(reqs);
+    if(my!==bookSeq)return;
+    let k=0;
+    for(const r of dutchRows){const x=raw[k++];if(!x)continue;
+      const h=strip0x(x),w=n=>BigInt("0x"+h.slice(n*64,(n+1)*64));
+      if(h.length>=640)Object.assign(r,{
+        start:w(2),duration:w(3),startPrice:w(5),endPrice:w(7),initial:w(8),remaining:w(9)});
+    }
+    for(const r of bidRows){const x=raw[k++];if(!x)continue;
+      const h=strip0x(x),w=n=>BigInt("0x"+h.slice(n*64,(n+1)*64));
+      // bids(): bidder,isNFT,startTime,duration,token,startPrice,quote,endPrice,...
+      if(h.length>=11*64)Object.assign(r,{start:w(2),duration:w(3),startPrice:w(5),endPrice:w(7)});
+    }
+    for(const r of fillRows){const x=raw[k++];if(!x)continue;
+      const h=strip0x(x);if(h.length<64)continue;
+      const init=BigInt("0x"+h.slice(0,64));
+      if(init>r.aB)r.filled=(init-r.aB)*10000n/init;
+    }
   }
   bookRows=rows;
   if(!rows.length){book.innerHTML="";syncBook(0);return}
+  await loadLogos(rows.flatMap(r=>[r.tA,r.tB]));
+  if(my!==bookSeq)return;
   const legs=await Promise.all(rows.map(r=>Promise.all([
-    leg(r.tA,r.aA,r.nA,r.sA!=null?{sym:r.sA,dec:r.dA}:null),
-    leg(r.tB,r.aB,r.nB,r.sB!=null?{sym:r.sB,dec:r.dB}:null)
+    // Both fields or neither: a symbol without decimals renders base units,
+    // which reads as a different number rather than a missing one. Floorboard
+    // legitimately reports unknown decimals, so this is reachable.
+    leg(r.tA,r.aA,r.nA,r.sA!=null&&r.dA!=null?{sym:r.sA,dec:r.dA}:null),
+    leg(r.tB,r.aB,r.nB,r.sB!=null&&r.dB!=null?{sym:r.sB,dec:r.dB}:null)
   ])));
   if(my!==bookSeq)return;
   let own="",rest="",nOwn=0,nRest=0;
   rows.forEach((r,i)=>{
     const[a,bg]=legs[i];
     const mine=r.maker.toLowerCase()===account.toLowerCase();
-    const tags=(r.nA||r.nB?'<span class="tg">NFT</span>':"")
+    const tags=(r.nA||r.nB||r.isNFT?'<span class="tg">NFT</span>':"")
       +(r.v2&&!r.pf&&!r.nA&&!r.nB?'<span class="tg">AON</span>':"")
       +(r.dutch?'<span class="tg">Dutch</span>':"")
+      // A BID, not an order: everything else here is someone selling, and
+      // hitting this means selling INTO it.
+      +(r.floor?'<span class="tg">Bid</span>':"")
+      +(r.floor&&r.isNFT&&r.anyId?'<span class="tg">any id</span>':"")
+      +(r.filled!==undefined&&r.filled>0n?`<span class="tg">${(Number(r.filled)/100).toFixed(0)}% filled</span>`:"")
       +(r.cp!==ZERO?'<span class="tg">private</span>':"")
       +(!a.ok||!bg.ok?'<span class="tg w">unverified</span>':"");
     const now=BigInt(Math.floor(Date.now()/1e3));
@@ -1892,10 +2266,27 @@ async function loadBook(){
       when=now>=end?` · floor reached: ${trimAmt(floor,r.dB)} ${r.sB}`
         :` · floor ${trimAmt(floor,r.dB)} ${r.sB} in ${rel(Number(end-now))}`;
     }
-    const act=mine?`<button data-x="c" data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}">Cancel</button>`
-                  :`<button data-x="f" data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}">Fill</button>`;
-    const row=`<div class="o"><span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
-      +`<i>${a.link}${tags}${when}</i></span></span>${act}</div>`;
+    // The bid's mirror of that line. A Dutch ask falls toward a floor a buyer
+    // waits for; a bid CLIMBS toward a ceiling a seller waits for, and its
+    // window is hard - past it the bid is dead, not resting at its best price.
+    if(r.floor&&r.duration){
+      const end=r.start+r.duration;
+      when=now>=end?" · window closed"
+        :` · climbs to ${trimAmt(r.endPrice,r.dA)} ${r.sA} in ${rel(Number(end-now))}`;
+    }
+    const dset=`data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}" data-f="${r.floor||0}"`;
+    // An NFT bid needs `hitNFT` and a chosen id; a fungible one needs an
+    // executor that knows the board. Both still render and still cancel.
+    const takeable=!r.floor||(!r.isNFT&&floorReady);
+    const act=mine?`<button data-x="c" ${dset}>Cancel</button>`
+                  :takeable?`<button data-x="f" ${dset}>${r.floor?"Sell into":"Fill"}</button>`
+                  :`<button disabled>${r.isNFT?"NFT bid":"Not routable"}</button>`;
+    // Only the boards that mint a receipt can be inspected; the legacy board is
+    // not an ERC-721 at all, so its rows stay flat rather than opening on empty.
+    const card=r.board.toLowerCase()!==SB1.toLowerCase();
+    const row=`<div class="ow"><div class="o${card?" ins":""}"${card?` data-k="${r.board}:${r.id}"`:""}>`
+      +`<span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
+      +`<i>${a.link}${tags}${when}</i></span></span>${act}</div><div class="ic"></div></div>`;
     if(mine){own+=row;++nOwn}else{rest+=row;++nRest}
   });
   let html="";
@@ -1903,6 +2294,47 @@ async function loadBook(){
   if(nRest)html+=`<h6><span>Orderbook</span><span>${nRest}</span></h6>`+rest;
   book.innerHTML=html;
   syncBook(nOwn+nRest);
+}
+// The receipt each board already renders on chain, on demand.
+//
+// Never per row: a card is ~4.5kB of base64 and one call, so a 40-row book
+// would be 190kB to paint a list nobody asked to read. One click, one call,
+// cached for the session - the card is immutable for a given state, and a
+// stale one is corrected by the refresh that follows any action.
+const cardCache={};
+async function loadCard(board,id){
+  const k=board.toLowerCase()+":"+id;
+  if(cardCache[k])return cardCache[k];
+  const raw=await rpc(C,[{to:board,data:"0x"+SEL_TOKENURI+encUint(id)},L]);
+  const uri=decodeString(raw);
+  const i=uri.indexOf("base64,");
+  if(i<0)throw Error("card is not inline");
+  const j=JSON.parse(atob(uri.slice(i+7)));
+  // The image goes in an `src`, never into markup: an <img> data URI cannot run
+  // script, and inlining the SVG would. `safeUrl` already admits exactly the
+  // https and data:image forms, so the renderer's output is checked by the same
+  // rule as a token logo rather than trusted for being ours.
+  const out={attrs:Array.isArray(j.attributes)?j.attributes:[],img:safeUrl(j.image),
+    name:safeSym(j.name).slice(0,40)};
+  cardCache[k]=out;return out;
+}
+function cardHtml(c){
+  const rows=c.attrs.slice(0,10).map(a=>{
+    const t=safeSym(a&&a.trait_type).slice(0,20);
+    let v=a&&a.value;
+    if(a&&a.display_type==="date"&&+v)v=new Date(+v*1e3).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+    else if(a&&a.display_type==="number")v=String(v);
+    return`<dt>${t}</dt><dd>${safeSym(v).slice(0,28)}</dd>`}).join("");
+  return(rows?`<dl>${rows}</dl>`:"")+(c.img?`<img src="${c.img}" alt="" loading="lazy">`:"");
+}
+async function inspect(el,k){
+  const box=el.parentNode.querySelector(".ic");
+  if(!box)return;
+  if(box.innerHTML){box.innerHTML="";return}          // second click closes it
+  const at=k.lastIndexOf(":"),board=k.slice(0,at),id=BigInt(k.slice(at+1));
+  box.textContent="Reading the receipt\u2026";
+  try{box.innerHTML=cardHtml(await loadCard(board,id))||"No card for this order."}
+  catch{box.textContent="This receipt could not be read."}
 }
 // The book can run long, so it collapses to a caret and scrolls when open. With
 // nothing in it there is no control at all, the same rule the chart follows.
@@ -1917,23 +2349,34 @@ bkTog.onclick=()=>{bkOpen=!bkOpen;LS.bk=bkOpen?"1":"0";syncBook(bookRows.length)
 
 book.addEventListener("click",async e=>{
   const b=e.target.closest("button[data-i]");
-  if(!b)return;
+  if(!b){
+    // A click anywhere else on an inspectable row opens its receipt. Links keep
+    // their own behaviour - the etherscan link inside the row is not a toggle.
+    const row=e.target.closest(".o.ins");
+    if(row&&!e.target.closest("a"))inspect(row,row.dataset.k);
+    return;
+  }
   b.disabled=true;
+  ++busy;
   try{
     await checkWallet();
     const id=BigInt(b.dataset.i),to=b.dataset.b,dl=BigInt(Math.floor(Date.now()/1e3)+1800);
     const row=bookRows.find(x=>String(x.id)===b.dataset.i&&x.board.toLowerCase()===to.toLowerCase());
     if(!row)throw Error("order changed — refresh and retry");
-    // The token selects can transiently read "__custom", so never index blind.
-    const selFrom=TOKENS[fromSel.value],selTo=TOKENS[toSel.value];
     if(b.dataset.x==="c"){
-      const native=selFrom?.addr===ZERO&&!row.nA
-        &&row.tA.toLowerCase()===WETH.toLowerCase();
-      const sel=b.dataset.d==="1"
+      // Unwrap when the escrow IS wrapped ether and the user has not asked to
+      // keep it that way. This used to read the pay PICKER instead, so the same
+      // cancel refunded ETH or WETH depending on a selection made for an
+      // unrelated trade - the choice was real, the input to it was not.
+      const native=!row.nA&&row.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
+      // Floorboard shares Dutchboard's cancel pair, and the same `native` test
+      // works: what returns is the ESCROW, and a bid escrows its quote (`tA`).
+      const floorish=b.dataset.d==="1"||b.dataset.f==="1";
+      const sel=floorish
         ?(native?SEL_DUTCH_CANCEL_UNWRAP:SEL_DUTCH_CANCEL)
         :(native&&b.dataset.v==="1"?SEL_CANCEL_UNWRAP:SEL_CANCELORD);
       const data="0x"+sel+encUint(id);
-      stat.textContent=`Cancelling — the unfilled remainder returns as ${native&&(b.dataset.d==="1"||b.dataset.v==="1")?"ETH":"its escrow token"}`;
+      stat.textContent=`Cancelling — the ${b.dataset.f==="1"?"unspent escrow":"unfilled remainder"} returns as ${native&&(floorish||b.dataset.v==="1")?"ETH":"its escrow token"}`;
       const tx={from:account,to,data,value:"0x0"};
       await rpc(C,[tx,L]);
       await settle(await rpc(S,[tx]));
@@ -1946,16 +2389,25 @@ book.addEventListener("click",async e=>{
     // swap. Swapbol remains msg.sender at the board, so private orders must
     // stay on the direct-wallet path below or their counterparty guard would
     // be weakened. NFTs likewise keep their native approval semantics.
-    const nativeOut=selTo?.addr===ZERO&&!r.nA
-      &&r.tA.toLowerCase()===WETH.toLowerCase();
-    const nativeIn=selFrom?.addr===ZERO&&!r.nB
-      &&r.tB.toLowerCase()===WETH.toLowerCase();
+    // Which side of the native boundary this fill uses comes from the ORDER,
+    // the stated preference, and the balances that have to satisfy it - never
+    // from the swap pickers, which is what it read before, so the identical row
+    // executed as ETH or as WETH on the strength of an unrelated selection.
+    const nativeOut=!r.nA&&r.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
+    const nativeIn=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()
+      &&r.aB>0n&&await payWithEth(r.aB);
     const routeIn=nativeIn?ZERO:r.tB;
     const routeOut=nativeOut?ZERO:r.tA;
     const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()
       ||(routeOut===ZERO&&routeIn.toLowerCase()===WETH.toLowerCase());
     if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
       if((await rpc("eth_getCode",[SWAPBOL,L])).length<5)throw Error("orderbook executor not deployed yet");
+      // Everything the executor will refuse, asked read-only FIRST. This runs
+      // ahead of `sendRouterFunded`, which requests its approval before it ever
+      // simulates the call - so without this a leg that was always going to
+      // revert still costs the user an approval transaction, and leaves the
+      // allowance standing behind it.
+      await preflightLeg(r,routeIn,routeOut,r.aB);
       const pay=r.aB,fillPlan=encFillPlan([
         {id:r.id,board:r.board,pay,get:r.aA,part:false}
       ],routeIn,routeOut,account,account,dl);
@@ -1984,14 +2436,15 @@ book.addEventListener("click",async e=>{
           // recipient 0 = the caller. The fills gained the middle two words when
           // the board grew a slippage floor; the encoding still wrote four.
         :"0x"+SEL_FILL1+encUint(id)+encUint(dl);
-    // Swapboard has a native prepaid fill. Dutch NFT lots are not routed
-    // through snwap's ERC20 balance guard, so wrap + approve + fill them with
-    // wallet batching when available (and as recoverable legacy steps otherwise).
-    const wrap=nativeIn&&r.dutch&&r.aB
-      ?{to:WETH,data:"0xd0e30db0",value:toHex(r.aB)}:null;
     // Only Swapboard v2 has a payable ETH fill. A v1 order quoted in WETH still
     // reads as `nativeIn`, but it must be paid by approval, not by msg.value.
     const payNative=(nativeIn&&!r.dutch&&r.v2)||(r.dutch&&r.tB===ZERO);
+    // Everything else paying natively has to wrap first: Dutch lots are not
+    // routed through snwap's ERC20 balance guard, and a v1 board has no payable
+    // entry point at all. Keyed off `payNative` rather than off the board kind,
+    // so the one case that needs no wrap is the one that says so.
+    const wrap=nativeIn&&!payNative&&r.aB
+      ?{to:WETH,data:"0xd0e30db0",value:toHex(r.aB)}:null;
     const tx={from:account,to,data,value:payNative?toHex(r.aB):"0x0"};
     const approvals=[];
     if(r.nB){
@@ -2034,6 +2487,7 @@ book.addEventListener("click",async e=>{
     }catch{stat.textContent="Filled · quote allowance remains; revoke it in your wallet"}
     loadBook();refreshBalance();
   }catch(x){err(x);b.disabled=false}
+  finally{--busy}
 });
 
 const SLOW="0x000000000000888741B254d37e1b27128AfEAaBC";
@@ -2123,6 +2577,7 @@ if(m){posShown+=POSPAGE;m.disabled=true;loadPos();return}
 const b=e.target.closest("button[data-t]");
 if(!b)return;
 b.disabled=true;
+++busy;
 try{
 await checkWallet();
 // claim() pays the recipient directly, but reverse() only credits the
@@ -2137,6 +2592,7 @@ await rpc(C,[txReq,L]);
 await settle(await rpc(S,[txReq]));
 refreshBalance();loadPos();
 }catch(x){err(x);b.disabled=false}
+finally{--busy}
 });
 
 const rcvOf=async v=>{
@@ -2168,6 +2624,19 @@ stat.textContent=amtErr;
 if(amount>0n)sendReady={to,amount,token:f,label:/^0x/.test(v)?to.slice(0,6)+"\u2026"+to.slice(-4):v};
 render();
 }
+// The Token ID field belongs to whichever side is holding a collection.
+// Blank means ANY id, which Floorboard models natively as an empty `ids`
+// set - so the placeholder is the feature, not a hint to fill something in.
+//
+// Shared with the token pickers, not only with `setTab`: choosing a collection
+// without leaving the tab used to leave the field hidden and the floor note
+// answering for the PREVIOUS collection, which is worse than answering nothing.
+const syncNftUI=()=>{
+const anyNft=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
+nftIdL.classList.toggle("hide",!anyNft);
+if(!anyNft)nftId.value="";
+showFloor();
+};
 const setTab=t=>{
 if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
 tab=t;last=null;sendReady=null;stat.textContent="";posShown=POSPAGE;
@@ -2199,16 +2668,13 @@ const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value&&(bk||t.std!=="nft")
 if(alt>=0)toSel.value=String(alt);
 }
 syncDisabled();
-// The Token ID field belongs to whichever side is holding a collection.
-// Blank means ANY id, which Floorboard models natively as an empty `ids`
-// set - so the placeholder is the feature, not a hint to fill something in.
-const anyNft=bk&&(isNft(fromSel.value)||isNft(toSel.value));
-nftIdL.classList.toggle("hide",!anyNft);
-if(!anyNft)nftId.value="";
-showFloor();
+syncNftUI();
 slipL.classList.toggle("hide",t!=="swap");
 dlyL.classList.toggle("hide",t==="swap");
 kindL.classList.toggle("hide",!bk);
+// Only where it can act: filling and cancelling are the two things that cross
+// the wrapped-ether boundary without the user naming a token to do it.
+ethModeL.classList.toggle("hide",!bk);
 dlyL.firstChild.nodeValue=bk?"Expires":"Time lock";
 dly.options[0].textContent=bk?"Never":"Instant";
 if(send)dly.value=sendD;else if(bk)dly.value=bookD;
@@ -2226,22 +2692,34 @@ dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;render()}
 fill.onchange=render;
 const syncOrderType=()=>{
   const dutch=tab==="book"&&kind.value==="dutch";
-  floorL.classList.toggle("hide",!dutch);
-  fillL.classList.toggle("hide",tab!=="book"||dutch);
-  rc.classList.toggle("hide",dutch);
-  rcvEl.classList.toggle("hide",dutch);
+  const bid=tab==="book"&&kind.value==="floor";
+  // Both schedules need a second price and a duration; only which end of the
+  // range each field holds differs, which the labels say.
+  const sched=dutch||bid;
+  floorL.classList.toggle("hide",!sched);
+  floorL.firstChild.nodeValue=bid?"Opening bid":"Floor total";
+  fillL.classList.toggle("hide",tab!=="book"||sched);
+  rc.classList.toggle("hide",sched);
+  rcvEl.classList.toggle("hide",sched);
   // Persist the forced default too, or leaving and re-entering the tab restores
   // "Never" and the button silently reverts to "Choose decay duration".
-  if(dutch&&+dly.value===0){dly.value="86400";if(tab==="book")bookD=dly.value}
-  if(tab==="book")rcvHdr.textContent=dutch?"Start ask total":"You want";
+  if(sched&&+dly.value===0){dly.value="86400";if(tab==="book")bookD=dly.value}
+  if(tab==="book"){
+    // The only order here whose pay side is not a lot being sold: it escrows
+    // the CEILING of its climb, and the receive side names a quantity.
+    payL.textContent=bid?"You escrow (max)":"You sell";
+    rcvHdr.textContent=bid?"You want to buy":dutch?"Start ask total":"You want";
+  }
 };
 kind.onchange=()=>{syncOrderType();render()};
 floorAmt.addEventListener("input",()=>{fitFont(floorAmt);render()});
 tabBook.onclick=()=>setTab("book");
-setInterval(()=>{if(account&&!document.hidden){loadPos();if(tab==="book")loadBook()}},3e4);
+// Never while a fill or a claim is in flight: the refresh would replace the
+// disabled button with an enabled one. Each flow refreshes on its own way out.
+setInterval(()=>{if(account&&!document.hidden&&!busy){loadPos();if(tab==="book")loadBook()}},3e4);
 // Re-quote before QUOTE_TTL expires, never while a tx is in flight or hidden.
 setInterval(()=>{
-if(tab!=="swap"||!account||document.hidden||!last||swap.disabled)return;
+if(tab!=="swap"||!account||document.hidden||!last||swap.disabled||busy)return;
 if(Date.now()>=last.exp-5000)update();
 },5e3);
 // ------------------------------------------------------------- PRICE TAPE
@@ -2518,6 +2996,21 @@ catch{stat.textContent=u}
 };
 tabSwap.onclick=()=>setTab("swap");
 tabSend.onclick=()=>setTab("send");
+// A tablist is a single stop in the tab order, moved through with the arrow
+// keys - without this the roles announce a widget whose keyboard contract the
+// page does not honour, which is worse than no roles at all.
+{const TABS=[tabSwap,tabSend,tabBook],NAMES=["swap","send","book"];
+for(const el of TABS)el.addEventListener("keydown",e=>{
+const i=TABS.indexOf(e.target);
+const j=e.key==="ArrowRight"?(i+1)%TABS.length:e.key==="ArrowLeft"?(i+TABS.length-1)%TABS.length
+  :e.key==="Home"?0:e.key==="End"?TABS.length-1:-1;
+if(j<0)return;
+e.preventDefault();TABS[j].focus();setTab(NAMES[j]);
+});
+// Only the selected tab is reachable by Tab itself; the arrows do the rest.
+const syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-1);
+syncStops();for(const el of TABS)el.addEventListener("click",syncStops);
+for(const el of TABS)el.addEventListener("keyup",syncStops);}
 applyLink();
 async function doSend(){
 if(!sendReady)return;
@@ -2620,23 +3113,43 @@ const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 swap.disabled=true;
 try{
 const sell=parseUnits(amt.value.trim(),f.dec),want=parseUnits(outAmt.value.trim(),t.dec);
-const dutch=kind.value==="dutch";
-const floor=dutch&&floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),t.dec):0n;
-const board=dutch?DUTCH:SB2;
-const quoteToken=!dutch&&t.addr===ZERO?WETH:t.addr;
+const dutch=kind.value==="dutch",bid=kind.value==="floor";
+const floor=(dutch||bid)&&floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),bid?f.dec:t.dec):0n;
+const board=bid?FLOOR:dutch?DUTCH:SB2;
+const quoteToken=!dutch&&!bid&&t.addr===ZERO?WETH:t.addr;
 const [bc,oc]=await Promise.all([rpc("eth_getCode",[board,L]),rpc("eth_getCode",[ORDERBOL,L])]);
-if(bc.length<5)throw Error(`${dutch?"Dutch":"fixed"} orderbook not deployed yet`);
+if(bc.length<5)throw Error(`${bid?"bid board":dutch?"Dutch":"fixed"} orderbook not deployed yet`);
 if(oc.length<5)throw Error("routed order adapter not deployed yet");
-if(f.addr===ZERO&&t.addr===WETH)throw Error("pick a non-WETH quote token");
-if(!dutch&&(f.addr===WETH||f.addr===ZERO)&&quoteToken===WETH)throw Error("pick different tokens");
+if(!bid&&f.addr===ZERO&&t.addr===WETH)throw Error("pick a non-WETH quote token");
+if(!dutch&&!bid&&(f.addr===WETH||f.addr===ZERO)&&quoteToken===WETH)throw Error("pick different tokens");
 if(dutch&&floor>want)throw Error("floor exceeds start price");
 let cp=ZERO;
 const v=rc.value.trim();
-if(!dutch&&v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
+if(!dutch&&!bid&&v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
 const pf=fill.value==="1"?1n:0n;
 const placementDeadline=BigInt(Math.floor(Date.now()/1e3)+300);
 let orderData;
-if(dutch){
+if(bid){
+  // `sell` is the escrow and the ceiling; `want` is a quantity; `floor` is the
+  // open. Prices are uint96 (the escrow width), the quantity uint128.
+  const duration=BigInt(dly.value||0);
+  if(!duration)throw Error("choose a bid window");
+  if(!floor)throw Error("set an opening bid");
+  if(floor>sell)throw Error("opening bid exceeds the maximum");
+  if(want>(1n<<128n)-1n||sell>(1n<<96n)-1n)throw Error("bid amount too large");
+  // The board buys a TOKEN. Native ETH has no code for it to call and no
+  // decimals for `want` to be denominated in, so it can only ever be the thing
+  // a bid pays WITH. The escrow's WETH alias must differ from it for the same
+  // reason a swap needs two sides: an ETH-funded bid for WETH is a wrap.
+  if(t.addr===ZERO)throw Error("a bid buys a token — pick one to bid for");
+  if((f.addr===ZERO?WETH:f.addr).toLowerCase()===t.addr.toLowerCase())
+    throw Error("pick different tokens");
+  // The board wraps an ETH-funded bid itself, so the quote is the ZERO address
+  // here, not the WETH alias the Swapboard path uses.
+  orderData="0x"+SEL_ORDER_FLOOR+encAddr(FLOOR)+encAddr(account)+encAddr(account)
+    +encAddr(t.addr)+encAddr(f.addr)+encUint(want)+encUint(floor)+encUint(sell)
+    +encUint(0n)+encUint(duration)+encUint(placementDeadline);
+}else if(dutch){
   const duration=BigInt(dly.value||0);
   if(!duration)throw Error("choose a decay duration");
   if(sell>(1n<<128n)-1n||want>(1n<<96n)-1n||floor>(1n<<96n)-1n)throw Error("Dutch amount too large");
@@ -2668,7 +3181,7 @@ if(f.addr===ZERO){
   ]);
 }
 await sendRouterFunded(direct,funded,f,sell,f.addr===ZERO?sell:0n,
-  dutch?"Placing Dutch order...":t.addr===ZERO?"Placing limit order (ETH quote settles as WETH)...":"Placing limit order...");
+  bid?"Placing bid (escrowing the ceiling)...":dutch?"Placing Dutch order...":t.addr===ZERO?"Placing limit order (ETH quote settles as WETH)...":"Placing limit order...");
 amt.value="";outAmt.value="";floorAmt.value="";
 fitFont(amt);fitFont(outAmt);fitFont(floorAmt);
 loadBook();refreshBalance();render();
@@ -2688,16 +3201,31 @@ if(Date.now()>last.exp){stat.textContent="Quote expired — refreshing...";updat
 if(last.impact!==null&&last.impact!==undefined&&last.impact>=IMPACT_CONFIRM){
 const pct=(Number(last.impact)/100).toFixed(2);
 const worse=`about ${trimAmt(last.lossTok,last.lossDec)} ${last.lossSym} ${last.isIn?"less than":"more than"} the market rate`;
+// Wallet in-app browsers sometimes stub `prompt`/`confirm` out entirely, and an
+// exception here would escape this handler unhandled - no dialog, no trade, no
+// message, which reads as a dead button. A gate that cannot be shown must still
+// hold, so it fails CLOSED and says why.
+try{
 if(last.impact>=IMPACT_TYPED){
 const need=String(Math.floor(Number(last.impact)/100));
 if(prompt(`STOP — this trade is priced ${pct}% away from the market.\n\nYou would ${last.isIn?"receive":"pay"} ${worse}.\n\nUsually this means the pool is illiquid or the amount is wrong.\n\nType ${need} to accept this loss:`)!==need)return;
 }else if(!confirm(`Price impact ${pct}%.\n\nYou will ${last.isIn?"receive":"pay"} ${worse}.\n\nContinue?`))return;
+}catch{
+stat.textContent=`This trade is ${pct}% away from the market and this browser blocked the confirmation. Reduce the amount, or open the page outside the wallet's in-app browser.`;
+return;
+}
 }
 swap.disabled=true;
 try{
 const {callData,fundedCallData,msgValue,amountIn,from,to}=last;
 if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
 await checkWallet();
+// Before the approval, never after. The waterfall below signs first and
+// simulates last, so a book leg that closed during the quote's 45s life would
+// otherwise cost an approval on the way to a revert. A stale plan re-quotes
+// instead: the books moved, and the next quote is the honest one.
+try{await preflightFills(last.fills,last.tokenIn,last.tokenOut)}
+catch(e){stat.textContent=e.message;swap.disabled=false;last=null;updateSoon();return}
 let cd2=callData,batchCalls=null;
 // Who is being approved, which is not always zRouter. A V4Port sell pulls the
 // token from `msg.sender` DIRECTLY - that is what stops an allowance to it

@@ -62,11 +62,11 @@ const PINNED_RUNS = {
   zQuoterV4: 9_999_999,
   PrecisionPoolFactory: 200,
   PrecisionPool: 200,
-  PrecisionRoute: 9_999_999,
-  PrecisionPoolLens: 9_999_999,
-  PrecisionZap: 9_999_999,
-  ConstantSurchargeHook: 9_999_999,
-  PrecisionPoolPolicy: 9_999_999,
+  PrecisionRoute: 200,
+  PrecisionPoolLens: 200,
+  PrecisionZap: 200,
+  ConstantSurchargeHook: 200,
+  PrecisionPoolPolicy: 200,
 };
 
 const [name, argsJson = "[]"] = process.argv.slice(2);
