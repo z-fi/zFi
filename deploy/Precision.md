@@ -1,43 +1,39 @@
 # Precision pool suite — deployment runbook
 
-**Status: STALE — MUST BE RE-MINED. DO NOT BROADCAST.** Nothing is on chain,
-and that is the only reason this is a chore rather than an incident.
+**Status: MINED, NOT BROADCAST.** Every salt below reproduces from source —
+`node script/check-create2-artifacts.mjs` verifies all 21 artifacts in the repo,
+these six included. Nothing is on chain.
 
-An audit pass changed all five contracts, so every frozen salt and address below
-now belongs to bytecode that no longer exists.
-`node script/check-create2-artifacts.mjs` reports `FAIL ... stored creation code
-differs from canonical compiler output` for each of them, which is the check
-doing its job. The addresses are kept here only so a stale reference elsewhere
-can be recognised as stale; they are NOT deployment targets.
+| contract | address |
+|---|---|
+| `PrecisionPoolFactory` | `0x0000000B6abaFBB3E93edf26Fa9314ff4e67ea6d` |
+| `PrecisionRoute` | `0x0000008C3Da8c76E9359EfbcCcD3a78A83916247` |
+| `PrecisionZap` | `0x00000079Ee63cFc8DA0224d8E1f0C062f3f88c9A` |
+| `PrecisionPoolLens` | `0x00000006435961edbA505ADF268313Fc579a0408` |
+| `ConstantSurchargeHook` | `0x000000B47C5b5435229Fa59bA7b49eCfCb94384E` |
+| `PrecisionPoolPolicy` | `0x0000007c2cE65BD230D97206557eCDbA4FFE39b9` |
 
-Re-mine when the code is frozen again, in the order below — the factory first,
-because its address is a constructor argument to the other four:
+Three leading zero bytes each. Salts are in `deploy/<Name>.salt.txt` and the
+broadcast calldata in `deploy/<Name>.deploy.calldata.txt`.
 
-```
-forge build && node script/precision-prep.mjs
-node script/mine_create2_salt.js 2 1e10 out/PrecisionPoolFactory.creation.txt
-# then the remaining four against the factory's new address
-```
+`PrecisionPoolPolicy`'s owner is `0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2`,
+baked into its initcode and therefore into its salt. It is an advisory oracle no
+contract reads, and `renounceOwnership` is disabled.
 
-| contract | STALE address | stale salt |
-|---|---|---|
-| `PrecisionPoolFactory` | `0x000000209724753c7D935DfcCa56D1fBF7187B5d` | `0x1fa448` |
-| `PrecisionRoute` | `0x00000080FDCEcf2D651B370069268294A030F81D` | see `deploy/PrecisionRoute.salt.txt` |
-| `PrecisionZap` | `0x00000015089893C4c6eCc5B7A3415333c7220f49` | see `deploy/PrecisionZap.salt.txt` |
-| `PrecisionPoolLens` | `0x0000001Dd410E47A5B217303e7cc2d357D8a7023` | see `deploy/PrecisionPoolLens.salt.txt` |
-| `ConstantSurchargeHook` | `0x000000548143c993D1f1dabcb0ebC426f81D2886` | see `deploy/ConstantSurchargeHook.salt.txt` |
+**Broadcast in the order listed.** The factory's address is a constructor
+argument to the other five, so deploying any of them first yields a contract
+pointing at nothing.
 
-`PrecisionPoolPolicy` is NOT mined. It needs an `initialOwner`, which is a
-governance decision rather than a build input, and it is an advisory oracle no
-contract reads. Mine it when that owner is chosen, or drop it.
+**These addresses are valid for exactly this bytecode.** Any edit to a
+pool-suite source file invalidates the affected salt; an edit to
+`PrecisionPool.sol` or `PrecisionPoolFactory.sol` invalidates all six, because
+the factory embeds the pool blob and the other five embed the factory address.
+Re-run `script/precision-prep.mjs`, re-mine, and re-run the checker. That
+checker is what catches a stale artifact, and it has caught one this session —
+a factory salt mined two seconds before the source changed under it.
 
-Broadcast order is the mining order and for the same reason: the factory's
-address is a constructor argument to the other four, so deploying them against a
-factory that is not yet at its address gives contracts pointing at nothing.
-
-This file exists so the ordering constraints are written down before anything
-is mined, because two of them are load-bearing and neither is obvious from the
-contracts.
+The rest of this file is why the ordering above is what it is: two constraints
+that decide everything, and neither is obvious from reading the contracts.
 
 ---
 
