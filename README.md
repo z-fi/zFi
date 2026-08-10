@@ -74,7 +74,7 @@ the holder. A sell therefore cannot be wrapped in `snwap`, whose executor sees
 
 | | address | |
 |---|---|---|
-| zQuoterV4 | [`0x000000DcF8245bdC84fc5018F7825aB029C82845`](https://etherscan.io/address/0x000000DcF8245bdC84fc5018F7825aB029C82845) | ordinary V4 pools, `view`, correct fee math |
+| zQuoterV4 | [`0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6`](https://etherscan.io/address/0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6) | ordinary V4 pools, `view`, correct fee math |
 | V4QuoteLens | [`0x000000c3aE1692983941495162A4AAB40660E65F`](https://etherscan.io/address/0x000000c3aE1692983941495162A4AAB40660E65F) | V4 pools priced by a hook |
 | V4Port | [`0x000000dfb53Fa7f1c486470034741d5BCBE14BE9`](https://etherscan.io/address/0x000000dfb53Fa7f1c486470034741d5BCBE14BE9) | executes any V4 pool, either direction |
 
@@ -82,18 +82,21 @@ The base quoter at [`0x658bF1A6608210FDE7310760f391AD4eC8006A5F`](https://ethers
 computes the V4 swap fee as `protocolFee + lpFee`. In V4 `protocolFee` is not a
 rate - it is a packed uint24 holding two 12-bit values - so while Uniswap left
 protocol fees at zero the sum happened to be right. They were switched on at
-block 25623201, and every V4 quote has been wrong since. Measured live at block
-25721569 on the deepest ETH/USDC V4 pool, 0.1 ETH in:
+block 25623201, and it has been wrong since: measured live on the deepest
+ETH/USDC V4 pool, 0.1 ETH in returns a quote of 93,281,193 where the truth is
+191,274,994, a 51% under-quote; other pools over-quote by 2054x.
 
-| | USDC out |
-|---|---|
-| base quoter | 93,281,193 |
-| zQuoterV4 | 191,274,994 |
-| canonical V4Quoter | 191,274,994 |
+That is the BASE quoter, and nothing reads it for V4. The hub zQuoter
+[`0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13`](https://etherscan.io/address/0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13)
+already routes its V4 leg to `zQuoterV4` above, which matches Uniswap's
+canonical quoter exactly. zSwap's V4 quotes are correct today.
 
-Under-quoting by 51%, and on other pools over-quoting by 2054x - which routes a
-trade to a leg that then reverts. `zQuoterV4` is the base quoter's own V4 code
-with the fee rule corrected, and it reads through StateView so it stays `view`.
+`zQuoterV4` is the base quoter's own V4 code with the fee rule corrected, reading
+through StateView so it stays `view`. A byte-identical copy sits unused at
+[`0x000000DcF8245bdC84fc5018F7825aB029C82845`](https://etherscan.io/address/0x000000DcF8245bdC84fc5018F7825aB029C82845):
+it was deployed here on the mistaken belief that the fix had never shipped,
+having been inferred from the absence of a file in `deploy/` rather than checked
+against the chain. Nothing references it. Use the address above.
 
 Route a pool here when its `hooks` address is non-zero and to `zQuoterV4`
 otherwise. Local tick math cannot quote a hooked pool - a hook may replace the
