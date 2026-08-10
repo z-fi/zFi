@@ -1069,18 +1069,27 @@ contract PrecisionPool is ERC20, IPriceTape {
         // in that direction reverts, permanently if the payee can no longer
         // collect. The backing balances are uint256 already, so nothing is
         // gained by narrowing the claim against them.
+        //
+        // CHECKED, not `unchecked`, and the width argument above is the reason
+        // rather than a reason to skip it. Width makes the counter unreachable;
+        // wrapping would make it CATASTROPHIC if it were ever reached, because
+        // `_assertBacked` compares `balance < reserve + owed` and a wrapped
+        // `owed` turns that solvency test into a permanent pass while inflating
+        // the `available` figure the swap path sizes its input against. The two
+        // failure modes are not symmetric: reverting here costs a swap on a pool
+        // nobody can reach, and wrapping here costs the pool. Each swap adds at
+        // most one uint128, so overflow needs on the order of 1e39 swaps - the
+        // check is unreachable in the same sense the wrap is, and it is the one
+        // of the two that fails safe. It is not on any hot path either: this
+        // function only runs when a hook or creator share is actually accruing.
         if (hookCut != 0) {
-            unchecked {
-                if (zeroForOne) hookOwed0 += hookCut;
-                else hookOwed1 += hookCut;
-            }
+            if (zeroForOne) hookOwed0 += hookCut;
+            else hookOwed1 += hookCut;
             emit HookFee(tokenIn, hookCut, surcharge);
         }
         if (creatorCut != 0) {
-            unchecked {
-                if (zeroForOne) creatorOwed0 += creatorCut;
-                else creatorOwed1 += creatorCut;
-            }
+            if (zeroForOne) creatorOwed0 += creatorCut;
+            else creatorOwed1 += creatorCut;
         }
     }
 
@@ -1392,7 +1401,25 @@ contract PrecisionPool is ERC20, IPriceTape {
         // the configured range.
         uint256 v0 = _virtual0(lp, sh);
         uint256 v1 = _virtual1(lp, sl);
-        if (v0 == 0 || v1 == 0) revert InsufficientLiquidity();
+        // The resolution floor, hoisted from `_addLiquidity`. Not a new
+        // constraint: `lp` here IS the `postSupply` the caller checks against
+        // `MIN_RESOLUTION` a few lines later - the seed's `MIN_LIQUIDITY` is
+        // subtracted from the return value and added straight back - so the
+        // accept/reject boundary is unchanged and this rejects nothing that
+        // would otherwise have been created.
+        //
+        // It is hoisted because `maxX` below divides `y * 1e36` by `sl * sl`,
+        // and the old `v1 != 0` guard only pinned `sl >= WAD / lp`. At that
+        // floor the quotient approaches `lp * lp`, which leaves uint256 at the
+        // top of the liquidity cap - so a pathological low-`sl` seed reached
+        // Solady's `MulDivFailed` instead of a stated reason, and reached it
+        // BEFORE the check that was going to refuse it anyway. Requiring 1e6 of
+        // resolution instead pins `sl >= 1e24 / lp` and bounds the same quotient
+        // by `lp * lp / 1e6`, six orders of magnitude clear. Same class as the
+        // `inAfterFee` guard in `_transitionAt` and the `supply == 0` guard in
+        // `_removeLiquidity`, and fixed the same way: order the checks so the
+        // contract's own error is what the caller sees.
+        if (v0 < MIN_RESOLUTION || v1 < MIN_RESOLUTION) revert InsufficientLiquidity();
         uint256 x = v0 + used0;
         uint256 y = v1 + used1;
         uint256 maxX = FixedPointMathLib.fullMulDiv(y, WAD * WAD, sl * sl);
@@ -1590,18 +1617,18 @@ contract PrecisionPool is ERC20, IPriceTape {
     }
 
     /// @dev Hook and creator claims on each side, which no exit may spend.
+    ///
+    ///      Checked, for the reason `_accrueFees` states: this figure is the
+    ///      right-hand side of the solvency test, so a wrap here reads as "the
+    ///      pool owes almost nothing" and passes an assertion that should fail.
     function _owed0() internal view returns (uint256 owed) {
-        unchecked {
-            if (hook != address(0)) owed = hookOwed0;
-            if (creatorFeeBps != 0) owed += creatorOwed0;
-        }
+        if (hook != address(0)) owed = hookOwed0;
+        if (creatorFeeBps != 0) owed += creatorOwed0;
     }
 
     function _owed1() internal view returns (uint256 owed) {
-        unchecked {
-            if (hook != address(0)) owed = hookOwed1;
-            if (creatorFeeBps != 0) owed += creatorOwed1;
-        }
+        if (hook != address(0)) owed = hookOwed1;
+        if (creatorFeeBps != 0) owed += creatorOwed1;
     }
 
     /// @dev What the pool could pay out right now without touching accrued
@@ -1730,8 +1757,14 @@ contract PrecisionPool is ERC20, IPriceTape {
         uint256 owed1 = _owed1();
         uint256 balance0 = _balance(token0);
         uint256 balance1 = _balance(token1);
+        // The SUM is checked and the difference is not, which is the way round
+        // that matters. `reserve + owed` wrapping would make this comparison
+        // pass on a pool that is deeply insolvent - the one thing the whole
+        // contract is built to detect - so it must revert instead. The
+        // subtractions below cannot underflow once the comparison has held,
+        // since `balance >= reserve + owed >= owed`.
+        if (balance0 < r0 + owed0 || balance1 < r1 + owed1) revert BalanceDeficit();
         unchecked {
-            if (balance0 < r0 + owed0 || balance1 < r1 + owed1) revert BalanceDeficit();
             (available0, available1) = (balance0 - owed0, balance1 - owed1);
         }
     }
