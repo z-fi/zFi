@@ -372,7 +372,8 @@ contract PrecisionPoolSnwapTest is Test {
                     PrecisionZap.checkpoint,
                     (
                         address(pool),
-                        keccak256(abi.encodeCall(PrecisionZap.exit, (address(pool), shares, 0, 0, lp)))
+                        keccak256(abi.encodeCall(PrecisionZap.exit, (address(pool), shares, 0, 0, lp))),
+                        lp
                     )
                 )
             )

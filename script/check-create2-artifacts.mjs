@@ -39,6 +39,7 @@ const SOURCES = {
   PrecisionZap: "src/pools/PrecisionZap.sol",
   PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
   ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
+  PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -84,6 +85,7 @@ const OPTIMIZER_RUNS = {
   PrecisionZap: 200,
   PrecisionPoolLens: 200,
   ConstantSurchargeHook: 200,
+  PrecisionPoolPolicy: 200,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -126,6 +128,9 @@ function findFreshArtifact(name) {
 }
 
 const PRECISION_EXECUTOR = "0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db";
+// Policy owner, chosen at deployment. It is an advisory oracle no contract
+// reads, but the address is baked into the initcode and therefore the salt.
+const PRECISION_POLICY_OWNER = "0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2";
 
 const specs = [
   // The Precision suite. The factory carries the pool's creation code as its
@@ -141,6 +146,7 @@ const specs = [
   {name: "PrecisionZap", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_EXECUTOR]},
   {name: "PrecisionPoolLens", args: [artifactAddress("PrecisionPoolFactory")]},
   {name: "ConstantSurchargeHook", args: [artifactAddress("PrecisionPoolFactory")]},
+  {name: "PrecisionPoolPolicy", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_POLICY_OWNER]},
   {name: "Swapboard", args: [WETH]},
   {name: "Dutchboard", args: [WETH]},
   {name: "Floorboard", args: [WETH]},

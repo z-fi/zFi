@@ -210,7 +210,7 @@ contract MultiHandler is Test {
         // after the snapshot, which is the whole point of the mechanism.
         vm.prank(EXEC);
         bytes32 intent = keccak256(abi.encodeCall(PrecisionZap.exit, (address(p), sh, 0, 0, actor)));
-        try zap.checkpoint(address(p), intent) {} catch { return; }
+        try zap.checkpoint(address(p), intent, actor) {} catch { return; }
         vm.prank(actor);
         p.transfer(address(zap), sh);
         vm.prank(EXEC);

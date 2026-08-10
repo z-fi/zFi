@@ -426,8 +426,29 @@ contract PrecisionPoolFactory {
     {
         pool = poolFor(m);
         if (!isPool[pool]) revert NoPool();
-        // A named market can only be initialized by its fee recipient.
-        if (PrecisionPool(payable(pool)).totalSupply() == 0) _checkCreator(m);
+        if (PrecisionPool(payable(pool)).totalSupply() == 0) {
+            // A named market can only be initialized by its fee recipient.
+            _checkCreator(m);
+        } else if (sqrtPriceInit != 0) {
+            // A NONZERO PRICE IS A STATED INTENT TO SEED, so refuse to quietly
+            // do something else with it. This function doubles as "initialize"
+            // and "top up", and the branch is chosen by state rather than by
+            // the caller - so a seed that loses a race does not fail, it turns
+            // into a proportional deposit at whoever won the race's price.
+            // `sqrtPriceInit` is ignored, and `minLP` bounds shares rather than
+            // price, so nothing the caller passed constrains what they buy.
+            //
+            // `createAndSeed` never had this hole - a seeded market sends it to
+            // `_create`, which reverts `Exists()` - and the in-transaction
+            // version is closed by the lock on both entry points. This is the
+            // mempool version, and it is the one that lands silently.
+            //
+            // No new parameter: the price argument is already documented as
+            // "used only for an empty pool", so a caller topping up a live pool
+            // passes zero and is unaffected, while a caller who passed a price
+            // is telling us which branch they meant.
+            revert Bad();
+        }
         (lp, used0, used1) = _fund(pool, m.token0, m.token1, amount0, amount1, sqrtPriceInit, minLP, to);
     }
 

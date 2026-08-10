@@ -145,6 +145,10 @@ contract PrecisionRoute {
     /// @notice Snapshot this contract's balance before the executor funds it.
     /// @param intent `keccak256` of the exact `route` or `zapIn` calldata this
     ///        checkpoint is taken for.
+    /// @param refundTo Where `abortCheckpoint` returns the funding if this
+    ///        route is opened and then abandoned. Committed HERE rather than
+    ///        supplied at abort time, which is what stops the abort from being
+    ///        a redirection primitive; see `abortCheckpoint`.
     /// @dev The snapshot bounds HOW MUCH the next call may spend; the intent
     ///      bounds WHAT it may spend it on. Both are needed, because the input
     ///      arrives between this call and the one that consumes it: the
@@ -155,10 +159,11 @@ contract PrecisionRoute {
     ///      different function entirely and would have been just as acceptable
     ///      to a checkpoint that only remembers a balance. Committing to the
     ///      calldata covers the entry point and every argument at once.
-    function checkpoint(address token, bytes32 intent) external {
+    function checkpoint(address token, bytes32 intent, address refundTo) external {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (token == address(0) || token.code.length == 0) revert Bad();
         if (intent == bytes32(0)) revert Bad();
+        if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         // At most one route exists at a time, so a reentrant checkpoint - or a
         // checkpoint taken while a route is mid-settlement - is rejected here
         // rather than relying on the per-token flag below to notice.
@@ -175,7 +180,67 @@ contract PrecisionRoute {
             tstore(slot, 1)
             tstore(add(slot, 1), snap)
             tstore(add(slot, 2), intent)
+            tstore(add(slot, 3), refundTo)
         }
+    }
+
+    /// @notice Close an open route without spending it, returning the funding.
+    /// @dev The counterpart to a settlement that cannot be made. Without it, an
+    ///      executor that checkpoints, funds this contract, and then finds it
+    ///      cannot call `route` - a hop that would revert, a clamp that came
+    ///      back zero, a slippage bound it would rather handle than bubble -
+    ///      has no way to give the tokens back. The transient checkpoint
+    ///      disappears at the end of the transaction and the balance simply
+    ///      stays here: inert, because every later route bases its own
+    ///      checkpoint on the raised balance and `zapIn`'s sweep is floored, but
+    ///      also unrecoverable. `PrecisionPoolFactory.abortCheckpoint` exists
+    ///      for exactly this and this contract had the identical gap.
+    ///
+    ///      It refunds the balance delta observed since the checkpoint and
+    ///      nothing else, so it returns this route's own funding and cannot
+    ///      reach a pre-existing or stranded balance.
+    ///
+    ///      THE DESTINATION IS THE ONE COMMITTED AT CHECKPOINT, not an address
+    ///      passed here. That is the whole reason `checkpoint` takes
+    ///      `refundTo`: this function is reachable during the funding transfer
+    ///      by anything the input token hands control to, so if it chose its own
+    ///      recipient it would be a strictly easier theft than the settlement
+    ///      path the intent commitment was built to close. As it stands, an
+    ///      early abort can only hand the funding back to the party the route
+    ///      already named, and it makes the outer `route` fail on a consumed
+    ///      checkpoint - a revert rather than a loss.
+    ///
+    ///      Native-funded entries open no checkpoint and so have nothing to
+    ///      abort; their input arrives with the settling call.
+    /// @param token The input token checkpointed for the open route.
+    /// @return refunded Amount handed back to the committed `refundTo`.
+    function abortCheckpoint(address token) external returns (uint256 refunded) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (_routeState() != _ROUTE_OPEN) revert BadCheckpoint();
+        _setRouteState(_ROUTE_SETTLING);
+
+        bytes32 slot = _slot(token);
+        uint256 active;
+        uint256 base;
+        address to;
+        assembly ("memory-safe") {
+            active := tload(slot)
+            base := tload(add(slot, 1))
+            to := tload(add(slot, 3))
+            tstore(slot, 0)
+            tstore(add(slot, 1), 0)
+            tstore(add(slot, 2), 0)
+            tstore(add(slot, 3), 0)
+        }
+        if (active == 0) revert BadCheckpoint();
+
+        uint256 current = token.balanceOf(address(this));
+        if (current < base) revert BadCheckpoint();
+        unchecked {
+            refunded = current - base;
+        }
+        if (refunded != 0) token.safeTransfer(to, refunded);
+        _setRouteState(_ROUTE_IDLE);
     }
 
     /// @notice Walk `pools` in order, starting from `amountIn` of `tokenIn`.
@@ -582,6 +647,9 @@ contract PrecisionRoute {
             tstore(slot, 0)
             tstore(add(slot, 1), 0)
             tstore(add(slot, 2), 0)
+            // The committed refund address, cleared with the rest so a spent
+            // checkpoint leaves nothing behind for a later abort to read.
+            tstore(add(slot, 3), 0)
         }
         if (active == 0) revert BadCheckpoint();
         // The committed call is this one, arguments included.

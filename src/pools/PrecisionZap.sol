@@ -15,6 +15,8 @@ contract PrecisionZap {
     uint256 constant REENTRANCY_SLOT = 1 << 254;
     /// @dev Disjoint from both of the above for any 160-bit token address.
     uint256 constant INTENT_NAMESPACE = (1 << 255) | (1 << 253);
+    /// @dev And disjoint from all three, on the same argument.
+    uint256 constant REFUND_NAMESPACE = (1 << 255) | (1 << 252);
 
     /// @notice The only immediate caller permitted to drive a prefunded redemption.
     /// @dev This is the executor that dispatches the route, not the router.
@@ -85,10 +87,14 @@ contract PrecisionZap {
     ///      for pointing `removeLiquidity` at something real. Relaxing it to
     ///      admit any share-like token would reopen the interval the intent
     ///      commitment then has to carry alone.
-    function checkpoint(address token, bytes32 intent) external nonReentrant {
+    /// @param refundTo Where `abortCheckpoint` returns the shares if this
+    ///        checkpoint is taken, funded, and then not spent. Committed here
+    ///        rather than supplied at abort time; see `abortCheckpoint`.
+    function checkpoint(address token, bytes32 intent, address refundTo) external nonReentrant {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (token == address(0) || token.code.length == 0) revert Bad();
         if (intent == bytes32(0)) revert Bad();
+        if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         if (!factory.isPool(token)) revert NoPool();
 
         bytes32 slot = _checkpointSlot(token);
@@ -104,10 +110,59 @@ contract PrecisionZap {
             encoded = snapshot + 1;
         }
         bytes32 intentSlot = _intentSlot(token);
+        bytes32 refundSlot = _refundSlot(token);
         assembly ("memory-safe") {
             tstore(slot, encoded)
             tstore(intentSlot, intent)
+            tstore(refundSlot, refundTo)
         }
+    }
+
+    /// @notice Return checkpointed shares that will not be exited after all.
+    /// @dev The counterpart to a settlement that cannot be made, and the same
+    ///      gap `PrecisionPoolFactory.abortCheckpoint` was added to close. An
+    ///      executor that checkpoints, transfers the shares in, and then finds
+    ///      it cannot `exit` - a `min0`/`min1` it would rather handle than
+    ///      bubble, a pool that reverts - otherwise has no authenticated way to
+    ///      hand them back. The transient checkpoint expires with the
+    ///      transaction and the shares stay here: inert, since every later
+    ///      checkpoint bases on the raised balance, but unrecoverable.
+    ///
+    ///      Refunds only the delta since the checkpoint, so it cannot reach
+    ///      shares that were already here, and it pays the `refundTo` COMMITTED
+    ///      AT CHECKPOINT rather than one named here - the same reason the
+    ///      factory does it that way, so that an abort can never redirect.
+    /// @param pool The pool whose shares were checkpointed.
+    /// @return refunded Shares handed back to the committed `refundTo`.
+    function abortCheckpoint(address pool) external nonReentrant returns (uint256 refunded) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+
+        bytes32 slot = _checkpointSlot(pool);
+        bytes32 intentSlot = _intentSlot(pool);
+        bytes32 refundSlot = _refundSlot(pool);
+        uint256 encoded;
+        address to;
+        assembly ("memory-safe") {
+            encoded := tload(slot)
+            to := tload(refundSlot)
+            tstore(slot, 0)
+            tstore(intentSlot, 0)
+            tstore(refundSlot, 0)
+        }
+        if (encoded == 0) revert BadCheckpoint();
+
+        uint256 base;
+        unchecked {
+            base = encoded - 1;
+        }
+        uint256 current = PrecisionPool(payable(pool)).balanceOf(address(this));
+        if (current < base) revert BadCheckpoint();
+        unchecked {
+            refunded = current - base;
+        }
+        // Solady ERC-20 with no transfer hook, and `checkpoint` already pinned
+        // this address to a pool the factory deployed.
+        if (refunded != 0) PrecisionPool(payable(pool)).transfer(to, refunded);
     }
 
     /// @notice Burn prefunded shares and deliver both sides to `to`.
@@ -138,6 +193,7 @@ contract PrecisionZap {
     function _consumeCheckpoint(address token, uint256 amount) internal {
         bytes32 slot = _checkpointSlot(token);
         bytes32 intentSlot = _intentSlot(token);
+        bytes32 refundSlot = _refundSlot(token);
         uint256 encoded;
         bytes32 intent;
         assembly ("memory-safe") {
@@ -145,6 +201,9 @@ contract PrecisionZap {
             intent := tload(intentSlot)
             tstore(slot, 0)
             tstore(intentSlot, 0)
+            // Cleared with the rest, so a spent checkpoint leaves nothing for a
+            // later abort to read.
+            tstore(refundSlot, 0)
         }
         if (encoded == 0) revert BadCheckpoint();
         if (intent != keccak256(msg.data)) revert IntentMismatch();
@@ -165,5 +224,9 @@ contract PrecisionZap {
 
     function _intentSlot(address token) internal pure returns (bytes32) {
         return bytes32(INTENT_NAMESPACE | uint256(uint160(token)));
+    }
+
+    function _refundSlot(address token) internal pure returns (bytes32) {
+        return bytes32(REFUND_NAMESPACE | uint256(uint160(token)));
     }
 }

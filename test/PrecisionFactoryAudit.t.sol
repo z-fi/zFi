@@ -114,6 +114,42 @@ contract PrecisionFactoryAuditTest is Test {
         assertGt(PrecisionPool(payable(pool)).balanceOf(victim), 0);
     }
 
+    /// @dev THE MEMPOOL HALF OF THE SAME FINDING. The lock closes the
+    /// in-transaction squat; it cannot close a front-run in a previous block.
+    /// There, `seed` used to convert silently: `totalSupply() != 0` skips
+    /// `_checkCreator`, `sqrtPriceInit` is ignored, and the deposit lands
+    /// proportionally at whatever price the squatter chose, with `minLP`
+    /// bounding shares rather than price.
+    ///
+    /// A nonzero `sqrtPriceInit` is now read as a stated intent to seed, so
+    /// that caller gets a revert instead of a position they did not choose. No
+    /// new parameter - the argument is already documented as meaningful only
+    /// for an empty pool, so a caller topping up passes zero and is unaffected.
+    function test_ASeedThatLostTheRaceRevertsRatherThanConverting() public {
+        PrecisionPoolFactory.Market memory m = _market();
+
+        // The squatter gets there first, at the bottom of the band.
+        address squatter = address(0xBEEF);
+        tok.mint(squatter, 1e26);
+        vm.deal(squatter, 1_000 ether);
+        vm.startPrank(squatter);
+        tok.approve(address(factory), type(uint256).max);
+        factory.createAndSeed{value: 50 ether}(m, m.sqrtPLow, 50 ether, 5e23, 0, squatter);
+        vm.stopPrank();
+
+        // The honest caller still believes they are initialising.
+        vm.startPrank(victim);
+        tok.approve(address(factory), type(uint256).max);
+        vm.expectRevert(PrecisionPoolFactory.Bad.selector);
+        factory.seed{value: 100 ether}(m, 1e18, 100 ether, 1e24, 0, victim);
+
+        // Passing zero says "top me up at whatever the price is", which is a
+        // different request and still works.
+        (, uint256 lp,,) = factory.seed{value: 10 ether}(m, 0, 10 ether, 1e23, 0, victim);
+        vm.stopPrank();
+        assertGt(lp, 0, "a genuine top-up must still go through");
+    }
+
     /// @dev `_routeHash` copies a hardcoded `0xe0` bytes of calldata. If a
     ///      `Route` field is added, reordered or made dynamic, the commitment
     ///      silently covers the wrong bytes - it would still hash something,

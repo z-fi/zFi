@@ -383,17 +383,6 @@ contract PrecisionPoolLens {
         effectiveFee = base + surcharge - FixedPointMathLib.fullMulDiv(base, surcharge, FEE_DENOM);
     }
 
-    function _sqrtPrice(uint256 supply, uint256 r0, uint256 r1, uint256 sl, uint256 sh)
-        internal
-        pure
-        returns (uint256)
-    {
-        uint256 vX = FixedPointMathLib.fullMulDiv(supply, WAD, sh) + r0;
-        if (vX == 0) return 0;
-        uint256 vY = FixedPointMathLib.fullMulDiv(supply, sl, WAD) + r1;
-        return FixedPointMathLib.sqrt(FixedPointMathLib.fullMulDiv(vY, WAD * WAD, vX));
-    }
-
     /// @notice Return the best single pool in a bounded pair page.
     /// @dev `sender` must be the address the pool will see at execution time.
     function quoteBestFor(
@@ -601,7 +590,8 @@ contract PrecisionPoolLens {
     ///      `legs[legs.length - 1].tokenOut` straight through; do not derive it
     ///      separately, which is the mistake the check is guarding against.
     ///
-    /// @dev Chained legs are funded from the router's own balance, and snwap
+    /// @dev THIS MODELS THE MULTI-LEG SNWAP ENCODING, not `PrecisionRoute`.
+    ///      Chained legs are funded from the router's own balance, and snwap
     ///      forwards `balance - 1` there - it retains a wei to keep the slot
     ///      warm. The factory's executor settles an exact declared amount, so a
     ///      caller that declares the previous leg's full output reverts
@@ -611,18 +601,36 @@ contract PrecisionPoolLens {
     ///
     ///      The first leg is funded directly and is therefore exact.
     ///
-    ///      Returns an empty array if any hop cannot fill, so a zero
-    ///      `amountOut` means the route is not executable rather than free.
+    ///      `PrecisionRoute.route` collapses the whole path into ONE leg and
+    ///      pays each hop directly from the last, so it never crosses the
+    ///      router's balance and never loses that wei. Quoting a `PrecisionRoute`
+    ///      path through this function is still safe - the retained wei per hop
+    ///      makes the answer a lower bound, so a `minOut` derived from it is
+    ///      conservative rather than wrong - but the per-leg `amountIn` figures
+    ///      are the snwap ones and are not what that contract will execute.
+    ///
+    ///      Returns an empty array if any hop is not a factory pool or cannot
+    ///      fill, so a zero `amountOut` means the route is not executable rather
+    ///      than free.
     function quoteRoute(address[] calldata pools, address sender, address tokenIn, uint256 amountIn)
         external
         view
         returns (Leg[] memory legs, uint256 amountOut)
     {
+        // An empty path has no last leg to read the output from.
+        if (pools.length == 0) return (legs, 0);
+
         legs = new Leg[](pools.length);
         address tin = tokenIn;
         uint256 amt = amountIn;
 
         for (uint256 i; i < pools.length; ++i) {
+            // Checked before `token0`, not left to `quoteFor`. Every other
+            // entry point here answers zero for an address the factory does not
+            // know; without this one the `token0` call below reverts first, so
+            // a single bad hop would take the whole quote down instead of
+            // reporting the path as unroutable.
+            if (!factory.isPool(pools[i])) return (new Leg[](0), 0);
             PrecisionPool p = PrecisionPool(payable(pools[i]));
             address t0 = p.token0();
             address tout = tin == t0 ? p.token1() : t0;
@@ -633,8 +641,11 @@ contract PrecisionPoolLens {
             legs[i] = Leg({pool: pools[i], tokenIn: tin, tokenOut: tout, amountIn: amt, amountOut: out});
 
             // The next hop spends what the router holds, less the retained wei.
+            // `out` is nonzero here, so this cannot wrap.
             tin = tout;
-            amt = out == 0 ? 0 : out - 1;
+            unchecked {
+                amt = out - 1;
+            }
         }
         amountOut = legs[pools.length - 1].amountOut;
     }

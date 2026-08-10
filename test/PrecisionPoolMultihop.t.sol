@@ -306,7 +306,7 @@ contract PrecisionPoolMultihopTest is Test {
         uint256 before = user.balance;
 
         vm.prank(EXEC);
-        router.checkpoint(WBTC, keccak256(call_));
+        router.checkpoint(WBTC, keccak256(call_), address(this));
 
         vm.prank(user);
         IERC20(WBTC).transfer(address(router), amountIn);
@@ -526,7 +526,7 @@ contract PrecisionPoolMultihopTest is Test {
         bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, USDC, 1e8, 0, user));
 
         vm.prank(EXEC);
-        router.checkpoint(WBTC, keccak256(call_));
+        router.checkpoint(WBTC, keccak256(call_), address(this));
 
         // The victim's funding is now in flight. Anyone can reach these through
         // the public executor.
@@ -541,7 +541,7 @@ contract PrecisionPoolMultihopTest is Test {
         // And a second checkpoint cannot be opened alongside the first.
         vm.prank(EXEC);
         vm.expectRevert(PrecisionRoute.Reentrancy.selector);
-        router.checkpoint(USDC, keccak256("whatever"));
+        router.checkpoint(USDC, keccak256("whatever"), address(this));
     }
 
     function test_ZapInRefusesUnknownPools() public {

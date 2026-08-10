@@ -1,10 +1,25 @@
 # Precision pool suite — deployment runbook
 
-**Status: MINED, NOT BROADCAST.** Salts and artifacts are frozen in `deploy/`
-and every one reproduces from source via `node script/check-create2-artifacts.mjs`.
-Nothing is on chain.
+**Status: STALE — MUST BE RE-MINED. DO NOT BROADCAST.** Nothing is on chain,
+and that is the only reason this is a chore rather than an incident.
 
-| contract | address | salt |
+An audit pass changed all five contracts, so every frozen salt and address below
+now belongs to bytecode that no longer exists.
+`node script/check-create2-artifacts.mjs` reports `FAIL ... stored creation code
+differs from canonical compiler output` for each of them, which is the check
+doing its job. The addresses are kept here only so a stale reference elsewhere
+can be recognised as stale; they are NOT deployment targets.
+
+Re-mine when the code is frozen again, in the order below — the factory first,
+because its address is a constructor argument to the other four:
+
+```
+forge build && node script/precision-prep.mjs
+node script/mine_create2_salt.js 2 1e10 out/PrecisionPoolFactory.creation.txt
+# then the remaining four against the factory's new address
+```
+
+| contract | STALE address | stale salt |
 |---|---|---|
 | `PrecisionPoolFactory` | `0x000000209724753c7D935DfcCa56D1fBF7187B5d` | `0x1fa448` |
 | `PrecisionRoute` | `0x00000080FDCEcf2D651B370069268294A030F81D` | see `deploy/PrecisionRoute.salt.txt` |
@@ -83,8 +98,8 @@ mined against one blob is worthless against another.
 | `trustedExecutor` | `0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db` (zRouter executor, live) |
 | pool creation code | 20,418 B (SSTORE2 cap 24,575) |
 | `poolInitCodeHash` | `0x514f8a233e2c54112e81ec5103bfe4181156cf384402045f4508bfafbac93650` |
-| factory creation code | 29,054 B (EIP-3860 cap 49,152) |
-| factory initcode hash | `0xc8c4b9c0be1c2e0899e61f950017e6bf700f533b8756804b1f2ed5b1c8c58418` |
+| factory creation code | 29,053 B (EIP-3860 cap 49,152) |
+| factory initcode hash | `0x82184821b131d2945fcb770270ca5e8b051f9d89732e968076af8e30a352c3e1` |
 
 These rows are regenerated, not hand-written: `node script/precision-prep.mjs`
 emits both payloads and rewrites this table from the artifacts it just built.

@@ -41,7 +41,7 @@ contract MockExec {
         external
         returns (bytes memory)
     {
-        r.checkpoint(token, keccak256(data));
+        r.checkpoint(token, keccak256(data), payer);
         MockERC20(token).transferFrom(payer, address(r), amount);
         (bool ok, bytes memory ret) = address(r).call(data);
         if (!ok) _bubble(ret);
