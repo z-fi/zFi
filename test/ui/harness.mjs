@@ -34,6 +34,8 @@ const coder = AbiCoder.defaultAbiCoder();
 // redeployed contract cannot leave these fixtures quietly testing nothing.
 export const A = {
   ZERO: '0x0000000000000000000000000000000000000000',
+  V4PORT: '0x000000dfb53Fa7f1c486470034741d5BCBE14BE9',
+  V4LENS: '0x000000c3aE1692983941495162A4AAB40660E65F',
   WETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
   USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
@@ -362,6 +364,18 @@ export class MockChain {
     if (to === A.DUTCH.toLowerCase() && sel === SEL.DUTCH_LISTING) return this.dutchListing(data);
     if (to === A.SLOW.toLowerCase()) return this.slow(sel, data);
     if (to === A.ZROUTER.toLowerCase()) return '0x';          // pre-flight eth_call
+    // V4QuoteLens.quoteV4Hooked(bool,address,address,uint24,int24,address,uint256)
+    // Returns (amountIn, amountOut); zero means "no route", never "free".
+    if (to === A.V4LENS.toLowerCase()) {
+      const body = '0x' + data.slice(8);
+      const q = this.v4Quote && this.v4Quote({
+        tokenIn: wordAddr(body, 1), tokenOut: wordAddr(body, 2),
+        fee: Number(word(body, 3)), ts: Number(word(body, 4)),
+        hooks: wordAddr(body, 5), amountIn: word(body, 6),
+      });
+      return coder.encode(['uint256', 'uint256'], [q ? word(body, 6) : 0n, q || 0n]);
+    }
+    if (to === A.V4PORT.toLowerCase()) return '0x';           // pre-flight eth_call
     if (to === A.SB2.toLowerCase() || to === A.SB1.toLowerCase()) return this.board(sel, data);
     if (sel === SEL.MARKETS) {
       const body = '0x' + data.slice(8);

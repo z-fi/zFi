@@ -155,6 +155,21 @@ const SEL_P2TF="09d31579";
 const EIP712DOM="EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const SEL_APPROVE="095ea7b3";
 const SEL_BALANCEOF="70a08231";
+// Uniswap V4 through the PoolManager directly. `V4PORT` executes any pool in
+// either direction without ever holding the token, which is the only way a
+// transfer-restricted asset can be traded at all; `V4LENS` prices a pool by
+// RUNNING its hook, because a hooked pool's price is not in slot0 and cannot be
+// recomputed from it. Ordinary V4 pools keep going through the hub quoter,
+// which is correct for them and cheaper to ask.
+const V4PORT="0x000000dfb53Fa7f1c486470034741d5BCBE14BE9";
+const V4LENS="0x000000c3aE1692983941495162A4AAB40660E65F";
+const SEL_V4QUOTE="d500463c",SEL_V4SWAP="48e6f730";
+// keccak256("zfi.v4pool") - the token list key carrying a listing's V4 pools.
+// A pool cannot be discovered: fee and tick spacing could be enumerated, but
+// the hook is 20 unguessable bytes and the hook is what prices it. Log scanning
+// is not an option either - full-range eth_getLogs is refused by every public
+// RPC a wallet is likely to be pointed at - so the list is where it comes from.
+const V4POOL_KEY="0x95a932c205571d4d1ca72715c642a2eca21dde79ffc28ff11509681f9383385f";
 const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
 const SOURCES=["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido"];
 const ETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#627EEA"/><g fill="#FFF" fill-rule="nonzero"><path fill-opacity=".602" d="M16.498 4v8.87l7.497 3.35z"/><path d="M16.498 4L9 16.22l7.498-3.35z"/><path fill-opacity=".602" d="M16.498 21.968v6.027L24 17.616z"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path fill-opacity=".2" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".602" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
@@ -179,6 +194,73 @@ const TOKENS=[
 // added or re-themed without shipping new HTML. Any failure - not deployed, wrong
 // chain, RPC hiccup, malformed entry - leaves the built-in list in place rather
 // than presenting an empty or half-populated token picker.
+// A listing's V4 pools, from its `zfi.v4pool` extra. The value is a
+// semicolon-separated list so a token can carry several - another fee tier,
+// another hook, a different pair - and each entry is:
+//
+//   v1 : other : fee : tickSpacing : hooks
+//
+// `other` is the currency paired against THIS token (0 for native ETH) and the
+// token itself is not repeated: the entry is already on its own listing, and
+// `TokenList` truncates an extra past 256 characters SILENTLY, so the encoding
+// cannot afford to restate what is already known. A pool key cut mid-address
+// would route nowhere, which is why every field is re-validated here rather
+// than trusted for being onchain.
+function parseV4Pools(extras,tokenAddr){
+if(!Array.isArray(extras)||!/^0x[0-9a-f]{40}$/i.test(tokenAddr||""))return[];
+const row=extras.find(x=>x&&typeof x.v==="string"&&String(x.k).toLowerCase()===V4POOL_KEY);
+if(!row)return[];
+const out=[];
+for(const spec of row.v.split(";")){
+const p=spec.trim().split(":");
+if(p.length!==5||p[0]!=="v1")continue;
+const other=p[1]==="0"?ZERO:p[1];
+const hooks=p[4]==="0"?ZERO:p[4];
+if(!/^0x[0-9a-f]{40}$/i.test(other)||!/^0x[0-9a-f]{40}$/i.test(hooks))continue;
+if(!/^\d{1,7}$/.test(p[2])||!/^\d{1,7}$/.test(p[3]))continue;
+const fee=Number(p[2]),ts=Number(p[3]);
+if(!Number.isInteger(fee)||!Number.isInteger(ts)||ts<1)continue;
+if(other.toLowerCase()===tokenAddr.toLowerCase())continue;
+// v4 sorts the pair; the page never gets to choose the order.
+const a=tokenAddr.toLowerCase(),b=other.toLowerCase();
+const zeroFirst=BigInt(a)<BigInt(b);
+out.push({c0:zeroFirst?tokenAddr:other,c1:zeroFirst?other:tokenAddr,fee,ts,hooks});
+if(out.length===8)break;
+}
+return out;
+}
+// The pools that can trade THIS pair, from either side's listing.
+function v4PoolsFor(f,t){
+const fa=f.addr.toLowerCase(),ta=t.addr.toLowerCase();
+const seen=new Set(),out=[];
+for(const tok of [f,t])for(const p of (tok.v4||[])){
+const c0=p.c0.toLowerCase(),c1=p.c1.toLowerCase();
+if(!((c0===fa&&c1===ta)||(c0===ta&&c1===fa)))continue;
+const id=`${c0}:${c1}:${p.fee}:${p.ts}:${p.hooks.toLowerCase()}`;
+if(seen.has(id))continue;
+seen.add(id);
+out.push({...p,zeroForOne:c0===fa});
+}
+return out;
+}
+const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks);
+// One exact-in quote per pool, priced by running the hook. `eth_call` is fine
+// for a non-view function, and a pool that cannot answer returns zero rather
+// than taking the whole quote down with it.
+async function quoteV4Pools(f,t,amountIn,block){
+const pools=v4PoolsFor(f,t);
+if(!pools.length||amountIn<=0n)return null;
+const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,
+data:"0x"+SEL_V4QUOTE+encBool(false)+encAddr(f.addr)+encAddr(t.addr)
++encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks)+encUint(amountIn)},block])
+.then(h=>{const x=strip0x(h);return x.length>=128?BigInt("0x"+x.slice(64,128)):0n})
+.catch(()=>0n)));
+let best=null;
+for(let i=0;i<pools.length;i++)if(rs[i]>0n&&(!best||rs[i]>best.amountOut))
+best={pool:pools[i],amountIn,amountOut:rs[i]};
+return best;
+}
+
 async function loadTokenList(){
 if(TOKENLIST===ZERO)return;
 try{
@@ -215,7 +297,8 @@ if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 // where registry data enters TOKENS, so nothing downstream has to remember.
 const sym=safeSym(t.s).slice(0,12);
 const logo=safeUrl(t.l);
-next.push({sym,addr:t.a,dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym)});
+next.push({sym,addr:t.a,dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym),
+v4:parseV4Pools(t.e,t.a)});
 }
 // Fungibles first, NFTs after, each keeping the registry's curation order. The
 // picker's default selections are indexes, so a stable partition matters: it
@@ -673,6 +756,11 @@ const candJob=acct?swapCandidates(f.addr,t.addr,quoteBlock).catch(()=>{
   const x=[];x.unavailable=true;return x
 }):Promise.resolve([]);
 const gasPriceJob=acct?rpc("eth_gasPrice",[]).then(BigInt).catch(()=>0n):Promise.resolve(0n);
+// V4 pools named by the token list, priced by RUNNING their hooks. Exact-in
+// only, and not a limitation of this page: `V4Port` swaps exact-in, and a
+// custom-curve hook may implement no other direction at all - the ETH/FWA hook
+// reverts on any exact-out. So an exact-output quote simply has no V4 leg.
+const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>null):Promise.resolve(null);
 const pick=y=>{if(!y)return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
 if(!r||(isIn?v>r.best.amountOut:v<r.best.amountIn))r=y};
 // Earlier jobs win ties, keeping the simpler route.
@@ -716,6 +804,22 @@ for(const i of tailJobs){const y=dec[i];if(!y)continue;
   if(v&&(!tail||(isIn?v>tail.best.amountOut:v<tail.best.amountIn)))tail=y;
 }
 if(my!==seq)return;
+// Built here rather than merged through `pick` because this route does not go
+// through zRouter at all: it is its own target, its own spender and its own
+// slippage floor. A token whose transfers are restricted has no conventional
+// leg to lose to, so without this the pair would not quote at all.
+const v4q=await v4Job;
+let v4c=null;
+if(v4q&&v4q.amountOut>0n){
+const v4Min=v4q.amountOut-(v4q.amountOut*slipBps)/10000n;
+const p=v4q.pool;
+v4c={best:{source:4,amountIn:v4q.amountIn,amountOut:v4q.amountOut,feeBps:BigInt(p.fee)/100n},
+callData:"0x"+SEL_V4SWAP+encPoolKey(p)+encBool(p.zeroForOne)+encUint(v4q.amountIn)
++encUint(v4Min)+encAddr(rcv||acct||ZERO)+encUint(deadline),
+fundedCallData:null,amountLimit:v4Min,msgValue:f.addr===ZERO?swapAmt:0n,
+to:V4PORT,spender:f.addr===ZERO?null:V4PORT};
+if(!r)r=v4c;
+}
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
 let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false;
@@ -832,6 +936,10 @@ if(acct){
     }
   }
 }
+// Last word, and only on merit: the planner above may have built a book+AMM
+// hybrid, and this replaces it wholesale rather than merging, because a V4Port
+// swap settles by itself and cannot be a leg of a zRouter multicall.
+if(v4c&&v4c!==r&&v4c.best.amountOut>r.best.amountOut){r=v4c;hybrid=null}
 const finalIn=r.best.amountIn;
 const finalOut=r.best.amountOut;
 if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
@@ -867,6 +975,7 @@ if(imp>=IMPACT_WARN)stat.textContent=`High price impact: ${pctTxt}% — about ${
 }
 const inApprove=isIn?swapAmt:r.msgValue||r.amountLimit;
 if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msgValue,
+to:r.to,spender:r.spender,
 amountIn:inApprove,from:f,exp:Date.now()+QUOTE_TTL,impact:imp,
 lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
 mkt,got:isIn?finalOut:finalIn,isIn};
@@ -2198,7 +2307,38 @@ const {callData,fundedCallData,msgValue,amountIn,from,to}=last;
 if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
 await checkWallet();
 let cd2=callData,batchCalls=null;
-if(from.addr!==ZERO&&!to){
+// Who is being approved, which is not always zRouter. A V4Port sell pulls the
+// token from `msg.sender` DIRECTLY - that is what stops an allowance to it
+// becoming a standing option a stranger could exercise - so the approval has
+// to name the port, and the swap cannot be a leg of a zRouter multicall.
+// `spender` is null where no allowance is involved at all, as for the WETH
+// unwrap, which retargets `to` without spending anything.
+const spender=last.spender!==undefined?last.spender:(to?null:ZROUTER);
+const target=to||ZROUTER;
+if(from.addr!==ZERO&&spender&&spender!==ZROUTER){
+// Plain allowance only. Permit and Permit2 both route their signature through
+// zRouter's multicall, which is not where this swap is going.
+const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(spender);
+const a=BigInt(await rpc(C,[{to:from.addr,data:allowData},L]));
+if(a<amountIn){
+if(await canBatch(account)){
+const pre=a>0n?[{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(0n),value:"0x0"}]:[];
+batchCalls=[...pre,{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(amountIn),value:"0x0"},
+{to:target,data:callData,value:toHex(msgValue)}];
+}else{
+const n=a>0n?2:1;
+if(a>0n){
+stat.textContent=`Approving (1/${n})...`;
+await waitTx(await rpc(S,[{from:account,to:from.addr,
+data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(0)}]));
+}
+stat.textContent=n>1?"Approving (2/2)...":"Approving...";
+await waitTx(await rpc(S,[{from:account,to:from.addr,
+data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(amountIn)}]));
+if(BigInt(await rpc(C,[{to:from.addr,data:allowData},L]))<amountIn)throw Error("approval failed");
+}
+}
+}else if(from.addr!==ZERO&&!to){
 const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
 const aHex=await rpc(C,[{to:from.addr,data:allowData},L]);
 const a=BigInt(aHex);
@@ -2224,7 +2364,7 @@ permitted=true;
 if(!permitted&&await canBatch(account)){
 const pre=a>0n?[{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(0n),value:"0x0"}]:[];
 batchCalls=[...pre,{to:from.addr,data:"0x"+SEL_APPROVE+encAddr(ZROUTER)+encUint(amountIn),value:"0x0"},
-{to:ZROUTER,data:callData,value:toHex(msgValue)}];
+{to:target,data:callData,value:toHex(msgValue)}];
 permitted=true;
 }
 if(!permitted){
@@ -2250,7 +2390,7 @@ if(batchCalls){
 await checkWallet();
 tx=await sendBatch(account,batchCalls);
 }else{
-const txReq={from:account,to:to||ZROUTER,data:cd2,value:toHex(msgValue)};
+const txReq={from:account,to:target,data:cd2,value:toHex(msgValue)};
 await rpc(C,[txReq,L]);
 await checkWallet();
 tx=await rpc(S,[txReq]);

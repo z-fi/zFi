@@ -73,8 +73,18 @@ contract V4PoolExtraTest is Test {
         uint256 id = ITokenList(TOKENLIST).idOf(FWA);
         address owner = ITokenList(TOKENLIST).owner();
 
-        assertEq(ITokenList(TOKENLIST).extraKeys(id).length, 0, "no extras on FWA today");
+        // Published for real at this point, so assert the LIVE value rather
+        // than writing one and reading it back - which would have passed just
+        // as happily against a chain where nothing was ever published.
+        bytes32[] memory live = ITokenList(TOKENLIST).extraKeys(id);
+        assertEq(live.length, 1, "FWA carries exactly one extra");
+        assertEq(live[0], KEY, "and it is the pool key");
+        assertTrue(
+            _contains(ITokenList(TOKENLIST).json(id), VALUE),
+            "the published value is the compact key, whole and untruncated"
+        );
 
+        // Rewriting it is idempotent, which is what makes a later append safe.
         vm.prank(owner);
         ITokenList(TOKENLIST).setExtra(id, KEY, VALUE);
 
@@ -93,10 +103,6 @@ contract V4PoolExtraTest is Test {
     /// go straight from a token list entry to a working route with nothing
     /// else configured anywhere.
     function test_theKeyItSpellsIsATradeablePool() public {
-        uint256 id = ITokenList(TOKENLIST).idOf(FWA);
-        vm.prank(ITokenList(TOKENLIST).owner());
-        ITokenList(TOKENLIST).setExtra(id, KEY, VALUE);
-
         // Parsed out of the string above, exactly as the page will parse it.
         PoolKey memory key = PoolKey(address(0), FWA, 0, 60, HOOK);
 
