@@ -205,12 +205,40 @@ max_optimizer_runs = 20
 paths = "src/Floorboard.sol"
 max_optimizer_runs = 200
 
-# PrecisionPoolFactory embeds PrecisionPool's creation code so it can deploy
-# markets, which means it GROWS whenever the pool does - from a different file,
-# silently. At default runs it sits ~900 B under EIP-170. Runtime gas here is
-# cheap to give up: createPool is once per market, and the per-swap executor is
-# thin dispatch. Same release invariant as the lens above - any edit to either
-# the factory OR the pool must be followed by a deployed-size check.
+# PrecisionPool is pinned so it has ONE build, not one per compilation unit.
+#
+# The factory takes the pool's creation code as a CONSTRUCTOR ARGUMENT and
+# stores it with SSTORE2, which writes the blob as contract code - so it is
+# bounded by EIP-170 less the leading STOP byte, 24,575 B. At 200 runs the pool
+# is 20,418 B and fits with 4,157 B to spare; at the default 9,999,999 it is
+# 24,657 B and does NOT, making the factory unconstructable.
+#
+# (20,341 B / 4,234 B before the checked-accrual and hoisted-resolution edits;
+# those cost 77 B. Measure the BLOB, i.e. the initcode column of
+# `forge build --force --sizes`, not the runtime column - the runtime figure is
+# 19,228 B and is not what the SSTORE2 bound applies to.)
+#
+# Without an entry of its own the pool inherited whichever setting its
+# compilation unit happened to carry: 200 when pulled in through the factory
+# below, the default when compiled standalone. Both artifacts then existed in
+# out/ at once, under different paths, and picking between them was a coin
+# flip. Since `poolInitCodeHash` is a CREATE2 input, that coin flip decided
+# every market address - and no test can catch the wrong choice, because forge
+# runs with `code_size_limit = None` and this repo ignores `code-size`.
+#
+# 200 is what the entire suite has always exercised. Raising it is a runtime-gas
+# optimisation that spends SSTORE2 headroom on the contract most likely to grow;
+# do not raise it without re-measuring the blob and re-emitting every artifact.
+# See test/PrecisionDeployConstraints.t.sol and deploy/Precision.md.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPool.sol"
+max_optimizer_runs = 200
+
+# The factory itself. Runtime gas here is cheap to give up: createPool is once
+# per market and the per-swap path is thin dispatch. Note it does NOT embed the
+# pool's creation code - an older revision did, and the pin predates the change
+# to passing it in - but the pin is kept because the size relationship above
+# only holds if both files compile at the same setting.
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionPoolFactory.sol"
 max_optimizer_runs = 200

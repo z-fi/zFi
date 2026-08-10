@@ -17,18 +17,25 @@ code** as an argument and stores it with SSTORE2. SSTORE2 writes the blob as
 contract code, so it is bounded by EIP-170: 24,576 bytes, one of which goes to
 the leading `STOP`. The blob must therefore be **≤ 24,575 bytes**.
 
-foundry.toml restricts `src/pools/PrecisionPoolFactory.sol` to
-`max_optimizer_runs = 200`, which transitively pins `PrecisionPool` inside that
-compilation unit. The numbers:
+foundry.toml now pins `src/pools/PrecisionPool.sol` to `max_optimizer_runs = 200`
+**in its own right**. Before that it had no entry and inherited whichever
+setting its compilation unit carried — 200 through the factory, the default
+standalone — so two builds sat in `out/` at once and picking between them was a
+coin flip that decided every market address. The numbers:
 
 | build | pool creation code | fits the blob? |
 |---|---|---|
-| 200 runs (pinned) | 20,341 B | yes, 4,234 B headroom |
+| 200 runs (pinned) | 20,418 B | yes, 4,157 B headroom |
 | 9,999,999 runs (default) | 24,657 B | **no — factory is unconstructable** |
 
-Both artifacts exist in `out/` at the same time, under different paths, so
-selecting one by path is a coin flip. Use `script/emit-pool-blob.mjs`, which
-selects on source hash **and** pinned runs and refuses an oversized blob.
+Measure the **creation-code** column of `forge build --force --sizes`, not the
+runtime column. The runtime figure is 19,228 B and is not what this bound
+applies to; reading the wrong column reports ~5 KB of headroom that is not there.
+
+With the pin in place a canonical build produces exactly one PrecisionPool
+artifact. `script/emit-pool-blob.mjs` still selects on source hash **and**
+pinned runs and refuses an oversized blob, so a stray artifact from an
+overridden profile cannot be picked up by accident.
 
 **No test can catch getting this wrong.** Forge runs with
 `code_size_limit = None`, and this repo lists `code-size` / `init-code-size` in
@@ -56,13 +63,20 @@ mined against one blob is worthless against another.
 |---|---|
 | CREATE2 factory (SafeSummoner) | `0x00000000004473e1f31C8266612e7FD5504e6f2a` |
 | `trustedExecutor` | `0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db` (zRouter executor, live) |
-| `poolInitCodeHash` | `0x17ff58e3f57a916f77f9abd13a90eee440c44640b1aee06d01b3f3d689058ee1` |
-| factory initcode hash | `0xa7eae87d8f7b5d10cfd94fcea787c3ddc5bd32b47dd047c5a52450bc246c46ad` |
-| factory creation size | 28,683 B (EIP-3860 cap is 49,152, so fine) |
+| pool creation code | 20,418 B (SSTORE2 cap 24,575) |
+| `poolInitCodeHash` | `0x514f8a233e2c54112e81ec5103bfe4181156cf384402045f4508bfafbac93650` |
+| factory creation code | 28,779 B (EIP-3860 cap 49,152) |
+| factory initcode hash | `0x00627ffe28db703145ac80d474490644c9df44a41913b9aaec5b6eef12550b64` |
 
-Hashes are for the tree at the time of writing. **Any source edit to
-`PrecisionPool.sol` or `PrecisionPoolFactory.sol` invalidates both** — re-emit
-before mining, never mine against a stale payload.
+These rows are regenerated, not hand-written: `node script/precision-prep.mjs`
+emits both payloads and rewrites this table from the artifacts it just built.
+Do not edit them by hand, and do not trust a copy of this file that was not
+produced by that script against the current tree.
+
+**Any source edit to `PrecisionPool.sol` or `PrecisionPoolFactory.sol`
+invalidates both hashes.** Re-run the prep script before mining. A salt is valid
+for exactly one bytecode, and `poolInitCodeHash` is a CREATE2 input, so a stale
+pool hash silently relocates every market address the factory will ever produce.
 
 `PrecisionPoolPolicy` additionally needs an `initialOwner`. It is an advisory
 oracle that no contract reads (see its header), so this is not a protocol
@@ -77,12 +91,8 @@ Decide deliberately or do not deploy it.
 # 0. Canonical build. Everything below reads out/.
 forge build
 
-# 1. The pool blob. Refuses the wrong build rather than producing a bad salt.
-node script/emit-pool-blob.mjs
-
-# 2. The factory's exact creation payload.
-node script/emit-creation-code.mjs PrecisionPoolFactory \
-  '["0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db","<contents of out/PrecisionPool.blob.txt>"]'
+# 1-2. Blob, factory payload, and the Inputs table above - one command.
+node script/precision-prep.mjs
 
 # 3. Mine. Long-running; parallel across cores.
 node script/mine_create2_salt.js 2 1e10 out/PrecisionPoolFactory.creation.txt
