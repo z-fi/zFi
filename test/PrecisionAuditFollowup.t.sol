@@ -353,7 +353,7 @@ contract PrecisionAuditFollowupTest is Test {
     function test_ZapInLeavesNoAllowanceOrResidueOnEitherSide() public {
         uint256 amountIn = 100e18;
         bytes memory data =
-            abi.encodeCall(PrecisionRoute.zapIn, (address(tokenPool), address(a), amountIn, 45e18, 0, user));
+            abi.encodeCall(PrecisionRoute.zapIn, (address(tokenPool), address(a), amountIn, 45e18, 0, user, user));
 
         vm.prank(user);
         exec.fundAndSend(router, address(a), user, amountIn, data);
@@ -371,7 +371,7 @@ contract PrecisionAuditFollowupTest is Test {
     /// back to the recipient rather than accumulating here.
     function test_NativeZapInLeavesNoAllowanceOrResidue() public {
         bytes memory data =
-            abi.encodeCall(PrecisionRoute.zapIn, (address(ethPool), address(0), 100e18, 45e18, 0, user));
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethPool), address(0), 100e18, 45e18, 0, user, user));
 
         exec.send{value: 100e18}(address(router), data);
 

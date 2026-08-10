@@ -375,7 +375,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.prank(user);
         ISnwap(ZROUTER).snwap{value: 2 ether}(
             address(0), 2 ether, user, address(ethUsdc), 0, address(router),
-            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, user))
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, user, user))
         );
 
         assertGt(ethUsdc.balanceOf(user) - before, 0, "no LP shares minted");
@@ -504,7 +504,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.prank(user);
         ISnwap(ZROUTER).snwap{value: 2 ether}(
             address(0), 2 ether, user, address(ethUsdc), 0, address(router),
-            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, address(0xDEAD)))
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, address(0xDEAD), address(0xDEAD)))
         );
 
         assertGt(ethUsdc.balanceOf(address(0xDEAD)), 0, "zap did not run");
@@ -532,7 +532,7 @@ contract PrecisionPoolMultihopTest is Test {
         // the public executor.
         vm.prank(EXEC);
         vm.expectRevert(PrecisionRoute.Reentrancy.selector);
-        router.zapIn{value: 1 ether}(address(ethUsdc), address(0), 1 ether, 0, 0, address(0xDEAD));
+        router.zapIn{value: 1 ether}(address(ethUsdc), address(0), 1 ether, 0, 0, address(0xDEAD), address(0xDEAD));
 
         vm.prank(EXEC);
         vm.expectRevert(PrecisionRoute.Reentrancy.selector);
@@ -549,7 +549,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.deal(EXEC, 2 ether);
         vm.prank(EXEC);
         (bool ok, bytes memory err) = address(router).call{value: 1 ether}(
-            abi.encodeCall(PrecisionRoute.zapIn, (address(0xDEAD), address(0), 1 ether, 0, 0, user))
+            abi.encodeCall(PrecisionRoute.zapIn, (address(0xDEAD), address(0), 1 ether, 0, 0, user, user))
         );
         assertFalse(ok);
         assertEq(bytes4(err), PrecisionRoute.NoPool.selector);

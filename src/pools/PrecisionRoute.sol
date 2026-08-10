@@ -80,6 +80,7 @@ contract PrecisionRoute {
     error Reentrancy();
     error NotExecutor();
     error BadCheckpoint();
+    error HookedNoClamp();
     error WrongTokenOut();
     error IntentMismatch();
     error InsufficientOutput();
@@ -461,8 +462,33 @@ contract PrecisionRoute {
         path = new address[](pools.length);
         address tin = tokenIn;
         for (uint256 i; i < pools.length; ++i) {
-            path[i] = tin;
             PrecisionPool p = PrecisionPool(payable(pools[i]));
+            // Membership is checked HERE rather than left to `_walk`, for two
+            // reasons. A non-pool would otherwise fail the `token0()` call
+            // below with no reason data - `routeUpTo` reporting nothing where
+            // `route` says `NoPool` - and the hook check underneath needs a
+            // real pool to ask.
+            if (!factory.isPool(pools[i])) revert NoPool();
+            // NO HOOKED POOL MAY APPEAR IN A CLAMPED ROUTE.
+            //
+            // The pool refuses partial fill on itself for a modelling reason
+            // (`HookedNoPartialFill`); this refuses it for two more, and both
+            // are worse. First, gas: the search bisects up to ~256 times and
+            // every probe pays `HOOK_GAS` per hooked hop, so three hooked hops
+            // is on the order of 115M gas - past the block limit, with the cost
+            // falling on whoever submitted the route. Second, correctness: the
+            // search quotes every hop against PRE-ROUTE state, and a hooked
+            // pool at position i gets control in `afterSwap` between hops, so
+            // it can move hop i+1's price and invalidate the clamp the search
+            // just computed. The route then reverts on the band - a cheap,
+            // repeatable grief rather than a one-off.
+            //
+            // The exact `route` path keeps hooked pools: it walks each hop once
+            // at a size the caller fixed, so neither problem arises there.
+            // `PrecisionPoolLens.routeClampable` is the off-chain screen for
+            // this, and now the contract enforces what it advises.
+            if (p.hook() != address(0)) revert HookedNoClamp();
+            path[i] = tin;
             address t0 = p.token0();
             tin = tin == t0 ? p.token1() : t0;
         }
@@ -545,18 +571,43 @@ contract PrecisionRoute {
     ///
     ///      Leftovers are always returned. This contract must never retain
     ///      value between routes or the next caller could sweep it.
+    /// @param to LP share recipient.
+    /// @param refundTo Where leftovers go. SEPARATE FROM `to`, as everywhere
+    ///        else here. This used to sweep to the share recipient, which is
+    ///        wrong twice over: a frontend depositing on a user's behalf sent
+    ///        that user its own leftover input, and a recipient that holds
+    ///        ERC-20 shares but has no payable receive - an ordinary vault or
+    ///        smart-account shape - reverted the whole zap on the native sweep
+    ///        AFTER the swap and the deposit had already run.
+    ///
+    /// @dev THE SWAP LEG RUNS AT `minOut = 0`; `minLP` is the only slippage
+    ///      bound on this call. That is the right guard in principle - a
+    ///      sandwiched swap returns less, so fewer shares, so `minLP` catches
+    ///      it - but `minLP` is denominated in shares whose value depends on
+    ///      the post-manipulation reserves, so it cannot be derived from the
+    ///      ideal split arithmetically. Take it from a simulation of this exact
+    ///      call, not from a closed form. The band bounds the damage either
+    ///      way: the pool refuses a swap that would leave its range, so an
+    ///      attacker's room is the band width rather than the whole curve.
     function zapIn(
         address pool,
         address tokenIn,
         uint256 amountIn,
         uint256 swapPortion,
         uint256 minLP,
-        address to
+        address to,
+        address refundTo
     ) external payable claimsRoute(tokenIn != address(0)) returns (uint256 lp) {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (!factory.isPool(pool)) revert NoPool();
         if (to == address(0) || to == address(this)) revert Bad();
+        if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         if (amountIn == 0 || swapPortion > amountIn) revert Bad();
+        // Swapping the WHOLE input leaves nothing for the other side of the
+        // deposit, so `_proportional` mints zero and the pool reverts
+        // `ZeroAmount()` from two calls away. "Zap all of it" is a reasonable
+        // thing for a frontend to send, so say so here instead.
+        if (swapPortion == amountIn) revert Bad();
 
         PrecisionPool p = PrecisionPool(payable(pool));
         address t0 = p.token0();
@@ -613,8 +664,8 @@ contract PrecisionRoute {
         if (t0 != address(0)) t0.safeApproveWithRetry(pool, 0);
         t1.safeApproveWithRetry(pool, 0);
 
-        _sweep(t0, pre0, to);
-        _sweep(t1, pre1, to);
+        _sweep(t0, pre0, refundTo);
+        _sweep(t1, pre1, refundTo);
     }
 
     /// @dev Returns what this call brought in and the deposit could not take at

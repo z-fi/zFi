@@ -972,6 +972,11 @@ contract PrecisionPool is ERC20, IPriceTape {
             ? FixedPointMathLib.fullMulDiv(amountOut, 1e18, amountIn)
             : FixedPointMathLib.fullMulDiv(amountIn, 1e18, amountOut);
         // Volume is always quoted in token0 so bars from both directions add up.
+        // GROSS ON ONE SIDE, NET ON THE OTHER: a token0-in trade prints the
+        // input before fees, a token1-in trade prints the output after them, so
+        // two economically identical trades differ by roughly the fee rate.
+        // Sub-percent, invisible on a chart, and `IPriceTape` already calls
+        // volume a lower bound - recorded so nobody chases the discrepancy.
         uint256 volume = zeroForOne ? amountIn : amountOut;
         uint256 done = PriceTape.print(_fine, price, volume, FINE_PERIOD);
         if (done != 0) PriceTape.fold(_coarse, done, FINE_PERIOD, COARSE_PERIOD);

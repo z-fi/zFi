@@ -6,12 +6,12 @@ these six included. Nothing is on chain.
 
 | contract | address |
 |---|---|
-| `PrecisionPoolFactory` | `0x0000000B6abaFBB3E93edf26Fa9314ff4e67ea6d` |
-| `PrecisionRoute` | `0x0000008C3Da8c76E9359EfbcCcD3a78A83916247` |
-| `PrecisionZap` | `0x00000079Ee63cFc8DA0224d8E1f0C062f3f88c9A` |
-| `PrecisionPoolLens` | `0x00000006435961edbA505ADF268313Fc579a0408` |
-| `ConstantSurchargeHook` | `0x000000B47C5b5435229Fa59bA7b49eCfCb94384E` |
-| `PrecisionPoolPolicy` | `0x0000007c2cE65BD230D97206557eCDbA4FFE39b9` |
+| `PrecisionPoolFactory` | `0x000000Eb27B557aB426d9E99cFd54EC455799e81` |
+| `PrecisionRoute` | `0x000000384711c65f633Aa4487b968ecb7956DB0F` |
+| `PrecisionZap` | `0x000000d193680877a83D3C6bCA73D8726D120c67` |
+| `PrecisionPoolLens` | `0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB` |
+| `ConstantSurchargeHook` | `0x000000Aee5a5acCFe16088A29A555D93eE42ec03` |
+| `PrecisionPoolPolicy` | `0x00000045fc7b570Be4d71F67219508ebD295EC6D` |
 
 Three leading zero bytes each. Salts are in `deploy/<Name>.salt.txt` and the
 broadcast calldata in `deploy/<Name>.deploy.calldata.txt`.
@@ -54,7 +54,7 @@ coin flip that decided every market address. The numbers:
 
 | build | pool creation code | fits the blob? |
 |---|---|---|
-| 200 runs (pinned) | 20,418 B | yes, 4,157 B headroom |
+| 200 runs (pinned) | 20,630 B | yes, 3,945 B headroom |
 | 9,999,999 runs (default) | 24,657 B | **no — factory is unconstructable** |
 
 Measure the **creation-code** column of `forge build --force --sizes`, not the
@@ -92,10 +92,10 @@ mined against one blob is worthless against another.
 |---|---|
 | CREATE2 factory (SafeSummoner) | `0x00000000004473e1f31C8266612e7FD5504e6f2a` |
 | `trustedExecutor` | `0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db` (zRouter executor, live) |
-| pool creation code | 20,418 B (SSTORE2 cap 24,575) |
-| `poolInitCodeHash` | `0x514f8a233e2c54112e81ec5103bfe4181156cf384402045f4508bfafbac93650` |
-| factory creation code | 29,053 B (EIP-3860 cap 49,152) |
-| factory initcode hash | `0x82184821b131d2945fcb770270ca5e8b051f9d89732e968076af8e30a352c3e1` |
+| pool creation code | 20,630 B (SSTORE2 cap 24,575) |
+| `poolInitCodeHash` | `0x897b0181f6b0a84c801ae9934c3e8219c68bd65d46d2d534068ae4cda61cbf10` |
+| factory creation code | 29,245 B (EIP-3860 cap 49,152) |
+| factory initcode hash | `0xb87630079e4971ebde7b67c3a2547d276376c12ed9f251231561645f5d01f59e` |
 
 These rows are regenerated, not hand-written: `node script/precision-prep.mjs`
 emits both payloads and rewrites this table from the artifacts it just built.
