@@ -4,6 +4,19 @@ via_ir = true
 optimizer = true
 optimizer_runs = 9_999_999
 
+# Pinned, not inherited. Forge's default tracks the newest mainnet fork, so an
+# unpinned build changes target with the toolchain - and CREATE2 artifacts in
+# `deploy/` commit to an exact initcode hash, which a silent target change would
+# invalidate. "prague" is what the default already resolved to when this was
+# pinned, so pinning is bytecode-neutral today and load-bearing tomorrow.
+#
+# The floor is CANCUN: PrecisionPool, PrecisionRoute and PrecisionPoolFactory
+# all guard reentrancy with `tstore`/`tload`, which do not exist before it. A
+# pre-Cancun target does not degrade the guards, it fails to compile - but only
+# if someone overrides this, which is the case the comment is here for. Do not
+# deploy this repo to a chain that has not activated Cancun.
+evm_version = "prague"
+
 # Must be an ARCHIVE endpoint: the pin below is far enough back that pruning
 # full nodes (1rpc.io, flashbots, cloudflare) return "historical state is not
 # available" and every forked test errors before its first assertion.

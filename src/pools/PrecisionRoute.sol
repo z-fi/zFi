@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 import {PrecisionPool} from "./PrecisionPool.sol";
 import {PrecisionPoolFactory} from "./PrecisionPoolFactory.sol";
+import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 
 /// @title PrecisionRoute
 /// @notice Executes a multi-pool route as a SINGLE zRouter executor call.
@@ -80,6 +80,7 @@ contract PrecisionRoute {
     error Reentrancy();
     error NotExecutor();
     error BadCheckpoint();
+    error WrongTokenOut();
     error IntentMismatch();
     error InsufficientOutput();
 
@@ -92,6 +93,25 @@ contract PrecisionRoute {
         (factory, trustedExecutor) = (factory_, trustedExecutor_);
     }
 
+    /// @dev Open because the route legitimately receives ETH mid-walk: a hop
+    ///      whose output is native pays this contract, and `routeUpTo` refunds
+    ///      from here. It cannot distinguish those from an unsolicited send, so
+    ///      ETH pushed in by anyone is STRANDED - inert, but unrecoverable.
+    ///
+    ///      DELIBERATELY NOT GIVEN A RESCUE PATH. The obvious fix, a sweep, is
+    ///      the exact bug `zapIn` was fixed for: this contract holds other
+    ///      people's funding during the interval between `checkpoint` and the
+    ///      call that spends it, so anything that moves a raw balance out is a
+    ///      way to take it. Gating a sweep on IDLE and on a privileged caller
+    ///      would work, but it buys back dust by introducing an actor and an
+    ///      invariant that the rest of this contract does not need - and the
+    ///      safety story here is precisely that nothing rests and nobody is
+    ///      trusted with what does. Stranded is the cheaper failure.
+    ///
+    ///      Nothing resting here affects a route. Every entry point spends what
+    ///      it authenticated - `msg.value`, or a checkpointed delta - and
+    ///      `zapIn`'s sweep is floored at the pre-call balance, so a stray
+    ///      balance is never picked up and never paid out.
     receive() external payable {}
 
     function _routeState() internal view returns (uint256 state) {
@@ -161,9 +181,17 @@ contract PrecisionRoute {
     /// @notice Walk `pools` in order, starting from `amountIn` of `tokenIn`.
     /// @dev Native input arrives as msg.value; ERC-20 input must have been
     ///      checkpointed and then transferred here in the same transaction.
+    /// @param tokenOut The asset the last hop must deliver. NOT redundant with
+    ///        `pools`: the output token is otherwise implicit in the path, so a
+    ///        reordered or off-by-one `pools` array silently delivers a
+    ///        different asset and `minOut` is then denominated in the wrong
+    ///        units - a 1e18 threshold against a 6-decimal token passes
+    ///        trivially, and the slippage check protects nothing. Naming the
+    ///        output makes the two agree or the call revert.
     function route(
         address[] calldata pools,
         address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minOut,
         address to
@@ -179,7 +207,9 @@ contract PrecisionRoute {
             _consume(tokenIn, amountIn);
         }
 
-        amountOut = _walk(pools, tokenIn, amountIn, to);
+        address delivered;
+        (amountOut, delivered) = _walk(pools, tokenIn, amountIn, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
         if (amountOut < minOut) revert InsufficientOutput();
         emit Routed(to, pools.length, amountIn, amountOut);
     }
@@ -226,9 +256,12 @@ contract PrecisionRoute {
     ///      return a valid but suboptimal fill, and one that answers
     ///      differently between the probe and the swap makes the route revert -
     ///      no loss, and a property of a pool the caller chose.
+    ///
+    /// @param tokenOut The asset the last hop must deliver; see `route`.
     function routeUpTo(
         address[] calldata pools,
         address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minOut,
         address to,
@@ -249,7 +282,9 @@ contract PrecisionRoute {
         consumed = _maxRouteIn(pools, tokenIn, amountIn);
         if (consumed == 0) revert InsufficientOutput();
 
-        amountOut = _walk(pools, tokenIn, consumed, to);
+        address delivered;
+        (amountOut, delivered) = _walk(pools, tokenIn, consumed, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
         if (amountOut < minOut) revert InsufficientOutput();
 
         // Always the caller's own input token, never an intermediate.
@@ -266,11 +301,15 @@ contract PrecisionRoute {
 
     /// @dev The hop loop, shared by `route` and `routeUpTo` so the executed
     ///      path cannot differ between them.
+    /// @return amt The final hop's output amount.
+    /// @return tin The asset that output is denominated in, returned rather
+    ///         than assumed so the caller can hold the path to a named
+    ///         `tokenOut`.
     function _walk(address[] calldata pools, address tokenIn, uint256 amountIn, address to)
         internal
-        returns (uint256 amt)
+        returns (uint256 amt, address tin)
     {
-        address tin = tokenIn;
+        tin = tokenIn;
         amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
             address pool = pools[i];
@@ -312,30 +351,56 @@ contract PrecisionRoute {
     ///      there. Output is monotone increasing in size, so a zero at `b` means
     ///      no smaller size fills either, and `b` is the answer whenever any
     ///      size does.
+    ///
+    ///      THE TOKEN PATH IS RESOLVED ONCE, up front, and handed to every
+    ///      probe. `token0`/`token1` are immutable per pool and the sequence of
+    ///      assets a route touches does not depend on the size being probed, so
+    ///      reading them inside the search would pay two cold external calls per
+    ///      hop per probe - up to ~256 of them on a two-hop clamp, for answers
+    ///      that cannot have changed. The probes then make exactly one call per
+    ///      hop, the quote itself.
     function _maxRouteIn(address[] calldata pools, address tokenIn, uint256 amountIn)
         internal
         view
         returns (uint256)
     {
+        address[] memory path = _path(pools, tokenIn);
+
         // Fast path: the whole request fits, so there is nothing to clamp.
-        if (_routeOut(pools, tokenIn, amountIn) != 0) return amountIn;
+        if (_routeOut(pools, path, amountIn) != 0) return amountIn;
 
         // The band admits the full size, so the only thing that stopped it was
         // a zero output - which only gets worse as the size falls.
-        if (_routeRoom(pools, tokenIn, amountIn)) return 0;
+        if (_routeRoom(pools, path, amountIn)) return 0;
 
         // Invariant: `lo` has room, `hi` does not. Zero has room.
         uint256 lo;
         uint256 hi = amountIn;
         while (hi - lo > 1) {
             uint256 mid = lo + (hi - lo) / 2;
-            if (_routeRoom(pools, tokenIn, mid)) lo = mid;
+            if (_routeRoom(pools, path, mid)) lo = mid;
             else hi = mid;
         }
         if (lo == 0) return 0;
         // The largest size the band takes is only useful if it also produces
         // something. `_routeOut` folds in every hop's zero-output refusal.
-        return _routeOut(pools, tokenIn, lo) == 0 ? 0 : lo;
+        return _routeOut(pools, path, lo) == 0 ? 0 : lo;
+    }
+
+    /// @dev The asset entering each hop: `path[0]` is `tokenIn` and `path[i]`
+    ///      is whatever hop `i-1` produced. Size-independent, so the search
+    ///      resolves it once. Membership is not checked here for the same
+    ///      reason `_routeOut` does not check it: this only feeds a view search
+    ///      whose result `_walk` re-derives against `factory.isPool`.
+    function _path(address[] calldata pools, address tokenIn) internal view returns (address[] memory path) {
+        path = new address[](pools.length);
+        address tin = tokenIn;
+        for (uint256 i; i < pools.length; ++i) {
+            path[i] = tin;
+            PrecisionPool p = PrecisionPool(payable(pools[i]));
+            address t0 = p.token0();
+            tin = tin == t0 ? p.token1() : t0;
+        }
     }
 
     /// @dev Whether every hop's BAND admits the route at this size, ignoring
@@ -347,23 +412,17 @@ contract PrecisionRoute {
     ///      Chains `amountOut` even when it is zero. A hop handed nothing simply
     ///      does not move its own price, so it reports room - and the caller's
     ///      single zero-output check at the end is what rejects that size.
-    function _routeRoom(address[] calldata pools, address tokenIn, uint256 amountIn)
+    function _routeRoom(address[] calldata pools, address[] memory path, uint256 amountIn)
         internal
         view
         returns (bool)
     {
-        address tin = tokenIn;
         uint256 amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
-            PrecisionPool p = PrecisionPool(payable(pools[i]));
-            address t0 = p.token0();
-            address tout = tin == t0 ? p.token1() : t0;
-
-            (uint256 out, bool hasRoom) = p.quoteTransition(address(this), tin, amt);
+            (uint256 out, bool hasRoom) =
+                PrecisionPool(payable(pools[i])).quoteTransition(address(this), path[i], amt);
             if (!hasRoom) return false;
-
             amt = out;
-            tin = tout;
         }
         return true;
     }
@@ -391,23 +450,16 @@ contract PrecisionRoute {
     ///      it, paying two fees to move one price back and forth, and screening
     ///      for it would charge every honest route a quadratic scan to prevent
     ///      a caller from wasting their own money.
-    function _routeOut(address[] calldata pools, address tokenIn, uint256 amountIn)
+    function _routeOut(address[] calldata pools, address[] memory path, uint256 amountIn)
         internal
         view
         returns (uint256 amt)
     {
-        address tin = tokenIn;
         amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
-            PrecisionPool p = PrecisionPool(payable(pools[i]));
-            address t0 = p.token0();
-            address tout = tin == t0 ? p.token1() : t0;
-
-            (uint256 out, bool fits) = p.quoteExactIn(address(this), tin, amt);
+            (uint256 out, bool fits) = PrecisionPool(payable(pools[i])).quoteExactIn(address(this), path[i], amt);
             if (!fits) return 0;
-
             amt = out;
-            tin = tout;
         }
     }
 

@@ -158,7 +158,7 @@ contract PrecisionRouteSearchPredicateTest is Test {
     ///      call in the sequence.
     function _clampRaw(uint256 ask) internal returns (bool ok, bytes memory ret) {
         x.mint(address(this), ask);
-        bytes memory data = abi.encodeCall(PrecisionRoute.routeUpTo, (_pools(), address(x), ask, 0, user, user));
+        bytes memory data = abi.encodeCall(PrecisionRoute.routeUpTo, (_pools(), address(x), address(y), ask, 0, user, user));
         router.checkpoint(address(x), keccak256(data));
         x.transfer(address(router), ask);
         (ok, ret) = address(router).call(data);

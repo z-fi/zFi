@@ -173,7 +173,13 @@ contract PrecisionPoolLens {
         if (kept > type(uint128).max - b.rIn) return (0, false);
 
         uint256 inAfterFee = net - feeAmount;
-        amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, b.rOut + b.vOut, b.rIn + b.vIn + inAfterFee);
+        // Mirrors the same guard in `PrecisionPool._transitionAt`. This function
+        // is a REIMPLEMENTATION of that one rather than a call to it, so every
+        // branch has to be carried across or the lens reverts where the pool
+        // returns - here, on a drained input side where the divisor is zero too.
+        if (inAfterFee != 0) {
+            amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, b.rOut + b.vOut, b.rIn + b.vIn + inAfterFee);
+        }
         if (amountOut > b.rOut) return (0, false);
 
         uint256 nextIn = b.rIn + b.vIn + kept;
@@ -494,6 +500,12 @@ contract PrecisionPoolLens {
     /// @notice Return pools in a page where `user` holds LP shares.
     /// @dev Amounts are the rounded-down pro-rata reserves redeemable today;
     ///      accrued hook and creator fees are excluded.
+    ///
+    ///      A POSITION REPORTING (0, 0) CANNOT BE WITHDRAWN. `removeLiquidity`
+    ///      refuses a burn that pays out nothing on both sides, so a holding
+    ///      whose share of both reserves floors to zero is listed here - the
+    ///      shares are real - but its exit reverts. Do not render a withdraw
+    ///      action for one; there is nothing to withdraw and the call will fail.
     function positionsOf(address user, uint256 start, uint256 count) external view returns (Position[] memory out) {
         address[] memory pools = factory.poolsSlice(start, count);
         out = new Position[](pools.length);

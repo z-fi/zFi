@@ -284,6 +284,14 @@ library PriceTape {
 
 /// @title IPriceTape
 /// @notice Minimal read interface for charting any adopting contract.
+///
+/// @dev NOT AN ORACLE. A tape records what an adopter printed, and an adopter
+///      prints executed trades - so a bar costs whatever the smallest trade on
+///      that venue costs, and `high`/`low` are extrema that one such trade
+///      fixes for the life of the bar. Nothing here is time-weighted, nothing
+///      is manipulation-resistant, and an adopter is free to print whatever it
+///      likes. Read it to draw a candlestick. Do not settle, liquidate,
+///      collateralise, or price anything against it.
 /// @dev Deliberately tiny: one call returns everything a candlestick chart
 ///      needs. A client that speaks this interface can chart every adopter
 ///      without knowing anything else about them, which is what makes this a
@@ -295,8 +303,27 @@ interface IPriceTape {
     /// @notice The newest `count` bars for `period`, newest first, packed.
     /// @dev Zero entries are buckets in which nothing traded. Decode with
     ///      `PriceTape.decode`: (bucket, open, high, low, close, volume, count).
-    ///      Prices are `token1` per `token0`, 1e18-scaled and decimal-adjusted,
-    ///      so a bar is direction-free. Volume is in `token0` units.
+    ///
+    ///      Prices are RAW `token1` per RAW `token0`, scaled by 1e18, so a bar
+    ///      is direction-free. Token decimals are NOT normalised: a client
+    ///      charting a non-18-decimal pair must apply the decimal difference
+    ///      itself, from `tapePair()`. (An earlier version of this line claimed
+    ///      the opposite; the adopters never did it, and the doc is the spec for
+    ///      an interface whose whole point is that one client reads every
+    ///      implementation, so it is the doc that was wrong.)
+    ///
+    ///      Volume is in `token0` units, and it is a LOWER BOUND rather than a
+    ///      measurement. Each accumulation re-packs the running total into the
+    ///      24-bit mantissa of a float32, so once a bar's total passes 2**n an
+    ///      individual trade below 2**(n-24) adds exactly zero, and `fold`
+    ///      compounds the same truncation into the coarse bar. The relative
+    ///      error is under ~1.2e-7 per accumulation and invisible on a chart,
+    ///      which is what this field is for; do not settle anything against it.
+    ///
+    ///      A COARSE BAR LAGS BY ONE FINE BAR. Coarse bars are folded from fine
+    ///      bars only as those finish, so the live fine bar - up to one fine
+    ///      period of the most recent trading - is never included in the coarse
+    ///      tape. Read the fine tape for the leading edge.
     function tape(uint256 period, uint256 count) external view returns (uint256[] memory);
 
     /// @notice The pair a tape prices, as (base, quote). Native asset is address(0).

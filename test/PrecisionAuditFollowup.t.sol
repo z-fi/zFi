@@ -286,7 +286,7 @@ contract PrecisionAuditFollowupTest is Test {
 
         uint256 before = user.balance;
         bytes memory ret = exec.send{value: 10e18}(
-            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), 10e18, 0, user))
+            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), address(0), 10e18, 0, user))
         );
         uint256 out = abi.decode(ret, (uint256));
 
@@ -310,7 +310,7 @@ contract PrecisionAuditFollowupTest is Test {
 
         vm.expectRevert(PrecisionRoute.InsufficientOutput.selector);
         exec.send{value: 10e18}(
-            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), 10e18, 10e18, user))
+            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), address(0), 10e18, 10e18, user))
         );
     }
 
@@ -326,7 +326,7 @@ contract PrecisionAuditFollowupTest is Test {
         bool settled;
         try exec.send{value: 10e18}(
             address(router),
-            abi.encodeCall(PrecisionRoute.routeUpTo, (pools, address(0), 10e18, 0, user, user))
+            abi.encodeCall(PrecisionRoute.routeUpTo, (pools, address(0), address(0), 10e18, 0, user, user))
         ) returns (bytes memory ret) {
             (uint256 out, uint256 consumed) = abi.decode(ret, (uint256, uint256));
             settled = true;

@@ -185,7 +185,7 @@ contract PrecisionPoolRoutedPartialFillTest is Test {
 
         factory.checkpoint(r);
         usdc.transfer(address(factory), ask);
-        vm.expectRevert(PrecisionPool.UnsupportedToken.selector);
+        vm.expectRevert(PrecisionPool.HookedNoPartialFill.selector);
         factory.executePrefundedSwapUpTo(r);
     }
 

@@ -58,6 +58,26 @@ interface IPrecisionHook {
 ///          holding some of the other side - that residue is retained fees and
 ///          belongs to the LPs.
 ///
+///      AN UNNAMED POOL CAN BE SEEDED BY ANYONE, AT ANY IN-BAND PRICE. When
+///      `feeRecipient` is zero there is no creator to check, so the first
+///      depositor sets the opening price and does not need the factory to do
+///      it. A squatter can therefore seed a market someone else intended to
+///      open, pin it at a corner of the band, and leave `createAndSeed` to
+///      revert `Exists()` for the real creator, who is left depositing
+///      proportionally into a price they did not choose. `MIN_RESOLUTION` and
+///      the seed price tolerance make this cost real capital rather than dust,
+///      and a bad opening price is arbitrageable - but on a wide band a corner
+///      is cheap to pin. Deploy anything with a frontend as a NAMED market
+///      (`feeRecipient != 0`), which only its creator can seed.
+///
+///      EVERY POOL'S LP TOKEN IS CALLED "Precision LP" / "pLP". The name is a
+///      compile-time constant because the EIP-2612 domain caches its hash, so
+///      wallets and explorers will render the shares of every market in this
+///      family identically and only the token address distinguishes them.
+///      Signatures are still domain-separated by address and chain ID, so this
+///      is not a replay concern; it is a display one, and interfaces should
+///      label a position by its pair and band rather than by this symbol.
+///
 ///      This is auto-compounding growing-K behaviour, deliberately: fees
 ///      accrue to share value with no separate accumulator and no harvest
 ///      call. Quoters and any limit-order-style integration should compute
@@ -186,6 +206,7 @@ contract PrecisionPool is ERC20, IPriceTape {
     error Bad();
     error NotHook();
     error Overflow();
+    error HookedNoPartialFill();
     error NotFactory();
     error Reentrancy();
     error ZeroAmount();
@@ -274,10 +295,29 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      Closing this does NOT make the balance unforgeable: `selfdestruct`
     ///      and block rewards reach a contract without calling it, so a
     ///      native-token0 pool can still hold ETH no entry point ever credited.
-    ///      That surplus is stranded rather than stealable, and deliberately so
-    ///      - every entry point ties the amount it credits to `msg.value` or to
-    ///      a pull it performed itself, never to the balance it happens to find,
-    ///      so nobody can claim it by declaring it. The alternative, a sweep,
+    ///      That surplus is stranded rather than stealable - but NOT uniformly
+    ///      by this contract's own doing, and the distinction matters to anyone
+    ///      auditing the boundary:
+    ///
+    ///        - The DIRECT entry points (`swapExactIn`, `swapUpTo`,
+    ///          `addLiquidityExact`) tie what they credit to `msg.value` or to
+    ///          a pull they performed themselves, so the guarantee is local.
+    ///        - The FACTORY entry points (`swapFromFactory`,
+    ///          `swapUpToFromFactory`, `addLiquidityFromFactory`) do not pull.
+    ///          They accept a DECLARED amount and bound it only by
+    ///          `available - reserve`, so on the ERC-20 side an unaccounted
+    ///          surplus sitting here is within what a declaration could reach.
+    ///          Native value is still checked against `msg.value` on all three.
+    ///
+    ///      Solvency holds either way - reserves never exceed balances - and
+    ///      nothing is currently claimable, because `PrecisionPoolFactory`
+    ///      forwards exactly what it declares and proves it did with its own
+    ///      checkpoint. But that is a FACTORY invariant, not one enforced here,
+    ///      and it is the reason `factory` is immutable and the settlement
+    ///      functions are gated to it. Anyone reviewing this pool in isolation
+    ///      should not take "declared equals forwarded" on the pool's word.
+    ///
+    ///      The alternative, a sweep,
     ///      would be a permission to move funds out of an otherwise
     ///      permissionless immutable contract, which is a strictly worse thing
     ///      to hold than the dust it recovers.
@@ -319,6 +359,17 @@ contract PrecisionPool is ERC20, IPriceTape {
     /// @dev How far a squared price sits outside the band; zero when inside.
     ///      Used to let a deposit into an out-of-band pool through only when it
     ///      does not make the excursion worse.
+    ///
+    ///      THE TWO SIDES ARE NOT REALLY COMMENSURABLE. A miss below the floor
+    ///      and a miss above the ceiling are both returned as bare distances in
+    ///      squared-price units and compared as if interchangeable, so a
+    ///      deposit that carried the price from one side of the band clean over
+    ///      to the other could in principle pass on a smaller number while
+    ///      being no better. It is unreachable rather than handled: the only
+    ///      caller applies this to a PROPORTIONAL deposit, which moves the
+    ///      ratio by rounding alone, and no rounding step crosses a whole band.
+    ///      That is a property of the caller, not of this function - anything
+    ///      else that starts comparing misses must re-establish it.
     function _bandMiss(uint256 ratio) internal view returns (uint256) {
         uint256 lo = sqrtPLow;
         uint256 hiExclusive = sqrtPHigh + 1;
@@ -426,6 +477,19 @@ contract PrecisionPool is ERC20, IPriceTape {
 
     /// @notice Pull exactly `amountIn` from the caller and settle the swap.
     /// @dev Pulls and settles the input in the same transaction.
+    ///
+    ///      NO DEADLINE. A transaction that sits in the mempool executes
+    ///      whenever it is finally mined, so a direct caller is writing an
+    ///      option the market can exercise against them - the standard reason
+    ///      AMM routers carry one. It is omitted here rather than forgotten:
+    ///      every routed path already has a deadline at the router, and the
+    ///      loss on this path is bounded by `minOut`, which the caller sets.
+    ///      What a deadline adds over `minOut` is protection against a trade
+    ///      that is still ABOVE the floor but stale, and paying for that on
+    ///      every swap to serve direct callers - who are the minority here and
+    ///      can set `minOut` tightly - was the trade rejected. If you call this
+    ///      directly from an EOA, set `minOut` as though there were no deadline,
+    ///      because there is not.
     function swapExactIn(address tokenIn, uint256 amountIn, uint256 minOut, address to)
         external
         payable
@@ -567,6 +631,28 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      grows - so the fillable set is an interval rather than a prefix or
     ///      a suffix, and the caller checks that half itself. Bisecting the
     ///      conjunction finds nothing.
+    ///
+    ///      THAT MONOTONICITY IS CONDITIONAL ON THE POOL BEING IN BAND, and the
+    ///      hardcoded `true` at `amountIn == 0` is what hides it. A pool can sit
+    ///      OUTSIDE its band without anyone misbehaving - both virtual reserves
+    ///      are floored functions of supply, so burning toward the dead minimum
+    ///      can leave a state the band no longer contains, which is the case
+    ///      `_addLiquidity`'s `_bandMiss` repair path exists for. From out
+    ///      there, a swap in the direction of the band moves the price back
+    ///      INTO it, so the real predicate runs false -> true -> false: an
+    ///      interval, not a suffix, and the zero case is a claim about an empty
+    ///      trade rather than a report of the pool's actual state.
+    ///
+    ///      THIS IS NOT A SAFETY BUG, and the reason is worth stating because
+    ///      it is not the bisection that saves it. `lo` is only ever advanced to
+    ///      a size a real probe confirmed, `_swapExact` re-runs `hasRoom` on the
+    ///      size it is about to commit, and a `lo` of zero is refused outright.
+    ///      The worst outcome is a suboptimal or empty partial fill on a pool
+    ///      that was already out of band - reachable only through the same
+    ///      dust-scale regime, and repaired by a deposit, not by a better
+    ///      search. Do not "fix" the zero case by reporting the live band state
+    ///      here without re-reading `_maxIn` and `PrecisionRoute._maxRouteIn`
+    ///      together: both encode "zero has room" as a loop invariant.
     function _transitionAt(Transition memory t, uint256 amountIn)
         internal
         view
@@ -586,7 +672,15 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (kept > type(uint128).max - t.rIn) return (0, 0, 0, 0, false);
 
         uint256 inAfterFee = net - feeAmount;
-        amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, t.rOut + t.vOut, t.rIn + t.vIn + inAfterFee);
+        // A priced amount of zero buys nothing, and computing that explicitly
+        // rather than through `fullMulDiv` avoids the one state where the
+        // divisor is also zero: a pool burned down to its dead shares on a band
+        // wide enough to floor `_virtual0` away has `rIn + vIn == 0`, and
+        // `fullMulDiv(0, y, 0)` reverts with `MulDivFailed` instead of the
+        // `InsufficientOutput` the caller should see.
+        if (inAfterFee != 0) {
+            amountOut = FixedPointMathLib.fullMulDiv(inAfterFee, t.rOut + t.vOut, t.rIn + t.vIn + inAfterFee);
+        }
         if (amountOut > t.rOut) return (0, 0, 0, 0, false);
 
         uint256 nextIn = t.rIn + t.vIn + kept;
@@ -737,7 +831,7 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (to == address(0) || to == address(this)) revert Bad();
         uint256 r0 = reserve0;
         uint256 r1 = reserve1;
-        (uint256 available0, uint256 available1, uint256 balance0, uint256 balance1) = _assertBacked(r0, r1);
+        (uint256 available0, uint256 available1) = _assertBacked(r0, r1);
         uint256 supply = totalSupply();
         if (supply == 0) revert InsufficientLiquidity();
 
@@ -762,7 +856,7 @@ contract PrecisionPool is ERC20, IPriceTape {
             // it is searching for - so partial fill is refused there rather
             // than approximated. Hooked pools keep the all-or-nothing
             // behaviour and callers size them from the lens.
-            if (hook != address(0)) revert UnsupportedToken();
+            if (hook != address(0)) revert HookedNoPartialFill();
             consumed = _maxIn(t, amountIn);
             if (consumed == 0) revert InsufficientOutput();
         }
@@ -787,15 +881,15 @@ contract PrecisionPool is ERC20, IPriceTape {
 
         // Keep the input less the hook and creator cuts in the reserves.
         _setReserves(next0, next1);
-        _pay(zeroForOne ? token1 : token0, to, amountOut, zeroForOne ? balance1 : balance0);
+        _pay(zeroForOne ? token1 : token0, to, amountOut);
 
         // Return the unconsumed input. Written after reserves are settled so a
-        // callback-capable token sees committed state, and paid from the
-        // balance measured before the output left, since that is the figure
-        // `_pay` reconciles against.
+        // callback-capable token sees committed state. `_pay` measures its own
+        // before-balance, so the output having already left is accounted for
+        // rather than something this call has to compensate for.
         if (consumed < amountIn) {
             unchecked {
-                _pay(tokenIn, refundTo, amountIn - consumed, zeroForOne ? balance0 : balance1);
+                _pay(tokenIn, refundTo, amountIn - consumed);
             }
         }
 
@@ -826,6 +920,24 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      recorded here rather than repaired because the repair would be a
     ///      per-pool scale factor, and a bar whose units depend on which pool
     ///      emitted it is worse for readers than a bar that is legibly empty.
+    ///
+    ///      THIS TAPE IS NOT AN ORACLE. DO NOT PRICE ANYTHING AGAINST IT.
+    ///      It is a chart, and it is CHEAP TO POISON - by design, not by
+    ///      oversight. The price printed is the executed one, fee included, and
+    ///      the fee is deliberately rounded up from a floored remainder, so
+    ///      below roughly `FEE_DENOM / fee` raw units of input a trade pays a
+    ///      large multiple of the nominal rate and prints a correspondingly
+    ///      distorted price. At 500 pips that is about 2,000 raw units - a
+    ///      couple of dollars on an 8-decimal token0. `high` and `low` are
+    ///      extrema over the bar, so a single such trade marks the bar for its
+    ///      whole life, and `fold` carries it into the coarse tape.
+    ///
+    ///      There is no defence here worth building, because the same bar is
+    ///      also movable by anyone willing to trade the price there and back
+    ///      for the cost of two fees. A contract that needs a manipulation-
+    ///      resistant price must derive it from the reserves, over a window it
+    ///      chooses, with its own cost-of-attack analysis. Charting is the
+    ///      whole intended use.
     function _record(bool zeroForOne, uint256 amountIn, uint256 amountOut) internal {
         uint256 price = zeroForOne
             ? FixedPointMathLib.fullMulDiv(amountOut, 1e18, amountIn)
@@ -864,7 +976,39 @@ contract PrecisionPool is ERC20, IPriceTape {
     }
 
     /// @notice Return the hook surcharge for a trade, clamped to the fee ceiling.
-    /// @dev A revert, out-of-gas call, or invalid return is treated as zero.
+    /// @dev A revert or invalid return is treated as zero. RUNNING OUT OF GAS
+    ///      IS NOT, and the difference is the whole point of the check below.
+    ///
+    ///      MAPPING FAILURE TO ZERO IS SAFE HERE AND NOT SAFE IN `afterSwap`,
+    ///      and the reason is arithmetic rather than judgement. Both run under
+    ///      the same budget and the same 63/64 rule, so in both the callee gets
+    ///      `min(HOOK_GAS, 63/64 * gasleft())`. The question is whether a
+    ///      trader can squeeze the callee out of gas and still have their own
+    ///      call succeed - because on THIS path that would buy them the trade
+    ///      at base fee with the surcharge silently dropped.
+    ///
+    ///      They cannot. Let `G` be the gas left at the staticcall, `C` what
+    ///      `feeFor` needs, and `R` the rest of the swap. Starving it requires
+    ///      `63/64 * G < C`; an out-of-gas callee consumes everything
+    ///      forwarded, so what survives is `G/64`, and finishing requires
+    ///      `G/64 >= R`. Together those give `R < C/63`. And `C` cannot exceed
+    ///      `HOOK_GAS`, because that is all the hook is ever handed - so
+    ///      starvation needs the ENTIRE remainder of the swap to cost under
+    ///      `HOOK_GAS / 63`, about 2,400 gas. Two reserve writes alone exceed
+    ///      that, before the transfer or the tape. The attempt costs the trader
+    ///      63 times what it costs the hook, which is the whole reason it is
+    ///      not worth defending against.
+    ///
+    ///      `afterSwap` is starvable for exactly the reason this is not: it
+    ///      runs LAST, so its `R` is approximately zero and the inequality is
+    ///      satisfiable. The asymmetry the header describes is real and this is
+    ///      where it comes from.
+    ///
+    ///      An earlier revision guarded this with a `gasleft()` floor. That was
+    ///      removed: it defended a threat the 63/64 rule already closes, while
+    ///      adding a revert to a `view` that quoting callers may legitimately
+    ///      run under a bounded gas budget. See
+    ///      test_FeeForCannotBeStarvedAtAnyGasLimit.
     function extraFee(address sender, address tokenIn, uint256 amountIn) public view returns (uint256) {
         address h = hook;
         if (h == address(0)) return 0;
@@ -913,14 +1057,23 @@ contract PrecisionPool is ERC20, IPriceTape {
 
     /// @notice Sweep accrued creator fees.
     /// @dev Callable only by `feeRecipient`.
+    ///
+    ///      BOTH SIDES ARE PAID OR NEITHER IS. If one token reverts on transfer
+    ///      - a paused token, a `to` blacklisted by one issuer - the other side
+    ///      cannot be collected either. `to` is an argument precisely so the
+    ///      recipient-specific cases are recoverable by naming a different
+    ///      address; a token-wide pause simply has to be waited out. Accruals
+    ///      are uint256 and nothing expires, so nothing is lost by waiting.
     function collectCreatorFees(address to) external nonReentrant returns (uint256 a0, uint256 a1) {
         if (msg.sender != feeRecipient) revert NotFeeRecipient();
         if (to == address(0) || to == address(this)) revert Bad();
-        (,, uint256 balance0, uint256 balance1) = _assertBacked(reserve0, reserve1);
+        // Solvency is still asserted before anything is paid out; `_pay` takes
+        // its own snapshot, so the balances themselves are not needed here.
+        _assertBacked(reserve0, reserve1);
         (a0, a1) = (creatorOwed0, creatorOwed1);
         (creatorOwed0, creatorOwed1) = (0, 0);
-        if (a0 != 0) _pay(token0, to, a0, balance0);
-        if (a1 != 0) _pay(token1, to, a1, balance1);
+        if (a0 != 0) _pay(token0, to, a0);
+        if (a1 != 0) _pay(token1, to, a1);
         emit CreatorFeeCollected(to, a0, a1);
     }
 
@@ -929,11 +1082,11 @@ contract PrecisionPool is ERC20, IPriceTape {
     function collectHookFees(address to) external nonReentrant returns (uint256 a0, uint256 a1) {
         if (msg.sender != hook) revert NotHook();
         if (to == address(0) || to == address(this)) revert Bad();
-        (,, uint256 balance0, uint256 balance1) = _assertBacked(reserve0, reserve1);
+        _assertBacked(reserve0, reserve1);
         (a0, a1) = (hookOwed0, hookOwed1);
         (hookOwed0, hookOwed1) = (0, 0);
-        if (a0 != 0) _pay(token0, to, a0, balance0);
-        if (a1 != 0) _pay(token1, to, a1, balance1);
+        if (a0 != 0) _pay(token0, to, a0);
+        if (a1 != 0) _pay(token1, to, a1);
         emit HookFeeCollected(to, a0, a1);
     }
 
@@ -1017,7 +1170,7 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         uint256 r0 = reserve0;
         uint256 r1 = reserve1;
-        (uint256 available0, uint256 available1, uint256 balance0, uint256 balance1) = _assertBacked(r0, r1);
+        (uint256 available0, uint256 available1) = _assertBacked(r0, r1);
         // Do not credit unrelated balance surplus to this deposit.
         if (amount0 > available0 - r0 || amount1 > available1 - r1) {
             revert BalanceDeficit();
@@ -1150,8 +1303,8 @@ contract PrecisionPool is ERC20, IPriceTape {
         _mint(to, lp);
 
         // Write reserves before refunding so callbacks see settled state.
-        if (amount0 > used0) _pay(token0, refundTo, amount0 - used0, balance0);
-        if (amount1 > used1) _pay(token1, refundTo, amount1 - used1, balance1);
+        if (amount0 > used0) _pay(token0, refundTo, amount0 - used0);
+        if (amount1 > used1) _pay(token1, refundTo, amount1 - used1);
 
         emit AddLiquidity(to, used0, used1, lp);
     }
@@ -1178,8 +1331,33 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (lp > MAX_LIQUIDITY) revert InsufficientLiquidity();
 
         // Round requirements up so the pool is not underfunded.
-        used0 = FixedPointMathLib.fullMulDivUp(FixedPointMathLib.fullMulDivUp(lp, sh - s, sh), WAD, s);
+        //
+        // ONE CEILING, NOT TWO. The requirement is `L * (sh - s) * WAD /
+        // (sh * s)`, and computing it as two nested `fullMulDivUp`s rounds up
+        // twice - overshooting the true figure by as much as `WAD / s + 1` raw
+        // units. `lp` is floor-derived from `in0`, so the exact requirement is
+        // always affordable; the overshoot is not, and the check at the end of
+        // this function then rejects a seed whose amounts the caller computed
+        // correctly from the same formula. It is also ASYMMETRIC - `used1`
+        // ceilings once and provably cannot overshoot - so the failure looks
+        // arbitrary from outside. At a low `s` the gap is large: around 1e8 raw
+        // units at `s = 1e10`.
+        //
+        // Fusing the two divisions removes it exactly, and both intermediates
+        // stay in range: `(sh - s) * WAD <= 1e54` and `sh * s <= 1e72`, with
+        // `fullMulDivUp` carrying the 512-bit numerator.
+        used0 = FixedPointMathLib.fullMulDivUp(lp, (sh - s) * WAD, sh * s);
         used1 = FixedPointMathLib.fullMulDivUp(lp, s - sl, WAD);
+
+        // Refuse anything the reserves could not hold before doing arithmetic
+        // on it. `_setReserves` would reject these amounts at the end of the
+        // deposit anyway, so nothing new is turned away - but `maxY` below
+        // divides `x * sh^2` by 1e36, and for a seed near the bottom of the
+        // price range `used0` grows by a factor of `WAD / s`. That quotient
+        // leaves uint256 well before `used0` itself does, so without this the
+        // caller gets Solady's `MulDivFailed` instead of a stated reason.
+        // Corrections below only ever lower these, so checking here is enough.
+        if (used0 > type(uint128).max || used1 > type(uint128).max) revert InsufficientLiquidity();
 
         // Remove rounding excess if it would put the discrete price outside
         // the configured range.
@@ -1217,8 +1395,16 @@ contract PrecisionPool is ERC20, IPriceTape {
     }
 
     /// @notice Burn LP shares for a pro-rata slice of both reserves.
-    /// @dev Deliberately unguarded by the range and tradeability postconditions
-    ///      that `_addLiquidity` enforces: an exit that can revert is a worse
+    /// @dev Two things here can revert - a zero-payout burn, and a token that
+    ///      does not credit the recipient exactly. Neither is a price guard:
+    ///      the RANGE and TRADEABILITY postconditions that `_addLiquidity`
+    ///      enforces are deliberately absent, because an exit blocked by where
+    ///      the price happens to sit is a worse failure than the one such a
+    ///      guard would prevent. See `removeLiquidityLossy` for the exit that
+    ///      survives a token which starts taking a fee on transfer.
+    ///
+    ///      Unguarded by those postconditions, then, and for this reason: an
+    ///      exit that can revert on price is a worse
     ///      failure than the one a guard here would prevent. Both virtual
     ///      reserves are floored functions of supply, so a burn can move the
     ///      represented price by up to one raw unit of virtual reserve even
@@ -1235,23 +1421,93 @@ contract PrecisionPool is ERC20, IPriceTape {
         nonReentrant
         returns (uint256 amount0, uint256 amount1)
     {
+        return _removeLiquidity(lp, min0, min1, to, true);
+    }
+
+    /// @notice Pro-rata exit that tolerates a token crediting the recipient
+    ///         less than it debits this pool.
+    ///
+    /// @dev THE ESCAPE HATCH FOR A FEE SWITCH FLIPPED AFTER DEPLOYMENT.
+    ///      `_pullExact` and `_pay` both demand exact movement, which is what
+    ///      keeps the reserves honest - but it means a token that LATER starts
+    ///      taking a fee on transfer closes every path at once: no deposit, no
+    ///      swap, no withdrawal, no fee collection. The pool is immutable and
+    ///      the LP funds are then locked for good, not merely degraded. This is
+    ///      not hypothetical; USDT ships an owner-settable fee that is currently
+    ///      zero, and plenty of bridged assets are upgradeable.
+    ///
+    ///      So this path keeps the check the accounting actually depends on -
+    ///      that THIS POOL was debited exactly `amount`, so the reserves it
+    ///      writes stay true - and drops only the check on what the recipient
+    ///      received. The shortfall is the caller's, knowingly.
+    ///
+    ///      IT GRANTS NO NEW AUTHORITY. Still pro-rata, still burns the
+    ///      caller's own shares, still cannot reach unaccounted surplus or
+    ///      anything owed to the hook or the creator, and still refuses a
+    ///      zero-payout burn. The pool stays untradeable under such a token,
+    ///      correctly - this only lets the LPs out.
+    ///
+    ///      `min0`/`min1` bound the amounts DEBITED FROM THE RESERVES, which is
+    ///      all this contract can observe; under a transfer fee the caller
+    ///      receives less than that and must size the shortfall themselves.
+    ///      Use `removeLiquidity` unless it is actually reverting.
+    ///
+    ///      IT COVERS ONE FEE SHAPE, AND THE OTHER CANNOT BE SERVED HERE. This
+    ///      survives a token that debits the pool exactly `amount` and credits
+    ///      the recipient less. A token that instead debits `amount + fee` -
+    ///      charging on top rather than out of - still fails the debit check,
+    ///      and widening that check to `>= amount` would be a real hazard
+    ///      rather than a fix: the reserves are written down by `amount`, so
+    ///      the extra is taken out of the balance backing OTHER holders. Once
+    ///      it exceeds any surplus the pool happens to hold, `_assertBacked`
+    ///      fails from then on and every remaining path - including this one -
+    ///      reverts for everyone. One LP's exit would brick the pool.
+    ///
+    ///      Writing the reserves down by the larger observed debit instead
+    ///      keeps the backing intact but pays the exiting LP more than their
+    ///      shares, which socialises the fee just as directly. There is no
+    ///      local answer: a token that charges the sender ON TOP of a transfer
+    ///      is incompatible with proportional accounting, and the honest
+    ///      position is that such a token must not be used in a pool.
+    function removeLiquidityLossy(uint256 lp, uint256 min0, uint256 min1, address to)
+        external
+        nonReentrant
+        returns (uint256 amount0, uint256 amount1)
+    {
+        return _removeLiquidity(lp, min0, min1, to, false);
+    }
+
+    function _removeLiquidity(uint256 lp, uint256 min0, uint256 min1, address to, bool exactCredit)
+        internal
+        returns (uint256 amount0, uint256 amount1)
+    {
         if (lp == 0) revert ZeroAmount();
         if (to == address(0) || to == address(this)) revert Bad();
         uint256 r0 = reserve0;
         uint256 r1 = reserve1;
-        (,, uint256 balance0, uint256 balance1) = _assertBacked(r0, r1);
+        _assertBacked(r0, r1);
         uint256 supply = totalSupply();
 
         // Rounds down, so the dust stays with the holders who remain.
         amount0 = FixedPointMathLib.fullMulDiv(lp, r0, supply);
         amount1 = FixedPointMathLib.fullMulDiv(lp, r1, supply);
+        // A burn that pays out nothing on either side is refused. It is not a
+        // theft - the caller is destroying their own shares for free - but it
+        // shrinks the supply the virtual offsets are derived from while leaving
+        // the real reserves untouched, which walks the represented price toward
+        // the bare `r1/r0` ratio and, for a mid-band position, out of the band.
+        // Self-funded and needing on the order of `max(r0, r1)` transactions to
+        // matter, so not practically exploitable - but it is a free lever on the
+        // one invariant the whole contract is built around, and no honest caller
+        // wants a zero-payout withdrawal.
+        if (amount0 == 0 && amount1 == 0) revert ZeroAmount();
         if (amount0 < min0 || amount1 < min1) revert InsufficientOutput();
 
         _burn(msg.sender, lp);
         _setReserves(r0 - amount0, r1 - amount1);
 
-        if (amount0 != 0) _pay(token0, to, amount0, balance0);
-        if (amount1 != 0) _pay(token1, to, amount1, balance1);
+        if (amount0 != 0) _settle(token0, to, amount0, exactCredit);
+        if (amount1 != 0) _settle(token1, to, amount1, exactCredit);
 
         emit RemoveLiquidity(msg.sender, lp, amount0, amount1);
     }
@@ -1313,11 +1569,17 @@ contract PrecisionPool is ERC20, IPriceTape {
         if (afterBalance < beforeBalance || afterBalance - beforeBalance != amount) revert UnsupportedToken();
     }
 
+    /// @dev Returns only the SPENDABLE figures. The raw balances used to be
+    ///      returned too, for callers to hand to `_pay`; `_settle` now measures
+    ///      its own immediately before each transfer, so passing them around
+    ///      only invited someone to reuse a stale one.
     function _assertBacked(uint256 r0, uint256 r1)
         internal
         view
-        returns (uint256 available0, uint256 available1, uint256 balance0, uint256 balance1)
+        returns (uint256 available0, uint256 available1)
     {
+        uint256 balance0;
+        uint256 balance1;
         uint256 owed0;
         uint256 owed1;
         unchecked {
@@ -1337,19 +1599,51 @@ contract PrecisionPool is ERC20, IPriceTape {
         }
     }
 
-    function _pay(address token, address to, uint256 amount, uint256 senderBefore) private {
+    /// @dev Measures its OWN before-balance rather than accepting one from the
+    ///      caller. The callers all pay twice - both reserves, both fee sides,
+    ///      or an output followed by a refund - and a snapshot taken once at the
+    ///      top of those functions is already stale by the second payout. It
+    ///      only diverges when something changes the balance mid-call, which
+    ///      needs a token that hands control to a recipient during transfer:
+    ///      that recipient sends the OTHER token to the pool, and this
+    ///      reconciliation then reads its own arithmetic as a broken token and
+    ///      reverts `UnsupportedToken` on a payout that was perfectly correct.
+    ///
+    ///      The reentrancy guard does not cover it. A plain ERC-20 transfer
+    ///      INTO the pool never calls the pool, so nothing about that flow is
+    ///      reentrant - the guard has nothing to catch, and the stale figure is
+    ///      the only thing that goes wrong.
+    ///
+    ///      Reading it here costs almost nothing on any path: `_assertBacked`
+    ///      has already touched both token contracts and this pool's own balance
+    ///      slot in each of them, and the line below touches the token again, so
+    ///      the extra read is warm in both the address and the slot.
+    function _pay(address token, address to, uint256 amount) private {
+        _settle(token, to, amount, true);
+    }
+
+    /// @dev `exactCredit` false drops ONLY the requirement that the recipient
+    ///      be credited the full amount. The debit check is never optional: it
+    ///      is what makes the reserve write this function's caller performs
+    ///      true, so relaxing it would let a misbehaving token desynchronise
+    ///      reserves from balances - the one thing the whole contract is built
+    ///      to prevent. Reachable exclusively through `removeLiquidityLossy`.
+    ///
+    ///      Every caller rejects `to == address(this)`, which is what keeps the
+    ///      two halves from describing the same balance and contradicting.
+    function _settle(address token, address to, uint256 amount, bool exactCredit) private {
         if (token == address(0)) {
             to.safeTransferETH(amount);
             return;
         }
 
+        uint256 senderBefore = token.balanceOf(address(this));
         uint256 recipientBefore = token.balanceOf(to);
         token.safeTransfer(to, amount);
         uint256 senderAfter = token.balanceOf(address(this));
         uint256 recipientAfter = token.balanceOf(to);
-        if (
-            senderAfter > senderBefore || senderBefore - senderAfter != amount || recipientAfter < recipientBefore
-                || recipientAfter - recipientBefore != amount
-        ) revert UnsupportedToken();
+        if (senderAfter > senderBefore || senderBefore - senderAfter != amount) revert UnsupportedToken();
+        if (recipientAfter < recipientBefore) revert UnsupportedToken();
+        if (exactCredit && recipientAfter - recipientBefore != amount) revert UnsupportedToken();
     }
 }

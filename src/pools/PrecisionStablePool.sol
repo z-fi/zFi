@@ -2,9 +2,32 @@
 pragma solidity ^0.8.36;
 
 /// @title PrecisionStablePool (USDT/USDC)
+/// @notice NOT FOR DEPLOYMENT. Out of scope for the Precision release and
+///         excluded from its audit; kept as a single-pair reference and gas
+///         baseline alongside PrecisionOraclePool and PrecisionRangePool. It
+///         has had no security review, and the two caveats below - the
+///         balance-delta funding pattern and the missing imbalance fee - are
+///         recorded rather than fixed for that reason.
 /// @notice Stableswap pool for a single pair. Curve math, no generality.
 /// @dev Integrates with zRouter via snwap (SafeExecutor calls `swap`).
 ///      Invariant (n=2): 4A(x + y) + D = 4AD + D^3 / (4xy)
+///
+///      USES THE BALANCE-DELTA PATTERN AND IS ONLY SAFE CALLED ATOMICALLY.
+///      `swap` and `addLiquidity` take as their input whatever the balance
+///      holds above the recorded reserve, exactly as a Uniswap V2 pair does.
+///      Nothing authenticates who put it there, so funding this pool in one
+///      transaction and calling it in another lets anyone settle that balance
+///      in between and take the proceeds. Fund and call in a single
+///      transaction - EIP-7702 batch, zRouter snwap, or a multisig batch -
+///      or do not use this contract. The successor, PrecisionPool, pulls its
+///      own input and has no such requirement.
+///
+///      IMBALANCED DEPOSITS ARE NOT CHARGED AN IMBALANCE FEE. `addLiquidity`
+///      prices a deposit by the change in D while `removeLiquidity` pays out
+///      proportionally, and Curve charges a fee on the difference precisely
+///      because the two disagree for a one-sided deposit. At this A the gap is
+///      second-order near the peg and the round trip is close to break-even,
+///      but it widens as the pool leaves it. Deposit balanced.
 contract PrecisionStablePool {
     address constant TOKEN0 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
     address constant TOKEN1 = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // USDT
@@ -19,6 +42,7 @@ contract PrecisionStablePool {
     error Reentrancy();
     error ZeroAmount();
     error InvalidToken();
+    error NoConvergence();
     error InsufficientOutput();
     error InsufficientLPBurned();
     error InsufficientLiquidity();
@@ -174,33 +198,52 @@ contract PrecisionStablePool {
     // ── STABLESWAP MATH ──────────────────────────────────────────────
 
     /// @dev Compute invariant D. Newton: D = (ANN*S + 2*Dp) * D / ((ANN-1)*D + 3*Dp)
+    ///
+    ///      REVERTS IF IT DOES NOT CONVERGE. Eight iterations is ample for a
+    ///      two-coin pool at this A near the peg, but "ample" is not "always",
+    ///      and the loop body is `unchecked`. Accepting the last iterate when the
+    ///      sequence has not settled means returning a D that is simply wrong,
+    ///      and D feeds `_computeY` - so the error does not stay in the
+    ///      invariant, it comes back out as a quoted output. Reverting a swap
+    ///      that cannot be priced is the only safe answer.
     function _computeD(uint256 x, uint256 y) internal pure returns (uint256 d) {
         if (x == 0 || y == 0) return x + y; // Degenerate: no curve, just sum.
         uint256 s = x + y;
         d = s;
         unchecked {
-            for (uint256 i; i < 8; ++i) {
+            for (uint256 i; i < 255; ++i) {
                 uint256 dp = d * d / (2 * x) * d / (2 * y);
                 uint256 dPrev = d;
                 d = (ANN * s + 2 * dp) * d / ((ANN - 1) * d + 3 * dp);
-                if (d > dPrev ? d - dPrev <= 1 : dPrev - d <= 1) break;
+                if (d > dPrev ? d - dPrev <= 1 : dPrev - d <= 1) return d;
             }
         }
+        revert NoConvergence();
     }
 
     /// @dev Compute reserve y given reserve x and invariant D.
     ///      Newton: y = (y^2 + c) / (2y + b - D)
+    ///
+    ///      REVERTS IF IT DOES NOT CONVERGE, and here the reason is sharper than
+    ///      for `_computeD`. The caller does `amountOut = rOut - newOut` behind
+    ///      only a `newOut > rOut` guard, so an iterate that has not settled and
+    ///      lands BELOW the true root is not caught by anything - it reads as a
+    ///      larger output and pays it, up to the whole output reserve. The
+    ///      subtraction inside the denominator is `unchecked` as well, so a
+    ///      wrapped intermediate produces a small `y` rather than a panic. The
+    ///      convergence test is what stands between those two facts and a drain.
     function _computeY(uint256 xKnown, uint256 d) internal pure returns (uint256 y) {
         uint256 c = d * d / (2 * xKnown) * d / (2 * ANN);
         uint256 b = xKnown + d / ANN;
         y = d;
         unchecked {
-            for (uint256 i; i < 8; ++i) {
+            for (uint256 i; i < 255; ++i) {
                 uint256 yPrev = y;
                 y = (y * y + c) / (2 * y + b - d);
-                if (y > yPrev ? y - yPrev <= 1 : yPrev - y <= 1) break;
+                if (y > yPrev ? y - yPrev <= 1 : yPrev - y <= 1) return y;
             }
         }
+        revert NoConvergence();
     }
 
     // ── ASSEMBLY HELPERS ─────────────────────────────────────────────

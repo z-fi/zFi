@@ -276,7 +276,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.prank(user);
         uint256 out = ISnwap(ZROUTER).snwap{value: 1 ether}(
             address(0), 1 ether, user, WBTC, 0, address(router),
-            abi.encodeCall(PrecisionRoute.route, (pools, address(0), 1 ether, 0, user))
+            abi.encodeCall(PrecisionRoute.route, (pools, address(0), WBTC, 1 ether, 0, user))
         );
 
         emit log_named_uint("WBTC out", out);
@@ -302,7 +302,7 @@ contract PrecisionPoolMultihopTest is Test {
         pools[1] = address(ethUsdc);  // USDC -> ETH
 
         uint256 amountIn = 1e8;
-        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, amountIn, 0, user));
+        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, address(0), amountIn, 0, user));
         uint256 before = user.balance;
 
         vm.prank(EXEC);
@@ -316,7 +316,7 @@ contract PrecisionPoolMultihopTest is Test {
         theirs[0] = address(usdcWbtc);
         vm.prank(EXEC);
         (bool ok, bytes memory err) = address(router).call(
-            abi.encodeCall(PrecisionRoute.route, (theirs, WBTC, amountIn, 0, address(0xBAD)))
+            abi.encodeCall(PrecisionRoute.route, (theirs, WBTC, USDC, amountIn, 0, address(0xBAD)))
         );
         assertFalse(ok, "an uncommitted route spent the funding");
         assertEq(bytes4(err), PrecisionRoute.IntentMismatch.selector, "wrong rejection");
@@ -341,7 +341,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.deal(EXEC, 2 ether);
         vm.prank(EXEC);
         (bool ok, bytes memory err) = address(router).call{value: 1 ether}(
-            abi.encodeCall(PrecisionRoute.route, (pools, address(0), 1 ether, 0, user))
+            abi.encodeCall(PrecisionRoute.route, (pools, address(0), USDC, 1 ether, 0, user))
         );
         assertFalse(ok, "unknown pool was accepted");
         assertEq(bytes4(err), PrecisionRoute.NoPool.selector, "wrong rejection");
@@ -355,7 +355,7 @@ contract PrecisionPoolMultihopTest is Test {
         vm.deal(user, 2 ether);
         vm.prank(user);
         (bool ok, bytes memory err) = address(router).call{value: 1 ether}(
-            abi.encodeCall(PrecisionRoute.route, (pools, address(0), 1 ether, 0, user))
+            abi.encodeCall(PrecisionRoute.route, (pools, address(0), USDC, 1 ether, 0, user))
         );
         assertFalse(ok, "untrusted caller was accepted");
         assertEq(bytes4(err), PrecisionRoute.NotExecutor.selector, "wrong rejection");
@@ -405,14 +405,14 @@ contract PrecisionPoolMultihopTest is Test {
         // All-or-nothing refuses the whole size.
         vm.prank(EXEC);
         vm.expectRevert();
-        router.route{value: huge}(pools, address(0), huge, 0, user);
+        router.route{value: huge}(pools, address(0), WBTC, huge, 0, user);
 
         uint256 wbtcBefore = IERC20(WBTC).balanceOf(user);
         uint256 refundBefore = address(0xFEE1).balance;
 
         vm.prank(EXEC);
         (uint256 out, uint256 consumed) =
-            router.routeUpTo{value: huge}(pools, address(0), huge, 0, user, address(0xFEE1));
+            router.routeUpTo{value: huge}(pools, address(0), WBTC, huge, 0, user, address(0xFEE1));
 
         assertGt(out, 0, "delivered nothing");
         assertGt(consumed, 0, "clamped to nothing");
@@ -444,14 +444,14 @@ contract PrecisionPoolMultihopTest is Test {
         uint256 snap = vm.snapshotState();
 
         vm.prank(EXEC);
-        (, uint256 consumed) = router.routeUpTo{value: huge}(pools, address(0), huge, 0, user, address(0xFEE1));
+        (, uint256 consumed) = router.routeUpTo{value: huge}(pools, address(0), WBTC, huge, 0, user, address(0xFEE1));
         assertLt(consumed, huge, "nothing to prove: it fit whole");
 
         vm.revertToState(snap);
 
         // Exactly the chosen size clears the path as a plain all-or-nothing route.
         vm.prank(EXEC);
-        uint256 out = router.route{value: consumed}(pools, address(0), consumed, 0, user);
+        uint256 out = router.route{value: consumed}(pools, address(0), WBTC, consumed, 0, user);
         assertGt(out, 0, "the chosen size did not execute");
 
         vm.revertToState(snap);
@@ -459,7 +459,7 @@ contract PrecisionPoolMultihopTest is Test {
         // One unit more does not.
         vm.prank(EXEC);
         vm.expectRevert();
-        router.route{value: consumed + 1}(pools, address(0), consumed + 1, 0, user);
+        router.route{value: consumed + 1}(pools, address(0), WBTC, consumed + 1, 0, user);
     }
 
     /// @dev A route that fits whole must not be clamped, and must cost only the
@@ -476,7 +476,7 @@ contract PrecisionPoolMultihopTest is Test {
 
         vm.prank(EXEC);
         (uint256 out, uint256 consumed) =
-            router.routeUpTo{value: 1 ether}(pools, address(0), 1 ether, 0, user, address(0xFEE1));
+            router.routeUpTo{value: 1 ether}(pools, address(0), WBTC, 1 ether, 0, user, address(0xFEE1));
 
         assertEq(consumed, 1 ether, "clamped a route that fits");
         assertGt(out, 0, "delivered nothing");
@@ -523,7 +523,7 @@ contract PrecisionPoolMultihopTest is Test {
 
         address[] memory pools = new address[](1);
         pools[0] = address(ethUsdc);
-        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, 1e8, 0, user));
+        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, WBTC, USDC, 1e8, 0, user));
 
         vm.prank(EXEC);
         router.checkpoint(WBTC, keccak256(call_));
@@ -536,7 +536,7 @@ contract PrecisionPoolMultihopTest is Test {
 
         vm.prank(EXEC);
         vm.expectRevert(PrecisionRoute.Reentrancy.selector);
-        router.route{value: 1 ether}(pools, address(0), 1 ether, 0, address(0xDEAD));
+        router.route{value: 1 ether}(pools, address(0), USDC, 1 ether, 0, address(0xDEAD));
 
         // And a second checkpoint cannot be opened alongside the first.
         vm.prank(EXEC);
@@ -553,5 +553,54 @@ contract PrecisionPoolMultihopTest is Test {
         );
         assertFalse(ok);
         assertEq(bytes4(err), PrecisionRoute.NoPool.selector);
+    }
+
+    /// @dev `minOut` is denominated in the output token, but before `tokenOut`
+    /// existed the output token was IMPLICIT in `pools` - so a reordered or
+    /// off-by-one path delivered a different asset and the slippage check
+    /// silently compared the wrong units. Here the path ends in WBTC (8
+    /// decimals) while the caller believes it ends in USDC (6): a `minOut` sized
+    /// for USDC clears trivially against a WBTC amount, and without the check
+    /// the trade settles. Naming the output is what turns that into a revert.
+    function test_RouteRejectsAPathThatEndsInADifferentTokenThanNamed() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 10 ether);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc); // ETH  -> USDC
+        pools[1] = address(usdcWbtc); // USDC -> WBTC
+
+        // The honest call: the path really does end in WBTC.
+        uint256 snap = vm.snapshotState();
+        vm.prank(EXEC);
+        uint256 out = router.route{value: 1 ether}(pools, address(0), WBTC, 1 ether, 0, user);
+        assertGt(out, 0, "the correct declaration must still route");
+        vm.revertToState(snap);
+
+        // The same path declared as ending in USDC. `minOut` is set to a figure
+        // that is real slippage protection in USDC units and no protection at
+        // all against a WBTC amount, which is the whole failure mode.
+        vm.prank(EXEC);
+        vm.expectRevert(PrecisionRoute.WrongTokenOut.selector);
+        router.route{value: 1 ether}(pools, address(0), USDC, 1 ether, 1_000e6, user);
+
+        assertEq(address(router).balance, 0, "kept ETH");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept the intermediate");
+    }
+
+    /// @dev Same guard on the clamping entry point, which needs it more: a
+    /// partial fill already returns less than asked, so a wrong-asset delivery
+    /// is even easier to mistake for ordinary slippage.
+    function test_RouteUpToRejectsAPathThatEndsInADifferentTokenThanNamed() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        vm.deal(EXEC, 10 ether);
+
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc);
+        pools[1] = address(usdcWbtc);
+
+        vm.prank(EXEC);
+        vm.expectRevert(PrecisionRoute.WrongTokenOut.selector);
+        router.routeUpTo{value: 1 ether}(pools, address(0), USDC, 1 ether, 0, user, user);
     }
 }
