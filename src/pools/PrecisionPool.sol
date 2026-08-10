@@ -1722,21 +1722,14 @@ contract PrecisionPool is ERC20, IPriceTape {
         view
         returns (uint256 available0, uint256 available1)
     {
-        uint256 balance0;
-        uint256 balance1;
-        uint256 owed0;
-        uint256 owed1;
-        unchecked {
-            if (hook != address(0)) {
-                (owed0, owed1) = (hookOwed0, hookOwed1);
-            }
-            if (creatorFeeBps != 0) {
-                owed0 += creatorOwed0;
-                owed1 += creatorOwed1;
-            }
-        }
-        balance0 = _balance(token0);
-        balance1 = _balance(token1);
+        // Shared with the degraded exit's clamp rather than restated. What
+        // counts as owed is the one definition both paths have to agree on:
+        // if they ever drifted, one would treat fees as spendable while the
+        // other did not, and only the looser one would be noticed.
+        uint256 owed0 = _owed0();
+        uint256 owed1 = _owed1();
+        uint256 balance0 = _balance(token0);
+        uint256 balance1 = _balance(token1);
         unchecked {
             if (balance0 < r0 + owed0 || balance1 < r1 + owed1) revert BalanceDeficit();
             (available0, available1) = (balance0 - owed0, balance1 - owed1);
