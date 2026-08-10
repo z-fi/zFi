@@ -38,6 +38,23 @@ contract PrecisionPoolLens {
         /// @notice Effective fee for `token0` input at the supplied probe size.
         /// @dev Use `effectiveFeeFor` for token1 or a trade-specific amount.
         uint256 effectiveFee0;
+        /// @notice Whether this pool may appear in a PARTIAL-FILL route.
+        /// @dev False for every hooked pool, and the reason is not cosmetic.
+        ///      `PrecisionPool.swapUpTo` refuses one outright
+        ///      (`HookedNoPartialFill`), because the surcharge is sampled at
+        ///      the requested size and the clamp would execute at a different
+        ///      one. `PrecisionRoute.routeUpTo` does support them - it probes
+        ///      the hook at each size it tries - but that is what makes them
+        ///      dangerous to route through: the search runs up to ~128 probes
+        ///      per hop, each paying up to `HOOK_GAS`, so a hook that burns its
+        ///      whole budget can put the search beyond the block limit and
+        ///      charge the gas to whoever submitted the route.
+        ///
+        ///      An exact `route` through a hooked pool is fine; only the
+        ///      clamping entry point is exposed. Filter on this before building
+        ///      a `routeUpTo` path. `factory.isPool` will NOT do it for you -
+        ///      anyone can create a hooked pool through the factory.
+        bool clampable;
         uint256 hookOwed0;
         uint256 hookOwed1;
         uint256 creatorOwed0;
@@ -453,6 +470,7 @@ contract PrecisionPoolLens {
         o.creatorFeeBps = p.creatorFeeBps();
         // Headline fee for token0 input at the supplied probe size.
         o.effectiveFee0 = effectiveFeeFor(pool, sender, o.token0, probe);
+        o.clampable = o.hook == address(0);
         o.hookOwed0 = p.hookOwed0();
         o.hookOwed1 = p.hookOwed1();
         o.creatorOwed0 = p.creatorOwed0();
@@ -539,8 +557,49 @@ contract PrecisionPoolLens {
         uint256 amountOut;
     }
 
+    /// @notice Whether a path may be submitted to `PrecisionRoute.routeUpTo`.
+    ///
+    /// @dev THE PREFLIGHT FOR THE CLAMPING ENTRY POINT. `routeUpTo` sizes the
+    ///      route by bisection - up to ~128 probes, each quoting every hop -
+    ///      and on a hooked hop each of those probes calls the hook under
+    ///      `HOOK_GAS`. A hook that burns its whole budget therefore multiplies
+    ///      into millions of gas and can push the search past the block limit,
+    ///      with the cost falling on whoever submitted the route. Nothing
+    ///      on-chain screens for it: `PrecisionRoute` checks `factory.isPool`,
+    ///      which proves only provenance, and anyone may create a hooked pool
+    ///      through the factory for an unnamed market.
+    ///
+    ///      So the screen belongs to whoever assembles `pools`, and this is it.
+    ///      `PrecisionPoolPolicy` encodes the same default rule but is an
+    ///      advisory oracle that no contract reads; this needs no deployment
+    ///      beyond the lens and no owner.
+    ///
+    ///      EXACT ROUTES DO NOT NEED THIS. `route` walks each hop once, so a
+    ///      hooked pool costs one hook call per hop and is perfectly routable.
+    ///      Only the bisecting entry point multiplies.
+    ///
+    /// @return ok True when every hop is a factory pool and none is hooked.
+    /// @return badIndex First hop that fails, or `pools.length` when `ok`.
+    function routeClampable(address[] calldata pools) external view returns (bool ok, uint256 badIndex) {
+        for (uint256 i; i < pools.length; ++i) {
+            if (!factory.isPool(pools[i]) || PrecisionPool(payable(pools[i])).hook() != address(0)) {
+                return (false, i);
+            }
+        }
+        return (true, pools.length);
+    }
+
     /// @notice Quote a multi-pool route and return the EXACT per-leg amounts to
     ///         encode into the router calldata.
+    ///
+    /// @dev THE LAST LEG'S `tokenOut` IS THE `tokenOut` ARGUMENT. `route` and
+    ///      `routeUpTo` both take the output asset explicitly and revert
+    ///      `WrongTokenOut` if the path does not end there - that check exists
+    ///      because `minOut` is otherwise denominated in whatever asset the
+    ///      `pools` array happens to terminate in, and a reordered path makes
+    ///      the slippage bound meaningless rather than wrong-looking. Pass
+    ///      `legs[legs.length - 1].tokenOut` straight through; do not derive it
+    ///      separately, which is the mistake the check is guarding against.
     ///
     /// @dev Chained legs are funded from the router's own balance, and snwap
     ///      forwards `balance - 1` there - it retains a wei to keep the slot

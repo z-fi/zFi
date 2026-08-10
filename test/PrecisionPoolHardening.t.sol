@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {MockERC20} from "./SwapboardMocks.sol";
+import {PrecisionPoolLens} from "../src/pools/PrecisionPoolLens.sol";
 
 /// @dev A token with a fee switch that starts OFF, which is the shape that
 /// matters: the pool is seeded and healthy under an exact-transfer token, and
@@ -42,8 +43,6 @@ contract FeeSwitchERC20 is MockERC20("FEESW", 18) {
     }
 }
 
-/// @dev Two hardening fixes from the review pass, both about a call that should
-/// be a clean refusal and was not.
 /// @dev A hook whose `feeFor` burns gas, so the starvation question is live
 /// rather than academic. `burn` is tuned by the test.
 contract GasHungryHook {
@@ -75,6 +74,10 @@ contract GasHungryHook {
     function afterSwap(address, address, uint256, uint256, address) external {}
 }
 
+/// @dev Hardening from the external review passes: cases where a call either
+/// should have been a clean refusal and was not, or should have succeeded and
+/// could not. Also the screen that keeps a griefing hook out of a clamped
+/// route, which no contract enforces and so has to be pinned somewhere.
 contract PrecisionPoolHardeningTest is Test {
     PrecisionPoolFactory factory;
     PrecisionPool pool;
@@ -386,6 +389,69 @@ contract PrecisionPoolHardeningTest is Test {
         }
 
         assertGt(succeeded, 0, "no gas limit produced a swap; the sweep proved nothing");
+    }
+
+    /// @dev The screen that keeps a griefing hook out of a clamped route.
+    ///
+    /// Nothing on-chain does this: `PrecisionRoute` checks `factory.isPool`,
+    /// which proves provenance only, and anyone can create a hooked pool
+    /// through the factory for an unnamed market. `routeUpTo` then bisects,
+    /// calling the hook once per hop per probe, so a hook that burns its whole
+    /// budget turns the search into millions of gas charged to the submitter.
+    ///
+    /// The filter therefore lives with whoever assembles the path, and this
+    /// pins both halves of it: the per-pool flag every discovery call already
+    /// carries, and the whole-path preflight.
+    function test_TheLensScreensHookedPoolsOutOfClampedRoutes() public {
+        PrecisionPoolLens lens = new PrecisionPoolLens(factory);
+        GasHungryHook h = new GasHungryHook(5_000);
+        MockERC20 t = new MockERC20("T2", 18);
+        t.mint(lp, 2e24);
+
+        vm.startPrank(lp);
+        t.approve(address(factory), type(uint256).max);
+        (address hooked,,,) = factory.createAndSeed{value: 100 ether}(
+            PrecisionPoolFactory.Market({
+                token0: address(0),
+                token1: address(t),
+                sqrtPLow: SQRT_LOW,
+                sqrtPHigh: SQRT_HIGH,
+                fee: 500,
+                hook: address(h),
+                feeRecipient: address(0),
+                creatorFeeBps: 0
+            }),
+            SQRT_MID, 100 ether, 1e24, 0, lp
+        );
+        vm.stopPrank();
+
+        // `isPool` says yes to both - which is exactly why it is not the screen.
+        assertTrue(factory.isPool(hooked), "hooked pool is a factory pool");
+        assertTrue(factory.isPool(address(pool)), "plain pool is a factory pool");
+
+        // The per-pool flag, as every `markets*` / `describeFor` call returns it.
+        assertFalse(lens.infoFor(hooked, address(this), 1 ether).clampable, "hooked pool must not be clampable");
+        assertTrue(lens.infoFor(address(pool), address(this), 1 ether).clampable, "plain pool must be clampable");
+
+        // The whole-path preflight, and it must name the offending hop.
+        address[] memory bad = new address[](2);
+        (bad[0], bad[1]) = (address(pool), hooked);
+        (bool ok, uint256 badIndex) = lens.routeClampable(bad);
+        assertFalse(ok, "a path containing a hooked pool must not clamp");
+        assertEq(badIndex, 1, "must point at the hooked hop");
+
+        address[] memory good = new address[](1);
+        good[0] = address(pool);
+        (ok, badIndex) = lens.routeClampable(good);
+        assertTrue(ok, "an all-hookless path must clamp");
+        assertEq(badIndex, 1, "badIndex is the length when the path is clean");
+
+        // A non-pool is refused too, so one call covers both failure modes.
+        address[] memory alien = new address[](1);
+        alien[0] = address(0xDEAD);
+        (ok, badIndex) = lens.routeClampable(alien);
+        assertFalse(ok, "a non-factory address must not clamp");
+        assertEq(badIndex, 0);
     }
 
     /// @dev The lossy path must not become a way to take more than a pro-rata
