@@ -30,6 +30,7 @@ const SOURCES = {
   FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
+  zQuoterV4: "src/zQuoterV4.sol",
 };
 // See the note in check-create2-artifacts.mjs: both Fwabols are named `Fwabol`
 // in Solidity, and only the key tells them apart.
@@ -51,6 +52,7 @@ const PINNED_RUNS = {
   FwabolV2: 9_999_999,
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
+  zQuoterV4: 9_999_999,
 };
 
 const [name, argsJson = "[]"] = process.argv.slice(2);

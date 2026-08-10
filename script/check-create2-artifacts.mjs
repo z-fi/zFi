@@ -33,6 +33,7 @@ const SOURCES = {
   FwabolV2: "src/forwarders/FwabolV2.sol",
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
+  zQuoterV4: "src/zQuoterV4.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -68,6 +69,7 @@ const OPTIMIZER_RUNS = {
   FwabolV2: 9_999_999,
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
+  zQuoterV4: 9_999_999,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
@@ -145,6 +147,9 @@ const specs = [
   // Any pool, hooked or not: the key is a call argument. Safe because the
   // only funds it can move are the caller's own - see the contract header.
   {name: "V4Port", args: []},
+  // Reads everything through StateView, so it stays `view` and callers keep
+  // their view-ness. No constructor arguments to get wrong.
+  {name: "zQuoterV4", args: []},
 ];
 
 let failed = false;
