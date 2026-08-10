@@ -174,6 +174,35 @@ contract PrecisionPoolHardeningTest is Test {
         pool.swapExactIn{value: dust}(address(0), dust, 0, user);
     }
 
+    /// @dev An exit against an unseeded pool has no shares to burn, and `_burn`
+    /// says so - but the pro-rata division runs first and divides by a zero
+    /// supply, surfacing Solady's `MulDivFailed`. Same class as the dust-swap
+    /// case above, and it would have been inconsistent to give one a stated
+    /// reason and not the other. Both exits are checked.
+    function test_ExitFromAnUnseededPoolRefusesCleanly() public {
+        MockERC20 t = new MockERC20("EMPTY", 18);
+        PrecisionPoolFactory.Market memory m = PrecisionPoolFactory.Market({
+            token0: address(0),
+            token1: address(t),
+            sqrtPLow: SQRT_LOW,
+            sqrtPHigh: SQRT_HIGH,
+            fee: 500,
+            hook: address(0),
+            feeRecipient: address(0),
+            creatorFeeBps: 0
+        });
+        PrecisionPool empty = PrecisionPool(payable(factory.createPool(m)));
+        assertEq(empty.totalSupply(), 0, "pool should be unseeded");
+
+        vm.prank(user);
+        vm.expectRevert(PrecisionPool.InsufficientLiquidity.selector);
+        empty.removeLiquidity(1, 0, 0, user);
+
+        vm.prank(user);
+        vm.expectRevert(PrecisionPool.InsufficientLiquidity.selector);
+        empty.removeLiquidityLossy(1, 0, 0, user);
+    }
+
     /// @dev A fee switch flipped AFTER a pool is seeded closes every strict
     /// path at once - deposit, swap, and withdrawal all reconcile exact
     /// movement, and none of them can. On an immutable contract that is

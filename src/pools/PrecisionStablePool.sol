@@ -248,6 +248,19 @@ contract PrecisionStablePool {
 
     // ── ASSEMBLY HELPERS ─────────────────────────────────────────────
 
+    /// @dev NEITHER HELPER BELOW CHECKS WHAT THE TOKEN ANSWERED, and both are
+    ///      safe only because `TOKEN0` and `TOKEN1` are compile-time constants
+    ///      that cannot be anything but USDC and USDT. Recorded rather than
+    ///      repaired because this contract is out of scope and its published
+    ///      gas figures are a benchmark that a changed transfer path would
+    ///      silently invalidate. DO NOT COPY EITHER INTO A POOL WITH
+    ///      CONFIGURABLE TOKENS - use SafeTransferLib, as PrecisionPool does.
+    ///
+    ///      `_transfer` checks that the CALL succeeded and ignores the return
+    ///      value, so a token that signals failure by returning `false` rather
+    ///      than reverting would read as a successful payout. USDT returns
+    ///      nothing (which is why the check is written this way) and USDC
+    ///      returns true or reverts, so neither reaches that branch.
     function _transfer(address token, address to, uint256 amount) internal {
         assembly ("memory-safe") {
             mstore(0x14, to)
@@ -260,6 +273,13 @@ contract PrecisionStablePool {
         }
     }
 
+    /// @dev `_balanceOf` discards the staticcall's success flag, and its
+    ///      failure mode is worse than a zero: the output buffer still holds
+    ///      the selector this function wrote there, so a token that reverted
+    ///      would be read as a balance of ~5.7e47. Every caller here treats
+    ///      that as reserves. Hardcoded USDC and USDT always answer, so it is
+    ///      unreachable - but it is unreachable by the token choice alone, and
+    ///      nothing else in this function defends it.
     function _balanceOf(address token) internal view returns (uint256 amount) {
         assembly ("memory-safe") {
             mstore(0x14, address())

@@ -1487,6 +1487,13 @@ contract PrecisionPool is ERC20, IPriceTape {
         uint256 r1 = reserve1;
         _assertBacked(r0, r1);
         uint256 supply = totalSupply();
+        // An unseeded pool has no shares to burn, and `_burn` below would say
+        // so - but the division runs first and would surface Solady's
+        // `MulDivFailed` instead. Same class as the `inAfterFee` guard in
+        // `_transitionAt`, and fixed the same way: a stated reason rather than
+        // a library panic. Unreachable once seeded, since `MIN_LIQUIDITY` is
+        // burned to the dead address and never returns supply to zero.
+        if (supply == 0) revert InsufficientLiquidity();
 
         // Rounds down, so the dust stays with the holders who remain.
         amount0 = FixedPointMathLib.fullMulDiv(lp, r0, supply);
