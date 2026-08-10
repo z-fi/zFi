@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 /// @title PriceTape
 /// @notice Compressed on-chain OHLCV history: a chart any client can read with

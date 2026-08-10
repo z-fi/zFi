@@ -43,6 +43,35 @@ contract FeeSwitchERC20 is MockERC20("FEESW", 18) {
     }
 }
 
+/// @dev The two failures the escape hatch has to survive that a fee switch
+/// does not cover: a balance that falls WITHOUT a transfer (USDT's
+/// `destroyBlackFunds`, a negative rebase, a burn in an upgrade), and a token
+/// that refuses to transfer at all (a pause, or a blacklisted recipient).
+contract HostileERC20 is MockERC20("HOSTILE", 18) {
+    bool public paused;
+
+    /// @dev Zeroes value out of an account with no transfer and no event the
+    ///      pool could react to. This is the shape that used to brick every
+    ///      function via `_assertBacked`.
+    function confiscate(address from, uint256 amt) external {
+        balanceOf[from] -= amt;
+    }
+
+    function setPaused(bool p) external {
+        paused = p;
+    }
+
+    function transfer(address to, uint256 amt) public override returns (bool) {
+        require(!paused, "paused");
+        return super.transfer(to, amt);
+    }
+
+    function transferFrom(address f, address t, uint256 amt) public override returns (bool) {
+        require(!paused, "paused");
+        return super.transferFrom(f, t, amt);
+    }
+}
+
 /// @dev A hook whose `feeFor` burns gas, so the starvation question is live
 /// rather than academic. `burn` is tuned by the test.
 contract GasHungryHook {
@@ -174,6 +203,43 @@ contract PrecisionPoolHardeningTest is Test {
         pool.swapExactIn{value: dust}(address(0), dust, 0, user);
     }
 
+    /// @dev The clamping path bisects, so its cost is not the cost of a swap.
+    /// Measured rather than assumed: a `swapUpTo` sized far past what the band
+    /// can take runs `_maxIn` to convergence - the worst case the design admits
+    /// on a single pool - and must stay a rounding error against the block
+    /// limit, since a router may chain several of them.
+    ///
+    /// The bisection is pure memory arithmetic over state loaded once, which is
+    /// why ~256 replays of `_transitionAt` are affordable at all. If this number
+    /// ever approaches seven figures, something has started touching storage
+    /// inside the loop.
+    function test_TheClampPathCostIsBounded() public {
+        vm.deal(user, type(uint128).max);
+
+        uint256 fits = 1 ether;
+        vm.prank(user);
+        uint256 g0 = gasleft();
+        pool.swapUpTo{value: fits}(address(0), fits, 0, user);
+        uint256 unclamped = g0 - gasleft();
+
+        // Far past the band, so the search runs its full depth.
+        uint256 huge = type(uint96).max;
+        vm.deal(user, huge);
+        vm.prank(user);
+        uint256 g1 = gasleft();
+        (, uint256 consumed) = pool.swapUpTo{value: huge}(address(0), huge, 0, user);
+        uint256 clamped = g1 - gasleft();
+
+        assertLt(consumed, huge, "nothing was clamped; the measurement is meaningless");
+        emit log_named_uint("swapUpTo, fits whole", unclamped);
+        emit log_named_uint("swapUpTo, full bisection", clamped);
+        emit log_named_uint("bisection overhead", clamped - unclamped);
+
+        // Ten percent of a 30M block for one clamped hop is the line at which a
+        // multi-hop route stops being routable.
+        assertLt(clamped, 3_000_000, "clamp path is too expensive to chain");
+    }
+
     /// @dev An exit against an unseeded pool has no shares to burn, and `_burn`
     /// says so - but the pro-rata division runs first and divides by a zero
     /// supply, surfacing Solady's `MulDivFailed`. Same class as the dust-swap
@@ -200,7 +266,7 @@ contract PrecisionPoolHardeningTest is Test {
 
         vm.prank(user);
         vm.expectRevert(PrecisionPool.InsufficientLiquidity.selector);
-        empty.removeLiquidityLossy(1, 0, 0, user);
+        empty.removeLiquidityLossy(1, 0, 0, user, true, true);
     }
 
     /// @dev A fee switch flipped AFTER a pool is seeded closes every strict
@@ -269,7 +335,7 @@ contract PrecisionPoolHardeningTest is Test {
         uint256 r1Before = fp.reserve1();
 
         vm.prank(lp);
-        (uint256 a0, uint256 a1) = fp.removeLiquidityLossy(shares / 10, 0, 0, lp);
+        (uint256 a0, uint256 a1) = fp.removeLiquidityLossy(shares / 10, 0, 0, lp, true, true);
 
         assertGt(a1, 0, "lossy exit paid nothing");
         assertEq(fp.reserve1(), r1Before - a1, "reserves must still be written exactly");
@@ -483,6 +549,118 @@ contract PrecisionPoolHardeningTest is Test {
         assertEq(badIndex, 0);
     }
 
+    /// @dev Seeds a pool against a token that can be made hostile later.
+    function _hostilePool(HostileERC20 t) internal returns (PrecisionPool hp) {
+        t.mint(lp, 1e24);
+        vm.startPrank(lp);
+        t.approve(address(factory), type(uint256).max);
+        (address p,,,) = factory.createAndSeed{value: 100 ether}(
+            PrecisionPoolFactory.Market({
+                token0: address(0),
+                token1: address(t),
+                sqrtPLow: SQRT_LOW,
+                sqrtPHigh: SQRT_HIGH,
+                fee: 500,
+                hook: address(0),
+                feeRecipient: address(0),
+                creatorFeeBps: 0
+            }),
+            SQRT_MID, 100 ether, 1e24, 0, lp
+        );
+        vm.stopPrank();
+        hp = PrecisionPool(payable(p));
+    }
+
+    /// @dev The failure that used to defeat the escape hatch entirely. When a
+    /// balance drops without a transfer, `balance < reserve`, and
+    /// `_assertBacked` reverts - which took down EVERY function including the
+    /// lossy exit, stranding the untouched ETH side along with the damaged
+    /// token side. The lossy path no longer asserts backing; it clamps to what
+    /// the pool can actually spend, which cannot overpay even where the
+    /// assertion would have passed.
+    function test_AConfiscatedBalanceDoesNotStrandTheHealthySide() public {
+        HostileERC20 t = new HostileERC20();
+        PrecisionPool hp = _hostilePool(t);
+        uint256 shares = hp.balanceOf(lp);
+
+        // Wipe 95% of the pool's token side out from under it, then exit half
+        // the position - so the surviving balance is far short of the claim and
+        // the clamp is unambiguously doing the work.
+        uint256 held = t.balanceOf(address(hp));
+        t.confiscate(address(hp), held * 95 / 100);
+        assertLt(t.balanceOf(address(hp)), hp.reserve1(), "pool should now be under-backed");
+
+        // Everything strict is frozen, including the ETH the pool still holds.
+        vm.prank(lp);
+        vm.expectRevert(PrecisionPool.BalanceDeficit.selector);
+        hp.removeLiquidity(shares / 2, 0, 0, lp);
+
+        uint256 ethBefore = lp.balance;
+        uint256 tokBefore = t.balanceOf(lp);
+        uint256 r0Before = hp.reserve0();
+        uint256 r1Before = hp.reserve1();
+
+        vm.prank(lp);
+        (uint256 paid0, uint256 paid1) = hp.removeLiquidityLossy(shares / 2, 0, 0, lp, true, true);
+
+        // The healthy side comes out whole.
+        assertGt(paid0, 0, "ETH side must be recoverable");
+        assertEq(lp.balance - ethBefore, paid0, "ETH did not arrive");
+        // The damaged side pays only what survived, not what was owed.
+        assertEq(t.balanceOf(lp) - tokBefore, paid1, "token payout mismatch");
+        assertLt(paid1, r1Before / 4, "should have been clamped far below the pro-rata claim");
+        assertGt(t.balanceOf(address(hp)), 0, "half the shares must not take the whole remainder");
+
+        // Reserves fall by the FULL claim on both sides, so the shortfall is
+        // shared rather than left to whoever exits last.
+        assertEq(hp.reserve0(), r0Before - paid0, "token0 was fully paid so the write-down matches");
+        assertLt(hp.reserve1(), r1Before - paid1, "token1 write-down must exceed what was paid");
+
+        // The real anti-run property: `balance / reserve` is unchanged, so the
+        // holders who remain own exactly the same fraction of the surviving
+        // tokens as they did before this exit, and going first bought nothing.
+        // Burning `lp` scales reserve and balance by the same `(supply-lp)/supply`.
+        assertApproxEqRel(
+            (t.balanceOf(address(hp)) * 1e18) / hp.reserve1(),
+            (held * 5 / 100 * 1e18) / r1Before,
+            1e12,
+            "backing ratio moved; the shortfall was not shared proportionally"
+        );
+    }
+
+    /// @dev A pause or a blacklisted recipient reverts one leg and, when both
+    /// legs are attempted in a single call, the whole exit with it - so an LP
+    /// could not withdraw their ETH because the token leg failed. `take0` /
+    /// `take1` let the caller leave through the side that still works.
+    function test_OneUntransferableSideDoesNotBlockTheOther() public {
+        HostileERC20 t = new HostileERC20();
+        PrecisionPool hp = _hostilePool(t);
+        uint256 shares = hp.balanceOf(lp);
+
+        t.setPaused(true);
+
+        // Both-sides exit cannot work: the token leg reverts the transaction.
+        vm.prank(lp);
+        vm.expectRevert();
+        hp.removeLiquidityLossy(shares / 10, 0, 0, lp, true, true);
+
+        // Abandoning the paused side gets the ETH out.
+        uint256 ethBefore = lp.balance;
+        uint256 r1Before = hp.reserve1();
+        vm.prank(lp);
+        (uint256 paid0, uint256 paid1) = hp.removeLiquidityLossy(shares / 10, 0, 0, lp, true, false);
+
+        assertGt(paid0, 0, "ETH side must be recoverable");
+        assertEq(paid1, 0, "abandoned side must pay nothing");
+        assertEq(lp.balance - ethBefore, paid0, "ETH did not arrive");
+        // The abandoned claim is still burned off the reserves - forfeited to
+        // the remaining holders, which is the caller's choice to make.
+        assertLt(hp.reserve1(), r1Before, "abandoned claim must still be written off");
+
+        // And the pool is still solvent for whoever remains.
+        assertGe(t.balanceOf(address(hp)), hp.reserve1(), "remaining holders must stay backed");
+    }
+
     /// @dev The lossy path must not become a way to take more than a pro-rata
     /// share, or to reach anything the strict path could not.
     function test_LossyExitGrantsNoExtraAuthority() public {
@@ -492,14 +670,14 @@ contract PrecisionPoolHardeningTest is Test {
         // Same zero-payout refusal as the strict path.
         vm.prank(user);
         vm.expectRevert(PrecisionPool.ZeroAmount.selector);
-        pool.removeLiquidityLossy(1, 0, 0, user);
+        pool.removeLiquidityLossy(1, 0, 0, user, true, true);
 
         // Cannot burn shares it does not hold. `supply` is read BEFORE arming
         // the cheatcode, which otherwise binds to that read instead.
         uint256 supply = pool.totalSupply();
         vm.prank(user);
         vm.expectRevert();
-        pool.removeLiquidityLossy(supply, 0, 0, user);
+        pool.removeLiquidityLossy(supply, 0, 0, user, true, true);
 
         // Under an exact-transfer token it is indistinguishable from the strict
         // path, so nothing is given up by using it.
@@ -509,7 +687,7 @@ contract PrecisionPoolHardeningTest is Test {
         (uint256 s0, uint256 s1) = pool.removeLiquidity(amount, 0, 0, lp);
         vm.revertToState(snap);
         vm.prank(lp);
-        (uint256 l0, uint256 l1) = pool.removeLiquidityLossy(amount, 0, 0, lp);
+        (uint256 l0, uint256 l1) = pool.removeLiquidityLossy(amount, 0, 0, lp, true, true);
         assertEq(l0, s0, "lossy must match strict on a well-behaved token");
         assertEq(l1, s1, "lossy must match strict on a well-behaved token");
     }

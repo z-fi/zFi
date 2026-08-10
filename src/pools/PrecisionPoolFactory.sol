@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {PrecisionPool} from "./PrecisionPool.sol";
 import {SSTORE2} from "../../lib/solady/src/utils/SSTORE2.sol";

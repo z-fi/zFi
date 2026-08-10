@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {PriceTape, IPriceTape} from "./PriceTape.sol";
 import {ERC20} from "../../lib/solady/src/tokens/ERC20.sol";
@@ -69,6 +69,22 @@ interface IPrecisionHook {
 ///      and a bad opening price is arbitrageable - but on a wide band a corner
 ///      is cheap to pin. Deploy anything with a frontend as a NAMED market
 ///      (`feeRecipient != 0`), which only its creator can seed.
+///
+///      THE POOL ADDRESS IS NOT A TRUST ANCHOR, AND `factory` IS. This
+///      constructor is PUBLIC and validates `factory_` with nothing but
+///      `code.length != 0`, so anyone can deploy a pool naming a factory of
+///      their own. Combined with the constant token name below, such a pool is
+///      visually identical to a canonical one in a wallet or an approval
+///      prompt. It cannot reach a canonical pool's reserves - the two share no
+///      state - and its own reserves are still bounded the same way, so this is
+///      approval-surface risk rather than a flaw in the accounting.
+///
+///      The check is one call and every consumer must make it: `pool.factory()`
+///      against the canonical factory, or equivalently `factory.isPool(pool)`.
+///      `PrecisionPoolLens` does it for you - it is constructed with one
+///      factory and returns an empty struct for anything that factory did not
+///      create - so reading pools through the lens is the check. Reading them
+///      from a raw address is not.
 ///
 ///      EVERY POOL'S LP TOKEN IS CALLED "Precision LP" / "pLP". The name is a
 ///      compile-time constant because the EIP-2612 domain caches its hash, so
@@ -751,6 +767,19 @@ contract PrecisionPool is ERC20, IPriceTape {
     ///      hook may key its surcharge on it, and the quote must sample the same
     ///      rate the swap will.
     ///
+    ///      ON A HOOKED POOL THIS IS ADVISORY, NOT A PREDICTION. `feeFor` is
+    ///      `view`, which constrains it to not writing - it does NOT constrain
+    ///      it to answering the same way twice. A hook may key its rate on
+    ///      block number, timestamp, its own storage, `tx.origin`, or the pool
+    ///      state a pending transaction is about to change, so the surcharge
+    ///      sampled here can differ from the one the swap applies, anywhere up
+    ///      to `MAX_TOTAL_FEE - fee`. That is bounded and it is the hook's
+    ///      prerogative - the hook is immutable per pool and its ceiling is
+    ///      enforced in `extraFee` - but it means a quote taken here is a
+    ///      sample, not a commitment. `minOut` is what actually protects the
+    ///      trade; size it against the worst case, not against this number.
+    ///      On an unhooked pool the quote is exact.
+    ///
     ///      DO NOT BISECT `fits`. It is the conjunction of two conditions that
     ///      run in OPPOSITE directions - the band closes as size grows, the
     ///      zero-output refusal opens - so the fillable set is an interval, and
@@ -1421,63 +1450,171 @@ contract PrecisionPool is ERC20, IPriceTape {
         nonReentrant
         returns (uint256 amount0, uint256 amount1)
     {
-        return _removeLiquidity(lp, min0, min1, to, true);
+        return _removeLiquidity(lp, min0, min1, to);
     }
 
-    /// @notice Pro-rata exit that tolerates a token crediting the recipient
-    ///         less than it debits this pool.
+    /// @notice Degraded pro-rata exit for a pool whose token has turned
+    ///         hostile: tolerates short credit, a shortfall against the
+    ///         reserves, and one side being untransferable entirely.
     ///
-    /// @dev THE ESCAPE HATCH FOR A FEE SWITCH FLIPPED AFTER DEPLOYMENT.
-    ///      `_pullExact` and `_pay` both demand exact movement, which is what
-    ///      keeps the reserves honest - but it means a token that LATER starts
-    ///      taking a fee on transfer closes every path at once: no deposit, no
-    ///      swap, no withdrawal, no fee collection. The pool is immutable and
-    ///      the LP funds are then locked for good, not merely degraded. This is
-    ///      not hypothetical; USDT ships an owner-settable fee that is currently
-    ///      zero, and plenty of bridged assets are upgradeable.
+    /// @dev THE ESCAPE HATCH. `_pullExact` and `_pay` demand exact movement,
+    ///      which is what keeps reserves honest and what makes the pool seize
+    ///      up the moment a token stops behaving. On an immutable contract
+    ///      that seizure is permanent, so there has to be one path out. This is
+    ///      it, and it is built for three distinct failures - the first two of
+    ///      which an earlier revision of this function did NOT survive:
     ///
-    ///      So this path keeps the check the accounting actually depends on -
-    ///      that THIS POOL was debited exactly `amount`, so the reserves it
-    ///      writes stay true - and drops only the check on what the recipient
-    ///      received. The shortfall is the caller's, knowingly.
+    ///        1. THE BALANCE FALLS WITHOUT A TRANSFER. USDT's owner can zero a
+    ///           blacklisted holder's balance outright; a rebasing token can
+    ///           contract; an upgrade can burn. Then `balance < reserve`, and
+    ///           `_assertBacked` reverts - which would take down every function
+    ///           in the contract INCLUDING this one, stranding the healthy side
+    ///           of the pool along with the damaged one. So this path does not
+    ///           assert backing. It clamps each payout to what the pool can
+    ///           actually spend, which is strictly stronger: the assertion only
+    ///           refuses when it detects a shortfall, whereas the clamp cannot
+    ///           overpay even when the assertion would have passed. The clamp
+    ///           is `lp/supply` of the SURVIVING balance rather than the
+    ///           balance itself, so a shortfall is shared in proportion and
+    ///           being first out of a damaged pool is worth nothing.
     ///
-    ///      IT GRANTS NO NEW AUTHORITY. Still pro-rata, still burns the
-    ///      caller's own shares, still cannot reach unaccounted surplus or
-    ///      anything owed to the hook or the creator, and still refuses a
-    ///      zero-payout burn. The pool stays untradeable under such a token,
-    ///      correctly - this only lets the LPs out.
+    ///        2. ONE SIDE CANNOT BE TRANSFERRED AT ALL. A paused token, or a
+    ///           `to` blacklisted by one issuer, reverts its leg and with it
+    ///           the whole call - so an LP could not withdraw their ETH because
+    ///           the USDC leg failed. `take0`/`take1` let the caller abandon a
+    ///           side and leave through the other. The abandoned side's claim
+    ///           is still burned and still written off the reserves: it is
+    ///           forfeited to the remaining holders, which is a real loss and
+    ///           the caller's decision to make.
     ///
-    ///      `min0`/`min1` bound the amounts DEBITED FROM THE RESERVES, which is
-    ///      all this contract can observe; under a transfer fee the caller
-    ///      receives less than that and must size the shortfall themselves.
-    ///      Use `removeLiquidity` unless it is actually reverting.
+    ///        3. THE RECIPIENT IS CREDITED LESS THAN THE POOL IS DEBITED, i.e.
+    ///           a fee switch flipped after deployment. `_settle` keeps the
+    ///           debit check and drops the credit check.
     ///
-    ///      IT COVERS ONE FEE SHAPE, AND THE OTHER CANNOT BE SERVED HERE. This
-    ///      survives a token that debits the pool exactly `amount` and credits
-    ///      the recipient less. A token that instead debits `amount + fee` -
-    ///      charging on top rather than out of - still fails the debit check,
-    ///      and widening that check to `>= amount` would be a real hazard
-    ///      rather than a fix: the reserves are written down by `amount`, so
-    ///      the extra is taken out of the balance backing OTHER holders. Once
-    ///      it exceeds any surplus the pool happens to hold, `_assertBacked`
-    ///      fails from then on and every remaining path - including this one -
-    ///      reverts for everyone. One LP's exit would brick the pool.
+    ///      RESERVES FALL BY THE FULL PRO-RATA CLAIM, NOT BY WHAT WAS PAID,
+    ///      and that is what keeps this from becoming a bank run. Were the
+    ///      write-down limited to what was actually transferred, the first
+    ///      exit out of a short pool would take its claim whole and leave the
+    ///      entire shortfall to the slowest holder. Writing off the full claim
+    ///      gives every holder their share of the damage and makes exit order
+    ///      irrelevant.
     ///
-    ///      Writing the reserves down by the larger observed debit instead
-    ///      keeps the backing intact but pays the exiting LP more than their
-    ///      shares, which socialises the fee just as directly. There is no
-    ///      local answer: a token that charges the sender ON TOP of a transfer
-    ///      is incompatible with proportional accounting, and the honest
-    ///      position is that such a token must not be used in a pool.
-    function removeLiquidityLossy(uint256 lp, uint256 min0, uint256 min1, address to)
+    ///      IT GRANTS NO NEW AUTHORITY. Still pro-rata, still burns only the
+    ///      caller's own shares, still cannot reach accrued hook or creator
+    ///      fees - the clamp subtracts them - and still refuses a burn that
+    ///      pays out nothing. Under a well-behaved token it is indistinguishable
+    ///      from `removeLiquidity`; use that one unless it is actually
+    ///      reverting.
+    ///
+    ///      ONE SHAPE REMAINS UNSERVEABLE. A token that debits the pool
+    ///      `amount + fee` - charging on top of the transfer rather than out of
+    ///      it - still fails `_settle`'s debit check. Relaxing that to `>=`
+    ///      would take the excess out of the balance backing other holders,
+    ///      and writing reserves down by the larger observed debit instead pays
+    ///      the exiting LP more than their shares. Both socialise the fee; the
+    ///      honest position is that such a token cannot be used in a pool that
+    ///      accounts proportionally.
+    /// @param take0 Whether to attempt the token0 leg. Pass false to abandon
+    ///        that side's claim and exit through the other one alone.
+    /// @param take1 As `take0`, for token1.
+    /// @return paid0 What actually left the pool on the token0 side, which is
+    ///         the pro-rata claim CLAMPED to what the pool can still spend, and
+    ///         zero when `take0` is false. Under a transfer fee the recipient
+    ///         receives less than this again.
+    /// @return paid1 As `paid0`, for token1.
+    function removeLiquidityLossy(uint256 lp, uint256 min0, uint256 min1, address to, bool take0, bool take1)
         external
         nonReentrant
-        returns (uint256 amount0, uint256 amount1)
+        returns (uint256 paid0, uint256 paid1)
     {
-        return _removeLiquidity(lp, min0, min1, to, false);
+        if (lp == 0) revert ZeroAmount();
+        if (to == address(0) || to == address(this)) revert Bad();
+        if (!take0 && !take1) revert ZeroAmount();
+
+        uint256 r0 = reserve0;
+        uint256 r1 = reserve1;
+        // NOT `_assertBacked`. That is the whole point of this function: a
+        // shortfall is the condition it exists to escape, not a reason to
+        // refuse. Paying out is made safe by clamping to what the pool can
+        // actually spend, which is a stronger guarantee than the assertion -
+        // it cannot overpay even when the assertion would have passed.
+        uint256 supply = totalSupply();
+        if (supply == 0) revert InsufficientLiquidity();
+
+        uint256 amount0 = FixedPointMathLib.fullMulDiv(lp, r0, supply);
+        uint256 amount1 = FixedPointMathLib.fullMulDiv(lp, r1, supply);
+        if (amount0 == 0 && amount1 == 0) revert ZeroAmount();
+
+        // RESERVES FALL BY THE FULL PRO-RATA CLAIM, NOT BY WHAT WAS PAID.
+        // This is what stops the escape hatch becoming a bank run. If the pool
+        // is short, the first exit would otherwise take its claim whole and
+        // leave the entire shortfall to whoever is slowest; writing off the
+        // full claim instead makes every holder carry their share of it, and
+        // the exit order stops mattering. It also only ever moves reserves
+        // DOWN faster than balances, so what backs the remaining holders can
+        // only improve.
+        _burn(msg.sender, lp);
+        _setReserves(r0 - amount0, r1 - amount1);
+
+        // THE CLAMP IS PRO-RATA ON THE SURVIVING BALANCE, not on the raw
+        // balance. Clamping to `spendable` alone would still hand the first
+        // exit everything left standing - a holder with half the shares would
+        // take the whole remainder, because their claim exceeds it - which is
+        // the run this function must not create. Taking `lp/supply` of what
+        // actually survives instead leaves `balance/reserve` exactly where it
+        // was: both sides scale by `(supply - lp)/supply`, so a degraded pool
+        // stays a proportional claim on its real holdings and exit order
+        // carries no advantage at all.
+        //
+        // On a healthy pool `spendable >= reserve`, so this is `amount` and the
+        // clamp is invisible.
+        if (take0) {
+            paid0 = FixedPointMathLib.min(
+                amount0, FixedPointMathLib.fullMulDiv(lp, _spendable(token0, _owed0()), supply)
+            );
+            if (paid0 != 0) _settle(token0, to, paid0, false);
+        }
+        if (take1) {
+            paid1 = FixedPointMathLib.min(
+                amount1, FixedPointMathLib.fullMulDiv(lp, _spendable(token1, _owed1()), supply)
+            );
+            if (paid1 != 0) _settle(token1, to, paid1, false);
+        }
+        // Bounds what LEAVES THE POOL, which is the figure this path can
+        // actually promise. The strict exit checks the pro-rata claim instead,
+        // because there the two are equal by construction.
+        if (paid0 < min0 || paid1 < min1) revert InsufficientOutput();
+        if (paid0 == 0 && paid1 == 0) revert ZeroAmount();
+
+        emit RemoveLiquidity(msg.sender, lp, amount0, amount1);
     }
 
-    function _removeLiquidity(uint256 lp, uint256 min0, uint256 min1, address to, bool exactCredit)
+    /// @dev Hook and creator claims on each side, which no exit may spend.
+    function _owed0() internal view returns (uint256 owed) {
+        unchecked {
+            if (hook != address(0)) owed = hookOwed0;
+            if (creatorFeeBps != 0) owed += creatorOwed0;
+        }
+    }
+
+    function _owed1() internal view returns (uint256 owed) {
+        unchecked {
+            if (hook != address(0)) owed = hookOwed1;
+            if (creatorFeeBps != 0) owed += creatorOwed1;
+        }
+    }
+
+    /// @dev What the pool could pay out right now without touching accrued
+    ///      fees. Saturates at zero instead of reverting, because this is the
+    ///      degraded path and a shortfall is the input, not an error.
+    function _spendable(address token, uint256 owed) internal view returns (uint256) {
+        uint256 bal = _balance(token);
+        unchecked {
+            return bal > owed ? bal - owed : 0;
+        }
+    }
+
+    function _removeLiquidity(uint256 lp, uint256 min0, uint256 min1, address to)
         internal
         returns (uint256 amount0, uint256 amount1)
     {
@@ -1513,8 +1650,8 @@ contract PrecisionPool is ERC20, IPriceTape {
         _burn(msg.sender, lp);
         _setReserves(r0 - amount0, r1 - amount1);
 
-        if (amount0 != 0) _settle(token0, to, amount0, exactCredit);
-        if (amount1 != 0) _settle(token1, to, amount1, exactCredit);
+        if (amount0 != 0) _pay(token0, to, amount0);
+        if (amount1 != 0) _pay(token1, to, amount1);
 
         emit RemoveLiquidity(msg.sender, lp, amount0, amount1);
     }
