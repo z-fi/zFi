@@ -48,6 +48,8 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqmeta{font-size:11px;opacity:.7;margin-top:3px}
 .lqmine{font-size:11px;margin-top:3px;color:var(--acc,#4da3ff)}
 .lqempty{padding:14px 12px;font-size:12px;opacity:.7;text-align:center}
+.lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--bd,#2a2f3a);background:transparent;color:inherit}
+.lqbtn:hover{opacity:.75}
 .rcpt:focus{border-color:var(--m)}
 .rcpt.bad{border-color:#c33}
 #rcvEl{display:block;font-size:.7em;color:var(--m);margin-top:.35em;word-break:break-all;text-align:center}
@@ -2358,7 +2360,7 @@ if(Date.now()>=last.exp-5000)update();
 // pool constructor is public and every LP token is named "Precision LP", so an
 // address alone proves nothing; the lens answers only for pools its own factory
 // created.
-let lqMode=false,lqSeq=0;
+let lqMode=false,lqSeq=0,lqRows=[];
 // Verified against `cast sig`, not guessed. A wrong selector here returns empty
 // calldata that decodes to zero rows - so it looks exactly like "you hold no
 // positions" rather than like a bug.
@@ -2394,7 +2396,8 @@ function lqRow(o,t0,t1){
     +(o.hook!==ZERO?` <span class="lqtag" title="Hooked: may add a surcharge, and cannot be used in a clamped route">hook</span>`:"")
     +(inRange?"":` <span class="lqtag">out of range</span>`)+`</div>`
     +`<div class="lqmeta">price ${fmtPx(px)} · ${formatUnits(o.r0,t0.dec)} ${t0.sym} / ${formatUnits(o.r1,t1.dec)} ${t1.sym}</div>`
-    +(mine?`<div class="lqmine">yours: ${formatUnits(o.mine0,t0.dec)} ${t0.sym} + ${formatUnits(o.mine1,t1.dec)} ${t1.sym}</div>`:"")
+    +(mine?`<div class="lqmine">yours: ${formatUnits(o.mine0,t0.dec)} ${t0.sym} + ${formatUnits(o.mine1,t1.dec)} ${t1.sym}`
+        +` <button class="lqbtn" data-act="w" data-pool="${o.pool}">Withdraw all</button></div>`:"")
     +`</div>`;
 }
 
@@ -2417,7 +2420,7 @@ async function loadLq(){
         rows.push({pool:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),
           sl:at(PI_SL),sh:at(PI_SH),fee:at(PI_FEE),r0:at(PI_R0),r1:at(PI_R1),px:at(PI_PX),
           liq:at(PI_LIQ),hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
-          mine0:0n,mine1:0n})}}
+          shares:0n,mine0:0n,mine1:0n})}}
     // What the account already holds. `positionsOf` walks a page of ALL pools
     // rather than this pair's, so match by address and ignore the rest.
     if(account&&rows.length){
@@ -2429,7 +2432,7 @@ async function loadLq(){
             const at=k=>BigInt("0x"+h.slice(base+(i*W+k)*64,base+(i*W+k+1)*64));
             const a="0x"+h.slice(base+(i*W)*64+24,base+(i*W+1)*64);
             const r=rows.find(x=>x.pool.toLowerCase()===a.toLowerCase());
-            if(r){r.mine0=at(2);r.mine1=at(3)}}}
+            if(r){r.shares=at(1);r.mine0=at(2);r.mine1=at(3)}}}
       }catch{}
     }
     if(my!==lqSeq)return;
@@ -2439,12 +2442,105 @@ async function loadLq(){
       return}
     // Deepest first: the band a depositor most likely wants is the live one.
     rows.sort((a,b)=>(b.liq>a.liq?1:b.liq<a.liq?-1:0));
+    lqRows=rows;
     lqList.innerHTML=rows.map(o=>lqRow(o,t0,t1)).join("");
   }catch(e){
     if(my!==lqSeq)return;
     lqList.innerHTML=`<div class="lqempty">Could not read pools.</div>`;
   }
 }
+// ---------------------------------------------------------- LIQUIDITY ACTIONS
+// Withdraw and two-sided add call the POOL DIRECTLY. Both are public entry
+// points that pull from `msg.sender` in the same call, so there is no router,
+// no checkpoint and no executor in the path - which also means no intent to get
+// wrong. Zapping is the one that has to go through zRouter, because
+// `PrecisionRoute.zapIn` is gated to the trusted executor; it comes later.
+// All verified with `cast sig`. Four of these were wrong when written from
+// memory, and a wrong selector on a VIEW is the dangerous kind: it returns
+// empty calldata that decodes to zeros, so a preview reads as "the pool would
+// refuse" and the button just never enables. Nothing throws.
+const SEL_REMOVE="e39b0eb5",SEL_ADDEXACT="cc0025e4",SEL_PREVIEW_REMOVE="a2eaee07",
+      SEL_PREVIEW_ADD="e03ec807"; // SEL_ALLOWANCE already declared above
+
+// Every preview returns `ok` first. False is not an error - it is the pool
+// saying it would refuse, which is a disabled button with a reason rather than
+// a failed transaction the user pays for.
+const dec1=(h,i)=>BigInt("0x"+strip0x(h).slice(i*64,(i+1)*64));
+
+async function previewRemove(pool,shares){
+  const [r]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_REMOVE+encAddr(pool)+encUint(shares)}]);
+  if(!r)return null;
+  return dec1(r,0)===1n?{a0:dec1(r,1),a1:dec1(r,2)}:null;
+}
+async function previewAdd(pool,a0,a1){
+  const [r]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_ADD+encAddr(pool)+encUint(a0)+encUint(a1)}]);
+  if(!r)return null;
+  return dec1(r,0)===1n?{lp:dec1(r,1),used0:dec1(r,2),used1:dec1(r,3),ref0:dec1(r,4),ref1:dec1(r,5)}:null;
+}
+
+// The pool pulls token1 with transferFrom, so it needs an allowance. token0 is
+// either native - paid as value - or an ERC-20 that needs the same treatment.
+async function ensureAllowance(token,spender,need){
+  if(token===ZERO||need===0n)return;
+  const [r]=await mc3([{to:token,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(spender)}]);
+  if(r&&dec1(r,0)>=need)return;
+  stat.textContent="Approving…";
+  await waitTx(await rpc(S,[{from:account,to:token,
+    data:"0x"+SEL_APPROVE+encAddr(spender)+encUint((1n<<256n)-1n),value:"0x0"}]));
+}
+
+async function doRemove(pool,shares,t0,t1){
+  const pv=await previewRemove(pool,shares);
+  // A real holding whose share of both reserves floors to zero cannot be
+  // exited at all - the pool refuses it outright. Say so instead of sending.
+  if(!pv){stat.textContent="This amount redeems nothing — the pool would refuse it.";return}
+  busy=true;
+  try{
+    stat.textContent="Withdrawing…";
+    // min0/min1 at the previewed amounts: the pool is the only writer of its
+    // own reserves and this is a direct call, so nothing can move in between.
+    await settle(await rpc(S,[{from:account,to:pool,value:"0x0",
+      data:"0x"+SEL_REMOVE+encUint(shares)+encUint(pv.a0)+encUint(pv.a1)+encAddr(account)}]));
+    await loadLq();
+  }catch(e){stat.textContent=(e&&e.message)||"Withdraw failed"}
+  finally{busy=false}
+}
+
+async function doAdd(pool,a0,a1,t0,t1){
+  const pv=await previewAdd(pool,a0,a1);
+  if(!pv){stat.textContent="The pool would refuse this deposit.";return}
+  busy=true;
+  try{
+    // Only token1 can ever be an ERC-20 pull alongside native token0; when
+    // token0 is also an ERC-20 both need allowances.
+    await ensureAllowance(t0.addr,pool,pv.used0);
+    await ensureAllowance(t1.addr,pool,pv.used1);
+    stat.textContent="Adding…";
+    const value=t0.addr===ZERO?a0:0n;
+    // minLP at the previewed shares. The refund is not slippage - a
+    // proportional deposit at the wrong ratio ALWAYS hands the excess back -
+    // so it is shown before sending rather than bounded here.
+    await settle(await rpc(S,[{from:account,to:pool,value:"0x"+value.toString(16),
+      data:"0x"+SEL_ADDEXACT+encUint(0)+encUint(a0)+encUint(a1)+encUint(pv.lp)+encAddr(account)}]));
+    await loadLq();
+  }catch(e){stat.textContent=(e&&e.message)||"Add failed"}
+  finally{busy=false}
+}
+
+// Delegated so rows can be re-rendered freely.
+lqList.onclick=async ev=>{
+  const b=ev.target.closest("[data-act]");
+  if(!b||busy||!account)return;
+  const p=chPair(); if(!p)return;
+  const [t0,t1]=p,pool=b.dataset.pool;
+  if(b.dataset.act==="w"){
+    const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+    if(!row||row.shares===0n)return;
+    // Whole position. A slider is the next iteration; this proves the path.
+    await doRemove(pool,row.shares,t0,t1);
+  }
+};
+
 lq.onclick=()=>lqSet(!lqMode);
 
 // ------------------------------------------------------------- PRICE TAPE
