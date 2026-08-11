@@ -38,6 +38,7 @@ const SOURCES = {
   PrecisionRoute: "src/pools/PrecisionRoute.sol",
   PrecisionZap: "src/pools/PrecisionZap.sol",
   PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
+  PrecisionLiquidityLens: "src/pools/PrecisionLiquidityLens.sol",
   ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
   PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
 };
@@ -84,6 +85,7 @@ const OPTIMIZER_RUNS = {
   PrecisionRoute: 200,
   PrecisionZap: 200,
   PrecisionPoolLens: 200,
+  PrecisionLiquidityLens: 200,
   ConstantSurchargeHook: 200,
   PrecisionPoolPolicy: 200,
 };
@@ -145,6 +147,7 @@ const specs = [
   {name: "PrecisionRoute", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_EXECUTOR]},
   {name: "PrecisionZap", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_EXECUTOR]},
   {name: "PrecisionPoolLens", args: [artifactAddress("PrecisionPoolFactory")]},
+  {name: "PrecisionLiquidityLens", args: [artifactAddress("PrecisionPoolFactory")]},
   {name: "ConstantSurchargeHook", args: [artifactAddress("PrecisionPoolFactory")]},
   {name: "PrecisionPoolPolicy", args: [artifactAddress("PrecisionPoolFactory"), PRECISION_POLICY_OWNER]},
   {name: "Swapboard", args: [WETH]},

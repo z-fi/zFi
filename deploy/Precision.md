@@ -1,6 +1,6 @@
 # Precision pool suite — deployment runbook
 
-**Status: LIVE ON MAINNET, VERIFIED, UNSEEDED.** All six deployed 2026-08-11 and
+**Status: LIVE ON MAINNET, VERIFIED, UNSEEDED.** Seven contracts deployed 2026-08-11 and
 verified on Etherscan. `poolCount()` is 0 — no market exists yet, so nothing
 holds user funds.
 
@@ -12,8 +12,17 @@ holds user funds.
 | `PrecisionPoolLens` | `0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB` | `0x86c38f84220e63fe0650846759ca21ad54aed1880bc83361852dec04f728e6bb` |
 | `ConstantSurchargeHook` | `0x000000Aee5a5acCFe16088A29A555D93eE42ec03` | `0xbc34840c31a88f4d865bab846e3f0fe60e2ec47faea55052ae0d75205dd32963` |
 | `PrecisionPoolPolicy` | `0x00000045fc7b570Be4d71F67219508ebD295EC6D` | `0x13fb57c19a534cfb04cbafd51788cff694b98a89babebf172cd4ab0f7012eb92` |
+| `PrecisionLiquidityLens` | `0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E` | `0x3cc3fce277b85ae92a63502b243b69bb70fd1b27ad20287d2065eab72a5a3673` |
 
-Factory landed in block 25,725,625. Total ~12.07M gas, 0.00206 ETH.
+Factory landed in block 25,725,625; the liquidity lens followed in 25,729,951.
+Total ~13.3M gas, ~0.0023 ETH.
+
+`PrecisionLiquidityLens` is the LP-side counterpart to `PrecisionPoolLens`:
+seed/add/remove previews and the zap split. It was deployed separately and
+deliberately - it is a pure view, referenced by no contract, so it can be
+replaced by deploying another and repointing the frontend. Extending the
+already-verified `PrecisionPoolLens` would instead have left a live address no
+longer reproducing from source.
 
 Confirmed from chain state after deployment:
 
