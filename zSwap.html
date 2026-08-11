@@ -353,6 +353,13 @@ const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+enc
 // for a non-view function, and a pool that cannot answer returns zero rather
 // than taking the whole quote down with it.
 const SEL_QUOTE_BEST="2adaa389",SEL_PSWAP="a6220b66",SEL_POOL_FEE="ddca3f43";
+const SEL_PAIR_COUNT="355da246";
+// How many bands a page will look at. `_byPair` is append-only and index 0 is
+// the OLDEST pool, so a fixed window is not neutral: on a NEW pair somebody can
+// create junk bands first and push a later real one outside it. Creation costs
+// ~4.6M gas apiece, so this is expensive rather than impossible - which makes
+// it worth bounding loudly rather than trusting nobody will pay.
+const LQ_SCAN=128;
 /**
  * Precision pools, as a quote source.
  *
@@ -371,13 +378,23 @@ if(PPLENS===ZERO||amountIn<=0n)return null;
 // Canonical order: the factory pages pools by the sorted pair, and ETH sorts
 // first as the zero address.
 const [c0,c1]=f.addr.toLowerCase()<t.addr.toLowerCase()?[f.addr,t.addr]:[t.addr,f.addr];
-const [q]=await mc3Deep([{to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(c0)+encAddr(c1)
-  +encAddr(sender)+encAddr(f.addr)+encUint(amountIn)+encUint(0n)+encUint(32n)}],block);
+// The window is asked for in full and the COUNT rides alongside it, in the
+// same batch. Reading the count first would put a second round trip in front
+// of every quote on the page, including the pairs that have no band at all -
+// and the count is only needed to say whether the window covered everything.
+const [q,c]=await mc3Deep([
+  {to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(c0)+encAddr(c1)
+    +encAddr(sender)+encAddr(f.addr)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
+  {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(c0)+encAddr(c1)},
+],block);
+let n=0;try{if(c)n=Number(BigInt(c))}catch{}
 if(!q)return null;
 const h=strip0x(q);
 if(h.length<128)return null;
 const pool="0x"+h.slice(24,64),out=BigInt("0x"+h.slice(64,128));
 if(out<=0n||/^0x0{40}$/i.test(pool))return null;
+// Say it rather than quietly quoting a subset.
+if(n>LQ_SCAN)stat.textContent=`Precision: quoting the first ${LQ_SCAN} of ${n} bands for this pair.`;
 let fee=0n;
 try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee=BigInt(fx)}catch{}
 return {pool,out,fee};
@@ -3309,9 +3326,23 @@ async function loadLq(){
   lqList.innerHTML=`<div class="lqempty">Loading…</div>`;
   try{
     const who=account||ZERO;
-    const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(t0.addr)+encAddr(t1.addr)
-      +encAddr(who)+encUint(0)+encUint(24)+encUint(0)}]);
+    // Ask for the count first: `_byPair` is append-only, so a fixed window
+    // shows the OLDEST bands and hides anything created after them. Harmless
+    // until somebody fills a new pair with junk to bury a real pool, so the
+    // window is sized to the pair and NAMED when it cannot cover it - "showing
+    // 128 of 900" reads very differently from a list that looks complete.
+    // Both in one batch: the rows, and how many there are in total. The lens
+    // returns only the bands that exist, so asking for the whole window costs
+    // nothing on an ordinary pair, and the count is what makes a truncated
+    // list say so instead of looking complete.
+    const [raw,c]=await mc3([
+      {to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(t0.addr)+encAddr(t1.addr)
+        +encAddr(who)+encUint(0)+encUint(LQ_SCAN)+encUint(0)},
+      {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(t0.addr)+encAddr(t1.addr)},
+    ]);
     if(my!==lqSeq)return;
+    let total=0;try{if(c)total=Number(BigInt(c))}catch{}
+    if(total>LQ_SCAN)lqSub.textContent+=` · showing ${LQ_SCAN} of ${total}`;
     const rows=[];
     if(raw){const h=strip0x(raw),n=Number(BigInt("0x"+h.slice(64,128))),base=128;
       for(let i=0;i<n&&i<24;i++){

@@ -91,6 +91,7 @@ export const SEL = {
   ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
   POOLFOR: '83bd1387', PREVIEW_SEED: '1d355417', CREATE_SEED: '7163352a',
   QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43',
+  PAIR_COUNT: '355da246',
   REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
   RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96', FLOOR_BID: '3d8d260b',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
@@ -286,6 +287,8 @@ export class MockChain {
     // What PrecisionPoolLens.quoteBestFor answers: {pool, out, fee}. Null is a
     // pair with no Precision band, which is most pairs.
     this.precisionQuote = null;
+    // Override for poolsForPairCount, to model a pair stuffed with bands.
+    this.pairCount = null;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -615,6 +618,14 @@ export class MockChain {
         if (width > this.rejectWiderThan) throw Error('InsufficientLiquidity');
       }
       return '0x' + '00'.repeat(128);
+    }
+    // poolsForPairCount — how many bands the pair has, which the page reads
+    // before deciding how wide a window to ask for. `_byPair` is append-only,
+    // so a fixed window hides anything created after it.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.PAIR_COUNT) {
+      const body = '0x' + data.slice(8);
+      const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
+      return '0x' + u256(this.pairCount ?? rows.length);
     }
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
       const who = wordAddr('0x' + data.slice(8), 0);

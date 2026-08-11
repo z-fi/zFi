@@ -330,4 +330,21 @@ describe('living beside the swap tile', () => {
     assert.equal(p.visible('swap'), true, 'the swap button came back with it');
     p.close();
   });
+
+  test('says when a pair has more bands than it is showing', async () => {
+    // `_byPair` is append-only and index 0 is the OLDEST pool, so a fixed
+    // window is not neutral: on a NEW pair somebody can create junk bands
+    // first and push a later real one outside it. Creation costs ~4.6M gas
+    // apiece, so that is expensive rather than impossible - which makes it
+    // worth bounding LOUDLY. A truncated list that looks complete is the
+    // failure that matters, not the truncation itself.
+    const p = await setup();
+    p.chain.pairCount = 900;
+    p.pickToken('toSel', 'USDT');
+    await p.settle();
+    p.pickToken('toSel', 'USDC');
+    await p.waitFor(() => /showing/.test(p.$('lqSub').textContent), { label: 'the notice' });
+    assert.match(p.$('lqSub').textContent, /showing 128 of 900/);
+    p.close();
+  });
 });
