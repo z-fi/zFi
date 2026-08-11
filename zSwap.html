@@ -185,7 +185,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
-<label class="dly hide" id="ethModeL">Wrapped ether<select id="ethMode"><option value="auto">Auto</option><option value="eth">Prefer ETH</option><option value="weth">Keep WETH</option></select></label>
+<label class="dly hide" id="ethModeL" title="How filling and cancelling cross the ETH / WETH line. Placing an order is unaffected: an order priced in ETH is always written in WETH, because the board has to be able to call the token.&#10;&#10;WETH first — spend the WETH you hold, and wrap ETH only if it falls short.&#10;ETH first — pay with ETH whenever it covers the order, and fall back to WETH.&#10;Keep WETH — never wrap, and take proceeds as WETH instead of unwrapping to ETH.">Wrapped ether<select id="ethMode"><option value="auto">WETH first</option><option value="eth">ETH first</option><option value="weth">Keep WETH</option></select></label>
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>

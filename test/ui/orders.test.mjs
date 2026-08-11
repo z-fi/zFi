@@ -544,6 +544,22 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  test('the wrapped-ether control says which way it goes, and when', async () => {
+    // "Auto" named the mechanism and not the behaviour: it did not say whether
+    // it favours ETH or WETH, that it governs BOTH paying and receiving, or
+    // that placing an order ignores it entirely.
+    const p = await setup();
+    const opts = [...p.$('ethMode').options].map(o => o.textContent);
+    assert.deepEqual(opts, ['WETH first', 'ETH first', 'Keep WETH'],
+      'each option should name the asset it reaches for first');
+
+    const help = p.$('ethModeL').getAttribute('title') || '';
+    assert.match(help, /filling and cancelling/i, 'says WHEN it applies');
+    assert.match(help, /Placing an order is unaffected/i, 'and when it does not');
+    assert.match(help, /proceeds/i, 'covers receiving, not only paying');
+    p.close();
+  });
+
   test('an empty book renders nothing at all', async () => {
     const p = await setup();
     await p.settle();
