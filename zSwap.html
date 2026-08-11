@@ -3787,7 +3787,17 @@ lq.onclick=()=>lqSet(!lqMode);
 // costs nothing at all until opened.
 const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
 const SEL_MARKETS="29c21083",SEL_TAPE="29a65241";
-const FINE=300,COARSE=14400,TFS=[["5m",300],["1h",3600],["1d",86400]];
+// The tape publishes exactly two periods and keeps 256 bars of each, so what
+// a timeframe can show is fixed by arithmetic rather than by taste:
+//
+//   5m  fine, native   256 bars   21 hours
+//   1h  fine, rolled    21 bars   21 hours   <- cannot reach further back
+//   4h  coarse, native 256 bars   42.7 days
+//   1d  coarse, rolled  42 bars   42.7 days
+//
+// 4h was missing, which left the pool's own second period reachable only
+// through the 1d rollup - the widest coverage it has, unused.
+const FINE=300,COARSE=14400,TFS=[["5m",300],["1h",3600],["4h",14400],["1d",86400]];
 // The fine ring only spans ~21h, so a daily candle built from it is a stub.
 // The pool also keeps a four-hour tape covering weeks; read both and pick the
 // one whose resolution the timeframe actually needs.
@@ -3920,6 +3930,42 @@ const chPairKey=p=>p?p[0].addr.toLowerCase()+":"+p[1].addr.toLowerCase():"";
 // token1 per token0 is the tape's order, so invert when token0 is the one that
 // should be doing the quoting.
 const chNaturalInv=p=>!!p&&moneyRank(p[0].addr)>moneyRank(p[1].addr);
+/**
+ * Which timeframe to open on.
+ *
+ * 5m is right for a market that traded ten minutes ago and useless for one
+ * that trades twice a week - the pool would be drawn as a flat line with two
+ * ticks on it, which reads as "nothing here" rather than "nothing recently".
+ *
+ * So it is chosen from what the pool HAS: the shortest timeframe that yields a
+ * few bars to look at, falling back to the widest when trading is sparse. Only
+ * on arrival at a pair; once a timeframe is picked it stays picked.
+ */
+const chAutoPeriod=()=>{
+  if(!chBars)return null;
+  const live=src=>(chBars[src]||[]).flat().filter(b=>b&&b.c).length;
+  const fine=live(FINE),coarse=live(COARSE);
+  // A rollup shrinks the count by its ratio, so this is bars actually drawable.
+  const drawable=secs=>{const src=srcFor(secs);
+    return Math.floor((src===FINE?fine:coarse)*src/secs)};
+  for(const[,secs] of TFS)if(drawable(secs)>=6)return secs;
+  // Nothing has enough to be a chart, so show whichever draws MOST - shortest
+  // wins a tie. Preferring the coarse tape merely because it has a bar put a
+  // young pool's two trades into one candle when the fine tape had them as two.
+  let best=FINE,bestN=-1;
+  for(const[,secs] of TFS){const n=drawable(secs);if(n>bestN){best=secs;bestN=n}}
+  return best;
+};
+let chTfKey="";
+const chSyncPeriod=()=>{
+  const k=chPairKey(chPair());
+  if(k===chTfKey)return;           // same pair: leave the choice alone
+  const auto=chAutoPeriod();
+  if(auto==null)return;            // nothing loaded yet
+  chTfKey=k;chPeriod=auto;
+  for(const c of chTf.children)
+    if(c.dataset.secs)c.classList.toggle("on",Number(c.dataset.secs)===chPeriod);
+};
 const chSyncOrientation=()=>{
   const p=chPair(),k=chPairKey(p);
   if(k===chInvKey)return;          // same pair: keep whatever is on screen
@@ -3973,7 +4019,7 @@ const pw=W-PL-PR,ph=H-PT-PB-VH;
 const src=srcFor(chPeriod),base=chBars[src]||chBars[FINE]||chBars[COARSE];
 if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 const step=chBars[src]?src:(chBars[FINE]?FINE:COARSE);
-chSyncOrientation();
+chSyncPeriod();chSyncOrientation();
 let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice().reverse();
 // WHICH WAY UP. The tape stores token1 per token0, and token0 is whichever
 // address sorts first - so ETH, always, being the zero address. That reads
@@ -4030,8 +4076,9 @@ const span=rel((last.b-first.b+1)*chPeriod);
 chNote.textContent=p?`${chInv?p[0].sym+" per "+p[1].sym:p[1].sym+" per "+p[0].sym} · ${chPools} pool${chPools===1?"":"s"} · ${clipped?"last ":""}${span}`:"";
 }
 for(const[label,secs]of TFS){const b=document.createElement("button");
-b.textContent=label;if(secs===chPeriod)b.className="on";
-b.onclick=()=>{chPeriod=secs;for(const c of chTf.children)if(c!==kindBtn)c.classList.toggle("on",c===b);drawChart()};
+b.textContent=label;b.dataset.secs=String(secs);if(secs===chPeriod)b.className="on";
+b.onclick=()=>{chPeriod=secs;chTfKey=chPairKey(chPair());
+for(const c of chTf.children)if(c.dataset.secs)c.classList.toggle("on",c===b);drawChart()};
 chTf.appendChild(b)}
 // Labelled with the action, not the state: at this width a glyph would be a guess.
 const kindBtn=document.createElement("button");

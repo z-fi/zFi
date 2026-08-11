@@ -64,7 +64,7 @@ function bars(n, { start = 3000, pool = 1 } = {}) {
   return out; // newest first, matching the contract
 }
 
-async function setup({ deployed = true, pools = [POOL_A], tapes = null, open = true } = {}) {
+async function setup({ deployed = true, pools = [POOL_A], tapes = null, coarse = null, open = true } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 5000n * USDC);
@@ -72,6 +72,8 @@ async function setup({ deployed = true, pools = [POOL_A], tapes = null, open = t
   chain.setCode(LENS, deployed ? '0x60006000' : '0x');
   chain.setPools(A.ZERO, A.USDC, pools);
   for (const [pool, b] of Object.entries(tapes || { [POOL_A]: bars(24) })) chain.setTape(pool, b);
+  // The 4h tape, which is where a sparsely traded pool keeps its history.
+  for (const [pool, b] of Object.entries(coarse || {})) chain.setTape(pool, b, 14400);
 
   const page = await loadPage({
     chain,
@@ -376,12 +378,17 @@ describe('reading a single bar', () => {
 });
 
 describe('timeframes', () => {
-  test('offers 5m, 1h and 1d', async () => {
+  test('offers 5m, 1h, 4h and 1d', async () => {
+    // The tape publishes exactly two periods and keeps 256 bars of each, so
+    // reach is arithmetic rather than taste: 1h is rolled from the fine tape
+    // and can never show more than 21 bars, while 4h IS the coarse period -
+    // 256 bars, nearly six weeks. It was missing, which left the pool's widest
+    // coverage reachable only through the 1d rollup.
     const p = await setup();
     await p.waitFor(() => svg(p), { label: 'chart' });
     const strip = [...p.$('chTf').children];
-    assert.deepEqual(strip.filter(b => b.className !== 'chk').map(b => b.textContent),
-      ['5m', '1h', '1d']);
+    assert.deepEqual(strip.filter(b => b.dataset.secs).map(b => b.textContent),
+      ['5m', '1h', '4h', '1d']);
     assert.equal(strip[strip.length - 1].className, 'chk', 'chart type sits after the timeframes');
     p.close();
   });
@@ -522,6 +529,31 @@ describe('when there is nothing to show', () => {
     p.click(inv);
     await p.settle();
     assert.match(p.text('chNote'), /ETH per USDC/, 'the override holds while the pair is up');
+    p.close();
+  });
+
+
+  test('opens on a timeframe the pool has data for', async () => {
+    // 24 fine bars is two hours of trading: 5m has plenty to draw, so that is
+    // where it opens.
+    const p = await setup();
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    assert.equal(on?.textContent, '5m', 'a busy pool opens close in');
+    p.close();
+  });
+
+  test('opens wider when the pool trades rarely', async () => {
+    // Three fine bars is not a chart, it is three ticks on a flat line - which
+    // reads as "nothing here" rather than "nothing recently". The coarse tape
+    // has the history, so that is what to open on.
+    const p = await setup({ tapes: { [POOL_A]: bars(3) }, coarse: { [POOL_A]: bars(30) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    assert.ok(on && Number(on.dataset.secs) >= 14400,
+      `a sparse pool should open on 4h or 1d, opened on ${on?.textContent}`);
     p.close();
   });
 
