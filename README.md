@@ -38,8 +38,10 @@ they carry no vanity prefix and are not deployed separately:
 
 | | address | |
 |---|---|---|
-| Orderbol | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | zRouter → Swapboard / Dutchboard |
-| Swapbol | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | zRouter → board fills, legacy and current |
+| Orderbol | [`0x000000c1051acD54A03e967b647112FDe17f518C`](https://etherscan.io/address/0x000000c1051acD54A03e967b647112FDe17f518C) | zRouter → Swapboard / Dutchboard / Floorboard |
+| Swapbol | [`0x00000087A6dc5071779Ed1F8274A39230768B976`](https://etherscan.io/address/0x00000087A6dc5071779Ed1F8274A39230768B976) | zRouter → board fills and bid hits |
+| Orderbol (superseded) | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | no Floorboard binding |
+| Swapbol (superseded) | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | no Floorboard binding |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
 | Swapbatch | [`0x0000005471EEF58dD16Aeccda21C37758E36a0b6`](https://etherscan.io/address/0x0000005471EEF58dD16Aeccda21C37758E36a0b6) | batch board fills paying native ETH |
 | Fwabol | [`0x000000798397834de6a60d9CCBfde0536A2699d9`](https://etherscan.io/address/0x000000798397834de6a60d9CCBfde0536A2699d9) | FWA both ways, straight to the v4 PoolManager |
@@ -132,7 +134,7 @@ Current v0.1 deployment flow: deploy the six generated HTML data contracts, then
 
 The HTML payload is installed as the **runtime bytecode of six data contracts** created before the wrapper. The wrapper keeps six `immutable` pointers (`DATA1`…`DATA6`). At read time, `html()` copies all six chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 135,047 bytes across 6 data contracts (22,508 / 22,508 / 22,508 / 22,508 / 22,508 / 22,507 bytes), with 12,409 bytes of 6-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 263,073 bytes across 14 data contracts (18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,790 bytes), with 80,991 bytes of 14-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 
@@ -172,6 +174,16 @@ Dutchboard adds a third creation route for a single NFT: `safeTransferFrom` the 
 
 Orderbol connects that primitive to zRouter. Its deployment binds the reviewed current Swapboard and Dutchboard immutably; the ABI-compatible board argument must select one of those bindings. For ERC-20 orders, zRouter first calls `checkpoint(token)`, then funds Orderbol and places the order through the same immediate executor. The transient, single-use checkpoint accepts exactly the post-checkpoint balance increase, so a later caller cannot convert donated or stranded tokens into an order they own. Orderbol returns and validates the created order/listing ID, rejects unrecoverable WETH refund destinations, and accepts an optional placement deadline. Native Swapboard orders instead bind the escrow to the exact `msg.value`; native Dutch sell orders are wrapped into canonical WETH before listing because Dutchboard escrows ERC-20 lots.
 
+Both take a Floorboard binding, so both are new deployments: the live pair predates that board and its constructor arity is one argument short. Neither is final, so the board was folded into the existing contracts rather than shipped as a `V2` beside them. Both are deployed. The deployed runtime is byte-identical to the artifact once the immutable slots are masked, and the four/three bindings read back correct on chain. The page probes `Swapbol.floorboard()` rather than assuming it, so a quote plans no bid leg against an executor that lacks the binding.
+
+Floorboard is the BID side, and the reason it needs an adapter at all is a shape mismatch rather than a missing feature: `hit` pulls the asset with `transferFrom(msg.sender)` and pays `msg.sender`, while `zRouter.snwap` transfers `tokenIn` **to** the executor before calling it. Floorboard therefore cannot be an snwap executor itself — it would be pulling from, and paying, `SafeExecutor`. Swapbol holds the asset, grants an exact call-scoped allowance, hits, and sweeps the proceeds on.
+
+Folding it into Swapbol rather than adding a sibling forwarder is forced by the same constraint that shaped `fillPlanAndSwap`: delegatecalled zRouter multicall entries all observe the same `msg.value`, so two forwarders would be two sibling snwaps each seeing the whole ETH value. A route that is part ask, part bid, part AMM is only expressible inside a single executor call — and for a user selling ETH for USDC, an ask that sells USDC for ETH and a bid that buys ETH paying USDC are the same trade, so splitting across them is the normal case rather than an exotic one.
+
+A bid leg needs no new type. `Fill` already means "pay `payIn` of tokenIn, get `getOut` of tokenOut at `orderId` on `board`", which reads on a bid as "deliver `payIn` units, be paid at least `getOut`" — `hit(id, give, minProceeds, ...)` field for field. The asset bindings are MIRRORED, though: `token` is what the bid buys and binds to `tokenIn`, `quote` is what it pays and binds to `tokenOut`, the opposite way round from every ask board. Swapbol re-checks that on chain, because the board itself cannot: from its side, any seller delivering the asset is a valid seller. Like the legacy v1 board, `hit` takes no recipient, so for a bid leg the sweep is the delivery path rather than a fallback; `unwrap` is left false on every leg so a mixed plan has one conversion point instead of one per leg.
+
+`Orderbol.placeFloor` opens a bid through the same funding waterfall as the other two placements. The one structural difference it has to respect: a bid escrows the PAYMENT, sized at `endPrice` — the ceiling of the climb, the most it can ever owe — and not anything derived from `want`.
+
 Swapbol applies the same checkpoint and per-call delta isolation to composed public fills. It grants each board or zRouter only an exact, call-scoped allowance, revokes it before returning, keeps output `recipient` separate from `refundTo`, and rejects zero/self destinations and ambiguous same-asset ETH/WETH routes. Private orders and NFTs remain direct-wallet fills because pretending that a router is an arbitrary taker would weaken Swapboard's `counterparty == msg.sender` authorization.
 
 ### Native ETH, WETH, and Dutch liquidity
@@ -198,7 +210,7 @@ node script/build-zSwap-chunks.mjs
 forge test --match-path test/zSwap.t.sol
 ```
 
-`build-zSwap.mjs` refreshes size natspec and the canonical source comment at the bottom of `zSwap.sol`. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk4.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
+`build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk14.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
 
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 

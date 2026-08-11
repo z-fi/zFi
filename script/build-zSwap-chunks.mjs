@@ -4,20 +4,19 @@
  *
  * WHY CHUNKS
  * The page is stored as the runtime bytecode of data contracts, so a single
- * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across seven
- * contracts moves that ceiling to ~147KB — the limit now applies per chunk, not
+ * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across fourteen
+ * contracts moves that ceiling to ~344KB — the limit now applies per chunk, not
  * to the page. zSwap takes the chunk addresses as constructor args and
  * reassembles them in html(), so its own creation bytecode stays small.
  *
  * DEPLOY ORDER
- *   1. deploy chunk 1              -> address A
- *   2. deploy chunk 2              -> address B
- *   3. deploy chunk 3              -> address C
- *   4. deploy chunk 4              -> address D
- *   5. deploy chunk 5              -> address E
- *   6. deploy chunk 6              -> address F
- *   7. deploy chunk 7              -> address G
- *   7. deploy zSwap(A, B, C, D, E, F) (constructor args appended to the creation code)
+ *   1..14. deploy chunk i          -> address A..N
+ *   15.    deploy zSwap(dao, previous, A, B, C, D, E, F, G, H, I, J, K, L, M, N)
+ *         (constructor args appended to the creation code)
+ *
+ * Every chunk must be non-empty and distinct or the constructor reverts
+ * InvalidData, which is why the guard below refuses a count that would leave
+ * one empty rather than quietly emitting fewer files than the wrapper expects.
  *
  * Each chunk's initcode is the classic data-contract stub:
  *   PUSH2 <len> DUP1 PUSH1 0x0a PUSH0 CODECOPY PUSH0 RETURN | <payload>
@@ -31,7 +30,7 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 7;
+const n = 14;
 if (process.argv[2] && process.argv[2] !== String(n)) {
   console.error(`zSwap currently supports exactly ${n} data chunks; update the wrapper before changing this.`);
   process.exit(1);
@@ -52,7 +51,15 @@ fs.mkdirSync(path.join(ROOT, "out"), { recursive: true });
 const parts = [];
 for (let i = 0; i < n; i++) {
   const slice = html.subarray(i * per, Math.min((i + 1) * per, html.length));
-  if (!slice.length) continue;
+  // An empty tail slice used to be skipped, which emitted fewer chunk files
+  // than the wrapper's constructor arity and left the shortfall to be noticed
+  // at deploy time - or not, since the round-trip guard below still passes on a
+  // short set. The constructor rejects a zero-code chunk outright, so say it
+  // here, where the count can still be changed.
+  if (!slice.length) {
+    console.error(`chunk ${i + 1} would be empty: ${html.length} B does not fill ${n} chunks`);
+    process.exit(1);
+  }
   const initcode = "0x" + stub(slice.length) + slice.toString("hex");
   const file = path.join(ROOT, "out", `zSwap.chunk${i + 1}.creation.txt`);
   fs.writeFileSync(file, initcode);

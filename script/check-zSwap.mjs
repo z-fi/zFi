@@ -7,10 +7,9 @@
  * WHAT IT CHECKS
  *   1. Every <script> block compiles. A syntax error here bricks the dapp
  *      permanently; nothing else in the pipeline would notice.
- *   2. The page contains no block-comment terminator (it would end zSwap.sol's
- *      trailing source comment early).
- *   3. It still fits CHUNKS x EIP-170.
- *   4. src/zSwap.sol's embedded copy is byte-identical to zSwap.html.
+ *   2. It still fits CHUNKS x EIP-170.
+ *   3. src/zSwap.sol's chunk arity is exactly CHUNKS - the wrapper, the
+ *      builders and this file must agree on one number.
  *   5. Every bare identifier the script relies on being an auto-global element id
  *      actually exists as an id= in the markup.
  *   6. The page's pure helpers behave: decQ decodes recorded zQuoter returns
@@ -37,7 +36,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 7;
+const CHUNKS = 14;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -79,12 +78,7 @@ check('every <script> block compiles', () => {
   return `${scripts.length} blocks`;
 });
 
-// ---------- 2. comment-terminator guard ----------
-check('no block-comment terminator (would end zSwap.sol source comment early)', () => {
-  if (html.includes('*/')) throw Error('page contains "*/"');
-});
-
-// ---------- 3. size ----------
+// ---------- 2. size ----------
 check(`fits ${CHUNKS} x EIP-170`, () => {
   const per = Math.ceil(bytes / CHUNKS);
   if (per > EIP170) throw Error(`${per} B per chunk exceeds ${EIP170} B — raise CHUNKS`);
@@ -131,31 +125,88 @@ check('manual fills preserve native/WETH routing domains', () => {
   }
 });
 
-// ---------- 4. zSwap.sol embedded copy is in sync ----------
-check('src/zSwap.sol embedded copy matches zSwap.html', () => {
+// ---------- 3. the wrapper's arity is CHUNKS ----------
+//
+// This replaces a byte-for-byte comparison against a copy of the page embedded
+// in zSwap.sol. That copy went 69 KB stale precisely because it was expensive
+// to maintain and its guard aborted the build instead of updating it; the page
+// is now pinned by length + keccak in test/zSwap.t.sol, where drift is
+// impossible rather than merely detected.
+//
+// What is left worth checking here is the number every part of the pipeline
+// has to agree on. The count is FIXED IN CONSTRUCTOR ARITY and permanent for a
+// deployment, so a wrapper that declares thirteen slots while the builders emit
+// fourteen is a deploy-time revert at best - and at worst a page served with a
+// slice missing, forever.
+check(`src/zSwap.sol declares exactly ${CHUNKS} chunks`, () => {
   const sol = fs.readFileSync(SOL_PATH, 'utf8');
-  const open = 'deployed chunks) =====\n\n';
-  const close = '\n===== end of zSwap.html source ===== */';
-  const i = sol.indexOf(open);
-  const j = sol.indexOf(close);
-  if (i < 0 || j < 0) throw Error('source comment markers not found in zSwap.sol');
-  if (sol.slice(i + open.length, j) !== html) throw Error('out of sync — run node script/build-zSwap.mjs');
+  if (sol.includes('===== zSwap.html source')) {
+    throw Error('zSwap.sol still carries an embedded page copy — run node script/build-zSwap.mjs');
+  }
+  const slots = [...sol.matchAll(/address public immutable DATA(\d+);/g)].map(m => Number(m[1]));
+  const expected = Array.from({length: CHUNKS}, (_, i) => i + 1);
+  if (slots.length !== CHUNKS || slots.some((v, i) => v !== expected[i])) {
+    throw Error(`DATA1..DATA${CHUNKS} expected, found ${slots.join(',') || 'none'}`);
+  }
+  // Every slot must actually be ASSIGNED. A declared-but-unwritten immutable
+  // does not compile, but a slot assigned from the wrong index does - and it
+  // serves a page with one slice doubled and another dropped.
+  for (let i = 0; i < CHUNKS; i++) {
+    if (!sol.includes(`DATA${i + 1} = d[${i}];`)) throw Error(`DATA${i + 1} is not assigned from d[${i}]`);
+  }
+  // The array widths and loop bounds carry the same number separately: the
+  // constructor's parameter, the reassembly array in _html, and the three
+  // bounds that walk them.
+  const widths = [...sol.matchAll(/address\[(\d+)\] memory/g)].map(m => Number(m[1]));
+  if (widths.length !== 2 || widths.some(v => v !== CHUNKS)) {
+    throw Error(`expected two address[${CHUNKS}] arrays, found ${widths.join(',') || 'none'}`);
+  }
+  // Scoped to the two bodies that WALK the chunks. A blanket scan over the file
+  // also catches `i != 32`, the lineage walk's own bound, which has nothing to
+  // do with the chunk count and would make this check a nuisance that gets
+  // deleted rather than a guard that gets kept.
+  const body = (start, end) => {
+    const i = sol.indexOf(start);
+    if (i < 0) throw Error(`could not find ${start.trim()} in zSwap.sol`);
+    const j = sol.indexOf(end, i);
+    return sol.slice(i, j < 0 ? sol.length : j);
+  };
+  const ctor = body('constructor(address dao', 'function deployNext');
+  const reassemble = body('function _html(', '\n}');
+  for (const [where, src, re] of [
+    ['constructor', ctor, /[ij] != (\d+);/g],
+    ['_html', reassemble, /lt\(i, (\d+)\)/g],
+  ]) {
+    const found = [...src.matchAll(re)];
+    if (!found.length) throw Error(`no chunk loop bound found in ${where}`);
+    for (const m of found) {
+      if (Number(m[1]) !== CHUNKS) throw Error(`${where}: "${m[0].trim()}" disagrees with CHUNKS=${CHUNKS}`);
+    }
+  }
+  return `${CHUNKS} slots, assignments, arrays and loop bounds agree`;
 });
 
 // ---------- 5. auto-global element ids resolve ----------
-// The page never calls getElementById; it leans on the browser exposing every id= as
-// a global. A renamed or deleted id therefore fails at runtime, not at build.
+// The page resolves most elements through auto-globals: the browser exposes
+// every id= as a global, so a renamed or deleted id fails at runtime, not at
+// build. That is the direction that bites - SCRIPT -> MARKUP - and check 6
+// below is what actually enforces it, by seeding the sandbox with exactly this
+// set and letting any other bare identifier throw a real ReferenceError.
+//
+// This check used to assert the REVERSE, that every id in the markup is named
+// somewhere in the script, and failed on `amtRow` and `outRow`: two <div
+// class="row"> layout anchors that exist for CSS and are not supposed to be
+// scripted. An id no one reads is not a defect, and a check that calls it one
+// gets satisfied by naming the id in a comment - which protects nothing. What
+// IS worth pinning is the ids the page addresses by string, since those skip
+// the auto-global mechanism and so skip check 6's coverage entirely.
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-check('element ids referenced by the script exist in the markup', () => {
-  const referenced = new Set();
+check('element ids addressed by string exist in the markup', () => {
   const js = scripts.join('\n');
-  for (const id of ids) {
-    // only care that declared ids are used consistently; look for the reverse too
-    if (new RegExp(`\\b${id}\\b`).test(js)) referenced.add(id);
-  }
-  const unused = [...ids].filter(id => !referenced.has(id));
-  if (unused.length) throw Error(`id(s) in markup never referenced by script: ${unused.join(', ')}`);
-  return `${ids.size} ids`;
+  const byName = [...js.matchAll(/getElementById\(["'`]([A-Za-z0-9_-]+)["'`]\)/g)].map(m => m[1]);
+  const missing = [...new Set(byName)].filter(id => !ids.has(id));
+  if (missing.length) throw Error(`getElementById for id(s) not in the markup: ${missing.join(', ')}`);
+  return `${ids.size} ids, ${new Set(byName).size} addressed by string`;
 });
 
 // ---------- 6. pure helpers behave ----------
@@ -210,7 +261,17 @@ check('page evaluates without throwing (DOM stubbed)', () => {
     // the deep-link handler throw here for a reason the real page never would.
     location: { reload() {}, href: '', hash: '', search: '', pathname: '/', origin: '' },
     navigator: { userAgent: 'node' },
-    document: { documentElement: stub(), addEventListener: () => {}, createElement: () => stub() },
+    // getElementById returns a stub for an id the markup really has, and null
+    // for one it does not - which is what the page's own `if (!el) return`
+    // guards are written against. Omitting it entirely made this check fail
+    // with "document.getElementById is not a function", so the page never
+    // evaluated and checks 6+ were asserting against nothing at all.
+    document: {
+      documentElement: stub(),
+      addEventListener: () => {},
+      createElement: () => stub(),
+      getElementById: (id) => (ids.has(id) ? stub() : null),
+    },
     window: { addEventListener: () => {} },
   };
   for (const id of ids) if (!(id in sandbox)) sandbox[id] = stub();
@@ -278,7 +339,13 @@ if (exported) {
     eq(safeUrl('data:text/html;base64,QUJD'), '', 'non-image data URL refused');
     eq(safeUrl('http://x.io/a.png'), '', 'plaintext http refused');
     eq(safeUrl('https://x.io/a.png" onerror="alert(1)'), '', 'attribute cannot be closed');
-    eq(safeUrl('https://x.io/' + 'a'.repeat(4096)), '', 'length bounded');
+    // The cap bounds MARKUP SIZE, not safety - the pattern is what keeps this
+    // out of trouble. It was 2048, which was tight enough to behave like a
+    // format rule: base64 PNG logos in the registry were silently dropped for a
+    // generated letter. Now 32 KB, so this only has to stop something absurd.
+    eq(safeUrl('https://x.io/' + 'a'.repeat(4096)), 'https://x.io/' + 'a'.repeat(4096),
+      'a real base64 logo is not "too long"');
+    eq(safeUrl('https://x.io/' + 'a'.repeat(40000)), '', 'length still bounded');
   });
 
   // The registry is the one metadata source a list owner writes freely, and both

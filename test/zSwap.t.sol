@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x312d5fcd84d66b85cf725563f6849e37676a5277f2845d14a6e5a2ab6725738b;
-    uint256 constant EXPECTED_LEN = 164657;
+    bytes32 constant EXPECTED_HASH = 0x383b4e07a73f2aa2623dc1456cc0455c55f68874c9521c212928b01a2e836b43;
+    uint256 constant EXPECTED_LEN = 263073;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -21,7 +21,7 @@ contract zSwapDeployTest is Test {
         require(p != address(0), "chunk deploy failed");
     }
 
-    uint256 constant CHUNKS = 7;
+    uint256 constant CHUNKS = 14;
 
     /// @dev Builds zSwap exactly as production does: split zSwap.html into
     /// CHUNKS parts, deploy each as its own data contract, pass them all in.
@@ -38,7 +38,14 @@ contract zSwapDeployTest is Test {
             }
             p[k] = _writeChunk(part);
         }
-        return new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+        return _new(p);
+    }
+
+    /// @dev The constructor takes CHUNKS positional addresses; every call site
+    /// spelling them out is CHUNKS edits per new slot, and one missed slot is a
+    /// test that passes while checking the wrong arity.
+    function _new(address[CHUNKS] memory p) internal returns (zSwap) {
+        return new zSwap(address(this), address(0), p);
     }
 
     function _contains(bytes memory haystack, bytes memory needle) internal pure returns (bool) {
@@ -66,28 +73,24 @@ contract zSwapDeployTest is Test {
         // The data contract's runtime bytecode IS the HTML payload, byte-for-byte.
         // Each chunk's runtime bytecode is its slice of the page, and all of
         // them concatenated must reproduce it exactly.
-        bytes memory c1 = z.DATA1().code;
-        bytes memory c2 = z.DATA2().code;
-        bytes memory c3 = z.DATA3().code;
-        bytes memory c4 = z.DATA4().code;
-        bytes memory c5 = z.DATA5().code;
-        bytes memory c6 = z.DATA6().code;
-        bytes memory c7 = z.DATA7().code;
-        assertEq(
-            c1.length + c2.length + c3.length + c4.length + c5.length + c6.length + c7.length,
-            EXPECTED_LEN,
-            "chunk codesize mismatch"
-        );
-        assertEq(
-            keccak256(bytes.concat(c1, c2, c3, c4, c5, c6, c7)),
-            EXPECTED_HASH,
-            "chunk content mismatch"
-        );
-        assertTrue(
-            c1.length <= 24576 && c2.length <= 24576 && c3.length <= 24576 && c4.length <= 24576
-                && c5.length <= 24576 && c6.length <= 24576 && c7.length <= 24576,
-            "chunk over EIP-170"
-        );
+        //
+        // Walked rather than named one variable per chunk: the unrolled form had
+        // to be edited in four places to add a chunk, and a slot left out of the
+        // concat is a page that serves correctly here while the DEPLOYED one
+        // drops a slice. The loop covers whatever the arity is.
+        address[CHUNKS] memory d = [
+            z.DATA1(), z.DATA2(), z.DATA3(), z.DATA4(), z.DATA5(), z.DATA6(), z.DATA7(),
+            z.DATA8(), z.DATA9(), z.DATA10(), z.DATA11(), z.DATA12(), z.DATA13(), z.DATA14()
+        ];
+        bytes memory all;
+        for (uint256 i; i != CHUNKS; ++i) {
+            bytes memory c = d[i].code;
+            assertGt(c.length, 0, "empty chunk");
+            assertLe(c.length, 24576, "chunk over EIP-170");
+            all = bytes.concat(all, c);
+        }
+        assertEq(all.length, EXPECTED_LEN, "chunk codesize mismatch");
+        assertEq(keccak256(all), EXPECTED_HASH, "chunk content mismatch");
     }
 
     function test_NameAndVersion() public {
@@ -97,34 +100,35 @@ contract zSwapDeployTest is Test {
     }
 
     function test_RejectsMissingOrDuplicatedChunks() public {
-        address a = _writeChunk(bytes("a"));
-        address b = _writeChunk(bytes("b"));
-
-        address c = _writeChunk(bytes("c"));
-        address d = _writeChunk(bytes("d"));
-        address e = _writeChunk(bytes("e"));
-        address f = _writeChunk(bytes("f"));
-        address g = _writeChunk(bytes("g"));
+        // One distinct chunk per slot, built rather than named: at eight the
+        // hand-written a..h list was already the thing that had to be extended
+        // in three places to add a slot, which is exactly the edit this test
+        // exists to make unnecessary.
+        address[CHUNKS] memory ok;
+        for (uint256 k; k != CHUNKS; ++k) {
+            ok[k] = _writeChunk(bytes(abi.encodePacked(bytes1(uint8(65 + k)))));
+        }
 
         // A zero address has no code, so EVERY position must reject it. Written as
-        // a loop rather than one `new` per slot so an eighth chunk cannot be added
+        // a loop rather than one `new` per slot so a new chunk cannot be added
         // with its guard silently untested - the case this file exists to catch,
-        // and the reason adding the seventh needed nothing here but a name.
+        // and the reason going from eight to fourteen needed nothing here but
+        // the count.
         for (uint256 i; i != CHUNKS; ++i) {
-            address[CHUNKS] memory p = [a, b, c, d, e, f, g];
+            address[CHUNKS] memory p = ok;
             p[i] = address(0);
             vm.expectRevert(zSwap.InvalidData.selector);
-            new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+            _new(p);
         }
 
         // A duplicate would serve one slice twice and drop another entirely. Every
         // unordered pair, for the same reason.
         for (uint256 i; i != CHUNKS; ++i) {
             for (uint256 j = i + 1; j != CHUNKS; ++j) {
-                address[CHUNKS] memory p = [a, b, c, d, e, f, g];
+                address[CHUNKS] memory p = ok;
                 p[j] = p[i];
                 vm.expectRevert(zSwap.InvalidData.selector);
-                new zSwap(address(this), address(0), p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+                _new(p);
             }
         }
     }
