@@ -708,6 +708,12 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqmeta{font-size:11px;opacity:.7;margin-top:3px}
 .lqmine{font-size:11px;margin-top:3px;color:var(--f)}
 .lqempty{padding:14px 12px;font-size:12px;opacity:.7;text-align:center}
+.lqnew{margin-top:8px;display:flex;flex-direction:column;gap:5px;text-align:left}
+.lqnew.hide{display:none}
+.lqnew .r{display:flex;gap:5px}
+.lqnew .r>*{flex:1;min-width:0}
+.lqnew select.lqin{appearance:none;-webkit-appearance:none}
+.lqnote{font-size:11px;opacity:.65;line-height:1.5}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
 #listNote.hide{display:none}
 .lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--e);background:transparent;color:inherit}
@@ -3617,7 +3623,7 @@ let lqSeq=0,lqRows=[];
 // The lenses already refuse an address their factory did not create, so a row
 // that priced at all is a real pool - but the write paths grant an allowance and
 // this makes that guarantee LOCAL rather than inherited from lens internals.
-const SEL_ISPOOL="5b16ebb7";
+const SEL_ISPOOL="5b16ebb7",SEL_POOLFOR="83bd1387",SEL_PREVIEW_SEED="1d355417",SEL_CREATE_SEED="7163352a";
 
 // Raw sqrt price, 1e18-scaled, into a human price for the pair. Decimals are
 // NOT normalised on chain - the band is quoted in RAW token1 per RAW token0 -
@@ -3668,6 +3674,48 @@ function lqRow(o,t0,t1){
     +`</div>`;
 }
 
+/**
+ * Create a band for a pair that has none.
+ *
+ * A pool is a PRICE RANGE, not just a pair, so creating one is a decision the
+ * page cannot make: where the band sits, and where inside it trading starts.
+ * That is why it was never folded into "add liquidity" - adding joins a band
+ * somebody already chose, and choosing badly here is arbitrageable rather than
+ * merely suboptimal.
+ *
+ * Two defaults are opinions worth stating. The market is created NAMED
+ * (feeRecipient = you) with a creator fee of ZERO: naming costs nothing, takes
+ * nothing from traders, and is the only thing that stops a stranger seeding
+ * your pool at a price of their choosing before you do. An unnamed market is
+ * open to anyone to seed, which is fine for a pool nobody is pointing a
+ * frontend at and wrong for one you are about to.
+ */
+const LQ_FEES=[[500,"0.05%"],[3000,"0.30%"],[10000,"1.00%"]];
+function lqNewForm(t0,t1){
+  return `<div class="lqnew" data-t0="${t0.addr}" data-t1="${t1.addr}">`
+    +`<div class="r"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low price" aria-label="Lowest price in the band">`
+    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High price" aria-label="Highest price in the band"></div>`
+    +`<div class="r"><input class="lqin" id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Opening price" aria-label="Opening price">`
+    +`<select class="lqin" id="lqFee" aria-label="Fee tier">`
+    +LQ_FEES.map(([v,l])=>`<option value="${v}"${v===3000?" selected":""}>${l} fee</option>`).join("")
+    +`</select></div>`
+    +`<div class="r"><input class="lqin" id="lqA0" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t0.sym}" aria-label="${t0.sym} to seed">`
+    +`<input class="lqin" id="lqA1" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t1.sym}" aria-label="${t1.sym} to seed"></div>`
+    +`<div class="lqpv" id="lqPv"></div>`
+    +`<div class="lqnote">Prices are ${t1.sym} per ${t0.sym}. You will own this market, which lets only you seed it — at no fee to traders.</div>`
+    +`<button class="lqbtn" id="lqCreate" disabled>Create band</button></div>`;
+}
+// price (token1 per token0, human) -> sqrt price in WAD, the pool's own units.
+const pxToSqrt=(px,d0,d1)=>{
+  const raw=px*10**(d1-d0);
+  if(!isFinite(raw)||raw<=0)return 0n;
+  // Through the decimal string rather than Number: sqrt(raw)*1e18 loses the low
+  // digits at any realistic price, and the band edges are compared exactly.
+  return BigInt(Math.round(Math.sqrt(raw)*1e9))*10n**9n;
+};
+const lqMarket=(t0,t1,lo,hi,fee,owner)=>encAddr(t0)+encAddr(t1)+encUint(lo)+encUint(hi)
+  +encUint(fee)+encAddr(ZERO)+encAddr(owner)+encUint(0n);
+
 // The pair's bands, then this account's LP balance in each.
 //
 // NOT `positionsOf`, which walks a page of the factory's GLOBAL pool list - so
@@ -3707,8 +3755,7 @@ async function loadLq(){
     }
     if(my!==lqSeq)return;
     if(!rows.length){
-      lqList.innerHTML=`<div class="lqempty">No Precision band for this pair yet.`
-        +`<br><small>Creating one means choosing the opening price — a separate step from adding liquidity.</small></div>`;
+      lqList.innerHTML=`<div class="lqempty">No Precision band for this pair yet.</div>`+lqNewForm(t0,t1);
       lqRows=[];return}
     // Yours first, then deepest: the band you are already in is the one you came
     // to act on, and a list sorted purely by size buries it.
@@ -3859,11 +3906,162 @@ async function lqPreview(box){
 
 // Delegated so rows can be re-rendered freely.
 lqList.addEventListener("input",e=>{
+  if(!e.target.classList.contains("lqin"))return;
   const box=e.target.closest(".lqadd");
-  if(!box||!e.target.classList.contains("lqin"))return;
-  clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);
+  if(box){clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
+  if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
+lqList.addEventListener("change",e=>{if(e.target.id==="lqFee")lqNewPreview()});
+
+/**
+ * What the pool will take, and what it will refuse.
+ *
+ * `previewSeed` answers both: `ok` false is the band saying this opening price
+ * cannot be seeded with these amounts at all, which is a different thing from
+ * a bad rate and has to read differently. The amounts are MAXIMA - the seed
+ * uses the ratio the price implies and hands the rest back - so the preview is
+ * the only place the difference is visible before signing.
+ */
+let lqNewSeq=0;
+async function lqNewPreview(){
+  const box=lqList.querySelector(".lqnew");
+  if(!box)return;
+  const out=box.querySelector("#lqPv"),go=box.querySelector("#lqCreate");
+  const my=++lqNewSeq;
+  go.disabled=true;
+  const pair=chPair();
+  if(!pair){out.textContent="";return}
+  const [t0,t1]=pair;
+  const num=id=>{const v=box.querySelector("#"+id).value.trim();return v?+v:NaN};
+  const lo=num("lqLo"),hi=num("lqHi"),px=num("lqPx");
+  if(!(lo>0)||!(hi>0)||!(px>0)){out.textContent="";return}
+  if(lo>=hi){out.textContent="The low price must be below the high one.";return}
+  if(px<lo||px>hi){out.textContent="The opening price has to sit inside the band.";return}
+  let a0=0n,a1=0n;
+  try{
+    const v0=box.querySelector("#lqA0").value.trim(),v1=box.querySelector("#lqA1").value.trim();
+    a0=v0?parseUnits(v0,t0.dec):0n;a1=v1?parseUnits(v1,t1.dec):0n;
+  }catch{out.textContent="Check the amounts.";return}
+  if(!a0&&!a1){out.textContent="Deposit at least one side.";return}
+  const sl=pxToSqrt(lo,t0.dec,t1.dec),sh=pxToSqrt(hi,t0.dec,t1.dec),sp=pxToSqrt(px,t0.dec,t1.dec);
+  if(!sl||!sh||!sp){out.textContent="Check the prices.";return}
+  // ONE-SIDED IS ALLOWED, and only at an edge - the same rule Uniswap v3 has.
+  // Inside the band the pool takes `min` of what each side can support, so a
+  // missing side makes that zero and it reverts ZeroAmount. At an edge the
+  // band lies entirely on one side of the opening price and one asset is the
+  // whole position, which is how a launch pool is seeded.
+  if(a0&&!a1&&sp!==sl){
+    out.textContent=`A ${t0.sym}-only band has to open at its low price — set the opening price to ${box.querySelector("#lqLo").value.trim()}.`;
+    return}
+  if(a1&&!a0&&sp!==sh){
+    out.textContent=`A ${t1.sym}-only band has to open at its high price — set the opening price to ${box.querySelector("#lqHi").value.trim()}.`;
+    return}
+  const fee=BigInt(box.querySelector("#lqFee").value);
+  const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account||ZERO);
+  box.dataset.sl=sl;box.dataset.sh=sh;box.dataset.sp=sp;box.dataset.fee=fee;
+  box.dataset.a0=a0;box.dataset.a1=a1;box.dataset.lp=0;
+  try{
+    // The address is CREATE2-derived, so it is known before anything exists -
+    // but the LENS reads the pool's band off the pool, and there is no code at
+    // that address yet. So an exact preview is only available in the case
+    // where the market was already deployed and left UNSEEDED, which the
+    // factory explicitly allows and will seed rather than reject.
+    //
+    // Everything else gets the honest version. The band is validated above
+    // without asking the chain anything, and the amounts are maxima either
+    // way, so there is nothing to hide - only an exact split to do without.
+    // Market is eight STATIC words, so it encodes inline - no offset. Getting
+    // that wrong shifts every field by one and the factory reads the offset
+    // itself as token0, which fails `token0 >= token1` and reverts Bad(). It
+    // decodes cleanly against a fixture that makes the same mistake, so only
+    // the live contract can tell you.
+    const [addr]=await mc3([{to:PFACTORY,data:"0x"+SEL_POOLFOR+market}]);
+    if(my!==lqNewSeq)return;
+    const pool="0x"+strip0x(addr).slice(24);
+    const [pv]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_SEED+encAddr(pool)+encUint(sp)
+      +encUint(a0)+encUint(a1)}]).catch(()=>[null]);
+    if(my!==lqNewSeq)return;
+    const h=strip0x(pv||""),w=i=>BigInt("0x"+h.slice(i*64,(i+1)*64));
+    if(h.length>=256&&w(0)!==0n){
+      const used0=w(2),used1=w(3);
+      out.textContent=`Seeds ${trimAmt(used0,t0.dec)} ${t0.sym} + ${trimAmt(used1,t1.dec)} ${t1.sym}`
+        +((used0<a0||used1<a1)?" — the rest is returned":"");
+      box.dataset.lp=w(1);
+    }else if(h.length>=256){
+      // A deployed, unseeded band that says no: the opening price cannot be
+      // served with these amounts. That is the pool refusing, not a thin
+      // preview, so it must not be clickable.
+      out.textContent="This band cannot open at that price with those amounts.";return;
+    }else{
+      out.textContent=`Deposits up to ${trimAmt(a0,t0.dec)} ${t0.sym} + ${trimAmt(a1,t1.dec)} ${t1.sym}`
+        +` — the pool takes the ratio your opening price implies and returns the rest.`;
+    }
+    go.disabled=!account;
+  }catch{
+    if(my!==lqNewSeq)return;
+    out.textContent="Could not reach the factory.";
+  }
+}
+/**
+ * Deploy the band and seed it, in one transaction.
+ *
+ * `createAndSeed` is deliberately not two steps. A pool that exists but has
+ * never been seeded is squattable: the address is CREATE2-derived so it cannot
+ * be redeployed, and whoever seeds it first chooses the opening price. Naming
+ * the market closes that - only the creator may seed a named one - and doing
+ * both in one call closes the window entirely.
+ *
+ * `minLP` carries the page's slippage, because the seed is priced off reserves
+ * that nothing else can move yet but the amounts still round.
+ */
+async function lqCreate(){
+  const box=lqList.querySelector(".lqnew");
+  if(!box||busy||!account)return;
+  const pair=chPair(); if(!pair)return;
+  const [t0,t1]=pair;
+  const go=box.querySelector("#lqCreate"),out=box.querySelector("#lqPv");
+  const sl=BigInt(box.dataset.sl||0),sh=BigInt(box.dataset.sh||0),sp=BigInt(box.dataset.sp||0);
+  const a0=BigInt(box.dataset.a0||0),a1=BigInt(box.dataset.a1||0),fee=BigInt(box.dataset.fee||0);
+  if(!sl||!sh||!sp){out.textContent="Preview the band first.";return}
+  busy=true;go.disabled=true;
+  try{
+    const bps=BigInt(Math.round(Math.min(10,Math.max(.01,+slip.value||.5))*100));
+    const lp=BigInt(box.dataset.lp||0);
+    // Zero when there was no exact preview to floor - which is the ordinary
+    // case, since the band does not exist yet. It is not a gap: the market is
+    // NAMED, so nobody else can seed it, there is no other liquidity to move
+    // against, and the opening price is the caller's own. minLP guards
+    // rounding here, not a counterparty.
+    const minLP=lp>0n?lp*(10000n-bps)/10000n:0n;
+    const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account);
+    // token0 is the sorted-first side, and ETH sorts first as address(0) - so
+    // a native leg is always amount0, and the factory takes it as value.
+    const native=t0.addr===ZERO;
+    if(!native&&a0)await lqApprove(t0.addr,a0);
+    if(a1)await lqApprove(t1.addr,a1);
+    // Market first and inline, then the five scalars - thirteen words, no
+    // offsets anywhere.
+    const data="0x"+SEL_CREATE_SEED+market+encUint(sp)+encUint(a0)+encUint(a1)
+      +encUint(minLP)+encAddr(account);
+    const tx={from:account,to:PFACTORY,data,value:native?toHex(a0):"0x0"};
+    stat.textContent="Creating the band...";
+    await rpc(C,[tx,L]);await checkWallet();await settle(await rpc(S,[tx]));
+    stat.textContent="Band created.";
+    loadLq();refreshBalance();
+  }catch(e){err(e);out.textContent="";}
+  finally{busy=false;go.disabled=false}
+}
+async function lqApprove(token,need){
+  const al=BigInt(await rpc(C,[{to:token,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(PFACTORY)},L]));
+  if(al>=need)return;
+  if(al)await settle(await rpc(S,[{from:account,to:token,
+    data:"0x"+SEL_APPROVE+encAddr(PFACTORY)+encUint(0n),value:"0x0"}]));
+  await settle(await rpc(S,[{from:account,to:token,
+    data:"0x"+SEL_APPROVE+encAddr(PFACTORY)+encUint(need),value:"0x0"}]));
+}
+
 lqList.onclick=async ev=>{
+  if(ev.target.id==="lqCreate"){await lqCreate();return}
   const b=ev.target.closest("[data-act]");
   if(!b||busy||!account)return;
   const p=chPair(); if(!p)return;

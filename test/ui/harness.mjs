@@ -89,6 +89,7 @@ export const SEL = {
   DUTCH_FILL: 'ae7a8260', DUTCH_LISTING: 'de74e57b',
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
   ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
+  POOLFOR: '83bd1387', PREVIEW_SEED: '1d355417', CREATE_SEED: '7163352a',
   REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
   RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96', FLOOR_BID: '3d8d260b',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
@@ -274,6 +275,10 @@ export class MockChain {
     // registry's own listing order.
     this.conviction = null;
     this.nftOwner = new Map();     // `${collection}:${id}` -> holder
+    // Band a seed preview answers for: {low, high} sqrt prices, and optional
+    // used0/used1 when the seed should consume less than it was offered.
+    this.seedBand = null;
+    this.seedDeployed = false;     // was the market already created, unseeded?
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -574,6 +579,23 @@ export class MockChain {
     // PrecisionPoolFactory.isPool — the trust anchor the liquidity write paths
     // ask before granting an allowance or sending value. Only pools this
     // fixture registered are its own.
+    // poolFor(Market) — the address is CREATE2-derived, so the page can ask
+    // what a band WOULD be before anything is deployed. The fixture only has
+    // to be deterministic in the market, which is what the real one is.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.POOLFOR) {
+      const body = data.slice(8);           // Market is static: encoded inline
+      const key = keccak256('0x' + body).slice(0, 42);
+      this.__predicted ||= new Map();
+      this.__predicted.set(key.toLowerCase(), '0x' + body);
+      // `seedDeployed` models the case the factory documents: the market was
+      // created and left unseeded, so the lens CAN answer for it.
+      if (this.seedDeployed && !this.code.has(key.toLowerCase())) {
+        this.code.set(key.toLowerCase(), '0x60006000f3');
+      }
+      return '0x' + addrWord(key);
+    }
+    // createAndSeed — recorded by `sent`; nothing to return to a preflight.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.CREATE_SEED) return '0x' + '00'.repeat(128);
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
       const who = wordAddr('0x' + data.slice(8), 0);
       return coder.encode(['bool'],
@@ -591,6 +613,28 @@ export class MockChain {
         const a1 = shares * BigInt(row.reserve1) / supply;
         return coder.encode(['bool', 'uint256', 'uint256'],
           [a0 !== 0n || a1 !== 0n, a0, a1]);
+      }
+      // previewSeed(pool, sqrtPriceInit, amount0, amount1). An unseeded band is
+      // the ONLY case here, so this models the shape the page depends on: `ok`
+      // false when the opening price sits outside the band, and amounts that
+      // may be less than offered because a seed takes the ratio it needs.
+      if (sel === SEL.PREVIEW_SEED) {
+        const out = ['bool', 'uint256', 'uint256', 'uint256'];
+        const sp = word(body, 1), a0 = word(body, 2), a1 = word(body, 3);
+        const band = this.seedBand;
+        // The lens reads the band OFF THE POOL, so against an address with no
+        // code it reverts rather than answering false. That is the ordinary
+        // case when creating - the pool does not exist yet - and modelling it
+        // as a polite `false` is what let a page ship that could never have
+        // previewed anything on mainnet.
+        if (!this.code.has(wordAddr(body, 0).toLowerCase())) throw Error('no pool at that address');
+        if (!band || sp < band.low || sp > band.high || (a0 === 0n && a1 === 0n)) {
+          return coder.encode(out, [false, 0n, 0n, 0n]);
+        }
+        // Enough to exercise the page: both sides are used in full unless the
+        // fixture says otherwise, and lp is their sum.
+        const used0 = band.used0 ?? a0, used1 = band.used1 ?? a1;
+        return coder.encode(out, [true, used0 + used1, used0, used1]);
       }
       if (sel === SEL.PREVIEW_ADD) {
         const off = ['bool', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'];
