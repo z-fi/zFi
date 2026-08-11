@@ -8,6 +8,7 @@
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   A, SEL, MockChain, loadPage, fixedRateQuoter, closeAllPages, word,
 } from './harness.mjs';
@@ -20,11 +21,23 @@ const LENS = '0x4444444444444444444444444444444444444444';
 const POOL_A = '0x5555555555555555555555555555555555555555';
 const POOL_B = '0x6666666666666666666666666666666666666666';
 
-/** Point the page's PPLENS at the mock lens. */
-const patchFactory = (addr = LENS) => [[
-  'const PPLENS="0x0000000000000000000000000000000000000000"',
-  `const PPLENS="${addr}"`,
-]];
+/**
+ * Point the page's PPLENS at the mock lens.
+ *
+ * Matched by SHAPE rather than by a literal address. This used to hardcode the
+ * zero placeholder the page shipped before the lens was deployed; the moment a
+ * real address landed in zSwap.html every test in this file failed on a missed
+ * patch target. The harness throwing on a miss is what made that loud instead
+ * of silently testing an unpatched page - but the fix is to not depend on which
+ * address happens to be canonical today.
+ */
+const CUR_PPLENS = (() => {
+  const html = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
+  const m = html.match(/const PPLENS="(0x[0-9a-fA-F]{40})"/);
+  if (!m) throw Error('zSwap.html no longer declares PPLENS');
+  return m[0];
+})();
+const patchFactory = (addr = LENS) => [[CUR_PPLENS, `const PPLENS="${addr}"`]];
 
 /**
  * The pool stores RAW prices: token1 per token0, 1e18-scaled, decimals NOT

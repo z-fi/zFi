@@ -184,9 +184,15 @@ export function encodeBidPage(rows, next = 0n) {
   return coder.encode([BID_TUPLE, 'uint256'], [encoded, BigInt(next)]);
 }
 
-/** PrecisionPoolLens.PoolInfo[] — 18 static fields, so 18 flat words per row. */
+/**
+ * PrecisionPoolLens.PoolInfo[] — all static, so the array is flat words and the
+ * FIELD COUNT IS THE ROW STRIDE. It was 18 until `clampable` was added; at the
+ * wrong width every row after the first decodes as garbage with nothing thrown,
+ * which presents as "the second pool vanished" rather than as an error. Keep in
+ * step with PI_WORDS in zSwap.html and with the preview builder.
+ */
 const POOL_INFO = 'tuple(address,address,address,uint256,uint256,uint256,uint256,uint256,' +
-  'uint256,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256)[]';
+  'uint256,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)[]';
 
 /** Pack a value the way PriceTape.pack does: 24-bit mantissa, 8-bit exponent. */
 export function packTapeFloat(v) {
@@ -455,10 +461,10 @@ export class MockChain {
     if (sel === SEL.MARKETS) {
       const body = '0x' + data.slice(8);
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
-      // PoolInfo is a static struct, so the array is 18 flat words per row.
+      // PoolInfo is a static struct, so the array is 19 flat words per row.
       return coder.encode([POOL_INFO], [rows.map(r => [
         r.pool, A.ZERO, A.ZERO, 0n, 0n, 0n, 0n, 0n, 0n, BigInt(r.liquidity),
-        r.hook, A.ZERO, 0n, 0n, 0n, 0n, 0n, 0n,
+        r.hook, A.ZERO, 0n, 0n, r.hook === A.ZERO ? 1n : 0n, 0n, 0n, 0n, 0n,
       ])]);
     }
     if (sel === SEL.TAPE) {

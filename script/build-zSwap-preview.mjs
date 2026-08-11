@@ -22,6 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = process.argv[2] || path.join(ROOT, 'dapp', 'preview', 'index.html');
 
 const LENS = '0x4444444444444444444444444444444444444444';
+const LQLENS = '0x5555555555555555555555555555555555555555';
 
 let page = fs.readFileSync(path.join(ROOT, 'zSwap.html'), 'utf8');
 
@@ -56,10 +57,18 @@ const DUTCH_ADDR = pageConst('DUTCH');
 
 const before = page;
 page = page.replace(
-  'const PPLENS="0x0000000000000000000000000000000000000000"',
-  `const PPLENS="${LENS}"`,
+  /^const PPLENS="0x[0-9a-fA-F]{40}";/m,
+  `const PPLENS="${LENS}";`,
 );
 if (page === before) throw Error('PPLENS constant not found — the preview would show no chart');
+// The liquidity panel reads the same lens, so it follows PPLENS automatically.
+// PrecisionLiquidityLens is separate and has to be redirected on its own or the
+// previews below would be sent to a mainnet address the fake provider ignores.
+{
+  const b4 = page;
+  page = page.replace(/^const PLQLENS="0x[0-9a-fA-F]{40}";/m, `const PLQLENS="${LQLENS}";`);
+  if (page === b4) throw Error('PLQLENS constant not found — liquidity previews would be dead');
+}
 
 // Point every provider reference at the simulation. A wallet extension installs
 // window.ethereum as a non-writable property, so simply assigning our own is
@@ -87,6 +96,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     ZQUOTER: "0x0000002d9a651b729e3afbe57fc84ffda4a98a13",
     ZROUTER: "0x000000000000fb114709235f1ccbffb925f600e4",
     LENS: "${LENS}",
+    LQLENS: "${LQLENS}",
     SLOW: "0x000000000000888741b254d37e1b27128afeaabc",
     WETH: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
@@ -261,6 +271,9 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (to === A.MC3 && sel === "82ad56cb") return aggregate3(data);
     if (to === A.ZQUOTER) { var q = quote(sel, tx.data); if (!q) throw Error("no route"); return q; }
     if (to === A.LENS.toLowerCase() && sel === "29c21083") return markets(data);
+    if (to === A.LENS.toLowerCase() && sel === "dc9d54ef") return positions();
+    if (to === A.LQLENS.toLowerCase() && sel === "a2eaee07") return previewRemove(data);
+    if (to === A.LQLENS.toLowerCase() && sel === "e03ec807") return previewAdd(data);
     if (sel === "29a65241") return tape(to, data);
     if (to === A.ZROUTER) return "0x";
     if (to === A.SLOW) return slow(sel, data);
@@ -315,17 +328,68 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     });
     return "0x" + u256(32) + u256(n) + head + tail;
   }
+  // PoolInfo is 19 flat words and the COUNT IS THE STRIDE. It was 18 until
+  // clampable was added to the struct; at the wrong width every row after the
+  // first decodes as garbage with nothing thrown. Keep in step with PI_WORDS in
+  // the page.
+  var PI_W = 19;
   function markets(data) {
     var h = data.slice(8);
     var key = wordAddr(h, 0) + ":" + wordAddr(h, 1);
     var rows = POOLS[key] || [];
-    var head = "", W = 18;
+    var head = "";
     rows.forEach(function (r) {
-      var w = new Array(W).fill(null).map(function () { return u256(0); });
-      w[0] = addrw(r.pool); w[9] = u256(BigInt(Math.floor(r.liq))); w[10] = addrw(r.hook);
+      var w = new Array(PI_W).fill(null).map(function () { return u256(0); });
+      var pr = pairOf(key);
+      w[0] = addrw(r.pool); w[1] = addrw(pr[0]); w[2] = addrw(pr[1]);
+      // Bands as raw sqrt prices, 1e18-scaled, decimals folded in exactly the
+      // way a real market's would be - so the page's decimal adjustment is
+      // actually exercised rather than trivially correct at 18/18.
+      w[3] = u256(sqrtRaw(r.lo != null ? r.lo : r.seed * 0.7, r.d0, r.d1));
+      w[4] = u256(sqrtRaw(r.hi != null ? r.hi : r.seed * 1.4, r.d0, r.d1));
+      w[5] = u256(BigInt(r.fee != null ? r.fee : 3000));
+      w[6] = u256(BigInt(Math.floor(r.liq / 1e6)));
+      w[7] = u256(BigInt(Math.floor(r.liq / 1e6)));
+      w[8] = u256(sqrtRaw(r.seed, r.d0, r.d1));
+      w[9] = u256(BigInt(Math.floor(r.liq)));
+      w[10] = addrw(r.hook);
+      w[14] = u256(r.hook === ZERO ? 1 : 0); // clampable
       head += w.join("");
     });
     return "0x" + u256(32) + u256(rows.length) + head;
+  }
+  function pairOf(key) { return key.split(":"); }
+  // price -> raw sqrt, 1e18 scaled: sqrt(price * 10**(d1-d0)) * 1e18
+  function sqrtRaw(price, d0, d1) {
+    var raw = price * Math.pow(10, (d1 || 18) - (d0 || 18));
+    return BigInt(Math.floor(Math.sqrt(raw) * 1e18));
+  }
+  // One position, so the panel has something to render and the withdraw button
+  // exists. Matches the deepest ETH/USDC pool.
+  function positions() {
+    var W = 4, rows = [{ pool: "0xaa01" + "0".repeat(36), shares: 4.1e21, a0: 1.35e18, a1: 4210e6 }];
+    var body = "";
+    rows.forEach(function (r) {
+      body += addrw(r.pool) + u256(BigInt(Math.floor(r.shares)))
+            + u256(BigInt(Math.floor(r.a0))) + u256(BigInt(Math.floor(r.a1)));
+    });
+    return "0x" + u256(32) + u256(rows.length) + body;
+  }
+  // previewRemove / previewAdd. Both lead with ok, and returning false is a
+  // legitimate answer the page renders rather than an error.
+  function previewRemove(data) {
+    var shares = word(data.slice(8), 1);
+    if (shares === 0n) return "0x" + u256(0) + u256(0) + u256(0);
+    return "0x" + u256(1) + u256(shares / 3000n) + u256(shares / 1000000n);
+  }
+  function previewAdd(data) {
+    var h = data.slice(8), a0 = word(h, 1), a1 = word(h, 2);
+    if (a0 === 0n || a1 === 0n) return "0x" + u256(0).repeat(6);
+    // Deliberately consume slightly less than offered on one side, so the
+    // refund line the page shows is non-zero and gets looked at.
+    var used0 = a0 - a0 / 50n, used1 = a1;
+    return "0x" + u256(1) + u256(a0 / 1000n) + u256(used0) + u256(used1)
+         + u256(a0 - used0) + u256(a1 - used1);
   }
   function tape(pool, data) {
     var period = Number(word(data.slice(8), 0));
