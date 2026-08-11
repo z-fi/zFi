@@ -734,12 +734,42 @@ fi:String(fromSel.value),ti:String(toSel.value)});
 const restorePair=k=>{
 if(!k)return;
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a.toLowerCase()):-1;
-if(String(fromSel.value)===k.fi){const i=at(k.fa);if(i>=0)fromSel.value=i}
-if(String(toSel.value)===k.ti){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
+// "Did this side move while the list loaded?" A side that moved was chosen
+// deliberately and is left alone. But rebuild() re-creates the options and
+// re-assigns the old index, and assigning an index the shorter list does not
+// have leaves the select BLANK - which is not a move, and reading it as one
+// silently discarded the pair a shared link had just named.
+const held=(cur,want)=>String(cur)===want||!TOKENS[cur];
+if(held(fromSel.value,k.fi)){const i=at(k.fa);if(i>=0)fromSel.value=i}
+if(held(toSel.value,k.ti)){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
 };
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
 const isNft=v=>TOKENS[v]?.std==="nft";
+// Has the pair been chosen, by a click or by a link? Until it has, the page is
+// still showing a guess and is free to replace it with a better one.
+let pairChosen=false;
+// The registry arrives in conviction order - `rankedIds()` is strictly
+// descending - so the landing pair is just its top two, and curation moves the
+// dapp without a redeploy. The one exception is a wrapped twin: ETH and WETH
+// are the same asset, and opening on a wrap rather than a market is not a
+// default anyone wants, so the output takes the next distinct asset down.
+const wrapTwin=(a,b)=>{
+const x=(a||"").toLowerCase(),y=(b||"").toLowerCase(),w=WETH.toLowerCase();
+return (x===ZERO&&y===w)||(x===w&&y===ZERO);
+};
+const rankedDefaults=()=>{
+if(TOKENS.length<2)return;
+const ok=i=>!isNft(String(i));
+const fi=TOKENS.findIndex((t,i)=>ok(i));
+if(fi<0)return;
+const ti=TOKENS.findIndex((t,i)=>i!==fi&&ok(i)&&!wrapTwin(t.addr,TOKENS[fi].addr));
+if(ti<0)return;
+fromSel.value=String(fi);toSel.value=String(ti);
+fromSel.dataset.prev=fromSel.value;toSel.dataset.prev=toSel.value;
+};
+// Keep what the user picked; otherwise adopt the ranking that just loaded.
+const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
 // A collection is listed on every tab so the picker does not reshuffle underneath
 // the user, but it is only SELECTABLE where something can act on it. Swapboard and
 // Dutchboard take NFT lots; the router cannot quote one and `send` prices its
@@ -837,7 +867,7 @@ account=accs[0];
 const keepPair=pairAddrs();
 await loadTokenList();
 rebuild();
-restorePair(keepPair);
+settlePair(keepPair);
 // rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
 // onchain list shorter than the built-in one can leave a selection pointing past
 // its end. Restore both before anything reads the pair.
@@ -1207,6 +1237,7 @@ sel.dataset.prev=sel.value;
 sel.addEventListener("change",async()=>{
 if(sel.value!=="__custom"){
 sel.dataset.prev=sel.value;
+pairChosen=true;
 syncDisabled();
 syncNftUI();
 if(sel===fromSel)refreshBalance();
@@ -1233,6 +1264,7 @@ const otherSel=sel===fromSel?toSel:fromSel;
 if(String(idx)===otherSel.value){otherSel.value=prev;otherSel.dataset.prev=prev}
 sel.value=String(idx);
 sel.dataset.prev=sel.value;
+pairChosen=true;
 stat.textContent="";
 syncDisabled();syncNftUI();
 refreshBalance();
@@ -1247,7 +1279,7 @@ stat.textContent=msg;
 }
 });
 }
-flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
+flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
 window.ethereum?.on?.("chainChanged",()=>location.reload());
 window.ethereum?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
@@ -1267,7 +1299,7 @@ showAddr();
 const keep2=pairAddrs();
 await loadTokenList();
 rebuild();
-restorePair(keep2);
+settlePair(keep2);
 refreshBalance();update();syncChart();
 }
 }catch{}
@@ -3024,6 +3056,7 @@ let i=TOKENS.findIndex(t=>t.sym.toLowerCase()===x||t.addr.toLowerCase()===x);
 if(i<0&&/^0x[0-9a-f]{40}$/.test(x)){try{i=await addCustomToken(x,0)}catch{}}
 return i};
 const fi=await tok(q.get("token")),oi=await tok(q.get("out"));
+if(fi>=0||oi>=0)pairChosen=true;
 rebuild();
 if(fi>=0)fromSel.value=fi;
 if(oi>=0&&oi!==fi)toSel.value=oi;

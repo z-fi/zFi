@@ -89,6 +89,7 @@ export const SEL = {
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
   ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
   REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
+  RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
   ENS_RSLV: '0178b8bf', ENS_EADDR: '3b3b57de', ENS_ENAME: '691f3431',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
@@ -262,6 +263,10 @@ export class MockChain {
     this.batches = [];             // wallet_sendCalls payloads
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
     this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
+    // zTokenlist rows, IN CONVICTION ORDER, as rankedIds() returns them. Null
+    // means the registry is unreachable and the page uses its built-in list,
+    // which is what most suites want; set it to exercise curation.
+    this.registry = null;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -452,6 +457,18 @@ export class MockChain {
     if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
     // TokenList.logoOf(address) REVERTS for an unlisted token rather than
     // returning empty, which is what the page's allow-failure batch relies on.
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.RANKEDIDS) {
+      if (!this.registry) throw Error('no registry');
+      const ids = this.registry.map((_, i) => u256(i + 1));
+      return '0x' + u256(32) + u256(ids.length) + ids.join('');
+    }
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.LISTJSON) {
+      if (!this.registry) throw Error('no registry');
+      const row = this.registry[Number(word('0x' + data.slice(8), 0)) - 1];
+      if (!row) throw Error('no such id');
+      const body = Buffer.from(JSON.stringify(row), 'utf8').toString('hex');
+      return '0x' + u256(32) + u256(body.length / 2) + body.padEnd(Math.ceil(body.length / 64) * 64, '0');
+    }
     if (to === A.TOKENLIST.toLowerCase() && sel === SEL.LOGOOF) {
       const logo = this.logos[wordAddr('0x' + data.slice(8), 0).toLowerCase()];
       if (!logo) throw Error('not listed');
@@ -776,7 +793,23 @@ export function closeAllPages() {
   openPages.clear();
 }
 
+/**
+ * The pair tests exercise unless they say otherwise.
+ *
+ * The landing pair is on-chain data now - the page adopts the top of the
+ * registry's conviction ranking - so a test that leans on it is really
+ * asserting today's ranking, and a re-rank would rewrite dozens of unrelated
+ * expectations. Pinning it through the page's OWN deep link does that before
+ * the registry loads, so the page settles on one pair for its whole life
+ * rather than transitioning and re-reading the chart for a pair no one asked
+ * to see. Tests that pass a hash override this; ranked-default tests pass
+ * `hash: null` to watch the page choose for itself.
+ */
+const PINNED_PAIR = 'token=ETH&out=USDC';
+
 export async function loadPage({ chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = {}) {
+  if (hash === '') hash = PINNED_PAIR;
+  else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
   // at a mock address through `patch`, matched by shape rather than by literal
   // so a redeploy of the real lens does not silently unpatch them.
@@ -935,10 +968,31 @@ export async function loadPage({ chain = new MockChain(), hash = '', storage = {
     await page.waitFor(() => other.value !== '...', { label: 'quote to resolve' });
     await page.settle();
   };
-  page.connect = async () => {
+  /**
+   * Connect, then pin the pair to ETH -> USDC.
+   *
+   * The landing pair is no longer a constant: the page adopts the top of the
+   * registry's conviction ranking once it loads, so curation moves the default
+   * without a redeploy. A test that leans on whatever that happens to be today
+   * is really asserting the current ranking, and every re-rank would rewrite
+   * dozens of unrelated expectations. So tests state the pair they exercise.
+   *
+   * Pass `{ pin: false }` to observe the default the page actually chose -
+   * that is what the ranked-default tests do.
+   */
+  page.connect = async ({ pin = true } = {}) => {
     page.click('swap');
     await page.waitFor(() => page.text('addr') !== 'Not connected', { label: 'connect' });
     await page.settle();
+    if (!pin) return;
+    // Selecting through the real control, so the page marks the pair chosen
+    // exactly as it would for a user - no back door into its state.
+    const has = (which, sym) => [...page.$(which).options].some(o => o.textContent === sym);
+    if (has('fromSel', 'ETH') && has('toSel', 'USDC')) {
+      page.pickToken('fromSel', 'ETH');
+      page.pickToken('toSel', 'USDC');
+      await page.settle();
+    }
   };
 
   await page.settle();
