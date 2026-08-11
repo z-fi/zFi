@@ -293,10 +293,13 @@ async function quoteV4Pools(f,t,amountIn,block){
 const pools=v4PoolsFor(f,t);
 if(!pools.length||amountIn<=0n)return null;
 // Starving this one is WORSE than an error: the lens catches its own failure
-// and answers (0, 0) by design, so a low gas budget reads as "this pool has no
-// route" and the venue silently drops out of the comparison. Measured at
-// ~180k against the live ETH/FWA pool; asking for far more costs nothing.
-const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,gas:CALL_GAS,
+// and answers (0, 0) by design, so a low budget reads as "this pool has no
+// route" and the venue silently drops out of the comparison. Measured at ~180k
+// against the live ETH/FWA pool, so 2M is an order of magnitude of headroom and
+// still far below any provider's cap - the point is to clear a stingy DEFAULT,
+// not to ask for the block.
+const V4_QUOTE_GAS="0x1e8480"; // 2,000,000
+const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,gas:V4_QUOTE_GAS,
 data:"0x"+SEL_V4QUOTE+encBool(false)+encAddr(f.addr)+encAddr(t.addr)
 +encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks)+encUint(amountIn)},block])
 .then(h=>{const x=strip0x(h);return x.length>=128?BigInt("0x"+x.slice(64,128)):0n})
@@ -566,21 +569,18 @@ const ok=BigInt("0x"+at(w))===1n,bo=Number(BigInt("0x"+at(w+1)))/32,lw=w+bo;
 const len=Number(BigInt("0x"+at(lw)));
 out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
 return out};
-// EVERY BATCHED READ ASKS FOR GAS EXPLICITLY. An `eth_call` with no `gas` takes
-// whatever the wallet's provider decides to allow, and providers disagree
-// wildly - some hand over the block limit, some a few hundred thousand. A quote
-// batch fans one aggregate3 across every venue for the pair, and a pool priced
-// by RUNNING its hook costs ~180k on its own, so the total lands well past the
-// stingier defaults.
+// GAS ON A READ IS ASKED FOR NARROWLY, NOT EVERYWHERE. An `eth_call` with no
+// `gas` takes whatever the wallet's provider allows, and providers disagree -
+// but they also disagree about what to do with a LARGE request. I set 30M on
+// every batched read on the theory that nodes clamp above their own cap; some
+// reject instead, and the whole quote path died with
+// "RetryOnEmptyMiddleware - retries exhausted" on pairs that had always worked.
 //
-// The failure is not subtle in the logs and is completely opaque in the UI: the
-// whole aggregate reverts, `update` has nothing to fall back to, and the tile
-// says "No route" with the provider's phrasing attached - "out of gas",
-// "intrinsic gas too low" - for a pair that routes perfectly well. Naming a
-// budget removes the provider's opinion from the answer. Nodes clamp a request
-// above their own cap rather than rejecting it, so asking high is safe.
-const CALL_GAS="0x1c9c380"; // 30,000,000
-const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs),gas:CALL_GAS},tag])):[];
+// So the generic batch goes back to the provider's default, which was never the
+// thing that was broken. Only the one call that genuinely needs more than a
+// trivial budget names one, and it names a modest figure rather than a maximal
+// one.
+const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
 // Impact, no oracle: quote amt and amt/REF_N; with zero impact output scales
 // linearly, so the shortfall IS the impact. The reference carries ~1/N of it, so
 // this understates - right direction for a warning. Mainnet: ETH/USDC reads
