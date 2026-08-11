@@ -48,6 +48,8 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqmeta{font-size:11px;opacity:.7;margin-top:3px}
 .lqmine{font-size:11px;margin-top:3px;color:var(--acc,#4da3ff)}
 .lqempty{padding:14px 12px;font-size:12px;opacity:.7;text-align:center}
+#listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
+#listNote.hide{display:none}
 .lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--bd,#2a2f3a);background:transparent;color:inherit}
 .lqbtn:hover{opacity:.75}
 .rcpt:focus{border-color:var(--m)}
@@ -145,6 +147,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="ethModeL">Wrapped ether<select id="ethMode"><option value="auto">Auto</option><option value="eth">Prefer ETH</option><option value="weth">Keep WETH</option></select></label>
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
+<div id="listNote" class="hide" role="status" aria-live="polite"></div>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
 <div id="chBox" class="hide"><div class="chtf" id="chTf"></div><div id="chArt"></div><small id="chNote"></small></div>
@@ -293,11 +296,27 @@ best={pool:pools[i],amountIn,amountOut:rs[i]};
 return best;
 }
 
+// Why the picker is showing what it is showing. Empty means the onchain
+// registry is in use; anything else is the built-in fallback and the reason.
+//
+// THE SILENCE WAS THE BUG. `loadTokenList` ended in a bare `catch{}`, so a
+// dead RPC, a wrong chain, or a malformed entry all produced the same thing: a
+// picker that looks completely normal, holding eight built-in tokens in their
+// own order. That is indistinguishable from a short curated list, which is
+// exactly how it gets reported - as ranking being ignored, or a token missing,
+// rather than as a load that failed. Falling back is right; doing it quietly
+// is not.
+let listSource="";
+const setListSource=w=>{listSource=w;
+const el=document.getElementById("listNote");
+if(!el)return;
+el.textContent=w?"Built-in token list — "+w:"";
+el.classList.toggle("hide",!w)};
 async function loadTokenList(){
-if(TOKENLIST===ZERO)return;
+if(TOKENLIST===ZERO)return setListSource("registry address not set");
 try{
 const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
-if(!ids.length)return;
+if(!ids.length)return setListSource("registry is empty");
 const rows=await Promise.all(ids.slice(0,64).map(id=>
 rpc(C,[{to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)},L]).then(decStr).catch(()=>null)));
 const next=[];
@@ -336,8 +355,10 @@ v4:parseV4Pools(t.e,t.a)});
 // picker's default selections are indexes, so a stable partition matters: it
 // keeps a swappable token at index 0 no matter how many collections are listed.
 next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
-if(next.some(t=>t.std==="ft"))TOKENS.splice(0,TOKENS.length,...next);
-}catch{}
+if(!next.some(t=>t.std==="ft"))return setListSource("registry returned nothing swappable");
+TOKENS.splice(0,TOKENS.length,...next);
+setListSource("");
+}catch(e){setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
 const pad32=h=>strip0x(h).padStart(64,"0");
