@@ -1106,7 +1106,20 @@ if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
 // NFT leg, so a buy would have to escrow the payment directly. Say which of
 // the two this is rather than one message for both.
 if(t.std==="nft"){
-swap.textContent="Buying an NFT is not supported yet";swap.disabled=true;return}
+if(kind.value!=="fixed"){
+// A Floorboard bid is the collection-wide want, and it is a different board
+// with a different shape. Not wired up here yet, so say which it is.
+swap.textContent=kind.value==="floor"
+  ?"Collection bids are not enabled yet":"A bid for one token is a fixed offer";
+swap.disabled=true;return}
+if(!/^\d+$/.test(nftId.value.trim())){
+// An order names ONE token: amountB is a token id, not a quantity. Wanting
+// any of them is a Floorboard bid, which this board cannot express.
+swap.textContent="Name the token id to buy";swap.disabled=true;return}
+let bidAmt=0n;
+try{bidAmt=amt.value.trim()?parseUnits(amt.value.trim(),f.dec):0n}catch{}
+if(!bidAmt){swap.textContent="Set what you will pay";swap.disabled=true;return}
+swap.textContent=`Bid for ${t.sym} #${nftId.value.trim()}`;swap.disabled=false;return}
 if(f.std==="nft"){
 if(kind.value!=="fixed"){
 swap.textContent="An NFT sells at a fixed price";swap.disabled=true;return}
@@ -3659,15 +3672,78 @@ await checkWallet();
 await settle(await rpc(S,[req]));
 }
 
+const SEL_CREATE_ETH="0e8e31d3",SEL_CREATE="8e14f9f8";
+
+/**
+ * Bid for one specific NFT, escrowing the payment at the board.
+ *
+ * The mirror of pushNftOrder, and it cannot use the routed path either: the
+ * Orderbol adapter refuses any order with an NFT leg, so the escrow is placed
+ * at Swapboard directly.
+ *
+ * Paying in ETH is one transaction and no approval - `createOrderWithEth`
+ * wraps the value itself, and the order is denominated in WETH from then on,
+ * which is also what the seller will be paid in. An ERC-20 needs the usual
+ * allowance first, bundled into one prompt where the wallet can batch.
+ *
+ * `amountB` is a TOKEN ID here, not an amount. That is the whole reason a
+ * collection-wide want cannot be expressed this way and belongs on Floorboard
+ * instead: an order names one token, and one token only.
+ */
+async function buyNftOrder(f,t){
+const id=nftId.value.trim();
+if(!/^\d+$/.test(id))throw Error("name the token id you want to buy");
+const tokenId=BigInt(id);
+if(kind.value!=="fixed")throw Error("a bid for one token is a fixed offer");
+const price=parseUnits(amt.value.trim()||"0",f.dec);
+if(!price)throw Error("name what you will pay");
+if((await rpc("eth_getCode",[SB2,L])).length<5)throw Error("fixed orderbook not deployed yet");
+let cp=ZERO;
+const v=rc.value.trim();
+if(v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
+// The board only escrows the payment - the token itself stays with whoever
+// holds it - so an id nobody owns would leave funds locked against an order
+// that can never be filled. Cheap to ask, and the only check available.
+try{await rpc(C,[{to:t.addr,data:"0x"+SEL_OWNEROF+encUint(tokenId)},L])}
+catch{throw Error(`${t.sym} #${id} does not exist`)}
+const exp=+dly.value?BigInt(Math.floor(Date.now()/1e3)+ +dly.value):0n;
+// partialFill false: the board refuses NFTNotDivisible outright.
+if(f.addr===ZERO){
+  const data="0x"+SEL_CREATE_ETH+encAddr(t.addr)+encUint(tokenId)+encBool(false)
+    +encUint(exp)+encBool(true)+encAddr(cp);
+  const req={from:account,to:SB2,data,value:toHex(price)};
+  await rpc(C,[req,L]);await checkWallet();await settle(await rpc(S,[req]));
+  return;
+}
+const data="0x"+SEL_CREATE+encAddr(f.addr)+encUint(price)+encAddr(t.addr)+encUint(tokenId)
+  +encBool(false)+encUint(exp)+encBool(false)+encBool(true)+encAddr(cp);
+const tx={from:account,to:SB2,data,value:"0x0"};
+const al=BigInt(await rpc(C,[{to:f.addr,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(SB2)},L]));
+const approvals=[];
+if(al<price){
+  // Clear a stale non-zero allowance first, for USDT-style tokens.
+  if(al)approvals.push({to:f.addr,data:"0x"+SEL_APPROVE+encAddr(SB2)+encUint(0n),value:"0x0"});
+  approvals.push({to:f.addr,data:"0x"+SEL_APPROVE+encAddr(SB2)+encUint(price),value:"0x0"});
+}
+if(approvals.length&&await canBatch(account)){
+  await checkWallet();
+  await settle(await sendBatch(account,[...approvals,{to:SB2,data,value:"0x0"}]));
+  return;
+}
+for(const a of approvals){await checkWallet();await settle(await rpc(S,[{from:account,...a}]))}
+await rpc(C,[tx,L]);await checkWallet();await settle(await rpc(S,[tx]));
+}
+
 async function placeOrder(){
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 swap.disabled=true;
 try{
-if(f.std==="nft"){
-  await pushNftOrder(f,t);
+if(f.std==="nft"||t.std==="nft"){
+  if(f.std==="nft")await pushNftOrder(f,t);else await buyNftOrder(f,t);
   amt.value="";outAmt.value="";nftId.value="";
   fitFont(amt);fitFont(outAmt);
-  stat.textContent="Listed.";loadBook();refreshBalance();render();
+  stat.textContent=f.std==="nft"?"Listed.":"Bid placed.";
+  loadBook();refreshBalance();render();
   return;
 }
 const sell=parseUnits(amt.value.trim(),f.dec),want=parseUnits(outAmt.value.trim(),t.dec);

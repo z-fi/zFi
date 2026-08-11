@@ -172,18 +172,121 @@ describe('listing an NFT', () => {
     p.close();
   });
 
-  test('says plainly that BUYING one is not supported', async () => {
-    // Not the same gap: selling needs no adapter, buying would have to escrow
-    // the payment directly because Orderbol refuses an order with an NFT leg.
+  test('asks for the price too, once the id is there', async () => {
     const p = await setup();
-    // PUNK is on the pay side and ETH on the receive side, so neither can move
-    // straight past the other - which is the equal-pair guard doing its job.
-    // Step through a third token.
+    p.type('nftId', '7');
+    await p.settle();
+    assert.match(p.text('swap'), /Set a price/i, 'an id alone is not an offer');
+    p.close();
+  });
+});
+
+/**
+ * Bidding for one specific NFT.
+ *
+ * The mirror of listing, and it cannot use the routed path either - Orderbol
+ * refuses an order with an NFT leg - so the escrow is placed at Swapboard
+ * directly. Paying in ETH is one transaction and no approval, because
+ * `createOrderWithEth` wraps the value itself.
+ *
+ * `amountB` is a TOKEN ID, not an amount. That is exactly why a
+ * collection-wide want cannot be expressed here: an order names one token.
+ */
+describe('bidding for an NFT', () => {
+  /** Collection on the RECEIVE side, paying from the pay side. */
+  async function buying({ pay = 'ETH' } = {}) {
+    const p = await setup();
+    // PUNK is on the pay side from setup; step through a third token so the
+    // equal-pair guard has somewhere to put each side.
     p.pickToken('fromSel', 'USDC');
     p.pickToken('toSel', 'PUNK');
+    p.pickToken('fromSel', pay);
     await p.settle();
-    assert.match(p.text('swap'), /Buying an NFT is not supported/i);
-    assert.equal(p.$('swap').disabled, true);
+    return p;
+  }
+
+  const bid = async (p, { price = '2', id = '7' } = {}) => {
+    p.type('amt', price);
+    p.type('nftId', id);
+    await p.settle();
+  };
+
+  test('offers to bid once a price and a token id are named', async () => {
+    const p = await buying();
+    assert.match(p.text('swap'), /Name the token id to buy/i,
+      'an order names one token: there is no "any of them" here');
+    await bid(p, { price: '2', id: '7' });
+    assert.match(p.text('swap'), /Bid for PUNK #7/);
+    assert.equal(p.$('swap').disabled, false);
+    p.close();
+  });
+
+  test('escrows ETH at the board in one transaction, with no approval', async () => {
+    const p = await buying();
+    await bid(p, { price: '2', id: '7' });
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'bid' });
+    await p.settle();
+
+    assert.equal(p.chain.sent.length, 1, 'no approval step for native ether');
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase(), 'placed at the board, not the router');
+    assert.equal(BigInt(tx.value), 2n * ETH, 'the bid rides as value and the board wraps it');
+    assert.equal(selectorOf(tx.data), '0e8e31d3', 'createOrderWithEth');
+
+    const b = '0x' + tx.data.replace(/^0x/, '').slice(8);
+    assert.equal(wordAddr(b, 0).toLowerCase(), PUNKS.toLowerCase(), 'the collection is tokenB');
+    assert.equal(word(b, 1), 7n, 'amountB is the TOKEN ID, not a quantity');
+    assert.equal(word(b, 2), 0n, 'partial fills refused: NFTNotDivisible');
+    assert.equal(word(b, 4), 1n, 'nftB');
+    assert.equal(wordAddr(b, 5).toLowerCase(), A.ZERO.toLowerCase(), 'public by default');
+    p.close();
+  });
+
+  test('approves and creates when paying in an ERC-20', async () => {
+    const p = await buying({ pay: 'USDC' });
+    await bid(p, { price: '5000', id: '7' });
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'approve then create' });
+    await p.settle();
+
+    const [approve] = p.chain.sent;
+    assert.equal(approve.to.toLowerCase(), A.USDC.toLowerCase());
+    assert.equal(selectorOf(approve.data), SEL.APPROVE);
+    assert.equal(wordAddr('0x' + approve.data.slice(10), 0).toLowerCase(), A.SB2.toLowerCase(),
+      'the board pulls the escrow, so the board is what gets approved');
+
+    const tx = p.chain.lastSent;
+    assert.equal(selectorOf(tx.data), '8e14f9f8', 'createOrder');
+    assert.equal(BigInt(tx.value || 0), 0n);
+    const b = '0x' + tx.data.replace(/^0x/, '').slice(8);
+    assert.equal(wordAddr(b, 0).toLowerCase(), A.USDC.toLowerCase(), 'paying in USDC');
+    assert.equal(word(b, 1), 5000n * 10n ** 6n, 'in the pay token\'s units');
+    assert.equal(wordAddr(b, 2).toLowerCase(), PUNKS.toLowerCase());
+    assert.equal(word(b, 3), 7n, 'the token id');
+    assert.equal(word(b, 6), 0n, 'nftA false');
+    assert.equal(word(b, 7), 1n, 'nftB true');
+    p.close();
+  });
+
+  test('refuses an id that does not exist, before escrowing anything', async () => {
+    // The board escrows the payment but cannot check the token: an id nobody
+    // owns would lock funds against an order that can never be filled.
+    const p = await buying();
+    await bid(p, { id: '99' });
+    p.click('swap');
+    await p.waitFor(() => /does not exist/i.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sent.length, 0, 'nothing escrowed');
+    p.close();
+  });
+
+  test('points a collection-wide want at the board that can express it', async () => {
+    const p = await buying();
+    await bid(p);
+    p.select('kind', 'floor');
+    await p.settle();
+    assert.match(p.text('swap'), /Collection bids are not enabled yet/i,
+      'a different board with a different shape, not a silent failure');
     p.close();
   });
 });
