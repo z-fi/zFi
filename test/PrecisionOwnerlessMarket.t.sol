@@ -153,9 +153,16 @@ contract PrecisionOwnerlessMarketTest is Test {
         assertEq(p.creatorOwed0(), 0, "an untaxed owned market must accrue nothing");
     }
 
-    /// @dev And the taxed case, so the contrast is pinned: the creator's cut
-    /// comes OUT of the base fee rather than on top of it, so the trader pays
-    /// the same either way and only the split changes.
+    /// @dev And the taxed case. The creator's cut comes OUT of the base fee
+    /// rather than on top of it: `amountOut` is derived from
+    /// `inAfterFee = net - feeAmount`, and `creatorCut` appears nowhere in it.
+    ///
+    /// SO THE TRADER IS UNAFFECTED FOR A GIVEN SWAP AGAINST GIVEN RESERVES -
+    /// which is what this test measures, on two freshly seeded identical pools.
+    /// It is NOT true that the two markets stay identical. `kept = net -
+    /// creatorCut` is what enters the reserves, so a taxed pool accumulates
+    /// more slowly and the two drift apart with volume. See the test below,
+    /// which measures the drift rather than assuming it away.
     function test_ACreatorShareComesOutOfTheFeeNotOnTopOfIt() public {
         PrecisionPoolFactory.Market memory taxed = _mkt(alice, 5000); // half the fee
         PrecisionPoolFactory.Market memory free = _mkt(address(0), 0);
@@ -178,5 +185,48 @@ contract PrecisionOwnerlessMarketTest is Test {
         assertEq(outTaxed, outFree, "a creator share changed what the trader received");
         assertGt(pt.creatorOwed0(), 0, "the taxed market accrued nothing");
         assertEq(pf.creatorOwed0(), 0, "the free market accrued something");
+    }
+
+    /// @dev WHERE THE CREATOR FEE ACTUALLY LANDS, over time rather than on one
+    /// trade. "A taxed and an untaxed market pay the trader the same" is only
+    /// true of the FIRST swap; stated generally it is wrong, and the direction
+    /// it is wrong in is counterintuitive.
+    ///
+    /// The cut leaves the pool, so a taxed pool's reserves grow more slowly
+    /// than an untaxed twin's. Less input retained means less price impact
+    /// accumulated, so the taxed pool ends up marginally CHEAPER to trade
+    /// against, not dearer. The cost is borne entirely by its LPs, who are
+    /// compounding a smaller share of the same fee.
+    ///
+    /// Measured rather than argued, because the sign is easy to get backwards.
+    function test_ATaxedMarketDivergesFromAnUntaxedTwinWithVolume() public {
+        PrecisionPoolFactory.Market memory taxed = _mkt(alice, 5000);
+        PrecisionPoolFactory.Market memory free = _mkt(address(0), 0);
+        vm.startPrank(alice);
+        factory.createAndSeed{value: 100 ether}(taxed, SM, 100 ether, 1e23, 0, alice);
+        factory.createAndSeed{value: 100 ether}(free, SM, 100 ether, 1e23, 0, alice);
+        vm.stopPrank();
+
+        PrecisionPool pt = PrecisionPool(payable(factory.poolFor(taxed)));
+        PrecisionPool pf = PrecisionPool(payable(factory.poolFor(free)));
+
+        uint256 firstT;
+        uint256 firstF;
+        uint256 lastT;
+        uint256 lastF;
+        for (uint256 i; i < 40; ++i) {
+            vm.prank(carol);
+            uint256 ot = pt.swapExactIn{value: 1 ether}(address(0), 1 ether, 0, carol);
+            vm.prank(carol);
+            uint256 og = pf.swapExactIn{value: 1 ether}(address(0), 1 ether, 0, carol);
+            if (i == 0) (firstT, firstF) = (ot, og);
+            (lastT, lastF) = (ot, og);
+        }
+
+        assertEq(firstT, firstF, "the first swap must be identical - same reserves, same math");
+        assertGt(lastT, lastF, "the taxed pool should end up marginally cheaper, not dearer");
+        // And the reason: its reserves grew more slowly by exactly the cut.
+        assertLt(pt.reserve0(), pf.reserve0(), "the taxed pool should hold less");
+        assertGt(pt.creatorOwed0(), 0, "the difference should be sitting in the creator's claim");
     }
 }
