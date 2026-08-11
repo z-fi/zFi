@@ -1513,6 +1513,29 @@ const payWithEth=async need=>{
     return ethMode.value==="eth"?e>=need:(w<need&&e>=need);
   }catch{return false}
 };
+// Can this account actually pay for the leg it is about to approve?
+//
+// `payWithEth` above already reads these balances - but only to CHOOSE a rail,
+// never to refuse. So a fill nobody could afford still asked for an approval
+// first and then reverted, and "execution reverted" does not tell you that the
+// problem is your balance. The approval is the part that stings: it costs gas
+// and leaves an allowance standing for a trade that never happened.
+//
+// A read that fails is not evidence of anything, so it lets the fill proceed
+// and the chain decide - this refuses only what it can prove.
+const assertFunded=async(token,need,meta)=>{
+  if(!need)return;
+  let have;
+  try{
+    have=token===ZERO
+      ?BigInt(await rpc("eth_getBalance",[account,L]))
+      :BigInt(await rpc(C,[{to:token,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
+  }catch{return}
+  if(have>=need)return;
+  const m=meta||known(token)||{sym:token===ZERO?"ETH":"tokens",dec:18};
+  throw Error(`Not enough ${m.sym} to fill: it costs ${trimAmt(need,m.dec)} `
+    +`and you hold ${trimAmt(have,m.dec)}.`);
+};
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
 const escan=(a,id)=>`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
@@ -2188,6 +2211,12 @@ book.addEventListener("click",async e=>{
     const routeOut=nativeOut?ZERO:r.tA;
     const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()
       ||(routeOut===ZERO&&routeIn.toLowerCase()===WETH.toLowerCase());
+    // Before any approval, on every path below. `routeIn` is already the asset
+    // this fill will actually spend - ETH where the leg wraps, the quoted token
+    // otherwise - so one check covers the executor route and the direct one.
+    // An NFT leg prices in token ids, not amounts, and is not a balance.
+    if(!r.nB)await assertFunded(routeIn,r.aB,
+      known(routeIn)||(routeIn===ZERO?{sym:"ETH",dec:18}:{sym:r.sB||"TOKEN",dec:r.dB??18}));
     if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
       if((await rpc("eth_getCode",[SWAPBOL,L])).length<5)throw Error("orderbook executor not deployed yet");
       // Everything the executor will refuse, asked read-only FIRST. This runs

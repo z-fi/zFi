@@ -522,6 +522,28 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  test('refuses a fill the account cannot pay for, before any approval', async () => {
+    // The reported case: an order asking 100 WETH against an account holding
+    // none. It cost an approval and then reverted, and "execution reverted"
+    // says nothing about the balance being the problem.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, 0n);
+      c.setNative(A.ACCOUNT, 0n);              // no ETH to wrap either
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => /Not enough/i.test(p.text('stat')), { label: 'the refusal' });
+    await p.settle();
+
+    assert.match(p.text('stat'), /Not enough WETH/i, 'must name the asset that is short');
+    assert.match(p.text('stat'), /you hold 0/i, 'and say what is actually held');
+    // The point of checking first: no approval, no gas, no allowance left
+    // standing for a trade that could never have settled.
+    assert.equal(p.chain.sent.length, 0, 'nothing was sent, least of all an approval');
+    p.close();
+  });
+
   test('an empty book renders nothing at all', async () => {
     const p = await setup();
     await p.settle();
