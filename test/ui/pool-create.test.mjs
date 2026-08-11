@@ -69,20 +69,36 @@ const preset = async (p, v) => {
   await new Promise(r => p.window.setTimeout(r, 60));
   await p.settle();
 };
-const fill = async (p, vals) => {
+
+/**
+ * Type a deposit and any form fields.
+ *
+ * The two amounts live on the SWAP TILE, not in this form: they are the
+ * deposit, and their ratio is the opening price - which is how pool creation
+ * works everywhere else, and the reason the form no longer asks for a price
+ * it can already read.
+ */
+const fill = async (p, { a0, a1, ...fields } = {}) => {
   const box = form(p);
-  for (const [id, v] of Object.entries(vals)) {
+  for (const [id, v] of Object.entries(fields)) {
     const el = box.querySelector('#' + id);
+    if (!el) throw Error(`no #${id} in the create form`);
     el.value = v;
     el.dispatchEvent(new p.window.Event('input', { bubbles: true }));
   }
-  await new Promise(r => p.window.setTimeout(r, 360));
+  if (a0 !== undefined) { p.$('amt').value = a0; p.type('amt', a0); }
+  if (a1 !== undefined) { p.$('outAmt').value = a1; p.type('outAmt', a1); }
+  await new Promise(r => p.window.setTimeout(r, 420));
   await p.settle();
 };
-// Custom prices, which is the shape most of these assertions are about. The
-// preset path has its own tests below.
-const good = { lqPx: '3000', lqA0: '1', lqA1: '3000', lqLo: '1000', lqHi: '5000' };
-const custom = async (p, vals = good) => { await preset(p, 'custom'); await fill(p, vals); };
+
+// 1 ETH and 3000 USDC: a ratio of 3000, which IS the opening price.
+const good = { a0: '1', a1: '3000' };
+const customBand = { lqLo: '1000', lqHi: '5000' };
+const custom = async (p, vals = { ...good, ...customBand }) => {
+  await preset(p, 'custom');
+  await fill(p, vals);
+};
 
 describe('creating a band', () => {
   test('is offered exactly where there is no band to join', async () => {
@@ -105,8 +121,8 @@ describe('creating a band', () => {
     // The pool would take it and the first trade would arbitrage it. Cheaper
     // to say so than to let the chain answer with a revert.
     const p = await setup();
-    await custom(p, { ...good, lqPx: '9000' });
-    assert.match(p.$('lqPv').textContent, /inside the band/i);
+    await custom(p, { ...good, ...customBand, lqLo: '4000', lqHi: '5000' });
+    assert.match(p.$('lqPv').textContent, /amounts imply 3,?000, which is outside that band/i);
     assert.equal(p.$('lqCreate').disabled, true);
     p.close();
   });
@@ -155,7 +171,12 @@ describe('creating a band', () => {
     assert.equal(word(b, 4), 3000n, 'the fee tier selected');
     assert.equal(wordAddr(b, 5).toLowerCase(), A.ZERO.toLowerCase(), 'no hook');
     // Then the scalars.
-    assert.equal(word(b, 8), sq(3000), 'sqrtPriceInit: where trading opens');
+    // The opening price is DERIVED from the ratio: the price at which both
+    // deposits are consumed in full. It is not the naive a1/a0 - a band shifts
+    // it - so what matters is that it sits strictly inside, which is what
+    // makes it a two-sided seed at all.
+    const sp = word(b, 8);
+    assert.ok(sp > word(b, 2) && sp < word(b, 3), 'opens strictly inside its own band');
     assert.equal(word(b, 9), ETH, 'amount0');
     assert.equal(word(b, 10), 3000n * USDC, 'amount1');
     assert.equal(wordAddr(b, 12).toLowerCase(), A.ACCOUNT.toLowerCase(), 'LP shares to you');
@@ -227,8 +248,7 @@ describe('creating a band', () => {
     // would refuse to create the very thing it exists to create.
     const p = await setup();                 // not deployed
     await custom(p);
-    assert.match(p.$('lqPv').textContent, /Deposits up to 1 ETH \+ 3,?000 USDC/);
-    assert.match(p.$('lqPv').textContent, /returns the rest/i, 'the amounts are maxima either way');
+    assert.match(p.$('lqPv').textContent, /Deposits 1 ETH \+ 3,?000 USDC/);
     assert.equal(p.$('lqCreate').disabled, false, 'and it must still be creatable');
     p.close();
   });
@@ -259,7 +279,7 @@ describe('creating a band', () => {
    */
   test('accepts a token0-only band that opens at its low price', async () => {
     const p = await setup();
-    await custom(p, { lqPx: '1000', lqA0: '1', lqA1: '', lqLo: '1000', lqHi: '5000' });
+    await custom(p, { a0: '1', a1: '', lqPx: '1000', lqLo: '1000', lqHi: '5000' });
     assert.equal(p.$('lqCreate').disabled, false, 'the whole position is ETH, and that is allowed');
     p.click('lqCreate');
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
@@ -273,7 +293,7 @@ describe('creating a band', () => {
 
   test('accepts a token1-only band that opens at its high price', async () => {
     const p = await setup();
-    await custom(p, { lqPx: '5000', lqA0: '', lqA1: '3000', lqLo: '1000', lqHi: '5000' });
+    await custom(p, { a0: '', a1: '3000', lqPx: '5000', lqLo: '1000', lqHi: '5000' });
     assert.equal(p.$('lqCreate').disabled, false);
     p.click('lqCreate');
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
@@ -291,9 +311,9 @@ describe('creating a band', () => {
     // band touches, which is what makes it single-asset. Quietly overriding
     // what someone typed is worse than refusing it.
     const p = await setup();
-    await custom(p, { lqPx: '3000', lqA0: '1', lqA1: '', lqLo: '1000', lqHi: '5000' });
-    assert.match(p.$('lqRangeOut').textContent, /ETH only, so it opens at 1,?000/i);
-    assert.match(p.$('lqRangeOut').textContent, /band sits above/i);
+    await custom(p, { a0: '1', a1: '', lqPx: '1000', lqLo: '1000', lqHi: '5000' });
+    assert.match(p.$('lqRangeOut').textContent, /opens at 1,?000 USDC per ETH/i);
+    assert.match(p.$('lqRangeOut').textContent, /ETH only/i);
     assert.equal(p.$('lqCreate').disabled, false);
 
     p.click('lqCreate');
@@ -316,9 +336,10 @@ describe('creating a band', () => {
   test('a preset places the band around the opening price', async () => {
     const p = await setup();
     await preset(p, '2');
-    await fill(p, { lqPx: '3000', lqA0: '1', lqA1: '3000' });
-    assert.match(p.$('lqRangeOut').textContent, /1,?500 – 6,?000 USDC per ETH/,
-      'a 2x width is half to double');
+    await fill(p, { a0: '1', a1: '3000' });
+    assert.match(p.$('lqRangeOut').textContent, /1,?500 – 6,?000/, 'a 2x width is half to double');
+    assert.match(p.$('lqRangeOut').textContent, /opens at 3,?000 USDC per ETH/,
+      'and the ratio of the deposit is what it opens at');
     p.close();
   });
 
@@ -327,11 +348,18 @@ describe('creating a band', () => {
     // depositing one asset IS a band that lies entirely on one side.
     const p = await setup();
     await preset(p, '2');
-    await fill(p, { lqPx: '3000', lqA0: '1', lqA1: '' });
+    // A single asset has no ratio, so this is the one case a price is asked
+    // for - and the band then lies entirely on one side of it.
+    await fill(p, { a0: '1', a1: '', lqPx: '3000' });
+    assert.equal(p.$('lqPxRow').classList.contains('hide'), false, 'the price is asked for here');
     assert.match(p.$('lqRangeOut').textContent, /3,?000 – 6,?000/, 'above, for token0');
+    assert.match(p.$('lqRangeOut').textContent, /ETH only/);
 
-    await fill(p, { lqA0: '', lqA1: '3000' });
-    assert.match(p.$('lqRangeOut').textContent, /1,?500 – 3,?000/, 'below, for token1');
+    const p2 = await setup();
+    await preset(p2, '2');
+    await fill(p2, { a0: '', a1: '3000', lqPx: '3000' });
+    assert.match(p2.$('lqRangeOut').textContent, /1,?500 – 3,?000/, 'below, for token1');
+    p2.close();
     p.close();
   });
 
@@ -341,9 +369,9 @@ describe('creating a band', () => {
     // deposits, making the easiest option the most likely error. The widths
     // are tried in turn and the first the chain accepts is taken.
     const p = await setup();
-    await fill(p, { lqPx: '3000', lqA0: '1', lqA1: '3000' });
+    await fill(p, { a0: '1', a1: '3000' });
     // The mock accepts every createAndSeed, so the widest is chosen.
-    assert.match(p.$('lqRangeOut').textContent, /^3(\.0+)? – 3,?000,?000 USDC per ETH/,
+    assert.match(p.$('lqRangeOut').textContent, /^3(\.0+)? – 3,?000,?000/,
       'the widest width on offer, once nothing refuses it');
     assert.equal(p.$('lqCreate').disabled, false);
     p.close();
@@ -354,15 +382,15 @@ describe('creating a band', () => {
     // offering a band that cannot be created.
     const p = await setup();
     p.chain.rejectWiderThan = 10;
-    await fill(p, { lqPx: '3000', lqA0: '1', lqA1: '3000' });
-    assert.match(p.$('lqRangeOut').textContent, /^300(\.0+)? – 30,?000 USDC per ETH/);
+    await fill(p, { a0: '1', a1: '3000' });
+    assert.match(p.$('lqRangeOut').textContent, /^300(\.0+)? – 30,?000/);
     p.close();
   });
 
   test('says so when even the narrowest range is out of reach', async () => {
     const p = await setup();
     p.chain.rejectWiderThan = 0;
-    await fill(p, { lqPx: '3000', lqA0: '1', lqA1: '3000' });
+    await fill(p, { a0: '1', a1: '3000' });
     assert.match(p.$('lqPv').textContent, /narrowest range needs more than this deposit/i);
     assert.equal(p.$('lqCreate').disabled, true);
     p.close();

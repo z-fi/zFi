@@ -40,28 +40,41 @@ svg{vertical-align:middle;flex-shrink:0}
 #lq.on{background:var(--k);color:var(--kf)}
 #lqPanel{display:block}
 #lqPanel.hide{display:none}
-.lqrow{padding:10px 12px;border:1px solid var(--e);border-radius:10px;margin:6px 0}
+.lqrow{padding:.62em .7em;border:1px solid var(--e);border-radius:.5em;margin:.35em 0}
 .lqrow.out{opacity:.55}
-.lqband{display:flex;align-items:center;gap:6px;font-size:13px}
-.lqfee{opacity:.7;font-size:11px}
-.lqtag{font-size:10px;padding:1px 5px;border-radius:6px;border:1px solid var(--e);opacity:.8}
-.lqmeta{font-size:11px;opacity:.7;margin-top:3px}
-.lqmine{font-size:11px;margin-top:3px;color:var(--f)}
-.lqempty{padding:14px 12px;font-size:12px;opacity:.7;text-align:center}
-.lqnew{margin-top:8px;display:flex;flex-direction:column;gap:5px;text-align:left}
+.lqband{display:flex;align-items:center;gap:.4em;font-size:.82em}
+.lqfee{color:var(--m);font-size:.72em}
+.lqtag{font-size:.62em;padding:.1em .4em;border-radius:.4em;border:1px solid var(--e);color:var(--m)}
+.lqmeta{font-size:.7em;color:var(--m);margin-top:.25em;display:flex;align-items:center;gap:.4em}
+.lqmeta>.lqbtn,.lqmine>.lqbtn{margin-left:auto}
+.lqmine{font-size:.7em;margin-top:.25em;display:flex;align-items:center;gap:.4em}
+.lqempty{padding:.9em .7em;font-size:.75em;color:var(--m);text-align:center}
+/* The create form. Sized off the page's own type scale and spacing rather
+   than its own pixel values, which is what made it read as a different dapp:
+   labelled rows like the Orders tab's controls, the shared .primary button,
+   and one border colour throughout. */
+.lqnew{margin-top:.5em;display:flex;flex-direction:column;gap:.35em;text-align:left}
 .lqnew.hide{display:none}
-.lqnew .r{display:flex;gap:5px}
+.lqf{display:flex;align-items:center;gap:.5em;font-size:.72em;color:var(--m)}
+.lqf.hide{display:none}
+.lqf>label{flex:none;min-width:6.5em}
+.lqf>.lqin,.lqf>.r{flex:1;min-width:0}
+.lqnew .r{display:flex;gap:.35em}
 .lqnew .r>*{flex:1;min-width:0}
-.lqnew select.lqin{appearance:none;-webkit-appearance:none}
-.lqnote{font-size:11px;opacity:.65;line-height:1.5}
+.lqnew .lqin{padding:.5em .6em;font-size:1.05em;border-radius:.45em;color:var(--f)}
+.lqnew select.lqin{appearance:none;-webkit-appearance:none;
+  background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right .6em center;padding-right:1.6em}
+.lqout{font-size:.72em;color:var(--m);line-height:1.55;min-height:1.1em}
+.lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
 #listNote.hide{display:none}
-.lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--e);background:transparent;color:inherit}
+.lqbtn{font-size:.9em;padding:.25em .6em;border-radius:.4em;cursor:pointer;border:1px solid var(--e);background:transparent;color:var(--f);font-family:inherit}
+.lqbtn:hover:not(:disabled){border-color:var(--m)}
 .lqbtn:hover:not(:disabled){opacity:.75}
 .lqbtn:disabled{opacity:.4;cursor:not-allowed}
-.lqadd{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.lqadd{margin-top:.45em;display:flex;flex-direction:column;gap:.35em}
 .lqadd.hide{display:none}
-.lqin{width:100%;box-sizing:border-box;padding:.45em .6em;font:inherit;font-size:12px;border:1px solid var(--e);border-radius:6px;background:transparent;color:var(--f);outline:0}
+.lqin{width:100%;box-sizing:border-box;padding:.45em .6em;font:inherit;font-size:.75em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);outline:0}
 .lqin:focus{border-color:var(--m)}
 .lqpv{font-size:11px;opacity:.7;min-height:1.2em}
 .lqadd .lqbtn{margin-left:0;align-self:flex-start;font-size:11px;padding:4px 10px}
@@ -1575,8 +1588,14 @@ location.reload();
 addr.onclick=()=>{if(account)disconnect()};
 const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(update,250)};
 const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
-amt.addEventListener("input",()=>{if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
-outAmt.addEventListener("input",()=>{if(tab==="book"){fitFont(outAmt);render();return}setMode("out");fitFont(outAmt);updateSoon()});
+// In liquidity mode these two are the deposit, not a trade: no quote to run,
+// no exact-in/exact-out to pick. Their RATIO is the opening price.
+amt.addEventListener("input",()=>{
+if(lqMode){fitFont(amt);lqPreviewSoon();return}
+if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
+outAmt.addEventListener("input",()=>{
+if(lqMode){fitFont(outAmt);lqPreviewSoon();return}
+if(tab==="book"){fitFont(outAmt);render();return}setMode("out");fitFont(outAmt);updateSoon()});
 // A slippage far from the default is the single easiest way to get sandwiched,
 // so it is worth colouring rather than leaving as a silent number.
 const slipWarn=()=>slip.classList.toggle("warn",+slip.value>=3);
@@ -2980,8 +2999,13 @@ function lqSet(on){
   lqMode=on;
   lq.setAttribute("aria-pressed",on?"true":"false");
   lq.classList.toggle("on",on);
-  for(const el of [amtRow,bal,outRow,rate,flip,rc,rcvEl,swap])
+  // The two amount fields STAY. They are the deposit, and the ratio between
+  // them is what sets the opening price - the way pool creation works
+  // everywhere else. Hiding them and asking again in a small box below was
+  // asking the same question twice and answering it worse.
+  for(const el of [rate,flip,rc,rcvEl,swap])
     if(el)el.classList.toggle("hide",on);
+  if(on){amt.value="";outAmt.value="";fitFont(amt);fitFont(outAmt)}
   rcvHdr.textContent=on?"and":"You receive";
   payL.textContent=on?"Liquidity for":"You pay";
   lqPanel.classList.toggle("hide",!on);
@@ -3038,22 +3062,49 @@ const LQ_RANGES=[["full","Full range"],["100","Wide — 100×"],["10","10×"],
   ["2","2×"],["1.25","Tight — 25%"],["custom","Custom prices"]];
 function lqNewForm(t0,t1){
   return `<div class="lqnew" data-t0="${t0.addr}" data-t1="${t1.addr}">`
-    +`<div class="r"><input class="lqin" id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Opening price" aria-label="Opening price">`
-    +`<select class="lqin" id="lqFee" aria-label="Fee tier">`
-    +LQ_FEES.map(([v,l])=>`<option value="${v}"${v===3000?" selected":""}>${l} fee</option>`).join("")
-    +`</select></div>`
-    +`<select class="lqin" id="lqRange" aria-label="Price range">`
+    +`<div class="lqf"><label for="lqRange">Range</label>`
+    +`<select class="lqin" id="lqRange">`
     +LQ_RANGES.map(([v,l])=>`<option value="${v}"${v==="full"?" selected":""}>${l}</option>`).join("")
-    +`</select>`
-    +`<div class="r hide" id="lqCustom"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low price" aria-label="Lowest price in the band">`
-    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High price" aria-label="Highest price in the band"></div>`
-    +`<div class="r"><input class="lqin" id="lqA0" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t0.sym}" aria-label="${t0.sym} to seed">`
-    +`<input class="lqin" id="lqA1" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t1.sym}" aria-label="${t1.sym} to seed"></div>`
-    +`<div class="lqband" id="lqRangeOut"></div>`
-    +`<div class="lqpv" id="lqPv"></div>`
-    +`<div class="lqnote">Prices are ${t1.sym} per ${t0.sym}. You will own this market, which lets only you seed it — at no fee to traders.</div>`
-    +`<button class="lqbtn" id="lqCreate" disabled>Create band</button></div>`;
+    +`</select></div>`
+    +`<div class="lqf hide" id="lqCustom"><label for="lqLo">Prices</label>`
+    +`<div class="r"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low" aria-label="Lowest price in the band">`
+    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High" aria-label="Highest price in the band"></div></div>`
+    +`<div class="lqf hide" id="lqPxRow"><label for="lqPx">Opening price</label>`
+    +`<input class="lqin" id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${t1.sym} per ${t0.sym}" aria-label="Opening price"></div>`
+    +`<div class="lqf"><label for="lqFee">Fee</label>`
+    +`<select class="lqin" id="lqFee">`
+    +LQ_FEES.map(([v,l])=>`<option value="${v}"${v===3000?" selected":""}>${l}</option>`).join("")
+    +`</select></div>`
+    +`<div class="lqout" id="lqRangeOut"></div>`
+    +`<div class="lqout" id="lqPv"></div>`
+    +`<button class="primary" id="lqCreate" disabled>Create band</button></div>`;
 }
+
+/**
+ * The opening price, from the deposit.
+ *
+ * This is how pool creation works everywhere: you put in two amounts and their
+ * RATIO is the price. Asking for the amounts and then asking again for a price
+ * is the same question twice, and lets the two disagree.
+ *
+ * A band makes it slightly more than a division. The pool takes
+ * `min(lpFrom0, lpFrom1)` and returns the rest, so the price that consumes
+ * BOTH sides in full is the one where those two are equal. That crossing is
+ * what the ratio means here, and it is found by bisection rather than by
+ * re-deriving the pool's algebra - one is exact by construction, the other is
+ * a copy that can drift.
+ */
+const lqSeedPrice=(sl,sh,in0,in1)=>{
+  const L=Number(sl),H=Number(sh),x=Number(in0),y=Number(in1),W=1e18;
+  // lp0 rises with s and lp1 falls, so their ratio crosses 1 exactly once.
+  const g=s=>(x*s*H*(s-L))/((H-s)*W*y*W);
+  let lo=L,hi=H;
+  for(let i=0;i<90;i++){const m=(lo+hi)/2;if(g(m)<1)lo=m;else hi=m}
+  const s=(lo+hi)/2;
+  // Strictly inside: the edges are the one-sided cases and mean something else.
+  if(!(s>L&&s<H))return 0n;
+  return BigInt(Math.round(s));
+};
 
 /**
  * Where the band sits, from the opening price and a width.
@@ -3153,7 +3204,10 @@ async function loadLq(){
     if(my!==lqSeq)return;
     if(!rows.length){
       lqList.innerHTML=`<div class="lqempty">No Precision band for this pair yet.</div>`+lqNewForm(t0,t1);
-      lqRows=[];return}
+      lqRows=[];
+      // Say what to do before anything is typed, rather than after.
+      lqNewPreview();
+      return}
     // Yours first, then deepest: the band you are already in is the one you came
     // to act on, and a list sorted purely by size buries it.
     rows.sort((a,b)=>(b.shares>0n)-(a.shares>0n)||(b.liq>a.liq?1:b.liq<a.liq?-1:0));
@@ -3320,6 +3374,8 @@ lqList.addEventListener("change",e=>{if(e.target.id==="lqFee"||e.target.id==="lq
  * the only place the difference is visible before signing.
  */
 let lqNewSeq=0;
+let lqPvT2;
+const lqPreviewSoon=()=>{clearTimeout(lqPvT2);lqPvT2=setTimeout(lqNewPreview,320)};
 async function lqNewPreview(){
   const box=lqList.querySelector(".lqnew");
   if(!box)return;
@@ -3332,23 +3388,40 @@ async function lqNewPreview(){
   const [t0,t1]=pair;
   const range=box.querySelector("#lqRange").value;
   box.querySelector("#lqCustom").classList.toggle("hide",range!=="custom");
-  const num=id=>{const v=box.querySelector("#"+id).value.trim();return v?+v:NaN};
-  const px=num("lqPx");
+  // The deposit is the pair of amounts on the tile above.
   let a0=0n,a1=0n;
   try{
-    const v0=box.querySelector("#lqA0").value.trim(),v1=box.querySelector("#lqA1").value.trim();
+    const v0=amt.value.trim(),v1=outAmt.value.trim();
     a0=v0?parseUnits(v0,t0.dec):0n;a1=v1?parseUnits(v1,t1.dec):0n;
   }catch{out.textContent="Check the amounts.";bandOut.textContent="";return}
+  const oneSided=(a0&&!a1)?0:(a1&&!a0)?1:-1;
+  // A price is only asked for where the amounts cannot imply one: a single
+  // asset has no ratio.
+  box.querySelector("#lqPxRow").classList.toggle("hide",oneSided<0);
+  if(!a0&&!a1){
+    bandOut.textContent="";
+    out.textContent=`Enter how much ${t0.sym} and ${t1.sym} to deposit — the ratio sets the opening price.`;
+    return}
+  const pxIn=box.querySelector("#lqPx").value.trim();
+  // Both sides: the ratio IS the price. One side: it has to be named.
+  const px=oneSided<0
+    ?(Number(a1)/10**t1.dec)/(Number(a0)/10**t0.dec)
+    :(pxIn?+pxIn:NaN);
+  if(!(px>0)){
+    bandOut.textContent="";
+    const only=oneSided===0?t0.sym:t1.sym;
+    out.textContent=`${/^[AEIOU]/i.test(only)?"An":"A"} ${only}-only band has no ratio to`
+      +` read a price from — name one.`;
+    return}
   let lo,hi;
   if(range==="custom"){
-    lo=num("lqLo");hi=num("lqHi");
-    if(!(lo>0)||!(hi>0)){bandOut.textContent="";out.textContent="";return}
+    const n=id=>{const v=box.querySelector("#"+id).value.trim();return v?+v:NaN};
+    lo=n("lqLo");hi=n("lqHi");
+    if(!(lo>0)||!(hi>0)){bandOut.textContent="";out.textContent="Name both prices.";return}
     if(lo>=hi){out.textContent="The low price must be below the high one.";bandOut.textContent="";return}
-    if(!(px>0)){out.textContent="";bandOut.textContent="";return}
-    if(px<lo||px>hi){out.textContent="The opening price has to sit inside the band.";return}
+    if(oneSided<0&&(px<lo||px>hi)){
+      out.textContent=`These amounts imply ${fmtPx(px)}, which is outside that band.`;return}
   }else{
-    if(!(px>0)){bandOut.textContent="";out.textContent="";return}
-    if(!a0&&!a1){bandOut.textContent="";out.textContent="Deposit at least one side.";return}
     let mult=+range;
     if(range==="full"){
       bandOut.textContent="Finding the widest band this deposit can back...";
@@ -3362,19 +3435,16 @@ async function lqNewPreview(){
     }
     [lo,hi]=lqBandFor(px,mult,a0,a1);
   }
-  // A single-asset band opens at the edge it touches - that is what makes it
-  // single-asset - so the opening price is derived rather than obeyed. Say so:
-  // a typed price being quietly ignored is worse than being refused.
-  const oneSided=(a0&&!a1)?0:(a1&&!a0)?1:-1;
-  bandOut.textContent=`${fmtPx(lo)} – ${fmtPx(hi)} ${t1.sym} per ${t0.sym}`
-    +(oneSided===0?` · ${t0.sym} only, so it opens at ${fmtPx(lo)} and the band sits above`
-     :oneSided===1?` · ${t1.sym} only, so it opens at ${fmtPx(hi)} and the band sits below`:"");
-  if(!a0&&!a1){out.textContent="Deposit at least one side.";return}
   const sl=pxToSqrt(lo,t0.dec,t1.dec),sh=pxToSqrt(hi,t0.dec,t1.dec);
-  // A single-asset band opens at the edge it touches; that is what makes it
-  // single-asset, so it is derived rather than asked for.
-  const sp=a0&&!a1?sl:a1&&!a0?sh:pxToSqrt(px,t0.dec,t1.dec);
-  if(!sl||!sh||!sp||sh<=sl){out.textContent="Check the prices.";return}
+  if(!sl||!sh||sh<=sl){out.textContent="Check the prices.";bandOut.textContent="";return}
+  // A single-asset band opens at the edge it touches - that is what makes it
+  // single-asset. Otherwise the opening price is the one that consumes both
+  // deposits in full, which is what their ratio means against a band.
+  const sp=oneSided===0?sl:oneSided===1?sh:lqSeedPrice(sl,sh,a0,a1);
+  if(!sp){out.textContent="Those amounts cannot open a band that wide.";return}
+  bandOut.textContent=`${fmtPx(lo)} – ${fmtPx(hi)}`
+    +` · opens at ${fmtPx(bandPrice(sp,t0.dec,t1.dec))} ${t1.sym} per ${t0.sym}`
+    +(oneSided===0?` · ${t0.sym} only`:oneSided===1?` · ${t1.sym} only`:"");
   const fee=BigInt(box.querySelector("#lqFee").value);
   const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account||ZERO);
   box.dataset.sl=sl;box.dataset.sh=sh;box.dataset.sp=sp;box.dataset.fee=fee;
@@ -3382,9 +3452,7 @@ async function lqNewPreview(){
   try{
     // Market is eight STATIC words, so it encodes inline - no offset. Getting
     // that wrong shifts every field by one and the factory reads the offset
-    // itself as token0, which fails `token0 >= token1` and reverts Bad(). It
-    // decodes cleanly against a fixture that makes the same mistake, so only
-    // the live contract can tell you.
+    // itself as token0, which fails `token0 >= token1` and reverts Bad().
     const [addr]=await mc3([{to:PFACTORY,data:"0x"+SEL_POOLFOR+market}]);
     if(my!==lqNewSeq)return;
     const pool="0x"+strip0x(addr).slice(24);
@@ -3403,8 +3471,7 @@ async function lqNewPreview(){
     }else if(h.length>=256){
       out.textContent="This band cannot open at that price with those amounts.";return;
     }else{
-      out.textContent=`Deposits up to ${trimAmt(a0,t0.dec)} ${t0.sym} + ${trimAmt(a1,t1.dec)} ${t1.sym}`
-        +` — the pool takes the ratio your opening price implies and returns the rest.`;
+      out.textContent=`Deposits ${trimAmt(a0,t0.dec)} ${t0.sym} + ${trimAmt(a1,t1.dec)} ${t1.sym}.`;
     }
     go.disabled=!account;
   }catch{

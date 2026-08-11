@@ -320,6 +320,21 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     // PrecisionPoolFactory.isPool - what the withdraw and add paths ask before
     // they grant an allowance or send value. Every pool this fixture serves is
     // one of its own; anything else is not, which is the answer that matters.
+    // poolFor(Market) and createAndSeed(...). The create form asks the CHAIN
+    // how wide a band a deposit can back - it tries widths and takes the first
+    // that is accepted - so a simulation that answers neither reports every
+    // range as unaffordable, which looks like the form refusing to work.
+    if (to === "${PFACTORY}" && sel === "83bd1387") {
+      return "0x" + addrw("0x" + strip(data).slice(8, 48));
+    }
+    if (to === "${PFACTORY}" && sel === "7163352a") {
+      // Width is bought with capital. Mirror that loosely so "Full range"
+      // lands somewhere plausible instead of always taking the widest.
+      var lo = BigInt("0x" + strip(data).slice(8 + 128, 8 + 192));
+      var hi = BigInt("0x" + strip(data).slice(8 + 192, 8 + 256));
+      if (lo === 0n || hi / lo > 200n) throw new Error("InsufficientLiquidity");
+      return "0x" + u256(0).repeat(4);
+    }
     if (to === "${PFACTORY}" && sel === "5b16ebb7") {
       return "0x" + u256(POOL_SET[wordAddr(data.slice(8), 0)] ? 1 : 0);
     }
