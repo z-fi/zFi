@@ -3031,19 +3031,76 @@ function lqRow(o,t0,t1){
  * frontend at and wrong for one you are about to.
  */
 const LQ_FEES=[[500,"0.05%"],[3000,"0.30%"],[10000,"1.00%"]];
+// Width as a MULTIPLE of the opening price, which is how a range is actually
+// thought about: "it can double or halve" beats two absolute prices nobody can
+// hold in their head. "full" is adaptive - see lqFullWidth.
+const LQ_RANGES=[["full","Full range"],["100","Wide — 100×"],["10","10×"],
+  ["2","2×"],["1.25","Tight — 25%"],["custom","Custom prices"]];
 function lqNewForm(t0,t1){
   return `<div class="lqnew" data-t0="${t0.addr}" data-t1="${t1.addr}">`
-    +`<div class="r"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low price" aria-label="Lowest price in the band">`
-    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High price" aria-label="Highest price in the band"></div>`
     +`<div class="r"><input class="lqin" id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Opening price" aria-label="Opening price">`
     +`<select class="lqin" id="lqFee" aria-label="Fee tier">`
     +LQ_FEES.map(([v,l])=>`<option value="${v}"${v===3000?" selected":""}>${l} fee</option>`).join("")
     +`</select></div>`
+    +`<select class="lqin" id="lqRange" aria-label="Price range">`
+    +LQ_RANGES.map(([v,l])=>`<option value="${v}"${v==="full"?" selected":""}>${l}</option>`).join("")
+    +`</select>`
+    +`<div class="r hide" id="lqCustom"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low price" aria-label="Lowest price in the band">`
+    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High price" aria-label="Highest price in the band"></div>`
     +`<div class="r"><input class="lqin" id="lqA0" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t0.sym}" aria-label="${t0.sym} to seed">`
     +`<input class="lqin" id="lqA1" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t1.sym}" aria-label="${t1.sym} to seed"></div>`
+    +`<div class="lqband" id="lqRangeOut"></div>`
     +`<div class="lqpv" id="lqPv"></div>`
     +`<div class="lqnote">Prices are ${t1.sym} per ${t0.sym}. You will own this market, which lets only you seed it — at no fee to traders.</div>`
     +`<button class="lqbtn" id="lqCreate" disabled>Create band</button></div>`;
+}
+
+/**
+ * Where the band sits, from the opening price and a width.
+ *
+ * Which SIDE it falls on is decided by the deposit, not by another question:
+ * a single asset is a band lying entirely on one side of the opening price -
+ * the Uniswap v3 rule - so depositing only token0 puts the band above the
+ * opening price and only token1 puts it below. That removes the "your opening
+ * price must equal the low edge" error entirely, because it can no longer be
+ * anything else.
+ */
+const lqBandFor=(px,mult,a0,a1)=>{
+  if(a0&&!a1)return[px,px*mult];        // token0 only: everything above
+  if(a1&&!a0)return[px/mult,px];        // token1 only: everything below
+  return[px/mult,px*mult];
+};
+/**
+ * The widest band this deposit can actually back.
+ *
+ * A band is not free: the pool needs its virtual reserves to stay above
+ * MIN_RESOLUTION, so width is bought with capital. Measured against the live
+ * factory, roughly ten times the deposit buys ten times the width - 0.01 ETH
+ * tops out near 10x, 1 ETH reaches 1000x - which means a fixed "full range"
+ * constant would simply fail for small deposits, and a page that shipped one
+ * would be offering its easiest option as its most likely error.
+ *
+ * So it is asked rather than assumed: try the widths in turn and take the
+ * first the chain accepts. `eth_call` is the same preflight the send path runs
+ * anyway, and the answer is exact instead of a replica of the pool's
+ * arithmetic that can drift from it.
+ */
+const LQ_WIDTHS=[1000,100,10,2];
+async function lqFullWidth(mk,sp,a0,a1,px){
+  for(const mult of LQ_WIDTHS){
+    const [lo,hi]=lqBandFor(px,mult,a0,a1);
+    const sl=pxToSqrt(lo,mk.d0,mk.d1),sh=pxToSqrt(hi,mk.d0,mk.d1);
+    if(!sl||!sh||sh<=sl)continue;
+    const s=a0&&!a1?sl:a1&&!a0?sh:pxToSqrt(px,mk.d0,mk.d1);
+    const market=lqMarket(mk.t0,mk.t1,sl,sh,mk.fee,account);
+    const data="0x"+SEL_CREATE_SEED+market+encUint(s)+encUint(a0)+encUint(a1)
+      +encUint(0n)+encAddr(account);
+    try{
+      await rpc(C,[{from:account,to:PFACTORY,data,value:mk.t0===ZERO?toHex(a0):"0x0"},L]);
+      return mult;
+    }catch{}
+  }
+  return null;
 }
 // price (token1 per token0, human) -> sqrt price in WAD, the pool's own units.
 const pxToSqrt=(px,d0,d1)=>{
@@ -3251,7 +3308,7 @@ lqList.addEventListener("input",e=>{
   if(box){clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
   if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
-lqList.addEventListener("change",e=>{if(e.target.id==="lqFee")lqNewPreview()});
+lqList.addEventListener("change",e=>{if(e.target.id==="lqFee"||e.target.id==="lqRange")lqNewPreview()});
 
 /**
  * What the pool will take, and what it will refuse.
@@ -3267,49 +3324,62 @@ async function lqNewPreview(){
   const box=lqList.querySelector(".lqnew");
   if(!box)return;
   const out=box.querySelector("#lqPv"),go=box.querySelector("#lqCreate");
+  const bandOut=box.querySelector("#lqRangeOut");
   const my=++lqNewSeq;
   go.disabled=true;
   const pair=chPair();
   if(!pair){out.textContent="";return}
   const [t0,t1]=pair;
+  const range=box.querySelector("#lqRange").value;
+  box.querySelector("#lqCustom").classList.toggle("hide",range!=="custom");
   const num=id=>{const v=box.querySelector("#"+id).value.trim();return v?+v:NaN};
-  const lo=num("lqLo"),hi=num("lqHi"),px=num("lqPx");
-  if(!(lo>0)||!(hi>0)||!(px>0)){out.textContent="";return}
-  if(lo>=hi){out.textContent="The low price must be below the high one.";return}
-  if(px<lo||px>hi){out.textContent="The opening price has to sit inside the band.";return}
+  const px=num("lqPx");
   let a0=0n,a1=0n;
   try{
     const v0=box.querySelector("#lqA0").value.trim(),v1=box.querySelector("#lqA1").value.trim();
     a0=v0?parseUnits(v0,t0.dec):0n;a1=v1?parseUnits(v1,t1.dec):0n;
-  }catch{out.textContent="Check the amounts.";return}
+  }catch{out.textContent="Check the amounts.";bandOut.textContent="";return}
+  let lo,hi;
+  if(range==="custom"){
+    lo=num("lqLo");hi=num("lqHi");
+    if(!(lo>0)||!(hi>0)){bandOut.textContent="";out.textContent="";return}
+    if(lo>=hi){out.textContent="The low price must be below the high one.";bandOut.textContent="";return}
+    if(!(px>0)){out.textContent="";bandOut.textContent="";return}
+    if(px<lo||px>hi){out.textContent="The opening price has to sit inside the band.";return}
+  }else{
+    if(!(px>0)){bandOut.textContent="";out.textContent="";return}
+    if(!a0&&!a1){bandOut.textContent="";out.textContent="Deposit at least one side.";return}
+    let mult=+range;
+    if(range==="full"){
+      bandOut.textContent="Finding the widest band this deposit can back...";
+      const found=await lqFullWidth({t0:t0.addr,t1:t1.addr,d0:t0.dec,d1:t1.dec,
+        fee:BigInt(box.querySelector("#lqFee").value)},0n,a0,a1,px);
+      if(my!==lqNewSeq)return;
+      if(!found){
+        bandOut.textContent="";
+        out.textContent="Even the narrowest range needs more than this deposit.";return}
+      mult=found;
+    }
+    [lo,hi]=lqBandFor(px,mult,a0,a1);
+  }
+  // A single-asset band opens at the edge it touches - that is what makes it
+  // single-asset - so the opening price is derived rather than obeyed. Say so:
+  // a typed price being quietly ignored is worse than being refused.
+  const oneSided=(a0&&!a1)?0:(a1&&!a0)?1:-1;
+  bandOut.textContent=`${fmtPx(lo)} – ${fmtPx(hi)} ${t1.sym} per ${t0.sym}`
+    +(oneSided===0?` · ${t0.sym} only, so it opens at ${fmtPx(lo)} and the band sits above`
+     :oneSided===1?` · ${t1.sym} only, so it opens at ${fmtPx(hi)} and the band sits below`:"");
   if(!a0&&!a1){out.textContent="Deposit at least one side.";return}
-  const sl=pxToSqrt(lo,t0.dec,t1.dec),sh=pxToSqrt(hi,t0.dec,t1.dec),sp=pxToSqrt(px,t0.dec,t1.dec);
-  if(!sl||!sh||!sp){out.textContent="Check the prices.";return}
-  // ONE-SIDED IS ALLOWED, and only at an edge - the same rule Uniswap v3 has.
-  // Inside the band the pool takes `min` of what each side can support, so a
-  // missing side makes that zero and it reverts ZeroAmount. At an edge the
-  // band lies entirely on one side of the opening price and one asset is the
-  // whole position, which is how a launch pool is seeded.
-  if(a0&&!a1&&sp!==sl){
-    out.textContent=`A ${t0.sym}-only band has to open at its low price — set the opening price to ${box.querySelector("#lqLo").value.trim()}.`;
-    return}
-  if(a1&&!a0&&sp!==sh){
-    out.textContent=`A ${t1.sym}-only band has to open at its high price — set the opening price to ${box.querySelector("#lqHi").value.trim()}.`;
-    return}
+  const sl=pxToSqrt(lo,t0.dec,t1.dec),sh=pxToSqrt(hi,t0.dec,t1.dec);
+  // A single-asset band opens at the edge it touches; that is what makes it
+  // single-asset, so it is derived rather than asked for.
+  const sp=a0&&!a1?sl:a1&&!a0?sh:pxToSqrt(px,t0.dec,t1.dec);
+  if(!sl||!sh||!sp||sh<=sl){out.textContent="Check the prices.";return}
   const fee=BigInt(box.querySelector("#lqFee").value);
   const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account||ZERO);
   box.dataset.sl=sl;box.dataset.sh=sh;box.dataset.sp=sp;box.dataset.fee=fee;
   box.dataset.a0=a0;box.dataset.a1=a1;box.dataset.lp=0;
   try{
-    // The address is CREATE2-derived, so it is known before anything exists -
-    // but the LENS reads the pool's band off the pool, and there is no code at
-    // that address yet. So an exact preview is only available in the case
-    // where the market was already deployed and left UNSEEDED, which the
-    // factory explicitly allows and will seed rather than reject.
-    //
-    // Everything else gets the honest version. The band is validated above
-    // without asking the chain anything, and the amounts are maxima either
-    // way, so there is nothing to hide - only an exact split to do without.
     // Market is eight STATIC words, so it encodes inline - no offset. Getting
     // that wrong shifts every field by one and the factory reads the offset
     // itself as token0, which fails `token0 >= token1` and reverts Bad(). It
@@ -3318,6 +3388,9 @@ async function lqNewPreview(){
     const [addr]=await mc3([{to:PFACTORY,data:"0x"+SEL_POOLFOR+market}]);
     if(my!==lqNewSeq)return;
     const pool="0x"+strip0x(addr).slice(24);
+    // The LENS reads the band off the pool, and there is no code at that
+    // address yet - so an exact preview only exists where the market was
+    // already deployed and left UNSEEDED, which the factory allows and seeds.
     const [pv]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_SEED+encAddr(pool)+encUint(sp)
       +encUint(a0)+encUint(a1)}]).catch(()=>[null]);
     if(my!==lqNewSeq)return;
@@ -3328,9 +3401,6 @@ async function lqNewPreview(){
         +((used0<a0||used1<a1)?" — the rest is returned":"");
       box.dataset.lp=w(1);
     }else if(h.length>=256){
-      // A deployed, unseeded band that says no: the opening price cannot be
-      // served with these amounts. That is the pool refusing, not a thin
-      // preview, so it must not be clickable.
       out.textContent="This band cannot open at that price with those amounts.";return;
     }else{
       out.textContent=`Deposits up to ${trimAmt(a0,t0.dec)} ${t0.sym} + ${trimAmt(a1,t1.dec)} ${t1.sym}`
@@ -3342,6 +3412,7 @@ async function lqNewPreview(){
     out.textContent="Could not reach the factory.";
   }
 }
+
 /**
  * Deploy the band and seed it, in one transaction.
  *

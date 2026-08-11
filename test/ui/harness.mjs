@@ -279,6 +279,9 @@ export class MockChain {
     // used0/used1 when the seed should consume less than it was offered.
     this.seedBand = null;
     this.seedDeployed = false;     // was the market already created, unseeded?
+    // Widest band the fixture will accept, as hi/lo in sqrt space. Null lets
+    // every width through.
+    this.rejectWiderThan = null;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -594,8 +597,21 @@ export class MockChain {
       }
       return '0x' + addrWord(key);
     }
-    // createAndSeed — recorded by `sent`; nothing to return to a preflight.
-    if (to === A.PFACTORY.toLowerCase() && sel === SEL.CREATE_SEED) return '0x' + '00'.repeat(128);
+    // createAndSeed. The preflight is where the page discovers how wide a band
+    // this deposit can back, so the fixture has to be able to REFUSE one:
+    // width is bought with capital, and the pool reverts InsufficientLiquidity
+    // when the virtual reserves would fall below MIN_RESOLUTION.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.CREATE_SEED) {
+      if (this.rejectWiderThan != null) {
+        const body = '0x' + data.slice(8);
+        const lo = word(body, 2), hi = word(body, 3);
+        // Widths are compared in sqrt space, where a band of n times each way
+        // spans sqrt(n) either side - so hi/lo is n, not n squared.
+        const width = lo === 0n ? Infinity : Number((hi * 1000n) / lo) / 1000;
+        if (width > this.rejectWiderThan) throw Error('InsufficientLiquidity');
+      }
+      return '0x' + '00'.repeat(128);
+    }
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
       const who = wordAddr('0x' + data.slice(8), 0);
       return coder.encode(['bool'],
