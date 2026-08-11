@@ -1390,21 +1390,43 @@ const safeUrl=u=>{u=String(u??"").trim();
 // same normalization as everything else rather than trusting its caller.
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(safeSym(sym)[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
+// ERC-165 and the two interface ids that decide which shelf a listing belongs
+// on. The registry classifies every entry this way; a token pasted in by hand
+// was the one path that did not, and simply declared itself fungible.
+const SEL_SUPPORTS="01ffc9a7",IFACE_721="80ac58cd",IFACE_1155="d9b67a26";
+const supports=id=>"0x"+SEL_SUPPORTS+id.padEnd(64,"0");
 async function addCustomToken(a,keep=1){
 a=a.toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
 const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
 if(i>=0)return i;
-const[symRet,decRet]=await Promise.all([
-rpc(C,[{to:a,data:"0x95d89b41"},L]),
-rpc(C,[{to:a,data:"0x313ce567"},L]),
-]);
-let sym=decodeString(symRet).trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?";
+// An address with no code answers every call with "0x", which decodes to a
+// nameless zero-decimal token - so say what is actually wrong.
+if((await rpc("eth_getCode",[a,L])).length<5)throw Error("no contract at that address");
+// One batch, and allow-failure throughout: an ERC-20 has no supportsInterface
+// and an ERC-721 has no decimals, so on any real token some of these revert.
+// That is the signal, not an error - which is why they cannot be four
+// separate awaits that reject.
+const[symRet,decRet,is721,is1155]=await mc3Deep([
+{to:a,data:"0x95d89b41"},{to:a,data:"0x313ce567"},
+{to:a,data:supports(IFACE_721)},{to:a,data:supports(IFACE_1155)}]);
+const yes=h=>{try{return !!h&&BigInt(h)===1n}catch{return false}};
+let sym="?";
+try{sym=decodeString(symRet||"0x").trim().replace(/[<>&"'`]/g,"").slice(0,16)||"?"}catch{}
 if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
-const dec=Number(BigInt(decRet));
-if(!Number.isInteger(dec)||dec<0||dec>36)throw Error("unsupported decimals");
-TOKENS.push({sym,addr:a,dec,std:"ft",icon:genIcon(sym)});
-if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
+// 1155 first: a contract may advertise both, and the half this page can act on
+// is the 721 half. Saying so beats listing it and failing at the order.
+if(yes(is1155)&&!yes(is721))throw Error("ERC-1155 is not supported");
+const std=yes(is721)?"nft":"ft";
+let dec=0;
+if(std==="ft"){
+dec=Number(BigInt(decRet||"0x0"));
+// No decimals and no ERC-721 answer means this is not a token this page can
+// price. Better here than as a quote that never resolves.
+if(!decRet||!Number.isInteger(dec)||dec<0||dec>36)throw Error("not an ERC-20 or ERC-721");
+}
+TOKENS.push({sym,addr:a,dec,std,icon:genIcon(sym)});
+if(keep)try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]");arr.push({sym,addr:a,dec,std});localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
 return TOKENS.length-1;
 }
 try{for(const t of JSON.parse(localStorage.getItem(STORE)||"[]")){
@@ -1412,7 +1434,10 @@ const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
 const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").slice(0,16)||"?";
-TOKENS.push({sym,addr,dec,std:"ft",icon:genIcon(sym)});
+// Restored as whatever it was classified as. Entries stored before this
+// carry no `std` and were all treated as fungible, so that stays the
+// default - a collection saved back then is re-detected when re-added.
+TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",icon:genIcon(sym)});
 }
 }}catch{}
 const QUOTE_TTL=45000;

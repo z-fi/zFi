@@ -304,7 +304,22 @@ export class MockChain {
     this.allow.set(`${token.toLowerCase()}:${owner.toLowerCase()}:${spender.toLowerCase()}`, BigInt(units));
     return this;
   }
-  setToken(token, m) { this.meta.set(token.toLowerCase(), m); return this; }
+  /**
+   * Register a token's metadata.
+   *
+   * Also registers code at the address, because a token WITHOUT code is not a
+   * thing that exists - and the page now checks, so a fixture that declares a
+   * token at an empty address is describing something impossible.
+   *
+   * `erc721: true` makes it answer ERC-165 for the NFT interface and refuse
+   * decimals(), which is how a real collection behaves and how the page tells
+   * the two apart.
+   */
+  setToken(token, m) {
+    this.meta.set(token.toLowerCase(), m);
+    if (!this.code.has(token.toLowerCase())) this.code.set(token.toLowerCase(), '0x60006000f3');
+    return this;
+  }
   /**
    * Register pools for a pair. Entries may be a bare address or
    * {pool, hook, liquidity} — the lens reports hook and liquidity, and the
@@ -769,7 +784,8 @@ export class MockChain {
         if (!m) throw Error('no name');
         return encodeString(m.name ?? m.symbol);
       case SEL.DECIMALS:
-        if (!m) throw Error('no decimals');
+        // A collection has no decimals, and reverting is the answer that says so.
+        if (!m || m.erc721) throw Error('no decimals');
         return '0x' + u256(m.decimals);
       case SEL.DS:
         if (!m?.domainSeparator) throw Error('no DOMAIN_SEPARATOR');
@@ -782,6 +798,14 @@ export class MockChain {
       default:
         // 0x081812fc = getApproved(uint256)
         if (sel === '081812fc') return '0x' + u256(0);
+        // supportsInterface(bytes4). An ERC-20 has no such function at all, so
+        // the miss below - a revert - is the correct answer for one.
+        if (sel === '01ffc9a7') {
+          const id = data.slice(8, 16);
+          if (m?.erc721 && id === '80ac58cd') return '0x' + u256(1);
+          if (m?.erc1155 && id === 'd9b67a26') return '0x' + u256(1);
+          if (m?.erc721 || m?.erc1155) return '0x' + u256(0);
+        }
         throw Error(`MockChain: unhandled call ${sel} to ${to}`);
     }
   }

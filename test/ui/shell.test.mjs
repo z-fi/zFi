@@ -128,6 +128,60 @@ describe('custom tokens', () => {
     p.close();
   });
 
+  /**
+   * A pasted address used to be assumed fungible: symbol(), decimals(), and
+   * `std:"ft"` written in. An ERC-721 usually fell over on decimals() and
+   * surfaced as "execution reverted", which explains nothing; one that DOES
+   * expose decimals() was listed as swappable, which is worse, because the
+   * registry's own listings are classified and the page already refuses to
+   * swap a collection. Detection puts the hand-typed path on the same footing.
+   */
+  const COLLECTION = '0xfeed567890abcdef1234567890abcdef12345678';
+  const withCollection = c =>
+    c.setToken(COLLECTION, { symbol: 'PUNK', name: 'CryptoPunks', erc721: true });
+
+  const importToken = async (p, addr) => {
+    p.queuePrompt(addr);
+    p.select('fromSel', '__custom');
+    await p.settle();
+  };
+
+  test('detects an ERC-721 and files it as a collection, not a swappable token', async () => {
+    const p = await setup({ prep: withCollection });
+    await p.connect();
+    await importToken(p, COLLECTION);
+    await p.waitFor(() => [...p.$('toSel').options].some(o => o.textContent === 'PUNK'),
+      { label: 'collection imported' });
+
+    const opt = [...p.$('toSel').options].find(o => o.textContent === 'PUNK');
+    assert.equal(opt.parentElement?.label, 'NFT collections — auction only',
+      'a collection belongs on the auction shelf, like the registry\'s own');
+    assert.equal(opt.disabled, true, 'and cannot be picked as a swap output');
+    p.close();
+  });
+
+  test('says what is wrong instead of failing on a missing decimals()', async () => {
+    // An address with code that is neither: no decimals, no ERC-165 answer.
+    const NEITHER = '0xdead567890abcdef1234567890abcdef12345678';
+    const p = await setup({ prep: c => c.setCode(NEITHER, '0x60006000f3') });
+    await p.connect();
+    await importToken(p, NEITHER);
+    await p.waitFor(() => /ERC-20 or ERC-721/i.test(p.text('stat')),
+      { label: 'a reason, not a revert' });
+    assert.ok(!/execution reverted/i.test(p.text('stat')), 'the raw revert helps nobody');
+    p.close();
+  });
+
+  test('says so when there is no contract at the address at all', async () => {
+    const EMPTY = '0xabc4567890abcdef1234567890abcdef12345678';
+    const p = await setup();
+    await p.connect();
+    await importToken(p, EMPTY);
+    await p.waitFor(() => /no contract at that address/i.test(p.text('stat')),
+      { label: 'the actual problem' });
+    p.close();
+  });
+
   test('remembers imported tokens across reloads', async () => {
     const p = await setup({ prep: withCustom });
     await p.connect();
