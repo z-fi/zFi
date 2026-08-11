@@ -142,7 +142,10 @@ svg{vertical-align:middle;flex-shrink:0}
   font:inherit;font-size:.9em;font-weight:600;letter-spacing:.02em;color:var(--f);cursor:pointer}
 .tkb.on{display:inline-flex}
 .tkbc{font-size:.7em;color:var(--m)}
-.tkp{position:absolute;z-index:40;width:min(20em,calc(100vw - 2em));max-height:22em;
+/* Rows carry two lines of description, so 22em showed about five of seventeen
+   and every visit began with a scroll. Take the height the viewport actually
+   has, and stay off its edges on a phone. */
+.tkp{position:absolute;z-index:40;width:min(20em,calc(100vw - 2em));max-height:min(32em,calc(100vh - 5em));
   display:flex;flex-direction:column;background:var(--c);border:1px solid var(--e);
   border-radius:.5em;box-shadow:0 4px 12px #0000001f,0 16px 40px #00000024;overflow:hidden}
 #tkFind{border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);
@@ -1024,7 +1027,12 @@ if(r){e.preventDefault();tkChoose(r.dataset.value)}
 tkPanel.addEventListener("click",e=>e.stopPropagation());
 document.addEventListener("click",tkClose);
 addEventListener("resize",tkClose);
-addEventListener("scroll",tkClose,true);
+// Capture, because the panel is anchored to a position on the page and has to
+// close when anything scrolls out from under it - but NOT when the list scrolls
+// itself, which is the one scroll that means "still reading". Without the
+// guard the panel shut on the first wheel tick and the list looked truncated
+// to whatever happened to fit.
+addEventListener("scroll",e=>{if(!tkPanel.contains(e.target))tkClose()},true);
 const render=()=>{
 if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
 if(tab==="book"){

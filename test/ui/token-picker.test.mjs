@@ -154,6 +154,36 @@ describe('the token picker', () => {
     p.close();
   });
 
+  test('lists every token, and scrolling the list does not close it', async () => {
+    // The panel is anchored to a point on the page, so it closes when the page
+    // scrolls under it - and that listener is in the capture phase, so it also
+    // saw the list scrolling ITSELF and shut on the first wheel tick. The list
+    // then looked truncated to whatever happened to fit on screen.
+    const many = [ROWS[0], ...Array.from({ length: 12 }, (_, i) =>
+      row(`TK${i}`, '0x' + String(i + 1).padStart(40, '0')))];
+    const p = await open('toSel', many);
+
+    const syms = rowsIn(p).map(symOf);
+    for (const r of many) assert.ok(syms.includes(r.s), `${r.s} is missing from the panel`);
+    // Plus the custom-token entry, which is an <option> like any other and so
+    // rides along without this having to know about it.
+    assert.equal(syms.length, many.length + 1, 'every listing is rendered, not a visible subset');
+    assert.ok(syms.some(x => /Custom token/i.test(x)));
+
+    const list = p.$('tkList');
+    list.dispatchEvent(new p.window.Event('scroll', { bubbles: true }));
+    await p.settle();
+    assert.equal(p.$('tkPanel').classList.contains('hide'), false,
+      'scrolling the list is "still reading", not "dismiss"');
+
+    // The page scrolling under it still dismisses it.
+    p.window.document.dispatchEvent(new p.window.Event('scroll', { bubbles: true }));
+    await p.settle();
+    assert.equal(p.$('tkPanel').classList.contains('hide'), true,
+      'a panel pinned to a stale position must not linger');
+    p.close();
+  });
+
   test('the native select survives, so nothing downstream has to know', async () => {
     const p = await open();
     const sel = p.$('toSel');
