@@ -1475,6 +1475,11 @@ if(my!==seq)return;
 // through zRouter at all: it is its own target, its own spender and its own
 // slippage floor. A token whose transfers are restricted has no conventional
 // leg to lose to, so without this the pair would not quote at all.
+//
+// It is held OUT of `r` until the hybrid planner below has run, and only then
+// compared on merit. Promoting it here would hand the planner a route that
+// cannot be a leg of a zRouter multicall and let it build a book+AMM hybrid
+// around it. Being the best price does not make it combinable.
 const v4q=await v4Job;
 let v4c=null;
 if(v4q&&v4q.amountOut>0n){
@@ -1487,16 +1492,20 @@ fundedCallData:null,amountLimit:v4Min,msgValue:f.addr===ZERO?swapAmt:0n,
 to:V4PORT,spender:f.addr===ZERO?null:V4PORT};
 if(!r)r=v4c;
 }
+// Precision, on the same footing as the V4 leg and for the same reason: the
+// pool is its own target and its own spender, so this does not go through
+// zRouter either. Held out of `r` until the hybrid planner has run, then
+// compared on merit alongside v4c - see the last word below.
 const pq=await preJob;
 if(my!==seq)return;
+let pc=null;
 if(pq&&pq.out>0n){
-// The pool is its own target and its own spender: this does not go through
-// zRouter at all, the same way the V4 leg does not.
 const pMin=pq.out-(pq.out*slipBps)/10000n;
-pick({best:{source:7,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/100n},
+pc={best:{source:7,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/100n},
 callData:"0x"+SEL_PSWAP+encAddr(f.addr)+encUint(swapAmt)+encUint(pMin)+encAddr(rcv||acct||ZERO),
 fundedCallData:null,amountLimit:pMin,msgValue:f.addr===ZERO?swapAmt:0n,
-to:pq.pool,spender:f.addr===ZERO?null:pq.pool});
+to:pq.pool,spender:f.addr===ZERO?null:pq.pool};
+if(!r)r=pc;
 }
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
@@ -1619,9 +1628,13 @@ if(acct){
   }
 }
 // Last word, and only on merit: the planner above may have built a book+AMM
-// hybrid, and this replaces it wholesale rather than merging, because a V4Port
-// swap settles by itself and cannot be a leg of a zRouter multicall.
-if(v4c&&v4c!==r&&v4c.best.amountOut>r.best.amountOut){r=v4c;hybrid=null}
+// hybrid, and these replace it wholesale rather than merging, because a V4Port
+// or Precision swap settles by itself and cannot be a leg of a zRouter
+// multicall. Both are compared here rather than earlier for that reason -
+// promoting one before the planner runs would have it build a hybrid around a
+// route that cannot be a leg.
+for(const c of [v4c,pc])
+  if(c&&c!==r&&c.best.amountOut>r.best.amountOut){r=c;hybrid=null}
 const finalIn=r.best.amountIn;
 const finalOut=r.best.amountOut;
 if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}

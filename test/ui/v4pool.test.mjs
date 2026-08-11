@@ -194,6 +194,26 @@ describe('quoting and sending', () => {
     page.close();
   });
 
+  it('wins on merit against the hub, and only after the planner has run', async () => {
+    // The comparison happens LAST, not where the candidate is built. A V4Port
+    // swap settles by itself and cannot be a leg of a zRouter multicall, so
+    // promoting it early would have the book+AMM planner build a hybrid around
+    // a route that cannot be combined - which is why it is held back and then
+    // replaces the plan wholesale.
+    const page = await setup({ v4Quote: ({ amountIn }) => amountIn * 3300n / 10n ** 12n });
+    await page.typeAmount('amt', '1');
+    assert.equal(page.value('outAmt'), '3300', 'the better price wins the comparison');
+    assert.match(page.text('rate'), /UniV4/, 'and it says which venue won');
+
+    page.click('swap');
+    await page.waitFor(() => page.chain.sent.length > 0, { label: 'swap' });
+    await page.settle();
+    assert.equal(page.chain.lastSent.to.toLowerCase(), A.V4PORT.toLowerCase(),
+      'and the trade goes to the port, not the router');
+    page.close();
+  });
+
+
   it('leaves the ordinary route alone when the pool is worse', async () => {
     // A tenth of the hub's rate: the V4 leg must lose and stay out of the way.
     const page = await setup({ v4Quote: ({ amountIn }) => amountIn * 300n / 10n ** 12n });
