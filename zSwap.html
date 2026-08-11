@@ -134,15 +134,46 @@ svg{vertical-align:middle;flex-shrink:0}
 #chArt{touch-action:pan-y}
 #chArt .msg{padding:2.2em .8em;text-align:center;font-size:.72em;color:var(--m);line-height:1.6}
 #chNote{display:block;font-size:.65em;color:var(--m);margin-top:.35em;text-align:right;font-variant-numeric:tabular-nums}
-@media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}.chtf button{padding:.5em}}
+/* Rich token picker. The native <select> stays in the DOM and stays the source
+   of truth - every read, every test and the no-JS fallback go through it - so
+   it is hidden rather than removed, and the button below merely reflects it. */
+.panel select.rich{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.tkb{display:none;align-items:center;gap:.25em;border:0;background:transparent;padding:0;
+  font:inherit;font-size:.9em;font-weight:600;letter-spacing:.02em;color:var(--f);cursor:pointer}
+.tkb.on{display:inline-flex}
+.tkbc{font-size:.7em;color:var(--m)}
+.tkp{position:absolute;z-index:40;width:min(20em,calc(100vw - 2em));max-height:22em;
+  display:flex;flex-direction:column;background:var(--c);border:1px solid var(--e);
+  border-radius:.5em;box-shadow:0 4px 12px #0000001f,0 16px 40px #00000024;overflow:hidden}
+#tkFind{border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);
+  font:inherit;font-size:.8em;padding:.7em .8em;outline:0;flex:none}
+#tkList{overflow-y:auto;overscroll-behavior:contain}
+.tkg{padding:.55em .8em .25em;font-size:.62em;letter-spacing:.09em;text-transform:uppercase;color:var(--m)}
+.tkr{display:flex;align-items:flex-start;gap:.55em;width:100%;box-sizing:border-box;
+  padding:.5em .8em;border:0;background:transparent;color:var(--f);font:inherit;
+  text-align:left;cursor:pointer}
+.tkr:hover,.tkr.cur{background:var(--fh)}
+.tkr[aria-disabled="true"]{opacity:.35;cursor:default}
+.tkr[aria-disabled="true"]:hover{background:transparent}
+.tkr img,.tkr svg{flex:none;border-radius:50%;margin-top:.1em}
+.tki{flex:none;width:20px;height:20px;display:flex;align-items:center;justify-content:center}
+.tkt{min-width:0;flex:1}
+.tks{display:flex;align-items:baseline;gap:.45em}
+.tks b{font-size:.85em;font-weight:600}
+.tkn{font-size:.7em;color:var(--m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkd{font-size:.66em;color:var(--m);line-height:1.45;margin-top:.15em;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tkmark{flex:none;font-size:.75em;color:var(--m)}
+.tkempty{padding:1.4em .8em;text-align:center;font-size:.72em;color:var(--m)}
+@media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}.chtf button{padding:.5em}#tkFind{font-size:16px}}
 </style>
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <div class="card">
 <div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false">💧</button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link">⧉</button><button id="th" title="Toggle theme" aria-label="Toggle theme">☾</button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
@@ -155,6 +186,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
+<div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens"><div id="tkList" role="listbox"></div></div>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
 <div id="chBox" class="hide"><div class="chtf" id="chTf"></div><div id="chArt"></div><small id="chNote"></small></div>
@@ -395,7 +427,12 @@ if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 // where registry data enters TOKENS, so nothing downstream has to remember.
 const sym=safeSym(t.s).slice(0,12);
 const logo=safeUrl(t.l);
+// The registry already carries the name and the blurb; the picker just never
+// had anywhere to put them. Both reach the DOM through textContent, never
+// innerHTML, so they need no escaping - and MUST NOT be given any, or a name
+// with an ampersand in it renders the entity.
 next.push({sym,addr:t.a,dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym),
+name:String(t.n??"").slice(0,64),desc:String(t.desc??"").slice(0,240),
 v4:parseV4Pools(t.e,t.a)});
 }
 // Fungibles first, NFTs after, each keeping the registry's curation order. The
@@ -796,15 +833,41 @@ const wrapTwin=(a,b)=>{
 const x=(a||"").toLowerCase(),y=(b||"").toLowerCase(),w=WETH.toLowerCase();
 return (x===ZERO&&y===w)||(x===w&&y===ZERO);
 };
+// Output candidates in rank order, so a dead one can step aside for the next.
+const rankedOutputs=fi=>TOKENS.map((t,i)=>i)
+  .filter(i=>i!==fi&&!isNft(String(i))&&!wrapTwin(TOKENS[i].addr,TOKENS[fi]?.addr));
+// Which ranked outputs have already failed to quote this load.
+const deadOutputs=new Set();
+let pairAuto=false;
 const rankedDefaults=()=>{
 if(TOKENS.length<2)return;
-const ok=i=>!isNft(String(i));
-const fi=TOKENS.findIndex((t,i)=>ok(i));
+const fi=TOKENS.findIndex((t,i)=>!isNft(String(i)));
 if(fi<0)return;
-const ti=TOKENS.findIndex((t,i)=>i!==fi&&ok(i)&&!wrapTwin(t.addr,TOKENS[fi].addr));
-if(ti<0)return;
+const ti=rankedOutputs(fi).find(i=>!deadOutputs.has(TOKENS[i].addr.toLowerCase()));
+if(ti==null)return;
 fromSel.value=String(fi);toSel.value=String(ti);
 fromSel.dataset.prev=fromSel.value;toSel.dataset.prev=toSel.value;
+pairAuto=true;
+};
+// Conviction ranks listings, not liquidity, so the top of it can be a token
+// with no market at all - ZORG and ZAMM both rank high and neither quotes.
+// Landing there means the first amount a stranger types answers "No route",
+// which reads as a broken page rather than a thin token.
+//
+// So the ranking still chooses, and a choice that cannot trade steps aside for
+// the next one down. Only ever the pair the PAGE picked: a pair the user or a
+// link named is their business and is left to fail honestly.
+const advancePastDeadPair=()=>{
+if(!pairAuto||pairChosen)return false;
+const cur=TOKENS[toSel.value];
+if(!cur)return false;
+deadOutputs.add(cur.addr.toLowerCase());
+const fi=Number(fromSel.value);
+const next=rankedOutputs(fi).find(i=>!deadOutputs.has(TOKENS[i].addr.toLowerCase()));
+if(next==null)return false;
+toSel.value=String(next);toSel.dataset.prev=toSel.value;
+syncDisabled();syncIcons();
+return true;
 };
 // Keep what the user picked; otherwise adopt the ranking that just loaded.
 const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
@@ -824,7 +887,128 @@ opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&
 fromSel.innerHTML=optsHtml();fromSel.value=0;
 toSel.innerHTML=optsHtml();toSel.value=5;
 syncDisabled();
-const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||""};
+const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||"";syncPickers()};
+
+// ------------------------------------------------------- rich token picker
+//
+// A native <option> renders text and nothing else - no logo, no second line -
+// so the registry's icons and blurbs had nowhere to go. This is the smallest
+// thing that fixes that: the <select> REMAINS the source of truth and keeps
+// receiving change events, so nothing downstream, and no test, has to know
+// this exists. Turn the JS off and the native control is still there.
+//
+// The rows are built FROM the select's own options rather than from TOKENS,
+// which is what keeps it honest: option order, the NFT group heading, the
+// disabled flags syncDisabled() writes, and "+ Custom token…" all arrive
+// already correct instead of being reproduced here and drifting.
+const tkPanel=document.getElementById("tkPanel"),tkFind=document.getElementById("tkFind"),
+tkList=document.getElementById("tkList");
+let tkSel=null,tkCur=-1;
+const pickBtn=sel=>document.getElementById(sel===fromSel?"fromPick":"toPick");
+const syncPickers=()=>{
+for(const sel of [fromSel,toSel]){
+const b=pickBtn(sel);if(!b)continue;
+const t=TOKENS[sel.value];
+b.classList.add("on");sel.classList.add("rich");
+b.querySelector(".tkbs").textContent=t?t.sym:(sel.selectedOptions[0]?.textContent||"");
+b.setAttribute("aria-label",`Token: ${t?t.sym:"none"} - change`);
+}
+};
+const tkRows=()=>{
+const q=tkFind.value.trim().toLowerCase();
+tkList.textContent="";
+let n=0,group="";
+for(const opt of tkSel.options){
+const t=TOKENS[opt.value];
+if(q){
+const hay=[opt.textContent,t?.name,t?.addr].filter(Boolean).join(" ").toLowerCase();
+if(!hay.includes(q))continue;
+}
+// Group headings come from the <optgroup> the page already builds.
+const g=opt.parentElement?.label||"";
+if(g&&g!==group){const h=document.createElement("div");h.className="tkg";h.textContent=g;tkList.appendChild(h);group=g}
+const r=document.createElement("button");
+r.type="button";r.className="tkr";r.setAttribute("role","option");
+r.dataset.value=opt.value;
+r.setAttribute("aria-selected",String(opt.value===tkSel.value));
+if(opt.disabled)r.setAttribute("aria-disabled","true");
+const ic=document.createElement("span");ic.className="tki";
+// TOKENS[].icon is markup the page built (an <img> from a vetted data URI, or
+// a generated SVG), never registry text.
+if(t?.icon)ic.innerHTML=t.icon;
+r.appendChild(ic);
+const tx=document.createElement("span");tx.className="tkt";
+const top=document.createElement("span");top.className="tks";
+const b=document.createElement("b");b.textContent=opt.textContent.trim();top.appendChild(b);
+if(t?.name&&t.name.toLowerCase()!==b.textContent.toLowerCase()){
+const nm=document.createElement("span");nm.className="tkn";nm.textContent=t.name;top.appendChild(nm);
+}
+tx.appendChild(top);
+if(t?.desc){const d=document.createElement("span");d.className="tkd";d.textContent=t.desc;tx.appendChild(d)}
+r.appendChild(tx);
+if(opt.value===tkSel.value){const m=document.createElement("span");m.className="tkmark";m.textContent="✓";r.appendChild(m)}
+tkList.appendChild(r);n++;
+}
+if(!n){const e=document.createElement("div");e.className="tkempty";e.textContent="No token matches that.";tkList.appendChild(e)}
+tkCur=-1;
+};
+const tkOpen=sel=>{
+tkSel=sel;tkFind.value="";tkRows();
+tkPanel.classList.remove("hide");
+const b=pickBtn(sel).getBoundingClientRect();
+// Flip above when there is no room below, and never off the right edge.
+const w=tkPanel.offsetWidth,h=tkPanel.offsetHeight;
+const left=Math.max(8,Math.min(b.left+scrollX,scrollX+innerWidth-w-8));
+const below=innerHeight-b.bottom;
+tkPanel.style.left=left+"px";
+tkPanel.style.top=(below<h+12&&b.top>below?b.top+scrollY-h-6:b.bottom+scrollY+6)+"px";
+pickBtn(sel).setAttribute("aria-expanded","true");
+tkFind.focus();
+};
+const tkClose=()=>{
+if(!tkSel)return;
+pickBtn(tkSel)?.setAttribute("aria-expanded","false");
+tkPanel.classList.add("hide");tkSel=null;
+};
+const tkChoose=v=>{
+const sel=tkSel;if(!sel)return;
+tkClose();
+if(sel.value===v&&v!=="__custom")return;   // no change event for a no-op
+sel.value=v;
+sel.dispatchEvent(new Event("change",{bubbles:true}));
+};
+for(const sel of [fromSel,toSel]){
+const b=pickBtn(sel);
+if(b)b.addEventListener("click",e=>{e.stopPropagation();tkSel===sel?tkClose():tkOpen(sel)});
+}
+tkList.addEventListener("click",e=>{
+const r=e.target.closest(".tkr");
+if(!r||r.getAttribute("aria-disabled")==="true")return;
+tkChoose(r.dataset.value);
+});
+tkFind.addEventListener("input",tkRows);
+// Enter takes the highlighted row, or the only one left after filtering -
+// typing three letters and pressing Enter is the whole interaction.
+tkPanel.addEventListener("keydown",e=>{
+const rows=[...tkList.querySelectorAll('.tkr:not([aria-disabled="true"])')];
+if(e.key==="Escape"){e.preventDefault();const s=tkSel;tkClose();pickBtn(s)?.focus();return}
+if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+e.preventDefault();
+if(!rows.length)return;
+tkCur=e.key==="ArrowDown"?(tkCur+1)%rows.length:(tkCur<=0?rows.length:tkCur)-1;
+rows.forEach((r,i)=>r.classList.toggle("cur",i===tkCur));
+rows[tkCur].scrollIntoView({block:"nearest"});
+return;
+}
+if(e.key==="Enter"){
+const r=tkCur>=0?rows[tkCur]:rows.length===1?rows[0]:null;
+if(r){e.preventDefault();tkChoose(r.dataset.value)}
+}
+});
+tkPanel.addEventListener("click",e=>e.stopPropagation());
+document.addEventListener("click",tkClose);
+addEventListener("resize",tkClose);
+addEventListener("scroll",tkClose,true);
 const render=()=>{
 if(!account){swap.textContent="Connect Wallet";swap.disabled=false;return}
 if(tab==="book"){
@@ -1246,7 +1430,12 @@ lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
 fills:r.fills||null,tokenIn:f.addr,tokenOut:t.addr,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
-}catch(e){if(my===seq){outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
+}catch(e){if(my===seq){
+// A pair the PAGE chose from the ranking and that cannot trade is the page's
+// mistake to correct, not the user's to read about. Re-quotes on the next
+// candidate down; a user's own pair falls through and says what happened.
+if(advancePastDeadPair()){loadChart();update();return}
+outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
 }
 let debounceT;
 const showAddr=async()=>{const a=account,short=a.slice(0,6)+"..."+a.slice(-4);
