@@ -54,6 +54,10 @@ function pageConst(name) {
 }
 const SB2_ADDR = pageConst('SB2');
 const DUTCH_ADDR = pageConst('DUTCH');
+// The factory is the trust anchor the liquidity write paths ask before they
+// send. It is not redirected like the lenses - the mock answers for the real
+// address - but it still has to be read from the page so the two cannot drift.
+const PFACTORY_ADDR = pageConst('PFACTORY');
 
 const before = page;
 page = page.replace(
@@ -79,7 +83,7 @@ if (providerRefs === 0) throw Error('no window.ethereum references — provider 
 page = page.split('window.ethereum').join('window.__PREVIEW');
 console.log(`rebound ${providerRefs} provider reference(s) to the simulation`);
 
-const MOCK = ((SB2, DUTCH) => String.raw`
+const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
 <script>
 /**
  * Simulated chain for the zSwap preview.
@@ -127,11 +131,38 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   TOK[A.WBTC] = { sym: "WBTC", dec: 8 };
   TOK[A.WETH] = { sym: "WETH", dec: 18 };
   TOK[A.WSTETH] = { sym: "wstETH", dec: 18 };
+  // Anything not listed is treated as 18 decimals, so only the exceptions
+  // matter - and getting one wrong shows up as a quote off by 10^n.
+  TOK["0x00000000008835cef3e0d2333695f288ee6b63a6"] = { sym: "zzz", dec: 0 };
+  TOK["0x0000000000696760e15f265e828db644a0c242eb"] = { sym: "WEI", dec: 0 };
 
   // USD reference prices, used to price every route consistently.
+  //
+  // EVERY token in the list needs one. The quoter bails out on an unpriced
+  // token, and the page can only report that as "bad quote" - it is
+  // indistinguishable from a real routing failure, so a missing entry here
+  // reads as a contract bug and sends someone debugging the wrong layer. That
+  // happened with DAI, BOLD and LUSD, all of which quote fine on mainnet.
   var USD = {};
   USD[ZERO] = 3120; USD[A.WETH] = 3120; USD[A.WSTETH] = 3690;
   USD[A.WBTC] = 96500; USD[A.USDC] = 1; USD[A.USDT] = 1;
+  USD["0xae7ab96520de3a18e5e111b5eaab095312d7fe84"] = 3120;   // stETH
+  USD["0xae78736cd615f374d3085123a210448e74fc6393"] = 3520;   // rETH
+  USD["0x6b175474e89094c44da98b954eedeac495271d0f"] = 1;      // DAI
+  USD["0x6440f144b7e50d6a8439336510312d2f54beb01d"] = 1;      // BOLD
+  USD["0x5f98805a4e8be255a32880fdec7f6728c6568ba0"] = 1;      // LUSD
+  // FWA against the live V4 pool: 1 ETH bought ~64,665 FWA when this was
+  // measured, so ~3120/64665. The others are plausible stand-ins - the
+  // simulation only has to be self-consistent, not accurate.
+  USD[A.FWA] = 0.0483;
+  USD["0x00a6ba94bbb5474725515de88fe04f854f2dcb12"] = 0.012;  // ZORG
+  USD["0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"] = 0.35;   // ZAMM
+  USD["0x00000000008835cef3e0d2333695f288ee6b63a6"] = 24;     // zzz  (0 dec)
+  USD["0x0000000000696760e15f265e828db644a0c242eb"] = 6.5;    // WEI  (0 dec)
+  // A token the list carries but the simulation has no opinion on still has
+  // to quote: an unpriced pair is the one failure mode that looks like the
+  // page is broken. Cheap and obviously synthetic.
+  var USD_FALLBACK = 0.05;
 
   var BAL = {};
   BAL[ZERO] = 12.418e18;
@@ -139,6 +170,9 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   BAL[A.WBTC] = 0.352e8;
   BAL[A.WSTETH] = 3.2e18;
   BAL[A.WETH] = 0.75e18;
+  // LP shares in the deepest ETH/USDC band, so the panel has a position to
+  // render and the withdraw button exists.
+  BAL["0xaa01" + "0".repeat(36)] = 4.1e21;
 
   function decOf(a) { return a === ZERO ? 18 : (TOK[a] ? TOK[a].dec : 18); }
 
@@ -213,9 +247,13 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   // A pair with a pool but no trades: the drawer must not appear.
   addPool(A.USDC, A.USDT, { pool: "0xee01" + "0".repeat(36), hook: ZERO, liq: 6e23, tape: [] });
 
+  // Every pool this fixture created, for isPool. A pool address the factory
+  // does not know is exactly what the page refusal above is there to catch.
+  var POOL_SET = {};
   var TAPE_BY_POOL = {}, COARSE_BY_POOL = {};
   Object.keys(POOLS).forEach(function (k) {
     POOLS[k].forEach(function (p, i) {
+      POOL_SET[p.pool.toLowerCase()] = true;
       TAPE_BY_POOL[p.pool.toLowerCase()] = p.tape;
       // The four-hour ring holds weeks the five-minute ring never could, so the
       // preview gives it its own longer history rather than a rolled-up stub.
@@ -247,8 +285,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     var tIn = wordAddr(h, base + 1), tOut = wordAddr(h, base + 2);
     var amount = word(h, base + 3);
     if (amount === 0n) return null;
-    var pin = USD[tIn], pout = USD[tOut];
-    if (!pin || !pout) return null;
+    var pin = USD[tIn] || USD_FALLBACK, pout = USD[tOut] || USD_FALLBACK;
     var din = decOf(tIn), dout = decOf(tOut);
     var human = Number(amount) / Math.pow(10, exactOut ? dout : din);
     // A gentle concave impact so large sizes visibly cost more.
@@ -274,7 +311,12 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (to === A.MC3 && sel === "82ad56cb") return aggregate3(data);
     if (to === A.ZQUOTER) { var q = quote(sel, tx.data); if (!q) throw Error("no route"); return q; }
     if (to === A.LENS.toLowerCase() && sel === "29c21083") return markets(data);
-    if (to === A.LENS.toLowerCase() && sel === "dc9d54ef") return positions();
+    // PrecisionPoolFactory.isPool - what the withdraw and add paths ask before
+    // they grant an allowance or send value. Every pool this fixture serves is
+    // one of its own; anything else is not, which is the answer that matters.
+    if (to === "${PFACTORY}" && sel === "5b16ebb7") {
+      return "0x" + u256(POOL_SET[wordAddr(data.slice(8), 0)] ? 1 : 0);
+    }
     if (to === A.LQLENS.toLowerCase() && sel === "a2eaee07") return previewRemove(data);
     if (to === A.LQLENS.toLowerCase() && sel === "e03ec807") return previewAdd(data);
     if (to === A.V4LENS && sel === "d500463c") return v4Hooked(data);
@@ -411,17 +453,11 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     var raw = price * Math.pow(10, (d1 || 18) - (d0 || 18));
     return BigInt(Math.floor(Math.sqrt(raw) * 1e18));
   }
-  // One position, so the panel has something to render and the withdraw button
-  // exists. Matches the deepest ETH/USDC pool.
-  function positions() {
-    var W = 4, rows = [{ pool: "0xaa01" + "0".repeat(36), shares: 4.1e21, a0: 1.35e18, a1: 4210e6 }];
-    var body = "";
-    rows.forEach(function (r) {
-      body += addrw(r.pool) + u256(BigInt(Math.floor(r.shares)))
-            + u256(BigInt(Math.floor(r.a0))) + u256(BigInt(Math.floor(r.a1)));
-    });
-    return "0x" + u256(32) + u256(rows.length) + body;
-  }
+  // An LP position is just an LP-token balance now: the page asks each pool it
+  // is already showing for balanceOf, rather than paging the factory global
+  // pool list through positionsOf and hoping the pair fell inside page one.
+  // Falls through to erc20() like any other token balance - BAL is seeded with
+  // shares in the deepest ETH/USDC pool below.
   // previewRemove / previewAdd. Both lead with ok, and returning false is a
   // legitimate answer the page renders rather than an error.
   function previewRemove(data) {
@@ -592,7 +628,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   try { localStorage.setItem("ch", "1"); sessionStorage.removeItem("dc"); } catch (e) {}
 })();
 </script>
-`)(SB2_ADDR, DUTCH_ADDR);
+`)(SB2_ADDR, DUTCH_ADDR, PFACTORY_ADDR);
 
 const GALLERY = String.raw`
 <h2 class="pv-h2">Precision pool charts</h2>

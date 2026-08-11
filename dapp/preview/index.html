@@ -149,11 +149,38 @@
   TOK[A.WBTC] = { sym: "WBTC", dec: 8 };
   TOK[A.WETH] = { sym: "WETH", dec: 18 };
   TOK[A.WSTETH] = { sym: "wstETH", dec: 18 };
+  // Anything not listed is treated as 18 decimals, so only the exceptions
+  // matter - and getting one wrong shows up as a quote off by 10^n.
+  TOK["0x00000000008835cef3e0d2333695f288ee6b63a6"] = { sym: "zzz", dec: 0 };
+  TOK["0x0000000000696760e15f265e828db644a0c242eb"] = { sym: "WEI", dec: 0 };
 
   // USD reference prices, used to price every route consistently.
+  //
+  // EVERY token in the list needs one. The quoter bails out on an unpriced
+  // token, and the page can only report that as "bad quote" - it is
+  // indistinguishable from a real routing failure, so a missing entry here
+  // reads as a contract bug and sends someone debugging the wrong layer. That
+  // happened with DAI, BOLD and LUSD, all of which quote fine on mainnet.
   var USD = {};
   USD[ZERO] = 3120; USD[A.WETH] = 3120; USD[A.WSTETH] = 3690;
   USD[A.WBTC] = 96500; USD[A.USDC] = 1; USD[A.USDT] = 1;
+  USD["0xae7ab96520de3a18e5e111b5eaab095312d7fe84"] = 3120;   // stETH
+  USD["0xae78736cd615f374d3085123a210448e74fc6393"] = 3520;   // rETH
+  USD["0x6b175474e89094c44da98b954eedeac495271d0f"] = 1;      // DAI
+  USD["0x6440f144b7e50d6a8439336510312d2f54beb01d"] = 1;      // BOLD
+  USD["0x5f98805a4e8be255a32880fdec7f6728c6568ba0"] = 1;      // LUSD
+  // FWA against the live V4 pool: 1 ETH bought ~64,665 FWA when this was
+  // measured, so ~3120/64665. The others are plausible stand-ins - the
+  // simulation only has to be self-consistent, not accurate.
+  USD[A.FWA] = 0.0483;
+  USD["0x00a6ba94bbb5474725515de88fe04f854f2dcb12"] = 0.012;  // ZORG
+  USD["0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"] = 0.35;   // ZAMM
+  USD["0x00000000008835cef3e0d2333695f288ee6b63a6"] = 24;     // zzz  (0 dec)
+  USD["0x0000000000696760e15f265e828db644a0c242eb"] = 6.5;    // WEI  (0 dec)
+  // A token the list carries but the simulation has no opinion on still has
+  // to quote: an unpriced pair is the one failure mode that looks like the
+  // page is broken. Cheap and obviously synthetic.
+  var USD_FALLBACK = 0.05;
 
   var BAL = {};
   BAL[ZERO] = 12.418e18;
@@ -276,8 +303,7 @@
     var tIn = wordAddr(h, base + 1), tOut = wordAddr(h, base + 2);
     var amount = word(h, base + 3);
     if (amount === 0n) return null;
-    var pin = USD[tIn], pout = USD[tOut];
-    if (!pin || !pout) return null;
+    var pin = USD[tIn] || USD_FALLBACK, pout = USD[tOut] || USD_FALLBACK;
     var din = decOf(tIn), dout = decOf(tOut);
     var human = Number(amount) / Math.pow(10, exactOut ? dout : din);
     // A gentle concave impact so large sizes visibly cost more.
