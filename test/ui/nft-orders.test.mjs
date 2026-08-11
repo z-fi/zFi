@@ -213,8 +213,9 @@ describe('bidding for an NFT', () => {
 
   test('offers to bid once a price and a token id are named', async () => {
     const p = await buying();
-    assert.match(p.text('swap'), /Name the token id to buy/i,
-      'an order names one token: there is no "any of them" here');
+    // A blank id is not a missing answer now - it is the collection bid.
+    await bid(p, { price: '2', id: '' });
+    assert.match(p.text('swap'), /Bid for any PUNK/i);
     await bid(p, { price: '2', id: '7' });
     assert.match(p.text('swap'), /Bid for PUNK #7/);
     assert.equal(p.$('swap').disabled, false);
@@ -280,13 +281,80 @@ describe('bidding for an NFT', () => {
     p.close();
   });
 
-  test('points a collection-wide want at the board that can express it', async () => {
+  test('bids for any id from the collection at a fixed price', async () => {
+    // Floorboard interpolates between startPrice and endPrice over the window,
+    // so EQUAL ENDPOINTS are a fixed offer. The board can do both shapes; the
+    // page used to treat climbing as the only one it could do.
     const p = await buying();
-    await bid(p);
-    p.select('kind', 'floor');
+    await bid(p, { price: '2', id: '' });
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'bid' });
     await p.settle();
-    assert.match(p.text('swap'), /Collection bids are not enabled yet/i,
-      'a different board with a different shape, not a silent failure');
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.FLOOR.toLowerCase(),
+      'the routed adapter hardcodes isNFT false, so this goes to the board itself');
+    assert.equal(selectorOf(tx.data), '3d8d260b', 'bid(Terms)');
+    assert.equal(BigInt(tx.value), 2n * ETH, 'the board takes the ceiling exactly, as value');
+
+    // Terms rides behind an offset; ids behind another, relative to the struct.
+    const b = '0x' + tx.data.replace(/^0x/, '').slice(8);
+    assert.equal(word(b, 0), 32n, 'offset to Terms');
+    assert.equal(wordAddr(b, 1).toLowerCase(), PUNKS.toLowerCase(), 'token');
+    assert.equal(wordAddr(b, 2).toLowerCase(), A.ZERO.toLowerCase(), 'quote 0 = ETH, escrowed as WETH');
+    assert.equal(word(b, 3), 1n, 'want: a count, not an amount');
+    assert.equal(word(b, 4), 2n * ETH, 'startPrice');
+    assert.equal(word(b, 5), 2n * ETH, 'endPrice EQUAL to it: a fixed offer');
+    assert.equal(word(b, 8), 1n, 'isNFT');
+    assert.equal(word(b, 9), 288n, 'offset to ids, relative to the struct');
+    assert.equal(word(b, 10), 0n, 'no ids: ANY token from the collection');
+    p.close();
+  });
+
+  test('climbs from an opening bid when asked to', async () => {
+    const p = await buying();
+    await bid(p, { price: '2', id: '' });
+    p.select('kind', 'floor');
+    p.type('floorAmt', '1');
+    await p.settle();
+    assert.match(p.text('swap'), /Climbing bid for any PUNK/i);
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'bid' });
+    await p.settle();
+
+    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
+    assert.equal(word(b, 4), ETH, 'starts at the opening bid');
+    assert.equal(word(b, 5), 2n * ETH, 'and climbs toward the ceiling');
+    assert.equal(BigInt(p.chain.lastSent.value), 2n * ETH,
+      'escrow is the ceiling: the most it can ever owe');
+    p.close();
+  });
+
+  test('bids for several from one collection', async () => {
+    const p = await buying();
+    p.type('amt', '5');
+    p.type('outAmt', '3');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'bid' });
+    await p.settle();
+
+    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
+    assert.equal(word(b, 3), 3n, 'want three of them');
+    assert.equal(word(b, 5), 5n * ETH,
+      'the ceiling is a TOTAL, not a price each - the board escrows exactly it');
+    p.close();
+  });
+
+  test('needs a window, because a bid IS its window', async () => {
+    const p = await buying();
+    await bid(p, { price: '2', id: '' });
+    p.select('dly', '0');       // "Never"
+    await p.settle();
+    assert.match(p.text('swap'), /needs a window/i,
+      'Floorboard refuses duration 0, so the page must not offer it');
+    assert.equal(p.$('swap').disabled, true);
     p.close();
   });
 });

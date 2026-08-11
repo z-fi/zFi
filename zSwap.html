@@ -1106,20 +1106,39 @@ if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
 // NFT leg, so a buy would have to escrow the payment directly. Say which of
 // the two this is rather than one message for both.
 if(t.std==="nft"){
-if(kind.value!=="fixed"){
-// A Floorboard bid is the collection-wide want, and it is a different board
-// with a different shape. Not wired up here yet, so say which it is.
-swap.textContent=kind.value==="floor"
-  ?"Collection bids are not enabled yet":"A bid for one token is a fixed offer";
+const oneId=nftId.value.trim();
+if(oneId&&!/^\d+$/.test(oneId)){
+swap.textContent="Token id must be a number";swap.disabled=true;return}
+const climbing=kind.value==="floor";
+// Blank id is not a missing answer, it is the OTHER shape: any token from the
+// collection. Swapboard names one id and escrows against it; Floorboard names
+// none and bids for whichever turns up. Both are supported, and which one is
+// being placed follows from the field rather than from a mode switch.
+if(kind.value==="dutch"){
+swap.textContent="A bid is fixed or climbing, not decaying";swap.disabled=true;return}
+if(oneId&&climbing){
+// A climbing bid interpolates over a window, which the fixed board has no
+// notion of - and a one-id Floorboard bid is a different escrow shape again.
+swap.textContent="A climbing bid takes any id — clear the token id";
 swap.disabled=true;return}
-if(!/^\d+$/.test(nftId.value.trim())){
-// An order names ONE token: amountB is a token id, not a quantity. Wanting
-// any of them is a Floorboard bid, which this board cannot express.
-swap.textContent="Name the token id to buy";swap.disabled=true;return}
 let bidAmt=0n;
 try{bidAmt=amt.value.trim()?parseUnits(amt.value.trim(),f.dec):0n}catch{}
-if(!bidAmt){swap.textContent="Set what you will pay";swap.disabled=true;return}
-swap.textContent=`Bid for ${t.sym} #${nftId.value.trim()}`;swap.disabled=false;return}
+if(!bidAmt){
+swap.textContent=climbing?"Set the most you will pay":"Set what you will pay";
+swap.disabled=true;return}
+if(climbing){
+let openAmt=0n;
+try{openAmt=floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),f.dec):0n}catch{}
+if(!openAmt){swap.textContent="Set an opening bid";swap.disabled=true;return}
+if(openAmt>bidAmt){swap.textContent="Opening bid exceeds the maximum";swap.disabled=true;return}
+if(!+dly.value){swap.textContent="A climbing bid needs a window";swap.disabled=true;return}
+}else if(!oneId&&!+dly.value){
+// A collection bid is a Floorboard bid whether or not it climbs, and that
+// board has no "never expires": the window IS the bid.
+swap.textContent="A collection bid needs a window";swap.disabled=true;return}
+swap.textContent=oneId?`Bid for ${t.sym} #${oneId}`
+  :climbing?`Climbing bid for any ${t.sym}`:`Bid for any ${t.sym}`;
+swap.disabled=false;return}
 if(f.std==="nft"){
 if(kind.value!=="fixed"){
 swap.textContent="An NFT sells at a fixed price";swap.disabled=true;return}
@@ -3672,7 +3691,70 @@ await checkWallet();
 await settle(await rpc(S,[req]));
 }
 
-const SEL_CREATE_ETH="0e8e31d3",SEL_CREATE="8e14f9f8";
+const SEL_CREATE_ETH="0e8e31d3",SEL_CREATE="8e14f9f8",SEL_FLOOR_BID="3d8d260b";
+
+/**
+ * Bid for ANY id from a collection, at a fixed price or a climbing one.
+ *
+ * Floorboard models this natively: `ids` empty means any token from the
+ * collection, and `want` says how many. The price is an interpolation between
+ * startPrice and endPrice over the window - so EQUAL ENDPOINTS ARE A FIXED
+ * OFFER, and a lower start is the climbing bid. One board, both shapes; the
+ * page was treating "climbing" as the only thing this board could do.
+ *
+ * Placed directly rather than through the routed adapter, which cannot express
+ * it: Orderbol.placeFloor hardcodes `isNFT: false` and an empty `ids`, so
+ * every bid it can build is an ERC-20 one.
+ *
+ * THE ESCROW IS `endPrice`, and it is a TOTAL, not a per-item price - the board
+ * takes exactly that as value and it is the most the bid can ever owe,
+ * whatever `want` says.
+ */
+async function bidCollection(f,t,climbing){
+if(nftId.value.trim())throw Error("clear the token id to bid on the whole collection");
+const ceiling=parseUnits(amt.value.trim()||"0",f.dec);
+if(!ceiling)throw Error("name the most you will pay in total");
+const open=climbing?parseUnits(floorAmt.value.trim()||"0",f.dec):ceiling;
+if(climbing&&!open)throw Error("set an opening bid");
+if(open>ceiling)throw Error("the opening bid exceeds the maximum");
+if(ceiling>(1n<<96n)-1n)throw Error("bid amount too large");
+// `want` is a COUNT here, not an amount - a collection has no decimals to
+// denominate one in. Blank is the ordinary case: one token.
+const wantRaw=outAmt.value.trim();
+if(wantRaw&&!/^\d+$/.test(wantRaw))throw Error("how many tokens? a whole number");
+const want=wantRaw?BigInt(wantRaw):1n;
+if(!want)throw Error("bid for at least one");
+const duration=BigInt(dly.value||0);
+// The board refuses duration 0, and it is the only expiry a bid has.
+if(!duration)throw Error("a bid needs a window — pick an expiry");
+if((await rpc("eth_getCode",[FLOOR,L])).length<5)throw Error("bid board not deployed yet");
+// Terms is a struct with a dynamic member, so it rides behind an offset, and
+// `ids` behind another one relative to the struct. Empty: any id.
+const terms=encAddr(t.addr)+encAddr(f.addr===ZERO?ZERO:f.addr)+encUint(want)
+  +encUint(open)+encUint(ceiling)+encUint(0n)+encUint(duration)+encBool(true)
+  +encUint(288n)+encUint(0n);
+const data="0x"+SEL_FLOOR_BID+encUint(32n)+terms;
+if(f.addr===ZERO){
+  // The board wraps it; it demands the ceiling exactly and refunds nothing.
+  const req={from:account,to:FLOOR,data,value:toHex(ceiling)};
+  await rpc(C,[req,L]);await checkWallet();await settle(await rpc(S,[req]));
+  return;
+}
+const tx={from:account,to:FLOOR,data,value:"0x0"};
+const al=BigInt(await rpc(C,[{to:f.addr,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(FLOOR)},L]));
+const approvals=[];
+if(al<ceiling){
+  if(al)approvals.push({to:f.addr,data:"0x"+SEL_APPROVE+encAddr(FLOOR)+encUint(0n),value:"0x0"});
+  approvals.push({to:f.addr,data:"0x"+SEL_APPROVE+encAddr(FLOOR)+encUint(ceiling),value:"0x0"});
+}
+if(approvals.length&&await canBatch(account)){
+  await checkWallet();
+  await settle(await sendBatch(account,[...approvals,{to:FLOOR,data,value:"0x0"}]));
+  return;
+}
+for(const a of approvals){await checkWallet();await settle(await rpc(S,[{from:account,...a}]))}
+await rpc(C,[tx,L]);await checkWallet();await settle(await rpc(S,[tx]));
+}
 
 /**
  * Bid for one specific NFT, escrowing the payment at the board.
@@ -3739,7 +3821,9 @@ const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 swap.disabled=true;
 try{
 if(f.std==="nft"||t.std==="nft"){
-  if(f.std==="nft")await pushNftOrder(f,t);else await buyNftOrder(f,t);
+  if(f.std==="nft")await pushNftOrder(f,t);
+  else if(nftId.value.trim())await buyNftOrder(f,t);
+  else await bidCollection(f,t,kind.value==="floor");
   amt.value="";outAmt.value="";nftId.value="";
   fitFont(amt);fitFont(outAmt);
   stat.textContent=f.std==="nft"?"Listed.":"Bid placed.";

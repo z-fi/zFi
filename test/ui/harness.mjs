@@ -90,7 +90,7 @@ export const SEL = {
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
   ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
   REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
-  RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96',
+  RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96', FLOOR_BID: '3d8d260b',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
   ENS_RSLV: '0178b8bf', ENS_EADDR: '3b3b57de', ENS_ENAME: '691f3431',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
@@ -494,6 +494,9 @@ export class MockChain {
     // last-moment staleness check. Served from the same fixtures as the lens,
     // so a test never has to state a row twice.
     if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
+    // bid(Terms) — a collection bid, placed at the board directly because the
+    // routed adapter hardcodes isNFT false and cannot express one.
+    if (to === A.FLOOR.toLowerCase() && sel === SEL.FLOOR_BID) return '0x' + u256(1);
     // TokenList.logoOf(address) REVERTS for an unlisted token rather than
     // returning empty, which is what the page's allow-failure batch relies on.
     if (to === A.ZLISTLENS.toLowerCase() && sel === SEL.RANKEDIDS) {
