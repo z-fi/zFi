@@ -910,14 +910,13 @@ const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+enc
 async function quoteV4Pools(f,t,amountIn,block){
 const pools=v4PoolsFor(f,t);
 if(!pools.length||amountIn<=0n)return null;
-// Starving this one is WORSE than an error: the lens catches its own failure
-// and answers (0, 0) by design, so a low budget reads as "this pool has no
-// route" and the venue silently drops out of the comparison. Measured at ~180k
-// against the live ETH/FWA pool, so 2M is an order of magnitude of headroom and
-// still far below any provider's cap - the point is to clear a stingy DEFAULT,
-// not to ask for the block.
-const V4_QUOTE_GAS="0x1e8480"; // 2,000,000
-const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,gas:V4_QUOTE_GAS,
+// Deliberately NO explicit `gas`. The lens runs the hook under `unlock` and
+// costs ~180k against the live ETH/FWA pool, which every provider's default
+// clears - measured returning the identical quote with no field, with 2M and
+// with 30M. Naming a number here would only add a way to be REJECTED, since
+// each provider caps eth_call gas at its own undocumented value. The page
+// states no gas anywhere; that is what makes it portable.
+const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,
 data:"0x"+SEL_V4QUOTE+encBool(false)+encAddr(f.addr)+encAddr(t.addr)
 +encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks)+encUint(amountIn)},block])
 .then(h=>{const x=strip0x(h);return x.length>=128?BigInt("0x"+x.slice(64,128)):0n})
@@ -1199,6 +1198,24 @@ return out};
 // trivial budget names one, and it names a modest figure rather than a maximal
 // one.
 const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
+// allowFailure covers one quoter reverting. It does NOT cover the eth_call
+// itself dying, and a batch can die for reasons the page cannot see: every
+// provider caps eth_call gas, at a different and undocumented value.
+//
+// So don't guess the cap - halve the batch. Two smaller calls cost less than
+// one big one, and the split repeats until each fits or a single call is
+// itself the thing that cannot run, which is the only genuinely dead case.
+// Nothing here assumes anything about the provider, because assuming a
+// provider clamps rather than rejects is what broke every pair on the page.
+const mc3Deep=async(cs,tag=L,depth=0)=>{
+  try{return await mc3(cs,tag)}
+  catch(e){
+    if(cs.length<2||depth>=4)return cs.map(()=>null);
+    const h=cs.length>>1;
+    const [a,b]=await Promise.all([mc3Deep(cs.slice(0,h),tag,depth+1),mc3Deep(cs.slice(h),tag,depth+1)]);
+    return a.concat(b);
+  }
+};
 // Impact, no oracle: quote amt and amt/REF_N; with zero impact output scales
 // linearly, so the shortfall IS the impact. The reference carries ~1/N of it, so
 // this understates - right direction for a warning. Mainnet: ETH/USDC reads
@@ -1561,8 +1578,13 @@ const refAmt=swapAmt/REF_N;
 const iRef=refAmt>0n
   ?Q("e453166e",a+rf+encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(refAmt)+encUint(0n)+encUint(deadline),4,9)
   :-1;
-// One allow-failure multicall for all quotes.
-const mcRaw=await mc3(_rq.map(q=>({to:q.to,data:q.data})),quoteBlock);
+// One allow-failure multicall for all quotes. allowFailure covers a single
+// quoter reverting; it does NOT cover the eth_call itself dying, which is what
+// a thin token does - it has no conventional liquidity, so its probes traverse
+// the most and cost the most. That must degrade to "these venues had nothing"
+// rather than discard the venues that did answer, so it is caught: a quote from
+// V4 alone is a route, and throwing here deleted it.
+const mcRaw=await mc3Deep(_rq.map(q=>({to:q.to,data:q.data})),quoteBlock);
 if(my!==seq)return;
 const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,q.u,q.v,q.S):null}catch{return null}});
 for(const g of jobs)pick(g.length>1?merge(dec[g[0]],dec[g[1]]):dec[g[0]]);
@@ -1608,7 +1630,7 @@ if(acct){
       const ps=encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(ss)+encUint(deadline);
       for(const sel of["892af013","85f86a90"])groups.push([add(sel,a+ps,4,8,1,ss)]);
     }
-    const raw=await mc3(qs.map(q=>({to:ZQUOTER,data:q.data})),quoteBlock);
+    const raw=await mc3Deep(qs.map(q=>({to:ZQUOTER,data:q.data})),quoteBlock);
     const ds=qs.map((q,i)=>{try{return raw[i]?decQ(raw[i],q.sb||slipBps,eo,q.u,q.v,q.S):null}catch{return null}});
     let best=null;
     for(const g of groups){
@@ -2070,7 +2092,7 @@ async function loadLogos(addrs){
   const want=[...new Set(addrs.map(a=>a.toLowerCase()))]
     .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
   if(!want.length||TOKENLIST===ZERO)return;
-  const raw=await mc3(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)}))).catch(()=>[]);
+  const raw=await mc3Deep(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)})));
   want.forEach((a,i)=>{let u="";try{if(raw[i])u=safeUrl(decodeString(raw[i]))}catch{}logoCache[a]=u});
 }
 async function leg(addr,amt,isNft,meta){
@@ -2544,7 +2566,7 @@ async function loadBook(){
       ...bidRows.map(r=>({to:FLOOR,data:"0x"+SEL_BIDS+encUint(r.id)})),
       ...fillRows.map(r=>({to:r.board,data:"0x"+SEL_INITIAL_B+encUint(r.id)})),
     ];
-    const raw=await mc3(reqs);
+    const raw=await mc3Deep(reqs);
     if(my!==bookSeq)return;
     let k=0;
     for(const r of dutchRows){const x=raw[k++];if(!x)continue;
@@ -3158,7 +3180,7 @@ async function loadLq(){
           liq:at(PI_LIQ),hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
           shares:0n,mine0:0n,mine1:0n})}}
     if(account&&rows.length){
-      const bs=await mc3(rows.map(r=>({to:r.pool,data:"0x"+SEL_BALANCEOF+encAddr(account)}))).catch(()=>[]);
+      const bs=await mc3Deep(rows.map(r=>({to:r.pool,data:"0x"+SEL_BALANCEOF+encAddr(account)})));
       if(my!==lqSeq)return;
       rows.forEach((r,i)=>{
         if(!bs[i]||r.liq===0n)return;
@@ -3442,7 +3464,7 @@ if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:0};return syncChar
 const reqs=[];
 for(const a of pools)reqs.push({to:a,data:"0x"+SEL_TAPE+encUint(FINE)+encUint(256)},
   {to:a,data:"0x"+SEL_TAPE+encUint(COARSE)+encUint(256)});
-const tapes=await mc3(reqs);
+const tapes=await mc3Deep(reqs);
 if(my!==chSeq)return;
 const dec1Tape=hex=>{if(!hex)return null;
 const h=strip0x(hex),n=Number(BigInt("0x"+h.slice(64,128))),bars=[];

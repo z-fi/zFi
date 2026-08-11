@@ -54,7 +54,11 @@ export const A = {
   FLOOR: '0x00000080198137F790DA4C52bb902cf87c276748',
   FLOORVIEW: '0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7',
   TOKENLIST: '0x0000006013dF75A31678B786061C2B54bf531524',
-  PPFACTORY: '0x0000000000000000000000000000000000000000',
+  // Precision pools. PPLENS is patched per-test (the chart and liquidity suites
+  // rewrite it by shape), but the factory and the liquidity lens are used at
+  // their real addresses, so those two are pinned against the page below.
+  PFACTORY: '0x000000Eb27B557aB426d9E99cFd54EC455799e81',
+  PLQLENS: '0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E',
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
   WNS: '0x0000000000696760E15f265e828DB644A0c242EB',
@@ -83,6 +87,8 @@ export const SEL = {
   FILL1: 'c37dfc5b', FILL2: '8ab3bfc9', FILL2_UNWRAP: '402ad677', FILL2_ETH: '13092239',
   DUTCH_FILL: 'ae7a8260', DUTCH_LISTING: 'de74e57b',
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
+  ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
+  REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
   ENS_RSLV: '0178b8bf', ENS_EADDR: '3b3b57de', ENS_ENAME: '691f3431',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
@@ -235,6 +241,9 @@ export class MockChain {
     this.dutchListings = new Map();
     // Price tape: pools per canonical pair, and bars per pool.
     this.pools = new Map();        // `${token0}:${token1}` -> [{pool,hook,liquidity}]
+    // Pools a lens reports but the factory disclaims — an impersonator, which
+    // is the case the write paths' isPool check exists to catch.
+    this.disowned = new Set();
     this.tapes = new Map();        // `${pool}:${period}` -> [bar | null], newest first
     // Name services. `names` resolves forward (name -> address) for .wei/.gwei
     // via the WNS/GNS registries; `reverse` drives the header's display name.
@@ -252,6 +261,7 @@ export class MockChain {
     this.signed = [];              // eth_signTypedData_v4 payloads
     this.batches = [];             // wallet_sendCalls payloads
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
+    this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -288,11 +298,22 @@ export class MockChain {
    * Register pools for a pair. Entries may be a bare address or
    * {pool, hook, liquidity} — the lens reports hook and liquidity, and the
    * chart uses both to decide which pools may speak for the pair's price.
+   *
+   * The band fields (fee, reserves, and the three raw sqrt prices) default to
+   * zero because the chart does not read them. The liquidity panel does, and
+   * so do the previews below, which compute against `liquidity` as the LP
+   * supply and `reserve0/1` as the reserves — the same arithmetic the real
+   * lens performs, so a test asserting on a previewed amount is asserting on
+   * something, not on a constant.
    */
   setPools(a, b, pools) {
     const [t0, t1] = a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
     const rows = pools.map(p => (typeof p === 'string' ? { pool: p } : p))
-      .map(r => ({ hook: A.ZERO, liquidity: 10n ** 21n, ...r }));
+      .map(r => ({
+        hook: A.ZERO, liquidity: 10n ** 21n,
+        fee: 0n, reserve0: 0n, reserve1: 0n, sqrtLow: 0n, sqrtHigh: 0n, sqrtNow: 0n,
+        ...r,
+      }));
     this.pools.set(`${t0.toLowerCase()}:${t1.toLowerCase()}`, rows);
     for (const r of rows) this.code.set(r.pool.toLowerCase(), '0x60006000');
     return this;
@@ -306,6 +327,19 @@ export class MockChain {
   undeploy(addr) { this.code.set(addr.toLowerCase(), '0x'); return this; }
   revertOn(to, selector, msg = 'execution reverted') {
     this.reverts.set(`${to.toLowerCase()}:${selector}`, msg); return this;
+  }
+
+  /** Make the factory disclaim a pool the lens still describes. */
+  disownPool(pool) { this.disowned.add(pool.toLowerCase()); return this; }
+
+  /** The registered pool row for an address, across every pair. */
+  poolRow(pool) {
+    const want = pool.toLowerCase();
+    for (const rows of this.pools.values()) {
+      const hit = rows.find(r => r.pool.toLowerCase() === want);
+      if (hit) return hit;
+    }
+    return null;
   }
 
   balanceOf(token, holder) {
@@ -463,9 +497,50 @@ export class MockChain {
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
       // PoolInfo is a static struct, so the array is 19 flat words per row.
       return coder.encode([POOL_INFO], [rows.map(r => [
-        r.pool, A.ZERO, A.ZERO, 0n, 0n, 0n, 0n, 0n, 0n, BigInt(r.liquidity),
+        r.pool, A.ZERO, A.ZERO, BigInt(r.sqrtLow), BigInt(r.sqrtHigh), BigInt(r.fee),
+        BigInt(r.reserve0), BigInt(r.reserve1), BigInt(r.sqrtNow), BigInt(r.liquidity),
         r.hook, A.ZERO, 0n, 0n, r.hook === A.ZERO ? 1n : 0n, 0n, 0n, 0n, 0n,
       ])]);
+    }
+    // PrecisionPoolFactory.isPool — the trust anchor the liquidity write paths
+    // ask before granting an allowance or sending value. Only pools this
+    // fixture registered are its own.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
+      const who = wordAddr('0x' + data.slice(8), 0);
+      return coder.encode(['bool'],
+        [!!this.poolRow(who) && !this.disowned.has(who.toLowerCase())]);
+    }
+    if (to === A.PLQLENS.toLowerCase()) {
+      const body = '0x' + data.slice(8);
+      const row = this.poolRow(wordAddr(body, 0));
+      if (sel === SEL.PREVIEW_REMOVE) {
+        const shares = word(body, 1), supply = row ? BigInt(row.liquidity) : 0n;
+        if (!row || shares === 0n || supply === 0n || shares > supply) {
+          return coder.encode(['bool', 'uint256', 'uint256'], [false, 0n, 0n]);
+        }
+        const a0 = shares * BigInt(row.reserve0) / supply;
+        const a1 = shares * BigInt(row.reserve1) / supply;
+        return coder.encode(['bool', 'uint256', 'uint256'],
+          [a0 !== 0n || a1 !== 0n, a0, a1]);
+      }
+      if (sel === SEL.PREVIEW_ADD) {
+        const off = ['bool', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'];
+        const a0 = word(body, 1), a1 = word(body, 2);
+        const supply = row ? BigInt(row.liquidity) : 0n;
+        const r0 = row ? BigInt(row.reserve0) : 0n, r1 = row ? BigInt(row.reserve1) : 0n;
+        if (!row || supply === 0n || r0 === 0n || r1 === 0n) {
+          return coder.encode(off, [false, 0n, 0n, 0n, 0n, 0n]);
+        }
+        // min of each side's proportional share, then ceil back the amounts
+        // that share actually consumes — the lens formula exactly.
+        const lp = (x => (x < a1 * supply / r1 ? x : a1 * supply / r1))(a0 * supply / r0);
+        const ceil = (n, d) => (n + d - 1n) / d;
+        const used0 = ceil(lp * r0, supply), used1 = ceil(lp * r1, supply);
+        if (lp === 0n || used0 > a0 || used1 > a1) {
+          return coder.encode(off, [false, 0n, 0n, 0n, 0n, 0n]);
+        }
+        return coder.encode(off, [true, lp, used0, used1, a0 - used0, a1 - used1]);
+      }
     }
     if (sel === SEL.TAPE) {
       const body = '0x' + data.slice(8);
@@ -485,6 +560,10 @@ export class MockChain {
   aggregate3(data, block) {
     // aggregate3((address target,bool allowFailure,bytes callData)[])
     const [calls] = coder.decode(['tuple(address,bool,bytes)[]'], '0x' + data.slice(8));
+    // Every provider caps eth_call, at its own undocumented value, and refuses
+    // the whole request rather than returning partial results. `batchLimit`
+    // reproduces that: allowFailure cannot help, because the batch never runs.
+    if (calls.length > this.batchLimit) throw Error('out of gas');
     const results = calls.map(([target, , callData]) => {
       try {
         return [true, this.ethCall({ to: target, data: callData }, block)];
@@ -698,9 +777,9 @@ export function closeAllPages() {
 }
 
 export async function loadPage({ chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = {}) {
-  // The shipped page leaves PPFACTORY at the zero address until deployment, so
-  // the chart stays off. Tests inject an address here rather than the page
-  // carrying a guessed one that would be immutable once deployed.
+  // Tests that exercise the price tape or the liquidity panel repoint PPLENS
+  // at a mock address through `patch`, matched by shape rather than by literal
+  // so a redeploy of the real lens does not silently unpatch them.
   let html = fs.readFileSync(HTML_PATH, 'utf8');
   for (const [from, to] of patch) {
     if (!html.includes(from)) throw Error(`patch target not found: ${from}`);
@@ -877,6 +956,9 @@ export function assertAddressesMatchPage(assert) {
     ZQUOTER: 'ZQUOTER', ZROUTER: 'ZROUTER', PERMIT2: 'PERMIT2', SLOW: 'SLOW',
     SB2: 'SB2', SB1: 'SB1', SBVIEW: 'SBVIEW', SWAPBOL: 'SWAPBOL', DUTCH: 'DUTCH',
     ORDERBOL: 'ORDERBOL', WETH: 'WETH', FLOOR: 'FLOOR', FLOORVIEW: 'FLOORVIEW',
+    // Not patched by any suite, so the fixtures answer at the real addresses
+    // and a redeploy has to update both.
+    PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS',
   };
   for (const [key, name] of Object.entries(pinned)) {
     const m = html.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));
