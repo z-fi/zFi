@@ -494,6 +494,11 @@ export class MockChain {
     // last-moment staleness check. Served from the same fixtures as the lens,
     // so a test never has to state a row twice.
     if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
+    // cancel / cancelUnwrap, which Floorboard shares with Dutchboard. Both
+    // boards return nothing; what matters is that the page reaches the right
+    // one with the right selector, since a cancel is how escrow comes back.
+    if ((to === A.FLOOR.toLowerCase() || to === A.DUTCH.toLowerCase())
+      && (sel === SEL.DUTCH_CANCEL || sel === SEL.DUTCH_CANCEL_UNWRAP)) return '0x';
     // bid(Terms) — a collection bid, placed at the board directly because the
     // routed adapter hardcodes isNFT false and cannot express one.
     if (to === A.FLOOR.toLowerCase() && sel === SEL.FLOOR_BID) return '0x' + u256(1);

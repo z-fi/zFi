@@ -358,3 +358,102 @@ describe('bidding for an NFT', () => {
     p.close();
   });
 });
+
+/**
+ * Getting the escrow back.
+ *
+ * All three new paths lock real value at three different boards - a listing
+ * holds the NFT at Swapboard, a per-token bid holds ether there, a collection
+ * bid holds it at Floorboard - and none of them had been proven to unwind.
+ * Placing is the half that is easy to test and the half that costs nothing to
+ * get wrong; cancelling is where a wrong selector or a wrong board strands
+ * somebody's money.
+ *
+ * The refund SHAPE differs per path and the page has to pick it:
+ *   an NFT escrow returns the token, and unwrapping it is nonsense
+ *   a WETH escrow can return as ETH or as WETH, which is the one real choice
+ *   Floorboard's cancel pair is Dutchboard's, not Swapboard's
+ */
+describe('cancelling', () => {
+  const ETH_ = 10n ** 18n;
+
+  async function book(prep) {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH_);
+    chain.setToken(PUNKS, { symbol: 'PUNK', name: 'CryptoPunks', erc721: true });
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH_ });
+    prep(chain);
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabBook');
+    await p.waitFor(() => /Cancel/.test(p.$('book').textContent), { label: 'own row' });
+    await p.settle();
+    return p;
+  }
+
+  const cancel = async p => {
+    const btn = [...p.$('book').querySelectorAll('button')].find(b => b.textContent === 'Cancel');
+    assert.ok(btn, 'the row should offer a cancel');
+    p.click(btn);
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel sent' });
+    await p.settle();
+    return p.chain.lastSent;
+  };
+
+  test('a listing returns the token, and does not try to unwrap it', async () => {
+    // nftA: the escrow IS the NFT. cancelOrderUnwrap would revert NotWETH.
+    const tx = await cancel(await book(c => {
+      c.recent = [{
+        id: 11, board: A.SB2, maker: A.ACCOUNT, pf: false, exp: 0,
+        tA: PUNKS, aA: 7n, symA: 'PUNK', decA: 0, nA: true,
+        tB: A.WETH, aB: ETH_, symB: 'WETH', decB: 18,
+      }];
+    }));
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase());
+    assert.equal(selectorOf(tx.data), '514fcac7', 'cancelOrder, not the unwrapping variant');
+    assert.equal(word('0x' + tx.data.slice(10), 0), 11n, 'the order id');
+  });
+
+  test('a per-token bid returns the escrow as ETH by default', async () => {
+    // The escrow is WETH - createOrderWithEth wrapped it - and Receive is ETH.
+    const tx = await cancel(await book(c => {
+      c.recent = [{
+        id: 12, board: A.SB2, maker: A.ACCOUNT, pf: false, exp: 0,
+        tA: A.WETH, aA: 2n * ETH_, symA: 'WETH', decA: 18,
+        tB: PUNKS, aB: 7n, symB: 'PUNK', decB: 0, nB: true,
+      }];
+    }));
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase());
+    assert.equal(selectorOf(tx.data), '21dd76f9', 'cancelOrderUnwrap: back as ether');
+  });
+
+  test('and as WETH when that is what was asked for', async () => {
+    const p = await book(c => {
+      c.recent = [{
+        id: 12, board: A.SB2, maker: A.ACCOUNT, pf: false, exp: 0,
+        tA: A.WETH, aA: 2n * ETH_, symA: 'WETH', decA: 18,
+        tB: PUNKS, aB: 7n, symB: 'PUNK', decB: 0, nB: true,
+      }];
+    });
+    p.select('ethMode', 'weth');
+    await p.settle();
+    const tx = await cancel(p);
+    assert.equal(selectorOf(tx.data), '514fcac7', 'plain cancelOrder keeps it wrapped');
+    p.close();
+  });
+
+  test('a collection bid unwinds at Floorboard, whose cancel is not Swapboard\'s', async () => {
+    const tx = await cancel(await book(c => {
+      c.floorBids = [{
+        id: 5n, bidder: A.ACCOUNT, token: PUNKS, quote: A.WETH,
+        isNFT: true, anyId: true, remaining: 1n, initial: 1n,
+        price: 2n * ETH_, proceeds: 2n * ETH_, expiry: 0n,
+        tokenDecimals: 0, quoteDecimals: 18, tokenSymbol: 'PUNK', quoteSymbol: 'WETH',
+      }];
+    }));
+    assert.equal(tx.to.toLowerCase(), A.FLOOR.toLowerCase(), 'the board that holds it');
+    assert.equal(selectorOf(tx.data), '8382de65',
+      'cancelUnwrap — Floorboard shares Dutchboard\'s pair, not Swapboard\'s');
+    assert.equal(word('0x' + tx.data.slice(10), 0), 5n, 'the bid id');
+  });
+});
