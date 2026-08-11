@@ -400,4 +400,41 @@ describe('creating a band', () => {
     assert.equal(p.$('lqCreate').disabled, true);
     p.close();
   });
+
+  test('draws where the band opens, on a log scale', async () => {
+    // A full range spans six decades - 10 to 10,000,000 is ordinary - so a
+    // linear mark would sit against the left edge at every realistic price and
+    // say nothing.
+    const p = await setup();
+    await fill(p, good);
+    const bar = p.$('lqRangeOut').querySelector('.lqbar');
+    assert.ok(bar, 'the band should be drawn, not only spelled out');
+    const at = parseFloat(bar.style.getPropertyValue('--at'));
+    assert.ok(at > 45 && at < 55,
+      `a band centred on its opening price should mark the middle, got ${at}%`);
+    assert.equal(bar.classList.contains('out'), false);
+    p.close();
+  });
+
+  test('marks a one-sided band at the edge it opens on', async () => {
+    const p = await setup();
+    await preset(p, '2');
+    await fill(p, { a0: '1', a1: '', lqPx: '3000' });
+    const at = parseFloat(p.$('lqRangeOut').querySelector('.lqbar').style.getPropertyValue('--at'));
+    assert.ok(at < 5, `token0-only opens at the LOW edge, got ${at}%`);
+    p.close();
+  });
+
+  test('offers a balance and a Max on the second side too', async () => {
+    // Both fields are a deposit here, so "how much can I put in" applies to
+    // both. On the swap tab the receive side is an output and never had one.
+    const p = await setup();
+    await p.waitFor(() => /Balance/.test(p.$('bal1').textContent), { label: 'second balance' });
+    assert.equal(p.visible('bal1'), true);
+
+    p.click(p.$('bal1').querySelector('a'));
+    await p.settle();
+    assert.equal(p.$('outAmt').value, '100000', 'the whole USDC balance, which needs no gas held back');
+    p.close();
+  });
 });

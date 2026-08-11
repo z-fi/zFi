@@ -62,6 +62,14 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqnew .dly .r{display:flex;gap:.4em;align-items:center}
 .lqnew .dly .r input{width:6.5em}
 .lqout{font-size:.72em;color:var(--m);line-height:1.55;min-height:1.1em}
+/* Where price sits inside the band. Three numbers answer "am I in range" only
+   after you have compared them; a mark on a line answers it at a glance. */
+.lqbar{position:relative;height:3px;border-radius:2px;background:var(--e);margin:.45em 0 .3em}
+.lqbar>i{position:absolute;top:-2.5px;width:3px;height:8px;border-radius:1px;background:var(--f);
+  left:var(--at,50%);transform:translateX(-1.5px)}
+.lqbar.out>i{background:var(--m)}
+.lqbar>b{position:absolute;top:-.05px;height:3px;border-radius:2px;background:var(--m);opacity:.45;
+  left:0;right:0}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
 #listNote.hide{display:none}
@@ -192,7 +200,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
@@ -817,7 +825,33 @@ const n=+formatUnits(fromBalance,f.dec);
 const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
 bal.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for ETH)">Max</a>`;
 }catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
+refreshBalance1();
 render();
+}
+/**
+ * The second side's balance, in liquidity mode only.
+ *
+ * There, both fields are a deposit and the obvious question - how much can I
+ * actually put in - was answerable for one of them and not the other. On the
+ * swap tab the receive side is an output and has no such question, which is
+ * why this had never come up.
+ */
+let toBalance=0n,b1Seq=0;
+async function refreshBalance1(){
+const t=TOKENS[toSel.value];
+bal1.classList.toggle("hide",!lqMode);
+if(!lqMode||!account||!t){bal1.textContent="";toBalance=0n;return}
+const my=++b1Seq;
+try{
+const hex=t.addr===ZERO
+?await rpc("eth_getBalance",[account,L])
+:await rpc(C,[{to:t.addr,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]);
+if(my!==b1Seq)return;
+toBalance=BigInt(hex);
+const n=+formatUnits(toBalance,t.dec);
+const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
+bal1.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for ETH)">Max</a>`;
+}catch{if(my===b1Seq){bal1.textContent="";toBalance=0n}}
 }
 // NFTs stay in the picker — Swapboard and Dutchboard auction them — but they are
 // not swappable, so they sit under their own heading instead of being interleaved
@@ -1238,6 +1272,22 @@ update();
 loadPos();
 syncChart();
 }
+bal1.addEventListener("click",async e=>{
+if(e.target.tagName!=="A")return;
+e.preventDefault();
+const t=TOKENS[toSel.value];
+if(!t)return;
+let reserve=0n;
+// Same reserve the pay side keeps back: creating a band is one escrow
+// transfer plus a deploy, and spending the last wei leaves nothing to send it.
+if(t.addr===ZERO){
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*900000n}catch{}
+}
+const max=toBalance>reserve?toBalance-reserve:0n;
+outAmt.value=formatUnits(max,t.dec);
+fitFont(outAmt);
+lqPreviewSoon();
+});
 bal.addEventListener("click",async e=>{
 if(e.target.tagName!=="A")return;
 e.preventDefault();
@@ -2985,6 +3035,20 @@ const SEL_ISPOOL="5b16ebb7",SEL_POOLFOR="83bd1387",SEL_PREVIEW_SEED="1d355417",S
 // NOT normalised on chain - the band is quoted in RAW token1 per RAW token0 -
 // so the adjustment happens here, once, where the token metadata lives.
 const bandPrice=(sqrtP,d0,d1)=>{const r=Number(sqrtP)/1e18;return r*r*10**(d0-d1)};
+/**
+ * A band drawn as a line, with a mark where price is.
+ *
+ * On a LOG scale, because a band can span six decades - 10 to 10,000,000 is a
+ * normal full range - and on a linear one every realistic price would sit
+ * against the left edge, which says nothing.
+ */
+const lqBar=(lo,hi,at)=>{
+  if(!(lo>0)||!(hi>lo)||!(at>0))return "";
+  const f=(Math.log(at)-Math.log(lo))/(Math.log(hi)-Math.log(lo));
+  const out=f<0||f>1;
+  const pct=(Math.max(0,Math.min(1,f))*100).toFixed(1);
+  return `<div class="lqbar${out?" out":""}" style="--at:${pct}%" aria-hidden="true"><b></b><i></i></div>`;
+};
 const fmtPx=v=>!isFinite(v)||v<=0?"—":v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0})
   :v>=1?v.toFixed(4):v.toPrecision(3);
 
@@ -3006,6 +3070,9 @@ function lqSet(on){
   rcvHdr.textContent=on?"and":"You receive";
   payL.textContent=on?"Liquidity for":"You pay";
   lqPanel.classList.toggle("hide",!on);
+  // The second side's balance only exists in this mode, so entering it is
+  // exactly when it has to be read - nothing else was going to ask.
+  refreshBalance1();
   if(on)loadLq();else{lqRows=[];lqList.innerHTML=""}
 }
 
@@ -3020,6 +3087,7 @@ function lqRow(o,t0,t1){
     +`<div class="lqband"><b>${fmtPx(lo)} – ${fmtPx(hi)}</b> <span class="lqfee">${(Number(o.fee)/10000).toFixed(2)}%</span>`
     +(o.hook!==ZERO?` <span class="lqtag" title="Hooked: may add a surcharge, and cannot be used in a clamped route">hook</span>`:"")
     +(inRange?"":` <span class="lqtag">out of range</span>`)+`</div>`
+    +lqBar(lo,hi,px)
     +`<div class="lqmeta">price ${fmtPx(px)} · ${trimAmt(o.r0,t0.dec)} ${t0.sym} / ${trimAmt(o.r1,t1.dec)} ${t1.sym}`
     +` <button class="lqbtn" data-act="a" ${p}>Add</button></div>`
     +(mine?`<div class="lqmine">yours: ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}`
@@ -3469,8 +3537,13 @@ async function lqNewPreview(){
   // deposits in full, which is what their ratio means against a band.
   const sp=oneSided===0?sl:oneSided===1?sh:lqSeedPrice(sl,sh,a0,a1);
   if(!sp){out.textContent="Those amounts cannot open a band that wide.";return}
-  bandOut.textContent=`${fmtPx(lo)} – ${fmtPx(hi)}`
-    +` · opens at ${fmtPx(bandPrice(sp,t0.dec,t1.dec))} ${t1.sym} per ${t0.sym}`
+  const openAt=bandPrice(sp,t0.dec,t1.dec);
+  // The bar is markup built from numbers; the line under it carries token
+  // symbols, which are registry text - so it goes in through textContent
+  // rather than being interpolated into the same string.
+  bandOut.innerHTML=lqBar(lo,hi,openAt)+`<span></span>`;
+  bandOut.querySelector("span").textContent=
+    `${fmtPx(lo)} – ${fmtPx(hi)} · opens at ${fmtPx(openAt)} ${t1.sym} per ${t0.sym}`
     +(oneSided===0?` · ${t0.sym} only`:oneSided===1?` · ${t1.sym} only`:"");
   const fee=BigInt(box.querySelector("#lqFee").value);
   const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account||ZERO);
