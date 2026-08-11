@@ -377,20 +377,25 @@ describe('creating a band', () => {
     p.close();
   });
 
-  test('full range narrows to what the chain will actually take', async () => {
-    // Everything wider than 10x refused: the page must land on 10x rather than
-    // offering a band that cannot be created.
+  test('full range narrows when the deposit cannot back the widest', async () => {
+    // Width is bought with capital: the pool needs lp above MIN_LIQUIDITY and
+    // both virtual reserves above MIN_RESOLUTION. This deposit is a hundredth
+    // of the one above, so the widest band no longer holds up.
     const p = await setup();
-    p.chain.rejectWiderThan = 10;
-    await fill(p, { a0: '1', a1: '3000' });
-    assert.match(p.$('lqRangeOut').textContent, /^300(\.0+)? – 30,?000/);
+    await fill(p, { a0: '0.01', a1: '30' });
+    const band = p.$('lqRangeOut').textContent;
+    assert.match(band, /opens at 3,?000 USDC per ETH/, 'same price, from the same ratio');
+    assert.ok(!/3,?000,?000/.test(band), `expected a narrower band than the widest, got ${band}`);
+    assert.equal(p.$('lqCreate').disabled, false, 'and it is still creatable');
     p.close();
   });
 
   test('says so when even the narrowest range is out of reach', async () => {
+    // Dust: no band at any width. Better than letting the pool answer
+    // ZeroAmount after a wallet prompt.
     const p = await setup();
-    p.chain.rejectWiderThan = 0;
-    await fill(p, { a0: '1', a1: '3000' });
+    // USDC has six decimals, so the dust has to be expressible in them.
+    await fill(p, { a0: '0.000000000000001', a1: '0.000001' });
     assert.match(p.$('lqPv').textContent, /narrowest range needs more than this deposit/i);
     assert.equal(p.$('lqCreate').disabled, true);
     p.close();

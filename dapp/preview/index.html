@@ -3769,6 +3769,17 @@ function lqNewForm(t0,t1){
  * re-deriving the pool's algebra - one is exact by construction, the other is
  * a copy that can drift.
  */
+// A human price (token1 per token0) as the pool's own sqrt-price-in-WAD.
+// Through the decimal string rather than Number: sqrt(raw)*1e18 loses the low
+// digits at any realistic price, and the band edges are compared exactly.
+const pxToSqrt=(px,d0,d1)=>{
+  const raw=px*10**(d1-d0);
+  if(!isFinite(raw)||raw<=0)return 0n;
+  return BigInt(Math.round(Math.sqrt(raw)*1e9))*10n**9n;
+};
+// Market: eight STATIC words, encoded inline wherever it is passed.
+const lqMarket=(t0,t1,lo,hi,fee,owner)=>encAddr(t0)+encAddr(t1)+encUint(lo)+encUint(hi)
+  +encUint(fee)+encAddr(ZERO)+encAddr(owner)+encUint(0n);
 const lqSeedPrice=(sl,sh,in0,in1)=>{
   const L=Number(sl),H=Number(sh),x=Number(in0),y=Number(in1),W=1e18;
   // lp0 rises with s and lp1 falls, so their ratio crosses 1 exactly once.
@@ -3799,45 +3810,50 @@ const lqBandFor=(px,mult,a0,a1)=>{
 /**
  * The widest band this deposit can actually back.
  *
- * A band is not free: the pool needs its virtual reserves to stay above
- * MIN_RESOLUTION, so width is bought with capital. Measured against the live
- * factory, roughly ten times the deposit buys ten times the width - 0.01 ETH
- * tops out near 10x, 1 ETH reaches 1000x - which means a fixed "full range"
- * constant would simply fail for small deposits, and a page that shipped one
- * would be offering its easiest option as its most likely error.
+ * A band is not free. The pool needs `lp > MIN_LIQUIDITY` and both virtual
+ * reserves at or above `MIN_RESOLUTION`, and those are what width costs -
+ * measured against the live factory, ten times the deposit buys about ten
+ * times the width. A fixed "full range" constant would therefore fail for
+ * small deposits, making the easiest option the likeliest error.
  *
- * So it is asked rather than assumed: try the widths in turn and take the
- * first the chain accepts. `eth_call` is the same preflight the send path runs
- * anyway, and the answer is exact instead of a replica of the pool's
- * arithmetic that can drift from it.
+ * This was asked of the chain, by simulating the create at each width. That
+ * was wrong, and wrong in a way that pointed at the user: an ERC-20 side has
+ * no allowance yet at preview time, so every width reverted TransferFromFailed
+ * and the page reported "even the narrowest range needs more than this
+ * deposit" to someone whose deposit was fine.
+ *
+ * So the three bounds are evaluated directly. They are the pool's own, they
+ * need no allowance and no round trip, and the real preflight still runs
+ * before anything is signed - this only chooses which range to offer.
  */
+const LQ_MIN_LIQUIDITY=1000,LQ_MIN_RESOLUTION=1e6,LQ_WAD=1e18;
+const lqSeedLp=(sl,sh,sp,in0,in1)=>{
+  const L=Number(sl),H=Number(sh),S=Number(sp),x=Number(in0),y=Number(in1);
+  if(!(S>=L&&S<=H))return 0;
+  // At an edge the band is one asset, and the other side's formula divides by
+  // zero - which is the same thing as saying it does not constrain anything.
+  const lp0=x&&H>S?x*S*H/((H-S)*LQ_WAD):Infinity;
+  const lp1=y&&S>L?y*LQ_WAD/(S-L):Infinity;
+  const lp=Math.min(lp0,lp1);
+  return isFinite(lp)&&lp>0?lp:0;
+};
+const lqBandFits=(sl,sh,sp,in0,in1)=>{
+  const lp=lqSeedLp(sl,sh,sp,in0,in1);
+  return lp>LQ_MIN_LIQUIDITY
+    && lp*LQ_WAD/Number(sh)>=LQ_MIN_RESOLUTION
+    && lp*Number(sl)/LQ_WAD>=LQ_MIN_RESOLUTION;
+};
 const LQ_WIDTHS=[1000,100,10,2];
-async function lqFullWidth(mk,sp,a0,a1,px){
+function lqFullWidth(d0,d1,a0,a1,px){
   for(const mult of LQ_WIDTHS){
     const [lo,hi]=lqBandFor(px,mult,a0,a1);
-    const sl=pxToSqrt(lo,mk.d0,mk.d1),sh=pxToSqrt(hi,mk.d0,mk.d1);
+    const sl=pxToSqrt(lo,d0,d1),sh=pxToSqrt(hi,d0,d1);
     if(!sl||!sh||sh<=sl)continue;
-    const s=a0&&!a1?sl:a1&&!a0?sh:pxToSqrt(px,mk.d0,mk.d1);
-    const market=lqMarket(mk.t0,mk.t1,sl,sh,mk.fee,account);
-    const data="0x"+SEL_CREATE_SEED+market+encUint(s)+encUint(a0)+encUint(a1)
-      +encUint(0n)+encAddr(account);
-    try{
-      await rpc(C,[{from:account,to:PFACTORY,data,value:mk.t0===ZERO?toHex(a0):"0x0"},L]);
-      return mult;
-    }catch{}
+    const sp=a0&&!a1?sl:a1&&!a0?sh:lqSeedPrice(sl,sh,a0,a1);
+    if(sp&&lqBandFits(sl,sh,sp,a0,a1))return mult;
   }
   return null;
 }
-// price (token1 per token0, human) -> sqrt price in WAD, the pool's own units.
-const pxToSqrt=(px,d0,d1)=>{
-  const raw=px*10**(d1-d0);
-  if(!isFinite(raw)||raw<=0)return 0n;
-  // Through the decimal string rather than Number: sqrt(raw)*1e18 loses the low
-  // digits at any realistic price, and the band edges are compared exactly.
-  return BigInt(Math.round(Math.sqrt(raw)*1e9))*10n**9n;
-};
-const lqMarket=(t0,t1,lo,hi,fee,owner)=>encAddr(t0)+encAddr(t1)+encUint(lo)+encUint(hi)
-  +encUint(fee)+encAddr(ZERO)+encAddr(owner)+encUint(0n);
 
 // The pair's bands, then this account's LP balance in each.
 //
@@ -4099,10 +4115,7 @@ async function lqNewPreview(){
   }else{
     let mult=+range;
     if(range==="full"){
-      bandOut.textContent="Finding the widest band this deposit can back...";
-      const found=await lqFullWidth({t0:t0.addr,t1:t1.addr,d0:t0.dec,d1:t1.dec,
-        fee:BigInt(box.querySelector("#lqFee").value)},0n,a0,a1,px);
-      if(my!==lqNewSeq)return;
+      const found=lqFullWidth(t0.dec,t1.dec,a0,a1,px);
       if(!found){
         bandOut.textContent="";
         out.textContent="Even the narrowest range needs more than this deposit.";return}
