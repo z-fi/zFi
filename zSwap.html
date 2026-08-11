@@ -623,6 +623,30 @@ return ft.map(([t,i])=>opt(t,i)).join("")
 +`<option value="__custom">+ Custom token…</option>`;
 };
 const rebuild=()=>{for(const s of[fromSel,toSel]){const v=s.value;s.innerHTML=optsHtml();s.value=v}};
+// A SELECTION IS AN INDEX, AND THE LIST UNDERNEATH IT CAN BE REPLACED.
+// `loadTokenList` swaps TOKENS wholesale for the onchain registry, whose order
+// is the registry's, not the built-in list's. `rebuild` faithfully preserves
+// `select.value` - which is the POSITION, not the token - so a pair chosen
+// before the swap silently becomes whatever now sits at those positions. It
+// reads as the page changing your mind: pick ETH -> FWA, and a moment later the
+// tile says ETH -> USDC with a perfectly good quote for it.
+//
+// So remember WHAT was selected, not WHERE, across any reload. Capture before,
+// restore after; both are no-ops when the order did not change.
+const pairAddrs=()=>({fa:TOKENS[fromSel.value]?.addr,ta:TOKENS[toSel.value]?.addr,
+fi:String(fromSel.value),ti:String(toSel.value)});
+// Restores ONLY a selection nobody else touched. The load is awaited, and a
+// deep link can resolve a token during that gap - including one it introduces
+// itself, which never existed when the snapshot was taken. Repositioning by
+// address would then faithfully undo the link. So the indices are part of the
+// snapshot: if either side moved while the list was loading, that side was
+// chosen deliberately and is left exactly where it is.
+const restorePair=k=>{
+if(!k)return;
+const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a.toLowerCase()):-1;
+if(String(fromSel.value)===k.fi){const i=at(k.fa);if(i>=0)fromSel.value=i}
+if(String(toSel.value)===k.ti){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
+};
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
 const isNft=v=>TOKENS[v]?.std==="nft";
@@ -720,8 +744,10 @@ catch(e){stat.textContent=isRejection(e)?"":"Switch to Ethereum mainnet.";return
 if(!accs[0])return;
 account=accs[0];
 // Mainnet-only: TOKENLIST is a mainnet address, and the chain was just enforced.
+const keepPair=pairAddrs();
 await loadTokenList();
 rebuild();
+restorePair(keepPair);
 // rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
 // onchain list shorter than the built-in one can leave a selection pointing past
 // its end. Restore both before anything reads the pair.
@@ -1139,8 +1165,10 @@ showAddr();
 // built-in fallback list instead of the curated one. The symptom is a picker
 // that looks fine and is simply the wrong list, with no NFT collections in it
 // at all, which reads as "the registry has none" rather than "it never loaded".
+const keep2=pairAddrs();
 await loadTokenList();
 rebuild();
+restorePair(keep2);
 refreshBalance();update();syncChart();
 }
 }catch{}

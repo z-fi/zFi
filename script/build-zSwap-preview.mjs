@@ -104,6 +104,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     WBTC: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
     WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
     V4LENS: "0x000000c3ae1692983941495162a4aab40660e65f",
+    V4PORT: "0x000000dfb53fa7f1c486470034741d5bcbe14be9",
     FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845"
   };
 
@@ -277,6 +278,11 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (to === A.LQLENS.toLowerCase() && sel === "a2eaee07") return previewRemove(data);
     if (to === A.LQLENS.toLowerCase() && sel === "e03ec807") return previewAdd(data);
     if (to === A.V4LENS && sel === "d500463c") return v4Hooked(data);
+    // V4Port.swap - the EXECUTION side of a hooked pool. The page simulates the
+    // leg before sending it, so an unhandled selector here surfaces as
+    // "unhandled 48e6f730" at the moment the user presses Swap, long after the
+    // quote said the route was fine. Returns the amount out, same as the port.
+    if (to === A.V4PORT && sel === "48e6f730") return v4Swap(data);
     if (sel === "29a65241") return tape(to, data);
     if (to === A.ZROUTER) return "0x";
     if (to === A.SLOW) return slow(sel, data);
@@ -371,6 +377,20 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   // Returns (amountIn, amountOut) and answers (0,0) for a pool it does not
   // know, matching the real lens: a dead pool is "no route", never a revert
   // that would take down a multi-venue sweep.
+  // The port's swap takes (PoolKey, zeroForOne, amountIn, minOut, to, deadline),
+  // so the pool key occupies the first five words and zeroForOne the sixth.
+  function v4Swap(data) {
+    var h = data.slice(8);
+    var c0 = wordAddr(h, 0), c1 = wordAddr(h, 1);
+    var zeroForOne = word(h, 5) !== 0n, amt = word(h, 6);
+    var other = zeroForOne ? c1 : c0;
+    var cfg = V4_HOOKED[other] || V4_HOOKED[zeroForOne ? c0 : c1];
+    if (!cfg || amt === 0n) return "0x" + u256(0);
+    var out = other === A.FWA
+      ? amt * BigInt(Math.floor(cfg.perEth * 1e6)) / 1000000n
+      : amt * 1000000n / BigInt(Math.floor(cfg.perEth * 1e6));
+    return "0x" + u256(out);
+  }
   var V4_HOOKED = {};
   V4_HOOKED[A.FWA] = { perEth: 57597.32, dec: 18 };
   function v4Hooked(data) {
