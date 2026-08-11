@@ -522,6 +522,46 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  test('wraps the shortfall when neither balance covers it but both together do', async () => {
+    // The case the old setting could not express at all: half wrapped, half
+    // not, and a 1 WETH order that neither half can pay for. It used to be a
+    // fill the page simply refused while the money was sitting right there.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, ETH / 2n);
+      c.setNative(A.ACCOUNT, ETH / 2n + ETH / 10n);   // the halves, plus gas
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'wrap then fill' });
+    await p.settle();
+
+    const [wrap] = p.chain.sent;
+    assert.equal(wrap.to.toLowerCase(), A.WETH.toLowerCase(), 'wraps first');
+    assert.equal(selectorOf(wrap.data), SEL.WETH_DEPOSIT);
+    assert.equal(BigInt(wrap.value), ETH / 2n, 'exactly the shortfall, not the whole ask');
+
+    const fill = p.chain.lastSent;
+    assert.equal(fill.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'then fills');
+    assert.equal(BigInt(fill.value || 0), 0n, 'paying in WETH now that it covers the leg');
+    p.close();
+  });
+
+  test('keeps a gas reserve back rather than wrapping the last wei', async () => {
+    // Wrapping everything leaves nothing to send the fill with, which is a
+    // worse failure than the one being avoided.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, ETH / 2n);
+      c.setNative(A.ACCOUNT, ETH / 2n);   // exactly the shortfall, no gas margin
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => /Not enough ether/i.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sent.length, 0, 'and nothing was wrapped on the way to failing');
+    p.close();
+  });
+
   test('refuses a fill the account cannot pay for, before any approval', async () => {
     // The reported case: an order asking 100 WETH against an account holding
     // none. It cost an approval and then reverted, and "execution reverted"
@@ -536,27 +576,29 @@ describe('the orderbook list', () => {
     await p.waitFor(() => /Not enough/i.test(p.text('stat')), { label: 'the refusal' });
     await p.settle();
 
-    assert.match(p.text('stat'), /Not enough WETH/i, 'must name the asset that is short');
-    assert.match(p.text('stat'), /you hold 0/i, 'and say what is actually held');
+    // Both balances, not one: "not enough WETH" while holding ether reads as a
+    // page that cannot see the money it is standing on.
+    assert.match(p.text('stat'), /Not enough ether/i, 'must say what is short');
+    assert.match(p.text('stat'), /0 WETH plus 0 ETH/i, 'and account for both sides of it');
     // The point of checking first: no approval, no gas, no allowance left
     // standing for a trade that could never have settled.
     assert.equal(p.chain.sent.length, 0, 'nothing was sent, least of all an approval');
     p.close();
   });
 
-  test('the wrapped-ether control says which way it goes, and when', async () => {
-    // "Auto" named the mechanism and not the behaviour: it did not say whether
-    // it favours ETH or WETH, that it governs BOTH paying and receiving, or
-    // that placing an order ignores it entirely.
+  test('asks only what it cannot work out for itself', async () => {
+    // The old control conflated two things and asked about both: which balance
+    // to spend, and what to be paid in. The first is arithmetic - the page can
+    // see both balances - and getting it wrong is a revert, not a matter of
+    // taste. Only the second is a preference, so only the second is asked.
     const p = await setup();
-    const opts = [...p.$('ethMode').options].map(o => o.textContent);
-    assert.deepEqual(opts, ['WETH first', 'ETH first', 'Keep WETH'],
-      'each option should name the asset it reaches for first');
+    assert.equal(p.$('ethModeL').textContent.replace(/\s+/g, ' ').trim().startsWith('Receive'),
+      true, 'the label should name what it decides');
+    assert.deepEqual([...p.$('ethMode').options].map(o => o.textContent), ['ETH', 'WETH'],
+      'two outcomes, both of which land in the wallet');
 
     const help = p.$('ethModeL').getAttribute('title') || '';
-    assert.match(help, /filling and cancelling/i, 'says WHEN it applies');
-    assert.match(help, /Placing an order is unaffected/i, 'and when it does not');
-    assert.match(help, /proceeds/i, 'covers receiving, not only paying');
+    assert.match(help, /Paying is not a setting/i, 'and says so, so nobody looks for it');
     p.close();
   });
 

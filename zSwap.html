@@ -185,7 +185,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
-<label class="dly hide" id="ethModeL" title="How filling and cancelling cross the ETH / WETH line. Placing an order is unaffected: an order priced in ETH is always written in WETH, because the board has to be able to call the token.&#10;&#10;WETH first — spend the WETH you hold, and wrap ETH only if it falls short.&#10;ETH first — pay with ETH whenever it covers the order, and fall back to WETH.&#10;Keep WETH — never wrap, and take proceeds as WETH instead of unwrapping to ETH.">Wrapped ether<select id="ethMode"><option value="auto">WETH first</option><option value="eth">ETH first</option><option value="weth">Keep WETH</option></select></label>
+<label class="dly hide" id="ethModeL" title="What a filled or cancelled order pays you in, when the order is denominated in WETH. Paying is not a setting: the page spends whichever of your ETH and WETH covers it, and wraps the difference if only the two together do.">Receive<select id="ethMode"><option value="auto">ETH</option><option value="weth">WETH</option></select></label>
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
@@ -1805,7 +1805,10 @@ let busy=0;
 // It lives on the Orders tab because that is where the book is. The Swap tab
 // needs no such control: ETH and WETH are both in the picker there, so the
 // choice is already the thing being asked for.
-if(LS.wm==="eth"||LS.wm==="weth"||LS.wm==="auto")ethMode.value=LS.wm;
+// "eth" was the old three-way control's PAYMENT preference. Paying is no
+// longer a choice, and that setting said nothing about what to receive, so it
+// lands on the receiving default rather than being carried over as a guess.
+if(LS.wm==="weth"||LS.wm==="auto")ethMode.value=LS.wm;
 ethMode.onchange=()=>{LS.wm=ethMode.value};
 // Unwrapping on the receive side has no failure mode, so it is pure preference.
 const wantsUnwrap=()=>ethMode.value!=="weth";
@@ -1814,18 +1817,41 @@ const wantsUnwrap=()=>ethMode.value!=="weth";
 // calldata is built, and a stale answer builds the wrong transaction. Any
 // failure answers "no" and leaves the leg on the wrapped path, whose
 // insufficient-balance revert is the legible one.
-const payWithEth=async need=>{
-  if(ethMode.value==="weth")return false;
+/**
+ * How a WETH-denominated leg gets paid for.
+ *
+ * This used to be a setting, and it should never have been one: which of two
+ * balances to spend is not a preference, it is arithmetic, and getting it
+ * wrong is a revert rather than a matter of taste. Worse, the setting could
+ * not express the common case at all - half your ether wrapped and half not,
+ * with neither half covering the order on its own.
+ *
+ * So it is decided from the balances, in the order that costs the user least:
+ *
+ *   wrapped enough           -> spend WETH, no wrap, no extra transaction
+ *   ether enough             -> pay natively, the router wraps in-flight
+ *   enough only ADDED UP     -> wrap exactly the shortfall, then spend WETH
+ *   neither, even added up   -> say so, naming the total rather than one side
+ *
+ * The wrap keeps a gas reserve back: spending the last wei of ether to wrap
+ * leaves nothing to send the fill with, which is a worse failure than the one
+ * being avoided.
+ */
+const planWethPayment=async need=>{
+  let w=0n,e=0n;
   try{
     const[wh,eh]=await Promise.all([
       rpc(C,[{to:WETH,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]),
       rpc("eth_getBalance",[account,L])]);
-    const w=BigInt(wh),e=BigInt(eh);
-    // "Prefer ETH" still yields to WETH when ether alone cannot cover the leg -
-    // a preference that turns a fillable order into a revert is not a
-    // preference, it is a trap.
-    return ethMode.value==="eth"?e>=need:(w<need&&e>=need);
-  }catch{return false}
+    w=BigInt(wh);e=BigInt(eh);
+  }catch{return{rail:"weth",wrap:0n,w,e}}   // unreadable: let the chain decide
+  if(w>=need)return{rail:"weth",wrap:0n,w,e};
+  if(e>=need)return{rail:"eth",wrap:0n,w,e};
+  let gas=0n;
+  try{gas=BigInt(await rpc("eth_gasPrice",[]))*400000n}catch{}
+  const spendable=e>gas?e-gas:0n;
+  if(w+spendable>=need)return{rail:"weth",wrap:need-w,w,e};
+  return{rail:"short",wrap:0n,w,e};
 };
 // Can this account actually pay for the leg it is about to approve?
 //
@@ -2522,8 +2548,20 @@ book.addEventListener("click",async e=>{
     // from the swap pickers, which is what it read before, so the identical row
     // executed as ETH or as WETH on the strength of an unrelated selection.
     const nativeOut=!r.nA&&r.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
-    const nativeIn=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()
-      &&r.aB>0n&&await payWithEth(r.aB);
+    const wethLeg=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()&&r.aB>0n;
+    const plan=wethLeg?await planWethPayment(r.aB):null;
+    if(plan&&plan.rail==="short")
+      throw Error(`Not enough ether to fill: it costs ${trimAmt(r.aB,18)} and you hold `
+        +`${trimAmt(plan.w,18)} WETH plus ${trimAmt(plan.e,18)} ETH.`);
+    // Half wrapped and half not, with neither half enough on its own. Top up
+    // the wrapped side by exactly the shortfall and the leg funds itself -
+    // where before this was simply a fill the page refused.
+    if(plan&&plan.wrap>0n){
+      stat.textContent=`Wrapping ${trimAmt(plan.wrap,18)} ETH to cover the rest...`;
+      const wtx={from:account,to:WETH,data:"0xd0e30db0",value:toHex(plan.wrap)};
+      await rpc(C,[wtx,L]);await checkWallet();await settle(await rpc(S,[wtx]));
+    }
+    const nativeIn=plan?.rail==="eth";
     const routeIn=nativeIn?ZERO:r.tB;
     const routeOut=nativeOut?ZERO:r.tA;
     const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()

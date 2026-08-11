@@ -457,7 +457,19 @@ export class MockChain {
    */
   applyTx(tx) {
     const data = strip(tx.data || '');
-    if (data.slice(0, 8) !== SEL.APPROVE) return;
+    const sel = data.slice(0, 8);
+    // WETH deposit actually moves the balance, because the page now funds a
+    // fill out of the result: it wraps a shortfall and then pays in WETH. A
+    // mock that took the wrap and left the balances alone would fail the very
+    // step the wrap exists to enable.
+    if (sel === SEL.WETH_DEPOSIT && tx.to?.toLowerCase() === A.WETH.toLowerCase()) {
+      const v = BigInt(tx.value || 0);
+      const holder = tx.from.toLowerCase();
+      this.setErc20(A.WETH, holder, this.balanceOf(A.WETH.toLowerCase(), holder) + v);
+      this.setNative(holder, (this.native.get(holder) ?? 0n) - v);
+      return;
+    }
+    if (sel !== SEL.APPROVE) return;
     const body = '0x' + data.slice(8);
     this.setAllowance(tx.to, tx.from, wordAddr(body, 0), word(body, 1));
   }
