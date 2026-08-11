@@ -1572,6 +1572,22 @@ const t=TOKENS[sel.value];
 b.classList.add("on");sel.classList.add("rich");
 b.querySelector(".tkbs").textContent=t?t.sym:(sel.selectedOptions[0]?.textContent||"");
 b.setAttribute("aria-label",`Token: ${t?t.sym:"none"} - change`);
+// Once a token is CHOSEN its blurb leaves the screen, and the picked row is
+// exactly where someone wants to re-read what a thin ticker stands for. The
+// same `title` the rest of the page uses, on the whole pill so the logo and
+// the symbol both answer - and absent, not empty, when the registry offered
+// nothing, so a token without a blurb shows no tooltip at all rather than an
+// empty box. Set through a property, so it needs no escaping.
+const pill=b.closest(".pill");
+if(pill){
+// Only what the screen is not already showing. A tooltip whose whole content
+// is the ticker printed two inches away is noise, and it trains people to
+// stop hovering the ones that would have told them something.
+const name=t?.name&&t.name.toLowerCase()!==t.sym.toLowerCase()?t.name:"";
+const extra=[name,t?.desc].filter(Boolean);
+if(extra.length)pill.title=[`${t.sym}${name?" — "+name:""}`,t.desc].filter(Boolean).join("\n\n");
+else pill.removeAttribute("title");
+}
 }
 };
 const tkRows=()=>{

@@ -129,6 +129,31 @@ describe('the token picker', () => {
     p.close();
   });
 
+  test('keeps the description reachable after the choice is made', async () => {
+    // Selecting is when the blurb LEAVES the screen, and the chosen row is
+    // where someone goes to re-read what an unfamiliar ticker stands for.
+    const p = await open();
+    p.click(rowsIn(p).find(r => symOf(r) === 'USDC'));
+    await p.settle();
+
+    const pill = p.$('toPick').closest('.pill');
+    assert.match(pill.title, /USDC — USD Coin/, 'names the asset, not just the ticker');
+    assert.match(pill.title, /dollar stablecoin issued by Circle/, 'and carries the blurb');
+    p.close();
+  });
+
+  test('shows no tooltip at all for a listing with nothing to say', async () => {
+    // An empty tooltip is worse than none: it opens a blank box on hover and
+    // reads as a rendering fault.
+    const p = await open('toSel', [ROWS[0], row('BARE', A.USDT, { n: 'BARE', desc: '' })]);
+    p.click(rowsIn(p).find(r => symOf(r) === 'BARE'));
+    await p.settle();
+
+    const pill = p.$('toPick').closest('.pill');
+    assert.equal(pill.hasAttribute('title'), false, 'no title attribute, not an empty one');
+    p.close();
+  });
+
   test('the native select survives, so nothing downstream has to know', async () => {
     const p = await open();
     const sel = p.$('toSel');
