@@ -16,8 +16,8 @@ body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-hei
 .meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-#th,#lk{border:0;border-radius:.4em;background:transparent;cursor:pointer;font-size:1.05em;color:var(--n);width:1.8em;height:1.8em;line-height:1}
-#th:hover{background:var(--p);color:var(--f)}
+#th,#lk,#lq{border:0;border-radius:.4em;background:transparent;cursor:pointer;font-size:1.05em;color:var(--n);width:1.8em;height:1.8em;line-height:1}
+#th:hover,#lk:hover,#lq:hover{background:var(--p);color:var(--f)}
 .meta input:hover{border-bottom-color:var(--m)}
 .meta input:focus{border-bottom-color:currentcolor}
 .panel{background:var(--p);border:1px solid transparent;border-radius:.5em;padding:.82em .85em;margin:.32em 0}
@@ -37,21 +37,28 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:hover:not(:disabled){background:var(--kh)}
 .primary:disabled{background:var(--e);color:var(--m);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:.6em;padding:.62em .8em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
-#lq.on{color:var(--acc,#4da3ff)}
+#lq.on{background:var(--k);color:var(--kf)}
 #lqPanel{display:block}
 #lqPanel.hide{display:none}
-.lqrow{padding:10px 12px;border:1px solid var(--bd,#2a2f3a);border-radius:10px;margin:6px 0}
+.lqrow{padding:10px 12px;border:1px solid var(--e);border-radius:10px;margin:6px 0}
 .lqrow.out{opacity:.55}
 .lqband{display:flex;align-items:center;gap:6px;font-size:13px}
 .lqfee{opacity:.7;font-size:11px}
-.lqtag{font-size:10px;padding:1px 5px;border-radius:6px;border:1px solid var(--bd,#2a2f3a);opacity:.8}
+.lqtag{font-size:10px;padding:1px 5px;border-radius:6px;border:1px solid var(--e);opacity:.8}
 .lqmeta{font-size:11px;opacity:.7;margin-top:3px}
-.lqmine{font-size:11px;margin-top:3px;color:var(--acc,#4da3ff)}
+.lqmine{font-size:11px;margin-top:3px;color:var(--f)}
 .lqempty{padding:14px 12px;font-size:12px;opacity:.7;text-align:center}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
 #listNote.hide{display:none}
-.lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--bd,#2a2f3a);background:transparent;color:inherit}
-.lqbtn:hover{opacity:.75}
+.lqbtn{margin-left:6px;font-size:10px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid var(--e);background:transparent;color:inherit}
+.lqbtn:hover:not(:disabled){opacity:.75}
+.lqbtn:disabled{opacity:.4;cursor:not-allowed}
+.lqadd{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.lqadd.hide{display:none}
+.lqin{width:100%;box-sizing:border-box;padding:.45em .6em;font:inherit;font-size:12px;border:1px solid var(--e);border-radius:6px;background:transparent;color:var(--f);outline:0}
+.lqin:focus{border-color:var(--m)}
+.lqpv{font-size:11px;opacity:.7;min-height:1.2em}
+.lqadd .lqbtn{margin-left:0;align-self:flex-start;font-size:11px;padding:4px 10px}
 .rcpt:focus{border-color:var(--m)}
 .rcpt.bad{border-color:#c33}
 #rcvEl{display:block;font-size:.7em;color:var(--m);margin-top:.35em;word-break:break-all;text-align:center}
@@ -108,7 +115,7 @@ svg{vertical-align:middle;flex-shrink:0}
 #bal:empty,#rate:empty{display:none}
 #bal a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:#c33;border-bottom-color:#c33}
-#th:focus-visible,#lk:focus-visible{background:var(--p);color:var(--f)}
+#th:focus-visible,#lk:focus-visible,#lq:focus-visible{background:var(--p);color:var(--f)}
 .chtog{width:100%;margin-top:.55em;padding:.5em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--n);cursor:pointer;font:inherit;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
 .chtog:hover{color:var(--f);border-color:var(--m)}
 .chtog span{display:inline-block;transition:transform .2s}
@@ -133,10 +140,10 @@ svg{vertical-align:middle;flex-shrink:0}
 <div class="card">
 <div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false">💧</button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link">⧉</button><button id="th" title="Toggle theme" aria-label="Toggle theme">☾</button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
-<div id="lqPanel" class="hide"><div id="lqHead" class="hdr"><small id="lqTitle">Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="rate"></small></div>
+<div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
@@ -285,7 +292,11 @@ const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+enc
 async function quoteV4Pools(f,t,amountIn,block){
 const pools=v4PoolsFor(f,t);
 if(!pools.length||amountIn<=0n)return null;
-const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,
+// Starving this one is WORSE than an error: the lens catches its own failure
+// and answers (0, 0) by design, so a low gas budget reads as "this pool has no
+// route" and the venue silently drops out of the comparison. Measured at
+// ~180k against the live ETH/FWA pool; asking for far more costs nothing.
+const rs=await Promise.all(pools.map(p=>rpc(C,[{to:V4LENS,gas:CALL_GAS,
 data:"0x"+SEL_V4QUOTE+encBool(false)+encAddr(f.addr)+encAddr(t.addr)
 +encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks)+encUint(amountIn)},block])
 .then(h=>{const x=strip0x(h);return x.length>=128?BigInt("0x"+x.slice(64,128)):0n})
@@ -306,8 +317,7 @@ return best;
 // exactly how it gets reported - as ranking being ignored, or a token missing,
 // rather than as a load that failed. Falling back is right; doing it quietly
 // is not.
-let listSource="";
-const setListSource=w=>{listSource=w;
+const setListSource=w=>{
 const el=document.getElementById("listNote");
 if(!el)return;
 el.textContent=w?"Built-in token list — "+w:"";
@@ -365,8 +375,11 @@ const pad32=h=>strip0x(h).padStart(64,"0");
 const encUint=v=>pad32(BigInt(v).toString(16));
 const encAddr=a=>pad32(a.toLowerCase());
 // Head is the offset (always 32 for a lone dynamic return), then the length.
-const decStr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);let s="";
-for(let i=0;i<n;i++)s+=String.fromCharCode(parseInt(h.substr(128+i*2,2),16));return s};
+// Decoded as UTF-8, not byte-by-byte: the registry's JSON carries names and
+// symbols outside ASCII, and a per-byte `fromCharCode` turns each multi-byte
+// character into mojibake BEFORE `JSON.parse` ever sees it.
+const decStr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);
+return new TextDecoder().decode(hexToBytes(h.slice(128,128+n*2)))};
 const decUintArr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);const o=[];
 for(let i=0;i<n;i++)o.push(BigInt("0x"+h.substr(128+i*64,64)));return o};
 const encBool=b=>pad32(b?"1":"0");
@@ -553,7 +566,21 @@ const ok=BigInt("0x"+at(w))===1n,bo=Number(BigInt("0x"+at(w+1)))/32,lw=w+bo;
 const len=Number(BigInt("0x"+at(lw)));
 out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
 return out};
-const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
+// EVERY BATCHED READ ASKS FOR GAS EXPLICITLY. An `eth_call` with no `gas` takes
+// whatever the wallet's provider decides to allow, and providers disagree
+// wildly - some hand over the block limit, some a few hundred thousand. A quote
+// batch fans one aggregate3 across every venue for the pair, and a pool priced
+// by RUNNING its hook costs ~180k on its own, so the total lands well past the
+// stingier defaults.
+//
+// The failure is not subtle in the logs and is completely opaque in the UI: the
+// whole aggregate reverts, `update` has nothing to fall back to, and the tile
+// says "No route" with the provider's phrasing attached - "out of gas",
+// "intrinsic gas too low" - for a pair that routes perfectly well. Naming a
+// budget removes the provider's opinion from the answer. Nodes clamp a request
+// above their own cap rather than rejecting it, so asking high is safe.
+const CALL_GAS="0x1c9c380"; // 30,000,000
+const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs),gas:CALL_GAS},tag])):[];
 // Impact, no oracle: quote amt and amt/REF_N; with zero impact output scales
 // linearly, so the shortfall IS the impact. The reference carries ~1/N of it, so
 // this understates - right direction for a warning. Mainnet: ETH/USDC reads
@@ -614,6 +641,10 @@ TOKENS.push({sym,addr,dec,std:"ft",icon:genIcon(sym)});
 }}catch{}
 const QUOTE_TTL=45000;
 let account=null,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
+// Declared up here with the rest of the page state, not beside the liquidity
+// code that owns it: `update` and the token pickers both branch on it, and they
+// are defined hundreds of lines earlier.
+let lqMode=false;
 async function refreshBalance(){
 const f=TOKENS[fromSel.value];
 // fromSel transiently reads "__custom" while the token prompt is open.
@@ -809,6 +840,10 @@ stat.innerHTML=txLink(tx,"Sent");await waitTx(tx);stat.innerHTML=txLink(tx,"Done
 const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
 async function update(){
 syncIcons();
+// The swap tile's amount fields are hidden in liquidity mode, so quoting them
+// would only write status text over a form nobody can see. The pair still
+// changed, though, and that is the one thing the band list is filtered by.
+if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
 const my=++seq;
@@ -1479,8 +1514,7 @@ function decBidRows(hex){
       // Symbol head words are offsets from the START OF THE ROW.
       const txt=k=>{const p=row+num(row+k*32),n=num(p);
         if(n>64||p+32+n>bytes)throw 0;
-        let s="";for(let j=0;j<n;j++)s+=String.fromCharCode(parseInt(h.slice((p+32+j)*2,(p+33+j)*2),16));
-        return safeSym(s)};
+        return safeSym(new TextDecoder().decode(hexToBytes(h.slice((p+32)*2,(p+32+n)*2))))};
       const dec=k=>{const v=num(row+k*32);return v>0&&v<=37?v-1:null};
       out.push({
         id:f(0),
@@ -2318,6 +2352,13 @@ showFloor();
 };
 const setTab=t=>{
 if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
+// Liquidity is a mode OF the swap tile - it borrows that tile's token pickers
+// as its pair filter and hides its amount fields. Everything below re-shows
+// those fields for the tab it is switching to, so leaving the mode on would
+// stack half a swap form over the band list with no action button under it.
+// Leave the way you came in.
+if(t!=="swap"&&lqMode)lqSet(false);
+lq.classList.toggle("hide",t!=="swap");
 tab=t;last=null;sendReady=null;stat.textContent="";posShown=POSPAGE;
 const send=t==="send",bk=t==="book";
 tabSwap.classList.toggle("on",t==="swap");
@@ -2402,9 +2443,8 @@ if(tab!=="swap"||!account||document.hidden||!last||swap.disabled||busy)return;
 if(Date.now()>=last.exp-5000)update();
 },5e3);
 // ------------------------------------------------------------- LIQUIDITY
-// Read-only for now: the droplet lists every Precision band for the pair the
-// swap tile is pointed at, and what the connected account holds in each. No
-// transactions, no approvals, no calldata.
+// The droplet lists every Precision band for the pair the swap tile is pointed
+// at, what the connected account holds in each, and lets it withdraw or add.
 //
 // A PAIR IS NOT A POOL, and that is the whole reason this is a list rather than
 // a mirror of the swap form. Swapping can hide the choice - `quoteBestFor` picks
@@ -2417,11 +2457,12 @@ if(Date.now()>=last.exp-5000)update();
 // pool constructor is public and every LP token is named "Precision LP", so an
 // address alone proves nothing; the lens answers only for pools its own factory
 // created.
-let lqMode=false,lqSeq=0,lqRows=[];
-// Verified against `cast sig`, not guessed. A wrong selector here returns empty
-// calldata that decodes to zero rows - so it looks exactly like "you hold no
-// positions" rather than like a bug.
-const SEL_POSITIONS="dc9d54ef";
+let lqSeq=0,lqRows=[];
+// `PrecisionPoolFactory.isPool`, the trust anchor named at the top of this file.
+// The lenses already refuse an address their factory did not create, so a row
+// that priced at all is a real pool - but the write paths grant an allowance and
+// this makes that guarantee LOCAL rather than inherited from lens internals.
+const SEL_ISPOOL="5b16ebb7";
 
 // Raw sqrt price, 1e18-scaled, into a human price for the pair. Decimals are
 // NOT normalised on chain - the band is quoted in RAW token1 per RAW token0 -
@@ -2430,16 +2471,20 @@ const bandPrice=(sqrtP,d0,d1)=>{const r=Number(sqrtP)/1e18;return r*r*10**(d0-d1
 const fmtPx=v=>!isFinite(v)||v<=0?"—":v>=1000?v.toLocaleString(undefined,{maximumFractionDigits:0})
   :v>=1?v.toFixed(4):v.toPrecision(3);
 
+// Only the AMOUNT fields belong to swapping. The token pickers are the pair
+// filter, and hiding the panels wholesale took them with it - which froze the
+// list on whatever the swap tile happened to hold and left no way to browse
+// another pair without toggling the droplet off and back on.
 function lqSet(on){
   lqMode=on;
   lq.setAttribute("aria-pressed",on?"true":"false");
   lq.classList.toggle("on",on);
-  // The amount fields and the action button belong to swapping; the recipient
-  // and order-type controls do too. Hide the lot rather than leave dead inputs.
-  for(const el of [document.querySelector(".panel"),rcvPanel,flip,rc,swap])
+  for(const el of [amtRow,bal,outRow,rate,flip,rc,rcvEl,swap])
     if(el)el.classList.toggle("hide",on);
+  rcvHdr.textContent=on?"and":"You receive";
+  payL.textContent=on?"Liquidity for":"You pay";
   lqPanel.classList.toggle("hide",!on);
-  if(on)loadLq();
+  if(on)loadLq();else{lqRows=[];lqList.innerHTML=""}
 }
 
 function lqRow(o,t0,t1){
@@ -2447,21 +2492,37 @@ function lqRow(o,t0,t1){
   // In range is the question a depositor actually asks: outside it the position
   // is entirely one asset and earns nothing until price comes back.
   const inRange=px>=lo&&px<=hi&&o.liq>0n;
-  const mine=o.mine0>0n||o.mine1>0n;
-  return `<div class="lqrow${inRange?"":" out"}">`
+  const mine=o.shares>0n;
+  const p=`data-pool="${o.pool}"`;
+  return `<div class="lqrow${inRange?"":" out"}" ${p}>`
     +`<div class="lqband"><b>${fmtPx(lo)} – ${fmtPx(hi)}</b> <span class="lqfee">${(Number(o.fee)/10000).toFixed(2)}%</span>`
     +(o.hook!==ZERO?` <span class="lqtag" title="Hooked: may add a surcharge, and cannot be used in a clamped route">hook</span>`:"")
     +(inRange?"":` <span class="lqtag">out of range</span>`)+`</div>`
-    +`<div class="lqmeta">price ${fmtPx(px)} · ${formatUnits(o.r0,t0.dec)} ${t0.sym} / ${formatUnits(o.r1,t1.dec)} ${t1.sym}</div>`
-    +(mine?`<div class="lqmine">yours: ${formatUnits(o.mine0,t0.dec)} ${t0.sym} + ${formatUnits(o.mine1,t1.dec)} ${t1.sym}`
-        +` <button class="lqbtn" data-act="w" data-pool="${o.pool}">Withdraw all</button></div>`:"")
+    +`<div class="lqmeta">price ${fmtPx(px)} · ${trimAmt(o.r0,t0.dec)} ${t0.sym} / ${trimAmt(o.r1,t1.dec)} ${t1.sym}`
+    +` <button class="lqbtn" data-act="a" ${p}>Add</button></div>`
+    +(mine?`<div class="lqmine">yours: ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}`
+        +` <button class="lqbtn" data-act="w" ${p}>Withdraw all</button></div>`:"")
+    // Collapsed until asked for. Two exact amounts, because `addLiquidityExact`
+    // takes both as MAXIMA and hands the off-ratio excess straight back - the
+    // preview below is the only place that difference is visible before signing.
+    +`<div class="lqadd hide">`
+    +`<input class="lqin" data-side="0" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t0.sym}" aria-label="${t0.sym} to deposit">`
+    +`<input class="lqin" data-side="1" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0 ${t1.sym}" aria-label="${t1.sym} to deposit">`
+    +`<div class="lqpv"></div>`
+    +`<button class="lqbtn" data-act="ac" ${p} disabled>Add liquidity</button></div>`
     +`</div>`;
 }
 
+// The pair's bands, then this account's LP balance in each.
+//
+// NOT `positionsOf`, which walks a page of the factory's GLOBAL pool list - so
+// a holding in any pool past the first page was invisible, and indistinguishable
+// from holding nothing. These pools are already known, and shares*reserve/supply
+// is the arithmetic the lens does, so asking each pool is exact and complete.
 async function loadLq(){
   const p=chPair();
   const my=++lqSeq;
-  if(!p){lqList.innerHTML=`<div class="lqempty">Pick two different tokens.</div>`;lqSub.textContent="";return}
+  if(!p){lqList.innerHTML=`<div class="lqempty">Pick two different tokens.</div>`;lqSub.textContent="";lqRows=[];return}
   const [t0,t1]=p;
   lqSub.textContent=`${t0.sym} / ${t1.sym}`;
   lqList.innerHTML=`<div class="lqempty">Loading…</div>`;
@@ -2478,31 +2539,30 @@ async function loadLq(){
           sl:at(PI_SL),sh:at(PI_SH),fee:at(PI_FEE),r0:at(PI_R0),r1:at(PI_R1),px:at(PI_PX),
           liq:at(PI_LIQ),hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
           shares:0n,mine0:0n,mine1:0n})}}
-    // What the account already holds. `positionsOf` walks a page of ALL pools
-    // rather than this pair's, so match by address and ignore the rest.
     if(account&&rows.length){
-      try{
-        const [pr]=await mc3([{to:PPLENS,data:"0x"+SEL_POSITIONS+encAddr(account)+encUint(0)+encUint(64)}]);
-        if(my!==lqSeq)return;
-        if(pr){const h=strip0x(pr),n=Number(BigInt("0x"+h.slice(64,128))),base=128,W=4;
-          for(let i=0;i<n;i++){
-            const at=k=>BigInt("0x"+h.slice(base+(i*W+k)*64,base+(i*W+k+1)*64));
-            const a="0x"+h.slice(base+(i*W)*64+24,base+(i*W+1)*64);
-            const r=rows.find(x=>x.pool.toLowerCase()===a.toLowerCase());
-            if(r){r.shares=at(1);r.mine0=at(2);r.mine1=at(3)}}}
-      }catch{}
+      const bs=await mc3(rows.map(r=>({to:r.pool,data:"0x"+SEL_BALANCEOF+encAddr(account)}))).catch(()=>[]);
+      if(my!==lqSeq)return;
+      rows.forEach((r,i)=>{
+        if(!bs[i]||r.liq===0n)return;
+        const s=dec1(bs[i],0);
+        // Same floor division the pool performs on redemption, so the figure
+        // shown is the figure `previewRemove` will confirm.
+        r.shares=s;r.mine0=s*r.r0/r.liq;r.mine1=s*r.r1/r.liq;
+      });
     }
     if(my!==lqSeq)return;
     if(!rows.length){
       lqList.innerHTML=`<div class="lqempty">No Precision band for this pair yet.`
         +`<br><small>Creating one means choosing the opening price — a separate step from adding liquidity.</small></div>`;
-      return}
-    // Deepest first: the band a depositor most likely wants is the live one.
-    rows.sort((a,b)=>(b.liq>a.liq?1:b.liq<a.liq?-1:0));
+      lqRows=[];return}
+    // Yours first, then deepest: the band you are already in is the one you came
+    // to act on, and a list sorted purely by size buries it.
+    rows.sort((a,b)=>(b.shares>0n)-(a.shares>0n)||(b.liq>a.liq?1:b.liq<a.liq?-1:0));
     lqRows=rows;
     lqList.innerHTML=rows.map(o=>lqRow(o,t0,t1)).join("");
   }catch(e){
     if(my!==lqSeq)return;
+    lqRows=[];
     lqList.innerHTML=`<div class="lqempty">Could not read pools.</div>`;
   }
 }
@@ -2535,15 +2595,38 @@ async function previewAdd(pool,a0,a1){
   return dec1(r,0)===1n?{lp:dec1(r,1),used0:dec1(r,2),used1:dec1(r,3),ref0:dec1(r,4),ref1:dec1(r,5)}:null;
 }
 
-// The pool pulls token1 with transferFrom, so it needs an allowance. token0 is
-// either native - paid as value - or an ERC-20 that needs the same treatment.
+// PREVIEWS ARE READ AT A BLOCK; TRANSACTIONS LAND AT A LATER ONE, and both
+// entry points bound themselves with minimums taken from the preview. A swap
+// through the band in between moves the reserves, so an EXACT minimum is not a
+// safety property - it is a guaranteed revert on any pool with traffic. Same
+// slippage control the swap tile uses, for the same reason.
+const lessSlip=v=>{const b=BigInt(Math.round(Math.min(10,Math.max(.01,+slip.value||.5))*100));
+return v-(v*b)/10000n};
+
+// The allowance has to cover what the pool MAY pull - the amount passed, not
+// the amount the preview expects it to use. `addLiquidityExact` treats both
+// sides as maxima and refunds the excess, so sizing this to `used` leaves an
+// allowance between the two passing here and reverting inside the pool.
 async function ensureAllowance(token,spender,need){
   if(token===ZERO||need===0n)return;
   const [r]=await mc3([{to:token,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(spender)}]);
   if(r&&dec1(r,0)>=need)return;
   stat.textContent="Approving…";
+  // Some tokens refuse a non-zero to non-zero approve, and an allowance that is
+  // merely too small is exactly that case.
+  if(r&&dec1(r,0)>0n)await waitTx(await rpc(S,[{from:account,to:token,
+    data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(0),value:"0x0"}]));
   await waitTx(await rpc(S,[{from:account,to:token,
-    data:"0x"+SEL_APPROVE+encAddr(spender)+encUint((1n<<256n)-1n),value:"0x0"}]));
+    data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(need),value:"0x0"}]));
+}
+
+// The factory is the trust anchor named at the top of this file, asked here
+// rather than inferred. Both lenses already refuse a foreign address, so a row
+// that rendered is genuine - but these two paths grant an allowance and send
+// value, and that guarantee should not live in another contract's internals.
+async function factoryPool(pool){
+  const [r]=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(pool)}]).catch(()=>[null]);
+  return !!r&&dec1(r,0)===1n;
 }
 
 async function doRemove(pool,shares,t0,t1){
@@ -2551,50 +2634,113 @@ async function doRemove(pool,shares,t0,t1){
   // A real holding whose share of both reserves floors to zero cannot be
   // exited at all - the pool refuses it outright. Say so instead of sending.
   if(!pv){stat.textContent="This amount redeems nothing — the pool would refuse it.";return}
-  busy=true;
+  if(!await factoryPool(pool)){stat.textContent="Not a Precision pool — refusing to send.";return}
+  ++busy;
   try{
+    await checkWallet();
     stat.textContent="Withdrawing…";
-    // min0/min1 at the previewed amounts: the pool is the only writer of its
-    // own reserves and this is a direct call, so nothing can move in between.
     await settle(await rpc(S,[{from:account,to:pool,value:"0x0",
-      data:"0x"+SEL_REMOVE+encUint(shares)+encUint(pv.a0)+encUint(pv.a1)+encAddr(account)}]));
-    await loadLq();
-  }catch(e){stat.textContent=(e&&e.message)||"Withdraw failed"}
-  finally{busy=false}
+      data:"0x"+SEL_REMOVE+encUint(shares)+encUint(lessSlip(pv.a0))+encUint(lessSlip(pv.a1))+encAddr(account)}]));
+    await loadLq();refreshBalance();
+  }catch(e){err(e)}
+  finally{--busy}
 }
 
 async function doAdd(pool,a0,a1,t0,t1){
   const pv=await previewAdd(pool,a0,a1);
   if(!pv){stat.textContent="The pool would refuse this deposit.";return}
-  busy=true;
+  if(!await factoryPool(pool)){stat.textContent="Not a Precision pool — refusing to send.";return}
+  ++busy;
   try{
-    // Only token1 can ever be an ERC-20 pull alongside native token0; when
-    // token0 is also an ERC-20 both need allowances.
-    await ensureAllowance(t0.addr,pool,pv.used0);
-    await ensureAllowance(t1.addr,pool,pv.used1);
+    await checkWallet();
+    // Whichever sides are ERC-20 need an allowance for the full amount offered;
+    // a native side is paid as value instead.
+    await ensureAllowance(t0.addr,pool,a0);
+    await ensureAllowance(t1.addr,pool,a1);
     stat.textContent="Adding…";
     const value=t0.addr===ZERO?a0:0n;
-    // minLP at the previewed shares. The refund is not slippage - a
-    // proportional deposit at the wrong ratio ALWAYS hands the excess back -
-    // so it is shown before sending rather than bounded here.
-    await settle(await rpc(S,[{from:account,to:pool,value:"0x"+value.toString(16),
-      data:"0x"+SEL_ADDEXACT+encUint(0)+encUint(a0)+encUint(a1)+encUint(pv.lp)+encAddr(account)}]));
-    await loadLq();
-  }catch(e){stat.textContent=(e&&e.message)||"Add failed"}
-  finally{busy=false}
+    // `sqrtPriceInit` is 0: this band exists, so there is no opening price to
+    // set. The refund is not slippage - an off-ratio deposit ALWAYS hands the
+    // excess back, and the preview shows it - but `minLP` is, for the same
+    // reason the withdraw minimums are.
+    await settle(await rpc(S,[{from:account,to:pool,value:toHex(value),
+      data:"0x"+SEL_ADDEXACT+encUint(0)+encUint(a0)+encUint(a1)+encUint(lessSlip(pv.lp))+encAddr(account)}]));
+    await loadLq();refreshBalance();
+  }catch(e){err(e)}
+  finally{--busy}
+}
+
+// The add form's own preview, debounced. It answers the one question the two
+// inputs cannot: an off-ratio pair is not rejected, it is silently trimmed, so
+// "you will actually deposit X and get Y back" has to be visible BEFORE the
+// click rather than discovered in the receipt.
+let lqPvT,lqPvSeq=0;
+async function lqPreview(box){
+  const pool=box.closest(".lqrow")?.dataset.pool||"";
+  const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+  const p=chPair();
+  const out=box.querySelector(".lqpv"),go=box.querySelector('[data-act="ac"]');
+  if(!row||!p){out.textContent="";go.disabled=true;return}
+  const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
+  let a0,a1;
+  try{
+    a0=ins[0].value.trim()?parseUnits(ins[0].value.trim(),t0.dec):0n;
+    a1=ins[1].value.trim()?parseUnits(ins[1].value.trim(),t1.dec):0n;
+  }catch{out.textContent="Invalid amount.";go.disabled=true;return}
+  if(!a0||!a1){
+    // Both sides, always: this is the two-sided entry point. One-sided entry is
+    // the zap, which is a different call through a different contract.
+    out.textContent="Enter both amounts.";go.disabled=true;return}
+  const my=++lqPvSeq;
+  out.textContent="Checking…";go.disabled=true;
+  const pv=await previewAdd(row.pool,a0,a1).catch(()=>null);
+  if(my!==lqPvSeq)return;
+  if(!pv){out.textContent="The pool would refuse this deposit.";go.disabled=true;return}
+  const ref=(pv.ref0>0n?` · refunds ${trimAmt(pv.ref0,t0.dec)} ${t0.sym}`:"")
+    +(pv.ref1>0n?` · refunds ${trimAmt(pv.ref1,t1.dec)} ${t1.sym}`:"");
+  out.textContent=`deposits ${trimAmt(pv.used0,t0.dec)} ${t0.sym} + ${trimAmt(pv.used1,t1.dec)} ${t1.sym}${ref}`;
+  go.disabled=false;
 }
 
 // Delegated so rows can be re-rendered freely.
+lqList.addEventListener("input",e=>{
+  const box=e.target.closest(".lqadd");
+  if(!box||!e.target.classList.contains("lqin"))return;
+  clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);
+});
 lqList.onclick=async ev=>{
   const b=ev.target.closest("[data-act]");
   if(!b||busy||!account)return;
   const p=chPair(); if(!p)return;
   const [t0,t1]=p,pool=b.dataset.pool;
-  if(b.dataset.act==="w"){
-    const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
-    if(!row||row.shares===0n)return;
+  const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+  if(!row)return;
+  const act=b.dataset.act;
+  if(act==="a"){
+    const box=b.closest(".lqrow").querySelector(".lqadd");
+    box.classList.toggle("hide");
+    b.textContent=box.classList.contains("hide")?"Add":"Cancel";
+    if(!box.classList.contains("hide"))box.querySelector(".lqin").focus();
+    return;
+  }
+  if(act==="w"){
+    if(row.shares===0n)return;
     // Whole position. A slider is the next iteration; this proves the path.
     await doRemove(pool,row.shares,t0,t1);
+    return;
+  }
+  if(act==="ac"){
+    const box=b.closest(".lqadd");
+    // Re-read from the inputs rather than trusting the dataset the preview
+    // stamped: a keystroke after the preview settled would otherwise send an
+    // amount the user never saw confirmed.
+    let a0,a1;
+    try{
+      const ins=box.querySelectorAll(".lqin");
+      a0=parseUnits(ins[0].value.trim(),t0.dec);a1=parseUnits(ins[1].value.trim(),t1.dec);
+    }catch{stat.textContent="Invalid amount";return}
+    if(!a0||!a1)return;
+    await doAdd(pool,a0,a1,t0,t1);
   }
 };
 
@@ -2620,6 +2766,11 @@ const srcFor=tf=>tf>=COARSE?COARSE:FINE;
 const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_T0=1,PI_T1=2,PI_SL=3,PI_SH=4,
       PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CLAMP=14;
 let chKind=LS.ck==="line"?"line":"candle",chPeriod=300,chBars=null,chSeq=0,chPools=0,chOpen=LS.ch==="1",chCache={};
+// Declared, not implied. `drawChart` can return early on an empty window AFTER
+// `syncChartUI` has already revealed the drawer, so the pointer handlers below
+// can run before this is ever assigned - and an undeclared identifier throws
+// ReferenceError there rather than reading as the null it is meant to be.
+let chDraw=null;
 // value = mantissa << exponent, matching PriceTape.pack
 const unf=p=>(p&0xffffff)*2**(p>>>24);
 const decBar=w=>{if(!w)return null;const f=s=>Number((w>>BigInt(s))&0xffffffffn);
@@ -2753,7 +2904,7 @@ const pw=W-PL-PR,ph=H-PT-PB-VH;
 // The tape is stored newest-first. A chart that runs right-to-left is worse
 // than no chart, so flip it before anything is measured or drawn.
 const src=srcFor(chPeriod),base=chBars[src]||chBars[FINE]||chBars[COARSE];
-if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';return}
+if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 const step=chBars[src]?src:(chBars[FINE]?FINE:COARSE);
 let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice().reverse();
 // Draw only what the width can resolve, keeping the most recent bars. Packing
@@ -2761,7 +2912,7 @@ let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice(
 const cap=Math.floor(pw/3);
 const clipped=pts.length>cap;
 if(clipped)pts=pts.slice(-cap);
-if(!pts.length){chArt.innerHTML='<div class="msg">No trades in this window.</div>';return}
+if(!pts.length){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 let hi=-Infinity,lo=Infinity,vm=0;
 for(const b of pts){if(b.h>hi)hi=b.h;if(b.l<lo)lo=b.l;if(b.v>vm)vm=b.v}
 if(hi===lo){hi*=1.001;lo*=0.999}
