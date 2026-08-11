@@ -4474,7 +4474,7 @@ const srcFor=tf=>tf>=COARSE?COARSE:FINE;
 // PoolInfo has to be reflected here.
 const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_T0=1,PI_T1=2,PI_SL=3,PI_SH=4,
       PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CLAMP=14;
-let chKind=LS.ck==="line"?"line":"candle",chPeriod=300,chBars=null,chSeq=0,chPools=0,chOpen=LS.ch==="1",chCache={};
+let chKind=LS.ck==="line"?"line":"candle",chInv=false,chInvKey="",chPeriod=300,chBars=null,chSeq=0,chPools=0,chOpen=LS.ch==="1",chCache={};
 // Declared, not implied. `drawChart` can return early on an empty window AFTER
 // `syncChartUI` has already revealed the drawer, so the pointer handlers below
 // can run before this is ever assigned - and an undeclared identifier throws
@@ -4568,6 +4568,39 @@ drawChart();
 }
 // Reading a single candle off a 340px strip is guesswork, so pointing at one
 // spells it out. Index -1 means "the latest", which is the resting state.
+/**
+ * Which asset a pair is naturally priced IN.
+ *
+ * The tape's own order is token1 per token0, and token0 is whichever address
+ * sorts first - so ETH, always. That reads correctly for a stablecoin and
+ * upside down for a token being bought, and a single sticky preference cannot
+ * fix both: flip it for ETH/ZORG and ETH/USDC comes back as 0.00033 ETH per
+ * USDC, which is worse than where it started.
+ *
+ * So the default is per pair, on the rule people already use - price the less
+ * money-like asset in terms of the more money-like one. Dollars quote ether,
+ * ether quotes everything else, and the toggle is an override for the pair in
+ * front of you rather than a setting that follows you to the next one.
+ *
+ * Matched by ADDRESS, not symbol: a token may call itself USDC.
+ */
+const NUMERAIRES=new Set([
+  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC
+  "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT
+  "0x6b175474e89094c44da98b954eedeac495271d0f", // DAI
+]);
+const moneyRank=a=>{a=(a||"").toLowerCase();
+  return NUMERAIRES.has(a)?2:(a===ZERO||a===WETH.toLowerCase())?1:0};
+const chPairKey=p=>p?p[0].addr.toLowerCase()+":"+p[1].addr.toLowerCase():"";
+// token1 per token0 is the tape's order, so invert when token0 is the one that
+// should be doing the quoting.
+const chNaturalInv=p=>!!p&&moneyRank(p[0].addr)>moneyRank(p[1].addr);
+const chSyncOrientation=()=>{
+  const p=chPair(),k=chPairKey(p);
+  if(k===chInvKey)return;          // same pair: keep whatever is on screen
+  chInvKey=k;chInv=chNaturalInv(p);
+};
+
 const hudFor=i=>{
 if(!chDraw)return;
 const{pts,num,UP,DN,ch}=chDraw,hd=chArt.querySelector(".hd");
@@ -4615,7 +4648,19 @@ const pw=W-PL-PR,ph=H-PT-PB-VH;
 const src=srcFor(chPeriod),base=chBars[src]||chBars[FINE]||chBars[COARSE];
 if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 const step=chBars[src]?src:(chBars[FINE]?FINE:COARSE);
+chSyncOrientation();
 let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice().reverse();
+// WHICH WAY UP. The tape stores token1 per token0, and token0 is whichever
+// address sorts first - so ETH, always, being the zero address. That reads
+// naturally for a stablecoin (USDC per ETH) and upside down for a token you
+// are buying: purchases take it OUT of the pool, so "TOKEN per ETH" falls and
+// the candle is red on the trade that made the token dearer.
+//
+// Both are the same fact and neither is wrong, so this is a choice rather than
+// a correction. Inverting swaps high and low with it - the reciprocal of the
+// highest price is the lowest one - which is the part that is easy to miss and
+// would otherwise draw candles inside out.
+if(chInv)pts=pts.map(b=>({...b,o:1/b.o,h:1/b.l,l:1/b.h,c:1/b.c}));
 // Draw only what the width can resolve, keeping the most recent bars. Packing
 // 250 candles into 300px produces a smear, not information.
 const cap=Math.floor(pw/3);
@@ -4630,7 +4675,7 @@ const n=pts.length,st=pw/n,bw=Math.max(1,Math.min(9,st*.68));
 const X=i=>PL+st*(i+.5),Y=p=>PT+ph*(1-(p-lo)/sp),vt=PT+ph+6,VY=v=>vt+(VH-6)*(1-(vm?v/vm:0));
 const num=v=>v>=1000?v.toLocaleString("en-US",{maximumFractionDigits:2}):v>=1?v.toFixed(3):v.toPrecision(3);
 const UP="#16a34a",DN="#c33";
-const p0=chPair(),lbl=p0?`${p0[1].sym} per ${p0[0].sym}`:"Price";
+const p0=chPair(),lbl=p0?(chInv?`${p0[0].sym} per ${p0[1].sym}`:`${p0[1].sym} per ${p0[0].sym}`):"Price";
 let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${lbl}, ${n} bars, ${num(pts[n-1].c)} now, range ${num(lo)} to ${num(hi)}">`;
 for(let g=0;g<=3;g++){const p=lo+sp*g/3,y=Y(p).toFixed(1);
 s+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="currentColor" stroke-opacity=".1"/>`
@@ -4657,7 +4702,7 @@ chDraw={pts,X,W,PL,st,num,UP,DN,ch};
 hudFor(-1);
 const p=chPair();
 const span=rel((last.b-first.b+1)*chPeriod);
-chNote.textContent=p?`${p[1].sym} per ${p[0].sym} · ${chPools} pool${chPools===1?"":"s"} · ${clipped?"last ":""}${span}`:"";
+chNote.textContent=p?`${chInv?p[0].sym+" per "+p[1].sym:p[1].sym+" per "+p[0].sym} · ${chPools} pool${chPools===1?"":"s"} · ${clipped?"last ":""}${span}`:"";
 }
 for(const[label,secs]of TFS){const b=document.createElement("button");
 b.textContent=label;if(secs===chPeriod)b.className="on";
@@ -4671,7 +4716,18 @@ kindBtn.title=`Switch to ${kindBtn.textContent.toLowerCase()} chart`};
 syncKind();
 kindBtn.onclick=()=>{chKind=chKind==="candle"?"line":"candle";LS.ck=chKind;syncKind();drawChart()};
 chTf.appendChild(kindBtn);
-const syncChart=()=>{loadChart()};
+// Which asset is being priced. Remembered, because it is a reading habit
+// rather than a per-visit decision.
+const invBtn=document.createElement("button");
+invBtn.className="chk";
+invBtn.textContent="⇅";
+const syncInv=()=>{const p=chPair();
+invBtn.title=p?`Price ${chInv?p[1].sym:p[0].sym} instead — currently ${chInv?p[0].sym:p[1].sym} per ${chInv?p[1].sym:p[0].sym}`:"Invert the price";
+invBtn.setAttribute("aria-pressed",chInv?"true":"false")};
+syncInv();
+invBtn.onclick=()=>{chInv=!chInv;syncInv();drawChart()};
+chTf.appendChild(invBtn);
+const syncChart=()=>{chSyncOrientation();syncInv();loadChart()};
 chTog.onclick=()=>{chOpen=!chOpen;LS.ch=chOpen?"1":"0";syncChartUI()};
 // SHAREABLE LINKS  (prefill only - nothing is ever auto-submitted)
 //   #to=alice.wei&amount=10&token=USDC            request a payment

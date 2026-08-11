@@ -467,4 +467,62 @@ describe('when there is nothing to show', () => {
     assert.equal(p.consoleErrors.length, 0, 'a chart failure must not throw');
     p.close();
   });
+
+  /**
+   * Which asset the chart prices.
+   *
+   * The tape stores token1 per token0, and token0 is whichever address sorts
+   * first - so ETH, always, being the zero address. That reads naturally for a
+   * stablecoin (USDC per ETH) and upside down for a token being bought:
+   * purchases take it out of the pool, so "TOKEN per ETH" FALLS on the trade
+   * that made the token dearer, and the candle is red.
+   *
+   * Both readings are the same fact, so this is a choice rather than a fix.
+   */
+  test('can price the other side of the pair', async () => {
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const before = p.text('chNote');
+    assert.match(before, /USDC per ETH/);
+
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    assert.ok(inv, 'there should be a way to flip it');
+    p.click(inv);
+    await p.settle();
+    assert.match(p.text('chNote'), /ETH per USDC/, 'the label follows the orientation');
+    p.close();
+  });
+
+  test('inverting swaps high and low, so candles are not drawn inside out', async () => {
+    // The reciprocal of the highest price is the LOWEST one. Miss that and
+    // every candle renders upside down while the numbers still look plausible.
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+
+    const hud = p.$('chArt').querySelector('.hd');
+    const shown = Number((hud.textContent.match(/[\d.]+e?-?\d*/) || ['0'])[0]);
+    assert.ok(shown > 0 && shown < 1,
+      `an ETH-per-USDC price should be a small fraction, got ${hud.textContent}`);
+    p.close();
+  });
+
+  test('opens each pair in the orientation that pair is quoted in', async () => {
+    // A single sticky preference cannot serve both: flipping for a token pair
+    // would bring ETH/USDC back as 0.00033 ETH per USDC. So the default is per
+    // pair - dollars quote ether, ether quotes everything else - and the
+    // toggle is an override for the pair in front of you.
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    assert.match(p.text('chNote'), /USDC per ETH/, 'a stablecoin does the quoting');
+
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+    assert.match(p.text('chNote'), /ETH per USDC/, 'the override holds while the pair is up');
+    p.close();
+  });
+
 });
