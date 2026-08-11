@@ -273,6 +273,7 @@ export class MockChain {
     // which is the case the page must survive by falling back to the
     // registry's own listing order.
     this.conviction = null;
+    this.nftOwner = new Map();     // `${collection}:${id}` -> holder
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -347,6 +348,11 @@ export class MockChain {
   /** Bars for one pool at one bar width. The page reads a fine and a coarse tape. */
   setTape(pool, bars, period = 300) {
     this.tapes.set(`${pool.toLowerCase()}:${period}`, bars);
+    return this;
+  }
+  /** Give `holder` token `id` of `collection`, so ownerOf answers for it. */
+  setNftOwner(collection, id, holder) {
+    this.nftOwner.set(`${collection.toLowerCase()}:${BigInt(id)}`, holder);
     return this;
   }
   setCode(addr, code) { this.code.set(addr.toLowerCase(), code); return this; }
@@ -798,6 +804,15 @@ export class MockChain {
       default:
         // 0x081812fc = getApproved(uint256)
         if (sel === '081812fc') return '0x' + u256(0);
+        // ownerOf(uint256), for a collection the fixture set up with setNftOwner.
+        if (sel === '6352211e' && m?.erc721) {
+          const owner = this.nftOwner.get(`${to}:${word('0x' + data.slice(8), 0)}`);
+          if (!owner) throw Error('nonexistent token');
+          return '0x' + addrWord(owner);
+        }
+        // safeTransferFrom(address,address,uint256,bytes) - how an NFT is
+        // listed: the token IS the order, so there is nothing to return.
+        if (sel === 'b88d4fde') return '0x';
         // supportsInterface(bytes4). An ERC-20 has no such function at all, so
         // the miss below - a revert - is the correct answer for one.
         if (sel === '01ffc9a7') {

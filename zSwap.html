@@ -1100,8 +1100,24 @@ if(!f||!t){swap.textContent="Place order";swap.disabled=true;return}
 // encoder below writes an ERC-20 shaped order, and `approve(address,uint256)`
 // is the same selector on ERC-721 - so letting the click through would grant a
 // real approval for a token id and then revert. Say so before the click.
-if(f.std==="nft"||t.std==="nft"){
-swap.textContent="NFT orders not supported yet";swap.disabled=true;return}
+// SELLING one is supported: the NFT is pushed to the board with its terms
+// attached, which needs no adapter and no approval. BUYING one is not, and
+// not for want of building it - the routed adapter refuses an order with an
+// NFT leg, so a buy would have to escrow the payment directly. Say which of
+// the two this is rather than one message for both.
+if(t.std==="nft"){
+swap.textContent="Buying an NFT is not supported yet";swap.disabled=true;return}
+if(f.std==="nft"){
+if(kind.value!=="fixed"){
+swap.textContent="An NFT sells at a fixed price";swap.disabled=true;return}
+if(!/^\d+$/.test(nftId.value.trim())){
+// "Any from collection" is a BID's wording - it makes sense when buying and
+// none at all when selling, where the seller holds particular tokens.
+swap.textContent="Name the token id to sell";swap.disabled=true;return}
+let ask=0n;
+try{ask=outAmt.value.trim()?parseUnits(outAmt.value.trim(),t.dec):0n}catch{}
+if(!ask){swap.textContent="Set a price";swap.disabled=true;return}
+swap.textContent=`List ${f.sym} #${nftId.value.trim()}`;swap.disabled=false;return}
 const dutch=kind.value==="dutch",bid=kind.value==="floor";
 let sell=0n,want=0n,floor=0n,badOrderAmount=false;
 // An untouched field is not a typo: parsing "" as an amount made a freshly
@@ -1876,7 +1892,10 @@ async function leg(addr,amt,isNft,meta){
 // one", which is a different query against a different set of bids.
 let floorSeq=0;
 // Re-run when the id field changes: blank and filled are different questions.
-addEventListener("input",e=>{if(e.target&&e.target.id==="nftId")showFloor()});
+// render() too, not only the floor note: on a listing the id is part of what
+// the button says and whether it is enabled, so typing one left the form
+// still asking for it.
+addEventListener("input",e=>{if(e.target&&e.target.id==="nftId"){showFloor();render()}});
 async function showFloor(){
   const el=document.getElementById("floorNote");if(!el)return;
   const side=isNft(fromSel.value)?fromSel.value:isNft(toSel.value)?toSel.value:null;
@@ -2750,6 +2769,10 @@ const syncNftUI=()=>{
 const anyNft=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
 nftIdL.classList.toggle("hide",!anyNft);
 if(!anyNft)nftId.value="";
+// Blank means ANY id only when BUYING. A seller holds particular tokens, so
+// there the field is a required one and the placeholder has to stop offering
+// a choice that does not exist on that side.
+nftId.placeholder=isNft(fromSel.value)?"Which one you are selling":"Any from collection";
 showFloor();
 };
 const setTab=t=>{
@@ -3545,10 +3568,70 @@ async function sendRouterFunded(callData,fundedCallData,token,amount,msgValue,ve
   await settle(tx);
 }
 
+// keccak256("Swapboard.PushOrder.v1"). The board refuses a bare 721 transfer,
+// so this is what separates a deliberate listing from a token sent by mistake.
+const PUSH_MAGIC="381bcb9ccaaab09ca206deb73834ed7b483c58bb3face9b43e8c7b50193253e2";
+const SEL_SAFE_TRANSFER_DATA="b88d4fde",SEL_OWNEROF="6352211e";
+
+/**
+ * List an NFT, by pushing it to the board with its terms attached.
+ *
+ * Nothing else on this tab works this way, and it is worth saying why. Every
+ * fungible order routes through zRouter and the Orderbol adapter, which pulls
+ * the escrow - and that adapter refuses any order with an NFT leg outright
+ * (`o.nftA || o.nftB` in _checkSwapboardOrder). So the routed path is not
+ * "not built yet" for NFTs; it is closed by design.
+ *
+ * The board takes the other route instead: `safeTransferFrom` carrying the
+ * terms in `data`. The collection is the CALLER, so a seller cannot name a
+ * collection they do not control, and the token is already escrowed by the
+ * time the board reads the terms. One transaction, and no approval at all -
+ * strictly better than the fungible path it sits beside.
+ */
+async function pushNftOrder(f,t){
+const id=nftId.value.trim();
+if(!/^\d+$/.test(id))throw Error("name the token id you are selling");
+const tokenId=BigInt(id);
+if(kind.value!=="fixed")throw Error("an NFT is indivisible, so it sells at a fixed price");
+const want=parseUnits(outAmt.value.trim()||"0",t.dec);
+if(!want)throw Error("name a price");
+// The board calls the quote token, so it must BE a contract: native ETH cannot
+// be the ask. WETH is what the page substitutes everywhere else too.
+const quote=t.addr===ZERO?WETH:t.addr;
+if(quote.toLowerCase()===f.addr.toLowerCase())throw Error("pick different tokens");
+if((await rpc("eth_getCode",[SB2,L])).length<5)throw Error("fixed orderbook not deployed yet");
+let cp=ZERO;
+const v=rc.value.trim();
+if(v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
+// Asked before the wallet is: the board reverts on a token the seller does not
+// hold, and "execution reverted" would not say which of the two was wrong.
+let owner=ZERO;
+try{owner="0x"+strip0x(await rpc(C,[{to:f.addr,data:"0x"+SEL_OWNEROF+encUint(tokenId)},L])).slice(-40)}
+catch{throw Error(`${f.sym} #${id} does not exist`)}
+if(owner.toLowerCase()!==account.toLowerCase())throw Error(`you do not own ${f.sym} #${id}`);
+const exp=+dly.value?BigInt(Math.floor(Date.now()/1e3)+ +dly.value):0n;
+// PushOrder: tokenB, amountB, expiry, nftB, counterparty - five words behind
+// the magic, 192 bytes exactly, which is what the board length-checks.
+const terms=PUSH_MAGIC+encAddr(quote)+encUint(want)+encUint(exp)+encBool(false)+encAddr(cp);
+const data="0x"+SEL_SAFE_TRANSFER_DATA+encAddr(account)+encAddr(SB2)+encUint(tokenId)
+  +encUint(128n)+encUint(192n)+terms;
+const req={from:account,to:f.addr,data,value:"0x0"};
+await rpc(C,[req,L]);
+await checkWallet();
+await settle(await rpc(S,[req]));
+}
+
 async function placeOrder(){
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 swap.disabled=true;
 try{
+if(f.std==="nft"){
+  await pushNftOrder(f,t);
+  amt.value="";outAmt.value="";nftId.value="";
+  fitFont(amt);fitFont(outAmt);
+  stat.textContent="Listed.";loadBook();refreshBalance();render();
+  return;
+}
 const sell=parseUnits(amt.value.trim(),f.dec),want=parseUnits(outAmt.value.trim(),t.dec);
 const dutch=kind.value==="dutch",bid=kind.value==="floor";
 const floor=(dutch||bid)&&floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),bid?f.dec:t.dec):0n;
