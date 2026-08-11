@@ -360,6 +360,12 @@ const SEL_PAIR_COUNT="355da246";
 // ~4.6M gas apiece, so this is expensive rather than impossible - which makes
 // it worth bounding loudly rather than trusting nobody will pay.
 const LQ_SCAN=128;
+// How many of those the panel actually draws. Scanning and showing are separate
+// budgets on purpose: the scan has to be wide enough that a buried band is
+// FOUND, and the list has to be short enough to read. Sorting happens across
+// everything scanned, so a real pool at index 400 still lands at the top of the
+// list - and whenever the list is shorter than the pair, it says so.
+const LQ_SHOW=24;
 /**
  * Precision pools, as a quote source.
  *
@@ -393,11 +399,14 @@ const h=strip0x(q);
 if(h.length<128)return null;
 const pool="0x"+h.slice(24,64),out=BigInt("0x"+h.slice(64,128));
 if(out<=0n||/^0x0{40}$/i.test(pool))return null;
-// Say it rather than quietly quoting a subset.
-if(n>LQ_SCAN)stat.textContent=`Precision: quoting the first ${LQ_SCAN} of ${n} bands for this pair.`;
 let fee=0n;
 try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee=BigInt(fx)}catch{}
-return {pool,out,fee};
+// Reported, not printed. This runs as a detached job inside `update()`, so
+// writing to `stat` from here writes from OUTSIDE the sequence guard that owns
+// it: a quote the user has already replaced could still land its notice on the
+// line, on top of a live price-impact warning. The caller holds the guard, so
+// hand it the fact and let it render.
+return {pool,out,fee,capped:n>LQ_SCAN};
 }
 
 async function quoteV4Pools(f,t,amountIn,block){
@@ -1670,6 +1679,9 @@ rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
 if(bookIncomplete)rate.textContent+=" · Book scan capped";
 if(plannerBounded)rate.textContent+=" · Planner heuristic/capped";
 if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";
+// Shown whoever won: it says the COMPARISON was bounded, which is a caveat on
+// the rate even when the chosen route came from somewhere else entirely.
+if(pq&&pq.capped)rate.textContent+=` · Precision scan capped (${LQ_SCAN})`;
 // Hidden below IMPACT_HIDE: deep pairs read a few bps and always showing that
 // teaches people to ignore it. Slippage bounds the QUOTE, not a fair rate, so a
 // ruinous trade passes a tight slippage check untouched.
@@ -1691,6 +1703,9 @@ to:r.to,spender:r.spender,
 amountIn:inApprove,from:f,exp:Date.now()+QUOTE_TTL,impact:imp,
 lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
 fills:r.fills||null,tokenIn:f.addr,tokenOut:t.addr,
+// Which venue won, carried to the send path: a Precision route approves the
+// POOL, and the send path has to know that is what it is looking at.
+source:r.best.source,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){
@@ -3342,10 +3357,9 @@ async function loadLq(){
     ]);
     if(my!==lqSeq)return;
     let total=0;try{if(c)total=Number(BigInt(c))}catch{}
-    if(total>LQ_SCAN)lqSub.textContent+=` · showing ${LQ_SCAN} of ${total}`;
     const rows=[];
     if(raw){const h=strip0x(raw),n=Number(BigInt("0x"+h.slice(64,128))),base=128;
-      for(let i=0;i<n&&i<24;i++){
+      for(let i=0;i<n&&i<LQ_SCAN;i++){
         const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
         rows.push({pool:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),
           sl:at(PI_SL),sh:at(PI_SH),fee:at(PI_FEE),r0:at(PI_R0),r1:at(PI_R1),px:at(PI_PX),
@@ -3372,8 +3386,16 @@ async function loadLq(){
     // Yours first, then deepest: the band you are already in is the one you came
     // to act on, and a list sorted purely by size buries it.
     rows.sort((a,b)=>(b.shares>0n)-(a.shares>0n)||(b.liq>a.liq?1:b.liq<a.liq?-1:0));
-    lqRows=rows;
-    lqList.innerHTML=rows.map(o=>lqRow(o,t0,t1)).join("");
+    // Sorted across everything scanned, THEN cut - so the cut takes the least
+    // interesting bands, not the newest ones. Named against the pair's real
+    // total, because a list that stops at 24 and looks complete is the failure
+    // that matters; when the scan itself could not reach the end, say that too
+    // rather than implying these 24 were chosen out of all 900.
+    const shown=rows.slice(0,LQ_SHOW);
+    if(total>shown.length)lqSub.textContent+=` · showing ${shown.length} of ${total}`
+      +(total>LQ_SCAN?` (first ${LQ_SCAN} scanned)`:"");
+    lqRows=shown;
+    lqList.innerHTML=shown.map(o=>lqRow(o,t0,t1)).join("");
   }catch(e){
     if(my!==lqSeq)return;
     lqRows=[];
@@ -3829,6 +3851,9 @@ const SEL_MARKETS="29c21083",SEL_TAPE="29a65241";
 // 4h was missing, which left the pool's own second period reachable only
 // through the 1d rollup - the widest coverage it has, unused.
 const FINE=300,COARSE=14400,TFS=[["5m",300],["1h",3600],["4h",14400],["1d",86400]];
+// Two tape reads per pool, so this is a request budget rather than a display
+// limit. The deepest few carry the pair's price; the tail adds calls, not signal.
+const CH_POOLS=8;
 // The fine ring only spans ~21h, so a daily candle built from it is a stub.
 // The pool also keeps a four-hour tape covering weeks; read both and pick the
 // one whose resolution the timeframe actually needs.
@@ -3884,17 +3909,25 @@ try{
 if(PPLENS===ZERO||(await rpc("eth_getCode",[PPLENS,L])).length<5)return syncChartUI();
 // One lens call discovers every registered pool for the pair AND returns the
 // hook and liquidity needed to decide which of them may speak for its price.
+// Discovery is WIDE, the tape budget is narrow, and they are not the same
+// number. Reading the first 8 entries of an append-only list meant a pair with
+// junk at the front charted nothing at all - every sampled pool filtered out as
+// hooked or empty - while the swap quote and the liquidity panel both saw the
+// real band. So scan as wide as they do, then spend the tape reads on the
+// DEEPEST pools rather than the oldest ones.
 const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(t0.addr)+encAddr(t1.addr)
-  +encAddr(account)+encUint(0)+encUint(8)+encUint(0)}]);
+  +encAddr(account)+encUint(0)+encUint(LQ_SCAN)+encUint(0)}]);
 if(my!==chSeq)return;
-const pools=[];
+const found=[];
 if(raw){const h=strip0x(raw),n=Number(BigInt("0x"+h.slice(64,128))),base=128;
-for(let i=0;i<n&&i<8;i++){const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
+for(let i=0;i<n&&i<LQ_SCAN;i++){const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
 // A hooked pool can charge a surcharge on top of the base fee, so its executed
 // prices are not the pair's market price - and the hook is free to make them
 // anything at all. Empty pools have no price to contribute either.
 if(at(PI_HOOK)!==0n||at(PI_LIQ)===0n)continue;
-pools.push("0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64))}}
+found.push({a:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),liq:at(PI_LIQ)})}}
+found.sort((x,y)=>y.liq>x.liq?1:y.liq<x.liq?-1:0);
+const pools=found.slice(0,CH_POOLS).map(x=>x.a);
 if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:0};return syncChartUI()}
 const reqs=[];
 for(const a of pools)reqs.push({to:a,data:"0x"+SEL_TAPE+encUint(FINE)+encUint(256)},
@@ -4626,6 +4659,19 @@ let cd2=callData,batchCalls=null;
 // unwrap, which retargets `to` without spending anything.
 const spender=last.spender!==undefined?last.spender:(to?null:ZROUTER);
 const target=to||ZROUTER;
+// A Precision route sends to the POOL and approves the POOL. The address comes
+// from our own lens, which only ever returns what the factory indexed - so it
+// is already a factory pool, and this asks the factory anyway.
+//
+// The liquidity panel has always asked before approving; the swap path did
+// not, which made the two disagree about how much a lens is trusted for. It is
+// one call on the click path, it is the same question `isPool` exists to
+// answer, and an approval is the thing worth being sure about.
+if(last.source===7&&target){
+const ok=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(target)}])
+  .then(([r])=>!!r&&BigInt(r)===1n).catch(()=>false);
+if(!ok)throw Error("that pool is not one the factory made — refusing to send");
+}
 if(from.addr!==ZERO&&spender&&spender!==ZROUTER){
 // Plain allowance only. Permit and Permit2 both route their signature through
 // zRouter's multicall, which is not where this swap is going.

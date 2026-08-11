@@ -26,12 +26,16 @@ const USDC = 10n ** 6n;
 const POOL = '0xc37f8c7e9afe897893952aba7fd91e0ab947837d';
 
 /** The AMM quotes 3000 USDC per ETH; `precision` is what the bands answer. */
-async function setup({ precision = null, rate = 3000n * ETH } = {}) {
+async function setup({ precision = null, rate = 3000n * ETH, known = true } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 50_000n * USDC);
   chain.quoteHandler = fixedRateQuoter({ rate });
   chain.precisionQuote = precision;
+  // Registering the pool is what makes `factory.isPool` answer true for it.
+  if (precision && known) {
+    chain.setPools(A.ZERO, A.USDC, [{ pool: precision.pool, hook: A.ZERO, liquidity: 10n ** 20n }]);
+  }
   const page = await loadPage({ chain });
   await page.connect();
   return page;
@@ -107,11 +111,43 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
+  // A bounded comparison is a caveat on the RATE, so it belongs on the rate
+  // line beside "Book scan capped" — not in `stat`. `quotePrecision` runs as a
+  // detached job inside `update()`, outside the sequence guard that owns
+  // `stat`, so writing there let a superseded quote drop its notice on top of
+  // whatever the current one was saying — including a price-impact warning,
+  // which is the one message in this flow that exists to stop a trade.
+  test('says the scan was capped without touching the status line', async () => {
+    const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 } });
+    p.chain.pairCount = 900;
+    await p.typeAmount('amt', '1');
+    assert.match(p.text('rate'), /Precision scan capped \(128\)/);
+    assert.equal(p.text('stat'), '', 'the status line stays the quote loop\'s to write');
+    p.close();
+  });
+
   test('is silent for a pair that has no band', async () => {
     const p = await setup({ precision: null });
     await p.typeAmount('amt', '1');
     assert.equal(p.value('outAmt'), '3000', 'the ordinary route is untouched');
     assert.ok(!/Precision/.test(p.text('rate')));
+    p.close();
+  });
+
+  test('refuses to send to a pool the factory disclaims', async () => {
+    // The address comes from our own lens, which only returns what the factory
+    // indexed - so this should never fire. It exists because the SPENDER of an
+    // ERC-20 approval is the one thing worth being sure about, and because the
+    // liquidity panel already asks: the two paths disagreeing about how far a
+    // lens is trusted is worse than one extra call on the click path.
+    const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 }, known: false });
+    await p.typeAmount('amt', '1');
+    assert.match(p.text('rate'), /Precision/, 'it still quotes');
+
+    p.click('swap');
+    await p.waitFor(() => /not one the factory made/i.test(p.text('stat')),
+      { label: 'the refusal' });
+    assert.equal(p.chain.sent.length, 0, 'and nothing was signed');
     p.close();
   });
 });
