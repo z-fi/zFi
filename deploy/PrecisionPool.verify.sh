@@ -32,8 +32,11 @@ ARGS=$(cast abi-encode "c(address,address,address,uint256,uint256,uint256,addres
 
 echo "pool         $POOL"
 echo "constructor  $ARGS"
+# --compilation-profile is required, not optional: the cache holds several
+# profiles (tokenlist, lens) and forge refuses to guess between them.
 forge verify-contract "$POOL" src/pools/PrecisionPool.sol:PrecisionPool \
   --chain 1 \
+  --compilation-profile default \
   --compiler-version 0.8.36+commit.8a079791 \
   --num-of-optimizations 200 \
   --via-ir \

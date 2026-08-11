@@ -59,6 +59,16 @@ The first market is **`0xc37F8c7E9Afe897893952ABa7fD91E0AB947837d`** (ETH/ZORG,
 deployed runtime is 19,440 bytes and reproduces from source at these settings -
 checked byte for byte, differing only where the immutables are written in.
 
+**Verified 2026-08-12**, and Etherscan reports it as an *Exact Match*. Two
+gotchas worth keeping:
+
+- `--compilation-profile default` is required, not optional. The build cache
+  holds several profiles (`tokenlist`, `lens`) and forge refuses to guess.
+- The site shows the verification immediately; the **API lags** it by a good
+  while. `checkverifystatus` returned `Pass - Verified` while `getsourcecode`
+  and `getabi` still answered "not verified" for the same address. Read the
+  page, or the GUID, before concluding a verification failed.
+
 **Creating a market costs ~4.63M gas**, of which ~3.9M is code deposit at 200
 gas a byte. That is the architecture: a market IS a contract. The dapp prices
 it before the wallet prompt because a wallet's default tip is sized for
