@@ -331,6 +331,31 @@ describe('living beside the swap tile', () => {
     p.close();
   });
 
+  // The cut is the point, so it has to be COUNTED, not just announced. The
+  // notice and the list are produced by different lines and drifted apart once
+  // already: the window was widened to 128 while the decode loop stayed at 24,
+  // so a 40-band pair dropped 16 of them and said nothing, and a 900-band pair
+  // claimed to be showing 128 while drawing 24.
+  test('draws every band it found, up to the display budget', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      ...BAND_A,
+      pool: '0x' + (i + 1).toString(16).padStart(40, '0'),
+      // Distinct depths, so "deepest first" is a real ordering and the 24 that
+      // survive the cut are the 24 deepest rather than the first 24 returned.
+      liquidity: 10n ** 21n + BigInt(i),
+    }));
+    const p = await setup({ bands: many, shares: 0n });
+    await p.waitFor(() => rows(p).length, { label: 'bands' });
+    assert.equal(rows(p).length, 24, 'the display budget, not the old decode cap');
+    assert.equal(rows(p)[0].dataset.pool.toLowerCase(),
+      many[39].pool.toLowerCase(), 'the deepest band leads');
+    assert.match(p.text('lqSub'), /showing 24 of 40/,
+      'a list shorter than the pair says so');
+    assert.doesNotMatch(p.text('lqSub'), /scanned/,
+      'the scan covered the pair, so it claims nothing about scanning');
+    p.close();
+  });
+
   test('says when a pair has more bands than it is showing', async () => {
     // `_byPair` is append-only and index 0 is the OLDEST pool, so a fixed
     // window is not neutral: on a NEW pair somebody can create junk bands
@@ -344,7 +369,10 @@ describe('living beside the swap tile', () => {
     await p.settle();
     p.pickToken('toSel', 'USDC');
     await p.waitFor(() => /showing/.test(p.$('lqSub').textContent), { label: 'the notice' });
-    assert.match(p.$('lqSub').textContent, /showing 128 of 900/);
+    // Two separate facts: how many of the pair are on screen, and that the scan
+    // itself stopped short - without which "24 of 900" implies these were the
+    // best 24 of all 900, when they are the best 24 of the first 128.
+    assert.match(p.$('lqSub').textContent, /showing 2 of 900 \(first 128 scanned\)/);
     p.close();
   });
 });

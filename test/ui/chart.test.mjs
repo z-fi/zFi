@@ -267,6 +267,46 @@ describe('reading the tape', () => {
     p.close();
   });
 
+  // `_byPair` is append-only and index 0 is the OLDEST pool, so sampling the
+  // front of it is not sampling at random. The chart used to read the first 8
+  // entries: fill a new pair with hooked junk and it charted nothing at all,
+  // while the swap quote and the liquidity panel — which scan far wider — both
+  // saw the real band. Discovery is now as wide as theirs, and the tape budget
+  // is spent on the deepest pools rather than the earliest.
+  test('finds the real pool behind a wall of junk bands', async () => {
+    const junk = Array.from({ length: 30 }, (_, i) => ({
+      pool: '0x' + (i + 1).toString(16).padStart(40, '0'),
+      hook: '0x9999999999999999999999999999999999999999',
+    }));
+    const p = await setup({
+      pools: [...junk, POOL_A],
+      tapes: { [POOL_A]: bars(24) },
+    });
+    await p.waitFor(() => p.text('chNote') !== '', { label: 'note' });
+    assert.match(p.text('chNote'), /1 pool\b/, 'the band buried at index 30 still charts');
+    assert.equal(p.chain.calls.filter(c => c.selector === SEL.TAPE).length, 2,
+      'and the junk costs no tape reads');
+    p.close();
+  });
+
+  // The wide scan must not turn into a wide fan-out: tape reads are two calls
+  // per pool and the deepest few carry the price, so the budget stays at eight.
+  test('spends its tape budget on the deepest pools, not the oldest', async () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      pool: '0x' + (i + 1).toString(16).padStart(40, '0'),
+      liquidity: 10n ** 21n + BigInt(i),
+    }));
+    const tapes = Object.fromEntries(many.map(m => [m.pool, bars(24)]));
+    const p = await setup({ pools: many, tapes });
+    await p.waitFor(() => p.text('chNote') !== '', { label: 'note' });
+    const read = p.chain.calls.filter(c => c.selector === SEL.TAPE);
+    assert.equal(read.length, 16, 'eight pools, both widths');
+    const seen = new Set(read.map(c => c.to.toLowerCase()));
+    assert.ok(seen.has(many[19].pool.toLowerCase()), 'the deepest pool is read');
+    assert.ok(!seen.has(many[0].pool.toLowerCase()), 'the shallowest, oldest one is not');
+    p.close();
+  });
+
   test('excludes empty pools, which have no price to contribute', async () => {
     const p = await setup({
       pools: [POOL_A, { pool: POOL_B, liquidity: 0n }],
