@@ -102,7 +102,9 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     USDT: "0xdac17f958d2ee523a2206206994597c13d831ec7",
     WBTC: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-    WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+    WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    V4LENS: "0x000000c3ae1692983941495162a4aab40660e65f",
+    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845"
   };
 
   /* ---- abi helpers ---- */
@@ -274,6 +276,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (to === A.LENS.toLowerCase() && sel === "dc9d54ef") return positions();
     if (to === A.LQLENS.toLowerCase() && sel === "a2eaee07") return previewRemove(data);
     if (to === A.LQLENS.toLowerCase() && sel === "e03ec807") return previewAdd(data);
+    if (to === A.V4LENS && sel === "d500463c") return v4Hooked(data);
     if (sel === "29a65241") return tape(to, data);
     if (to === A.ZROUTER) return "0x";
     if (to === A.SLOW) return slow(sel, data);
@@ -359,6 +362,30 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     return "0x" + u256(32) + u256(rows.length) + head;
   }
   function pairOf(key) { return key.split(":"); }
+  // V4QuoteLens.quoteV4Hooked - the ONLY thing that prices a custom-curve pool,
+  // because the curve lives in the hook and nothing about it is visible in
+  // slot0. The page routes every pool with a non-zero hooks address here, so
+  // without this the preview shows no quote for those pairs while mainnet quotes
+  // them fine - which reads as a broken page rather than a thin fixture.
+  //
+  // Returns (amountIn, amountOut) and answers (0,0) for a pool it does not
+  // know, matching the real lens: a dead pool is "no route", never a revert
+  // that would take down a multi-venue sweep.
+  var V4_HOOKED = {};
+  V4_HOOKED[A.FWA] = { perEth: 57597.32, dec: 18 };
+  function v4Hooked(data) {
+    var h = data.slice(8);
+    var exactOut = word(h, 0) !== 0n;
+    var tin = wordAddr(h, 1), tout = wordAddr(h, 2), amt = word(h, 6);
+    var cfg = V4_HOOKED[tout] || V4_HOOKED[tin];
+    // Exact-out is the common casualty: a custom-curve hook often implements
+    // only exact-in and reverts the other way, so the real lens returns zeros.
+    if (!cfg || exactOut || amt === 0n) return "0x" + u256(0) + u256(0);
+    var out = tout === A.FWA
+      ? amt * BigInt(Math.floor(cfg.perEth * 1e6)) / 1000000n
+      : amt * 1000000n / BigInt(Math.floor(cfg.perEth * 1e6));
+    return "0x" + u256(amt) + u256(out);
+  }
   // price -> raw sqrt, 1e18 scaled: sqrt(price * 10**(d1-d0)) * 1e18
   function sqrtRaw(price, d0, d1) {
     var raw = price * Math.pow(10, (d1 || 18) - (d0 || 18));
