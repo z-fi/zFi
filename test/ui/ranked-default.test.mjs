@@ -216,3 +216,64 @@ describe('conviction ranking', () => {
     page.close();
   });
 });
+
+/**
+ * The pair can never be the same asset twice.
+ *
+ * The picker disables whichever option the other side holds - but rebuild()
+ * re-creates the <option> nodes and drops every disabled flag, so that
+ * protection only exists if something puts it back. `connect` did.
+ * The boot path for a wallet that is ALREADY authorised - a returning visitor,
+ * the commonest case there is - did not, and neither did any test, because
+ * every test connects by clicking.
+ *
+ * So the picker let ETH be chosen against ETH and the form dead-ended on "Pick
+ * different tokens" with no way to see why.
+ */
+describe('a pair of one asset', () => {
+  const REG = [ETH_ROW, WBTC_ROW, USDC_ROW];
+
+  /** A wallet already authorised: the page connects itself, without a click. */
+  async function returning() {
+    const chain = new MockChain();
+    chain.registry = REG;
+    chain.conviction = [1, 2, 3];
+    chain.autoConnected = true;
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    const page = await loadPage({ chain, hash: null });
+    await page.waitFor(() => page.text('addr') !== 'Not connected', { label: 'auto-connect' });
+    await page.settle();
+    return page;
+  }
+
+  test('is impossible to select for a returning wallet, not only a fresh one', async () => {
+    const p = await returning();
+    const from = p.$('fromSel').value;
+    const dupe = [...p.$('toSel').options].find(o => o.value === from);
+    assert.equal(dupe.disabled, true,
+      'the token on the pay side must stay disabled on the receive side');
+
+    // And through the panel, which is built from those same flags.
+    p.click('toPick');
+    await p.settle();
+    const row = [...p.$('tkList').querySelectorAll('.tkr')].find(r => r.dataset.value === from);
+    assert.equal(row.getAttribute('aria-disabled'), 'true');
+    p.close();
+  });
+
+  test('is corrected rather than displayed, whatever put it there', async () => {
+    // Reaching past the controls, the way a code path that forgot to sync
+    // would: the invariant lives where the flags are written, so it holds.
+    const p = await returning();
+    p.$('toSel').value = p.$('fromSel').value;
+    p.$('toSel').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await p.settle();
+
+    assert.notEqual(p.$('toSel').value, p.$('fromSel').value,
+      'the page should move a side, not sit on a pair it refuses to quote');
+    assert.ok(!/Pick different tokens/i.test(p.text('stat')),
+      'and that message should be unreachable now');
+    p.close();
+  });
+});

@@ -1559,6 +1559,25 @@ return true;
 };
 // Keep what the user picked; otherwise adopt the ranking that just loaded.
 const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
+// EVERYTHING that has to happen when a new list lands, in one place.
+//
+// There are two paths here - `connect`, and the boot path for a wallet that is
+// already authorised - and they had this sequence written out twice. The
+// second copy was missing the last line, so for a returning user rebuild()
+// dropped every `disabled` flag and nothing put them back: the picker let the
+// same asset be chosen on both sides and the form dead-ended on "Pick
+// different tokens". The comment explaining that hazard was sitting in the
+// copy that did it right, which is the whole argument for not having two.
+const adoptList=keep=>{
+rebuild();
+settlePair(keep);
+// rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
+// onchain list shorter than the built-in one can leave a selection pointing
+// past its end. Restore both before anything reads the pair.
+if(!TOKENS[fromSel.value])fromSel.value=0;
+if(!TOKENS[toSel.value]||toSel.value===fromSel.value)toSel.value=TOKENS[1]?1:0;
+syncDisabled();syncIcons();
+};
 // A collection is listed on every tab so the picker does not reshuffle underneath
 // the user, but it is only SELECTABLE where something can act on it. Swapboard and
 // Dutchboard take NFT lots; the router cannot quote one and `send` prices its
@@ -1568,6 +1587,17 @@ const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
 const syncDisabled=()=>{
 const pair=tab!=="send";
 const nftOk=tab==="book";
+// The same asset on both sides is not a trade, and every path that can create
+// one ends here - so this is where it stops being possible, rather than in
+// each caller remembering. Send is the exception: it has no output side, so
+// the two selections are unrelated there.
+//
+// Belt to the disabled flags below, which are the braces. They are what a user
+// meets; this is what catches the code path that forgot to apply them.
+if(pair&&fromSel.value===toSel.value){
+const alt=TOKENS.findIndex((t,i)=>String(i)!==fromSel.value&&(nftOk||t.std!=="nft"));
+if(alt>=0){toSel.value=String(alt);toSel.dataset.prev=toSel.value}
+}
 for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]])
 for(const opt of sel.options)
 opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
@@ -1797,14 +1827,7 @@ account=accs[0];
 // Mainnet-only: TOKENLIST is a mainnet address, and the chain was just enforced.
 const keepPair=pairAddrs();
 await loadTokenList();
-rebuild();
-settlePair(keepPair);
-// rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
-// onchain list shorter than the built-in one can leave a selection pointing past
-// its end. Restore both before anything reads the pair.
-if(!TOKENS[fromSel.value])fromSel.value=0;
-if(!TOKENS[toSel.value]||toSel.value===fromSel.value)toSel.value=TOKENS[1]?1:0;
-syncDisabled();syncIcons();
+adoptList(keepPair);
 showAddr();
 refreshBalance();
 update();
@@ -2234,8 +2257,7 @@ showAddr();
 // at all, which reads as "the registry has none" rather than "it never loaded".
 const keep2=pairAddrs();
 await loadTokenList();
-rebuild();
-settlePair(keep2);
+adoptList(keep2);
 refreshBalance();update();syncChart();
 }
 }catch{}
