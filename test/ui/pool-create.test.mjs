@@ -183,10 +183,11 @@ describe('creating a band', () => {
     p.close();
   });
 
-  test('names the market to you, at no fee to traders', async () => {
-    // An unnamed market may be seeded by anyone, so a stranger could open it at
-    // a price of their choosing before you do. Naming closes that, and a zero
-    // creator fee means it costs traders nothing to be protected.
+  test('creates an unowned market by default', async () => {
+    // The AMM norm, and the credibly neutral one: nobody is privileged and
+    // nobody can ever take a fee from it. A squatter CAN seed it first and
+    // leave the creator's transaction reverting - but that costs them real
+    // capital, and the price they pin is arbitraged straight back out.
     const p = await setup();
     await custom(p);
     p.click('lqCreate');
@@ -194,11 +195,43 @@ describe('creating a band', () => {
     await p.settle();
 
     const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
-    assert.equal(wordAddr(b, 6).toLowerCase(), A.ACCOUNT.toLowerCase(),
-      'feeRecipient: only its creator may seed a named market');
-    assert.equal(word(b, 7), 0n, 'creatorFeeBps: naming should cost traders nothing');
+    assert.equal(wordAddr(b, 6).toLowerCase(), A.ZERO.toLowerCase(),
+      'feeRecipient zero: an unowned market');
+    assert.equal(word(b, 7), 0n, 'and no creator fee, which the zero recipient also requires');
     p.close();
   });
+
+  test('can gate seeding to the creator when that is what matters', async () => {
+    // For a launch the opening price IS the product, so being squatted is not
+    // noise. Naming the market is the only thing that stops it, and it still
+    // costs traders nothing - creatorFeeBps is immutable at zero.
+    const p = await setup();
+    await custom(p);
+    const own = form(p).querySelector('#lqOwn');
+    own.value = '1';
+    own.dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await new Promise(r => p.window.setTimeout(r, 420));
+    await p.settle();
+
+    assert.match(p.$('lqOwnNote').textContent, /Only your address can seed/i);
+    p.click('lqCreate');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
+    await p.settle();
+
+    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
+    assert.equal(wordAddr(b, 6).toLowerCase(), A.ACCOUNT.toLowerCase(), 'named to the creator');
+    assert.equal(word(b, 7), 0n, 'and still no fee');
+    p.close();
+  });
+
+  test('says which of the two was chosen, since neither can charge a trader', async () => {
+    const p = await setup();
+    await custom(p);
+    assert.match(p.$('lqOwnNote').textContent, /Unowned, like any AMM pool/i);
+    assert.match(p.$('lqOwnNote').textContent, /nobody can ever take a fee/i);
+    p.close();
+  });
+
 
   test('carries a slippage floor under the previewed shares', async () => {
     const p = await setup({ deployed: true });

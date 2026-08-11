@@ -3138,11 +3138,15 @@ function lqNewForm(t0,t1){
     +`<input id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High" aria-label="Highest price in the band"></span></label>`
     +`<label class="dly hide" id="lqPxRow" for="lqPx">Opening price`
     +`<input id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${t1.sym} per ${t0.sym}" aria-label="Opening price"></label>`
+    +`<label class="dly" for="lqOwn">Market<select id="lqOwn">`
+    +`<option value="0" selected>Anyone can seed</option>`
+    +`<option value="1">Only I can seed it</option></select></label>`
     +`<label class="dly" for="lqFee">Fee<select id="lqFee">`
     +LQ_FEES.map(([v,l,h])=>`<option value="${v}"${v===3000?" selected":""}>${l} — ${h}</option>`).join("")
     +`</select></label>`
     +`<div class="lqout" id="lqRangeOut"></div>`
     +`<div class="lqout" id="lqPv"></div>`
+    +`<div class="lqout" id="lqOwnNote"></div>`
     +`<button class="primary" id="lqCreate" disabled>Create band</button></div>`;
 }
 
@@ -3460,7 +3464,7 @@ lqList.addEventListener("input",e=>{
   if(box){lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
   if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
-lqList.addEventListener("change",e=>{if(e.target.id==="lqFee"||e.target.id==="lqRange")lqNewPreview()});
+lqList.addEventListener("change",e=>{if(["lqFee","lqRange","lqOwn"].includes(e.target.id))lqNewPreview()});
 
 /**
  * What the pool will take, and what it will refuse.
@@ -3546,7 +3550,15 @@ async function lqNewPreview(){
     `${fmtPx(lo)} – ${fmtPx(hi)} · opens at ${fmtPx(openAt)} ${t1.sym} per ${t0.sym}`
     +(oneSided===0?` · ${t0.sym} only`:oneSided===1?` · ${t1.sym} only`:"");
   const fee=BigInt(box.querySelector("#lqFee").value);
-  const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account||ZERO);
+  const owned=box.querySelector("#lqOwn").value==="1";
+  // Neither choice can ever charge a trader: creatorFeeBps is immutable and
+  // this page only ever writes zero. What ownership decides is who may open
+  // the market - nothing else, and not later.
+  box.querySelector("#lqOwnNote").textContent=owned
+    ?"Only your address can seed this market. Worth it when the opening price is the point — a launch — since a squatter can otherwise seed it first and leave your create reverting."
+    :`Unowned, like any AMM pool: anyone may seed it and nobody can ever take a fee from it. Prices are ${t1.sym} per ${t0.sym}.`;
+  const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,owned?(account||ZERO):ZERO);
+  box.dataset.owned=owned?"1":"";
   box.dataset.sl=sl;box.dataset.sh=sh;box.dataset.sp=sp;box.dataset.fee=fee;
   box.dataset.a0=a0;box.dataset.a1=a1;box.dataset.lp=0;
   try{
@@ -3611,7 +3623,7 @@ async function lqCreate(){
     // against, and the opening price is the caller's own. minLP guards
     // rounding here, not a counterparty.
     const minLP=lp>0n?lp*(10000n-bps)/10000n:0n;
-    const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,account);
+    const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,box.dataset.owned?account:ZERO);
     // token0 is the sorted-first side, and ETH sorts first as address(0) - so
     // a native leg is always amount0, and the factory takes it as value.
     const native=t0.addr===ZERO;
