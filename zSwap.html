@@ -581,21 +581,42 @@ return out};
 // one.
 const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
 // allowFailure covers one quoter reverting. It does NOT cover the eth_call
-// itself dying, and a batch can die for reasons the page cannot see: every
-// provider caps eth_call gas, at a different and undocumented value.
+// itself dying, and a batch dies for limits the page cannot read off the
+// provider: a gas cap, a response-size cap, and - the one that actually bites
+// here - a wall-clock execution timeout. Measured against a public node, the
+// full quote batch returns `execution aborted (timeout = 5s)`, which no gas
+// figure would have fixed. Every provider sets these differently and none of
+// them publishes the value.
 //
-// So don't guess the cap - halve the batch. Two smaller calls cost less than
-// one big one, and the split repeats until each fits or a single call is
-// itself the thing that cannot run, which is the only genuinely dead case.
-// Nothing here assumes anything about the provider, because assuming a
-// provider clamps rather than rejects is what broke every pair on the page.
+// So the page learns the limit instead of assuming it. A batch that fails is
+// halved and retried; the size that failed is remembered in `mc3Cap`, so the
+// NEXT batch is chunked to a size known to work rather than rediscovering the
+// same ceiling. Without that memory every quote pays the timeout again - it
+// would be correct, and unusably slow.
+//
+// Shrink-only, and only for this page load. Being under the true limit costs
+// a few extra requests that run concurrently; being over it costs seconds.
+//
+// The starting value is measured, not chosen: driving this page against a
+// public node, one batch of everything times out on every pair, 6 still trips
+// on the heavier split quoters, and 4 clears them - taking the first ETH/DAI
+// quote from 32s to 7.8s. It is a starting point, not a belief: a provider
+// stricter than that teaches the page on its first failure and is not asked
+// twice, and one call too slow on its own simply drops out, which is why a
+// thin pair still quotes on the venues that did answer.
+let mc3Cap=4;
+const mc3Split=(cs,n)=>{const o=[];for(let i=0;i<cs.length;i+=n)o.push(cs.slice(i,i+n));return o};
 const mc3Deep=async(cs,tag=L,depth=0)=>{
+  if(!cs.length)return[];
+  // Chunks go out together: the cost is one round trip, not one per chunk.
+  const fan=async n=>(await Promise.all(mc3Split(cs,n).map(c=>mc3Deep(c,tag,depth+1)))).flat();
+  if(cs.length>mc3Cap&&depth<8)return fan(mc3Cap);
   try{return await mc3(cs,tag)}
   catch(e){
-    if(cs.length<2||depth>=4)return cs.map(()=>null);
+    if(cs.length<2||depth>=8)return cs.map(()=>null);
     const h=cs.length>>1;
-    const [a,b]=await Promise.all([mc3Deep(cs.slice(0,h),tag,depth+1),mc3Deep(cs.slice(h),tag,depth+1)]);
-    return a.concat(b);
+    if(h<mc3Cap)mc3Cap=h;
+    return fan(h);
   }
 };
 // Impact, no oracle: quote amt and amt/REF_N; with zero impact output scales
