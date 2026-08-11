@@ -46,6 +46,25 @@ submitted for that address with its nine constructor args. Etherscan often
 propagates a similar-match afterwards, but verify the first market explicitly
 rather than relying on it.
 
+`deploy/PrecisionPool.verify.sh` does it, reading the nine args off the pool
+rather than reconstructing what we think was submitted:
+
+```
+ETHERSCAN_API_KEY=... deploy/PrecisionPool.verify.sh 0x<pool>
+```
+
+The first market is **`0xc37F8c7E9Afe897893952ABa7fD91E0AB947837d`** (ETH/ZORG,
+0.30%, unowned), created 2026-08-12 in
+`0x917a240c82e1a2a2ae03fbab4c3f70b9c3f8d6ce0f44eb712618f9066d0e7ef5`. Its
+deployed runtime is 19,440 bytes and reproduces from source at these settings -
+checked byte for byte, differing only where the immutables are written in.
+
+**Creating a market costs ~4.63M gas**, of which ~3.9M is code deposit at 200
+gas a byte. That is the architecture: a market IS a contract. The dapp prices
+it before the wallet prompt because a wallet's default tip is sized for
+ordinary transactions - the first create paid 2 gwei against a 0.163 gwei base
+fee, and 92% of the fee went to the validator.
+
 ### The deployer key is burned
 
 `0xAcFBA7Ce872C6eAD99d535586f84b0D68ADE4082` was used to broadcast and its
