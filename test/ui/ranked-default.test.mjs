@@ -16,7 +16,7 @@
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { A, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
+import { A, SEL, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
 
 after(closeAllPages);
 
@@ -33,10 +33,11 @@ const USDC_ROW = row('USDC', A.USDC, 6);
 const WBTC_ROW = row('WBTC', A.WBTC, 8);
 const USDT_ROW = row('USDT', A.USDT, 6);
 
-/** Load with a registry in the given conviction order, and let the page choose. */
-async function landOn(registry) {
+/** Load with a registry in the given order, and let the page choose. */
+async function landOn(registry, conviction) {
   const chain = new MockChain();
   chain.registry = registry;
+  if (conviction) chain.conviction = conviction;
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
   // hash: null opts out of the harness's pinned pair - the whole point here is
@@ -132,6 +133,86 @@ describe('the landing pair', () => {
     const el = page.$('toSel');
     assert.equal([...el.options].find(o => o.value === el.value)?.textContent, 'USDC',
       'a shared link names the pair and must not be second-guessed');
+    page.close();
+  });
+});
+
+/**
+ * Which ranking the picker obeys.
+ *
+ * Two contracts answer `rankedIds()`. The registry sorts by the `rank` its
+ * owner assigns - curation. ZorgTokenListLens re-sorts the same ids by live
+ * `supportOf`, the conviction bonded behind each listing - earned. The picker
+ * was reading the first, so the order it showed was the one an owner wrote
+ * rather than the one people had put weight behind, and bonding moved nothing.
+ *
+ * Membership is a separate question and stays with the registry: conviction
+ * decides what RANKS, never what EXISTS. Gating on it would hide every listing
+ * nobody has bonded to yet, which is a different rule and not a stricter one.
+ */
+describe('conviction ranking', () => {
+  // Registry order: ETH, WBTC, USDC. Conviction (ids are 1-based) puts USDC
+  // above WBTC, so the two rankings genuinely disagree.
+  const REG = [ETH_ROW, WBTC_ROW, USDC_ROW];
+
+  test('is preferred over the listing order the registry assigns', async () => {
+    const { page, from, to } = await landOn(REG, [1, 3, 2]);
+    assert.equal(from, 'ETH');
+    assert.equal(to, 'USDC', 'bonded support should outrank the listing order');
+    const opts = [...page.$('toSel').options].map(o => o.textContent);
+    assert.deepEqual(opts.slice(0, 3), ['ETH', 'USDC', 'WBTC'], 'the whole picker follows it');
+    page.close();
+  });
+
+  test('bonding reorders the picker with no change to the page', async () => {
+    const { page, to } = await landOn(REG, [2, 1, 3]);
+    assert.equal(to, 'ETH', 'WBTC now carries the most conviction, so ETH is the output');
+    const opts = [...page.$('toSel').options].map(o => o.textContent);
+    assert.deepEqual(opts.slice(0, 3), ['WBTC', 'ETH', 'USDC']);
+    page.close();
+  });
+
+  test('still lists a token nobody has bonded to', async () => {
+    // Only ETH carries support here. The other two must remain in the picker:
+    // conviction ranks, it does not admit.
+    const { page } = await landOn(REG, [1, 2, 3]);
+    const opts = [...page.$('toSel').options].map(o => o.textContent);
+    for (const sym of ['ETH', 'WBTC', 'USDC']) {
+      assert.ok(opts.includes(sym), `${sym} was dropped from the picker`);
+    }
+    page.close();
+  });
+
+  test('falls back to the listing order, and says so, when the lens is unreachable', async () => {
+    // conviction left null: the harness makes the lens throw.
+    const { page, to } = await landOn(REG);
+    assert.equal(to, 'WBTC', 'the registry order stands in');
+    const note = page.$('listNote');
+    assert.match(note.textContent, /conviction unavailable/i,
+      'a different order than the one promised must not be shown silently');
+    assert.ok(!/Built-in/i.test(note.textContent),
+      'the curated list DID load - only its ranking fell back');
+    page.close();
+  });
+
+  test('reads every listing in one batch, not one call per token', async () => {
+    const chain = new MockChain();
+    chain.registry = [ETH_ROW, WBTC_ROW, USDC_ROW, USDT_ROW, WETH_ROW];
+    chain.conviction = [1, 2, 3, 4, 5];
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    const page = await loadPage({ chain, hash: null });
+    await page.connect({ pin: false });
+
+    // chain.calls records the batch's INNER calls identically to direct ones,
+    // so it cannot tell the two apart. chain.log records actual requests.
+    const requests = chain.log.filter(r => r.method === 'eth_call'
+      && r.params?.[0]?.to?.toLowerCase() === A.TOKENLIST.toLowerCase()
+      && (r.params[0].data || '').slice(2, 10) === SEL.LISTJSON);
+    assert.equal(requests.length, 0,
+      'metadata must ride the batcher, not one eth_call per listing');
+    // And it did actually read them: five listings, all present.
+    assert.equal([...page.$('toSel').options].filter(o => o.value !== '__custom').length, 5);
     page.close();
   });
 });

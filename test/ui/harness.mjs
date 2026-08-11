@@ -54,6 +54,7 @@ export const A = {
   FLOOR: '0x00000080198137F790DA4C52bb902cf87c276748',
   FLOORVIEW: '0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7',
   TOKENLIST: '0x0000006013dF75A31678B786061C2B54bf531524',
+  ZLISTLENS: '0x000000cEa3AB048d59473F3fb116A8D7F1abd247',
   // Precision pools. PPLENS is patched per-test (the chart and liquidity suites
   // rewrite it by shape), but the factory and the liquidity lens are used at
   // their real addresses, so those two are pinned against the page below.
@@ -267,6 +268,11 @@ export class MockChain {
     // means the registry is unreachable and the page uses its built-in list,
     // which is what most suites want; set it to exercise curation.
     this.registry = null;
+    // Conviction order as ZorgTokenListLens.rankedIds() returns it: registry
+    // ids, re-sorted by live support. Null means the lens is unreachable,
+    // which is the case the page must survive by falling back to the
+    // registry's own listing order.
+    this.conviction = null;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -457,6 +463,11 @@ export class MockChain {
     if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
     // TokenList.logoOf(address) REVERTS for an unlisted token rather than
     // returning empty, which is what the page's allow-failure batch relies on.
+    if (to === A.ZLISTLENS.toLowerCase() && sel === SEL.RANKEDIDS) {
+      if (!this.conviction) throw Error('conviction lens unreachable');
+      const ids = this.conviction.map(i => u256(i));
+      return '0x' + u256(32) + u256(ids.length) + ids.join('');
+    }
     if (to === A.TOKENLIST.toLowerCase() && sel === SEL.RANKEDIDS) {
       if (!this.registry) throw Error('no registry');
       const ids = this.registry.map((_, i) => u256(i + 1));
@@ -1013,6 +1024,7 @@ export function assertAddressesMatchPage(assert) {
     // Not patched by any suite, so the fixtures answer at the real addresses
     // and a redeploy has to update both.
     PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS',
+    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS',
   };
   for (const [key, name] of Object.entries(pinned)) {
     const m = html.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));

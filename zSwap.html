@@ -185,6 +185,8 @@ const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // empty or malformed list - leaves them in place rather than presenting an empty
 // or half-populated picker. See `loadTokenList`.
 const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
+// ZorgTokenListLens: the same listings, re-sorted by live zOrg conviction.
+const ZLISTLENS="0x000000cEa3AB048d59473F3fb116A8D7F1abd247";
 const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
@@ -319,18 +321,51 @@ return best;
 // exactly how it gets reported - as ranking being ignored, or a token missing,
 // rather than as a load that failed. Falling back is right; doing it quietly
 // is not.
-const setListSource=w=>{
+// Two different degradations, and one sentence cannot carry both: the built-in
+// list standing in for the registry, and the registry loading fine but ordered
+// by its listing rank because conviction could not be read.
+const setListNote=t=>{
 const el=document.getElementById("listNote");
 if(!el)return;
-el.textContent=w?"Built-in token list — "+w:"";
-el.classList.toggle("hide",!w)};
+el.textContent=t||"";
+el.classList.toggle("hide",!t)};
+const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
+// WHICH RANKING. Two contracts answer `rankedIds()` and they are not the same
+// list. The registry sorts by the `rank` field its owner assigns - curation.
+// ZorgTokenListLens re-sorts those same ids by live `supportOf`, the zOrg
+// conviction bonded behind each listing, keeping the registry's order as the
+// tie-break - earned. The picker should show what people have put weight
+// behind, so conviction is the one to ask, and the registry is the fallback
+// rather than the default. Measured at ~260ms for the whole 17-listing sort.
+//
+// Membership still comes from the registry alone. Conviction decides what
+// RANKS, never what EXISTS: gating on it would hide every listing nobody has
+// bonded to yet, which is a different rule, not a stricter one.
+let rankFellBack=false;
+const rankedIds=async()=>{
+rankFellBack=false;
+try{
+const ids=decUintArr(await rpc(C,[{to:ZLISTLENS,data:"0x"+SEL_RANKEDIDS},L]));
+if(ids.length)return ids;
+}catch{}
+try{
+const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+// Noted at the END of the load, not here: the success path clears the note,
+// so saying it now would be saying it to nobody.
+if(ids.length)rankFellBack=true;
+return ids;
+}catch{return[]}
+};
 async function loadTokenList(){
 if(TOKENLIST===ZERO)return setListSource("registry address not set");
 try{
-const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+const ids=await rankedIds();
 if(!ids.length)return setListSource("registry is empty");
-const rows=await Promise.all(ids.slice(0,64).map(id=>
-rpc(C,[{to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)},L]).then(decStr).catch(()=>null)));
+// One batched read, not one call per listing. This was 17 separate eth_calls
+// on the connect path; the batcher above splits it to whatever the provider
+// will actually serve, so it is a few round trips instead of one per token.
+const raw=await mc3Deep(ids.slice(0,64).map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
+const rows=raw.map(h=>{try{return h?decStr(h):null}catch{return null}});
 const next=[];
 for(const row of rows){
 if(!row)continue;
@@ -369,7 +404,10 @@ v4:parseV4Pools(t.e,t.a)});
 next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
 if(!next.some(t=>t.std==="ft"))return setListSource("registry returned nothing swappable");
 TOKENS.splice(0,TOKENS.length,...next);
-setListSource("");
+// The curated list DID load; only its ranking fell back. Different sentence,
+// because "built-in list" would be wrong and would send someone looking for
+// the wrong failure.
+setListNote(rankFellBack?"Ranked by listing order — conviction unavailable":"");
 }catch(e){setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;

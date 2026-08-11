@@ -109,8 +109,14 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
     V4LENS: "0x000000c3ae1692983941495162a4aab40660e65f",
     V4PORT: "0x000000dfb53fa7f1c486470034741d5bcbe14be9",
-    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845"
+    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845",
+    ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247"
   };
+  // Live zOrg conviction order, captured from ZorgTokenListLens on mainnet.
+  // The registry's own listing order is the fixture's array order; these two
+  // genuinely disagree, and the preview is only worth looking at if it shows
+  // the same picker production does.
+  var CONVICTION = ["0", "104165018710067097353655755692819801489527232022561016148205125677286991358696", "3718177199436581777268575498026466751093263122", "707243736947857446325356514591335334", "1097077688018008265106216665536940668749033598146", "726330175714135941764069406682033110407748398240", "996101235222674412020337938588541139382869425796", "996050538495118299096582895562516634314123010963", "196268403159008932410419402999721616371951519129", "917551056842671309452305380979543736893630245704", "1248875146012964071876423320777688075155124985543", "611382286831621467233887798921843936019654057231", "572347342219638448467305352643680561532887805981", "545755017600859801259713618028590235307948280736", "1334160193485309697971829933264346612480800613613", "547287933988090748419475474076549867", "918413654914014884208350033397884031592738900037"];
 
   /* ---- abi helpers ---- */
   function pad(h) { h = h.replace(/^0x/, ""); return "0".repeat(64 - h.length) + h; }
@@ -339,8 +345,18 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     // would make loadTokenList fail and the page would show its built-in list,
     // which has no collections in it at all.
     if (sel === "df7ca268") {
-      var body = u256(32) + u256(REG.length);
-      REG.forEach(function (r) { body += u256(BigInt(r.id)); });
+      // Which contract was asked decides which order comes back. Answering
+      // both from one order would hide the fallback path entirely.
+      var order = REG.map(function (r) { return r.id; });
+      if (to === A.ZLISTLENS) {
+        var known = {};
+        REG.forEach(function (r) { known[r.id] = true; });
+        var ranked = CONVICTION.filter(function (id) { return known[id]; });
+        REG.forEach(function (r) { if (ranked.indexOf(r.id) < 0) ranked.push(r.id); });
+        order = ranked;
+      }
+      var body = u256(32) + u256(order.length);
+      order.forEach(function (id) { body += u256(BigInt(id)); });
       return "0x" + body;
     }
     if (sel === "74e18e96") {
@@ -676,11 +692,39 @@ const GALLERY = String.raw`
       '<div class="pv-note-line">' + note + "</div>";
     return d;
   }
+  function symOf(sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === sel.value) return sel.options[i].textContent;
+    }
+    return "";
+  }
   (async function () {
     var g = document.getElementById("pvGallery");
     await wait(function () { return document.getElementById("chArt"); }, 8000);
     try { chOpen = true; } catch (e) {}          // in case storage is unavailable
     await wait(function () { return typeof account !== "undefined" && account; }, 8000);
+
+    // The registry has to be IN before anything reads the landing pair. The
+    // gallery's own pick() calls mark the pair as user-chosen, which correctly
+    // stops conviction from moving it afterwards - so starting before the list
+    // lands would pre-empt the ranking and then restore the pre-empted pair,
+    // and the preview would contradict production while looking deliberate.
+    // ZORG is registry-only: its presence means the curated list is in.
+    await wait(function () {
+      var sel = document.getElementById("toSel");
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].textContent === "ZORG") return true;
+      }
+      return false;
+    }, 8000);
+
+    // What the page LANDED on, before the gallery starts cycling pairs to draw
+    // its cards. That is now decided by zOrg conviction rather than by a
+    // constant, so it has to be read rather than assumed - restoring a
+    // hardcoded ETH/USDC here would have quietly contradicted the ranking the
+    // picker above it is demonstrating.
+    var startFrom = symOf(document.getElementById("fromSel"));
+    var startTo = symOf(document.getElementById("toSel"));
 
     for (var i = 0; i < PAIRS.length; i++) {
       var a = PAIRS[i][0], b = PAIRS[i][1], caption = PAIRS[i][2], expect = PAIRS[i][3];
@@ -699,8 +743,10 @@ const GALLERY = String.raw`
         caption));
     }
     // Leave the live tile on the pair it started with.
-    pick(document.getElementById("fromSel"), "ETH");
-    pick(document.getElementById("toSel"), "USDC");
+    pick(document.getElementById("toSel"), startTo)
+      || pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("toSel"), startTo);
   })();
 })();
 </script>

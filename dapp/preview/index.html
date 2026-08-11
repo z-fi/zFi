@@ -127,8 +127,14 @@
     WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
     V4LENS: "0x000000c3ae1692983941495162a4aab40660e65f",
     V4PORT: "0x000000dfb53fa7f1c486470034741d5bcbe14be9",
-    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845"
+    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845",
+    ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247"
   };
+  // Live zOrg conviction order, captured from ZorgTokenListLens on mainnet.
+  // The registry's own listing order is the fixture's array order; these two
+  // genuinely disagree, and the preview is only worth looking at if it shows
+  // the same picker production does.
+  var CONVICTION = ["0", "104165018710067097353655755692819801489527232022561016148205125677286991358696", "3718177199436581777268575498026466751093263122", "707243736947857446325356514591335334", "1097077688018008265106216665536940668749033598146", "726330175714135941764069406682033110407748398240", "996101235222674412020337938588541139382869425796", "996050538495118299096582895562516634314123010963", "196268403159008932410419402999721616371951519129", "917551056842671309452305380979543736893630245704", "1248875146012964071876423320777688075155124985543", "611382286831621467233887798921843936019654057231", "572347342219638448467305352643680561532887805981", "545755017600859801259713618028590235307948280736", "1334160193485309697971829933264346612480800613613", "547287933988090748419475474076549867", "918413654914014884208350033397884031592738900037"];
 
   /* ---- abi helpers ---- */
   function pad(h) { h = h.replace(/^0x/, ""); return "0".repeat(64 - h.length) + h; }
@@ -357,8 +363,18 @@
     // would make loadTokenList fail and the page would show its built-in list,
     // which has no collections in it at all.
     if (sel === "df7ca268") {
-      var body = u256(32) + u256(REG.length);
-      REG.forEach(function (r) { body += u256(BigInt(r.id)); });
+      // Which contract was asked decides which order comes back. Answering
+      // both from one order would hide the fallback path entirely.
+      var order = REG.map(function (r) { return r.id; });
+      if (to === A.ZLISTLENS) {
+        var known = {};
+        REG.forEach(function (r) { known[r.id] = true; });
+        var ranked = CONVICTION.filter(function (id) { return known[id]; });
+        REG.forEach(function (r) { if (ranked.indexOf(r.id) < 0) ranked.push(r.id); });
+        order = ranked;
+      }
+      var body = u256(32) + u256(order.length);
+      order.forEach(function (id) { body += u256(BigInt(id)); });
       return "0x" + body;
     }
     if (sel === "74e18e96") {
@@ -829,6 +845,8 @@ const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 // empty or malformed list - leaves them in place rather than presenting an empty
 // or half-populated picker. See `loadTokenList`.
 const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
+// ZorgTokenListLens: the same listings, re-sorted by live zOrg conviction.
+const ZLISTLENS="0x000000cEa3AB048d59473F3fb116A8D7F1abd247";
 const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
 const SEL_CID="fb021939",SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
@@ -963,18 +981,51 @@ return best;
 // exactly how it gets reported - as ranking being ignored, or a token missing,
 // rather than as a load that failed. Falling back is right; doing it quietly
 // is not.
-const setListSource=w=>{
+// Two different degradations, and one sentence cannot carry both: the built-in
+// list standing in for the registry, and the registry loading fine but ordered
+// by its listing rank because conviction could not be read.
+const setListNote=t=>{
 const el=document.getElementById("listNote");
 if(!el)return;
-el.textContent=w?"Built-in token list — "+w:"";
-el.classList.toggle("hide",!w)};
+el.textContent=t||"";
+el.classList.toggle("hide",!t)};
+const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
+// WHICH RANKING. Two contracts answer `rankedIds()` and they are not the same
+// list. The registry sorts by the `rank` field its owner assigns - curation.
+// ZorgTokenListLens re-sorts those same ids by live `supportOf`, the zOrg
+// conviction bonded behind each listing, keeping the registry's order as the
+// tie-break - earned. The picker should show what people have put weight
+// behind, so conviction is the one to ask, and the registry is the fallback
+// rather than the default. Measured at ~260ms for the whole 17-listing sort.
+//
+// Membership still comes from the registry alone. Conviction decides what
+// RANKS, never what EXISTS: gating on it would hide every listing nobody has
+// bonded to yet, which is a different rule, not a stricter one.
+let rankFellBack=false;
+const rankedIds=async()=>{
+rankFellBack=false;
+try{
+const ids=decUintArr(await rpc(C,[{to:ZLISTLENS,data:"0x"+SEL_RANKEDIDS},L]));
+if(ids.length)return ids;
+}catch{}
+try{
+const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+// Noted at the END of the load, not here: the success path clears the note,
+// so saying it now would be saying it to nobody.
+if(ids.length)rankFellBack=true;
+return ids;
+}catch{return[]}
+};
 async function loadTokenList(){
 if(TOKENLIST===ZERO)return setListSource("registry address not set");
 try{
-const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+const ids=await rankedIds();
 if(!ids.length)return setListSource("registry is empty");
-const rows=await Promise.all(ids.slice(0,64).map(id=>
-rpc(C,[{to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)},L]).then(decStr).catch(()=>null)));
+// One batched read, not one call per listing. This was 17 separate eth_calls
+// on the connect path; the batcher above splits it to whatever the provider
+// will actually serve, so it is a few round trips instead of one per token.
+const raw=await mc3Deep(ids.slice(0,64).map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
+const rows=raw.map(h=>{try{return h?decStr(h):null}catch{return null}});
 const next=[];
 for(const row of rows){
 if(!row)continue;
@@ -1013,7 +1064,10 @@ v4:parseV4Pools(t.e,t.a)});
 next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
 if(!next.some(t=>t.std==="ft"))return setListSource("registry returned nothing swappable");
 TOKENS.splice(0,TOKENS.length,...next);
-setListSource("");
+// The curated list DID load; only its ranking fell back. Different sentence,
+// because "built-in list" would be wrong and would send someone looking for
+// the wrong failure.
+setListNote(rankFellBack?"Ranked by listing order — conviction unavailable":"");
 }catch(e){setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
@@ -1378,12 +1432,42 @@ fi:String(fromSel.value),ti:String(toSel.value)});
 const restorePair=k=>{
 if(!k)return;
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a.toLowerCase()):-1;
-if(String(fromSel.value)===k.fi){const i=at(k.fa);if(i>=0)fromSel.value=i}
-if(String(toSel.value)===k.ti){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
+// "Did this side move while the list loaded?" A side that moved was chosen
+// deliberately and is left alone. But rebuild() re-creates the options and
+// re-assigns the old index, and assigning an index the shorter list does not
+// have leaves the select BLANK - which is not a move, and reading it as one
+// silently discarded the pair a shared link had just named.
+const held=(cur,want)=>String(cur)===want||!TOKENS[cur];
+if(held(fromSel.value,k.fi)){const i=at(k.fa);if(i>=0)fromSel.value=i}
+if(held(toSel.value,k.ti)){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
 };
 // Each swap side excludes the other's pick. Send has no output token, and
 // leaving the hidden pick disabled made that token impossible to send.
 const isNft=v=>TOKENS[v]?.std==="nft";
+// Has the pair been chosen, by a click or by a link? Until it has, the page is
+// still showing a guess and is free to replace it with a better one.
+let pairChosen=false;
+// The registry arrives in conviction order - `rankedIds()` is strictly
+// descending - so the landing pair is just its top two, and curation moves the
+// dapp without a redeploy. The one exception is a wrapped twin: ETH and WETH
+// are the same asset, and opening on a wrap rather than a market is not a
+// default anyone wants, so the output takes the next distinct asset down.
+const wrapTwin=(a,b)=>{
+const x=(a||"").toLowerCase(),y=(b||"").toLowerCase(),w=WETH.toLowerCase();
+return (x===ZERO&&y===w)||(x===w&&y===ZERO);
+};
+const rankedDefaults=()=>{
+if(TOKENS.length<2)return;
+const ok=i=>!isNft(String(i));
+const fi=TOKENS.findIndex((t,i)=>ok(i));
+if(fi<0)return;
+const ti=TOKENS.findIndex((t,i)=>i!==fi&&ok(i)&&!wrapTwin(t.addr,TOKENS[fi].addr));
+if(ti<0)return;
+fromSel.value=String(fi);toSel.value=String(ti);
+fromSel.dataset.prev=fromSel.value;toSel.dataset.prev=toSel.value;
+};
+// Keep what the user picked; otherwise adopt the ranking that just loaded.
+const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
 // A collection is listed on every tab so the picker does not reshuffle underneath
 // the user, but it is only SELECTABLE where something can act on it. Swapboard and
 // Dutchboard take NFT lots; the router cannot quote one and `send` prices its
@@ -1481,7 +1565,7 @@ account=accs[0];
 const keepPair=pairAddrs();
 await loadTokenList();
 rebuild();
-restorePair(keepPair);
+settlePair(keepPair);
 // rebuild() re-creates the <option> nodes, dropping the disabled flags, and an
 // onchain list shorter than the built-in one can leave a selection pointing past
 // its end. Restore both before anything reads the pair.
@@ -1851,6 +1935,7 @@ sel.dataset.prev=sel.value;
 sel.addEventListener("change",async()=>{
 if(sel.value!=="__custom"){
 sel.dataset.prev=sel.value;
+pairChosen=true;
 syncDisabled();
 syncNftUI();
 if(sel===fromSel)refreshBalance();
@@ -1877,6 +1962,7 @@ const otherSel=sel===fromSel?toSel:fromSel;
 if(String(idx)===otherSel.value){otherSel.value=prev;otherSel.dataset.prev=prev}
 sel.value=String(idx);
 sel.dataset.prev=sel.value;
+pairChosen=true;
 stat.textContent="";
 syncDisabled();syncNftUI();
 refreshBalance();
@@ -1891,7 +1977,7 @@ stat.textContent=msg;
 }
 });
 }
-flip.onclick=()=>{const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
+flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
 window.__PREVIEW?.on?.("chainChanged",()=>location.reload());
 window.__PREVIEW?.on?.("accountsChanged",()=>location.reload());
 (async()=>{
@@ -1911,7 +1997,7 @@ showAddr();
 const keep2=pairAddrs();
 await loadTokenList();
 rebuild();
-restorePair(keep2);
+settlePair(keep2);
 refreshBalance();update();syncChart();
 }
 }catch{}
@@ -2124,6 +2210,29 @@ const payWithEth=async need=>{
     // preference, it is a trap.
     return ethMode.value==="eth"?e>=need:(w<need&&e>=need);
   }catch{return false}
+};
+// Can this account actually pay for the leg it is about to approve?
+//
+// `payWithEth` above already reads these balances - but only to CHOOSE a rail,
+// never to refuse. So a fill nobody could afford still asked for an approval
+// first and then reverted, and "execution reverted" does not tell you that the
+// problem is your balance. The approval is the part that stings: it costs gas
+// and leaves an allowance standing for a trade that never happened.
+//
+// A read that fails is not evidence of anything, so it lets the fill proceed
+// and the chain decide - this refuses only what it can prove.
+const assertFunded=async(token,need,meta)=>{
+  if(!need)return;
+  let have;
+  try{
+    have=token===ZERO
+      ?BigInt(await rpc("eth_getBalance",[account,L]))
+      :BigInt(await rpc(C,[{to:token,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
+  }catch{return}
+  if(have>=need)return;
+  const m=meta||known(token)||{sym:token===ZERO?"ETH":"tokens",dec:18};
+  throw Error(`Not enough ${m.sym} to fill: it costs ${trimAmt(need,m.dec)} `
+    +`and you hold ${trimAmt(have,m.dec)}.`);
 };
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
@@ -2800,6 +2909,12 @@ book.addEventListener("click",async e=>{
     const routeOut=nativeOut?ZERO:r.tA;
     const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()
       ||(routeOut===ZERO&&routeIn.toLowerCase()===WETH.toLowerCase());
+    // Before any approval, on every path below. `routeIn` is already the asset
+    // this fill will actually spend - ETH where the leg wraps, the quoted token
+    // otherwise - so one check covers the executor route and the direct one.
+    // An NFT leg prices in token ids, not amounts, and is not a balance.
+    if(!r.nB)await assertFunded(routeIn,r.aB,
+      known(routeIn)||(routeIn===ZERO?{sym:"ETH",dec:18}:{sym:r.sB||"TOKEN",dec:r.dB??18}));
     if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
       if((await rpc("eth_getCode",[SWAPBOL,L])).length<5)throw Error("orderbook executor not deployed yet");
       // Everything the executor will refuse, asked read-only FIRST. This runs
@@ -3668,6 +3783,7 @@ let i=TOKENS.findIndex(t=>t.sym.toLowerCase()===x||t.addr.toLowerCase()===x);
 if(i<0&&/^0x[0-9a-f]{40}$/.test(x)){try{i=await addCustomToken(x,0)}catch{}}
 return i};
 const fi=await tok(q.get("token")),oi=await tok(q.get("out"));
+if(fi>=0||oi>=0)pairChosen=true;
 rebuild();
 if(fi>=0)fromSel.value=fi;
 if(oi>=0&&oi!==fi)toSel.value=oi;
@@ -4092,11 +4208,39 @@ render();
       '<div class="pv-note-line">' + note + "</div>";
     return d;
   }
+  function symOf(sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === sel.value) return sel.options[i].textContent;
+    }
+    return "";
+  }
   (async function () {
     var g = document.getElementById("pvGallery");
     await wait(function () { return document.getElementById("chArt"); }, 8000);
     try { chOpen = true; } catch (e) {}          // in case storage is unavailable
     await wait(function () { return typeof account !== "undefined" && account; }, 8000);
+
+    // The registry has to be IN before anything reads the landing pair. The
+    // gallery's own pick() calls mark the pair as user-chosen, which correctly
+    // stops conviction from moving it afterwards - so starting before the list
+    // lands would pre-empt the ranking and then restore the pre-empted pair,
+    // and the preview would contradict production while looking deliberate.
+    // ZORG is registry-only: its presence means the curated list is in.
+    await wait(function () {
+      var sel = document.getElementById("toSel");
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].textContent === "ZORG") return true;
+      }
+      return false;
+    }, 8000);
+
+    // What the page LANDED on, before the gallery starts cycling pairs to draw
+    // its cards. That is now decided by zOrg conviction rather than by a
+    // constant, so it has to be read rather than assumed - restoring a
+    // hardcoded ETH/USDC here would have quietly contradicted the ranking the
+    // picker above it is demonstrating.
+    var startFrom = symOf(document.getElementById("fromSel"));
+    var startTo = symOf(document.getElementById("toSel"));
 
     for (var i = 0; i < PAIRS.length; i++) {
       var a = PAIRS[i][0], b = PAIRS[i][1], caption = PAIRS[i][2], expect = PAIRS[i][3];
@@ -4115,8 +4259,10 @@ render();
         caption));
     }
     // Leave the live tile on the pair it started with.
-    pick(document.getElementById("fromSel"), "ETH");
-    pick(document.getElementById("toSel"), "USDC");
+    pick(document.getElementById("toSel"), startTo)
+      || pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("toSel"), startTo);
   })();
 })();
 </script>
