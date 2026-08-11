@@ -192,32 +192,48 @@ describe('adding', () => {
     return box;
   };
 
-  test('previews what the pool will actually take, and what it hands back', async () => {
+  test('fills the other side from the pool\'s own ratio', async () => {
+    // Adding to a live band is not a free choice of two numbers: the pool
+    // takes them in the proportion its reserves are already in and returns the
+    // rest. The band is 100 ETH to 300000 USDC, so 2 ETH is 6000 USDC - which
+    // the page can work out, and used to make the user work out.
     const p = await setup();
     const box = await openAdd(p);
     const [i0, i1] = box.querySelectorAll('.lqin');
-    // Off ratio on purpose: the band is 100 ETH to 300000 USDC, so 3000 USDC
-    // can only ever be matched by 1 ETH and the second ETH comes straight back.
     typeInto(p, i0, '2');
-    typeInto(p, i1, '3000');
+    assert.equal(i1.value, '6000', 'the counterpart follows the reserves');
+
     await p.waitFor(() => /deposits/.test(box.querySelector('.lqpv').textContent),
       { label: 'preview', timeout: 6000 });
     const txt = box.querySelector('.lqpv').textContent;
-    assert.match(txt, /deposits 1 ETH \+ 3,?000 USDC|deposits 1 ETH \+ 3000 USDC/);
-    assert.match(txt, /refunds 1 ETH/);
+    assert.match(txt, /deposits 2 ETH \+ 6,?000 USDC/);
+    assert.ok(!/refunds/.test(txt), 'on ratio, so there is nothing to hand back');
     p.close();
   });
 
-  test('will not enable on one side alone', async () => {
+  test('mirrors whichever side was typed in', async () => {
     const p = await setup();
     const box = await openAdd(p);
-    const [i0] = box.querySelectorAll('.lqin');
-    typeInto(p, i0, '1');
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i1, '3000');
+    assert.equal(i0.value, '1', 'and back the other way');
+    p.close();
+  });
+
+  test('still refuses when a side is emptied', async () => {
+    // Clearing one clears both - the pool has no one-sided entry, and the zap
+    // that does is a different call through a different contract.
+    const p = await setup();
+    const box = await openAdd(p);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '2');
+    typeInto(p, i1, '');
     await p.waitFor(() => /both amounts/.test(box.querySelector('.lqpv').textContent),
       { label: 'one-sided refusal', timeout: 6000 });
     assert.equal(box.querySelector('[data-act="ac"]').disabled, true);
     p.close();
   });
+
 
   test('approves the full amount offered, then adds with minLP below the preview', async () => {
     const p = await setup();

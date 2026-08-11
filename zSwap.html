@@ -55,15 +55,12 @@ svg{vertical-align:middle;flex-shrink:0}
    and one border colour throughout. */
 .lqnew{margin-top:.5em;display:flex;flex-direction:column;gap:.35em;text-align:left}
 .lqnew.hide{display:none}
-.lqf{display:flex;align-items:center;gap:.5em;font-size:.72em;color:var(--m)}
-.lqf.hide{display:none}
-.lqf>label{flex:none;min-width:6.5em}
-.lqf>.lqin,.lqf>.r{flex:1;min-width:0}
-.lqnew .r{display:flex;gap:.35em}
-.lqnew .r>*{flex:1;min-width:0}
-.lqnew .lqin{padding:.5em .6em;font-size:1.05em;border-radius:.45em;color:var(--f)}
-.lqnew select.lqin{appearance:none;-webkit-appearance:none;
-  background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right .6em center;padding-right:1.6em}
+/* Range and Fee are the Orders tab's controls: same .dly row, same caret,
+   same spacing. They were a lookalike written in different units, which is
+   the whole reason this panel read as a different dapp. */
+.lqnew .dly{margin-top:.4em}
+.lqnew .dly .r{display:flex;gap:.4em;align-items:center}
+.lqnew .dly .r input{width:6.5em}
 .lqout{font-size:.72em;color:var(--m);line-height:1.55;min-height:1.1em}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
@@ -3054,7 +3051,10 @@ function lqRow(o,t0,t1){
  * open to anyone to seed, which is fine for a pool nobody is pointing a
  * frontend at and wrong for one you are about to.
  */
-const LQ_FEES=[[500,"0.05%"],[3000,"0.30%"],[10000,"1.00%"]];
+// The number alone does not say which to pick. What a tier is FOR is the part
+// that decides it, and it is the same taxonomy every concentrated AMM uses.
+const LQ_FEES=[[500,"0.05%","pairs that track each other"],
+  [3000,"0.30%","most pairs"],[10000,"1.00%","thin or volatile"]];
 // Width as a MULTIPLE of the opening price, which is how a range is actually
 // thought about: "it can double or halve" beats two absolute prices nobody can
 // hold in their head. "full" is adaptive - see lqFullWidth.
@@ -3062,38 +3062,22 @@ const LQ_RANGES=[["full","Full range"],["100","Wide — 100×"],["10","10×"],
   ["2","2×"],["1.25","Tight — 25%"],["custom","Custom prices"]];
 function lqNewForm(t0,t1){
   return `<div class="lqnew" data-t0="${t0.addr}" data-t1="${t1.addr}">`
-    +`<div class="lqf"><label for="lqRange">Range</label>`
-    +`<select class="lqin" id="lqRange">`
+    +`<label class="dly" for="lqRange">Range<select id="lqRange">`
     +LQ_RANGES.map(([v,l])=>`<option value="${v}"${v==="full"?" selected":""}>${l}</option>`).join("")
-    +`</select></div>`
-    +`<div class="lqf hide" id="lqCustom"><label for="lqLo">Prices</label>`
-    +`<div class="r"><input class="lqin" id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low" aria-label="Lowest price in the band">`
-    +`<input class="lqin" id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High" aria-label="Highest price in the band"></div></div>`
-    +`<div class="lqf hide" id="lqPxRow"><label for="lqPx">Opening price</label>`
-    +`<input class="lqin" id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${t1.sym} per ${t0.sym}" aria-label="Opening price"></div>`
-    +`<div class="lqf"><label for="lqFee">Fee</label>`
-    +`<select class="lqin" id="lqFee">`
-    +LQ_FEES.map(([v,l])=>`<option value="${v}"${v===3000?" selected":""}>${l}</option>`).join("")
-    +`</select></div>`
+    +`</select></label>`
+    +`<label class="dly hide" id="lqCustom">Prices<span class="r">`
+    +`<input id="lqLo" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="Low" aria-label="Lowest price in the band">`
+    +`<input id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High" aria-label="Highest price in the band"></span></label>`
+    +`<label class="dly hide" id="lqPxRow" for="lqPx">Opening price`
+    +`<input id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${t1.sym} per ${t0.sym}" aria-label="Opening price"></label>`
+    +`<label class="dly" for="lqFee">Fee<select id="lqFee">`
+    +LQ_FEES.map(([v,l,h])=>`<option value="${v}"${v===3000?" selected":""}>${l} — ${h}</option>`).join("")
+    +`</select></label>`
     +`<div class="lqout" id="lqRangeOut"></div>`
     +`<div class="lqout" id="lqPv"></div>`
     +`<button class="primary" id="lqCreate" disabled>Create band</button></div>`;
 }
 
-/**
- * The opening price, from the deposit.
- *
- * This is how pool creation works everywhere: you put in two amounts and their
- * RATIO is the price. Asking for the amounts and then asking again for a price
- * is the same question twice, and lets the two disagree.
- *
- * A band makes it slightly more than a division. The pool takes
- * `min(lpFrom0, lpFrom1)` and returns the rest, so the price that consumes
- * BOTH sides in full is the one where those two are equal. That crossing is
- * what the ratio means here, and it is found by bisection rather than by
- * re-deriving the pool's algebra - one is exact by construction, the other is
- * a copy that can drift.
- */
 // A human price (token1 per token0) as the pool's own sqrt-price-in-WAD.
 // Through the decimal string rather than Number: sqrt(raw)*1e18 loses the low
 // digits at any realistic price, and the band edges are compared exactly.
@@ -3371,11 +3355,41 @@ async function lqPreview(box){
   go.disabled=false;
 }
 
+/**
+ * Fill the other side from the pool's own ratio.
+ *
+ * Adding to a live band is not a free choice of two numbers: the pool takes
+ * them in the proportion its reserves are already in and hands the rest
+ * straight back. Asking for both and then reporting a refund made the user do
+ * that arithmetic, and punished them for getting it wrong.
+ *
+ * r0 and r1 are already on screen, so the counterpart is not a guess. The
+ * preview still has the last word - this only stops the obvious answer having
+ * to be worked out by hand.
+ */
+function lqMirror(box,src){
+  const pool=box.closest(".lqrow")?.dataset.pool||"";
+  const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+  const p=chPair();
+  if(!row||!p||!row.r0||!row.r1)return;
+  const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
+  const i=src===ins[0]?0:src===ins[1]?1:-1;
+  if(i<0)return;
+  const other=ins[1-i],v=src.value.trim();
+  if(!v){other.value="";return}
+  try{
+    const raw=parseUnits(v,i===0?t0.dec:t1.dec);
+    // Same direction the pool reads it: whichever side was typed, the other
+    // follows the reserves.
+    other.value=formatUnits(i===0?raw*row.r1/row.r0:raw*row.r0/row.r1,i===0?t1.dec:t0.dec);
+  }catch{}
+}
+
 // Delegated so rows can be re-rendered freely.
 lqList.addEventListener("input",e=>{
   if(!e.target.classList.contains("lqin"))return;
   const box=e.target.closest(".lqadd");
-  if(box){clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
+  if(box){lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
   if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
 lqList.addEventListener("change",e=>{if(e.target.id==="lqFee"||e.target.id==="lqRange")lqNewPreview()});
