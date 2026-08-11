@@ -733,7 +733,8 @@ svg{vertical-align:middle;flex-shrink:0}
 /* Range and Fee are the Orders tab's controls: same .dly row, same caret,
    same spacing. They were a lookalike written in different units, which is
    the whole reason this panel read as a different dapp. */
-.lqnew .dly{margin-top:.4em}
+.lqnew .dly{margin-top:.4em;gap:.6em}
+.lqnew .dly>select{flex:1;min-width:0;text-align:right;text-align-last:right}
 .lqnew .dly .r{display:flex;gap:.4em;align-items:center}
 .lqnew .dly .r input{width:6.5em}
 .lqout{font-size:.72em;color:var(--m);line-height:1.55;min-height:1.1em}
@@ -810,9 +811,10 @@ svg{vertical-align:middle;flex-shrink:0}
 .p button:hover:not(:disabled),.p button:focus-visible:not(:disabled){background:var(--kh)}
 .p button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
 #rate{text-wrap:balance}
-#bal,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
-#bal:empty,#rate:empty{display:none}
-#bal a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
+#bal,#bal1,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
+#bal:empty,#bal1:empty,#rate:empty{display:none}
+#bal1.hide{display:none}
+#bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:#c33;border-bottom-color:#c33}
 #th:focus-visible,#lk:focus-visible,#lq:focus-visible{background:var(--p);color:var(--f)}
 .chtog{width:100%;margin-top:.55em;padding:.5em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--n);cursor:pointer;font:inherit;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
@@ -3813,15 +3815,13 @@ function lqNewForm(t0,t1){
     +`<input id="lqHi" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="High" aria-label="Highest price in the band"></span></label>`
     +`<label class="dly hide" id="lqPxRow" for="lqPx">Opening price`
     +`<input id="lqPx" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${t1.sym} per ${t0.sym}" aria-label="Opening price"></label>`
-    +`<label class="dly" for="lqOwn">Market<select id="lqOwn">`
-    +`<option value="0" selected>Anyone can seed</option>`
-    +`<option value="1">Only I can seed it</option></select></label>`
     +`<label class="dly" for="lqFee">Fee<select id="lqFee">`
     +LQ_FEES.map(([v,l,h])=>`<option value="${v}"${v===3000?" selected":""}>${l} — ${h}</option>`).join("")
     +`</select></label>`
     +`<div class="lqout" id="lqRangeOut"></div>`
     +`<div class="lqout" id="lqPv"></div>`
     +`<div class="lqout" id="lqOwnNote"></div>`
+    +`<div class="lqout" id="lqGas"></div>`
     +`<button class="primary" id="lqCreate" disabled>Create band</button></div>`;
 }
 
@@ -4139,7 +4139,7 @@ lqList.addEventListener("input",e=>{
   if(box){lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
   if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
-lqList.addEventListener("change",e=>{if(["lqFee","lqRange","lqOwn"].includes(e.target.id))lqNewPreview()});
+lqList.addEventListener("change",e=>{if(["lqFee","lqRange"].includes(e.target.id))lqNewPreview()});
 
 /**
  * What the pool will take, and what it will refuse.
@@ -4225,15 +4225,20 @@ async function lqNewPreview(){
     `${fmtPx(lo)} – ${fmtPx(hi)} · opens at ${fmtPx(openAt)} ${t1.sym} per ${t0.sym}`
     +(oneSided===0?` · ${t0.sym} only`:oneSided===1?` · ${t1.sym} only`:"");
   const fee=BigInt(box.querySelector("#lqFee").value);
-  const owned=box.querySelector("#lqOwn").value==="1";
-  // Neither choice can ever charge a trader: creatorFeeBps is immutable and
-  // this page only ever writes zero. What ownership decides is who may open
-  // the market - nothing else, and not later.
-  box.querySelector("#lqOwnNote").textContent=owned
-    ?"Only your address can seed this market. Worth it when the opening price is the point — a launch — since a squatter can otherwise seed it first and leave your create reverting."
-    :`Unowned, like any AMM pool: anyone may seed it and nobody can ever take a fee from it. Prices are ${t1.sym} per ${t0.sym}.`;
-  const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,owned?(account||ZERO):ZERO);
-  box.dataset.owned=owned?"1":"";
+  // ALWAYS UNOWNED, and deliberately not a question.
+  //
+  // `lqMarket` still takes an owner, because the day this page offers a
+  // creator fee it will need one: `creatorFeeBps != 0` requires a recipient,
+  // so a fee IS ownership and the two are one decision. Asking it now, with
+  // the fee fixed at zero, offered only a gate on who may open the market -
+  // against a squat that costs the squatter real capital and is arbitraged
+  // straight back out. That is a narrow, jargon-heavy trade sitting at the
+  // same weight as Range and Fee, which change what the position earns.
+  box.querySelector("#lqOwnNote").textContent=
+    `Unowned, like any AMM pool: anyone may add, and no creator fee can ever be`
+    +` charged. Prices are ${t1.sym} per ${t0.sym}.`;
+  lqGasNote(box);
+  const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,ZERO);
   box.dataset.sl=sl;box.dataset.sh=sh;box.dataset.sp=sp;box.dataset.fee=fee;
   box.dataset.a0=a0;box.dataset.a1=a1;box.dataset.lp=0;
   try{
@@ -4268,6 +4273,34 @@ async function lqNewPreview(){
 }
 
 /**
+ * What creating a band costs, before the wallet asks.
+ *
+ * A Precision market IS a contract - the create deploys ~19.4 KB of pool code,
+ * and code deposit alone is 200 gas a byte. Measured on the first real create:
+ * 4.63M gas, of which ~3.9M is the deployment. That is the architecture rather
+ * than waste, but it is twenty-odd times an ordinary transaction, and a wallet
+ * offering its usual tip on top of it turns a 0.0014 ETH transaction into a
+ * 0.010 ETH one without ever looking wrong.
+ *
+ * So it is priced here, at the CURRENT base fee, before the prompt - the one
+ * moment the number can still be questioned.
+ */
+const LQ_CREATE_GAS=4700000n;
+async function lqGasNote(box){
+  const el=box.querySelector("#lqGas");
+  if(!el)return;
+  el.textContent=`Creating deploys the pool contract — about `
+    +`${(Number(LQ_CREATE_GAS)/1e6).toFixed(1)}M gas.`;
+  try{
+    const wei=BigInt(await rpc("eth_gasPrice",[]))*LQ_CREATE_GAS;
+    el.textContent=`Creating deploys the pool contract — about `
+      +`${(Number(LQ_CREATE_GAS)/1e6).toFixed(1)}M gas, roughly `
+      +`${trimAmt(wei,18)} ETH at the moment. Adding to a band that already `
+      +`exists costs a fraction of it, so check the fee your wallet offers.`;
+  }catch{}
+}
+
+/**
  * Deploy the band and seed it, in one transaction.
  *
  * `createAndSeed` is deliberately not two steps. A pool that exists but has
@@ -4298,7 +4331,7 @@ async function lqCreate(){
     // against, and the opening price is the caller's own. minLP guards
     // rounding here, not a counterparty.
     const minLP=lp>0n?lp*(10000n-bps)/10000n:0n;
-    const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,box.dataset.owned?account:ZERO);
+    const market=lqMarket(t0.addr,t1.addr,sl,sh,fee,ZERO);
     // token0 is the sorted-first side, and ETH sorts first as address(0) - so
     // a native leg is always amount0, and the factory takes it as value.
     const native=t0.addr===ZERO;

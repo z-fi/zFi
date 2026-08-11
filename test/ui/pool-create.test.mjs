@@ -201,36 +201,20 @@ describe('creating a band', () => {
     p.close();
   });
 
-  test('can gate seeding to the creator when that is what matters', async () => {
-    // For a launch the opening price IS the product, so being squatted is not
-    // noise. Naming the market is the only thing that stops it, and it still
-    // costs traders nothing - creatorFeeBps is immutable at zero.
+  test('does not ask about ownership at all', async () => {
+    // The only thing it could buy today is a gate on who may OPEN the market -
+    // creatorFeeBps is fixed at zero here and immutable in the pool - and that
+    // is a narrow, jargon-heavy trade to put at the same weight as Range and
+    // Fee, which change what the position earns. It comes back with the
+    // creator fee, because a fee REQUIRES a recipient: they are one decision.
     const p = await setup();
     await custom(p);
-    const own = form(p).querySelector('#lqOwn');
-    own.value = '1';
-    own.dispatchEvent(new p.window.Event('change', { bubbles: true }));
-    await new Promise(r => p.window.setTimeout(r, 420));
-    await p.settle();
-
-    assert.match(p.$('lqOwnNote').textContent, /Only your address can seed/i);
-    p.click('lqCreate');
-    await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
-    await p.settle();
-
-    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
-    assert.equal(wordAddr(b, 6).toLowerCase(), A.ACCOUNT.toLowerCase(), 'named to the creator');
-    assert.equal(word(b, 7), 0n, 'and still no fee');
-    p.close();
-  });
-
-  test('says which of the two was chosen, since neither can charge a trader', async () => {
-    const p = await setup();
-    await custom(p);
+    assert.equal(form(p).querySelector('#lqOwn'), null, 'no ownership control');
     assert.match(p.$('lqOwnNote').textContent, /Unowned, like any AMM pool/i);
-    assert.match(p.$('lqOwnNote').textContent, /nobody can ever take a fee/i);
+    assert.match(p.$('lqOwnNote').textContent, /no creator fee can ever be charged/i);
     p.close();
   });
+
 
 
   test('carries a slippage floor under the previewed shares', async () => {
@@ -468,6 +452,23 @@ describe('creating a band', () => {
     p.click(p.$('bal1').querySelector('a'));
     await p.settle();
     assert.equal(p.$('outAmt').value, '100000', 'the whole USDC balance, which needs no gas held back');
+    p.close();
+  });
+
+  test('prices the deployment before the wallet is asked', async () => {
+    // A Precision market IS a contract: the create deploys ~19.4 KB of pool
+    // code, and code deposit alone is 200 gas a byte. The first real create
+    // cost 4.63M gas - twenty-odd times an ordinary transaction - and a wallet
+    // offering its usual tip on top turned 0.0014 ETH into 0.010 ETH without
+    // ever looking wrong. The number has to be visible while it can still be
+    // questioned.
+    const p = await setup();
+    await custom(p);
+    await p.waitFor(() => /M gas/.test(p.$('lqGas').textContent), { label: 'the cost' });
+    assert.match(p.$('lqGas').textContent, /deploys the pool contract/i);
+    assert.match(p.$('lqGas').textContent, /4\.7M gas/);
+    assert.match(p.$('lqGas').textContent, /check the fee your wallet offers/i,
+      'the tip is the half the dapp cannot set');
     p.close();
   });
 });
