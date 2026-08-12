@@ -211,6 +211,43 @@ describe('bidding for an NFT', () => {
     await p.settle();
   };
 
+  test('hides the controls a collection order cannot carry', async () => {
+    // A form showing a control the order cannot express asks a question with no
+    // answer, and the user cannot tell that from one that matters.
+    //
+    // Fill is the clearest case: `placeFloor` has no partial-fill parameter and
+    // neither does an NFT listing - a token transfers or it does not, there is
+    // no 60% of one - so `fill.value` never reached either call. It was already
+    // hidden for Dutch and climbing bids; a collection was not part of that test.
+    const p = await buying();
+    assert.equal(p.visible('fillL'), false,
+      'an NFT order cannot be partially filled, so Fill must not be offered');
+
+    // And Floorboard has no "never expires" - the window IS the bid - so
+    // offering "Never" offers something the button then refuses, one step late.
+    await bid(p, { price: '2', id: '' });
+    assert.match(p.$('dlyL').textContent, /Bid window/,
+      'a collection bid is a window, not an expiry');
+    assert.notEqual(p.$('dly').options[0].textContent, 'Never',
+      '"Never" is not on offer for a board that cannot express it');
+    p.close();
+  });
+
+  test('typing an id moves it back to a Swapboard order, and the controls follow', async () => {
+    // A collection bid and a bid for one token are different orders on
+    // different boards. The controls have to move with the keystroke rather
+    // than wait for the order type to be touched.
+    const p = await buying();
+    await bid(p, { price: '2', id: '' });
+    assert.match(p.$('dlyL').textContent, /Bid window/);
+
+    await bid(p, { price: '2', id: '7' });
+    assert.match(p.$('dlyL').textContent, /Expires/,
+      'a bid for one token is a Swapboard order, which really does expire');
+    assert.equal(p.$('dly').options[0].textContent, 'Never');
+    p.close();
+  });
+
   test('offers to bid once a price and a token id are named', async () => {
     const p = await buying();
     // A blank id is not a missing answer now - it is the collection bid.

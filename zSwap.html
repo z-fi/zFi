@@ -2490,7 +2490,11 @@ let floorSeq=0;
 // render() too, not only the floor note: on a listing the id is part of what
 // the button says and whether it is enabled, so typing one left the form
 // still asking for it.
-addEventListener("input",e=>{if(e.target&&e.target.id==="nftId"){showFloor();render()}});
+// Typing an id turns a COLLECTION bid into a bid for one token, and those
+// two are different orders on different boards - a Floorboard bid that needs
+// a window versus a Swapboard order that does not. The controls have to move
+// with the keystroke, not wait for the order type to be touched.
+addEventListener("input",e=>{if(e.target&&e.target.id==="nftId"){syncOrderType();showFloor();render()}});
 async function showFloor(){
   const el=document.getElementById("floorNote");if(!el)return;
   const side=isNft(fromSel.value)?fromSel.value:isNft(toSel.value)?toSel.value:null;
@@ -3512,6 +3516,12 @@ if(!anyNft)nftId.value="";
 // there the field is a required one and the placeholder has to stop offering
 // a choice that does not exist on that side.
 nftId.placeholder=isNft(fromSel.value)?"Which one you are selling":"Any from collection";
+// The order-type controls now depend on whether a leg is a collection - Fill
+// cannot apply to one, and a collection bid has no "never expires" - so the
+// pass that decides them has to run when THAT changes, not only when the order
+// type does. Picking a collection from the token list is exactly the moment it
+// changes, and it was the one moment nothing re-ran.
+if(typeof syncOrderType==="function")syncOrderType();
 showFloor();
 };
 const setTab=t=>{
@@ -3580,6 +3590,25 @@ const syncOrderType=()=>{
   // Both schedules need a second price and a duration; only which end of the
   // range each field holds differs, which the labels say.
   const sched=dutch||bid;
+  /**
+   * THE CONTROLS FOLLOW WHAT THE ORDER CAN EXPRESS.
+   *
+   * A form that shows a control the order cannot carry is asking a question
+   * with no answer, and the user cannot tell that from a question that matters.
+   * Two were doing exactly that:
+   *
+   *   Fill. `placeFloor` has no partial-fill parameter and neither does an NFT
+   *   listing - a token transfers or it does not, and there is no 60% of one.
+   *   `fill.value` never reached either call, so the control sat there offering
+   *   a choice with no effect. It was already hidden for Dutch and climbing
+   *   bids; a collection was simply not part of that test.
+   *
+   *   The window. Floorboard has no "never expires" - the window IS the bid -
+   *   so a collection bid offering "Never" offers a thing that is refused at
+   *   the button ("A collection bid needs a window"), one step too late.
+   */
+  const nftLeg=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
+  const collectionBid=nftLeg&&isNft(toSel.value)&&!nftId.value.trim();
   floorL.classList.toggle("hide",!sched);
   floorL.firstChild.nodeValue=bid?"Opening bid":"Floor total";
   /**
@@ -3596,10 +3625,10 @@ const syncOrderType=()=>{
    * rather than resting, because a bid that kept climbing would have no ceiling.
    */
   if(tab==="book"){
-    dlyL.firstChild.nodeValue=dutch?"Decays over":bid?"Bid window":"Expires";
-    dly.options[0].textContent=sched?"—":"Never";
+    dlyL.firstChild.nodeValue=dutch?"Decays over":bid||collectionBid?"Bid window":"Expires";
+    dly.options[0].textContent=sched||collectionBid?"—":"Never";
   }
-  fillL.classList.toggle("hide",tab!=="book"||sched);
+  fillL.classList.toggle("hide",tab!=="book"||sched||nftLeg);
   rc.classList.toggle("hide",sched);
   rcvEl.classList.toggle("hide",sched);
   // Persist the forced default too, or leaving and re-entering the tab restores
