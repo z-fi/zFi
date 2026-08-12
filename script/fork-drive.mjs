@@ -308,8 +308,26 @@ const WARM = {
 process.stdout.write('warming');
 await Promise.all(Object.values(WARM).map(a => rpc('eth_getCode', [a, 'latest'])));
 process.stdout.write(` ${Object.keys(WARM).length} contracts\n`);
-// Gas has to come from somewhere, and this is a throwaway chain.
-await rpc('anvil_setBalance', [ACCOUNT, '0x' + (10n ** 19n).toString(16)]);
+/**
+ * Gas has to come from somewhere, and this is a throwaway chain.
+ *
+ * anvil's cheat methods APPLY but do not always answer - `anvil_setBalance`
+ * here returns an empty body and never resolves, which hangs anything that
+ * awaits it. So this is fired without waiting and then CHECKED, which is the
+ * honest way round: the balance is the thing we need, not the acknowledgement.
+ */
+const want = 10n ** 19n;
+if ((await bal('ETH', ACCOUNT)) < want) {
+  fetch(RPC, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
+      params: [ACCOUNT, '0x' + want.toString(16)] }),
+  }).catch(() => {});
+  await sleep(1500);
+  const got = await bal('ETH', ACCOUNT);
+  if (got < want) { console.error(`could not fund ${ACCOUNT} (has ${fmt(got)} ETH)`); process.exit(1); }
+}
+console.log(`funded  ${fmt(await bal('ETH', ACCOUNT))} ETH`);
 
 const run = scenarios[SCENARIO];
 if (!run) { console.error(`unknown scenario "${SCENARIO}". Try: ${Object.keys(scenarios).join(', ')}`); process.exit(1); }
