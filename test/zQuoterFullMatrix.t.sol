@@ -58,9 +58,16 @@ contract zQuoterFullMatrixTest is Test {
     ];
 
     address user = address(0xB0B);
-    uint256 routed;
-    uint256 refused;
-    uint256 broke;
+
+    /// @dev Outcome of one pair. Returned rather than accumulated in storage:
+    /// the loop rolls the fork back between pairs (see the test below), and a
+    /// counter in storage is state like any other - it would be rolled back too,
+    /// and the totals would report the last pair instead of all of them.
+    enum R {
+        ROUTED,
+        REFUSED,
+        BROKE
+    }
 
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
@@ -86,8 +93,17 @@ contract zQuoterFullMatrixTest is Test {
         } else {
             deal(t, user, amt * 2, true);
         }
+        // Low-level, and the return value is DELIBERATELY ignored. USDT's
+        // approve returns nothing at all, so `IERC20(t).approve(...)` reverts
+        // decoding a bool from empty returndata - not in the router, in this
+        // helper. That killed the whole test at the first pair with USDT as the
+        // INPUT (USDT->ETH, i=6), which is why the run reported a bare
+        // "EvmError: Revert" and the last two rows of the matrix never ran.
+        // Approving from zero, so USDT's other quirk - a non-zero-to-non-zero
+        // approve reverting - does not arise.
         vm.prank(user);
-        IERC20(t).approve(ZROUTER, type(uint256).max);
+        (bool okApprove,) = t.call(abi.encodeWithSignature("approve(address,uint256)", ZROUTER, type(uint256).max));
+        require(okApprove, "approve failed");
     }
 
     function _bal(address t, address who) internal view returns (uint256) {
@@ -95,7 +111,7 @@ contract zQuoterFullMatrixTest is Test {
     }
 
     /// Quote, then execute, then verify the recipient actually received it.
-    function _run(uint256 i, uint256 j) internal {
+    function _run(uint256 i, uint256 j) internal returns (R) {
         address tin = toks[i];
         address tout = toks[j];
         uint256 amt = amts[i];
@@ -111,15 +127,13 @@ contract zQuoterFullMatrixTest is Test {
             cd = mc;
             msgVal = mv;
         } catch {
-            refused++;
             emit log_named_string(pair, "REFUSED at quote (acceptable)");
-            return;
+            return R.REFUSED;
         }
 
         if (cd.length == 0 || expected == 0) {
-            refused++;
             emit log_named_string(pair, "no route (acceptable)");
-            return;
+            return R.REFUSED;
         }
 
         _fund(tin, amt + msgVal);
@@ -129,33 +143,60 @@ contract zQuoterFullMatrixTest is Test {
         (bool ok,) = ZROUTER.call{value: msgVal}(cd);
 
         if (!ok) {
-            broke++;
             emit log_named_string(pair, "!!! QUOTED BUT EXECUTION REVERTED");
-            return;
+            return R.BROKE;
         }
 
         uint256 got = _bal(tout, user) - before;
         if (got == 0) {
-            broke++;
             emit log_named_string(pair, "!!! EXECUTED BUT DELIVERED NOTHING");
-            return;
+            return R.BROKE;
         }
         // Delivered must be within 5% of the quote (slippage bound is 1%).
         if (got * 100 < expected * 95) {
-            broke++;
             emit log_named_string(pair, "!!! DELIVERED FAR LESS THAN QUOTED");
             emit log_named_uint("  quoted", expected);
             emit log_named_uint("  got   ", got);
-            return;
+            return R.BROKE;
         }
-        routed++;
+        return R.ROUTED;
     }
 
+    /// @dev EVERY PAIR STARTS FROM THE SAME CLEAN FORK.
+    ///
+    /// This is not tidiness, it is the difference between the test measuring
+    /// the router and measuring itself. A forge test is ONE transaction, and
+    /// the V4 path writes transient storage - which clears at the end of a
+    /// TRANSACTION, not at the end of a call. So the second swap in a test ran
+    /// against tstore slots the first swap had already set, and reverted.
+    ///
+    /// It reported that as "!!! QUOTED BUT EXECUTION REVERTED", the loudest
+    /// message it has, on ten major pairs including ETH->USDC - all of which
+    /// execute perfectly when they are the first swap in their own test. The
+    /// suite then aborted outright partway through the fifth row, so half the
+    /// matrix never ran at all. An exhaustive check that fabricates failures
+    /// and then stops early is worse than no check: the reason this file exists
+    /// is that a real execution bug hid behind a confident quote, and that is
+    /// exactly the signal these false positives were burying.
+    ///
+    /// `revertToState` restores transient storage along with everything else,
+    /// which is what makes each pair a fresh transaction. The snapshot is taken
+    /// once and reused; the counters live in memory because storage is state and
+    /// would be rolled back with it.
     function test_fullMatrix_executes() public {
+        uint256 routed;
+        uint256 refused;
+        uint256 broke;
+
+        uint256 clean = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
-                _run(i, j);
+                vm.revertToState(clean);
+                R r = _run(i, j);
+                if (r == R.ROUTED) routed++;
+                else if (r == R.REFUSED) refused++;
+                else broke++;
             }
         }
         emit log_named_uint("routed+executed ", routed);
