@@ -75,6 +75,36 @@ it before the wallet prompt because a wallet's default tip is sized for
 ordinary transactions - the first create paid 2 gwei against a 0.163 gwei base
 fee, and 92% of the fee went to the validator.
 
+### A contract creator cannot open a NATIVE named market
+
+`ConstantSurchargeHook.collectTo` exists so a fee recipient that cannot
+receive native ETH can still be paid: "this recovery path supports contract
+recipients that cannot receive native ETH". For an ETH-quoted market, such a
+recipient cannot reach that path unaided.
+
+The two halves do not meet:
+
+- A named market admits only its creator as the seeder (`NotCreator`), so the
+  contract that is the `feeRecipient` has to be the one calling `seed`.
+- Seeding refunds the unconsumed input to `msg.sender` - `_fund` passes it as
+  `refundTo` - and a seed almost always leaves dust. Measured at 631 wei in the
+  fixture that found this.
+
+So a contract that reverts on receiving ETH reverts on its own seed, unless it
+supplies amounts the pool consumes exactly, which is not practical to arrange.
+
+NEITHER CONTRACT IS WRONG, and neither is being changed for it. Editing a
+deployed contract's source - even a comment - changes the metadata hash and
+would stop the verified addresses reproducing from this tree, which is a real
+cost against a narrow limitation. The workarounds, in preference order:
+
+1. Make the market UNOWNED. The seam only exists because a named market pins
+   the seeder, and unowned is the dapp's default anyway.
+2. Name an EOA as `feeRecipient` and have it forward. Ownership is only a seed
+   gate here; `creatorFeeBps` is immutable at zero from this dapp.
+3. Quote the market in WETH rather than native ETH, which removes the refund
+   path entirely.
+
 ### The deployer key is burned
 
 `0xAcFBA7Ce872C6eAD99d535586f84b0D68ADE4082` was used to broadcast and its
