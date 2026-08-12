@@ -226,7 +226,21 @@ svg{vertical-align:middle;flex-shrink:0}
 <script>
 const ic=()=>th.textContent=H.className=='d'?'☀︎':'☾';ic();
 th.onclick=()=>{H.classList.toggle('d');LS.t=H.className=='d'?'d':'l';ic()};
-const ZQUOTER="0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13";
+// The hub quoter. Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which
+// let Curve win an EXACT-OUT quote it cannot serve: `exchange` is exact-in only,
+// so the router sizes the input backwards with `get_dx(want) + 1`, and `get_dx`
+// is not a tight inverse of `get_dy`. It rounds down, the swap lands just under
+// the target, and the router then correctly refuses to under-deliver. Measured:
+// 40081764 USDC bought 39999997595328568832 BOLD against a 40e18 target - eight
+// of fifty-six ordered pairs quoted confidently and reverted, at every size, and
+// even against a 90% bound, because that bound caps the INPUT rather than the
+// output. This one declines Curve on exact-out so the next-best venue wins on
+// its own merits instead.
+//
+// Compared against the old one across 30 ordered pairs in both directions before
+// switching: identical best-source and amounts on every one, zero routing
+// changes. It is a strict addition, not a different opinion about price.
+const ZQUOTER="0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16";
 const WNS="0x0000000000696760E15f265e828DB644A0c242EB";
 const GNS="0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6";
 const ENSREG="0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";

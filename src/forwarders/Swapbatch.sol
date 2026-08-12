@@ -54,17 +54,25 @@ pragma solidity ^0.8.36;
 ///                     fillOrders(uint256[],uint256,uint256[],uint256[],address) <- pays direct
 ///                     tryFillOrders(uint256[],uint256,uint256[],uint256[],address)
 ///
-///         WHY ONLY THESE TWO OF THE FOUR BOARDS. `Swapbol` forwards to four -
-///         v1, the current Swapboard, Dutchboard and Floorboard - but the other
-///         two need no helper, for opposite reasons:
+///         WHICH OF THE FOUR BOARDS ARE HERE. `Swapbol` forwards to four - v1,
+///         the current Swapboard, Dutchboard and Floorboard - and three of them
+///         are bound here, each for a reason the others do not share:
 ///
-///           Dutchboard  `fillMany`/`tryFillMany` are ALREADY payable and take a
-///                       `to`, so paying ETH across a batch is native there.
-///           Floorboard  `tryHitMany` is not payable at all. Hitting a bid runs
-///                       the other way: the taker DELIVERS the asset and receives
-///                       proceeds, so there is no ETH leg for this to wrap.
+///           v1          no batch fill and no `multicall`. Driven one order at a
+///                       time by `fillOrdersWithEth`, which is the only way N
+///                       fills there can share a transaction at all.
+///           current     has a batch fill, but no payable one.
+///           Dutchboard  batches ETH natively and is NOT routed here for that.
+///                       Bound for the one shape it cannot serve: a listing
+///                       quoted in WETH, which `fill` refuses to take ether for
+///                       and `_settle` pays by pulling the quote asset from the
+///                       caller. See `fillDutchWithEth`.
 ///
-///         Adding either would be a helper with nothing to help.
+///         Floorboard is deliberately absent, and that is not an oversight to be
+///         corrected later: `tryHitMany` is not payable because hitting a bid
+///         runs the other way - the taker DELIVERS the asset and RECEIVES the
+///         proceeds. There is no ETH leg to wrap, so a binding would be a
+///         payable entry point with no payable work behind it.
 ///
 ///         So on a legacy board the `tokensOut` sweep is not a safety net, it is the
 ///         DELIVERY PATH, and the whole purchase sits here until it runs. Omitting a
@@ -81,6 +89,9 @@ contract Swapbatch {
     address public immutable weth;
     address public immutable legacyBoard;
     address public immutable modernBoard;
+    /// @dev Dutchboard, for the one case it cannot serve itself. See
+    ///      `fillDutchWithEth`. Zero disables that path.
+    address public immutable dutchboard;
 
     /// @dev Transient reentrancy flag. One past the `Reentrancy()` selector, so the
     ///      slot and the error the guard reverts with cannot be confused for each
@@ -118,16 +129,24 @@ contract Swapbatch {
     /// @dev v1 leg whose tokenB is not WETH, so `msg.value` cannot pay for it.
     error NotWethQuoted(uint256 index, address tokenB);
 
-    constructor(address _weth, address _legacyBoard, address _modernBoard) {
+    constructor(address _weth, address _legacyBoard, address _modernBoard, address _dutchboard) {
         if (_weth == address(0)) revert ZeroAddress();
         if (_weth.code.length == 0) revert NotAContract(_weth);
         if (_legacyBoard == address(0) && _modernBoard == address(0)) revert UnknownBoard(address(0));
         if (_legacyBoard != address(0) && _legacyBoard.code.length == 0) revert NotAContract(_legacyBoard);
         if (_modernBoard != address(0) && _modernBoard.code.length == 0) revert NotAContract(_modernBoard);
         if (_legacyBoard != address(0) && _legacyBoard == _modernBoard) revert UnknownBoard(_legacyBoard);
+        if (_dutchboard != address(0)) {
+            if (_dutchboard.code.length == 0) revert NotAContract(_dutchboard);
+            // A board reachable through two different paths is a board whose ABI
+            // the caller gets to choose, which is the thing `UnknownBoard` exists
+            // to prevent.
+            if (_dutchboard == _legacyBoard || _dutchboard == _modernBoard) revert UnknownBoard(_dutchboard);
+        }
         weth = _weth;
         legacyBoard = _legacyBoard;
         modernBoard = _modernBoard;
+        dutchboard = _dutchboard;
     }
 
     /// @notice Fill `orderIds` on `board`, paying with the ETH attached to this call.
@@ -362,6 +381,116 @@ contract Swapbatch {
         }
     }
 
+    /// @notice Batch-fill WETH-quoted Dutchboard listings, paying native ETH.
+    /// @dev    NOT for native-ETH-quoted lots. Those are already batchable with
+    ///         `msg.value` straight at the board, and routing them through here
+    ///         would wrap ether the board will not spend. Every leg must be
+    ///         quoted in WETH and is checked before anything is wrapped.
+    ///
+    ///         Unlike the legacy Swapboard path there is no `tokensOut` sweep:
+    ///         Dutchboard takes a recipient and delivers the lot straight to it,
+    ///         so this contract never holds the purchase. It holds only the
+    ///         wrapped input, and only for the length of the call.
+    /// @param  ids           Listings to fill.
+    /// @param  takes         ERC20 units per listing; 0 (or the full bundle) for NFTs.
+    /// @param  maxCosts      Per-leg payment bound. A decaying price is read at
+    ///                       execution, so this - not the quote - is what the
+    ///                       batch commits to, and their sum is what gets wrapped.
+    /// @param  recipient     Receives every lot and all refunds; 0 means the caller.
+    ///                       For an NFT lot this must be able to hold an ERC-721:
+    ///                       delivery is `transferFrom`, with no receiver hook.
+    /// @param  skipFailures  true uses `tryFillMany`, which steps over legs that
+    ///                       went stale; their share of the wrapped input comes
+    ///                       back as ETH.
+    /// @return filled        Per-leg outcome; all true on the atomic path.
+    function fillDutchWithEth(
+        uint256[] calldata ids,
+        uint128[] calldata takes,
+        uint256[] calldata maxCosts,
+        address recipient,
+        bool skipFailures
+    ) public payable returns (bool[] memory filled) {
+        assembly ("memory-safe") {
+            if tload(REENTRANCY_GUARD_SLOT) {
+                mstore(0x00, 0xab143c06) // Reentrancy()
+                revert(0x1c, 0x04)
+            }
+            tstore(REENTRANCY_GUARD_SLOT, 1)
+        }
+
+        address board = dutchboard;
+        if (board == address(0)) revert UnknownBoard(address(0));
+        uint256 n = ids.length;
+        if (n == 0) revert NoOrders();
+        if (n != takes.length || n != maxCosts.length) revert LengthMismatch();
+
+        address to = recipient == address(0) ? msg.sender : recipient;
+        if (to == address(this) || to == weth || to == address(0)) revert BadRecipient();
+
+        // Every leg must be payable in the asset this contract is about to mint.
+        // A native-quoted lot would be settled out of `msg.value` the board never
+        // receives here, and any other ERC20 would be pulled from a balance this
+        // contract does not hold - both revert, but neither says why.
+        uint256 total;
+        for (uint256 i; i < n; ++i) {
+            if (maxCosts[i] == 0) revert ZeroFillAmount(i);
+            (,,,,,, address quote,,,,) = IDutchListings(board).listings(ids[i]);
+            if (quote != weth) revert NotWethQuoted(i, quote);
+            total += maxCosts[i];
+        }
+        if (msg.value < total) revert InsufficientValue(total, msg.value);
+
+        uint256 ethBase = address(this).balance - msg.value;
+        uint256 wethBase = balanceOf(weth, address(this));
+
+        // Wrap the BOUND, not the price. A decaying lot costs whatever it costs
+        // when the block lands; the difference is refunded below.
+        IWETH(weth).deposit{value: total}();
+        uint256 afterDeposit = balanceOf(weth, address(this));
+        if (afterDeposit < wethBase) revert WETHAmountMismatch(wethBase, afterDeposit);
+        if (afterDeposit - wethBase != total) revert WETHAmountMismatch(total, afterDeposit - wethBase);
+        safeApprove(weth, board, total);
+
+        // No ETH is forwarded: these legs are ERC20-quoted, and Dutchboard's
+        // single `fill` rejects value outright on one. The board pulls WETH.
+        if (skipFailures) {
+            (filled,) = IDutchBatchFill(board).tryFillMany(ids, takes, maxCosts, to);
+            if (filled.length != n) revert InvalidResult();
+        } else {
+            IDutchBatchFill(board).fillMany(ids, takes, maxCosts, to);
+            filled = new bool[](n);
+            for (uint256 i; i < n; ++i) {
+                filled[i] = true;
+            }
+        }
+
+        safeApprove(weth, board, 0);
+
+        // Whatever the board did not pull. Measured, not inferred: a decaying
+        // price means the spend is not knowable before the call, and a skipped
+        // leg spends nothing at all.
+        uint256 left = balanceOf(weth, address(this));
+        if (left < wethBase) revert WETHAmountMismatch(wethBase, left);
+        left -= wethBase;
+        if (left != 0) {
+            IWETH(weth).withdraw(left);
+            uint256 received = address(this).balance - (ethBase + (msg.value - total));
+            if (received != left) revert WETHAmountMismatch(left, received);
+        }
+
+        if (address(this).balance < ethBase) revert InvalidResult();
+        assembly ("memory-safe") {
+            let refund := sub(selfbalance(), ethBase)
+            if refund {
+                if iszero(call(gas(), to, refund, codesize(), 0x00, codesize(), 0x00)) {
+                    mstore(0x00, 0xb12d13eb) // ETHTransferFailed()
+                    revert(0x1c, 0x04)
+                }
+            }
+            tstore(REENTRANCY_GUARD_SLOT, 0)
+        }
+    }
+
     function _legacyOrders(address board, uint256[] calldata orderIds)
         internal
         view
@@ -429,6 +558,49 @@ interface IWETH {
 ///      beside it that "a v1 board has no payable entry point at all".
 interface ILegacyOrderFill {
     function fillOrder(uint256 orderId, uint256 deadline) external;
+}
+
+/// @dev Dutchboard batches ETH natively and needs no help doing it - `fillMany`
+///      and `tryFillMany` are payable, thread `msg.value` across the legs and
+///      refund the remainder once at the end. `fillDutchWithEth` exists for the
+///      one shape it CANNOT serve: a listing quoted in WETH.
+///
+///      There, `fill` reverts `Bad()` if any ETH is attached, and `_settle`
+///      pays with `_payQuoteToken(quote, msg.sender, ...)` - it pulls the quote
+///      asset from the caller and never looks at `msg.value`. So a taker holding
+///      only ether cannot fill a WETH-quoted lot at all: not in a batch, not one
+///      at a time. Wrapping first is the whole job.
+interface IDutchBatchFill {
+    function fillMany(uint256[] calldata ids, uint128[] calldata takes, uint256[] calldata maxCosts, address to)
+        external
+        payable
+        returns (uint256 ethSpent);
+    function tryFillMany(uint256[] calldata ids, uint128[] calldata takes, uint256[] calldata maxCosts, address to)
+        external
+        payable
+        returns (bool[] memory filled, uint256 ethSpent);
+}
+
+/// @dev The public mapping getter. Solidity omits the struct's trailing dynamic
+///      `ids` array from an auto-generated getter, so this is eleven values, not
+///      twelve - only `quote` is read here.
+interface IDutchListings {
+    function listings(uint256 id)
+        external
+        view
+        returns (
+            address seller,
+            bool isNFT,
+            uint40 startTime,
+            uint40 duration,
+            address token,
+            uint96 startPrice,
+            address quote,
+            uint96 endPrice,
+            uint128 initial,
+            uint128 remaining,
+            uint40 expiry
+        );
 }
 
 

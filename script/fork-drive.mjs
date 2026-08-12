@@ -809,7 +809,7 @@ console.log(`fork ${RPC} · block ${block} · as ${ACCOUNT}`);
  * wait.
  */
 const WARM = {
-  zQuoter: '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13',
+  zQuoter: '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16',
   zRouter: '0x000000000000FB114709235f1ccBFfb925F600e4',
   tokenlist: '0x0000006013dF75A31678B786061C2B54bf531524',
   convictionLens: '0x000000cEa3AB048d59473F3fb116A8D7F1abd247',

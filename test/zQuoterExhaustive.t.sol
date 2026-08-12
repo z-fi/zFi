@@ -65,7 +65,21 @@ contract zQuoterExhaustiveTest is Test {
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         vm.etch(V4_HELPER, address(new zQuoterV4()).code);
-        q = new zQuoter();
+        // Against the DEPLOYED quoter when ZQUOTER names one, otherwise a local
+        // build. The default proves the source is right; it does not prove the
+        // bytecode at a live address behaves the way the source says, and those
+        // are different claims - the deployed artifact is built with a different
+        // profile (runs=20, yul=false) to fit EIP-170. Point this at a fresh
+        // deployment to check the thing users will actually route through:
+        //   ZQUOTER=0x... forge test --match-test test_fullMatrix_executes
+        address dep = vm.envOr("ZQUOTER", address(0));
+        if (dep == address(0)) {
+            q = new zQuoter();
+        } else {
+            require(dep.code.length != 0, "ZQUOTER has no code at this fork block");
+            q = zQuoter(payable(dep));
+            emit log_named_address("quoter under test (deployed)", dep);
+        }
         user = address(this);
     }
 

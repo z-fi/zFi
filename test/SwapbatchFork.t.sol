@@ -53,7 +53,7 @@ contract SwapbatchForkTest is Test {
             vm.envOr("FOUNDRY_ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_640_000
         );
         require(_BOARD.code.length != 0, "live board missing at fork block");
-        batch = new Swapbatch(_WETH, _BOARD, address(0));
+        batch = new Swapbatch(_WETH, _BOARD, address(0), address(0));
         vm.deal(address(batch), 0);
         vm.deal(taker, 100 ether);
         vm.label(_BOARD, "Swapboard(live)");

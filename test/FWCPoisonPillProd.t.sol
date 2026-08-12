@@ -66,31 +66,36 @@ contract FWCPoisonPillProdTest is Test {
         return keccak256(abi.encode(PROPOSER, proposer.PILL_NONCE(), proposer.PERMIT_COUNT(), uint256(1)));
     }
 
-    /// The whole path, end to end, on live state.
-    function test_ProductionDryRun() public {
-        // --- 0. Where we actually are -------------------------------------------------
+    /// Bring live state to "permit exists". The proposal may already be Executed on
+    /// mainnet, in which case there is nothing left to push.
+    function _arm() internal {
         uint8 st = dao.state(PROPOSAL_ID);
-        emit log_named_uint("proposal state (2 = Queued)", st);
-        assertEq(st, 2, "proposal is not queued on live state");
+        emit log_named_uint("proposal state (2 = Queued, 6 = Executed)", st);
+        if (st == 6) {
+            assertTrue(proposer.armed(), "executed but no permit");
+            return;
+        }
+        assertEq(st, 2, "proposal is neither queued nor executed on live state");
         assertFalse(proposer.armed(), "permit already exists before execution");
 
+        // Clear the timelock. Anyone may push this; the test contract is a stranger.
+        uint64 qAt = dao.queuedAt(PROPOSAL_ID);
+        assertGt(qAt, 0, "not actually queued");
+        vm.warp(uint256(qAt) + dao.timelockDelay() + 1);
+
+        (bool exOk,) = dao.executeByVotes(0, DAO, 0, proposer.permitData(), _proposalNonce());
+        assertTrue(exOk, "executeByVotes failed");
+        assertEq(dao.state(PROPOSAL_ID), 6, "proposal not marked Executed");
+    }
+
+    /// The whole path, end to end, on live state.
+    function test_ProductionDryRun() public {
         uint256[] memory idsBefore = pill.heldIds();
         emit log_named_uint("passes held by vault", idsBefore.length);
         assertGt(idsBefore.length, 0, "vault holds nothing to redeem");
 
-        bytes memory data = proposer.permitData();
-        bytes32 nonce = _proposalNonce();
-
-        // --- 1. Clear the timelock ----------------------------------------------------
-        uint64 qAt = dao.queuedAt(PROPOSAL_ID);
-        uint64 delay = dao.timelockDelay();
-        assertGt(qAt, 0, "not actually queued");
-        vm.warp(uint256(qAt) + delay + 1);
-
-        // --- 2. Execute. Anyone may push this; the test contract is a stranger. -------
-        (bool exOk,) = dao.executeByVotes(0, DAO, 0, data, nonce);
-        assertTrue(exOk, "executeByVotes failed");
-        assertEq(dao.state(PROPOSAL_ID), 6, "proposal not marked Executed");
+        // --- 1/2. Queued -> Executed (a no-op if mainnet already got there) -----------
+        _arm();
 
         // --- 3. The guardian now holds exactly one permit ------------------------------
         assertTrue(proposer.armed(), "permit was not minted");
@@ -127,8 +132,7 @@ contract FWCPoisonPillProdTest is Test {
 
     /// Nobody but the guardian can spend it, even once it exists.
     function test_OnlyGuardianAfterExecution() public {
-        vm.warp(uint256(dao.queuedAt(PROPOSAL_ID)) + dao.timelockDelay() + 1);
-        dao.executeByVotes(0, DAO, 0, proposer.permitData(), _proposalNonce());
+        _arm();
         assertTrue(proposer.armed());
 
         bytes memory payload = proposer.pullPayload();

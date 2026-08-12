@@ -24,7 +24,7 @@ contract SwapbatchWethLegProbeTest is Test {
         board = new WethOutLegacyBoard(address(weth));
         // `modernBoard` only has to be a distinct contract with code here; this
         // probe never routes to it.
-        batch = new Swapbatch(address(weth), address(board), address(new Dummy()));
+        batch = new Swapbatch(address(weth), address(board), address(new Dummy()), address(0));
         vm.deal(address(board), 500 ether);
         vm.prank(address(board));
         weth.deposit{value: 400 ether}();

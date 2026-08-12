@@ -179,7 +179,17 @@ const specs = [
   // all. v1 is the board that needs the helper most: it has no batch fill and
   // no `multicall`, so N fills there cannot otherwise share a transaction.
   // See deploy/Swapbatch.md for why Dutchboard and Floorboard are NOT bound.
-  {name: "Swapbatch", args: [WETH, LEGACY, artifactAddress("Swapboard")]},
+  //
+  // Dutchboard is bound for ONE shape it cannot serve itself: a listing quoted
+  // in WETH. It batches native-ETH lots fine - `fillMany` is payable - but
+  // `fill` refuses ether on an ERC20-quoted listing and `_settle` pays those by
+  // pulling the quote asset from the caller, so ether alone cannot buy one at
+  // all. Floorboard stays absent: `tryHitMany` is not payable because hitting a
+  // bid runs the other way, delivering the asset and receiving proceeds.
+  {
+    name: "Swapbatch",
+    args: [WETH, LEGACY, artifactAddress("Swapboard"), artifactAddress("Dutchboard")],
+  },
   // The Universal Router is bound at construction rather than passed per call:
   // a caller-supplied router would let anyone pair this contract's ETH with
   // arbitrary calldata. Mainnet UR, read off the Permit2 spender in the live

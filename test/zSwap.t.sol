@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0xea5170a8aed035d3308af6e1f1957312598f296bd9fa317ade428942c7d8dba4;
-    uint256 constant EXPECTED_LEN = 271746;
+    bytes32 constant EXPECTED_HASH = 0xa5197d8c86b214154175955d71c4fdcdb48d4f42cea084b94712ca37d97b1641;
+    uint256 constant EXPECTED_LEN = 277325;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -178,8 +178,15 @@ contract zSwapDeployTest is Test {
     ///      execute each generated calldata path against zRouter.
     function test_SwapFrontend_usesAllOnchainRouteBuilders() public {
         bytes memory html = vm.readFileBinary("zSwap.html");
+        // Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which let Curve
+        // win an exact-out quote it cannot serve - `exchange` is exact-in only
+        // and `get_dx` is not a tight inverse of `get_dy`, so the swap lands
+        // under the target and the router refuses to under-deliver. The
+        // replacement declines Curve on exact-out and is otherwise identical:
+        // compared across 30 ordered pairs in both directions before switching,
+        // same best-source and same amounts on every one.
         assertTrue(
-            _contains(html, bytes("const ZQUOTER=\"0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13\"")),
+            _contains(html, bytes("const ZQUOTER=\"0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16\"")),
             "wrong zQuoter deployment"
         );
         assertTrue(_contains(html, bytes("Q(\"e453166e\"")), "missing 1/2-hop builder");

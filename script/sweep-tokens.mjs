@@ -54,7 +54,7 @@ const RPCS = (process.argv[3] || process.env.ETH_RPC_URL || [
 const CACHE = path.join(ROOT, 'cache', 'rpc-sweep');
 const ETH_SIZE = BigInt(Math.round((Number(process.argv[2]) || 1) * 1e18));
 
-const QUOTER = '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13';
+const QUOTER = '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 // buildBestSwapViaETHMulticall(address,address,bool,address,address,uint256,uint256,uint256)
 // NOT getQuotes: that is the SINGLE-HOP quoter, so every token without a direct

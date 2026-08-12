@@ -28,7 +28,7 @@ contract SwapbatchTest is Test {
         A = new MockERC20("AAA", 18);
         B = new MockERC20("BBB", 18);
         legacyBoard = new LegacyBoard(address(weth), A, B);
-        batch = new Swapbatch(address(weth), address(legacyBoard), address(sb));
+        batch = new Swapbatch(address(weth), address(legacyBoard), address(sb), address(0));
         vm.deal(address(sb), 0);
         vm.deal(address(batch), 0);
         vm.deal(taker, 100 ether);
