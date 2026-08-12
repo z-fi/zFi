@@ -592,13 +592,23 @@ describe('the orderbook list', () => {
     // see both balances - and getting it wrong is a revert, not a matter of
     // taste. Only the second is a preference, so only the second is asked.
     const p = await setup();
-    assert.equal(p.$('ethModeL').textContent.replace(/\s+/g, ' ').trim().startsWith('Receive'),
-      true, 'the label should name what it decides');
+    // It said "Receive", which names the outcome but not the ACT - and it sits
+    // in the placement form, so it read as "how this order pays me". It does not
+    // govern that and cannot: a board denominates in WETH, and a maker's
+    // proceeds are transferred as WETH with no unwrap available. Asked about a
+    // real placement, the page had to print a note explaining that the control
+    // the user had just set would not apply. Naming the two acts it DOES govern
+    // is what stops the misreading.
+    const label = p.$('ethModeL').textContent.replace(/\s+/g, ' ').trim();
+    assert.match(label, /^Fills & cancels pay/,
+      'the label should name what it decides, and it decides about fills and cancels');
     assert.deepEqual([...p.$('ethMode').options].map(o => o.textContent), ['ETH', 'WETH'],
       'two outcomes, both of which land in the wallet');
 
     const help = p.$('ethModeL').getAttribute('title') || '';
     assert.match(help, /Paying is not a setting/i, 'and says so, so nobody looks for it');
+    assert.match(help, /does NOT change what an order you place pays you/i,
+      'and the one thing it is most likely to be mistaken for is denied outright');
     p.close();
   });
 

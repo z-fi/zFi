@@ -211,7 +211,7 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
-<label class="dly hide" id="ethModeL" title="What a filled or cancelled order pays you in, when the order is denominated in WETH. Paying is not a setting: the page spends whichever of your ETH and WETH covers it, and wraps the difference if only the two together do.">Receive<select id="ethMode"><option value="auto">ETH</option><option value="weth">WETH</option></select></label>
+<label class="dly hide" id="ethModeL" title="Applies when YOU fill an order from the book, or cancel one of yours and the escrow comes back wrapped. It does NOT change what an order you place pays you: boards are denominated in WETH, and a maker's proceeds are transferred as WETH with no unwrap available - so a limit order asking for ETH is an order asking for WETH, and fills as such. Paying is not a setting either: the page spends whichever of your ETH and WETH covers it, and wraps the difference if only the two together do.">Fills &amp; cancels pay<select id="ethMode"><option value="auto">ETH</option><option value="weth">WETH</option></select></label>
 <small id="floorNote" class="hide"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
@@ -590,7 +590,14 @@ if(h.length<(v+2)*64)E();
 const o=Number(num(v))*2;if(o+64>h.length)E();
 const n=Number(BigInt("0x"+h.slice(o,o+64)));if(!n||o+64+n*2>h.length)E();
 const g=num(u+3),t=g>0n,k=S?(num(3)>0n?0:u):t?u:0,B=10000n,ai=S?num(2)+num(u+2):num(2),ao=S?num(3)+g:t?g:num(3),q=eo?ai:ao;
-return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},callData:"0x"+h.slice(o+64,o+64+n*2),amountLimit:eo?(q*(B+slip)+B-1n)/B:q*(B-slip)/B,msgValue:num(v+1)};
+// EVERY leg's venue, not just the labelled one. `best.source` names a single
+// leg - whichever is populated - which is all a rate line needs and not enough
+// to ask "does this route TOUCH venue X". Quotes are four words each
+// (source, feeBps, amountIn, amountOut) laid out from word 0 up to `u`, so a
+// two-leg route has legs at 0 and 4 and a three-hop has 0, 4 and 8. A leg with
+// nothing on either side was not used and is not reported.
+const src=[];for(let w=0;w<=u;w+=4)if(num(w+2)>0n||num(w+3)>0n)src.push(Number(num(w)));
+return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},sources:src,callData:"0x"+h.slice(o+64,o+64+n*2),amountLimit:eo?(q*(B+slip)+B-1n)/B:q*(B-slip)/B,msgValue:num(v+1)};
 };
 // `est` is the zero-bound quote used for apples-to-apples route comparison.
 // `exe` owns the calldata and its real per-leg slippage budget. Recomputing one
@@ -598,16 +605,64 @@ return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},cal
 // exact-out Max on multihop routes, so only replace the displayed estimate.
 const merge=(est,exe)=>{if(!est)return exe;if(!exe)return null;return{...exe,best:est.best}};
 const rpc=(method,params)=>window.ethereum.request({method,params});
+/**
+ * A read, retried. For the handful of reads whose failure would be reported to
+ * the user as something else's failure.
+ *
+ * The allowance re-check after an approval is the case that matters: it exists
+ * to confirm the approval landed, so a node error there gets announced as
+ * "approval failed" on an approval that succeeded. Retrying a read is always
+ * safe - it changes nothing - which is exactly why sends are NOT retried here.
+ */
+const rpcRead=async(method,params,tries=4)=>{
+let last;
+for(let i=0;i<tries;i++){
+try{return await rpc(method,params)}
+catch(e){last=e;await new Promise(r=>setTimeout(r,300*(i+1)))}
+}
+throw last;
+};
 const okRet=h=>{h=strip0x(h);if(h&&BigInt("0x"+h)===0n)throw Error("token returned false")};
+/**
+ * Wait for a receipt, surviving a node that stutters while we wait.
+ *
+ * A poll that throws is the NODE failing, not the transaction. This used to let
+ * that exception escape, so one bad `eth_getTransactionReceipt` - and public
+ * endpoints return internal errors regularly - aborted the whole flow and told
+ * the user their approval had failed. It had not: it was in the mempool, and
+ * usually mined moments later. The user then retried and approved a second time.
+ *
+ * Reported from the field as "very flakey with my rpc... I had to try 3 times to
+ * get out of failure mode", on a step whose transaction was never the problem.
+ *
+ * A receipt saying `status != 1` is an ANSWER and still throws. Only the absence
+ * of an answer is retried, and only until the same overall deadline.
+ */
 const waitTx=async hash=>{
 const end=Date.now()+600000;
+let misses=0,wait=1500;
 while(Date.now()<end){
+try{
 const r=await rpc("eth_getTransactionReceipt",[hash]);
+misses=0;
 if(r){
 if(r.status!=="0x1")throw Error("tx reverted: "+hash);
 return r;
 }
-await new Promise(res=>setTimeout(res,1500));
+// Not mined yet. Ease off toward block time rather than asking eight times
+// per block: at 1.5s flat this spends up to 400 requests per transaction,
+// and it spends them in the same window the user is quoting in - so the
+// waiting itself helped cause the errors that made the waiting fail.
+wait=Math.min(wait+500,5000);
+}catch(e){
+// The receipt itself said the tx failed - that is the answer, not a stutter.
+if(/tx reverted/.test(e.message||""))throw e;
+// Back off harder as misses accumulate, so a node having a bad minute is
+// not hammered, but keep waiting: the transaction is already broadcast and
+// abandoning it here is what created the double-approval.
+if(++misses>2)wait=Math.min(wait*2,15000);
+}
+await new Promise(res=>setTimeout(res,wait));
 }
 throw Error("tx not mined in time");
 };
@@ -735,11 +790,31 @@ for(const c of cs){const d=strip0x(c.data),len=d.length/2;
 const body=encAddr(c.to)+encBool(true)+encUint(96)+encUint(len)+d.padEnd(Math.ceil(d.length/64)*64,"0");
 head+=encUint(off);tail+=body;off+=body.length/2}
 return"0x82ad56cb"+pad32("20")+encUint(n)+head+tail};
+/**
+ * How the individual calls in a batch fared.
+ *
+ * `allowFailure` means one call can fail without taking the batch down, and the
+ * failure arrives as a null that reads downstream exactly like "this venue had
+ * nothing to say". Usually that IS what it means - a quoter reverts on a pair it
+ * has no pool for, which is the whole point of allowing failure.
+ *
+ * But it is also what a NODE limit looks like. An exact-out probe is the
+ * heaviest read the page makes, and against a node whose eth_call budget cannot
+ * cover it every probe fails, every result is null, and the page reports "no
+ * route" for a question the node never answered. `mcGaveUp` does not catch this:
+ * it only counts batches that bisected all the way down, and these batches
+ * SUCCEEDED - it was the calls inside them that did not.
+ *
+ * One failure among several answers proves nothing. All of them failing and none
+ * succeeding is not a market condition, so that is the only case reported.
+ */
+let mcOk=0,mcFailed=0;
 const decAgg3=hex=>{const h=strip0x(hex),at=i=>h.slice(i*64,(i+1)*64);
 const n=Number(BigInt("0x"+at(1))),out=[];
 for(let i=0;i<n;i++){const rel=Number(BigInt("0x"+at(2+i)))/32,w=2+rel;
 const ok=BigInt("0x"+at(w))===1n,bo=Number(BigInt("0x"+at(w+1)))/32,lw=w+bo;
 const len=Number(BigInt("0x"+at(lw)));
+if(ok)mcOk++;else mcFailed++;
 out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
 return out};
 // GAS ON A READ IS ASKED FOR NARROWLY, NOT EVERYWHERE. An `eth_call` with no
@@ -749,10 +824,20 @@ return out};
 // reject instead, and the whole quote path died with
 // "RetryOnEmptyMiddleware - retries exhausted" on pairs that had always worked.
 //
-// So the generic batch goes back to the provider's default, which was never the
-// thing that was broken. Only the one call that genuinely needs more than a
-// trivial budget names one, and it names a modest figure rather than a maximal
-// one.
+// So every read goes back to the provider's default, which was never the thing
+// that was broken. NOT ONE CALL NAMES A GAS FIGURE - this used to say that the
+// single heaviest read still named a modest one, and that stopped being true
+// when the regression was undone; it is stated here because a stale exception
+// invites someone to reintroduce the bug it describes.
+//
+// The cost of naming none is real and worth knowing. An exact-out probe is the
+// heaviest read the page makes, and against a node whose per-call budget cannot
+// cover it, that probe fails - every time, with no way to ask for more. What the
+// page CAN do is tell the truth about it: `mcOk`/`mcFailed` above separate "the
+// node answered nothing" from "the market has nothing", so a budget too small
+// reads as an RPC problem instead of as absent liquidity. Measured on a fork
+// pinned to anvil's 60M block gas limit, where exact-out ETH->USDC returned
+// `EVM error OutOfGas` and the page had called it "No route: bad quote".
 const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
 // allowFailure covers one quoter reverting. It does NOT cover the eth_call
 // itself dying, and a batch dies for limits the page cannot read off the
@@ -781,6 +866,34 @@ const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(c
 let mc3Cap=4;
 const mc3Split=(cs,n)=>{const o=[];for(let i=0;i<cs.length;i+=n)o.push(cs.slice(i,i+n));return o};
 /**
+ * How many batches may be in flight at once.
+ *
+ * `mc3Cap` solved timeouts by making each batch small, but small batches mean
+ * MANY batches, and they are fanned out with `Promise.all` - so a quote can hand
+ * the provider a dozen-plus simultaneous eth_calls. That trades a timeout for a
+ * RATE LIMIT, and the wallet's own endpoint is usually a shared tier that
+ * answers a burst with a transient internal error rather than a queue.
+ *
+ * Those errors are indistinguishable from a real batch failure, so bisection
+ * treats them as one: it halves `mc3Cap` - permanently, by design - and every
+ * later quote issues even MORE requests. The pressure that caused the failure is
+ * what the response increases. This bound is what stops that loop.
+ *
+ * Six is above the concurrency any single quote needs to stay fast and below
+ * where shared endpoints start refusing. Requests queue rather than fail, which
+ * costs a little latency on the widest quotes and buys back the whole failure
+ * mode.
+ */
+const MC3_LANES=6;
+let mc3Live=0;
+const mc3Waiting=[];
+const mc3Gate=async fn=>{
+if(mc3Live>=MC3_LANES)await new Promise(r=>mc3Waiting.push(r));
+mc3Live++;
+try{return await fn()}
+finally{mc3Live--;const next=mc3Waiting.shift();if(next)next()}
+};
+/**
  * Did a batch give up rather than answer?
  *
  * Bisection ends by returning nulls, which read downstream exactly like "this
@@ -797,7 +910,7 @@ const mc3Deep=async(cs,tag=L,depth=0)=>{
   // Chunks go out together: the cost is one round trip, not one per chunk.
   const fan=async n=>(await Promise.all(mc3Split(cs,n).map(c=>mc3Deep(c,tag,depth+1)))).flat();
   if(cs.length>mc3Cap&&depth<8)return fan(mc3Cap);
-  try{return await mc3(cs,tag)}
+  try{return await mc3Gate(()=>mc3(cs,tag))}
   catch(e){
     if(cs.length<2||depth>=8){mcGaveUp+=cs.length;return cs.map(()=>null)}
     const h=cs.length>>1;
@@ -1392,7 +1505,35 @@ setMode("in");fitFont(amt);
 update();
 });
 let seq=0;
-const err=e=>stat.textContent=isRejection(e)?"":"Error: "+String(e.message||e).slice(0,110);
+/**
+ * What a custom error MEANS, for the ones a user can actually meet.
+ *
+ * A revert with no reason string surfaces as eight hex characters, and a wallet
+ * usually buries them in a longer message ("execution reverted: custom error
+ * 0x1ab7da6b"). That tells the user nothing about what to do next, and the two
+ * most likely reverts here have completely different remedies - one says try
+ * again, the other says fix your input.
+ *
+ * Keyed by selector because that is all that comes back. Solady's transfer
+ * failures are included: they are the shape a missing allowance takes.
+ */
+const REVERTS={
+"1ab7da6b":"That took too long and the deadline passed, so nothing was placed. Try again — you were not charged for an order.",
+"98c2c368":"The order was refused as malformed. Check the amounts and the expiry.",
+"7939f424":"The token transfer was refused — usually a missing or spent approval. Try again and approve first.",
+"90b8ec18":"The token transfer was refused by the token itself.",
+"3e3f8f73":"The approval was refused by the token.",
+"b12d13eb":"Ether could not be sent to the recipient — a contract there may not accept it.",
+"ab143c06":"That call re-entered and was stopped.",
+};
+/** Pull a bare 4-byte custom error out of whatever the wallet wrapped it in. */
+const explain=e=>{
+const s=String(e?.data?.data||e?.data||e?.message||e||"");
+const m=/0x([0-9a-fA-F]{8})\b/.exec(s);
+const hit=m&&REVERTS[m[1].toLowerCase()];
+return hit||("Error: "+s.slice(0,110));
+};
+const err=e=>stat.textContent=isRejection(e)?"":explain(e);
 const settle=async tx=>{
 if(!tx){stat.textContent="Done";return}
 if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
@@ -1446,6 +1587,19 @@ rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
 last={callData:"0x2e1a7d4d"+encUint(swapAmt),msgValue:0n,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+QUOTE_TTL};
 render();return;
 }
+// The mirror. Only the unwrap half was here, so ETH -> WETH fell through to the
+// router and asked the venues to price an asset against itself: no venue quotes
+// that, so the amount sat on "..." until the quote timed out, and the one
+// conversion every holder of ether eventually wants was the one path the page
+// could not do. `deposit()` takes the ether as value and mints 1:1, so there is
+// no allowance and no spender - `from.addr===ZERO` skips those branches, and
+// the msgValue check above wants exactly `amountIn`, which is what a wrap is.
+if(!rv&&f.addr===ZERO&&t.addr===WETH){
+outEl.value=inEl.value;fitFont(outEl);
+rate.textContent=`1 ${f.sym} = 1 ${t.sym}`;
+last={callData:"0xd0e30db0",msgValue:swapAmt,amountIn:swapAmt,from:f,to:WETH,exp:Date.now()+QUOTE_TTL};
+render();return;
+}
 const pct=Math.min(10,Math.max(.01,+slip.value||.5));
 const slipBps=BigInt(Math.round(pct*100));
 const deadline=BigInt(Math.floor(Date.now()/1e3)+1800);
@@ -1453,7 +1607,7 @@ outEl.value="...";fitFont(outEl);
 const acct=account;
 // Taken before the try, because the catch has to read it: what is counted is
 // THIS quote's abandoned reads, not every failure the page has ever had.
-const gaveUp0=mcGaveUp;
+const gaveUp0=mcGaveUp,ok0=mcOk,failed0=mcFailed;
 try{
 const a=encAddr(rcv||acct||ZERO),rf=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
 const _rq=[];
@@ -1477,7 +1631,38 @@ const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>null):Promise.re
 // Exact-in only: `quoteBestFor` prices an input, and there is no exact-out
 // counterpart to invert it honestly.
 const preJob=isIn?quotePrecision(f,t,swapAmt,rcv||acct||ZERO,quoteBlock).catch(()=>null):Promise.resolve(null);
-const pick=y=>{if(!y)return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
+/**
+ * A Curve leg cannot serve an EXACT-OUT trade, so a route carrying one is
+ * discarded before it can win.
+ *
+ * Curve's `exchange` is exact-in only. An exact-out quote is therefore built by
+ * asking `get_dx(want)` and then swapping exact-in with that input - and
+ * `get_dx` does NOT invert `get_dy`. It rounds down, against the trader, so the
+ * pool delivers slightly less than `want` and zRouter refuses the fill with
+ * `Slippage()`. Measured on the live USDC/BOLD pool: get_dx(1 BOLD) = 1002278,
+ * and get_dy of that is 999999127232857768 - short by 8.7e-7 BOLD. The shortfall
+ * is tiny but it is never zero, and exact-out has no tolerance for "slightly
+ * less"; the router's slippage bound caps the INPUT, so widening it does not
+ * help. Verified reverting at 1, 5 and 40 units, and at a 90% bound.
+ *
+ * The quoter has a `+1` fudge for this, which is the right idea at a fixed
+ * scale: the shortfall grows with size, needing +1 at $1 and +10 at $40. Until
+ * that becomes a verify-and-bump in `_curveTryQuoteOne`, the page must not
+ * offer these routes - eight of the fifty-six ordered pairs quote confidently
+ * and then revert, which costs the user gas and buys nothing.
+ *
+ * EVERY leg is checked, not `best.source`. The failing WETH->BOLD route carries
+ * Curve as its SECOND leg while the first is V4, so the single label the rate
+ * line uses would have missed it.
+ */
+const SRC_CURVE=5;
+// Set when a route was dropped for this, so the failure can say WHY. "No route"
+// is a poor thing to tell someone when a working route exists a few bps away -
+// the page simply cannot ask for it, because the builders each return their own
+// finished choice and the runner-up is never exposed.
+let curveOnlyOut=false;
+const exactOutSafe=y=>{if(isIn||!y.sources||!y.sources.includes(SRC_CURVE))return true;curveOnlyOut=true;return false};
+const pick=y=>{if(!y)return;if(!exactOutSafe(y))return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
 if(!r||(isIn?v>r.best.amountOut:v<r.best.amountIn))r=y};
 // Earlier jobs win ties, keeping the simpler route.
 const tl0=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(0n)+encUint(deadline);
@@ -1561,6 +1746,10 @@ fundedCallData:null,amountLimit:pMin,msgValue:f.addr===ZERO?swapAmt:0n,
 to:pq.pool,spender:f.addr===ZERO?null:pq.pool};
 if(!r)r=pc;
 }
+// A pair whose only exact-out route runs through Curve is not "no route" - it
+// is a route this direction cannot execute. Say that, and name the way out,
+// because exact-IN on the same pair works.
+if(!r&&curveOnlyOut)throw Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`);
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
 let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false;
@@ -1746,7 +1935,7 @@ outEl.value="";fitFont(outEl);
 // never asked - so "no route" would be blaming the market for the node. Seen
 // for real against a node with a low eth_call gas cap: every venue answered
 // nothing, and the page reported no liquidity.
-stat.textContent=mcGaveUp>gaveUp0
+stat.textContent=mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0)
   ?"Your RPC could not complete the quote — some venues were never asked. Try again, or switch networks in your wallet and back."
   :"No route: "+(e.message||e)}}
 }
@@ -4586,7 +4775,20 @@ let cp=ZERO;
 const v=rc.value.trim();
 if(!dutch&&!bid&&v){cp=await rcvOf(v);if(!cp)throw Error("Private recipient not resolved")}
 const pf=fill.value==="1"?1n:0n;
-const placementDeadline=BigInt(Math.floor(Date.now()/1e3)+300);
+// Thirty minutes, matching every other deadline on the page. This was five,
+// and five is the wrong number for a PLACEMENT: a swap's deadline bounds how
+// stale a PRICE may get before it settles, but placing a limit order commits to
+// no price at all - the order carries its own `expiry` (the "Expires" control),
+// and that is what protects the maker. All this bounds is how long the
+// transaction may sit unmined.
+//
+// Five minutes is inside the range of ordinary wallet friction. A real
+// placement died at 36 seconds past it: the RPC returned an opaque error on the
+// first send, the user retried, and by the time it mined the window had closed -
+// so the escrow transfer ran, `placeSwapboard` reverted `DeadlineExpired`, and
+// the order cost a full fee to not exist. See
+// 0xd2ce8c744a6b2ab1d2f5ce5714204c29e1b13f383b1e94b4bccd74f30ba5708c.
+const placementDeadline=BigInt(Math.floor(Date.now()/1e3)+1800);
 let orderData;
 if(bid){
   // `sell` is the escrow and the ceiling; `want` is a quantity; `floor` is the
@@ -4727,7 +4929,7 @@ data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(0)}]));
 stat.textContent=n>1?"Approving (2/2)...":"Approving...";
 await waitTx(await rpc(S,[{from:account,to:from.addr,
 data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(amountIn)}]));
-if(BigInt(await rpc(C,[{to:from.addr,data:allowData},L]))<amountIn)throw Error("approval failed");
+if(BigInt(await rpcRead(C,[{to:from.addr,data:allowData},L]))<amountIn)throw Error("approval failed");
 }
 }
 }else if(from.addr!==ZERO&&!to){

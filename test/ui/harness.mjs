@@ -267,6 +267,7 @@ export class MockChain {
     this.batches = [];             // wallet_sendCalls payloads
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
     this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
+    this.failEveryCall = false;    // batch returns, but every call inside it failed
     // zTokenlist rows, IN CONVICTION ORDER, as rankedIds() returns them. Null
     // means the registry is unreachable and the page uses its built-in list,
     // which is what most suites want; set it to exercise curation.
@@ -726,6 +727,15 @@ export class MockChain {
     // the whole request rather than returning partial results. `batchLimit`
     // reproduces that: allowFailure cannot help, because the batch never runs.
     if (calls.length > this.batchLimit) throw Error('out of gas');
+    // A node whose per-call budget cannot cover the read fails EVERY call while
+    // the batch itself returns fine. That is not the same as `batchLimit`, which
+    // kills the whole request - here allowFailure works exactly as designed and
+    // hands back a full set of failures, which look identical to "no liquidity".
+    // Seen for real: an exact-out quote against a fork whose eth_call gas cap is
+    // below what the heaviest probe needs.
+    if (this.failEveryCall) {
+      return coder.encode(['tuple(bool,bytes)[]'], [calls.map(() => [false, '0x'])]);
+    }
     const results = calls.map(([target, , callData]) => {
       try {
         return [true, this.ethCall({ to: target, data: callData }, block)];

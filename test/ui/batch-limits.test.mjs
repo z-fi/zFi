@@ -114,6 +114,30 @@ describe('a capped RPC provider', () => {
     p.close();
   });
 
+  test('blames the node when the batch returned but every call in it failed', async () => {
+    // The gap between the two tests above. `batchLimit` kills the whole request,
+    // which bisection notices and counts. This is the other shape: the batch
+    // SUCCEEDS and allowFailure hands back a full set of per-call failures, so
+    // nothing bisects, nothing is abandoned, and every venue reads as empty.
+    //
+    // Found on a fork whose eth_call gas cap could not cover an exact-out probe.
+    // The page said "No route: bad quote" - the market blamed for a budget.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.USDC, A.ACCOUNT, 50_000n * USDC);
+    chain.quoteHandler = fixedRateQuoter({ rate: RATE });
+    const p = await loadPage({ chain });
+    await p.connect();
+    chain.failEveryCall = true;          // only once the page is up and connected
+    await p.typeAmount('amt', '1');
+    await p.waitFor(() => p.text('stat').length > 0, { label: 'a verdict' });
+
+    assert.match(p.text('stat'), /RPC could not complete/i,
+      'a node that answered nothing at all is not a market with no liquidity');
+    assert.ok(!/No route/i.test(p.text('stat')));
+    p.close();
+  });
+
   test('still says no route when the venues genuinely answered nothing', async () => {
     // The other half: a healthy node that simply has no route must NOT be
     // reported as a node failure, or the message becomes noise.

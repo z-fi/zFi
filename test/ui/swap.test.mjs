@@ -136,6 +136,36 @@ describe('quoting', () => {
     p.close();
   });
 
+  // Curve's `exchange` is exact-in only. An exact-out route through it is built
+  // from `get_dx(want)`, and `get_dx` does not invert `get_dy` - it rounds down,
+  // so the pool delivers just under `want` and zRouter refuses with Slippage().
+  // Measured on the live USDC/BOLD pool, and reverting at every size and even at
+  // a 90% bound, because the bound caps the INPUT. Eight of the fifty-six
+  // ordered pairs quoted confidently and then reverted; the page must not offer
+  // them. Exact-IN through Curve is unaffected and must still route.
+  test('refuses an exact-out route that runs through Curve', async () => {
+    const p = await setup({ chain: { quoteHandler: fixedRateQuoter({ rate: RATE, source: 5 }) } });
+    await p.typeAmount('outAmt', '3000');
+    assert.equal(p.value('amt'), '', 'no input figure, because there is no route to quote');
+    assert.ok(!/Curve/.test(p.text('rate')), 'and it is not offered on the rate line');
+    assert.equal(p.$('swap').disabled, true, 'the button cannot be pressed into a revert');
+    // "No route" would be false here: the pair trades fine, just not in this
+    // direction, and exact-IN is one keystroke away. The page cannot switch
+    // venues itself - the builders each return their own finished choice - so
+    // the least it can do is name the way out.
+    assert.match(p.text('stat'), /exact-output is unavailable/i, 'it says what is wrong');
+    assert.match(p.text('stat'), /amount to PAY/i, 'and what to do instead');
+    p.close();
+  });
+
+  test('still routes exact-IN through Curve, which works', async () => {
+    const p = await setup({ chain: { quoteHandler: fixedRateQuoter({ rate: RATE, source: 5 }) } });
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3000', 'exact-in is unaffected by the exact-out guard');
+    assert.match(p.text('rate'), /Curve/, 'and still names the venue');
+    p.close();
+  });
+
   test('the displayed maximum never rounds below what the calldata can spend', async () => {
     const p = await setup();
     await p.typeAmount('outAmt', '3000');

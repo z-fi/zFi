@@ -228,11 +228,24 @@ const WHALES = [
   '0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503',
 ];
 
-/** Move `amount` of `token` to `to` from whoever on the fork actually has it. */
+/**
+ * Move `amount` of `token` to `to` from whoever on the fork actually has it.
+ *
+ * Returns false for two very different reasons, and used to report them the same
+ * way: "could not source USDC" was printed both when no whale held enough AND
+ * when a cold fork simply never answered. The second is the node, not the chain,
+ * and reading it as the first sends you looking for a richer whale that already
+ * exists. So the reason is recorded and the caller can say which happened.
+ */
+const FUND = { why: null };
 async function fund(token, to, amount) {
+  FUND.why = null;
   if (await bal(token, to) >= amount) return true;
+  const held = [];
   for (const w of WHALES) {
-    if (await bal(token, w) < amount) continue;
+    const has = await bal(token, w);
+    held.push(has);
+    if (has < amount) continue;
     // Gas for the whale, then a plain transfer. Impersonation makes this a
     // normal transaction from an address nobody holds the key to.
     fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -244,10 +257,20 @@ async function fund(token, to, amount) {
         data: '0xa9059cbb' + p32(BigInt(to)) + p32(amount) }]);
       const rc = await rpc('eth_getTransactionReceipt', [h]);
       if (rc?.status === '0x1' && await bal(token, to) >= amount) return true;
-    } catch (_) {}
+      FUND.why = `the transfer from ${w.slice(0, 10)} did not land (status ${rc?.status})`;
+    } catch (e) {
+      // An upstream fetch failure is the fork struggling, not a poor whale.
+      FUND.why = `the fork did not answer while funding from ${w.slice(0, 10)}: ${e.message}`;
+    }
+  }
+  if (!FUND.why) {
+    const best = held.length ? held.reduce((a, b) => (b > a ? b : a), 0n) : 0n;
+    FUND.why = `no whale holds ${amount} (deepest has ${best})`;
   }
   return false;
 }
+/** The reason the last `fund` failed, for a message that names the real cause. */
+const fundFailed = what => Error(`could not source ${what} - ${FUND.why}`);
 const POOL = '0xc37f8c7e9afe897893952aba7fd91e0ab947837d';
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
@@ -389,13 +412,13 @@ const scenarios = {
 
   /** The other direction, which needs an approval the ETH path does not. */
   async 'swap:token-eth'(page) {
-    if (!await fund(USDC, ACCOUNT, 500n * 10n ** 6n)) throw Error('could not source USDC');
+    if (!await fund(USDC, ACCOUNT, 500n * 10n ** 6n)) throw fundFailed('USDC');
     await tradeAndCheck(page, { from: 'USDC', to: 'ETH', amount: '100' });
   },
 
   /** Neither side native: two ERC-20s, and a route that may hop. */
   async 'swap:token-token'(page) {
-    if (!await fund(USDC, ACCOUNT, 500n * 10n ** 6n)) throw Error('could not source USDC');
+    if (!await fund(USDC, ACCOUNT, 500n * 10n ** 6n)) throw fundFailed('USDC');
     await tradeAndCheck(page, { from: 'USDC', to: 'DAI', amount: '100' });
   },
 
@@ -437,7 +460,7 @@ const scenarios = {
 
   /** And back out again, which is the unwrap path. */
   async 'swap:unwrap'(page) {
-    if (!await fund(WETH, ACCOUNT, 10n ** 16n)) throw Error('could not source WETH');
+    if (!await fund(WETH, ACCOUNT, 10n ** 16n)) throw fundFailed('WETH');
     await page.waitToken('fromSel', 'WETH');
     page.pick('toSel', 'USDC');
     page.pick('fromSel', 'WETH');
@@ -478,7 +501,7 @@ const scenarios = {
   /** The same, for a token, which needs a transfer rather than a value send. */
   async 'send:token'(page) {
     const TO = '0x000000000000000000000000000000000000bEEF';
-    if (!await fund(USDC, ACCOUNT, 50n * 10n ** 6n)) throw Error('could not source USDC');
+    if (!await fund(USDC, ACCOUNT, 50n * 10n ** 6n)) throw fundFailed('USDC');
     await page.waitToken('fromSel', 'USDC');
     page.click('tabSend');
     await sleep(400);
@@ -510,7 +533,7 @@ const scenarios = {
     const MAKER = '0xF977814e90dA44bFA03b6295A0616a897441aceC';
     // The maker sells USDC absurdly cheaply for WETH. Nothing on any AMM can
     // compete, so if the book is in the routing set at all, this must win.
-    if (!await fund(USDC, MAKER, 400n * 10n ** 6n)) throw Error('could not source USDC for the maker');
+    if (!await fund(USDC, MAKER, 400n * 10n ** 6n)) throw fundFailed('USDC for the maker');
     fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
         params: [MAKER, '0x' + (10n ** 19n).toString(16)] }) }).catch(() => {});
@@ -614,6 +637,157 @@ const scenarios = {
       if (m1.weth - m0.weth === 0n) throw Error('the maker was not paid');
     } finally { taker.close(); }
   },
+
+  /**
+   * The same round trip, but on a DECAYING price.
+   *
+   * A Dutch order is escrowed against Dutchboard rather than the fixed board,
+   * and its price is a function of time, so what the taker pays is not what the
+   * maker typed. The fill is the only place that arithmetic is exercised end to
+   * end - a quote never settles it - and the two boards are different contracts
+   * reached through the same button, which is exactly where a routing mistake
+   * would hide.
+   */
+  async 'order:dutch'(page) {
+    const TAKER = '0x28C6c06298d514Db089934071355E5743bf21d60';
+    await page.waitToken('fromSel', 'ZORG');
+
+    page.click('tabBook');
+    await sleep(400);
+    page.pick('kind', 'Dutch decay');
+    await sleep(400);
+    // Same vacate-the-receive-side dance as order:fixed.
+    page.pick('toSel', 'USDC');
+    page.pick('fromSel', 'ZORG');
+    page.pick('toSel', 'ETH');
+    await sleep(800);
+    // 60, not 50: order:fixed sells 50 on the same board, and these scenarios
+    // share a fork. Two rows reading "50 ZORG" would make the row lookup below
+    // ambiguous, and it would pick whichever sorted first.
+    page.type('amt', '60');            // sell 60 ZORG
+    page.type('outAmt', '0.0004');     // starting at 0.0004 ETH
+    page.type('floorAmt', '0.0002');   // decaying to 0.0002
+    page.pick('dly', '1 hour');          // over an hour
+    await sleep(700);
+    console.log(`  button     ${page.text('swap')}`);
+    if (/Pick|Invalid|Choose|Set /i.test(page.text('swap')))
+      throw Error(`the page will not accept the order: "${page.text('swap')}"`);
+
+    const z0 = await bal(ZORG, ACCOUNT);
+    page.click('swap');
+    await until(() => /Placed|Done|Error/i.test(page.text('stat')), 180000, 'the dutch placement',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+    const escrowed = z0 - await bal(ZORG, ACCOUNT);
+    console.log(`  escrowed   ${fmt(escrowed)} ZORG, decaying 0.0004 -> 0.0002 ETH`);
+    if (escrowed === 0n) throw Error('nothing left the maker');
+
+    // Let the price walk down a little, so the fill is priced by the CURVE and
+    // not by the opening number. Half the window puts it near the midpoint.
+    await rpc('evm_increaseTime', [1800]).catch(() => {});
+    await rpc('evm_mine', []).catch(() => {});
+
+    fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
+        params: [TAKER, '0x' + (10n ** 19n).toString(16)] }) }).catch(() => {});
+    await sleep(1200);
+
+    const taker = await openPage(new ForkChain(TAKER));
+    try {
+      taker.click('tabBook');
+      // OURS, not merely the first fillable thing on the book.
+      //
+      // This took the first `Fill` button it found, which on a mainnet fork is a
+      // stranger's order - the book is real. It filled one (10 ZORG for 100
+      // WETH, at a price nobody would take) and then reported "the maker was not
+      // paid", which was true and meant nothing: the maker of that order is not
+      // us. A scenario that asserts on OUR balances has to act on OUR row.
+      const mine = () => [...taker.$('book').querySelectorAll('button')]
+        .filter(b => b.textContent === 'Fill')
+        .find(b => /\b60 ZORG\b/.test(b.closest('div')?.textContent || ''));
+      await until(mine, 120000, 'our dutch order in the book',
+        () => `${taker.$('book').textContent.length} chars of book`);
+      await taker.settle();
+      const row = mine();
+      if (!row) throw Error('our dutch row went missing after settling');
+      console.log(`  book row   ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
+
+      // A Dutch lot quoted in ETH pays its maker in ETH, NOT WETH. The page says
+      // so itself - `payNative` is true for `r.dutch && r.tB===ZERO` - and the
+      // maker sends no transaction during someone else's fill, so their ether
+      // balance moves for exactly one reason. Measuring WETH here reported "the
+      // maker was not paid" on a fill that had paid them correctly.
+      //
+      // Both are summed anyway: which side of the wrapped boundary the proceeds
+      // land on is the contract's business, and the assertion that matters is
+      // that the maker got PAID.
+      const t0 = await bal(ZORG, TAKER);
+      const m0 = await bal('ETH', ACCOUNT) + await bal(WETH, ACCOUNT);
+      taker.click(row);
+      await until(() => /Done|Error/i.test(taker.text('stat')), 180000, 'the dutch fill',
+        () => taker.text('stat').slice(0, 44));
+      await taker.settle();
+      if (/Error/i.test(taker.text('stat'))) throw Error(taker.text('stat'));
+
+      const got = await bal(ZORG, TAKER) - t0;
+      const paid = (await bal('ETH', ACCOUNT) + await bal(WETH, ACCOUNT)) - m0;
+      console.log(`  taker got  ${fmt(got)} ZORG`);
+      console.log(`  maker got  ${fmt(paid)} ETH+WETH`);
+      if (got === 0n) throw Error('the taker received nothing');
+      if (paid <= 0n) throw Error('the maker was not paid');
+      // The whole point of a decay: partway through the window the price must
+      // be under where it opened. Equal to the start means the curve never ran.
+      if (paid > 4n * 10n ** 14n)
+        throw Error(`paid ${fmt(paid)}, which is not below the 0.0004 opening - the decay did not apply`);
+    } finally { taker.close(); }
+  },
+
+  /**
+   * A climbing bid: the mirror of a Dutch, and the only flow that BUYS.
+   *
+   * Every other order path sells something the maker already holds. A bid
+   * escrows the PAY side and rises toward a maximum, so the asset moving at
+   * placement is the one being spent - the opposite direction through the same
+   * escrow, and the case a sell-shaped assumption would get wrong.
+   */
+  async 'order:bid'(page) {
+    await page.waitToken('toSel', 'ZORG');
+    page.click('tabBook');
+    await sleep(400);
+    page.pick('kind', 'Climbing bid');
+    await sleep(400);
+    page.pick('fromSel', 'ETH');
+    page.pick('toSel', 'ZORG');
+    await sleep(800);
+    page.type('amt', '0.0008');        // at most 0.0008 ETH
+    page.type('outAmt', '50');         // for 50 ZORG
+    page.type('floorAmt', '0.0004');   // opening at half that
+    page.pick('dly', '1 hour');
+    await sleep(700);
+    console.log(`  button     ${page.text('swap')}`);
+    if (/Pick|Invalid|Choose|Set /i.test(page.text('swap')))
+      throw Error(`the page will not accept the bid: "${page.text('swap')}"`);
+
+    // A bid spends the PAY side, so that is the balance that must move. The
+    // page may spend ether or wrapped ether depending on what covers it, so
+    // both are counted - what matters is that the escrow was funded.
+    const e0 = await bal('ETH', ACCOUNT), w0 = await bal(WETH, ACCOUNT);
+    page.click('swap');
+    await until(() => /Placed|Done|Error/i.test(page.text('stat')), 180000, 'the bid placement',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+    const spent = (e0 - await bal('ETH', ACCOUNT)) + (w0 - await bal(WETH, ACCOUNT));
+    console.log(`  bid placed 0.0004 -> 0.0008 ETH for 50 ZORG · moved ${fmt(spent)}`);
+    if (spent === 0n) throw Error('the bid escrowed nothing');
+
+    // And it has to be visible as a bid, or nobody can ever take it.
+    page.click('tabBook');
+    await until(() => /ZORG/.test(page.$('book').textContent), 120000, 'the bid in the book',
+      () => `${page.$('book').textContent.length} chars of book`);
+    console.log(`  listed     ${page.$('book').textContent.trim().slice(0, 60)}`);
+  },
 };
 
 // --------------------------------------------------------------------- main
@@ -647,8 +821,29 @@ const WARM = {
   zorg: '0x00a6ba94bbb5474725515de88fe04f854f2dcb12',
 };
 process.stdout.write('warming');
-await Promise.all(Object.values(WARM).map(a => rpc('eth_getCode', [a, 'latest'])));
+const warmed = await Promise.all(
+  Object.entries(WARM).map(async ([k, a]) => [k, a, await rpc('eth_getCode', [a, 'latest'])]));
 process.stdout.write(` ${Object.keys(WARM).length} contracts\n`);
+/**
+ * A fork older than the contracts is not a failing dapp, but it reads as one.
+ *
+ * This suite was pinned at 25,640,000, which predates `ZorgTokenListLens`. With
+ * no code there the registry came back EMPTY, so the page fell back to its
+ * built-in tokens and every scenario naming a listed one - DAI, FWA - spent 90
+ * seconds waiting for a token that was never going to arrive, then blamed the
+ * token list. Three scenarios looked broken and none of them were.
+ *
+ * So the block is checked against the addresses this run actually needs, and a
+ * stale pin says so in one line instead of timing out three times.
+ */
+const missing = warmed.filter(([, , code]) => !code || code === '0x');
+if (missing.length) {
+  console.error(`\nfork block ${block} predates ${missing.length} contract(s) this suite drives:`);
+  for (const [k, a] of missing) console.error(`  ${k.padEnd(16)} ${a}`);
+  console.error(`\nThe page would fall back to its built-in token list and the failures would\n`
+    + `point at the dapp. Re-pin the fork past their deployment and run again.`);
+  process.exit(1);
+}
 /**
  * Gas has to come from somewhere, and this is a throwaway chain.
  *

@@ -87,8 +87,12 @@ check(`fits ${CHUNKS} x EIP-170`, () => {
 
 check('actionable quotes expire after 45 seconds', () => {
   if (!/\bconst QUOTE_TTL=45000;/.test(html)) throw Error('QUOTE_TTL is not 45 seconds');
+  // Three: the routed quote, and the two 1:1 wrapped-ether shortcuts. The
+  // shortcuts do not consult a venue, but they are still ACTIONABLE - each one
+  // arms the button with calldata - so they expire on the same clock as
+  // everything else. This read 2 until ETH -> WETH gained its own path.
   const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
-  if (uses.length !== 2) throw Error(`expected 2 quote-expiry uses, found ${uses.length}`);
+  if (uses.length !== 3) throw Error(`expected 3 quote-expiry uses, found ${uses.length}`);
   if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
 });
 
@@ -116,6 +120,16 @@ check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('SEL_FILL2_ETH="6f608bab"')) throw Error('direct native Swapboard fill selector missing');
   if (!html.includes('if(!rv&&f.addr===WETH&&t.addr===ZERO)')) {
     throw Error('WETH -> ETH direct unwrap is not preserved');
+  }
+  // The mirror. Only the unwrap half was ever pinned here, and only the unwrap
+  // half existed: ETH -> WETH fell through to the router, which has no venue
+  // that prices an asset against itself, so the amount sat on "..." until the
+  // quote timed out. Both directions are pinned now so neither can go missing.
+  if (!html.includes('if(!rv&&f.addr===ZERO&&t.addr===WETH)')) {
+    throw Error('ETH -> WETH direct wrap is not preserved');
+  }
+  if (!html.includes('callData:"0xd0e30db0"')) {
+    throw Error('the wrap does not call WETH deposit()');
   }
   if (!html.includes('tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()')) {
     throw Error('ETH -> WETH does not enter strict Dutch candidate filtering');
