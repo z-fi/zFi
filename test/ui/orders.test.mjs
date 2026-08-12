@@ -161,6 +161,100 @@ describe('order validation', () => {
     p.close();
   });
 
+  test('the floor is seeded from the ask instead of defaulting to free', async () => {
+    // An empty Floor total reads as ZERO, and zero is a real price: the
+    // schedule rests at its floor once the window elapses, so the lot can be
+    // taken for nothing, indefinitely. That is a legitimate shape and it is not
+    // what an empty field means. Half the opening is the classic auction shape
+    // - open at twice your reserve, decay to it - and above all it is a number
+    // the seller has seen.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    assert.equal(p.value('floorAmt'), '1500', 'the floor follows the ask');
+    p.close();
+  });
+
+  test('a floor the user typed is never overwritten, including a zero', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    p.type('floorAmt', '0');           // a deliberate come-and-take-it launch
+    await p.settle();
+    p.type('outAmt', '4000');          // re-pricing must not undo that choice
+    await p.settle();
+    assert.equal(p.value('floorAmt'), '0', 'the page stopped having opinions once asked');
+    p.close();
+  });
+
+  test('a zero floor is asked about before it is signed', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    p.type('floorAmt', '0');
+    await p.settle();
+
+    // Declined: nothing is sent.
+    p.queueConfirm(false);
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'a refused confirmation places no order');
+
+    // Accepted: it goes, because this shape is allowed on purpose.
+    p.queueConfirm(true);
+    p.click('swap');
+    await p.settle();
+    assert.ok(p.chain.sent.length > 0, 'a confirmed zero floor is still placeable');
+    p.close();
+  });
+
+  test('the duration control is named for what it does, per order type', async () => {
+    // One control, three meanings, and only one of them was "Expires". On a
+    // fixed order the duration IS an expiry. On a Dutch it is the decay window,
+    // and `placeDutch` takes no expiry at all - the listing rests at its floor
+    // until cancelled, so "Expires: 1 day" promised the opposite of the truth.
+    const p = await setup();
+    const label = () => p.$('dlyL').textContent.replace(/\s+/g, ' ').trim();
+    assert.match(label(), /^Expires/, 'a fixed order really does expire');
+
+    p.select('kind', 'dutch');
+    await p.settle();
+    assert.match(label(), /^Decays over/, 'a Dutch decays; it does not expire');
+
+    p.select('kind', 'floor');
+    await p.settle();
+    assert.match(label(), /^Bid window/, 'a bid is dead past its window, not resting');
+    p.close();
+  });
+
+  test('the form says what the order will still be doing tomorrow', async () => {
+    // The button states the terms. It cannot state the BEHAVIOUR, which is the
+    // part people get wrong - a Dutch that ends its window keeps sitting there,
+    // fillable at the floor, and nothing on the form said so.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    p.type('floorAmt', '1000');
+    await p.settle();
+
+    const said = p.text('rate');
+    assert.match(said, /Falls from 3000 to 1000/, 'states the schedule');
+    assert.match(said, /rests at 1000 .* until you cancel/i,
+      'and states the resting behaviour, which is the part that surprises people');
+    p.close();
+  });
+
   test('a Dutch order defaults to a real decay window rather than "Never"', async () => {
     const p = await setup();
     p.select('kind', 'dutch');

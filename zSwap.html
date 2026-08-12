@@ -38,8 +38,6 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:disabled{background:var(--e);color:var(--m);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:.6em;padding:.62em .8em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
 #lq.on{background:var(--k);color:var(--kf)}
-#lqPanel{display:block}
-#lqPanel.hide{display:none}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);border-radius:.5em;margin:.35em 0}
 .lqrow.out{opacity:.55}
 .lqband{display:flex;align-items:center;gap:.4em;font-size:.82em}
@@ -54,7 +52,6 @@ svg{vertical-align:middle;flex-shrink:0}
    labelled rows like the Orders tab's controls, the shared .primary button,
    and one border colour throughout. */
 .lqnew{margin-top:.5em;display:flex;flex-direction:column;gap:.35em;text-align:left}
-.lqnew.hide{display:none}
 /* Range and Fee are the Orders tab's controls: same .dly row, same caret,
    same spacing. They were a lookalike written in different units, which is
    the whole reason this panel read as a different dapp. */
@@ -73,13 +70,10 @@ svg{vertical-align:middle;flex-shrink:0}
   left:0;right:0}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.4em auto 0;font-size:11px;opacity:.75;text-align:center}
-#listNote.hide{display:none}
 .lqbtn{font-size:.9em;padding:.25em .6em;border-radius:.4em;cursor:pointer;border:1px solid var(--e);background:transparent;color:var(--f);font-family:inherit}
-.lqbtn:hover:not(:disabled){border-color:var(--m)}
-.lqbtn:hover:not(:disabled){opacity:.75}
+.lqbtn:hover:not(:disabled){border-color:var(--m);opacity:.75}
 .lqbtn:disabled{opacity:.4;cursor:not-allowed}
 .lqadd{margin-top:.45em;display:flex;flex-direction:column;gap:.35em}
-.lqadd.hide{display:none}
 .lqin{width:100%;box-sizing:border-box;padding:.45em .6em;font:inherit;font-size:.75em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);outline:0}
 .lqin:focus{border-color:var(--m)}
 .lqpv{font-size:11px;opacity:.7;min-height:1.2em}
@@ -138,7 +132,6 @@ svg{vertical-align:middle;flex-shrink:0}
 #rate{text-wrap:balance}
 #bal,#bal1,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
 #bal:empty,#bal1:empty,#rate:empty{display:none}
-#bal1.hide{display:none}
 #bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:#c33;border-bottom-color:#c33}
 #th:focus-visible,#lk:focus-visible,#lq:focus-visible{background:var(--p);color:var(--f)}
@@ -251,7 +244,27 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 // pool constructor is public and every LP token is named "Precision LP", so a
 // hostile deployment is indistinguishable in a wallet.
 const PFACTORY="0x000000Eb27B557aB426d9E99cFd54EC455799e81";
+// TWO LENSES, and the split is by question rather than by feature. PLQLENS
+// PREVIEWS a write - what a remove, an add or a seed would actually pay out -
+// and PPLENS READS the market: which pools exist for a pair, what the best
+// quote through them is, and their price tapes. Nothing needs both at once,
+// which is why it is easy to reach for the wrong one; the names are the only
+// thing keeping them apart.
 const PLQLENS="0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E";
+// Declared HERE, with the other Precision anchors, rather than beside the chart
+// code that was written last. `quotePrecision` and `loadLq` both read it and
+// both sit thousands of lines above that point - safe today only because
+// nothing calls them before the script finishes evaluating, and a plain
+// ReferenceError the first time something does.
+const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
+// PoolInfo is a static struct, so the lens returns rows of flat words - and the
+// COUNT IS LOAD-BEARING, because it is the stride between rows. It was 18 until
+// `clampable` was added to the struct; at the wrong stride every pool after the
+// first decodes as garbage, silently, with no error anywhere. Anything added to
+// PoolInfo has to be reflected here. Only the fields this page reads are named:
+// an index nobody uses is an index nobody notices going stale.
+const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_SL=3,PI_SH=4,
+      PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8;
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
 /**
@@ -571,7 +584,10 @@ const encAddr=a=>pad32(a.toLowerCase());
 const decStr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);
 return new TextDecoder().decode(hexToBytes(h.slice(128,128+n*2)))};
 const decUintArr=hex=>{const h=strip0x(hex);const n=parseInt(h.slice(64,128),16);const o=[];
-for(let i=0;i<n;i++)o.push(BigInt("0x"+h.substr(128+i*64,64)));return o};
+// slice, not substr: the only Annex B call left in the file, and the two read
+// almost identically at a glance (offset+LENGTH vs offset+END) - which is what
+// makes it worth removing rather than leaving for someone to "fix" wrongly.
+for(let i=0;i<n;i++)o.push(BigInt("0x"+h.slice(128+i*64,192+i*64)));return o};
 const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
@@ -1204,7 +1220,12 @@ for(const opt of sel.options)
 opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
-toSel.innerHTML=optsHtml();toSel.value=5;
+toSel.innerHTML=optsHtml();
+// The pre-connect pair, replaced by the registry's ranking as soon as a list
+// lands. By SYMBOL, not by a literal index into the built-in list: 5 happened
+// to be USDC and would silently become something else the day a token is added
+// above it - the same class of bug `restorePair` exists to prevent one layer up.
+toSel.value=String(Math.max(1,TOKENS.findIndex(t=>t.sym==="USDC")));
 syncDisabled();
 const syncIcons=()=>{fromIcon.innerHTML=TOKENS[fromSel.value]?.icon||"";toIcon.innerHTML=TOKENS[toSel.value]?.icon||"";syncPickers()};
 
@@ -1445,6 +1466,19 @@ if(sell>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;
 swap.textContent=dutch
   ?`Dutch ${trimAmt(sell,f.dec)} ${f.sym} · ${trimAmt(want,t.dec)} → ${trimAmt(floor,t.dec)} ${t.sym}`
   :`Place ${fill.value==="1"?"":"all-or-nothing "}order \u2014 ${trimAmt(sell,f.dec)} ${f.sym} \u2192 ${trimAmt(want,t.dec)} ${t.addr===ZERO?"WETH":t.sym}`;
+// What the order DOES, in words, where the swap tab puts its rate line.
+//
+// The button states the TERMS; it cannot state the behaviour, and the behaviour
+// is the part people get wrong. A Dutch does not stop when its window ends - it
+// rests at the floor, fillable, until cancelled - and nothing on this form said
+// so. This is the only line that says what happens tomorrow.
+{
+const qs=t.addr===ZERO?"ETH":t.sym;
+rate.textContent=dutch
+  ?`Falls from ${trimAmt(want,t.dec)} to ${trimAmt(floor,t.dec)} ${qs} over ${rel(+dly.value)}, then rests at ${trimAmt(floor,t.dec)} ${qs} until you cancel`
+  :`${fill.value==="1"?"Fills in any amount":"Fills all at once"} at ${trimAmt(want,t.dec)} ${t.addr===ZERO?"WETH":t.sym} for ${trimAmt(sell,f.dec)} ${f.sym}`
+   +(+dly.value?`, expiring in ${rel(+dly.value)}`:", and never expires");
+}
 swap.disabled=false;return;
 }
 if(tab==="send"){
@@ -1972,7 +2006,7 @@ if(lqMode){fitFont(amt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
 outAmt.addEventListener("input",()=>{
 if(lqMode){fitFont(outAmt);lqPreviewSoon();return}
-if(tab==="book"){fitFont(outAmt);render();return}setMode("out");fitFont(outAmt);updateSoon()});
+if(tab==="book"){fitFont(outAmt);seedFloor();render();return}setMode("out");fitFont(outAmt);updateSoon()});
 // A slippage far from the default is the single easiest way to get sandwiched,
 // so it is worth colouring rather than leaving as a silent number.
 const slipWarn=()=>slip.classList.toggle("warn",+slip.value>=3);
@@ -2372,7 +2406,33 @@ async function showFloor(){
     +`${trimAmt(best.proceeds,q?q.dec:18)} ${q?q.sym:"?"} for any ${t.sym}`;
 }
 
+/**
+ * ONE BAD ROW IS ONE BAD ROW, not an empty book.
+ *
+ * This walked every row inside a single try and returned `[]` from the catch,
+ * so any row that failed a bounds check discarded the rows already decoded
+ * beside it - and reported it as "no standing bids", which is a fact about the
+ * market rather than about the decode. That is what made `order:hitbid`
+ * intermittently red: whether an unparseable bid happened to fall inside the
+ * 256-bid scan window varied run to run, and one of them hid every real bid.
+ *
+ * It was also reachable on purpose and for the price of one bid. The symbol
+ * strings here are chosen by whoever listed the token, the old `n>64` ceiling
+ * threw on a longer one, and a single such bid blanked the floor book for
+ * every user of the page - including their own bids, which they then could not
+ * see or cancel from this UI.
+ *
+ * So a long symbol is no longer an error at all: it is a legal token, capped at
+ * read time and truncated for display by `safeSym`, which is where truncation
+ * belongs. Only genuine corruption - a pointer outside the response - drops a
+ * row, and it drops that row alone. Rows are reached through their own element
+ * pointers, so skipping one cannot desynchronise the next.
+ *
+ * The header checks still return `[]`: an offset or length that does not fit
+ * means the whole response is unusable, which is different from one bad row.
+ */
 function decBidRows(hex){
+  const out=[];
   try{
     const h=strip0x(hex),bytes=h.length/2;
     const word=b=>{if(b<0||b+32>bytes)throw 0;return BigInt("0x"+h.slice(b*2,(b+32)*2))};
@@ -2381,15 +2441,18 @@ function decBidRows(hex){
     if(arr<64||arr+32>bytes)throw 0;
     const n=num(arr),base=arr+32;
     if(n>256||base+n*32>bytes)throw 0;
-    const out=[];
     for(let i=0;i<n;i++){
+     try{
       const row=base+num(base+i*32);        // element pointer, then the row
       if(row+17*32>bytes)throw 0;
       const f=k=>word(row+k*32);
-      // Symbol head words are offsets from the START OF THE ROW.
-      const txt=k=>{const p=row+num(row+k*32),n=num(p);
-        if(n>64||p+32+n>bytes)throw 0;
-        return safeSym(new TextDecoder().decode(hexToBytes(h.slice((p+32)*2,(p+32+n)*2))))};
+      // Symbol head words are offsets from the START OF THE ROW. Bounded by the
+      // response, not by a guess at how long a ticker should be: `safeSym` cuts
+      // it to 16 for display, and the read cap only stops a pathological length
+      // word turning into pathological work.
+      const txt=k=>{const p=row+num(row+k*32),len=num(p);
+        if(p+32+len>bytes)throw 0;
+        return safeSym(new TextDecoder().decode(hexToBytes(h.slice((p+32)*2,(p+32+Math.min(len,1024))*2))))};
       const dec=k=>{const v=num(row+k*32);return v>0&&v<=37?v-1:null};
       out.push({
         id:f(0),
@@ -2408,9 +2471,10 @@ function decBidRows(hex){
         tDec:dec(13),qDec:dec(14),
         tSym:txt(15),qSym:txt(16),
       });
+     }catch{continue}   // this bid, not the book
     }
     return out;
-  }catch{return[]}
+  }catch{return out}
 }
 
 // What the collection-wide bids on `collection` will pay, right now. Backs the
@@ -2478,18 +2542,36 @@ function decViewPage(hex){
   if(!Number.isSafeInteger(arr)||arr<64||arr+32>bytes)throw Error("bad lens offset");
   const n=Number(word(arr)),head=arr+32;
   if(!Number.isSafeInteger(n)||n>256||head+n*32>bytes)throw Error("bad lens length");
+  // Bounded by the response rather than by a ceiling on how long a ticker may
+  // be. A symbol over 64 bytes is a legal token, and throwing on one used to
+  // cost the whole page - the same defect as `decBidRows`, described there,
+  // with a harder landing here.
   const text=(base,k)=>{const off=Number(word(base+k*32)),p=base+off,len=Number(word(p));
-    if(!Number.isSafeInteger(off)||!Number.isSafeInteger(len)||len>64||p+32+len>bytes)throw Error("bad lens string");
-    const a=new Uint8Array(len);for(let i=0;i<len;i++)a[i]=parseInt(h.slice((p+32+i)*2,(p+33+i)*2),16);
+    if(!Number.isSafeInteger(off)||!Number.isSafeInteger(len)||p+32+len>bytes)throw Error("bad lens string");
+    const cap=Math.min(len,1024),a=new Uint8Array(cap);
+    for(let i=0;i<cap;i++)a[i]=parseInt(h.slice((p+32+i)*2,(p+33+i)*2),16);
     return new TextDecoder().decode(a)};
   const rows=[];
+  // Bounded like every other decoder here (`decBidRows`, `loadTokenList`), and
+  // for a harder reason: a decimals figure lands in `formatUnits`, which pads a
+  // string to its width - so an absurd one is an allocation sized by data this
+  // page did not write. null means unknown, which every consumer already
+  // handles: `leg` falls back to `tokMeta`, and `formatUnits` prints base units.
+  const dec=v=>{const d=Number(v);return Number.isInteger(d)&&d>=0&&d<=36?d:null};
   for(let i=0;i<n;i++){
-    const off=Number(word(head+i*32)),b=head+off;
-    if(!Number.isSafeInteger(off)||b+16*32>bytes)throw Error("bad lens row");
-    rows.push({id:word(b),maker:addr(b+32),pf:word(b+64)===1n,exp:word(b+96),
-      nA:word(b+128)===1n,nB:word(b+160)===1n,cp:addr(b+192),
-      tA:addr(b+224),aA:word(b+256),sA:safeSym(text(b,9)),dA:Number(word(b+320)),
-      tB:addr(b+352),aB:word(b+384),sB:safeSym(text(b,13)),dB:Number(word(b+448)),board:addr(b+480)});
+    // Per row, for the same reason as `decBidRows`: element pointers are
+    // independent, so a row that cannot be read costs that row and nothing
+    // else. Throwing discarded the whole lens page, which sends `loadBook` to
+    // its raw 40-newest-per-board fallback - no Dutch rows, no bids - and drops
+    // the board out of routing entirely in `swapCandidates`.
+    try{
+      const off=Number(word(head+i*32)),b=head+off;
+      if(!Number.isSafeInteger(off)||b+16*32>bytes)throw Error("bad lens row");
+      rows.push({id:word(b),maker:addr(b+32),pf:word(b+64)===1n,exp:word(b+96),
+        nA:word(b+128)===1n,nB:word(b+160)===1n,cp:addr(b+192),
+        tA:addr(b+224),aA:word(b+256),sA:safeSym(text(b,9)),dA:dec(word(b+320)),
+        tB:addr(b+352),aB:word(b+384),sB:safeSym(text(b,13)),dB:dec(word(b+448)),board:addr(b+480)});
+    }catch{continue}
   }
   return{rows,next};
 }
@@ -2498,7 +2580,23 @@ const betterRate=(a,b)=>a.aA*b.aB>b.aA*a.aB;
 const MAX_BOOK_LEGS=32,AON_PAIR_SEEDS=24;
 function planBookExactIn(rows,amountIn,ammOut,ammIn){
   if(!amountIn||!ammIn)return null;
-  let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aB<=amountIn));
+  // YOUR OWN ORDERS ARE NOT LIQUIDITY TO YOU.
+//
+// Swapboard reverts a maker filling their own order: payer and recipient are
+// the same address, the transfer nets to nothing, and `_pullToken` throws
+// `BalanceMismatch(amount, 0)` - which its own comment calls the correct
+// outcome, "self-filling is a cancellation written the expensive way", and asks
+// front ends to steer the maker to `cancelOrder`.
+//
+// The book tab does exactly that: a row you made offers Cancel, never Fill. The
+// PLANNER did not, and it reads the same lens. So a resting order of your own
+// priced at or better than the pools would be picked as the best leg and the
+// whole swap would revert - on a leg the user never chose, with an error naming
+// a balance rather than the cause. Unreachable while an order is far off
+// market; entirely reachable the moment one is competitive, which is the point
+// of placing it.
+let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aB<=amountIn)
+  &&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
   const candidateCapped=c.length>256;
   const aonCount=c.reduce((n,o)=>n+!o.pf,0);
   const aonBounded=aonCount>=3;
@@ -2541,7 +2639,9 @@ function planBookExactIn(rows,amountIn,ammOut,ammIn){
 const cheaperRate=(a,b)=>a.aB*b.aA<b.aB*a.aA;
 function planBookExactOut(rows,amountOut,ammIn,ammOut){
   if(!amountOut||!ammOut)return null;
-  let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aA<=amountOut));
+  // Same exclusion as the exact-in planner above, and for the same reason.
+let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aA<=amountOut)
+  &&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
   const candidateCapped=c.length>256;
   const aonCount=c.reduce((n,o)=>n+!o.pf,0);
   const aonBounded=aonCount>=3;
@@ -2984,9 +3084,22 @@ book.addEventListener("click",async e=>{
     const nativeOut=!r.nA&&r.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
     const wethLeg=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()&&r.aB>0n;
     const plan=wethLeg?await planWethPayment(r.aB):null;
+    // NAME THE WAY THROUGH, not just the shortfall.
+    //
+    // This button takes the WHOLE order - `pay` is `r.aB` and `part` is false -
+    // so on a large order it quotes a number most people cannot cover and stops
+    // there. But a partial-fillable order IS available in smaller pieces: the
+    // swap path lists exactly these rows as liquidity (`fillRows` keeps `r.pf`)
+    // and fills them with `part: pay < o.aB`, sized to whatever is being bought.
+    //
+    // Reported from the field as "why can't I buy a small amount?" - which the
+    // old message had no answer for, though the page did.
     if(plan&&plan.rail==="short")
       throw Error(`Not enough ether to fill: it costs ${trimAmt(r.aB,18)} and you hold `
-        +`${trimAmt(plan.w,18)} WETH plus ${trimAmt(plan.e,18)} ETH.`);
+        +`${trimAmt(plan.w,18)} WETH plus ${trimAmt(plan.e,18)} ETH. `
+        +(r.pf
+          ?`This button takes the whole order — to buy part of it, use the Swap tab, which fills this order alongside the pools.`
+          :`This order is all-or-nothing, so it cannot be filled in smaller pieces.`));
     // Half wrapped and half not, with neither half enough on its own. Top up
     // the wrapped side by exactly the shortfall and the leg funds itself -
     // where before this was simply a fill the page refused.
@@ -3315,6 +3428,23 @@ const syncOrderType=()=>{
   const sched=dutch||bid;
   floorL.classList.toggle("hide",!sched);
   floorL.firstChild.nodeValue=bid?"Opening bid":"Floor total";
+  /**
+   * One control, three meanings - and only one of them was "Expires".
+   *
+   * On a fixed order the duration IS an expiry: the page stamps `now + dly` and
+   * the order dies there. On a Dutch it is the DECAY WINDOW, and `placeDutch`
+   * takes no expiry at all - the listing is created with `expiry == 0`, which
+   * Dutchboard documents as "rest forever". So an order labelled "Expires: 1
+   * day" decays for a day and then sits at its floor indefinitely, fillable,
+   * until it is cancelled. The label promised the opposite of what happens.
+   *
+   * A climbing bid is a third thing again: past its window the bid is DEAD
+   * rather than resting, because a bid that kept climbing would have no ceiling.
+   */
+  if(tab==="book"){
+    dlyL.firstChild.nodeValue=dutch?"Decays over":bid?"Bid window":"Expires";
+    dly.options[0].textContent=sched?"—":"Never";
+  }
   fillL.classList.toggle("hide",tab!=="book"||sched);
   rc.classList.toggle("hide",sched);
   rcvEl.classList.toggle("hide",sched);
@@ -3328,8 +3458,43 @@ const syncOrderType=()=>{
     rcvHdr.textContent=bid?"You want to buy":dutch?"Start ask total":"You want";
   }
 };
-kind.onchange=()=>{syncOrderType();render()};
-floorAmt.addEventListener("input",()=>{fitFont(floorAmt);render()});
+// Also on the way IN to a Dutch: the ask is usually typed before the order type
+// is chosen, and a floor that only appears if you happen to retype the ask is a
+// default nobody meets.
+kind.onchange=()=>{syncOrderType();seedFloor();render()};
+/**
+ * A floor the user did not choose is the one they are most likely to regret.
+ *
+ * `Floor total` left empty reads as zero, and zero is a REAL price: the schedule
+ * rests at its floor once the window elapses - `_priceAt` returns `endPrice`
+ * forever after - so a lot that decays to nothing can be taken for nothing, and
+ * Dutchboard says as much ("zero is also a legitimate price for a fully decayed
+ * lot"). That is a deliberate shape - a come-and-take-it launch - and it is not
+ * what an empty field means.
+ *
+ * So the field is SEEDED rather than fenced: half the opening ask, which is the
+ * classic shape (open at twice your reserve, decay to it) and is at least a
+ * number the seller looked at. It is only ever written into a field the user has
+ * not touched - once they type their own, this never fires again, including if
+ * they type a zero on purpose.
+ */
+let floorTouched=false;
+const seedFloor=()=>{
+if(floorTouched||kind.value!=="dutch")return;
+const t=TOKENS[toSel.value];
+const raw=outAmt.value.trim();
+if(!raw||!t)return;
+let start;try{start=parseUnits(raw,t.dec)}catch{return}
+if(!start)return;
+floorAmt.value=trimAmt(start/2n,t.dec);
+fitFont(floorAmt);
+};
+floorAmt.addEventListener("input",()=>{
+// Any keystroke here - including clearing it back to empty - is a choice, and
+// the page must stop having opinions about it from then on.
+floorTouched=true;
+fitFont(floorAmt);render();
+});
 tabBook.onclick=()=>setTab("book");
 // Never while a fill or a claim is in flight: the refresh would replace the
 // disabled button with an enabled one. Each flow refreshes on its own way out.
@@ -3995,7 +4160,12 @@ async function lqCreate(){
   const sl=BigInt(box.dataset.sl||0),sh=BigInt(box.dataset.sh||0),sp=BigInt(box.dataset.sp||0);
   const a0=BigInt(box.dataset.a0||0),a1=BigInt(box.dataset.a1||0),fee=BigInt(box.dataset.fee||0);
   if(!sl||!sh||!sp){out.textContent="Preview the band first.";return}
-  busy=true;go.disabled=true;
+  // A DEPTH COUNTER, not a flag. This used to assign `busy=true`/`busy=false`,
+  // which is the same thing only while nothing else is in flight: a fill or a
+  // claim running alongside a create had its `++busy` stamped away, and its own
+  // `--busy` then left the page on -1 - truthy, so every liquidity action and
+  // the 30s refresh were dead for the rest of the session.
+  ++busy;go.disabled=true;
   try{
     const bps=BigInt(Math.round(Math.min(10,Math.max(.01,+slip.value||.5))*100));
     const lp=BigInt(box.dataset.lp||0);
@@ -4021,7 +4191,7 @@ async function lqCreate(){
     stat.textContent="Band created.";
     loadLq();refreshBalance();
   }catch(e){err(e);out.textContent="";}
-  finally{busy=false;go.disabled=false}
+  finally{--busy;go.disabled=false}
 }
 async function lqApprove(token,need){
   const al=BigInt(await rpc(C,[{to:token,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(PFACTORY)},L]));
@@ -4076,7 +4246,9 @@ lq.onclick=()=>lqSet(!lqMode);
 // no server. One aggregate3 finds the pools for the pair and reads their tapes,
 // so opening the drawer costs a single round trip. Closed by default, and it
 // costs nothing at all until opened.
-const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
+// PPLENS and the PoolInfo layout are declared with the other Precision anchors
+// at the top of this file - both are read by the swap quote and the liquidity
+// panel long before this point.
 const SEL_MARKETS="29c21083",SEL_TAPE="29a65241";
 // The tape publishes exactly two periods and keeps 256 bars of each, so what
 // a timeframe can show is fixed by arithmetic rather than by taste:
@@ -4096,13 +4268,6 @@ const CH_POOLS=8;
 // The pool also keeps a four-hour tape covering weeks; read both and pick the
 // one whose resolution the timeframe actually needs.
 const srcFor=tf=>tf>=COARSE?COARSE:FINE;
-// PoolInfo is a static struct, so the lens returns rows of flat words - and the
-// COUNT IS LOAD-BEARING, because it is the stride between rows. It was 18 until
-// `clampable` was added to the struct; at the wrong stride every pool after the
-// first decodes as garbage, silently, with no error anywhere. Anything added to
-// PoolInfo has to be reflected here.
-const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_T0=1,PI_T1=2,PI_SL=3,PI_SH=4,
-      PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CLAMP=14;
 let chKind=LS.ck==="line"?"line":"candle",chInv=false,chInvKey="",chPeriod=300,chBars=null,chSeq=0,chPools=0,chOpen=LS.ch==="1",chCache={};
 // Declared, not implied. `drawChart` can return early on an empty window AFTER
 // `syncChartUI` has already revealed the drawer, so the pointer handlers below
@@ -4276,13 +4441,15 @@ const chSyncOrientation=()=>{
 
 const hudFor=i=>{
 if(!chDraw)return;
-const{pts,num,UP,DN,ch}=chDraw,hd=chArt.querySelector(".hd");
+// `per`, not `chPeriod`: a bar is worth what the tape it came from says, which
+// is only the selected timeframe when that timeframe could actually be rolled.
+const{pts,num,UP,DN,ch,per}=chDraw,hd=chArt.querySelector(".hd");
 if(!hd)return;
 if(i<0){const b=pts[pts.length-1];
 hd.innerHTML=`<b>${num(b.c)}</b> <span style="color:${ch>=0?UP:DN}">${ch>=0?"+":""}${ch.toFixed(2)}%</span>`;
 return}
-const b=pts[i],up=b.c>=b.o,d=new Date(b.b*chPeriod*1e3);
-const when=chPeriod>=86400
+const b=pts[i],up=b.c>=b.o,d=new Date(b.b*per*1e3);
+const when=per>=86400
   ?d.toLocaleDateString("en-US",{month:"short",day:"numeric"})
   :d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});
 hd.innerHTML=`<b style="color:${up?UP:DN}">${num(b.c)}</b> <span>${when}</span>`
@@ -4316,12 +4483,26 @@ function drawChart(){
 if(!chBars)return;
 const W=340,H=150,PL=2,PR=42,PT=10,PB=14,VH=22;
 const pw=W-PL-PR,ph=H-PT-PB-VH;
-// The tape is stored newest-first. A chart that runs right-to-left is worse
-// than no chart, so flip it before anything is measured or drawn.
+// THE TIMEFRAME IS CHOSEN FIRST, because it is what decides which tape to
+// read. These used to run after `src`/`base`/`step` were already resolved, so
+// arriving at a pair whose auto-period is 1d while the previous pair sat on 5m
+// picked the FINE tape and then rolled a daily candle out of it - and the fine
+// ring only spans ~21h, which is exactly the stub the coarse tape exists to
+// prevent. The coarse tape was loaded and sitting right there, unused.
+chSyncPeriod();chSyncOrientation();
 const src=srcFor(chPeriod),base=chBars[src]||chBars[FINE]||chBars[COARSE];
 if(!base){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 const step=chBars[src]?src:(chBars[FINE]?FINE:COARSE);
-chSyncPeriod();chSyncOrientation();
+// WHAT A BAR IS ACTUALLY WORTH IN SECONDS, which is not always the timeframe
+// the buttons say. `rollUp` refuses to roll DOWN - it cannot invent sub-bars -
+// so asking for 5m on a pair whose fine tape is empty (nothing traded in the
+// last ~21h) draws the coarse bars unrolled, still keyed in 14400s. Every piece
+// of time arithmetic downstream then multiplied those keys by 300: the crosshair
+// dated candles to 1971 and the footer called six weeks of trading two hours.
+// The candles themselves were right the whole time, which is what hid it.
+const per=Math.max(chPeriod,step);
+// The tape is stored newest-first. A chart that runs right-to-left is worse
+// than no chart, so flip it before anything is measured or drawn.
 let pts=(chPeriod===step?base.filter(Boolean):rollUp(base,step,chPeriod)).slice().reverse();
 // WHICH WAY UP. The tape stores token1 per token0, and token0 is whichever
 // address sorts first - so ETH, always, being the zero address. That reads
@@ -4371,10 +4552,10 @@ s+=`<line x1="${x.toFixed(1)}" y1="${Y(b.h).toFixed(1)}" x2="${x.toFixed(1)}" y2
 s+="</svg>";
 const last=pts[n-1],first=pts[0],ch=((last.c-first.o)/first.o)*100;
 chArt.innerHTML=s+'<div class="hd"></div>';
-chDraw={pts,X,W,PL,st,num,UP,DN,ch};
+chDraw={pts,X,W,PL,st,num,UP,DN,ch,per};
 hudFor(-1);
 const p=chPair();
-const span=rel((last.b-first.b+1)*chPeriod);
+const span=rel((last.b-first.b+1)*per);
 chNote.textContent=p?`${chInv?p[0].sym+" per "+p[1].sym:p[1].sym+" per "+p[0].sym} · ${chPools} pool${chPools===1?"":"s"} · ${clipped?"last ":""}${span}`:"";
 }
 for(const[label,secs]of TFS){const b=document.createElement("button");
@@ -4777,6 +4958,28 @@ if(f.std==="nft"||t.std==="nft"){
 const sell=parseUnits(amt.value.trim(),f.dec),want=parseUnits(outAmt.value.trim(),t.dec);
 const dutch=kind.value==="dutch",bid=kind.value==="floor";
 const floor=(dutch||bid)&&floorAmt.value.trim()?parseUnits(floorAmt.value.trim(),bid?f.dec:t.dec):0n;
+/**
+ * A Dutch to ZERO is a real thing to want, and not a thing to do by accident.
+ *
+ * The schedule rests at its floor once the window elapses - `_priceAt` returns
+ * `endPrice` from then on - so a floor of zero means that after the decay
+ * anyone can take the whole lot for nothing, indefinitely. That is exactly what
+ * a come-and-take-it launch IS, so the page must not refuse it. It is also what
+ * an empty field looks like, which is why it is asked about.
+ *
+ * Asked once, and only for zero: a low floor is a judgement call the seller is
+ * entitled to make quietly. Fails CLOSED if the browser has no dialog, on the
+ * same reasoning as the price-impact gate - a gate that cannot be shown must
+ * still hold.
+ */
+if(dutch&&floor===0n){
+try{
+  if(!confirm(`This lot decays to ZERO.\n\nOnce the window ends, anyone can take all ${trimAmt(sell,f.dec)} ${f.sym} for nothing — and it stays that way until you cancel.\n\nThat is how a "come and take it" launch works. If you meant to keep a reserve, set a Floor total instead.\n\nContinue with a zero floor?`))return;
+}catch{
+  stat.textContent="This lot would decay to zero and this browser blocked the confirmation. Set a Floor total, or open the page outside the wallet's in-app browser.";
+  return;
+}
+}
 const board=bid?FLOOR:dutch?DUTCH:SB2;
 const quoteToken=!dutch&&!bid&&t.addr===ZERO?WETH:t.addr;
 const [bc,oc]=await Promise.all([rpc("eth_getCode",[board,L]),rpc("eth_getCode",[ORDERBOL,L])]);
@@ -4858,6 +5061,9 @@ if(f.addr===ZERO){
 await sendRouterFunded(direct,funded,f,sell,f.addr===ZERO?sell:0n,
   bid?"Placing bid (escrowing the ceiling)...":dutch?"Placing Dutch order...":t.addr===ZERO?"Placing limit order (ETH quote settles as WETH)...":"Placing limit order...");
 amt.value="";outAmt.value="";floorAmt.value="";
+// The next order is a fresh decision, so the seeded default comes back. Without
+// this, one hand-typed floor would silence it for the rest of the session.
+floorTouched=false;
 fitFont(amt);fitFont(outAmt);fitFont(floorAmt);
 loadBook();refreshBalance();render();
 }catch(e){err(e);render()}
