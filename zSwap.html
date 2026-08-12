@@ -767,6 +767,18 @@ const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(c
 // thin pair still quotes on the venues that did answer.
 let mc3Cap=4;
 const mc3Split=(cs,n)=>{const o=[];for(let i=0;i<cs.length;i+=n)o.push(cs.slice(i,i+n));return o};
+/**
+ * Did a batch give up rather than answer?
+ *
+ * Bisection ends by returning nulls, which read downstream exactly like "this
+ * venue had nothing" - so a node that cannot answer becomes "No route", and
+ * the page blames the market for the RPC's failure. Seen for real: an
+ * exact-out quote whose batch hit the node's eth_call gas cap was reported to
+ * the user as no liquidity existing.
+ *
+ * The count is what separates the two. Read it around a quote, not globally.
+ */
+let mcGaveUp=0;
 const mc3Deep=async(cs,tag=L,depth=0)=>{
   if(!cs.length)return[];
   // Chunks go out together: the cost is one round trip, not one per chunk.
@@ -774,7 +786,7 @@ const mc3Deep=async(cs,tag=L,depth=0)=>{
   if(cs.length>mc3Cap&&depth<8)return fan(mc3Cap);
   try{return await mc3(cs,tag)}
   catch(e){
-    if(cs.length<2||depth>=8)return cs.map(()=>null);
+    if(cs.length<2||depth>=8){mcGaveUp+=cs.length;return cs.map(()=>null)}
     const h=cs.length>>1;
     if(h<mc3Cap)mc3Cap=h;
     return fan(h);
@@ -1426,6 +1438,9 @@ const slipBps=BigInt(Math.round(pct*100));
 const deadline=BigInt(Math.floor(Date.now()/1e3)+1800);
 outEl.value="...";fitFont(outEl);
 const acct=account;
+// Taken before the try, because the catch has to read it: what is counted is
+// THIS quote's abandoned reads, not every failure the page has ever had.
+const gaveUp0=mcGaveUp;
 try{
 const a=encAddr(rcv||acct||ZERO),rf=encAddr(acct||ZERO),tl=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(slipBps)+encUint(deadline);
 const _rq=[];
@@ -1713,7 +1728,14 @@ render();
 // mistake to correct, not the user's to read about. Re-quotes on the next
 // candidate down; a user's own pair falls through and says what happened.
 if(advancePastDeadPair()){loadChart();update();return}
-outEl.value="";fitFont(outEl);stat.textContent="No route: "+(e.message||e)}}
+outEl.value="";fitFont(outEl);
+// WHOSE FAULT. If reads were abandoned during this quote, the venues were
+// never asked - so "no route" would be blaming the market for the node. Seen
+// for real against a node with a low eth_call gas cap: every venue answered
+// nothing, and the page reported no liquidity.
+stat.textContent=mcGaveUp>gaveUp0
+  ?"Your RPC could not complete the quote — some venues were never asked. Try again, or switch networks in your wallet and back."
+  :"No route: "+(e.message||e)}}
 }
 let debounceT;
 const showAddr=async()=>{const a=account,short=a.slice(0,6)+"..."+a.slice(-4);

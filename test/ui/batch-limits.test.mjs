@@ -87,13 +87,44 @@ describe('a capped RPC provider', () => {
     capped.close();
   });
 
-  test('degrades to no route rather than hanging when nothing fits', async () => {
+  test('settles rather than hanging when nothing fits', async () => {
     // batchLimit 0 refuses even a single call, so bisection bottoms out. The
-    // page must settle, not spin: an unreachable node is a real state.
+    // page must settle, not spin: an unreachable node is a real state. WHAT it
+    // says about it is the next test - this one is only that it stops.
     const p = await setup(0);
     await p.typeAmount('amt', '1');
     assert.equal(p.value('outAmt'), '', 'no quote is available');
-    assert.match(p.text('stat'), /No route/, 'and the page says so rather than hanging');
+    assert.ok(p.text('stat').length > 0, 'and it reaches a verdict rather than spinning');
+    p.close();
+  });
+
+  test('blames the node, not the market, when reads were abandoned', async () => {
+    // Found on a fork whose eth_call gas cap is lower than mainnet's: the
+    // quote batch failed, bisection bottomed out, every venue came back null,
+    // and the page said "No route: bad quote". That is the market being
+    // blamed for the RPC - and a user reading it concludes the pair has no
+    // liquidity when their node simply could not answer.
+    const p = await setup(0);          // refuses even a single call
+    await p.typeAmount('amt', '1');
+    await p.waitFor(() => p.text('stat').length > 0, { label: 'a verdict' });
+
+    assert.match(p.text('stat'), /RPC could not complete/i, 'says whose failure it was');
+    assert.ok(!/No route/i.test(p.text('stat')),
+      'and does not report absent liquidity for a question nobody asked');
+    p.close();
+  });
+
+  test('still says no route when the venues genuinely answered nothing', async () => {
+    // The other half: a healthy node that simply has no route must NOT be
+    // reported as a node failure, or the message becomes noise.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = () => null;   // answers, with nothing
+    const p = await loadPage({ chain });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    await p.waitFor(() => /No route/i.test(p.text('stat')), { label: 'no route' });
+    assert.ok(!/RPC could not complete/i.test(p.text('stat')));
     p.close();
   });
 });
