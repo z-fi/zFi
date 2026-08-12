@@ -105,6 +105,17 @@ cost against a narrow limitation. The workarounds, in preference order:
 3. Quote the market in WETH rather than native ETH, which removes the refund
    path entirely.
 
+If the factory is ever redeployed for a reason that earns it on its own, this
+closes in ONE parameter and the pool does not move. `PrecisionPool` already
+takes `refundTo` as an argument - `_addLiquidity(..., to, refundTo)` - so the
+pool can already refund somewhere other than the seeder. It is only the factory
+that hardcodes `msg.sender` into it, at `_fund`. Letting the seeder name a
+`refundTo` would close the seam without touching `PrecisionPool`, so
+`poolInitCodeHash` and every already-verified pool stay valid. Not worth a
+redeploy by itself: the trigger needs a creator that is at once a contract, a
+native market's owner, and unable to receive ETH, and workaround 1 is the
+dapp's default path anyway.
+
 ### The deployer key is burned
 
 `0xAcFBA7Ce872C6eAD99d535586f84b0D68ADE4082` was used to broadcast and its

@@ -43,7 +43,7 @@ they carry no vanity prefix and are not deployed separately:
 | Orderbol (superseded) | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | no Floorboard binding |
 | Swapbol (superseded) | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | no Floorboard binding |
 | Cowol | [`0x0000003B59007E8aa43B0e508AfF8a304438333B`](https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B) | CoW Protocol, ERC-1271 |
-| Swapbatch | [`0x0000005471EEF58dD16Aeccda21C37758E36a0b6`](https://etherscan.io/address/0x0000005471EEF58dD16Aeccda21C37758E36a0b6) | batch board fills paying native ETH |
+| Swapbatch | [`0x000000Fbde0567d1966FCa91eF2A1ddCCD1fedbd`](https://etherscan.io/address/0x000000Fbde0567d1966FCa91eF2A1ddCCD1fedbd) | batch board fills paying native ETH (v1 + current Swapboard) |
 | Fwabol | [`0x000000798397834de6a60d9CCBfde0536A2699d9`](https://etherscan.io/address/0x000000798397834de6a60d9CCBfde0536A2699d9) | FWA both ways, straight to the v4 PoolManager |
 | Fwabol (superseded) | [`0x000000F2303C64Ad38956B38917Ade68b7a604FE`](https://etherscan.io/address/0x000000F2303C64Ad38956B38917Ade68b7a604FE) | buy-side only, via the Universal Router |
 
@@ -109,8 +109,25 @@ transient storage; `eth_call` simulates it fine. `solveExactOut` bisects
 exact-in quotes for hooks that implement only one direction, as the ETH/FWA
 hook does.
 
-Swapbatch binds `legacyBoard = address(0)`: no legacy board is reachable through
-it, so `tokensOut` must be empty and `legacyBoardMode` false on every call.
+Swapbatch binds both boards: `legacyBoard` is v1
+(`0x000000fF3D7A2d373615141d7489Ca66683DbecF`) and `modernBoard` is the current
+Swapboard. v1 is the one that needs the helper — it has no batch fill and no
+`multicall`, so N fills there cannot otherwise share a transaction — and it
+holds the history worth batching, 139 orders against the deprecated board's 3.
+
+Calling it against v1 means `legacyBoardMode` true and one validated `tokensOut`
+entry per order: v1 takes no recipient and pays tokenA to its `msg.sender`, so
+that sweep is the DELIVERY PATH rather than a safety net. v1 also predates
+partial fills and the payable entry point, so a leg is all-or-nothing at the
+order's own price and must be quoted in WETH. Against the current Swapboard,
+`tokensOut` must be empty and `legacyBoardMode` false, as before.
+
+The earlier deployment at `0x0000005471EEF58dD16Aeccda21C37758E36a0b6` bound
+`legacyBoard = address(0)`, which the constructor permits so long as a modern
+board is set — so its entire legacy path was unreachable. `legacyBoard` is
+immutable, which is why binding v1 needed a new address rather than a setter.
+See [deploy/Swapbatch.md](deploy/Swapbatch.md), including why Dutchboard and
+Floorboard are deliberately NOT bound.
 
 
 ### Reproducing an address
@@ -128,13 +145,15 @@ own, because the board embeds their creation code.
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
 
-Current v0.1 deployment flow: deploy the six generated HTML data contracts, then deploy `zSwap(data1, data2, data3, data4)` with those addresses. Record the final wrapper address here after deployment.
+Deployment flow: deploy the FOURTEEN generated chunk contracts (`out/zSwap.chunk1..14.creation.txt`), then deploy `zSwap(dao, previous, chunk1, ..., chunk14)` with those addresses. The count is not decorative - the constructor reverts `InvalidData` unless all fourteen are present, non-empty and distinct, and `script/check-zSwap.mjs` fails the build if the source and the Solidity disagree about it. Record the final wrapper address here after deployment.
+
+`html()` is IMMUTABLE, so a page fix is never an update in place: it is a new set of chunks and a new wrapper, deployed by the DAO through `deployNext`, with the naming layer repointed at it. That is the whole design - an address whose bytes cannot move under an auditor or a bookmark - and it means an edit to `zSwap.html` is not live until that has happened.
 
 ### The permanent-HTML pattern
 
 The HTML payload is installed as the **runtime bytecode of six data contracts** created before the wrapper. The wrapper keeps six `immutable` pointers (`DATA1`…`DATA6`). At read time, `html()` copies all six chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 263,073 bytes across 14 data contracts (18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,791 / 18,790 bytes), with 80,991 bytes of 14-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 271,746 bytes across 14 data contracts (19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,411 / 19,403 bytes), with 72,318 bytes of 14-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 
