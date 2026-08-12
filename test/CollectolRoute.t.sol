@@ -50,7 +50,10 @@ contract CollectolRouteTest is Test {
     address user = address(0xB0B);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         bytes memory initcode = vm.readFileBinary("deploy/Collectol.initcode.bin");
         bytes32 salt = vm.parseBytes32(vm.trim(vm.readFile("deploy/Collectol.salt.txt")));
         address predicted = vm.parseAddress(vm.trim(vm.readFile("deploy/Collectol.address.txt")));

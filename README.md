@@ -212,6 +212,42 @@ forge test --match-path test/zSwap.t.sol
 
 `build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk14.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
 
+### Running the suite
+
+```
+forge test
+```
+
+`ETH_RPC_URL` is optional — every forked suite defaults to the endpoint in
+`foundry.toml`. Set it to a paid archive node if the public one rate-limits you;
+a saturated endpoint surfaces as test FAILURES rather than infrastructure errors,
+so budget a re-run before believing any fork-test failure.
+
+**If an invariant suite fails with `replay failure`, suspect the cache first.**
+Foundry persists a counterexample under `cache/invariant/failures/<Test>/<invariant>`
+and replays it on every subsequent run. A run that is INTERRUPTED — Ctrl-C, a
+killed process, a timeout — can leave a truncated file behind, and replaying that
+reports as a hard failure forever, on code that is perfectly fine. The tell is the
+counter: a real counterexample replays many calls, while a truncated one reads
+
+```
+[FAIL: invariant_UndamagedPoolStaysBacked replay failure]
+ invariant_UndamagedPoolStaysBacked() (runs: 1, calls: 1, reverts: 1)
+```
+
+`calls: 1, reverts: 1` means the single replayed call reverted, which is not the
+same as the invariant breaking. Delete the file and re-run to get a real answer:
+
+```
+rm -rf cache/invariant/failures/<TestContract>
+forge test --match-path test/<TheSuite>.t.sol
+```
+
+This has already cost one investigation into a PrecisionPool "accounting break"
+that did not exist — the invariants pass 256 runs x 128,000 calls from a clean
+cache. `cache/` is gitignored, so this is always local state, never something a
+checkout inherits.
+
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 
 ## TokenList: the token registry as an NFT collection

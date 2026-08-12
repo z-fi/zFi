@@ -44,7 +44,10 @@ contract CollectolTest is Test {
     address refund = address(0xBEEF);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         col = new Collectol(SALE, FEE);
         lens = new CollectolLens();
         colEthBase = address(col).balance;

@@ -13,7 +13,10 @@ contract TacTxTest is Test {
         104165018710067097353655755692819801489527232022561016148205125677286991358696;
 
     function test_RawMulticall() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         if (TokenList(payable(REG)).isListed(ID)) { emit log("already listed - skipped"); return; }
 
         bytes memory cd = vm.parseBytes(vm.replace(vm.readFile("./deploy/TAC-list.calldata.txt"), "\n", ""));

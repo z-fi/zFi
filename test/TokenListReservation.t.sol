@@ -11,7 +11,10 @@ contract TokenListReservationTest is Test {
     address constant DAI  = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // unlisted ERC-20
 
     function test_ActivatedReservationStaysReadable() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         bytes32 key = keccak256("probe.reservation");
 
         vm.prank(SAFE);

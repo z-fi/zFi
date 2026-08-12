@@ -18,7 +18,10 @@ contract CollectolDeployTest is Test {
     address constant SHARES = 0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49;
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
     }
 
     function _deploy(string memory name) internal returns (address deployed, address predicted) {

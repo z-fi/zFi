@@ -11,7 +11,7 @@ interface IE20 {
 contract FwaTransferTest is Test {
     IE20 constant FWA = IE20(0xa0Df17B5aC76ABaBA36E1450E2cbCd18A620C845);
 
-    function setUp() public { vm.createSelectFork(vm.envString("ETH_RPC_URL")); }
+    function setUp() public { vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io"))); }
 
     /// @dev Can an ordinary holder send FWA to another wallet?
     function test_HolderToHolderTransfer() public {
