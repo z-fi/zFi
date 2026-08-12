@@ -55,9 +55,22 @@ contract AuditH01Test is Test {
             creatorFeeBps: 0
         });
 
+        // The property is that this is REFUSED, not which guard refuses it.
+        // It was PriceOutOfRange when the postcondition was added; the
+        // resolution floor now fires first and returns InsufficientLiquidity.
+        // Both are refusals of the same degenerate seed, so pinning one
+        // selector turned a guard reorder into a "regression" that reads
+        // exactly like the bricked-pool bug this test exists to prevent.
         vm.prank(lp);
-        vm.expectRevert(PrecisionPool.PriceOutOfRange.selector);
-        factory.createAndSeed{value: AMT0}(m, SEED, AMT0, AMT1, 0, lp);
+        try factory.createAndSeed{value: AMT0}(m, SEED, AMT0, AMT1, 0, lp) {
+            fail("degenerate seed was accepted - it must be refused, not minted");
+        } catch (bytes memory err) {
+            bytes4 sel = bytes4(err);
+            assertTrue(
+                sel == PrecisionPool.PriceOutOfRange.selector || sel == PrecisionPool.InsufficientLiquidity.selector,
+                "refused, but by neither bound guard - check what changed"
+            );
+        }
     }
 
     /// @dev And the same market seeds fine with a sane counter-asset amount,
