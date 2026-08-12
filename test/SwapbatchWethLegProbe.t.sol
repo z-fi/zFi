@@ -52,12 +52,27 @@ contract SwapbatchWethLegProbeTest is Test {
         assertEq(weth.balanceOf(taker) - before, 10 ether, "taker receives the WETH it bought");
     }
 
-    /// Half paid, half delivered - the ordinary partial fill the legacy board's
-    /// per-order `fillAmountsB` exists to express.
-    function test_partiallyFilledWethOutputLeg() public {
-        uint256 before = weth.balanceOf(taker);
-        _call(0.5 ether, 5 ether);
-        assertEq(weth.balanceOf(taker) - before, 5 ether, "taker receives the WETH it bought");
+    /// v1 CANNOT partially fill: `fillOrder(id, deadline)` has nowhere to put a
+    /// smaller number, so a leg is taken whole or not at all. Asking for half
+    /// used to be expressible only because the helper was addressing a different
+    /// board's ABI. It must now be refused BEFORE any value is wrapped - a
+    /// silent acceptance would approve 0.5 and have the board pull the full 1,
+    /// or wrap 0.5 against an order that never settles.
+    function test_partialFillAgainstV1IsRefused() public {
+        board.setDelivery(10 ether);
+        uint256[] memory ids = new uint256[](1);
+        uint256[] memory pays = new uint256[](1);
+        uint256[] memory mins = new uint256[](1);
+        address[] memory outs = new address[](1);
+        (ids[0], pays[0], mins[0], outs[0]) = (0, 0.5 ether, 0, address(weth));
+        vm.prank(taker);
+        vm.expectRevert(
+            abi.encodeWithSelector(Swapbatch.PartialFillUnsupported.selector, 0, 1 ether, 0.5 ether)
+        );
+        batch.fillOrdersWithEth{value: 0.5 ether}(
+            address(board), ids, pays, mins, outs, block.timestamp + 1, taker, false, true
+        );
+        assertEq(taker.balance, 100 ether, "nothing was spent");
     }
 }
 
@@ -68,15 +83,12 @@ contract WethOutLegacyBoard {
     address public immutable weth;
     uint256 public delivery;
 
-    // Seven words, matching the DEPLOYED legacy board. This mock used to omit
-    // `partialFill` exactly as Swapbatch's interface did, so the two agreed with
-    // each other and disagreed with mainnet - the unit tests passed against a
-    // mock built to the shape of the bug, and the one suite that used the real
-    // board was the only one failing.
+    // Six words, matching v1 - the board Swapbatch binds as `legacyBoard`.
+    // Decoded from mainnet, not inferred; see the note on Swapbatch's
+    // `ILegacyBatchOrderView.Order` for why every shape here is measured.
     struct Order {
         address maker;
         bool active;
-        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;
@@ -91,17 +103,17 @@ contract WethOutLegacyBoard {
         delivery = amount;
     }
 
-    function fillOrders(uint256[] calldata, uint256, uint256[] calldata fillAmountsB) external {
-        uint256 paid;
-        for (uint256 i; i < fillAmountsB.length; ++i) paid += fillAmountsB[i];
-        IERC20(weth).transferFrom(msg.sender, address(this), paid);
+    /// @dev v1's single-order fill. The order is quoted at 1 ether, and that is
+    ///      the only amount it can be taken at.
+    function fillOrder(uint256, uint256) external {
+        IERC20(weth).transferFrom(msg.sender, address(this), 1 ether);
         IERC20(weth).transfer(msg.sender, delivery);
     }
 
     function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory out) {
         out = new Order[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
-            out[i] = Order(address(1), true, false, weth, 10 ether, weth, 1 ether);
+            out[i] = Order(address(1), true, weth, 10 ether, weth, 1 ether);
         }
     }
 }

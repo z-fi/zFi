@@ -406,15 +406,19 @@ contract LegacyBoard {
     MockERC20 public immutable tokenA;
     MockERC20 public immutable tokenB;
 
-    // Seven words, matching the DEPLOYED legacy board. This mock used to omit
-    // `partialFill` exactly as Swapbatch's interface did, so the two agreed with
-    // each other and disagreed with mainnet - the unit tests passed against a
-    // mock built to the shape of the bug, and the one suite that used the real
-    // board was the only one failing.
+    // Six words, matching v1 - the board Swapbatch binds as `legacyBoard`, and
+    // what "legacy" means everywhere else in the system. Decoded from mainnet:
+    // `getOrders([5])` on 0x000000fF3D...DbecF returns exactly these six.
+    //
+    // A mock is the wrong place to be creative about a shape. This one has been
+    // wrong twice in both directions - once omitting a field the board has, once
+    // carrying a field it does not - and each time the unit tests passed anyway,
+    // because a mock built to the interface's shape agrees with the interface no
+    // matter what mainnet says. That is the failure mode to design against: the
+    // only suite that can catch it is the one holding a real board.
     struct Order {
         address maker;
         bool active;
-        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;
@@ -427,24 +431,38 @@ contract LegacyBoard {
         tokenB = _b;
     }
 
-    function fillOrders(uint256[] calldata orderIds, uint256, uint256[] calldata fillAmountsB) external {
-        uint256 paid;
-        for (uint256 i; i < orderIds.length; ++i) {
-            paid += fillAmountsB[i];
-        }
-        MockERC20(weth).transferFrom(msg.sender, address(this), paid);
-        for (uint256 i; i < orderIds.length; ++i) {
-            (orderIds[i] < 2 ? tokenA : tokenB).transfer(msg.sender, 100e18);
-        }
+    /// @dev Orders this mock refuses, so a batch can be made to have a bad leg.
+    mapping(uint256 => bool) public dead;
+
+    function kill(uint256 orderId) external {
+        dead[orderId] = true;
+    }
+
+    /// @dev What a leg costs. v1 has no fill-amount argument, so this is not a
+    ///      parameter of the fill - it is a property of the order, and the only
+    ///      price at which the order can be taken.
+    function _priceOf(uint256 orderId) internal pure returns (uint256) {
+        return orderId == 1 ? 2 ether : 1 ether;
+    }
+
+    /// @dev v1's fill: ONE order, for the WHOLE amount, with no recipient - so
+    ///      tokenA is paid to `msg.sender`, which is the helper. That is what
+    ///      makes the `tokensOut` sweep the delivery path rather than a safety
+    ///      net. Signature confirmed against the live board.
+    function fillOrder(uint256 orderId, uint256 deadline) external {
+        require(!dead[orderId], "inactive");
+        require(block.timestamp <= deadline, "expired");
+        MockERC20(weth).transferFrom(msg.sender, address(this), _priceOf(orderId));
+        (orderId < 2 ? tokenA : tokenB).transfer(msg.sender, 100e18);
     }
 
     function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory out) {
         out = new Order[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
             if (orderIds[i] < 2) {
-                out[i] = Order(address(1), true, false, address(tokenA), 100e18, address(weth), 1 ether);
+                out[i] = Order(address(1), true, address(tokenA), 100e18, address(weth), _priceOf(orderIds[i]));
             } else if (orderIds[i] < 4) {
-                out[i] = Order(address(1), true, false, address(tokenB), 100e18, address(weth), 1 ether);
+                out[i] = Order(address(1), true, address(tokenB), 100e18, address(weth), _priceOf(orderIds[i]));
             }
         }
     }

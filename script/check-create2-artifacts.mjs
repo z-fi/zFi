@@ -173,10 +173,13 @@ const specs = [
   },
   {name: "Cowol", args: []},
   {name: "FloorboardView", args: []},
-  // No legacy board is bound: the zero address disables that whole path for
-  // this deployment, which the constructor permits so long as a modern board
-  // is set.
-  {name: "Swapbatch", args: [WETH, ZERO, artifactAddress("Swapboard")]},
+  // Both boards are bound. This deployment passed ZERO for the legacy slot,
+  // which the constructor permits so long as a modern board is set - so the
+  // whole legacy path was dead code on chain, and v1 could not be batched at
+  // all. v1 is the board that needs the helper most: it has no batch fill and
+  // no `multicall`, so N fills there cannot otherwise share a transaction.
+  // See deploy/Swapbatch.md for why Dutchboard and Floorboard are NOT bound.
+  {name: "Swapbatch", args: [WETH, LEGACY, artifactAddress("Swapboard")]},
   // The Universal Router is bound at construction rather than passed per call:
   // a caller-supplied router would let anyone pair this contract's ETH with
   // arbitrary calldata. Mainnet UR, read off the Permit2 spender in the live

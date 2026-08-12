@@ -45,13 +45,26 @@ pragma solidity ^0.8.36;
 ///         WHICH BOARD DECIDES WHERE tokenA LANDS. The deployed board does NOT take a
 ///         recipient, and pays tokenA to ITS msg.sender - this contract:
 ///
-///           deployed  0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831
+///           legacy    0x000000fF3D7A2d373615141d7489Ca66683DbecF  (v1)
 ///                     fillOrders(uint256[],uint256,uint256[])          <- no recipient
 ///                     tryFillOrders(uint256[],uint256,uint256[])
 ///                     (no `multicall` either, so ETH batching there is
 ///                      impossible today without this helper)
-///           current   fillOrders(uint256[],uint256,uint256[],uint256[],address) <- pays direct
+///           current   0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b
+///                     fillOrders(uint256[],uint256,uint256[],uint256[],address) <- pays direct
 ///                     tryFillOrders(uint256[],uint256,uint256[],uint256[],address)
+///
+///         WHY ONLY THESE TWO OF THE FOUR BOARDS. `Swapbol` forwards to four -
+///         v1, the current Swapboard, Dutchboard and Floorboard - but the other
+///         two need no helper, for opposite reasons:
+///
+///           Dutchboard  `fillMany`/`tryFillMany` are ALREADY payable and take a
+///                       `to`, so paying ETH across a batch is native there.
+///           Floorboard  `tryHitMany` is not payable at all. Hitting a bid runs
+///                       the other way: the taker DELIVERS the asset and receives
+///                       proceeds, so there is no ETH leg for this to wrap.
+///
+///         Adding either would be a helper with nothing to help.
 ///
 ///         So on a legacy board the `tokensOut` sweep is not a safety net, it is the
 ///         DELIVERY PATH, and the whole purchase sits here until it runs. Omitting a
@@ -100,6 +113,10 @@ contract Swapbatch {
     error InsufficientValue(uint256 required, uint256 sent);
     error WETHAmountMismatch(uint256 expected, uint256 actual);
     error TokensOutMismatch(uint256 index, address expected, address actual);
+    /// @dev v1 has no fill-amount argument; a leg there is all or nothing.
+    error PartialFillUnsupported(uint256 index, uint256 orderAmountB, uint256 requested);
+    /// @dev v1 leg whose tokenB is not WETH, so `msg.value` cannot pay for it.
+    error NotWethQuoted(uint256 index, address tokenB);
 
     constructor(address _weth, address _legacyBoard, address _modernBoard) {
         if (_weth == address(0)) revert ZeroAddress();
@@ -197,6 +214,29 @@ contract Swapbatch {
                 if (tokensOut[i] != address(0) && tokensOut[i] != weth) {
                     outputBases[i] = balanceOf(tokensOut[i], address(this));
                 }
+                // Only an order that still EXISTS can be asserted about. A dead
+                // one - cancelled, already filled, never created - reads back as
+                // all zeros, and both checks below would then reject the caller's
+                // figure for disagreeing with a price the board no longer quotes.
+                // That is exactly the leg `skipFailures` is for: it must reach the
+                // loop and be skipped, not abort the batch here. On the atomic path
+                // it still aborts, but at the board, with the board's own error.
+                if (legacyOrders[i].active) {
+                    // v1 takes the WHOLE order at the WHOLE price - it has no
+                    // fill-amount argument to pass a smaller number to. So the caller's
+                    // figure is not a request, it is an assertion about what this leg
+                    // costs, and it has to match the board or the batch would wrap the
+                    // wrong total and leave the difference stranded as allowance.
+                    if (fillAmountsB[i] != legacyOrders[i].amountB) {
+                        revert PartialFillUnsupported(i, legacyOrders[i].amountB, fillAmountsB[i]);
+                    }
+                    // Paying with ETH means paying in WETH. An order quoted in any
+                    // other tokenB cannot be settled from `msg.value` at all, and
+                    // would otherwise reach the board with an allowance it never uses.
+                    if (legacyOrders[i].tokenB != weth) {
+                        revert NotWethQuoted(i, legacyOrders[i].tokenB);
+                    }
+                }
             }
         }
 
@@ -216,35 +256,51 @@ contract Swapbatch {
         if (wrapped != total) revert WETHAmountMismatch(total, wrapped);
         safeApprove(weth, board, total);
 
-        // The legacy encoding simply omits the trailing recipient word; both generations
-        // otherwise take the same arguments in the same order.
-        bytes memory callData;
+        // The two generations settle differently, because v1 has no batch call to
+        // make. The modern board takes the whole batch in one go; v1 is driven one
+        // order at a time from here, which is the service this helper provides.
         if (isLegacy) {
-            callData = skipFailures
-                ? abi.encodeCall(ILegacyBatchFill.tryFillOrders, (orderIds, deadline, fillAmountsB))
-                : abi.encodeCall(ILegacyBatchFill.fillOrders, (orderIds, deadline, fillAmountsB));
-        } else {
-            callData = skipFailures
-                ? abi.encodeCall(IModernBatchFill.tryFillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to))
-                : abi.encodeCall(IModernBatchFill.fillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to));
-        }
-
-        (bool ok, bytes memory ret) = board.call(callData);
-        if (!ok) {
-            // Bubble the board's own revert; a bare failure here would hide OrderExpired,
-            // NotCounterparty and friends behind a useless generic error.
-            assembly ("memory-safe") {
-                revert(add(ret, 0x20), mload(ret))
-            }
-        }
-
-        if (skipFailures) {
-            filled = abi.decode(ret, (bool[]));
-            if (filled.length != n) revert InvalidResult();
-        } else {
             filled = new bool[](n);
             for (uint256 i; i < n; ++i) {
-                filled[i] = true; // atomic path: reaching here means every leg settled
+                (bool legOk, bytes memory legRet) =
+                    board.call(abi.encodeCall(ILegacyOrderFill.fillOrder, (orderIds[i], deadline)));
+                if (legOk) {
+                    filled[i] = true;
+                    continue;
+                }
+                // `skipFailures` has to be honoured leg by leg here. On the modern
+                // board the board itself decides what to skip; on v1 there is no
+                // `tryFillOrders` to ask, so this loop IS the try-semantics - and a
+                // skipped leg simply leaves its share of the wrapped WETH unspent,
+                // which the accounting below already refunds.
+                if (!skipFailures) {
+                    assembly ("memory-safe") {
+                        revert(add(legRet, 0x20), mload(legRet))
+                    }
+                }
+            }
+        } else {
+            bytes memory callData = skipFailures
+                ? abi.encodeCall(IModernBatchFill.tryFillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to))
+                : abi.encodeCall(IModernBatchFill.fillOrders, (orderIds, deadline, fillAmountsB, minAmountsA, to));
+
+            (bool ok, bytes memory ret) = board.call(callData);
+            if (!ok) {
+                // Bubble the board's own revert; a bare failure here would hide OrderExpired,
+                // NotCounterparty and friends behind a useless generic error.
+                assembly ("memory-safe") {
+                    revert(add(ret, 0x20), mload(ret))
+                }
+            }
+
+            if (skipFailures) {
+                filled = abi.decode(ret, (bool[]));
+                if (filled.length != n) revert InvalidResult();
+            } else {
+                filled = new bool[](n);
+                for (uint256 i; i < n; ++i) {
+                    filled[i] = true; // atomic path: reaching here means every leg settled
+                }
             }
         }
 
@@ -360,12 +416,21 @@ interface IWETH {
     function withdraw(uint256) external;
 }
 
-interface ILegacyBatchFill {
-    function fillOrders(uint256[] calldata orderIds, uint256 deadline, uint256[] calldata fillAmountsB) external;
-    function tryFillOrders(uint256[] calldata orderIds, uint256 deadline, uint256[] calldata fillAmountsB)
-        external
-        returns (bool[] memory filled);
+/// @dev v1 fills ONE ORDER AT A TIME. It has no batch entry point and no
+///      `multicall`, which is the entire reason this helper is worth deploying
+///      for it: N fills that cannot otherwise share a transaction.
+///
+///      `fillOrder(uint256,uint256)` is (orderId, deadline) - NOT an amount. v1
+///      predates partial fills, so a fill takes the whole order at the whole
+///      price, and it predates the payable entry point too, so the WETH has to
+///      be approved rather than sent. Both are confirmed against the dapp, which
+///      has been filling this board in production: see the `SEL_FILL1` encoding
+///      in zSwap.html, which writes exactly `id` then `deadline`, and the comment
+///      beside it that "a v1 board has no payable entry point at all".
+interface ILegacyOrderFill {
+    function fillOrder(uint256 orderId, uint256 deadline) external;
 }
+
 
 interface IModernBatchFill {
     function fillOrders(
@@ -386,21 +451,34 @@ interface IModernBatchFill {
 }
 
 interface ILegacyBatchOrderView {
-    /// @dev MUST match the deployed board's struct word for word. `partialFill`
-    ///      was missing, and a missing field does not fail to decode - it slides
-    ///      every field after it one word left. `tokenA` read the partialFill
-    ///      BOOL, `amountA` read the tokenA address as a number, and so on down.
-    ///      Confirmed against 0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831:
-    ///      getOrders([0]) returns seven words per order, not six.
+    /// @dev MUST match the bound board's struct WORD FOR WORD. A missing field
+    ///      does not fail to decode - it slides every field after it one word
+    ///      left, so `tokenA` reads a bool and `amountA` reads an address as a
+    ///      number. Nothing reverts; the batch just settles against nonsense.
     ///
-    ///      This is the current Swapboard's struct minus the fields added after
-    ///      the legacy board shipped (expiry, nftA, nftB, counterparty), which is
-    ///      exactly why the mismatch is easy to reintroduce - the shapes differ by
-    ///      deployment date, not by name.
+    ///      THREE BOARDS EXIST AND ALL THREE SHAPES DIFFER. They are told apart
+    ///      by deployment date, not by name, which is what makes this easy to get
+    ///      wrong. Measured from mainnet, not inferred:
+    ///
+    ///        v1   0x000000fF3D7A2d373615141d7489Ca66683DbecF   6 words
+    ///        mid  0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831   7 words (partialFill)
+    ///        v2   0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b  11 words
+    ///
+    ///      THIS IS v1, and v1 is what "legacy" means everywhere else in the
+    ///      system: `Swapbol.boardV1()` returns it, and the dapp lists it as its
+    ///      legacy board while excluding the mid one as deprecated (see the
+    ///      `BOARDS` table in zSwap.html, whose decoder reads 6 words for it).
+    ///      v1 also holds the history worth batching - 139 orders against the mid
+    ///      board's 3.
+    ///
+    ///      Verified by decoding a real order rather than by counting fields:
+    ///      `getOrders([5])` on v1 returns six words that read as maker, active=1,
+    ///      tokenA=WETH, amountA=0.02e18, tokenB=USDC, amountB=100e6. Addresses
+    ///      land in the address slots and amounts in the amount slots, which they
+    ///      would not under any other field ordering.
     struct Order {
         address maker;
         bool active;
-        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;

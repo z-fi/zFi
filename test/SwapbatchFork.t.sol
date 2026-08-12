@@ -18,11 +18,11 @@ import {Swapbatch} from "../src/forwarders/Swapbatch.sol";
 ///         Orders are created here rather than borrowed from the live book, so the test
 ///         does not depend on someone else's resting escrow at a pinned block.
 interface ILiveBoard {
-    /// @dev The deployed board's create is narrower than the current source's: five
-    ///      arguments, with no expiry, NFT flags or counterparty. Confirmed against its
-    ///      bytecode — `createOrder(address,uint256,address,uint256,bool)` is present and
-    ///      every wider overload is absent.
-    function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB, bool partialFill)
+    /// @dev v1's create is the narrowest of the three boards: four arguments, with
+    ///      no partialFill, expiry, NFT flags or counterparty. v1 predates all of
+    ///      them - which is the same reason its Order struct is six words and its
+    ///      fill takes no amount.
+    function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB)
         external
         returns (uint256);
     function nextOrderId() external view returns (uint256);
@@ -32,7 +32,14 @@ interface ILiveBoard {
 contract SwapbatchForkTest is Test {
     address constant _WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address constant _USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant _BOARD = 0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831;
+    /// @dev v1 - the board `Swapbatch` binds as `legacyBoard`, and what "legacy"
+    ///      means everywhere else: `Swapbol.boardV1()` returns it and the dapp
+    ///      lists it. This suite used to bind 0x...85B831, the MID board, whose
+    ///      Order struct is seven words to v1's six and whose fill takes an
+    ///      amount v1 has no argument for. Testing against it made the helper
+    ///      agree with a board the product does not use, while the one it does -
+    ///      139 live orders against the mid board's 3 - went unexercised.
+    address constant _BOARD = 0x000000fF3D7A2d373615141d7489Ca66683DbecF;
 
     Swapbatch batch;
     address maker = makeAddr("maker");
@@ -71,7 +78,7 @@ contract SwapbatchForkTest is Test {
         deal(_USDC, maker, _bal(_USDC, maker) + amountUSDC);
         vm.startPrank(maker);
         _approve(_USDC, _BOARD, amountUSDC);
-        id = ILiveBoard(_BOARD).createOrder(_USDC, amountUSDC, _WETH, priceWeth, false);
+        id = ILiveBoard(_BOARD).createOrder(_USDC, amountUSDC, _WETH, priceWeth);
         vm.stopPrank();
     }
 
