@@ -1522,16 +1522,26 @@ update();
 loadPos();
 syncChart();
 }
+// What a liquidity action actually costs, which is two very different numbers.
+// Creating deploys the pool contract; joining a band that already exists is an
+// approve and a call. Reserving the create figure for everyone would hold back
+// a quarter of an ether at a busy gas price from someone who only wants to add,
+// so it asks which form is on screen rather than assuming the expensive one.
+const lqReserveGas=()=>lqList.querySelector(".lqnew")?LQ_CREATE_GAS+300000n:400000n;
 bal1.addEventListener("click",async e=>{
 if(e.target.tagName!=="A")return;
 e.preventDefault();
 const t=TOKENS[toSel.value];
 if(!t)return;
 let reserve=0n;
-// Same reserve the pay side keeps back: creating a band is one escrow
-// transfer plus a deploy, and spending the last wei leaves nothing to send it.
+// Same reserve the pay side keeps back, and it is NOT a swap's worth: this
+// button only exists in liquidity mode, where the transaction it has to leave
+// room for is a band create - a ~4.7M gas contract DEPLOY, five times what was
+// reserved here. Maxing out ether and then being told the create cannot be
+// afforded, moments after the form quoted its cost, is the page contradicting
+// itself with the user's own money.
 if(t.addr===ZERO){
-try{reserve=BigInt(await rpc("eth_gasPrice",[]))*900000n}catch{}
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*lqReserveGas()}catch{}
 }
 const max=toBalance>reserve?toBalance-reserve:0n;
 outAmt.value=formatUnits(max,t.dec);
@@ -1550,11 +1560,20 @@ if(f.addr===ZERO){
 // plain send is a bare transfer. One number for all three left the Orders tab
 // holding back a swap's worth of gas it was never going to need.
 try{reserve=BigInt(await rpc("eth_gasPrice",[]))
-  *(tab==="swap"?900000n:tab==="book"?350000n:+dly.value?200000n:30000n)}catch{}
+  *(lqMode?lqReserveGas():tab==="swap"?900000n:tab==="book"?350000n:+dly.value?200000n:30000n)}catch{}
 }
 const max=fromBalance>reserve?fromBalance-reserve:0n;
 amt.value=formatUnits(max,f.dec);
-setMode("in");fitFont(amt);
+fitFont(amt);
+// LIQUIDITY MODE IS NOT A TRADE, and neither of the two things below is safe
+// here. `setMode("in")` clears the OTHER field - which on this tile is the
+// second deposit, not a quote output - so Max on one side silently erased the
+// amount typed on the other. And `update()` reloads the whole band list, which
+// re-renders the create form and takes the chosen Range and Fee back to their
+// defaults. The receive side's Max button was written for this mode and does
+// neither; this one was the swap tab's, reused without noticing the difference.
+if(lqMode){lqPreviewSoon();return}
+setMode("in");
 update();
 });
 let seq=0;
@@ -2144,6 +2163,12 @@ const SEL_BIDS="4423c5f1";
 // Swapboard.initialAmountB / ERC-721 tokenURI / TokenList.logoOf. All three
 // answer questions the routing lenses do not carry.
 const SEL_INITIAL_B="878ea250",SEL_TOKENURI="c87b56dd",SEL_LOGOOF="6ce273ac";
+// `Swapboard.quoteFill(orderId, fillAmountB) -> (outA, paidB)`. The board
+// answering the question it will later be asked, so a partial fill is never
+// sized by arithmetic this page invented: `_computeFill` floors with
+// `fullMulDiv` in the maker's favour, and a re-derivation that disagreed by a
+// wei would revert on the fill's own slippage floor.
+const SEL_QUOTEFILL="f325beda";
 // Everything the executor checks that this page can check first, for free.
 // `Swapbol._validateFloorBid` reverts `BadPlan` on a bid that is closed, NFT,
 // or pointed at the wrong pair, and an executor built without the floorboard
@@ -3078,6 +3103,59 @@ book.addEventListener("click",async e=>{
 
     const r=row;
 
+    /**
+     * HOW MUCH OF IT.
+     *
+     * This button used to mean "take the whole order", which on a large one
+     * quotes a number most people cannot cover and stops - while the very same
+     * order is available in pieces to the swap path, which lists these rows as
+     * liquidity and sizes the fill to whatever is being bought. Two ways to take
+     * one order, and only the invisible one could take part of it.
+     *
+     * So Fill now means fill, and asks how much. Only where the board can
+     * actually do it: a fungible, partial-fillable v2 order that is not yours.
+     * Everything else - NFT legs, all-or-nothing orders, Dutch lots, bids -
+     * keeps `payB === r.aB` and behaves exactly as before.
+     *
+     * THE AMOUNT IS QUOTED BY THE BOARD, not computed here. `_computeFill`
+     * rounds with `fullMulDiv` and floors in the maker's favour; a page that
+     * re-derived that would disagree by a wei sooner or later and the fill would
+     * revert on its own slippage floor. `quoteFill` is the board answering the
+     * question it will later be asked.
+     */
+    let payB=r.aB,getA=r.aA;
+    if(r.pf&&!r.nA&&!r.nB&&!r.dutch&&!r.floor&&r.v2&&r.maker.toLowerCase()!==account.toLowerCase()){
+      const dB=r.dB??18,dA=r.dA??18,sB=r.sB||"tokens",sA=r.sA||"tokens";
+      // Default to what they can actually spend, so the common case is one
+      // keystroke rather than a number the next check rejects.
+      let have=0n;
+      try{
+        have=r.tB===ZERO||r.tB.toLowerCase()===WETH.toLowerCase()
+          ?BigInt(await rpc("eth_getBalance",[account,L]))
+            +(r.tB===ZERO?0n:BigInt(await rpc(C,[{to:WETH,data:"0x"+SEL_BALANCEOF+encAddr(account)},L])))
+          :BigInt(await rpc(C,[{to:r.tB,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
+      }catch{}
+      const suggest=have&&have<r.aB?have:r.aB;
+      const answer=prompt(
+        `Fill how much of this order?\n\nIt sells ${trimAmt(r.aA,dA)} ${sA} for ${trimAmt(r.aB,dB)} ${sB} in total, `
+        +`and can be filled in part.\n\nEnter the ${sB} you want to spend:`,
+        trimAmt(suggest,dB));
+      if(answer===null)return;                       // cancelled, nothing sent
+      let asked;
+      try{asked=parseUnits(String(answer).trim(),dB)}catch{throw Error("that is not an amount")}
+      if(!asked)throw Error("enter an amount above zero");
+      if(asked>r.aB)throw Error(`that is more than the order needs — it costs ${trimAmt(r.aB,dB)} ${sB} in full`);
+      if(asked<r.aB){
+        const q=await rpc(C,[{to:r.board,data:"0x"+SEL_QUOTEFILL+encUint(id)+encUint(asked)},L]);
+        const h=strip0x(q);
+        if(h.length<128)throw Error("the board would not quote that amount");
+        getA=BigInt("0x"+h.slice(0,64));
+        payB=BigInt("0x"+h.slice(64,128));
+        if(!getA)throw Error("that amount buys nothing — try a larger one");
+        stat.textContent=`Filling ${trimAmt(payB,dB)} ${sB} of ${trimAmt(r.aB,dB)} for ${trimAmt(getA,dA)} ${sA}...`;
+      }
+    }
+
     // Public fungible orders can use the same zRouter funding waterfall as a
     // swap. Swapbol remains msg.sender at the board, so private orders must
     // stay on the direct-wallet path below or their counterparty guard would
@@ -3087,8 +3165,8 @@ book.addEventListener("click",async e=>{
     // from the swap pickers, which is what it read before, so the identical row
     // executed as ETH or as WETH on the strength of an unrelated selection.
     const nativeOut=!r.nA&&r.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
-    const wethLeg=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()&&r.aB>0n;
-    const plan=wethLeg?await planWethPayment(r.aB):null;
+    const wethLeg=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()&&payB>0n;
+    const plan=wethLeg?await planWethPayment(payB):null;
     // NAME THE WAY THROUGH, not just the shortfall.
     //
     // This button takes the WHOLE order - `pay` is `r.aB` and `part` is false -
@@ -3100,7 +3178,7 @@ book.addEventListener("click",async e=>{
     // Reported from the field as "why can't I buy a small amount?" - which the
     // old message had no answer for, though the page did.
     if(plan&&plan.rail==="short")
-      throw Error(`Not enough ether to fill: it costs ${trimAmt(r.aB,18)} and you hold `
+      throw Error(`Not enough ether to fill: it costs ${trimAmt(payB,18)} and you hold `
         +`${trimAmt(plan.w,18)} WETH plus ${trimAmt(plan.e,18)} ETH. `
         +(r.pf
           ?`This button takes the whole order — to buy part of it, use the Swap tab, which fills this order alongside the pools.`
@@ -3122,7 +3200,7 @@ book.addEventListener("click",async e=>{
     // this fill will actually spend - ETH where the leg wraps, the quoted token
     // otherwise - so one check covers the executor route and the direct one.
     // An NFT leg prices in token ids, not amounts, and is not a balance.
-    if(!r.nB)await assertFunded(routeIn,r.aB,
+    if(!r.nB)await assertFunded(routeIn,payB,
       known(routeIn)||(routeIn===ZERO?{sym:"ETH",dec:18}:{sym:r.sB||"TOKEN",dec:r.dB??18}));
     if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
       if((await rpc("eth_getCode",[SWAPBOL,L])).length<5)throw Error("orderbook executor not deployed yet");
@@ -3131,19 +3209,19 @@ book.addEventListener("click",async e=>{
       // simulates the call - so without this a leg that was always going to
       // revert still costs the user an approval transaction, and leaves the
       // allowance standing behind it.
-      await preflightLeg(r,routeIn,routeOut,r.aB);
-      const pay=r.aB,fillPlan=encFillPlan([
-        {id:r.id,board:r.board,pay,get:r.aA,part:false}
+      await preflightLeg(r,routeIn,routeOut,payB);
+      const pay=payB,fillPlan=encFillPlan([
+        {id:r.id,board:r.board,pay,get:getA,part:false}
       ],routeIn,routeOut,account,account,dl);
       // amount == 0 means "sweep all" to zRouter, so a free Dutch fill must
       // name native input on the protecting snwap even when its quote is ERC20.
-      const planCall=encSnwap(pay?routeIn:ZERO,pay,account,routeOut,r.aA,SWAPBOL,fillPlan);
+      const planCall=encSnwap(pay?routeIn:ZERO,pay,account,routeOut,getA,SWAPBOL,fillPlan);
       const checkpoint=routeIn===ZERO?null:encCheckpoint(SWAPBOL,routeIn,account);
       const direct=checkpoint?encCalls([checkpoint,planCall]):planCall;
       const funded=routeIn===ZERO||!pay?direct:encCalls([
         checkpoint,
         encSweep(routeIn,pay,SWAPBOL),
-        encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)
+        encSnwap(ZERO,0n,account,routeOut,getA,SWAPBOL,fillPlan)
       ]);
       const meta=known(routeIn)||{addr:routeIn,sym:r.sB||"TOKEN",dec:r.dB||18};
       await sendRouterFunded(direct,funded,meta,pay,routeIn===ZERO?pay:0n,"Filling order...");
@@ -3151,7 +3229,7 @@ book.addEventListener("click",async e=>{
     }
 
     const data=r.dutch
-      ?"0x"+SEL_DUTCH_FILL+encUint(id)+encUint(r.nA?0n:r.aA)+encAddr(account)+encUint(r.aB)
+      ?"0x"+SEL_DUTCH_FILL+encUint(id)+encUint(r.nA?0n:getA)+encAddr(account)+encUint(payB)
       :r.v2
         ?"0x"+(nativeIn?SEL_FILL2_ETH:nativeOut?SEL_FILL2_UNWRAP:SEL_FILL2)
           +encUint(id)+encUint(dl)+(nativeIn?"":encUint(0n))+encUint(0n)+encAddr(ZERO)
@@ -3167,22 +3245,22 @@ book.addEventListener("click",async e=>{
     // routed through snwap's ERC20 balance guard, and a v1 board has no payable
     // entry point at all. Keyed off `payNative` rather than off the board kind,
     // so the one case that needs no wrap is the one that says so.
-    const wrap=nativeIn&&!payNative&&r.aB
-      ?{to:WETH,data:"0xd0e30db0",value:toHex(r.aB)}:null;
-    const tx={from:account,to,data,value:payNative?toHex(r.aB):"0x0"};
+    const wrap=nativeIn&&!payNative&&payB
+      ?{to:WETH,data:"0xd0e30db0",value:toHex(payB)}:null;
+    const tx={from:account,to,data,value:payNative?toHex(payB):"0x0"};
     const approvals=[];
     if(r.nB){
       let ap=ZERO;
-      try{ap="0x"+strip0x(await rpc(C,[{to:r.tB,data:"0x081812fc"+encUint(r.aB)},L])).slice(-40)}catch{}
+      try{ap="0x"+strip0x(await rpc(C,[{to:r.tB,data:"0x081812fc"+encUint(payB)},L])).slice(-40)}catch{}
       if(ap.toLowerCase()!==to.toLowerCase()){
-        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(r.aB),value:"0x0"});
+        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(payB),value:"0x0"});
       }
-    }else if(r.tB!==ZERO&&r.aB&&!(nativeIn&&!r.dutch&&r.v2)){
+    }else if(r.tB!==ZERO&&payB&&!(nativeIn&&!r.dutch&&r.v2)){
       const al=BigInt(await rpc(C,[{to:r.tB,data:"0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(to)},L]));
-      if(al<r.aB){
+      if(al<payB){
         // Clear a stale non-zero allowance for USDT-style tokens.
         if(al)approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(0n),value:"0x0"});
-        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(r.aB),value:"0x0"});
+        approvals.push({to:r.tB,data:"0x"+SEL_APPROVE+encAddr(to)+encUint(payB),value:"0x0"});
       }
     }
     const revoke=r.dutch&&!r.nB&&r.tB!==ZERO
@@ -4628,6 +4706,13 @@ sendD=String(os.find(v=>v>=lk)??os[os.length-1]);dly.value=sendD}
 setTab(q.get("out")?"swap":(to||!isNaN(lk))?"send":tab);
 const n=q.get("amount");
 if(n&&/^\d*\.?\d+$/.test(n)){
+// `hashchange` fires on a live page, so this can land while the droplet is on -
+// and there the two fields below are a PAIR of deposits, not a trade, so
+// `setMode` would write one and blank the other. A link carrying an amount is a
+// trade request either way; showing the trade tile is what it asked for. A bare
+// `#token=` still just re-points the pair, which is a fine way to share a
+// band list.
+if(lqMode)lqSet(false);
 if(q.get("exactOut")==="1"&&q.get("out")){outAmt.value=n;setMode("out");fitFont(outAmt)}
 else{amt.value=n;setMode("in");fitFont(amt)}
 }

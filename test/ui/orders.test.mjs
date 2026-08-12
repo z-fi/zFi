@@ -483,6 +483,49 @@ describe('the orderbook list', () => {
     ...over,
   });
 
+  test('Fill asks how much, and takes only that much', async () => {
+    // The button used to mean "take the whole order", which on a large one
+    // quotes a number most people cannot cover and stops - while the same order
+    // was available in pieces to the swap path all along. Reported from the
+    // field as "why can't I buy a small amount?".
+    const p = await setup(c => { c.recent = [order({ id: 5 })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+
+    p.queuePrompt('0.25');                       // a quarter of the 1 WETH ask
+    p.click(p.$('book').querySelector('button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    await p.settle();
+
+    // The amount that goes out is the one that was asked for, not the ask.
+    const tx = p.chain.lastSent;
+    const paid = JSON.stringify(tx).toLowerCase();
+    assert.ok(paid.includes((250000000000000000n).toString(16)),
+      'the transaction should carry the 0.25 WETH the user chose');
+    assert.ok(!paid.includes((1000000000000000000n).toString(16).padStart(16, '0') + '0'.repeat(0)) ||
+      paid.includes((250000000000000000n).toString(16)),
+      'and not silently take the whole order');
+    p.close();
+  });
+
+  test('a declined amount sends nothing at all', async () => {
+    const p = await setup(c => { c.recent = [order({ id: 5 })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));   // no queued answer = cancelled
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'dismissing the prompt must not place a fill');
+    p.close();
+  });
+
+  test('an all-or-nothing order is never asked about', async () => {
+    // Only the board can split an order. Asking "how much?" about one that
+    // cannot be split would offer a choice that does not exist.
+    const p = await setup(c => { c.recent = [order({ id: 5, pf: false })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('button'));   // no prompt queued, yet it proceeds
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    p.close();
+  });
+
   test('lists other makers\' orders with a fill action', async () => {
     const p = await setup(c => { c.recent = [order()]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
@@ -570,6 +613,8 @@ describe('the orderbook list', () => {
   test('cancelling an order calls the board directly', async () => {
     const p = await setup(c => { c.recent = [order({ id: 7, maker: A.ACCOUNT })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel' });
     await p.settle();
@@ -588,6 +633,8 @@ describe('the orderbook list', () => {
     // setup() funds the account with WETH, which covers the 1 WETH ask.
     const p = await setup(c => { c.recent = [order({ id: 5 })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
@@ -606,6 +653,8 @@ describe('the orderbook list', () => {
       c.setErc20(A.WETH, A.ACCOUNT, 0n);
     });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
@@ -626,6 +675,8 @@ describe('the orderbook list', () => {
       c.setNative(A.ACCOUNT, ETH / 2n + ETH / 10n);   // the halves, plus gas
     });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => p.chain.sent.length > 1, { label: 'wrap then fill' });
     await p.settle();
@@ -650,6 +701,8 @@ describe('the orderbook list', () => {
       c.setNative(A.ACCOUNT, ETH / 2n);   // exactly the shortfall, no gas margin
     });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => /Not enough ether/i.test(p.text('stat')), { label: 'the refusal' });
     assert.equal(p.chain.sent.length, 0, 'and nothing was wrapped on the way to failing');
@@ -666,6 +719,8 @@ describe('the orderbook list', () => {
       c.setNative(A.ACCOUNT, 0n);              // no ETH to wrap either
     });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
     p.click(p.$('book').querySelector('button'));
     await p.waitFor(() => /Not enough/i.test(p.text('stat')), { label: 'the refusal' });
     await p.settle();

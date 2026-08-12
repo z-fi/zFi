@@ -73,7 +73,7 @@ export const SEL = {
   SYMBOL: '95d89b41', DECIMALS: '313ce567', NAME: '06fdde03',
   DS: '3644e515', NONCES: '7ecebe00',
   MULTICALL: 'ac9650d8', SNWAP: '5f3bd1c8', SWEEP: 'cb019b84', CHECKPOINT: 'a972985e',
-  FILLPLAN: 'c277f67c', FILLPLAN_SWAP: '9090c8e5',
+  FILLPLAN: 'c277f67c', FILLPLAN_SWAP: '9090c8e5', QUOTEFILL: 'f325beda',
   RPERMIT: '7ac2ff7b', P2TF: '09d31579',
   AGG3: '82ad56cb',
   QUOTE: 'e453166e', QUOTE_MULTI: '4c464f59', SPLIT_A: '892af013', SPLIT_B: '85f86a90',
@@ -880,6 +880,25 @@ export class MockChain {
 
   board(sel, data) {
     if (sel === SEL.NEXTID) return '0x' + u256(0);
+    /**
+     * `quoteFill(orderId, fillAmountB) -> (outA, paidB)`.
+     *
+     * The board answering the question a partial fill will later ask it. The
+     * page deliberately does NOT compute this itself: `_computeFill` floors
+     * with `fullMulDiv` in the maker's favour, and a page that re-derived it
+     * would disagree by a wei sooner or later and revert on its own floor. So
+     * the mock rounds the same way the board does, or it would be testing an
+     * agreement that does not exist on chain.
+     */
+    if (sel === SEL.QUOTEFILL) {
+      const body = '0x' + data.slice(8);
+      const id = word(body, 0).toString();
+      const pay = word(body, 1);
+      const o = [...this.recent, ...this.candidates].find(x => String(x.id) === id);
+      if (!o) return '0x' + u256(0) + u256(0);
+      if (pay >= o.aB) return '0x' + u256(o.aA) + u256(o.aB);
+      return '0x' + u256((pay * o.aA) / o.aB) + u256(pay);   // floors, as the board does
+    }
     return '0x'; // fill/cancel are pre-flighted with eth_call before signing
   }
 

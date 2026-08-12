@@ -111,7 +111,9 @@ check('recipient and orderbook metadata guards remain wired', () => {
 check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('const routeIn=nativeIn?ZERO:r.tB')) throw Error('native input is not normalized');
   if (!html.includes('],routeIn,routeOut,account,account,dl)')) throw Error('fillPlan uses raw book tokens');
-  if (!html.includes('encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)')) {
+  if (!html.includes('encSnwap(ZERO,0n,account,routeOut,getA,SWAPBOL,fillPlan)')) {
+    // `getA`, not `r.aA`: a partial fill buys less than the whole order, and the
+    // floor has to protect what is actually being bought.
     throw Error('prepared outer snwap does not protect the routed output');
   }
   // fillOrderWithEth(uint256,uint256,uint256,address) on the current board. This
