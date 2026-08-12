@@ -96,13 +96,18 @@ svg{vertical-align:middle;flex-shrink:0}
 #book:empty{display:none}
 #book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin:.6em 0 .3em;font-weight:600;display:flex;justify-content:space-between}
 .o{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.5em .7em;background:var(--p);border-radius:.6em;margin-bottom:.3em;font-size:.75em}
-.o .l{display:flex;align-items:center;gap:.45em;min-width:0}
+.o .l{display:flex;align-items:center;gap:.45em;min-width:0;flex:1 1 auto}
+/* The label SHRINKS; the button never does. `.l` had min-width:0 but no
+   flex, so it sized to its content - and a row with more to say (a Dutch
+   carries a tag and a countdown its neighbours do not) overflowed, wrapped
+   under `flex-wrap`, and dropped its button onto a second line. One row
+   twice the height of the others, for having more metadata. */
 .o svg{flex-shrink:0}
 .o svg+svg{margin-left:-.5em}
 .o b{font-weight:600;font-variant-numeric:tabular-nums;display:block}
 .o i{font-style:normal;color:var(--m);display:block;font-size:.9em;word-break:break-all}
 .o a{color:var(--m)}
-.o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer}
+.o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer;flex:0 0 auto}
 .o button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
 .ow{margin-bottom:.3em}
 .ow .o{margin-bottom:0}
