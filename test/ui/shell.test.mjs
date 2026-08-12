@@ -337,3 +337,29 @@ describe('accessibility and shell affordances', () => {
     dom.close();
   });
 });
+
+describe('the footer', () => {
+  test('names the version, and says so honestly when it cannot name the address', async () => {
+    // A page whose bytes never change is only auditable if you can tell WHICH
+    // forever you are looking at. But a root cannot carry its own address: the
+    // wrapper is CREATE2 over initcode naming chunks derived from these very
+    // bytes, so writing the address in changes the address. Saying "not known"
+    // is true; a placeholder that looks like an address would not be.
+    const p = await loadPage({ chain: new MockChain() });
+    assert.match(p.text('footV'), /zSwap v0\.1/, 'the build is named');
+    assert.match(p.text('footAddr'), /not known to this build/i);
+    assert.equal(p.$('footAddr').querySelector('a'), null, 'no link to an address it does not have');
+    p.close();
+  });
+
+  test('reads its own address off a web3 gateway hostname', async () => {
+    // `<address>.<chain>.w3link.io` carries the contract in the URL, so a page
+    // served that way can simply look - which costs nothing and is always right.
+    const addr = '0x00000000000000000000000000000000000000ab';
+    const p = await loadPage({ chain: new MockChain(), url: `https://${addr}.1.w3link.io/` });
+    const link = p.$('footAddr').querySelector('a');
+    assert.ok(link, 'an address in the hostname should become a link');
+    assert.match(link.getAttribute('href'), new RegExp(addr, 'i'));
+    p.close();
+  });
+});

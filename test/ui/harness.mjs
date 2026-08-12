@@ -999,7 +999,8 @@ export function closeAllPages() {
  */
 const PINNED_PAIR = 'token=ETH&out=USDC';
 
-export async function loadPage({ chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = {}) {
+export async function loadPage(opts = {}) {
+  let { chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = opts;
   if (hash === '') hash = PINNED_PAIR;
   else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
@@ -1026,7 +1027,10 @@ export async function loadPage({ chain = new MockChain(), hash = '', storage = {
   const asked = { prompt: [], confirm: [] };
 
   const dom = new JSDOM(html, {
-    url: 'https://zswap.test/' + (hash ? '#' + hash.replace(/^#/, '') : ''),
+    // `url` is overridable because the page reads its own contract address off a
+    // web3:// gateway hostname - `<address>.<chain>.w3link.io` - and that is the
+    // only way to exercise it, a root build having no way to carry its own address.
+    url: (opts.url || 'https://zswap.test/') + (hash ? '#' + hash.replace(/^#/, '') : ''),
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole,

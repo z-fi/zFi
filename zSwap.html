@@ -108,6 +108,9 @@ svg{vertical-align:middle;flex-shrink:0}
 .o i{font-style:normal;color:var(--m);display:block;font-size:.9em;word-break:break-all}
 .o a{color:var(--m)}
 .o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer;flex:0 0 auto}
+#foot{display:flex;justify-content:center;gap:.5em;flex-wrap:wrap;margin-top:1.1em;font-size:.68em;color:var(--m);letter-spacing:.03em}
+#foot a{color:var(--m);text-decoration:none;border-bottom:1px solid var(--e)}
+#foot a:hover{color:var(--f)}
 .o button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
 .ow{margin-bottom:.3em}
 .ow .o{margin-bottom:0}
@@ -220,9 +223,77 @@ svg{vertical-align:middle;flex-shrink:0}
 <div id="pos"></div>
 <button id="bkTog" class="chtog hide" aria-expanded="true">Orderbook <span>▾</span></button>
 <div id="book"></div>
+<!-- Which build you are looking at, and where it came from. A page that cannot
+     be told apart from its successor is a page nobody can audit twice. -->
+<footer id="foot"><span id="footV"></span><span id="footAddr"></span></footer>
 </div>
 <script>
 const ic=()=>th.textContent=H.className=='d'?'☀︎':'☾';ic();
+/**
+ * WHICH BUILD THIS IS, AND WHERE IT CAME FROM.
+ *
+ * A page that serves identical bytes forever is only auditable if you can tell
+ * WHICH forever you are looking at. The lineage lives on chain - `generation`,
+ * `PREVIOUS`, `successor`, `latest()` - but a reader staring at the UI has no
+ * way to reach it without already knowing the address.
+ *
+ * THE ADDRESS CANNOT BE BAKED IN, and it is worth saying why rather than
+ * leaving the empty constant below looking like an oversight. The wrapper is
+ * CREATE2 over initcode that names its fourteen chunks, and those chunk
+ * addresses are derived from the page's own bytes - so writing the address into
+ * the page changes the page, which changes the chunks, which changes the
+ * address. It is circular for the ROOT and only the root.
+ *
+ * Two ways out, in order of preference:
+ *
+ *   1. Read it from where the page is being served. A web3:// gateway puts the
+ *      contract in the hostname - `<address>.<chain>.w3link.io` - so a page
+ *      served that way can simply look. Costs nothing and is always right.
+ *   2. `ZSWAP_SELF`, filled in by a SUCCESSOR. v1 cannot contain its own
+ *      address, but v2 can be built already knowing v1's, and every version
+ *      after that knows both. So the chain becomes self-describing from the
+ *      second link onward.
+ *
+ * Until either resolves, the footer states the version and says the address is
+ * not known to the page - which is true, and better than a placeholder that
+ * looks like a fact.
+ */
+const ZSWAP_VERSION="0.1";
+// Set when a successor is built; empty in the root, for the reason above.
+const ZSWAP_SELF="";
+const ZSWAP_PREVIOUS="";
+const selfFromUrl=()=>{
+  // `0xabc….1.w3link.io`, `0xabc….w3eth.io`, and the ENS-named forms that carry
+  // no address at all. Only an exact 20-byte hex label counts as an answer.
+  const h=(location.hostname||"").split(".");
+  if(!/^0x[0-9a-fA-F]{40}$/.test(h[0]||""))return "";
+  // AND ONLY IF IT IS THIS CHAIN'S. w3link names the chain in the second label,
+  // so `0xabc….5.w3link.io` is a Goerli contract wearing the same shape - and
+  // the footer would print it under a mainnet etherscan link, asserting the one
+  // thing this element exists to get right. `w3eth.io` carries no number and is
+  // mainnet by construction, so a non-numeric label is not a disagreement.
+  // The literal, NOT `CHAIN_ID`: this block runs immediately, at the very top of
+  // the script, and that constant is declared some eighty lines below it. A
+  // forward reference here is not a style question - it is a ReferenceError at
+  // load, before anything else in the page has run, and the whole dapp is blank.
+  if(/^\d+$/.test(h[1]||"")&&h[1]!=="1")return "";
+  return h[0];
+};
+const short=a=>a.slice(0,6)+"\u2026"+a.slice(-4);
+(()=>{
+  const self=selfFromUrl()||ZSWAP_SELF;
+  footV.textContent=`zSwap v${ZSWAP_VERSION}`;
+  if(self){
+    footAddr.innerHTML=`\u00b7 <a href="https://etherscan.io/address/${self}#code" target="_blank" rel="noopener" `
+      +`title="This exact build, on chain. Its bytes cannot change; a newer version is a different address.">${short(self)}</a>`;
+    if(ZSWAP_PREVIOUS)footAddr.innerHTML+=` \u00b7 <a href="https://etherscan.io/address/${ZSWAP_PREVIOUS}#code" `
+      +`target="_blank" rel="noopener" title="The version this one succeeded. It still serves its own page, unchanged.">prev</a>`;
+  }else{
+    footAddr.textContent="\u00b7 address not known to this build";
+    footAddr.title="A root page cannot contain its own address: it would change the bytes that determine it. "
+      +"Serve this through a web3:// gateway and it will read the address from the URL.";
+  }
+})();
 th.onclick=()=>{H.classList.toggle('d');LS.t=H.className=='d'?'d':'l';ic()};
 // The hub quoter. Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which
 // let Curve win an EXACT-OUT quote it cannot serve: `exchange` is exact-in only,
