@@ -915,7 +915,20 @@ const PFACTORY="0x000000Eb27B557aB426d9E99cFd54EC455799e81";
 const PLQLENS="0x5555555555555555555555555555555555555555";
 const CHAIN_ID=1;
 const ZERO="0x0000000000000000000000000000000000000000";
-const WETH="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+/**
+ * LOWERCASE, and every token address the page holds is too.
+ *
+ * The curated registry serves addresses lowercase and the built-in list wrote
+ * them checksummed, so `f.addr===WETH` - a plain string compare - was false
+ * for every connected user. That silently killed the WETH/ETH fast paths: the
+ * 1:1 unwrap stopped short-circuiting and went through the router instead, and
+ * the orderbook's two "pick different token" guards never fired.
+ *
+ * Found by driving a real unwrap on a fork and watching it get priced by a
+ * Precision pool. Normalising at every source is the fix; comparing with
+ * toLowerCase at each site would leave the next one to be written wrong.
+ */
+const WETH="0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 // Onchain token list (src/utils/TokenList.sol), Ethereum mainnet. The built-in
 // TOKENS below remain the fallback: any failure - wrong chain, RPC hiccup, an
 // empty or malformed list - leaves them in place rather than presenting an empty
@@ -962,12 +975,12 @@ const BOLD_ICON=`<svg width="20" height="20" viewBox="0 0 32 32" fill="none"><ci
 const TOKENS=[
 {sym:"ETH",   addr:ZERO, dec:18, icon:ETH_ICON},
 {sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
-{sym:"wstETH",addr:"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",dec:18,icon:WSTETH_ICON},
-{sym:"rETH",  addr:"0xae78736Cd615f374D3085123A210448E74Fc6393",dec:18,icon:RETH_ICON},
-{sym:"WBTC",  addr:"0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",dec:8, icon:WBTC_ICON},
-{sym:"USDC",  addr:"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",dec:6, icon:USDC_ICON},
-{sym:"USDT",  addr:"0xdAC17F958D2ee523a2206206994597C13D831ec7",dec:6, icon:USDT_ICON},
-{sym:"BOLD",  addr:"0x6440f144b7e50D6a8439336510312d2F54beB01D",dec:18,icon:BOLD_ICON},
+{sym:"wstETH",addr:"0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",dec:18,icon:WSTETH_ICON},
+{sym:"rETH",  addr:"0xae78736cd615f374d3085123a210448e74fc6393",dec:18,icon:RETH_ICON},
+{sym:"WBTC",  addr:"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",dec:8, icon:WBTC_ICON},
+{sym:"USDC",  addr:"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",dec:6, icon:USDC_ICON},
+{sym:"USDT",  addr:"0xdac17f958d2ee523a2206206994597c13d831ec7",dec:6, icon:USDT_ICON},
+{sym:"BOLD",  addr:"0x6440f144b7e50d6a8439336510312d2f54beb01d",dec:18,icon:BOLD_ICON},
 ];
 // The hardcoded TOKENS above are the fallback, not the source of truth: once
 // TOKENLIST points at a deployment, the list is read from chain so tokens can be
@@ -1192,7 +1205,7 @@ const logo=safeUrl(t.l);
 // had anywhere to put them. Both reach the DOM through textContent, never
 // innerHTML, so they need no escaping - and MUST NOT be given any, or a name
 // with an ampersand in it renders the entity.
-next.push({sym,addr:t.a,dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym),
+next.push({sym,addr:t.a.toLowerCase(),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20">`:genIcon(sym),
 name:String(t.n??"").slice(0,64),desc:String(t.desc??"").slice(0,240),
 v4:parseV4Pools(t.e,t.a)});
 }

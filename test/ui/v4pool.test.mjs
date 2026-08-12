@@ -40,8 +40,12 @@ async function setup({ v4Quote, extra = '' } = {}) {
     // Inject the pool onto the built-in USDC row, which is what parsing a
     // listing would have produced. The parser itself is tested directly below.
     patch: [[
-      `{sym:"USDC",  addr:"${A.USDC}",dec:6, icon:USDC_ICON},`,
-      `{sym:"USDC",  addr:"${A.USDC}",dec:6, icon:USDC_ICON,v4:[{c0:"${A.ZERO}",c1:"${A.USDC}",fee:0,ts:60,hooks:"${HOOK}"}]${extra}},`,
+      // The page holds every token address LOWERCASE - the curated registry
+      // serves them that way, and the built-in list was normalised to match
+      // after a checksummed literal made `f.addr===WETH` false for every
+      // connected user. Patch against what the file says, not a checksum.
+      `{sym:"USDC",  addr:"${A.USDC.toLowerCase()}",dec:6, icon:USDC_ICON},`,
+      `{sym:"USDC",  addr:"${A.USDC.toLowerCase()}",dec:6, icon:USDC_ICON,v4:[{c0:"${A.ZERO}",c1:"${A.USDC}",fee:0,ts:60,hooks:"${HOOK}"}]${extra}},`,
     ]],
   });
   await page.connect();

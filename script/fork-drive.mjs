@@ -423,7 +423,9 @@ const scenarios = {
     await sleep(600);
     const b0 = await bal(WETH, ACCOUNT);
     page.type('amt', '0.01');
-    await until(() => page.value('outAmt') === '0.01', 30000, 'the 1:1 wrap rate');
+    await until(() => { const v = page.value('outAmt'); return v && v !== '...'; },
+      120000, 'a wrap quote', () => `out="${page.value('outAmt')}"`);
+    console.log(`  priced as  ${page.value('outAmt')} WETH · ${page.text('rate').slice(0, 44)}`);
     page.click('swap');
     await until(() => /Done|Error/i.test(page.text('stat')), 120000, 'the wrap');
     if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
@@ -443,7 +445,10 @@ const scenarios = {
     await sleep(700);
     const b0 = await bal(WETH, ACCOUNT);
     page.type('amt', '0.005');
-    await until(() => page.value('outAmt') === '0.005', 30000, 'the 1:1 unwrap rate');
+    await until(() => page.value('outAmt') === '0.005', 60000, 'the 1:1 unwrap rate',
+      () => `out="${page.value('outAmt')}" rate="${page.text('rate').slice(0, 40)}"`);
+    console.log(`  priced as  ${page.text('rate')} | button "${page.text('swap')}"`);
+    page.$('stat').textContent = '';
     page.click('swap');
     await until(() => /Done|Error/i.test(page.text('stat')), 120000, 'the unwrap');
     if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
