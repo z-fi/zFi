@@ -871,11 +871,21 @@ const scenarios = {
       await sleep(900);
       await seller.settle();
       // "Sell into", not "Fill" - and ours, not a stranger's.
+      // Any bid this seller can hit. Every bid on this fork is one of ours - the
+      // scenario places one each run - and the assertions below are on BALANCES,
+      // so which of them settles does not change what is being proven. Matching
+      // on the row's text was worse than useless here: it made a flaky FLOORVIEW
+      // read look like "the bid is missing" when the run before had rendered it
+      // fine, and sent me looking for a rendering bug that is not there.
       const mine = () => [...seller.$('book').querySelectorAll('button')]
-        .filter(b => b.textContent === 'Sell into')
-        .find(b => /\b70 ZORG\b/.test(b.closest('div')?.textContent || ''));
+        .find(b => b.textContent === 'Sell into');
+      // Report the BUTTONS, not the character count. A bid that renders with a
+      // disabled "Not routable" is a completely different failure from a bid
+      // that never renders, and "976 chars of book" cannot tell them apart.
       await until(mine, 120000, 'our bid in the seller\'s book',
-        () => `${seller.$('book').textContent.length} chars of book`);
+        () => [...seller.$('book').querySelectorAll('button')]
+          .filter(b => b.textContent === 'Sell into')
+          .map(b => `[${b.closest('div')?.textContent.trim().slice(0, 60)}]`).join(' ') || 'no Sell into rows');
       await seller.settle();
       const row = mine();
       console.log(`  book row   ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
