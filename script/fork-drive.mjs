@@ -205,6 +205,7 @@ const fmt = (v, d = 18) => (Number(v) / 10 ** d).toFixed(6);
 
 const ZORG = '0x00a6ba94bbb5474725515de88fe04f854f2dcb12';
 const POOL = '0xc37f8c7e9afe897893952aba7fd91e0ab947837d';
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
 // ---------------------------------------------------------------- scenarios
 const scenarios = {
@@ -272,6 +273,76 @@ const scenarios = {
       [{ to: POOL, data: '0x70a08231' + p32(BigInt(ACCOUNT)) }, 'latest']));
     console.log(`  LP shares  ${shares}`);
     console.log(`  status     ${page.text('stat').slice(0, 70)}`);
+  },
+
+  /**
+   * Place an order as one account and fill it as another.
+   *
+   * The multi-board executor is the piece with the most moving parts and the
+   * least real exercise: an order is escrowed at the board, the taker's fill
+   * goes through zRouter and Swapbol, and the maker is paid by a contract the
+   * taker never names. Nothing about that is visible in an eth_call - it all
+   * turns on where the assets end up.
+   */
+  async order(page) {
+    const TAKER = '0x28C6c06298d514Db089934071355E5743bf21d60';
+    await page.waitToken('fromSel', 'ZORG');
+
+    // ---- maker: sell 50 ZORG for 0.0004 ETH, which settles as WETH
+    page.click('tabBook');
+    await sleep(400);
+    // The landing pair is ETH -> ZORG, so ZORG is disabled on the pay side
+    // until something else vacates the receive side. Step through USDC.
+    page.pick('toSel', 'USDC');
+    page.pick('fromSel', 'ZORG');
+    page.pick('toSel', 'ETH');
+    await sleep(800);
+    page.type('amt', '50');
+    page.type('outAmt', '0.0004');
+    await sleep(600);
+    console.log(`  button     ${page.text('swap')}`);
+
+    const mk0 = { zorg: await bal(ZORG, ACCOUNT) };
+    page.click('swap');
+    await until(() => /Placed|Done|Error/i.test(page.text('stat')), 180000, 'the placement',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+    const mk1 = { zorg: await bal(ZORG, ACCOUNT) };
+    console.log(`  escrowed   ${fmt(mk0.zorg - mk1.zorg)} ZORG · ${page.chain.sent.length} tx`);
+    if (mk0.zorg - mk1.zorg === 0n) throw Error('nothing left the maker');
+
+    // ---- taker: a different account, and it must find the order in the book
+    fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
+        params: [TAKER, '0x' + (10n ** 19n).toString(16)] }) }).catch(() => {});
+    await sleep(1200);
+
+    const takerChain = new ForkChain(TAKER);
+    const taker = await openPage(takerChain);
+    try {
+      taker.click('tabBook');
+      await until(() => /Fill/.test(taker.$('book').textContent), 120000, 'the order in the book',
+        () => `${taker.$('book').textContent.length} chars of book`);
+      await taker.settle();
+
+      const row = [...taker.$('book').querySelectorAll('button')].find(b => b.textContent === 'Fill');
+      if (!row) throw Error('no fillable row');
+      console.log(`  book row   ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
+
+      const t0 = { zorg: await bal(ZORG, TAKER) }, m0 = { weth: await bal(WETH, ACCOUNT) };
+      taker.click(row);
+      await until(() => /Done|Error/i.test(taker.text('stat')), 180000, 'the fill',
+        () => taker.text('stat').slice(0, 44));
+      await taker.settle();
+      if (/Error/i.test(taker.text('stat'))) throw Error(taker.text('stat'));
+
+      const t1 = { zorg: await bal(ZORG, TAKER) }, m1 = { weth: await bal(WETH, ACCOUNT) };
+      console.log(`  taker got  ${fmt(t1.zorg - t0.zorg)} ZORG`);
+      console.log(`  maker got  ${fmt(m1.weth - m0.weth)} WETH`);
+      if (t1.zorg - t0.zorg === 0n) throw Error('the taker received nothing');
+      if (m1.weth - m0.weth === 0n) throw Error('the maker was not paid');
+    } finally { taker.close(); }
   },
 };
 
