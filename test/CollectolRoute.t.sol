@@ -37,7 +37,7 @@ interface IZRouter {
 contract CollectolRouteTest is Test {
     address constant FACTORY = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
-    address constant ZQUOTER = 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13;
+    address constant ZQUOTER = 0xC7a03F9ED2Be5FEEA18ce93e12F4f05C98287C16;
     address constant SALE = 0x824d11a46F32cd16cdF46380314343e9697e2491;
     address constant SHARES = 0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49;
     address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
