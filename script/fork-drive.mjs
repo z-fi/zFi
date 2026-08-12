@@ -42,6 +42,31 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
+/**
+ * A page's background work must not be able to kill the suite.
+ *
+ * The page keeps things running that nobody awaits - an ENS reverse lookup for
+ * the address in the header, a balance poll, a book reload. When the fork
+ * hiccups, one of those rejects with nobody to catch it, and Node's default for
+ * an unhandled rejection is to terminate the process.
+ *
+ * That is how a whole run of nineteen scenarios ended after three: an ENS
+ * lookup inside `showAddr` failed on a page that had already been closed and
+ * took every remaining scenario with it. The failure was reported as a stack
+ * trace with no scenario name attached, which reads like the harness crashed
+ * rather than like one read timed out.
+ *
+ * Recorded and swallowed. A scenario that actually depends on the failed work
+ * still fails on its own assertion, which is where the failure belongs.
+ */
+let strayRejections = 0;
+process.on('unhandledRejection', e => {
+  strayRejections++;
+  if (process.env.FORK_ERRORS) {
+    console.error(`    ~~ background task rejected: ${String(e?.message || e).slice(0, 100)}`);
+  }
+});
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HTML = path.join(ROOT, 'zSwap.html');
 
@@ -65,14 +90,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * response to it. A revert, by contrast, is an answer: it is returned, never
  * retried.
  */
-const rpc = async (method, params = [], tries = 6) => {
+const rpc = async (method, params = [], tries = 4) => {
   let last;
   for (let i = 0; i < tries; i++) {
     try {
       const r = await fetch(RPC, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-        signal: AbortSignal.timeout(120000),
+        // 25s, not 120s. A call that has not answered in 25 seconds is wedged,
+        // not slow: the upstream archive answers in under a second, so the wait
+        // is anvil, and anvil does not recover by being waited on longer. At
+        // 120s x 6 tries a SINGLE hung call could burn twelve minutes and
+        // starve everything behind it, which is what made whole suites time out
+        // while the node sat idle. Fail fast, retry, move on.
+        signal: AbortSignal.timeout(25000),
       });
       const j = await r.json();
       if (j.error) {
@@ -1097,9 +1128,28 @@ const WARM = {
   zorg: '0x00a6ba94bbb5474725515de88fe04f854f2dcb12',
 };
 process.stdout.write('warming');
-const warmed = await Promise.all(
-  Object.entries(WARM).map(async ([k, a]) => [k, a, await rpc('eth_getCode', [a, 'latest'])]));
-process.stdout.write(` ${Object.keys(WARM).length} contracts\n`);
+/**
+ * Warming is BEST EFFORT, and one call that fails must not end the run.
+ *
+ * These ten go out at once, and a burst is exactly when a forked node drops
+ * one. That used to be survivable only by accident - the retry was patient
+ * enough (120s x 6) to outlast the stall - and shortening it to fail fast, which
+ * is right for a wedged call, made this line throw at the top level and kill the
+ * process before a single scenario ran. Both behaviours were wrong; the timeout
+ * was not the mistake, treating a warm-up like a precondition was.
+ *
+ * A miss here costs a slower first read, nothing else. It is only reported as
+ * MISSING - the guard below - when the address genuinely has no code, and that
+ * is distinguished by asking again, once, on its own.
+ */
+const warmed = await Promise.all(Object.entries(WARM).map(async ([k, a]) => {
+  const code = await rpc('eth_getCode', [a, 'latest']).catch(() => undefined);
+  if (code !== undefined) return [k, a, code];
+  const retry = await rpc('eth_getCode', [a, 'latest']).catch(() => '0xUNKNOWN');
+  return [k, a, retry];
+}));
+const missedWarm = warmed.filter(([, , c]) => c === '0xUNKNOWN').length;
+process.stdout.write(` ${Object.keys(WARM).length} contracts${missedWarm ? ` (${missedWarm} unread — slower first quote)` : ''}\n`);
 /**
  * A fork older than the contracts is not a failing dapp, but it reads as one.
  *
@@ -1112,7 +1162,10 @@ process.stdout.write(` ${Object.keys(WARM).length} contracts\n`);
  * So the block is checked against the addresses this run actually needs, and a
  * stale pin says so in one line instead of timing out three times.
  */
-const missing = warmed.filter(([, , code]) => !code || code === '0x');
+// `0xUNKNOWN` is "the node would not say", which is not the same claim as "the
+// block predates this contract" - and stopping the run on it would put the
+// blame in the wrong place, which is the mistake this guard exists to prevent.
+const missing = warmed.filter(([, , code]) => code === '0x' || code === '');
 if (missing.length) {
   console.error(`\nfork block ${block} predates ${missing.length} contract(s) this suite drives:`);
   for (const [k, a] of missing) console.error(`  ${k.padEnd(16)} ${a}`);
@@ -1157,11 +1210,63 @@ if (!names.length) {
   process.exit(1);
 }
 
+/**
+ * Pay the cold-fork cost ONCE, out loud, before anything is being measured.
+ *
+ * A pinned fork fetches every state slot it has not seen from upstream, and the
+ * routing path touches hundreds - so the FIRST quote of a session takes minutes
+ * and every one after it takes seconds. Run per-scenario, that cost lands on
+ * whichever scenario happens to go first, which then times out and is reported
+ * as a failure of the dapp. It has masqueraded as a broken swap, a broken
+ * token list and a drained whale in this suite alone.
+ *
+ * So it is paid here, deliberately, with a generous ceiling and a label saying
+ * what it is. Everything after this is measuring the page rather than the cache.
+ */
+async function warm() {
+  process.stdout.write('warming the routing path (first quote on a cold fork is slow)');
+  const t = Date.now();
+  const chain = new ForkChain(ACCOUNT);
+  let page;
+  try {
+    page = await openPage(chain);
+    await page.waitToken('toSel', 'USDC', 240000);
+    page.pick('toSel', 'USDC');
+    page.type('amt', '0.01');
+    await until(() => page.value('outAmt') && page.value('outAmt') !== '...',
+      900000, 'the first quote', () => `${chain.log.length} reads`);
+    console.log(` — ${((Date.now() - t) / 1000).toFixed(0)}s, ${chain.log.length} reads`);
+  } catch (e) {
+    console.log(`\n  warm-up did not complete (${e.message.slice(0, 60)}) — continuing anyway`);
+  } finally {
+    try { page?.close(); } catch (_) {}
+  }
+}
+if (names.length > 1) await warm();
+
+/**
+ * Each scenario starts from the state the one before it started from.
+ *
+ * `evm_snapshot`/`evm_revert` rewinds chain state WITHOUT discarding anvil's
+ * fork cache, which is the property that matters: isolation and a warm node are
+ * not a trade-off. Restarting anvil gives isolation and throws the cache away;
+ * sharing state keeps the cache and lets scenarios interfere.
+ *
+ * They did interfere. A placement whose WAIT timed out still landed, so a later
+ * run found two orders matching its own description and could not tell which
+ * was its own. Every run advanced the clock 1800s for a Dutch decay, and five
+ * runs put the fork 6038s ahead of real time, closing bid windows that should
+ * have been open. Both were hunted as page bugs.
+ */
+const snapshot = async () => rpc('evm_snapshot', []).catch(() => null);
+const revert = async id => { if (id) await rpc('evm_revert', [id]).catch(() => {}); };
+
 const VENUE = { last: null };
 const results = [];
 for (const name of names) {
   console.log(`\n[${name}]`);
   const t0 = Date.now();
+  const snap = names.length > 1 ? await snapshot() : null;
   const chain = new ForkChain(ACCOUNT);
   let page;
   try {
@@ -1175,6 +1280,7 @@ for (const name of names) {
     console.error(`[${name}] FAILED: ${e.message}`);
   } finally {
     try { page?.close(); } catch (_) {}
+    await revert(snap);
   }
 }
 
@@ -1185,4 +1291,8 @@ for (const r of results) {
   console.log(`  ${r.ok ? 'ok  ' : 'FAIL'}  ${r.name.padEnd(20)} ${String((r.ms / 1000).toFixed(0)).padStart(4)}s  ${r.ok ? via : r.why.slice(0, 58)}`);
 }
 console.log(`${'='.repeat(64)}\n  ${pass}/${results.length} paths exercised against the fork`);
+// Not a failure on its own - the page fires reads nobody awaits - but a jump in
+// this number is the fork struggling, and it is worth seeing next to a result
+// that blames the dapp.
+if (strayRejections) console.log(`  (${strayRejections} background read(s) rejected and were ignored)`);
 if (pass !== results.length) process.exitCode = 1;
