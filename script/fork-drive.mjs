@@ -861,6 +861,15 @@ const scenarios = {
     const seller = await openPage(new ForkChain(SELLER));
     try {
       seller.click('tabBook');
+      // The book is filtered by the SELECTED PAIR, so a page left on its landing
+      // pair simply does not list our bid - the row was never missing, it was
+      // never asked for. The seller is selling ZORG, so that is the pay side.
+      await seller.waitToken('fromSel', 'ZORG');
+      seller.pick('toSel', 'USDC');
+      seller.pick('fromSel', 'ZORG');
+      seller.pick('toSel', 'ETH');
+      await sleep(900);
+      await seller.settle();
       // "Sell into", not "Fill" - and ours, not a stranger's.
       const mine = () => [...seller.$('book').querySelectorAll('button')]
         .filter(b => b.textContent === 'Sell into')
@@ -925,12 +934,15 @@ const scenarios = {
     if (escrowed === 0n) throw Error('nothing was escrowed to cancel');
 
     page.click('tabBook');
-    const mine = () => [...page.$('book').querySelectorAll('button')]
+    const rows = () => [...page.$('book').querySelectorAll('button')]
       .filter(b => b.textContent === 'Cancel')
-      .find(b => /\b80 ZORG\b/.test(b.closest('div')?.textContent || ''));
+      .filter(b => /\b80 ZORG\b/.test(b.closest('div')?.textContent || ''));
+    const count = () => rows().length;
+    const mine = () => rows()[0];
     await until(mine, 120000, 'our order under YOUR ORDERS',
       () => `${page.$('book').textContent.length} chars of book`);
     await page.settle();
+    const had = count();
     const row = mine();
     console.log(`  row        ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
 
@@ -946,9 +958,16 @@ const scenarios = {
     // is a cancel that lost something.
     if (returned !== escrowed)
       throw Error(`escrowed ${fmt(escrowed)} but got back ${fmt(returned)}`);
-    // And it must be gone from the book, or it can still be filled.
+    // And ONE of them must leave the book, or the order still looks fillable.
+    //
+    // Counted rather than matched. These scenarios re-run against a long-lived
+    // fork, and a placement whose wait timed out still landed on chain - so an
+    // earlier attempt can leave its own 80 ZORG order resting there forever,
+    // and "is there still a row saying 80 ZORG" answers yes no matter what this
+    // run did. The count is what this run is responsible for.
     await page.settle();
-    if (mine()) throw Error('the cancelled order is still listed as cancellable');
+    await until(() => count() < had, 120000, 'the cancelled row to leave the book',
+      () => `${count()} rows now, ${had} before`);
   },
 
   /**
