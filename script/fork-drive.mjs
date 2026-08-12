@@ -186,6 +186,22 @@ async function openPage(chain) {
       el.value = o.value;
       el.dispatchEvent(new w.Event('change', { bubbles: true }));
     },
+    /** Select by option VALUE rather than label - `__custom` has no stable text. */
+    select(id, value) {
+      const el = d.getElementById(id);
+      el.value = value;
+      el.dispatchEvent(new w.Event('change', { bubbles: true }));
+    },
+    /**
+     * Answer the page's next `prompt()`.
+     *
+     * Importing a collection is the one flow that asks the user a question
+     * through the browser rather than through a field, and jsdom has no dialog -
+     * `prompt` is undefined, so the import path could not be driven at all.
+     */
+    queuePrompt(answer) {
+      w.prompt = () => answer;
+    },
     // Lenient on purpose: a forked node answers some of the page's bigger
     // batches slowly, and the page also polls in the background - so "quiet"
     // is a best effort rather than a precondition.
@@ -787,6 +803,237 @@ const scenarios = {
     await until(() => /ZORG/.test(page.$('book').textContent), 120000, 'the bid in the book',
       () => `${page.$('book').textContent.length} chars of book`);
     console.log(`  listed     ${page.$('book').textContent.trim().slice(0, 60)}`);
+  },
+
+  /**
+   * The taker side of a bid, which nothing else reaches.
+   *
+   * Every other order scenario SELLS: the maker escrows the thing being sold
+   * and a taker pays for it. Hitting a bid runs the other way - the standing
+   * order holds the PAYMENT, and whoever acts on it delivers the asset and is
+   * paid out of that escrow. Floorboard settles it through `hitMany`, which is
+   * not payable precisely because no ether moves from the taker.
+   *
+   * So this is a whole settlement direction, and until now no simulation had
+   * ever executed it. The page calls the button "Sell into" rather than "Fill",
+   * which is the tell that it is a different act.
+   */
+  async 'order:hitbid'(page) {
+    const SELLER = '0x28C6c06298d514Db089934071355E5743bf21d60';
+    await page.waitToken('toSel', 'ZORG');
+
+    // ---- bidder: offer to BUY 70 ZORG, climbing from 0.0004 to 0.0008 ETH
+    page.click('tabBook');
+    await sleep(400);
+    page.pick('kind', 'Climbing bid');
+    await sleep(400);
+    page.pick('fromSel', 'ETH');
+    page.pick('toSel', 'ZORG');
+    await sleep(800);
+    page.type('amt', '0.0008');
+    page.type('outAmt', '70');         // 70, so the row cannot be confused with 50 or 60
+    page.type('floorAmt', '0.0004');
+    page.pick('dly', '1 hour');
+    await sleep(700);
+    if (/Pick|Invalid|Choose|Set /i.test(page.text('swap')))
+      throw Error(`the page will not accept the bid: "${page.text('swap')}"`);
+    page.click('swap');
+    await until(() => /Placed|Done|Error/i.test(page.text('stat')), 180000, 'the bid placement',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+    console.log(`  bid placed 0.0004 -> 0.0008 ETH for 70 ZORG`);
+
+    // Let it climb, so what the seller receives is the CURVE's price and not
+    // merely the opening number.
+    await rpc('evm_increaseTime', [1800]).catch(() => {});
+    await rpc('evm_mine', []).catch(() => {});
+
+    // ---- seller: needs ZORG to deliver. The bidder has plenty.
+    fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
+        params: [SELLER, '0x' + (10n ** 19n).toString(16)] }) }).catch(() => {});
+    await sleep(1000);
+    await rpc('eth_sendTransaction', [{ from: ACCOUNT, to: ZORG,
+      data: '0xa9059cbb' + p32(BigInt(SELLER)) + p32(200n * 10n ** 18n) }]);
+    if (await bal(ZORG, SELLER) < 70n * 10n ** 18n) throw Error('could not get ZORG to the seller');
+
+    const seller = await openPage(new ForkChain(SELLER));
+    try {
+      seller.click('tabBook');
+      // "Sell into", not "Fill" - and ours, not a stranger's.
+      const mine = () => [...seller.$('book').querySelectorAll('button')]
+        .filter(b => b.textContent === 'Sell into')
+        .find(b => /\b70 ZORG\b/.test(b.closest('div')?.textContent || ''));
+      await until(mine, 120000, 'our bid in the seller\'s book',
+        () => `${seller.$('book').textContent.length} chars of book`);
+      await seller.settle();
+      const row = mine();
+      console.log(`  book row   ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
+
+      const s0 = { zorg: await bal(ZORG, SELLER), weth: await bal(WETH, SELLER), eth: await bal('ETH', SELLER) };
+      const b0 = await bal(ZORG, ACCOUNT);
+      seller.click(row);
+      await until(() => /Done|Error/i.test(seller.text('stat')), 180000, 'the hit',
+        () => seller.text('stat').slice(0, 44));
+      await seller.settle();
+      if (/Error/i.test(seller.text('stat'))) throw Error(seller.text('stat'));
+
+      const gave = s0.zorg - await bal(ZORG, SELLER);
+      const got = (await bal(WETH, SELLER) - s0.weth) + (await bal('ETH', SELLER) - s0.eth);
+      const bought = await bal(ZORG, ACCOUNT) - b0;
+      console.log(`  seller gave ${fmt(gave)} ZORG`);
+      console.log(`  seller got  ${fmt(got)} ETH+WETH`);
+      console.log(`  bidder got  ${fmt(bought)} ZORG`);
+      // Gas is paid in ether by the seller, so the proceeds are checked on the
+      // wrapped side alone when the two together could net negative.
+      if (gave === 0n) throw Error('the seller delivered nothing');
+      if (bought === 0n) throw Error('the bidder received nothing for their escrow');
+    } finally { seller.close(); }
+  },
+
+  /**
+   * Cancelling, which is the only path that gives an escrow BACK.
+   *
+   * It also crosses the wrapped-ether boundary on its own terms - the board has
+   * `cancelUnwrap` beside `cancel` - so it is exactly where a mistake about
+   * which side of that boundary an asset sits would hide. Everything else in
+   * this file spends; nothing else asks for a refund.
+   */
+  async 'order:cancel'(page) {
+    await page.waitToken('fromSel', 'ZORG');
+    page.click('tabBook');
+    await sleep(400);
+    page.pick('kind', 'Fixed limit');
+    await sleep(400);
+    page.pick('toSel', 'USDC');
+    page.pick('fromSel', 'ZORG');
+    page.pick('toSel', 'ETH');
+    await sleep(800);
+    page.type('amt', '80');            // distinct from every other scenario's size
+    page.type('outAmt', '0.0004');
+    await sleep(600);
+
+    const before = await bal(ZORG, ACCOUNT);
+    page.click('swap');
+    await until(() => /Placed|Done|Error/i.test(page.text('stat')), 180000, 'the placement',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+    const escrowed = before - await bal(ZORG, ACCOUNT);
+    console.log(`  escrowed   ${fmt(escrowed)} ZORG`);
+    if (escrowed === 0n) throw Error('nothing was escrowed to cancel');
+
+    page.click('tabBook');
+    const mine = () => [...page.$('book').querySelectorAll('button')]
+      .filter(b => b.textContent === 'Cancel')
+      .find(b => /\b80 ZORG\b/.test(b.closest('div')?.textContent || ''));
+    await until(mine, 120000, 'our order under YOUR ORDERS',
+      () => `${page.$('book').textContent.length} chars of book`);
+    await page.settle();
+    const row = mine();
+    console.log(`  row        ${row.closest('div')?.textContent.trim().slice(0, 52)}`);
+
+    page.click(row);
+    await until(() => /Done|Error/i.test(page.text('stat')), 180000, 'the cancel',
+      () => page.text('stat').slice(0, 44));
+    await page.settle();
+    if (/Error/i.test(page.text('stat'))) throw Error(page.text('stat'));
+
+    const returned = await bal(ZORG, ACCOUNT) - (before - escrowed);
+    console.log(`  returned   ${fmt(returned)} ZORG`);
+    // The whole escrow, not part of it: a cancel that refunds less than it took
+    // is a cancel that lost something.
+    if (returned !== escrowed)
+      throw Error(`escrowed ${fmt(escrowed)} but got back ${fmt(returned)}`);
+    // And it must be gone from the book, or it can still be filled.
+    await page.settle();
+    if (mine()) throw Error('the cancelled order is still listed as cancellable');
+  },
+
+  /**
+   * List a real NFT, then take it back.
+   *
+   * The NFT paths have thorough unit coverage and no live execution at all,
+   * which is the exact gap that let a Swapbatch struct mismatch survive twenty
+   * passing tests: a mock agrees with whatever shape you build it to. A real
+   * ERC-721 does not. It has its own approval semantics, its own `ownerOf`, and
+   * a `transferFrom` with no receiver hook - so escrowing one either works
+   * against the real thing or it does not.
+   *
+   * Moonbirds because it is a plain 721 with an easy holder to impersonate; the
+   * page has never seen it, so the collection is imported through the same
+   * `__custom` prompt a user would use, which exercises the ERC-721 detection
+   * as well.
+   */
+  async 'nft:list-cancel'() {
+    const PUNKS = '0x23581767a106ae21c074b2276D25e5C3e136a68b';  // Moonbirds
+    const ID = 1n;
+    const owner = ('0x' + (await rpc('eth_call', [{ to: PUNKS,
+      data: '0x6352211e' + p32(ID) }, 'latest'])).slice(26)).toLowerCase();
+    console.log(`  holder     ${owner} owns #${ID}`);
+    fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'anvil_setBalance',
+        params: [owner, '0x' + (10n ** 19n).toString(16)] }) }).catch(() => {});
+    await sleep(1000);
+
+    const p = await openPage(new ForkChain(owner));
+    try {
+      await until(() => p.$('tabBook'), 90000, 'the page');
+      p.click('tabBook');
+      await sleep(600);
+
+      // Import the collection the way a user would: the page prompts for an
+      // address and works out for itself that it is a 721.
+      p.queuePrompt(PUNKS);
+      p.select('fromSel', '__custom');
+      await until(() => /MOONBIRD|BIRB|\w/.test(
+        p.$('fromSel').selectedOptions[0]?.textContent || '') &&
+        p.$('fromSel').selectedOptions[0].textContent !== 'ETH',
+        120000, 'the collection to import',
+        () => `fromSel="${p.$('fromSel').selectedOptions[0]?.textContent}"`);
+      console.log(`  imported   ${p.$('fromSel').selectedOptions[0].textContent}`);
+      p.pick('toSel', 'ETH');
+      await sleep(800);
+
+      // Ask 5 ETH for token #1.
+      p.type('outAmt', '5');
+      p.type('nftId', String(ID));
+      await sleep(800);
+      console.log(`  button     ${p.text('swap')}`);
+      if (/Pick|Invalid|Choose|Set /i.test(p.text('swap')))
+        throw Error(`the page will not accept the listing: "${p.text('swap')}"`);
+
+      p.click('swap');
+      await until(() => /Placed|Done|Error/i.test(p.text('stat')), 240000, 'the listing',
+        () => p.text('stat').slice(0, 44));
+      await p.settle();
+      if (/Error/i.test(p.text('stat'))) throw Error(p.text('stat'));
+
+      // The escrow is the thing to check: the board must actually hold the token.
+      const holder = ('0x' + (await rpc('eth_call', [{ to: PUNKS,
+        data: '0x6352211e' + p32(ID) }, 'latest'])).slice(26)).toLowerCase();
+      console.log(`  #${ID} now at  ${holder}`);
+      if (holder === owner) throw Error('the token never left the seller - nothing was escrowed');
+
+      // ---- and take it back
+      p.click('tabBook');
+      const mine = () => [...p.$('book').querySelectorAll('button')]
+        .find(b => b.textContent === 'Cancel');
+      await until(mine, 120000, 'the listing under YOUR ORDERS',
+        () => `${p.$('book').textContent.length} chars of book`);
+      await p.settle();
+      p.click(mine());
+      await until(() => /Done|Error/i.test(p.text('stat')), 240000, 'the cancel',
+        () => p.text('stat').slice(0, 44));
+      await p.settle();
+      if (/Error/i.test(p.text('stat'))) throw Error(p.text('stat'));
+
+      const back = ('0x' + (await rpc('eth_call', [{ to: PUNKS,
+        data: '0x6352211e' + p32(ID) }, 'latest'])).slice(26)).toLowerCase();
+      console.log(`  returned   #${ID} to ${back}`);
+      if (back !== owner) throw Error(`cancel did not return the token: it sits at ${back}`);
+    } finally { p.close(); }
   },
 };
 
