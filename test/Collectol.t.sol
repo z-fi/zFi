@@ -82,7 +82,22 @@ contract CollectolTest is Test {
     }
 
     /// Sale above pool spot: the whole order should mint, nothing to the curve.
+    ///
+    /// The state is BUILT here rather than assumed. This used to plan against
+    /// whatever the live pool happened to hold at the pinned block and assert
+    /// `poolAmount == 0`, and the pool has since become the better venue for a
+    /// slice: the planner routed 0.0436 ETH to the curve and returned 1,012,828
+    /// shares where the sale alone pays 1,000,000. That is the planner doing its
+    /// job, reported as "pool should get nothing". Buying the pool up first puts
+    /// it genuinely above the sale rate, which is the premise in the name, and
+    /// makes the assertion true by construction instead of by luck.
     function testExactInPrefersSaleWhenPoolIsWorse() public {
+        vm.startPrank(alice);
+        IZAMMSwap.PoolKey memory up =
+            IZAMMSwap.PoolKey({id0: 0, id1: 0, token0: address(0), token1: SHARES, feeOrHook: FEE});
+        IZAMMSwap(ZAMM).swapExactIn{value: 30 ether}(up, 30 ether, 0, true, alice, block.timestamp + 60);
+        vm.stopPrank();
+
         uint256 rate = _rate();
         CollectolLens.Plan memory p = lens.planExactIn(SHARES, FEE, 1 ether, rate, _cap(rate), 100);
         assertEq(p.poolAmount, 0, "pool should get nothing");
