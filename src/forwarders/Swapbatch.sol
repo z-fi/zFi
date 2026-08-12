@@ -386,9 +386,21 @@ interface IModernBatchFill {
 }
 
 interface ILegacyBatchOrderView {
+    /// @dev MUST match the deployed board's struct word for word. `partialFill`
+    ///      was missing, and a missing field does not fail to decode - it slides
+    ///      every field after it one word left. `tokenA` read the partialFill
+    ///      BOOL, `amountA` read the tokenA address as a number, and so on down.
+    ///      Confirmed against 0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831:
+    ///      getOrders([0]) returns seven words per order, not six.
+    ///
+    ///      This is the current Swapboard's struct minus the fields added after
+    ///      the legacy board shipped (expiry, nftA, nftB, counterparty), which is
+    ///      exactly why the mismatch is easy to reintroduce - the shapes differ by
+    ///      deployment date, not by name.
     struct Order {
         address maker;
         bool active;
+        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;

@@ -406,9 +406,15 @@ contract LegacyBoard {
     MockERC20 public immutable tokenA;
     MockERC20 public immutable tokenB;
 
+    // Seven words, matching the DEPLOYED legacy board. This mock used to omit
+    // `partialFill` exactly as Swapbatch's interface did, so the two agreed with
+    // each other and disagreed with mainnet - the unit tests passed against a
+    // mock built to the shape of the bug, and the one suite that used the real
+    // board was the only one failing.
     struct Order {
         address maker;
         bool active;
+        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;
@@ -436,9 +442,9 @@ contract LegacyBoard {
         out = new Order[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
             if (orderIds[i] < 2) {
-                out[i] = Order(address(1), true, address(tokenA), 100e18, address(weth), 1 ether);
+                out[i] = Order(address(1), true, false, address(tokenA), 100e18, address(weth), 1 ether);
             } else if (orderIds[i] < 4) {
-                out[i] = Order(address(1), true, address(tokenB), 100e18, address(weth), 1 ether);
+                out[i] = Order(address(1), true, false, address(tokenB), 100e18, address(weth), 1 ether);
             }
         }
     }

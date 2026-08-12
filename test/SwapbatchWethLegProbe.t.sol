@@ -68,9 +68,15 @@ contract WethOutLegacyBoard {
     address public immutable weth;
     uint256 public delivery;
 
+    // Seven words, matching the DEPLOYED legacy board. This mock used to omit
+    // `partialFill` exactly as Swapbatch's interface did, so the two agreed with
+    // each other and disagreed with mainnet - the unit tests passed against a
+    // mock built to the shape of the bug, and the one suite that used the real
+    // board was the only one failing.
     struct Order {
         address maker;
         bool active;
+        bool partialFill;
         address tokenA;
         uint256 amountA;
         address tokenB;
@@ -95,7 +101,7 @@ contract WethOutLegacyBoard {
     function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory out) {
         out = new Order[](orderIds.length);
         for (uint256 i; i < orderIds.length; ++i) {
-            out[i] = Order(address(1), true, weth, 10 ether, weth, 1 ether);
+            out[i] = Order(address(1), true, false, weth, 10 ether, weth, 1 ether);
         }
     }
 }
