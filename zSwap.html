@@ -133,8 +133,17 @@ svg{vertical-align:middle;flex-shrink:0}
 #book{margin-top:.4em;max-height:17em;overflow-y:auto;overscroll-behavior:contain}
 #book:empty{display:none}
 #book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin:.6em 0 .3em;font-weight:600;display:flex;justify-content:space-between}
-.o{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.5em .7em;background:var(--p);border-radius:.6em;margin-bottom:.3em;font-size:.75em}
+/* nowrap, not wrap: `flex:1 1 auto` on the label lets it shrink, but wrapping
+   was still available as an escape hatch and the longest rows took it - the
+   Dutch row, which carries a tag and a countdown, dropped Cancel onto a line
+   of its own and stood at twice the height of its neighbours. Denying the wrap
+   forces the shrink instead, and the label rewraps its own text. */
+.o{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:.5em;padding:.5em .7em;background:var(--p);border-radius:.6em;margin-bottom:.3em;font-size:.75em}
 .o .l{display:flex;align-items:center;gap:.45em;min-width:0;flex:1 1 auto}
+/* The text block inside the label is itself a flex item, and its default
+   min-width:auto floors it at its content width - so `.l` could not shrink
+   however hard it was told to. */
+.o .l>span{min-width:0;flex:1 1 auto}
 /* The label SHRINKS; the button never does. `.l` had min-width:0 but no
    flex, so it sized to its content - and a row with more to say (a Dutch
    carries a tag and a countdown its neighbours do not) overflowed, wrapped
@@ -145,11 +154,19 @@ svg{vertical-align:middle;flex-shrink:0}
 .o b{font-weight:600;font-variant-numeric:tabular-nums;display:block}
 .o i{font-style:normal;color:var(--m);display:block;font-size:.9em;word-break:break-all}
 .o a{color:var(--m)}
-.o button{border:0;border-radius:.5em;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer;flex:0 0 auto}
+/* Row actions are GHOSTS at rest. Filled in --k, a page of them was a column
+   of the brightest chips on the card - brighter than the primary button, and
+   loudest on the rows the user is only reading. The affordance survives: the
+   border says clickable, and hover/focus fills it exactly as before, so the
+   button you are actually pointing at is the one that lights up. */
+.o button{border:1px solid var(--e);border-radius:.5em;padding:.35em .7em;font-size:.95em;font-weight:600;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;transition:background .15s,color .15s,border-color .15s}
+.o button:hover:not(:disabled),.o button:focus-visible:not(:disabled){background:var(--k);color:var(--kf);border-color:var(--k)}
 #foot{display:flex;justify-content:center;gap:.5em;flex-wrap:wrap;margin-top:1.1em;font-size:.68em;color:var(--m);letter-spacing:.03em}
 #foot a{color:var(--m);text-decoration:none;border-bottom:1px solid var(--e)}
 #foot a:hover{color:var(--f)}
-.o button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
+/* A disabled action is a STATE label ("Filled", "Expired"), not a control -
+   so it loses the border too, or the ghost style would make it look pressable. */
+.o button:disabled{background:transparent;border-color:transparent;color:var(--m);cursor:default;font-weight:400}
 .ow{margin-bottom:.3em}
 .ow .o{margin-bottom:0}
 .o.ins{cursor:pointer}
@@ -592,8 +609,18 @@ const addVar=(a,b)=>{
   const [x,y]=a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];
   if(!vars.some(v=>v.c0===x&&v.c1===y&&v.tokenIn===a))vars.push({c0:x,c1:y,tokenIn:a});
 };
-addVar(f.addr,t.addr);            // exactly as the picker names them
-addVar(nat(f.addr),nat(t.addr));  // and the same pair with ether for WETH
+// Ether has TWO forms and a market may be stored under either, on either side.
+// Mapping WETH to ether covered half of it and left the other half dark: an ETH
+// input never asked for a WETH market, so that pool was as invisible as the
+// native one had been. The cross-product is small - at most four - and it is
+// the only version of this with no blind spot left in it.
+const forms=a=>a===ZERO?[ZERO,WETH]
+  :a.toLowerCase()===WETH.toLowerCase()?[WETH,ZERO]:[a];
+for(const a of forms(f.addr))for(const b of forms(t.addr)){
+  // ETH against WETH is a wrap, not a market, and no pool holds both.
+  if(nat(a)===nat(b))continue;
+  addVar(a,b);
+}
 // The window is asked for in full and the COUNT rides alongside it, in the
 // same batch. Reading the count first would put a second round trip in front
 // of every quote on the page, including the pairs that have no band at all -
@@ -604,7 +631,7 @@ for(const v of vars)reqs.push(
     +encAddr(sender)+encAddr(v.tokenIn)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
   {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(v.c0)+encAddr(v.c1)});
 const res=await mc3Deep(reqs,block);
-let pool="",out=0n,n=0,fA=f.addr;
+let pool="",out=0n,n=0,fA=f.addr,won=null;
 for(let i=0;i<vars.length;i++){
   const q=res[i*2],c=res[i*2+1];
   if(!q)continue;
@@ -613,11 +640,15 @@ for(let i=0;i<vars.length;i++){
   const p2="0x"+h.slice(24,64),o2=BigInt("0x"+h.slice(64,128));
   if(o2<=0n||/^0x0{40}$/i.test(p2))continue;
   if(o2<=out)continue;
-  pool=p2;out=o2;fA=vars[i].tokenIn;
+  pool=p2;out=o2;fA=vars[i].tokenIn;won=vars[i];
   try{if(c)n=Number(BigInt(c))}catch{n=0}
 }
-if(!pool)return null;
-const tA=fA===ZERO||nat(t.addr)===ZERO?nat(t.addr):t.addr;
+if(!pool||!won)return null;
+// The pool's OTHER side, derived from the pair that actually answered rather
+// than from the picker. A market found under (address(0), USDC) pays ether even
+// if the user typed WETH, and one found under (WETH, USDC) pays WETH even if
+// they typed ETH - and the page has to say which, because it is what lands.
+const tA=won.c0===fA?won.c1:won.c0;
 let fee=0n;
 try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee=BigInt(fx)}catch{}
 // Reported, not printed. This runs as a detached job inside `update()`, so
@@ -625,11 +656,33 @@ try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee
 // it: a quote the user has already replaced could still land its notice on the
 // line, on top of a live price-impact warning. The caller holds the guard, so
 // hand it the fact and let it render.
-// `unwrap` is how much WETH has to become ether before the pool can be paid.
-// Zero on every other shape, including a native input that needs nothing.
-return {pool,out,fee,capped:n>LQ_SCAN,tokenIn:fA,
+/**
+ * EVERY ETHER SHAPE, STATED RATHER THAN ASSUMED.
+ *
+ * The pool is paid in the asset IT holds and pays out the asset it holds; what
+ * the picker names is a separate fact. Four input combinations and four output
+ * ones, and only the two diagonals need nothing:
+ *
+ *   pays ETH  -> native pool   value, as is
+ *   pays ETH  -> WETH pool     WRAP first, then approve          <- `wrap`
+ *   pays WETH -> native pool   UNWRAP first, then value          <- `unwrap`
+ *   pays WETH -> WETH pool     approve, as is
+ *
+ *   wants ETH  <- native pool  arrives as ether
+ *   wants ETH  <- WETH pool    arrives as WETH                   <- `outDiffers`
+ *   wants WETH <- native pool  arrives as ether                  <- `outDiffers`
+ *   wants WETH <- WETH pool    arrives as WETH
+ *
+ * The output pair cannot be converted on the way out - the pool sends its own
+ * token straight to the recipient - so those two are DISCLOSED rather than
+ * fixed. They are the same asset either way; being told the wrong name is the
+ * whole harm, and a second transaction to rename it would cost more than it
+ * saves.
+ */
+return {pool,out,fee,capped:n>LQ_SCAN,tokenIn:fA,tokenOut:tA,
   unwrap:fA===ZERO&&f.addr!==ZERO?amountIn:0n,
-  nativeOut:tA===ZERO&&t.addr!==ZERO};
+  wrap:fA!==ZERO&&f.addr===ZERO?amountIn:0n,
+  outDiffers:(tA===ZERO)!==(t.addr===ZERO)};
 }
 
 async function quoteV4Pools(f,t,amountIn,block){
@@ -2008,7 +2061,7 @@ const pNative=pq.tokenIn===ZERO;
 pc={best:{source:7,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/100n},
 callData:"0x"+SEL_PSWAP+encAddr(pq.tokenIn)+encUint(swapAmt)+encUint(pMin)+encAddr(rcv||acct||ZERO),
 fundedCallData:null,amountLimit:pMin,msgValue:pNative?swapAmt:0n,
-unwrap:pq.unwrap||0n,
+unwrap:pq.unwrap||0n,wrap:pq.wrap||0n,outDiffers:!!pq.outDiffers,poolOut:pq.tokenOut,
 to:pq.pool,spender:pNative?null:pq.pool};
 if(!r)r=pc;
 }
@@ -2152,6 +2205,11 @@ const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
 const s=r.best.source,raw=SOURCES[s]||"?";
 const src=hybrid?"Orderbook + AMM":(s===3||s===4||s===7)&&r.best.feeBps?`${raw} ${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
+// A Precision pool sends ITS OWN token straight to the recipient - the output
+// side cannot be converted on the way out - so when the market holds the other
+// form of ether than the picker names, say which one actually lands. It is the
+// same asset; being told the wrong name is the whole harm.
+if(r.outDiffers&&rate.textContent)rate.textContent+=` \u00b7 pays ${r.poolOut===ZERO?"ETH":"WETH"}`;
 rate.title="";
 if(isIn)rate.textContent+=` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`;
 else{
@@ -2195,7 +2253,7 @@ source:r.best.source,
 // copies is a value that silently does not exist. The dead `last.best.source`
 // guard was this exact mistake, found by watching a disclaimed pool's
 // transaction go out anyway.
-unwrap:r.unwrap||0n,
+unwrap:r.unwrap||0n,wrap:r.wrap||0n,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){
@@ -5458,7 +5516,13 @@ const {callData,fundedCallData,msgValue,amountIn,from,to}=last;
 // `from.addr` is WETH throughout and the call still carries `amountIn`. This
 // read only the picker and rejected that as "bad value", which is a guard
 // refusing the very case it was widened for.
-if(msgValue!==(from.addr===ZERO||last.unwrap>0n?amountIn:0n))throw Error("bad value");
+// What rides is decided by the CALL, and the call is decided by the pool. Both
+// halves matter and each is a case the other would reject: an unwrapped WETH
+// input pays a native pool AS VALUE while `from.addr` is WETH, and an ETH input
+// wrapped for a WETH pool pays NOTHING as value while `from.addr` is ether.
+// Reading only the picker refused each of them in turn.
+const wantsValue=last.wrap>0n?0n:(from.addr===ZERO||last.unwrap>0n?amountIn:0n);
+if(msgValue!==wantsValue)throw Error("bad value");
 await checkWallet();
 // Before the approval, never after. The waterfall below signs first and
 // simulates last, so a book leg that closed during the quote's 45s life would
@@ -5507,6 +5571,17 @@ stat.textContent=`Unwrapping ${trimAmt(last.unwrap,18)} WETH — this pool holds
 const utx={from:account,to:WETH,data:"0x2e1a7d4d"+encUint(last.unwrap),value:"0x0"};
 await rpc(C,[utx,L]);await checkWallet();
 await settle(await rpc(S,[utx]));
+}
+// The mirror: a WETH-based market cannot be paid in ether. Same shape, same
+// reason, opposite direction - and it has to run BEFORE the approval below,
+// because there is nothing to approve until the WETH exists.
+if(last.wrap>0n){
+const have=BigInt(await rpcRead("eth_getBalance",[account,L]));
+if(have<last.wrap)throw Error(`Not enough ETH: this needs ${trimAmt(last.wrap,18)} and you hold ${trimAmt(have,18)}.`);
+stat.textContent=`Wrapping ${trimAmt(last.wrap,18)} ETH — this pool holds WETH...`;
+const wtx={from:account,to:WETH,data:"0xd0e30db0",value:toHex(last.wrap)};
+await rpc(C,[wtx,L]);await checkWallet();
+await settle(await rpc(S,[wtx]));
 }
 }
 if(from.addr!==ZERO&&spender&&spender!==ZROUTER){

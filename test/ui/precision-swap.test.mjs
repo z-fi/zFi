@@ -73,6 +73,88 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
+  /**
+   * THE WHOLE ETHER MATRIX, because each cell reads as correct alone.
+   *
+   * A pool is paid in the asset IT holds and pays out the asset it holds; the
+   * picker names a separate thing. Four input combinations and four output
+   * ones, and only the diagonals need nothing - every off-diagonal cell is a
+   * step that, left out, either strands funds or quotes a market that cannot
+   * be paid.
+   */
+  const market = ({ pair, out = 4000n * USDC }) => {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.WETH, A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.USDC, A.ACCOUNT, 50_000n * USDC);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.precisionQuote = { pool: POOL, out, fee: 3000, pair };
+    chain.setPools(pair[0], pair[1], [{ pool: POOL, hook: A.ZERO, liquidity: 10n ** 20n }]);
+    return chain;
+  };
+
+  test('pays ETH into a WETH market by wrapping first', async () => {
+    // The mirror of the unwrap, and the case that would otherwise quote a
+    // market it cannot pay: a WETH pool takes an allowance, not value, so
+    // there is nothing to approve until the WETH exists.
+    const p = await loadPage({ chain: market({ pair: [A.WETH, A.USDC] }) });
+    await p.connect();
+    p.pickToken('fromSel', 'ETH');
+    p.pickToken('toSel', 'USDC');
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '4000', 'a WETH market must be reachable from ETH');
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'wrap then swap' });
+    await p.settle();
+
+    const first = p.chain.sent[0];
+    assert.equal(first.to.toLowerCase(), A.WETH.toLowerCase());
+    assert.match(first.data, /^0xd0e30db0/, 'deposit()');
+    assert.equal(BigInt(first.value), ETH, 'wrapping the input, as value');
+    // And the pool call itself carries NO value, because it is not native.
+    const swap = p.chain.sent[p.chain.sent.length - 1];
+    assert.equal(BigInt(swap.value || 0), 0n, 'a WETH pool must not be sent ether');
+    p.close();
+  });
+
+  test('says which side of the wrapped boundary the output lands on', async () => {
+    // The pool sends its own token straight to the recipient, so the output
+    // cannot be converted on the way out. It is the same asset; being told the
+    // wrong name is the whole harm, so the page names what actually lands.
+    const p = await loadPage({ chain: market({ pair: [A.ZERO, A.USDC], out: 2n * ETH }) });
+    await p.connect();
+    // Step through a third token: the page refuses the same asset on both sides,
+    // so USDC cannot move to the pay side while it is still the receive side.
+    p.pickToken('toSel', 'WETH');
+    p.pickToken('fromSel', 'USDC');     // asks for WETH from a NATIVE market
+    await p.typeAmount('amt', '1000');
+    assert.match(p.text('rate'), /pays ETH/i, 'the output form must be disclosed');
+    p.close();
+  });
+
+  test('sends the output to a named recipient, not the payer', async () => {
+    // Custom recipients have to survive every one of these paths: the pool's
+    // `to` is the last argument of the swap, and a wrap or unwrap in front of
+    // it must not quietly retarget it back to the sender.
+    const p = await loadPage({ chain: market({ pair: [A.ZERO, A.USDC] }) });
+    await p.connect();
+    p.pickToken('fromSel', 'WETH');     // forces an unwrap in front
+    p.pickToken('toSel', 'USDC');
+    p.type('rc', A.OTHER);
+    await p.typeAmount('amt', '1');
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'unwrap then swap' });
+    await p.settle();
+
+    const swap = p.chain.sent[p.chain.sent.length - 1];
+    assert.equal(swap.to.toLowerCase(), POOL.toLowerCase());
+    assert.ok(swap.data.toLowerCase().includes(A.OTHER.slice(2).toLowerCase()),
+      'the recipient must reach the pool call, not be replaced by the payer');
+    p.close();
+  });
+
   test('a WETH-based market stays reachable, and is not unwrapped', async () => {
     // The mirror of the bug above, and the reason the lookup asks for BOTH
     // shapes rather than normalising. Nothing in the factory prefers ether to
