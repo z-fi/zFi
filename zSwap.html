@@ -185,8 +185,16 @@ svg{vertical-align:middle;flex-shrink:0}
    card, so nothing else can be mistaken for it) at the weight of a caution.
    The dark shade is lifted because #c33 on #242424 fails contrast. */
 .tg.w{background:transparent;border:1px solid currentcolor;color:#c33;font-weight:600;
-  text-transform:uppercase;font-size:.6em;letter-spacing:.05em;padding:0 .3em;
-  vertical-align:.1em;line-height:1.5}
+  text-transform:uppercase;font-size:.58em;letter-spacing:.09em;padding:.3em .6em .25em;
+  border-radius:.6em;vertical-align:.12em;line-height:1;text-decoration:none;
+  /* The trailing letter-space pushes the last glyph off the right border; give
+     it back, or the word sits visibly left of centre inside its own pill. */
+  text-indent:.09em}
+/* It is an <a> inside `.o`, so it would otherwise inherit that rule's link
+   colour and the browser's underline - a red pill with a red underline under
+   it, which is what made it read as crammed rather than as a tag. */
+.o a.tg.w{color:#c33}
+.d .o a.tg.w{color:#e57373}
 .d .tg.w{color:#e57373}
 .dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
 .dly select{font-size:1em}
@@ -304,7 +312,12 @@ svg{vertical-align:middle;flex-shrink:0}
 <div id="book"></div>
 <!-- Which build you are looking at, and where it came from. A page that cannot
      be told apart from its successor is a page nobody can audit twice. -->
-<footer id="foot"><span id="footV"></span><span id="footAddr"></span></footer>
+<!-- Where the token order comes from, and who can change it. The list this page
+     imports is ranked by onchain conviction staking, so the ranking is not an
+     editorial decision anybody here can be asked about - it is a contract the
+     reader can go and stake in. One footer link is the honest place to say so:
+     it belongs beside the build's own provenance, not in front of a trade. -->
+<footer id="foot"><span id="footV"></span><span id="footAddr"></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by onchain conviction staking. Stake to move a token up the list - or to get one listed at all.">token list</a></span></footer>
 </div>
 <script>
 const ic=()=>th.textContent=H.className=='d'?'☀︎':'☾';ic();
@@ -341,6 +354,12 @@ const ZSWAP_VERSION="0.1";
 // Set when a successor is built; empty in the root, for the reason above.
 const ZSWAP_SELF="";
 const ZSWAP_PREVIOUS="";
+// zList, through a web3:// gateway. Declared up here with the other page-level
+// constants because the footer IIFE below references it, and a constant defined
+// further down the script would be a ReferenceError at load - the same trap the
+// comment above describes. Two places link to it (the footer and every
+// unverified badge), so it lives in one.
+const ZLIST_URL="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/";
 const selfFromUrl=()=>{
   // `0xabc….1.w3link.io`, `0xabc….w3eth.io`, and the ENS-named forms that carry
   // no address at all. Only an exact 20-byte hex label counts as an answer.
@@ -362,6 +381,7 @@ const short=a=>a.slice(0,6)+"\u2026"+a.slice(-4);
 (()=>{
   const self=selfFromUrl()||ZSWAP_SELF;
   footV.textContent=`zSwap v${ZSWAP_VERSION}`;
+  footList.href=ZLIST_URL;
   if(self){
     footAddr.innerHTML=`\u00b7 <a href="https://etherscan.io/address/${self}#code" target="_blank" rel="noopener" `
       +`title="This exact build, on chain. Its bytes cannot change; a newer version is a different address.">${short(self)}</a>`;
@@ -3297,7 +3317,16 @@ async function loadBook(){
       +(r.floor&&r.isNFT&&r.anyId?'<span class="tg">any id</span>':"")
       +(r.filled!==undefined&&r.filled>0n?`<span class="tg">${(Number(r.filled)/100).toFixed(0)}% filled</span>`:"")
       +(r.cp!==ZERO?'<span class="tg">private</span>':"")
-      +(!a.ok||!bg.ok?'<span class="tg w">unverified</span>':"");
+      // The badge names a gap; the link says who can close it. Anyone reading
+      // "unverified" is asking the same question - verified by whom, and how
+      // does a real token stop being flagged - and the answer is the staked
+      // list, not us. Safe as an anchor: the row's own click handler already
+      // ignores events originating inside an <a> (see inspect() below), so
+      // this cannot open a receipt card by accident.
+      +(!a.ok||!bg.ok?'<a class="tg w" href="'+ZLIST_URL+'" target="_blank" rel="noopener"'
+        +' title="Not on the staked token list. Its symbol and decimals are read straight from the contract'
+        +' and nothing has vouched for it - check the address before filling. Stake on zList to get a real'
+        +' token listed.">unverified</a>':"");
     const now=BigInt(Math.floor(Date.now()/1e3));
     let when=r.exp?" · "+rel(Number(r.exp-now))+" left":"";
     if(r.dutch&&r.duration){
