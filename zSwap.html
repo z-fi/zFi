@@ -178,7 +178,16 @@ svg{vertical-align:middle;flex-shrink:0}
 .ic dt{color:var(--m)}
 .ic dd{margin:0;color:var(--f);font-variant-numeric:tabular-nums;text-align:right}
 .tg{display:inline-block;font-size:.85em;padding:.05em .35em;border-radius:.35em;background:var(--e);color:var(--n);margin-left:.3em}
-.tg.w{background:#c33;color:#fff}
+/* A WARNING, not an alarm. Solid #c33 made "unverified" the brightest object
+   in the book - louder than the Fill button that actually spends money, and
+   loud enough that a page of them stops being read at all. Outlined in the
+   same red it keeps the one thing it must have (it is the only red on the
+   card, so nothing else can be mistaken for it) at the weight of a caution.
+   The dark shade is lifted because #c33 on #242424 fails contrast. */
+.tg.w{background:transparent;border:1px solid currentcolor;color:#c33;font-weight:600;
+  text-transform:uppercase;font-size:.6em;letter-spacing:.05em;padding:0 .3em;
+  vertical-align:.1em;line-height:1.5}
+.d .tg.w{color:#e57373}
 .dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
 .dly select{font-size:1em}
 .dly input{width:9em;border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);text-align:right;outline:0;font:inherit;font-variant-numeric:tabular-nums}
@@ -539,6 +548,33 @@ const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+enc
 // for a non-view function, and a pool that cannot answer returns zero rather
 // than taking the whole quote down with it.
 const SEL_QUOTE_BEST="2adaa389",SEL_PSWAP="a6220b66",SEL_POOL_FEE="ddca3f43";
+/**
+ * PRECISION THROUGH zROUTER, like every other venue.
+ *
+ * `PrecisionRoute.trustedExecutor` IS SafeExecutor - the contract `snwap`
+ * delegates to - so a Precision swap can be an ordinary leg rather than a
+ * transaction of its own. Going direct to the pool was what made it the only
+ * venue that could not compose: no multicall to fold a wrap into, its own
+ * approval semantics, and a recipient handled differently from every other
+ * route.
+ *
+ * `route` names `tokenOut` explicitly and the contract explains why: the output
+ * is otherwise implicit in the path, so a reordered `pools` array delivers a
+ * different asset and `minOut` is then denominated in the wrong units - a 1e18
+ * threshold against a 6-decimal token passes trivially. Naming it makes the two
+ * agree or the call revert.
+ *
+ * An ERC-20 input is checkpointed first, and the checkpoint commits to the
+ * keccak of the EXACT call that will spend it - entry point and every argument.
+ * The executor is publicly callable and holds no lock across the funding
+ * transfer, so a snapshot that only remembered a balance could be consumed by a
+ * different call with pools, slippage and a recipient of its own choosing.
+ */
+const PROUTE="0x000000384711c65f633Aa4487b968ecb7956DB0F";
+const SEL_PROUTE="5d6498e1",SEL_PCHECKPOINT="0b7c6c6c";
+const encPRoute=(pools,tokenIn,tokenOut,amountIn,minOut,to)=>
+  "0x"+SEL_PROUTE+encUint(192)+encAddr(tokenIn)+encAddr(tokenOut)+encUint(amountIn)
+  +encUint(minOut)+encAddr(to)+encUint(BigInt(pools.length))+pools.map(encAddr).join("");
 const SEL_PAIR_COUNT="355da246";
 // How many bands a page will look at. `_byPair` is append-only and index 0 is
 // the OLDEST pool, so a fixed window is not neutral: on a NEW pair somebody can
@@ -2058,11 +2094,28 @@ const pMin=pq.out-(pq.out*slipBps)/10000n;
 // takes ether and value; a WETH input reaches it by being unwrapped first, which
 // `unwrap` carries to the click handler. `pq.tokenIn` is already normalised.
 const pNative=pq.tokenIn===ZERO;
+const pTo=rcv||acct||ZERO;
+// One leg, routed like any other: zRouter -> snwap -> SafeExecutor ->
+// PrecisionRoute. The old shape sent straight to the pool, which is what kept
+// this venue from composing with anything and gave it approval and recipient
+// semantics of its own.
+const routeData=encPRoute([pq.pool],pq.tokenIn,pq.tokenOut,swapAmt,pMin,pTo);
+const routedLeg=encSnwap(pq.tokenIn,swapAmt,pTo,pq.tokenOut,pMin,PROUTE,routeData);
+// An ERC-20 input is snapshotted before it is sent, and the snapshot names the
+// call that may spend it.
+const pCall=pNative?routedLeg:encCalls([
+  encSnwap(ZERO,0n,acct||ZERO,ZERO,0n,PROUTE,
+    "0x"+SEL_PCHECKPOINT+encAddr(pq.tokenIn)+strip0x(keccak(hexToBytes(routeData)))+encAddr(acct||ZERO)),
+  routedLeg,
+]);
 pc={best:{source:7,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/100n},
-callData:"0x"+SEL_PSWAP+encAddr(pq.tokenIn)+encUint(swapAmt)+encUint(pMin)+encAddr(rcv||acct||ZERO),
+callData:pCall,
 fundedCallData:null,amountLimit:pMin,msgValue:pNative?swapAmt:0n,
 unwrap:pq.unwrap||0n,wrap:pq.wrap||0n,outDiffers:!!pq.outDiffers,poolOut:pq.tokenOut,
-to:pq.pool,spender:pNative?null:pq.pool};
+// `to` is zRouter now, not the pool - and the allowance goes to zRouter with
+// it, which is what puts this venue on the same permit/permit2/batch funding
+// waterfall as every other ERC-20 input on the page.
+to:null,spender:pNative?null:ZROUTER,pool:pq.pool};
 if(!r)r=pc;
 }
 // A pair whose only exact-out route runs through Curve is not "no route" - it
@@ -2253,7 +2306,7 @@ source:r.best.source,
 // copies is a value that silently does not exist. The dead `last.best.source`
 // guard was this exact mistake, found by watching a disclaimed pool's
 // transaction go out anyway.
-unwrap:r.unwrap||0n,wrap:r.wrap||0n,
+unwrap:r.unwrap||0n,wrap:r.wrap||0n,pool:r.pool||null,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){
@@ -5547,8 +5600,13 @@ const target=to||ZROUTER;
 // not, which made the two disagree about how much a lens is trusted for. It is
 // one call on the click path, it is the same question `isPool` exists to
 // answer, and an approval is the thing worth being sure about.
-if(last.source===7&&target){
-const ok=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(target)}])
+// `last.pool`, not `target`. The target is zRouter now that this routes like
+// every other venue, and asking the factory whether ZROUTER is one of its pools
+// would fail every Precision swap - a guard that cannot pass is not a guard.
+// What still needs asking is the same question as before: the pool this route
+// will walk came from our own lens, and the factory is the thing that knows.
+if(last.source===7&&last.pool){
+const ok=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(last.pool)}])
   .then(([r])=>!!r&&BigInt(r)===1n).catch(()=>false);
 if(!ok)throw Error("that pool is not one the factory made — refusing to send");
 /**
@@ -5607,7 +5665,13 @@ data:"0x"+SEL_APPROVE+encAddr(spender)+encUint(amountIn)}]));
 if(BigInt(await rpcRead(C,[{to:from.addr,data:allowData},L]))<amountIn)throw Error("approval failed");
 }
 }
-}else if(from.addr!==ZERO&&!to){
+// `!msgValue` matters now that a Precision leg is routed. A WETH input that was
+// unwrapped for a native pool pays the router AS VALUE, but `from.addr` is
+// still WETH and the target is still the router - which is exactly this branch's
+// test - so it asked for an allowance on tokens the route never pulls. Harmless
+// and wasteful: an approval transaction, a wallet prompt, and a standing
+// allowance, all for an input that arrives as ether.
+}else if(from.addr!==ZERO&&!to&&!msgValue){
 const allowData="0x"+SEL_ALLOWANCE+encAddr(account)+encAddr(ZROUTER);
 const aHex=await rpc(C,[{to:from.addr,data:allowData},L]);
 const a=BigInt(aHex);

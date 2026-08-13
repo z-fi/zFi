@@ -149,9 +149,9 @@ describe('precision as a quote source', () => {
     await p.settle();
 
     const swap = p.chain.sent[p.chain.sent.length - 1];
-    assert.equal(swap.to.toLowerCase(), POOL.toLowerCase());
+    assert.equal(swap.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'routed, like every other leg');
     assert.ok(swap.data.toLowerCase().includes(A.OTHER.slice(2).toLowerCase()),
-      'the recipient must reach the pool call, not be replaced by the payer');
+      'the recipient must survive the routing, not be replaced by the payer');
     p.close();
   });
 
@@ -214,8 +214,10 @@ describe('precision as a quote source', () => {
     const [first, second] = p.chain.sent;
     assert.equal(first.to.toLowerCase(), A.WETH.toLowerCase(), 'the first call is the unwrap');
     assert.match(first.data, /^0x2e1a7d4d/, 'withdraw(uint256)');
-    assert.equal(second.to.toLowerCase(), POOL.toLowerCase(), 'then the pool itself');
+    assert.equal(second.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'then the routed swap');
     assert.equal(BigInt(second.value), ETH, 'paid as VALUE, because the pool holds ether');
+    assert.ok(second.data.toLowerCase().includes(POOL.slice(2).toLowerCase()),
+      'and the pool is the path the route walks');
     p.close();
   });
 
@@ -236,8 +238,12 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
-  test('sends to the pool itself, which is its own target and spender', async () => {
-    // This does not go through zRouter, the same way the V4 leg does not.
+  test('routes through zRouter like every other venue', async () => {
+    // It used to go straight at the pool, which is what kept this venue from
+    // composing with anything: no multicall to fold a wrap into, its own
+    // approval semantics, and a recipient handled unlike every other route.
+    // `PrecisionRoute.trustedExecutor` IS SafeExecutor - the contract `snwap`
+    // delegates to - so a Precision swap can be an ordinary leg.
     const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 } });
     await p.typeAmount('amt', '1');
     p.click('swap');
@@ -245,20 +251,21 @@ describe('precision as a quote source', () => {
     await p.settle();
 
     const tx = p.chain.lastSent;
-    assert.equal(tx.to.toLowerCase(), POOL, 'straight at the pool');
-    assert.equal(selectorOf(tx.data), 'a6220b66', 'swapExactIn');
-    assert.equal(BigInt(tx.value), ETH, 'native input rides as value');
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'the router, not the pool');
+    assert.equal(BigInt(tx.value), ETH, 'native input still rides as value');
 
-    const b = '0x' + tx.data.replace(/^0x/, '').slice(8);
-    assert.equal(wordAddr(b, 0).toLowerCase(), A.ZERO.toLowerCase(), 'tokenIn is ETH');
-    assert.equal(word(b, 1), ETH, 'amountIn');
-    // 0.5% default slippage under the quote.
-    assert.equal(word(b, 2), 3100n * USDC * 9950n / 10000n, 'minOut carries the slippage floor');
-    assert.equal(wordAddr(b, 3).toLowerCase(), A.ACCOUNT.toLowerCase(), 'paid to the trader');
+    const hex = tx.data.toLowerCase();
+    // The leg names PrecisionRoute as its executor and the pool as the path.
+    assert.ok(hex.includes(POOL.slice(2).toLowerCase()), 'the pool is in the path');
+    assert.ok(hex.includes('5d6498e1'), 'route(address[],address,address,uint256,uint256,address)');
+    // minOut still carries the slippage floor, 0.5% under the quote.
+    const floor = (3100n * USDC * 9950n / 10000n).toString(16).padStart(64, '0');
+    assert.ok(hex.includes(floor), 'the slippage floor survives the routing');
+    assert.ok(hex.includes(A.ACCOUNT.slice(2).toLowerCase()), 'and the trader is the recipient');
     p.close();
   });
 
-  test('approves the pool when the input is an ERC-20', async () => {
+  test('approves zRouter for an ERC-20 input, not the pool', async () => {
     const p = await setup({ precision: { pool: POOL, out: ETH / 3n, fee: 500 } });
     // The pair is pinned ETH -> USDC, so neither side can move straight past
     // the other. Step through a third token.
@@ -274,8 +281,12 @@ describe('precision as a quote source', () => {
     const first = p.chain.sent[0];
     assert.equal(first.to.toLowerCase(), A.USDC.toLowerCase());
     assert.equal(selectorOf(first.data), SEL.APPROVE);
-    assert.equal(wordAddr('0x' + first.data.slice(10), 0).toLowerCase(), POOL,
-      'the pool pulls the tokens, so the pool is what gets approved');
+    // The allowance follows the ROUTE. Approving the pool was a consequence of
+    // going straight at it; routed through zRouter this input joins the same
+    // permit / Permit2 / batch funding waterfall as every other ERC-20 on the
+    // page, and the pool is paid by the route rather than by pulling from us.
+    assert.equal(wordAddr('0x' + first.data.slice(10), 0).toLowerCase(), A.ZROUTER.toLowerCase(),
+      'the route spends it, so the router is what gets approved');
     p.close();
   });
 
