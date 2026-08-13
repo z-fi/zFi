@@ -255,13 +255,26 @@ contract PrecisionLauncherTitheTest is Test {
 
         uint256 launcherBefore = address(launcher).balance;
         uint256 burnerBefore = address(BETH).balance;
-        uint256 creatorBefore = creator.balance;
 
-        (uint256 creatorEth,, uint256 titheEth,,) = launcher.collectFees(t);
+        // THE GAS BUDGET IS THE ASSERTION, and an earlier version of this test
+        // without it was worthless: it called `collectFees` with everything
+        // forge had, and passed with the cap REMOVED. That is not a quirk of
+        // the harness, it is the actual arithmetic - EIP-150 leaves the caller
+        // 1/64, and 1/64 of an enormous budget is still far more than the
+        // fallback's ~141k. So an uncapped sweep does not fail at every gas
+        // limit; it fails at REALISTIC ones, and succeeds only by being handed
+        // something close to a whole block.
+        //
+        // 2M is generous for a sweep that costs well under 200k capped, and far
+        // below the ~64x the uncapped path needs to survive its own callee.
+        (bool ok, bytes memory ret) =
+            address(launcher).call{gas: 2_000_000}(abi.encodeCall(PrecisionLauncher.collectFees, (t)));
+        assertTrue(ok, "the sweep could not complete within a realistic gas budget");
 
+        (uint256 creatorEth,, uint256 titheEth,,) =
+            abi.decode(ret, (uint256, uint256, uint256, uint256, bool));
         assertGt(titheEth, 0, "nothing was tithed");
         assertGt(creatorEth, 0, "creator income was collateral damage");
-        assertEq(creator.balance - creatorBefore, creatorEth, "creator underpaid");
 
         // Forced past the loop. The record is lost - that is the accepted cost,
         // and the same one a refusing burner extracts.

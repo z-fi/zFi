@@ -38,16 +38,32 @@ a burner that *reverts*, and `testASeizedBurnerCannotWedgeTheSweep` etches
 exactly that: `60006000fd`, five bytes that revert immediately and leave the gas
 untouched. It does not cover a burner that *consumes* gas.
 
+> **CORRECTED AFTER MUTATION TESTING — the mechanism is real, the severity as
+> first written was wrong.** My original text claimed the sweep "reverts out of
+> gas at any gas limit, because raising the limit raises the callee's
+> consumption proportionally." The consumption does scale — but so does the
+> 1/64 EIP-150 leaves behind, which I failed to account for. Handed ~29.5M, the
+> burner takes 63/64 and the surviving ~460k comfortably funds the fallback's
+> ~141k. **It is not a permanent wedge.** Measured: with the cap the sweep costs
+> ~5.08M; without it, ~29.3M — it survives only by being handed most of a block.
+> See the corrected scenario below. Severity stays low; the reasoning behind it
+> was overstated and is fixed here rather than quietly left standing.
+
 Failure scenario: `BETH_BURNER`'s code at `0x2cb662Ec…` becomes something that
 spins to out-of-gas — a `SELFDESTRUCT`-and-redeploy at the same address, a
 proxy repointed, or a state-dependent loop. `call` returns `ok == false` with
-1/64 of the original gas left. `forceSafeTransferETH` then has to `CREATE` a
-self-destructing contract (~32k gas) and cannot; `collectFees` reverts out of
-gas at any gas limit, because raising the limit raises the callee's consumption
-proportionally. `collectFees` is the only way to clear `creatorOwed0/1`, and the
-pool pays both sides or neither, so this freezes the fee stream *and* the token
-burn for **every token this launcher has ever launched**, permanently. That is
-the §5 defect class exactly, one layer down.
+1/64 of the gas it was given. `forceSafeTransferETH` then needs ~141k for its
+own stipend attempt plus the `CREATE`, so the sweep completes only when roughly
+**9M gas remains at the `_tithe` call site** — 64 × 141k. Below that the
+fallback is unfunded and `collectFees` reverts.
+
+So the damage is availability, not permanence: every sweep of every token this
+launcher launched costs ~6× what it should and sits near the block ceiling. It
+fails outright from any caller that bounds gas — a multisig, a relayer, a
+contract — and inside `collectFeesMany` a single hostile burner starves every
+entry queued behind it, since each `try` is handed 63/64 of what remains. One
+reduction in the block limit, or one larger batch, turns it into the §5 defect
+class for real.
 
 This is rated low only because `BETH_BURNER` is a known immutable mainnet
 contract, so the trigger is not reachable today. Given §1 ("assume no operator
@@ -624,6 +640,31 @@ The two working-tree suites that postdate the brief's coverage table —
 `test/PrecisionLauncherGuards.t.sol` (10 tests) — are a material addition and
 close most of what I would otherwise have recommended writing. `LiveFactory` was
 excluded (self-pins to a different block).
+
+### Mutation testing — what was actually proven
+
+Every test above passes. That is not the same as every test being able to fail,
+which is the defect this review found three times in other people's tests, so
+the two I wrote to close findings were mutation-tested against their own fixes:
+
+| Mutation | Expected | Result |
+| --- | --- | --- |
+| `redeem` marked `watchPosition(false)` — claims not to move the position | invariant fails | ✅ `the position moved outside a redemption: 1 != 0` |
+| `gas: TITHE_GAS` removed from `_tithe` | gas-burner test fails | ✅ `the sweep could not complete within a realistic gas budget` |
+| same, seized (reverting) burner | still passes | ✅ passes — confirms the consumption-vs-refusal distinction |
+
+**The second one failed first, and that is how L-1 got corrected.** My original
+`testAGasBurningBurnerCannotWedgeTheSweep` called `collectFees` with everything
+forge had, and **passed with the fix removed** — worthless as a regression, and
+the fourth instance of the exact pattern this review is about, this time mine.
+The rewrite bounds the sweep to a 2M budget, which is what makes it sensitive to
+the cap at all. Chasing why it passed is what surfaced the 1/64 arithmetic that
+falsified L-1's "permanent wedge" claim.
+
+Worth generalising: the finding was reasoned, the fix was correct, the
+regression was green, and the severity was still wrong. Only mutating the
+contract exposed that. A green suite says nothing until its tests have been
+shown capable of going red.
 
 Still not covered, and worth adding:
 
