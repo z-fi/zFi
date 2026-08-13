@@ -73,6 +73,40 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
+  test('a WETH-based market stays reachable, and is not unwrapped', async () => {
+    // The mirror of the bug above, and the reason the lookup asks for BOTH
+    // shapes rather than normalising. Nothing in the factory prefers ether to
+    // WETH - both are ordinary pairs, and which exists is whatever its creator
+    // chose. Rewriting WETH to ether unconditionally would have made a native
+    // market visible by making a wrapped one invisible: the same defect,
+    // pointing the other way.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.WETH, A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    // The market is stored under (WETH, USDC) - there is no native pool at all.
+    chain.precisionQuote = { pool: POOL, out: 4000n * USDC, fee: 3000, pair: [A.WETH, A.USDC] };
+    chain.setPools(A.WETH, A.USDC, [{ pool: POOL, hook: A.ZERO, liquidity: 10n ** 20n }]);
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.pickToken('fromSel', 'WETH');
+    p.pickToken('toSel', 'USDC');
+    await p.typeAmount('amt', '1');
+
+    assert.equal(p.value('outAmt'), '4000', 'a wrapped market must not be normalised away');
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'the swap' });
+    await p.settle();
+
+    // No unwrap: the pool holds WETH, so WETH is what it is paid, by allowance.
+    assert.ok(!p.chain.sent.some(t => /^0x2e1a7d4d/.test(t.data || '')),
+      'nothing should be unwrapped for a pool that wants WETH');
+    const swap = p.chain.lastSent;
+    assert.equal(BigInt(swap.value || 0), 0n, 'and no value rides, because the call is not native');
+    p.close();
+  });
+
   test('unwraps the WETH before paying a pool that holds ether', async () => {
     // The other half. Quoting finds the market; the pool still wants VALUE, not
     // an allowance. A Precision swap settles at the pool rather than through

@@ -570,26 +570,54 @@ if(PPLENS===ZERO||amountIn<=0n)return null;
  * user holds is a separate question, answered at execution: the pool wants
  * ether, so WETH is unwrapped first.
  */
+/**
+ * ASK FOR BOTH SHAPES, because either can be the real one.
+ *
+ * A market on ETH/ZORG lives under (address(0), ZORG); one on WETH/ZORG lives
+ * under (WETH, ZORG). Nothing in the factory prefers either - both are ordinary
+ * pairs, and which exists is whatever its creator chose. So normalising WETH to
+ * ether unconditionally does not FIX the lookup, it moves the blind spot: it
+ * makes a native market visible and a wrapped one invisible, which is the same
+ * bug pointing the other way.
+ *
+ * Both go out in one batch, so this costs a slot in an aggregate3 rather than a
+ * round trip, and the better quote wins on its merits. A pair with neither side
+ * wrapped produces one variant and asks exactly what it used to.
+ */
 const nat=a=>a.toLowerCase()===WETH.toLowerCase()?ZERO:a;
-const fA=nat(f.addr),tA=nat(t.addr);
-// Canonical order: the factory pages pools by the sorted pair, and ETH sorts
-// first as the zero address.
-const [c0,c1]=fA.toLowerCase()<tA.toLowerCase()?[fA,tA]:[tA,fA];
+const vars=[];
+const addVar=(a,b)=>{
+  // Canonical order: the factory pages pools by the sorted pair, and ETH sorts
+  // first as the zero address.
+  const [x,y]=a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];
+  if(!vars.some(v=>v.c0===x&&v.c1===y&&v.tokenIn===a))vars.push({c0:x,c1:y,tokenIn:a});
+};
+addVar(f.addr,t.addr);            // exactly as the picker names them
+addVar(nat(f.addr),nat(t.addr));  // and the same pair with ether for WETH
 // The window is asked for in full and the COUNT rides alongside it, in the
 // same batch. Reading the count first would put a second round trip in front
 // of every quote on the page, including the pairs that have no band at all -
 // and the count is only needed to say whether the window covered everything.
-const [q,c]=await mc3Deep([
-  {to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(c0)+encAddr(c1)
-    +encAddr(sender)+encAddr(fA)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
-  {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(c0)+encAddr(c1)},
-],block);
-let n=0;try{if(c)n=Number(BigInt(c))}catch{}
-if(!q)return null;
-const h=strip0x(q);
-if(h.length<128)return null;
-const pool="0x"+h.slice(24,64),out=BigInt("0x"+h.slice(64,128));
-if(out<=0n||/^0x0{40}$/i.test(pool))return null;
+const reqs=[];
+for(const v of vars)reqs.push(
+  {to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(v.c0)+encAddr(v.c1)
+    +encAddr(sender)+encAddr(v.tokenIn)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
+  {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(v.c0)+encAddr(v.c1)});
+const res=await mc3Deep(reqs,block);
+let pool="",out=0n,n=0,fA=f.addr;
+for(let i=0;i<vars.length;i++){
+  const q=res[i*2],c=res[i*2+1];
+  if(!q)continue;
+  const h=strip0x(q);
+  if(h.length<128)continue;
+  const p2="0x"+h.slice(24,64),o2=BigInt("0x"+h.slice(64,128));
+  if(o2<=0n||/^0x0{40}$/i.test(p2))continue;
+  if(o2<=out)continue;
+  pool=p2;out=o2;fA=vars[i].tokenIn;
+  try{if(c)n=Number(BigInt(c))}catch{n=0}
+}
+if(!pool)return null;
+const tA=fA===ZERO||nat(t.addr)===ZERO?nat(t.addr):t.addr;
 let fee=0n;
 try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee=BigInt(fx)}catch{}
 // Reported, not printed. This runs as a detached job inside `update()`, so
