@@ -379,6 +379,40 @@ describe('placing orders', () => {
     assert.equal(word(b, 6), 20000n * USDC, 'starting ask');
     assert.equal(word(b, 7), 15000n * USDC, 'floor');
     assert.equal(word(b, 9), 86400n, 'decay duration');
+    // Word 10 is the lot's EXPIRY, which is a different clock from the decay
+    // above it. Zero is "rest at the floor forever" - what every lot placed
+    // before the adapter carried the parameter did, and still the default.
+    assert.equal(word(b, 10), 0n, 'resting forever unless asked otherwise');
+    p.close();
+  });
+
+  test('a Dutch lot can be given an end, and it is not the decay window', async () => {
+    // The adapter hardcoded the board's expiry to zero, so a lot decayed to its
+    // floor and then sat there fillable until someone spent gas cancelling it.
+    // Dutchboard always took the parameter; nothing could reach it.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '5');
+    p.type('outAmt', '20000');
+    p.type('floorAmt', '15000');
+    p.select('dly', '86400');          // decays over a day
+    p.select('dRest', '604800');       // then rests a week and comes back
+    await p.settle();
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const order = placementPayload(p.chain.lastSent);
+    const b = '0x' + order.slice(10);
+    assert.equal(word(b, 9), 86400n, 'the decay window is untouched');
+    const expiry = word(b, 10);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    // Strictly after the decay ends, which is the board's own rule and the
+    // reason this is expressed as "rest AFTER the decay" rather than a date.
+    assert.ok(expiry > now + 86400n, 'the lot must not expire before it has finished decaying');
+    assert.ok(expiry <= now + 86400n + 604800n + 5n, 'and not far beyond the rest it was given');
     p.close();
   });
 

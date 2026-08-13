@@ -13,6 +13,23 @@ body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-hei
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #addr.on{cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
+/* The favicon, inline. Same path and same clip as the tab icon, drawn in the
+   page's own tokens rather than baked black-on-white, so the tile inverts with
+   the theme instead of punching a white square into the dark card. */
+/* The favicon, inline, in the corner of the PAGE - the card is the app, this
+   is whose app it is. Fixed rather than in flow so it stays put while a long
+   orderbook scrolls. Colours are the favicon's own - black tile, white Z, in
+   both themes - not the page tokens: theming it made the mark invert against
+   the tab icon, so the two read as different logos.
+   It is decoration: the card carries every control, so the mark is aria-hidden
+   rather than announced as a second, redundant app name. */
+#logo{position:fixed;top:.85em;left:.85em;width:1.75em;height:1.75em;
+  pointer-events:none;z-index:1}
+#logo rect{fill:#000}
+#logo path{fill:#fff}
+/* No room beside the card on a phone, and a mark that overlaps the controls is
+   worse than no mark. */
+@media(max-width:32em){#logo{display:none}}
 .meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -127,6 +144,14 @@ svg{vertical-align:middle;flex-shrink:0}
 .dly{display:flex;justify-content:space-between;align-items:center;font-size:.75em;color:var(--n);margin-top:.55em;padding:.55em .8em;background:var(--p);border:1px solid var(--e);border-radius:.45em}
 .dly select{font-size:1em}
 .dly input{width:9em;border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);text-align:right;outline:0;font:inherit;font-variant-numeric:tabular-nums}
+/* A note ABOUT the control stack above it, not a control. It was a bare
+   <small>, so it inherited full text colour and sat flush against the button -
+   reading as a heading for the button rather than as a footnote to the form.
+   Muted, centred and balanced puts it in the same voice as #rcvEl and #stat,
+   which is what every other advisory line on this page already speaks in. */
+#floorNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);
+  text-align:center;text-wrap:balance;margin:.55em .2em 0}
+#floorNote:empty{display:none}
 #pos{margin-top:.4em}
 #pos:empty{display:none}
 .ph{margin:.9em 0 .45em;font-size:.9em;color:var(--f);font-weight:700}
@@ -198,6 +223,7 @@ svg{vertical-align:middle;flex-shrink:0}
 @media(pointer:coarse){.rcpt,.meta input{font-size:16px}.p button,.tabs button{padding:.6em .8em}.chtf button{padding:.5em}#tkFind{font-size:16px}}
 </style>
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
+<svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg>
 <div class="card">
 <div class="meta"><span id="addr">Not connected</span><label id="slipL">Slippage <input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false">💧</button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link">⧉</button><button id="th" title="Toggle theme" aria-label="Toggle theme">☾</button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
@@ -211,9 +237,10 @@ svg{vertical-align:middle;flex-shrink:0}
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
+<label class="dly hide" id="dRestL" title="A Dutch lot has TWO clocks. It decays to your floor over the window above, and then - unless it is given an end - it sits there fillable forever, until you spend gas cancelling. This is how long it rests at the floor before the escrow simply comes back to you.">Rest at floor<select id="dRest"><option value="0">Forever</option><option value="86400">1 day</option><option value="604800">1 week</option><option value="2592000">30 days</option></select></label>
 <label class="dly hide" id="nftIdL">Token ID<input id="nftId" inputmode="numeric" placeholder="Any from collection" spellcheck="false" autocomplete="off"></label>
 <label class="dly hide" id="ethModeL" title="Applies when YOU fill an order from the book, or cancel one of yours and the escrow comes back wrapped. It does NOT change what an order you place pays you: boards are denominated in WETH, and a maker's proceeds are transferred as WETH with no unwrap available - so a limit order asking for ETH is an order asking for WETH, and fills as such. Paying is not a setting either: the page spends whichever of your ETH and WETH covers it, and wraps the difference if only the two together do.">Fills &amp; cancels pay<select id="ethMode"><option value="auto">ETH</option><option value="weth">WETH</option></select></label>
-<small id="floorNote" class="hide"></small>
+<small id="floorNote" class="hide" role="status" aria-live="polite"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
 <div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens"><div id="tkList" role="listbox"></div></div>
@@ -1551,7 +1578,8 @@ swap.textContent=dutch
 {
 const qs=t.addr===ZERO?"ETH":t.sym;
 rate.textContent=dutch
-  ?`Falls from ${trimAmt(want,t.dec)} to ${trimAmt(floor,t.dec)} ${qs} over ${rel(+dly.value)}, then rests at ${trimAmt(floor,t.dec)} ${qs} until you cancel`
+  ?`Falls from ${trimAmt(want,t.dec)} to ${trimAmt(floor,t.dec)} ${qs} over ${rel(+dly.value)}, then rests at ${trimAmt(floor,t.dec)} ${qs} `
+    +(+dRest.value?`for ${rel(+dRest.value)} and returns to you`:`until you cancel`)
   :`${fill.value==="1"?"Fills in any amount":"Fills all at once"} at ${trimAmt(want,t.dec)} ${t.addr===ZERO?"WETH":t.sym} for ${trimAmt(sell,f.dec)} ${f.sym}`
    +(+dly.value?`, expiring in ${rel(+dly.value)}`:", and never expires");
 }
@@ -2189,7 +2217,7 @@ const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
 const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
 const SWAPBOL="0x00000087A6dc5071779Ed1F8274A39230768B976";
 const DUTCH="0x000000a213b430D14Bae6062c176289B05e04489";
-const ORDERBOL="0x000000c1051acD54A03e967b647112FDe17f518C";
+const ORDERBOL="0x000000e6c7a12C80525ee74e7434aAb919447D95";
 // Floorboard: the standing-BID book. The mirror of every other book here -
 // the bidder is buying, so whoever acts on a bid is SELLING into it. Its lens
 // is separate from SBVIEW because an OrderView row cannot say "any id from
@@ -2350,7 +2378,13 @@ async function preflightAsk(row){
   // gap for equality to trip over.
   if(at(iA+1)!==row.aA||at(iB+1)!==row.aB)throw Error("order changed — refresh and retry");
 }
-const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="fb910431",SEL_CHECKPOINT="a972985e";
+// `placeDutch` grew a `uint40 expiry` between `duration` and `deadline`, so the
+// selector moved from fb910431. The old adapter hardcoded the board's expiry to
+// zero - Dutchboard always took one - which left a Dutch lot resting at its
+// floor forever whether or not the seller meant it, while a FIXED order could
+// be given an end. Backwards, for the one order whose premise is that time
+// changes what the seller will accept.
+const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="bbd94e1a",SEL_CHECKPOINT="a972985e";
 const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
 const WORDS=b=>b?11:6;   // static struct width, so decoding is positional
 let bookSeq=0,bookRows=[],candCache={},bkOpen=LS.bk!=="0";
@@ -3608,6 +3642,8 @@ const syncOrderType=()=>{
    *   the button ("A collection bid needs a window"), one step too late.
    */
   const nftLeg=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
+  // Only a Dutch lot has two clocks to tell apart.
+  dRestL.classList.toggle("hide",!dutch);
   const collectionBid=nftLeg&&isNft(toSel.value)&&!nftId.value.trim();
   floorL.classList.toggle("hide",!sched);
   floorL.firstChild.nodeValue=bid?"Opening bid":"Floor total";
@@ -3662,6 +3698,27 @@ kind.onchange=()=>{syncOrderType();seedFloor();render()};
  * they type a zero on purpose.
  */
 let floorTouched=false;
+/**
+ * When a Dutch lot stops being available at all.
+ *
+ * Two clocks, and only one of them used to exist here. `duration` is how long
+ * the price takes to fall to the floor; `expiry` is when the listing closes.
+ * Dutchboard has always had both - `_checkExpiry` validates the second and
+ * `_isExpired` enforces it - but the adapter hardcoded it to zero, so every lot
+ * rested at its floor indefinitely and the only way to end one was to spend gas
+ * cancelling it.
+ *
+ * Expressed as "how long it rests AFTER the decay" rather than as an absolute
+ * date, because that is the only form that cannot be nonsense: the board
+ * refuses an expiry that is not strictly after both now and the start, and a
+ * seller picking a wall-clock time has no reason to know the decay ends first.
+ * Zero still means rest forever, which is what every lot placed before this did.
+ */
+const dutchEnds=()=>{
+const rest=BigInt(dRest.value||0);
+if(!rest)return 0n;
+return BigInt(Math.floor(Date.now()/1e3))+BigInt(dly.value||0)+rest;
+};
 const seedFloor=()=>{
 if(floorTouched||kind.value!=="dutch")return;
 const t=TOKENS[toSel.value];
@@ -5221,9 +5278,13 @@ if(bid){
   const duration=BigInt(dly.value||0);
   if(!duration)throw Error("choose a decay duration");
   if(sell>(1n<<128n)-1n||want>(1n<<96n)-1n||floor>(1n<<96n)-1n)throw Error("Dutch amount too large");
+  // Decay window and lifetime are DIFFERENT things, and now both are sayable.
+  // The board's rule: zero, or strictly after both `block.timestamp` and
+  // `startTime`. Resting at the floor stays available by asking for it.
+  const dutchExpiry=dutchEnds();
   orderData="0x"+SEL_ORDER_DUTCH+encAddr(DUTCH)+encAddr(account)+encAddr(account)
     +encAddr(f.addr)+encAddr(t.addr)+encUint(sell)+encUint(want)+encUint(floor)
-    +encUint(0n)+encUint(duration)+encUint(placementDeadline);
+    +encUint(0n)+encUint(duration)+encUint(dutchExpiry)+encUint(placementDeadline);
 }else{
   const exp=+dly.value?BigInt(Math.floor(Date.now()/1e3)+ +dly.value):0n;
   orderData="0x"+SEL_ORDER_FIXED+encAddr(SB2)+encAddr(account)+encAddr(account)

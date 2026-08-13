@@ -154,6 +154,10 @@ const specs = [
   {name: "Dutchboard", args: [WETH]},
   {name: "Floorboard", args: [WETH]},
   {name: "SwapboardView", args: []},
+  // `placeDutch` now forwards a `uint40 expiry` to Dutchboard instead of
+  // hardcoding zero, so the initcode - and the address - moved. The superseded
+  // instance at 0x000000c1051acD54A03e967b647112FDe17f518C still works for
+  // everything except giving a Dutch lot an end.
   {
     name: "Orderbol",
     args: [

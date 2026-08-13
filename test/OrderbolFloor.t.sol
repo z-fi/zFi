@@ -264,7 +264,7 @@ contract OrderbolTest is Test {
         lot.mint(address(executor), 10e18);
 
         uint256 listingId = executor.placeDutch(
-            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0
+            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0, 0
         );
 
         assertEq(dutchboard.getListing(listingId).seller, maker);

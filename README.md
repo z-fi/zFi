@@ -38,7 +38,8 @@ they carry no vanity prefix and are not deployed separately:
 
 | | address | |
 |---|---|---|
-| Orderbol | [`0x000000c1051acD54A03e967b647112FDe17f518C`](https://etherscan.io/address/0x000000c1051acD54A03e967b647112FDe17f518C) | zRouter → Swapboard / Dutchboard / Floorboard |
+| Orderbol | [`0x000000e6c7a12C80525ee74e7434aAb919447D95`](https://etherscan.io/address/0x000000e6c7a12C80525ee74e7434aAb919447D95) | zRouter → Swapboard / Dutchboard / Floorboard |
+| Orderbol (superseded) | [`0x000000c1051acD54A03e967b647112FDe17f518C`](https://etherscan.io/address/0x000000c1051acD54A03e967b647112FDe17f518C) | hardcoded a Dutch lot's expiry to zero |
 | Swapbol | [`0x00000087A6dc5071779Ed1F8274A39230768B976`](https://etherscan.io/address/0x00000087A6dc5071779Ed1F8274A39230768B976) | zRouter → board fills and bid hits |
 | Orderbol (superseded) | [`0x000000fADa565c5608570a4F66Fb5E0bD08ef91B`](https://etherscan.io/address/0x000000fADa565c5608570a4F66Fb5E0bD08ef91B) | no Floorboard binding |
 | Swapbol (superseded) | [`0x0000003069053df109F47acac630e03C77804AD8`](https://etherscan.io/address/0x0000003069053df109F47acac630e03C77804AD8) | no Floorboard binding |
@@ -153,7 +154,7 @@ Deployment flow: deploy the FOURTEEN generated chunk contracts (`out/zSwap.chunk
 
 The HTML payload is installed as the **runtime bytecode of six data contracts** created before the wrapper. The wrapper keeps six `immutable` pointers (`DATA1`…`DATA6`). At read time, `html()` copies all six chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 301,451 bytes across 14 data contracts (21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,533 / 21,522 bytes), with 42,613 bytes of 14-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 305,738 bytes across 14 data contracts (21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,839 / 21,831 bytes), with 38,326 bytes of 14-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 

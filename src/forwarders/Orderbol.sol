@@ -146,6 +146,22 @@ contract Orderbol {
     /// @notice Create a fungible Dutchboard listing.
     /// @param token address(0) means native ETH, wrapped here to canonical WETH
     ///              before the board escrows it.
+    /// @param expiry Hard stop on the fill window, or 0 to rest at the floor
+    ///               forever. THIS USED TO BE HARDCODED TO ZERO. Dutchboard has
+    ///               always taken it - the struct stores it, `_checkExpiry`
+    ///               validates it, `_isExpired` enforces it - and this adapter
+    ///               simply had nowhere to put one, so every lot placed through
+    ///               it rested forever whether or not the seller meant to.
+    ///
+    ///               That is the wrong default to be unable to change. A Dutch
+    ///               lot is the one order whose premise is that time changes
+    ///               what the seller will accept, and it was the only one that
+    ///               could not be given an end - while a fixed Swapboard order,
+    ///               which commits to a single price, could. A standing offer at
+    ///               a stale floor is what gets picked off after a price move.
+    ///
+    ///               Zero remains meaningful and remains the resting behaviour,
+    ///               so a caller that wants it asks for it.
     /// @param deadline Optional placement deadline; zero disables it.
     function placeDutch(
         address board,
@@ -158,6 +174,7 @@ contract Orderbol {
         uint256 endPrice,
         uint40 startTime,
         uint40 duration,
+        uint40 expiry,
         uint256 deadline
     ) external payable returns (uint256 listingId) {
         _enter();
@@ -199,12 +216,12 @@ contract Orderbol {
         // rather than from two lines plus a check thirty lines up.
         safeApprove(escrowToken, dutchboard, amount);
         listingId = IRelayedDutchboard(dutchboard)
-            .listERC20For(seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration, 0);
+            .listERC20For(seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration, expiry);
         safeApprove(escrowToken, dutchboard, 0);
 
         uint256 actual = balanceOf(escrowToken);
         if (actual != escrowBase) revert InputMismatch(escrowBase, actual);
-        _checkDutchListing(listingId, seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration);
+        _checkDutchListing(listingId, seller, escrowToken, quote, amount, startPrice, endPrice, startTime, duration, expiry);
         _sweepETH(refundTo, ethBase);
         _leave();
     }
@@ -369,13 +386,14 @@ contract Orderbol {
         uint256 startPrice,
         uint256 endPrice,
         uint40 startTime,
-        uint40 duration
+        uint40 duration,
+        uint40 expiry
     ) internal view {
         IRelayedDutchboardView.ListingView memory l = IRelayedDutchboardView(dutchboard).getListing(listingId);
         if (
             l.id != listingId || l.seller != seller || l.token != token || l.quote != quote || l.isNFT
                 || l.duration != duration || l.startPrice != startPrice || l.endPrice != endPrice || l.initial != amount
-                || l.remaining != amount || l.ids.length != 0 || l.expiry != 0
+                || l.remaining != amount || l.ids.length != 0 || l.expiry != expiry
                 || l.startTime != (startTime == 0 ? uint40(block.timestamp) : startTime)
         ) revert BadOrder();
     }
