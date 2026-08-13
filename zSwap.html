@@ -181,15 +181,15 @@ svg{vertical-align:middle;flex-shrink:0}
 /* A WARNING, not an alarm. Solid #c33 made "unverified" the brightest object
    in the book - louder than the Fill button that actually spends money, and
    loud enough that a page of them stops being read at all. Outlined in the
-   same red it keeps the one thing it must have (it is the only red on the
-   card, so nothing else can be mistaken for it) at the weight of a caution.
+   No chip at all, in the end: every attempt to make a bordered one breathe at
+   this size traded one problem for the other - loose enough not to look crammed
+   and it outgrew the metadata line it sits on. The box was never the signal.
+   Colour is, and red is used nowhere else on the card, so a bare red word
+   cannot be mistaken for anything and costs no room to say it.
    The dark shade is lifted because #c33 on #242424 fails contrast. */
-.tg.w{background:transparent;border:1px solid currentcolor;color:#c33;font-weight:600;
-  text-transform:uppercase;font-size:.58em;letter-spacing:.09em;padding:.3em .6em .25em;
-  border-radius:.6em;vertical-align:.12em;line-height:1;text-decoration:none;
-  /* The trailing letter-space pushes the last glyph off the right border; give
-     it back, or the word sits visibly left of centre inside its own pill. */
-  text-indent:.09em}
+.tg.w{background:transparent;border:0;color:#c33;font-weight:600;
+  text-transform:uppercase;font-size:.62em;letter-spacing:.1em;padding:0;
+  vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 /* It is an <a> inside `.o`, so it would otherwise inherit that rule's link
    colour and the browser's underline - a red pill with a red underline under
    it, which is what made it read as crammed rather than as a tag. */
@@ -5612,7 +5612,9 @@ await checkWallet();
 // instead: the books moved, and the next quote is the honest one.
 try{await preflightFills(last.fills,last.tokenIn,last.tokenOut)}
 catch(e){stat.textContent=e.message;swap.disabled=false;last=null;updateSoon();return}
-let cd2=callData,batchCalls=null;
+// Calls that must land BEFORE the trade and cannot ride inside it. Batched
+// into one prompt when the wallet can, sent in order when it cannot.
+let cd2=callData,batchCalls=null,prep=[];
 // Who is being approved, which is not always zRouter. A V4Port sell pulls the
 // token from `msg.sender` DIRECTLY - that is what stops an allowance to it
 // becoming a standing option a stranger could exercise - so the approval has
@@ -5651,13 +5653,25 @@ if(!ok)throw Error("that pool is not one the factory made — refusing to send")
  * into; the same shape as the wrap step a book fill already does when neither
  * balance covers a leg on its own.
  */
+/**
+ * ONE PROMPT WHERE THE WALLET ALLOWS IT.
+ *
+ * The conversion cannot be folded into the route. `snwap` forwards
+ * `msg.value` to the executor and nothing else, so ether the router is holding
+ * after an in-multicall `unwrap` never reaches `route` - proved against the
+ * deployed router in PrecisionWethFold.t.sol, where deposit+unwrap+snwap fails
+ * and unwrap-then-route succeeds. The step is a consequence of how value moves,
+ * not scaffolding left over from the direct-to-pool days.
+ *
+ * What it does not have to be is a second SIGNATURE. A wallet that supports
+ * EIP-5792 takes both calls at once, so the user approves the trade rather than
+ * approving a conversion and then a trade.
+ */
 if(last.unwrap>0n){
 const have=BigInt(await rpcRead(C,[{to:WETH,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
 if(have<last.unwrap)throw Error(`Not enough WETH: this needs ${trimAmt(last.unwrap,18)} and you hold ${trimAmt(have,18)}.`);
-stat.textContent=`Unwrapping ${trimAmt(last.unwrap,18)} WETH — this pool holds ether...`;
-const utx={from:account,to:WETH,data:"0x2e1a7d4d"+encUint(last.unwrap),value:"0x0"};
-await rpc(C,[utx,L]);await checkWallet();
-await settle(await rpc(S,[utx]));
+prep.push({to:WETH,data:"0x2e1a7d4d"+encUint(last.unwrap),value:"0x0",
+  note:`Unwrapping ${trimAmt(last.unwrap,18)} WETH — this pool holds ether`});
 }
 // The mirror: a WETH-based market cannot be paid in ether. Same shape, same
 // reason, opposite direction - and it has to run BEFORE the approval below,
@@ -5665,10 +5679,8 @@ await settle(await rpc(S,[utx]));
 if(last.wrap>0n){
 const have=BigInt(await rpcRead("eth_getBalance",[account,L]));
 if(have<last.wrap)throw Error(`Not enough ETH: this needs ${trimAmt(last.wrap,18)} and you hold ${trimAmt(have,18)}.`);
-stat.textContent=`Wrapping ${trimAmt(last.wrap,18)} ETH — this pool holds WETH...`;
-const wtx={from:account,to:WETH,data:"0xd0e30db0",value:toHex(last.wrap)};
-await rpc(C,[wtx,L]);await checkWallet();
-await settle(await rpc(S,[wtx]));
+prep.push({to:WETH,data:"0xd0e30db0",value:toHex(last.wrap),
+  note:`Wrapping ${trimAmt(last.wrap,18)} ETH — this pool holds WETH`});
 }
 }
 if(from.addr!==ZERO&&spender&&spender!==ZROUTER){
@@ -5746,16 +5758,32 @@ if(BigInt(nHex)<amountIn)throw Error("approval failed");
 }
 }
 }
-stat.textContent="Swapping...";
 let tx;
+const mainTx={from:account,to:target,data:cd2,value:toHex(msgValue)};
+if(prep.length&&!batchCalls&&await canBatch(account)){
+// One signature for the whole thing.
+stat.textContent="Swapping...";
+await checkWallet();
+tx=await sendBatch(account,[...prep.map(({to,data,value})=>({to,data,value})),
+  {to:target,data:cd2,value:toHex(msgValue)}]);
+}else{
+// Sent in order, each announced for what it is - a wallet prompt with no
+// explanation beside it is how a conversion gets mistaken for the trade.
+for(const c of prep){
+  stat.textContent=c.note+"...";
+  const ctx={from:account,to:c.to,data:c.data,value:c.value};
+  await rpc(C,[ctx,L]);await checkWallet();
+  await settle(await rpc(S,[ctx]));
+}
+stat.textContent="Swapping...";
 if(batchCalls){
 await checkWallet();
 tx=await sendBatch(account,batchCalls);
 }else{
-const txReq={from:account,to:target,data:cd2,value:toHex(msgValue)};
-await rpc(C,[txReq,L]);
+await rpc(C,[mainTx,L]);
 await checkWallet();
-tx=await rpc(S,[txReq]);
+tx=await rpc(S,[mainTx]);
+}
 }
 await settle(tx);
 last=null;
