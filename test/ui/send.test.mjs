@@ -103,6 +103,19 @@ describe('recipient resolution', () => {
     p.close();
   });
 
+  // A disabled button that just says "Send" makes you guess which of the two
+  // fields is at fault. It should name the one that is missing.
+  test('the dead button says which field is still empty', async () => {
+    const p = await setup();
+    assert.equal(p.text('swap'), 'Enter an amount');
+    assert.equal(p.disabled('swap'), true);
+    await p.typeAmount('amt', '1');
+    assert.equal(p.text('swap'), 'Name a recipient',
+      'with an amount typed, the missing piece is the recipient');
+    assert.equal(p.disabled('swap'), true);
+    p.close();
+  });
+
   test('an amount over the balance is caught before signing', async () => {
     const p = await setup();
     await recipient(p, A.OTHER);

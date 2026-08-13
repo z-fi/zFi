@@ -51,6 +51,58 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
+  test('a native market is found when the input is WETH', async () => {
+    // The bug this exists for: a Precision market on ETH/ZORG is stored under
+    // (address(0), ZORG) because the pool holds ether. Asked with WETH the
+    // factory was asked for a pair nobody created, answered zero, and the page
+    // said "no route" about a market that was live, funded, and the only venue
+    // for that token. Confirmed on chain: 1 pool for (ETH, ZORG), 0 for
+    // (ZORG, WETH).
+    //
+    // Every other venue already knew - the book maps a native leg onto its WETH
+    // alias, zQuoter carries WETH_WRAP as a source - and Precision is the one
+    // most likely to be a token's ONLY market, which is when being invisible
+    // costs the most.
+    const p = await setup({ precision: { pool: POOL, out: 4000n * USDC, fee: 3000 } });
+    p.pickToken('fromSel', 'WETH');
+    p.pickToken('toSel', 'USDC');
+    await p.typeAmount('amt', '1');
+
+    assert.equal(p.value('outAmt'), '4000', 'the native market must be reachable from WETH');
+    assert.match(p.text('rate'), /Precision/, 'and named as the venue');
+    p.close();
+  });
+
+  test('unwraps the WETH before paying a pool that holds ether', async () => {
+    // The other half. Quoting finds the market; the pool still wants VALUE, not
+    // an allowance. A Precision swap settles at the pool rather than through
+    // zRouter, so there is no multicall to fold this into - it is a separate
+    // transaction, the same shape as the wrap a book fill already does.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.WETH, A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.precisionQuote = { pool: POOL, out: 4000n * USDC, fee: 3000 };
+    chain.setPools(A.ZERO, A.USDC, [{ pool: POOL, hook: A.ZERO, liquidity: 10n ** 20n }]);
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.pickToken('fromSel', 'WETH');
+    p.pickToken('toSel', 'USDC');
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '4000');
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'unwrap then swap' });
+    await p.settle();
+
+    const [first, second] = p.chain.sent;
+    assert.equal(first.to.toLowerCase(), A.WETH.toLowerCase(), 'the first call is the unwrap');
+    assert.match(first.data, /^0x2e1a7d4d/, 'withdraw(uint256)');
+    assert.equal(second.to.toLowerCase(), POOL.toLowerCase(), 'then the pool itself');
+    assert.equal(BigInt(second.value), ETH, 'paid as VALUE, because the pool holds ether');
+    p.close();
+  });
+
   test('loses when it is worse, rather than being preferred for being ours', async () => {
     const p = await setup({ precision: { pool: POOL, out: 2900n * USDC, fee: 3000 } });
     await p.typeAmount('amt', '1');

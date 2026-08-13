@@ -642,6 +642,23 @@ export class MockChain {
     if (sel === SEL.QUOTE_BEST) {
       const q = this.precisionQuote;
       if (!q) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      /**
+       * THE PAIR IS PART OF THE QUESTION, and the mock has to say so.
+       *
+       * The factory pages pools by the SORTED pair, and a native market is
+       * stored under address(0) because the pool holds ether. Answering
+       * regardless of which pair was asked for made this mock agree with any
+       * lookup, including a wrong one - so a page that asked for (ZORG, WETH)
+       * when the market is (ETH, ZORG) got a quote here and "no route" on
+       * chain. Exactly the shape that let a Swapbatch struct mismatch live
+       * behind twenty passing tests.
+       */
+      const body = '0x' + data.slice(8);
+      const asked = [wordAddr(body, 0).toLowerCase(), wordAddr(body, 1).toLowerCase()];
+      const want = (q.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort();
+      if (asked.sort().join() !== want.join()) {
+        return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      }
       return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.out)]);
     }
     if (sel === SEL.POOL_FEE && this.precisionQuote) {

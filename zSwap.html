@@ -30,10 +30,24 @@ body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-hei
 /* No room beside the card on a phone, and a mark that overlaps the controls is
    worse than no mark. */
 @media(max-width:32em){#logo{display:none}}
-.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:.5em;font-size:.85em;color:var(--n);margin-bottom:.75em}
+/* FIVE children, five columns. With four, the theme toggle wrapped onto a line
+   of its own the moment the Swap tab revealed Slippage - the row was only ever
+   whole on the tabs that hide it. */
+.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;align-items:center;gap:.4em;font-size:.85em;color:var(--n);margin-bottom:.75em}
+/* Slippage is a setting you touch once, so the WORD recedes and the number
+   stays legible - the label was competing with the account name beside it. */
+#slipL{display:inline-flex;align-items:baseline;gap:.15em;font-size:.72em;color:var(--m);
+  letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);border-radius:0;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* The label shrank; the value must not. It is the only number in this row. */
+#slip{font-size:1.2em;width:2.4em;font-weight:600;font-variant-numeric:tabular-nums}
 #th,#lk,#lq{border:0;border-radius:.4em;background:transparent;cursor:pointer;font-size:1.05em;color:var(--n);width:1.8em;height:1.8em;line-height:1}
+/* An emoji is full colour and everything beside it is not, so the droplet read
+   as the loudest control on the page while OFF. It earns its colour only when
+   liquidity mode is actually on. */
+#lq{filter:grayscale(1);opacity:.65;transition:filter .15s,opacity .15s}
+#lq:hover,#lq.on{filter:none;opacity:1}
 #th:hover,#lk:hover,#lq:hover{background:var(--p);color:var(--f)}
 .meta input:hover{border-bottom-color:var(--m)}
 .meta input:focus{border-bottom-color:currentcolor}
@@ -42,7 +56,11 @@ body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-hei
 .panel small{color:var(--m);font-size:.8em}
 .hdr small{text-transform:uppercase;letter-spacing:.08em;font-size:.7em}
 .row{display:flex;gap:.4em;align-items:center;margin-top:.35em}
-.panel input{font-size:1.4em;border:0;background:transparent;color:var(--f);outline:none;padding:0;flex:1;min-width:0;width:100%;font-variant-numeric:tabular-nums;transition:font-size .1s}
+.panel input{font-size:1.65em;border:0;background:transparent;color:var(--f);outline:none;padding:0;flex:1;min-width:0;width:100%;font-variant-numeric:tabular-nums;transition:font-size .1s}
+/* An empty field should look empty. The default placeholder shade sat close
+   enough to real text that a card showing "0.0" twice read as a filled form
+   with two zeroes in it. */
+.panel input::placeholder{color:var(--m);opacity:.4}
 .pill{display:inline-flex;align-items:center;gap:.4em;cursor:pointer;transition:opacity .15s}
 .pill:hover,.pill:focus-within{opacity:.6}
 .panel select,.dly select{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;max-width:8em;font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
@@ -50,9 +68,12 @@ body{background:var(--b);color:var(--f);font-family:system-ui,sans-serif;min-hei
 svg{vertical-align:middle;flex-shrink:0}
 .flip{display:flex;align-items:center;justify-content:center;margin:-.62em auto;width:2em;height:2em;border-radius:50%;border:3px solid var(--c);background:var(--c);cursor:pointer;color:var(--m);padding:0;box-shadow:0 1px 2px #0000000f;transition:all .25s}
 .flip:hover{background:var(--fh);color:var(--f);transform:rotate(180deg)}
-.primary{width:100%;min-height:3.1em;padding:.9em;overflow-wrap:anywhere;line-height:1.3;font-size:1em;border-radius:.5em;background:var(--k);color:var(--kf);border:0;cursor:pointer;margin-top:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:background .15s}
+.primary{width:100%;box-sizing:border-box;border:1px solid transparent;min-height:3.1em;padding:.9em;overflow-wrap:anywhere;line-height:1.3;font-size:1em;border-radius:.5em;background:var(--k);color:var(--kf);cursor:pointer;margin-top:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:background .15s,border-color .15s}
 .primary:hover:not(:disabled){background:var(--kh)}
-.primary:disabled{background:var(--e);color:var(--m);cursor:not-allowed}
+/* A disabled button filled with --e was a heavy slab in dark mode - the
+   loudest block on a card whose whole point is the two panels above it. An
+   outline says "not yet" without shouting it. */
+.primary:disabled{background:transparent;border:1px solid var(--e);color:var(--m);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:.6em;padding:.62em .8em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
 #lq.on{background:var(--k);color:var(--kf)}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);border-radius:.5em;margin:.35em 0}
@@ -168,8 +189,13 @@ svg{vertical-align:middle;flex-shrink:0}
 #bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:#c33;border-bottom-color:#c33}
 #th:focus-visible,#lk:focus-visible,#lq:focus-visible{background:var(--p);color:var(--f)}
-.chtog{width:100%;margin-top:.55em;padding:.5em;border:1px solid var(--e);border-radius:.45em;background:transparent;color:var(--n);cursor:pointer;font:inherit;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
-.chtog:hover{color:var(--f);border-color:var(--m)}
+/* A disclosure, not an action. Once the primary button became an outline when
+   disabled, an outlined Chart toggle sat at the same weight right beneath it -
+   two identical boxes, neither of which looked more important than the other.
+   Dropping the border restores the order: filled = do it, outlined = the one
+   thing this card is for, bare text = show me more. */
+.chtog{width:100%;margin-top:.5em;padding:.5em;border:0;border-radius:.45em;background:transparent;color:var(--m);cursor:pointer;font:inherit;font-size:.7em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;transition:color .15s,background .15s}
+.chtog:hover{color:var(--f);background:var(--p)}
 .chtog span{display:inline-block;transition:transform .2s}
 .chtog[aria-expanded=true] span{transform:rotate(180deg)}
 #chBox{margin-top:.4em}
@@ -524,16 +550,38 @@ const LQ_SHOW=24;
  */
 async function quotePrecision(f,t,amountIn,sender,block){
 if(PPLENS===ZERO||amountIn<=0n)return null;
+/**
+ * ETH AND WETH ARE ONE ASSET TO A POOL LOOKUP.
+ *
+ * A Precision market on ETH/ZORG is stored under the pair (address(0), ZORG),
+ * because the pool holds native ether. Asked with WETH the factory is asked for
+ * (ZORG, WETH) - a pair nobody created - so it answers zero and the page
+ * reported "no route" for a market that was live, funded, and the ONLY venue
+ * for that token. Confirmed against the factory: 1 pool for (ETH, ZORG), 0 for
+ * (ZORG, WETH).
+ *
+ * Every other venue already knew. The book maps a native leg onto its WETH
+ * alias before it queries; zQuoter carries WETH_WRAP as a source of its own.
+ * Precision was the one asked with raw addresses, and it is the venue most
+ * likely to be a token's only market - which is exactly when being invisible
+ * costs the most.
+ *
+ * The normalisation is for the LOOKUP and the pool's own accounting. What the
+ * user holds is a separate question, answered at execution: the pool wants
+ * ether, so WETH is unwrapped first.
+ */
+const nat=a=>a.toLowerCase()===WETH.toLowerCase()?ZERO:a;
+const fA=nat(f.addr),tA=nat(t.addr);
 // Canonical order: the factory pages pools by the sorted pair, and ETH sorts
 // first as the zero address.
-const [c0,c1]=f.addr.toLowerCase()<t.addr.toLowerCase()?[f.addr,t.addr]:[t.addr,f.addr];
+const [c0,c1]=fA.toLowerCase()<tA.toLowerCase()?[fA,tA]:[tA,fA];
 // The window is asked for in full and the COUNT rides alongside it, in the
 // same batch. Reading the count first would put a second round trip in front
 // of every quote on the page, including the pairs that have no band at all -
 // and the count is only needed to say whether the window covered everything.
 const [q,c]=await mc3Deep([
   {to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(c0)+encAddr(c1)
-    +encAddr(sender)+encAddr(f.addr)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
+    +encAddr(sender)+encAddr(fA)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
   {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(c0)+encAddr(c1)},
 ],block);
 let n=0;try{if(c)n=Number(BigInt(c))}catch{}
@@ -549,7 +597,11 @@ try{const [fx]=await mc3Deep([{to:pool,data:"0x"+SEL_POOL_FEE}],block);if(fx)fee
 // it: a quote the user has already replaced could still land its notice on the
 // line, on top of a live price-impact warning. The caller holds the guard, so
 // hand it the fact and let it render.
-return {pool,out,fee,capped:n>LQ_SCAN};
+// `unwrap` is how much WETH has to become ether before the pool can be paid.
+// Zero on every other shape, including a native input that needs nothing.
+return {pool,out,fee,capped:n>LQ_SCAN,tokenIn:fA,
+  unwrap:fA===ZERO&&f.addr!==ZERO?amountIn:0n,
+  nativeOut:tA===ZERO&&t.addr!==ZERO};
 }
 
 async function quoteV4Pools(f,t,amountIn,block){
@@ -715,7 +767,10 @@ const maxAmt=(v,dec)=>{v=BigInt(v);if(dec<=6)return formatUnits(v,dec);
 const u=10n**BigInt(dec-6);return formatUnits((v+u-1n)/u,6)};
 const fitFont=el=>{
 const l=el.value.length;
-el.style.fontSize=l>18?".9em":l>14?"1.1em":l>10?"1.25em":"1.4em";
+// Same ladder, one rung taller at the top: the amount is the hero of this
+// card and 1.4em barely outranked the token symbol beside it. The steps below
+// are unchanged, so a long number still shrinks to fit exactly as before.
+el.style.fontSize=l>18?".9em":l>14?"1.1em":l>10?"1.25em":"1.65em";
 };
 const decQ=(hex,slip,eo,u,v,S)=>{
 const h=strip0x(hex),num=i=>BigInt("0x"+h.slice(i*64,(i+1)*64)),E=()=>{throw Error("bad quote")};
@@ -1586,7 +1641,14 @@ rate.textContent=dutch
 swap.disabled=false;return;
 }
 if(tab==="send"){
-if(!sendReady){swap.textContent="Send";swap.disabled=true;return}
+// A dead button labelled "Send" says nothing about WHY it is dead. The Orders
+// tab has always named the missing piece ("Set a price", "Name the token id");
+// Send is the tab with the fewest fields and was the only one that made you
+// guess which of the two was at fault.
+if(!sendReady){
+  let n=0n;try{n=parseUnits(amt.value.trim(),TOKENS[fromSel.value].dec)}catch{}
+  swap.textContent=n>0n?"Name a recipient":"Enter an amount";
+  swap.disabled=true;return}
 if(sendReady.amount>fromBalance){swap.textContent="Insufficient balance";swap.disabled=true;return}
 const a=`${trimAmt(sendReady.amount,sendReady.token.dec)} ${sendReady.token.sym}`,dv=+dly.value;
 swap.textContent=(dv?`Lock ${a} for ${rel(dv)}`:`Send ${a}`)+` \u2192 ${sendReady.label}`;
@@ -1911,10 +1973,15 @@ if(my!==seq)return;
 let pc=null;
 if(pq&&pq.out>0n){
 const pMin=pq.out-(pq.out*slipBps)/10000n;
+// The pool is paid in ITS asset, not the one the picker names. A native market
+// takes ether and value; a WETH input reaches it by being unwrapped first, which
+// `unwrap` carries to the click handler. `pq.tokenIn` is already normalised.
+const pNative=pq.tokenIn===ZERO;
 pc={best:{source:7,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/100n},
-callData:"0x"+SEL_PSWAP+encAddr(f.addr)+encUint(swapAmt)+encUint(pMin)+encAddr(rcv||acct||ZERO),
-fundedCallData:null,amountLimit:pMin,msgValue:f.addr===ZERO?swapAmt:0n,
-to:pq.pool,spender:f.addr===ZERO?null:pq.pool};
+callData:"0x"+SEL_PSWAP+encAddr(pq.tokenIn)+encUint(swapAmt)+encUint(pMin)+encAddr(rcv||acct||ZERO),
+fundedCallData:null,amountLimit:pMin,msgValue:pNative?swapAmt:0n,
+unwrap:pq.unwrap||0n,
+to:pq.pool,spender:pNative?null:pq.pool};
 if(!r)r=pc;
 }
 // A pair whose only exact-out route runs through Curve is not "no route" - it
@@ -2094,6 +2161,13 @@ fills:r.fills||null,tokenIn:f.addr,tokenOut:t.addr,
 // Which venue won, carried to the send path: a Precision route approves the
 // POOL, and the send path has to know that is what it is looking at.
 source:r.best.source,
+// And how much WETH has to become ether before that pool can be paid. Carried
+// for the same reason `source` is: computed in the quote, needed at the click,
+// and dropped in between - `last` is built field by field, so a value nobody
+// copies is a value that silently does not exist. The dead `last.best.source`
+// guard was this exact mistake, found by watching a disclaimed pool's
+// transaction go out anyway.
+unwrap:r.unwrap||0n,
 mkt,got:isIn?finalOut:finalIn,isIn};
 render();
 }catch(e){if(my===seq){
@@ -5350,7 +5424,13 @@ return;
 swap.disabled=true;
 try{
 const {callData,fundedCallData,msgValue,amountIn,from,to}=last;
-if(msgValue!==(from.addr===ZERO?amountIn:0n))throw Error("bad value");
+// Value rides when the CALL is native, which is not the same question as
+// whether the user's token is. A Precision market on ETH/ZORG holds ether, so
+// a WETH input reaches it by being unwrapped first and then paid as value -
+// `from.addr` is WETH throughout and the call still carries `amountIn`. This
+// read only the picker and rejected that as "bad value", which is a guard
+// refusing the very case it was widened for.
+if(msgValue!==(from.addr===ZERO||last.unwrap>0n?amountIn:0n))throw Error("bad value");
 await checkWallet();
 // Before the approval, never after. The waterfall below signs first and
 // simulates last, so a book leg that closed during the quote's 45s life would
@@ -5379,6 +5459,27 @@ if(last.source===7&&target){
 const ok=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(target)}])
   .then(([r])=>!!r&&BigInt(r)===1n).catch(()=>false);
 if(!ok)throw Error("that pool is not one the factory made — refusing to send");
+/**
+ * The pool wants ETHER; the user is holding WETH. Unwrap exactly the input.
+ *
+ * A Precision market on ETH/ZORG holds native ether, so paying it means value,
+ * not an allowance. Quoting now normalises WETH to ether so the market is
+ * FOUND - it was invisible before, and it is often a token's only venue - and
+ * this is the other half: turning what the user has into what the pool takes.
+ *
+ * A separate transaction on purpose. A Precision swap settles at the pool
+ * itself rather than through zRouter, so there is no multicall to fold this
+ * into; the same shape as the wrap step a book fill already does when neither
+ * balance covers a leg on its own.
+ */
+if(last.unwrap>0n){
+const have=BigInt(await rpcRead(C,[{to:WETH,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
+if(have<last.unwrap)throw Error(`Not enough WETH: this needs ${trimAmt(last.unwrap,18)} and you hold ${trimAmt(have,18)}.`);
+stat.textContent=`Unwrapping ${trimAmt(last.unwrap,18)} WETH — this pool holds ether...`;
+const utx={from:account,to:WETH,data:"0x2e1a7d4d"+encUint(last.unwrap),value:"0x0"};
+await rpc(C,[utx,L]);await checkWallet();
+await settle(await rpc(S,[utx]));
+}
 }
 if(from.addr!==ZERO&&spender&&spender!==ZROUTER){
 // Plain allowance only. Permit and Permit2 both route their signature through
