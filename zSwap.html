@@ -463,6 +463,7 @@ const encPRoute=(pools,tokenIn,tokenOut,amountIn,minOut,to)=>
 const SEL_PAIR_COUNT="355da246",SEL_CREATORBPS="17773ebb";
 const LQ_SCAN=128;
 const LQ_SHOW=24;
+const isEthLike=a=>a===ZERO||a.toLowerCase()===WETH.toLowerCase();
 async function quotePrecision(f,t,amountIn,sender,block){
 if(PPLENS===ZERO||amountIn<=0n)return null;
 const nat=a=>a.toLowerCase()===WETH.toLowerCase()?ZERO:a;
@@ -486,25 +487,67 @@ const res=await mc3Deep(reqs,block);
 let pool="",out=0n,n=0,fA=f.addr,won=null;
 for(let i=0;i<vars.length;i++){
 const q=res[i*2],c=res[i*2+1];
-if(!q)continue;
-const h=strip0x(q);
-if(h.length<128)continue;
-const p2="0x"+h.slice(24,64),o2=BigInt("0x"+h.slice(64,128));
-if(o2<=0n||/^0x0{40}$/i.test(p2))continue;
-if(o2<=out)continue;
-pool=p2;out=o2;fA=vars[i].tokenIn;won=vars[i];
+const b=decBest(q);
+if(!b)continue;
+if(b.out<=out)continue;
+pool=b.pool;out=b.out;fA=vars[i].tokenIn;won=vars[i];
 try{if(c)n=Number(BigInt(c))}catch{n=0}
 }
-if(!pool||!won)return null;
+if(!pool||!won)return await hubHop(f,t,amountIn,sender,block);
 const tA=won.c0===fA?won.c1:won.c0;
 let fee=0n;
 try{const [fx]=await mc3Deep([{to:PPLENS,
 data:"0x"+SEL_EFFFEE+encAddr(pool)+encAddr(sender)+encAddr(fA)+encUint(amountIn)}],block);
 if(fx)fee=BigInt(fx)}catch{}
-return {pool,out,fee,capped:n>LQ_SCAN,tokenIn:fA,tokenOut:tA,
+return {pools:[pool],out,fee,capped:n>LQ_SCAN,tokenIn:fA,tokenOut:tA,
 unwrap:fA===ZERO&&f.addr!==ZERO?amountIn:0n,
 wrap:fA!==ZERO&&f.addr===ZERO?amountIn:0n,
 outDiffers:(tA===ZERO)!==(t.addr===ZERO)};
+}
+function decBest(raw){
+if(!raw)return null;
+const h=strip0x(raw);
+if(h.length<128)return null;
+const pool="0x"+h.slice(24,64),out=BigInt("0x"+h.slice(64,128));
+if(out<=0n||/^0x0{40}$/i.test(pool))return null;
+return {pool,out};
+}
+async function hubHop(f,t,amountIn,sender,block){
+if(isEthLike(f.addr)||isEthLike(t.addr))return null;
+const enc=(a,b,tokenIn,amt)=>{
+const [c0,c1]=a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];
+return [{to:PPLENS,data:"0x"+SEL_QUOTE_BEST+encAddr(c0)+encAddr(c1)
++encAddr(sender)+encAddr(tokenIn)+encUint(amt)+encUint(0n)+encUint(BigInt(LQ_SCAN))},
+{to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(c0)+encAddr(c1)}]};
+const count=raw=>{try{return raw?Number(BigInt(raw)):0}catch{return 0}};
+const hubs=[ZERO,WETH];
+const legs=[];
+const first=await mc3Deep(hubs.flatMap(h=>enc(f.addr,h,f.addr,amountIn)),block);
+for(let i=0;i<hubs.length;i++){
+const b=decBest(first[i*2]);
+if(b)legs.push({hub:hubs[i],pool:b.pool,mid:b.out,n:count(first[i*2+1])});
+}
+if(!legs.length)return null;
+const second=await mc3Deep(legs.flatMap(l=>enc(l.hub,t.addr,l.hub,l.mid)),block);
+let win=null;
+for(let i=0;i<legs.length;i++){
+const b=decBest(second[i*2]);
+if(!b||(win&&b.out<=win.out))continue;
+win={pools:[legs[i].pool,b.pool],out:b.out,mid:legs[i].mid,hub:legs[i].hub,
+n:Math.max(legs[i].n,count(second[i*2+1]))};
+}
+if(!win)return null;
+let fee=0n;
+try{
+const [a,b]=await mc3Deep([
+{to:PPLENS,data:"0x"+SEL_EFFFEE+encAddr(win.pools[0])+encAddr(sender)+encAddr(f.addr)+encUint(amountIn)},
+{to:PPLENS,data:"0x"+SEL_EFFFEE+encAddr(win.pools[1])+encAddr(sender)+encAddr(win.hub)+encUint(win.mid)},
+],block);
+const fa=a?BigInt(a):0n,fb=b?BigInt(b):0n;
+fee=fa+fb-(fa*fb)/1000000n;
+}catch{}
+return {pools:win.pools,out:win.out,fee,capped:win.n>LQ_SCAN,
+tokenIn:f.addr,tokenOut:t.addr,unwrap:0n,wrap:0n,outDiffers:false};
 }
 const QPAIR=2;
 const SEL_BBS="e7798987";
@@ -1635,8 +1678,8 @@ const pWethIn=pNative&&(pq.unwrap||0n)>0n;
 const pTo=rcv||acct||ZERO;
 const pFund=pWethIn?WETH:pq.tokenIn;
 const routeData=pWethIn
-?encPRouteWeth([pq.pool],pq.tokenOut,swapAmt,pMin,pTo)
-:encPRoute([pq.pool],pq.tokenIn,pq.tokenOut,swapAmt,pMin,pTo);
+?encPRouteWeth(pq.pools,pq.tokenOut,swapAmt,pMin,pTo)
+:encPRoute(pq.pools,pq.tokenIn,pq.tokenOut,swapAmt,pMin,pTo);
 const routedLeg=encSnwap(pFund,swapAmt,pTo,pq.tokenOut,pMin,PROUTE,routeData);
 const checkpointLeg=encSnwap(ZERO,0n,acct||ZERO,ZERO,0n,PROUTE,
 "0x"+SEL_PCHECKPOINT+encAddr(pFund)+strip0x(keccak(hexToBytes(routeData)))+encAddr(acct||ZERO));
@@ -1650,7 +1693,7 @@ pc={best:{source:SRC_PRECISION,amountIn:swapAmt,amountOut:pq.out,feeBps:pq.fee/1
 callData:pCall,
 fundedCallData:pFunded,amountLimit:pMin,msgValue:(pNative&&!pWethIn)?swapAmt:0n,
 wrap:pq.wrap||0n,outDiffers:!!pq.outDiffers,poolOut:pq.tokenOut,
-to:null,spender:(pNative&&!pWethIn)?null:ZROUTER,pool:pq.pool};
+to:null,spender:(pNative&&!pWethIn)?null:ZROUTER,pools:pq.pools};
 if(!r)r=pc;
 }
 if(!r&&curveOnlyOut)throw Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`);
@@ -1841,7 +1884,7 @@ amountIn:inApprove,from:f,recipient:rcv||"",exp:Date.now()+QUOTE_TTL,impact:imp,
 lossTok,lossSym:isIn?t.sym:f.sym,lossDec:isIn?t.dec:f.dec,
 fills:r.fills||null,tokenIn:f.addr,tokenOut:t.addr,
 source:r.best.source,
-wrap:r.wrap||0n,pool:r.pool||null,
+wrap:r.wrap||0n,pools:r.pools||null,
 mkt,got:isIn?finalOut:finalIn,isIn};
 quoting=false;
 render();
@@ -3389,6 +3432,19 @@ if(sp&&lqBandFits(sl,sh,sp,fee,a0,a1))return mult;
 }
 return null;
 }
+async function lqOtherForm(t0,t1){
+const eth=[t0,t1].filter(x=>isEthLike(x.addr));
+if(eth.length!==1)return null;
+const cur=eth[0],coin=t0===cur?t1:t0;
+const other=cur.addr===ZERO?WETH:ZERO;
+const idx=TOKENS.findIndex(x=>x.addr.toLowerCase()===other.toLowerCase());
+if(idx<0)return null;
+const [c0,c1]=other.toLowerCase()<coin.addr.toLowerCase()?[other,coin.addr]:[coin.addr,other];
+const [c]=await mc3([{to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+encAddr(c0)+encAddr(c1)}]).catch(()=>[null]);
+let n=0;try{if(c)n=Number(BigInt(c))}catch{}
+if(!n)return null;
+return {idx,sym:TOKENS[idx].sym,asked:cur.sym};
+}
 async function loadLq(){
 const p=chPair();
 const my=++lqSeq;
@@ -3430,6 +3486,20 @@ r.shares=s;r.mine0=s*r.r0/r.liq;r.mine1=s*r.r1/r.liq;
 }
 if(my!==lqSeq)return;
 if(!rows.length){
+const alt=await lqOtherForm(t0,t1);
+if(my!==lqSeq)return;
+if(alt){
+lqList.innerHTML=`<div class="lqempty">This pair's band holds ${alt.sym}, not ${alt.asked}. `
++`<button class="lqbtn" id="lqSwitch">Switch to ${alt.sym}</button></div>`;
+lqSyncAmounts();
+lqRows=[];
+lqList.querySelector("#lqSwitch").onclick=()=>{
+const sel=TOKENS[fromSel.value]&&isEthLike(TOKENS[fromSel.value].addr)?fromSel:toSel;
+sel.value=String(alt.idx);sel.dataset.prev=sel.value;
+pairChosen=true;
+syncDisabled();refreshBalance();loadChart();loadLq();update();
+};
+return}
 lqList.innerHTML=`<div class="lqempty">No Precision band for this pair yet.</div>`+lqNewForm(t0,t1);lqSyncAmounts();
 lqRows=[];
 lqNewPreview();
@@ -5008,9 +5078,9 @@ let cd2=callData,batchCalls=null,prep=[];
 const spender=q.spender!==undefined?q.spender:(to?null:ZROUTER);
 const target=to||ZROUTER;
 const fund=q.wrap>0n?{addr:WETH,sym:"WETH",dec:18}:from;
-if(q.source===SRC_PRECISION&&q.pool){
-const ok=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(q.pool)}])
-.then(([r])=>!!r&&BigInt(r)===1n).catch(()=>false);
+if(q.source===SRC_PRECISION&&q.pools&&q.pools.length){
+const ok=await mc3(q.pools.map(p=>({to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(p)})))
+.then(rs=>rs.length===q.pools.length&&rs.every(r=>!!r&&BigInt(r)===1n)).catch(()=>false);
 if(!ok)throw Error("that pool is not one the factory made — refusing to send");
 if(q.wrap>0n){
 const have=BigInt(await rpcRead("eth_getBalance",[account,L]));

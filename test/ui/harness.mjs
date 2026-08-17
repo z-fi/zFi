@@ -106,6 +106,8 @@ export const SEL = {
   POOLFOR: '83bd1387', PREVIEW_SEED: '1d355417', CREATE_SEED: '7163352a',
   TOTALSUPPLY: '18160ddd',
   QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43', EFF_FEE: 'ef66de32',
+  // PrecisionRoute.route(address[],address,address,uint256,uint256,address)
+  PROUTE_ROUTE: '5d6498e1',
   BY_CREATOR: '7d78be2b', TOKEN1: 'd21220a7', BY_CREATOR_N: 'aa5e6b5b', RESERVE0: '443cb4bc',
   PAIR_COUNT: '355da246',
   REMOVE: 'e39b0eb5', REMOVE_LOSSY: '0cc55f06', ADDEXACT: 'cc0025e4',
@@ -374,7 +376,10 @@ export class MockChain {
     // every width through.
     this.rejectWiderThan = null;
     // What PrecisionPoolLens.quoteBestFor answers: {pool, out, fee}. Null is a
-    // pair with no Precision band, which is most pairs.
+    // pair with no Precision band, which is most pairs. An ARRAY is several
+    // markets, each with its own `pair` - which is what a hub hop needs, since
+    // it asks about two pairs that share a token and must get a different pool
+    // and a different size from each.
     this.precisionQuote = null;
     // Override for poolsForPairCount, to model a pair stuffed with bands.
     this.pairCount = null;
@@ -460,6 +465,17 @@ export class MockChain {
     this.launched = pools;
     for (const {pool} of pools) if (!this.code.has(pool.toLowerCase())) this.code.set(pool.toLowerCase(), '0x60006000');
     return this;
+  }
+  /** `precisionQuote` as a list, whether the fixture set one market or several. */
+  precisionList() {
+    if (!this.precisionQuote) return [];
+    return Array.isArray(this.precisionQuote) ? this.precisionQuote : [this.precisionQuote];
+  }
+  /** The market at `pool`, for the reads that name a pool rather than a pair. */
+  precisionAt(pool) {
+    if (!pool) return null;
+    const want = String(pool).toLowerCase();
+    return this.precisionList().find(q => q.pool.toLowerCase() === want) || null;
   }
   setPools(a, b, pools) {
     const [t0, t1] = a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
@@ -877,8 +893,6 @@ export class MockChain {
     // zQuoter predates Precision and cannot see these pools at all, so a market
     // can be live, funded and quotable and still be invisible to the router.
     if (sel === SEL.QUOTE_BEST) {
-      const q = this.precisionQuote;
-      if (!q) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
       /**
        * THE PAIR IS PART OF THE QUESTION, and the mock has to say so.
        *
@@ -888,13 +902,22 @@ export class MockChain {
        * lookup, including a wrong one - so a page that asked for (ZORG, WETH)
        * when the market is (ETH, ZORG) got a quote here and "no route" on
        * chain. Exactly the shape that let a Swapbatch struct mismatch live
-       * behind twenty passing tests.
+       * behind twenty passing tests. Matching on it is also what lets several
+       * markets coexist, which a hub hop needs.
        */
-      const body = '0x' + data.slice(8);
-      const asked = [wordAddr(body, 0).toLowerCase(), wordAddr(body, 1).toLowerCase()];
-      const want = (q.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort();
-      if (asked.sort().join() !== want.join()) {
-        return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      const body0 = '0x' + data.slice(8);
+      const askedPair = [wordAddr(body0, 0).toLowerCase(), wordAddr(body0, 1).toLowerCase()].sort();
+      const q = this.precisionList()
+        .find(x => (x.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort().join()
+          === askedPair.join());
+      if (!q) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      /* A hop's size is its PREDECESSOR's output, so a fixture that answers a
+         flat `out` cannot express a chain at all. `perIn` lets a market price
+         whatever it is handed, which is what makes the second hop's quote
+         depend on the first. */
+      if (q.perIn) {
+        const amt = word('0x' + data.slice(8), 4);
+        return coder.encode(['address', 'uint256'], [q.pool, q.perIn(amt)]);
       }
       /* SIZE-DEPENDENT, when the fixture asks for it. A flat answer cannot
          express impact at all: the page measures it by quoting a hundredth of
@@ -909,7 +932,7 @@ export class MockChain {
       return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.out)]);
     }
     if (sel === SEL.POOL_FEE && this.precisionQuote) {
-      return '0x' + u256(this.precisionQuote.fee ?? 3000);
+      return '0x' + u256(this.precisionAt(to)?.fee ?? 3000);
     }
     /* `effectiveFee` on the lens. The page stopped reading the pool's own
        `fee()` because that is only the BASE rate - a hooked pool charges more,
@@ -918,14 +941,17 @@ export class MockChain {
        back zero, and the rate line silently drops the tier: "Precision"
        instead of "Precision 0.3%". */
     if (sel === SEL.EFF_FEE && this.precisionQuote) {
-      return '0x' + u256(this.precisionQuote.effFee ?? this.precisionQuote.fee ?? 3000);
+      // Asked ABOUT A POOL, so answer about that one: a two-hop route composes
+      // the two rates, and a mock that returns the same number for both cannot
+      // tell a correct composition from a doubled first hop.
+      const q = this.precisionAt(wordAddr('0x' + data.slice(8), 0));
+      return '0x' + u256(q?.effFee ?? q?.fee ?? 3000);
     }
     // swapExactIn on the pool itself. The page preflights every send with
     // eth_call, so a pool that cannot answer this reads as a broken route
     // rather than as a thin fixture.
-    if (sel === SEL.PSWAP && this.precisionQuote
-      && to === this.precisionQuote.pool.toLowerCase()) {
-      return '0x' + u256(this.precisionQuote.out);
+    if (sel === SEL.PSWAP && this.precisionAt(to)) {
+      return '0x' + u256(this.precisionAt(to).out);
     }
     if (to === A.PLQLENS.toLowerCase()) {
       const body = '0x' + data.slice(8);
