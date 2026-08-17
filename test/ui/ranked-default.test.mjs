@@ -52,7 +52,41 @@ async function landOn(registry, conviction) {
 }
 
 describe('the landing pair', () => {
-  test('is the top of the conviction ranking, not a hardcoded pair', async () => {
+  test('remembers the pair the ranking settled on, so it need not guess twice', async () => {
+  // The ETH->USDC flash: two array indices paint a pair, the registry's ranking
+  // arrives a moment later and moves it, and you watch the page correct itself.
+  // The ranking cannot be known before the network answers, so the flash cannot
+  // be removed outright - but guessing when we already know the answer can.
+  const rows = [ETH_ROW, WBTC_ROW, USDC_ROW];
+  const mk = () => {
+    const c = new MockChain();
+    c.registry = rows;
+    c.conviction = rows.map((_, i) => i + 1);
+    c.setNative(A.ACCOUNT, 10n * ETH);
+    c.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    return c;
+  };
+
+  const first = await loadPage({ chain: mk(), hash: null });
+  await first.connect({ pin: false });
+  await first.settle();
+  // By ADDRESS, not by select index: the index depends on list order, and the
+  // whole point is that the second visit seats the pair BEFORE the registry
+  // reorders anything. Comparing indices would compare two different lists.
+  const addrs = p => [p.$('fromSel').dataset.addr, p.$('toSel').dataset.addr];
+  const settled = addrs(first);
+  const remembered = first.window.localStorage.getItem('zswap:pair');
+  assert.ok(remembered, 'the settled pair should be remembered');
+  first.close();
+
+  // Second visit, same storage: seated before any ranking is fetched.
+  const second = await loadPage({ chain: mk(), hash: null, storage: { 'zswap:pair': remembered } });
+  assert.deepEqual(addrs(second), settled,
+    'the remembered pair should be seated immediately, with nothing to correct');
+  second.close();
+});
+
+test('is the top of the conviction ranking, not a hardcoded pair', async () => {
     const { page, from, to } = await landOn([ETH_ROW, USDC_ROW, WBTC_ROW]);
     assert.equal(from, 'ETH');
     assert.equal(to, 'USDC', 'the second-ranked asset should be the output');
@@ -102,17 +136,20 @@ describe('the landing pair', () => {
   });
 
   test('falls back to the ranking when the pick is not in the registry', async () => {
-    // The pre-registry list is the built-in fallback, which carries tokens the
-    // curated list may not. Such a pick cannot be honoured - the token is gone
-    // from the picker - so the ranking takes over rather than leaving the form
-    // pointing at nothing.
+    // The built-in fallback carries tokens the curated list may not, and a link
+    // can name one. Such a pick cannot be honoured once the registry lands -
+    // the token is gone from the picker - so the ranking takes over rather than
+    // leaving the form pointing at nothing.
     const chain = new MockChain();
     chain.registry = [ETH_ROW, WBTC_ROW, USDC_ROW];
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
-    const page = await loadPage({ chain, hash: null });
-
-    page.pickToken('toSel', 'USDT');            // absent from the registry above
+    // Selected through the URL, because there is no longer a window in which to
+    // click it: the registry loads at BOOT now, so the built-in list is gone
+    // before a test could reach into the picker. The hash is applied first, off
+    // the built-ins, which is exactly the situation this guards - a pick the
+    // registry then turns out not to carry.
+    const page = await loadPage({ chain, hash: '#token=ETH&out=USDT' });
     await page.connect({ pin: false });
 
     const el = page.$('toSel');

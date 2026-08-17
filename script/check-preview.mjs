@@ -46,16 +46,32 @@ const w = dom.window;
 const d = w.document;
 const $ = id => d.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const until = async (fn, ms, label) => {
+const until = async (fn, ms, label, step = 60) => {
   const end = Date.now() + ms;
-  while (Date.now() < end) { try { if (fn()) return true; } catch {} await sleep(60); }
+  while (Date.now() < end) { try { if (fn()) return true; } catch {} await sleep(step); }
   throw Error('timed out: ' + label);
 };
 
 await sleep(1200);
 $('swap').click();
 await until(() => $('addr').textContent !== 'Not connected', 15000, 'connect');
-await sleep(500);
+
+/**
+ * WAIT FOR THE LIST TO STOP MOVING.
+ *
+ * An option's value is an INDEX into TOKENS, and the registry's conviction
+ * ranking lands after connect and rebuilds the whole dropdown - so an index
+ * read before the rebuild names a different token after it. That is how this
+ * script came to report "ETH -> USDC = 259,990" with a rate line that said
+ * ZORG: the quote was real and correct, for the token the stale index actually
+ * pointed at. Two identical readings of the option list, half a second apart.
+ */
+let sig = '';
+await until(() => {
+  const s = [...$('toSel').options].map(o => o.textContent).join(',');
+  if (s && s === sig) return true;
+  sig = s; return false;
+}, 15000, 'token list settled', 500);
 
 let failed = 0;
 let checked = 0;
@@ -69,15 +85,55 @@ for (const t of registry) {
     const sel = $('toSel');
     sel.value = opt.value;
     sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    // Belt and braces: confirm the page ended up on the token this iteration
+    // is about, rather than trusting an index to still mean what it meant.
+    await until(() => sel.options[sel.selectedIndex]?.textContent === t.s,
+      5000, 'select ' + t.s);
     await sleep(220);
     const amt = $('amt');
     amt.value = '1';
     amt.dispatchEvent(new w.Event('input', { bubbles: true }));
+    // CLEAR THE PREVIOUS ANSWER FIRST. The wait below returns as soon as the
+    // output box is non-empty, and the box still holds the LAST token's quote
+    // for as long as this one takes to run - so the wait returned instantly,
+    // the page then blanked the field for the new quote, and the read 100ms
+    // later saw "". That reported a token quoting perfectly well as a routing
+    // failure, and only ever the token whose predecessor had been slow.
+    // No event dispatched: writing this field is how exact-out is requested.
+    $('outAmt').value = '';
+    // ...and then wait for an answer that STAYS. Clearing the box is not enough
+    // on its own: the previous token's quote can still be in flight, land in
+    // the box after the clear, and satisfy a one-shot wait - and the new quote
+    // blanks it again a moment later. Two equal, non-empty samples 400ms apart
+    // is the difference between "a quote arrived" and "this token's quote
+    // arrived", and it is the whole of the intermittency in this script.
+    // WAIT FOR THIS TOKEN'S QUOTE, NOT FOR ANY QUOTE.
+    //
+    // The rate line names the token it priced, and that is the only reliable
+    // signal that the answer on screen belongs to the pair under test. Waiting
+    // for "the box is non-empty" instead picked up two different strangers: the
+    // previous token's quote still in flight, and the page's own recovery -
+    // when a quote fails it advances the output to the next ranked token and
+    // quotes THAT, which lands a moment later under whatever is selected by
+    // then. Both produced a real number for the wrong asset, which is a pass
+    // that means nothing and a failure that means nothing either.
     await until(() => {
       const o = $('outAmt').value, s = $('stat').textContent;
-      return (o && o !== '...') || /No route/i.test(s);
-    }, 15000, 'quote ' + t.s);
-    await sleep(100);
+      if (/No route/i.test(s)) return true;
+      // The page may have moved the output itself while we waited - a failed
+      // quote advances to the next ranked token. Put it back and ask again,
+      // which is what a person watching this happen would do.
+      if (sel.options[sel.selectedIndex]?.textContent !== t.s) {
+        const again = [...sel.options].find(o2 => o2.textContent === t.s);
+        if (!again || again.disabled) return false;
+        sel.value = again.value;
+        sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+        amt.value = '1';
+        amt.dispatchEvent(new w.Event('input', { bubbles: true }));
+        return false;
+      }
+      return o && o !== '...' && $('rate').textContent.includes(t.s);
+    }, 15000, 'quote ' + t.s, 200);
     const out = $('outAmt').value;
     if (!out || out === '...') {
       failed++;

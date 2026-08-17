@@ -75,6 +75,11 @@ contract PrecisionRoute {
     address public immutable trustedExecutor;
     PrecisionPoolFactory public immutable factory;
 
+    /// @dev Canonical wrapper. A constant rather than an argument: taking it
+    ///      from the caller would turn `routeFromWETH` into "call withdraw on
+    ///      an address of your choosing".
+    address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
     error Bad();
     error NoPool();
     error Reentrancy();
@@ -254,6 +259,58 @@ contract PrecisionRoute {
     ///        units - a 1e18 threshold against a 6-decimal token passes
     ///        trivially, and the slippage check protects nothing. Naming the
     ///        output makes the two agree or the call revert.
+    /// @notice Route a WETH input into a NATIVE path, unwrapping on the way in.
+    /// @dev THE ONE CONVERSION A CALLER CANNOT DO FOR THEMSELVES IN THE SAME
+    ///      TRANSACTION. A market on ETH/TOKEN holds ether and cannot accept a
+    ///      WETH allowance, so a holder of WETH had to unwrap in a transaction
+    ///      of their own and then swap - two signatures for one trade, and the
+    ///      page had to explain why the first one existed.
+    ///
+    ///      zRouter cannot bridge that gap either, and the reason is worth
+    ///      recording because it looks like it should: `unwrap(uint256)` does
+    ///      exist there and works, but `snwap` forwards `msg.value` to the
+    ///      executor and nothing else - `safeExecutor.execute{value: msg.value}`
+    ///      - so ether the router is holding after an in-multicall unwrap never
+    ///      reaches this contract. Measured against the deployed router: deposit
+    ///      + unwrap + snwap reverts `Bad()` here, on `msg.value != amountIn`.
+    ///
+    ///      What `snwap` DOES do is deliver an ERC-20 to the executor it was
+    ///      told to call. So WETH arrives here as an ordinary token input, and
+    ///      this unwraps it. One call, one signature, no conversion the user has
+    ///      to be told about.
+    ///
+    ///      Checkpointed exactly as `route` is, and in the same order: the
+    ///      snapshot is consumed - which is where the intent is checked against
+    ///      the keccak of THIS calldata - BEFORE any ether exists. A caller who
+    ///      could unwrap first and consume second would have a contract holding
+    ///      ether against an unverified claim.
+    ///
+    ///      `WETH` is a constant, not an argument. Taking it from the caller
+    ///      would make this "call withdraw on an address of your choosing",
+    ///      which is a different and much worse function.
+    function routeFromWETH(
+        address[] calldata pools,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minOut,
+        address to
+    ) external claimsRoute(true) returns (uint256 amountOut) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (pools.length == 0 || amountIn == 0) revert Bad();
+        if (to == address(0) || to == address(this)) revert Bad();
+        // Consume first: the intent covers this exact call, arguments included.
+        _consume(WETH, amountIn);
+        // Now it is ether, and `_walk` already knows how to spend that.
+        (bool okw,) = WETH.call(abi.encodeWithSelector(0x2e1a7d4d, amountIn));
+        if (!okw) revert Bad();
+
+        address delivered;
+        (amountOut, delivered) = _walk(pools, address(0), amountIn, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
+        if (amountOut < minOut) revert InsufficientOutput();
+        emit Routed(to, pools.length, amountIn, amountOut);
+    }
+
     function route(
         address[] calldata pools,
         address tokenIn,

@@ -96,12 +96,17 @@ fs_permissions = [
     # the seven listings that no longer fit the constructor, so the file that gets
     # broadcast is produced by the same test that proves it yields the right list.
     { access = "read-write", path = "./deploy" },
+    { access = "read-write", path = "./out" },
     # `TokenListMinedDeploy` hashes the sources its salts were mined for, so the
     # staleness check is a question about the source rather than about whichever
     # build happens to be in `out/`. Read-only.
     { access = "read", path = "./src/utils" },
     { access = "read", path = "./src/dao" },
     { access = "read-write", path = "./dapp" },
+    # The seed-preview fixture. Written by script/PrecisionSeedFixture.s.sol and
+    # read back by test/PrecisionSeedPreviewFixture.t.sol, so the lens is checked
+    # against the same bytes test/ui/liquidity.test.mjs checks the page against.
+    { access = "read-write", path = "./test/fixtures" },
 ]
 
 # DIFFERENTIAL COMPILATION
@@ -280,8 +285,46 @@ max_optimizer_runs = 200
 paths = "src/pools/ConstantSurchargeHook.sol"
 max_optimizer_runs = 200
 
+# Same reason as the entries above - it imports the factory, so without a pin
+# of its own it inherits whichever compilation unit it lands in. It also embeds
+# LaunchToken's creation code, so a differently-optimized LaunchToken moves this
+# contract's initcode and therefore its mined CREATE2 address.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncher.sol"
+max_optimizer_runs = 200
+
+# eth_call only, like the other lenses, so runtime gas is nearly free. Pinned
+# for the same ambiguity reason as the entries above rather than for size: it
+# imports the launcher AND the factory, so without an entry it would inherit
+# whichever compilation unit it happened to land in.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncherLens.sol"
+max_optimizer_runs = 200
+
+# The fee splitter. Pinned for the same reason as everything above it - its
+# salt is mined against one exact payload - even though nothing pulls it into a
+# restricted unit today. Relying on that staying true is the bet that produced
+# two builds of the lens.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/FeeSplitter.sol"
+max_optimizer_runs = 200
+
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionPoolPolicy.sol"
+max_optimizer_runs = 200
+
+# The launcher and its lens, pinned for the same reason as the rest of the
+# suite above: they import the factory and so already resolve to 200 in their
+# own compilation unit, but "already resolves to" is not a guarantee - it is a
+# property of whichever unit happens to pull them in. These are CREATE2
+# deployments whose salts are mined against one exact payload, so the setting
+# has to be stated rather than inherited.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncher.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncherLens.sol"
 max_optimizer_runs = 200
 
 # TokenList and its renderer are pinned to 200 runs by their deployment manifest

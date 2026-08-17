@@ -384,6 +384,49 @@ describe('bidding for an NFT', () => {
     p.close();
   });
 
+  test('refuses a fraction of a token at the gate, not after the click', async () => {
+    // `want` is a COUNT and bidCollection has always refused anything else -
+    // but only once the button had been pressed. Until then the form read
+    // "Bid for any PUNK" and was enabled, so the first news of the mistake
+    // arrived as an error where a wallet prompt was expected.
+    const p = await buying();
+    p.type('amt', '5');
+    p.type('outAmt', '1.5');
+    await p.settle();
+    assert.match(p.text('swap'), /whole number/i);
+    assert.equal(p.$('swap').disabled, true);
+
+    p.type('outAmt', '0');
+    await p.settle();
+    assert.match(p.text('swap'), /at least one/i, 'a bid for none is not a bid');
+    assert.equal(p.$('swap').disabled, true);
+
+    p.type('outAmt', '3');
+    await p.settle();
+    assert.match(p.text('swap'), /Bid for any PUNK/i, 'and a count is fine');
+    assert.equal(p.$('swap').disabled, false);
+    p.close();
+  });
+
+  test('clears the opening bid once one is placed', async () => {
+    // The fungible path resets floorAmt and floorTouched; this one did not, so
+    // a placed climb left its opening bid sitting in the form to be carried,
+    // unnoticed, into whatever order was typed next.
+    const p = await buying();
+    await bid(p, { price: '2', id: '' });
+    p.select('kind', 'floor');
+    p.type('floorAmt', '1');
+    await p.settle();
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'bid' });
+    await p.settle();
+
+    assert.equal(p.$('floorAmt').value, '', 'the opening bid does not outlive its bid');
+    assert.equal(p.$('amt').value, '');
+    assert.equal(p.$('outAmt').value, '');
+    p.close();
+  });
+
   test('needs a window, because a bid IS its window', async () => {
     const p = await buying();
     await bid(p, { price: '2', id: '' });
@@ -392,6 +435,84 @@ describe('bidding for an NFT', () => {
     assert.match(p.text('swap'), /needs a window/i,
       'Floorboard refuses duration 0, so the page must not offer it');
     assert.equal(p.$('swap').disabled, true);
+    p.close();
+  });
+});
+
+/**
+ * The pair itself, before any amount is typed.
+ *
+ * Every branch below the pair reads ONE leg as the collection and the other as
+ * the money for it, and the two readers disagree about which is which: render
+ * checks `t.std === "nft"` first and calls the pair a bid, in the seller's
+ * decimals; placeOrder checks `f.std === "nft"` first and calls it a listing.
+ * With a collection on both sides they answer differently about the same form,
+ * and the one that wins is the one that spends - safeTransferFrom pushing a
+ * token into escrow against an ERC-721 named as the quote, which Swapboard's
+ * fungibility check must then reject with the token already gone from the
+ * wallet's point of view until the revert lands.
+ *
+ * The swap tab never allowed a collection at all, so this pair was only ever
+ * reachable here, and nothing on the tab said no to it.
+ */
+describe('two collections', () => {
+  const APES = '0xbeef567890abcdef1234567890abcdef12345678';
+
+  /** Import a collection into `sel` the way the custom-token path does. */
+  async function importInto(p, sel, addr, sym) {
+    p.queuePrompt(addr);
+    p.select(sel, '__custom');
+    await p.waitFor(() => p.$(sel).selectedOptions[0]?.textContent === sym,
+      { label: `${sym} imported` });
+    await p.settle();
+  }
+
+  async function twoCollections() {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setToken(PUNKS, { symbol: 'PUNK', name: 'CryptoPunks', erc721: true });
+    chain.setToken(APES, { symbol: 'APE', name: 'Apes', erc721: true });
+    chain.setNftOwner(PUNKS, 7, A.ACCOUNT);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabBook');
+    await p.settle();
+    return p;
+  }
+
+  test('the side the user did not touch gives way to a token', async () => {
+    const p = await twoCollections();
+    await importInto(p, 'fromSel', PUNKS, 'PUNK');
+    assert.equal(p.$('fromSel').selectedOptions[0].textContent, 'PUNK');
+
+    // Naming a collection to BUY is the newer intent, so the sell side yields
+    // rather than the keystroke being undone.
+    await importInto(p, 'toSel', APES, 'APE');
+    assert.equal(p.$('toSel').selectedOptions[0].textContent, 'APE',
+      'the side just touched keeps what was typed into it');
+    assert.notEqual(p.$('fromSel').selectedOptions[0].textContent, 'PUNK',
+      'the other side must become the money');
+    p.close();
+  });
+
+  test('and the button refuses the pair even if one forms anyway', async () => {
+    // The gate is what placeOrder trusts, so it says no on its own rather than
+    // relying on the pair repair having run.
+    const p = await twoCollections();
+    await importInto(p, 'fromSel', PUNKS, 'PUNK');
+    await importInto(p, 'toSel', APES, 'APE');
+    const punk = [...p.$('fromSel').options].find(o => o.textContent === 'PUNK');
+    p.$('fromSel').value = punk.value;   // straight past the repair
+    p.type('amt', '1');
+    p.type('nftId', '7');
+    await p.settle();
+
+    assert.match(p.text('swap'), /One side must be a token/i);
+    assert.equal(p.$('swap').disabled, true);
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'and nothing is pushed to any board');
     p.close();
   });
 });
@@ -429,7 +550,7 @@ describe('cancelling', () => {
   }
 
   const cancel = async p => {
-    const btn = [...p.$('book').querySelectorAll('button')].find(b => b.textContent === 'Cancel');
+    const btn = [...p.$('book').querySelectorAll('.o button')].find(b => b.textContent === 'Cancel');
     assert.ok(btn, 'the row should offer a cancel');
     p.click(btn);
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel sent' });

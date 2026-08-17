@@ -281,6 +281,34 @@ contract DegradedHandler is Test {
         _observe(ratio, covered, "confiscateThenExit", true);
     }
 
+    /// @dev Abandon token1 outright, deterministically. Same reasoning as
+    ///      `confiscateThenExit` above and the same fix, applied to the branch
+    ///      it left behind: `removeLossy` only reaches the abandoned-side path
+    ///      when the fuzzer happens to pick an odd `sides` for an actor that
+    ///      still holds LP, and whether that happens inside a 128,000-call
+    ///      campaign depends on the seed. Measured across campaigns it lands
+    ///      13 times out of 15 attempts when it is attempted at all - and zero
+    ///      times in campaigns that never attempt it, which is how
+    ///      `afterInvariant` came to fail on a branch that works.
+    ///
+    ///      Choosing the sides here rather than hoping for them costs the fuzzer
+    ///      nothing: `removeLossy` still explores every combination, and this
+    ///      only guarantees the floor.
+    function abandonSideExit(uint256 s, uint256 lp) public {
+        address a = _actor(s);
+        uint256 bal = pool.balanceOf(a);
+        if (bal == 0) return;
+        lp = bound(lp, 1, bal);
+        (uint256 ratio, bool covered) = _snapshot();
+        vm.prank(a);
+        // t0 kept, t1 abandoned - the claim on token1 is given up entirely.
+        try pool.removeLiquidityLossy(lp, 0, 0, a, true, false) returns (uint256, uint256) {
+            ++lossyExits;
+            ++abandonedSideExits;
+        } catch {}
+        _observe(ratio, covered, "abandonSideExit", true);
+    }
+
     receive() external payable {}
 }
 
@@ -373,6 +401,26 @@ contract PrecisionDegradedInvariantTest is Test {
     /// cover its accrued fees before a call must still cover them after.
     function invariant_ExitsNeverSpendAccruedFees() public view {
         assertEq(handler.contractCausedOwedShortfall(), 0, "an exit paid out fees it did not own");
+    }
+
+    /// @dev Does abandoning a side, on its own, break the backing of an
+    ///      UNDAMAGED pool? The invariant campaign reported that it did - one
+    ///      `abandonSideExit` call and nothing else - and a deployed pool
+    ///      leaking backing on a normal user action is worth answering
+    ///      deterministically rather than from a shrunk fuzz sequence.
+    function test_abandoningASideDoesNotBreakBacking() public {
+        address a = address(0xA1);
+        uint256 lp = pool.balanceOf(a);
+        assertGt(lp, 0, "the actor holds no LP");
+
+        assertGe(address(pool).balance, pool.reserve0(), "token0 unbacked BEFORE");
+        assertGe(tok.balanceOf(address(pool)), pool.reserve1(), "token1 unbacked BEFORE");
+
+        vm.prank(a);
+        pool.removeLiquidityLossy(lp / 2, 0, 0, a, true, false);
+
+        assertGe(address(pool).balance, pool.reserve0(), "token0 unbacked AFTER");
+        assertGe(tok.balanceOf(address(pool)), pool.reserve1(), "token1 unbacked AFTER");
     }
 
     /// @dev Until the token takes value without a transfer, ordinary operation

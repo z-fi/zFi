@@ -23,7 +23,7 @@ import {Test} from "../lib/forge-std/src/Test.sol";
 ///         suites. Forge forks once, caches, and answers in seconds.
 contract PrecisionRoutedForkTest is Test {
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
-    address constant PROUTE = 0x000000384711c65f633Aa4487b968ecb7956DB0F;
+    address constant PROUTE = 0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB;
     address constant EXECUTOR = 0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db;
     address constant POOL = 0xc37F8c7E9Afe897893952ABa7fD91E0AB947837d;
     address constant ZORG = 0x00a6bA94BBb5474725515De88fE04F854f2dCb12;
@@ -48,7 +48,7 @@ contract PrecisionRoutedForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork(
-            vm.envOr("ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_739_900
+            vm.envOr("ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_745_140
         );
         vm.deal(trader, 100 ether);
     }

@@ -198,12 +198,25 @@ describe('reading the tape', () => {
   });
 
   test('caps how many bars it draws, so candles stay legible', async () => {
+    // 250 five-minute bars in ~300px is a smear. The answer is to open a
+    // timeframe the history fits in rather than to keep 5m and throw three
+    // quarters of it away, so the full 21 hours is still reachable.
     const p = await setup({ tapes: { [POOL_A]: bars(250) } });
     await p.waitFor(() => svg(p), { label: 'chart' });
-    // 250 bars in ~300px is a smear; the drawer keeps the most recent that fit.
     const wicks = svg(p).querySelectorAll('line').length - 4;   // minus gridlines
     assert.ok(wicks < 130, `drew ${wicks} candles, which cannot resolve at this width`);
-    assert.match(p.text('chNote'), /last /, 'and says the window was clipped');
+    // Not a literal span: 250 five-minute buckets straddle 21 or 22 hourly ones
+    // depending on where the clock sits inside the current bucket. "last" is the
+    // word the drawer uses when it had to drop something, so its absence is the
+    // claim, and it does not move with the wall clock.
+    assert.doesNotMatch(p.text('chNote'), /last /, 'and none of the history is dropped');
+
+    // Forced back down to 5m it cannot show 21 hours, and says which slice it did.
+    [...p.$('chTf').children].find(b => b.textContent === '5m').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
+    assert.match(p.text('chNote'), /last \d+h/, 'a clipped window must say so');
+    assert.ok(svg(p).querySelectorAll('line').length - 4 < 130);
     p.close();
   });
 
@@ -331,6 +344,112 @@ describe('reading the tape', () => {
     await p.waitFor(() => svg(p), { label: 'chart' });
     var shown = Number(p.$('chArt').querySelector('.hd b').textContent.replace(/,/g, ''));
     assert.ok(shown > 90, `volume-weighted close ${shown} must sit near the deep pool's 100`);
+    p.close();
+  });
+
+  test('a dust pool cannot own the y-range with one absurd wick', async () => {
+    // Volume weighting already kept the thin pool off the LINE, but the wick
+    // was a plain min/max across pools, so a pool holding 0.1% of the volume
+    // still stretched the axis - and with the 9% padding on top, the real
+    // series collapsed into a couple of pixels. Surviving the pool filter
+    // takes one wei of liquidity, so this is cheap to do on purpose.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (px, v, hi) => [{ bucket, open: px * RAW_ETH_USDC, high: (hi || px) * RAW_ETH_USDC,
+      low: px * RAW_ETH_USDC, close: px * RAW_ETH_USDC, volume: v, count: 1 }];
+    const p = await setup({
+      pools: [POOL_A, POOL_B],
+      tapes: { [POOL_A]: at(100, 1000e18), [POOL_B]: at(100, 1e18, 100000) },
+    });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const label = svg(p).getAttribute('aria-label');
+    const top = Number((label.match(/range .* to ([\d,.]+)/) || [])[1].replace(/,/g, ''));
+    assert.ok(top < 200, `a 0.1%-volume pool printing 100000 set the top of the axis to ${top}`);
+    p.close();
+  });
+
+  test('a bar the pool could only print as zero does not break the axis', async () => {
+    // `pack(0) == 0` and `_record` floors the price, so a pair below 1e-18 raw
+    // per raw prints zeros - and `PriceTape` says a zeroed low then pins the
+    // bar for its whole life. Upright that dragged the range to 0 and squashed
+    // every real price into the top few pixels.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (i, px, low) => ({ bucket: bucket - i, open: px * RAW_ETH_USDC,
+      high: px * RAW_ETH_USDC, low: low * RAW_ETH_USDC, close: px * RAW_ETH_USDC,
+      volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0, 3000, 3000), at(1, 3010, 0), at(3, 2990, 2990)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const label = svg(p).getAttribute('aria-label');
+    const bottom = Number((label.match(/range ([\d,.]+) to/) || [])[1].replace(/,/g, ''));
+    assert.ok(bottom > 1000, `one unprintable low pulled the axis down to ${bottom}`);
+    assert.equal(p.consoleErrors.length, 0);
+    p.close();
+  });
+
+  test('inverting a zeroed low yields no Infinity, and no NaN in the path', async () => {
+    // The reciprocal of an unprintable price is not a number, and inverted is
+    // the DEFAULT orientation for a token quoted in a stablecoin. This drew a
+    // flat line at the axis under gridlines labelled "Infinity", and put NaN
+    // into the line chart's `d` attribute.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (i, px, low) => ({ bucket: bucket - i, open: px * RAW_ETH_USDC,
+      high: px * RAW_ETH_USDC, low: low * RAW_ETH_USDC, close: px * RAW_ETH_USDC,
+      volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0, 3000, 3000), at(1, 3010, 0), at(3, 2990, 2990)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+
+    const s = svg(p);
+    assert.doesNotMatch(s.outerHTML, /Infinity|NaN/, 'no non-number may reach the SVG');
+    p.click([...p.$('chTf').children].find(b => b.className === 'chk'));   // line chart
+    assert.doesNotMatch(svg(p).outerHTML, /Infinity|NaN/, 'including the line path');
+    assert.equal(p.consoleErrors.length, 0);
+    p.close();
+  });
+
+  test('a quiet stretch is drawn as a gap, not closed up', async () => {
+    // `PriceTape.recent` returns an idle bucket as a zero word so a client can
+    // tell a quiet market from a flat one. Packing the survivors shoulder to
+    // shoulder threw that away: two trades a day ago and two now drew four
+    // evenly spaced candles under a note reporting a day.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = i => ({ bucket: bucket - i, open: 3000 * RAW_ETH_USDC, high: 3000 * RAW_ETH_USDC,
+      low: 3000 * RAW_ETH_USDC, close: 3000 * RAW_ETH_USDC, volume: 5e18, count: 1 });
+    // Four bars, but the newest pair sits 40 buckets from the older pair.
+    const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+
+    const xs = [...svg(p).querySelectorAll('rect')]
+      .map(r => Number(r.getAttribute('x'))).sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > 0.5) gaps.push(xs[i] - xs[i - 1]);
+    assert.ok(Math.max(...gaps) > 6 * Math.min(...gaps),
+      'the idle stretch must open a real gap, not another candle-width step');
+    p.close();
+  });
+
+  test('pointing into a gap reads out the nearest real bar', async () => {
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = i => ({ bucket: bucket - i, open: 3000 * RAW_ETH_USDC, high: 3000 * RAW_ETH_USDC,
+      low: 3000 * RAW_ETH_USDC, close: 3000 * RAW_ETH_USDC, volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const el = p.$('chArt');
+    el.getBoundingClientRect = () => ({ left: 0, width: 340, top: 0, height: 150 });
+    el.dispatchEvent(new p.window.MouseEvent('pointermove',
+      { bubbles: true, clientX: 60, clientY: 40 }));
+    const hd = el.querySelector('.hd').textContent;
+    assert.match(hd, /H .* L /, 'the middle of the gap still names a bar');
+    assert.doesNotMatch(hd, /NaN|undefined/);
+    // The axis spans 42 buckets, so this lands in the gap a few slots past the
+    // older pair and must snap back to the nearer of them. Reading the pointer
+    // as an ARRAY INDEX - four bars across the full width, which is what it was
+    // before bars sat at their buckets - puts it a whole bar further out.
+    const clock = b => new Date(b * 300 * 1e3).toLocaleTimeString(
+      'en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    assert.match(hd, new RegExp(clock(bucket - 40)), 'snaps to the bar nearest the pointer');
+    assert.doesNotMatch(hd, new RegExp(clock(bucket - 41)), 'not to the one an index would pick');
     p.close();
   });
 
@@ -463,7 +582,9 @@ describe('timeframes', () => {
   });
 
   test('rolling up is done locally, with no extra chain read', async () => {
-    const p = await setup({ tapes: { [POOL_A]: bars(120) } });
+    // Five hours of bars: dense enough that the drawer opens on 5m, so the
+    // click below is a real change of timeframe and not a no-op.
+    const p = await setup({ tapes: { [POOL_A]: bars(60) } });
     await p.waitFor(() => svg(p), { label: 'chart' });
     const fine = svg(p).querySelectorAll('rect').length;
     const readsBefore = p.chain.calls.length;

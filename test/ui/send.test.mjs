@@ -261,6 +261,144 @@ describe('time-locked sends', () => {
   });
 });
 
+/**
+ * A time lock does not release itself: somebody has to send the claim once it
+ * matures. The tip is what buys that somebody, so what matters is that it is
+ * quoted from live gas, paid in ether whatever is being sent, and given back
+ * when the transfer is reversed instead of claimed.
+ */
+describe('keeper tip', () => {
+  // 1 gwei (the harness default) x the page's 180k claim budget.
+  const TIP = 180_000n * 10n ** 9n;
+
+  /** A tipped ETH lock, ready to submit. */
+  async function tipped(p, amount = '2', delay = '86400') {
+    await p.typeAmount('amt', amount);
+    await recipient(p, A.OTHER);
+    p.select('dly', delay);
+    await p.settle();
+    p.click('tipCk');
+    await p.settle();
+  }
+
+  test('the tip is only offered once there is a lock to claim', async () => {
+    const p = await setup();
+    assert.equal(p.visible('tipL'), false, 'an instant send needs nobody to claim it');
+    p.select('dly', '86400');
+    await p.settle();
+    assert.equal(p.visible('tipL'), true);
+    p.select('dly', '0');
+    await p.settle();
+    assert.equal(p.visible('tipL'), false);
+    p.close();
+  });
+
+  test('ticking auto-claim quotes the tip from live gas', async () => {
+    const p = await setup();
+    p.select('dly', '86400');
+    await p.settle();
+    assert.equal(p.text('tipNote'), '', 'an unticked box costs nothing and says nothing');
+    p.click('tipCk');
+    await p.settle();
+    assert.match(p.text('tipNote'), /tip ≈ 0\.00018 ETH/,
+      'the quote must name the cost before it is signed');
+    p.close();
+  });
+
+  test('an ETH lock pays the tip alongside the amount in one value', async () => {
+    const p = await setup();
+    await tipped(p);
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'tipped deposit' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SLOW.toLowerCase());
+    assert.equal(selectorOf(tx.data), SEL.DEPOSITTIP);
+    const body = '0x' + tx.data.slice(10);
+    assert.equal(wordAddr(body, 1).toLowerCase(), A.OTHER.toLowerCase());
+    assert.equal(word(body, 2), 2n * ETH,
+      'unlike depositTo, the tipped path splits msg.value and must be told the amount');
+    assert.equal(word(body, 3), 86400n, 'the delay is unchanged by tipping');
+    assert.equal(word(body, 4), TIP, 'the tip is an argument, not only value');
+    assert.equal(BigInt(tx.value), 2n * ETH + TIP,
+      'ether transfers carry amount and tip in the same msg.value');
+    p.close();
+  });
+
+  test('an ERC-20 lock sends the tip as the whole value', async () => {
+    const p = await setup();
+    p.pickToken('fromSel', 'USDC');
+    await p.settle();
+    await tipped(p, '100', '3600');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length >= 2, { label: 'approve + tipped deposit' });
+    await p.settle();
+
+    const deposit = p.chain.lastSent;
+    assert.equal(selectorOf(deposit.data), SEL.DEPOSITTIP);
+    const body = '0x' + deposit.data.slice(10);
+    assert.equal(word(body, 2), 100n * USDC);
+    assert.equal(word(body, 4), TIP);
+    assert.equal(BigInt(deposit.value), TIP,
+      'the tip is ether even when the transfer is not');
+    p.close();
+  });
+
+  test('a tip that no longer fits the balance is caught before signing', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '10');   // the entire ETH balance
+    await recipient(p, A.OTHER);
+    p.select('dly', '86400');
+    await p.settle();
+    assert.equal(p.disabled('swap'), false, 'without a tip the whole balance is sendable');
+    p.click('tipCk');
+    await p.settle();
+    assert.match(p.text('swap'), /Insufficient ETH for amount \+ keeper tip/);
+    assert.equal(p.disabled('swap'), true);
+    assert.equal(p.chain.sent.length, 0);
+    p.close();
+  });
+
+  test('reversing a tipped transfer reclaims the tip from the gate', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const p = await setup(c => {
+      c.slowOut = [2n];
+      c.slowPending.set('2', {
+        timestamp: BigInt(now), id: BigInt(A.ZERO) | (86400n << 160n), amount: ETH,
+      });
+      c.slowTips.set('2', TIP);
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('Reversible'), { label: 'positions' });
+    p.click([...p.$('pos').querySelectorAll('button')].find(b => b.textContent === 'Reverse'));
+    await p.waitFor(() => p.chain.sent.length >= 2, { label: 'reverse + refund' });
+    await p.settle();
+
+    const refund = p.chain.lastSent;
+    assert.equal(refund.to.toLowerCase(), A.SLOW_GATE.toLowerCase(),
+      'the tip is held by the gate, not by SLOW');
+    assert.equal(selectorOf(refund.data), SEL.REFUNDTIP);
+    assert.equal(word('0x' + refund.data.slice(10), 0), 2n);
+    p.close();
+  });
+
+  test('reversing an untipped transfer asks for no second signature', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const p = await setup(c => {
+      c.slowOut = [2n];
+      c.slowPending.set('2', {
+        timestamp: BigInt(now), id: BigInt(A.ZERO) | (86400n << 160n), amount: ETH,
+      });
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('Reversible'), { label: 'positions' });
+    p.click([...p.$('pos').querySelectorAll('button')].find(b => b.textContent === 'Reverse'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'reverse' });
+    await p.settle();
+    assert.equal(p.chain.sent.length, 1, 'there is no tip to give back');
+    p.close();
+  });
+});
+
 describe('pending positions', () => {
   /** One incoming position, matured or not, plus one outgoing reversible one. */
   function withPositions(chain, { ready = true } = {}) {
@@ -333,6 +471,104 @@ describe('pending positions', () => {
     assert.match(p.$('pos').textContent, /Arrives in/);
     const claim = [...p.$('pos').querySelectorAll('button')].find(b => b.textContent === 'Claim');
     assert.equal(claim, undefined, 'nothing to claim before it matures');
+    p.close();
+  });
+});
+
+/**
+ * SLOW does not let a transfer go stale in the escrow forever, and it does not
+ * treat a guarded account like an unguarded one. Both rules are the contract's,
+ * not the page's — a page that ignores either builds calldata that reverts, or
+ * leaves the user's ether where they cannot reach it.
+ */
+describe('recovery paths', () => {
+  const DAY = 86400n;
+  const GRACE = 2592000;
+
+  /** One outgoing position, matured `agedSecs` ago. */
+  function outgoing(chain, agedSecs) {
+    const now = Math.floor(Date.now() / 1000);
+    chain.slowOut = [2n];
+    chain.slowPending.set('2', {
+      timestamp: BigInt(now - agedSecs) - DAY, id: BigInt(A.ZERO) | (DAY << 160n), amount: ETH,
+    });
+  }
+  const btn = (p, label) =>
+    [...p.$('pos').querySelectorAll('button')].find(b => b.textContent === label);
+
+  test('a matured transfer the recipient abandoned is clawed back after the grace', async () => {
+    const p = await setup(c => outgoing(c, GRACE + 60));
+    await p.waitFor(() => p.$('pos').textContent.includes('past grace'), { label: 'positions' });
+
+    const b = btn(p, 'Clawback');
+    assert.ok(b, 'past the grace the escrow is the sender\'s to take back');
+    p.click(b);
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'clawback tx' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SLOW.toLowerCase());
+    assert.equal(selectorOf(tx.data), SEL.MULTICALL, 'clawback alone would strand the funds');
+    assert.match(tx.data, new RegExp(SEL.CLAWBACK));
+    assert.match(tx.data, new RegExp(SEL.WITHDRAWFROM));
+    p.close();
+  });
+
+  test('within the grace the transfer is still the recipient\'s', async () => {
+    const p = await setup(c => outgoing(c, 60));
+    await p.waitFor(() => p.$('pos').textContent.includes('Matured'), { label: 'positions' });
+    assert.equal(btn(p, 'Clawback'), undefined, 'the grace belongs to the recipient');
+    assert.equal(btn(p, 'Reverse'), undefined, 'reverse is over once the lock expires');
+    p.close();
+  });
+
+  test('a guarded recipient unlocks rather than claims', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const p = await setup(c => {
+      c.slowGuardian = A.SLOW_GATE;
+      c.slowIn = [1n];
+      c.slowPending.set('1', {
+        timestamp: BigInt(now) - 2n * DAY, id: BigInt(A.USDC) | (DAY << 160n), amount: 500n * USDC,
+      });
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('500'), { label: 'positions' });
+
+    const b = btn(p, 'Unlock');
+    assert.ok(b, 'claim reverts for a guarded account — the page must say what it will do');
+    p.click(b);
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'unlock tx' });
+    await p.settle();
+    assert.equal(selectorOf(p.chain.lastSent.data), SEL.UNLOCK);
+    p.close();
+  });
+
+  test('a guarded sender reverses without the withdraw it cannot make', async () => {
+    const p = await setup(c => { c.slowGuardian = A.SLOW_GATE; outgoing(c, -3600); });
+    await p.waitFor(() => p.$('pos').textContent.includes('Reversible'), { label: 'positions' });
+    p.click(btn(p, 'Reverse'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'reverse tx' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(selectorOf(tx.data), SEL.REVERSE,
+      'withdrawFrom needs the guardian to co-sign, so bundling it reverts the reverse too');
+    p.close();
+  });
+
+  test('a tip nobody spent is offered back once the transfer has settled', async () => {
+    const p = await setup(c => {
+      c.slowOut = [2n];          // settled: pendingTransfers reads back zero
+      c.slowTips.set('2', 10n ** 15n);
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('Keeper tip'), { label: 'stale tip' });
+    p.click(btn(p, 'Reclaim tip'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'refund tx' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SLOW_GATE.toLowerCase());
+    assert.equal(selectorOf(tx.data), SEL.REFUNDTIP);
+    assert.equal(word('0x' + tx.data.slice(10), 0), 2n);
     p.close();
   });
 });

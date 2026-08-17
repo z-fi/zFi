@@ -47,7 +47,20 @@ describe('precision as a quote source', () => {
     const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 } });
     await p.typeAmount('amt', '1');
     assert.equal(p.value('outAmt'), '3100');
-    assert.match(p.text('rate'), /Precision 0\.3%/, 'and says which venue won');
+    assert.match(p.text('rate'), /Precision\s0\.3%/, 'and says which venue won');
+    p.close();
+  });
+
+  test('quotes the fee a hooked pool actually charges, not its base rate', async () => {
+    // `fee()` is the BASE rate. A hooked pool adds a surcharge on top, so a
+    // page reading the pool directly tells the user 0.3% while the swap takes
+    // 1%. The lens composes the two the way the pool does; the difference is
+    // only visible when the two numbers disagree, which is why this fixture
+    // sets them apart rather than reusing the default.
+    const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000, effFee: 10000 } });
+    await p.typeAmount('amt', '1');
+    assert.match(p.text('rate'), /Precision\s1%/,
+      `the surcharge should be in the quoted tier, got ${p.text('rate')}`);
     p.close();
   });
 
@@ -112,6 +125,22 @@ describe('precision as a quote source', () => {
     assert.equal(first.to.toLowerCase(), A.WETH.toLowerCase());
     assert.match(first.data, /^0xd0e30db0/, 'deposit()');
     assert.equal(BigInt(first.value), ETH, 'wrapping the input, as value');
+    // AND THE ALLOWANCE THE WRAP EXISTS TO MAKE POSSIBLE.
+    //
+    // The route is funded in WETH through zRouter, so it needs one - and both
+    // approval branches keyed off the token the PICKER names, which is ether
+    // here. Neither fired, nothing was approved, and the wrap still went out
+    // ahead of a swap that could only revert: the user paid gas to wrap and was
+    // left holding the WETH. This test passed throughout, because it only ever
+    // looked at the first send and the last one.
+    const approve = p.chain.sent.find(t =>
+      t.to.toLowerCase() === A.WETH.toLowerCase() && selectorOf(t.data) === SEL.APPROVE);
+    assert.ok(approve, 'the wrapped input must be approved to the router');
+    const body = approve.data.slice(10);
+    assert.equal(wordAddr(body, 0).toLowerCase(), A.ZROUTER.toLowerCase());
+    assert.ok(word(body, 1) >= ETH, 'covering the whole input');
+    // Order matters: there is nothing to approve until the WETH exists.
+    assert.ok(p.chain.sent.indexOf(first) < p.chain.sent.indexOf(approve), 'wrap before approve');
     // And the pool call itself carries NO value, because it is not native.
     const swap = p.chain.sent[p.chain.sent.length - 1];
     assert.equal(BigInt(swap.value || 0), 0n, 'a WETH pool must not be sent ether');
@@ -130,6 +159,25 @@ describe('precision as a quote source', () => {
     p.pickToken('fromSel', 'USDC');     // asks for WETH from a NATIVE market
     await p.typeAmount('amt', '1000');
     assert.match(p.text('rate'), /pays ETH/i, 'the output form must be disclosed');
+    // On the HEADING over the amount, not only at the tail of the rate line.
+    // There it sat past the fee, the minimum, the impact and the scan cap -
+    // several facts along from the number it contradicts, and a reader who has
+    // found their amount has no reason to read on.
+    assert.match(p.text('rcvHdr'), /as ETH/i, 'and named where the amount is read');
+    p.close();
+  });
+
+  test('drops the output-form note when the quote it belonged to goes', async () => {
+    // The heading states a fact about one QUOTE. Left standing after the quote
+    // is cleared it becomes a claim about whatever is typed next.
+    const p = await loadPage({ chain: market({ pair: [A.ZERO, A.USDC], out: 2n * ETH }) });
+    await p.connect();
+    p.pickToken('toSel', 'WETH');
+    p.pickToken('fromSel', 'USDC');
+    await p.typeAmount('amt', '1000');
+    assert.match(p.text('rcvHdr'), /as ETH/i);
+    await p.typeAmount('amt', '');
+    assert.equal(p.text('rcvHdr'), 'You receive');
     p.close();
   });
 
@@ -189,11 +237,14 @@ describe('precision as a quote source', () => {
     p.close();
   });
 
-  test('unwraps the WETH before paying a pool that holds ether', async () => {
-    // The other half. Quoting finds the market; the pool still wants VALUE, not
-    // an allowance. A Precision swap settles at the pool rather than through
-    // zRouter, so there is no multicall to fold this into - it is a separate
-    // transaction, the same shape as the wrap a book fill already does.
+  test('pays a pool that holds ether from WETH, without an unwrap step', async () => {
+    // The other half, and the case that used to cost the user an extra prompt.
+    // The market holds ether and cannot take a WETH allowance, so the page
+    // unwrapped first and had to explain why. `PrecisionRoute.routeFromWETH`
+    // moved that conversion inside the route - `snwap` delivers an ERC-20 to
+    // the executor it calls, so the WETH arrives as an ordinary token input and
+    // is unwrapped there. What must be true now: no `withdraw`, an allowance to
+    // zRouter like any other token leg, and no value riding.
     const chain = new MockChain();
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.setErc20(A.WETH, A.ACCOUNT, 10n * ETH);
@@ -208,16 +259,30 @@ describe('precision as a quote source', () => {
     assert.equal(p.value('outAmt'), '4000');
 
     p.click('swap');
-    await p.waitFor(() => p.chain.sent.length > 1, { label: 'unwrap then swap' });
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'approve then swap' });
     await p.settle();
 
-    const [first, second] = p.chain.sent;
-    assert.equal(first.to.toLowerCase(), A.WETH.toLowerCase(), 'the first call is the unwrap');
-    assert.match(first.data, /^0x2e1a7d4d/, 'withdraw(uint256)');
-    assert.equal(second.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'then the routed swap');
-    assert.equal(BigInt(second.value), ETH, 'paid as VALUE, because the pool holds ether');
-    assert.ok(second.data.toLowerCase().includes(POOL.slice(2).toLowerCase()),
+    assert.ok(!p.chain.sent.some(t => /^0x2e1a7d4d/.test(t.data || '')),
+      'nothing may be unwrapped: the route does that itself');
+
+    const swap = p.chain.lastSent;
+    assert.equal(swap.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'the swap goes through zRouter');
+    assert.equal(BigInt(swap.value || 0), 0n,
+      'and NO value rides - the leg is funded in WETH, not in ether');
+    assert.ok(swap.data.toLowerCase().includes('78fd78b0'),
+      'routeFromWETH(address[],address,uint256,uint256,address) is the inner call');
+    assert.ok(swap.data.toLowerCase().includes(POOL.slice(2).toLowerCase()),
       'and the pool is the path the route walks');
+
+    // Funded like any ERC-20 leg: the allowance goes to zRouter, and the
+    // checkpoint that binds it names WETH rather than ether.
+    const approve = p.chain.sent.find(t => /^0x095ea7b3/.test(t.data || ''));
+    assert.ok(approve, 'the WETH input is approved');
+    assert.equal(approve.to.toLowerCase(), A.WETH.toLowerCase());
+    assert.ok(approve.data.toLowerCase().includes(A.ZROUTER.slice(2).toLowerCase()),
+      'approved to zRouter, so this rides the same funding waterfall as every other token');
+    assert.ok(swap.data.toLowerCase().includes('0b7c6c6c'),
+      'and the funding is checkpointed before it is spent');
     p.close();
   });
 
@@ -266,7 +331,13 @@ describe('precision as a quote source', () => {
   });
 
   test('approves zRouter for an ERC-20 input, not the pool', async () => {
-    const p = await setup({ precision: { pool: POOL, out: ETH / 3n, fee: 500 } });
+    /* `small` makes the fixture size-AWARE. Without it the mock pays the same
+       output for a hundredth of the input, which is not a pool - it is a
+       machine that prints ether, and the page now correctly reads it as ~99%
+       price impact and stops to ask. Proportional is what a real quote does. */
+    const p = await setup({
+      precision: { pool: POOL, out: ETH / 3n, small: ETH / 300n, amountIn: 1000n * USDC, fee: 500 },
+    });
     // The pair is pinned ETH -> USDC, so neither side can move straight past
     // the other. Step through a third token.
     p.pickToken('toSel', 'WBTC');

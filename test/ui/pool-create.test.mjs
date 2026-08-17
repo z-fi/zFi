@@ -7,13 +7,21 @@
  * a band somebody already chose, and choosing badly here is arbitrageable
  * rather than merely suboptimal.
  *
- * Two defaults are opinions, and both are asserted below because both are
- * security-relevant rather than cosmetic:
+ * Two defaults are asserted below because both are security-relevant rather
+ * than cosmetic:
  *
- *   the market is created NAMED (feeRecipient = you), which is the only thing
- *   that stops a stranger seeding your pool at a price of their choosing
+ *   the market is created UNOWNED (feeRecipient zero), so anyone may add and
+ *   no creator fee can ever be charged - see 'creates an unowned market by
+ *   default'
  *
- *   the creator fee is ZERO, so naming costs traders nothing
+ *   the creator fee is ZERO, which is what ownership would otherwise buy
+ *
+ * This header used to claim the opposite - that the market is created NAMED,
+ * "the only thing that stops a stranger seeding your pool at a price of their
+ * choosing". The assertion below has always checked for a zero recipient, so
+ * the prose and the test disagreed. What actually protects the opening price
+ * is that `createAndSeed` deploys and seeds in ONE call and reverts `Exists()`
+ * on a pool that already holds liquidity.
  *
  * Run: node --test test/ui/
  */
@@ -40,7 +48,7 @@ const patchLens = (() => {
 // price is USDC per ETH, so the decimal bias is 10^(6-18).
 const sq = px => BigInt(Math.round(Math.sqrt(px * 10 ** -12) * 1e9)) * 10n ** 9n;
 
-async function setup({ band = { low: sq(1000), high: sq(5000) }, deployed = false } = {}) {
+async function setup({ band = { low: sq(1000), high: sq(5000) }, deployed = false, supply = 0n } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 50n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 100_000n * USDC);
@@ -51,6 +59,9 @@ async function setup({ band = { low: sq(1000), high: sq(5000) }, deployed = fals
   // that already exists. Creating one usually means it does NOT - see the
   // "not yet deployed" tests below for the ordinary case.
   chain.seedDeployed = deployed;
+  // What the predicted address answers `totalSupply()` with. Nonzero means the
+  // band already exists AND holds liquidity, which `createAndSeed` refuses.
+  chain.seedSupply = supply;
   // No pools registered for the pair: the panel's empty state is the entry
   // point, which is the whole point of putting creation there.
   const page = await loadPage({ chain, patch: patchLens });
@@ -86,8 +97,16 @@ const fill = async (p, { a0, a1, ...fields } = {}) => {
     el.value = v;
     el.dispatchEvent(new p.window.Event('input', { bubbles: true }));
   }
-  if (a0 !== undefined) { p.$('amt').value = a0; p.type('amt', a0); }
-  if (a1 !== undefined) { p.$('outAmt').value = a1; p.type('outAmt', a1); }
+  // The tile's two boxes are the deposit, mapped BY TOKEN: `chPair()` sorts by
+  // address because that is how a pool stores its pair, while the tile is in
+  // picker order. `a0`/`a1` here mean token0/token1, so put each one wherever
+  // that token currently sits.
+  const pay = p.$('fromSel');
+  const payIs0 = (p.window.getComputedStyle ? true : true) &&
+    (p.$('fromSel').dataset.addr || '').toLowerCase() <= (p.$('toSel').dataset.addr || '').toLowerCase();
+  const el0 = payIs0 ? 'amt' : 'outAmt', el1 = payIs0 ? 'outAmt' : 'amt';
+  if (a0 !== undefined) { p.$(el0).value = a0; p.type(el0, a0); }
+  if (a1 !== undefined) { p.$(el1).value = a1; p.type(el1, a1); }
   await new Promise(r => p.window.setTimeout(r, 420));
   await p.settle();
 };
@@ -127,21 +146,47 @@ describe('creating a band', () => {
     p.close();
   });
 
-  test('previews exactly when the market exists but was never seeded', async () => {
-    // The factory allows this and seeds rather than rejecting, and it is the
-    // only case where the lens has a pool to read.
-    const p = await setup({ deployed: true });
-    await custom(p);
-    assert.match(p.$('lqPv').textContent, /Seeds 1 ETH \+ 3,?000 USDC/);
-    assert.equal(p.$('lqCreate').disabled, false);
-    p.close();
+  test('previews the seed itself, deployed or not', async () => {
+    // `previewSeed` cannot answer for a band that does not exist - `_band`
+    // reverts NoPool on an address with no code - and a band that does not
+    // exist is what this form creates. So the seed is mirrored in the page
+    // (`lqSeedQuote`, pinned to the lens by test/fixtures/seed-preview.json)
+    // and the answer no longer depends on whether anyone deployed the market
+    // first. It used to: undeployed, the page printed the amounts back
+    // unchecked, which is not a preview of anything.
+    const a = await setup();                     // predicted, no code
+    await custom(a);
+    const undeployed = a.$('lqPv').textContent;
+    assert.match(undeployed, /^Seeds /);
+    assert.equal(a.$('lqCreate').disabled, false);
+
+    const b = await setup({ deployed: true });   // created but never seeded
+    await custom(b);
+    assert.equal(b.$('lqPv').textContent, undeployed, 'the same seed, either way');
+    a.close(); b.close();
   });
 
   test('says when the rest comes back, because the amounts are maxima', async () => {
     // A seed takes the ratio the opening price implies and returns the excess.
-    const p = await setup({ band: { low: sq(1000), high: sq(5000), used0: ETH / 2n }, deployed: true });
+    // 1 ETH against 3000 USDC over a 1000-5000 band consumes all of the USDC
+    // and a hair under the ETH, which is a refund and has to be spoken of as
+    // one - the figure is what the pool will really take.
+    const p = await setup();
     await custom(p);
+    assert.match(p.$('lqPv').textContent, /Seeds 0\.999999 ETH \+ 3,?000 USDC/);
     assert.match(p.$('lqPv').textContent, /the rest is returned/i);
+    p.close();
+  });
+
+  test('will not create a band that is already seeded', async () => {
+    // `createAndSeed` reverts Exists() on a market that holds liquidity - the
+    // address is CREATE2-derived from the whole tuple, so an identical band
+    // cannot be redeployed. Cheaper to say so than to let the wallet say it.
+    const p = await setup({ deployed: true, supply: 10n ** 21n });
+    await custom(p);
+    assert.match(p.$('lqPv').textContent, /already exists/i);
+    assert.equal(p.$('lqCreate').disabled, true);
+    assert.equal(p.chain.sent.length, 0);
     p.close();
   });
 
@@ -183,6 +228,38 @@ describe('creating a band', () => {
     p.close();
   });
 
+  test('mints the shares to the recipient field, not always to you', async () => {
+    // The field is live in this mode - it resolves names, and both `addLiquidity`
+    // and the zap honour it. Seeding sent `account` regardless, which is the one
+    // place the label ("LP shares to") and the transaction disagreed.
+    const to = '0x' + '5c'.repeat(20);
+    const p = await setup();
+    await custom(p);
+    p.type('rc', to);
+    await new Promise(r => p.window.setTimeout(r, 340));
+    await p.settle();
+    p.click('lqCreate');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
+    await p.settle();
+
+    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
+    assert.equal(wordAddr(b, 12).toLowerCase(), to, 'LP shares go where the field says');
+    p.close();
+  });
+
+  test('refuses to create when the recipient does not resolve', async () => {
+    const p = await setup();
+    await custom(p);
+    p.type('rc', 'nope.eth');
+    await new Promise(r => p.window.setTimeout(r, 340));
+    await p.settle();
+    p.click('lqCreate');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'nothing signed against an unresolved name');
+    assert.match(p.text('stat'), /must be an address or a/i);
+    p.close();
+  });
+
   test('creates an unowned market by default', async () => {
     // The AMM norm, and the credibly neutral one: nobody is privileged and
     // nobody can ever take a fee from it. A squatter CAN seed it first and
@@ -218,17 +295,24 @@ describe('creating a band', () => {
 
 
   test('carries a slippage floor under the previewed shares', async () => {
-    const p = await setup({ deployed: true });
+    // And it carries one on EVERY create, not only when a lens happened to
+    // answer. This used to send zero whenever the band did not already exist,
+    // which is the ordinary case, on the reasoning that the market was NAMED
+    // and so nobody else could seed it - but the page creates an UNOWNED
+    // market (see 'creates an unowned market by default' above), so that
+    // reasoning had not been true for some time.
+    const p = await setup();
     await custom(p);
     p.click('lqCreate');
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
     await p.settle();
 
     const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
-    const previewed = ETH + 3000n * USDC;             // what the fixture returns
+    const seeded = p.window.lqSeedQuote(word(b, 2), word(b, 3), word(b, 8), word(b, 9), word(b, 10));
+    assert.ok(seeded.ok && seeded.lp > 0n, 'the calldata sent describes a seed that works');
     const minLP = word(b, 11);
-    assert.ok(minLP > 0n && minLP < previewed, 'a floor, not the preview itself');
-    assert.equal(minLP, previewed * 9950n / 10000n, 'the page slippage, 0.5% by default');
+    assert.ok(minLP > 0n && minLP < seeded.lp, 'a floor, not the preview itself');
+    assert.equal(minLP, seeded.lp * 9950n / 10000n, 'the page slippage, 0.5% by default');
     p.close();
   });
 
@@ -248,40 +332,16 @@ describe('creating a band', () => {
   });
 
   test('reports a band the pool would refuse rather than sending it', async () => {
-    // previewSeed answering `ok: false` is the band saying this cannot open
-    // here at all - a different thing from a poor rate, and it must not be
-    // clickable.
-    const p = await setup({ band: { low: sq(4000), high: sq(5000) }, deployed: true });
-    await custom(p);
+    // The pool needs both virtual reserves above MIN_RESOLUTION, which is a
+    // property of the band's WIDTH against the deposit - a band the deposit
+    // cannot back at all is a different thing from a poor rate, and it must
+    // not be clickable. THE ORDINARY CASE IS THE UNDEPLOYED ONE, and this
+    // refusal was unreachable there for as long as it came from the lens.
+    const p = await setup();                 // not deployed
+    await custom(p, { a0: '1', a1: '3000', lqLo: '0.0001', lqHi: '300000000' });
     assert.match(p.$('lqPv').textContent, /cannot open at that price/i);
     assert.equal(p.$('lqCreate').disabled, true);
     assert.equal(p.chain.sent.length, 0);
-    p.close();
-  });
-  test('previews honestly when the band does not exist yet', async () => {
-    // THE ORDINARY CASE. previewSeed reads the band off the pool, and there is
-    // no code at a CREATE2 address until it is deployed - so on mainnet it
-    // REVERTS rather than answering. A page that treated that as a failure
-    // would refuse to create the very thing it exists to create.
-    const p = await setup();                 // not deployed
-    await custom(p);
-    assert.match(p.$('lqPv').textContent, /Deposits 1 ETH \+ 3,?000 USDC/);
-    assert.equal(p.$('lqCreate').disabled, false, 'and it must still be creatable');
-    p.close();
-  });
-
-  test('sends no share floor when there was no preview to floor', async () => {
-    // Not a gap: the market is NAMED, so nobody else can seed it, there is no
-    // other liquidity to move against, and the opening price is the caller's
-    // own. minLP guards rounding here, not a counterparty.
-    const p = await setup();
-    await custom(p);
-    p.click('lqCreate');
-    await p.waitFor(() => p.chain.sent.length > 0, { label: 'create' });
-    await p.settle();
-
-    const b = '0x' + p.chain.lastSent.data.replace(/^0x/, '').slice(8);
-    assert.equal(word(b, 11), 0n);
     p.close();
   });
 
@@ -430,6 +490,43 @@ describe('creating a band', () => {
     assert.ok(at > 45 && at < 55,
       `a band centred on its opening price should mark the middle, got ${at}%`);
     assert.equal(bar.classList.contains('out'), false);
+    p.close();
+  });
+
+  test('reads the two deposits by token, not by which field they sit in', async () => {
+    /**
+     * The tile's fields are in PICKER order; `chPair()` sorts the pair by
+     * ADDRESS, because that is the order a pool is stored in. They agree only
+     * by luck - ETH sorts first as the zero address, so every other test here
+     * uses a pair that hides this - and disagree the moment the pay side is
+     * the higher address.
+     *
+     * USDC (0xa0b8…) → WBTC (0x2260…) is exactly that: the form read the USDC
+     * figure as amount0 and parsed it with WBTC's 8 decimals, so the opening
+     * price came out reciprocal and the band, the seed and `createAndSeed`'s
+     * value were all built from the two deposits swapped.
+     */
+    const p = await setup();
+    // Receive side first: USDC starts there, and the page refuses the same
+    // asset on both sides, so it has to move before the pay side can take it.
+    p.pickToken('toSel', 'WBTC');
+    p.pickToken('fromSel', 'USDC');
+    await p.settle();
+    // token0 is WBTC here, so the panel prices USDC per WBTC either way - what
+    // the bug changed is which field it took each amount from.
+    assert.match(p.$('lqSub').textContent, /WBTC\s*\/\s*USDC/, 'sorted, as the pool stores it');
+    // A preset band is centred on the opening price, so what the line reports
+    // is the ratio itself rather than a seed price solved against fixed edges.
+    p.type('amt', '3000');       // USDC, the pay side
+    p.type('outAmt', '1');       // WBTC, the receive side
+    await new Promise(r => p.window.setTimeout(r, 420));
+    await p.settle();
+    const band = p.$('lqRangeOut').textContent;
+    assert.match(band, /opens at 3,?000 USDC per WBTC/,
+      `1 WBTC against 3000 USDC is a price of 3000, got: ${band}`);
+    // The reciprocal is what the bug produced, and it is inside the band too -
+    // so the preview looked perfectly healthy while seeding the wrong pool.
+    assert.doesNotMatch(band, /opens at 0\.000/, 'the price must not come out inverted');
     p.close();
   });
 

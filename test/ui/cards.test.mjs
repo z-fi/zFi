@@ -48,6 +48,11 @@ async function setup(prep = () => {}) {
   const p = await loadPage({ chain });
   await p.connect();
   p.click('tabBook');
+  // The book opens filtered to the selected pair. These fixtures are about how
+  // a row RENDERS - a far-away token's logo, a receipt card - so they sit on
+  // other pairs on purpose. Drop the filter through the chip, as a user would.
+  await p.waitFor(() => p.$('book').querySelector('[data-bf="0"]'), { label: 'filter chips' });
+  p.click(p.$('book').querySelector('[data-bf="0"]'));
   await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
   return p;
 }
@@ -187,7 +192,9 @@ describe('the bid climb', () => {
         id: 7n, token: A.WETH, quote: A.USDC,
         remaining: 10n * ETH, initial: 10n * ETH,
         price: 40_000n * USDC, proceeds: 40_000n * USDC,
-        startTime: BigInt(now), expiry: BigInt(now + 3600),
+        // `bids()` states the window as a DURATION; the lens row's `expiry` is
+        // that same window already added to `startTime`.
+        startTime: BigInt(now), duration: 3600n, expiry: BigInt(now + 3600),
         tokenDecimals: 18, quoteDecimals: 6, tokenSymbol: 'WETH', quoteSymbol: 'USDC',
       }];
     });

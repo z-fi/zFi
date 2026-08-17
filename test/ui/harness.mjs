@@ -45,6 +45,7 @@ export const A = {
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
   SLOW: '0x000000000000888741B254d37e1b27128AfEAaBC',
+  SLOW_GATE: '0xb8B546b93a82f4Aa6f0345142dF5679B659ef3D4',
   SB2: '0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b',
   SB1: '0x000000fF3D7A2d373615141d7489Ca66683DbecF',
   SBVIEW: '0x000000E0b25449F32f7D9259aC449bA88E78dFCE',
@@ -60,8 +61,13 @@ export const A = {
   // their real addresses, so those two are pinned against the page below.
   PFACTORY: '0x000000Eb27B557aB426d9E99cFd54EC455799e81',
   PLQLENS: '0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E',
+  // The executor target of a one-sided deposit. Pinned too: the zap names it
+  // as snwap's `executor`, and a wrong address there is a transaction that
+  // hands the router's value to nothing.
+  PROUTE: '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB',
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
+  ENSRESOLVER: '0x00000000000000000000000000000000000e5e50',
   WNS: '0x0000000000696760E15f265e828DB644A0c242EB',
   GNS: '0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6',
   ACCOUNT: '0x1111111111111111111111111111111111111111',
@@ -71,12 +77,13 @@ export const A = {
 export const SEL = {
   BALANCEOF: '70a08231', ALLOWANCE: 'dd62ed3e', APPROVE: '095ea7b3', TRANSFER: 'a9059cbb',
   SYMBOL: '95d89b41', DECIMALS: '313ce567', NAME: '06fdde03',
-  DS: '3644e515', NONCES: '7ecebe00',
+  DS: '3644e515', NONCES: '7ecebe00', PERMIT_TH: '30adf81f',
   MULTICALL: 'ac9650d8', SNWAP: '5f3bd1c8', SWEEP: 'cb019b84', CHECKPOINT: 'a972985e',
   FILLPLAN: 'c277f67c', FILLPLAN_SWAP: '9090c8e5', QUOTEFILL: 'f325beda',
   RPERMIT: '7ac2ff7b', P2TF: '09d31579',
   AGG3: '82ad56cb',
   QUOTE: 'e453166e', QUOTE_MULTI: '4c464f59', SPLIT_A: '892af013', SPLIT_B: '85f86a90',
+  QUOTE_ONE: 'e7798987',
   // `placeDutch` grew a `uint40 expiry` between `duration` and `deadline`, so
   // the selector moved from fb910431. The adapter used to hardcode the board's
   // expiry to zero, leaving every Dutch lot resting at its floor forever.
@@ -88,28 +95,43 @@ export const SEL = {
   FLOOR_HIT: '309ce4ce', ORDER_FLOOR: '23e93357', BOL_FLOOR: 'b732d224',
   NEXTID: '2a58b330', CANCELORD: '514fcac7', CANCEL_UNWRAP: '21dd76f9',
   DUTCH_CANCEL: '40e58ee5', DUTCH_CANCEL_UNWRAP: '8382de65',
-  FILL1: 'c37dfc5b', FILL2: '8ab3bfc9', FILL2_UNWRAP: '402ad677', FILL2_ETH: '13092239',
+  // The fill entry points carry `fillAmountB` and `minAmountA`: a taker states
+  // what it pays and the floor it accepts. The three-and-four-argument
+  // ancestors (8ab3bfc9 / 402ad677 / 13092239) had neither.
+  FILL1: 'c37dfc5b', FILL2: '9d136c7f', FILL2_UNWRAP: '3987baf4', FILL2_ETH: '6f608bab',
   DUTCH_FILL: 'ae7a8260', DUTCH_LISTING: 'de74e57b',
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
   ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
+  PREVIEW_ZAP: 'e7cddab0', ZAPIN: 'c98c2c0b',
   POOLFOR: '83bd1387', PREVIEW_SEED: '1d355417', CREATE_SEED: '7163352a',
-  QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43',
+  TOTALSUPPLY: '18160ddd',
+  QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43', EFF_FEE: 'ef66de32',
+  BY_CREATOR: '7d78be2b', TOKEN1: 'd21220a7', BY_CREATOR_N: 'aa5e6b5b', RESERVE0: '443cb4bc',
   PAIR_COUNT: '355da246',
-  REMOVE: 'e39b0eb5', ADDEXACT: 'cc0025e4',
+  REMOVE: 'e39b0eb5', REMOVE_LOSSY: '0cc55f06', ADDEXACT: 'cc0025e4',
   RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96', FLOOR_BID: '3d8d260b',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
   ENS_RSLV: '0178b8bf', ENS_EADDR: '3b3b57de', ENS_ENAME: '691f3431',
+  ENS_RESOLVE: '9061b923', ENS_SUPPORTS: '01ffc9a7',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
+  DEPOSITTIP: '75f92e42', TIPS: 'a5c68c59', REFUNDTIP: 'd27e1e72',
   OUT: 'd40d4bc6', IN: 'e3993ee7', PENDING: '6577b86a',
+  GUARDIAN: '0633b14a', UNLOCK: '6198e339', CLAWBACK: 'fcc36bc9',
   WETH_DEPOSIT: 'd0e30db0', WETH_WITHDRAW: '2e1a7d4d',
+  LATEST: '52bfe789', PREVIOUS: '247dfaa8', SUCCEEDED_AT: '451aae60',
 };
 
 // -------------------------------------------------------------- abi helpers
 const strip = h => (h || '').replace(/^0x/, '');
+const ZERO_ADDR = '0x' + '0'.repeat(40);
 export const word = (hex, i) => BigInt('0x' + strip(hex).slice(i * 64, (i + 1) * 64));
 export const wordAddr = (hex, i) => '0x' + strip(hex).slice(i * 64 + 24, (i + 1) * 64);
 const u256 = v => BigInt(v).toString(16).padStart(64, '0');
 const addrWord = a => strip(a).toLowerCase().padStart(64, '0');
+const PLAUNCH = '0x0000002fc8e77585a008aa45d78a71ad36293aee';
+const FEE_POOL = '0x' + 'fe'.repeat(20);
+const LAUNCHED_TOPIC = keccak256(toUtf8Bytes(
+  'Launched(address,address,address,uint256,uint256,uint256)'));
 export const selectorOf = data => strip(data).slice(0, 8);
 
 /** ABI-encode a dynamic `bytes` tail (length word + right-padded body). */
@@ -150,6 +172,21 @@ export function encodeQuote({ u = 4, legs, callData = '0x', msgValue = 0n, hops 
   return '0x' + head + arr + bytesTail(callData);
 }
 
+/**
+ * buildBestSwap's return: (Quote, bytes callData, uint256 amountLimit, uint256 msgValue).
+ *
+ * One word longer than the multicall builders, because amountLimit sits between
+ * the bytes offset and msgValue. That word is the whole reason the page passes
+ * decQ an explicit msgValue index for this builder — read it as v+1 and the
+ * msg.value of every ETH swap becomes the slippage bound instead.
+ */
+export function encodeSingleHop({ source = 3, feeBps = 30n, amountIn, amountOut, amountLimit, msgValue = 0n, callData = '0x' }) {
+  const d = callData.replace(/^0x/, '');
+  return '0x' + u256(source) + u256(feeBps) + u256(amountIn) + u256(amountOut)
+    + u256(7 * 32) + u256(amountLimit) + u256(msgValue)
+    + u256(d.length / 2) + d.padEnd(Math.ceil(d.length / 64) * 64, '0');
+}
+
 /** The 16-field SwapboardView.OrderView tuple, as decViewPage decodes it. */
 const ROW_TUPLE =
   'tuple(uint256,address,bool,uint64,bool,bool,address,address,uint256,string,uint8,address,uint256,string,uint8,address)[]';
@@ -166,6 +203,25 @@ export function encodeViewPage(rows, next = 0n) {
 }
 
 const encodeString = s => coder.encode(['string'], [s]);
+export const wordHex = (hex, i) => '0x' + strip(hex).slice(i * 64, (i + 1) * 64);
+/** namehash, computed independently of the page so the test is not the code. */
+export const ensNamehash = name => {
+  let node = '0x' + '0'.repeat(64);
+  if (name) for (const label of name.split('.').reverse())
+    node = keccak256(node + strip(keccak256(toUtf8Bytes(label))));
+  return node;
+};
+/** DNS wire format back to a dotted name. */
+const dnsDecode = hex => {
+  const h = strip(hex); const out = []; let i = 0;
+  for (;;) {
+    const len = parseInt(h.slice(i, i + 2), 16);
+    if (!len) break;
+    out.push(Buffer.from(h.slice(i + 2, i + 2 + len * 2), 'hex').toString('utf8'));
+    i += 2 + len * 2;
+  }
+  return out.join('.');
+};
 
 /**
  * The 17-field FloorboardView.BidRow tuple.
@@ -258,9 +314,20 @@ export class MockChain {
     this.names = new Map();
     this.reverse = new Map();
     this.ensResolver = A.ZERO;   // non-zero enables the .eth path
+    this.ensResolvers = new Map();  // node -> resolver, for the ENSIP-10 walk
+    this.ensNames = new Map();      // .eth name -> address, read by addr()/resolve()
+    this.ensRevNames = new Map();   // address -> the name its reverse record claims
+    this.ensWildcard = false;       // does the resolver admit to ENSIP-10?
+    this.ensOffchain = false;       // resolve() reverts OffchainLookup, as a CCIP resolver does
     this.slowOut = [];
     this.slowIn = [];
     this.slowPending = new Map();
+    // transferId -> tip in wei, as the gate holds it. Absent means no tip was
+    // posted, which is what a plain depositTo leaves behind.
+    this.slowTips = new Map();
+    // A guardian on the account changes which calls SLOW will accept: claim
+    // becomes unlock, and withdrawFrom needs the guardian's co-signature.
+    this.slowGuardian = A.ZERO;
     this.quoteHandler = null;      // ({selector, params}) => hex | null
     this.capabilities = null;      // wallet_getCapabilities response
     this.sent = [];                // eth_sendTransaction payloads
@@ -268,6 +335,14 @@ export class MockChain {
     this.log = [];                 // every request {method, params}
     this.signed = [];              // eth_signTypedData_v4 payloads
     this.batches = [];             // wallet_sendCalls payloads
+    // Recovery id the mock wallet puts in the last byte of a signature. Real
+    // wallets disagree: most answer 27/28, some answer the raw 0/1 form, and a
+    // signature that reaches Permit2 with 0/1 recovers address(0) and reverts.
+    this.sigV = 0x1b;
+    // wallet_getCallsStatus answer, as ({id}) => status object. Null means the
+    // default: one receipt, confirmed. Set it to exercise partial failure, a
+    // per-call receipt list, or a status code that is not 200.
+    this.callsStatusHandler = null;
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
     this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
     this.failEveryCall = false;    // batch returns, but every call inside it failed
@@ -281,6 +356,16 @@ export class MockChain {
     // registry's own listing order.
     this.conviction = null;
     this.nftOwner = new Map();     // `${collection}:${id}` -> holder
+    // zSwap address -> what its `latest()` answers. Unset means the address is
+    // its own tip: no successor, so the page has nothing to announce.
+    this.lineage = new Map();
+    // version -> its predecessor, and predecessor -> when it recorded that
+    // successor. The page refuses to point anyone at a version younger than
+    // the maturity delay, so a lineage fixture needs a clock as well as a
+    // shape. Unset reads as zero, which the page treats as "no clock, no
+    // delay" - the pre-field chain case.
+    this.previousOf = new Map();
+    this.succeededAt = new Map();
     // Band a seed preview answers for: {low, high} sqrt prices, and optional
     // used0/used1 when the seed should consume less than it was offered.
     this.seedBand = null;
@@ -352,6 +437,30 @@ export class MockChain {
    * lens performs, so a test asserting on a previewed amount is asserting on
    * something, not on a constant.
    */
+  /**
+   * Markets the LAUNCHER created, as the factory's creator index reports them.
+   * `pools` is [{pool, token}] - the page reads the pool list, then `token1()`
+   * on each, because token0 is always the native asset on a launch.
+   */
+  /**
+   * Fees a launched coin has accrued but nobody has swept. `fees` is
+   * {token: {owed0, owed1, pool}} - owed0 is the ether side, which is what the
+   * page offers to collect.
+   */
+  setLaunchFees(fees) {
+    this.launchFees = {};
+    for (const [t, v] of Object.entries(fees)) {
+      const e = typeof v === 'bigint' ? { owed0: v } : v;
+      this.launchFees[t.toLowerCase()] = e;
+      this.code.set((e.pool || FEE_POOL).toLowerCase(), '0x60006000');
+    }
+    return this;
+  }
+  setLaunched(pools) {
+    this.launched = pools;
+    for (const {pool} of pools) if (!this.code.has(pool.toLowerCase())) this.code.set(pool.toLowerCase(), '0x60006000');
+    return this;
+  }
   setPools(a, b, pools) {
     const [t0, t1] = a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
     const rows = pools.map(p => (typeof p === 'string' ? { pool: p } : p))
@@ -376,12 +485,30 @@ export class MockChain {
   }
   setCode(addr, code) { this.code.set(addr.toLowerCase(), code); return this; }
   undeploy(addr) { this.code.set(addr.toLowerCase(), '0x'); return this; }
+  /**
+   * Make an `eth_call` fail.
+   *
+   * `msg` may be a FUNCTION of the calldata, for the case where one selector
+   * has to fail selectively: a pool whose degraded exit reverts when asked for
+   * both sides and succeeds when asked for one is a single selector called
+   * twice with different arguments, and a flat map cannot tell those apart.
+   * Return a message to revert, or a falsy value to let the call through.
+   */
   revertOn(to, selector, msg = 'execution reverted') {
     this.reverts.set(`${to.toLowerCase()}:${selector}`, msg); return this;
   }
 
   /** Make the factory disclaim a pool the lens still describes. */
   disownPool(pool) { this.disowned.add(pool.toLowerCase()); return this; }
+
+  /** The sorted pair a pool was registered under, or null. */
+  poolPair(pool) {
+    const want = pool.toLowerCase();
+    for (const [key, rows] of this.pools) {
+      if (rows.some(r => r.pool.toLowerCase() === want)) return key.split(':');
+    }
+    return null;
+  }
 
   /** The registered pool row for an address, across every pair. */
   poolRow(pool) {
@@ -437,12 +564,18 @@ export class MockChain {
         this.applyTx(params[0]);
         return '0x' + (++this.nonce).toString(16).padStart(64, '0');
       }
-      case 'eth_getTransactionReceipt':
-        return { status: '0x1', transactionHash: params[0], blockNumber: this.blockNumber };
+      case 'eth_getTransactionReceipt': {
+        const r = { status: '0x1', transactionHash: params[0], blockNumber: this.blockNumber };
+        // `thinReceipts` drops the array entirely rather than emptying it,
+        // because that is the shape the wallet RPCs which do this actually
+        // return - and `receipt.logs || []` has to survive both.
+        if (!this.thinReceipts) r.logs = this.lastLogs || [];
+        return r;
+      }
       case 'eth_signTypedData_v4': {
         if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
         this.signed.push({ owner: params[0], typedData: JSON.parse(params[1]) });
-        return '0x' + '11'.repeat(32) + '22'.repeat(32) + '1b';
+        return '0x' + '11'.repeat(32) + '22'.repeat(32) + this.sigV.toString(16).padStart(2, '0');
       }
       case 'wallet_switchEthereumChain': this.chainId = params[0].chainId; return null;
       case 'wallet_revokePermissions': return null;
@@ -460,6 +593,7 @@ export class MockChain {
         return { id: '0xbatch' + this.batches.length };
       }
       case 'wallet_getCallsStatus':
+        if (this.callsStatusHandler) return this.callsStatusHandler({ id: params[0] });
         return { status: 200, receipts: [{ status: '0x1', transactionHash: '0x' + 'ab'.repeat(32) }] };
       default:
         throw Error(`MockChain: unhandled method ${method}`);
@@ -477,6 +611,26 @@ export class MockChain {
   applyTx(tx) {
     const data = strip(tx.data || '');
     const sel = data.slice(0, 8);
+    /* A real launch emits `Launched`, and the page reads the token out of it.
+       A mock whose receipts carried no logs would leave that path untravelled
+       while every launch test still passed - which is exactly how a wrong
+       topic hash shipped. `owner` is head word 6 in both entry points. */
+    if ((sel === '6a648dc6' || sel === '72cf7bd8') && tx.to?.toLowerCase() === PLAUNCH) {
+      this.lastLogs = [{
+        address: PLAUNCH,
+        topics: [
+          LAUNCHED_TOPIC,
+          // Separate from `launchToken`, which is what the PREFLIGHT predicts.
+          // They differ only under a nonce race, and a fixture that could not
+          // express that could not test which of the two the page believes.
+          '0x' + addrWord(this.launchLogToken || this.launchToken || '0x' + '11'.repeat(20)),
+          '0x' + addrWord(this.launchPool || '0x' + '22'.repeat(20)),
+          '0x' + data.slice(8 + 6 * 64, 8 + 7 * 64),
+        ],
+        data: '0x' + u256(0).repeat(3),
+      }];
+      return;
+    }
     // WETH deposit actually moves the balance, because the page now funds a
     // fill out of the result: it wraps a shortfall and then pays in WETH. A
     // mock that took the wrap and left the balances alone would fail the very
@@ -500,7 +654,21 @@ export class MockChain {
     this.calls.push({ to, data: '0x' + data, block, selector: sel });
 
     const rv = this.reverts.get(`${to}:${sel}`);
-    if (rv) throw Error(rv);
+    if (rv) {
+      const msg = typeof rv === 'function' ? rv('0x' + data) : rv;
+      if (msg) throw Error(msg);
+    }
+
+    // zSwap.latest() — the tip of the successor chain, which the page reads on
+    // ITSELF. Keyed by the address called so a test can serve a chain whose
+    // tip is a third contract, or leave it unset for the common case: no
+    // successor, and the page therefore says nothing.
+    if (sel === SEL.LATEST) {
+      const tip = this.lineage.get(to) ?? to;
+      return '0x' + addrWord(tip);
+    }
+    if (sel === SEL.PREVIOUS) return '0x' + addrWord(this.previousOf.get(to) || ZERO_ADDR);
+    if (sel === SEL.SUCCEEDED_AT) return '0x' + u256(this.succeededAt.get(to) || 0);
 
     // A plain value transfer pre-flights as a call with no calldata at all.
     if (!data) return '0x';
@@ -565,8 +733,28 @@ export class MockChain {
       return '0x' + addrWord(this.swapbolFloorboard ?? A.FLOOR);
     }
     if (to === A.DUTCH.toLowerCase() && sel === SEL.DUTCH_LISTING) return this.dutchListing(data);
-    if (to === A.SLOW.toLowerCase()) return this.slow(sel, data);
+    if (to === A.SLOW.toLowerCase()) return this.slow(sel, data, tx);
+    // SLOW's tip gate: `tips(transferId) -> (uint96 amount, address sender)`.
+    // refundTip is state-changing and only pre-flighted, so it answers empty.
+    if (to === A.SLOW_GATE.toLowerCase()) {
+      if (sel === SEL.TIPS) {
+        const t = this.slowTips.get(word('0x' + data.slice(8), 0).toString());
+        return '0x' + u256(t ?? 0) + addrWord(t ? this.accounts[0] : A.ZERO);
+      }
+      return '0x';
+    }
     if (to === A.ZROUTER.toLowerCase()) return '0x';          // pre-flight eth_call
+    // The same, for a write sent straight at a Precision pool. doRemove/doAdd
+    // bypass the router, and the page simulates them before asking for a
+    // signature - a node answers that call, so the fixture has to as well or
+    // the pre-flight reads as a revert and no transaction is ever sent.
+    // The degraded exit is the same shape: pre-flighted at the pool, answered
+    // by a node. A test that wants it to FAIL says so with `revertOn`, whose
+    // message may be a function of the calldata - `take0`/`take1` are arguments
+    // to one selector, so a pool that can only pay one side is not something a
+    // flat selector map can express.
+    if ((sel === SEL.REMOVE || sel === SEL.ADDEXACT || sel === SEL.REMOVE_LOSSY)
+      && this.poolRow(to)) return '0x';
     // V4QuoteLens.quoteV4Hooked(bool,address,address,uint24,int24,address,uint256)
     // Returns (amountIn, amountOut); zero means "no route", never "free".
     if (to === A.V4LENS.toLowerCase()) {
@@ -631,6 +819,55 @@ export class MockChain {
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
       return '0x' + u256(this.pairCount ?? rows.length);
     }
+    // totalSupply on a pool. The create form asks the PREDICTED address, and a
+    // CREATE2 address with no code answers an eth_call with EMPTY returndata
+    // rather than failing - which is not the same as answering zero, and the
+    // page has to tell the two apart. So an undeployed address returns '0x'
+    // here, exactly as a node would.
+    if (sel === SEL.TOTALSUPPLY) {
+      const row = this.poolRow(to);
+      if (row) return '0x' + u256(row.liquidity);
+      if (!this.code.has(to) || this.code.get(to) === '0x') return '0x';
+      return '0x' + u256(this.seedSupply ?? 0n);
+    }
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.BY_CREATOR_N) {
+      return '0x' + u256((this.launched || []).length);
+    }
+    /* Honours `start`/`count`, because the page's whole reason for asking the
+       COUNT first is to request the tail rather than the head - a mock that
+       ignored the window would pass either way and prove nothing. */
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.BY_CREATOR) {
+      const l = this.launched || [];
+      const start = Number(BigInt('0x' + data.slice(8 + 64, 8 + 128)));
+      const count = Number(BigInt('0x' + data.slice(8 + 128, 8 + 192)));
+      return coder.encode(['address[]'], [l.slice(start, start + count).map(x => x.pool)]);
+    }
+    /* PrecisionPool.creatorFeeBps - an IMMUTABLE, zero on an ordinary pool and
+       nonzero on one a launcher created, which is how the page tells how much
+       of the headline fee actually reaches LPs. A row opts in with
+       `creatorFeeBps` in setPools. */
+    /* Chainlink ETH/USD `latestRoundData`. Absent a fixture the page gets
+       nothing and simply shows no dollar figure, which is the honest default -
+       a wrong price is worse than none. `ethUsd` opts a test in, `ethUsdAge`
+       drives the staleness refusal. */
+    if (sel === 'feaf968c' && to === '0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419') {
+      if (this.ethUsd === undefined) throw Error('no feed');
+      const now = Math.floor(Date.now() / 1000) - (this.ethUsdAge ?? 0);
+      return '0x' + u256(1) + u256(BigInt(Math.round(this.ethUsd * 1e8)))
+        + u256(now) + u256(now) + u256(1);
+    }
+    if (sel === '17773ebb') {
+      const r = this.poolRow(to);
+      return '0x' + u256(r?.creatorFeeBps ?? 0n);
+    }
+    if (sel === SEL.RESERVE0) {
+      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      return '0x' + u256(hit?.reserve0 ?? 0n);
+    }
+    if (sel === SEL.TOKEN1) {
+      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      if (hit) return '0x' + addrWord(hit.token);
+    }
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
       const who = wordAddr('0x' + data.slice(8), 0);
       return coder.encode(['bool'],
@@ -659,10 +896,29 @@ export class MockChain {
       if (asked.sort().join() !== want.join()) {
         return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
       }
+      /* SIZE-DEPENDENT, when the fixture asks for it. A flat answer cannot
+         express impact at all: the page measures it by quoting a hundredth of
+         the trade and comparing the marginal price to the executed one, so a
+         mock that returns the same `out` for both makes every trade look
+         impact-free. `small` is what the reference-sized quote returns. */
+      if (q.small !== undefined) {
+        const asked = word('0x' + data.slice(8), 4);
+        const full = BigInt(q.amountIn ?? 10n ** 18n);
+        if (asked < full) return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.small)]);
+      }
       return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.out)]);
     }
     if (sel === SEL.POOL_FEE && this.precisionQuote) {
       return '0x' + u256(this.precisionQuote.fee ?? 3000);
+    }
+    /* `effectiveFee` on the lens. The page stopped reading the pool's own
+       `fee()` because that is only the BASE rate - a hooked pool charges more,
+       so reading it off the pool understates what the trade actually pays.
+       Without an answer here the read falls into its `catch`, the fee comes
+       back zero, and the rate line silently drops the tier: "Precision"
+       instead of "Precision 0.3%". */
+    if (sel === SEL.EFF_FEE && this.precisionQuote) {
+      return '0x' + u256(this.precisionQuote.effFee ?? this.precisionQuote.fee ?? 3000);
     }
     // swapExactIn on the pool itself. The page preflights every send with
     // eth_call, so a pool that cannot answer this reads as a broken route
@@ -706,6 +962,24 @@ export class MockChain {
         const used0 = band.used0 ?? a0, used1 = band.used1 ?? a1;
         return coder.encode(out, [true, used0 + used1, used0, used1]);
       }
+      // previewZap(pool, tokenIn, amountIn) -> (ok, swapPortion, expectedLp).
+      // The real lens BISECTS for the split against the pool's own quoter; the
+      // page treats both numbers as opaque, so what has to be modelled is the
+      // contract of the answer, not its arithmetic: refused when the band has
+      // no supply or the token is not in the pair, and a portion strictly
+      // inside the input otherwise (`zapIn` reverts on portion == amountIn).
+      if (sel === SEL.PREVIEW_ZAP) {
+        const out = ['bool', 'uint256', 'uint256'];
+        const tokenIn = wordAddr(body, 1).toLowerCase(), amountIn = word(body, 2);
+        const supply = row ? BigInt(row.liquidity) : 0n;
+        const known = (this.poolPair(wordAddr(body, 0)) || []).includes(tokenIn);
+        if (!row || supply === 0n || !known || amountIn < 2n) {
+          return coder.encode(out, [false, 0n, 0n]);
+        }
+        const portion = this.zapPortion ?? amountIn / 2n;
+        const lp = this.zapLp ?? amountIn / 4n;
+        return coder.encode(out, [true, portion, lp]);
+      }
       if (sel === SEL.PREVIEW_ADD) {
         const off = ['bool', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'];
         const a0 = word(body, 1), a1 = word(body, 2);
@@ -730,13 +1004,28 @@ export class MockChain {
       const bars = this.tapes.get(`${to}:${Number(word(body, 0))}`) || [];
       const count = Number(word(body, 1));
       return coder.encode(['uint256[]'],
-        [bars.slice(0, count).map(b => (b === null ? 0n : encodeTapeBar(b)))]);
+        /* A bar may be given already PACKED - a bigint or decimal string, as
+           `tape()` returns it on chain. That lets a fixture replay a tape a
+           real pool actually wrote, rather than one hand-assembled here, where
+           the volume need not agree with the price move it sits under. */
+        [bars.slice(0, count).map(b =>
+          b === null ? 0n
+          : (typeof b === 'bigint' || typeof b === 'string') ? BigInt(b)
+          : encodeTapeBar(b))]);
     }
     if (to === A.WNS.toLowerCase() || to === A.GNS.toLowerCase()) return this.ns(sel, data);
     if (to === A.ENSREG.toLowerCase()) {
-      if (sel === SEL.ENS_RSLV) return '0x' + addrWord(this.ensResolver);
+      if (sel === SEL.ENS_RSLV) {
+        // A resolver pinned to one node beats the flat default, so a test can
+        // give an ANCESTOR one while the exact node has none — the shape the
+        // ENSIP-10 walk exists for, and the one a single flat field cannot say.
+        const node = '0x' + strip(data).slice(8, 72);
+        if (this.ensResolvers.has(node)) return '0x' + addrWord(this.ensResolvers.get(node));
+        return '0x' + addrWord(this.ensResolver);
+      }
       throw Error(`MockChain: unhandled ENS registry selector ${sel}`);
     }
+    if (to === A.ENSRESOLVER.toLowerCase()) return this.ensResolve(sel, data);
     return this.erc20Call(to, sel, data, tx);
   }
 
@@ -828,9 +1117,12 @@ export class MockChain {
     if (!b) return '0x' + '0'.repeat(64 * 11);
     return '0x' + [
       addrWord(b.bidder || A.OTHER), u256(b.isNFT ? 1 : 0),
-      u256(b.startTime || 0), u256(b.expiry ?? 0),
-      addrWord(b.token), u256(b.price),
-      addrWord(b.quote), u256(b.price),
+      // Word three is the bid's DURATION, not its expiry: the window is stated
+      // as a length and the lens is what adds it to `startTime`. Start and end
+      // price are distinct on a climbing bid, and default to the flat `price`.
+      u256(b.startTime || 0), u256(b.duration ?? 0),
+      addrWord(b.token), u256(b.startPrice ?? b.price),
+      addrWord(b.quote), u256(b.endPrice ?? b.price),
       u256(b.price), u256(b.initial ?? b.remaining), u256(b.remaining),
     ].join('');
   }
@@ -898,6 +1190,46 @@ export class MockChain {
     throw Error(`MockChain: unhandled name-service selector ${sel}`);
   }
 
+  /**
+   * An ENS resolver, keyed by NAME rather than node.
+   *
+   * The page reaches a name two ways — addr(node) when the exact node owns the
+   * resolver, resolve(dnsName, addr(node)) when an ancestor does — and the whole
+   * point of the second path is that the node alone no longer identifies the
+   * name. So the mock indexes `ensNames` by name and namehashes it on the way
+   * in, which lets one map answer both paths and keeps a test from having to
+   * know which one the page will choose.
+   */
+  ensResolve(sel, data) {
+    const body = '0x' + data.slice(8);
+    if (sel === SEL.ENS_SUPPORTS) {
+      const id = strip(data).slice(8, 16);
+      return '0x' + u256(id === SEL.ENS_RESOLVE && this.ensWildcard ? 1 : 0);
+    }
+    const byNode = node => {
+      for (const [name, addr] of this.ensNames)
+        if (ensNamehash(name) === node) return addr;
+      return null;
+    };
+    if (sel === SEL.ENS_EADDR) return '0x' + addrWord(byNode(wordHex(body, 0)) || A.ZERO);
+    if (sel === SEL.ENS_ENAME) {
+      for (const [addr, name] of this.ensRevNames)
+        if (ensNamehash(strip(addr).toLowerCase() + '.addr.reverse') === wordHex(body, 0))
+          return encodeString(name);
+      return encodeString('');
+    }
+    if (sel === SEL.ENS_RESOLVE) {
+      // A CCIP resolver answers a plain call with a revert, not a value.
+      if (this.ensOffchain) { const e = Error('execution reverted'); e.data = '0x556f1830'; throw e; }
+      const [dns, inner] = coder.decode(['bytes', 'bytes'], body);
+      const name = dnsDecode(dns);
+      const a = this.ensNames.get(name) || A.ZERO;
+      if (strip(inner).slice(0, 8) !== SEL.ENS_EADDR) return coder.encode(['bytes'], ['0x']);
+      return coder.encode(['bytes'], ['0x' + addrWord(a)]);
+    }
+    throw Error(`MockChain: unhandled ENS resolver selector ${sel}`);
+  }
+
   board(sel, data) {
     if (sel === SEL.NEXTID) return '0x' + u256(0);
     /**
@@ -922,8 +1254,29 @@ export class MockChain {
     return '0x'; // fill/cancel are pre-flighted with eth_call before signing
   }
 
-  slow(sel, data) {
+  slow(sel, data, tx = {}) {
     const arr = ids => coder.encode(['uint256[]'], [ids.map(BigInt)]);
+    /**
+     * The tipped deposit splits msg.value into amount and tip and insists the
+     * two add up exactly — unlike depositTo, which reads a native amount out
+     * of msg.value and accepts a zero argument. Both rules are enforced by the
+     * real contract (InvalidAmount / a value mismatch), so they are enforced
+     * here: a page that encodes the deposit like the untipped one reverts on
+     * chain, and this is where that has to be caught.
+     */
+    if (sel === SEL.DEPOSITTIP) {
+      const body = '0x' + data.slice(8);
+      const native = wordAddr(body, 0) === A.ZERO;
+      const amount = word(body, 2), tip = word(body, 4);
+      const value = BigInt(tx.value ?? 0);
+      if (amount === 0n) throw Error('SLOW: InvalidAmount — a tipped deposit must state its amount');
+      if (tip === 0n) throw Error('SLOW: a tipped deposit with no tip');
+      if (value !== (native ? amount + tip : tip)) {
+        throw Error(`SLOW: msg.value ${value} does not equal ${native ? 'amount + tip' : 'tip'}`);
+      }
+      return '0x' + u256(1);
+    }
+    if (sel === SEL.GUARDIAN) return '0x' + addrWord(this.slowGuardian);
     if (sel === SEL.OUT) return arr(this.slowOut);
     if (sel === SEL.IN) return arr(this.slowIn);
     if (sel === SEL.PENDING) {
@@ -958,6 +1311,12 @@ export class MockChain {
       case SEL.DS:
         if (!m?.domainSeparator) throw Error('no DOMAIN_SEPARATOR');
         return m.domainSeparator;
+      // Most EIP-2612 tokens publish this; DAI-style ones publish a DIFFERENT
+      // one for a permit the router cannot call. A fixture that sets neither
+      // reverts, which is also what plenty of real 2612 tokens do.
+      case SEL.PERMIT_TH:
+        if (!m?.permitTypehash) throw Error('no PERMIT_TYPEHASH');
+        return m.permitTypehash;
       case SEL.NONCES: return '0x' + u256(m?.nonce ?? 0);
       case SEL.APPROVE: case SEL.TRANSFER: return '0x' + u256(1);
       // WETH deposit/withdraw return nothing; the page pre-flights the unwrap
@@ -982,6 +1341,78 @@ export class MockChain {
           if (m?.erc721 && id === '80ac58cd') return '0x' + u256(1);
           if (m?.erc1155 && id === 'd9b67a26') return '0x' + u256(1);
           if (m?.erc721 || m?.erc1155) return '0x' + u256(0);
+        }
+        /* PrecisionLauncher.launch / launchWithArt, simulated. The page runs an
+           `eth_call` before signing so a launch the chain would refuse costs
+           nothing; without an answer here that preflight throws and no launch
+           is ever sent. Returns the (token, pool) pair the real one does.
+           `launchReverts` lets a test drive the refusal path. */
+        /* ERC-7572 `contractURI()`. Almost no ERC-20 has one, and the page
+           treats absence as "no art" - so answering with a revert here is the
+           realistic case, not a gap. A fixture wanting art sets `contractURIs`. */
+        if (sel === '56ea33ee' || sel === '3ad57b72') {
+          const e = Object.values(this.launchFees || {})
+            .find(x => (x.pool || FEE_POOL).toLowerCase() === to.toLowerCase());
+          if (!e) return '0x' + u256(0);
+          return '0x' + u256(sel === '56ea33ee' ? (e.owed0 ?? 0n) : (e.owed1 ?? 0n));
+        }
+        if (sel === 'e8a3d485') {
+          const u = this.contractURIs?.[to.toLowerCase()];
+          if (!u) throw Error('no contractURI');
+          const b = Buffer.from(u, 'utf8');
+          return '0x' + u256(32) + u256(b.length) + b.toString('hex').padEnd(Math.ceil(b.length / 32) * 64, '0');
+        }
+        /* PrecisionLauncher.poolOf and the pool's `creatorOwed0` - what the
+           page reads to decide whether a coin has uncollected fees. Absent a
+           fixture every token answers zero, which is the honest default: most
+           tokens were not launched here. `setLaunchFees` opts a test in. */
+        if (sel === '988b1fa7') {
+          const t = '0x' + data.slice(8 + 24, 8 + 64).toLowerCase();
+          const f = this.launchFees?.[t];
+          return '0x' + addrWord(f ? (f.pool || FEE_POOL) : A.ZERO);
+        }
+        if (sel === 'a480ca79' || sel === 'c296057e') {
+          if (this.collectReverts) throw Error('execution reverted');
+          return '0x' + u256(0).repeat(6);
+        }
+        if (sel === '6a648dc6' || sel === '72cf7bd8') {
+          if (this.launchReverts) throw Error('execution reverted');
+          return '0x' + addrWord(this.launchToken || '0x' + '11'.repeat(20))
+            + addrWord(this.launchPool || '0x' + '22'.repeat(20));
+        }
+        /* PrecisionLauncher.creatorOf - the one call the page spends when a
+           receipt arrives without logs, to decide whether the address its
+           preflight predicted is really the coin it just launched. Zero for
+           anything this launcher did not launch, which is the real contract's
+           behaviour and the whole basis of the fallback being sound.
+           `creatorOfAnswer` lets a test drive the nonce race, where the
+           predicted address is a REAL token belonging to somebody else. */
+        /* PrecisionLauncher.quoteRedeem - the ether backing an amount of a
+           launched coin. Zero unless a fixture opts in, which matches the real
+           contract: it returns zero for anything it did not launch. */
+        if (sel === '385e4465') {
+          return '0x' + u256(this.redeemQuote ?? 0n);
+        }
+        /* PrecisionLauncher.floorPrice - `quoteRedeem` of ONE whole token. The
+           page reads this once per token and scales, since redemption is linear
+           in the amount, so a fixture's `redeemQuote` has to be expressed per
+           token here or the two disagree. */
+        if (sel === '2aad9987') {
+          const per = this.floorPrice ?? this.redeemQuote ?? 0n;
+          return '0x' + u256(per);
+        }
+        if (sel === 'dea5c2e0') {
+          if (this.creatorOfAnswer !== undefined) return '0x' + addrWord(this.creatorOfAnswer);
+          /* A token this fixture launched via `setLaunchFees` answers with its
+             creator - that is what the page filters on to decide whose fees
+             these are. */
+          const t = '0x' + data.slice(8 + 24, 8 + 64).toLowerCase();
+          if (this.launchFees?.[t]) {
+            return '0x' + addrWord(this.launchFees[t].creator || A.ACCOUNT);
+          }
+          const asked = '0x' + data.slice(8 + 24, 8 + 64);
+          const mine = (this.launchToken || '0x' + '11'.repeat(20)).toLowerCase();
+          return '0x' + addrWord(asked === mine ? (this.launchCreator || A.ACCOUNT) : ZERO_ADDR);
         }
         throw Error(`MockChain: unhandled call ${sel} to ${to}`);
     }
@@ -1224,11 +1655,12 @@ export function assertAddressesMatchPage(assert) {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   const pinned = {
     ZQUOTER: 'ZQUOTER', ZROUTER: 'ZROUTER', PERMIT2: 'PERMIT2', SLOW: 'SLOW',
+    SLOW_GATE: 'SLOW_GATE',
     SB2: 'SB2', SB1: 'SB1', SBVIEW: 'SBVIEW', SWAPBOL: 'SWAPBOL', DUTCH: 'DUTCH',
     ORDERBOL: 'ORDERBOL', WETH: 'WETH', FLOOR: 'FLOOR', FLOORVIEW: 'FLOORVIEW',
     // Not patched by any suite, so the fixtures answer at the real addresses
     // and a redeploy has to update both.
-    PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS',
+    PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS', PROUTE: 'PROUTE',
     TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS',
   };
   for (const [key, name] of Object.entries(pinned)) {

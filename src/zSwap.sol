@@ -3,14 +3,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.1
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (325526 B) is the runtime bytecode of
-///      14 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (240945 B) is the runtime bytecode of
+///      15 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 14 data contracts
+///      compatibility (ERC-4804). Splitting the page across 10 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 18538 B headroom).
+///      (24576 B per chunk, 4815 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement, but it can
 ///      only be chosen once for a given deployment: it is fixed in the
@@ -18,18 +18,27 @@ pragma solidity ^0.8.36;
 ///      the argument for the size of this one. Seven was chosen at 165 KB and
 ///      was spent by the liquidity panel, the price tape and the V4 routing.
 ///      Eight replaced it and never held at all - the page passed that ceiling
-///      before the count reached a deployment. Both were sized to what the page
-///      then measured, plus a little, and a little is worth about two features
-///      here. Fourteen is sized to the observed rate of growth instead: ~81 KB
-///      spare at 263 KB, which is roughly what the last two bets each bought as
-///      a fraction, from a base that is now much larger.
+///      before the count reached a deployment. Fourteen was sized to the
+///      observed rate of growth instead and lasted one release. Fifteen
+///      followed it, at 350 KB and 97% full.
+///
+///      Nine is not a continuation of that series. The page source carried its
+///      own documentation - about 45% of it - and that was being deployed too;
+///      stripping it took 354 KB to 198 KB, which is what makes a smaller count
+///      possible at all. It costs six data-contract deployments per version.
+///
+///      IT ALSO SPENDS THE SLACK. Every earlier count had comments in it, so a
+///      page against its ceiling could always be cut back without touching a
+///      feature. That valve is gone: 198 KB is the page itself, 89% of what
+///      ten chunks hold, and the next ~23 KB of growth needs a larger count -
+///      which means a new wrapper, a new salt and a new address.
 ///
 ///      The count cannot simply be padded, either: every chunk must be
 ///      non-empty and distinct (see the constructor below), so a count far
 ///      above what the page needs does not deploy. That is the real bound on
-///      this number - not caution, but the fact that 14 chunks require a page
-///      of at least 14 bytes' worth of distinct slices and, more practically,
-///      that ceil(len/14) must stay under EIP-170 while len/14 stays non-zero.
+///      this number - not caution, but the fact that 9 chunks require a page
+///      of at least 9 bytes' worth of distinct slices and, more practically,
+///      that ceil(len/9) must stay under EIP-170 while len/9 stays non-zero.
 ///
 /// HOW TO READ THE DAPP
 ///   cast call <addr> "html()(string)" --rpc-url <rpc> > zSwap.html
@@ -186,7 +195,7 @@ contract zSwap {
     string public constant NAME = "zSwap";
     string public constant VERSION = "0.1";
 
-    /// @dev The HTML payload lives in fourteen separate data contracts whose
+    /// @dev The HTML payload lives in nine separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -201,10 +210,11 @@ contract zSwap {
     address public immutable DATA8;
     address public immutable DATA9;
     address public immutable DATA10;
+    /// @dev An eleventh chunk. The page outgrew ten: stripped of comments it is
+    ///      still 255,337 bytes, and ten chunks would need 25,534 each against
+    ///      EIP-170's 24,576. The count is a consequence of the page's size and
+    ///      the cap, nothing more.
     address public immutable DATA11;
-    address public immutable DATA12;
-    address public immutable DATA13;
-    address public immutable DATA14;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -212,7 +222,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own fourteen chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own ten chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -223,6 +233,23 @@ contract zSwap {
     //
     // A client wanting the newest build walks `successor` until it reaches
     // zero. A client wanting the bytes it audited stops where it is.
+    //
+    // THE PAGE IS ONE OF THOSE CLIENTS. A pointer nobody reads moves nobody:
+    // for the whole of v0.1 the chain could have carried three successors and
+    // every open tab would have said nothing. So the served page calls
+    // `latest()` on its own address - taken from the GATEWAY HOSTNAME, which
+    // is the only place it can come from: a page that writes its own address
+    // into itself changes the chunks the address is derived from, and no salt
+    // solves that fixpoint. So this notice exists for readers on a web3://
+    // gateway, and a file opened from disk simply does not get it. If the tip
+    // is not itself, the page
+    // puts a "newer" link in the footer beside the address. It SAYS, it does
+    // not send: no redirect, no auto-navigation, no rewriting of what is on
+    // screen. The bytes stay the bytes that were audited and leaving them is
+    // the reader's decision. The read is a plain `eth_call` through the
+    // wallet's RPC, so it needs no account and no permission, and every
+    // failure - no wallet, another chain, an RPC that will not answer - is
+    // silent, because a missing notice is a smaller harm than a wrong one.
 
     /// @notice The DAO permitted to deploy this version's successor.
     address public immutable DAO;
@@ -235,12 +262,33 @@ contract zSwap {
     /// @dev Write-once. A rewritable pointer is not lineage, it is a mutable
     ///      redirect wearing lineage's clothes - and history that can be
     ///      restated is not history. A successor set in error is not a dead
-    ///      end either: the DAO deploys v0.3 from v0.2 and the chain moves on.
+    ///      end either: the DAO deploys v0.3 from v0.2 and the chain moves on -
+    ///      but ONLY because `deployNext` refuses to point at anything that
+    ///      cannot do that. What is written once is checked first.
     address public successor;
+
+    /// @notice When `successor` was set, as a unix timestamp; zero until then.
+    /// @dev THE ONE FACT ONLY THE CHAIN KNOWS. Every reader that follows this
+    ///      pointer has to decide whether to follow it YET, and none of them
+    ///      can tell from the pointer alone whether it appeared a year ago or
+    ///      in the block they are reading. A governance key that is stolen at
+    ///      noon can name a successor at 12:01; without a clock, the name and
+    ///      every predecessor's page would carry the reader there before anyone
+    ///      had time to look at it. With one, readers can require a version to
+    ///      have stood unchallenged for a while before they follow it, and the
+    ///      DAO cannot backdate that - `block.timestamp` is written here, by
+    ///      this contract, in the same transaction that sets the pointer.
+    ///
+    ///      It is not a second record of anything: the pointer says WHERE, this
+    ///      says WHEN, and neither can be derived from the other. `uint96`
+    ///      packs it into `successor`'s slot, so recording it costs nothing -
+    ///      one `sstore` either way - and it overflows in the year 2.5e21.
+    uint96 public succeededAt;
 
     error NotDAO();
     error AlreadySucceeded();
     error DeployFailed();
+    error NotASuccessor();
 
     /// @notice Emitted once per version, by the version that created it.
     event Succeeded(address indexed successor, uint256 indexed version);
@@ -257,21 +305,22 @@ contract zSwap {
     ///      so the deployer IS the predecessor at construction time. No version
     ///      NUMBER is stored: it is derived by walking, so there is no counter
     ///      to pass in wrongly, skip, or repeat. The chain is the record.
-    /// @dev The chunks arrive as ONE fixed-size array rather than 14 positional
+    /// @dev The chunks arrive as ONE fixed-size array rather than 9 positional
     ///      parameters. Sixteen address parameters put the constructor over the
-    ///      EVM's stack limit outright ("1 too deep"), and the array costs
+    ///      EVM's stack limit outright ("1 too deep") at the previous count of
+    ///      fifteen, and the array costs
     ///      nothing to say so: a static array is ABI-encoded inline, so
     ///      `abi.encode(dao, previous, chunks)` is byte-identical to the
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
-    ///      instead of a parameter list, a temporary array and 14 assignments.
-    constructor(address dao, address previous, address[14] memory d) {
+    ///      instead of a parameter list, a temporary array and 15 assignments.
+    constructor(address dao, address previous, address[11] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 14; ++i) {
+        for (uint256 i; i != 11; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 14; ++j) {
+            for (uint256 j = i + 1; j != 11; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -286,9 +335,6 @@ contract zSwap {
         DATA9 = d[8];
         DATA10 = d[9];
         DATA11 = d[10];
-        DATA12 = d[11];
-        DATA13 = d[12];
-        DATA14 = d[13];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -300,6 +346,23 @@ contract zSwap {
     /// @param initcode Creation code for the successor, constructor args
     ///                 appended. Its `previous` argument must be this address.
     /// @param salt     CREATE2 salt, so the address is checkable in advance.
+    /// @dev The pointer is write-once, so what it is set TO is checked before
+    ///      it is set. `create2` reports success for initcode that returns no
+    ///      runtime code at all, and the constructor's `previous` check is
+    ///      skipped entirely when `previous` is zero - so without the two
+    ///      checks below the DAO could, in one transaction, burn the only
+    ///      successor slot on a codeless address (making `latest()` revert for
+    ///      this contract and every predecessor, permanently) or on a second
+    ///      root whose `PREVIOUS` disagrees with this contract's `successor`.
+    ///      Both are unrecoverable: `AlreadySucceeded` refuses a retry.
+    ///
+    ///      WHAT IS CHECKED IS THE INTERFACE THE CHAIN IS WALKED BY, and that
+    ///      is the whole of it: `PREVIOUS()` and `successor()`. A successor is
+    ///      otherwise free to be a different contract entirely - a different
+    ///      chunk count, a different reassembly, a different page - because the
+    ///      initcode is the DAO's to choose. Only the two pointers are frozen,
+    ///      for every version, forever: they are what `generation()`, `latest()`
+    ///      and every reader outside this file depend on.
     function deployNext(bytes calldata initcode, bytes32 salt) external returns (address next) {
         if (msg.sender != DAO) revert NotDAO();
         if (successor != address(0)) revert AlreadySucceeded();
@@ -309,7 +372,26 @@ contract zSwap {
             next := create2(0, p, initcode.length, salt)
         }
         if (next == address(0)) revert DeployFailed();
+        // Codeless deploy, or something that is not a zSwap naming this one as
+        // its predecessor. `staticcall` rather than the typed call so a missing
+        // function is a revert here and not a decode panic: an address with no
+        // code answers successfully with empty returndata.
+        (bool ok, bytes memory ret) = next.staticcall(abi.encodeWithSelector(bytes4(keccak256("PREVIOUS()"))));
+        if (!ok || ret.length != 32 || abi.decode(ret, (address)) != address(this)) {
+            revert NotASuccessor();
+        }
+        // THE FORWARD HALF OF THE SAME CHECK. `latest()` walks by calling
+        // `successor()` on each link, so a successor that does not answer it
+        // breaks the walk for THIS contract and every predecessor - the same
+        // permanent failure as a codeless deploy, arrived at from the other
+        // side. It must also be zero: a version that is born already succeeded
+        // is not a new tip, and the walk would step straight past it.
+        (ok, ret) = next.staticcall(abi.encodeWithSelector(bytes4(keccak256("successor()"))));
+        if (!ok || ret.length != 32 || abi.decode(ret, (address)) != address(0)) {
+            revert NotASuccessor();
+        }
         successor = next;
+        succeededAt = uint96(block.timestamp);
         emit Succeeded(next, generation() + 1);
     }
 
@@ -377,7 +459,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all fourteen chunks in one pass: each chunk
+    /// @dev Reassembles the page from all ten chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///
@@ -387,18 +469,17 @@ contract zSwap {
     /// correctly into exactly one `extcodecopy` - the kind of edit that is
     /// mechanical until the one time it is not, and whose failure mode is a
     /// page silently served with a chunk overwritten or omitted. Here the
-    /// cursor advances by construction, so the fourteenth chunk lands after
-    /// the thirteenth for the same reason the second lands after the first.
+    /// cursor advances by construction, so the tenth chunk lands after the
+    /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[14] memory d = [
-            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7,
-            DATA8, DATA9, DATA10, DATA11, DATA12, DATA13, DATA14
+        address[11] memory d = [
+            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
             let body := add(s, 0x20)
             let at := body
-            for { let i := 0 } lt(i, 14) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, 11) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)

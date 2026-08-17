@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x569b862cfe5524c5aa0eb22dbe07d51ab2fd0c34004dbbb2e9ac3c55d6bb8431;
-    uint256 constant EXPECTED_LEN = 325526;
+    bytes32 constant EXPECTED_HASH = 0x676e0f95d030c83319bd4512492a3aec8a22835e9e375da02657cc5eef8455f9;
+    uint256 constant EXPECTED_LEN = 240945;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -21,7 +21,7 @@ contract zSwapDeployTest is Test {
         require(p != address(0), "chunk deploy failed");
     }
 
-    uint256 constant CHUNKS = 14;
+    uint256 constant CHUNKS = 11;
 
     /// @dev Builds zSwap exactly as production does: split zSwap.html into
     /// CHUNKS parts, deploy each as its own data contract, pass them all in.
@@ -79,8 +79,8 @@ contract zSwapDeployTest is Test {
         // concat is a page that serves correctly here while the DEPLOYED one
         // drops a slice. The loop covers whatever the arity is.
         address[CHUNKS] memory d = [
-            z.DATA1(), z.DATA2(), z.DATA3(), z.DATA4(), z.DATA5(), z.DATA6(), z.DATA7(),
-            z.DATA8(), z.DATA9(), z.DATA10(), z.DATA11(), z.DATA12(), z.DATA13(), z.DATA14()
+            z.DATA1(), z.DATA2(), z.DATA3(), z.DATA4(), z.DATA5(), z.DATA6(),
+            z.DATA7(), z.DATA8(), z.DATA9(), z.DATA10(), z.DATA11()
         ];
         bytes memory all;
         for (uint256 i; i != CHUNKS; ++i) {

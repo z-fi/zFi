@@ -4,14 +4,18 @@
  *
  * WHY CHUNKS
  * The page is stored as the runtime bytecode of data contracts, so a single
- * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across fourteen
- * contracts moves that ceiling to ~344KB — the limit now applies per chunk, not
+ * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across nine
+ * contracts moves that ceiling to ~221KB — the limit now applies per chunk, not
  * to the page. zSwap takes the chunk addresses as constructor args and
  * reassembles them in html(), so its own creation bytecode stays small.
  *
+ * THE PAGE MUST BE STRIPPED FIRST. zSwap.html carries no comments: they were
+ * ~45% of the file and were being deployed with it. `script/strip-zSwap.mjs`
+ * is idempotent and reports the sizes, so run it if an edit reintroduces any.
+ *
  * DEPLOY ORDER
- *   1..14. deploy chunk i          -> address A..N
- *   15.    deploy zSwap(dao, previous, A, B, C, D, E, F, G, H, I, J, K, L, M, N)
+ *   1..9. deploy chunk i           -> address A..I
+ *   10.   deploy zSwap(dao, previous, A, B, C, D, E, F, G, H, I)
  *         (constructor args appended to the creation code)
  *
  * Every chunk must be non-empty and distinct or the constructor reverts
@@ -30,13 +34,23 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 14;
-if (process.argv[2] && process.argv[2] !== String(n)) {
+const n = 11;
+// The count is a positional argument; `--file` and its value are not it.
+const countArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
+if (countArg && countArg !== String(n)) {
   console.error(`zSwap currently supports exactly ${n} data chunks; update the wrapper before changing this.`);
   process.exit(1);
 }
 
-const html = fs.readFileSync(path.join(ROOT, "zSwap.html"));
+/* `--file` so the STRIPPED page can be chunked without overwriting the
+   commented source. zSwap.html carries its explanations; what gets deployed
+   is `out/zSwap.min.html`, and pointing at it beats clobbering the original. */
+const fileArg = (() => {
+  const i = process.argv.indexOf("--file");
+  return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
+})();
+const SRC = fileArg ? path.resolve(fileArg) : path.join(ROOT, "zSwap.html");
+const html = fs.readFileSync(SRC);
 const per = Math.ceil(html.length / n);
 if (per > EIP170) {
   console.error(`chunk size ${per} exceeds EIP-170 (${EIP170}); use more chunks`);

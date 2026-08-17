@@ -41,6 +41,9 @@ const SOURCES = {
   PrecisionLiquidityLens: "src/pools/PrecisionLiquidityLens.sol",
   ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
   PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
+  PrecisionLauncher: "src/pools/PrecisionLauncher.sol",
+  PrecisionLauncherLens: "src/pools/PrecisionLauncherLens.sol",
+  FeeSplitter: "src/pools/FeeSplitter.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -88,6 +91,9 @@ const OPTIMIZER_RUNS = {
   PrecisionLiquidityLens: 200,
   ConstantSurchargeHook: 200,
   PrecisionPoolPolicy: 200,
+  PrecisionLauncher: 200,
+  PrecisionLauncherLens: 200,
+  FeeSplitter: 200,
 };
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",

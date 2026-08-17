@@ -37,7 +37,11 @@ const REGISTRY = fs.readFileSync(path.join(ROOT, 'script', 'fixtures', 'tokenlis
 // Strip the document-level tags: the preview supplies its own shell.
 page = page
   .replace(/<!doctype html>\s*/i, '')
-  .replace(/<meta[^>]*>\s*/gi, '')
+  // Document-level metas only. A meta carrying an `id` is addressed by the
+  // page's own script - `tc` is the theme-colour tag `ic()` rewrites on every
+  // theme flip - so stripping those does not tidy the shell, it deletes a
+  // binding and the preview dies at load with `tc is not defined`.
+  .replace(/<meta(?![^>]*\bid=)[^>]*>\s*/gi, '')
   .replace(/<title>[\s\S]*?<\/title>\s*/i, '')
   .replace(/<link rel="icon"[^>]*>\s*/i, '');
 
@@ -58,6 +62,12 @@ const DUTCH_ADDR = pageConst('DUTCH');
 // send. It is not redirected like the lenses - the mock answers for the real
 // address - but it still has to be read from the page so the two cannot drift.
 const PFACTORY_ADDR = pageConst('PFACTORY');
+// Both read from the page for the same reason as the boards above: the floor
+// probe compares the answer against the page's own FLOOR constant, so a
+// retyped address here would answer the probe with a mismatch and read as an
+// executor that cannot route bids.
+const SWAPBOL_ADDR = pageConst('SWAPBOL');
+const FLOOR_ADDR = pageConst('FLOOR');
 
 const before = page;
 page = page.replace(
@@ -96,19 +106,24 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
   var ZERO = "0x" + "0".repeat(40);
   var A = {
     ACCOUNT: "0x1111111111111111111111111111111111111111",
-    MC3: "0xca11bde05977b3631167028862be2a173976ca11",
-    ZQUOTER: "0x0000002d9a651b729e3afbe57fc84ffda4a98a13",
-    ZROUTER: "0x000000000000fb114709235f1ccbffb925f600e4",
+    MC3: "${pageConst('MC3')}",
+    // READ FROM THE PAGE, NOT RETYPED. This was pinned to the pre-move quoter
+    // 0x0000002d9a65..., and the page has since been repointed; every quote
+    // then fell through to the unhandled-selector throw and the tile reported
+    // "No route: bad quote", indistinguishable from a routing bug. Same trap the
+    // board addresses above were already fixed for.
+    ZQUOTER: "${pageConst('ZQUOTER')}",
+    ZROUTER: "${pageConst('ZROUTER')}",
     LENS: "${LENS}",
     LQLENS: "${LQLENS}",
-    SLOW: "0x000000000000888741b254d37e1b27128afeaabc",
+    SLOW: "${pageConst('SLOW')}",
     WETH: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     USDT: "0xdac17f958d2ee523a2206206994597c13d831ec7",
     WBTC: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
     WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
-    V4LENS: "0x000000c3ae1692983941495162a4aab40660e65f",
-    V4PORT: "0x000000dfb53fa7f1c486470034741d5bcbe14be9",
+    V4LENS: "${pageConst('V4LENS')}",
+    V4PORT: "${pageConst('V4PORT')}",
     FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845",
     ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247"
   };
@@ -317,6 +332,23 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     if (to === A.MC3 && sel === "82ad56cb") return aggregate3(data);
     if (to === A.ZQUOTER) { var q = quote(sel, tx.data); if (!q) throw Error("no route"); return q; }
     if (to === A.LENS.toLowerCase() && sel === "29c21083") return markets(data);
+    // PrecisionPoolLens.quoteBestFor - the ONLY way Precision bands can win a
+    // quote, since zQuoter predates them and cannot see these pools at all.
+    // Unimplemented, this threw on every quote the page ran: the venue was
+    // invisible in the preview while the liquidity panel listed its bands from
+    // the same fixture, so the two halves of the page disagreed about whether
+    // a market existed.
+    if (to === A.LENS.toLowerCase() && sel === "2adaa389") return quoteBest(data);
+    // PrecisionPoolFactory.pairCount - asked alongside every quoteBestFor, and
+    // only to say whether the scan window covered every band.
+    if (to === "${PFACTORY_ADDR}" && sel === "355da246") {
+      var pcKey = pair(wordAddr(data.slice(8), 0), wordAddr(data.slice(8), 1)).join(":");
+      return "0x" + u256((POOLS[pcKey] || []).length);
+    }
+    // Swapbol.floorboard() - probed because the page and the executor ship
+    // separately. A throw here is read as "this executor has no floor binding",
+    // which silently made every collection bid unroutable in the preview.
+    if (to === "${SWAPBOL_ADDR}" && sel === "b732d224") return "0x" + addrw("${FLOOR_ADDR}");
     // PrecisionPoolFactory.isPool - what the withdraw and add paths ask before
     // they grant an allowance or send value. Every pool this fixture serves is
     // one of its own; anything else is not, which is the answer that matters.
@@ -415,6 +447,46 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
   // first decodes as garbage with nothing thrown. Keep in step with PI_WORDS in
   // the page.
   var PI_W = 19;
+  /**
+   * PrecisionPoolLens.quoteBestFor(c0, c1, sender, tokenIn, amountIn, minOut, scan)
+   * -> (address pool, uint256 amountOut).
+   *
+   * Priced off the same USD table the zQuoter fixture uses, so the two venues
+   * are comparable and whichever wins wins on its numbers rather than on which
+   * one the mock happened to implement. The band's own fee comes off the top,
+   * which is also what makes Precision lose to the router on the deep ETH/USDC
+   * tiers and win on the pairs that have no other market - the shape the real
+   * quote has.
+   *
+   * A hooked band is skipped: the page will not route through one, and a lens
+   * that offered it would send the preview down a path production refuses.
+   * Zero, not a revert, when nothing qualifies - a dead pair is "no route".
+   */
+  function quoteBest(data) {
+    var h = data.slice(8);
+    var key = pair(wordAddr(h, 0), wordAddr(h, 1)).join(":");
+    var rows = (POOLS[key] || []).filter(function (r) { return r.hook === ZERO; });
+    var tokenIn = wordAddr(h, 3), amountIn = word(h, 4);
+    var pr = key.split(":");
+    if (!rows.length || amountIn === 0n) return "0x" + addrw(ZERO) + u256(0);
+    if (tokenIn !== pr[0] && tokenIn !== pr[1]) return "0x" + addrw(ZERO) + u256(0);
+    var tokenOut = tokenIn === pr[0] ? pr[1] : pr[0];
+    var pin = USD[tokenIn] || USD_FALLBACK, pout = USD[tokenOut] || USD_FALLBACK;
+    var din = decOf(tokenIn), dout = decOf(tokenOut);
+    var best = null, bestOut = 0n;
+    rows.forEach(function (r) {
+      var fee = Number(r.fee != null ? r.fee : 3000) / 1e6;
+      var human = Number(amountIn) / Math.pow(10, din);
+      // Depth caps the size a single band absorbs, so a big trade through a
+      // thin band prices worse - the reason a pool can lose to the router.
+      var impact = 1 - Math.min(0.4, (human * pin) / (r.liq / 1e18 * 4e4 + 1));
+      var out = BigInt(Math.floor(human * pin / pout * (1 - fee) * impact * Math.pow(10, dout)));
+      if (out > bestOut) { bestOut = out; best = r.pool; }
+    });
+    if (!best || bestOut <= 0n) return "0x" + addrw(ZERO) + u256(0);
+    return "0x" + addrw(best) + u256(bestOut);
+  }
+
   function markets(data) {
     var h = data.slice(8);
     var key = wordAddr(h, 0) + ":" + wordAddr(h, 1);

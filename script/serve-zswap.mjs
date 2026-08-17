@@ -76,8 +76,10 @@ server.listen(PORT, '127.0.0.1', () => {
   if (!PREVIEW) {
     console.log('  Wallet prompts are real and transactions are real. Contracts in play:');
     console.log('    factory  0x000000Eb27B557aB426d9E99cFd54EC455799e81');
-    console.log('    route    0x000000384711c65f633Aa4487b968ecb7956DB0F');
-    console.log('    lens     0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB');
+    console.log('    route    0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB');
+    console.log('    launcher 0x0000002fC8E77585A008Aa45d78A71ad36293aEe  (the coin button)');
+    console.log('    splitter 0x000000aA142133107c7D2664F900f80e28BbfFbd  (no split set yet)');
+    console.log('    launch lens 0x00000041201F1542EE49F9722b2590DEDFE4296B\n    lens     0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB');
     console.log('    lq lens  0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E');
     console.log('');
     console.log('  poolCount() is 0 until a market is seeded, so the droplet');

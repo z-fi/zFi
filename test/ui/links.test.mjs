@@ -354,6 +354,160 @@ describe('the share button', () => {
   });
 });
 
+/**
+ * A registry row in the shape zTokenlist serves, so these tests can curate the
+ * list the page actually adopts. Kept in step with ranked-default.test.mjs.
+ */
+const row = (sym, addr, dec = 18, p = 'ERC-20') => ({
+  i: '1', c: 1, k: 'eip155', p, x: true, o: false, f: false,
+  a: addr, n: sym, s: sym, d: dec, t: '#888', r: 1, u: '', au: '', l: '', desc: '', e: [], v: true,
+});
+
+/** Open a link against a curated registry, which the page loads WHILE the link applies. */
+async function openListed(hash, registry, prep = () => {}, storage = {}) {
+  const chain = new MockChain({ autoConnected: true });
+  chain.registry = registry;
+  chain.setNative(A.ACCOUNT, 10n * ETH);
+  chain.setErc20(A.WBTC, A.ACCOUNT, 10n ** 8n);
+  chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+  prep(chain);
+  const p = await loadPage({ chain, hash, storage });
+  await p.settle();
+  return p;
+}
+
+/**
+ * The token list arrives from chain AFTER the page has already applied the
+ * hash, and it does not append - it REPLACES the array the link just indexed
+ * into. A link that remembered "token number 3" would land on whatever token
+ * number 3 became, which is a different asset with a straight face. So the
+ * link has to hold addresses across every await, and re-import a token the
+ * reload dropped.
+ */
+describe('links survive the token list landing underneath them', () => {
+  const LISTED = [
+    row('ETH', A.ZERO, 18, 'Native'), row('WBTC', A.WBTC, 8),
+    row('USDT', A.USDT, 6), row('USDC', A.USDC, 6),
+  ];
+
+  test('a link names the token it named, not the index it occupied', async () => {
+    // The built-in list and the registry disagree about every position.
+    const p = await openListed(`token=${A.WBTC}&out=${A.USDC}&amount=1`, LISTED);
+    assert.equal(symOf(p, 'fromSel'), 'WBTC');
+    assert.equal(symOf(p, 'toSel'), 'USDC');
+    p.close();
+  });
+
+  test('a token the user saved survives it too', async () => {
+    const p = await openListed(null, LISTED,
+      c => c.setToken(MOON, { symbol: 'MOON', decimals: 18, name: 'Moon' }),
+      { 'zswap:custom': JSON.stringify([{ sym: 'MOON', addr: MOON, dec: 18, std: 'ft' }]) });
+    assert.ok([...p.$('toSel').options].some(o => o.textContent === 'MOON'),
+      'the registry does not list it, and the picker is the only record the user has');
+    p.close();
+  });
+
+  test('a link-imported token survives the reload that would have dropped it', async () => {
+    const p = await openListed(`token=ETH&out=${MOON}&amount=1`, LISTED,
+      c => c.setToken(MOON, { symbol: 'MOON', decimals: 18, name: 'Moon' }));
+    assert.equal(symOf(p, 'toSel'), 'MOON',
+      'the imported token is not in the registry, so only a re-import can keep it');
+    p.close();
+  });
+});
+
+/**
+ * Symbols are curated, not unique: anyone can get a second "USDC" listed. A
+ * link that resolved a symbol by taking the first match would hand whoever
+ * ranks highest the ability to repoint every existing link.
+ */
+describe('ambiguous symbols', () => {
+  const FAKE = '0xfeed00000000000000000000000000000000feed';
+  const TWO_USDC = [
+    row('ETH', A.ZERO, 18, 'Native'), row('WBTC', A.WBTC, 8),
+    row('USDC', FAKE, 6), row('USDC', A.USDC, 6),
+  ];
+
+  /** Follow a link once the curated list - the one holding both USDCs - is up. */
+  const follow = async (p, hash) => {
+    p.window.location.hash = hash;
+    p.window.dispatchEvent(new p.window.HashChangeEvent('hashchange'));
+    await p.settle();
+    await p.settle();
+  };
+
+  test('a symbol claimed by two tokens selects neither', async () => {
+    const p = await openListed(`token=ETH&out=${A.WBTC}`, TWO_USDC);
+    assert.equal(p.$('toSel').dataset.addr, A.WBTC.toLowerCase());
+    await follow(p, 'token=ETH&out=USDC&amount=1');
+    assert.equal(p.$('toSel').dataset.addr, A.WBTC.toLowerCase(),
+      'the ambiguous side must hold, not guess between two tokens');
+    p.close();
+  });
+
+  test('the address form still selects exactly one of them', async () => {
+    const p = await openListed(`token=ETH&out=${A.USDC}&amount=1`, TWO_USDC);
+    assert.equal(p.$('toSel').dataset.addr, A.USDC.toLowerCase());
+    p.close();
+  });
+
+  test('sharing such a token writes its address, not its symbol', async () => {
+    const p = await openListed(`token=ETH&out=${A.USDC}&amount=1`, TWO_USDC);
+    const q = new URLSearchParams(new URL(await share(p)).hash.slice(1));
+    assert.equal(q.get('out').toLowerCase(), A.USDC.toLowerCase(),
+      'a symbol two tokens answer to cannot identify either');
+    p.close();
+  });
+});
+
+describe('the orderbook tab', () => {
+  test('shares a link that reopens on the orderbook, with its expiry', async () => {
+    const p = await open('');
+    p.click('tabBook');
+    await p.settle();
+    p.select('dly', '86400');
+    p.type('amt', '2');
+    await p.settle();
+    const url = await share(p);
+    const q = new URLSearchParams(new URL(url).hash.slice(1));
+    assert.equal(q.get('tab'), 'book');
+    assert.equal(q.get('lock'), '86400');
+    p.close();
+
+    const p2 = await open(new URL(url).hash.slice(1));
+    assert.equal(tabOf(p2), 'Book', 'an order link shared as a swap would reopen as the wrong trade');
+    assert.equal(p2.value('dly'), '86400', 'and would silently reset the expiry');
+    assert.equal(p2.value('amt'), '2');
+    p2.close();
+  });
+
+  test('an unknown tab= is ignored rather than obeyed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1&tab=evil');
+    assert.equal(tabOf(p), 'Swap');
+    p.close();
+  });
+});
+
+describe('liquidity mode', () => {
+  test('a payment link keeps its recipient', async () => {
+    const p = await open('');
+    p.click('lq');
+    await p.settle();
+    assert.equal(p.$('lq').getAttribute('aria-pressed'), 'true');
+
+    p.chain.names.set('alice.wei', A.OTHER);
+    // Assigning the hash is enough: jsdom fires hashchange itself. Dispatching
+    // one as well applies the link TWICE, and the second pass would paper over
+    // exactly the clobber this test is here to catch.
+    p.window.location.hash = 'to=alice.wei&amount=3&token=ETH';
+    await p.waitFor(() => tabOf(p) === 'Send', { label: 'tab switch' });
+    assert.equal(p.value('rc'), 'alice.wei',
+      'leaving liquidity mode blanks the recipient, so the link must leave it first');
+    assert.equal(p.value('amt'), '3');
+    p.close();
+  });
+});
+
 describe('share links round-trip', () => {
   const roundTrip = async (setUp, check) => {
     const p = await open('');

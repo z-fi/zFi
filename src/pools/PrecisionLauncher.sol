@@ -71,15 +71,27 @@ contract LaunchToken is ERC20, Ownable {
     ///
     ///      Not front-runnable: the launcher clones and initializes in a single
     ///      call, so an uninitialized clone never exists between transactions.
+    /// @param image Raw image bytes, or empty for none. Set HERE rather than
+    ///        through `setImage` because `setImage` is `onlyOwner` and this
+    ///        hands ownership to the creator on the line above - so by the time
+    ///        the launcher regained control it would no longer be allowed to.
+    ///        Which is the whole reason a launch used to cost two signatures.
     function initialize(
         string calldata name_,
         string calldata symbol_,
         string calldata uri_,
         uint256 supply,
-        address owner_
+        address owner_,
+        bytes calldata image,
+        uint8 mime
     ) external {
         _initializeOwner(owner_);
         (_name, _symbol, _contractURI) = (name_, symbol_, uri_);
+        if (image.length != 0) {
+            if (mime > 5) revert BadMime();
+            imagePointer = SSTORE2.write(image);
+            imageMime = mime;
+        }
         _mint(msg.sender, supply);
     }
 
@@ -514,6 +526,55 @@ contract PrecisionLauncher is ReentrancyGuard {
         uint256 startMcapWei,
         address owner
     ) external nonReentrant returns (address token, address pool) {
+        return _launch(name, symbol, uri, supply, allocBps, startMcapWei, owner, "", 0);
+    }
+
+    /// @notice A launch that arrives with its logo already on-chain.
+    ///
+    /// @dev ONE SIGNATURE, WHICH IS THE ENTIRE POINT. The image lives on the
+    ///      TOKEN, and the token does not exist until this call runs - its
+    ///      address is CREATE-derived from this contract's nonce - so a page
+    ///      could not call `setImage` until the launch had already confirmed.
+    ///      That made every launch with a logo two wallet prompts, the second
+    ///      of which a user could simply decline, leaving a coin with no art
+    ///      and no obvious way to understand why.
+    ///
+    ///      Passing the bytes through here costs calldata - 16 gas a byte, so
+    ///      roughly 65k for a 4 KB mark - on top of the same SSTORE2 write the
+    ///      separate call would have made. That is the price of the second
+    ///      prompt disappearing, and it is worth it.
+    ///
+    ///      `launch` is the same function with no art, so there is one body and
+    ///      one set of guards rather than two that must be kept in step.
+    /// @param image Raw image bytes. NOT base64 - encoding happens on read.
+    /// @param mime 0 png, 1 webp, 2 svg, 3 gif, 4 jpeg, 5 avif.
+    function launchWithArt(
+        string calldata name,
+        string calldata symbol,
+        string calldata uri,
+        uint256 supply,
+        uint256 allocBps,
+        uint256 startMcapWei,
+        address owner,
+        bytes calldata image,
+        uint8 mime
+    ) external nonReentrant returns (address token, address pool) {
+        return _launch(name, symbol, uri, supply, allocBps, startMcapWei, owner, image, mime);
+    }
+
+    function _launch(
+        string calldata name,
+        string calldata symbol,
+        string calldata uri,
+        uint256 supply,
+        uint256 allocBps,
+        uint256 startMcapWei,
+        address owner,
+        /* `memory`, not `calldata`: `launch` passes an empty literal and a
+           literal has no calldata to point at. The copy is a few words. */
+        bytes memory image,
+        uint8 mime
+    ) internal returns (address token, address pool) {
         if (owner == address(0)) revert Bad();
         {
             uint256 n = bytes(name).length;
@@ -543,7 +604,7 @@ contract PrecisionLauncher is ReentrancyGuard {
         if (sqrtPHigh > MAX_SQRT_PRICE || sqrtPLow == 0) revert Bad();
 
         token = LibClone.clone_PUSH0(tokenImplementation);
-        LaunchToken(token).initialize(name, symbol, uri, supply, owner);
+        LaunchToken(token).initialize(name, symbol, uri, supply, owner, image, mime);
         if (alloc != 0) token.safeTransfer(owner, alloc);
 
         PrecisionPoolFactory.Market memory m = PrecisionPoolFactory.Market({

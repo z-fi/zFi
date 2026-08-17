@@ -307,3 +307,42 @@ describe('placing a bid', () => {
     p.close();
   });
 });
+
+// -------------------------------------------------------------- the book row
+
+describe('listing a climbing bid in the book', () => {
+  /** Open the Orders tab with the pair filter dropped. */
+  const openBook = async p => {
+    p.click('tabBook');
+    await p.waitFor(() => p.$('book').querySelector('[data-bf="0"]'), { label: 'filter chips' });
+    p.click(p.$('book').querySelector('[data-bf="0"]'));
+    await p.settle();
+  };
+
+  it('states the climb against what is LEFT, not the original lot', async () => {
+    // The bid opened wanting 10 ETH and has 4 left. `endPrice` is the total for
+    // the FULL INITIAL lot, so printing it raw promised a seller 50,000 USDC
+    // for a remainder that can only ever pay 20,000 — the same basis mistake
+    // the partial-take arithmetic above exists to avoid.
+    const p = await setup(c => {
+      c.floorBids = [bidWethForUsdc({
+        remaining: 4n * ETH,
+        initial: 10n * ETH,
+        price: 40_000n * USDC,
+        proceeds: 16_000n * USDC,
+        startPrice: 40_000n * USDC,
+        endPrice: 50_000n * USDC,
+        startTime: BigInt(Math.floor(Date.now() / 1000)),
+        duration: 3600n,
+      })];
+    });
+    await openBook(p);
+    const row = [...p.$('book').querySelectorAll('.o')]
+      .find(o => o.textContent.includes('climbs to'));
+    assert.ok(row, `no climbing bid on the book: ${p.$('book').textContent}`);
+    assert.match(row.textContent, /climbs to 20000 USDC/,
+      `the climb must be scaled to the remaining lot: ${row.textContent}`);
+    assert.doesNotMatch(row.textContent, /climbs to 50000/);
+    p.close();
+  });
+});

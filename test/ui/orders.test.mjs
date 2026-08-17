@@ -517,6 +517,21 @@ describe('the orderbook list', () => {
     ...over,
   });
 
+  /**
+   * Drop the pair filter, the way a user does.
+   *
+   * The book opens filtered to the selected pair, so a fixture built on some
+   * other pair — which is most of the ones below, since they are about how a
+   * row RENDERS rather than which pair it belongs to — is legitimately hidden.
+   * Clicking the chip is the honest way to see it: no back door into the
+   * page's state, and it exercises the filter on the way past.
+   */
+  const showAllPairs = async p => {
+    await p.waitFor(() => p.$('book').querySelector('[data-bf="0"]'), { label: 'filter chips' });
+    p.click(p.$('book').querySelector('[data-bf="0"]'));
+    await p.settle();
+  };
+
   test('Fill asks how much, and takes only that much', async () => {
     // The button used to mean "take the whole order", which on a large one
     // quotes a number most people cannot cover and stops - while the same order
@@ -526,7 +541,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
 
     p.queuePrompt('0.25');                       // a quarter of the 1 WETH ask
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
 
@@ -544,9 +559,14 @@ describe('the orderbook list', () => {
   test('a declined amount sends nothing at all', async () => {
     const p = await setup(c => { c.recent = [order({ id: 5 })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
-    p.click(p.$('book').querySelector('button'));   // no queued answer = cancelled
+    const btn = p.$('book').querySelector('.o button');
+    p.click(btn);                                      // no queued answer = cancelled
     await p.settle();
     assert.equal(p.chain.sent.length, 0, 'dismissing the prompt must not place a fill');
+    // Changing your mind must not cost you the button. The re-enable lives in
+    // the catch, so an early return walks straight past it and Fill stays grey
+    // until the 30s poll repaints the book.
+    assert.equal(btn.disabled, false, 'declining left the Fill button disabled');
     p.close();
   });
 
@@ -555,7 +575,7 @@ describe('the orderbook list', () => {
     // cannot be split would offer a choice that does not exist.
     const p = await setup(c => { c.recent = [order({ id: 5, pf: false })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
-    p.click(p.$('book').querySelector('button'));   // no prompt queued, yet it proceeds
+    p.click(p.$('book').querySelector('.o button'));   // no prompt queued, yet it proceeds
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     p.close();
   });
@@ -564,7 +584,7 @@ describe('the orderbook list', () => {
     const p = await setup(c => { c.recent = [order()]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     assert.match(p.$('book').textContent, /3000 USDC → 1 WETH/);
-    const btn = p.$('book').querySelector('button');
+    const btn = p.$('book').querySelector('.o button');
     assert.equal(btn.textContent, 'Fill');
     p.close();
   });
@@ -572,7 +592,7 @@ describe('the orderbook list', () => {
   test('separates your own orders and offers to cancel them', async () => {
     const p = await setup(c => { c.recent = [order({ maker: A.ACCOUNT })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
-    assert.equal(p.$('book').querySelector('button').textContent, 'Cancel');
+    assert.equal(p.$('book').querySelector('.o button').textContent, 'Cancel');
     p.close();
   });
 
@@ -602,10 +622,136 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  /**
+   * FINDING THE ORDER YOU CAME FOR.
+   *
+   * Four boards land in one list and nothing removed rows that were about
+   * other pairs, so a page whose tile said ETH/USDC listed every order on every
+   * market and left the reading to you.
+   */
+  const chips = p => [...p.$('book').querySelectorAll('.bkc')];
+  const chip = (p, attr, val) => p.$('book').querySelector(`[data-${attr}="${val}"]`);
+  const rowText = p => [...p.$('book').querySelectorAll('.o')].map(o => o.textContent);
+
+  test('opens on the selected pair and says how many it is holding back', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),                                                   // USDC/WETH — the pair
+        order({ id: 2, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n }), // WBTC/WETH — not
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    assert.equal(rowText(p).length, 1, 'only the pair on screen');
+    assert.match(rowText(p)[0], /USDC/);
+    assert.match(p.$('book').textContent, /1 hidden/, 'and it admits what it is not showing');
+    // The chip names the pair: the picker driving it is three panels up, and a
+    // book scrolled into view has to say what it is showing.
+    assert.equal(chip(p, 'bf', '1').textContent, 'ETH/USDC');
+    p.close();
+  });
+
+  test('ETH and WETH are the same asset to the filter', async () => {
+    // Boards are WETH-denominated and the picker is not. Comparing raw
+    // addresses would hide every WETH order behind an ETH selection - which is
+    // most of the book, and exactly the rows being looked for.
+    const p = await setup(c => { c.recent = [order({ id: 3 })]; });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    assert.equal(rowText(p).length, 1, 'a WETH leg matches an ETH selection');
+    p.close();
+  });
+
+  test('dropping the pair filter brings the rest back', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),
+        order({ id: 2, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n }),
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    p.click(chip(p, 'bf', '0'));
+    await p.settle();
+    assert.equal(rowText(p).length, 2);
+    // Repainted from rows already in hand: changing what you look at must not
+    // cost four lens reads and a logo fetch.
+    const before = p.chain.calls.length;
+    p.click(chip(p, 'bf', '1'));
+    await p.settle();
+    assert.equal(p.chain.calls.length, before, 'a filter click reads nothing from chain');
+    assert.equal(rowText(p).length, 1);
+    p.close();
+  });
+
+  test('filters by what an order DOES, and never by which board it is on', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),
+        // A Dutch lot lives on its own board, and the lens is asked per board.
+        order({ id: 2, dutch: true, board: A.DUTCH }),
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    p.click(chip(p, 'bf', '0'));
+    await p.settle();
+    assert.equal(rowText(p).length, 2);
+
+    p.click(chip(p, 'bt', 'dutch'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1, 'a Dutch decays under a taker — that is worth filtering on');
+    assert.match(rowText(p)[0], /Dutch/);
+
+    p.click(chip(p, 'bt', 'limit'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1);
+    assert.ok(!/Dutch/.test(rowText(p)[0]));
+
+    // Provenance is not a filter: which board an order lives on is a migration
+    // detail, not a decision anybody makes.
+    assert.ok(!chips(p).some(c => /v1|v2|board/i.test(c.textContent)));
+    p.close();
+  });
+
+  test('the empty line says whose orders were searched, and the caret agrees', async () => {
+    // "Nothing here matches" sat directly beneath a Dutch order that plainly
+    // did match - the reader's own, which is exempt from both filters. And the
+    // caret counted only what it rendered, so "Orderbook (1)" appeared above a
+    // line reading "1 hidden". Two statements about the same list, disagreeing.
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1, maker: A.ACCOUNT }),   // yours: always shown
+        order({ id: 2 }),                     // someone else's, same pair
+      ];
+    });
+    await p.waitFor(() => p.$('book').querySelector('[data-bt="dutch"]'), { label: 'chips' });
+    p.click(p.$('book').querySelector('[data-bt="dutch"]'));
+    await p.settle();
+    const txt = p.$('book').textContent;
+    assert.match(txt, /No dutch orders on ETH\/USDC from anyone else/,
+      'the line has to name the filter AND exclude your own, or it argues with the screen');
+    assert.match(txt, /1 hidden/);
+    assert.match(p.text('bkTog'), /Orderbook \(1 of 2\)/, 'the caret counts the book, not the view');
+    p.close();
+  });
+
+  test('your own orders survive every filter', async () => {
+    // The one case where hiding a row costs money: escrow you forgot because a
+    // filter you set for browsing quietly swallowed it.
+    const p = await setup(c => {
+      c.recent = [order({ id: 7, maker: A.ACCOUNT, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n })];
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own section' });
+    assert.equal(rowText(p).length, 1, 'off-pair, but still yours to cancel');
+    p.click(chip(p, 'bt', 'bid'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1, 'and a type filter cannot bury it either');
+    assert.equal(p.$('book').querySelector('.o button').textContent, 'Cancel');
+    p.close();
+  });
+
   test('warns on tokens that are not on the known list', async () => {
     const p = await setup(c => {
       c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: 'SCAM' })];
     });
+    await showAllPairs(p);
     await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
     const warn = p.$('book').querySelector('.tg.w');
     assert.ok(warn, 'an unrecognised token must carry a visible warning');
@@ -623,7 +769,27 @@ describe('the orderbook list', () => {
     p.close();
   });
 
-  test('hides expired orders', async () => {
+  test('a chain with no board says so, and leaves nothing behind', async () => {
+    // The early return used to paint the notice over rows it never cleared, so
+    // the caret went on counting a book that is not there and the click
+    // handler could still find another chain's orders in `bookRows`.
+    const p = await setup(c => { c.recent = [order({ id: 1 })]; });
+    await p.waitFor(() => /Orderbook \(1\)/.test(p.text('bkTog')), { label: 'a book to lose' });
+
+    // The wallet moves to a chain that has no board on it.
+    p.chain.undeploy(A.SB2);
+    p.chain.undeploy(A.SB1);
+    p.click('tabSwap');
+    p.click('tabBook');
+    await p.waitFor(() => p.$('book').textContent.includes('No Swapboard'), { label: 'notice' });
+    await p.settle();
+    assert.equal(p.$('book').querySelectorAll('.o button').length, 0, 'nothing left to click');
+    assert.equal(p.visible('book'), true, 'the notice has to be readable');
+    assert.equal(p.visible('bkTog'), false, 'and no caret counting a book that is gone');
+    p.close();
+  });
+
+  test("hides other people's expired orders", async () => {
     const p = await setup(c => {
       c.recent = [order({ id: 1, exp: Math.floor(Date.now() / 1000) - 60 })];
     });
@@ -632,11 +798,35 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  // Expiry stops an order being FILLED. It does not return the escrow: only
+  // cancelOrder/cancelExpired does that. So hiding the maker's own lapsed order
+  // hides money they still have to come and get - the one row that must stay.
+  test('keeps YOUR expired order visible, with a way to get the escrow back', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 3, maker: A.ACCOUNT, exp: Math.floor(Date.now() / 1000) - 60 })];
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
+    const txt = p.$('book').textContent;
+    assert.match(txt, /expired/, 'and it says why it cannot be filled');
+    assert.match(txt, /escrow still held/, 'and that the money is still on the board');
+
+    const btn = p.$('book').querySelector('.o button');
+    assert.equal(btn.textContent, 'Reclaim', 'not "Cancel" — there is nothing left to call off');
+    p.click(btn);
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'reclaim' });
+    await p.settle();
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase());
+    assert.equal(word('0x' + tx.data.slice(10), 0), 3n, 'reclaims the order that lapsed');
+    p.close();
+  });
+
   test('a hostile token symbol cannot inject markup into the list', async () => {
     const evil = '<img src=x onerror=alert(1)>';
     const p = await setup(c => {
       c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: evil })];
     });
+    await showAllPairs(p);
     await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
     assert.equal(p.$('book').querySelectorAll('img').length, 0,
       'lens-provided metadata is attacker-controlled and must never become markup');
@@ -649,7 +839,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel' });
     await p.settle();
 
@@ -669,7 +859,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
 
@@ -681,6 +871,31 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  test('a private order is filled at the board, stating the payment and a floor', async () => {
+    // A counterparty-restricted order cannot go through the executor, so it is
+    // filled at the board directly - and there `fillAmountB` is not a full-fill
+    // sentinel. Zero is `ZeroFillAmount` on a fungible order, so the page used
+    // to hand the wallet a transaction that could only revert; it also threw
+    // away the amount the prompt had just asked for, and left `minAmountA` at
+    // zero, which is a fill with no floor under it.
+    const p = await setup(c => { c.recent = [order({ id: 5, cp: A.ACCOUNT })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.queuePrompt('0.25');                      // a quarter of the 1 WETH ask
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => p.chain.sent.some(t => selectorOf(t.data) === SEL.FILL2),
+      { label: 'fill' });
+    await p.settle();
+
+    const fill = p.chain.sent.find(t => selectorOf(t.data) === SEL.FILL2);
+    assert.equal(fill.to.toLowerCase(), A.SB2.toLowerCase(), 'a private order goes to the board');
+    const args = '0x' + fill.data.slice(10);
+    assert.equal(word(args, 0), 5n, 'fills the order that was clicked');
+    assert.equal(word(args, 2), ETH / 4n, 'pays the amount the prompt asked for');
+    // The board quotes 750 USDC for a quarter of a 3,000 USDC ask.
+    assert.equal(word(args, 3), 750n * USDC, 'and states that as the floor it accepts');
+    p.close();
+  });
+
   test('filling a public order sends ETH when the WETH balance cannot cover it', async () => {
     const p = await setup(c => {
       c.recent = [order({ id: 5 })];
@@ -689,7 +904,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
 
@@ -711,7 +926,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 1, { label: 'wrap then fill' });
     await p.settle();
 
@@ -737,7 +952,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => /Not enough ether/i.test(p.text('stat')), { label: 'the refusal' });
     assert.equal(p.chain.sent.length, 0, 'and nothing was wrapped on the way to failing');
     p.close();
@@ -755,7 +970,7 @@ describe('the orderbook list', () => {
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
     p.queuePrompt('1');
-    p.click(p.$('book').querySelector('button'));
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => /Not enough/i.test(p.text('stat')), { label: 'the refusal' });
     await p.settle();
 

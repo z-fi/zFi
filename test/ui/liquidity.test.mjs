@@ -109,6 +109,37 @@ describe('the panel', () => {
     p.close();
   });
 
+  test('says what the price is in, and that the two amounts are a holding', async () => {
+    // "price 73,700 · 0.010199 ETH / 750.801782 ZORG" was three numbers with
+    // no units on any of them, and a slash between two token amounts reads as
+    // a ratio - which, since dividing the reserves lands near the price, was a
+    // misreading that confirmed itself.
+    const p = await setup();
+    await p.waitFor(() => rows(p).length, { label: 'bands' });
+    const meta = rows(p)[0].querySelector('.lqmeta').textContent;
+    assert.match(meta, /3,000 USDC per ETH/, 'the price carries its units');
+    assert.match(meta, /holds 100 ETH \+ 300000 USDC/, 'and the reserves are named as reserves');
+    assert.ok(!/ETH \/ /.test(meta), 'no slash between two token amounts');
+    p.close();
+  });
+
+  test('flags the widest band rather than making the reader divide its edges', async () => {
+    // 1 to 1,000,000: the span the create form calls "Full range", where the
+    // useful fact is that price effectively never leaves it.
+    const WIDE = {
+      pool: '0x9999999999999999999999999999999999999999', fee: 3000n, liquidity: 10n ** 21n,
+      reserve0: 100n * ETH, reserve1: 300000n * USDC,
+      sqrtLow: sqrtRaw(1), sqrtHigh: sqrtRaw(1e6), sqrtNow: sqrtRaw(3000),
+    };
+    const p = await setup({ bands: [WIDE, BAND_A], shares: 0n });
+    await p.waitFor(() => rows(p).length === 2, { label: 'bands' });
+    const wide = rows(p).find(r => r.dataset.pool.toLowerCase() === WIDE.pool.toLowerCase());
+    const narrow = rows(p).find(r => r.dataset.pool.toLowerCase() === POOL_A.toLowerCase());
+    assert.match(wide.textContent, /full range/);
+    assert.ok(!/full range/.test(narrow.textContent), '2000-4000 is an ordinary band');
+    p.close();
+  });
+
   test('shows the holding from the pool balance, not from a paged position list', async () => {
     const p = await setup();
     await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
@@ -169,6 +200,117 @@ describe('withdrawing', () => {
     await p.waitFor(() => p.chain.sent.length, { label: 'withdraw tx' });
     const body = '0x' + p.chain.sent.at(-1).data.replace(/^0x/, '').slice(8);
     assert.equal(word(body, 1), 10n * ETH * 9800n / 10000n);
+    p.close();
+  });
+
+  /**
+   * Every other write on this page simulates before it asks for a signature —
+   * swaps, orders, sends and fills all do `eth_call` then
+   * `eth_sendTransaction`. The three Precision liquidity writes did not. The
+   * preview beforehand is a DIFFERENT call: it prices the position through the
+   * lens, it does not run the write, so it cannot see the lessSlip bounds
+   * broken by a block landing in between, or anything the pool itself would
+   * reject. Without the pre-flight the user signs and pays gas for a revert the
+   * node would have named for free.
+   */
+  test('simulates the withdrawal before asking for a signature', async () => {
+    const p = await setup();
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    const isRemove = c => (c.to || '').toLowerCase() === POOL_A.toLowerCase()
+      && (c.data || '').replace(/^0x/, '').slice(0, 8) === SEL.REMOVE;
+    const before = p.chain.calls.filter(isRemove).length;
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => p.chain.sent.length, { label: 'withdraw tx' });
+    await p.settle();
+    assert.ok(p.chain.calls.filter(isRemove).length > before,
+      'the exact removal must be eth_call-ed before it is signed');
+    p.close();
+  });
+
+  /**
+   * THE ESCAPE HATCH.
+   *
+   * `removeLiquidity` demands exact movement on both sides, so one token that
+   * pauses, blacklists the holder, or starts taking a transfer fee takes the
+   * whole withdrawal down with it — the healthy side included. The pool carries
+   * `removeLiquidityLossy` for precisely that and the page could not reach it:
+   * an LP whose USDC leg reverted had no way out with their ETH.
+   *
+   * It is reached ONLY after the strict exit has been refused by an `eth_call`,
+   * which is what stops it from silently downgrading a withdrawal that would
+   * have settled in full.
+   */
+  const lossySent = p => p.chain.sent.filter(
+    t => (t.data || '').replace(/^0x/, '').slice(0, 8) === SEL.REMOVE_LOSSY);
+
+  test('never reaches for the degraded exit while the strict one works', async () => {
+    const p = await setup();
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => p.chain.sent.length, { label: 'withdraw tx' });
+    await p.settle();
+    assert.equal(lossySent(p).length, 0);
+    assert.equal(p.asked.confirm.length, 0, 'and nothing was asked of the user');
+    p.close();
+  });
+
+  test('offers the degraded exit when the strict one is refused', async () => {
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, 'execution reverted');
+    p.queueConfirm(true);
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => lossySent(p).length, { label: 'lossy withdrawal' });
+    await p.settle();
+
+    const tx = lossySent(p).at(-1);
+    assert.equal(tx.to.toLowerCase(), POOL_A.toLowerCase());
+    const body = '0x' + tx.data.replace(/^0x/, '').slice(8);
+    assert.equal(word(body, 0), 10n ** 20n, 'the whole position');
+    // Minimums of zero, deliberately: the lossy path bounds what LEAVES the
+    // pool, which on a short pool is below the pro-rata claim, so carrying the
+    // strict path's bound here would revert on exactly the pools this escapes.
+    assert.equal(word(body, 1), 0n);
+    assert.equal(word(body, 2), 0n);
+    assert.equal(wordAddr(body, 3).toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.equal(word(body, 4), 1n, 'both sides attempted first');
+    assert.equal(word(body, 5), 1n);
+    assert.match(p.asked.confirm.at(-1), /cannot pay out in full|short/i);
+    p.close();
+  });
+
+  test('abandons one side only when taking both still fails', async () => {
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, 'execution reverted');
+    // A pool whose token1 leg cannot move at all: any attempt that takes side 1
+    // reverts, and only the token0-alone exit succeeds.
+    p.chain.revertOn(POOL_A, SEL.REMOVE_LOSSY, data => {
+      const body = '0x' + data.replace(/^0x/, '').slice(8);
+      return word(body, 5) === 1n ? 'token1 transfer failed' : null;
+    });
+    p.queueConfirm(true);
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => lossySent(p).length, { label: 'one-sided withdrawal' });
+    await p.settle();
+
+    const body = '0x' + lossySent(p).at(-1).data.replace(/^0x/, '').slice(8);
+    assert.equal(word(body, 4), 1n, 'leaves through ETH');
+    assert.equal(word(body, 5), 0n, 'and gives up the USDC claim');
+    // Forfeiting a claim to the remaining holders is a real loss, so the
+    // question has to name it rather than ask a bland "continue?".
+    assert.match(p.asked.confirm.at(-1), /GIVES UP your USDC claim/);
+    p.close();
+  });
+
+  test('sends nothing when the degraded exit is declined', async () => {
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, 'execution reverted');
+    p.queueConfirm(false);
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => /cancelled/i.test(p.text('stat')), { label: 'cancellation' });
+    assert.equal(p.chain.sent.length, 0);
     p.close();
   });
 
@@ -269,6 +411,40 @@ describe('adding', () => {
     p.close();
   });
 
+  test('deposits the shares to a named recipient', async () => {
+    const p = await setup();
+    const box = await openAdd(p);
+    p.type('rc', A.OTHER);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '1');
+    typeInto(p, i1, '3000');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.chain.sent.length >= 2, { label: 'approve + add', timeout: 6000 });
+    await p.settle();
+    const body = '0x' + p.chain.sent.at(-1).data.replace(/^0x/, '').slice(8);
+    assert.equal(wordAddr(body, 4).toLowerCase(), A.OTHER.toLowerCase());
+    p.close();
+  });
+
+  test('a bad recipient is refused before any approval is granted', async () => {
+    // Order matters: an allowance already granted cannot be taken back by
+    // aborting, so the cheap check has to come first.
+    const p = await setup();
+    const box = await openAdd(p);
+    p.type('rc', 'not-an-address');
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '1');
+    typeInto(p, i1, '3000');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => /resolves/.test(p.text('stat')), { label: 'refusal' });
+    assert.equal(p.chain.sent.length, 0, 'not even the approval');
+    p.close();
+  });
+
   test('refuses to send to a pool the factory disclaims', async () => {
     const p = await setup();
     const box = await openAdd(p);
@@ -285,19 +461,332 @@ describe('adding', () => {
   });
 });
 
+/**
+ * ONE-SIDED DEPOSIT.
+ *
+ * The one path here that does NOT call the pool directly: `zapIn` answers only
+ * to the trusted executor, so this rides zRouter.snwap -> SafeExecutor ->
+ * PrecisionRoute. Three hops means three places to name the wrong address, and
+ * the value travels with the call, so every field of that encoding is pinned.
+ *
+ * `minLP` is the whole of the slippage guard - `zapIn` swaps at minOut = 0 -
+ * which is why it is asserted twice: once as snwap's own out-minimum measured
+ * in LP shares at the depositor, and once inside the executor payload.
+ */
+describe('zapping in from one side', () => {
+  const openAdd = async p => {
+    await p.waitFor(() => btn(p, 'a'), { label: 'add button' });
+    p.click(btn(p, 'a'));
+    const box = rows(p)[0].querySelector('.lqadd');
+    await p.waitFor(() => !box.classList.contains('hide'), { label: 'add form' });
+    return box;
+  };
+  const goZap = async p => {
+    const box = await openAdd(p);
+    const z = box.querySelector('.lqz');
+    z.checked = true;
+    z.dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    return box;
+  };
+
+  test('is offered on any seeded band, not only the native ones', async () => {
+    // `zapIn` takes an ERC-20 as readily as ether - it just wants the route
+    // opened with a checkpoint first. Gating the control on a native token0
+    // hid the feature from every pair that has no ETH side at all.
+    const p = await setup();
+    await p.waitFor(() => rows(p).length, { label: 'bands' });
+    assert.ok(rows(p)[0].querySelector('.lqz'), 'a seeded band offers it');
+    p.close();
+  });
+
+  test('does not mirror the counterpart — the swap leg produces it', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '2');
+    // Empty, but still ON SCREEN: it is how the depositor says they meant the
+    // OTHER side. Hiding it is what pinned the old zap to token0.
+    assert.equal(i1.value, '', 'the counterpart is not the depositor\'s to state');
+    assert.equal(i1.classList.contains('hide'), false, 'the other side stays reachable');
+    assert.equal(box.querySelector('[data-act="ac"]').textContent, 'Zap in');
+    p.close();
+  });
+
+  test('reads the side off whichever field was filled', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    typeInto(p, box.querySelectorAll('.lqin')[1], '3000');
+    await p.waitFor(() => /swaps/.test(box.querySelector('.lqpv').textContent),
+      { label: 'token-side zap preview', timeout: 6000 });
+    assert.match(box.querySelector('.lqpv').textContent, /swaps 1,?500 of 3,?000 USDC/,
+      'the preview should be denominated in the side actually being deposited');
+    p.close();
+  });
+
+  test('refuses to guess when both sides are filled', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    typeInto(p, box.querySelectorAll('.lqin')[1], '3000');
+    await p.waitFor(() => /One side only/.test(box.querySelector('.lqpv').textContent),
+      { label: 'the ambiguity to be named', timeout: 6000 });
+    assert.equal(box.querySelector('[data-act="ac"]').disabled, true,
+      'an ambiguous deposit must not be sendable');
+    p.close();
+  });
+
+  test('an ERC-20 zap opens the route with a checkpoint, and approves first', async () => {
+    // The token arrives BEFORE the call that spends it, so `zapIn` demands an
+    // open route - exactly as the routed swap does. Ether needs neither.
+    const p = await setup();
+    const box = await goZap(p);
+    typeInto(p, box.querySelectorAll('.lqin')[1], '3000');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'zap preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.chain.sent.length >= 2, { label: 'approve + zap', timeout: 6000 });
+    await p.settle();
+
+    const appr = p.chain.sent.at(-2), tx = p.chain.sent.at(-1);
+    assert.equal(appr.to.toLowerCase(), A.USDC.toLowerCase(), 'the token is approved');
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
+    assert.equal(BigInt(tx.value || 0), 0n, 'nothing rides as value for a token zap');
+    const raw = tx.data.replace(/^0x/, '');
+    assert.equal(raw.slice(0, 8), SEL.MULTICALL, 'checkpoint and settle in one call');
+    assert.ok(raw.includes(SEL.ZAPIN), 'the zap itself is in there');
+    assert.ok(raw.includes('0b7c6c6c'), 'and so is the checkpoint that opens the route');
+    p.close();
+  });
+
+  test('previews the swap as well as the mint', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    await p.waitFor(() => /swaps/.test(box.querySelector('.lqpv').textContent),
+      { label: 'zap preview', timeout: 6000 });
+    // A depositor does not expect the word "deposit" to trade half their input
+    // at the pool's fee. Naming it is the point of the line.
+    assert.match(box.querySelector('.lqpv').textContent, /swaps 1 of 2 ETH for USDC/);
+    p.close();
+  });
+
+  test('routes through zRouter with minLP bounding both hops', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'zap preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.chain.sent.length, { label: 'zap tx', timeout: 6000 });
+    await p.settle();
+
+    // ONE transaction: native input needs no approval and no checkpoint.
+    assert.equal(p.chain.sent.length, 1, 'ETH in is a single call');
+    const tx = p.chain.sent.at(-1);
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'the router, not the pool');
+    assert.equal(BigInt(tx.value), 2n * ETH, 'the deposit rides as value');
+
+    const raw = tx.data.replace(/^0x/, '');
+    assert.equal(raw.slice(0, 8), SEL.SNWAP);
+    const body = '0x' + raw.slice(8);
+    // previewZap mints amountIn/4 in the mock; the bound is that less 0.5%.
+    const minLp = (2n * ETH / 4n) * 9950n / 10000n;
+    assert.equal(wordAddr(body, 0), A.ZERO, 'native in');
+    assert.equal(word(body, 1), 2n * ETH);
+    assert.equal(wordAddr(body, 2).toLowerCase(), A.ACCOUNT.toLowerCase(), 'shares to the depositor');
+    assert.equal(wordAddr(body, 3).toLowerCase(), POOL_A.toLowerCase(),
+      'tokenOut is the POOL, so the router measures LP shares that actually land');
+    assert.equal(word(body, 4), minLp, 'the router\'s own guard is the same bound');
+    assert.equal(wordAddr(body, 5).toLowerCase(), A.PROUTE.toLowerCase(), 'PrecisionRoute executes');
+
+    // The executor payload, unwrapped from snwap's trailing bytes argument.
+    const inner = body.slice(2 + 7 * 64).replace(/^.{64}/, '');
+    assert.equal(inner.slice(0, 8), SEL.ZAPIN);
+    const z = '0x' + inner.slice(8);
+    assert.equal(wordAddr(z, 0).toLowerCase(), POOL_A.toLowerCase());
+    assert.equal(wordAddr(z, 1), A.ZERO, 'native in, so no checkpoint path');
+    assert.equal(word(z, 2), 2n * ETH);
+    assert.equal(word(z, 3), 1n * ETH, 'the split the lens bisected, not one invented here');
+    assert.equal(word(z, 4), minLp);
+    assert.equal(wordAddr(z, 5).toLowerCase(), A.ACCOUNT.toLowerCase(), 'shares');
+    assert.equal(wordAddr(z, 6).toLowerCase(), A.ACCOUNT.toLowerCase(), 'and the leftovers');
+    p.close();
+  });
+
+  test('shares can go to someone else; the change comes back to the depositor', async () => {
+    const p = await setup();
+    p.chain.names.set('alice.wei', A.OTHER);
+    const box = await goZap(p);
+    p.type('rc', 'alice.wei');
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'zap preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.chain.sent.length, { label: 'zap tx', timeout: 6000 });
+    await p.settle();
+
+    const body = '0x' + p.chain.sent.at(-1).data.replace(/^0x/, '').slice(8);
+    // The router measures the LP balance that moved AT ITS RECIPIENT, so this
+    // has to be the share recipient or the guard watches an account that gains
+    // nothing - reverting every honest gift and bounding nothing that matters.
+    assert.equal(wordAddr(body, 2).toLowerCase(), A.OTHER.toLowerCase(),
+      'snwap measures where the shares actually land');
+    const inner = body.slice(2 + 7 * 64).replace(/^.{64}/, '');
+    const z = '0x' + inner.slice(8);
+    assert.equal(wordAddr(z, 5).toLowerCase(), A.OTHER.toLowerCase(), 'shares to them');
+    // Leftovers are change, and change goes back to whoever paid. Sweeping them
+    // to the recipient also reverts the whole zap when that address cannot
+    // receive ether - after the swap and deposit have already run.
+    assert.equal(wordAddr(z, 6).toLowerCase(), A.ACCOUNT.toLowerCase(), 'refunds to the payer');
+    p.close();
+  });
+
+  test('a name that does not resolve sends nothing at all', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    p.type('rc', 'nobody.wei');
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'zap preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => /resolves/.test(p.text('stat')), { label: 'refusal' });
+    // Never a silent fallback to the depositor: that looks like success until
+    // the other party asks where their position is.
+    assert.equal(p.chain.sent.length, 0, 'no value moves on an unresolved name');
+    p.close();
+  });
+
+  test('refuses to send to a pool the factory disclaims', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    p.chain.disownPool(POOL_A);
+    typeInto(p, box.querySelectorAll('.lqin')[0], '2');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'zap preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => /Not a Precision pool/.test(p.text('stat')), { label: 'refusal' });
+    assert.equal(p.chain.sent.length, 0, 'value must never leave for an impersonator');
+    p.close();
+  });
+
+  test('turning the mode off restores the two-sided form', async () => {
+    const p = await setup();
+    const box = await goZap(p);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '2');
+    const z = box.querySelector('.lqz');
+    z.checked = false;
+    z.dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    assert.equal(i1.classList.contains('hide'), false);
+    // Re-derived rather than left blank: 2 ETH against a 100/300000 band.
+    assert.equal(i1.value, '6000', 'the counterpart comes back from the reserves');
+    assert.equal(box.querySelector('[data-act="ac"]').textContent, 'Add liquidity');
+    p.close();
+  });
+});
+
 describe('living beside the swap tile', () => {
+  test('the recipient field stays, and says what it means here', async () => {
+    const p = await setup();
+    await p.waitFor(() => rows(p).length, { label: 'bands' });
+    assert.equal(p.visible('rc'), true, 'it names the share recipient in this mode');
+    assert.match(p.$('rc').placeholder, /LP shares to/);
+    // The order-type sync rewrites this class on every keystroke, so a mode it
+    // did not know about could hide the field mid-typing.
+    p.type('amt', '1');
+    await p.settle();
+    assert.equal(p.visible('rc'), true, 'and it survives a keystroke');
+    p.close();
+  });
+
+  test('a recipient typed for a swap cannot survive into a deposit', async () => {
+    // Both directions. A field carried across a mode change is read as an
+    // answer to a question that was never asked in the new mode - here, the
+    // owner of a position.
+    const p = await setup({ open: false });
+    p.$('rc').value = '0x3333333333333333333333333333333333333333';
+    p.click('lq');
+    await p.settle();
+    assert.equal(p.$('rc').value, '', 'cleared entering liquidity mode');
+    p.$('rc').value = '0x4444444444444444444444444444444444444444';
+    p.click('lq');
+    await p.settle();
+    assert.equal(p.$('rc').value, '', 'and cleared on the way back out');
+    p.close();
+  });
+
+  test('offers a NEW band on a pair that already has one', async () => {
+    /**
+     * A PAIR IS NOT A POOL, which is the whole argument for this panel being a
+     * list: ETH/USDC at [1800,2400] and at [1000,4000] are different positions.
+     * Creation was reachable only from the empty state, so that choice existed
+     * exactly until somebody made it once - and the tile's two amount fields,
+     * which are the deposit for a band being created, sat visible and inert on
+     * every pair that had one.
+     */
+    const p = await setup();
+    await p.waitFor(() => rows(p).length, { label: 'bands' });
+    assert.equal(!!p.$('lqList').querySelector('.lqnew'), false,
+      'the form stays out of the way until it is asked for');
+    const tog = p.$('lqNewTog');
+    assert.ok(tog, 'a pair with bands must still offer a new one');
+
+    tog.click();
+    await p.settle();
+    assert.ok(p.$('lqList').querySelector('.lqnew'), 'the create form opens in place');
+    assert.ok(rows(p).length, 'without discarding the bands already listed');
+
+    // And it is the same form: the tile amounts drive it, ratio as the price.
+    // They are hidden while this form is collapsed - there they would feed
+    // nothing - so they appear with it.
+    assert.equal(p.visible('amtRow'), true, 'the amounts come back with the form');
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await new Promise(r => p.window.setTimeout(r, 420));
+    await p.settle();
+    assert.match(p.$('lqRangeOut').textContent, /opens at 3,?000 USDC per ETH/,
+      'the deposit ratio sets the opening price, as in the empty state');
+    p.close();
+  });
+
   test('keeps the token pickers, so the pair can still be changed', async () => {
     const p = await setup();
     await p.waitFor(() => rows(p).length, { label: 'bands' });
     // Hiding the panels wholesale took the pickers with them and froze the list.
-    // The amount fields STAY: in this mode they are the deposit, and the ratio
-    // between them is the opening price of a band being created.
-    assert.equal(p.visible('amtRow'), true, 'the amounts are the deposit here');
-    assert.equal(p.visible('outRow'), true);
+    // The pickers stay; the AMOUNT ROWS do not. In this mode the tile is a pair
+    // picker and nothing else - the deposit amounts belong to the form that
+    // spends them, whether that is a row's add or the create form.
+    // With bands listed and the create form collapsed, the amounts have nothing
+    // to feed - so they are not on screen pretending otherwise.
+    assert.equal(p.visible('amtRow'), false, 'inert amounts must not be shown');
+    assert.equal(p.visible('outRow'), false);
     assert.equal(p.visible('swap'), false, 'but there is nothing to swap');
     assert.ok(p.$('fromSel').offsetParent !== undefined);
     assert.equal(p.$('fromSel').closest('.panel').classList.contains('hide'), false,
       'the pair filter stays on screen');
+    p.close();
+  });
+
+  test('re-reads the RECEIVE balance when that token changes', async () => {
+    // Liquidity mode is the only mode that reads a balance off both selects -
+    // the second amount is a deposit, not an output - and only the pay side was
+    // refreshed on a change. So swapping the receive token left the balance
+    // line, and the Max link that fills from it, pinned to the token that had
+    // just been replaced: clicking Max offered someone their USDC balance as an
+    // amount of USDT.
+    const p = await setup();
+    await p.waitFor(() => /Balance/.test(p.text('bal1')), { label: 'the receive balance' });
+    p.chain.setErc20(A.USDT, A.ACCOUNT, 7n * USDC);
+    p.pickToken('toSel', 'USDT');
+    await p.waitFor(() => /Balance: 7\b/.test(p.text('bal1')), { label: 'the new token balance' });
+
+    // ETH/USDT has no bands, so the create form is open and the amounts are on
+    // screen - which is the only state where Max has anywhere to put a number.
+    await p.waitFor(() => p.$('lqList').querySelector('.lqnew'), { label: 'the create form' });
+    p.$('bal1').querySelector('a').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await p.settle();
+    assert.equal(p.value('outAmt'), '7', 'and Max fills from the token now selected');
     p.close();
   });
 
@@ -373,6 +862,161 @@ describe('living beside the swap tile', () => {
     // itself stopped short - without which "24 of 900" implies these were the
     // best 24 of all 900, when they are the best 24 of the first 128.
     assert.match(p.$('lqSub').textContent, /showing 2 of 900 \(first 128 scanned\)/);
+    p.close();
+  });
+});
+
+/**
+ * The other half of the seed pin.
+ *
+ * `previewSeed` reads the band OFF THE POOL, so it cannot answer for a band
+ * that has not been deployed - which is every band the create form makes. The
+ * page therefore mirrors the seed itself, in BigInt, and a mirror is only worth
+ * having while something holds it to the original. Neither side gets to be the
+ * reference: test/PrecisionSeedPreviewFixture.t.sol asserts the LENS still
+ * produces test/fixtures/seed-preview.json, and this asserts the PAGE
+ * reproduces the same file. Move the math on either side and exactly one of the
+ * two fails, which names the side that moved.
+ *
+ * Regenerate with `forge script script/PrecisionSeedFixture.s.sol`.
+ */
+describe('the page\'s seed mirror', () => {
+  const cases = JSON.parse(readFileSync(new URL('../fixtures/seed-preview.json', import.meta.url), 'utf8'));
+
+  test('reproduces every case the lens produced', async () => {
+    const p = await setup({ open: false });
+    assert.ok(cases.length, 'empty fixture');
+    for (const c of cases) {
+      const got = p.window.lqSeedQuote(BigInt(c.sl), BigInt(c.sh), BigInt(c.s), BigInt(c.a0), BigInt(c.a1));
+      assert.equal(got.ok, c.ok, `ok: ${c.desc}`);
+      assert.equal(got.lp, BigInt(c.lp), `lp: ${c.desc}`);
+      assert.equal(got.used0, BigInt(c.used0), `used0: ${c.desc}`);
+      assert.equal(got.used1, BigInt(c.used1), `used1: ${c.desc}`);
+    }
+    p.close();
+  });
+
+  test('refuses a band wider than the factory will build', async () => {
+    // sqrtPHigh > 1e36 reverts Bad() in the factory, and a mirror that answered
+    // for it would be previewing a market that cannot exist.
+    const p = await setup({ open: false });
+    const over = 10n ** 36n + 1n;
+    assert.equal(p.window.lqSeedQuote(10n ** 18n, over, 10n ** 27n, 10n ** 20n, 10n ** 20n).ok, false);
+    p.close();
+  });
+});
+
+/**
+ * The refusals the mirror does NOT carry.
+ *
+ * `lqSeedQuote` mirrors the LENS, and the lens stops where `previewSeed` stops:
+ * it models `_seed`'s arithmetic and the seed price tolerance, but not the
+ * uint128 reserve bound, not `_priceInRange`, and not `_tradeable`. All three
+ * live in `_addLiquidity`, all three refuse a seed, and the page used to print
+ * "Seeds X + Y" for every one of them and let the wallet deliver the revert.
+ *
+ * `lqSeedAdmits` is that missing layer, kept OUT of the mirror so the fixture
+ * pin above still means what it says.
+ *
+ * ONLY THE uint128 BOUND IS KNOWN TO BITE. A randomised sweep of ~600k seeds
+ * across the whole band and amount space found no case where the price and
+ * tradeability checks refused something the tolerance test had already
+ * admitted; they are carried because the pool carries them and the search is
+ * not a proof, not because a case is known. The test below pins the one that
+ * does, and the one after it guards the far more likely failure of the other
+ * two - refusing a band that is perfectly fine.
+ */
+describe('the seed refusals the lens does not model', () => {
+  test('refuses a seed whose reserves would not fit uint128', async () => {
+    const p = await setup({ open: false });
+    // A band opened at its ceiling by a token1 amount past 2^128. The mirror
+    // admits it: every figure it checks is in range, and `used1 <= amount1`
+    // holds. `_seed` does not - it bounds both requirements by uint128 before
+    // it corrects them, because `_setReserves` could not hold the result.
+    const sl = 10n ** 6n, sh = 10n ** 24n, s = sh;
+    const a0 = 10n ** 45n, a1 = 10n ** 42n;
+    const q = p.window.lqSeedQuote(sl, sh, s, a0, a1);
+    assert.equal(q.ok, true, 'the mirror admits it, which is the point');
+    assert.ok(q.used1 > (1n << 128n) - 1n, 'and the amount it asks for is past uint128');
+    assert.equal(p.window.lqSeedAdmits(sl, sh, s, 3000n, q), false);
+    p.close();
+  });
+
+  test('admits every seed the lens fixture accepts', async () => {
+    // The layer's real risk is not missing a refusal, it is inventing one: a
+    // band the pool would open, refused by the page with no way to tell. Every
+    // accepted fixture case has to survive it, at all three fee tiers.
+    const p = await setup({ open: false });
+    const cases = JSON.parse(readFileSync(new URL('../fixtures/seed-preview.json', import.meta.url), 'utf8'));
+    let checked = 0;
+    for (const c of cases.filter(x => x.ok)) {
+      const q = p.window.lqSeedQuote(BigInt(c.sl), BigInt(c.sh), BigInt(c.s), BigInt(c.a0), BigInt(c.a1));
+      for (const fee of [500n, 3000n, 10000n]) {
+        assert.equal(p.window.lqSeedAdmits(BigInt(c.sl), BigInt(c.sh), BigInt(c.s), fee, q), true,
+          `${c.desc} at ${fee} pips`);
+        checked++;
+      }
+    }
+    assert.ok(checked > 0, 'the fixture has accepted cases to check');
+    p.close();
+  });
+
+  test('says so in the form instead of sending the seed', async () => {
+    // A USDC-only seed at the top of a band running from 1e-6 to 1e24. Every
+    // figure the LENS checks is in range and `used1 <= amount1` holds, so the
+    // mirror admits it - but the amount it asks the pool to hold is past
+    // uint128, and `_seed` refuses on exactly that.
+    const p = await setup({ bands: [], shares: 0n });
+    await p.waitFor(() => p.$('lqCreate'), { label: 'create form' });
+    typeInto(p, p.$('lqRange'), 'custom');
+    p.$('lqRange').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await p.settle();
+    typeInto(p, p.$('lqLo'), '0.000001');
+    typeInto(p, p.$('lqHi'), '1e24');
+    typeInto(p, p.$('lqPx'), '1e24');     // a one-sided seed opens at the ceiling
+    // Spelled out: `parseUnits` reads digits, not exponents. Typed last, so the
+    // amount is what the final preview run reacts to.
+    typeInto(p, p.$('outAmt'), '1' + '0'.repeat(36));   // USDC, token1, alone
+    await new Promise(r => p.window.setTimeout(r, 420));
+    await p.settle();
+
+    assert.match(p.text('lqPv'), /could not be traded once opened/);
+    assert.equal(p.$('lqCreate').disabled, true, 'and the button stays shut');
+    assert.equal(p.chain.sent.length, 0, 'nothing was sent');
+    p.close();
+  });
+});
+
+/**
+ * What an LP actually keeps.
+ *
+ * A launcher pool charges 1% and hands HALF to the creator before the rest
+ * reaches reserves - so "1.00%" on the panel reads as LP yield when only half
+ * of it is. `creatorFeeBps` is an immutable on the pool, zero everywhere else,
+ * so this is a read rather than a guess about where a pool came from.
+ */
+describe('the fee a pool shows an LP', () => {
+  const LAUNCHED = {
+    pool: POOL_A, fee: 10000n, creatorFeeBps: 5000n, liquidity: 10n ** 21n,
+    reserve0: 100n * ETH, reserve1: 300000n * USDC,
+    sqrtLow: sqrtRaw(2000), sqrtHigh: sqrtRaw(4000), sqrtNow: sqrtRaw(3000),
+  };
+
+  test('names the LP share when a slice goes to a creator', async () => {
+    const p = await setup({ bands: [LAUNCHED] });
+    const t = p.$('lqList').textContent;
+    assert.match(t, /1\.00%/, `headline fee missing: ${t.slice(0, 200)}`);
+    assert.match(t, /0\.50% to LPs/, `LP share not named: ${t.slice(0, 200)}`);
+    p.close();
+  });
+
+  test('an ordinary pool renders exactly as it always did', async () => {
+    // The whole design constraint: no second code path, and no new noise on
+    // the pools that make up almost all of them.
+    const p = await setup({ bands: [BAND_A] });
+    const t = p.$('lqList').textContent;
+    assert.match(t, /0\.30%/);
+    assert.ok(!/to LPs/.test(t), `an ordinary pool grew a fee split: ${t.slice(0, 200)}`);
     p.close();
   });
 });
