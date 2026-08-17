@@ -3275,11 +3275,10 @@ if(!raw||!t)return;
 let start;try{start=parseUnits(raw,t.dec)}catch{return}
 if(!start)return;
 floorAmt.value=trimAmt(start/2n,t.dec);
-fitFont(floorAmt);
 };
 floorAmt.addEventListener("input",()=>{
 floorTouched=true;
-fitFont(floorAmt);render();
+render();
 });
 tabBook.onclick=()=>setTab("book");
 setInterval(()=>{if(account&&!document.hidden&&!busy){refreshBalance();loadPos();if(tab==="book")loadBook()}},3e4);
@@ -3624,6 +3623,9 @@ const [r]=await mc3([{to:PFACTORY,data:"0x"+SEL_ISPOOL+encAddr(pool)}]).catch(()
 return !!r&&dec1(r,0)===1n;
 }
 const SEL_REMOVE_LOSSY="0cc55f06";
+const ERR_MINOUT="bb2875c3";
+const revertIs=(e,sel)=>new RegExp(sel,"i")
+.test((e&&e.data?JSON.stringify(e.data):"")+((e&&e.message)||""));
 const encLossy=(shares,to,take0,take1)=>"0x"+SEL_REMOVE_LOSSY+encUint(shares)
 +encUint(0n)+encUint(0n)+encAddr(to)+encBool(take0)+encBool(take1);
 async function lossyExit(pool,shares,t0,t1){
@@ -3653,10 +3655,18 @@ if(!await factoryPool(pool)){stat.textContent="Not a Precision pool — refusing
 try{
 await checkWallet();
 stat.textContent="Withdrawing…";
-let req={from:account,to:pool,value:"0x0",
-data:"0x"+SEL_REMOVE+encUint(shares)+encUint(lessSlip(pv.a0))+encUint(lessSlip(pv.a1))+encAddr(account)};
+const mkReq=q=>({from:account,to:pool,value:"0x0",
+data:"0x"+SEL_REMOVE+encUint(shares)+encUint(lessSlip(q.a0))+encUint(lessSlip(q.a1))+encAddr(account)});
+let req=mkReq(pv);
 try{await rpc(C,[req,L])}
 catch(strict){
+if(revertIs(strict,ERR_MINOUT)){
+const pv2=await previewRemove(pool,shares);
+if(!pv2){stat.textContent="This amount redeems nothing — the pool would refuse it.";return}
+req=mkReq(pv2);
+try{await rpc(C,[req,L])}
+catch{stat.textContent="The pool moved while this was quoted — try again, or raise slippage.";return}
+}else{
 const alt=await lossyExit(pool,shares,t0,t1);
 if(!alt)throw strict;
 let go=false;
@@ -3665,6 +3675,7 @@ catch{go=false}
 if(!go){stat.textContent="Withdrawal cancelled.";return}
 req=alt.req;
 stat.textContent="Withdrawing what the pool can still pay…";
+}
 }
 await settle(await rpc(S,[req]));
 await loadLq();refreshBalance();
@@ -3747,7 +3758,7 @@ const zp=await previewZap(row.pool,z.tok.addr,z.amt).catch(()=>null);
 if(mz!==lqPvSeq)return;
 if(!zp||zp.lp===0n){out.textContent="The pool would refuse this deposit.";go.disabled=true;return}
 out.textContent=`swaps ${trimAmt(zp.portion,z.tok.dec)} of ${trimAmt(z.amt,z.tok.dec)} ${z.tok.sym}`
-+` for ${t1.sym}, then deposits both · mints ~${trimAmt(zp.lp,18)} LP`;
++` for ${(z.tok===t0?t1:t0).sym}, then deposits both · mints ~${trimAmt(zp.lp,18)} LP`;
 go.disabled=false;return;
 }
 if(!a0||!a1){
@@ -5038,7 +5049,7 @@ else if(nftId.value.trim())await buyNftOrder(f,t);
 else await bidCollection(f,t,kind.value==="floor");
 amt.value="";outAmt.value="";nftId.value="";floorAmt.value="";
 floorTouched=false;
-fitFont(amt);fitFont(outAmt);fitFont(floorAmt);
+fitFont(amt);fitFont(outAmt);
 stat.textContent=f.std==="nft"?"Listed.":"Bid placed.";
 loadBook();refreshBalance();render();
 return;
@@ -5113,7 +5124,7 @@ await sendRouterFunded(direct,funded,f,sell,f.addr===ZERO?sell:0n,
 bid?"Placing bid (escrowing the ceiling)...":dutch?"Placing Dutch order...":t.addr===ZERO?"Placing limit order (ETH quote settles as WETH)...":"Placing limit order...");
 amt.value="";outAmt.value="";floorAmt.value="";
 floorTouched=false;
-fitFont(amt);fitFont(outAmt);fitFont(floorAmt);
+fitFont(amt);fitFont(outAmt);
 loadBook();refreshBalance();render();
 }catch(e){err(e);render()}
 }

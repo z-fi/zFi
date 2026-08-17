@@ -693,6 +693,13 @@ export class MockChain {
     const rv = this.reverts.get(`${to}:${sel}`);
     if (rv) {
       const msg = typeof rv === 'function' ? rv('0x' + data) : rv;
+      /* An object models a provider that returns REVERT DATA rather than only a
+         string. Which of the two a wallet gives you is not something the page
+         can choose, and telling a missed bound apart from a short pool depends
+         on reading the selector out of whichever one arrived. */
+      if (msg && typeof msg === 'object') {
+        throw Object.assign(Error(msg.message || 'execution reverted'), { data: msg.data });
+      }
       if (msg) throw Error(msg);
     }
 

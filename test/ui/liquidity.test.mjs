@@ -1020,3 +1020,92 @@ describe('the fee a pool shows an LP', () => {
     p.close();
   });
 });
+
+/**
+ * A MISSED BOUND IS NOT A SHORT POOL.
+ *
+ * The strict exit is preflighted with an `eth_call`, and ANY refusal used to
+ * send the page to the degraded one. But `removeLiquidity` reverts
+ * `InsufficientOutput` whenever the price moved between the preview and the
+ * send — the most ordinary thing that can happen to a pool with traffic, and it
+ * says nothing at all about whether the pool can pay.
+ *
+ * So an LP in a perfectly healthy pool was told one of its tokens was short,
+ * and offered an exit carrying minimums of ZERO as the remedy. The two causes
+ * are distinguishable by selector and now are.
+ */
+describe('telling a moved price from a short pool', () => {
+  const MINOUT = '0xbb2875c3';  // PrecisionPool.InsufficientOutput()
+  const DEFICIT = '0xa9e4150c'; // PrecisionPool.BalanceDeficit()
+  const strictSent = p => p.chain.sent.filter(
+    t => (t.data || '').replace(/^0x/, '').slice(0, 8) === SEL.REMOVE);
+  const lossySent2 = p => p.chain.sent.filter(
+    t => (t.data || '').replace(/^0x/, '').slice(0, 8) === SEL.REMOVE_LOSSY);
+
+  /** Refuse the first preflight with `err`, then behave. */
+  const failOnce = (p, err) => {
+    let n = 0;
+    p.chain.revertOn(POOL_A, SEL.REMOVE, () => (n++ === 0 ? err : null));
+  };
+
+  for (const [shape, err] of [
+    ['revert data', { data: MINOUT }],
+    ['the message', `execution reverted: ${MINOUT}`],
+  ]) {
+    test(`re-quotes instead of degrading, when the bound missed (${shape})`, async () => {
+      const p = await setup();
+      failOnce(p, err);
+      await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+      p.click(btn(p, 'w'));
+      await p.waitFor(() => strictSent(p).length, { label: 'a second strict attempt' });
+      await p.settle();
+      assert.equal(lossySent2(p).length, 0, 'the degraded exit is not for a moved price');
+      assert.equal(p.asked.confirm.length, 0,
+        'and the user must not be asked to accept a loss that is not happening');
+      p.close();
+    });
+  }
+
+  test('keeps a real bound on the retry rather than dropping to zero', async () => {
+    // The whole harm of the old path was swapping a bounded withdrawal for an
+    // unbounded one. A retry that carried zeros would be the same bug wearing a
+    // different message.
+    const p = await setup();
+    failOnce(p, { data: MINOUT });
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => strictSent(p).length, { label: 'a second strict attempt' });
+    await p.settle();
+    const body = '0x' + strictSent(p).at(-1).data.replace(/^0x/, '').slice(8);
+    assert.ok(word(body, 1) > 0n, 'min0 must still bound the withdrawal');
+    assert.ok(word(body, 2) > 0n, 'and min1 too');
+    p.close();
+  });
+
+  test('still reaches the degraded exit for a pool that really is short', async () => {
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, { data: DEFICIT });
+    p.queueConfirm(true);
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => lossySent2(p).length, { label: 'lossy withdrawal' });
+    await p.settle();
+    assert.match(p.asked.confirm.at(-1), /cannot pay out in full|short/i);
+    p.close();
+  });
+
+  test('sends nothing when the price keeps moving', async () => {
+    // Two misses in a row is a moving market, not a broken pool. Saying so and
+    // stopping is the honest answer; reaching for the degraded exit here would
+    // spend the LP's slippage protection on a problem it cannot solve.
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, { data: MINOUT });
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => /moved while this was quoted/i.test(p.text('stat')),
+      { label: 'the explanation' });
+    assert.equal(p.chain.sent.length, 0, 'and nothing may go out');
+    assert.equal(p.asked.confirm.length, 0);
+    p.close();
+  });
+});
