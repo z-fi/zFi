@@ -253,3 +253,89 @@ describe('the liquidity tab and the two shapes of ether', () => {
     p.close();
   });
 });
+
+/**
+ * The routability policy, which is deployed for this reader and no other.
+ *
+ * `PrecisionPoolPolicy` is live, owned, and bound to the same factory these
+ * pools come from — and nothing on chain consults it, deliberately: the factory
+ * and the route stay permissionless so that no owner holds a kill switch over
+ * the one path that has none. Its docblock names who should read it instead —
+ * "frontends, aggregators, and anyone assembling a `pools` array off-chain" —
+ * and this page was not doing so. Under `Default` it allows an unhooked pool
+ * and denies a hooked one, and `createPool` is permissionless, so the pool the
+ * page routes through was chosen with no view of its hook at all.
+ */
+describe('the routability policy', () => {
+  const GOOD = '0xaaaa000000000000000000000000000000000001';
+  const BAD = '0xbbbb000000000000000000000000000000000002';
+
+  /** Two bands on ETH/USDC. `BAD` quotes better, so it is what wins unscreened. */
+  async function setup({ block = null, unreadable = false } = {}) {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.USDC, A.ACCOUNT, 100_000n * USDC);
+    chain.quoteHandler = () => null;
+    chain.precisionQuote = [
+      // Linear, so the reference-sized quote the impact meter takes agrees with
+      // the full one. A flat `out` makes a hundredth of the trade look a hundred
+      // times better and trips the high-impact confirmation.
+      { pool: GOOD, pair: [A.ZERO, A.USDC], fee: 3000, effFee: 3000,
+        perIn: amt => amt * 3000n / 10n ** 12n },
+      { pool: BAD, pair: [A.ZERO, A.USDC], fee: 3000, effFee: 3000,
+        perIn: amt => amt * 3500n / 10n ** 12n },
+    ];
+    chain.setPools(A.ZERO, A.USDC, [
+      { pool: GOOD, hook: A.ZERO, liquidity: 10n ** 20n },
+      { pool: BAD, hook: A.ZERO, liquidity: 10n ** 20n },
+    ]);
+    if (block) chain.blockPool(block);
+    chain.policyUnreadable = unreadable;
+    const page = await loadPage({ chain });
+    await page.connect();
+    return page;
+  }
+
+  test('routes the best pool when the policy allows it', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3500', 'the best band, unrefused');
+    p.close();
+  });
+
+  test('re-picks rather than dropping the pair when the winner is refused', async () => {
+    // THE POINT OF THE FALLBACK. `quoteBestFor` answers with one pool and no
+    // reason, so a refused winner would take the whole pair down with it — and
+    // anyone may create a pool for any pair, which would turn that into a way
+    // to unlist a token whose band is its only venue.
+    const p = await setup({ block: BAD });
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3000', 'the next band down must still route');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length, { label: 'a send' });
+    const tx = p.chain.sent[p.chain.sent.length - 1];
+    assert.ok(!tx.data.toLowerCase().includes(BAD.slice(2).toLowerCase()),
+      'and the refused pool must not appear in what is sent');
+    assert.ok(tx.data.toLowerCase().includes(GOOD.slice(2).toLowerCase()));
+    p.close();
+  });
+
+  test('quotes nothing when every band for the pair is refused', async () => {
+    const p = await setup({ block: BAD });
+    p.chain.blockPool(GOOD);
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '', `expected no quote, got ${p.value('outAmt')}`);
+    p.close();
+  });
+
+  test('AN UNREADABLE POLICY ALLOWS, because the alternative is a kill switch', async () => {
+    // A dropped call or a chain with nothing at that address must not disable
+    // the venue: that is the switch the contract went out of its way not to
+    // build, only self-inflicted. Allowing is also what the page did before the
+    // screen existed, so it is a no-op rather than a regression.
+    const p = await setup({ unreadable: true });
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3500', 'an unreadable policy must not cost the route');
+    p.close();
+  });
+});

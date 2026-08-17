@@ -65,6 +65,7 @@ export const A = {
   // as snwap's `executor`, and a wrong address there is a transaction that
   // hands the router's value to nothing.
   PROUTE: '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB',
+  PPOLICY: '0x00000045fc7b570Be4d71F67219508ebD295EC6D',
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
   ENSRESOLVER: '0x00000000000000000000000000000000000e5e50',
@@ -108,6 +109,7 @@ export const SEL = {
   QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43', EFF_FEE: 'ef66de32',
   // PrecisionRoute.route(address[],address,address,uint256,uint256,address)
   PROUTE_ROUTE: '5d6498e1',
+  QUOTE_ALL: '89941805', ROUTABLE_BATCH: '9662c498',
   BY_CREATOR: '7d78be2b', TOKEN1: 'd21220a7', BY_CREATOR_N: 'aa5e6b5b', RESERVE0: '443cb4bc',
   PAIR_COUNT: '355da246',
   REMOVE: 'e39b0eb5', REMOVE_LOSSY: '0cc55f06', ADDEXACT: 'cc0025e4',
@@ -383,6 +385,9 @@ export class MockChain {
     this.precisionQuote = null;
     // Override for poolsForPairCount, to model a pair stuffed with bands.
     this.pairCount = null;
+    // Pools PrecisionPoolPolicy declines, and whether it can be read at all.
+    this.blocked = new Set();
+    this.policyUnreadable = false;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
@@ -471,12 +476,28 @@ export class MockChain {
     if (!this.precisionQuote) return [];
     return Array.isArray(this.precisionQuote) ? this.precisionQuote : [this.precisionQuote];
   }
+  /**
+   * What one market answers at `amt`.
+   *
+   * `perIn` prices whatever it is handed, which is what makes a second hop's
+   * quote depend on the first. `small` is the flat alternative for impact: the
+   * page quotes a hundredth of the trade and compares the marginal price to the
+   * executed one, so a fixture returning the same number for both sizes makes
+   * every trade look impact-free.
+   */
+  precisionOut(q, amt) {
+    if (q.perIn) return q.perIn(amt);
+    if (q.small !== undefined && amt < BigInt(q.amountIn ?? 10n ** 18n)) return BigInt(q.small);
+    return BigInt(q.out);
+  }
   /** The market at `pool`, for the reads that name a pool rather than a pair. */
   precisionAt(pool) {
     if (!pool) return null;
     const want = String(pool).toLowerCase();
     return this.precisionList().find(q => q.pool.toLowerCase() === want) || null;
   }
+  /** Make the policy decline `pool`, the way a hooked or Blocked one reads. */
+  blockPool(pool) { this.blocked.add(pool.toLowerCase()); return this; }
   setPools(a, b, pools) {
     const [t0, t1] = a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
     const rows = pools.map(p => (typeof p === 'string' ? { pool: p } : p))
@@ -830,6 +851,15 @@ export class MockChain {
     // poolsForPairCount — how many bands the pair has, which the page reads
     // before deciding how wide a window to ask for. `_byPair` is append-only,
     // so a fixed window hides anything created after it.
+    /* PrecisionPoolPolicy.isRoutableBatch. `blocked` is what the owner has
+       declined; `policyUnreadable` is the OTHER answer the page has to handle,
+       because an unreadable policy must allow rather than disable the venue. */
+    if (to === A.PPOLICY.toLowerCase() && sel === SEL.ROUTABLE_BATCH) {
+      if (this.policyUnreadable) throw Error('policy unreachable');
+      const [pools] = coder.decode(['address[]'], '0x' + data.slice(8));
+      return coder.encode(['bool[]'],
+        [pools.map(p => !this.blocked.has(p.toLowerCase()))]);
+    }
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.PAIR_COUNT) {
       const body = '0x' + data.slice(8);
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
@@ -907,29 +937,33 @@ export class MockChain {
        */
       const body0 = '0x' + data.slice(8);
       const askedPair = [wordAddr(body0, 0).toLowerCase(), wordAddr(body0, 1).toLowerCase()].sort();
-      const q = this.precisionList()
-        .find(x => (x.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort().join()
+      const rows = this.precisionList()
+        .filter(x => (x.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort().join()
           === askedPair.join());
-      if (!q) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
-      /* A hop's size is its PREDECESSOR's output, so a fixture that answers a
-         flat `out` cannot express a chain at all. `perIn` lets a market price
-         whatever it is handed, which is what makes the second hop's quote
-         depend on the first. */
-      if (q.perIn) {
-        const amt = word('0x' + data.slice(8), 4);
-        return coder.encode(['address', 'uint256'], [q.pool, q.perIn(amt)]);
+      if (!rows.length) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      /* THE BEST of them, not the first. Several pools may share a pair — that
+         is the case where the policy screen has somewhere to send the page when
+         it declines one — and `quoteBestFor` is defined as the maximum. A mock
+         that answered with whichever was declared first would let a page that
+         re-picked wrongly still look right. */
+      let best = null;
+      for (const q of rows) {
+        const out = this.precisionOut(q, word('0x' + data.slice(8), 4));
+        if (!best || out > best.out) best = { pool: q.pool, out };
       }
-      /* SIZE-DEPENDENT, when the fixture asks for it. A flat answer cannot
-         express impact at all: the page measures it by quoting a hundredth of
-         the trade and comparing the marginal price to the executed one, so a
-         mock that returns the same `out` for both makes every trade look
-         impact-free. `small` is what the reference-sized quote returns. */
-      if (q.small !== undefined) {
-        const asked = word('0x' + data.slice(8), 4);
-        const full = BigInt(q.amountIn ?? 10n ** 18n);
-        if (asked < full) return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.small)]);
-      }
-      return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.out)]);
+      return coder.encode(['address', 'uint256'], [best.pool, best.out]);
+    }
+    /* `quoteAllFor` — every pool in the pair, not just the winner. The page
+       falls back to it when the policy declines the winner, so that one refused
+       pool cannot take a whole pair down with it. */
+    if (sel === SEL.QUOTE_ALL) {
+      const body = '0x' + data.slice(8);
+      const asked = [wordAddr(body, 0).toLowerCase(), wordAddr(body, 1).toLowerCase()].sort();
+      const amt = word(body, 4);
+      const rows = this.precisionList().filter(x =>
+        (x.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort().join() === asked.join());
+      return coder.encode(['tuple(address,uint256,uint256)[]'],
+        [rows.map(q => [q.pool, this.precisionOut(q, amt), BigInt(q.fee ?? 3000)])]);
     }
     if (sel === SEL.POOL_FEE && this.precisionQuote) {
       return '0x' + u256(this.precisionAt(to)?.fee ?? 3000);

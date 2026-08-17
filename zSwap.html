@@ -461,6 +461,8 @@ const encPRoute=(pools,tokenIn,tokenOut,amountIn,minOut,to)=>
 "0x"+SEL_PROUTE+encUint(192)+encAddr(tokenIn)+encAddr(tokenOut)+encUint(amountIn)
 +encUint(minOut)+encAddr(to)+encUint(BigInt(pools.length))+pools.map(encAddr).join("");
 const SEL_PAIR_COUNT="355da246",SEL_CREATORBPS="17773ebb";
+const PPOLICY="0x00000045fc7b570Be4d71F67219508ebD295EC6D";
+const SEL_ROUTABLE="9662c498",SEL_QUOTE_ALL="89941805";
 const LQ_SCAN=128;
 const LQ_SHOW=24;
 const isEthLike=a=>a===ZERO||a.toLowerCase()===WETH.toLowerCase();
@@ -496,13 +498,62 @@ try{if(c)n=Number(BigInt(c))}catch{n=0}
 if(!pool||!won)return await hubHop(f,t,amountIn,sender,block);
 const tA=won.c0===fA?won.c1:won.c0;
 let fee=0n;
-try{const [fx]=await mc3Deep([{to:PPLENS,
-data:"0x"+SEL_EFFFEE+encAddr(pool)+encAddr(sender)+encAddr(fA)+encUint(amountIn)}],block);
-if(fx)fee=BigInt(fx)}catch{}
+const feeReq=p=>({to:PPLENS,
+data:"0x"+SEL_EFFFEE+encAddr(p)+encAddr(sender)+encAddr(fA)+encUint(amountIn)});
+const [fx,rt]=await mc3Deep([feeReq(pool),routableReq([pool])],block);
+if(policyRefuses(rt,1)){
+const alt=await bestRoutable(won.c0,won.c1,fA,amountIn,sender,block);
+if(!alt)return await hubHop(f,t,amountIn,sender,block);
+pool=alt.pool;out=alt.out;
+const [fx2]=await mc3Deep([feeReq(pool)],block);
+if(fx2)fee=BigInt(fx2);
+}else if(fx)fee=BigInt(fx);
 return {pools:[pool],out,fee,capped:n>LQ_SCAN,tokenIn:fA,tokenOut:tA,
 unwrap:fA===ZERO&&f.addr!==ZERO?amountIn:0n,
 wrap:fA!==ZERO&&f.addr===ZERO?amountIn:0n,
 outDiffers:(tA===ZERO)!==(t.addr===ZERO)};
+}
+const routableReq=pools=>({to:PPOLICY,
+data:"0x"+SEL_ROUTABLE+encUint(32)+encUint(BigInt(pools.length))+pools.map(encAddr).join("")});
+function policyRefuses(raw,n){
+if(!raw)return false;
+const h=strip0x(raw);
+if(h.length<128+n*64)return false;
+const len=Number(BigInt("0x"+h.slice(64,128)));
+if(len!==n)return false;
+for(let i=0;i<n;i++)if(BigInt("0x"+h.slice(128+i*64,128+(i+1)*64))===0n)return true;
+return false;
+}
+async function bestRoutable(c0,c1,tokenIn,amountIn,sender,block){
+const [raw]=await mc3Deep([{to:PPLENS,data:"0x"+SEL_QUOTE_ALL+encAddr(c0)+encAddr(c1)
++encAddr(sender)+encAddr(tokenIn)+encUint(amountIn)+encUint(0n)+encUint(BigInt(LQ_SCAN))}],block);
+const cands=decAll(raw);
+if(!cands.length)return null;
+const [rt]=await mc3Deep([routableReq(cands.map(c=>c.pool))],block);
+if(!rt)return null;
+const h=strip0x(rt);
+if(h.length<128+cands.length*64)return null;
+let win=null;
+for(let i=0;i<cands.length;i++){
+if(BigInt("0x"+h.slice(128+i*64,128+(i+1)*64))===0n)continue;
+if(!win||cands[i].out>win.out)win=cands[i];
+}
+return win;
+}
+function decAll(raw){
+if(!raw)return[];
+const h=strip0x(raw);
+if(h.length<128)return[];
+const n=Number(BigInt("0x"+h.slice(64,128)));
+const out=[];
+for(let i=0;i<n;i++){
+const b=128+i*192;
+if(h.length<b+192)break;
+const pool="0x"+h.slice(b+24,b+64),o=BigInt("0x"+h.slice(b+64,b+128));
+if(o<=0n||/^0x0{40}$/i.test(pool))continue;
+out.push({pool,out:o});
+}
+return out;
 }
 function decBest(raw){
 if(!raw)return null;
@@ -538,14 +589,14 @@ n:Math.max(legs[i].n,count(second[i*2+1]))};
 }
 if(!win)return null;
 let fee=0n;
-try{
-const [a,b]=await mc3Deep([
+const [a,b,rt]=await mc3Deep([
 {to:PPLENS,data:"0x"+SEL_EFFFEE+encAddr(win.pools[0])+encAddr(sender)+encAddr(f.addr)+encUint(amountIn)},
 {to:PPLENS,data:"0x"+SEL_EFFFEE+encAddr(win.pools[1])+encAddr(sender)+encAddr(win.hub)+encUint(win.mid)},
+routableReq(win.pools),
 ],block);
+if(policyRefuses(rt,win.pools.length))return null;
 const fa=a?BigInt(a):0n,fb=b?BigInt(b):0n;
 fee=fa+fb-(fa*fb)/1000000n;
-}catch{}
 return {pools:win.pools,out:win.out,fee,capped:win.n>LQ_SCAN,
 tokenIn:f.addr,tokenOut:t.addr,unwrap:0n,wrap:0n,outDiffers:false};
 }
@@ -4374,23 +4425,35 @@ if(k0&&chLoading===k0)return;
 chBars=null;chPools=null;
 const p=p0;
 if(tab!=="swap"||!p){syncChartUI();return}
-const my=++chSeq,[t0,t1]=p,key=k0;
+const my=++chSeq,key=k0;
 const hit=chCache[key];
 if(hit&&Date.now()-hit.at<30000){chBars=hit.bars;chPools=hit.pools;syncChartUI();return}
 chLoading=key;
 try{
 if(PPLENS===ZERO||(await rpc("eth_getCode",[PPLENS,L])).length<5)return syncChartUI();
-const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(t0.addr)+encAddr(t1.addr)
+const marketsFor=async pair=>{
+const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+encAddr(pair[0].addr)+encAddr(pair[1].addr)
 +encAddr(ZERO)+encUint(0)+encUint(LQ_SCAN)+encUint(0)}]);
-if(my!==chSeq)return;
 const found=[];
 if(raw){const h=strip0x(raw),n=Number(BigInt("0x"+h.slice(64,128))),base=128;
 for(let i=0;i<n&&i<LQ_SCAN;i++){const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
 if(at(PI_HOOK)!==0n||at(PI_LIQ)===0n)continue;
 found.push({a:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),liq:at(PI_LIQ)})}}
 found.sort((x,y)=>y.liq>x.liq?1:y.liq<x.liq?-1:0);
-const pools=found.slice(0,CH_POOLS).map(x=>x.a);
-if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:null};return syncChartUI()}
+return found.slice(0,CH_POOLS).map(x=>x.a);
+};
+let eff=p,pools=await marketsFor(p);
+if(my!==chSeq)return;
+if(!pools.length){
+const alt=chOtherForm(p);
+if(alt){
+const altPools=await marketsFor(alt);
+if(my!==chSeq)return;
+if(altPools.length){eff=alt;pools=altPools}
+}
+}
+const [t0,t1]=eff;
+if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:null,pair:null};return syncChartUI()}
 const reqs=[];
 for(const a of pools)reqs.push({to:a,data:"0x"+SEL_TAPE+encUint(FINE)+encUint(256)},
 {to:a,data:"0x"+SEL_TAPE+encUint(COARSE)+encUint(256)});
@@ -4413,7 +4476,7 @@ if(lead.length)c=lead.concat(c)}
 chBars=f||c?{[FINE]:f,[COARSE]:c}:null;
 const live=set=>set.filter(d=>d&&d.some(Boolean)).length;
 chPools=chBars?{[FINE]:live(fine),[COARSE]:live(coarse)}:null;
-chCache[key]={at:Date.now(),bars:chBars,pools:chPools};
+chCache[key]={at:Date.now(),bars:chBars,pools:chPools,pair:eff===p?null:eff};
 }catch{chBars=null;chPools=null}
 finally{if(chLoading===k0)chLoading=""}
 if(my===chSeq)syncChartUI();
@@ -4440,7 +4503,7 @@ chTog.classList.toggle("hide",!on);
 chBox.classList.toggle("hide",!on||!chOpen);
 chTog.setAttribute("aria-expanded",on&&chOpen?"true":"false");
 if(!on||!chOpen)return;
-const p=chPair();
+const p=chEff();
 chNote.textContent=p?chLabel(p):"";
 drawChart();syncInv();
 }
@@ -4453,6 +4516,17 @@ const moneyRank=a=>{a=(a||"").toLowerCase();
 return NUMERAIRES.has(a)?2:(a===ZERO||a===WETH.toLowerCase())?1:0};
 const chPairKey=p=>p?p[0].addr.toLowerCase()+":"+p[1].addr.toLowerCase():"";
 const chNaturalInv=p=>!!p&&moneyRank(p[0].addr)>moneyRank(p[1].addr);
+const chOtherForm=p=>{
+const eth=p.filter(x=>isEthLike(x.addr));
+if(eth.length!==1)return null;
+const cur=eth[0],rest=p[0]===cur?p[1]:p[0];
+const sub=TOKENS.find(x=>x.addr.toLowerCase()===(cur.addr===ZERO?WETH:ZERO).toLowerCase());
+if(!sub)return null;
+return sub.addr.toLowerCase()<rest.addr.toLowerCase()?[sub,rest]:[rest,sub];
+};
+const chEff=()=>{const p=chPair();if(!p)return p;
+const hit=chCache[chPairKey(p)];
+return (hit&&hit.pair)||p;};
 const CH_SLOTS=Math.floor((340-2-42)/3);
 const chFinest=()=>chBars&&chBars[FINE]?FINE:COARSE;
 const chSeries=secs=>{
@@ -4482,7 +4556,7 @@ return best==null?chFinest():best;
 };
 let chTfKey="";
 const chSyncPeriod=()=>{
-const k=chPairKey(chPair());
+const k=chPairKey(chEff());
 if(k===chTfKey)return;
 const auto=chAutoPeriod();
 if(auto==null)return;
@@ -4498,7 +4572,7 @@ c.title=c.disabled?"This pair has no five-minute tape to draw":"";
 c.classList.toggle("on",secs===chPeriod)}
 };
 const chSyncOrientation=()=>{
-const p=chPair(),k=chPairKey(p);
+const p=chEff(),k=chPairKey(p);
 if(k===chInvKey)return;
 chInvKey=k;chInv=chNaturalInv(p);
 };
@@ -4510,7 +4584,7 @@ if(i<0){const b=pts[pts.length-1];
 let note="",flip="";
 if(chInv&&isFinite(ch)&&ch>-100){
 const other=(1/(1+ch/100)-1)*100;
-const pr=chPair&&chPair();
+const pr=chEff&&chEff();
 const base=pr&&pr[1]?pr[1].sym:"the token";
 note=` title="${base} is ${other>=0?"+":""}${other.toFixed(2)}% over this window. `
 +`This chart prices the pair the other way up, so its line moves the opposite way."`;
@@ -4595,7 +4669,7 @@ const st=pw/slots,bw=Math.max(1,Math.min(9,st*.68));
 const X=i=>PL+st*(pts[i].b-b0+.5),Y=p=>PT+ph*(1-(p-lo)/sp),vt=PT+ph+6,VY=v=>vt+(VH-6)*(1-(vm?v/vm:0));
 const num=v=>v>=1000?v.toLocaleString("en-US",{maximumFractionDigits:2}):v>=1?v.toFixed(3):fmtPx(v);
 const UP="#16a34a",DN="#c33";
-const p0=chPair(),lbl=p0?chLabel(p0):"Price";
+const p0=chEff(),lbl=p0?chLabel(p0):"Price";
 let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${lbl}, ${n} bars, ${num(pts[n-1].c)} now, range ${num(lo)} to ${num(hi)}">`;
 for(let g=0;g<=3;g++){const p=lo+sp*g/3,y=Y(p).toFixed(1);
 s+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="currentColor" stroke-opacity=".1"/>`
@@ -4644,7 +4718,7 @@ chFloorFor(p0).then(()=>{if(chFloor+":"+chSupply!==was)drawChart()});}
 }
 for(const[label,secs]of TFS){const b=document.createElement("button");
 b.textContent=label;b.dataset.secs=String(secs);if(secs===chPeriod)b.className="on";
-b.onclick=()=>{chPeriod=secs;chTfKey=chPairKey(chPair());drawChart()};
+b.onclick=()=>{chPeriod=secs;chTfKey=chPairKey(chEff());drawChart()};
 chTf.appendChild(b)}
 const kindBtn=document.createElement("button");
 kindBtn.className="chk";
@@ -4656,7 +4730,7 @@ chTf.appendChild(kindBtn);
 const invBtn=document.createElement("button");
 invBtn.className="chk";
 invBtn.textContent="⇅";
-const syncInv=()=>{const p=chPair();
+const syncInv=()=>{const p=chEff();
 invBtn.title=p?`Price ${chInv?p[1].sym:p[0].sym} instead — currently ${chInv?p[0].sym:p[1].sym} per ${chInv?p[1].sym:p[0].sym}`:"Invert the price";
 invBtn.setAttribute("aria-pressed",chInv?"true":"false")};
 syncInv();

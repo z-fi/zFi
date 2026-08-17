@@ -719,3 +719,75 @@ describe('when there is nothing to show', () => {
   });
 
 });
+
+/**
+ * The chart and the two shapes of ether.
+ *
+ * A native market is stored under address(0) because the pool holds ether, so
+ * `marketsForPair(coin, WETH)` answers zero about a pool that is live, funded,
+ * and the one the swap tab is quoting on the same screen. The chart simply
+ * hid itself.
+ *
+ * The dangerous fix is to borrow the native pool's tapes into the SELECTED
+ * pair's ordering. Ether sorts first and WETH sorts after most tokens, so for
+ * ETH/USDC the two orderings are opposites and the bars come out inverted —
+ * a chart that looks like real data while showing the reciprocal price, which
+ * is strictly worse than the blank one it replaces. So the whole pair is
+ * redrawn as the market that exists instead, and these pin that.
+ */
+describe('a native market selected as WETH', () => {
+  test('draws the native market rather than hiding', async () => {
+    // The chart has no empty state — it removes its own control — so the signal
+    // is whether the drawer is offered at all. The <svg> element itself stays
+    // in the DOM from the previous pair, which is what made a first version of
+    // this test pass against the unfixed page.
+    const p = await setup();
+    await p.waitFor(() => p.visible('chTog'), { label: 'the ETH chart' });
+    p.pickToken('fromSel', 'WETH');
+    await p.settle();
+    await p.waitFor(() => p.visible('chTog'),
+      { label: 'the chart, with the same market selected as WETH' });
+    p.close();
+  });
+
+  test('and draws it the SAME WAY UP, not the reciprocal', async () => {
+    // The whole reason the pair is swapped rather than the pools borrowed.
+    // Ether sorts first and WETH sorts after USDC, so lifting the native tape
+    // into the selected pair's ordering inverts it: 3000 becomes 0.00033, and
+    // nothing in the rendering says which one you are looking at.
+    const a = await setup();
+    await a.waitFor(() => a.visible('chTog'), { label: 'the ETH chart' });
+    const ethNote = a.text('chNote'), ethPath = svg(a).innerHTML;
+    a.close();
+
+    const b = await setup();
+    await b.waitFor(() => b.visible('chTog'), { label: 'the ETH chart' });
+    b.pickToken('fromSel', 'WETH');
+    await b.settle();
+    await b.waitFor(() => b.visible('chTog'), { label: 'the WETH chart' });
+    assert.equal(b.text('chNote'), ethNote,
+      'the label must name the market being drawn, and it is the ether one');
+    assert.equal(svg(b).innerHTML, ethPath, 'and the bars must be identical, not flipped');
+    b.close();
+  });
+
+  test('leaves a pair that HAS a WETH market alone', async () => {
+    // The substitution is a fallback for a pair with nothing, not a rule that
+    // ether outranks WETH. A real WETH band must still be its own chart.
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setErc20(A.USDC, A.ACCOUNT, 5000n * USDC);
+    chain.setErc20(A.WETH, A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.setCode(LENS, '0x60006000');
+    chain.setPools(A.WETH, A.USDC, [POOL_A]);
+    chain.setTape(POOL_A, bars(24));
+    const p = await loadPage({ chain, patch: patchFactory(), storage: { ch: '1' } });
+    await p.connect();
+    p.pickToken('fromSel', 'WETH');
+    await p.settle();
+    await p.waitFor(() => p.visible('chTog'), { label: 'the WETH chart' });
+    assert.match(p.text('chNote'), /WETH/, 'a real WETH band is its own market');
+    p.close();
+  });
+});

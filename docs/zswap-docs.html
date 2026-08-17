@@ -1,0 +1,293 @@
+<title>zSwap Onchain</title>
+<style>
+:root{
+  --bg:#faf9f5; --surf:#ffffff; --sunk:#f2f1ea; --edge:#e3e1d7; --edge-2:#cfcdc0;
+  --fg:#15150f; --mut:#63625a; --acc:#4f6a06; --acc-bg:#eef5cf;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0a0c; --surf:#121215; --sunk:#0e0e11; --edge:#232329; --edge-2:#33333b;
+    --fg:#f1f1f3; --mut:#92929c; --acc:#c9f24d; --acc-bg:#1c2110;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0a0c; --surf:#121215; --sunk:#0e0e11; --edge:#232329; --edge-2:#33333b;
+  --fg:#f1f1f3; --mut:#92929c; --acc:#c9f24d; --acc-bg:#1c2110;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font:400 16.5px/1.68 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+code,.mono,.addr,.eyebrow{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+a{color:var(--acc);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--acc) 40%,transparent)}
+a:hover{border-bottom-color:var(--acc)}
+a:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:2px}
+
+.bar{
+  position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--edge);
+}
+.bar .in{max-width:930px;margin:0 auto;padding:11px 26px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline}
+.bar .mark{font-family:ui-monospace,monospace;font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--fg)}
+.bar nav{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px}
+.bar nav a{color:var(--mut);border:0}
+.bar nav a:hover{color:var(--fg)}
+main{max-width:930px;margin:0 auto;padding:0 26px 90px}
+section{padding-top:54px}
+.col{max-width:70ch}
+
+h1{font-size:clamp(31px,5vw,44px);line-height:1.1;letter-spacing:-.03em;font-weight:640;margin:0 0 18px;text-wrap:balance}
+h2{font-size:25px;line-height:1.18;letter-spacing:-.02em;font-weight:640;margin:0 0 10px;text-wrap:balance}
+h3{font-size:16.5px;font-weight:650;letter-spacing:-.005em;margin:28px 0 6px}
+p{margin:0 0 15px}
+.lede{font-size:19px;line-height:1.6;color:var(--mut);max-width:64ch}
+.lede b{color:var(--fg);font-weight:600}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--acc);font-weight:600;margin:0 0 10px}
+.mut{color:var(--mut)}
+ul{margin:0 0 15px;padding-left:1.15em}
+li{margin-bottom:8px}
+code{font-size:.87em;background:var(--sunk);border:1px solid var(--edge);border-radius:4px;padding:1px 5px}
+h1 + .lede{margin-bottom:26px}
+
+.hero{padding:64px 0 8px}
+.stat{display:flex;gap:34px;flex-wrap:wrap;margin:30px 0 4px;font-variant-numeric:tabular-nums}
+.stat b{display:block;font-family:ui-monospace,monospace;font-size:21px;font-weight:600;letter-spacing:-.02em}
+.stat span{font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+
+.ledger{border-top:1px solid var(--edge);margin:18px 0 6px}
+.row{display:grid;grid-template-columns:158px 1fr;gap:4px 22px;padding:13px 2px;border-bottom:1px solid var(--edge);align-items:baseline}
+.row .k{font-family:ui-monospace,monospace;font-size:13px;font-weight:600}
+.row .v{font-size:14.5px;line-height:1.58;color:var(--mut)}
+.row .v b{color:var(--fg);font-weight:600}
+.addr{display:block;font-size:12px;color:var(--mut);word-break:break-all;margin-top:3px;letter-spacing:-.01em}
+.addr a{color:var(--mut);border-bottom-color:var(--edge-2)}
+.addr a:hover{color:var(--acc)}
+@media (max-width:620px){.row{grid-template-columns:1fr}}
+
+.note{
+  border-left:2px solid var(--acc);background:var(--sunk);
+  padding:13px 16px;margin:22px 0;font-size:14.5px;line-height:1.62;color:var(--mut);
+}
+.note b{color:var(--fg);font-weight:600}
+.flow{display:grid;gap:11px;margin:22px 0}
+.step{display:grid;grid-template-columns:26px 1fr;gap:14px;align-items:start}
+.step .n{font-family:ui-monospace,monospace;font-size:12px;color:var(--acc);padding-top:4px;font-variant-numeric:tabular-nums}
+.step .t{font-size:15px;line-height:1.6;color:var(--mut)}
+.step .t b{color:var(--fg);font-weight:600}
+pre{
+  background:var(--sunk);border:1px solid var(--edge);border-radius:8px;
+  padding:13px 15px;overflow-x:auto;font-size:13px;line-height:1.6;margin:16px 0;
+}
+pre code{background:0;border:0;padding:0;font-size:13px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.tag{font-size:11.5px;font-family:ui-monospace,monospace;color:var(--mut);background:var(--sunk);border:1px solid var(--edge);border-radius:5px;padding:2px 7px}
+.tag.on{color:var(--acc);background:var(--acc-bg);border-color:color-mix(in srgb,var(--acc) 35%,var(--edge))}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--edge);font-size:13.5px;color:var(--mut)}
+</style>
+
+<div class="bar"><div class="in">
+  <span class="mark">zSwap</span>
+  <nav>
+    <a href="#page">The page</a>
+    <a href="#erc8244">ERC-8244</a>
+    <a href="#router">zRouter</a>
+    <a href="#quoter">zQuoter</a>
+    <a href="#books">Orderbooks</a>
+    <a href="#precision">Precision pools</a>
+    <a href="#addresses">Addresses</a>
+  </nav>
+</div></div>
+
+<main>
+
+<section class="hero">
+  <h1>The page you trade on is stored in eleven contracts.</h1>
+  <p class="lede">zSwap's HTML lives on Ethereum mainnet as contract code. Eleven contracts hold the bytes; a twelfth reads them back and answers with the page. There is no server in the path and no file to pin, and the bytes at a given address can never be edited, including by us.</p>
+  <div class="stat">
+    <div><b>255,337 B</b><span>of HTML, stripped of comments</span></div>
+    <div><b>11</b><span>data contracts holding it</span></div>
+    <div><b>3 days</b><span>before a new version is served</span></div>
+  </div>
+</section>
+
+<section id="page">
+  <p class="eyebrow">How the page reaches you</p>
+  <h2>Storing a web page as bytecode</h2>
+  <div class="col">
+    <p>Anyone can read a deployed contract's code with <code>EXTCODECOPY</code>. zSwap treats that as a filesystem. The minified page is cut into slices; each slice is deployed with a small init stub that returns the slice as the contract's own runtime code. The wrapper then holds one <code>immutable</code> pointer per slice, <code>DATA1</code> through <code>DATA11</code>.</p>
+    <div class="flow">
+      <div class="step"><span class="n">01</span><span class="t"><b>Slice the page.</b> EIP-170 caps deployed code at 24,576 bytes, so the split is what keeps that ceiling off the dapp as a whole. Eleven is simply what 255,337 bytes needs: ten chunks would have to carry 25,534 bytes each.</span></div>
+      <div class="step"><span class="n">02</span><span class="t"><b>Deploy the chunks.</b> Each one holds page bytes and nothing else.</span></div>
+      <div class="step"><span class="n">03</span><span class="t"><b>Deploy the wrapper</b> with those addresses. Its constructor reverts unless every chunk is present, non-empty and distinct, so a missing or duplicated slice cannot be baked in by accident.</span></div>
+      <div class="step"><span class="n">04</span><span class="t"><b>Read it back.</b> <code>html()</code> copies all eleven chunks into one ABI-encoded <code>string</code>, which any RPC client decodes without help.</span></div>
+    </div>
+    <p>Code is cheaper to deploy than the equivalent storage, and reads come back in a single copy. Storing the same HTML in <code>SSTORE</code> slots would cost roughly 20k gas per 32-byte word to write and a pile of <code>SLOAD</code>s to serve. The pointers being immutable is what lets the dapp answer with <code>Cache-Control: public, max-age=31536000, immutable</code> and mean it: no function on the wrapper can change the bytes.</p>
+    <h3>Reading it yourself</h3>
+    <pre><code>cast call &lt;zswap-address&gt; "html()(string)" --rpc-url &lt;rpc&gt; &gt; zSwap.html
+# open the file in any browser</code></pre>
+    <div class="note"><b>What an upgrade actually does.</b> Since <code>html()</code> can't be changed, fixing the page means deploying new chunks and a new wrapper, which the DAO does through <code>deployNext</code>. Every old version keeps serving its own bytes at its own address forever. Only the ENS name follows the new tip, and it waits out a three-day maturity period first. Bookmark an address and you stay on that build permanently.</div>
+  </div>
+</section>
+
+<section id="erc8244">
+  <p class="eyebrow">Standards</p>
+  <h2>ERC-8244 and the browsing path</h2>
+  <div class="col">
+    <p>Getting from a contract address to a browser tab takes four standards. zSwap answers all of them, so it works on whichever gateway or wallet a reader happens to have.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">ERC-8244</span><span class="v"><b>A contract with an <code>html()</code> function is a web page.</b> The gateway calls <code>html()</code>, receives a string, serves it as <code>text/html</code>, and that is the entire standard. A gateway needs to know nothing about zSwap in particular, and the dapp implements nothing beyond the function it already had.</span></div>
+    <div class="row"><span class="k">ERC-5219</span><span class="v">A fuller request interface. <code>request(resource, params)</code> answers with a status code, a body and headers; zSwap returns 200, the page, and its <code>Content-Type</code> and <code>Cache-Control</code> headers. Paths and query strings are ignored. It is one page, served from any URL under its address.</span></div>
+    <div class="row"><span class="k">ERC-4804</span><span class="v">The <code>web3://</code> scheme itself. <code>resolveMode()</code> returns <code>"5219"</code>, which tells a client to use the interface above instead of guessing at calldata.</span></div>
+    <div class="row"><span class="k">ERC-6821</span><span class="v">Name to contract. A gateway reads the <code>contentcontract</code> text record and falls back to the address record; <code>zSwapResolver</code> answers both, so either path arrives at the same version.</span></div>
+  </div>
+  <div class="col">
+    <h3>Three ways to open it</h3>
+    <ul>
+      <li>An ERC-8244 gateway: <code>https://&lt;address&gt;.w4eth.io/</code></li>
+      <li>An ERC-4804 gateway: <code>https://&lt;address&gt;.1.w3link.io/</code></li>
+      <li>A wallet or browser extension that speaks <code>web3://</code> natively</li>
+      <li>By name, through the <code>.wei</code> gateway at <code>zswap.wei.limo</code>, which follows the resolver to whichever build is current and mature</li>
+    </ul>
+    <h3>zSwapResolver stores no address</h3>
+    <p>The name is a <code>.wei</code> name in <b>WNS</b>, our own registry at <code>0x0000000000696760E15f265e828DB644A0c242EB</code>. A <code>.wei</code> name is an NFT, and WNS resolves it to an address: id, then resolve. Pointing that name at this contract is what makes a gateway serve the current build. The resolver speaks the ENS resolver interface as well — <code>addr(bytes32)</code>, ENSIP-9 coin type 60, and <code>text</code> for ERC-6821's <code>contentcontract</code> — so gateways written for either system land in the same place. The node argument is ignored, since the resolver is set on one name and answers for that name.</p>
+    <p>Usually a name has to be re-pointed after every upgrade, and that second transaction is the one people forget. Then the chain says v0.3 while the name still serves v0.1.</p>
+    <p>This resolver keeps no address at all. It walks the on-chain successor chain when it's read and returns the newest version that has cleared its maturity window, so the DAO's <code>deployNext</code> call is the name update too, in the same transaction. Contenthash is deliberately left empty: it names a blob, and there is no blob here. The DAO's only privileged power over the resolver is <code>manage</code>, a gated call into WNS and nowhere else, which exists so the name can still be renewed, re-pointed or handed back.</p>
+  </div>
+</section>
+
+<section id="router">
+  <p class="eyebrow">Execution</p>
+  <h2>zRouter</h2>
+  <div class="col">
+    <p>zRouter is what the page transacts against. It speaks Uniswap V2, V3 and V4, Sushi, Curve, Lido and zAMM through a compact ABI, and reaches anything else through <code>snwap</code>: the input tokens go to a venue-specific executor, the executor is called, and the router measures the recipient's balance before and after. The output minimum is enforced on that measured difference, so a venue that misreports its own fill still can't underpay you.</p>
+    <p>The arbitrary call runs through <code>SafeExecutor</code>, a separate contract that holds no token approvals. It exists so that calling an unknown venue can never be turned into a call on the router's own allowances.</p>
+    <p>Multicall entries are delegatecalled, which is why a route that's part AMM and part resting order can settle as one transaction on one signature. ETH and WETH are interchangeable at the interface: the router wraps or unwraps whichever way the pool needs, in the same call. Deadlines revert as <code>Expired</code>, mismatched value as <code>InvalidMsgVal</code>, and a short fill as <code>SnwapSlippage</code>, which names the token, what arrived, and what was required.</p>
+    <h3>Forwarders</h3>
+    <p>Venues whose call shape doesn't fit <code>snwap</code> get a small adapter rather than a special case inside the router.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">Orderbol</span><span class="v"><b>Placing orders.</b> Routes into Swapboard, Dutchboard and Floorboard. A single-use <code>checkpoint(token)</code> in transient storage means an order can only ever be funded by the balance increase that arrived after the checkpoint, so tokens sitting at the adapter can't be swept into somebody's new order.</span></div>
+    <div class="row"><span class="k">Swapbol</span><span class="v"><b>Filling orders.</b> Ask fills and bid hits, using exact call-scoped allowances that are revoked before it returns. Both sides live in one adapter because a route that's part ask, part bid and part AMM only works inside a single executor call.</span></div>
+    <div class="row"><span class="k">Swapbatch</span><span class="v">Batched fills against the legacy Swapboard v1, which has neither a batch fill nor a multicall of its own.</span></div>
+    <div class="row"><span class="k">Cowol</span><span class="v">CoW Protocol, signing as a contract via ERC-1271.</span></div>
+    <div class="row"><span class="k">Fwabol</span><span class="v">FWA in both directions, unlocking the V4 PoolManager directly. FWA reverts transfers that don't touch the PoolManager, so an adapter that ever received it would be stuck holding it. This one never does: on a buy the PoolManager pays the recipient, on a sell the seller pays the PoolManager.</span></div>
+  </div>
+</section>
+
+<section id="quoter">
+  <p class="eyebrow">Pricing</p>
+  <h2>zQuoter</h2>
+  <div class="col">
+    <p>Before anything is signed, zQuoter prices the trade across Uniswap V2, V3 and V4, Sushi, Curve, Lido, zAMM and the Precision pools, and the best route wins. AMM and orderbook reads are pinned to one block, so what you're comparing is a single moment rather than a spread of them.</p>
+    <p>V4 needs its own machinery, because a V4 pool can't always be priced by local math.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">zQuoterV4</span><span class="v">Ordinary V4 pools. Stays a pure <code>view</code> by reading through StateView, and matches Uniswap's canonical quoter exactly.</span></div>
+    <div class="row"><span class="k">V4QuoteLens</span><span class="v">Pools with a hook. A hook can replace the curve, take a cut of the output, or set the fee per swap, and none of that shows up in <code>slot0</code>. This one runs the hook for real through <code>PoolManager.unlock</code>. That writes transient storage, so it isn't <code>view</code>, but <code>eth_call</code> simulates it fine.</span></div>
+    <div class="row"><span class="k">V4Port</span><span class="v">Executes any V4 pool in either direction.</span></div>
+  </div>
+  <div class="col">
+    <div class="note"><b>Why V4 is quoted separately.</b> The widely used base quoter computes a V4 swap fee as <code>protocolFee + lpFee</code>. But <code>protocolFee</code> in V4 isn't a rate: it's a packed <code>uint24</code> carrying two 12-bit values. That sum was only correct while Uniswap left protocol fees at zero, and they were switched on at block 25,623,201. Measured live since then, the base quoter under-quotes the deepest ETH/USDC pool by about half and over-quotes others by three orders of magnitude. zSwap sends its V4 leg to <code>zQuoterV4</code>, where the fee rule is fixed.</div>
+    <h3>What you see before signing</h3>
+    <ul>
+      <li><b>Slippage</b> is the worst price you'll accept. Past it, the trade reverts instead of filling badly.</li>
+      <li><b>Price impact</b> is how far your own size moves the price. The page warns as it grows and won't quietly let a terrible one through.</li>
+      <li><b>Min received</b> or <b>Max paid</b>, the venue that won, and the effective rate.</li>
+      <li>Order discovery and route planning both run under bounds. When either one hits its limit, the page prints <code>Book scan capped</code> or <code>Planner heuristic/capped</code>, so you know a better combination may exist beyond what was searched.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="books">
+  <p class="eyebrow">Resting liquidity</p>
+  <h2>Orderbooks</h2>
+  <div class="col">
+    <p>Three boards hold real escrow on-chain, and every quote consults them. When board liquidity beats the AMM price on part of a trade, the page builds a split route across both and takes it if the expected improvement clears a gas-aware threshold.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">Swapboard</span><span class="v"><b>A price you name.</b> The order rests, fully escrowed, until someone fills it or you cancel. Partial fills are supported, and a WETH order can be cancelled back to native ETH.</span></div>
+    <div class="row"><span class="k">Dutchboard</span><span class="v"><b>A price that falls.</b> It starts above your floor and decays to it across a window you set. There are two clocks: the decay, then how long the lot rests at the floor before escrow returns to you. Set the second to forever and it waits until you cancel. Handles ERC-20 lots and NFTs.</span></div>
+    <div class="row"><span class="k">Floorboard</span><span class="v"><b>The bid side.</b> A standing offer that climbs toward a ceiling. The escrow is the payment, sized at the end price, because that's the most the bid can ever owe.</span></div>
+    <div class="row"><span class="k">View lenses</span><span class="v">Read-only planners over the boards. <code>SwapboardView</code> caps planning at 256 candidates, drops all-or-nothing rows too large for the current request before spending that cap, and bounds token metadata calls by gas and returndata size. A hostile <code>symbol()</code> comes back blank rather than breaking the read.</span></div>
+  </div>
+  <div class="col">
+    <h3>Every position is an NFT that draws itself</h3>
+    <p>An order on any board is an ERC-721, and its <code>tokenURI</code> is a self-contained SVG card rendered on-chain by an immutable contract the board deployed in its own constructor. Nothing is fetched at display time, so the card can't rot or go stale independently of the order it describes.</p>
+    <h3>Listing an NFT without handing over your collection</h3>
+    <p>Dutchboard will take an NFT by plain <code>safeTransferFrom</code>, with the sale terms ABI-encoded in the transfer's <code>data</code>. The conventional route needs a per-token <code>approve</code>, or in practice a blanket <code>setApprovalForAll</code> that leaves the board holding authority over every token you own in that collection long after the listing ends. Pushing the token grants nothing and moves exactly one item. Bundles still go through <code>listNFT</code>, since one transfer carries one token.</p>
+    <h3>Sending, and SLOW sends</h3>
+    <p>The page also sends plain transfers, resolving <code>0x</code>, <code>.eth</code>, <code>.wei</code> and <code>.gwei</code> recipients. A <b>SLOW</b> send is time-locked and reversible by you at any point before it matures, which is worth using for large amounts and for addresses you haven't paid before. A locked transfer doesn't deliver itself; tick auto-claim and the page attaches a small keeper tip, refundable if you reverse the transfer.</p>
+  </div>
+</section>
+
+<section id="precision">
+  <p class="eyebrow">Liquidity</p>
+  <h2>Precision pools</h2>
+  <div class="col">
+    <p>A general-purpose AMM pays for its generality on every single swap: token addresses and fee tiers come out of storage, decimals are normalized at runtime, pool keys get hashed, hooks get dispatched. A Precision pool knows its pair, decimals, fee and curve parameters at compile time, so all of that becomes constants and the swap collapses to the curve math plus the transfer.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">Stable</span><span class="v">Curve's stableswap invariant at A=2000, written for exactly two tokens of equal decimals. The fee is <b>50 pips, 0.5 bps</b>, half of Uniswap V3's lowest tier and an eighth of Curve 3pool. All of it goes to LPs; there's no protocol cut.</span></div>
+    <div class="row"><span class="k">Range</span><span class="v">Concentrated constant product with the band compiled in as virtual reserve offsets. The core step is one multiplication and one division, with no ticks, bitmaps or traversal loops, and it holds native ETH rather than WETH. Different pools cover different bands; the router quotes them all and uses whichever covers the current price.</span></div>
+    <div class="row"><span class="k">Oracle</span><span class="v">No curve at all. Chainlink sets the price and swaps execute at it, plus a fee that scales with how stale the feed is: 1 bp just after an update, 50 bps at the one-hour heartbeat. Price impact is zero at any size. The staleness ramp also means the first swap after a price move pays the maximum, which is what makes sandwiching an oracle update unprofitable. Without a bonding curve there's no curve-based LVR, the largest source of LP loss on V3 ETH/USDC.</span></div>
+  </div>
+  <div class="col">
+    <p><code>PrecisionPoolFactory</code> generalizes the range design, taking the pair, band and fee as constructor arguments behind CREATE2 with an on-chain registry, while leaving the AMM step untouched. Around it sit <code>PrecisionRoute</code>, the zRouter executor; <code>PrecisionZap</code> for single-sided entry; <code>PrecisionPoolLens</code> and <code>PrecisionLiquidityLens</code> for swap and LP previews; and <code>PrecisionPoolPolicy</code>.</p>
+    <div class="tags">
+      <span class="tag on">USDC→ETH 36,922 gas</span>
+      <span class="tag on">ETH→USDC 65,748</span>
+      <span class="tag on">USDC→USDT 74,254</span>
+      <span class="tag">Ekubo 85,675</span>
+      <span class="tag">Uniswap V3 ~105k</span>
+      <span class="tag">Uniswap V4 ~117k</span>
+    </div>
+    <p class="mut" style="font-size:13.5px;margin-top:11px">Ours are end-to-end through an EIP-7702 batch wallet, measured in Foundry fork tests against mainnet. Competitor figures come from their official snapshots; gas is pair-independent in generalized AMMs. The pools are also reachable through <code>zRouter.snwap</code> or a multisig <code>executeBatch</code>.</p>
+    <div class="note">The suite is live and verified on mainnet as of 11 August 2026, but unseeded: <code>poolCount()</code> is 0, so no market exists yet and nothing holds user funds.</div>
+  </div>
+</section>
+
+<section id="addresses">
+  <p class="eyebrow">Ethereum mainnet</p>
+  <h2>Canonical deployments</h2>
+  <div class="col">
+    <p>Every address here was placed by SafeSummoner via CREATE2 and verified on Etherscan. Salts and creation payloads live in <code>deploy/</code>, and <code>node script/check-create2-artifacts.mjs</code> reproduces each address from the committed source.</p>
+  </div>
+  <div class="ledger">
+    <div class="row"><span class="k">zRouter</span><span class="v">Execution across every venue<span class="addr"><a href="https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4">0x000000000000FB114709235f1ccBFfb925F600e4</a></span></span></div>
+    <div class="row"><span class="k">zQuoter</span><span class="v">Hub quoter<span class="addr"><a href="https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16">0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16</a></span></span></div>
+    <div class="row"><span class="k">zQuoterV4</span><span class="v">V4 with corrected fee math<span class="addr"><a href="https://etherscan.io/address/0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6">0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6</a></span></span></div>
+    <div class="row"><span class="k">V4QuoteLens</span><span class="v">V4 pools priced by a hook<span class="addr"><a href="https://etherscan.io/address/0x000000c3aE1692983941495162A4AAB40660E65F">0x000000c3aE1692983941495162A4AAB40660E65F</a></span></span></div>
+    <div class="row"><span class="k">V4Port</span><span class="v">V4 execution, either direction<span class="addr"><a href="https://etherscan.io/address/0x000000dfb53Fa7f1c486470034741d5BCBE14BE9">0x000000dfb53Fa7f1c486470034741d5BCBE14BE9</a></span></span></div>
+    <div class="row"><span class="k">Swapboard</span><span class="v">Escrowed peer-to-peer orders<span class="addr"><a href="https://etherscan.io/address/0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b">0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b</a></span></span></div>
+    <div class="row"><span class="k">Dutchboard</span><span class="v">Descending-price lots<span class="addr"><a href="https://etherscan.io/address/0x000000a213b430D14Bae6062c176289B05e04489">0x000000a213b430D14Bae6062c176289B05e04489</a></span></span></div>
+    <div class="row"><span class="k">Floorboard</span><span class="v">Ascending standing bids<span class="addr"><a href="https://etherscan.io/address/0x00000080198137F790DA4C52bb902cf87c276748">0x00000080198137F790DA4C52bb902cf87c276748</a></span></span></div>
+    <div class="row"><span class="k">SwapboardView</span><span class="v">Lens over Swapboard v1/v2 and Dutchboard<span class="addr"><a href="https://etherscan.io/address/0x000000E0b25449F32f7D9259aC449bA88E78dFCE">0x000000E0b25449F32f7D9259aC449bA88E78dFCE</a></span></span></div>
+    <div class="row"><span class="k">FloorboardView</span><span class="v">Lens over Floorboard bids<span class="addr"><a href="https://etherscan.io/address/0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7">0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7</a></span></span></div>
+    <div class="row"><span class="k">Orderbol</span><span class="v">zRouter into order placement<span class="addr"><a href="https://etherscan.io/address/0x000000e6c7a12C80525ee74e7434aAb919447D95">0x000000e6c7a12C80525ee74e7434aAb919447D95</a></span></span></div>
+    <div class="row"><span class="k">Swapbol</span><span class="v">zRouter into fills and bid hits<span class="addr"><a href="https://etherscan.io/address/0x00000087A6dc5071779Ed1F8274A39230768B976">0x00000087A6dc5071779Ed1F8274A39230768B976</a></span></span></div>
+    <div class="row"><span class="k">Swapbatch</span><span class="v">Batched fills, including the legacy board<span class="addr"><a href="https://etherscan.io/address/0x000000Fbde0567d1966FCa91eF2A1ddCCD1fedbd">0x000000Fbde0567d1966FCa91eF2A1ddCCD1fedbd</a></span></span></div>
+    <div class="row"><span class="k">Cowol</span><span class="v">CoW Protocol, ERC-1271<span class="addr"><a href="https://etherscan.io/address/0x0000003B59007E8aa43B0e508AfF8a304438333B">0x0000003B59007E8aa43B0e508AfF8a304438333B</a></span></span></div>
+    <div class="row"><span class="k">Fwabol</span><span class="v">FWA, straight to the V4 PoolManager<span class="addr"><a href="https://etherscan.io/address/0x000000798397834de6a60d9CCBfde0536A2699d9">0x000000798397834de6a60d9CCBfde0536A2699d9</a></span></span></div>
+    <div class="row"><span class="k">PrecisionPoolFactory</span><span class="v">CREATE2 pools and registry<span class="addr"><a href="https://etherscan.io/address/0x000000Eb27B557aB426d9E99cFd54EC455799e81">0x000000Eb27B557aB426d9E99cFd54EC455799e81</a></span></span></div>
+    <div class="row"><span class="k">PrecisionRoute</span><span class="v">zRouter executor for Precision pools<span class="addr"><a href="https://etherscan.io/address/0x000000384711c65f633Aa4487b968ecb7956DB0F">0x000000384711c65f633Aa4487b968ecb7956DB0F</a></span></span></div>
+    <div class="row"><span class="k">PrecisionZap</span><span class="v">Single-sided liquidity entry<span class="addr"><a href="https://etherscan.io/address/0x000000d193680877a83D3C6bCA73D8726D120c67">0x000000d193680877a83D3C6bCA73D8726D120c67</a></span></span></div>
+    <div class="row"><span class="k">PrecisionPoolLens</span><span class="v">Swap previews<span class="addr"><a href="https://etherscan.io/address/0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB">0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB</a></span></span></div>
+    <div class="row"><span class="k">PrecisionLiquidityLens</span><span class="v">Seed, add, remove and zap previews<span class="addr"><a href="https://etherscan.io/address/0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E">0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E</a></span></span></div>
+    <div class="row"><span class="k">PrecisionPoolPolicy</span><span class="v">Pool policy<span class="addr"><a href="https://etherscan.io/address/0x00000045fc7b570Be4d71F67219508ebD295EC6D">0x00000045fc7b570Be4d71F67219508ebD295EC6D</a></span></span></div>
+    <div class="row"><span class="k">zSwapResolver</span><span class="v">Resolves the <code>.wei</code> name to the current version<span class="addr"><a href="https://etherscan.io/address/0x000000E7DAD6128683D1fb415e80B30c23dAb7AC">0x000000E7DAD6128683D1fb415e80B30c23dAb7AC</a></span></span></div>
+    <div class="row"><span class="k">WNS</span><span class="v">The <code>.wei</code> name registry<span class="addr"><a href="https://etherscan.io/address/0x0000000000696760E15f265e828DB644A0c242EB">0x0000000000696760E15f265e828DB644A0c242EB</a></span></span></div>
+    <div class="row"><span class="k">SafeSummoner</span><span class="v">The CREATE2 deployer behind every address above<span class="addr"><a href="https://etherscan.io/address/0x00000000004473e1f31C8266612e7FD5504e6f2a">0x00000000004473e1f31C8266612e7FD5504e6f2a</a></span></span></div>
+  </div>
+  <div class="col">
+    <div class="note"><b>Reproducing an address.</b> Several contracts pin their optimizer run count because they don't otherwise fit EIP-170: Dutchboard at 20, Swapboard, Floorboard and SwapboardView at 200, and the Precision suite verifies at 200. A salt is only valid for initcode built at the pinned setting, so <code>forge verify-contract</code> needs <code>--num-of-optimizations</code> given explicitly. The default profile's 9,999,999 produces bytecode Etherscan will reject.</div>
+  </div>
+</section>
+
+<footer>
+  <p>Contract source in <code>src/zSwap.sol</code>; the page itself is <code>zSwap.html</code> at the repo root. Rebuild the payload with <code>build-zSwap.mjs</code>, then <code>build-zSwap-chunks.mjs</code>, then <code>forge test --match-path "test/zSwap*"</code>. An edit to the page isn't live until a new wrapper is deployed and the name has been re-pointed.</p>
+</footer>
+
+</main>
