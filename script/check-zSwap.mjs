@@ -1022,6 +1022,88 @@ if (exported) {
       eq(r.best.amountIn, 1000000000000000000000n, 'amountIn from populated leg');
       return `${SOURCES[r.best.source]} (not UniV2)`;
     });
+
+    // ---- properties that must hold for EVERY shape, in BOTH directions ----
+    // The per-fixture checks above pin decoded AMOUNTS against real captures.
+    // The bound is a different question: amountLimit is what the user is shown
+    // as "Min received" and what the approval is sized to, and it is derived
+    // rather than captured. These say what it must never do, on every shape at
+    // once, so a new builder shape cannot arrive with a bound nobody checked.
+    const SHAPES = Object.keys(fx);
+
+    check('decQ: an exact-in bound is never above the quote, and loosens with slippage', () => {
+      for (const k of SHAPES) {
+        const f = fx[k];
+        const at = s => decQ(f.data, s, false, f.u, f.v, f.S, f.mv);
+        const [a0, a50, a500] = [0n, 50n, 500n].map(at);
+        if (a0.amountLimit !== a0.best.amountOut) {
+          throw Error(`${k}: zero slippage must guarantee the quote exactly `
+            + `(${a0.amountLimit} vs ${a0.best.amountOut})`);
+        }
+        if (!(a500.amountLimit < a50.amountLimit && a50.amountLimit < a0.amountLimit)) {
+          throw Error(`${k}: bound is not monotonic in slippage `
+            + `(${a0.amountLimit} / ${a50.amountLimit} / ${a500.amountLimit})`);
+        }
+        if (a50.amountLimit > a50.best.amountOut) {
+          throw Error(`${k}: min received exceeds the quote — the page would promise more than the route`);
+        }
+      }
+      return `${SHAPES.length} shapes`;
+    });
+
+    check('decQ: an exact-out bound is never below the quote, and loosens with slippage', () => {
+      for (const k of SHAPES) {
+        const f = fx[k];
+        const at = s => decQ(f.data, s, true, f.u, f.v, f.S, f.mv);
+        const [a0, a50, a500] = [0n, 50n, 500n].map(at);
+        if (a0.amountLimit !== a0.best.amountIn) {
+          throw Error(`${k}: zero slippage must cost exactly the quote `
+            + `(${a0.amountLimit} vs ${a0.best.amountIn})`);
+        }
+        if (!(a500.amountLimit > a50.amountLimit && a50.amountLimit > a0.amountLimit)) {
+          throw Error(`${k}: bound is not monotonic in slippage`);
+        }
+        if (a50.amountLimit < a50.best.amountIn) {
+          throw Error(`${k}: max spend is below the quote — the swap could not fill`);
+        }
+      }
+      return `${SHAPES.length} shapes`;
+    });
+
+    check('decQ: the winning source is one of the populated legs', () => {
+      for (const k of SHAPES) {
+        const f = fx[k];
+        const r = decQ(f.data, 50n, false, f.u, f.v, f.S, f.mv);
+        if (!r.sources.length) throw Error(`${k}: no populated legs reported`);
+        // A split sums BOTH legs, so its label is legitimately one of several.
+        if (!f.S && !r.sources.includes(r.best.source)) {
+          throw Error(`${k}: labelled ${SOURCES[r.best.source]} but the populated legs are `
+            + `${r.sources.map(s => SOURCES[s]).join(', ')} — the rate line names a venue `
+            + `that carried none of the trade`);
+        }
+      }
+      return `${SHAPES.length} shapes`;
+    });
+
+    check('merge takes the estimate from one quote and the bound from the other', () => {
+      // The page quotes each builder TWICE, at zero slippage and at the user's,
+      // then merges: amounts from the unslipped quote (the true expectation),
+      // everything executable from the slipped one. If merge ever took the
+      // bound from `est`, the calldata and the promise would describe different
+      // trades — the number shown would be guaranteed by nothing.
+      const f = fx.singleHop_ETH_USDC;
+      const est = decQ(f.data, 0n, false, f.u, f.v, f.S, f.mv);
+      const exe = decQ(f.data, 50n, false, f.u, f.v, f.S, f.mv);
+      const m = merge(est, exe);
+      eq(m.best.amountOut, est.best.amountOut, 'estimate comes from the unslipped quote');
+      eq(m.amountLimit, exe.amountLimit, 'the bound comes from the executable quote');
+      eq(m.callData, exe.callData, 'and so does the calldata');
+      if (m.amountLimit >= m.best.amountOut) {
+        throw Error('merged bound is not below the merged estimate');
+      }
+      if (merge(null, exe) !== exe) throw Error('a missing estimate must fall back to the executable quote');
+      if (merge(est, null) !== null) throw Error('an estimate with no executable quote must not be offered');
+    });
   }
 }
 
