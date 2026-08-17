@@ -4645,8 +4645,8 @@ const tname=t=>/\s/.test(t.sym)||!symAddr(t.sym.toLowerCase())?t.addr:t.sym;
 lk.onclick=async()=>{
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
 p.set("token",tname(f));
+const rcv=rc.value.trim();if(rcv)p.set("to",rcv);
 if(tab==="send"){
-const r=rc.value.trim();if(r)p.set("to",r);
 if(amt.value.trim())p.set("amount",amt.value.trim());
 if(+dly.value)p.set("lock",dly.value);
 }else{

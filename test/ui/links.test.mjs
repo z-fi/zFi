@@ -318,6 +318,30 @@ describe('the share button', () => {
     p.close();
   });
 
+  test('a swap share carries the recipient, so "buy X for someone" survives', async () => {
+    // "Spend ETH, pay ross.wei 100 USDC" is one link or it is nothing. The
+    // reader has always understood `to` on the swap tab; the share button only
+    // emitted it on send, so the half of the request that names WHO got
+    // dropped the moment you copied it.
+    const p = await open('');
+    p.type('rc', 'ross.wei');
+    await p.typeAmount('outAmt', '100');
+    const q = new URLSearchParams(new URL(await share(p)).hash.slice(1));
+    assert.equal(q.get('to'), 'ross.wei', 'the recipient must survive a swap share');
+    assert.equal(q.get('amount'), '100');
+    assert.equal(q.get('exactOut'), '1');
+    assert.equal(q.get('out'), 'USDC', 'and still name the output token');
+    p.close();
+  });
+
+  test('a swap share with no recipient carries no to=', async () => {
+    const p = await open('');
+    await p.typeAmount('amt', '1');
+    const q = new URLSearchParams(new URL(await share(p)).hash.slice(1));
+    assert.equal(q.get('to'), null, 'an empty recipient must not appear in the link');
+    p.close();
+  });
+
   test('a send-tab share carries recipient and lock, not an output token', async () => {
     const p = await open('');
     p.click('tabSend');
