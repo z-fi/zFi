@@ -28,7 +28,7 @@ contract SwapbolAuditNewTest is Test {
         vm.deal(WETH, 0);
 
         board = new Swapboard(WETH);
-        forwarder = new Swapbol(address(new SwapbolVenueStub()), address(board), address(new SwapbolVenueStub()));
+        forwarder = new Swapbol(address(new SwapbolVenueStub()), address(board), address(new SwapbolVenueStub()), address(new SwapbolVenueStub()));
         input = new MockERC20("INPUT", 18);
         output = new MockERC20("OUTPUT", 18);
     }

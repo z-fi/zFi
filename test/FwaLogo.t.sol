@@ -9,7 +9,10 @@ contract FwaLogoTest is Test {
     function test_OnchainCardEmbedsFwaLogo() public {
         // The LIVE deployed renderer, not a local build.
         TokenListRenderer r = TokenListRenderer(0x0000009650f4aEF08AdB2De98bdD2695A41eDcF4);
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
 
         TokenList.Token memory t;
         t.chainId = 1; t.deployed = true; t.synced = true;

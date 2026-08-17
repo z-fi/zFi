@@ -1,0 +1,79 @@
+<title>zSwap launchpad</title>
+<style>
+:root{--bg:#08080a;--card:#131316;--edge:#242429;--fg:#f5f5f7;--mut:#9a9aa4;--acc:#c9f24d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.5 ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif;
+-webkit-font-smoothing:antialiased;padding:44px 42px 38px}
+.wrap{max-width:1000px;margin:0 auto}
+h1{margin:0 0 9px;font-size:30px;letter-spacing:-.023em;font-weight:650;line-height:1.16}
+.sub{margin:0 0 26px;color:var(--mut);font-size:15px;line-height:1.62;max-width:88ch}
+.sub b{color:var(--fg);font-weight:600}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:15px;padding:16px}
+.lab{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--acc);font-weight:650;margin-bottom:12px}
+.fig{background:#0d0d10;border:1px solid #1e1e23;border-radius:10px;padding:10px 12px;margin-bottom:11px}
+.note{margin:0;font-size:12.5px;color:var(--mut);line-height:1.6}
+.note b{color:var(--fg);font-weight:600}
+.strip{margin-top:14px;background:var(--card);border:1px solid var(--edge);border-radius:15px;padding:16px 18px;
+display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+.strip div{font-size:13px;color:var(--mut)}
+.strip b{color:var(--fg);font-weight:600}
+</style>
+<div class="wrap">
+<h1>A trading pool that starts with no ETH in it</h1>
+<p class="sub">One transaction mints the token and opens its market. You supply <b>no ether, only gas</b> — the pool opens holding your token and nothing else. Ether arrives when people buy, and it cannot leave: the LP is locked in the contract forever, which is what gives holders a floor to redeem against.</p>
+<div class="three">
+
+  <div class="card">
+    <div class="lab">At launch</div>
+    <div class="fig"><svg viewBox="0 0 300 118" width="100%" fill="none" font-family="ui-sans-serif,system-ui,sans-serif">
+      <text x="14" y="20" fill="#9a9aa4" font-size="11">token</text>
+      <rect x="14" y="28" width="272" height="22" rx="5" fill="#c9f24d"/>
+      <text x="150" y="43" fill="#0b0b0c" font-size="11.5" font-weight="600" text-anchor="middle">1,000,000,000</text>
+      <text x="14" y="76" fill="#9a9aa4" font-size="11">ether</text>
+      <rect x="14" y="84" width="272" height="22" rx="5" stroke="#2a2a31" stroke-width="1.6" stroke-dasharray="5 4"/>
+      <text x="150" y="99" fill="#9a9aa4" font-size="11.5" text-anchor="middle">0</text>
+    </svg></div>
+    <p class="note">Every token goes in. You pick the <b>starting market cap</b>, and that alone sets the opening price.</p>
+  </div>
+
+  <div class="card">
+    <div class="lab">As people buy</div>
+    <div class="fig"><svg viewBox="0 0 300 118" width="100%" fill="none" font-family="ui-sans-serif,system-ui,sans-serif">
+      <text x="14" y="20" fill="#9a9aa4" font-size="11">token</text>
+      <rect x="14" y="28" width="272" height="22" rx="5" fill="#2a2a31"/>
+      <rect x="14" y="28" width="188" height="22" rx="5" fill="#c9f24d"/>
+      <path d="M214 39 H272" stroke="#9a9aa4" stroke-width="1.3"/><path d="M266 34 272 39 266 44" stroke="#9a9aa4" stroke-width="1.3"/>
+      <text x="222" y="21" fill="#9a9aa4" font-size="10.5">sold to buyers</text>
+      <text x="14" y="76" fill="#9a9aa4" font-size="11">ether</text>
+      <rect x="14" y="84" width="272" height="22" rx="5" stroke="#2a2a31" stroke-width="1.6"/>
+      <rect x="14" y="84" width="84" height="22" rx="5" fill="#c9f24d" fill-opacity=".55"/>
+      <text x="56" y="99" fill="#e6e6ea" font-size="11.5" text-anchor="middle">ETH in</text>
+    </svg></div>
+    <p class="note">Ether only enters by purchase. It stays: <b>the LP can never be pulled</b>, by anyone.</p>
+  </div>
+
+  <div class="card">
+    <div class="lab">The floor</div>
+    <div class="fig"><svg viewBox="0 0 300 118" width="100%" fill="none" font-family="ui-sans-serif,system-ui,sans-serif">
+      <rect x="14" y="22" width="98" height="30" rx="6" stroke="#4d4d58" stroke-width="1.4"/>
+      <text x="63" y="42" fill="#e6e6ea" font-size="12" text-anchor="middle">holder</text>
+      <path d="M118 37 H176" stroke="#c9f24d" stroke-width="2"/><path d="M169 31 176 37 169 43" stroke="#c9f24d" stroke-width="2"/>
+      <text x="147" y="20" fill="#c9f24d" font-size="10.5" text-anchor="middle">tokens</text>
+      <rect x="182" y="22" width="104" height="30" rx="6" stroke="#4d4d58" stroke-width="1.4"/>
+      <text x="234" y="42" fill="#e6e6ea" font-size="12" text-anchor="middle">pool</text>
+      <path d="M176 76 H118" stroke="#c9f24d" stroke-width="2"/><path d="M125 70 118 76 125 82" stroke="#c9f24d" stroke-width="2"/>
+      <text x="147" y="97" fill="#c9f24d" font-size="10.5" text-anchor="middle">their share of the ETH</text>
+      <text x="14" y="112" fill="#9a9aa4" font-size="11">redeemable at any time</text>
+    </svg></div>
+    <p class="note">Burning tokens to take ether back. <b>Supply only ever falls</b>, so the floor never falls for anyone else.</p>
+  </div>
+</div>
+<div class="strip">
+  <div><b>1</b> transaction</div>
+  <div><b>0</b> ether from you</div>
+  <div>creator keeps <b>0&ndash;20%</b></div>
+  <div>logo stored <b>onchain</b>, not IPFS</div>
+  <div>LP locked <b>forever</b></div>
+</div>
+</div>

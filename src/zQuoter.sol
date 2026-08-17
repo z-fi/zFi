@@ -204,11 +204,27 @@ contract zQuoter {
         (best,) = getQuotes(exactOut, tokenIn, tokenOut, amount);
         if (best.source == AMM.WETH_WRAP) best = Quote(AMM.UNI_V2, 0, 0, 0);
 
-        // 2. Curve (unbuildable cases already filtered inside quoteCurve).
-        {
-            (uint256 cin, uint256 cout, address pool,,,,) = quoteCurve(exactOut, tokenIn, tokenOut, amount, 8);
+        // 2. Curve, EXACT-IN ONLY (unbuildable cases already filtered inside quoteCurve).
+        //
+        // Curve cannot serve exact-out and must not be allowed to win it.
+        // `exchange` is exact-in only, so the router sizes the input in a
+        // backward pass with `get_dx(want) + 1` - and `get_dx` is not a tight
+        // inverse of `get_dy`. It rounds down, the swap lands just under the
+        // target, and the router then correctly refuses to under-deliver.
+        // Measured live: 40081764 USDC bought 39999997595328568832 BOLD against
+        // a 40e18 target. Eight of the fifty-six ordered pairs quoted
+        // confidently and reverted - at every size, and even against a 90%
+        // bound, because that bound caps the INPUT rather than the output.
+        //
+        // Declining here rather than in the router is what keeps the trade
+        // alive: `best` simply stays whatever the base grid found, so the
+        // next-best venue wins on its own. USDC->BOLD moves to UniV3 at about
+        // 4 bps worse, which executes. Skipping the quote on this path also
+        // saves the staticcalls it would have cost.
+        if (!exactOut) {
+            (uint256 cin, uint256 cout, address pool,,,,) = quoteCurve(false, tokenIn, tokenOut, amount, 8);
             if (pool != address(0)) {
-                if (_isBetter(exactOut, cin, cout, best.amountIn, best.amountOut)) {
+                if (_isBetter(false, cin, cout, best.amountIn, best.amountOut)) {
                     best = _asQuote(AMM.CURVE, cin, cout);
                 }
             }

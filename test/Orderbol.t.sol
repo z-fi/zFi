@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {Orderbol} from "../src/forwarders/Orderbol.sol";
 import {Swapboard} from "../src/Swapboard.sol";
 import {Dutchboard} from "../src/Dutchboard.sol";
+import {Floorboard} from "../src/Floorboard.sol";
 import {MockERC20, MockWETH} from "./SwapboardMocks.sol";
 
 contract OrderbolTest is Test {
@@ -27,7 +28,7 @@ contract OrderbolTest is Test {
 
         swapboard = new Swapboard(WETH);
         dutchboard = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        executor = new Orderbol(address(swapboard), address(dutchboard));
+        executor = new Orderbol(address(swapboard), address(dutchboard), address(new Floorboard(WETH)));
         // A new contract inherits whatever balance already sits at its address,
         // and these forked tests deploy to deterministic CREATE addresses - one
         // of which (0x2e23...470b) holds 1 wei on mainnet at the pinned block.
@@ -67,13 +68,68 @@ contract OrderbolTest is Test {
         assertEq(lot.balanceOf(maker), 10e18, "maker could not reclaim sponsored escrow");
     }
 
+    /// A Dutch lot can be given an END, which is the whole point of this change.
+    ///
+    /// `placeDutch` hardcoded the board's `expiry` argument to zero, and its own
+    /// post-check asserted `l.expiry != 0` - so the adapter enforced the limit it
+    /// created, and every test that placed a lot and inspected it passed for the
+    /// same reason the bug survived. Dutchboard always took the parameter: the
+    /// struct stores it, `_checkExpiry` validates it, `_isExpired` enforces it.
+    ///
+    /// The asymmetry it left is the part worth pinning. A fixed Swapboard order,
+    /// which commits to ONE price forever, could be given an expiry. A Dutch
+    /// lot - the one order whose premise is that time changes what the seller
+    /// will accept - could not, and rested at its floor indefinitely whether or
+    /// not that was meant.
+    function test_aRoutedDutchLotCanBeGivenAnExpiry() public {
+        executor.checkpoint(address(lot));
+        lot.mint(address(executor), 10e18);
+
+        uint40 ends = uint40(block.timestamp + 2 days);
+        uint256 listingId = executor.placeDutch(
+            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, ends, 0
+        );
+
+        assertEq(dutchboard.getListing(listingId).expiry, ends, "the expiry never reached the board");
+
+        // And it BITES: past it the lot is closed to fills, rather than resting
+        // at its floor for whoever turns up.
+        quote.mint(taker, 100e18);
+        vm.warp(uint256(ends) + 1);
+        vm.startPrank(taker);
+        quote.approve(address(dutchboard), type(uint256).max);
+        vm.expectRevert(Dutchboard.Expired.selector);
+        dutchboard.fill(listingId, 10e18, taker, 25e18);
+        vm.stopPrank();
+    }
+
+    /// Zero still means rest forever, so the old behaviour is a choice now
+    /// rather than the only option.
+    function test_zeroExpiryStillRestsAtTheFloor() public {
+        executor.checkpoint(address(lot));
+        lot.mint(address(executor), 10e18);
+        quote.mint(taker, 100e18);
+
+        uint256 listingId = executor.placeDutch(
+            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0, 0
+        );
+        assertEq(dutchboard.getListing(listingId).expiry, 0);
+
+        vm.warp(block.timestamp + 30 days);        // long past the decay window
+        vm.startPrank(taker);
+        quote.approve(address(dutchboard), type(uint256).max);
+        dutchboard.fill(listingId, 10e18, taker, 25e18);   // still fillable, at the floor
+        vm.stopPrank();
+        assertEq(lot.balanceOf(taker), 10e18, "a zero expiry must still rest, not close");
+    }
+
     function test_routedDutchOrderCreditsSellerAndPaysThem() public {
         executor.checkpoint(address(lot));
         lot.mint(address(executor), 10e18);
         quote.mint(taker, 100e18);
 
         uint256 listingId = executor.placeDutch(
-            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0
+            address(dutchboard), maker, sponsor, address(lot), address(quote), 10e18, 25e18, 20e18, 0, 1 hours, 0, 0
         );
         assertEq(listingId, 0);
 
@@ -112,7 +168,7 @@ contract OrderbolTest is Test {
         vm.deal(address(this), 10 ether);
 
         executor.placeDutch{value: 3 ether}(
-            address(dutchboard), maker, address(this), address(0), address(quote), 3 ether, 9e18, 6e18, 0, 1 days, 0
+            address(dutchboard), maker, address(this), address(0), address(quote), 3 ether, 9e18, 6e18, 0, 1 days, 0, 0
         );
 
         Dutchboard.ListingView memory l = dutchboard.getListing(0);
@@ -179,7 +235,7 @@ contract OrderbolTest is Test {
 
         vm.expectRevert(Orderbol.BadOrder.selector);
         executor.placeDutch(
-            address(dutchboard), address(executor), sponsor, address(0), address(quote), 1 ether, 1e18, 1e18, 0, 1 days, 0
+            address(dutchboard), address(executor), sponsor, address(0), address(quote), 1 ether, 1e18, 1e18, 0, 1 days, 0, 0
         );
     }
 

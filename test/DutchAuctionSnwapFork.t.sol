@@ -5,304 +5,81 @@ import "forge-std/Test.sol";
 import {DutchAuction} from "../src/DutchAuction.sol";
 import {Swapbol} from "../src/forwarders/Swapbol.sol";
 
-/// @notice Proves that a decaying, partially-fillable limit order composes with the
-///         LIVE zRouter today, with no new contract and no allowlisting:
+/// @notice Swapbol will not forward to `DutchAuction`, and that is the design.
 ///
-///           zRouter.snwap --> SafeExecutor --> Swapbol --> DutchAuction.fill
+/// @dev THIS FILE USED TO ASSERT THE OPPOSITE, and it is worth saying why
+///      rather than deleting it.
 ///
-///         `snwap` does not gate its `executor` against `_isTrustedForCall` (only
-///         `execute` does), so Swapbol needs no trust grant. And because Swapbol
-///         takes `board` and the fill calldata as parameters, it forwards to
-///         DutchAuction exactly as readily as to Swapboard.
+///      It was written when Swapbol took `board` as a free parameter, so it
+///      forwarded anywhere the caller pointed it - the original header claimed
+///      a decaying, partially-fillable order composed with the live zRouter
+///      "with no new contract and no allowlisting". True at the time, and the
+///      allowlisting clause is precisely what stopped being true: Swapbol now
+///      pins four immutable boards in its constructor and reverts
+///      `UnknownBoard` for anything else.
 ///
-///         What each side contributes:
-///           - DutchAuction supplies the decay and the partial fill, and prices
-///             every fill off `initial` rather than `remaining`, so unit price is a
-///             pure function of time and is unaffected by fill history.
-///           - Swapbol supplies the recipient indirection DutchAuction.fill lacks
-///             (it pays msg.sender) and sweeps the ETH overpayment refund.
-///           - snwap supplies the amountOutMin that DutchAuction.fill lacks.
+///      That is not a regression. A forwarder that will call any address a
+///      caller names is a forwarder that will call a contract written to abuse
+///      it, and Swapbol holds balances mid-plan. The allowlist is the fix.
 ///
-///         DutchAuction and Swapbol are deployed fresh here; only zRouter and
-///         zQuoter are the live mainnet contracts under test.
+///      Two facts make the old test unrecoverable rather than merely stale:
+///
+///        - `DutchAuction` is NOT DEPLOYED. `Dutchboard` is the contract that
+///          shipped, at 0x000000a213b430D14Bae6062c176289B05e04489, and it IS
+///          one of Swapbol's four. Everything the old file wanted to prove
+///          about decay, partial fills and snwap's minOut is proven against
+///          Dutchboard by its own suite.
+///        - So a fork test of DutchAuction-through-Swapbol is a fork test of
+///          a composition that cannot exist on chain.
+///
+///      What is left worth pinning is the boundary itself, which no other test
+///      states outright: an unknown board is refused BY NAME, before any
+///      balance moves.
 contract DutchAuctionSnwapForkTest is Test {
-    address constant ETH = address(0);
-    address constant _USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant _ROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
-    address constant _QUOTER = 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13;
-
-    DutchAuction auction;
     Swapbol swapbol;
+    DutchAuction auction;
 
-    /// @dev ETH already sitting at Swapbol's address before any call. The
-    ///      forwarder snapshots that baseline and never attributes it to a later
-    ///      caller; only ETH created by the active call is refundable.
-    uint256 dust;
+    address constant BOARD_V1 = 0x000000fF3D7A2d373615141d7489Ca66683DbecF;
+    address constant BOARD_CURRENT = 0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b;
+    address constant DUTCHBOARD = 0x000000a213b430D14Bae6062c176289B05e04489;
+    address constant FLOORBOARD = 0x00000080198137F790DA4C52bb902cf87c276748;
 
-    address maker = makeAddr("maker");
-    address taker = makeAddr("taker");
-
-    /// Lot: 100k USDC, sold for ETH.
-    uint128 constant LOT = 100_000e6;
+    /// @dev Forked, and against the DEPLOYED Swapbol rather than a fresh one.
+    ///      Its constructor requires all four venues to have code, so it cannot
+    ///      be built on a bare chain at all - and the allowlist worth pinning is
+    ///      the one users actually route through, not one this test chose.
+    address constant SWAPBOL = 0x00000087A6dc5071779Ed1F8274A39230768B976;
 
     function setUp() public {
-        auction = new DutchAuction();
-        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction));
-        vm.label(address(auction), "DutchAuction");
-        vm.label(address(swapbol), "Swapbol");
-        vm.label(_ROUTER, "zRouter");
-        dust = address(swapbol).balance;
-
-        vm.deal(taker, 1_000 ether);
-    }
-
-    // ------------------------------------------------------------------ HELPERS
-
-    function _approve(address token, address spender, uint256 amt) internal {
-        (bool ok,) = token.call(abi.encodeWithSignature("approve(address,uint256)", spender, amt));
-        require(ok, "approve failed");
-    }
-
-    function _bal(address token, address who) internal view returns (uint256) {
-        if (token == ETH) return who.balance;
-        (bool ok, bytes memory d) = token.staticcall(abi.encodeWithSignature("balanceOf(address)", who));
-        return ok ? abi.decode(d, (uint256)) : 0;
-    }
-
-    /// @dev The composed call. `value` is what the taker sends; anything above the
-    ///      auction's cost comes back to `recipient` via Swapbol's delta sweep.
-    function _fillViaRouter(uint256 id, uint128 take, uint256 amountOutMin, uint256 value, address recipient)
-        internal
-        returns (uint256 amountOut)
-    {
-        bytes memory boardCall = abi.encodeCall(DutchAuction.fill, (id, take));
-        bytes memory executorData = abi.encodeCall(Swapbol.fill, (address(auction), ETH, _USDC, recipient, recipient, boardCall));
-        bytes memory snwap = abi.encodeWithSignature(
-            "snwap(address,uint256,address,address,uint256,address,bytes)",
-            ETH,
-            uint256(0),
-            recipient,
-            _USDC,
-            amountOutMin,
-            address(swapbol),
-            executorData
-        );
-        (bool ok, bytes memory ret) = _ROUTER.call{value: value}(snwap);
-        if (!ok) {
-            assembly ("memory-safe") {
-                revert(add(ret, 0x20), mload(ret))
-            }
-        }
-        amountOut = abi.decode(ret, (uint256));
-    }
-
-    /// @dev Funds and approves a fresh lot each time, so a test can list more than once.
-    function _list(uint128 startPrice, uint128 endPrice, uint40 duration) internal returns (uint256 id) {
-        deal(_USDC, maker, _bal(_USDC, maker) + LOT);
-        vm.startPrank(maker);
-        _approve(_USDC, address(auction), LOT);
-        id = auction.listERC20(_USDC, LOT, startPrice, endPrice, 0, duration);
-        vm.stopPrank();
-    }
-
-    /// @dev No route-owned funds or approvals may remain. Counterfactual /
-    ///      pre-existing ETH is deliberately left at its baseline.
-    function _assertSwapbolClean() internal view {
-        assertEq(_bal(_USDC, address(swapbol)), 0, "swapbol holds USDC");
-        assertEq(address(swapbol).balance, dust, "swapbol changed forced-ETH baseline");
-        (bool ok, bytes memory d) =
-            _USDC.staticcall(abi.encodeWithSignature("allowance(address,address)", address(swapbol), address(auction)));
-        assertTrue(ok);
-        assertEq(abi.decode(d, (uint256)), 0, "swapbol left an approval");
-    }
-
-    // -------------------------------------------------------------------- TESTS
-
-    /// Baseline: a mid-decay partial fill routed through the live router.
-    function testForkPartialFillViaSnwap() public {
-        uint256 id = _list(30 ether, 20 ether, 1 hours);
-
-        // Halfway through the decay: price is ~25 ETH for the whole lot.
-        skip(30 minutes);
-        uint256 price = auction.priceOf(id);
-        assertApproxEqRel(price, 25 ether, 1e15, "decay midpoint");
-
-        uint128 take = LOT / 4; // buy 25k USDC of the 100k lot
-        uint256 cost = auction.costOf(id, take);
-        assertApproxEqRel(cost, price / 4, 1e15, "cost prorates from initial");
-
-        uint256 takerEthBefore = taker.balance;
-        uint256 makerEthBefore = maker.balance;
-
-        // Overpay deliberately: the refund must reach the taker, not rest in Swapbol.
-        vm.prank(taker);
-        uint256 out = _fillViaRouter(id, take, take, cost + 1 ether, taker);
-
-        assertEq(out, take, "snwap measured the delta at the recipient");
-        assertEq(_bal(_USDC, taker), take, "taker received USDC");
-        assertEq(maker.balance - makerEthBefore, cost, "maker was paid exactly cost");
-        assertEq(takerEthBefore - taker.balance, cost, "overpayment refunded to taker");
-        _assertSwapbolClean();
-
-        // The lot is still live for the remainder, and still decaying.
-        DutchAuction.AuctionView memory v = auction.getAuction(id);
-        assertEq(v.initial, LOT, "initial is preserved");
-        assertEq(v.remaining, LOT - take, "remainder rests");
-    }
-
-    /// The core property: successive partial fills price off `initial`, so the unit
-    /// price falls monotonically with time and never depends on how much was already
-    /// taken. This is what makes decay + partial fill safe, and it is the reason this
-    /// belongs in DutchAuction rather than in Swapboard's destructively-decremented
-    /// amountA/amountB.
-    function testForkUnitPriceFallsAndIgnoresFillHistory() public {
-        uint256 id = _list(30 ether, 20 ether, 1 hours);
-        uint128 take = LOT / 10;
-
-        skip(6 minutes);
-        vm.prank(taker);
-        uint256 costEarly = auction.costOf(id, take);
-        _fillViaRouter(id, take, take, costEarly, taker);
-        _assertSwapbolClean();
-
-        skip(30 minutes);
-        uint256 costLate = auction.costOf(id, take);
-        vm.prank(taker);
-        _fillViaRouter(id, take, take, costLate, taker);
-        _assertSwapbolClean();
-
-        assertLt(costLate, costEarly, "same size costs less later");
-        assertEq(_bal(_USDC, taker), 2 * take, "both fills delivered");
-
-        // Unit price for an identical take is the schedule alone: the second fill's
-        // cost equals what a fresh, never-filled lot would charge at the same instant.
-        uint256 id2 = _list(30 ether, 20 ether, 1 hours);
-        // id2 started 36 minutes later, so compare the pure function instead.
-        assertEq(auction.costOf(id, take), _prorate(auction.priceOf(id), take), "cost is priceOf x take / initial");
-        assertGt(auction.priceOf(id2), auction.priceOf(id), "fresh lot sits earlier on its own schedule");
-    }
-
-    function _prorate(uint256 price, uint128 take) internal pure returns (uint256) {
-        return (price * take + LOT - 1) / LOT;
-    }
-
-    /// DutchAuction.fill takes no min-out and no max-price. snwap supplies the
-    /// missing guard, measured at the recipient.
-    function testForkSnwapMinOutGuardsTheFill() public {
-        uint256 id = _list(30 ether, 20 ether, 1 hours);
-        skip(30 minutes);
-
-        uint128 take = LOT / 4;
-        uint256 cost = auction.costOf(id, take);
-
-        vm.prank(taker);
-        vm.expectRevert(); // SnwapSlippage
-        _fillViaRouter(id, take, uint256(take) + 1, cost, taker);
-    }
-
-    /// A pending fill can never be filled worse than quoted: the schedule is
-    /// monotone non-increasing and reads no pool state, so no filler and no
-    /// pool-displacing attacker can move the price against the taker.
-    function testForkPriceOnlyImprovesForTaker() public {
-        uint256 id = _list(30 ether, 20 ether, 1 hours);
-        uint128 take = LOT / 4;
-
-        uint256 quoted = auction.costOf(id, take);
-        skip(17 minutes); // the taker's tx sits in the mempool
-        uint256 atExecution = auction.costOf(id, take);
-        assertLe(atExecution, quoted, "price never moves against a pending taker");
-
-        vm.prank(taker);
-        uint256 before = taker.balance;
-        _fillViaRouter(id, take, take, quoted, taker);
-        assertEq(before - taker.balance, atExecution, "billed the improved price, difference refunded");
-        _assertSwapbolClean();
-    }
-
-    /// The listing-time anchor: derive startPrice/endPrice from a live zQuoter
-    /// quote for the LOT SIZE, so the decay brackets the price the maker would
-    /// actually realise dumping this much into the AMMs — then fill at the moment
-    /// the schedule crosses that market price.
-    ///
-    /// The anchor is computed here, off-chain, at listing time. It must NOT be read
-    /// inside `fill`: zQuoter reports live pool state, so a fill-time anchor would
-    /// let a filler displace the pool, buy the whole lot at the depressed quote,
-    /// and restore it.
-    /// @dev zQuoter 0x0000002d… was deployed between blocks 25,630,000 and 25,640,000,
-    ///      well after this suite's pin, so this case forks forward and rebuilds its
-    ///      fixtures there. That block is also past 25,623,201, where Uniswap's V4
-    ///      protocol fees broke the base quoter — so this exercises the repointed
-    ///      quoter's corrected path, not the bricked one.
-    function testForkListingAnchorFromQuoter() public {
         vm.createSelectFork(
-            vm.envOr("FOUNDRY_ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet")), 25_640_000
+            vm.envOr("FOUNDRY_ETH_RPC_URL", string("https://gateway.tenderly.co/public/mainnet"))
         );
-        require(_QUOTER.code.length != 0, "zQuoter missing at anchor block");
+        swapbol = Swapbol(payable(SWAPBOL));
         auction = new DutchAuction();
-        swapbol = new Swapbol(address(this), address(new DutchAuction()), address(auction));
-        dust = address(swapbol).balance;
-        vm.deal(taker, 1_000 ether);
-
-        (uint128 startPrice, uint128 endPrice, uint256 market) = _anchoredPrices(LOT, 500, 300);
-        assertGt(startPrice, market, "start sits above market");
-        assertLt(endPrice, market, "floor sits below market");
-
-        uint40 duration = 20 minutes;
-        uint256 id = _list(startPrice, endPrice, duration);
-
-        assertEq(auction.priceOf(id), startPrice, "opens at the premium");
-
-        // Walk the schedule until it crosses the anchored market price, then fill.
-        uint256 crossed;
-        for (uint256 i; i < 20; ++i) {
-            skip(1 minutes);
-            if (auction.priceOf(id) <= market) {
-                crossed = i + 1;
-                break;
-            }
-        }
-        assertGt(crossed, 0, "schedule crossed market inside its duration");
-        assertLt(crossed, 20, "and crossed before the floor");
-
-        uint128 take = LOT / 2;
-        uint256 cost = auction.costOf(id, take);
-        vm.prank(taker);
-        uint256 out = _fillViaRouter(id, take, take, cost, taker);
-
-        assertEq(out, take, "filled at the market crossing");
-        // At the crossing the maker realises about what the AMM would have paid,
-        // and any fill before the crossing beat it outright.
-        assertLe(cost, _prorate(market, take), "maker did no worse than the AMM reference");
-        _assertSwapbolClean();
     }
 
-    /// @dev The helper a maker's UI would call. `premBps` above market to open,
-    ///      `floorBps` below market to stop. Size-aware: getQuotes takes the swap
-    ///      amount, so `market` already includes the AMM slippage of a lot this big
-    ///      — the correct reference for a lot-sized order, not a marginal tick.
-    function _anchoredPrices(uint128 lot, uint256 premBps, uint256 floorBps)
-        internal
-        view
-        returns (uint128 startPrice, uint128 endPrice, uint256 market)
-    {
-        (QuoteView memory best,) = IQuoter(_QUOTER).getQuotes(false, _USDC, ETH, lot);
-        market = best.amountOut;
-        require(market != 0, "no quote");
-        startPrice = uint128(market * (10_000 + premBps) / 10_000);
-        endPrice = uint128(market * (10_000 - floorBps) / 10_000);
+    /// @dev The four are immutable, so the set a deployment trusts is fixed at
+    ///      construction and readable by anyone integrating against it.
+    function test_OnlyFourBoardsAreEverForwardedTo() public view {
+        assertEq(swapbol.boardV1(), BOARD_V1);
+        assertEq(swapbol.boardCurrent(), BOARD_CURRENT);
+        assertEq(swapbol.dutchboard(), DUTCHBOARD);
+        assertEq(swapbol.floorboard(), FLOORBOARD);
     }
-}
 
-struct QuoteView {
-    uint8 source;
-    uint256 feeBps;
-    uint256 amountIn;
-    uint256 amountOut;
-}
+    /// @dev The refusal names the address it refused, which is what makes a
+    ///      misconfigured integration debuggable instead of a silent revert.
+    function test_AnUnknownBoardIsRefusedByName() public {
+        vm.expectRevert(abi.encodeWithSelector(Swapbol.UnknownBoard.selector, address(auction)));
+        swapbol.fill(address(auction), address(0), address(0), address(this), address(this), "");
+    }
 
-interface IQuoter {
-    function getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
-        external
-        view
-        returns (QuoteView memory best, QuoteView[] memory quotes);
+    /// @dev Including one that behaves perfectly well. Being a real, working
+    ///      auction is not the property Swapbol screens on - being one of the
+    ///      four addresses this deployment was built over is.
+    function test_ARealAuctionIsRefusedJustTheSame() public {
+        assertGt(address(auction).code.length, 0, "the auction is a real contract");
+        vm.expectRevert(abi.encodeWithSelector(Swapbol.UnknownBoard.selector, address(auction)));
+        swapbol.fill(address(auction), address(0), address(0), address(this), address(this), "");
+    }
 }

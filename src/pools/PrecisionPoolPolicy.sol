@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {Ownable} from "../../lib/solady/src/auth/Ownable.sol";
 
@@ -14,8 +14,25 @@ interface IPrecisionPoolPolicyView {
 /// @title PrecisionPoolPolicy
 /// @notice Routing policy for pools created by a PrecisionPoolFactory.
 /// @dev Unhooked factory pools are routable by default. Hooked pools require
-///      explicit approval, while `Blocked` always denies routing. This is a
-///      policy oracle only; pools and generic router calls remain permissionless.
+///      explicit approval, while `Blocked` always denies routing.
+///
+///      THIS IS AN ORACLE, NOT A CONTROL, AND NOTHING ON-CHAIN CONSULTS IT.
+///      Neither `PrecisionPoolFactory` nor `PrecisionRoute` reads `isRoutable`;
+///      pools and generic router calls stay permissionless whatever this
+///      contract says. That is deliberate and is the reason it is not wired in:
+///      the route is an immutable contract anyone can call, and giving an owner
+///      the power to refuse a hop would put a kill switch on the one path that
+///      currently has none - a strictly worse trade than the curation it buys.
+///      What this serves is the layer that can legitimately decline to route:
+///      frontends, aggregators, and anyone assembling a `pools` array off-chain.
+///      Read it there. Do not read a routable answer as a safety claim; it is
+///      one owner's opinion about one factory's pools.
+///
+///      `Approved` overrides the hook default and does NOT re-evaluate. A hooked
+///      pool approved while its surcharge is benign stays approved if the hook
+///      later schedules an increase to the cap - the owner has to `Blocked` it
+///      back. Any hooked pool can charge `MAX_TOTAL_FEE - fee` at any block, so
+///      an approval is a statement about the hook's operator, not about a rate.
 contract PrecisionPoolPolicy is Ownable {
     /// @notice Policy applied to a pool.
     enum Policy {

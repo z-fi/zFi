@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 // Refreshes src/zSwap.sol from zSwap.html:
 //   - updates the payload-size and headroom mentions in the natspec
-//   - rewrites the trailing /* ===== zSwap.html source ===== */ comment block
 //   - rewrites the same figures in README.md and docs/src/README.md
+//   - repins length + keccak in test/zSwap.t.sol
 //
 // The page is NO LONGER embedded in this file. It is deployed as separate data
 // contracts (script/build-zSwap-chunks.mjs) whose addresses are passed to the
 // zSwap constructor, so EIP-170 caps each chunk rather than the whole page.
 //
-// Aborts if the HTML contains a "*/" sequence (it would end the comment early).
+// The page is NOT copied into src/zSwap.sol. It used to be appended as a
+// trailing block comment, "canonical, byte-for-byte" - and that copy went 69 KB
+// stale, because the page grew ten "*/" sequences (CSS and JSDoc comment
+// closers) and every run of this script aborted rather than end the comment
+// early. A guard that stops the build to protect a copy is only worth it while
+// the copy is worth having; this one silently became the least trustworthy
+// record of the page in the repo. The chunks ARE the page, html() serves them,
+// and test/zSwap.t.sol pins length + keccak against the real file - so the
+// record is now a hash that cannot drift instead of a duplicate that did.
 // Run all three in order — skipping the registry step leaves
 // script/zSwapRegistry-*.calldata.txt pinned to a stale page:
 //   node script/build-zSwap.mjs
@@ -24,15 +32,10 @@ const HTML_PATH = path.join(ROOT, 'zSwap.html');
 const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 
 const EIP170_LIMIT = 24576;
-const CHUNKS = 6;
+const CHUNKS = 10;
 
 const html = fs.readFileSync(HTML_PATH);
 const htmlText = html.toString('utf8');
-
-if (htmlText.includes('*/')) {
-  console.error('ERROR: zSwap.html contains "*/" which would break the trailing Solidity block comment.');
-  process.exit(1);
-}
 
 const perChunk = Math.ceil(html.length / CHUNKS);
 if (perChunk > EIP170_LIMIT) {
@@ -50,17 +53,15 @@ const sized = sol
   .replace(/(across )\d+( data contracts)/, `$1${CHUNKS}$2`)
   .replace(/(\d+ B per chunk, )[\d,]+( B headroom)/, `$1${headroom}$2`);
 
+// Any leftover source block from before this script stopped emitting one is
+// stripped, so a checkout that still carries the stale copy is cleaned by the
+// first run rather than keeping it forever.
 const sourceMarker = '\n\n/* ===== zSwap.html source';
-const before = sized.includes(sourceMarker)
-  ? sized.slice(0, sized.indexOf(sourceMarker))
-  : sized.replace(/\s*$/, '');
+const stripped = sized.includes(sourceMarker)
+  ? sized.slice(0, sized.indexOf(sourceMarker)).replace(/\s*$/, '') + '\n'
+  : sized;
 
-const sourceBlock =
-  `\n\n/* ===== zSwap.html source (canonical, byte-for-byte equivalent of the deployed chunks) =====\n\n` +
-  htmlText +
-  `\n===== end of zSwap.html source ===== */\n`;
-
-fs.writeFileSync(SOL_PATH, before + sourceBlock);
+fs.writeFileSync(SOL_PATH, stripped);
 
 // The same three numbers appear prose-style in the READMEs. They used to be
 // hand-maintained and silently rotted every time the page changed, so rewrite
@@ -122,6 +123,6 @@ if (fs.existsSync(TESTPIN)) {
 
 console.log(`zSwap.html: ${html.length} B across ${CHUNKS} chunks (${headroom} B headroom)`);
 console.log(`  chunks: ${chunkSizes.map(n).join(' / ')} B`);
-console.log(`src/zSwap.sol: natspec + canonical source comment refreshed`);
+console.log(`src/zSwap.sol: natspec figures refreshed`);
 console.log(`README.md + docs/src/README.md: payload sizes refreshed`);
 console.log(`next: node script/build-zSwap-chunks.mjs && node script/build-zSwapRegistry-call.mjs && node script/check-zSwap.mjs`);

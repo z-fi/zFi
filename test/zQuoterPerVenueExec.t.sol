@@ -144,8 +144,20 @@ contract zQuoterPerVenueExecTest is Test {
 /// if the deployed bytecode agrees, so compare their quotes head to head.
 contract zQuoterDeployedVsSourceTest is Test {
     string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
-    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
-    address constant LIVE = 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13; // zSwap.html
+    /// @dev Past the quoter below, which was created in block 25,739,810. This
+    ///      suite's whole question is whether the committed source still agrees
+    ///      with the contract the page CALLS, so it has to fork somewhere that
+    ///      contract exists. At the old 25,640,000 pin the address is empty and
+    ///      every comparison would be against nothing.
+    uint256 constant DEFAULT_FORK_BLOCK = 25_739_900;
+    /// @dev The quoter zSwap.html actually calls. Moved here from
+    ///      0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13 when the page repointed:
+    ///      that one let Curve win an exact-out quote it cannot serve, and the
+    ///      source in this repo now declines it. Leaving LIVE on the old address
+    ///      would have made this suite compare the new source against the old
+    ///      deployment - a divergence it would report as a source bug, on a
+    ///      contract nothing calls any more.
+    address constant LIVE = 0xC7a03F9ED2Be5FEEA18ce93e12F4f05C98287C16;
     address constant ETH = address(0);
     address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;

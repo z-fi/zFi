@@ -41,7 +41,7 @@ contract MockExec {
         external
         returns (bytes memory)
     {
-        r.checkpoint(token, keccak256(data));
+        r.checkpoint(token, keccak256(data), payer);
         MockERC20(token).transferFrom(payer, address(r), amount);
         (bool ok, bytes memory ret) = address(r).call(data);
         if (!ok) _bubble(ret);
@@ -286,7 +286,7 @@ contract PrecisionAuditFollowupTest is Test {
 
         uint256 before = user.balance;
         bytes memory ret = exec.send{value: 10e18}(
-            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), 10e18, 0, user))
+            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), address(0), 10e18, 0, user))
         );
         uint256 out = abi.decode(ret, (uint256));
 
@@ -310,7 +310,7 @@ contract PrecisionAuditFollowupTest is Test {
 
         vm.expectRevert(PrecisionRoute.InsufficientOutput.selector);
         exec.send{value: 10e18}(
-            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), 10e18, 10e18, user))
+            address(router), abi.encodeCall(PrecisionRoute.route, (pools, address(0), address(0), 10e18, 10e18, user))
         );
     }
 
@@ -326,7 +326,7 @@ contract PrecisionAuditFollowupTest is Test {
         bool settled;
         try exec.send{value: 10e18}(
             address(router),
-            abi.encodeCall(PrecisionRoute.routeUpTo, (pools, address(0), 10e18, 0, user, user))
+            abi.encodeCall(PrecisionRoute.routeUpTo, (pools, address(0), address(0), 10e18, 0, user, user))
         ) returns (bytes memory ret) {
             (uint256 out, uint256 consumed) = abi.decode(ret, (uint256, uint256));
             settled = true;
@@ -353,7 +353,7 @@ contract PrecisionAuditFollowupTest is Test {
     function test_ZapInLeavesNoAllowanceOrResidueOnEitherSide() public {
         uint256 amountIn = 100e18;
         bytes memory data =
-            abi.encodeCall(PrecisionRoute.zapIn, (address(tokenPool), address(a), amountIn, 45e18, 0, user));
+            abi.encodeCall(PrecisionRoute.zapIn, (address(tokenPool), address(a), amountIn, 45e18, 0, user, user));
 
         vm.prank(user);
         exec.fundAndSend(router, address(a), user, amountIn, data);
@@ -371,7 +371,7 @@ contract PrecisionAuditFollowupTest is Test {
     /// back to the recipient rather than accumulating here.
     function test_NativeZapInLeavesNoAllowanceOrResidue() public {
         bytes memory data =
-            abi.encodeCall(PrecisionRoute.zapIn, (address(ethPool), address(0), 100e18, 45e18, 0, user));
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethPool), address(0), 100e18, 45e18, 0, user, user));
 
         exec.send{value: 100e18}(address(router), data);
 

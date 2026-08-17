@@ -194,7 +194,7 @@ contract MultiHandler is Test {
         (path[0], path[1]) = (a, b);
         amt = bound(amt, 1, 2_000 ether);
         vm.prank(EXEC);
-        try router.routeUpTo{value: amt}(path, address(0), amt, 0, actor, actor) {
+        try router.routeUpTo{value: amt}(path, address(0), address(0), amt, 0, actor, actor) {
             _assertSwapLeftItInBand(PrecisionPool(payable(a)));
             _assertSwapLeftItInBand(PrecisionPool(payable(b)));
         } catch {}
@@ -210,7 +210,7 @@ contract MultiHandler is Test {
         // after the snapshot, which is the whole point of the mechanism.
         vm.prank(EXEC);
         bytes32 intent = keccak256(abi.encodeCall(PrecisionZap.exit, (address(p), sh, 0, 0, actor)));
-        try zap.checkpoint(address(p), intent) {} catch { return; }
+        try zap.checkpoint(address(p), intent, actor) {} catch { return; }
         vm.prank(actor);
         p.transfer(address(zap), sh);
         vm.prank(EXEC);
@@ -219,7 +219,23 @@ contract MultiHandler is Test {
         // band exactly as a direct exit can.
         try zap.exit(address(p), sh, 0, 0, actor) {
             burned[address(p)] = true;
-        } catch {}
+        } catch {
+            // Undo the funding. Checkpoint, transfer and exit are three legs of
+            // ONE router transaction in every real flow - snwap funds the zap
+            // and calls it atomically - so a failing `exit` rolls the transfer
+            // back with it and nothing is ever left resting. This handler drives
+            // the three as separate transactions, which is what the checkpoint
+            // mechanism is designed to survive but is not a call sequence any
+            // caller can actually produce, and `try/catch` keeps the transfer
+            // committed after the revert. Without this the suite would report a
+            // stranded balance that only its own framing created.
+            //
+            // A dust exit reverting is reachable: `removeLiquidity` refuses a
+            // burn that pays out zero on both sides, which `sh` can be small
+            // enough to hit.
+            vm.prank(address(zap));
+            p.transfer(actor, sh);
+        }
     }
 
     receive() external payable {}

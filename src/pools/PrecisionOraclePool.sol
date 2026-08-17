@@ -2,6 +2,11 @@
 pragma solidity ^0.8.36;
 
 /// @title PrecisionOraclePool (ETH/USDC)
+/// @notice NOT FOR DEPLOYMENT. Out of scope for the Precision release and
+///         excluded from its audit; kept as a single-pair reference and gas
+///         baseline alongside PrecisionStablePool and PrecisionRangePool. It
+///         has had no security review. Do not deploy it, and do not treat its
+///         presence in `src/` as intent to.
 /// @notice Oracle-priced pool — Chainlink sets the price, not a bonding curve.
 /// @dev Swaps execute at oracle price ± dynamic fee. No AMM curve.
 ///      Eliminates curve-based LVR; residual adverse selection is bounded

@@ -7,10 +7,9 @@
  * WHAT IT CHECKS
  *   1. Every <script> block compiles. A syntax error here bricks the dapp
  *      permanently; nothing else in the pipeline would notice.
- *   2. The page contains no block-comment terminator (it would end zSwap.sol's
- *      trailing source comment early).
- *   3. It still fits CHUNKS x EIP-170.
- *   4. src/zSwap.sol's embedded copy is byte-identical to zSwap.html.
+ *   2. It still fits CHUNKS x EIP-170.
+ *   3. src/zSwap.sol's chunk arity is exactly CHUNKS - the wrapper, the
+ *      builders and this file must agree on one number.
  *   5. Every bare identifier the script relies on being an auto-global element id
  *      actually exists as an id= in the markup.
  *   6. The page's pure helpers behave: decQ decodes recorded zQuoter returns
@@ -29,6 +28,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { AbiCoder, Interface } from 'ethers';
+import { strip } from './strip-zSwap.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HTML_PATH = path.join(ROOT, 'zSwap.html');
@@ -37,7 +37,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 6;
+const CHUNKS = 11;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -79,27 +79,40 @@ check('every <script> block compiles', () => {
   return `${scripts.length} blocks`;
 });
 
-// ---------- 2. comment-terminator guard ----------
-check('no block-comment terminator (would end zSwap.sol source comment early)', () => {
-  if (html.includes('*/')) throw Error('page contains "*/"');
-});
-
-// ---------- 3. size ----------
+// ---------- 2. size ----------
+// zSwap.html IS the deployed artifact: it is stored stripped, and
+// build-zSwap-chunks.mjs splits these exact bytes. strip() here is the guard —
+// it must be a no-op, so a comment that creeps back in fails the size check
+// rather than silently eating headroom.
 check(`fits ${CHUNKS} x EIP-170`, () => {
+  const deployed = Buffer.byteLength(strip(html), 'utf8');
+  if (deployed !== bytes) {
+    throw Error(`page is not stripped — ${(bytes - deployed).toLocaleString('en-US')} B of `
+      + `comments/indentation; run: node script/strip-zSwap.mjs --write`);
+  }
   const per = Math.ceil(bytes / CHUNKS);
   if (per > EIP170) throw Error(`${per} B per chunk exceeds ${EIP170} B — raise CHUNKS`);
-  return `${bytes.toLocaleString('en-US')} B, ${(EIP170 * CHUNKS - bytes).toLocaleString('en-US')} B headroom`;
+  return `${bytes.toLocaleString('en-US')} B, ${per.toLocaleString('en-US')} B/chunk, `
+    + `${(EIP170 * CHUNKS - bytes).toLocaleString('en-US')} B headroom`;
 });
 
 check('actionable quotes expire after 45 seconds', () => {
   if (!/\bconst QUOTE_TTL=45000;/.test(html)) throw Error('QUOTE_TTL is not 45 seconds');
+  // Three: the routed quote, and the two 1:1 wrapped-ether shortcuts. The
+  // shortcuts do not consult a venue, but they are still ACTIONABLE - each one
+  // arms the button with calldata - so they expire on the same clock as
+  // everything else. This read 2 until ETH -> WETH gained its own path.
   const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
-  if (uses.length !== 2) throw Error(`expected 2 quote-expiry uses, found ${uses.length}`);
+  if (uses.length !== 3) throw Error(`expected 3 quote-expiry uses, found ${uses.length}`);
   if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
 });
 
 check('recipient and orderbook metadata guards remain wired', () => {
-  if (!/return \/\^0x0\{40\}\$\/i\.test\(v\)\?""\:v/.test(html)) {
+  // Pinned to the guard, not to one spelling of it: rcvOf has since grown a
+  // checksum test and a resolution cache around this line, and matching the
+  // whole return expression made the check fail on changes that kept the
+  // guard perfectly intact.
+  if (!/\/\^0x0\{40\}\$\/i\.test\(v\)/.test(html)) {
     throw Error('literal zero recipient is not rejected by rcvOf');
   }
   if (!html.includes('sA:safeSym(text(b,9))') || !html.includes('sB:safeSym(text(b,13))')) {
@@ -113,7 +126,9 @@ check('recipient and orderbook metadata guards remain wired', () => {
 check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('const routeIn=nativeIn?ZERO:r.tB')) throw Error('native input is not normalized');
   if (!html.includes('],routeIn,routeOut,account,account,dl)')) throw Error('fillPlan uses raw book tokens');
-  if (!html.includes('encSnwap(ZERO,0n,account,routeOut,r.aA,SWAPBOL,fillPlan)')) {
+  if (!html.includes('encSnwap(ZERO,0n,account,routeOut,getA,SWAPBOL,fillPlan)')) {
+    // `getA`, not `r.aA`: a partial fill buys less than the whole order, and the
+    // floor has to protect what is actually being bought.
     throw Error('prepared outer snwap does not protect the routed output');
   }
   // fillOrderWithEth(uint256,uint256,uint256,address) on the current board. This
@@ -123,6 +138,16 @@ check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('if(!rv&&f.addr===WETH&&t.addr===ZERO)')) {
     throw Error('WETH -> ETH direct unwrap is not preserved');
   }
+  // The mirror. Only the unwrap half was ever pinned here, and only the unwrap
+  // half existed: ETH -> WETH fell through to the router, which has no venue
+  // that prices an asset against itself, so the amount sat on "..." until the
+  // quote timed out. Both directions are pinned now so neither can go missing.
+  if (!html.includes('if(!rv&&f.addr===ZERO&&t.addr===WETH)')) {
+    throw Error('ETH -> WETH direct wrap is not preserved');
+  }
+  if (!html.includes('callData:"0xd0e30db0"')) {
+    throw Error('the wrap does not call WETH deposit()');
+  }
   if (!html.includes('tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()')) {
     throw Error('ETH -> WETH does not enter strict Dutch candidate filtering');
   }
@@ -131,31 +156,154 @@ check('manual fills preserve native/WETH routing domains', () => {
   }
 });
 
-// ---------- 4. zSwap.sol embedded copy is in sync ----------
-check('src/zSwap.sol embedded copy matches zSwap.html', () => {
+// ---------- 3. the wrapper's arity is CHUNKS ----------
+//
+// This replaces a byte-for-byte comparison against a copy of the page embedded
+// in zSwap.sol. That copy went 69 KB stale precisely because it was expensive
+// to maintain and its guard aborted the build instead of updating it; the page
+// is now pinned by length + keccak in test/zSwap.t.sol, where drift is
+// impossible rather than merely detected.
+//
+// What is left worth checking here is the number every part of the pipeline
+// has to agree on. The count is FIXED IN CONSTRUCTOR ARITY and permanent for a
+// deployment, so a wrapper that declares thirteen slots while the builders emit
+// fourteen is a deploy-time revert at best - and at worst a page served with a
+// slice missing, forever.
+check(`src/zSwap.sol declares exactly ${CHUNKS} chunks`, () => {
   const sol = fs.readFileSync(SOL_PATH, 'utf8');
-  const open = 'deployed chunks) =====\n\n';
-  const close = '\n===== end of zSwap.html source ===== */';
-  const i = sol.indexOf(open);
-  const j = sol.indexOf(close);
-  if (i < 0 || j < 0) throw Error('source comment markers not found in zSwap.sol');
-  if (sol.slice(i + open.length, j) !== html) throw Error('out of sync — run node script/build-zSwap.mjs');
+  if (sol.includes('===== zSwap.html source')) {
+    throw Error('zSwap.sol still carries an embedded page copy — run node script/build-zSwap.mjs');
+  }
+  const slots = [...sol.matchAll(/address public immutable DATA(\d+);/g)].map(m => Number(m[1]));
+  const expected = Array.from({length: CHUNKS}, (_, i) => i + 1);
+  if (slots.length !== CHUNKS || slots.some((v, i) => v !== expected[i])) {
+    throw Error(`DATA1..DATA${CHUNKS} expected, found ${slots.join(',') || 'none'}`);
+  }
+  // Every slot must actually be ASSIGNED. A declared-but-unwritten immutable
+  // does not compile, but a slot assigned from the wrong index does - and it
+  // serves a page with one slice doubled and another dropped.
+  for (let i = 0; i < CHUNKS; i++) {
+    if (!sol.includes(`DATA${i + 1} = d[${i}];`)) throw Error(`DATA${i + 1} is not assigned from d[${i}]`);
+  }
+  // The array widths and loop bounds carry the same number separately: the
+  // constructor's parameter, the reassembly array in _html, and the three
+  // bounds that walk them.
+  const widths = [...sol.matchAll(/address\[(\d+)\] memory/g)].map(m => Number(m[1]));
+  if (widths.length !== 2 || widths.some(v => v !== CHUNKS)) {
+    throw Error(`expected two address[${CHUNKS}] arrays, found ${widths.join(',') || 'none'}`);
+  }
+  // Scoped to the two bodies that WALK the chunks. A blanket scan over the file
+  // also catches `i != 32`, the lineage walk's own bound, which has nothing to
+  // do with the chunk count and would make this check a nuisance that gets
+  // deleted rather than a guard that gets kept.
+  const body = (start, end) => {
+    const i = sol.indexOf(start);
+    if (i < 0) throw Error(`could not find ${start.trim()} in zSwap.sol`);
+    const j = sol.indexOf(end, i);
+    return sol.slice(i, j < 0 ? sol.length : j);
+  };
+  const ctor = body('constructor(address dao', 'function deployNext');
+  const reassemble = body('function _html(', '\n}');
+  for (const [where, src, re] of [
+    ['constructor', ctor, /[ij] != (\d+);/g],
+    ['_html', reassemble, /lt\(i, (\d+)\)/g],
+  ]) {
+    const found = [...src.matchAll(re)];
+    if (!found.length) throw Error(`no chunk loop bound found in ${where}`);
+    for (const m of found) {
+      if (Number(m[1]) !== CHUNKS) throw Error(`${where}: "${m[0].trim()}" disagrees with CHUNKS=${CHUNKS}`);
+    }
+  }
+  return `${CHUNKS} slots, assignments, arrays and loop bounds agree`;
+});
+
+// ---------- 4b. the lineage constants the page ships ----------
+// ZSWAP_SELF and ZSWAP_PREVIOUS are hand-written: nothing generates them, and
+// nothing else in the pipeline would notice a malformed one until the page was
+// immutable. ZSWAP_PREVIOUS feeds an href, and ZSWAP_SELF is the address the
+// `latest()` read falls back to when the page is not served from a gateway
+// hostname - a typo in either is permanent.
+//
+// ZSWAP_SELF MUST BE EMPTY, IN EVERY BUILD, NOT JUST THE ROOT. It looks like a
+// value a successor could carry, because a successor's address is CREATE2 and
+// therefore knowable in advance - but knowable from WHAT. The address is
+// keccak(0xff, predecessor, salt, keccak(initcode)), the initcode names the
+// nine chunk contracts, and the chunks ARE these bytes. Writing the address
+// into the page changes the chunks, which changes the initcode, which changes
+// the address. Choosing a salt does not escape it: satisfying
+// address(salt, bytes(address)) == address is a hash preimage, not a search.
+// So the page learns its address from the gateway hostname or not at all, and
+// a non-empty ZSWAP_SELF is not a bold claim - it is a wrong one.
+//
+// ZSWAP_PREVIOUS has no such circularity: the predecessor exists and its
+// address does not depend on what the successor says about it.
+check('lineage constants are well-formed', () => {
+  const one = name => {
+    const m = html.match(new RegExp(`const ${name}="([^"]*)";`));
+    if (!m) throw Error(`${name} is not declared in the page`);
+    if (m[1] !== '' && !/^0x[0-9a-fA-F]{40}$/.test(m[1])) {
+      throw Error(`${name}="${m[1]}" is neither empty nor a 20-byte address`);
+    }
+    return m[1];
+  };
+  const self = one('ZSWAP_SELF');
+  const prev = one('ZSWAP_PREVIOUS');
+  if (self) {
+    throw Error(`ZSWAP_SELF="${self}" — a page cannot name its own address; the bytes determine it`);
+  }
+  // The selector the page calls `latest()` with. A wrong four bytes is a call
+  // that reverts or, worse, hits some other function of a future successor.
+  for (const [name, sig] of [
+    ['SEL_LATEST', 'function latest() view returns (address)'],
+    ['SEL_PREV', 'function PREVIOUS() view returns (address)'],
+    ['SEL_SUCCAT', 'function succeededAt() view returns (uint96)'],
+  ]) {
+    const sel = html.match(new RegExp(`${name}="([0-9a-f]{8})"`));
+    if (!sel) throw Error(`${name} is not declared in the page`);
+    const real = new Interface([sig]).getFunction(sig.split(' ')[1].split('(')[0]).selector.slice(2);
+    if (sel[1] !== real) throw Error(`${name}=${sel[1]} but the real selector is ${real}`);
+  }
+  // The page waits out the same delay the resolver does before it points a
+  // reader at a newer version. Two numbers, one policy: if they drift, the
+  // page and the name disagree about which version is safe to follow, and the
+  // page's copy is the one that can never be corrected.
+  const mat = html.match(/const MATURITY=(\d+);/);
+  if (!mat) throw Error('MATURITY is not declared in the page');
+  const solMat = fs.readFileSync(path.join(ROOT, 'src', 'utils', 'zSwapResolver.sol'), 'utf8')
+    .match(/uint256 public constant MATURITY = (\d+) days;/);
+  if (!solMat) throw Error('zSwapResolver.MATURITY is not a plain "N days" constant');
+  const wantSecs = Number(solMat[1]) * 86400;
+  if (Number(mat[1]) !== wantSecs) {
+    throw Error(`page MATURITY=${mat[1]}s but zSwapResolver says ${solMat[1]} days (${wantSecs}s)`);
+  }
+  const sol = fs.readFileSync(SOL_PATH, 'utf8');
+  if (!/function latest\(\) external view returns \(address tip\)/.test(sol)) {
+    throw Error('zSwap.sol no longer exposes latest() with the signature the page calls');
+  }
+  return prev ? `successor build, prev ${prev}` : 'root build (no predecessor)';
 });
 
 // ---------- 5. auto-global element ids resolve ----------
-// The page never calls getElementById; it leans on the browser exposing every id= as
-// a global. A renamed or deleted id therefore fails at runtime, not at build.
+// The page resolves most elements through auto-globals: the browser exposes
+// every id= as a global, so a renamed or deleted id fails at runtime, not at
+// build. That is the direction that bites - SCRIPT -> MARKUP - and check 6
+// below is what actually enforces it, by seeding the sandbox with exactly this
+// set and letting any other bare identifier throw a real ReferenceError.
+//
+// This check used to assert the REVERSE, that every id in the markup is named
+// somewhere in the script, and failed on `amtRow` and `outRow`: two <div
+// class="row"> layout anchors that exist for CSS and are not supposed to be
+// scripted. An id no one reads is not a defect, and a check that calls it one
+// gets satisfied by naming the id in a comment - which protects nothing. What
+// IS worth pinning is the ids the page addresses by string, since those skip
+// the auto-global mechanism and so skip check 6's coverage entirely.
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-check('element ids referenced by the script exist in the markup', () => {
-  const referenced = new Set();
+check('element ids addressed by string exist in the markup', () => {
   const js = scripts.join('\n');
-  for (const id of ids) {
-    // only care that declared ids are used consistently; look for the reverse too
-    if (new RegExp(`\\b${id}\\b`).test(js)) referenced.add(id);
-  }
-  const unused = [...ids].filter(id => !referenced.has(id));
-  if (unused.length) throw Error(`id(s) in markup never referenced by script: ${unused.join(', ')}`);
-  return `${ids.size} ids`;
+  const byName = [...js.matchAll(/getElementById\(["'`]([A-Za-z0-9_-]+)["'`]\)/g)].map(m => m[1]);
+  const missing = [...new Set(byName)].filter(id => !ids.has(id));
+  if (missing.length) throw Error(`getElementById for id(s) not in the markup: ${missing.join(', ')}`);
+  return `${ids.size} ids, ${new Set(byName).size} addressed by string`;
 });
 
 // ---------- 6. pure helpers behave ----------
@@ -167,7 +315,7 @@ const HELPERS = [
   'decodeString', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
-  'encPermit2Hybrid', 'impactBps', 'safeSym',
+  'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'genIcon',
 ];
 
 function stub() {
@@ -210,7 +358,17 @@ check('page evaluates without throwing (DOM stubbed)', () => {
     // the deep-link handler throw here for a reason the real page never would.
     location: { reload() {}, href: '', hash: '', search: '', pathname: '/', origin: '' },
     navigator: { userAgent: 'node' },
-    document: { documentElement: stub(), addEventListener: () => {}, createElement: () => stub() },
+    // getElementById returns a stub for an id the markup really has, and null
+    // for one it does not - which is what the page's own `if (!el) return`
+    // guards are written against. Omitting it entirely made this check fail
+    // with "document.getElementById is not a function", so the page never
+    // evaluated and checks 6+ were asserting against nothing at all.
+    document: {
+      documentElement: stub(),
+      addEventListener: () => {},
+      createElement: () => stub(),
+      getElementById: (id) => (ids.has(id) ? stub() : null),
+    },
     window: { addEventListener: () => {} },
   };
   for (const id of ids) if (!(id in sandbox)) sandbox[id] = stub();
@@ -236,7 +394,7 @@ if (exported) {
     decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
     decBar, rollUp, mergeTapes,
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
-    encPermit2Hybrid, impactBps, safeSym,
+    encPermit2Hybrid, impactBps, safeSym, safeUrl, genIcon,
   } = exported;
 
   check('keccak matches known vectors', () => {
@@ -269,6 +427,95 @@ if (exported) {
     eq(safeSym('<svg onload="x">&BAD`'), 'svg onload=xBAD', 'markup stripped');
     eq(safeSym('\u0000\u0008'), '?', 'controls collapse to fallback');
     eq(safeSym('ABCDEFGHIJKLMNOPQRST'), 'ABCDEFGHIJKLMNOP', 'symbol length cap');
+  });
+
+  check('safeUrl admits only https and inline images', () => {
+    eq(safeUrl('https://x.io/a.png'), 'https://x.io/a.png', 'https passes');
+    eq(safeUrl('data:image/svg+xml;base64,QUJD'), 'data:image/svg+xml;base64,QUJD', 'inline image passes');
+    eq(safeUrl('javascript:alert(1)'), '', 'javascript scheme refused');
+    eq(safeUrl('data:text/html;base64,QUJD'), '', 'non-image data URL refused');
+    eq(safeUrl('http://x.io/a.png'), '', 'plaintext http refused');
+    eq(safeUrl('https://x.io/a.png" onerror="alert(1)'), '', 'attribute cannot be closed');
+    // The cap bounds MARKUP SIZE, not safety - the pattern is what keeps this
+    // out of trouble. It was 2048, which was tight enough to behave like a
+    // format rule: base64 PNG logos in the registry were silently dropped for a
+    // generated letter. Now 32 KB, so this only has to stop something absurd.
+    eq(safeUrl('https://x.io/' + 'a'.repeat(4096)), 'https://x.io/' + 'a'.repeat(4096),
+      'a real base64 logo is not "too long"');
+    eq(safeUrl('https://x.io/' + 'a'.repeat(40000)), '', 'length still bounded');
+  });
+
+  // The registry is the one metadata source a list owner writes freely, and both
+  // of its rendered fields reach innerHTML. Assert the ingress normalizes them,
+  // not just that a normalizer exists somewhere in the file.
+  check('registry logo and symbol cannot inject markup', () => {
+    const hostile = '"><img src=x onerror=alert(1)>';
+    const body = genIcon(hostile).match(/>([^<]*)<\/text>/);
+    if (!body) throw Error('genIcon markup shape changed');
+    if (body[1] !== 'I') throw Error(`genIcon emitted raw metadata: ${JSON.stringify(body[1])}`);
+    const ingress = html.match(/const sym=safeSym\(t\.s\)[\s\S]{0,400}?next\.push\([^\n]*\n/);
+    if (!ingress) throw Error('loadTokenList ingress no longer sanitizes via safeSym/safeUrl');
+    if (!/const logo=safeUrl\(t\.l\);/.test(ingress[0])) throw Error('registry logo not passed through safeUrl');
+    if (/\$\{t\.[sl]\}/.test(ingress[0])) throw Error('raw registry field interpolated into markup');
+  });
+
+  /**
+   * Curve's exact-out refusal has to hold at BOTH places a route is chosen.
+   * The direct route drops it in `pick` (covered end-to-end by
+   * test/ui/swap.test.mjs), but the book+AMM planner picks the remainder leg in
+   * its own `quoteRem`, and that one had no filter — so the page refused the
+   * venue when it was the whole trade and embedded it when it was the tail,
+   * building a plan that reverts. That second site is only reachable through a
+   * full hybrid fixture, so it is pinned here at the source instead of being
+   * left unguarded: a route selector that scores exact-out must consult
+   * `sources` for Curve.
+   */
+  check('the Curve exact-out refusal is applied wherever a route is scored', () => {
+    const scorers = [...html.matchAll(/eo\?y\.best\.amountIn:y\.best\.amountOut/g)];
+    if (!scorers.length) throw Error('remainder scorer no longer recognizable — retarget this check');
+    const remainder = html.match(/const quoteRem=async\(x,eo\)=>\{[\s\S]*?\n\};/);
+    if (!remainder) throw Error('quoteRem no longer recognizable — retarget this check');
+    if (!/if\(eo&&y\.sources&&y\.sources\.includes\(SRC_CURVE\)\)continue;/.test(remainder[0])) {
+      throw Error('quoteRem scores exact-out routes without excluding Curve');
+    }
+    if (!/exactOutSafe=y=>\{if\(isIn\|\|!y\.sources\|\|!y\.sources\.includes\(SRC_CURVE\)\)/.test(html)) {
+      throw Error('the direct route no longer excludes Curve on exact-out');
+    }
+  });
+
+  /**
+   * Both order pre-flights must fail CLOSED. `preflightAsk` always did — an
+   * unreadable order throws "refresh and retry". `preflightFills`, the same
+   * check for a planned route, swallowed the read failure and returned, so the
+   * fill plan went out unvalidated. That is invisible on the ordinary path,
+   * where the swap's own eth_call would fail too and block the send, but a
+   * batching wallet goes straight to wallet_sendCalls with no simulation at
+   * all: an RPC blip and the user pays for a revert. mc3Deep already retries
+   * and splits, and reports an unreadable call as null, which the loop below
+   * treats as stale — so the read is simply not wrapped in a swallow.
+   */
+  check('both order pre-flights fail closed on an unreadable order', () => {
+    // Bounded by the NEXT declaration, not by a closing brace: the file ships
+    // stripped, so every nested `}` also sits at column 0 and `\n}` would end
+    // the match inside the first if-block.
+    const between = (from, to) => {
+      const a = html.indexOf(from);
+      const b = html.indexOf(to, a + 1);
+      return a < 0 || b < 0 ? null : [html.slice(a, b)];
+    };
+    const fills = between('async function preflightFills(', 'async function preflightAsk(');
+    if (!fills) throw Error('preflightFills no longer recognizable — retarget this check');
+    if (/catch\s*\{\s*return\s*\}/.test(fills[0])) {
+      throw Error('preflightFills swallows the read failure and validates nothing');
+    }
+    if (!/await mc3Deep\(reads\)/.test(fills[0])) {
+      throw Error('preflightFills no longer reads through the retrying reader');
+    }
+    const ask = between('async function preflightAsk(', 'const SEL_ORDER_FIXED=');
+    if (!ask) throw Error('preflightAsk no longer recognizable — retarget this check');
+    if (!/catch\{throw Error\("order could not be read/.test(ask[0])) {
+      throw Error('preflightAsk no longer fails closed on an unreadable order');
+    }
   });
 
   check('executable quote retains its real bound and value', () => {
@@ -658,16 +905,68 @@ if (exported) {
     const SOURCES = ['UniV2', 'Sushi', 'zAMM', 'UniV3', 'UniV4', 'Curve', 'Lido'];
     const MULTICALL = '0xac9650d8';
 
-    const decode = f => decQ(f.data, 50n, f.eo, f.u, f.v, f.S);
+    const decode = f => decQ(f.data, 50n, f.eo, f.u, f.v, f.S, f.mv);
 
     check('decQ: 2-hop builder return decodes coherently', () => {
       const r = decode(fx.twoHop_ETH_USDC);
       eq(r.best.amountIn, 1000000000000000000n, 'amountIn == swapAmount');
       eq(r.msgValue, 1000000000000000000n, 'msgValue == ETH in');
       if (r.best.amountOut <= 0n) throw Error('amountOut is zero');
+      // This capture is the via-ETH builder taking its SINGLE-HOP fast path,
+      // so leg b comes back `Quote(UNI_V2, 0, 0, 0)`. Both of these guard the
+      // same hazard zQuoter names in its own source: the enum's default is
+      // UniV2, so a zeroed leg is indistinguishable from a real V2 hop unless
+      // the amounts are consulted. Reading the route off that leg reports a
+      // venue that never ran; counting it inflates the hop list the exact-out
+      // Curve refusal is built on.
+      eq(r.best.source, 3, 'labelled by the leg that ran, not the zeroed one');
+      eq(r.sources.length, 1, 'the empty leg must not be counted as a UniV2 hop');
       if (!r.callData.startsWith(MULTICALL)) throw Error('callData is not a multicall');
       if (r.amountLimit >= r.best.amountOut) throw Error('exact-in min must be below quote');
       return `${SOURCES[r.best.source]}, out ${r.best.amountOut}`;
+    });
+
+    check('decQ: refuses a truncated return rather than decoding rubbish', () => {
+      // Providers clip large `eth_call` results at their own undocumented
+      // caps, and these builders return kilobytes. A short read that decoded
+      // anyway would produce a route with a plausible-looking amount and a
+      // callData sliced out of nothing. Throwing is what makes the caller's
+      // `catch` treat the venue as unavailable, which is the honest answer.
+      const f = fx.twoHop_ETH_USDC;
+      for (const words of [0, 4, f.v + 1]) {
+        const short = '0x' + f.data.slice(2).slice(0, words * 64);
+        let threw = false;
+        try { decQ(short, 50n, f.eo, f.u, f.v, f.S, f.mv); } catch { threw = true; }
+        if (!threw) throw Error(`decoded a ${words}-word return instead of refusing it`);
+      }
+      return 'short reads at 0, 4 and v words all refused';
+    });
+
+    check('decQ: the via-ETH builder with BOTH legs populated', () => {
+      // Every captured 2-hop return in the fixtures is really the via-ETH
+      // builder taking its single-hop fast path: leg b comes back
+      // `Quote(UNI_V2, 0, 0, 0)` and decQ falls to leg a. That is the common
+      // case and it is covered - but it leaves the ACTUAL two-hop shape at
+      // u=4 decoded by nothing, and the leg-b branch exercised only at u=8 by
+      // the 3-hop fixture. So this one populates leg b on a real return: the
+      // route's input is still leg a's, its output is now leg b's, and both
+      // venues have to show up in `sources` or the Curve exact-out guard
+      // cannot see a hop it needs to refuse.
+      const f = fx.twoHop_ETH_USDC;
+      const h = f.data.slice(2);
+      const w = i => h.slice(i * 64, (i + 1) * 64);
+      const u256 = v => v.toString(16).padStart(64, '0');
+      if (BigInt('0x' + w(7)) !== 0n) throw Error('fixture leg b is no longer empty — rewrite this');
+      const legB = u256(5n) + u256(30n) + w(3) + u256(777n);   // Curve, in = leg a's out
+      const data = '0x' + h.slice(0, 4 * 64) + legB + h.slice(8 * 64);
+      const r = decQ(data, 50n, f.eo, f.u, f.v, f.S, f.mv);
+      eq(r.best.amountIn, 1000000000000000000n, 'input is still the FIRST leg\'s');
+      eq(r.best.amountOut, 777n, 'output is the LAST leg\'s');
+      eq(r.best.source, 5, 'the route is labelled by the leg that delivered');
+      if (!r.sources.includes(3) || !r.sources.includes(5)) {
+        throw Error(`both hops must appear in sources, got ${r.sources}`);
+      }
+      return `${SOURCES[3]} -> ${SOURCES[5]}, out ${r.best.amountOut}`;
     });
 
     check('decQ: 3-hop builder return decodes coherently', () => {
@@ -676,6 +975,26 @@ if (exported) {
       eq(r.msgValue, 0n, 'ERC-20 in => no msg.value');
       if (r.best.amountOut <= 0n) throw Error('amountOut is zero');
       if (!r.callData.startsWith(MULTICALL)) throw Error('callData is not a multicall');
+      return `${SOURCES[r.best.source]}, out ${r.best.amountOut}`;
+    });
+
+    // The cheap single-hop builder. buildBestSwapViaETHMulticall needs ~160M gas
+    // on mainnet and buildBestSwap needs ~5M, so on any RPC with the usual 50M
+    // eth_call cap this is the ONLY router path that answers at all. Its return
+    // puts amountLimit between the bytes offset and msgValue, one word more than
+    // the multicall builders - read it as v+1 and every msg.value the page sends
+    // for an ETH swap would silently become the slippage bound instead.
+    check('decQ: single-hop builder return decodes coherently', () => {
+      const f = fx.singleHop_ETH_USDC;
+      if (!f) throw Error('singleHop fixture missing');
+      const r = decode(f);
+      eq(r.best.amountIn, 1000000000000000000n, 'amountIn == swapAmount');
+      eq(r.msgValue, 1000000000000000000n, 'msgValue is the ETH in, not amountLimit');
+      // The contract computed 1879300193 for this quote at 50 bps; decQ must agree
+      // exactly, because this is the number the user is shown as "Min received".
+      eq(r.amountLimit, 1879300193n, 'amountLimit matches SlippageLib to the wei');
+      if (!r.callData.startsWith('0x')) throw Error('no callData');
+      if (r.amountLimit >= r.best.amountOut) throw Error('exact-in min must be below quote');
       return `${SOURCES[r.best.source]}, out ${r.best.amountOut}`;
     });
 

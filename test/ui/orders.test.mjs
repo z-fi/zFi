@@ -161,6 +161,100 @@ describe('order validation', () => {
     p.close();
   });
 
+  test('the floor is seeded from the ask instead of defaulting to free', async () => {
+    // An empty Floor total reads as ZERO, and zero is a real price: the
+    // schedule rests at its floor once the window elapses, so the lot can be
+    // taken for nothing, indefinitely. That is a legitimate shape and it is not
+    // what an empty field means. Half the opening is the classic auction shape
+    // - open at twice your reserve, decay to it - and above all it is a number
+    // the seller has seen.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    assert.equal(p.value('floorAmt'), '1500', 'the floor follows the ask');
+    p.close();
+  });
+
+  test('a floor the user typed is never overwritten, including a zero', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    p.type('floorAmt', '0');           // a deliberate come-and-take-it launch
+    await p.settle();
+    p.type('outAmt', '4000');          // re-pricing must not undo that choice
+    await p.settle();
+    assert.equal(p.value('floorAmt'), '0', 'the page stopped having opinions once asked');
+    p.close();
+  });
+
+  test('a zero floor is asked about before it is signed', async () => {
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    p.type('floorAmt', '0');
+    await p.settle();
+
+    // Declined: nothing is sent.
+    p.queueConfirm(false);
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'a refused confirmation places no order');
+
+    // Accepted: it goes, because this shape is allowed on purpose.
+    p.queueConfirm(true);
+    p.click('swap');
+    await p.settle();
+    assert.ok(p.chain.sent.length > 0, 'a confirmed zero floor is still placeable');
+    p.close();
+  });
+
+  test('the duration control is named for what it does, per order type', async () => {
+    // One control, three meanings, and only one of them was "Expires". On a
+    // fixed order the duration IS an expiry. On a Dutch it is the decay window,
+    // and `placeDutch` takes no expiry at all - the listing rests at its floor
+    // until cancelled, so "Expires: 1 day" promised the opposite of the truth.
+    const p = await setup();
+    const label = () => p.$('dlyL').textContent.replace(/\s+/g, ' ').trim();
+    assert.match(label(), /^Expires/, 'a fixed order really does expire');
+
+    p.select('kind', 'dutch');
+    await p.settle();
+    assert.match(label(), /^Decays over/, 'a Dutch decays; it does not expire');
+
+    p.select('kind', 'floor');
+    await p.settle();
+    assert.match(label(), /^Bid window/, 'a bid is dead past its window, not resting');
+    p.close();
+  });
+
+  test('the form says what the order will still be doing tomorrow', async () => {
+    // The button states the terms. It cannot state the BEHAVIOUR, which is the
+    // part people get wrong - a Dutch that ends its window keeps sitting there,
+    // fillable at the floor, and nothing on the form said so.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    p.type('floorAmt', '1000');
+    await p.settle();
+
+    const said = p.text('rate');
+    assert.match(said, /Falls from 3000 to 1000/, 'states the schedule');
+    assert.match(said, /rests at 1000 .* until you cancel/i,
+      'and states the resting behaviour, which is the part that surprises people');
+    p.close();
+  });
+
   test('a Dutch order defaults to a real decay window rather than "Never"', async () => {
     const p = await setup();
     p.select('kind', 'dutch');
@@ -285,6 +379,40 @@ describe('placing orders', () => {
     assert.equal(word(b, 6), 20000n * USDC, 'starting ask');
     assert.equal(word(b, 7), 15000n * USDC, 'floor');
     assert.equal(word(b, 9), 86400n, 'decay duration');
+    // Word 10 is the lot's EXPIRY, which is a different clock from the decay
+    // above it. Zero is "rest at the floor forever" - what every lot placed
+    // before the adapter carried the parameter did, and still the default.
+    assert.equal(word(b, 10), 0n, 'resting forever unless asked otherwise');
+    p.close();
+  });
+
+  test('a Dutch lot can be given an end, and it is not the decay window', async () => {
+    // The adapter hardcoded the board's expiry to zero, so a lot decayed to its
+    // floor and then sat there fillable until someone spent gas cancelling it.
+    // Dutchboard always took the parameter; nothing could reach it.
+    const p = await setup();
+    p.select('kind', 'dutch');
+    await p.settle();
+    p.type('amt', '5');
+    p.type('outAmt', '20000');
+    p.type('floorAmt', '15000');
+    p.select('dly', '86400');          // decays over a day
+    p.select('dRest', '604800');       // then rests a week and comes back
+    await p.settle();
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'placement' });
+    await p.settle();
+
+    const order = placementPayload(p.chain.lastSent);
+    const b = '0x' + order.slice(10);
+    assert.equal(word(b, 9), 86400n, 'the decay window is untouched');
+    const expiry = word(b, 10);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    // Strictly after the decay ends, which is the board's own rule and the
+    // reason this is expressed as "rest AFTER the decay" rather than a date.
+    assert.ok(expiry > now + 86400n, 'the lot must not expire before it has finished decaying');
+    assert.ok(expiry <= now + 86400n + 604800n + 5n, 'and not far beyond the rest it was given');
     p.close();
   });
 
@@ -389,11 +517,74 @@ describe('the orderbook list', () => {
     ...over,
   });
 
+  /**
+   * Drop the pair filter, the way a user does.
+   *
+   * The book opens filtered to the selected pair, so a fixture built on some
+   * other pair — which is most of the ones below, since they are about how a
+   * row RENDERS rather than which pair it belongs to — is legitimately hidden.
+   * Clicking the chip is the honest way to see it: no back door into the
+   * page's state, and it exercises the filter on the way past.
+   */
+  const showAllPairs = async p => {
+    await p.waitFor(() => p.$('book').querySelector('[data-bf="0"]'), { label: 'filter chips' });
+    p.click(p.$('book').querySelector('[data-bf="0"]'));
+    await p.settle();
+  };
+
+  test('Fill asks how much, and takes only that much', async () => {
+    // The button used to mean "take the whole order", which on a large one
+    // quotes a number most people cannot cover and stops - while the same order
+    // was available in pieces to the swap path all along. Reported from the
+    // field as "why can't I buy a small amount?".
+    const p = await setup(c => { c.recent = [order({ id: 5 })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+
+    p.queuePrompt('0.25');                       // a quarter of the 1 WETH ask
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    await p.settle();
+
+    // The amount that goes out is the one that was asked for, not the ask.
+    const tx = p.chain.lastSent;
+    const paid = JSON.stringify(tx).toLowerCase();
+    assert.ok(paid.includes((250000000000000000n).toString(16)),
+      'the transaction should carry the 0.25 WETH the user chose');
+    assert.ok(!paid.includes((1000000000000000000n).toString(16).padStart(16, '0') + '0'.repeat(0)) ||
+      paid.includes((250000000000000000n).toString(16)),
+      'and not silently take the whole order');
+    p.close();
+  });
+
+  test('a declined amount sends nothing at all', async () => {
+    const p = await setup(c => { c.recent = [order({ id: 5 })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    const btn = p.$('book').querySelector('.o button');
+    p.click(btn);                                      // no queued answer = cancelled
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'dismissing the prompt must not place a fill');
+    // Changing your mind must not cost you the button. The re-enable lives in
+    // the catch, so an early return walks straight past it and Fill stays grey
+    // until the 30s poll repaints the book.
+    assert.equal(btn.disabled, false, 'declining left the Fill button disabled');
+    p.close();
+  });
+
+  test('an all-or-nothing order is never asked about', async () => {
+    // Only the board can split an order. Asking "how much?" about one that
+    // cannot be split would offer a choice that does not exist.
+    const p = await setup(c => { c.recent = [order({ id: 5, pf: false })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.click(p.$('book').querySelector('.o button'));   // no prompt queued, yet it proceeds
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    p.close();
+  });
+
   test('lists other makers\' orders with a fill action', async () => {
     const p = await setup(c => { c.recent = [order()]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
     assert.match(p.$('book').textContent, /3000 USDC → 1 WETH/);
-    const btn = p.$('book').querySelector('button');
+    const btn = p.$('book').querySelector('.o button');
     assert.equal(btn.textContent, 'Fill');
     p.close();
   });
@@ -401,7 +592,7 @@ describe('the orderbook list', () => {
   test('separates your own orders and offers to cancel them', async () => {
     const p = await setup(c => { c.recent = [order({ maker: A.ACCOUNT })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
-    assert.equal(p.$('book').querySelector('button').textContent, 'Cancel');
+    assert.equal(p.$('book').querySelector('.o button').textContent, 'Cancel');
     p.close();
   });
 
@@ -431,10 +622,136 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  /**
+   * FINDING THE ORDER YOU CAME FOR.
+   *
+   * Four boards land in one list and nothing removed rows that were about
+   * other pairs, so a page whose tile said ETH/USDC listed every order on every
+   * market and left the reading to you.
+   */
+  const chips = p => [...p.$('book').querySelectorAll('.bkc')];
+  const chip = (p, attr, val) => p.$('book').querySelector(`[data-${attr}="${val}"]`);
+  const rowText = p => [...p.$('book').querySelectorAll('.o')].map(o => o.textContent);
+
+  test('opens on the selected pair and says how many it is holding back', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),                                                   // USDC/WETH — the pair
+        order({ id: 2, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n }), // WBTC/WETH — not
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    assert.equal(rowText(p).length, 1, 'only the pair on screen');
+    assert.match(rowText(p)[0], /USDC/);
+    assert.match(p.$('book').textContent, /1 hidden/, 'and it admits what it is not showing');
+    // The chip names the pair: the picker driving it is three panels up, and a
+    // book scrolled into view has to say what it is showing.
+    assert.equal(chip(p, 'bf', '1').textContent, 'ETH/USDC');
+    p.close();
+  });
+
+  test('ETH and WETH are the same asset to the filter', async () => {
+    // Boards are WETH-denominated and the picker is not. Comparing raw
+    // addresses would hide every WETH order behind an ETH selection - which is
+    // most of the book, and exactly the rows being looked for.
+    const p = await setup(c => { c.recent = [order({ id: 3 })]; });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    assert.equal(rowText(p).length, 1, 'a WETH leg matches an ETH selection');
+    p.close();
+  });
+
+  test('dropping the pair filter brings the rest back', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),
+        order({ id: 2, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n }),
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    p.click(chip(p, 'bf', '0'));
+    await p.settle();
+    assert.equal(rowText(p).length, 2);
+    // Repainted from rows already in hand: changing what you look at must not
+    // cost four lens reads and a logo fetch.
+    const before = p.chain.calls.length;
+    p.click(chip(p, 'bf', '1'));
+    await p.settle();
+    assert.equal(p.chain.calls.length, before, 'a filter click reads nothing from chain');
+    assert.equal(rowText(p).length, 1);
+    p.close();
+  });
+
+  test('filters by what an order DOES, and never by which board it is on', async () => {
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1 }),
+        // A Dutch lot lives on its own board, and the lens is asked per board.
+        order({ id: 2, dutch: true, board: A.DUTCH }),
+      ];
+    });
+    await p.waitFor(() => chips(p).length, { label: 'filter chips' });
+    p.click(chip(p, 'bf', '0'));
+    await p.settle();
+    assert.equal(rowText(p).length, 2);
+
+    p.click(chip(p, 'bt', 'dutch'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1, 'a Dutch decays under a taker — that is worth filtering on');
+    assert.match(rowText(p)[0], /Dutch/);
+
+    p.click(chip(p, 'bt', 'limit'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1);
+    assert.ok(!/Dutch/.test(rowText(p)[0]));
+
+    // Provenance is not a filter: which board an order lives on is a migration
+    // detail, not a decision anybody makes.
+    assert.ok(!chips(p).some(c => /v1|v2|board/i.test(c.textContent)));
+    p.close();
+  });
+
+  test('the empty line says whose orders were searched, and the caret agrees', async () => {
+    // "Nothing here matches" sat directly beneath a Dutch order that plainly
+    // did match - the reader's own, which is exempt from both filters. And the
+    // caret counted only what it rendered, so "Orderbook (1)" appeared above a
+    // line reading "1 hidden". Two statements about the same list, disagreeing.
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1, maker: A.ACCOUNT }),   // yours: always shown
+        order({ id: 2 }),                     // someone else's, same pair
+      ];
+    });
+    await p.waitFor(() => p.$('book').querySelector('[data-bt="dutch"]'), { label: 'chips' });
+    p.click(p.$('book').querySelector('[data-bt="dutch"]'));
+    await p.settle();
+    const txt = p.$('book').textContent;
+    assert.match(txt, /No dutch orders on ETH\/USDC from anyone else/,
+      'the line has to name the filter AND exclude your own, or it argues with the screen');
+    assert.match(txt, /1 hidden/);
+    assert.match(p.text('bkTog'), /Orderbook \(1 of 2\)/, 'the caret counts the book, not the view');
+    p.close();
+  });
+
+  test('your own orders survive every filter', async () => {
+    // The one case where hiding a row costs money: escrow you forgot because a
+    // filter you set for browsing quietly swallowed it.
+    const p = await setup(c => {
+      c.recent = [order({ id: 7, maker: A.ACCOUNT, tA: A.WBTC, symA: 'WBTC', decA: 8, aA: 10n ** 8n })];
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own section' });
+    assert.equal(rowText(p).length, 1, 'off-pair, but still yours to cancel');
+    p.click(chip(p, 'bt', 'bid'));
+    await p.settle();
+    assert.equal(rowText(p).length, 1, 'and a type filter cannot bury it either');
+    assert.equal(p.$('book').querySelector('.o button').textContent, 'Cancel');
+    p.close();
+  });
+
   test('warns on tokens that are not on the known list', async () => {
     const p = await setup(c => {
       c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: 'SCAM' })];
     });
+    await showAllPairs(p);
     await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
     const warn = p.$('book').querySelector('.tg.w');
     assert.ok(warn, 'an unrecognised token must carry a visible warning');
@@ -452,7 +769,27 @@ describe('the orderbook list', () => {
     p.close();
   });
 
-  test('hides expired orders', async () => {
+  test('a chain with no board says so, and leaves nothing behind', async () => {
+    // The early return used to paint the notice over rows it never cleared, so
+    // the caret went on counting a book that is not there and the click
+    // handler could still find another chain's orders in `bookRows`.
+    const p = await setup(c => { c.recent = [order({ id: 1 })]; });
+    await p.waitFor(() => /Orderbook \(1\)/.test(p.text('bkTog')), { label: 'a book to lose' });
+
+    // The wallet moves to a chain that has no board on it.
+    p.chain.undeploy(A.SB2);
+    p.chain.undeploy(A.SB1);
+    p.click('tabSwap');
+    p.click('tabBook');
+    await p.waitFor(() => p.$('book').textContent.includes('No Swapboard'), { label: 'notice' });
+    await p.settle();
+    assert.equal(p.$('book').querySelectorAll('.o button').length, 0, 'nothing left to click');
+    assert.equal(p.visible('book'), true, 'the notice has to be readable');
+    assert.equal(p.visible('bkTog'), false, 'and no caret counting a book that is gone');
+    p.close();
+  });
+
+  test("hides other people's expired orders", async () => {
     const p = await setup(c => {
       c.recent = [order({ id: 1, exp: Math.floor(Date.now() / 1000) - 60 })];
     });
@@ -461,11 +798,35 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  // Expiry stops an order being FILLED. It does not return the escrow: only
+  // cancelOrder/cancelExpired does that. So hiding the maker's own lapsed order
+  // hides money they still have to come and get - the one row that must stay.
+  test('keeps YOUR expired order visible, with a way to get the escrow back', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 3, maker: A.ACCOUNT, exp: Math.floor(Date.now() / 1000) - 60 })];
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
+    const txt = p.$('book').textContent;
+    assert.match(txt, /expired/, 'and it says why it cannot be filled');
+    assert.match(txt, /escrow still held/, 'and that the money is still on the board');
+
+    const btn = p.$('book').querySelector('.o button');
+    assert.equal(btn.textContent, 'Reclaim', 'not "Cancel" — there is nothing left to call off');
+    p.click(btn);
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'reclaim' });
+    await p.settle();
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SB2.toLowerCase());
+    assert.equal(word('0x' + tx.data.slice(10), 0), 3n, 'reclaims the order that lapsed');
+    p.close();
+  });
+
   test('a hostile token symbol cannot inject markup into the list', async () => {
     const evil = '<img src=x onerror=alert(1)>';
     const p = await setup(c => {
       c.recent = [order({ tA: '0x9999999999999999999999999999999999999999', symA: evil })];
     });
+    await showAllPairs(p);
     await p.waitFor(() => p.$('book').querySelectorAll('.o').length >= 1, { label: 'rows' });
     assert.equal(p.$('book').querySelectorAll('img').length, 0,
       'lens-provided metadata is attacker-controlled and must never become markup');
@@ -476,7 +837,9 @@ describe('the orderbook list', () => {
   test('cancelling an order calls the board directly', async () => {
     const p = await setup(c => { c.recent = [order({ id: 7, maker: A.ACCOUNT })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Your orders'), { label: 'own orders' });
-    p.click(p.$('book').querySelector('button'));
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'cancel' });
     await p.settle();
 
@@ -486,17 +849,164 @@ describe('the orderbook list', () => {
     p.close();
   });
 
-  test('filling a public order routes it and pays exactly the asking amount', async () => {
+  // Which side of the native boundary a fill pays from is a property of the
+  // ORDER and of what the account holds — not of the swap pickers, which are
+  // set for an unrelated trade. So the same row has two correct executions,
+  // and both are pinned here.
+  test('filling a public order pays in WETH when the account holds enough', async () => {
+    // setup() funds the account with WETH, which covers the 1 WETH ask.
     const p = await setup(c => { c.recent = [order({ id: 5 })]; });
     await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
-    p.click(p.$('book').querySelector('button'));
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
     await p.settle();
 
     const tx = p.chain.lastSent;
     assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
-    // The order asks 1 WETH; paying from an ETH-selected wallet wraps on the way.
+    // No wrap step and no extra approval: the balance is already in the form
+    // the board wants, so nothing rides as value.
+    assert.equal(BigInt(tx.value), 0n, 'spent ETH while holding enough WETH');
+    p.close();
+  });
+
+  test('a private order is filled at the board, stating the payment and a floor', async () => {
+    // A counterparty-restricted order cannot go through the executor, so it is
+    // filled at the board directly - and there `fillAmountB` is not a full-fill
+    // sentinel. Zero is `ZeroFillAmount` on a fungible order, so the page used
+    // to hand the wallet a transaction that could only revert; it also threw
+    // away the amount the prompt had just asked for, and left `minAmountA` at
+    // zero, which is a fill with no floor under it.
+    const p = await setup(c => { c.recent = [order({ id: 5, cp: A.ACCOUNT })]; });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    p.queuePrompt('0.25');                      // a quarter of the 1 WETH ask
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => p.chain.sent.some(t => selectorOf(t.data) === SEL.FILL2),
+      { label: 'fill' });
+    await p.settle();
+
+    const fill = p.chain.sent.find(t => selectorOf(t.data) === SEL.FILL2);
+    assert.equal(fill.to.toLowerCase(), A.SB2.toLowerCase(), 'a private order goes to the board');
+    const args = '0x' + fill.data.slice(10);
+    assert.equal(word(args, 0), 5n, 'fills the order that was clicked');
+    assert.equal(word(args, 2), ETH / 4n, 'pays the amount the prompt asked for');
+    // The board quotes 750 USDC for a quarter of a 3,000 USDC ask.
+    assert.equal(word(args, 3), 750n * USDC, 'and states that as the floor it accepts');
+    p.close();
+  });
+
+  test('filling a public order sends ETH when the WETH balance cannot cover it', async () => {
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, 0n);
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'fill' });
+    await p.settle();
+
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase());
     assert.equal(BigInt(tx.value), ETH, 'must send exactly the order\'s asking amount');
+    p.close();
+  });
+
+  test('wraps the shortfall when neither balance covers it but both together do', async () => {
+    // The case the old setting could not express at all: half wrapped, half
+    // not, and a 1 WETH order that neither half can pay for. It used to be a
+    // fill the page simply refused while the money was sitting right there.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, ETH / 2n);
+      c.setNative(A.ACCOUNT, ETH / 2n + ETH / 10n);   // the halves, plus gas
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => p.chain.sent.length > 1, { label: 'wrap then fill' });
+    await p.settle();
+
+    const [wrap] = p.chain.sent;
+    assert.equal(wrap.to.toLowerCase(), A.WETH.toLowerCase(), 'wraps first');
+    assert.equal(selectorOf(wrap.data), SEL.WETH_DEPOSIT);
+    assert.equal(BigInt(wrap.value), ETH / 2n, 'exactly the shortfall, not the whole ask');
+
+    const fill = p.chain.lastSent;
+    assert.equal(fill.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'then fills');
+    assert.equal(BigInt(fill.value || 0), 0n, 'paying in WETH now that it covers the leg');
+    p.close();
+  });
+
+  test('keeps a gas reserve back rather than wrapping the last wei', async () => {
+    // Wrapping everything leaves nothing to send the fill with, which is a
+    // worse failure than the one being avoided.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, ETH / 2n);
+      c.setNative(A.ACCOUNT, ETH / 2n);   // exactly the shortfall, no gas margin
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => /Not enough ether/i.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sent.length, 0, 'and nothing was wrapped on the way to failing');
+    p.close();
+  });
+
+  test('refuses a fill the account cannot pay for, before any approval', async () => {
+    // The reported case: an order asking 100 WETH against an account holding
+    // none. It cost an approval and then reverted, and "execution reverted"
+    // says nothing about the balance being the problem.
+    const p = await setup(c => {
+      c.recent = [order({ id: 5 })];
+      c.setErc20(A.WETH, A.ACCOUNT, 0n);
+      c.setNative(A.ACCOUNT, 0n);              // no ETH to wrap either
+    });
+    await p.waitFor(() => p.$('book').textContent.includes('Orderbook'), { label: 'book' });
+    // Fill now asks HOW MUCH; answering with the whole ask is the old behaviour.
+    p.queuePrompt('1');
+    p.click(p.$('book').querySelector('.o button'));
+    await p.waitFor(() => /Not enough/i.test(p.text('stat')), { label: 'the refusal' });
+    await p.settle();
+
+    // Both balances, not one: "not enough WETH" while holding ether reads as a
+    // page that cannot see the money it is standing on.
+    assert.match(p.text('stat'), /Not enough ether/i, 'must say what is short');
+    assert.match(p.text('stat'), /0 WETH plus 0 ETH/i, 'and account for both sides of it');
+    // The point of checking first: no approval, no gas, no allowance left
+    // standing for a trade that could never have settled.
+    assert.equal(p.chain.sent.length, 0, 'nothing was sent, least of all an approval');
+    p.close();
+  });
+
+  test('asks only what it cannot work out for itself', async () => {
+    // The old control conflated two things and asked about both: which balance
+    // to spend, and what to be paid in. The first is arithmetic - the page can
+    // see both balances - and getting it wrong is a revert, not a matter of
+    // taste. Only the second is a preference, so only the second is asked.
+    const p = await setup();
+    // It said "Receive", which names the outcome but not the ACT - and it sits
+    // in the placement form, so it read as "how this order pays me". It does not
+    // govern that and cannot: a board denominates in WETH, and a maker's
+    // proceeds are transferred as WETH with no unwrap available. Asked about a
+    // real placement, the page had to print a note explaining that the control
+    // the user had just set would not apply. Naming the two acts it DOES govern
+    // is what stops the misreading.
+    const label = p.$('ethModeL').textContent.replace(/\s+/g, ' ').trim();
+    assert.match(label, /^Fills & cancels pay/,
+      'the label should name what it decides, and it decides about fills and cancels');
+    assert.deepEqual([...p.$('ethMode').options].map(o => o.textContent), ['ETH', 'WETH'],
+      'two outcomes, both of which land in the wallet');
+
+    const help = p.$('ethModeL').getAttribute('title') || '';
+    assert.match(help, /Paying is not a setting/i, 'and says so, so nobody looks for it');
+    assert.match(help, /does NOT change what an order you place pays you/i,
+      'and the one thing it is most likely to be mistaken for is denied outright');
     p.close();
   });
 

@@ -157,7 +157,7 @@ contract PrecisionPoolPartialFillTest is Test {
         usdc.approve(address(hp), type(uint256).max);
 
         vm.prank(trader);
-        vm.expectRevert(PrecisionPool.UnsupportedToken.selector);
+        vm.expectRevert(PrecisionPool.HookedNoPartialFill.selector);
         hp.swapUpTo(address(usdc), 1_000e6, 0, trader);
 
         // The all-or-nothing path still works there.

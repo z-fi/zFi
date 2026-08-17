@@ -8,6 +8,7 @@
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   A, SEL, MockChain, loadPage, fixedRateQuoter, closeAllPages, word,
 } from './harness.mjs';
@@ -20,11 +21,23 @@ const LENS = '0x4444444444444444444444444444444444444444';
 const POOL_A = '0x5555555555555555555555555555555555555555';
 const POOL_B = '0x6666666666666666666666666666666666666666';
 
-/** Point the page's PPLENS at the mock lens. */
-const patchFactory = (addr = LENS) => [[
-  'const PPLENS="0x0000000000000000000000000000000000000000"',
-  `const PPLENS="${addr}"`,
-]];
+/**
+ * Point the page's PPLENS at the mock lens.
+ *
+ * Matched by SHAPE rather than by a literal address. This used to hardcode the
+ * zero placeholder the page shipped before the lens was deployed; the moment a
+ * real address landed in zSwap.html every test in this file failed on a missed
+ * patch target. The harness throwing on a miss is what made that loud instead
+ * of silently testing an unpatched page - but the fix is to not depend on which
+ * address happens to be canonical today.
+ */
+const CUR_PPLENS = (() => {
+  const html = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
+  const m = html.match(/const PPLENS="(0x[0-9a-fA-F]{40})"/);
+  if (!m) throw Error('zSwap.html no longer declares PPLENS');
+  return m[0];
+})();
+const patchFactory = (addr = LENS) => [[CUR_PPLENS, `const PPLENS="${addr}"`]];
 
 /**
  * The pool stores RAW prices: token1 per token0, 1e18-scaled, decimals NOT
@@ -51,7 +64,7 @@ function bars(n, { start = 3000, pool = 1 } = {}) {
   return out; // newest first, matching the contract
 }
 
-async function setup({ deployed = true, pools = [POOL_A], tapes = null, open = true } = {}) {
+async function setup({ deployed = true, pools = [POOL_A], tapes = null, coarse = null, open = true } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 5000n * USDC);
@@ -59,6 +72,8 @@ async function setup({ deployed = true, pools = [POOL_A], tapes = null, open = t
   chain.setCode(LENS, deployed ? '0x60006000' : '0x');
   chain.setPools(A.ZERO, A.USDC, pools);
   for (const [pool, b] of Object.entries(tapes || { [POOL_A]: bars(24) })) chain.setTape(pool, b);
+  // The 4h tape, which is where a sparsely traded pool keeps its history.
+  for (const [pool, b] of Object.entries(coarse || {})) chain.setTape(pool, b, 14400);
 
   const page = await loadPage({
     chain,
@@ -183,12 +198,25 @@ describe('reading the tape', () => {
   });
 
   test('caps how many bars it draws, so candles stay legible', async () => {
+    // 250 five-minute bars in ~300px is a smear. The answer is to open a
+    // timeframe the history fits in rather than to keep 5m and throw three
+    // quarters of it away, so the full 21 hours is still reachable.
     const p = await setup({ tapes: { [POOL_A]: bars(250) } });
     await p.waitFor(() => svg(p), { label: 'chart' });
-    // 250 bars in ~300px is a smear; the drawer keeps the most recent that fit.
     const wicks = svg(p).querySelectorAll('line').length - 4;   // minus gridlines
     assert.ok(wicks < 130, `drew ${wicks} candles, which cannot resolve at this width`);
-    assert.match(p.text('chNote'), /last /, 'and says the window was clipped');
+    // Not a literal span: 250 five-minute buckets straddle 21 or 22 hourly ones
+    // depending on where the clock sits inside the current bucket. "last" is the
+    // word the drawer uses when it had to drop something, so its absence is the
+    // claim, and it does not move with the wall clock.
+    assert.doesNotMatch(p.text('chNote'), /last /, 'and none of the history is dropped');
+
+    // Forced back down to 5m it cannot show 21 hours, and says which slice it did.
+    [...p.$('chTf').children].find(b => b.textContent === '5m').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
+    assert.match(p.text('chNote'), /last \d+h/, 'a clipped window must say so');
+    assert.ok(svg(p).querySelectorAll('line').length - 4 < 130);
     p.close();
   });
 
@@ -252,6 +280,46 @@ describe('reading the tape', () => {
     p.close();
   });
 
+  // `_byPair` is append-only and index 0 is the OLDEST pool, so sampling the
+  // front of it is not sampling at random. The chart used to read the first 8
+  // entries: fill a new pair with hooked junk and it charted nothing at all,
+  // while the swap quote and the liquidity panel — which scan far wider — both
+  // saw the real band. Discovery is now as wide as theirs, and the tape budget
+  // is spent on the deepest pools rather than the earliest.
+  test('finds the real pool behind a wall of junk bands', async () => {
+    const junk = Array.from({ length: 30 }, (_, i) => ({
+      pool: '0x' + (i + 1).toString(16).padStart(40, '0'),
+      hook: '0x9999999999999999999999999999999999999999',
+    }));
+    const p = await setup({
+      pools: [...junk, POOL_A],
+      tapes: { [POOL_A]: bars(24) },
+    });
+    await p.waitFor(() => p.text('chNote') !== '', { label: 'note' });
+    assert.match(p.text('chNote'), /1 pool\b/, 'the band buried at index 30 still charts');
+    assert.equal(p.chain.calls.filter(c => c.selector === SEL.TAPE).length, 2,
+      'and the junk costs no tape reads');
+    p.close();
+  });
+
+  // The wide scan must not turn into a wide fan-out: tape reads are two calls
+  // per pool and the deepest few carry the price, so the budget stays at eight.
+  test('spends its tape budget on the deepest pools, not the oldest', async () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      pool: '0x' + (i + 1).toString(16).padStart(40, '0'),
+      liquidity: 10n ** 21n + BigInt(i),
+    }));
+    const tapes = Object.fromEntries(many.map(m => [m.pool, bars(24)]));
+    const p = await setup({ pools: many, tapes });
+    await p.waitFor(() => p.text('chNote') !== '', { label: 'note' });
+    const read = p.chain.calls.filter(c => c.selector === SEL.TAPE);
+    assert.equal(read.length, 16, 'eight pools, both widths');
+    const seen = new Set(read.map(c => c.to.toLowerCase()));
+    assert.ok(seen.has(many[19].pool.toLowerCase()), 'the deepest pool is read');
+    assert.ok(!seen.has(many[0].pool.toLowerCase()), 'the shallowest, oldest one is not');
+    p.close();
+  });
+
   test('excludes empty pools, which have no price to contribute', async () => {
     const p = await setup({
       pools: [POOL_A, { pool: POOL_B, liquidity: 0n }],
@@ -276,6 +344,112 @@ describe('reading the tape', () => {
     await p.waitFor(() => svg(p), { label: 'chart' });
     var shown = Number(p.$('chArt').querySelector('.hd b').textContent.replace(/,/g, ''));
     assert.ok(shown > 90, `volume-weighted close ${shown} must sit near the deep pool's 100`);
+    p.close();
+  });
+
+  test('a dust pool cannot own the y-range with one absurd wick', async () => {
+    // Volume weighting already kept the thin pool off the LINE, but the wick
+    // was a plain min/max across pools, so a pool holding 0.1% of the volume
+    // still stretched the axis - and with the 9% padding on top, the real
+    // series collapsed into a couple of pixels. Surviving the pool filter
+    // takes one wei of liquidity, so this is cheap to do on purpose.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (px, v, hi) => [{ bucket, open: px * RAW_ETH_USDC, high: (hi || px) * RAW_ETH_USDC,
+      low: px * RAW_ETH_USDC, close: px * RAW_ETH_USDC, volume: v, count: 1 }];
+    const p = await setup({
+      pools: [POOL_A, POOL_B],
+      tapes: { [POOL_A]: at(100, 1000e18), [POOL_B]: at(100, 1e18, 100000) },
+    });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const label = svg(p).getAttribute('aria-label');
+    const top = Number((label.match(/range .* to ([\d,.]+)/) || [])[1].replace(/,/g, ''));
+    assert.ok(top < 200, `a 0.1%-volume pool printing 100000 set the top of the axis to ${top}`);
+    p.close();
+  });
+
+  test('a bar the pool could only print as zero does not break the axis', async () => {
+    // `pack(0) == 0` and `_record` floors the price, so a pair below 1e-18 raw
+    // per raw prints zeros - and `PriceTape` says a zeroed low then pins the
+    // bar for its whole life. Upright that dragged the range to 0 and squashed
+    // every real price into the top few pixels.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (i, px, low) => ({ bucket: bucket - i, open: px * RAW_ETH_USDC,
+      high: px * RAW_ETH_USDC, low: low * RAW_ETH_USDC, close: px * RAW_ETH_USDC,
+      volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0, 3000, 3000), at(1, 3010, 0), at(3, 2990, 2990)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const label = svg(p).getAttribute('aria-label');
+    const bottom = Number((label.match(/range ([\d,.]+) to/) || [])[1].replace(/,/g, ''));
+    assert.ok(bottom > 1000, `one unprintable low pulled the axis down to ${bottom}`);
+    assert.equal(p.consoleErrors.length, 0);
+    p.close();
+  });
+
+  test('inverting a zeroed low yields no Infinity, and no NaN in the path', async () => {
+    // The reciprocal of an unprintable price is not a number, and inverted is
+    // the DEFAULT orientation for a token quoted in a stablecoin. This drew a
+    // flat line at the axis under gridlines labelled "Infinity", and put NaN
+    // into the line chart's `d` attribute.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = (i, px, low) => ({ bucket: bucket - i, open: px * RAW_ETH_USDC,
+      high: px * RAW_ETH_USDC, low: low * RAW_ETH_USDC, close: px * RAW_ETH_USDC,
+      volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0, 3000, 3000), at(1, 3010, 0), at(3, 2990, 2990)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+
+    const s = svg(p);
+    assert.doesNotMatch(s.outerHTML, /Infinity|NaN/, 'no non-number may reach the SVG');
+    p.click([...p.$('chTf').children].find(b => b.className === 'chk'));   // line chart
+    assert.doesNotMatch(svg(p).outerHTML, /Infinity|NaN/, 'including the line path');
+    assert.equal(p.consoleErrors.length, 0);
+    p.close();
+  });
+
+  test('a quiet stretch is drawn as a gap, not closed up', async () => {
+    // `PriceTape.recent` returns an idle bucket as a zero word so a client can
+    // tell a quiet market from a flat one. Packing the survivors shoulder to
+    // shoulder threw that away: two trades a day ago and two now drew four
+    // evenly spaced candles under a note reporting a day.
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = i => ({ bucket: bucket - i, open: 3000 * RAW_ETH_USDC, high: 3000 * RAW_ETH_USDC,
+      low: 3000 * RAW_ETH_USDC, close: 3000 * RAW_ETH_USDC, volume: 5e18, count: 1 });
+    // Four bars, but the newest pair sits 40 buckets from the older pair.
+    const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+
+    const xs = [...svg(p).querySelectorAll('rect')]
+      .map(r => Number(r.getAttribute('x'))).sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > 0.5) gaps.push(xs[i] - xs[i - 1]);
+    assert.ok(Math.max(...gaps) > 6 * Math.min(...gaps),
+      'the idle stretch must open a real gap, not another candle-width step');
+    p.close();
+  });
+
+  test('pointing into a gap reads out the nearest real bar', async () => {
+    const bucket = Math.floor(Date.now() / 1000 / 300);
+    const at = i => ({ bucket: bucket - i, open: 3000 * RAW_ETH_USDC, high: 3000 * RAW_ETH_USDC,
+      low: 3000 * RAW_ETH_USDC, close: 3000 * RAW_ETH_USDC, volume: 5e18, count: 1 });
+    const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const el = p.$('chArt');
+    el.getBoundingClientRect = () => ({ left: 0, width: 340, top: 0, height: 150 });
+    el.dispatchEvent(new p.window.MouseEvent('pointermove',
+      { bubbles: true, clientX: 60, clientY: 40 }));
+    const hd = el.querySelector('.hd').textContent;
+    assert.match(hd, /H .* L /, 'the middle of the gap still names a bar');
+    assert.doesNotMatch(hd, /NaN|undefined/);
+    // The axis spans 42 buckets, so this lands in the gap a few slots past the
+    // older pair and must snap back to the nearer of them. Reading the pointer
+    // as an ARRAY INDEX - four bars across the full width, which is what it was
+    // before bars sat at their buckets - puts it a whole bar further out.
+    const clock = b => new Date(b * 300 * 1e3).toLocaleTimeString(
+      'en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    assert.match(hd, new RegExp(clock(bucket - 40)), 'snaps to the bar nearest the pointer');
+    assert.doesNotMatch(hd, new RegExp(clock(bucket - 41)), 'not to the one an index would pick');
     p.close();
   });
 
@@ -363,12 +537,17 @@ describe('reading a single bar', () => {
 });
 
 describe('timeframes', () => {
-  test('offers 5m, 1h and 1d', async () => {
+  test('offers 5m, 1h, 4h and 1d', async () => {
+    // The tape publishes exactly two periods and keeps 256 bars of each, so
+    // reach is arithmetic rather than taste: 1h is rolled from the fine tape
+    // and can never show more than 21 bars, while 4h IS the coarse period -
+    // 256 bars, nearly six weeks. It was missing, which left the pool's widest
+    // coverage reachable only through the 1d rollup.
     const p = await setup();
     await p.waitFor(() => svg(p), { label: 'chart' });
     const strip = [...p.$('chTf').children];
-    assert.deepEqual(strip.filter(b => b.className !== 'chk').map(b => b.textContent),
-      ['5m', '1h', '1d']);
+    assert.deepEqual(strip.filter(b => b.dataset.secs).map(b => b.textContent),
+      ['5m', '1h', '4h', '1d']);
     assert.equal(strip[strip.length - 1].className, 'chk', 'chart type sits after the timeframes');
     p.close();
   });
@@ -403,7 +582,9 @@ describe('timeframes', () => {
   });
 
   test('rolling up is done locally, with no extra chain read', async () => {
-    const p = await setup({ tapes: { [POOL_A]: bars(120) } });
+    // Five hours of bars: dense enough that the drawer opens on 5m, so the
+    // click below is a real change of timeframe and not a no-op.
+    const p = await setup({ tapes: { [POOL_A]: bars(60) } });
     await p.waitFor(() => svg(p), { label: 'chart' });
     const fine = svg(p).querySelectorAll('rect').length;
     const readsBefore = p.chain.calls.length;
@@ -454,4 +635,87 @@ describe('when there is nothing to show', () => {
     assert.equal(p.consoleErrors.length, 0, 'a chart failure must not throw');
     p.close();
   });
+
+  /**
+   * Which asset the chart prices.
+   *
+   * The tape stores token1 per token0, and token0 is whichever address sorts
+   * first - so ETH, always, being the zero address. That reads naturally for a
+   * stablecoin (USDC per ETH) and upside down for a token being bought:
+   * purchases take it out of the pool, so "TOKEN per ETH" FALLS on the trade
+   * that made the token dearer, and the candle is red.
+   *
+   * Both readings are the same fact, so this is a choice rather than a fix.
+   */
+  test('can price the other side of the pair', async () => {
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const before = p.text('chNote');
+    assert.match(before, /USDC per ETH/);
+
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    assert.ok(inv, 'there should be a way to flip it');
+    p.click(inv);
+    await p.settle();
+    assert.match(p.text('chNote'), /ETH per USDC/, 'the label follows the orientation');
+    p.close();
+  });
+
+  test('inverting swaps high and low, so candles are not drawn inside out', async () => {
+    // The reciprocal of the highest price is the LOWEST one. Miss that and
+    // every candle renders upside down while the numbers still look plausible.
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+
+    const hud = p.$('chArt').querySelector('.hd');
+    const shown = Number((hud.textContent.match(/[\d.]+e?-?\d*/) || ['0'])[0]);
+    assert.ok(shown > 0 && shown < 1,
+      `an ETH-per-USDC price should be a small fraction, got ${hud.textContent}`);
+    p.close();
+  });
+
+  test('opens each pair in the orientation that pair is quoted in', async () => {
+    // A single sticky preference cannot serve both: flipping for a token pair
+    // would bring ETH/USDC back as 0.00033 ETH per USDC. So the default is per
+    // pair - dollars quote ether, ether quotes everything else - and the
+    // toggle is an override for the pair in front of you.
+    const p = await setup({ open: true });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    assert.match(p.text('chNote'), /USDC per ETH/, 'a stablecoin does the quoting');
+
+    const inv = [...p.$('chTf').querySelectorAll('button')].find(b => b.textContent === '⇅');
+    p.click(inv);
+    await p.settle();
+    assert.match(p.text('chNote'), /ETH per USDC/, 'the override holds while the pair is up');
+    p.close();
+  });
+
+
+  test('opens on a timeframe the pool has data for', async () => {
+    // 24 fine bars is two hours of trading: 5m has plenty to draw, so that is
+    // where it opens.
+    const p = await setup();
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    assert.equal(on?.textContent, '5m', 'a busy pool opens close in');
+    p.close();
+  });
+
+  test('opens wider when the pool trades rarely', async () => {
+    // Three fine bars is not a chart, it is three ticks on a flat line - which
+    // reads as "nothing here" rather than "nothing recently". The coarse tape
+    // has the history, so that is what to open on.
+    const p = await setup({ tapes: { [POOL_A]: bars(3) }, coarse: { [POOL_A]: bars(30) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    assert.ok(on && Number(on.dataset.secs) >= 14400,
+      `a sparse pool should open on 4h or 1d, opened on ${on?.textContent}`);
+    p.close();
+  });
+
 });

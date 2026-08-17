@@ -56,7 +56,7 @@ contract TestSwap is Test {
     // Current zQuoter. The previous pin (0x6370a0…5FFA8) predates the repoint and
     // no longer carries buildBestSwapViaETHMulticall (0xe453166e) at all, so both
     // builder tests reverted on a missing function while getQuotes still passed.
-    IQuoter quoter = IQuoter(0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13);
+    IQuoter quoter = IQuoter(0xC7a03F9ED2Be5FEEA18ce93e12F4f05C98287C16);
     address constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
 

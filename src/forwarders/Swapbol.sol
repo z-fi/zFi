@@ -2,8 +2,38 @@
 pragma solidity ^0.8.36;
 
 /// @title Swapbol
-/// @notice zRouter snwap forwarder for Swapboard and Dutchboard, so resting
-///         liquidity and a zQuoter-built AMM remainder can settle atomically.
+/// @notice zRouter snwap forwarder for Swapboard, Dutchboard and Floorboard, so
+///         resting liquidity and a zQuoter-built AMM remainder settle atomically.
+///
+/// @dev The book has two sides and this fills both.
+///      Swapboard orders and Dutch listings are resting ASKS - a maker escrowed
+///      a lot and named a price. A Floorboard bid is the mirror: a bidder
+///      escrowed the PAYMENT and named what they want to buy, and whoever acts
+///      on one is SELLING into it. For a router those are the same direction:
+///      a user selling ETH for USDC can be filled by an ask that sells USDC for
+///      ETH, or by a bid that buys ETH and pays USDC. Both are USDC-for-ETH.
+///
+///      That is the whole reason the bid board lives here rather than in a
+///      sibling forwarder. Two forwarders cannot share a plan: they
+///      would have to be two sibling snwaps, and delegatecalled zRouter
+///      multicall entries all observe the same msg.value, so each native-input
+///      snwap would see the entire ETH value. Splitting a route across asks and
+///      bids is therefore only expressible inside a single executor call - and
+///      splitting it is exactly the point, since the best price for a given
+///      size is routinely part ask, part bid, part AMM.
+///
+///      A floor bid needs no new leg type. `Fill` already means "pay `payIn` of
+///      tokenIn, get `getOut` of tokenOut at `orderId` on `board`", which reads
+///      on a bid as "deliver `payIn` units of the asset, be paid at least
+///      `getOut` out of escrow" - `Floorboard.hit(id, give, minProceeds, ...)`
+///      field for field. The board address continues to select the venue.
+///
+///      Like the legacy v1 Swapboard, and unlike the current Swapboard and
+///      Dutchboard, `Floorboard.hit` takes no recipient - it pays `msg.sender`,
+///      which is this contract. So for a bid leg the sweep is the delivery path,
+///      not a fallback. `unwrap` is left false on every bid leg: native output
+///      is taken as WETH and unwrapped once at the end, so a mixed plan has a
+///      single conversion point rather than one per leg.
 ///
 /// @dev The trust model is zRouter's, not this contract's. snwap sends tokenIn
 ///      here, calls this through SafeExecutor (which holds no approvals), then
@@ -19,6 +49,7 @@ pragma solidity ^0.8.36;
 ///        v1  0x000000fF3D7A2d373615141d7489Ca66683DbecF  fillOrder(uint256,uint256)
 ///        current replacement Swapboard                   fillOrder(uint256,uint256,uint256,uint256,address)
 ///        Dutchboard                                      fill(uint256,uint128,address,uint256)
+///        Floorboard                                      hit(uint256,uint128,uint256,bool)
 ///
 ///      So against v1 the sweep below is not a fallback for a refunded leg - it
 ///      is the delivery path, and the whole output sits here until it runs.
@@ -29,7 +60,7 @@ pragma solidity ^0.8.36;
 ///      recipient inside it.
 ///
 ///      EVERY ENTRY POINT BINDS ITS VENUE TO IMMUTABLE DEPLOYMENT CONFIGURATION.
-///      `fill` takes a board address, but only to select among the three
+///      `fill` takes a board address, but only to select among the four
 ///      bindings - it is not a call target drawn from calldata. Its calldata
 ///      is decoded and reconstructed as one of the reviewed fill methods; a
 ///      creation, cancellation, approval, sweep, or arbitrary fallback call
@@ -38,9 +69,11 @@ pragma solidity ^0.8.36;
 ///      APPROVALS ARE SCOPED TO THE CALL. The sibling forwarders (Matcha,
 ///      Parasol, OneInch, ...) lazily grant an infinite approval and never
 ///      revoke it, which is safe for them because the spender is a hardcoded
-///      constant - a known aggregator. Here the spender is one of three
+///      constant - a known aggregator. Here the spender is one of four
 ///      immutable venues, and the approval is exact and revoked before
-///      returning, so no capability survives the call.
+///      returning, so no capability survives the call. That matters most on a
+///      bid leg, where the approval is over the asset the user is SELLING and
+///      so is sized by the route's whole input budget.
 ///
 ///      Gating msg.sender would not substitute for this: zRouter.snwap is
 ///      itself public and forwards arbitrary executorData through SafeExecutor,
@@ -75,10 +108,14 @@ contract Swapbol {
     address public immutable boardV1;
     address public immutable boardCurrent;
     address public immutable dutchboard;
+    address public immutable floorboard;
 
     /// @notice Same ABI shape as SwapboardView.Fill. The board address selects
     ///         one of the immutable venue bindings; `isPartial` is quote
     ///         metadata and does not need to be trusted during execution.
+    /// @dev On a Floorboard leg the same two amounts read as the bid side of
+    ///      the trade: `payIn` is `give`, the asset units delivered, and
+    ///      `getOut` is `minProceeds`, the payment floor the board enforces.
     struct Fill {
         uint256 orderId;
         address board;
@@ -104,15 +141,22 @@ contract Swapbol {
     error InputMismatch(uint256 expected, uint256 actual);
     error WETHAmountMismatch(uint256 expected, uint256 actual);
 
-    constructor(address boardV1_, address boardCurrent_, address dutchboard_) {
-        if (
-            boardV1_ == address(0) || boardCurrent_ == address(0) || dutchboard_ == address(0)
-                || boardV1_ == boardCurrent_ || boardV1_ == dutchboard_ || boardCurrent_ == dutchboard_
-                || boardV1_.code.length == 0 || boardCurrent_.code.length == 0 || dutchboard_.code.length == 0
-        ) revert BadVenue();
+    /// @dev Every venue must be a distinct, deployed contract. Written as a
+    ///      pairwise loop rather than the flat conjunction the three-venue
+    ///      version used: a fourth binding takes that from three comparisons to
+    ///      six, which is where a hand-written chain starts silently missing one.
+    constructor(address boardV1_, address boardCurrent_, address dutchboard_, address floorboard_) {
+        address[4] memory venues = [boardV1_, boardCurrent_, dutchboard_, floorboard_];
+        for (uint256 i; i < 4; ++i) {
+            if (venues[i] == address(0) || venues[i].code.length == 0) revert BadVenue();
+            for (uint256 j = i + 1; j < 4; ++j) {
+                if (venues[i] == venues[j]) revert BadVenue();
+            }
+        }
         boardV1 = boardV1_;
         boardCurrent = boardCurrent_;
         dutchboard = dutchboard_;
+        floorboard = floorboard_;
     }
 
     /// @notice Snapshot an ERC-20 input balance immediately before funding.
@@ -158,7 +202,9 @@ contract Swapbol {
         _enter();
         uint256 ethBase = address(this).balance - msg.value;
         uint256 wethBase = balanceOf(WETH);
-        if (board != boardV1 && board != boardCurrent && board != dutchboard) revert UnknownBoard(board);
+        if (board != boardV1 && board != boardCurrent && board != dutchboard && board != floorboard) {
+            revert UnknownBoard(board);
+        }
         // `tokenIn == tokenOut` unconditionally, which `_checkPlan` already
         // requires and this guard used to exempt for the native/native case.
         // ETH in and ETH out leaves output and unspent change in ONE balance
@@ -494,6 +540,25 @@ contract Swapbol {
             return;
         }
 
+        if (board == floorboard) {
+            // `hit` has no recipient argument, so unlike the Swapboard and
+            // Dutchboard branches above there is nothing to bind to the route's
+            // recipient: the proceeds come back here by construction and are
+            // swept. Native input is refused for the same reason as on v1 -
+            // this entry point forwards msg.value rather than wrapping, and the
+            // board only ever moves the asset as a token.
+            if (selector != IFloorboardHit.hit.selector || data.length != 132 || tokenIn == address(0)) {
+                revert BadPlan();
+            }
+            (uint256 bidId,,, bool unwrap) = abi.decode(data[4:], (uint256, uint128, uint256, bool));
+            // Proceeds must arrive in the same form the sweep expects. Letting
+            // the board unwrap would put ETH here while `_sweep` is measuring a
+            // token delta for `tokenOut`, and the payout would leave as change.
+            if (unwrap) revert BadPlan();
+            _validateFloorBid(bidId, tokenIn, tokenOut);
+            return;
+        }
+
         revert UnknownBoard(board);
     }
 
@@ -504,9 +569,40 @@ contract Swapbol {
             _validateCurrentOrder(leg.orderId, tokenIn, tokenOut);
         } else if (leg.board == dutchboard) {
             _validateDutchListing(leg.orderId, tokenIn, tokenOut);
+        } else if (leg.board == floorboard) {
+            _validateFloorBid(leg.orderId, tokenIn, tokenOut);
         } else {
             revert UnknownBoard(leg.board);
         }
+    }
+
+    /// @dev The asset bindings are MIRRORED relative to every ask board above.
+    ///      There, `tokenA` is what the taker receives and `tokenB` what they
+    ///      pay. A bid is stated from the buyer's side: `token` is what the
+    ///      bidder wants to buy, which is what our user is selling, and `quote`
+    ///      is what the bidder pays out. So token binds to tokenIn and quote to
+    ///      tokenOut - the opposite way round, and the one thing about this leg
+    ///      type that a reader coming from `_validateV1Order` will get wrong.
+    ///
+    ///      One read of the board's own storage. `bids` is the public mapping
+    ///      getter, which omits the struct's trailing dynamic `ids` array; that
+    ///      is what is wanted, since an NFT bid is refused outright here and a
+    ///      fungible bid's `ids` is empty by construction.
+    ///
+    ///      Liveness, the climb, `remaining` and the price are deliberately not
+    ///      re-derived. They are the board's to enforce at settlement, and a
+    ///      second copy of that calculation here would only ever be the staler
+    ///      one. What this must catch is a leg pointed at the wrong assets,
+    ///      which the board cannot catch, because from its side any seller
+    ///      delivering the asset is a valid seller.
+    function _validateFloorBid(uint256 bidId, address tokenIn, address tokenOut) internal view {
+        (address bidder, bool isNFT,,, address token,, address quote,,,,) =
+            IFloorboardBid(floorboard).bids(bidId);
+        if (bidder == address(0) || isNFT) revert BadPlan();
+        // The board holds no native balance: an ETH-funded bid is WETH-quoted
+        // from the moment it opens, and an ETH seller's asset reaches it as WETH
+        // after the per-leg wrap in `_fillLegs`. Both sides alias through WETH.
+        if (token != _swapboardInput(tokenIn) || quote != _swapboardOutput(tokenOut)) revert BadPlan();
     }
 
     function _validateV1Order(uint256 orderId, address tokenIn, address tokenOut) internal view {
@@ -599,6 +695,17 @@ contract Swapbol {
                     } else {
                         revert BadPlan();
                     }
+                }
+            } else if (board != address(0) && board == floorboard) {
+                // `payIn` is `give`, `getOut` is `minProceeds` - see the `Fill`
+                // note. `give` is uint128 on the board because `remaining` is,
+                // so a plan naming more than that could never have been
+                // fillable in the first place.
+                if (leg.payIn > type(uint128).max) revert AmountTooLarge();
+                data = abi.encodeCall(IFloorboardHit.hit, (leg.orderId, uint128(leg.payIn), leg.getOut, false));
+                if (tokenIn == address(0)) {
+                    _wrapWETH(leg.payIn);
+                    payToken = WETH;
                 }
             } else {
                 revert UnknownBoard(board);
@@ -757,6 +864,33 @@ interface ISwapboardCurrentOrderView {
     }
 
     function getOrders(uint256[] calldata orderIds) external view returns (Order[] memory);
+}
+
+interface IFloorboardHit {
+    function hit(uint256 id, uint128 give, uint256 minProceeds, bool unwrap) external returns (uint256 proceeds);
+}
+
+interface IFloorboardBid {
+    /// @dev The generated getter for `Floorboard.bids`, whose struct ends in a
+    ///      dynamic `uint256[] ids`. Public mapping getters DROP a trailing
+    ///      dynamic member, so this signature must not declare it - adding it
+    ///      would shift nothing at the ABI level but would fail to decode.
+    function bids(uint256 id)
+        external
+        view
+        returns (
+            address bidder,
+            bool isNFT,
+            uint40 startTime,
+            uint40 duration,
+            address token,
+            uint96 startPrice,
+            address quote,
+            uint96 endPrice,
+            uint96 locked,
+            uint128 initial,
+            uint128 remaining
+        );
 }
 
 interface IDutchFill {

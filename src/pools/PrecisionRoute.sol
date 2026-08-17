@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
-import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 import {PrecisionPool} from "./PrecisionPool.sol";
 import {PrecisionPoolFactory} from "./PrecisionPoolFactory.sol";
+import {SafeTransferLib} from "../../lib/solady/src/utils/SafeTransferLib.sol";
 
 /// @title PrecisionRoute
 /// @notice Executes a multi-pool route as a SINGLE zRouter executor call.
@@ -75,11 +75,18 @@ contract PrecisionRoute {
     address public immutable trustedExecutor;
     PrecisionPoolFactory public immutable factory;
 
+    /// @dev Canonical wrapper. A constant rather than an argument: taking it
+    ///      from the caller would turn `routeFromWETH` into "call withdraw on
+    ///      an address of your choosing".
+    address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
     error Bad();
     error NoPool();
     error Reentrancy();
     error NotExecutor();
     error BadCheckpoint();
+    error HookedNoClamp();
+    error WrongTokenOut();
     error IntentMismatch();
     error InsufficientOutput();
 
@@ -92,6 +99,25 @@ contract PrecisionRoute {
         (factory, trustedExecutor) = (factory_, trustedExecutor_);
     }
 
+    /// @dev Open because the route legitimately receives ETH mid-walk: a hop
+    ///      whose output is native pays this contract, and `routeUpTo` refunds
+    ///      from here. It cannot distinguish those from an unsolicited send, so
+    ///      ETH pushed in by anyone is STRANDED - inert, but unrecoverable.
+    ///
+    ///      DELIBERATELY NOT GIVEN A RESCUE PATH. The obvious fix, a sweep, is
+    ///      the exact bug `zapIn` was fixed for: this contract holds other
+    ///      people's funding during the interval between `checkpoint` and the
+    ///      call that spends it, so anything that moves a raw balance out is a
+    ///      way to take it. Gating a sweep on IDLE and on a privileged caller
+    ///      would work, but it buys back dust by introducing an actor and an
+    ///      invariant that the rest of this contract does not need - and the
+    ///      safety story here is precisely that nothing rests and nobody is
+    ///      trusted with what does. Stranded is the cheaper failure.
+    ///
+    ///      Nothing resting here affects a route. Every entry point spends what
+    ///      it authenticated - `msg.value`, or a checkpointed delta - and
+    ///      `zapIn`'s sweep is floored at the pre-call balance, so a stray
+    ///      balance is never picked up and never paid out.
     receive() external payable {}
 
     function _routeState() internal view returns (uint256 state) {
@@ -125,6 +151,10 @@ contract PrecisionRoute {
     /// @notice Snapshot this contract's balance before the executor funds it.
     /// @param intent `keccak256` of the exact `route` or `zapIn` calldata this
     ///        checkpoint is taken for.
+    /// @param refundTo Where `abortCheckpoint` returns the funding if this
+    ///        route is opened and then abandoned. Committed HERE rather than
+    ///        supplied at abort time, which is what stops the abort from being
+    ///        a redirection primitive; see `abortCheckpoint`.
     /// @dev The snapshot bounds HOW MUCH the next call may spend; the intent
     ///      bounds WHAT it may spend it on. Both are needed, because the input
     ///      arrives between this call and the one that consumes it: the
@@ -135,10 +165,11 @@ contract PrecisionRoute {
     ///      different function entirely and would have been just as acceptable
     ///      to a checkpoint that only remembers a balance. Committing to the
     ///      calldata covers the entry point and every argument at once.
-    function checkpoint(address token, bytes32 intent) external {
+    function checkpoint(address token, bytes32 intent, address refundTo) external {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (token == address(0) || token.code.length == 0) revert Bad();
         if (intent == bytes32(0)) revert Bad();
+        if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         // At most one route exists at a time, so a reentrant checkpoint - or a
         // checkpoint taken while a route is mid-settlement - is rejected here
         // rather than relying on the per-token flag below to notice.
@@ -155,15 +186,135 @@ contract PrecisionRoute {
             tstore(slot, 1)
             tstore(add(slot, 1), snap)
             tstore(add(slot, 2), intent)
+            tstore(add(slot, 3), refundTo)
         }
+    }
+
+    /// @notice Close an open route without spending it, returning the funding.
+    /// @dev The counterpart to a settlement that cannot be made. Without it, an
+    ///      executor that checkpoints, funds this contract, and then finds it
+    ///      cannot call `route` - a hop that would revert, a clamp that came
+    ///      back zero, a slippage bound it would rather handle than bubble -
+    ///      has no way to give the tokens back. The transient checkpoint
+    ///      disappears at the end of the transaction and the balance simply
+    ///      stays here: inert, because every later route bases its own
+    ///      checkpoint on the raised balance and `zapIn`'s sweep is floored, but
+    ///      also unrecoverable. `PrecisionPoolFactory.abortCheckpoint` exists
+    ///      for exactly this and this contract had the identical gap.
+    ///
+    ///      It refunds the balance delta observed since the checkpoint and
+    ///      nothing else, so it returns this route's own funding and cannot
+    ///      reach a pre-existing or stranded balance.
+    ///
+    ///      THE DESTINATION IS THE ONE COMMITTED AT CHECKPOINT, not an address
+    ///      passed here. That is the whole reason `checkpoint` takes
+    ///      `refundTo`: this function is reachable during the funding transfer
+    ///      by anything the input token hands control to, so if it chose its own
+    ///      recipient it would be a strictly easier theft than the settlement
+    ///      path the intent commitment was built to close. As it stands, an
+    ///      early abort can only hand the funding back to the party the route
+    ///      already named, and it makes the outer `route` fail on a consumed
+    ///      checkpoint - a revert rather than a loss.
+    ///
+    ///      Native-funded entries open no checkpoint and so have nothing to
+    ///      abort; their input arrives with the settling call.
+    /// @param token The input token checkpointed for the open route.
+    /// @return refunded Amount handed back to the committed `refundTo`.
+    function abortCheckpoint(address token) external returns (uint256 refunded) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (_routeState() != _ROUTE_OPEN) revert BadCheckpoint();
+        _setRouteState(_ROUTE_SETTLING);
+
+        bytes32 slot = _slot(token);
+        uint256 active;
+        uint256 base;
+        address to;
+        assembly ("memory-safe") {
+            active := tload(slot)
+            base := tload(add(slot, 1))
+            to := tload(add(slot, 3))
+            tstore(slot, 0)
+            tstore(add(slot, 1), 0)
+            tstore(add(slot, 2), 0)
+            tstore(add(slot, 3), 0)
+        }
+        if (active == 0) revert BadCheckpoint();
+
+        uint256 current = token.balanceOf(address(this));
+        if (current < base) revert BadCheckpoint();
+        unchecked {
+            refunded = current - base;
+        }
+        if (refunded != 0) token.safeTransfer(to, refunded);
+        _setRouteState(_ROUTE_IDLE);
     }
 
     /// @notice Walk `pools` in order, starting from `amountIn` of `tokenIn`.
     /// @dev Native input arrives as msg.value; ERC-20 input must have been
     ///      checkpointed and then transferred here in the same transaction.
+    /// @param tokenOut The asset the last hop must deliver. NOT redundant with
+    ///        `pools`: the output token is otherwise implicit in the path, so a
+    ///        reordered or off-by-one `pools` array silently delivers a
+    ///        different asset and `minOut` is then denominated in the wrong
+    ///        units - a 1e18 threshold against a 6-decimal token passes
+    ///        trivially, and the slippage check protects nothing. Naming the
+    ///        output makes the two agree or the call revert.
+    /// @notice Route a WETH input into a NATIVE path, unwrapping on the way in.
+    /// @dev THE ONE CONVERSION A CALLER CANNOT DO FOR THEMSELVES IN THE SAME
+    ///      TRANSACTION. A market on ETH/TOKEN holds ether and cannot accept a
+    ///      WETH allowance, so a holder of WETH had to unwrap in a transaction
+    ///      of their own and then swap - two signatures for one trade, and the
+    ///      page had to explain why the first one existed.
+    ///
+    ///      zRouter cannot bridge that gap either, and the reason is worth
+    ///      recording because it looks like it should: `unwrap(uint256)` does
+    ///      exist there and works, but `snwap` forwards `msg.value` to the
+    ///      executor and nothing else - `safeExecutor.execute{value: msg.value}`
+    ///      - so ether the router is holding after an in-multicall unwrap never
+    ///      reaches this contract. Measured against the deployed router: deposit
+    ///      + unwrap + snwap reverts `Bad()` here, on `msg.value != amountIn`.
+    ///
+    ///      What `snwap` DOES do is deliver an ERC-20 to the executor it was
+    ///      told to call. So WETH arrives here as an ordinary token input, and
+    ///      this unwraps it. One call, one signature, no conversion the user has
+    ///      to be told about.
+    ///
+    ///      Checkpointed exactly as `route` is, and in the same order: the
+    ///      snapshot is consumed - which is where the intent is checked against
+    ///      the keccak of THIS calldata - BEFORE any ether exists. A caller who
+    ///      could unwrap first and consume second would have a contract holding
+    ///      ether against an unverified claim.
+    ///
+    ///      `WETH` is a constant, not an argument. Taking it from the caller
+    ///      would make this "call withdraw on an address of your choosing",
+    ///      which is a different and much worse function.
+    function routeFromWETH(
+        address[] calldata pools,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minOut,
+        address to
+    ) external claimsRoute(true) returns (uint256 amountOut) {
+        if (msg.sender != trustedExecutor) revert NotExecutor();
+        if (pools.length == 0 || amountIn == 0) revert Bad();
+        if (to == address(0) || to == address(this)) revert Bad();
+        // Consume first: the intent covers this exact call, arguments included.
+        _consume(WETH, amountIn);
+        // Now it is ether, and `_walk` already knows how to spend that.
+        (bool okw,) = WETH.call(abi.encodeWithSelector(0x2e1a7d4d, amountIn));
+        if (!okw) revert Bad();
+
+        address delivered;
+        (amountOut, delivered) = _walk(pools, address(0), amountIn, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
+        if (amountOut < minOut) revert InsufficientOutput();
+        emit Routed(to, pools.length, amountIn, amountOut);
+    }
+
     function route(
         address[] calldata pools,
         address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minOut,
         address to
@@ -179,7 +330,9 @@ contract PrecisionRoute {
             _consume(tokenIn, amountIn);
         }
 
-        amountOut = _walk(pools, tokenIn, amountIn, to);
+        address delivered;
+        (amountOut, delivered) = _walk(pools, tokenIn, amountIn, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
         if (amountOut < minOut) revert InsufficientOutput();
         emit Routed(to, pools.length, amountIn, amountOut);
     }
@@ -226,9 +379,12 @@ contract PrecisionRoute {
     ///      return a valid but suboptimal fill, and one that answers
     ///      differently between the probe and the swap makes the route revert -
     ///      no loss, and a property of a pool the caller chose.
+    ///
+    /// @param tokenOut The asset the last hop must deliver; see `route`.
     function routeUpTo(
         address[] calldata pools,
         address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minOut,
         address to,
@@ -249,7 +405,9 @@ contract PrecisionRoute {
         consumed = _maxRouteIn(pools, tokenIn, amountIn);
         if (consumed == 0) revert InsufficientOutput();
 
-        amountOut = _walk(pools, tokenIn, consumed, to);
+        address delivered;
+        (amountOut, delivered) = _walk(pools, tokenIn, consumed, to);
+        if (delivered != tokenOut) revert WrongTokenOut();
         if (amountOut < minOut) revert InsufficientOutput();
 
         // Always the caller's own input token, never an intermediate.
@@ -266,11 +424,15 @@ contract PrecisionRoute {
 
     /// @dev The hop loop, shared by `route` and `routeUpTo` so the executed
     ///      path cannot differ between them.
+    /// @return amt The final hop's output amount.
+    /// @return tin The asset that output is denominated in, returned rather
+    ///         than assumed so the caller can hold the path to a named
+    ///         `tokenOut`.
     function _walk(address[] calldata pools, address tokenIn, uint256 amountIn, address to)
         internal
-        returns (uint256 amt)
+        returns (uint256 amt, address tin)
     {
-        address tin = tokenIn;
+        tin = tokenIn;
         amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
             address pool = pools[i];
@@ -312,30 +474,81 @@ contract PrecisionRoute {
     ///      there. Output is monotone increasing in size, so a zero at `b` means
     ///      no smaller size fills either, and `b` is the answer whenever any
     ///      size does.
+    ///
+    ///      THE TOKEN PATH IS RESOLVED ONCE, up front, and handed to every
+    ///      probe. `token0`/`token1` are immutable per pool and the sequence of
+    ///      assets a route touches does not depend on the size being probed, so
+    ///      reading them inside the search would pay two cold external calls per
+    ///      hop per probe - up to ~256 of them on a two-hop clamp, for answers
+    ///      that cannot have changed. The probes then make exactly one call per
+    ///      hop, the quote itself.
     function _maxRouteIn(address[] calldata pools, address tokenIn, uint256 amountIn)
         internal
         view
         returns (uint256)
     {
+        address[] memory path = _path(pools, tokenIn);
+
         // Fast path: the whole request fits, so there is nothing to clamp.
-        if (_routeOut(pools, tokenIn, amountIn) != 0) return amountIn;
+        if (_routeOut(pools, path, amountIn) != 0) return amountIn;
 
         // The band admits the full size, so the only thing that stopped it was
         // a zero output - which only gets worse as the size falls.
-        if (_routeRoom(pools, tokenIn, amountIn)) return 0;
+        if (_routeRoom(pools, path, amountIn)) return 0;
 
         // Invariant: `lo` has room, `hi` does not. Zero has room.
         uint256 lo;
         uint256 hi = amountIn;
         while (hi - lo > 1) {
             uint256 mid = lo + (hi - lo) / 2;
-            if (_routeRoom(pools, tokenIn, mid)) lo = mid;
+            if (_routeRoom(pools, path, mid)) lo = mid;
             else hi = mid;
         }
         if (lo == 0) return 0;
         // The largest size the band takes is only useful if it also produces
         // something. `_routeOut` folds in every hop's zero-output refusal.
-        return _routeOut(pools, tokenIn, lo) == 0 ? 0 : lo;
+        return _routeOut(pools, path, lo) == 0 ? 0 : lo;
+    }
+
+    /// @dev The asset entering each hop: `path[0]` is `tokenIn` and `path[i]`
+    ///      is whatever hop `i-1` produced. Size-independent, so the search
+    ///      resolves it once. Membership is not checked here for the same
+    ///      reason `_routeOut` does not check it: this only feeds a view search
+    ///      whose result `_walk` re-derives against `factory.isPool`.
+    function _path(address[] calldata pools, address tokenIn) internal view returns (address[] memory path) {
+        path = new address[](pools.length);
+        address tin = tokenIn;
+        for (uint256 i; i < pools.length; ++i) {
+            PrecisionPool p = PrecisionPool(payable(pools[i]));
+            // Membership is checked HERE rather than left to `_walk`, for two
+            // reasons. A non-pool would otherwise fail the `token0()` call
+            // below with no reason data - `routeUpTo` reporting nothing where
+            // `route` says `NoPool` - and the hook check underneath needs a
+            // real pool to ask.
+            if (!factory.isPool(pools[i])) revert NoPool();
+            // NO HOOKED POOL MAY APPEAR IN A CLAMPED ROUTE.
+            //
+            // The pool refuses partial fill on itself for a modelling reason
+            // (`HookedNoPartialFill`); this refuses it for two more, and both
+            // are worse. First, gas: the search bisects up to ~256 times and
+            // every probe pays `HOOK_GAS` per hooked hop, so three hooked hops
+            // is on the order of 115M gas - past the block limit, with the cost
+            // falling on whoever submitted the route. Second, correctness: the
+            // search quotes every hop against PRE-ROUTE state, and a hooked
+            // pool at position i gets control in `afterSwap` between hops, so
+            // it can move hop i+1's price and invalidate the clamp the search
+            // just computed. The route then reverts on the band - a cheap,
+            // repeatable grief rather than a one-off.
+            //
+            // The exact `route` path keeps hooked pools: it walks each hop once
+            // at a size the caller fixed, so neither problem arises there.
+            // `PrecisionPoolLens.routeClampable` is the off-chain screen for
+            // this, and now the contract enforces what it advises.
+            if (p.hook() != address(0)) revert HookedNoClamp();
+            path[i] = tin;
+            address t0 = p.token0();
+            tin = tin == t0 ? p.token1() : t0;
+        }
     }
 
     /// @dev Whether every hop's BAND admits the route at this size, ignoring
@@ -347,23 +560,17 @@ contract PrecisionRoute {
     ///      Chains `amountOut` even when it is zero. A hop handed nothing simply
     ///      does not move its own price, so it reports room - and the caller's
     ///      single zero-output check at the end is what rejects that size.
-    function _routeRoom(address[] calldata pools, address tokenIn, uint256 amountIn)
+    function _routeRoom(address[] calldata pools, address[] memory path, uint256 amountIn)
         internal
         view
         returns (bool)
     {
-        address tin = tokenIn;
         uint256 amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
-            PrecisionPool p = PrecisionPool(payable(pools[i]));
-            address t0 = p.token0();
-            address tout = tin == t0 ? p.token1() : t0;
-
-            (uint256 out, bool hasRoom) = p.quoteTransition(address(this), tin, amt);
+            (uint256 out, bool hasRoom) =
+                PrecisionPool(payable(pools[i])).quoteTransition(address(this), path[i], amt);
             if (!hasRoom) return false;
-
             amt = out;
-            tin = tout;
         }
         return true;
     }
@@ -391,23 +598,16 @@ contract PrecisionRoute {
     ///      it, paying two fees to move one price back and forth, and screening
     ///      for it would charge every honest route a quadratic scan to prevent
     ///      a caller from wasting their own money.
-    function _routeOut(address[] calldata pools, address tokenIn, uint256 amountIn)
+    function _routeOut(address[] calldata pools, address[] memory path, uint256 amountIn)
         internal
         view
         returns (uint256 amt)
     {
-        address tin = tokenIn;
         amt = amountIn;
         for (uint256 i; i < pools.length; ++i) {
-            PrecisionPool p = PrecisionPool(payable(pools[i]));
-            address t0 = p.token0();
-            address tout = tin == t0 ? p.token1() : t0;
-
-            (uint256 out, bool fits) = p.quoteExactIn(address(this), tin, amt);
+            (uint256 out, bool fits) = PrecisionPool(payable(pools[i])).quoteExactIn(address(this), path[i], amt);
             if (!fits) return 0;
-
             amt = out;
-            tin = tout;
         }
     }
 
@@ -428,18 +628,43 @@ contract PrecisionRoute {
     ///
     ///      Leftovers are always returned. This contract must never retain
     ///      value between routes or the next caller could sweep it.
+    /// @param to LP share recipient.
+    /// @param refundTo Where leftovers go. SEPARATE FROM `to`, as everywhere
+    ///        else here. This used to sweep to the share recipient, which is
+    ///        wrong twice over: a frontend depositing on a user's behalf sent
+    ///        that user its own leftover input, and a recipient that holds
+    ///        ERC-20 shares but has no payable receive - an ordinary vault or
+    ///        smart-account shape - reverted the whole zap on the native sweep
+    ///        AFTER the swap and the deposit had already run.
+    ///
+    /// @dev THE SWAP LEG RUNS AT `minOut = 0`; `minLP` is the only slippage
+    ///      bound on this call. That is the right guard in principle - a
+    ///      sandwiched swap returns less, so fewer shares, so `minLP` catches
+    ///      it - but `minLP` is denominated in shares whose value depends on
+    ///      the post-manipulation reserves, so it cannot be derived from the
+    ///      ideal split arithmetically. Take it from a simulation of this exact
+    ///      call, not from a closed form. The band bounds the damage either
+    ///      way: the pool refuses a swap that would leave its range, so an
+    ///      attacker's room is the band width rather than the whole curve.
     function zapIn(
         address pool,
         address tokenIn,
         uint256 amountIn,
         uint256 swapPortion,
         uint256 minLP,
-        address to
+        address to,
+        address refundTo
     ) external payable claimsRoute(tokenIn != address(0)) returns (uint256 lp) {
         if (msg.sender != trustedExecutor) revert NotExecutor();
         if (!factory.isPool(pool)) revert NoPool();
         if (to == address(0) || to == address(this)) revert Bad();
+        if (refundTo == address(0) || refundTo == address(this)) revert Bad();
         if (amountIn == 0 || swapPortion > amountIn) revert Bad();
+        // Swapping the WHOLE input leaves nothing for the other side of the
+        // deposit, so `_proportional` mints zero and the pool reverts
+        // `ZeroAmount()` from two calls away. "Zap all of it" is a reasonable
+        // thing for a frontend to send, so say so here instead.
+        if (swapPortion == amountIn) revert Bad();
 
         PrecisionPool p = PrecisionPool(payable(pool));
         address t0 = p.token0();
@@ -496,8 +721,8 @@ contract PrecisionRoute {
         if (t0 != address(0)) t0.safeApproveWithRetry(pool, 0);
         t1.safeApproveWithRetry(pool, 0);
 
-        _sweep(t0, pre0, to);
-        _sweep(t1, pre1, to);
+        _sweep(t0, pre0, refundTo);
+        _sweep(t1, pre1, refundTo);
     }
 
     /// @dev Returns what this call brought in and the deposit could not take at
@@ -530,6 +755,9 @@ contract PrecisionRoute {
             tstore(slot, 0)
             tstore(add(slot, 1), 0)
             tstore(add(slot, 2), 0)
+            // The committed refund address, cleared with the rest so a spent
+            // checkpoint leaves nothing behind for a later abort to read.
+            tstore(add(slot, 3), 0)
         }
         if (active == 0) revert BadCheckpoint();
         // The committed call is this one, arguments included.

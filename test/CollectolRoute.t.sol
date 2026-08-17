@@ -37,7 +37,7 @@ interface IZRouter {
 contract CollectolRouteTest is Test {
     address constant FACTORY = 0x00000000004473e1f31C8266612e7FD5504e6f2a;
     address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
-    address constant ZQUOTER = 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13;
+    address constant ZQUOTER = 0xC7a03F9ED2Be5FEEA18ce93e12F4f05C98287C16;
     address constant SALE = 0x824d11a46F32cd16cdF46380314343e9697e2491;
     address constant SHARES = 0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49;
     address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
@@ -50,7 +50,10 @@ contract CollectolRouteTest is Test {
     address user = address(0xB0B);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("ETH_RPC_URL"));
+        // Defaulted, not required: an unset ETH_RPC_URL made this suite fail at
+        // setUp with "environment variable not found", which reads as a broken
+        // test rather than a missing variable. Matches foundry.toml's eth_rpc_url.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         bytes memory initcode = vm.readFileBinary("deploy/Collectol.initcode.bin");
         bytes32 salt = vm.parseBytes32(vm.trim(vm.readFile("deploy/Collectol.salt.txt")));
         address predicted = vm.parseAddress(vm.trim(vm.readFile("deploy/Collectol.address.txt")));

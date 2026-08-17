@@ -1,7 +1,14 @@
 // Cloudflare Worker: zFi On-Chain DEX Aggregator API
 // Deploy: cd worker/api && wrangler deploy
 
-const ZQUOTER = '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13';
+// Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which offered Curve for
+// EXACT-OUT routes it cannot execute: Curve's `exchange` is exact-in only, the
+// router sizes the input as `get_dx(want) + 1`, and `get_dx` rounds down - so
+// the swap lands under the target and the router correctly refuses to
+// under-deliver. Eight of the fifty-six ordered pairs quoted and then reverted.
+// The routing calldata here comes from buildBestSwap, so this address IS the
+// fix; `quoteCurve` below is only read for the per-venue comparison.
+const ZQUOTER = '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16';
 const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ZERO = '0x0000000000000000000000000000000000000000';

@@ -2,9 +2,11 @@
 pragma solidity ^0.8.36;
 
 /// @title PrecisionRangePool (ETH/USDC $2200-$3000)
-/// @notice DEPRECATED - superseded by PrecisionPool. Retained as a gas
-///         baseline and as the reference the generalised pool was derived
-///         from. Do not deploy.
+/// @notice DEPRECATED and NOT FOR DEPLOYMENT - superseded by PrecisionPool.
+///         Retained as a gas baseline and as the reference the generalised
+///         pool was derived from. Out of scope for the Precision release and
+///         excluded from its audit, as are PrecisionOraclePool and
+///         PrecisionStablePool. Do not deploy.
 ///
 /// @dev    WHY IT IS SUPERSEDED. PrecisionPool is this contract with its pair,
 ///         band and fee lifted into constructor parameters, behind a factory

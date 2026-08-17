@@ -4,6 +4,19 @@ via_ir = true
 optimizer = true
 optimizer_runs = 9_999_999
 
+# Pinned, not inherited. Forge's default tracks the newest mainnet fork, so an
+# unpinned build changes target with the toolchain - and CREATE2 artifacts in
+# `deploy/` commit to an exact initcode hash, which a silent target change would
+# invalidate. "prague" is what the default already resolved to when this was
+# pinned, so pinning is bytecode-neutral today and load-bearing tomorrow.
+#
+# The floor is CANCUN: PrecisionPool, PrecisionRoute and PrecisionPoolFactory
+# all guard reentrancy with `tstore`/`tload`, which do not exist before it. A
+# pre-Cancun target does not degrade the guards, it fails to compile - but only
+# if someone overrides this, which is the case the comment is here for. Do not
+# deploy this repo to a chain that has not activated Cancun.
+evm_version = "prague"
+
 # Must be an ARCHIVE endpoint: the pin below is far enough back that pruning
 # full nodes (1rpc.io, flashbots, cloudflare) return "historical state is not
 # available" and every forked test errors before its first assertion.
@@ -83,12 +96,17 @@ fs_permissions = [
     # the seven listings that no longer fit the constructor, so the file that gets
     # broadcast is produced by the same test that proves it yields the right list.
     { access = "read-write", path = "./deploy" },
+    { access = "read-write", path = "./out" },
     # `TokenListMinedDeploy` hashes the sources its salts were mined for, so the
     # staleness check is a question about the source rather than about whichever
     # build happens to be in `out/`. Read-only.
     { access = "read", path = "./src/utils" },
     { access = "read", path = "./src/dao" },
     { access = "read-write", path = "./dapp" },
+    # The seed-preview fixture. Written by script/PrecisionSeedFixture.s.sol and
+    # read back by test/PrecisionSeedPreviewFixture.t.sol, so the lens is checked
+    # against the same bytes test/ui/liquidity.test.mjs checks the page against.
+    { access = "read-write", path = "./test/fixtures" },
 ]
 
 # DIFFERENTIAL COMPILATION
@@ -192,14 +210,121 @@ max_optimizer_runs = 20
 paths = "src/Floorboard.sol"
 max_optimizer_runs = 200
 
-# PrecisionPoolFactory embeds PrecisionPool's creation code so it can deploy
-# markets, which means it GROWS whenever the pool does - from a different file,
-# silently. At default runs it sits ~900 B under EIP-170. Runtime gas here is
-# cheap to give up: createPool is once per market, and the per-swap executor is
-# thin dispatch. Same release invariant as the lens above - any edit to either
-# the factory OR the pool must be followed by a deployed-size check.
+# PrecisionPool is pinned so it has ONE build, not one per compilation unit.
+#
+# The factory takes the pool's creation code as a CONSTRUCTOR ARGUMENT and
+# stores it with SSTORE2, which writes the blob as contract code - so it is
+# bounded by EIP-170 less the leading STOP byte, 24,575 B. At 200 runs the pool
+# is 20,418 B and fits with 4,157 B to spare; at the default 9,999,999 it is
+# 24,657 B and does NOT, making the factory unconstructable.
+#
+# (20,341 B / 4,234 B before the checked-accrual and hoisted-resolution edits;
+# those cost 77 B. Measure the BLOB, i.e. the initcode column of
+# `forge build --force --sizes`, not the runtime column - the runtime figure is
+# 19,228 B and is not what the SSTORE2 bound applies to.)
+#
+# Without an entry of its own the pool inherited whichever setting its
+# compilation unit happened to carry: 200 when pulled in through the factory
+# below, the default when compiled standalone. Both artifacts then existed in
+# out/ at once, under different paths, and picking between them was a coin
+# flip. Since `poolInitCodeHash` is a CREATE2 input, that coin flip decided
+# every market address - and no test can catch the wrong choice, because forge
+# runs with `code_size_limit = None` and this repo ignores `code-size`.
+#
+# 200 is what the entire suite has always exercised. Raising it is a runtime-gas
+# optimisation that spends SSTORE2 headroom on the contract most likely to grow;
+# do not raise it without re-measuring the blob and re-emitting every artifact.
+# See test/PrecisionDeployConstraints.t.sol and deploy/Precision.md.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPool.sol"
+max_optimizer_runs = 200
+
+# The factory itself. Runtime gas here is cheap to give up: createPool is once
+# per market and the per-swap path is thin dispatch. Note it does NOT embed the
+# pool's creation code - an older revision did, and the pin predates the change
+# to passing it in - but the pin is kept because the size relationship above
+# only holds if both files compile at the same setting.
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionPoolFactory.sol"
+max_optimizer_runs = 200
+
+# The rest of the deployable suite, pinned for the same reason and to the same
+# value. None of these had an entry, so each inherited whatever compilation unit
+# it landed in: Route, Zap and the hook import the factory and so picked up 200,
+# while the lens ALSO appeared at 20 runs because some unit pulls it in beside
+# TokenList, which is pinned there. Two builds of the lens existed in out/ at
+# once.
+#
+# That is the same ambiguity documented above for the pool, and it matters for
+# the same reason: these are CREATE2 deployments whose salts are mined against
+# one exact payload. A second build of the same source is a second address, and
+# nothing warns you which artifact the mining script picked up.
+#
+# 200 across the board, matching what they already resolved to in their own
+# units and what the tests exercise. PrecisionPoolPolicy is included even though
+# it was unambiguous - it only touches interfaces, so nothing pulled it into a
+# restricted unit - because relying on that staying true is the same bet that
+# produced the two lens artifacts.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPoolLens.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLiquidityLens.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionRoute.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionZap.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/ConstantSurchargeHook.sol"
+max_optimizer_runs = 200
+
+# Same reason as the entries above - it imports the factory, so without a pin
+# of its own it inherits whichever compilation unit it lands in. It also embeds
+# LaunchToken's creation code, so a differently-optimized LaunchToken moves this
+# contract's initcode and therefore its mined CREATE2 address.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncher.sol"
+max_optimizer_runs = 200
+
+# eth_call only, like the other lenses, so runtime gas is nearly free. Pinned
+# for the same ambiguity reason as the entries above rather than for size: it
+# imports the launcher AND the factory, so without an entry it would inherit
+# whichever compilation unit it happened to land in.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncherLens.sol"
+max_optimizer_runs = 200
+
+# The fee splitter. Pinned for the same reason as everything above it - its
+# salt is mined against one exact payload - even though nothing pulls it into a
+# restricted unit today. Relying on that staying true is the bet that produced
+# two builds of the lens.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/FeeSplitter.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionPoolPolicy.sol"
+max_optimizer_runs = 200
+
+# The launcher and its lens, pinned for the same reason as the rest of the
+# suite above: they import the factory and so already resolve to 200 in their
+# own compilation unit, but "already resolves to" is not a guarantee - it is a
+# property of whichever unit happens to pull them in. These are CREATE2
+# deployments whose salts are mined against one exact payload, so the setting
+# has to be stated rather than inherited.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncher.sol"
+max_optimizer_runs = 200
+
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionLauncherLens.sol"
 max_optimizer_runs = 200
 
 # TokenList and its renderer are pinned to 200 runs by their deployment manifest

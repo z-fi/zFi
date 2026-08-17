@@ -22,6 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = process.argv[2] || path.join(ROOT, 'dapp', 'preview', 'index.html');
 
 const LENS = '0x4444444444444444444444444444444444444444';
+const LQLENS = '0x5555555555555555555555555555555555555555';
 
 let page = fs.readFileSync(path.join(ROOT, 'zSwap.html'), 'utf8');
 
@@ -36,7 +37,11 @@ const REGISTRY = fs.readFileSync(path.join(ROOT, 'script', 'fixtures', 'tokenlis
 // Strip the document-level tags: the preview supplies its own shell.
 page = page
   .replace(/<!doctype html>\s*/i, '')
-  .replace(/<meta[^>]*>\s*/gi, '')
+  // Document-level metas only. A meta carrying an `id` is addressed by the
+  // page's own script - `tc` is the theme-colour tag `ic()` rewrites on every
+  // theme flip - so stripping those does not tidy the shell, it deletes a
+  // binding and the preview dies at load with `tc is not defined`.
+  .replace(/<meta(?![^>]*\bid=)[^>]*>\s*/gi, '')
   .replace(/<title>[\s\S]*?<\/title>\s*/i, '')
   .replace(/<link rel="icon"[^>]*>\s*/i, '');
 
@@ -53,13 +58,31 @@ function pageConst(name) {
 }
 const SB2_ADDR = pageConst('SB2');
 const DUTCH_ADDR = pageConst('DUTCH');
+// The factory is the trust anchor the liquidity write paths ask before they
+// send. It is not redirected like the lenses - the mock answers for the real
+// address - but it still has to be read from the page so the two cannot drift.
+const PFACTORY_ADDR = pageConst('PFACTORY');
+// Both read from the page for the same reason as the boards above: the floor
+// probe compares the answer against the page's own FLOOR constant, so a
+// retyped address here would answer the probe with a mismatch and read as an
+// executor that cannot route bids.
+const SWAPBOL_ADDR = pageConst('SWAPBOL');
+const FLOOR_ADDR = pageConst('FLOOR');
 
 const before = page;
 page = page.replace(
-  'const PPLENS="0x0000000000000000000000000000000000000000"',
-  `const PPLENS="${LENS}"`,
+  /^const PPLENS="0x[0-9a-fA-F]{40}";/m,
+  `const PPLENS="${LENS}";`,
 );
 if (page === before) throw Error('PPLENS constant not found — the preview would show no chart');
+// The liquidity panel reads the same lens, so it follows PPLENS automatically.
+// PrecisionLiquidityLens is separate and has to be redirected on its own or the
+// previews below would be sent to a mainnet address the fake provider ignores.
+{
+  const b4 = page;
+  page = page.replace(/^const PLQLENS="0x[0-9a-fA-F]{40}";/m, `const PLQLENS="${LQLENS}";`);
+  if (page === b4) throw Error('PLQLENS constant not found — liquidity previews would be dead');
+}
 
 // Point every provider reference at the simulation. A wallet extension installs
 // window.ethereum as a non-writable property, so simply assigning our own is
@@ -70,7 +93,7 @@ if (providerRefs === 0) throw Error('no window.ethereum references — provider 
 page = page.split('window.ethereum').join('window.__PREVIEW');
 console.log(`rebound ${providerRefs} provider reference(s) to the simulation`);
 
-const MOCK = ((SB2, DUTCH) => String.raw`
+const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
 <script>
 /**
  * Simulated chain for the zSwap preview.
@@ -83,17 +106,32 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   var ZERO = "0x" + "0".repeat(40);
   var A = {
     ACCOUNT: "0x1111111111111111111111111111111111111111",
-    MC3: "0xca11bde05977b3631167028862be2a173976ca11",
-    ZQUOTER: "0x0000002d9a651b729e3afbe57fc84ffda4a98a13",
-    ZROUTER: "0x000000000000fb114709235f1ccbffb925f600e4",
+    MC3: "${pageConst('MC3')}",
+    // READ FROM THE PAGE, NOT RETYPED. This was pinned to the pre-move quoter
+    // 0x0000002d9a65..., and the page has since been repointed; every quote
+    // then fell through to the unhandled-selector throw and the tile reported
+    // "No route: bad quote", indistinguishable from a routing bug. Same trap the
+    // board addresses above were already fixed for.
+    ZQUOTER: "${pageConst('ZQUOTER')}",
+    ZROUTER: "${pageConst('ZROUTER')}",
     LENS: "${LENS}",
-    SLOW: "0x000000000000888741b254d37e1b27128afeaabc",
+    LQLENS: "${LQLENS}",
+    SLOW: "${pageConst('SLOW')}",
     WETH: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     USDT: "0xdac17f958d2ee523a2206206994597c13d831ec7",
     WBTC: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
-    WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+    WSTETH: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+    V4LENS: "${pageConst('V4LENS')}",
+    V4PORT: "${pageConst('V4PORT')}",
+    FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845",
+    ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247"
   };
+  // Live zOrg conviction order, captured from ZorgTokenListLens on mainnet.
+  // The registry's own listing order is the fixture's array order; these two
+  // genuinely disagree, and the preview is only worth looking at if it shows
+  // the same picker production does.
+  var CONVICTION = ["0", "104165018710067097353655755692819801489527232022561016148205125677286991358696", "3718177199436581777268575498026466751093263122", "707243736947857446325356514591335334", "1097077688018008265106216665536940668749033598146", "726330175714135941764069406682033110407748398240", "996101235222674412020337938588541139382869425796", "996050538495118299096582895562516634314123010963", "196268403159008932410419402999721616371951519129", "917551056842671309452305380979543736893630245704", "1248875146012964071876423320777688075155124985543", "611382286831621467233887798921843936019654057231", "572347342219638448467305352643680561532887805981", "545755017600859801259713618028590235307948280736", "1334160193485309697971829933264346612480800613613", "547287933988090748419475474076549867", "918413654914014884208350033397884031592738900037"];
 
   /* ---- abi helpers ---- */
   function pad(h) { h = h.replace(/^0x/, ""); return "0".repeat(64 - h.length) + h; }
@@ -114,11 +152,38 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   TOK[A.WBTC] = { sym: "WBTC", dec: 8 };
   TOK[A.WETH] = { sym: "WETH", dec: 18 };
   TOK[A.WSTETH] = { sym: "wstETH", dec: 18 };
+  // Anything not listed is treated as 18 decimals, so only the exceptions
+  // matter - and getting one wrong shows up as a quote off by 10^n.
+  TOK["0x00000000008835cef3e0d2333695f288ee6b63a6"] = { sym: "zzz", dec: 0 };
+  TOK["0x0000000000696760e15f265e828db644a0c242eb"] = { sym: "WEI", dec: 0 };
 
   // USD reference prices, used to price every route consistently.
+  //
+  // EVERY token in the list needs one. The quoter bails out on an unpriced
+  // token, and the page can only report that as "bad quote" - it is
+  // indistinguishable from a real routing failure, so a missing entry here
+  // reads as a contract bug and sends someone debugging the wrong layer. That
+  // happened with DAI, BOLD and LUSD, all of which quote fine on mainnet.
   var USD = {};
   USD[ZERO] = 3120; USD[A.WETH] = 3120; USD[A.WSTETH] = 3690;
   USD[A.WBTC] = 96500; USD[A.USDC] = 1; USD[A.USDT] = 1;
+  USD["0xae7ab96520de3a18e5e111b5eaab095312d7fe84"] = 3120;   // stETH
+  USD["0xae78736cd615f374d3085123a210448e74fc6393"] = 3520;   // rETH
+  USD["0x6b175474e89094c44da98b954eedeac495271d0f"] = 1;      // DAI
+  USD["0x6440f144b7e50d6a8439336510312d2f54beb01d"] = 1;      // BOLD
+  USD["0x5f98805a4e8be255a32880fdec7f6728c6568ba0"] = 1;      // LUSD
+  // FWA against the live V4 pool: 1 ETH bought ~64,665 FWA when this was
+  // measured, so ~3120/64665. The others are plausible stand-ins - the
+  // simulation only has to be self-consistent, not accurate.
+  USD[A.FWA] = 0.0483;
+  USD["0x00a6ba94bbb5474725515de88fe04f854f2dcb12"] = 0.012;  // ZORG
+  USD["0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"] = 0.35;   // ZAMM
+  USD["0x00000000008835cef3e0d2333695f288ee6b63a6"] = 24;     // zzz  (0 dec)
+  USD["0x0000000000696760e15f265e828db644a0c242eb"] = 6.5;    // WEI  (0 dec)
+  // A token the list carries but the simulation has no opinion on still has
+  // to quote: an unpriced pair is the one failure mode that looks like the
+  // page is broken. Cheap and obviously synthetic.
+  var USD_FALLBACK = 0.05;
 
   var BAL = {};
   BAL[ZERO] = 12.418e18;
@@ -126,6 +191,9 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   BAL[A.WBTC] = 0.352e8;
   BAL[A.WSTETH] = 3.2e18;
   BAL[A.WETH] = 0.75e18;
+  // LP shares in the deepest ETH/USDC band, so the panel has a position to
+  // render and the withdraw button exists.
+  BAL["0xaa01" + "0".repeat(36)] = 4.1e21;
 
   function decOf(a) { return a === ZERO ? 18 : (TOK[a] ? TOK[a].dec : 18); }
 
@@ -200,9 +268,13 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   // A pair with a pool but no trades: the drawer must not appear.
   addPool(A.USDC, A.USDT, { pool: "0xee01" + "0".repeat(36), hook: ZERO, liq: 6e23, tape: [] });
 
+  // Every pool this fixture created, for isPool. A pool address the factory
+  // does not know is exactly what the page refusal above is there to catch.
+  var POOL_SET = {};
   var TAPE_BY_POOL = {}, COARSE_BY_POOL = {};
   Object.keys(POOLS).forEach(function (k) {
     POOLS[k].forEach(function (p, i) {
+      POOL_SET[p.pool.toLowerCase()] = true;
       TAPE_BY_POOL[p.pool.toLowerCase()] = p.tape;
       // The four-hour ring holds weeks the five-minute ring never could, so the
       // preview gives it its own longer history rather than a rolled-up stub.
@@ -234,8 +306,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     var tIn = wordAddr(h, base + 1), tOut = wordAddr(h, base + 2);
     var amount = word(h, base + 3);
     if (amount === 0n) return null;
-    var pin = USD[tIn], pout = USD[tOut];
-    if (!pin || !pout) return null;
+    var pin = USD[tIn] || USD_FALLBACK, pout = USD[tOut] || USD_FALLBACK;
     var din = decOf(tIn), dout = decOf(tOut);
     var human = Number(amount) / Math.pow(10, exactOut ? dout : din);
     // A gentle concave impact so large sizes visibly cost more.
@@ -261,6 +332,52 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     if (to === A.MC3 && sel === "82ad56cb") return aggregate3(data);
     if (to === A.ZQUOTER) { var q = quote(sel, tx.data); if (!q) throw Error("no route"); return q; }
     if (to === A.LENS.toLowerCase() && sel === "29c21083") return markets(data);
+    // PrecisionPoolLens.quoteBestFor - the ONLY way Precision bands can win a
+    // quote, since zQuoter predates them and cannot see these pools at all.
+    // Unimplemented, this threw on every quote the page ran: the venue was
+    // invisible in the preview while the liquidity panel listed its bands from
+    // the same fixture, so the two halves of the page disagreed about whether
+    // a market existed.
+    if (to === A.LENS.toLowerCase() && sel === "2adaa389") return quoteBest(data);
+    // PrecisionPoolFactory.pairCount - asked alongside every quoteBestFor, and
+    // only to say whether the scan window covered every band.
+    if (to === "${PFACTORY_ADDR}" && sel === "355da246") {
+      var pcKey = pair(wordAddr(data.slice(8), 0), wordAddr(data.slice(8), 1)).join(":");
+      return "0x" + u256((POOLS[pcKey] || []).length);
+    }
+    // Swapbol.floorboard() - probed because the page and the executor ship
+    // separately. A throw here is read as "this executor has no floor binding",
+    // which silently made every collection bid unroutable in the preview.
+    if (to === "${SWAPBOL_ADDR}" && sel === "b732d224") return "0x" + addrw("${FLOOR_ADDR}");
+    // PrecisionPoolFactory.isPool - what the withdraw and add paths ask before
+    // they grant an allowance or send value. Every pool this fixture serves is
+    // one of its own; anything else is not, which is the answer that matters.
+    // poolFor(Market) and createAndSeed(...). The create form asks the CHAIN
+    // how wide a band a deposit can back - it tries widths and takes the first
+    // that is accepted - so a simulation that answers neither reports every
+    // range as unaffordable, which looks like the form refusing to work.
+    if (to === "${PFACTORY}" && sel === "83bd1387") {
+      return "0x" + addrw("0x" + strip(data).slice(8, 48));
+    }
+    if (to === "${PFACTORY}" && sel === "7163352a") {
+      // Width is bought with capital. Mirror that loosely so "Full range"
+      // lands somewhere plausible instead of always taking the widest.
+      var lo = BigInt("0x" + strip(data).slice(8 + 128, 8 + 192));
+      var hi = BigInt("0x" + strip(data).slice(8 + 192, 8 + 256));
+      if (lo === 0n || hi / lo > 200n) throw new Error("InsufficientLiquidity");
+      return "0x" + u256(0).repeat(4);
+    }
+    if (to === "${PFACTORY}" && sel === "5b16ebb7") {
+      return "0x" + u256(POOL_SET[wordAddr(data.slice(8), 0)] ? 1 : 0);
+    }
+    if (to === A.LQLENS.toLowerCase() && sel === "a2eaee07") return previewRemove(data);
+    if (to === A.LQLENS.toLowerCase() && sel === "e03ec807") return previewAdd(data);
+    if (to === A.V4LENS && sel === "d500463c") return v4Hooked(data);
+    // V4Port.swap - the EXECUTION side of a hooked pool. The page simulates the
+    // leg before sending it, so an unhandled selector here surfaces as
+    // "unhandled 48e6f730" at the moment the user presses Swap, long after the
+    // quote said the route was fine. Returns the amount out, same as the port.
+    if (to === A.V4PORT && sel === "48e6f730") return v4Swap(data);
     if (sel === "29a65241") return tape(to, data);
     if (to === A.ZROUTER) return "0x";
     if (to === A.SLOW) return slow(sel, data);
@@ -275,8 +392,18 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     // would make loadTokenList fail and the page would show its built-in list,
     // which has no collections in it at all.
     if (sel === "df7ca268") {
-      var body = u256(32) + u256(REG.length);
-      REG.forEach(function (r) { body += u256(BigInt(r.id)); });
+      // Which contract was asked decides which order comes back. Answering
+      // both from one order would hide the fallback path entirely.
+      var order = REG.map(function (r) { return r.id; });
+      if (to === A.ZLISTLENS) {
+        var known = {};
+        REG.forEach(function (r) { known[r.id] = true; });
+        var ranked = CONVICTION.filter(function (id) { return known[id]; });
+        REG.forEach(function (r) { if (ranked.indexOf(r.id) < 0) ranked.push(r.id); });
+        order = ranked;
+      }
+      var body = u256(32) + u256(order.length);
+      order.forEach(function (id) { body += u256(BigInt(id)); });
       return "0x" + body;
     }
     if (sel === "74e18e96") {
@@ -315,17 +442,140 @@ const MOCK = ((SB2, DUTCH) => String.raw`
     });
     return "0x" + u256(32) + u256(n) + head + tail;
   }
+  // PoolInfo is 19 flat words and the COUNT IS THE STRIDE. It was 18 until
+  // clampable was added to the struct; at the wrong width every row after the
+  // first decodes as garbage with nothing thrown. Keep in step with PI_WORDS in
+  // the page.
+  var PI_W = 19;
+  /**
+   * PrecisionPoolLens.quoteBestFor(c0, c1, sender, tokenIn, amountIn, minOut, scan)
+   * -> (address pool, uint256 amountOut).
+   *
+   * Priced off the same USD table the zQuoter fixture uses, so the two venues
+   * are comparable and whichever wins wins on its numbers rather than on which
+   * one the mock happened to implement. The band's own fee comes off the top,
+   * which is also what makes Precision lose to the router on the deep ETH/USDC
+   * tiers and win on the pairs that have no other market - the shape the real
+   * quote has.
+   *
+   * A hooked band is skipped: the page will not route through one, and a lens
+   * that offered it would send the preview down a path production refuses.
+   * Zero, not a revert, when nothing qualifies - a dead pair is "no route".
+   */
+  function quoteBest(data) {
+    var h = data.slice(8);
+    var key = pair(wordAddr(h, 0), wordAddr(h, 1)).join(":");
+    var rows = (POOLS[key] || []).filter(function (r) { return r.hook === ZERO; });
+    var tokenIn = wordAddr(h, 3), amountIn = word(h, 4);
+    var pr = key.split(":");
+    if (!rows.length || amountIn === 0n) return "0x" + addrw(ZERO) + u256(0);
+    if (tokenIn !== pr[0] && tokenIn !== pr[1]) return "0x" + addrw(ZERO) + u256(0);
+    var tokenOut = tokenIn === pr[0] ? pr[1] : pr[0];
+    var pin = USD[tokenIn] || USD_FALLBACK, pout = USD[tokenOut] || USD_FALLBACK;
+    var din = decOf(tokenIn), dout = decOf(tokenOut);
+    var best = null, bestOut = 0n;
+    rows.forEach(function (r) {
+      var fee = Number(r.fee != null ? r.fee : 3000) / 1e6;
+      var human = Number(amountIn) / Math.pow(10, din);
+      // Depth caps the size a single band absorbs, so a big trade through a
+      // thin band prices worse - the reason a pool can lose to the router.
+      var impact = 1 - Math.min(0.4, (human * pin) / (r.liq / 1e18 * 4e4 + 1));
+      var out = BigInt(Math.floor(human * pin / pout * (1 - fee) * impact * Math.pow(10, dout)));
+      if (out > bestOut) { bestOut = out; best = r.pool; }
+    });
+    if (!best || bestOut <= 0n) return "0x" + addrw(ZERO) + u256(0);
+    return "0x" + addrw(best) + u256(bestOut);
+  }
+
   function markets(data) {
     var h = data.slice(8);
     var key = wordAddr(h, 0) + ":" + wordAddr(h, 1);
     var rows = POOLS[key] || [];
-    var head = "", W = 18;
+    var head = "";
     rows.forEach(function (r) {
-      var w = new Array(W).fill(null).map(function () { return u256(0); });
-      w[0] = addrw(r.pool); w[9] = u256(BigInt(Math.floor(r.liq))); w[10] = addrw(r.hook);
+      var w = new Array(PI_W).fill(null).map(function () { return u256(0); });
+      var pr = pairOf(key);
+      w[0] = addrw(r.pool); w[1] = addrw(pr[0]); w[2] = addrw(pr[1]);
+      // Bands as raw sqrt prices, 1e18-scaled, decimals folded in exactly the
+      // way a real market's would be - so the page's decimal adjustment is
+      // actually exercised rather than trivially correct at 18/18.
+      w[3] = u256(sqrtRaw(r.lo != null ? r.lo : r.seed * 0.7, r.d0, r.d1));
+      w[4] = u256(sqrtRaw(r.hi != null ? r.hi : r.seed * 1.4, r.d0, r.d1));
+      w[5] = u256(BigInt(r.fee != null ? r.fee : 3000));
+      w[6] = u256(BigInt(Math.floor(r.liq / 1e6)));
+      w[7] = u256(BigInt(Math.floor(r.liq / 1e6)));
+      w[8] = u256(sqrtRaw(r.seed, r.d0, r.d1));
+      w[9] = u256(BigInt(Math.floor(r.liq)));
+      w[10] = addrw(r.hook);
+      w[14] = u256(r.hook === ZERO ? 1 : 0); // clampable
       head += w.join("");
     });
     return "0x" + u256(32) + u256(rows.length) + head;
+  }
+  function pairOf(key) { return key.split(":"); }
+  // V4QuoteLens.quoteV4Hooked - the ONLY thing that prices a custom-curve pool,
+  // because the curve lives in the hook and nothing about it is visible in
+  // slot0. The page routes every pool with a non-zero hooks address here, so
+  // without this the preview shows no quote for those pairs while mainnet quotes
+  // them fine - which reads as a broken page rather than a thin fixture.
+  //
+  // Returns (amountIn, amountOut) and answers (0,0) for a pool it does not
+  // know, matching the real lens: a dead pool is "no route", never a revert
+  // that would take down a multi-venue sweep.
+  // The port's swap takes (PoolKey, zeroForOne, amountIn, minOut, to, deadline),
+  // so the pool key occupies the first five words and zeroForOne the sixth.
+  function v4Swap(data) {
+    var h = data.slice(8);
+    var c0 = wordAddr(h, 0), c1 = wordAddr(h, 1);
+    var zeroForOne = word(h, 5) !== 0n, amt = word(h, 6);
+    var other = zeroForOne ? c1 : c0;
+    var cfg = V4_HOOKED[other] || V4_HOOKED[zeroForOne ? c0 : c1];
+    if (!cfg || amt === 0n) return "0x" + u256(0);
+    var out = other === A.FWA
+      ? amt * BigInt(Math.floor(cfg.perEth * 1e6)) / 1000000n
+      : amt * 1000000n / BigInt(Math.floor(cfg.perEth * 1e6));
+    return "0x" + u256(out);
+  }
+  var V4_HOOKED = {};
+  V4_HOOKED[A.FWA] = { perEth: 57597.32, dec: 18 };
+  function v4Hooked(data) {
+    var h = data.slice(8);
+    var exactOut = word(h, 0) !== 0n;
+    var tin = wordAddr(h, 1), tout = wordAddr(h, 2), amt = word(h, 6);
+    var cfg = V4_HOOKED[tout] || V4_HOOKED[tin];
+    // Exact-out is the common casualty: a custom-curve hook often implements
+    // only exact-in and reverts the other way, so the real lens returns zeros.
+    if (!cfg || exactOut || amt === 0n) return "0x" + u256(0) + u256(0);
+    var out = tout === A.FWA
+      ? amt * BigInt(Math.floor(cfg.perEth * 1e6)) / 1000000n
+      : amt * 1000000n / BigInt(Math.floor(cfg.perEth * 1e6));
+    return "0x" + u256(amt) + u256(out);
+  }
+  // price -> raw sqrt, 1e18 scaled: sqrt(price * 10**(d1-d0)) * 1e18
+  function sqrtRaw(price, d0, d1) {
+    var raw = price * Math.pow(10, (d1 || 18) - (d0 || 18));
+    return BigInt(Math.floor(Math.sqrt(raw) * 1e18));
+  }
+  // An LP position is just an LP-token balance now: the page asks each pool it
+  // is already showing for balanceOf, rather than paging the factory global
+  // pool list through positionsOf and hoping the pair fell inside page one.
+  // Falls through to erc20() like any other token balance - BAL is seeded with
+  // shares in the deepest ETH/USDC pool below.
+  // previewRemove / previewAdd. Both lead with ok, and returning false is a
+  // legitimate answer the page renders rather than an error.
+  function previewRemove(data) {
+    var shares = word(data.slice(8), 1);
+    if (shares === 0n) return "0x" + u256(0) + u256(0) + u256(0);
+    return "0x" + u256(1) + u256(shares / 3000n) + u256(shares / 1000000n);
+  }
+  function previewAdd(data) {
+    var h = data.slice(8), a0 = word(h, 1), a1 = word(h, 2);
+    if (a0 === 0n || a1 === 0n) return "0x" + u256(0).repeat(6);
+    // Deliberately consume slightly less than offered on one side, so the
+    // refund line the page shows is non-zero and gets looked at.
+    var used0 = a0 - a0 / 50n, used1 = a1;
+    return "0x" + u256(1) + u256(a0 / 1000n) + u256(used0) + u256(used1)
+         + u256(a0 - used0) + u256(a1 - used1);
   }
   function tape(pool, data) {
     var period = Number(word(data.slice(8), 0));
@@ -481,7 +731,7 @@ const MOCK = ((SB2, DUTCH) => String.raw`
   try { localStorage.setItem("ch", "1"); sessionStorage.removeItem("dc"); } catch (e) {}
 })();
 </script>
-`)(SB2_ADDR, DUTCH_ADDR);
+`)(SB2_ADDR, DUTCH_ADDR, PFACTORY_ADDR);
 
 const GALLERY = String.raw`
 <h2 class="pv-h2">Precision pool charts</h2>
@@ -529,11 +779,39 @@ const GALLERY = String.raw`
       '<div class="pv-note-line">' + note + "</div>";
     return d;
   }
+  function symOf(sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === sel.value) return sel.options[i].textContent;
+    }
+    return "";
+  }
   (async function () {
     var g = document.getElementById("pvGallery");
     await wait(function () { return document.getElementById("chArt"); }, 8000);
     try { chOpen = true; } catch (e) {}          // in case storage is unavailable
     await wait(function () { return typeof account !== "undefined" && account; }, 8000);
+
+    // The registry has to be IN before anything reads the landing pair. The
+    // gallery's own pick() calls mark the pair as user-chosen, which correctly
+    // stops conviction from moving it afterwards - so starting before the list
+    // lands would pre-empt the ranking and then restore the pre-empted pair,
+    // and the preview would contradict production while looking deliberate.
+    // ZORG is registry-only: its presence means the curated list is in.
+    await wait(function () {
+      var sel = document.getElementById("toSel");
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].textContent === "ZORG") return true;
+      }
+      return false;
+    }, 8000);
+
+    // What the page LANDED on, before the gallery starts cycling pairs to draw
+    // its cards. That is now decided by zOrg conviction rather than by a
+    // constant, so it has to be read rather than assumed - restoring a
+    // hardcoded ETH/USDC here would have quietly contradicted the ranking the
+    // picker above it is demonstrating.
+    var startFrom = symOf(document.getElementById("fromSel"));
+    var startTo = symOf(document.getElementById("toSel"));
 
     for (var i = 0; i < PAIRS.length; i++) {
       var a = PAIRS[i][0], b = PAIRS[i][1], caption = PAIRS[i][2], expect = PAIRS[i][3];
@@ -552,8 +830,10 @@ const GALLERY = String.raw`
         caption));
     }
     // Leave the live tile on the pair it started with.
-    pick(document.getElementById("fromSel"), "ETH");
-    pick(document.getElementById("toSel"), "USDC");
+    pick(document.getElementById("toSel"), startTo)
+      || pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("fromSel"), startFrom);
+    pick(document.getElementById("toSel"), startTo);
   })();
 })();
 </script>

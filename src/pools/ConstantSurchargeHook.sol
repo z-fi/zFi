@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 import {PrecisionPool} from "./PrecisionPool.sol";
 
@@ -165,10 +165,16 @@ contract ConstantSurchargeHook {
         if (p.hook() != address(this)) revert InvalidPool();
     }
 
+    /// @dev `validAfter` is the sentinel for "one is scheduled", as the storage
+    ///      docs say and as `cancelSurchargeIncrease` and
+    ///      `applySurchargeIncrease` both test. This guarded on `pips` instead,
+    ///      which happens to agree today only because a schedule must strictly
+    ///      exceed the live rate and so can never store zero pips. Two sentinels
+    ///      for one piece of state is a latent disagreement, not a saving.
     function _cancelIncrease(address pool) internal {
-        uint256 pending = pendingSurchargeOf[pool].pips;
-        if (pending == 0) return;
+        PendingSurcharge memory pending = pendingSurchargeOf[pool];
+        if (pending.validAfter == 0) return;
         delete pendingSurchargeOf[pool];
-        emit SurchargeIncreaseCancelled(pool, pending);
+        emit SurchargeIncreaseCancelled(pool, pending.pips);
     }
 }

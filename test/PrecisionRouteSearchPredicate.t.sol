@@ -158,8 +158,8 @@ contract PrecisionRouteSearchPredicateTest is Test {
     ///      call in the sequence.
     function _clampRaw(uint256 ask) internal returns (bool ok, bytes memory ret) {
         x.mint(address(this), ask);
-        bytes memory data = abi.encodeCall(PrecisionRoute.routeUpTo, (_pools(), address(x), ask, 0, user, user));
-        router.checkpoint(address(x), keccak256(data));
+        bytes memory data = abi.encodeCall(PrecisionRoute.routeUpTo, (_pools(), address(x), address(y), ask, 0, user, user));
+        router.checkpoint(address(x), keccak256(data), address(this));
         x.transfer(address(router), ask);
         (ok, ret) = address(router).call(data);
     }
@@ -203,5 +203,110 @@ contract PrecisionRouteSearchPredicateTest is Test {
     function _pools() internal view returns (address[] memory p) {
         p = new address[](1);
         p[0] = address(pool);
+    }
+
+    // ------------------------------------------------------------------ ABORT
+
+    /// @dev This test contract is the router's `trustedExecutor`, so it can
+    ///      drive the whole checkpoint lifecycle directly.
+    function _openAndFund(uint256 amountIn, address refundTo) internal returns (bytes memory call_) {
+        call_ = abi.encodeCall(PrecisionRoute.route, (_pools(), address(x), address(y), amountIn, 0, user));
+        router.checkpoint(address(x), keccak256(call_), refundTo);
+        vm.prank(lp);
+        x.transfer(address(router), amountIn);
+    }
+
+    /// @dev The gap `abortCheckpoint` closes. An executor that checkpoints and
+    ///      funds the router, then finds it cannot route - a clamp that came
+    ///      back zero, a hop that would revert - previously had no way to hand
+    ///      the input back. It stayed here permanently: inert, because every
+    ///      later checkpoint bases on the raised balance, but unrecoverable.
+    function test_AbortReturnsTheFundingToTheCommittedAddress() public {
+        uint256 amountIn = 1e18;
+        _openAndFund(amountIn, user);
+        assertEq(x.balanceOf(address(router)), amountIn, "router holds the funding");
+
+        uint256 refunded = router.abortCheckpoint(address(x));
+
+        assertEq(refunded, amountIn, "abort returns the whole funding");
+        assertEq(x.balanceOf(address(router)), 0, "nothing left stranded");
+        assertEq(x.balanceOf(user), amountIn, "refund went to the committed address");
+    }
+
+    /// @dev It refunds the DELTA since the checkpoint, so a balance that was
+    ///      already resting here - stranded by an earlier bug, or donated - is
+    ///      not reachable through it.
+    function test_AbortCannotReachAPreExistingBalance() public {
+        uint256 stranded = 5e17;
+        vm.prank(lp);
+        x.transfer(address(router), stranded);
+
+        uint256 amountIn = 1e18;
+        _openAndFund(amountIn, user);
+
+        uint256 refunded = router.abortCheckpoint(address(x));
+
+        assertEq(refunded, amountIn, "only this route's funding is refundable");
+        assertEq(x.balanceOf(address(router)), stranded, "the pre-existing balance stays put");
+    }
+
+    /// @dev Abort releases the route lock, so the executor can open a fresh one
+    ///      in the same transaction rather than being wedged until it ends.
+    function test_AbortReopensTheRoute() public {
+        uint256 amountIn = 1e18;
+        _openAndFund(amountIn, user);
+        router.abortCheckpoint(address(x));
+
+        bytes memory call_ = _openAndFund(amountIn, user);
+        (bool ok,) = address(router).call(call_);
+        assertTrue(ok, "a fresh route was refused after an abort");
+        assertEq(x.balanceOf(address(router)), 0, "kept the input");
+    }
+
+    function test_AbortRequiresTheExecutorAndAnOpenRoute() public {
+        vm.prank(user);
+        vm.expectRevert(PrecisionRoute.NotExecutor.selector);
+        router.abortCheckpoint(address(x));
+
+        vm.expectRevert(PrecisionRoute.BadCheckpoint.selector);
+        router.abortCheckpoint(address(x));
+    }
+
+    /// @dev Naming a token other than the one checkpointed cannot drain a
+    ///      balance: the route is open, but that token's slot is not.
+    function test_AbortRejectsAnUnrelatedToken() public {
+        _openAndFund(1e18, user);
+        vm.expectRevert(PrecisionRoute.BadCheckpoint.selector);
+        router.abortCheckpoint(address(y));
+    }
+
+    /// @dev The funding is spendable exactly once. A route that already
+    ///      consumed the checkpoint leaves nothing for an abort to pay out, and
+    ///      an aborted checkpoint leaves nothing for a route to spend.
+    function test_AbortAfterARouteIsRefused() public {
+        bytes memory call_ = _openAndFund(1e18, user);
+        (bool ok,) = address(router).call(call_);
+        assertTrue(ok, "the committed route was refused");
+
+        vm.expectRevert(PrecisionRoute.BadCheckpoint.selector);
+        router.abortCheckpoint(address(x));
+    }
+
+    function test_RouteAfterAnAbortIsRefused() public {
+        bytes memory call_ = _openAndFund(1e18, user);
+        router.abortCheckpoint(address(x));
+
+        (bool ok, bytes memory err) = address(router).call(call_);
+        assertFalse(ok, "an aborted checkpoint was spent");
+        assertEq(bytes4(err), PrecisionRoute.Reentrancy.selector, "wrong rejection");
+    }
+
+    function test_CheckpointRejectsAnUnusableRefundAddress() public {
+        bytes32 intent = keccak256("anything");
+        vm.expectRevert(PrecisionRoute.Bad.selector);
+        router.checkpoint(address(x), intent, address(0));
+
+        vm.expectRevert(PrecisionRoute.Bad.selector);
+        router.checkpoint(address(x), intent, address(router));
     }
 }

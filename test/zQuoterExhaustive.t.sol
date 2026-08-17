@@ -65,7 +65,21 @@ contract zQuoterExhaustiveTest is Test {
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
         vm.etch(V4_HELPER, address(new zQuoterV4()).code);
-        q = new zQuoter();
+        // Against the DEPLOYED quoter when ZQUOTER names one, otherwise a local
+        // build. The default proves the source is right; it does not prove the
+        // bytecode at a live address behaves the way the source says, and those
+        // are different claims - the deployed artifact is built with a different
+        // profile (runs=20, yul=false) to fit EIP-170. Point this at a fresh
+        // deployment to check the thing users will actually route through:
+        //   ZQUOTER=0x... forge test --match-test test_fullMatrix_executes
+        address dep = vm.envOr("ZQUOTER", address(0));
+        if (dep == address(0)) {
+            q = new zQuoter();
+        } else {
+            require(dep.code.length != 0, "ZQUOTER has no code at this fork block");
+            q = zQuoter(payable(dep));
+            emit log_named_address("quoter under test (deployed)", dep);
+        }
         user = address(this);
     }
 
@@ -79,7 +93,19 @@ contract zQuoterExhaustiveTest is Test {
         } else {
             // no totalSupply adjustment: forge cannot locate the slot on some tokens
             deal(t, user, amt * 3);
-            IERC20(t).approve(ZROUTER, type(uint256).max);
+            // Low-level, return value DELIBERATELY ignored. USDT's approve returns
+            // nothing, so `IERC20(t).approve(...)` reverts decoding a bool from
+            // empty returndata - in this helper, not in the router. That is the
+            // bare "EvmError: Revert" that killed these suites, and it fires on
+            // the first pair with USDT as the INPUT, so everything after it in
+            // the loop never ran.
+            // Zero FIRST. USDT refuses a non-zero -> non-zero allowance change,
+            // and this helper runs three times per pair (small/mid/large), so the
+            // second approve of the run reverted with a bare "approve failed".
+            t.call(abi.encodeWithSignature("approve(address,uint256)", ZROUTER, uint256(0)));
+            (bool okApprove,) =
+                t.call(abi.encodeWithSignature("approve(address,uint256)", ZROUTER, type(uint256).max));
+            require(okApprove, "approve failed");
         }
     }
 
@@ -192,6 +218,23 @@ contract zQuoterExhaustiveTest is Test {
         }
     }
 
+    /// Roll the fork back to a clean pre-swap state, preserving the tallies.
+    ///
+    /// A forge test is ONE transaction and the V4 path writes transient storage,
+    /// which clears per TRANSACTION rather than per call. So the second swap in a
+    /// loop like the ones below ran against slots the first had already set and
+    /// reverted, and the whole test died with a bare "EvmError: Revert" partway
+    /// through - five suites here, all reporting the router as broken while every
+    /// pair executes correctly on its own. `revertToState` restores transient
+    /// storage along with everything else, which is what makes each iteration a
+    /// fresh transaction. The counters are storage and would be rolled back with
+    /// it, so they are carried across by hand.
+    function _fresh(uint256 snap) internal {
+        (uint256 r, uint256 rf, uint256 bk) = (routed, refused, broke);
+        vm.revertToState(snap);
+        (routed, refused, broke) = (r, rf, bk);
+    }
+
     function _report() internal {
         emit log_named_uint("executed OK    ", routed);
         emit log_named_uint("refused (safe) ", refused);
@@ -200,9 +243,11 @@ contract zQuoterExhaustiveTest is Test {
     }
 
     function test_exactIn_allPairs_smallMidLarge() public {
+        uint256 snap = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
+                _fresh(snap);
                 _exactIn(i, j, 1);
                 _exactIn(i, j, 40);
                 _exactIn(i, j, 5000);
@@ -213,9 +258,11 @@ contract zQuoterExhaustiveTest is Test {
     }
 
     function test_exactOut_allPairs() public {
+        uint256 snap = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
+                _fresh(snap);
                 _exactOut(i, j, 40);
             }
         }
@@ -223,9 +270,11 @@ contract zQuoterExhaustiveTest is Test {
     }
 
     function test_splitBuilder_allPairs() public {
+        uint256 snap = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
+                _fresh(snap);
                 _split(i, j, 5000);
             }
         }
@@ -233,9 +282,11 @@ contract zQuoterExhaustiveTest is Test {
     }
 
     function test_3hopBuilder_allPairs() public {
+        uint256 snap = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
+                _fresh(snap);
                 _hop3(i, j, 40);
             }
         }
@@ -245,9 +296,11 @@ contract zQuoterExhaustiveTest is Test {
     /// @dev zSwap considers this fourth exact-in candidate for non-trivial trades.
     ///      Exercise every curated pair rather than only the ETH->USDT regression.
     function test_hybridBuilder_allPairs() public {
+        uint256 snap = vm.snapshotState();
         for (uint256 i; i < 8; ++i) {
             for (uint256 j; j < 8; ++j) {
                 if (i == j) continue;
+                _fresh(snap);
                 _hybrid(i, j, 5000);
             }
         }

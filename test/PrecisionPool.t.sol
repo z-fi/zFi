@@ -934,13 +934,20 @@ contract PrecisionPoolTest is Test {
         FeeHook h = new FeeHook(1000); // +0.1%
         PrecisionPool fp = _feePool(address(h));
 
+        // Read the seeded reserve rather than assuming it equals what was
+        // offered. `_seed` rounds the requirement up ONCE from a floored `lp`,
+        // so it can take slightly less than the round number it was funded
+        // with and refund the difference. What this test is about is the
+        // DELTA - the pool keeps the input less the hook's slice - and pinning
+        // the absolute figure only pinned a rounding artifact.
+        uint256 r0Before = fp.reserve0();
         uint256 r1Before = fp.reserve1();
         vm.prank(trader);
         fp.swapExactIn{value: 1 ether}(address(0), 1 ether, 0, trader);
 
         // The hook took 0.1% of the input; the pool kept the rest.
         assertEq(fp.hookOwed0(), 1 ether * 1000 / 1_000_000, "hook paid exactly its slice");
-        assertEq(fp.reserve0(), 10 ether + (1 ether - fp.hookOwed0()), "reserves got the remainder");
+        assertEq(fp.reserve0(), r0Before + (1 ether - fp.hookOwed0()), "reserves got the remainder");
         assertLt(fp.reserve1(), r1Before, "and paid out against it");
     }
 
@@ -1108,6 +1115,9 @@ contract PrecisionPoolTest is Test {
         address creator = address(0xC0DE);
         PrecisionPool cp = _creatorPool(creator, 2500);
 
+        // As above: the seeded reserve is read, not assumed to be the round
+        // amount the pool was funded with.
+        uint256 r0Before = cp.reserve0();
         vm.prank(trader);
         cp.swapExactIn{value: 1 ether}(address(0), 1 ether, 0, trader);
 
@@ -1116,7 +1126,7 @@ contract PrecisionPoolTest is Test {
 
         // The pool kept the input less the creator's cut - LPs still earn the
         // other three quarters.
-        assertEq(cp.reserve0(), 10 ether + 1 ether - cp.creatorOwed0());
+        assertEq(cp.reserve0(), r0Before + 1 ether - cp.creatorOwed0());
     }
 
     function test_OnlyTheRecipientMayCollect() public {

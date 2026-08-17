@@ -87,7 +87,30 @@ contract BatchListTxTest is Test {
     function test_BatchListing() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
 
-        Item[] memory items = _items();
+        // Only the ones still MISSING. This builds calldata to `list` three
+        // tokens, and listing is not idempotent - the registry rejects an id it
+        // already holds. Two of the three have since been listed for real, so the
+        // multicall reverted and the suite reported "multicall reverted", which
+        // reads like broken registry code and is actually the broadcast having
+        // succeeded. A one-shot deploy artifact has to notice its own work
+        // landing, or it turns into permanent red the moment it does its job.
+        Item[] memory all = _items();
+        TokenList regView = TokenList(payable(REG));
+        uint256 pending;
+        for (uint256 i; i < all.length; ++i) {
+            if (!regView.isListed(uint256(uint160(all[i].token)))) ++pending;
+        }
+        if (pending == 0) {
+            emit log("SKIP: every token in this batch is already listed - nothing left to broadcast");
+            vm.skip(true);
+        }
+        Item[] memory items = new Item[](pending);
+        uint256 k;
+        for (uint256 i; i < all.length; ++i) {
+            if (!regView.isListed(uint256(uint160(all[i].token)))) items[k++] = all[i];
+        }
+        emit log_named_uint("tokens still to list", items.length);
+
         bytes[] memory calls = new bytes[](items.length * 2);
         for (uint256 i; i < items.length; ++i) {
             Item memory it = items[i];

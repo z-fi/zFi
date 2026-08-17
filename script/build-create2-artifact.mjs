@@ -37,7 +37,29 @@ const SOURCES = {
   ZorgConvictionRenderer: "src/dao/ZorgConvictionRenderer.sol",
   ZorgConviction: "src/dao/ZorgConviction.sol",
   ZorgTokenListLens: "src/dao/ZorgTokenListLens.sol",
+  Fwabol: "src/forwarders/Fwabol.sol",
+  FwabolV2: "src/forwarders/FwabolV2.sol",
+  V4QuoteLens: "src/V4QuoteLens.sol",
+  V4Port: "src/forwarders/V4Port.sol",
+  zQuoterV4: "src/zQuoterV4.sol",
+  PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
+  PrecisionPool: "src/pools/PrecisionPool.sol",
+  PrecisionRoute: "src/pools/PrecisionRoute.sol",
+  PrecisionPoolLens: "src/pools/PrecisionPoolLens.sol",
+  PrecisionLiquidityLens: "src/pools/PrecisionLiquidityLens.sol",
+  PrecisionZap: "src/pools/PrecisionZap.sol",
+  ConstantSurchargeHook: "src/pools/ConstantSurchargeHook.sol",
+  PrecisionPoolPolicy: "src/pools/PrecisionPoolPolicy.sol",
+  PrecisionLauncher: "src/pools/PrecisionLauncher.sol",
+  PrecisionLauncherLens: "src/pools/PrecisionLauncherLens.sol",
+  FeeSplitter: "src/pools/FeeSplitter.sol",
+  zSwap: "src/zSwap.sol",
+  zSwapResolver: "src/utils/zSwapResolver.sol",
+  zSwapResolver: "src/utils/zSwapResolver.sol",
 };
+// See the note in check-create2-artifacts.mjs.
+const ARTIFACT_NAMES = {FwabolV2: "Fwabol"};
+const artifactName = (n) => ARTIFACT_NAMES[n] ?? n;
 // Contracts whose deployment manifest pins them below the default optimizer
 // runs. A salt is only valid for initcode built at the pinned setting, so
 // picking up an artifact compiled at any other one silently mines - or
@@ -57,6 +79,17 @@ const PINNED_RUNS = {
   TokenListRenderer: 20,
   ZorgConviction: 200,
   ZorgConvictionRenderer: 200,
+  PrecisionPoolFactory: 200,
+  PrecisionPool: 200,
+  PrecisionRoute: 200,
+  PrecisionPoolLens: 200,
+  PrecisionLiquidityLens: 200,
+  PrecisionZap: 200,
+  ConstantSurchargeHook: 200,
+  PrecisionPoolPolicy: 200,
+  PrecisionLauncher: 200,
+  PrecisionLauncherLens: 200,
+  FeeSplitter: 200,
 };
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
@@ -77,7 +110,7 @@ function findFreshArtifact(contractName) {
     for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) visit(full);
-      else if (entry.name === `${contractName}.json`) candidates.push(full);
+      else if (entry.name === `${artifactName(contractName)}.json`) candidates.push(full);
     }
   }
   visit(path.join(ROOT, "out"));

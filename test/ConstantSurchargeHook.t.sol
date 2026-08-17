@@ -9,7 +9,29 @@ import {ConstantSurchargeHook} from "../src/pools/ConstantSurchargeHook.sol";
 import {MockERC20} from "./SwapboardMocks.sol";
 
 /// @dev Can administer its market but deliberately cannot receive native ETH.
+/// A fee recipient that cannot receive ETH when the surcharge is collected.
+///
+/// It has to accept ETH during CREATION, which is not a weakening of the test
+/// but a constraint the contracts impose: the factory requires a named creator
+/// to be the seeder (`_checkCreator`), and seeding a native band refunds dust -
+/// 631 wei here - by PUSHING it to msg.sender. So a contract that rejects ETH
+/// unconditionally cannot create a named native market at all, and the property
+/// under test - that such a recipient can still recover its surcharge through
+/// `collectTo` - could never be reached to be tested.
+///
+/// The toggle isolates the behaviour that matters: at collection time this
+/// address rejects ETH, `collect` reverts, and `collectTo` redirects.
 contract NonPayableSurchargeRecipient {
+    bool public rejecting;
+
+    receive() external payable {
+        require(!rejecting, "cannot receive ETH");
+    }
+
+    function stopAcceptingEth() external {
+        rejecting = true;
+    }
+
     function create(
         PrecisionPoolFactory factory,
         ConstantSurchargeHook hook,
@@ -377,6 +399,9 @@ contract ConstantSurchargeHookTest is Test {
         usdc.mint(address(recipient), 30_000e6);
         vm.deal(address(recipient), 10 ether);
         PrecisionPool p = PrecisionPool(payable(recipient.create(factory, hook, usdc, SQRT_LOW, SQRT_MID, SQRT_HIGH)));
+
+        // From here on it behaves as the name says: ETH sent to it reverts.
+        recipient.stopAcceptingEth();
 
         recipient.schedule(hook, address(p), 10_000);
         vm.warp(block.timestamp + hook.INCREASE_DELAY());

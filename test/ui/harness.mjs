@@ -34,24 +34,40 @@ const coder = AbiCoder.defaultAbiCoder();
 // redeployed contract cannot leave these fixtures quietly testing nothing.
 export const A = {
   ZERO: '0x0000000000000000000000000000000000000000',
+  V4PORT: '0x000000dfb53Fa7f1c486470034741d5BCBE14BE9',
+  V4LENS: '0x000000c3aE1692983941495162A4AAB40660E65F',
   WETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
   USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
-  ZQUOTER: '0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13',
+  ZQUOTER: '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16',
   ZROUTER: '0x000000000000FB114709235f1ccBFfb925F600e4',
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
   SLOW: '0x000000000000888741B254d37e1b27128AfEAaBC',
+  SLOW_GATE: '0xb8B546b93a82f4Aa6f0345142dF5679B659ef3D4',
   SB2: '0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b',
   SB1: '0x000000fF3D7A2d373615141d7489Ca66683DbecF',
   SBVIEW: '0x000000E0b25449F32f7D9259aC449bA88E78dFCE',
-  SWAPBOL: '0x0000003069053df109F47acac630e03C77804AD8',
+  SWAPBOL: '0x00000087A6dc5071779Ed1F8274A39230768B976',
   DUTCH: '0x000000a213b430D14Bae6062c176289B05e04489',
-  ORDERBOL: '0x000000fADa565c5608570a4F66Fb5E0bD08ef91B',
-  PPFACTORY: '0x0000000000000000000000000000000000000000',
+  ORDERBOL: '0x000000e6c7a12C80525ee74e7434aAb919447D95',
+  FLOOR: '0x00000080198137F790DA4C52bb902cf87c276748',
+  FLOORVIEW: '0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7',
+  TOKENLIST: '0x0000006013dF75A31678B786061C2B54bf531524',
+  ZLISTLENS: '0x000000cEa3AB048d59473F3fb116A8D7F1abd247',
+  // Precision pools. PPLENS is patched per-test (the chart and liquidity suites
+  // rewrite it by shape), but the factory and the liquidity lens are used at
+  // their real addresses, so those two are pinned against the page below.
+  PFACTORY: '0x000000Eb27B557aB426d9E99cFd54EC455799e81',
+  PLQLENS: '0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E',
+  // The executor target of a one-sided deposit. Pinned too: the zap names it
+  // as snwap's `executor`, and a wrong address there is a transaction that
+  // hands the router's value to nothing.
+  PROUTE: '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB',
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
+  ENSRESOLVER: '0x00000000000000000000000000000000000e5e50',
   WNS: '0x0000000000696760E15f265e828DB644A0c242EB',
   GNS: '0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6',
   ACCOUNT: '0x1111111111111111111111111111111111111111',
@@ -61,32 +77,61 @@ export const A = {
 export const SEL = {
   BALANCEOF: '70a08231', ALLOWANCE: 'dd62ed3e', APPROVE: '095ea7b3', TRANSFER: 'a9059cbb',
   SYMBOL: '95d89b41', DECIMALS: '313ce567', NAME: '06fdde03',
-  DS: '3644e515', NONCES: '7ecebe00',
+  DS: '3644e515', NONCES: '7ecebe00', PERMIT_TH: '30adf81f',
   MULTICALL: 'ac9650d8', SNWAP: '5f3bd1c8', SWEEP: 'cb019b84', CHECKPOINT: 'a972985e',
-  FILLPLAN: 'c277f67c', FILLPLAN_SWAP: '9090c8e5',
+  FILLPLAN: 'c277f67c', FILLPLAN_SWAP: '9090c8e5', QUOTEFILL: 'f325beda',
   RPERMIT: '7ac2ff7b', P2TF: '09d31579',
   AGG3: '82ad56cb',
   QUOTE: 'e453166e', QUOTE_MULTI: '4c464f59', SPLIT_A: '892af013', SPLIT_B: '85f86a90',
-  ORDER_FIXED: 'bcdb7936', ORDER_DUTCH: 'fb910431',
+  QUOTE_ONE: 'e7798987',
+  // `placeDutch` grew a `uint40 expiry` between `duration` and `deadline`, so
+  // the selector moved from fb910431. The adapter used to hardcode the board's
+  // expiry to zero, leaving every Dutch lot resting at its floor forever.
+  ORDER_FIXED: 'bcdb7936', ORDER_DUTCH: 'bbd94e1a',
   CANDS: '5f452988', DUTCH_CANDS: 'eb33e466', RECENT: '6a9849c1', RECENT_DUTCH: '98035c9a',
+  FLOOR_CANDS: 'c587d927', RECENT_FLOOR: 'a5edd13d', COLL_BIDS: '16bb24eb',
+  GETORDERS: '03652027', BIDS: '4423c5f1',
+  INITIAL_B: '878ea250', TOKENURI: 'c87b56dd', LOGOOF: '6ce273ac',
+  FLOOR_HIT: '309ce4ce', ORDER_FLOOR: '23e93357', BOL_FLOOR: 'b732d224',
   NEXTID: '2a58b330', CANCELORD: '514fcac7', CANCEL_UNWRAP: '21dd76f9',
   DUTCH_CANCEL: '40e58ee5', DUTCH_CANCEL_UNWRAP: '8382de65',
-  FILL1: 'c37dfc5b', FILL2: '8ab3bfc9', FILL2_UNWRAP: '402ad677', FILL2_ETH: '13092239',
+  // The fill entry points carry `fillAmountB` and `minAmountA`: a taker states
+  // what it pays and the floor it accepts. The three-and-four-argument
+  // ancestors (8ab3bfc9 / 402ad677 / 13092239) had neither.
+  FILL1: 'c37dfc5b', FILL2: '9d136c7f', FILL2_UNWRAP: '3987baf4', FILL2_ETH: '6f608bab',
   DUTCH_FILL: 'ae7a8260', DUTCH_LISTING: 'de74e57b',
   POOLS_PAIR: '84cc5873', TAPE: '29a65241', MARKETS: '29c21083',
+  ISPOOL: '5b16ebb7', PREVIEW_REMOVE: 'a2eaee07', PREVIEW_ADD: 'e03ec807',
+  PREVIEW_ZAP: 'e7cddab0', ZAPIN: 'c98c2c0b',
+  POOLFOR: '83bd1387', PREVIEW_SEED: '1d355417', CREATE_SEED: '7163352a',
+  TOTALSUPPLY: '18160ddd',
+  QUOTE_BEST: '2adaa389', PSWAP: 'a6220b66', POOL_FEE: 'ddca3f43', EFF_FEE: 'ef66de32',
+  BY_CREATOR: '7d78be2b', TOKEN1: 'd21220a7', BY_CREATOR_N: 'aa5e6b5b', RESERVE0: '443cb4bc',
+  PAIR_COUNT: '355da246',
+  REMOVE: 'e39b0eb5', REMOVE_LOSSY: '0cc55f06', ADDEXACT: 'cc0025e4',
+  RANKEDIDS: 'df7ca268', LISTJSON: '74e18e96', FLOOR_BID: '3d8d260b',
   NS_CID: 'fb021939', NS_RES: '4f896d4f', NS_REV: '9af8b7aa',
   ENS_RSLV: '0178b8bf', ENS_EADDR: '3b3b57de', ENS_ENAME: '691f3431',
+  ENS_RESOLVE: '9061b923', ENS_SUPPORTS: '01ffc9a7',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
+  DEPOSITTIP: '75f92e42', TIPS: 'a5c68c59', REFUNDTIP: 'd27e1e72',
   OUT: 'd40d4bc6', IN: 'e3993ee7', PENDING: '6577b86a',
+  GUARDIAN: '0633b14a', UNLOCK: '6198e339', CLAWBACK: 'fcc36bc9',
   WETH_DEPOSIT: 'd0e30db0', WETH_WITHDRAW: '2e1a7d4d',
+  LATEST: '52bfe789', PREVIOUS: '247dfaa8', SUCCEEDED_AT: '451aae60',
 };
 
 // -------------------------------------------------------------- abi helpers
 const strip = h => (h || '').replace(/^0x/, '');
+const ZERO_ADDR = '0x' + '0'.repeat(40);
 export const word = (hex, i) => BigInt('0x' + strip(hex).slice(i * 64, (i + 1) * 64));
 export const wordAddr = (hex, i) => '0x' + strip(hex).slice(i * 64 + 24, (i + 1) * 64);
 const u256 = v => BigInt(v).toString(16).padStart(64, '0');
 const addrWord = a => strip(a).toLowerCase().padStart(64, '0');
+const PLAUNCH = '0x0000002fc8e77585a008aa45d78a71ad36293aee';
+const FEE_POOL = '0x' + 'fe'.repeat(20);
+const LAUNCHED_TOPIC = keccak256(toUtf8Bytes(
+  'Launched(address,address,address,uint256,uint256,uint256)'));
 export const selectorOf = data => strip(data).slice(0, 8);
 
 /** ABI-encode a dynamic `bytes` tail (length word + right-padded body). */
@@ -127,6 +172,21 @@ export function encodeQuote({ u = 4, legs, callData = '0x', msgValue = 0n, hops 
   return '0x' + head + arr + bytesTail(callData);
 }
 
+/**
+ * buildBestSwap's return: (Quote, bytes callData, uint256 amountLimit, uint256 msgValue).
+ *
+ * One word longer than the multicall builders, because amountLimit sits between
+ * the bytes offset and msgValue. That word is the whole reason the page passes
+ * decQ an explicit msgValue index for this builder — read it as v+1 and the
+ * msg.value of every ETH swap becomes the slippage bound instead.
+ */
+export function encodeSingleHop({ source = 3, feeBps = 30n, amountIn, amountOut, amountLimit, msgValue = 0n, callData = '0x' }) {
+  const d = callData.replace(/^0x/, '');
+  return '0x' + u256(source) + u256(feeBps) + u256(amountIn) + u256(amountOut)
+    + u256(7 * 32) + u256(amountLimit) + u256(msgValue)
+    + u256(d.length / 2) + d.padEnd(Math.ceil(d.length / 64) * 64, '0');
+}
+
 /** The 16-field SwapboardView.OrderView tuple, as decViewPage decodes it. */
 const ROW_TUPLE =
   'tuple(uint256,address,bool,uint64,bool,bool,address,address,uint256,string,uint8,address,uint256,string,uint8,address)[]';
@@ -143,10 +203,66 @@ export function encodeViewPage(rows, next = 0n) {
 }
 
 const encodeString = s => coder.encode(['string'], [s]);
+export const wordHex = (hex, i) => '0x' + strip(hex).slice(i * 64, (i + 1) * 64);
+/** namehash, computed independently of the page so the test is not the code. */
+export const ensNamehash = name => {
+  let node = '0x' + '0'.repeat(64);
+  if (name) for (const label of name.split('.').reverse())
+    node = keccak256(node + strip(keccak256(toUtf8Bytes(label))));
+  return node;
+};
+/** DNS wire format back to a dotted name. */
+const dnsDecode = hex => {
+  const h = strip(hex); const out = []; let i = 0;
+  for (;;) {
+    const len = parseInt(h.slice(i, i + 2), 16);
+    if (!len) break;
+    out.push(Buffer.from(h.slice(i + 2, i + 2 + len * 2), 'hex').toString('utf8'));
+    i += 2 + len * 2;
+  }
+  return out.join('.');
+};
 
-/** PrecisionPoolLens.PoolInfo[] — 18 static fields, so 18 flat words per row. */
+/**
+ * The 17-field FloorboardView.BidRow tuple.
+ *
+ * Three of its members are dynamic (`ids`, and both symbols), so each ELEMENT
+ * of the array is offset-encoded — the array head holds pointers to rows, not
+ * rows. That indirection is the thing the page's decoder has to get right, and
+ * encoding it here through a real ABI coder is what makes the test able to
+ * catch a decoder that reads a pointer as an address.
+ *
+ * `tokenDecimals`/`quoteDecimals` carry the board's `decimals + 1` convention,
+ * with 0 meaning "never snapshotted". Fixtures state the TRUE decimals and the
+ * bias is applied here, so a test never has to remember it.
+ */
+const BID_TUPLE =
+  'tuple(uint256,address,address,address,bool,bool,uint256[],uint128,uint128,' +
+  'uint256,uint256,uint40,uint40,uint8,uint8,string,string)[]';
+
+export function encodeBidPage(rows, next = 0n) {
+  const encoded = rows.map(r => [
+    BigInt(r.id), r.bidder || A.OTHER, r.token, r.quote,
+    !!r.isNFT, r.anyId ?? !!r.isNFT, (r.ids || []).map(BigInt),
+    BigInt(r.remaining), BigInt(r.initial ?? r.remaining),
+    BigInt(r.price), BigInt(r.proceeds),
+    BigInt(r.startTime || 0), BigInt(r.expiry ?? 0),
+    r.tokenDecimals == null ? 0 : r.tokenDecimals + 1,
+    r.quoteDecimals == null ? 0 : r.quoteDecimals + 1,
+    r.tokenSymbol || 'ASSET', r.quoteSymbol || 'QUOTE',
+  ]);
+  return coder.encode([BID_TUPLE, 'uint256'], [encoded, BigInt(next)]);
+}
+
+/**
+ * PrecisionPoolLens.PoolInfo[] — all static, so the array is flat words and the
+ * FIELD COUNT IS THE ROW STRIDE. It was 18 until `clampable` was added; at the
+ * wrong width every row after the first decodes as garbage with nothing thrown,
+ * which presents as "the second pool vanished" rather than as an error. Keep in
+ * step with PI_WORDS in zSwap.html and with the preview builder.
+ */
 const POOL_INFO = 'tuple(address,address,address,uint256,uint256,uint256,uint256,uint256,' +
-  'uint256,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256)[]';
+  'uint256,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)[]';
 
 /** Pack a value the way PriceTape.pack does: 24-bit mantissa, 8-bit exponent. */
 export function packTapeFloat(v) {
@@ -189,15 +305,29 @@ export class MockChain {
     this.dutchListings = new Map();
     // Price tape: pools per canonical pair, and bars per pool.
     this.pools = new Map();        // `${token0}:${token1}` -> [{pool,hook,liquidity}]
+    // Pools a lens reports but the factory disclaims — an impersonator, which
+    // is the case the write paths' isPool check exists to catch.
+    this.disowned = new Set();
     this.tapes = new Map();        // `${pool}:${period}` -> [bar | null], newest first
     // Name services. `names` resolves forward (name -> address) for .wei/.gwei
     // via the WNS/GNS registries; `reverse` drives the header's display name.
     this.names = new Map();
     this.reverse = new Map();
     this.ensResolver = A.ZERO;   // non-zero enables the .eth path
+    this.ensResolvers = new Map();  // node -> resolver, for the ENSIP-10 walk
+    this.ensNames = new Map();      // .eth name -> address, read by addr()/resolve()
+    this.ensRevNames = new Map();   // address -> the name its reverse record claims
+    this.ensWildcard = false;       // does the resolver admit to ENSIP-10?
+    this.ensOffchain = false;       // resolve() reverts OffchainLookup, as a CCIP resolver does
     this.slowOut = [];
     this.slowIn = [];
     this.slowPending = new Map();
+    // transferId -> tip in wei, as the gate holds it. Absent means no tip was
+    // posted, which is what a plain depositTo leaves behind.
+    this.slowTips = new Map();
+    // A guardian on the account changes which calls SLOW will accept: claim
+    // becomes unlock, and withdrawFrom needs the guardian's co-signature.
+    this.slowGuardian = A.ZERO;
     this.quoteHandler = null;      // ({selector, params}) => hex | null
     this.capabilities = null;      // wallet_getCapabilities response
     this.sent = [];                // eth_sendTransaction payloads
@@ -205,14 +335,62 @@ export class MockChain {
     this.log = [];                 // every request {method, params}
     this.signed = [];              // eth_signTypedData_v4 payloads
     this.batches = [];             // wallet_sendCalls payloads
+    // Recovery id the mock wallet puts in the last byte of a signature. Real
+    // wallets disagree: most answer 27/28, some answer the raw 0/1 form, and a
+    // signature that reaches Permit2 with 0/1 recovers address(0) and reverts.
+    this.sigV = 0x1b;
+    // wallet_getCallsStatus answer, as ({id}) => status object. Null means the
+    // default: one receipt, confirmed. Set it to exercise partial failure, a
+    // per-call receipt list, or a status code that is not 200.
+    this.callsStatusHandler = null;
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
+    this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
+    this.failEveryCall = false;    // batch returns, but every call inside it failed
+    // zTokenlist rows, IN CONVICTION ORDER, as rankedIds() returns them. Null
+    // means the registry is unreachable and the page uses its built-in list,
+    // which is what most suites want; set it to exercise curation.
+    this.registry = null;
+    // Conviction order as ZorgTokenListLens.rankedIds() returns it: registry
+    // ids, re-sorted by live support. Null means the lens is unreachable,
+    // which is the case the page must survive by falling back to the
+    // registry's own listing order.
+    this.conviction = null;
+    this.nftOwner = new Map();     // `${collection}:${id}` -> holder
+    // zSwap address -> what its `latest()` answers. Unset means the address is
+    // its own tip: no successor, so the page has nothing to announce.
+    this.lineage = new Map();
+    // version -> its predecessor, and predecessor -> when it recorded that
+    // successor. The page refuses to point anyone at a version younger than
+    // the maturity delay, so a lineage fixture needs a clock as well as a
+    // shape. Unset reads as zero, which the page treats as "no clock, no
+    // delay" - the pre-field chain case.
+    this.previousOf = new Map();
+    this.succeededAt = new Map();
+    // Band a seed preview answers for: {low, high} sqrt prices, and optional
+    // used0/used1 when the seed should consume less than it was offered.
+    this.seedBand = null;
+    this.seedDeployed = false;     // was the market already created, unseeded?
+    // Widest band the fixture will accept, as hi/lo in sqrt space. Null lets
+    // every width through.
+    this.rejectWiderThan = null;
+    // What PrecisionPoolLens.quoteBestFor answers: {pool, out, fee}. Null is a
+    // pair with no Precision band, which is most pairs.
+    this.precisionQuote = null;
+    // Override for poolsForPairCount, to model a pair stuffed with bands.
+    this.pairCount = null;
     this.rejectNext = null;        // make the next signature/tx a user rejection
     this.inFlight = 0;
     this.nonce = 0;
+    this.floorBids = [];           // FloorboardView.BidRow fixtures
+    this.cards = {};               // `${board}:${id}` -> tokenURI JSON object
+    this.logos = {};               // token -> logoOf() string
+    this.initialAmountB = {};      // `${board}:${id}` -> original amountB
+    this.swapbolFloorboard = null; // null => the executor knows A.FLOOR
 
     // Every zSwap-relevant contract is deployed by default; tests that care
     // about "not deployed yet" branches clear these explicitly.
     for (const a of [A.SB2, A.SB1, A.SBVIEW, A.SWAPBOL, A.DUTCH, A.ORDERBOL,
+      A.FLOOR, A.FLOORVIEW, A.TOKENLIST,
       A.ZROUTER, A.ZQUOTER, A.SLOW, A.MC3, A.PERMIT2, A.WETH, A.USDC, A.USDT, A.WBTC]) {
       this.code.set(a.toLowerCase(), '0x60006000');
     }
@@ -231,16 +409,66 @@ export class MockChain {
     this.allow.set(`${token.toLowerCase()}:${owner.toLowerCase()}:${spender.toLowerCase()}`, BigInt(units));
     return this;
   }
-  setToken(token, m) { this.meta.set(token.toLowerCase(), m); return this; }
+  /**
+   * Register a token's metadata.
+   *
+   * Also registers code at the address, because a token WITHOUT code is not a
+   * thing that exists - and the page now checks, so a fixture that declares a
+   * token at an empty address is describing something impossible.
+   *
+   * `erc721: true` makes it answer ERC-165 for the NFT interface and refuse
+   * decimals(), which is how a real collection behaves and how the page tells
+   * the two apart.
+   */
+  setToken(token, m) {
+    this.meta.set(token.toLowerCase(), m);
+    if (!this.code.has(token.toLowerCase())) this.code.set(token.toLowerCase(), '0x60006000f3');
+    return this;
+  }
   /**
    * Register pools for a pair. Entries may be a bare address or
    * {pool, hook, liquidity} — the lens reports hook and liquidity, and the
    * chart uses both to decide which pools may speak for the pair's price.
+   *
+   * The band fields (fee, reserves, and the three raw sqrt prices) default to
+   * zero because the chart does not read them. The liquidity panel does, and
+   * so do the previews below, which compute against `liquidity` as the LP
+   * supply and `reserve0/1` as the reserves — the same arithmetic the real
+   * lens performs, so a test asserting on a previewed amount is asserting on
+   * something, not on a constant.
    */
+  /**
+   * Markets the LAUNCHER created, as the factory's creator index reports them.
+   * `pools` is [{pool, token}] - the page reads the pool list, then `token1()`
+   * on each, because token0 is always the native asset on a launch.
+   */
+  /**
+   * Fees a launched coin has accrued but nobody has swept. `fees` is
+   * {token: {owed0, owed1, pool}} - owed0 is the ether side, which is what the
+   * page offers to collect.
+   */
+  setLaunchFees(fees) {
+    this.launchFees = {};
+    for (const [t, v] of Object.entries(fees)) {
+      const e = typeof v === 'bigint' ? { owed0: v } : v;
+      this.launchFees[t.toLowerCase()] = e;
+      this.code.set((e.pool || FEE_POOL).toLowerCase(), '0x60006000');
+    }
+    return this;
+  }
+  setLaunched(pools) {
+    this.launched = pools;
+    for (const {pool} of pools) if (!this.code.has(pool.toLowerCase())) this.code.set(pool.toLowerCase(), '0x60006000');
+    return this;
+  }
   setPools(a, b, pools) {
     const [t0, t1] = a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
     const rows = pools.map(p => (typeof p === 'string' ? { pool: p } : p))
-      .map(r => ({ hook: A.ZERO, liquidity: 10n ** 21n, ...r }));
+      .map(r => ({
+        hook: A.ZERO, liquidity: 10n ** 21n,
+        fee: 0n, reserve0: 0n, reserve1: 0n, sqrtLow: 0n, sqrtHigh: 0n, sqrtNow: 0n,
+        ...r,
+      }));
     this.pools.set(`${t0.toLowerCase()}:${t1.toLowerCase()}`, rows);
     for (const r of rows) this.code.set(r.pool.toLowerCase(), '0x60006000');
     return this;
@@ -250,10 +478,46 @@ export class MockChain {
     this.tapes.set(`${pool.toLowerCase()}:${period}`, bars);
     return this;
   }
+  /** Give `holder` token `id` of `collection`, so ownerOf answers for it. */
+  setNftOwner(collection, id, holder) {
+    this.nftOwner.set(`${collection.toLowerCase()}:${BigInt(id)}`, holder);
+    return this;
+  }
   setCode(addr, code) { this.code.set(addr.toLowerCase(), code); return this; }
   undeploy(addr) { this.code.set(addr.toLowerCase(), '0x'); return this; }
+  /**
+   * Make an `eth_call` fail.
+   *
+   * `msg` may be a FUNCTION of the calldata, for the case where one selector
+   * has to fail selectively: a pool whose degraded exit reverts when asked for
+   * both sides and succeeds when asked for one is a single selector called
+   * twice with different arguments, and a flat map cannot tell those apart.
+   * Return a message to revert, or a falsy value to let the call through.
+   */
   revertOn(to, selector, msg = 'execution reverted') {
     this.reverts.set(`${to.toLowerCase()}:${selector}`, msg); return this;
+  }
+
+  /** Make the factory disclaim a pool the lens still describes. */
+  disownPool(pool) { this.disowned.add(pool.toLowerCase()); return this; }
+
+  /** The sorted pair a pool was registered under, or null. */
+  poolPair(pool) {
+    const want = pool.toLowerCase();
+    for (const [key, rows] of this.pools) {
+      if (rows.some(r => r.pool.toLowerCase() === want)) return key.split(':');
+    }
+    return null;
+  }
+
+  /** The registered pool row for an address, across every pair. */
+  poolRow(pool) {
+    const want = pool.toLowerCase();
+    for (const rows of this.pools.values()) {
+      const hit = rows.find(r => r.pool.toLowerCase() === want);
+      if (hit) return hit;
+    }
+    return null;
   }
 
   balanceOf(token, holder) {
@@ -300,12 +564,18 @@ export class MockChain {
         this.applyTx(params[0]);
         return '0x' + (++this.nonce).toString(16).padStart(64, '0');
       }
-      case 'eth_getTransactionReceipt':
-        return { status: '0x1', transactionHash: params[0], blockNumber: this.blockNumber };
+      case 'eth_getTransactionReceipt': {
+        const r = { status: '0x1', transactionHash: params[0], blockNumber: this.blockNumber };
+        // `thinReceipts` drops the array entirely rather than emptying it,
+        // because that is the shape the wallet RPCs which do this actually
+        // return - and `receipt.logs || []` has to survive both.
+        if (!this.thinReceipts) r.logs = this.lastLogs || [];
+        return r;
+      }
       case 'eth_signTypedData_v4': {
         if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
         this.signed.push({ owner: params[0], typedData: JSON.parse(params[1]) });
-        return '0x' + '11'.repeat(32) + '22'.repeat(32) + '1b';
+        return '0x' + '11'.repeat(32) + '22'.repeat(32) + this.sigV.toString(16).padStart(2, '0');
       }
       case 'wallet_switchEthereumChain': this.chainId = params[0].chainId; return null;
       case 'wallet_revokePermissions': return null;
@@ -323,6 +593,7 @@ export class MockChain {
         return { id: '0xbatch' + this.batches.length };
       }
       case 'wallet_getCallsStatus':
+        if (this.callsStatusHandler) return this.callsStatusHandler({ id: params[0] });
         return { status: 200, receipts: [{ status: '0x1', transactionHash: '0x' + 'ab'.repeat(32) }] };
       default:
         throw Error(`MockChain: unhandled method ${method}`);
@@ -339,7 +610,39 @@ export class MockChain {
    */
   applyTx(tx) {
     const data = strip(tx.data || '');
-    if (data.slice(0, 8) !== SEL.APPROVE) return;
+    const sel = data.slice(0, 8);
+    /* A real launch emits `Launched`, and the page reads the token out of it.
+       A mock whose receipts carried no logs would leave that path untravelled
+       while every launch test still passed - which is exactly how a wrong
+       topic hash shipped. `owner` is head word 6 in both entry points. */
+    if ((sel === '6a648dc6' || sel === '72cf7bd8') && tx.to?.toLowerCase() === PLAUNCH) {
+      this.lastLogs = [{
+        address: PLAUNCH,
+        topics: [
+          LAUNCHED_TOPIC,
+          // Separate from `launchToken`, which is what the PREFLIGHT predicts.
+          // They differ only under a nonce race, and a fixture that could not
+          // express that could not test which of the two the page believes.
+          '0x' + addrWord(this.launchLogToken || this.launchToken || '0x' + '11'.repeat(20)),
+          '0x' + addrWord(this.launchPool || '0x' + '22'.repeat(20)),
+          '0x' + data.slice(8 + 6 * 64, 8 + 7 * 64),
+        ],
+        data: '0x' + u256(0).repeat(3),
+      }];
+      return;
+    }
+    // WETH deposit actually moves the balance, because the page now funds a
+    // fill out of the result: it wraps a shortfall and then pays in WETH. A
+    // mock that took the wrap and left the balances alone would fail the very
+    // step the wrap exists to enable.
+    if (sel === SEL.WETH_DEPOSIT && tx.to?.toLowerCase() === A.WETH.toLowerCase()) {
+      const v = BigInt(tx.value || 0);
+      const holder = tx.from.toLowerCase();
+      this.setErc20(A.WETH, holder, this.balanceOf(A.WETH.toLowerCase(), holder) + v);
+      this.setNative(holder, (this.native.get(holder) ?? 0n) - v);
+      return;
+    }
+    if (sel !== SEL.APPROVE) return;
     const body = '0x' + data.slice(8);
     this.setAllowance(tx.to, tx.from, wordAddr(body, 0), word(body, 1));
   }
@@ -351,7 +654,21 @@ export class MockChain {
     this.calls.push({ to, data: '0x' + data, block, selector: sel });
 
     const rv = this.reverts.get(`${to}:${sel}`);
-    if (rv) throw Error(rv);
+    if (rv) {
+      const msg = typeof rv === 'function' ? rv('0x' + data) : rv;
+      if (msg) throw Error(msg);
+    }
+
+    // zSwap.latest() — the tip of the successor chain, which the page reads on
+    // ITSELF. Keyed by the address called so a test can serve a chain whose
+    // tip is a third contract, or leave it unset for the common case: no
+    // successor, and the page therefore says nothing.
+    if (sel === SEL.LATEST) {
+      const tip = this.lineage.get(to) ?? to;
+      return '0x' + addrWord(tip);
+    }
+    if (sel === SEL.PREVIOUS) return '0x' + addrWord(this.previousOf.get(to) || ZERO_ADDR);
+    if (sel === SEL.SUCCEEDED_AT) return '0x' + u256(this.succeededAt.get(to) || 0);
 
     // A plain value transfer pre-flights as a call with no calldata at all.
     if (!data) return '0x';
@@ -359,37 +676,375 @@ export class MockChain {
     if (to === A.MC3.toLowerCase() && sel === SEL.AGG3) return this.aggregate3(data, block);
     if (to === A.ZQUOTER.toLowerCase()) return this.quote(sel, data);
     if (to === A.SBVIEW.toLowerCase()) return this.lens(sel, data);
+    if (to === A.FLOORVIEW.toLowerCase()) return this.floorLens(sel, data);
+    // The board's OWN storage, which the page reads back before sending as a
+    // last-moment staleness check. Served from the same fixtures as the lens,
+    // so a test never has to state a row twice.
+    if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
+    // cancel / cancelUnwrap, which Floorboard shares with Dutchboard. Both
+    // boards return nothing; what matters is that the page reaches the right
+    // one with the right selector, since a cancel is how escrow comes back.
+    if ((to === A.FLOOR.toLowerCase() || to === A.DUTCH.toLowerCase())
+      && (sel === SEL.DUTCH_CANCEL || sel === SEL.DUTCH_CANCEL_UNWRAP)) return '0x';
+    // bid(Terms) — a collection bid, placed at the board directly because the
+    // routed adapter hardcodes isNFT false and cannot express one.
+    if (to === A.FLOOR.toLowerCase() && sel === SEL.FLOOR_BID) return '0x' + u256(1);
+    // TokenList.logoOf(address) REVERTS for an unlisted token rather than
+    // returning empty, which is what the page's allow-failure batch relies on.
+    if (to === A.ZLISTLENS.toLowerCase() && sel === SEL.RANKEDIDS) {
+      if (!this.conviction) throw Error('conviction lens unreachable');
+      const ids = this.conviction.map(i => u256(i));
+      return '0x' + u256(32) + u256(ids.length) + ids.join('');
+    }
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.RANKEDIDS) {
+      if (!this.registry) throw Error('no registry');
+      const ids = this.registry.map((_, i) => u256(i + 1));
+      return '0x' + u256(32) + u256(ids.length) + ids.join('');
+    }
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.LISTJSON) {
+      if (!this.registry) throw Error('no registry');
+      const row = this.registry[Number(word('0x' + data.slice(8), 0)) - 1];
+      if (!row) throw Error('no such id');
+      const body = Buffer.from(JSON.stringify(row), 'utf8').toString('hex');
+      return '0x' + u256(32) + u256(body.length / 2) + body.padEnd(Math.ceil(body.length / 64) * 64, '0');
+    }
+    if (to === A.TOKENLIST.toLowerCase() && sel === SEL.LOGOOF) {
+      const logo = this.logos[wordAddr('0x' + data.slice(8), 0).toLowerCase()];
+      if (!logo) throw Error('not listed');
+      return encodeString(logo);
+    }
+    if (sel === SEL.TOKENURI) {
+      const c = this.cards[`${to}:${word('0x' + data.slice(8), 0)}`];
+      if (!c) throw Error('no card');
+      return encodeString('data:application/json;base64,' +
+        Buffer.from(JSON.stringify(c)).toString('base64'));
+    }
+    if (sel === SEL.INITIAL_B) {
+      const v = this.initialAmountB[`${to}:${word('0x' + data.slice(8), 0)}`];
+      return '0x' + u256(v ?? 0);
+    }
+    if ((to === A.SB2.toLowerCase() || to === A.SB1.toLowerCase()) && sel === SEL.GETORDERS) {
+      return this.boardOrders(to, data);
+    }
+    // Swapbol.floorboard(). The page probes this before it will plan a bid leg,
+    // because the page and the executor ship separately: an executor without
+    // the binding rejects the leg after the user has already signed.
+    if (to === A.SWAPBOL.toLowerCase() && sel === SEL.BOL_FLOOR) {
+      return '0x' + addrWord(this.swapbolFloorboard ?? A.FLOOR);
+    }
     if (to === A.DUTCH.toLowerCase() && sel === SEL.DUTCH_LISTING) return this.dutchListing(data);
-    if (to === A.SLOW.toLowerCase()) return this.slow(sel, data);
+    if (to === A.SLOW.toLowerCase()) return this.slow(sel, data, tx);
+    // SLOW's tip gate: `tips(transferId) -> (uint96 amount, address sender)`.
+    // refundTip is state-changing and only pre-flighted, so it answers empty.
+    if (to === A.SLOW_GATE.toLowerCase()) {
+      if (sel === SEL.TIPS) {
+        const t = this.slowTips.get(word('0x' + data.slice(8), 0).toString());
+        return '0x' + u256(t ?? 0) + addrWord(t ? this.accounts[0] : A.ZERO);
+      }
+      return '0x';
+    }
     if (to === A.ZROUTER.toLowerCase()) return '0x';          // pre-flight eth_call
+    // The same, for a write sent straight at a Precision pool. doRemove/doAdd
+    // bypass the router, and the page simulates them before asking for a
+    // signature - a node answers that call, so the fixture has to as well or
+    // the pre-flight reads as a revert and no transaction is ever sent.
+    // The degraded exit is the same shape: pre-flighted at the pool, answered
+    // by a node. A test that wants it to FAIL says so with `revertOn`, whose
+    // message may be a function of the calldata - `take0`/`take1` are arguments
+    // to one selector, so a pool that can only pay one side is not something a
+    // flat selector map can express.
+    if ((sel === SEL.REMOVE || sel === SEL.ADDEXACT || sel === SEL.REMOVE_LOSSY)
+      && this.poolRow(to)) return '0x';
+    // V4QuoteLens.quoteV4Hooked(bool,address,address,uint24,int24,address,uint256)
+    // Returns (amountIn, amountOut); zero means "no route", never "free".
+    if (to === A.V4LENS.toLowerCase()) {
+      const body = '0x' + data.slice(8);
+      const q = this.v4Quote && this.v4Quote({
+        tokenIn: wordAddr(body, 1), tokenOut: wordAddr(body, 2),
+        fee: Number(word(body, 3)), ts: Number(word(body, 4)),
+        hooks: wordAddr(body, 5), amountIn: word(body, 6),
+      });
+      return coder.encode(['uint256', 'uint256'], [q ? word(body, 6) : 0n, q || 0n]);
+    }
+    if (to === A.V4PORT.toLowerCase()) return '0x';           // pre-flight eth_call
     if (to === A.SB2.toLowerCase() || to === A.SB1.toLowerCase()) return this.board(sel, data);
     if (sel === SEL.MARKETS) {
       const body = '0x' + data.slice(8);
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
-      // PoolInfo is a static struct, so the array is 18 flat words per row.
+      // PoolInfo is a static struct, so the array is 19 flat words per row.
       return coder.encode([POOL_INFO], [rows.map(r => [
-        r.pool, A.ZERO, A.ZERO, 0n, 0n, 0n, 0n, 0n, 0n, BigInt(r.liquidity),
-        r.hook, A.ZERO, 0n, 0n, 0n, 0n, 0n, 0n,
+        r.pool, A.ZERO, A.ZERO, BigInt(r.sqrtLow), BigInt(r.sqrtHigh), BigInt(r.fee),
+        BigInt(r.reserve0), BigInt(r.reserve1), BigInt(r.sqrtNow), BigInt(r.liquidity),
+        r.hook, A.ZERO, 0n, 0n, r.hook === A.ZERO ? 1n : 0n, 0n, 0n, 0n, 0n,
       ])]);
+    }
+    // PrecisionPoolFactory.isPool — the trust anchor the liquidity write paths
+    // ask before granting an allowance or sending value. Only pools this
+    // fixture registered are its own.
+    // poolFor(Market) — the address is CREATE2-derived, so the page can ask
+    // what a band WOULD be before anything is deployed. The fixture only has
+    // to be deterministic in the market, which is what the real one is.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.POOLFOR) {
+      const body = data.slice(8);           // Market is static: encoded inline
+      const key = keccak256('0x' + body).slice(0, 42);
+      this.__predicted ||= new Map();
+      this.__predicted.set(key.toLowerCase(), '0x' + body);
+      // `seedDeployed` models the case the factory documents: the market was
+      // created and left unseeded, so the lens CAN answer for it.
+      if (this.seedDeployed && !this.code.has(key.toLowerCase())) {
+        this.code.set(key.toLowerCase(), '0x60006000f3');
+      }
+      return '0x' + addrWord(key);
+    }
+    // createAndSeed. The preflight is where the page discovers how wide a band
+    // this deposit can back, so the fixture has to be able to REFUSE one:
+    // width is bought with capital, and the pool reverts InsufficientLiquidity
+    // when the virtual reserves would fall below MIN_RESOLUTION.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.CREATE_SEED) {
+      if (this.rejectWiderThan != null) {
+        const body = '0x' + data.slice(8);
+        const lo = word(body, 2), hi = word(body, 3);
+        // Widths are compared in sqrt space, where a band of n times each way
+        // spans sqrt(n) either side - so hi/lo is n, not n squared.
+        const width = lo === 0n ? Infinity : Number((hi * 1000n) / lo) / 1000;
+        if (width > this.rejectWiderThan) throw Error('InsufficientLiquidity');
+      }
+      return '0x' + '00'.repeat(128);
+    }
+    // poolsForPairCount — how many bands the pair has, which the page reads
+    // before deciding how wide a window to ask for. `_byPair` is append-only,
+    // so a fixed window hides anything created after it.
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.PAIR_COUNT) {
+      const body = '0x' + data.slice(8);
+      const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
+      return '0x' + u256(this.pairCount ?? rows.length);
+    }
+    // totalSupply on a pool. The create form asks the PREDICTED address, and a
+    // CREATE2 address with no code answers an eth_call with EMPTY returndata
+    // rather than failing - which is not the same as answering zero, and the
+    // page has to tell the two apart. So an undeployed address returns '0x'
+    // here, exactly as a node would.
+    if (sel === SEL.TOTALSUPPLY) {
+      const row = this.poolRow(to);
+      if (row) return '0x' + u256(row.liquidity);
+      if (!this.code.has(to) || this.code.get(to) === '0x') return '0x';
+      return '0x' + u256(this.seedSupply ?? 0n);
+    }
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.BY_CREATOR_N) {
+      return '0x' + u256((this.launched || []).length);
+    }
+    /* Honours `start`/`count`, because the page's whole reason for asking the
+       COUNT first is to request the tail rather than the head - a mock that
+       ignored the window would pass either way and prove nothing. */
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.BY_CREATOR) {
+      const l = this.launched || [];
+      const start = Number(BigInt('0x' + data.slice(8 + 64, 8 + 128)));
+      const count = Number(BigInt('0x' + data.slice(8 + 128, 8 + 192)));
+      return coder.encode(['address[]'], [l.slice(start, start + count).map(x => x.pool)]);
+    }
+    /* PrecisionPool.creatorFeeBps - an IMMUTABLE, zero on an ordinary pool and
+       nonzero on one a launcher created, which is how the page tells how much
+       of the headline fee actually reaches LPs. A row opts in with
+       `creatorFeeBps` in setPools. */
+    /* Chainlink ETH/USD `latestRoundData`. Absent a fixture the page gets
+       nothing and simply shows no dollar figure, which is the honest default -
+       a wrong price is worse than none. `ethUsd` opts a test in, `ethUsdAge`
+       drives the staleness refusal. */
+    if (sel === 'feaf968c' && to === '0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419') {
+      if (this.ethUsd === undefined) throw Error('no feed');
+      const now = Math.floor(Date.now() / 1000) - (this.ethUsdAge ?? 0);
+      return '0x' + u256(1) + u256(BigInt(Math.round(this.ethUsd * 1e8)))
+        + u256(now) + u256(now) + u256(1);
+    }
+    if (sel === '17773ebb') {
+      const r = this.poolRow(to);
+      return '0x' + u256(r?.creatorFeeBps ?? 0n);
+    }
+    if (sel === SEL.RESERVE0) {
+      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      return '0x' + u256(hit?.reserve0 ?? 0n);
+    }
+    if (sel === SEL.TOKEN1) {
+      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      if (hit) return '0x' + addrWord(hit.token);
+    }
+    if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
+      const who = wordAddr('0x' + data.slice(8), 0);
+      return coder.encode(['bool'],
+        [!!this.poolRow(who) && !this.disowned.has(who.toLowerCase())]);
+    }
+    // PrecisionPoolLens.quoteBestFor — the pair's own bands as a quote source.
+    // zQuoter predates Precision and cannot see these pools at all, so a market
+    // can be live, funded and quotable and still be invisible to the router.
+    if (sel === SEL.QUOTE_BEST) {
+      const q = this.precisionQuote;
+      if (!q) return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      /**
+       * THE PAIR IS PART OF THE QUESTION, and the mock has to say so.
+       *
+       * The factory pages pools by the SORTED pair, and a native market is
+       * stored under address(0) because the pool holds ether. Answering
+       * regardless of which pair was asked for made this mock agree with any
+       * lookup, including a wrong one - so a page that asked for (ZORG, WETH)
+       * when the market is (ETH, ZORG) got a quote here and "no route" on
+       * chain. Exactly the shape that let a Swapbatch struct mismatch live
+       * behind twenty passing tests.
+       */
+      const body = '0x' + data.slice(8);
+      const asked = [wordAddr(body, 0).toLowerCase(), wordAddr(body, 1).toLowerCase()];
+      const want = (q.pair || [A.ZERO, A.USDC]).map(a => a.toLowerCase()).sort();
+      if (asked.sort().join() !== want.join()) {
+        return coder.encode(['address', 'uint256'], [A.ZERO, 0n]);
+      }
+      /* SIZE-DEPENDENT, when the fixture asks for it. A flat answer cannot
+         express impact at all: the page measures it by quoting a hundredth of
+         the trade and comparing the marginal price to the executed one, so a
+         mock that returns the same `out` for both makes every trade look
+         impact-free. `small` is what the reference-sized quote returns. */
+      if (q.small !== undefined) {
+        const asked = word('0x' + data.slice(8), 4);
+        const full = BigInt(q.amountIn ?? 10n ** 18n);
+        if (asked < full) return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.small)]);
+      }
+      return coder.encode(['address', 'uint256'], [q.pool, BigInt(q.out)]);
+    }
+    if (sel === SEL.POOL_FEE && this.precisionQuote) {
+      return '0x' + u256(this.precisionQuote.fee ?? 3000);
+    }
+    /* `effectiveFee` on the lens. The page stopped reading the pool's own
+       `fee()` because that is only the BASE rate - a hooked pool charges more,
+       so reading it off the pool understates what the trade actually pays.
+       Without an answer here the read falls into its `catch`, the fee comes
+       back zero, and the rate line silently drops the tier: "Precision"
+       instead of "Precision 0.3%". */
+    if (sel === SEL.EFF_FEE && this.precisionQuote) {
+      return '0x' + u256(this.precisionQuote.effFee ?? this.precisionQuote.fee ?? 3000);
+    }
+    // swapExactIn on the pool itself. The page preflights every send with
+    // eth_call, so a pool that cannot answer this reads as a broken route
+    // rather than as a thin fixture.
+    if (sel === SEL.PSWAP && this.precisionQuote
+      && to === this.precisionQuote.pool.toLowerCase()) {
+      return '0x' + u256(this.precisionQuote.out);
+    }
+    if (to === A.PLQLENS.toLowerCase()) {
+      const body = '0x' + data.slice(8);
+      const row = this.poolRow(wordAddr(body, 0));
+      if (sel === SEL.PREVIEW_REMOVE) {
+        const shares = word(body, 1), supply = row ? BigInt(row.liquidity) : 0n;
+        if (!row || shares === 0n || supply === 0n || shares > supply) {
+          return coder.encode(['bool', 'uint256', 'uint256'], [false, 0n, 0n]);
+        }
+        const a0 = shares * BigInt(row.reserve0) / supply;
+        const a1 = shares * BigInt(row.reserve1) / supply;
+        return coder.encode(['bool', 'uint256', 'uint256'],
+          [a0 !== 0n || a1 !== 0n, a0, a1]);
+      }
+      // previewSeed(pool, sqrtPriceInit, amount0, amount1). An unseeded band is
+      // the ONLY case here, so this models the shape the page depends on: `ok`
+      // false when the opening price sits outside the band, and amounts that
+      // may be less than offered because a seed takes the ratio it needs.
+      if (sel === SEL.PREVIEW_SEED) {
+        const out = ['bool', 'uint256', 'uint256', 'uint256'];
+        const sp = word(body, 1), a0 = word(body, 2), a1 = word(body, 3);
+        const band = this.seedBand;
+        // The lens reads the band OFF THE POOL, so against an address with no
+        // code it reverts rather than answering false. That is the ordinary
+        // case when creating - the pool does not exist yet - and modelling it
+        // as a polite `false` is what let a page ship that could never have
+        // previewed anything on mainnet.
+        if (!this.code.has(wordAddr(body, 0).toLowerCase())) throw Error('no pool at that address');
+        if (!band || sp < band.low || sp > band.high || (a0 === 0n && a1 === 0n)) {
+          return coder.encode(out, [false, 0n, 0n, 0n]);
+        }
+        // Enough to exercise the page: both sides are used in full unless the
+        // fixture says otherwise, and lp is their sum.
+        const used0 = band.used0 ?? a0, used1 = band.used1 ?? a1;
+        return coder.encode(out, [true, used0 + used1, used0, used1]);
+      }
+      // previewZap(pool, tokenIn, amountIn) -> (ok, swapPortion, expectedLp).
+      // The real lens BISECTS for the split against the pool's own quoter; the
+      // page treats both numbers as opaque, so what has to be modelled is the
+      // contract of the answer, not its arithmetic: refused when the band has
+      // no supply or the token is not in the pair, and a portion strictly
+      // inside the input otherwise (`zapIn` reverts on portion == amountIn).
+      if (sel === SEL.PREVIEW_ZAP) {
+        const out = ['bool', 'uint256', 'uint256'];
+        const tokenIn = wordAddr(body, 1).toLowerCase(), amountIn = word(body, 2);
+        const supply = row ? BigInt(row.liquidity) : 0n;
+        const known = (this.poolPair(wordAddr(body, 0)) || []).includes(tokenIn);
+        if (!row || supply === 0n || !known || amountIn < 2n) {
+          return coder.encode(out, [false, 0n, 0n]);
+        }
+        const portion = this.zapPortion ?? amountIn / 2n;
+        const lp = this.zapLp ?? amountIn / 4n;
+        return coder.encode(out, [true, portion, lp]);
+      }
+      if (sel === SEL.PREVIEW_ADD) {
+        const off = ['bool', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'];
+        const a0 = word(body, 1), a1 = word(body, 2);
+        const supply = row ? BigInt(row.liquidity) : 0n;
+        const r0 = row ? BigInt(row.reserve0) : 0n, r1 = row ? BigInt(row.reserve1) : 0n;
+        if (!row || supply === 0n || r0 === 0n || r1 === 0n) {
+          return coder.encode(off, [false, 0n, 0n, 0n, 0n, 0n]);
+        }
+        // min of each side's proportional share, then ceil back the amounts
+        // that share actually consumes — the lens formula exactly.
+        const lp = (x => (x < a1 * supply / r1 ? x : a1 * supply / r1))(a0 * supply / r0);
+        const ceil = (n, d) => (n + d - 1n) / d;
+        const used0 = ceil(lp * r0, supply), used1 = ceil(lp * r1, supply);
+        if (lp === 0n || used0 > a0 || used1 > a1) {
+          return coder.encode(off, [false, 0n, 0n, 0n, 0n, 0n]);
+        }
+        return coder.encode(off, [true, lp, used0, used1, a0 - used0, a1 - used1]);
+      }
     }
     if (sel === SEL.TAPE) {
       const body = '0x' + data.slice(8);
       const bars = this.tapes.get(`${to}:${Number(word(body, 0))}`) || [];
       const count = Number(word(body, 1));
       return coder.encode(['uint256[]'],
-        [bars.slice(0, count).map(b => (b === null ? 0n : encodeTapeBar(b)))]);
+        /* A bar may be given already PACKED - a bigint or decimal string, as
+           `tape()` returns it on chain. That lets a fixture replay a tape a
+           real pool actually wrote, rather than one hand-assembled here, where
+           the volume need not agree with the price move it sits under. */
+        [bars.slice(0, count).map(b =>
+          b === null ? 0n
+          : (typeof b === 'bigint' || typeof b === 'string') ? BigInt(b)
+          : encodeTapeBar(b))]);
     }
     if (to === A.WNS.toLowerCase() || to === A.GNS.toLowerCase()) return this.ns(sel, data);
     if (to === A.ENSREG.toLowerCase()) {
-      if (sel === SEL.ENS_RSLV) return '0x' + addrWord(this.ensResolver);
+      if (sel === SEL.ENS_RSLV) {
+        // A resolver pinned to one node beats the flat default, so a test can
+        // give an ANCESTOR one while the exact node has none — the shape the
+        // ENSIP-10 walk exists for, and the one a single flat field cannot say.
+        const node = '0x' + strip(data).slice(8, 72);
+        if (this.ensResolvers.has(node)) return '0x' + addrWord(this.ensResolvers.get(node));
+        return '0x' + addrWord(this.ensResolver);
+      }
       throw Error(`MockChain: unhandled ENS registry selector ${sel}`);
     }
+    if (to === A.ENSRESOLVER.toLowerCase()) return this.ensResolve(sel, data);
     return this.erc20Call(to, sel, data, tx);
   }
 
   aggregate3(data, block) {
     // aggregate3((address target,bool allowFailure,bytes callData)[])
     const [calls] = coder.decode(['tuple(address,bool,bytes)[]'], '0x' + data.slice(8));
+    // Every provider caps eth_call, at its own undocumented value, and refuses
+    // the whole request rather than returning partial results. `batchLimit`
+    // reproduces that: allowFailure cannot help, because the batch never runs.
+    if (calls.length > this.batchLimit) throw Error('out of gas');
+    // A node whose per-call budget cannot cover the read fails EVERY call while
+    // the batch itself returns fine. That is not the same as `batchLimit`, which
+    // kills the whole request - here allowFailure works exactly as designed and
+    // hands back a full set of failures, which look identical to "no liquidity".
+    // Seen for real: an exact-out quote against a fork whose eth_call gas cap is
+    // below what the heaviest probe needs.
+    if (this.failEveryCall) {
+      return coder.encode(['tuple(bool,bytes)[]'], [calls.map(() => [false, '0x'])]);
+    }
     const results = calls.map(([target, , callData]) => {
       try {
         return [true, this.ethCall({ to: target, data: callData }, block)];
@@ -422,6 +1077,77 @@ export class MockChain {
     if (sel === SEL.RECENT) return pick(this.recent, false);
     if (sel === SEL.RECENT_DUTCH) return pick(this.recent, true);
     throw Error(`MockChain: unhandled lens selector ${sel}`);
+  }
+
+  /**
+   * FloorboardView. `floorCandidatesFrom` is asked with the taker's own
+   * (tokenIn, tokenOut) and must answer with bids that BUY tokenIn — the
+   * mirror of an ask — so the filter here is deliberately written the same way
+   * round as the real lens rather than passing everything through.
+   */
+  floorLens(sel, data) {
+    const body = '0x' + data.slice(8);
+    if (sel === SEL.FLOOR_CANDS) {
+      const tokenIn = wordAddr(body, 1).toLowerCase();
+      const tokenOut = wordAddr(body, 2).toLowerCase();
+      return encodeBidPage(this.floorBids.filter(b =>
+        !b.isNFT
+        && b.token.toLowerCase() === tokenIn
+        && b.quote.toLowerCase() === tokenOut), 0n);
+    }
+    if (sel === SEL.RECENT_FLOOR) return encodeBidPage(this.floorBids, 0n);
+    if (sel === SEL.COLL_BIDS) {
+      const collection = wordAddr(body, 1).toLowerCase();
+      return encodeBidPage(this.floorBids.filter(b =>
+        b.isNFT && b.token.toLowerCase() === collection), 0n);
+    }
+    throw Error(`MockChain: unhandled floor lens selector ${sel}`);
+  }
+
+  /**
+   * `Floorboard.bids(id)` — the generated mapping getter, which DROPS the
+   * struct's trailing dynamic `ids`, so it is eleven flat words.
+   */
+  floorBid(data) {
+    const id = word('0x' + data.slice(8), 0);
+    const b = this.floorBids.find(x => BigInt(x.id) === id);
+    // A slot that never existed answers with a zero bidder rather than
+    // reverting — that is what the real getter does, and the page treats it
+    // as "closed".
+    if (!b) return '0x' + '0'.repeat(64 * 11);
+    return '0x' + [
+      addrWord(b.bidder || A.OTHER), u256(b.isNFT ? 1 : 0),
+      // Word three is the bid's DURATION, not its expiry: the window is stated
+      // as a length and the lens is what adds it to `startTime`. Start and end
+      // price are distinct on a climbing bid, and default to the flat `price`.
+      u256(b.startTime || 0), u256(b.duration ?? 0),
+      addrWord(b.token), u256(b.startPrice ?? b.price),
+      addrWord(b.quote), u256(b.endPrice ?? b.price),
+      u256(b.price), u256(b.initial ?? b.remaining), u256(b.remaining),
+    ].join('');
+  }
+
+  /**
+   * `Swapboard.getOrders(uint256[])`. The struct is static, so it inlines: six
+   * words on the legacy board, eleven on the current one. Offset, length, body.
+   */
+  boardOrders(board, data) {
+    const body = '0x' + data.slice(8);
+    // (offset, length, id...) — the page asks for exactly one.
+    const id = word(body, 2);
+    const rows = [...this.recent, ...this.candidates];
+    const o = rows.find(r => BigInt(r.id) === id && r.board.toLowerCase() === board);
+    const v2 = board === A.SB2.toLowerCase();
+    const words = o
+      ? (v2
+        ? [addrWord(o.maker || A.OTHER), u256(1), u256(o.pf ? 1 : 0), u256(o.exp || 0),
+           u256(o.nA ? 1 : 0), u256(o.nB ? 1 : 0), addrWord(o.cp || A.ZERO),
+           addrWord(o.tA), u256(o.aA), addrWord(o.tB), u256(o.aB)]
+        : [addrWord(o.maker || A.OTHER), u256(1),
+           addrWord(o.tA), u256(o.aA), addrWord(o.tB), u256(o.aB)])
+      // `active = 0` is how the real board reports a filled or cancelled id.
+      : new Array(v2 ? 11 : 6).fill(u256(0));
+    return '0x' + u256(32) + u256(1) + words.join('');
   }
 
   dutchListing(data) {
@@ -464,13 +1190,93 @@ export class MockChain {
     throw Error(`MockChain: unhandled name-service selector ${sel}`);
   }
 
+  /**
+   * An ENS resolver, keyed by NAME rather than node.
+   *
+   * The page reaches a name two ways — addr(node) when the exact node owns the
+   * resolver, resolve(dnsName, addr(node)) when an ancestor does — and the whole
+   * point of the second path is that the node alone no longer identifies the
+   * name. So the mock indexes `ensNames` by name and namehashes it on the way
+   * in, which lets one map answer both paths and keeps a test from having to
+   * know which one the page will choose.
+   */
+  ensResolve(sel, data) {
+    const body = '0x' + data.slice(8);
+    if (sel === SEL.ENS_SUPPORTS) {
+      const id = strip(data).slice(8, 16);
+      return '0x' + u256(id === SEL.ENS_RESOLVE && this.ensWildcard ? 1 : 0);
+    }
+    const byNode = node => {
+      for (const [name, addr] of this.ensNames)
+        if (ensNamehash(name) === node) return addr;
+      return null;
+    };
+    if (sel === SEL.ENS_EADDR) return '0x' + addrWord(byNode(wordHex(body, 0)) || A.ZERO);
+    if (sel === SEL.ENS_ENAME) {
+      for (const [addr, name] of this.ensRevNames)
+        if (ensNamehash(strip(addr).toLowerCase() + '.addr.reverse') === wordHex(body, 0))
+          return encodeString(name);
+      return encodeString('');
+    }
+    if (sel === SEL.ENS_RESOLVE) {
+      // A CCIP resolver answers a plain call with a revert, not a value.
+      if (this.ensOffchain) { const e = Error('execution reverted'); e.data = '0x556f1830'; throw e; }
+      const [dns, inner] = coder.decode(['bytes', 'bytes'], body);
+      const name = dnsDecode(dns);
+      const a = this.ensNames.get(name) || A.ZERO;
+      if (strip(inner).slice(0, 8) !== SEL.ENS_EADDR) return coder.encode(['bytes'], ['0x']);
+      return coder.encode(['bytes'], ['0x' + addrWord(a)]);
+    }
+    throw Error(`MockChain: unhandled ENS resolver selector ${sel}`);
+  }
+
   board(sel, data) {
     if (sel === SEL.NEXTID) return '0x' + u256(0);
+    /**
+     * `quoteFill(orderId, fillAmountB) -> (outA, paidB)`.
+     *
+     * The board answering the question a partial fill will later ask it. The
+     * page deliberately does NOT compute this itself: `_computeFill` floors
+     * with `fullMulDiv` in the maker's favour, and a page that re-derived it
+     * would disagree by a wei sooner or later and revert on its own floor. So
+     * the mock rounds the same way the board does, or it would be testing an
+     * agreement that does not exist on chain.
+     */
+    if (sel === SEL.QUOTEFILL) {
+      const body = '0x' + data.slice(8);
+      const id = word(body, 0).toString();
+      const pay = word(body, 1);
+      const o = [...this.recent, ...this.candidates].find(x => String(x.id) === id);
+      if (!o) return '0x' + u256(0) + u256(0);
+      if (pay >= o.aB) return '0x' + u256(o.aA) + u256(o.aB);
+      return '0x' + u256((pay * o.aA) / o.aB) + u256(pay);   // floors, as the board does
+    }
     return '0x'; // fill/cancel are pre-flighted with eth_call before signing
   }
 
-  slow(sel, data) {
+  slow(sel, data, tx = {}) {
     const arr = ids => coder.encode(['uint256[]'], [ids.map(BigInt)]);
+    /**
+     * The tipped deposit splits msg.value into amount and tip and insists the
+     * two add up exactly — unlike depositTo, which reads a native amount out
+     * of msg.value and accepts a zero argument. Both rules are enforced by the
+     * real contract (InvalidAmount / a value mismatch), so they are enforced
+     * here: a page that encodes the deposit like the untipped one reverts on
+     * chain, and this is where that has to be caught.
+     */
+    if (sel === SEL.DEPOSITTIP) {
+      const body = '0x' + data.slice(8);
+      const native = wordAddr(body, 0) === A.ZERO;
+      const amount = word(body, 2), tip = word(body, 4);
+      const value = BigInt(tx.value ?? 0);
+      if (amount === 0n) throw Error('SLOW: InvalidAmount — a tipped deposit must state its amount');
+      if (tip === 0n) throw Error('SLOW: a tipped deposit with no tip');
+      if (value !== (native ? amount + tip : tip)) {
+        throw Error(`SLOW: msg.value ${value} does not equal ${native ? 'amount + tip' : 'tip'}`);
+      }
+      return '0x' + u256(1);
+    }
+    if (sel === SEL.GUARDIAN) return '0x' + addrWord(this.slowGuardian);
     if (sel === SEL.OUT) return arr(this.slowOut);
     if (sel === SEL.IN) return arr(this.slowIn);
     if (sel === SEL.PENDING) {
@@ -499,11 +1305,18 @@ export class MockChain {
         if (!m) throw Error('no name');
         return encodeString(m.name ?? m.symbol);
       case SEL.DECIMALS:
-        if (!m) throw Error('no decimals');
+        // A collection has no decimals, and reverting is the answer that says so.
+        if (!m || m.erc721) throw Error('no decimals');
         return '0x' + u256(m.decimals);
       case SEL.DS:
         if (!m?.domainSeparator) throw Error('no DOMAIN_SEPARATOR');
         return m.domainSeparator;
+      // Most EIP-2612 tokens publish this; DAI-style ones publish a DIFFERENT
+      // one for a permit the router cannot call. A fixture that sets neither
+      // reverts, which is also what plenty of real 2612 tokens do.
+      case SEL.PERMIT_TH:
+        if (!m?.permitTypehash) throw Error('no PERMIT_TYPEHASH');
+        return m.permitTypehash;
       case SEL.NONCES: return '0x' + u256(m?.nonce ?? 0);
       case SEL.APPROVE: case SEL.TRANSFER: return '0x' + u256(1);
       // WETH deposit/withdraw return nothing; the page pre-flights the unwrap
@@ -512,6 +1325,95 @@ export class MockChain {
       default:
         // 0x081812fc = getApproved(uint256)
         if (sel === '081812fc') return '0x' + u256(0);
+        // ownerOf(uint256), for a collection the fixture set up with setNftOwner.
+        if (sel === '6352211e' && m?.erc721) {
+          const owner = this.nftOwner.get(`${to}:${word('0x' + data.slice(8), 0)}`);
+          if (!owner) throw Error('nonexistent token');
+          return '0x' + addrWord(owner);
+        }
+        // safeTransferFrom(address,address,uint256,bytes) - how an NFT is
+        // listed: the token IS the order, so there is nothing to return.
+        if (sel === 'b88d4fde') return '0x';
+        // supportsInterface(bytes4). An ERC-20 has no such function at all, so
+        // the miss below - a revert - is the correct answer for one.
+        if (sel === '01ffc9a7') {
+          const id = data.slice(8, 16);
+          if (m?.erc721 && id === '80ac58cd') return '0x' + u256(1);
+          if (m?.erc1155 && id === 'd9b67a26') return '0x' + u256(1);
+          if (m?.erc721 || m?.erc1155) return '0x' + u256(0);
+        }
+        /* PrecisionLauncher.launch / launchWithArt, simulated. The page runs an
+           `eth_call` before signing so a launch the chain would refuse costs
+           nothing; without an answer here that preflight throws and no launch
+           is ever sent. Returns the (token, pool) pair the real one does.
+           `launchReverts` lets a test drive the refusal path. */
+        /* ERC-7572 `contractURI()`. Almost no ERC-20 has one, and the page
+           treats absence as "no art" - so answering with a revert here is the
+           realistic case, not a gap. A fixture wanting art sets `contractURIs`. */
+        if (sel === '56ea33ee' || sel === '3ad57b72') {
+          const e = Object.values(this.launchFees || {})
+            .find(x => (x.pool || FEE_POOL).toLowerCase() === to.toLowerCase());
+          if (!e) return '0x' + u256(0);
+          return '0x' + u256(sel === '56ea33ee' ? (e.owed0 ?? 0n) : (e.owed1 ?? 0n));
+        }
+        if (sel === 'e8a3d485') {
+          const u = this.contractURIs?.[to.toLowerCase()];
+          if (!u) throw Error('no contractURI');
+          const b = Buffer.from(u, 'utf8');
+          return '0x' + u256(32) + u256(b.length) + b.toString('hex').padEnd(Math.ceil(b.length / 32) * 64, '0');
+        }
+        /* PrecisionLauncher.poolOf and the pool's `creatorOwed0` - what the
+           page reads to decide whether a coin has uncollected fees. Absent a
+           fixture every token answers zero, which is the honest default: most
+           tokens were not launched here. `setLaunchFees` opts a test in. */
+        if (sel === '988b1fa7') {
+          const t = '0x' + data.slice(8 + 24, 8 + 64).toLowerCase();
+          const f = this.launchFees?.[t];
+          return '0x' + addrWord(f ? (f.pool || FEE_POOL) : A.ZERO);
+        }
+        if (sel === 'a480ca79' || sel === 'c296057e') {
+          if (this.collectReverts) throw Error('execution reverted');
+          return '0x' + u256(0).repeat(6);
+        }
+        if (sel === '6a648dc6' || sel === '72cf7bd8') {
+          if (this.launchReverts) throw Error('execution reverted');
+          return '0x' + addrWord(this.launchToken || '0x' + '11'.repeat(20))
+            + addrWord(this.launchPool || '0x' + '22'.repeat(20));
+        }
+        /* PrecisionLauncher.creatorOf - the one call the page spends when a
+           receipt arrives without logs, to decide whether the address its
+           preflight predicted is really the coin it just launched. Zero for
+           anything this launcher did not launch, which is the real contract's
+           behaviour and the whole basis of the fallback being sound.
+           `creatorOfAnswer` lets a test drive the nonce race, where the
+           predicted address is a REAL token belonging to somebody else. */
+        /* PrecisionLauncher.quoteRedeem - the ether backing an amount of a
+           launched coin. Zero unless a fixture opts in, which matches the real
+           contract: it returns zero for anything it did not launch. */
+        if (sel === '385e4465') {
+          return '0x' + u256(this.redeemQuote ?? 0n);
+        }
+        /* PrecisionLauncher.floorPrice - `quoteRedeem` of ONE whole token. The
+           page reads this once per token and scales, since redemption is linear
+           in the amount, so a fixture's `redeemQuote` has to be expressed per
+           token here or the two disagree. */
+        if (sel === '2aad9987') {
+          const per = this.floorPrice ?? this.redeemQuote ?? 0n;
+          return '0x' + u256(per);
+        }
+        if (sel === 'dea5c2e0') {
+          if (this.creatorOfAnswer !== undefined) return '0x' + addrWord(this.creatorOfAnswer);
+          /* A token this fixture launched via `setLaunchFees` answers with its
+             creator - that is what the page filters on to decide whose fees
+             these are. */
+          const t = '0x' + data.slice(8 + 24, 8 + 64).toLowerCase();
+          if (this.launchFees?.[t]) {
+            return '0x' + addrWord(this.launchFees[t].creator || A.ACCOUNT);
+          }
+          const asked = '0x' + data.slice(8 + 24, 8 + 64);
+          const mine = (this.launchToken || '0x' + '11'.repeat(20)).toLowerCase();
+          return '0x' + addrWord(asked === mine ? (this.launchCreator || A.ACCOUNT) : ZERO_ADDR);
+        }
         throw Error(`MockChain: unhandled call ${sel} to ${to}`);
     }
   }
@@ -534,10 +1436,27 @@ export function closeAllPages() {
   openPages.clear();
 }
 
-export async function loadPage({ chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = {}) {
-  // The shipped page leaves PPFACTORY at the zero address until deployment, so
-  // the chart stays off. Tests inject an address here rather than the page
-  // carrying a guessed one that would be immutable once deployed.
+/**
+ * The pair tests exercise unless they say otherwise.
+ *
+ * The landing pair is on-chain data now - the page adopts the top of the
+ * registry's conviction ranking - so a test that leans on it is really
+ * asserting today's ranking, and a re-rank would rewrite dozens of unrelated
+ * expectations. Pinning it through the page's OWN deep link does that before
+ * the registry loads, so the page settles on one pair for its whole life
+ * rather than transitioning and re-reading the chart for a pair no one asked
+ * to see. Tests that pass a hash override this; ranked-default tests pass
+ * `hash: null` to watch the page choose for itself.
+ */
+const PINNED_PAIR = 'token=ETH&out=USDC';
+
+export async function loadPage(opts = {}) {
+  let { chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = opts;
+  if (hash === '') hash = PINNED_PAIR;
+  else if (hash === null) hash = '';
+  // Tests that exercise the price tape or the liquidity panel repoint PPLENS
+  // at a mock address through `patch`, matched by shape rather than by literal
+  // so a redeploy of the real lens does not silently unpatch them.
   let html = fs.readFileSync(HTML_PATH, 'utf8');
   for (const [from, to] of patch) {
     if (!html.includes(from)) throw Error(`patch target not found: ${from}`);
@@ -559,7 +1478,10 @@ export async function loadPage({ chain = new MockChain(), hash = '', storage = {
   const asked = { prompt: [], confirm: [] };
 
   const dom = new JSDOM(html, {
-    url: 'https://zswap.test/' + (hash ? '#' + hash.replace(/^#/, '') : ''),
+    // `url` is overridable because the page reads its own contract address off a
+    // web3:// gateway hostname - `<address>.<chain>.w3link.io` - and that is the
+    // only way to exercise it, a root build having no way to carry its own address.
+    url: (opts.url || 'https://zswap.test/') + (hash ? '#' + hash.replace(/^#/, '') : ''),
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     virtualConsole,
@@ -693,10 +1615,31 @@ export async function loadPage({ chain = new MockChain(), hash = '', storage = {
     await page.waitFor(() => other.value !== '...', { label: 'quote to resolve' });
     await page.settle();
   };
-  page.connect = async () => {
+  /**
+   * Connect, then pin the pair to ETH -> USDC.
+   *
+   * The landing pair is no longer a constant: the page adopts the top of the
+   * registry's conviction ranking once it loads, so curation moves the default
+   * without a redeploy. A test that leans on whatever that happens to be today
+   * is really asserting the current ranking, and every re-rank would rewrite
+   * dozens of unrelated expectations. So tests state the pair they exercise.
+   *
+   * Pass `{ pin: false }` to observe the default the page actually chose -
+   * that is what the ranked-default tests do.
+   */
+  page.connect = async ({ pin = true } = {}) => {
     page.click('swap');
     await page.waitFor(() => page.text('addr') !== 'Not connected', { label: 'connect' });
     await page.settle();
+    if (!pin) return;
+    // Selecting through the real control, so the page marks the pair chosen
+    // exactly as it would for a user - no back door into its state.
+    const has = (which, sym) => [...page.$(which).options].some(o => o.textContent === sym);
+    if (has('fromSel', 'ETH') && has('toSel', 'USDC')) {
+      page.pickToken('fromSel', 'ETH');
+      page.pickToken('toSel', 'USDC');
+      await page.settle();
+    }
   };
 
   await page.settle();
@@ -712,8 +1655,13 @@ export function assertAddressesMatchPage(assert) {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   const pinned = {
     ZQUOTER: 'ZQUOTER', ZROUTER: 'ZROUTER', PERMIT2: 'PERMIT2', SLOW: 'SLOW',
+    SLOW_GATE: 'SLOW_GATE',
     SB2: 'SB2', SB1: 'SB1', SBVIEW: 'SBVIEW', SWAPBOL: 'SWAPBOL', DUTCH: 'DUTCH',
-    ORDERBOL: 'ORDERBOL', WETH: 'WETH',
+    ORDERBOL: 'ORDERBOL', WETH: 'WETH', FLOOR: 'FLOOR', FLOORVIEW: 'FLOORVIEW',
+    // Not patched by any suite, so the fixtures answer at the real addresses
+    // and a redeploy has to update both.
+    PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS', PROUTE: 'PROUTE',
+    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS',
   };
   for (const [key, name] of Object.entries(pinned)) {
     const m = html.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));

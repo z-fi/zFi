@@ -1,0 +1,86 @@
+<title>zSwap architecture</title>
+<style>
+:root{--bg:#08080a;--card:#131316;--edge:#242429;--fg:#f5f5f7;--mut:#9a9aa4;--acc:#c9f24d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:400 16px/1.5 ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:46px 44px 38px}
+.wrap{max-width:1360px;margin:0 auto}
+h1{margin:0 0 10px;font-size:33px;letter-spacing:-.024em;font-weight:650;line-height:1.15}
+.sub{margin:0 0 30px;color:var(--mut);font-size:15.5px;max-width:96ch;line-height:1.62}
+.sub b{color:var(--fg);font-weight:600}
+.rail{display:grid;grid-template-columns:228px 1fr;gap:20px;align-items:start}
+.host{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:17px}
+.hl{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--acc);font-weight:650;margin-bottom:12px}
+.chunks{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:12px}
+.ch{height:26px;border-radius:4px;background:#1b1b1f;border:1px solid #2b2b31;
+display:flex;align-items:center;justify-content:center;font-size:9.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+.figs{font-size:12px;color:var(--mut);line-height:1.6;margin:0}
+.figs b{color:var(--fg);display:block;margin-top:2px}
+.wrapc{border:1px dashed #3a3a42;border-radius:10px;padding:12px;margin:12px 0}
+.wrapc b{display:block;font-size:13.5px;margin-bottom:4px}
+.wrapc p{margin:0;font-size:12px;color:var(--mut);line-height:1.55}
+.sel{margin-top:7px;display:flex;gap:5px}
+.sel code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--acc);
+background:#191920;border:1px solid #2c2c33;border-radius:4px;padding:2px 6px}
+.note{font-size:12px;color:var(--mut);line-height:1.58;margin:0}
+.stack{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+.g{background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:16px 16px 14px}
+.g h3{margin:0 0 6px;font-size:15px;font-weight:650;letter-spacing:-.012em}
+.g p{margin:0 0 12px;font-size:12.5px;color:var(--mut);line-height:1.58}
+.fig{background:#0d0d10;border:1px solid #1e1e23;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.pills{display:flex;flex-wrap:wrap;gap:5px}
+.p{font-size:10.5px;padding:3px 7px;border-radius:5px;border:1px solid #2c2c33;color:#b9b9c2;background:#191920;white-space:nowrap}
+.foot{margin-top:26px;display:flex;gap:30px;flex-wrap:wrap;font-size:13.5px;color:var(--mut)}
+.foot b{color:var(--fg);font-weight:600}
+</style>
+<div class="wrap">
+<h1>zSwap runs on Ethereum. Not on a server that talks to Ethereum.</h1>
+<p class="sub">The page itself is <b>contract bytecode</b>. Ten data contracts hold the HTML; an eleventh reassembles and serves it over <b>ERC-8244</b> and <b>ERC-5219</b>. There are <b>zero build steps between the source and what you load</b> — no host to go down, no domain to seize, and no version anyone can change, us included.</p>
+<div class="rail">
+  <div class="host">
+    <div class="hl">The page</div>
+    <div class="chunks"><div class="ch">01</div><div class="ch">02</div><div class="ch">03</div><div class="ch">04</div><div class="ch">05</div><div class="ch">06</div><div class="ch">07</div><div class="ch">08</div><div class="ch">09</div><div class="ch">10</div></div>
+    <p class="figs">10 data contracts, 24,095 B each<b>240,945 bytes of HTML</b></p>
+    <div class="wrapc"><b>zSwap</b><p>6,034 bytes of Solidity. Reassembles the ten and answers:</p>
+      <div class="sel"><code>html()</code><code>request()</code></div></div>
+    <p class="note">Your browser runs the HTML, as it would any page. What differs is where it came from — and that its bytes cannot change.</p>
+  </div>
+  <div class="stack">
+    <div class="g"><h3>Routing & quoting</h3><p>Every quote is compared across Uniswap v2/v3/v4, Curve, Sushi and our own pools. The best wins and settles in one signature.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif">
+  <path d="M14 16 C90 16 110 48 170 48" stroke="#4d4d58" stroke-width="1.3"/><path d="M14 34 C90 34 110 48 170 48" stroke="#4d4d58" stroke-width="1.3"/><path d="M14 52 C90 52 110 48 170 48" stroke="#c9f24d" stroke-width="2.4"/><path d="M14 70 C90 70 110 48 170 48" stroke="#4d4d58" stroke-width="1.3"/>
+  <circle cx="170" cy="48" r="6" fill="#c9f24d"/>
+  <path d="M178 48 H286" stroke="#c9f24d" stroke-width="2.4"/>
+  <path d="M279 42 286 48 279 54" stroke="#c9f24d" stroke-width="2.4"/>
+  <text x="14" y="88" fill="#9a9aa4" font-size="11" text-anchor="start">6 venues quoted</text><text x="196" y="40" fill="#e6e6ea" font-size="12" text-anchor="start">one signature</text></svg></div><div class="pills"><span class="p">zRouter</span><span class="p">zQuoter</span><span class="p">V4 lens</span><span class="p">V4 port</span><span class="p">Permit2</span><span class="p">Multicall3</span></div></div>
+<div class="g"><h3>Precision AMM</h3><p>Our own concentrated liquidity. A position earns only inside the band you choose — wider is safer and earns less.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif">
+  <path d="M18 62 H302" stroke="#4d4d58" stroke-width="1.6"/>
+  <rect x="112" y="26" width="96" height="36" rx="5" fill="#c9f24d" fill-opacity=".14" stroke="#c9f24d" stroke-width="2"/>
+  <path d="M160 18 V70" stroke="#c9f24d" stroke-width="2.6"/>
+  <text x="160" y="14" fill="#c9f24d" font-size="11" text-anchor="middle">price</text>
+  <text x="160" y="84" fill="#e6e6ea" font-size="12" text-anchor="middle">earns fees in this band</text>
+  <text x="18" y="84" fill="#9a9aa4" font-size="11" text-anchor="start">idle</text><text x="302" y="84" fill="#9a9aa4" font-size="11" text-anchor="end">idle</text></svg></div><div class="pills"><span class="p">Pool factory</span><span class="p">Route</span><span class="p">Pool lens</span><span class="p">Liquidity lens</span></div></div>
+<div class="g"><h3>Orderbooks</h3><p>Three shapes of order. Each one mints an NFT whose art is drawn on chain by an immutable renderer.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif">
+  <path d="M16 20 H120" stroke="#e6e6ea" stroke-width="2.4"/>
+  <path d="M16 48 C64 48 78 76 120 76" stroke="#c9f24d" stroke-width="2.4"/>
+  <path d="M16 76 C64 76 78 48 120 48" stroke="#6ea8fe" stroke-width="2.4"/>
+  <text x="132" y="24" fill="#e6e6ea" font-size="12" text-anchor="start">rests at your price</text>
+  <text x="132" y="52" fill="#c9f24d" font-size="12" text-anchor="start">decays to a floor</text>
+  <text x="132" y="80" fill="#6ea8fe" font-size="12" text-anchor="start">climbs to a ceiling</text></svg></div><div class="pills"><span class="p">Swapboard v1</span><span class="p">Swapboard v2</span><span class="p">Dutchboard</span><span class="p">Floorboard</span><span class="p">+4 views</span></div></div>
+<div class="g"><h3>Launcher</h3><p>One transaction mints a fixed supply and seeds a fresh pool with all of it. No ether needed beyond gas.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif">
+  <rect x="14" y="34" width="70" height="30" rx="6" stroke="#c9f24d" stroke-width="2"/>
+  <text x="49" y="54" fill="#c9f24d" font-size="13" text-anchor="middle">1 tx</text>
+  <path d="M88 49 H124" stroke="#4d4d58" stroke-width="1.8"/><path d="M117 43 124 49 117 55" stroke="#4d4d58" stroke-width="1.8"/>
+  <rect x="130" y="14" width="176" height="30" rx="6" stroke="#4d4d58" stroke-width="1.4"/>
+  <text x="142" y="33" fill="#e6e6ea" font-size="12" text-anchor="start">fixed supply, minted</text>
+  <rect x="130" y="54" width="176" height="30" rx="6" stroke="#4d4d58" stroke-width="1.4"/>
+  <text x="142" y="73" fill="#e6e6ea" font-size="12" text-anchor="start">pool seeded with all of it</text></svg></div><div class="pills"><span class="p">PrecisionLauncher</span><span class="p">Launcher lens</span></div></div>
+<div class="g"><h3>Token list</h3><p>Curation ranked on chain by conviction staking. Re-ranking moves what the dapp opens on, with no redeploy.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif">
+  <rect x="16" y="14" width="232" height="11" rx="5.5" fill="#c9f24d" fill-opacity="1"/><rect x="16" y="34" width="186" height="11" rx="5.5" fill="#4d4d58" fill-opacity="0.6"/><rect x="16" y="54" width="140" height="11" rx="5.5" fill="#4d4d58" fill-opacity="0.6"/><rect x="16" y="74" width="94" height="11" rx="5.5" fill="#4d4d58" fill-opacity="0.6"/>
+  <text x="258" y="24" fill="#c9f24d" font-size="11" text-anchor="start">most</text>
+  <text x="258" y="84" fill="#9a9aa4" font-size="11" text-anchor="start">least</text>
+  <text x="16" y="92" fill="#e6e6ea" font-size="12" text-anchor="start">ranked on chain by conviction staked</text></svg></div><div class="pills"><span class="p">TokenList</span><span class="p">zList lens</span></div></div>
+<div class="g"><h3>Names & time-lock</h3><p>Send to a name instead of an address. Or time-lock a transfer and keep the right to reverse it until it matures.</p><div class="fig"><svg viewBox="0 0 320 96" width="100%" preserveAspectRatio="xMidYMid meet" fill="none" stroke-linecap="round" stroke-linejoin="round" font-family="ui-sans-serif,system-ui,sans-serif"><rect x="14" y="10" width="104" height="30" rx="6" stroke="#4d4d58" stroke-width="1.4"/><text x="30" y="30" fill="#e6e6ea" font-size="13">ross.wei</text><path d="M124 25 H166" stroke="#4d4d58" stroke-width="1.8"/><path d="M159 19 166 25 159 31" stroke="#4d4d58" stroke-width="1.8"/><text x="174" y="30" fill="#9a9aa4" font-size="12">0x1c0a&#8230;5a20</text><path d="M20 72 H300" stroke="#4d4d58" stroke-width="1.6"/><path d="M20 72 H236" stroke="#c9f24d" stroke-width="3"/><circle cx="20" cy="72" r="4.5" fill="#c9f24d"/><path d="M236 64 V80" stroke="#c9f24d" stroke-width="2.4"/><path d="M300 66 V78" stroke="#4d4d58" stroke-width="2"/><text x="20" y="92" fill="#9a9aa4" font-size="11">sent</text><text x="236" y="92" fill="#9a9aa4" font-size="11" text-anchor="middle">matures</text><text x="20" y="60" fill="#e6e6ea" font-size="12">reverse any time in here</text></svg></div><div class="pills"><span class="p">ENS registry</span><span class="p">wei names</span><span class="p">gwei names</span><span class="p">SLOW</span></div></div>
+  </div>
+</div>
+<div class="foot"><span><b>28</b> contract addresses baked into the page</span><span><b>0</b> servers</span><span><b>0</b> API keys</span><span><b>0</b> databases</span></div>
+</div>

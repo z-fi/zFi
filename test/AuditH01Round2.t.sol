@@ -91,7 +91,15 @@ contract AuditH01Round2Test is Test {
         vm.prank(lp);
         (address pool,,,) = factory.createAndSeed(m, 33e18, 0, 1e12, 0, lp);
         PrecisionPool p = PrecisionPool(payable(pool));
+        // A ONE-SHARE burn now redeems nothing on either side, and the pool
+        // refuses a redemption that would pay zero - the same guard the UI
+        // surfaces as "this amount redeems nothing". That refusal used to be
+        // the assertion here, phrased as "a one-share burn leaves it trading",
+        // and it made an accepted seed look rejected: `createAndSeed` above
+        // succeeds, which is the whole claim of this test. Pin the refusal
+        // explicitly, then go on to prove the pool trades.
         vm.prank(lp);
+        vm.expectRevert(PrecisionPool.ZeroAmount.selector);
         p.removeLiquidity(1, 0, 0, lp);
         vm.startPrank(trader);
         a.approve(pool, type(uint256).max);

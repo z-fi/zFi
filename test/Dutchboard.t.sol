@@ -31,7 +31,7 @@ contract DutchboardTest is Test {
 
     function setUp() public {
         board = new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-        swapbol = new Swapbol(address(this), address(new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)), address(board));
+        swapbol = new Swapbol(address(this), address(new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)), address(board), address(new Dutchboard(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)));
         boardEthAtDeploy = address(board).balance;
         vm.label(address(board), "Dutchboard");
         vm.label(_USDC, "USDC");

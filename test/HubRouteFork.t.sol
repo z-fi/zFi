@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+import {Test} from "forge-std/Test.sol";
+
+interface IERC20 { function balanceOf(address) external view returns (uint256); }
+
+/// @dev Executes the EXACT multicall zSwap.html's hubRoute() assembled, against
+///      the deployed zRouter on a forked mainnet at the block it was quoted at.
+///      Tenderly's gateway cannot run zRouter (its eth_call interpreter predates
+///      EIP-1153 and the router's entry guard is a `tload`), so the plan was
+///      priced but never executed. Foundry brings its own EVM and only needs the
+///      RPC for state, which is what makes this provable at all.
+contract HubRouteForkTest is Test {
+    address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
+    address constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    address constant HUB = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // the hub the page picked
+    address constant USER = 0x00000000000000000000000000000000000b0B0b;
+
+    function test_HubRoutePlanExecutes() public {
+        // Skips rather than fails without an endpoint, like the other fork tests
+        // here: `forge test` stays green offline, `ETH_RPC_URL=... forge test`
+        // actually proves it.
+        string memory url = vm.envOr("ETH_RPC_URL", string(""));
+        if (bytes(url).length == 0) {
+            emit log("SKIP: set ETH_RPC_URL to execute the captured plan");
+            return;
+        }
+        vm.createSelectFork(url, 25749272);
+
+        bytes memory plan = hex"ac9650d800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000003c00000000000000000000000000000000000000000000000000000000000000104afeae12b000000000000000000000000000000000000fb114709235f1ccbffb925f600e4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001f40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000008ac7230489e80000000000000000000000000000000000000000000000000000000000045ed75808000000000000000000000000000000000000000000000000000000006a7e547f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000104afeae12b00000000000000000000000000000000000000000000000000000000000b0b0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000000000000000000000000000000000045ed758080000000000000000000000000000000000000000000000000000000001c092f5000000000000000000000000000000000000000000000000000000006a7e547f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000084cb019b84000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b0b0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000084cb019b8400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b0b0b00000000000000000000000000000000000000000000000000000000";
+        uint256 msgValue = 10000000000000000000;
+        uint256 minOut = 29397749;
+        uint256 quoted = 29545477;
+
+        vm.deal(USER, msgValue + 1 ether);
+        uint256 ethBefore = USER.balance;
+        uint256 before = IERC20(WBTC).balanceOf(USER);
+
+        vm.prank(USER);
+        (bool ok,) = ZROUTER.call{value: msgValue}(plan);
+        assertTrue(ok, "the assembled two-leg plan reverted");
+
+        uint256 got = IERC20(WBTC).balanceOf(USER) - before;
+        emit log_named_uint("WBTC received", got);
+        emit log_named_uint("quoted       ", quoted);
+        emit log_named_uint("min accepted ", minOut);
+        emit log_named_uint("ETH spent    ", ethBefore - USER.balance);
+
+        assertGe(got, minOut, "delivered less than the bound the user was shown");
+
+        // Leg 2 buys with leg 1's GUARANTEED minimum, so leg 1 almost always
+        // overshoots. That surplus is a real balance in a router whose sweep()
+        // is public: it has to reach the payer in this same transaction.
+        uint256 surplus = IERC20(HUB).balanceOf(USER);
+        emit log_named_uint("hub surplus returned", surplus);
+        assertGt(surplus, 0, "leg-1 overshoot never came back");
+        assertEq(IERC20(HUB).balanceOf(ZROUTER), 0, "hub surplus stranded in router");
+        assertEq(ZROUTER.balance, 0, "ether stranded in router");
+        // The hub sweep must return leg-1 overshoot; nothing may be stranded in
+        // a router whose sweep() is public.
+        assertEq(IERC20(WBTC).balanceOf(ZROUTER), 0, "output stranded in router");
+        assertLe(ethBefore - USER.balance, msgValue, "spent more ether than msg.value");
+    }
+}

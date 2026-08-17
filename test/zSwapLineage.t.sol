@@ -18,11 +18,13 @@ contract zSwapLineageTest is Test {
     address dao = makeAddr("dao");
     address stranger = makeAddr("stranger");
 
-    address[6] chunks;
+    uint256 constant CHUNKS = 11;
+
+    address[CHUNKS] chunks;
 
     function setUp() public {
-        for (uint256 i; i != 6; ++i) {
-            // Six distinct, NON-EMPTY data contracts. The content is irrelevant
+        for (uint256 i; i != CHUNKS; ++i) {
+            // CHUNKS distinct, NON-EMPTY data contracts. The content is irrelevant
             // but the length is not: `6001` is valid initcode that returns
             // nothing, so the chunk deploys with zero code and the constructor
             // rejects it. This stub writes one byte and returns it.
@@ -40,12 +42,12 @@ contract zSwapLineageTest is Test {
     function _initcode(address previous) internal view returns (bytes memory) {
         return abi.encodePacked(
             type(zSwap).creationCode,
-            abi.encode(dao, previous, chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5])
+            abi.encode(dao, previous, chunks)
         );
     }
 
     function _root() internal returns (zSwap) {
-        return new zSwap(dao, address(0), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5]);
+        return new zSwap(dao, address(0), chunks);
     }
 
     // ------------------------------------------------------------- THE ROOT
@@ -117,7 +119,7 @@ contract zSwapLineageTest is Test {
     function test_cannotClaimAPredecessorThatDidNotDeployYou() public {
         zSwap v1 = _root();
         vm.expectRevert(zSwap.InvalidData.selector);
-        new zSwap(dao, address(v1), chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5]);
+        new zSwap(dao, address(v1), chunks);
     }
 
     function test_deployNextRevertsRatherThanRecordingAFailedDeploy() public {
@@ -127,6 +129,63 @@ contract zSwapLineageTest is Test {
         vm.expectRevert(zSwap.DeployFailed.selector);
         v1.deployNext(hex"60006000fd", bytes32(uint256(9)));
         assertEq(v1.successor(), address(0), "a failed deploy leaves no successor");
+    }
+
+    /// A CREATE2 that "succeeds" onto zero runtime code is the sharpest way to
+    /// lose the chain: the address is non-zero, so the write-once pointer would
+    /// be spent, and every subsequent `latest()` walk - from this contract AND
+    /// from every predecessor - would revert decoding empty returndata, with
+    /// `AlreadySucceeded` refusing the repair. It must not be recordable.
+    function test_deployNextRefusesACodelessSuccessor() public {
+        zSwap v1 = _root();
+        // PUSH1 0 PUSH1 0 RETURN: constructs fine, returns no runtime code.
+        vm.prank(dao);
+        vm.expectRevert(zSwap.NotASuccessor.selector);
+        v1.deployNext(hex"60006000f3", bytes32(uint256(11)));
+        assertEq(v1.successor(), address(0));
+        assertEq(v1.latest(), address(v1), "the walk still terminates");
+    }
+
+    /// The constructor's `previous` check is skipped when `previous` is zero,
+    /// so a successor CAN be built that declares no predecessor. Recording one
+    /// would fork the record: `v1.successor()` says v2, `v2.PREVIOUS()` says
+    /// nothing, and `v2.generation()` restarts at 1. Two accounts of one fact.
+    function test_deployNextRefusesASuccessorThatDisownsThisContract() public {
+        zSwap v1 = _root();
+        vm.prank(dao);
+        vm.expectRevert(zSwap.NotASuccessor.selector);
+        v1.deployNext(_initcode(address(0)), bytes32(uint256(12)));
+        assertEq(v1.successor(), address(0));
+    }
+
+    /// Not every contract answers `PREVIOUS()`. One that does not - or that
+    /// answers with someone else's address - is not this contract's successor.
+    function test_deployNextRefusesAContractThatIsNotAzSwap() public {
+        zSwap v1 = _root();
+        // Runtime code that returns nothing for any call: valid contract, no ABI.
+        vm.prank(dao);
+        vm.expectRevert(zSwap.NotASuccessor.selector);
+        v1.deployNext(hex"600b80600a3d393df360006000f3", bytes32(uint256(13)));
+        assertEq(v1.successor(), address(0));
+    }
+
+    /// `latest()` walks FORWARD by calling `successor()` on each link, so a
+    /// successor that cannot answer it breaks the walk for this contract and
+    /// every predecessor - the same permanent failure as a codeless deploy,
+    /// reached from the other side.
+    function test_deployNextRefusesASuccessorThatCannotBeWalkedForward() public {
+        zSwap v1 = _root();
+        // Answers PREVIOUS() with this contract's address and everything else
+        // with empty returndata: passes the backward check, fails the forward.
+        bytes memory runtime = abi.encodePacked(hex"73", address(v1), hex"60005260206000f3");
+        bytes memory initcode = abi.encodePacked(
+            hex"61", bytes2(uint16(runtime.length)), hex"80600a5f395ff3", runtime
+        );
+        vm.prank(dao);
+        vm.expectRevert(zSwap.NotASuccessor.selector);
+        v1.deployNext(initcode, bytes32(uint256(14)));
+        assertEq(v1.successor(), address(0));
+        assertEq(v1.latest(), address(v1), "the walk still terminates");
     }
 
     /// The salt is the point of CREATE2 here: the DAO can publish the next

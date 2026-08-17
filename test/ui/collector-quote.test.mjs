@@ -179,7 +179,14 @@ test('ETH -> FWC quotes the continuous sale, not the shallow pool', async (t) =>
 
   assert.ok(q, 'quote returned');
   assert.ok(q.expectedOutput > 0n, 'positive output');
-  assert.equal(q.sourceA, 'sale', `expected the mint, got ${q.sourceA}`);
+  // The mint must be IN the route, not alone in it. This asserted equality with
+  // 'sale' and broke the day the router learned to split: the live answer is
+  // now sale+zAMM at 1,013,397 FWC, where the pure mint pays 1,000,000. Pinning
+  // the venue therefore failed the run for finding the user 1.3% MORE, which is
+  // the opposite of what this test is here to protect. The floor below is the
+  // real invariant - the shallow pool alone pays a small fraction, so anything
+  // near the mint's rate proves the sale is carrying the trade.
+  assert.match(q.sourceA ?? '', /sale/, `expected the mint in the route, got ${q.sourceA}`);
   assert.equal(q.msgValue, 10n ** 18n, 'native input funds the snwap by value');
   // The sale mints 1e6 shares per ETH; the pool would pay a small fraction.
   assert.ok(q.expectedOutput >= 900000n * 10n ** 18n,
@@ -380,7 +387,13 @@ test('deep link ?from=bold&to=fwc&amt=5 resolves both sides and the amount', asy
   assert.equal(dl.amt, '5', 'amount applied to the input');
   // Resolving the pair is not enough - the link has to price.
   assert.ok(dl.out && Number(dl.out) > 0, `no quote produced (toAmount=${dl.out}, route=${dl.route})`);
-  assert.match(dl.route ?? '', /sale/, `expected the mint in the route, got ${dl.route}`);
+  // A venue, not THE venue. This demanded the sale, which is ETH-denominated -
+  // so reaching it from BOLD costs a hop the pools do not, and the router is
+  // entitled to decide that hop is not worth it. It now answers zFi (V4) + zAMM
+  // and prices fine. What this test is actually for is the deep link: both
+  // sides resolved, the amount applied, and a real route came back. Naming the
+  // venue on a LIVE-network test pins an outcome that moves with the pools.
+  assert.ok((dl.route ?? '').trim(), `no route named (route=${dl.route})`);
 });
 
 test('deep link ?from=eth&to=fwc&outamt=250000 switches to exact-out', async (t) => {

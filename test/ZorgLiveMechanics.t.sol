@@ -58,6 +58,12 @@ contract ZorgLiveMechanicsTest is Test {
     /// A listing that already exists on the live registry: WETH.
     uint256 constant LISTING_WETH = uint256(uint160(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     uint256 constant LISTING_RETH = uint256(uint160(0xae78736Cd615f374D3085123A210448E74Fc6393));
+    /// Candidates for a listing this test can be the SOLE user of. Listing ids
+    /// are token addresses, so any listed token works; these are simply ones
+    /// nobody had allocated to when this was written.
+    address constant _WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    address constant _USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
     IERC20Like zorg;
     IERC721Like zorgz;
@@ -117,8 +123,33 @@ contract ZorgLiveMechanicsTest is Test {
         vm.stopPrank();
     }
 
+    /// A listing with nothing allocated to it yet, or 0 if there is none.
+    ///
+    /// The lifecycle assertions are ABSOLUTE - "live weight is 1500", "weight
+    /// released back to 0" - and that only holds on a listing this test is the
+    /// sole user of. It was pinned to rETH, which real users have since put 700
+    /// ether of weight behind, so the suite began reporting the governor as
+    /// broken (2200 != 1500) when the governor was exactly right: alice's
+    /// allocation WAS 1500, sitting on a baseline the test never read. Nothing
+    /// stops the same thing happening to any address hardcoded here, so find an
+    /// untouched listing at run time rather than picking one and hoping.
+    function _cleanListing() internal view returns (uint256) {
+        address[3] memory candidates = [_WBTC, _USDT, _DAI];
+        for (uint256 i; i < candidates.length; ++i) {
+            uint256 id = uint256(uint160(candidates[i]));
+            (uint256 score, uint256 weight) = GOV.listingState(id);
+            if (score == 0 && weight == 0) return id;
+        }
+        return 0;
+    }
+
     /// The whole thing, in order, against the deployed contracts.
     function testFullLifecycleAgainstDeployedContracts() public {
+        uint256 listing = _cleanListing();
+        if (listing == 0) {
+            emit log("SKIP: every candidate listing already carries live weight");
+            vm.skip(true);
+        }
         // ---- 1. BOND -------------------------------------------------------
         _bond(alice, aliceId, 10_000 ether, 0.01 ether, 3);   // tier 3 = 1.50x
         assertEq(zorgz.ownerOf(aliceId), address(GOV), "zOrgz escrowed");
@@ -126,27 +157,28 @@ contract ZorgLiveMechanicsTest is Test {
         assertEq(GOV.bondedWeight(aliceId), 10_000 ether, "shares escrowed");
 
         // ---- 2. ALLOCATE ---------------------------------------------------
-        (uint256 scoreBefore,) = GOV.listingState(LISTING_RETH);
+        (uint256 scoreBefore, uint256 weightBefore) = GOV.listingState(listing);
         vm.prank(alice);
-        GOV.allocate(aliceId, LISTING_RETH, 1_000 ether);
-        (uint256 score0, uint256 weight0) = GOV.listingState(LISTING_RETH);
-        assertEq(weight0 - 0, 1_500 ether, "1000 zOrg at 1.50x directs 1500 of live weight");
+        GOV.allocate(aliceId, listing, 1_000 ether);
+        (uint256 score0, uint256 weight0) = GOV.listingState(listing);
+        assertEq(weight0 - weightBefore, 1_500 ether, "1000 zOrg at 1.50x directs 1500 of live weight");
         assertApproxEqAbs(score0, scoreBefore + 1_500 ether, 1e15, "score starts at live weight");
 
         // ---- 3. CONVICTION ACCRUES ----------------------------------------
         uint64 hl = GOV.halfLife();
         vm.warp(block.timestamp + hl);                       // one half-life
-        (uint256 score1,) = GOV.listingState(LISTING_RETH);
+        (uint256 score1,) = GOV.listingState(listing);
         assertApproxEqRel(score1, 1_500 ether * 3 / 2, 0.01e18, "1 half-life -> 1.5x live weight");
 
         vm.warp(block.timestamp + hl * 6);                   // six more
-        (uint256 score2, uint256 weight2) = GOV.listingState(LISTING_RETH);
+        (uint256 score2, uint256 weight2) = GOV.listingState(listing);
         assertEq(weight2, 1_500 ether, "live weight unchanged by time");
         assertApproxEqRel(score2, 2 * 1_500 ether, 0.02e18, "converges on the 2x ceiling");
         assertLt(score2, 2 * 1_500 ether, "and never exceeds it");
 
         // ---- 4. SOMEONE EXITS EARLY ---------------------------------------
         uint256 reserveBefore = GOV.loyaltyRewardReserve();
+        uint256 treasuryBefore = GOV.treasuryEth();
         uint256 aliceLoyaltyBefore = GOV.loyaltyOf(aliceId);
         _bond(bob, bobId, 5_000 ether, 0.01 ether, 0);
         // Bob's own weight leaves before the split, so the denominator is
@@ -159,7 +191,19 @@ contract ZorgLiveMechanicsTest is Test {
         assertEq(GOV.ethCredits(bob), 0.008 ether, "leaver keeps 80% of principal");
         assertEq(zorgz.ownerOf(bobId), bob, "and gets the zOrgz back");
         assertEq(zorg.balanceOf(bob), 20_000 ether, "and every share back");
-        assertEq(GOV.loyaltyRewardReserve() - reserveBefore, 0.001 ether, "0.001 to bonded receipts");
+        // The reserve receives `distributed` - the round trip of the per-weight
+        // index - not exactly half. `_distributeEarlyExitTax` deliberately sweeps
+        // the integer dust to the treasury so it cannot become an unclaimable
+        // balance, and the size of that dust is a function of totalLoyaltyWeight,
+        // which on the LIVE contract includes everyone else's bond. So the exact
+        // split is not this test's to predict; it was asserted to the wei and
+        // came back one short, which reads as a leak and is the opposite - the
+        // wei went somewhere accounted for, on purpose.
+        uint256 reserveGain = GOV.loyaltyRewardReserve() - reserveBefore;
+        uint256 treasuryGain = GOV.treasuryEth() - treasuryBefore;
+        assertEq(reserveGain + treasuryGain, 0.002 ether, "the whole forfeited tax is accounted for");
+        assertApproxEqAbs(reserveGain, 0.001 ether, 1e9, "about half reaches bonded receipts");
+        assertLe(reserveGain, 0.001 ether, "and never more than half");
 
         // ---- 5. LOYALTY REACHES THE STAYER --------------------------------
         // NOT all of it: alice shares the pot with every other live bond, which
@@ -195,7 +239,7 @@ contract ZorgLiveMechanicsTest is Test {
         GOV.unbond(aliceId);                                  // still hard locked
         vm.warp(uint256(unlockAt) + 1);
         vm.startPrank(alice);
-        GOV.allocate(aliceId, LISTING_RETH, 0);               // must clear allocations first
+        GOV.allocate(aliceId, listing, 0);                    // must clear allocations first
         GOV.unbond(aliceId);
         vm.stopPrank();
         assertEq(zorg.balanceOf(alice), 20_000 ether, "every share returned");
@@ -203,7 +247,7 @@ contract ZorgLiveMechanicsTest is Test {
         assertEq(GOV.ethCredits(alice), 0.01 ether, "full principal, no tax at maturity");
 
         // Support falls back to where it started once the bond leaves.
-        (, uint256 weightEnd) = GOV.listingState(LISTING_RETH);
+        (, uint256 weightEnd) = GOV.listingState(listing);
         assertEq(weightEnd, 0, "live weight released");
     }
 

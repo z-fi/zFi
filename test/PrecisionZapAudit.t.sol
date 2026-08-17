@@ -11,7 +11,15 @@ import {MockERC20} from "./SwapboardMocks.sol";
 ///      focused zap assertions convenient.
 contract ZapExecutorMock {
     function checkpoint(PrecisionZap zap, address pool, bytes32 intent) external {
-        zap.checkpoint(pool, intent);
+        zap.checkpoint(pool, intent, address(this));
+    }
+
+    function checkpoint(PrecisionZap zap, address pool, bytes32 intent, address refundTo) external {
+        zap.checkpoint(pool, intent, refundTo);
+    }
+
+    function abortCheckpoint(PrecisionZap zap, address pool) external returns (uint256) {
+        return zap.abortCheckpoint(pool);
     }
 
     function exit(PrecisionZap zap, address pool, uint256 shares, uint256 min0, uint256 min1, address to)
@@ -50,7 +58,10 @@ contract ReentrantZapRecipient {
             .call(
                 abi.encodeCall(
                     ZapExecutorMock.execute,
-                    (address(zap), abi.encodeCall(PrecisionZap.checkpoint, (pool, bytes32(uint256(1)))))
+                    (
+                        address(zap),
+                        abi.encodeCall(PrecisionZap.checkpoint, (pool, bytes32(uint256(1)), address(this)))
+                    )
                 )
             );
     }
@@ -130,7 +141,7 @@ contract PrecisionZapAuditTest is Test {
     function test_CheckpointRequiresExecutorAndRegisteredPool() public {
         bytes32 intent = _exitIntent(1, 0, 0, recipient);
         vm.expectRevert(PrecisionZap.NotExecutor.selector);
-        zap.checkpoint(address(pool), intent);
+        zap.checkpoint(address(pool), intent, address(this));
 
         vm.expectRevert(PrecisionZap.NoPool.selector);
         executor.checkpoint(zap, address(token), intent);
@@ -233,5 +244,77 @@ contract PrecisionZapAuditTest is Test {
         assertTrue(receiver.attempted(), "native payout must exercise callback");
         assertFalse(receiver.succeeded(), "callback must not enter checkpoint");
         assertEq(pool.balanceOf(address(zap)), 0);
+    }
+
+    /// @dev The gap `abortCheckpoint` closes. An executor that checkpoints and
+    /// funds the zap, then decides not to exit, previously had no way to hand
+    /// the shares back - they stayed here permanently, unreachable by any later
+    /// call because every subsequent checkpoint bases on the raised balance.
+    function test_AbortReturnsTheFundingToTheCommittedAddress() public {
+        uint256 shares = pool.balanceOf(lp) / 4;
+        _fund(shares);
+        assertEq(pool.balanceOf(address(zap)), shares, "zap holds the funding");
+
+        uint256 refunded = executor.abortCheckpoint(zap, address(pool));
+
+        assertEq(refunded, shares, "abort returns the whole funding");
+        assertEq(pool.balanceOf(address(zap)), 0, "nothing is left stranded");
+        // `_fund` commits the executor as the refund address.
+        assertEq(pool.balanceOf(address(executor)), shares, "refund went to the committed address");
+    }
+
+    /// @dev Abort refunds the DELTA, so shares that were already resting here
+    /// are not reachable through it.
+    function test_AbortCannotReachAPreExistingBalance() public {
+        uint256 stranded = pool.balanceOf(lp) / 8;
+        vm.prank(lp);
+        pool.transfer(address(zap), stranded);
+
+        uint256 shares = pool.balanceOf(lp) / 4;
+        _fund(shares);
+
+        uint256 refunded = executor.abortCheckpoint(zap, address(pool));
+
+        assertEq(refunded, shares, "only this route's funding is refundable");
+        assertEq(pool.balanceOf(address(zap)), stranded, "the pre-existing balance stays put");
+    }
+
+    function test_AbortRequiresTheExecutorAndAnOpenCheckpoint() public {
+        vm.expectRevert(PrecisionZap.NotExecutor.selector);
+        zap.abortCheckpoint(address(pool));
+
+        vm.expectRevert(PrecisionZap.BadCheckpoint.selector);
+        executor.abortCheckpoint(zap, address(pool));
+    }
+
+    /// @dev A consumed checkpoint leaves nothing behind, so the exit cannot be
+    /// followed by an abort that pays out a second time.
+    function test_AbortAfterAnExitIsRefused() public {
+        uint256 shares = pool.balanceOf(lp) / 4;
+        _fund(shares);
+        executor.exit(zap, address(pool), shares, 0, 0, recipient);
+
+        vm.expectRevert(PrecisionZap.BadCheckpoint.selector);
+        executor.abortCheckpoint(zap, address(pool));
+    }
+
+    /// @dev And an aborted checkpoint cannot then be exited: abort clears the
+    /// intent along with the balance, so the funding is spendable exactly once.
+    function test_ExitAfterAnAbortIsRefused() public {
+        uint256 shares = pool.balanceOf(lp) / 4;
+        _fund(shares);
+        executor.abortCheckpoint(zap, address(pool));
+
+        vm.expectRevert(PrecisionZap.BadCheckpoint.selector);
+        executor.exit(zap, address(pool), shares, 0, 0, recipient);
+    }
+
+    function test_CheckpointRejectsAnUnusableRefundAddress() public {
+        bytes32 intent = _exitIntent(1, 0, 0, recipient);
+        vm.expectRevert(PrecisionZap.Bad.selector);
+        executor.checkpoint(zap, address(pool), intent, address(0));
+
+        vm.expectRevert(PrecisionZap.Bad.selector);
+        executor.checkpoint(zap, address(pool), intent, address(zap));
     }
 }

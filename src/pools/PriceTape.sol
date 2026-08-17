@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.36;
+pragma solidity 0.8.36;
 
 /// @title PriceTape
 /// @notice Compressed on-chain OHLCV history: a chart any client can read with
@@ -72,6 +72,20 @@ library PriceTape {
     /// @dev Relative error is below 2**-23 (~1.2e-7), which is far finer than
     ///      any chart pixel, and the representable range covers every price a
     ///      1e18-scaled pair can produce.
+    ///
+    ///      IT TRUNCATES RATHER THAN ROUNDS, so the error is one-sided: every
+    ///      packed value is at or below the real one, `high` included, where a
+    ///      bias upward would be the conservative direction. Immaterial at
+    ///      chart resolution and not worth the branch, but it is a bias and not
+    ///      the symmetric error the bound above sounds like.
+    ///
+    ///      `pack(0) == 0`, and that interacts with `low`. A bar whose `low`
+    ///      takes a zero can never be raised again - `if (p < lowP)` will not
+    ///      lift it - so a single trade whose price underflows the 1e18 scale
+    ///      pins the bar's low at zero for its whole life and `fold` carries it
+    ///      into the coarse candle. On an adopter whose prices can legitimately
+    ///      round to zero that turns "charts flat" into "charts a spike to
+    ///      zero".
     function pack(uint256 v) internal pure returns (uint32) {
         if (v == 0) return 0;
         uint256 msb = _msb(v);
@@ -85,6 +99,14 @@ library PriceTape {
 
     /// @notice Expand a 4-byte float back to an integer.
     /// @dev Lossy in the low bits by construction; never reverts.
+    ///
+    ///      TOTAL ONLY BECAUSE `pack` IS ITS SOLE PRODUCER. The shift is
+    ///      unchecked, and `pack` can never emit an exponent above 232 - the
+    ///      msb of a uint256 is at most 255 and it keeps 23 - so the worst case
+    ///      is `(2**24 - 1) << 232`, just under 2**256. `decode` is advertised
+    ///      as a reader for ANY adopter's bars, so a client feeding it a
+    ///      hand-built word rather than one this library produced is outside
+    ///      that argument and can wrap.
     function unpack(uint32 p) internal pure returns (uint256) {
         unchecked {
             return uint256(p & 0xffffff) << (p >> 24);
@@ -146,6 +168,14 @@ library PriceTape {
     ///      actually traded, including fee and slippage — which is what a tape
     ///      should show, rather than an untradeable mid.
     /// @param period Bar width in seconds; must be non-zero.
+    ///
+    ///        THE BUCKET IS A uint32 OF `block.timestamp / period`, so the
+    ///        period an adopter picks decides when the tape wraps. At five
+    ///        minutes that is somewhere past the year 40,000; at `period = 1`
+    ///        it is 2106. This is a public-good library and the choice is the
+    ///        adopter's, so it is stated here rather than assumed away.
+    ///        `fold` casts to `uint32` on the same arithmetic and truncates
+    ///        silently if anyone ever folds with `srcPeriod > period`.
     /// @return finalised The bar just closed and moved to the ring, or zero if
     ///         this trade landed in the bar already open. Adopters cascade this
     ///         into a coarser tape with `fold`, which is what keeps a trade at
@@ -259,11 +289,38 @@ library PriceTape {
     /// @dev Buckets with no trades are returned as zero, so a caller can tell a
     ///      flat market from an idle one. Callers decode with `decode`.
     function recent(Tape storage self, uint256 period, uint256 count) internal view returns (uint256[] memory bars) {
+        // Bounded before allocating. `count` arrives from the caller through
+        // `IPriceTape.tape`, and a large one blows memory before the loop even
+        // starts. Nothing above the ring depth can be anything but zero, so the
+        // excess was never information - it was only a way to make a `view`
+        // that other contracts read run out of gas.
+        if (count > BARS) count = BARS;
         bars = new uint256[](count);
         if (count == 0 || period == 0) return bars;
 
         uint256 live = self.live;
         uint256 newest = uint256(uint32(block.timestamp / period));
+
+        // A DORMANT POOL'S LAST BAR IS IN NEITHER PLACE, so return it here or
+        // it is unreachable. The live bar only reaches the ring when the NEXT
+        // trade finalises it, and the walk below matches buckets against the
+        // wall clock - so once trading stops and `newest` advances past it, the
+        // final bar is not in the window and not in the ring. Past `BARS`
+        // periods of quiet its slot has been lapped or never written, and no
+        // value of `count` recovers it.
+        //
+        // That is exactly the case the zero-encoding exists to distinguish: a
+        // reader could not tell "never traded" from "traded, then went quiet",
+        // which is the one question a chart of a dormant market has to answer.
+        //
+        // Placing it at index 0 does not corrupt the time axis, because every
+        // bar carries its own `bucket` and a client reads position from that
+        // rather than from the array index. The index is newest-first ordering,
+        // not a timestamp.
+        if (live != 0 && bucketOf(live) < newest - (newest < count ? newest : count - 1)) {
+            bars[0] = live;
+            return bars;
+        }
 
         for (uint256 i; i != count; ++i) {
             if (i > newest) break; // before the epoch of this period
@@ -284,6 +341,14 @@ library PriceTape {
 
 /// @title IPriceTape
 /// @notice Minimal read interface for charting any adopting contract.
+///
+/// @dev NOT AN ORACLE. A tape records what an adopter printed, and an adopter
+///      prints executed trades - so a bar costs whatever the smallest trade on
+///      that venue costs, and `high`/`low` are extrema that one such trade
+///      fixes for the life of the bar. Nothing here is time-weighted, nothing
+///      is manipulation-resistant, and an adopter is free to print whatever it
+///      likes. Read it to draw a candlestick. Do not settle, liquidate,
+///      collateralise, or price anything against it.
 /// @dev Deliberately tiny: one call returns everything a candlestick chart
 ///      needs. A client that speaks this interface can chart every adopter
 ///      without knowing anything else about them, which is what makes this a
@@ -295,8 +360,27 @@ interface IPriceTape {
     /// @notice The newest `count` bars for `period`, newest first, packed.
     /// @dev Zero entries are buckets in which nothing traded. Decode with
     ///      `PriceTape.decode`: (bucket, open, high, low, close, volume, count).
-    ///      Prices are `token1` per `token0`, 1e18-scaled and decimal-adjusted,
-    ///      so a bar is direction-free. Volume is in `token0` units.
+    ///
+    ///      Prices are RAW `token1` per RAW `token0`, scaled by 1e18, so a bar
+    ///      is direction-free. Token decimals are NOT normalised: a client
+    ///      charting a non-18-decimal pair must apply the decimal difference
+    ///      itself, from `tapePair()`. (An earlier version of this line claimed
+    ///      the opposite; the adopters never did it, and the doc is the spec for
+    ///      an interface whose whole point is that one client reads every
+    ///      implementation, so it is the doc that was wrong.)
+    ///
+    ///      Volume is in `token0` units, and it is a LOWER BOUND rather than a
+    ///      measurement. Each accumulation re-packs the running total into the
+    ///      24-bit mantissa of a float32, so once a bar's total passes 2**n an
+    ///      individual trade below 2**(n-24) adds exactly zero, and `fold`
+    ///      compounds the same truncation into the coarse bar. The relative
+    ///      error is under ~1.2e-7 per accumulation and invisible on a chart,
+    ///      which is what this field is for; do not settle anything against it.
+    ///
+    ///      A COARSE BAR LAGS BY ONE FINE BAR. Coarse bars are folded from fine
+    ///      bars only as those finish, so the live fine bar - up to one fine
+    ///      period of the most recent trading - is never included in the coarse
+    ///      tape. Read the fine tape for the leading edge.
     function tape(uint256 period, uint256 count) external view returns (uint256[] memory);
 
     /// @notice The pair a tape prices, as (base, quote). Native asset is address(0).
