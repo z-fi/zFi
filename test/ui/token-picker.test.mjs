@@ -204,6 +204,40 @@ test('shows the logo, the name and the description the registry serves', async (
     p.close();
   });
 
+  test('a coin outside the launch cap is still reachable by address', async () => {
+    // Discovery is capped: LAUNCH_SCAN looks at the newest 256 launches and
+    // LAUNCH_SHOW keeps the deepest 24 of those. Everything else is invisible
+    // to the list, so pasting the address was the only route left - and it
+    // dead-ended at "No token matches that", because the search only ever
+    // filtered tokens already loaded. An unlisted coin was unreachable from
+    // the picker even when the user knew exactly what they were looking for.
+    const UNLISTED = '0x00000000000000000000000000000000dece17ed';
+    const chain = new MockChain();
+    chain.registry = ROWS;
+    chain.conviction = ROWS.map((_, i) => i + 1);
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.setToken(UNLISTED, { symbol: 'DEEP', decimals: 18, name: 'Deep Cut' });
+    const p = await loadPage({ chain, hash: null });
+    await p.connect({ pin: false });
+    p.click('toPick');
+    await p.settle();
+
+    const find = p.$('tkFind');
+    find.value = UNLISTED;
+    find.dispatchEvent(new p.window.Event('input', { bubbles: true }));
+
+    const offer = rowsIn(p);
+    assert.equal(offer.length, 1, 'no way offered to reach an unlisted address');
+    assert.match(offer[0].textContent, /Use 0x0000/, 'the offer does not name the address');
+
+    offer[0].click();
+    await p.settle();
+    assert.equal(p.$('toSel').selectedOptions[0].textContent.trim(), 'DEEP',
+      'reading it from chain should also select it');
+    p.close();
+  });
+
   test('will not select the token already chosen on the other side', async () => {
     // syncDisabled() writes the disabled flags on the <option>s; the panel is
     // built from those options, so it inherits the rule instead of copying it.

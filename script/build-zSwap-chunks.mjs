@@ -34,7 +34,7 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 11;
+const n = 12;
 // The count is a positional argument; `--file` and its value are not it.
 const countArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
 if (countArg && countArg !== String(n)) {

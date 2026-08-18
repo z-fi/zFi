@@ -18,7 +18,7 @@ contract zSwapLineageTest is Test {
     address dao = makeAddr("dao");
     address stranger = makeAddr("stranger");
 
-    uint256 constant CHUNKS = 11;
+    uint256 constant CHUNKS = 12;
 
     address[CHUNKS] chunks;
 
@@ -201,7 +201,10 @@ contract zSwapLineageTest is Test {
         assertEq(actual, predicted, "CREATE2 landed where it was said it would");
     }
 
-    function test_versionStringIsZeroPointOne() public {
-        assertEq(_root().VERSION(), "0.1");
+    /// Hand-written and immutable, like every other version marker here. It is
+    /// not read for behaviour, which is exactly why it drifts: v0.2 was built
+    /// still calling itself "0.1" and nothing failed until this was checked.
+    function test_versionStringMatchesTheBuild() public {
+        assertEq(_root().VERSION(), "0.2");
     }
 }

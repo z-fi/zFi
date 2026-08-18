@@ -26,6 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import nodecrypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AbiCoder, Interface } from 'ethers';
 import { strip } from './strip-zSwap.mjs';
@@ -37,7 +38,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 11;
+const CHUNKS = 12;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -316,7 +317,13 @@ const HELPERS = [
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
   'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'genIcon',
+  'wcToWallet', 'wcNode', 'wcHost',
 ];
+// Exported for the same reason as HELPERS, but they are namespaces rather than
+// functions: the hand-rolled WalletConnect crypto and the QR encoder. These
+// ship on chain and can never be patched, so the vectors below run against the
+// PAGE'S copy, not against a scratch one that merely resembles it.
+const NAMESPACES = ['WCU', 'QR8'];
 
 function stub() {
   const target = function () {};
@@ -374,14 +381,16 @@ check('page evaluates without throwing (DOM stubbed)', () => {
   for (const id of ids) if (!(id in sandbox)) sandbox[id] = stub();
 
   const ctx = vm.createContext(sandbox);
-  const epilogue = `;globalThis.__exports={${HELPERS.join(',')}};`;
+  const epilogue = `;globalThis.__exports={${HELPERS.concat(NAMESPACES).join(',')}};`;
   vm.runInContext(scripts.join('\n') + epilogue, ctx, { filename: 'zSwap.html' });
 
   exported = ctx.__exports;
   if (!exported) throw Error('epilogue did not export — sandbox wiring is broken');
   const missing = HELPERS.filter(h => typeof exported[h] !== 'function');
   if (missing.length) throw Error(`helper(s) missing or not functions: ${missing.join(', ')}`);
-  return `${HELPERS.length} helpers reachable`;
+  const missingNs = NAMESPACES.filter(n => !exported[n] || typeof exported[n] !== 'object');
+  if (missingNs.length) throw Error(`namespace(s) missing: ${missingNs.join(', ')}`);
+  return `${HELPERS.length} helpers + ${NAMESPACES.length} namespaces reachable`;
 });
 
 const eq = (got, want, what) => {
@@ -396,6 +405,111 @@ if (exported) {
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
     encPermit2Hybrid, impactBps, safeSym, safeUrl, genIcon,
   } = exported;
+
+  const { WCU, QR8 } = exported;
+
+  // The one primitive no browser exposes, so the page must carry it. Node's
+  // own chacha20-poly1305 is the reference; nothing is vendored to check it.
+  // WalletConnect pairs each request tag with a specific response tag. Acking
+  // wc_sessionSettle (1102) with 1109 instead of 1103 made a real wallet report
+  // itself connected and then ignore every request the page sent, which reads
+  // as the dapp hanging. The pairs are pinned so that cannot come back.
+  // The read node exists ONLY inside a WalletConnect session, because routing
+  // every eth_call to a phone measured at ~5s round trip. Signing must still go
+  // to the wallet: a node that could answer eth_sendTransaction would be a very
+  // different trust assumption than one that answers eth_call.
+  check('WalletConnect routes signing to the wallet and reads to the node', () => {
+    const { wcToWallet } = exported;
+    const toWallet = ['eth_sendTransaction', 'eth_signTransaction', 'personal_sign', 'eth_sign',
+      'eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4',
+      'wallet_switchEthereumChain', 'wallet_sendCalls', 'wallet_getCapabilities',
+      'wallet_getCallsStatus', 'wallet_revokePermissions'];
+    const toNode = ['eth_call', 'eth_getCode', 'eth_gasPrice', 'eth_getBalance',
+      'eth_blockNumber', 'eth_getTransactionReceipt'];
+    for (const m of toWallet) if (!wcToWallet(m)) throw Error(`${m} would leave the wallet`);
+    for (const m of toNode) if (wcToWallet(m)) throw Error(`${m} would go to the wallet, not the node`);
+    // Everything the page actually calls must be classified deliberately.
+    const used = new Set([...html.matchAll(/rpc\("([a-zA-Z_]+)"/g)].map(m => m[1]));
+    for (const m of used) if (!toWallet.includes(m) && !toNode.includes(m)
+        && !['eth_accounts', 'eth_requestAccounts'].includes(m))
+      throw Error(`${m} is called but not covered by the routing table`);
+    return `${toWallet.length} to wallet, ${toNode.length} to node`;
+  });
+
+  check('the page makes no network call outside the WalletConnect read path', () => {
+    const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
+    if (hits !== 1) throw Error(`expected exactly one fetch(, found ${hits}`);
+    const fn = html.match(/async function wcRpc\(method,params\)\{[\s\S]*?\n\}/);
+    if (!fn || !/\bfetch\s*\(/.test(fn[0])) throw Error('the only fetch is not the one inside wcRpc');
+    if (/XMLHttpRequest|EventSource|navigator\.sendBeacon/.test(html))
+      throw Error('another network primitive appeared in the page');
+    return 'one fetch, inside wcRpc';
+  });
+
+  check('WalletConnect protocol tags match the spec', () => {
+    const want = { T_PROPOSE: 1100, T_APPROVE: 1101, T_SETTLE: 1102,
+                   T_SETTLE_RES: 1103, T_REQ: 1108, T_RES: 1109 };
+    for (const [name, v] of Object.entries(want)) {
+      const m = html.match(new RegExp(`${name}=(\\d+)`));
+      if (!m) throw Error(`${name} is not declared in the page`);
+      if (+m[1] !== v) throw Error(`${name} is ${m[1]}, spec says ${v}`);
+    }
+    if (!/wc_sessionSettle[\s\S]{0,400}?T_SETTLE_RES/.test(html))
+      throw Error('the wc_sessionSettle ack does not publish with T_SETTLE_RES');
+    return `${Object.keys(want).length} tags, settle acked with 1103`;
+  });
+
+  check('ChaCha20-Poly1305 matches node across message sizes', () => {
+    for (const len of [0, 1, 15, 16, 17, 63, 64, 65, 512, 5000]) {
+      const key = nodecrypto.randomBytes(32);
+      const nonce = nodecrypto.randomBytes(12);
+      const msg = nodecrypto.randomBytes(len);
+      const c = nodecrypto.createCipheriv('chacha20-poly1305', key, nonce, { authTagLength: 16 });
+      const ref = Buffer.concat([c.update(msg), c.final(), c.getAuthTag()]);
+      const got = Buffer.from(WCU.seal(key, nonce, msg));
+      if (!got.equals(ref)) throw Error(`seal differs from node at ${len} bytes`);
+      const back = WCU.open(key, nonce, got);
+      if (!back || !Buffer.from(back).equals(msg)) throw Error(`open failed at ${len} bytes`);
+    }
+    return '10 sizes, sealed and opened';
+  });
+
+  check('a tampered envelope never decrypts', () => {
+    const key = nodecrypto.randomBytes(32), nonce = nodecrypto.randomBytes(12);
+    const sealed = WCU.seal(key, nonce, nodecrypto.randomBytes(64));
+    for (const i of [0, 33, sealed.length - 1]) {
+      const bad = Uint8Array.from(sealed); bad[i] ^= 1;
+      if (WCU.open(key, nonce, bad) !== null) throw Error(`tamper at ${i} was accepted`);
+    }
+    if (WCU.open(nodecrypto.randomBytes(32), nonce, sealed) !== null) throw Error('wrong key accepted');
+    return 'ciphertext, tag and key all rejected';
+  });
+
+  // Relay auth is a JWT whose issuer IS the key. A wrong did:key encoding means
+  // the relay refuses every connection, so it is pinned to the W3C vector.
+  check('did:key matches the W3C Ed25519 vector', () => {
+    const pub = Uint8Array.from(Buffer.from(
+      '2e6fcce36701dc791488e0d0b1745cc1e33a4c1c9fcc41c63bd343dbbe0970e6', 'hex'));
+    const want = 'did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK';
+    const got = WCU.didKey(pub);
+    if (got !== want) throw Error(`got ${got}`);
+    return 'multicodec + base58btc agree with the spec';
+  });
+
+  // A WalletConnect pairing URI is always exactly 160 bytes, which is why the
+  // encoder can hardcode version 8 / ECC L. The golden hash was taken from an
+  // encoder verified module-for-module against the `qrcode` package on 50
+  // random URIs; it pins that agreement without vendoring the package.
+  check('QR encoder is stable and correctly sized', () => {
+    const uri = 'wc:' + 'a'.repeat(64) + '@2?relay-protocol=irn&symKey=' + 'b'.repeat(64);
+    if (uri.length !== 160) throw Error(`uri length drifted to ${uri.length}`);
+    const q = QR8.build(uri);
+    if (q.size !== 49) throw Error(`expected a 49x49 symbol, got ${q.size}`);
+    const flat = q.modules.map(r => r.join('')).join('');
+    const h = nodecrypto.createHash('sha256').update(flat).digest('hex');
+    if (h !== '380ce9a4bf0815c44838b42bc69c815e5e49b33110beb99e918acb19d38c5566') throw Error(`QR modules changed: ${h}`);
+    return `49x49, mask ${q.mask}`;
+  });
 
   check('keccak matches known vectors', () => {
     eq(keccak(new TextEncoder().encode('')),
@@ -704,6 +818,49 @@ if (exported) {
     eq(po.bookIn, 0n, 'exact-out Dutch book input');
     eq(po.bookOut, 10n, 'exact-out Dutch book output');
     eq(po.ammOut, 0n, 'exact-out AMM remainder');
+  });
+
+  check('book planners route a floor bid, and drop a degenerate one', () => {
+    // A Floorboard row prices with price/initial rather than aA/aB, so the
+    // planner divides by both. Anyone can post a bid, so a zero in either
+    // field is attacker-supplied: it must drop the row, not raise out of the
+    // quote path and take every route on the pair down with it.
+    const bid = over => ({
+      id: 7,
+      board: '0x00000000000000000000000000000000000000f1',
+      floor: 1, pf: true, nA: false, nB: false,
+      aA: 100n, aB: 50n, price: 100n, initial: 50n,
+      ...over,
+    });
+
+    const full = planBookExactIn([bid()], 50n, 50n, 50n);
+    if (!full) throw Error('exact-in discarded a healthy floor bid');
+    eq(full.fills[0].pay, 50n, 'exact-in floor payment');
+    eq(full.fills[0].get, 100n, 'exact-in floor output');
+    eq(full.ammIn, 0n, 'exact-in floor remainder');
+
+    // A partial hit is the case that actually reaches floorGet.
+    const part = planBookExactIn([bid()], 20n, 50n, 50n);
+    if (!part) throw Error('exact-in discarded a partial floor hit');
+    eq(part.fills[0].pay, 20n, 'exact-in partial floor payment');
+    eq(part.fills[0].get, 40n, 'exact-in partial floor output');
+
+    const out = planBookExactOut([bid()], 40n, 100n, 50n);
+    if (!out) throw Error('exact-out discarded a healthy floor bid');
+    eq(out.fills[0].pay, 20n, 'exact-out floor payment');
+    eq(out.fills[0].get, 40n, 'exact-out floor output');
+    eq(out.ammOut, 0n, 'exact-out floor remainder');
+
+    for (const [what, bad] of [['initial', bid({ initial: 0n })], ['price', bid({ price: 0n })]]) {
+      let pi, po;
+      try { pi = planBookExactIn([bad], 20n, 50n, 50n); }
+      catch (e) { throw Error(`exact-in raised on a zero-${what} bid: ${e.message}`); }
+      try { po = planBookExactOut([bad], 40n, 100n, 50n); }
+      catch (e) { throw Error(`exact-out raised on a zero-${what} bid: ${e.message}`); }
+      if (pi) throw Error(`exact-in planned a zero-${what} bid`);
+      if (po) throw Error(`exact-out planned a zero-${what} bid`);
+    }
+    return 'full, partial and exact-out route; zero price/initial dropped';
   });
 
   check('paired AON seeding escapes the greedy single-seed trap', () => {
@@ -1110,6 +1267,19 @@ if (exported) {
 // Async load-time work settles on later ticks, so grade it after draining them.
 await new Promise(r => setImmediate(r));
 await new Promise(r => setImmediate(r));
+
+if (exported) {
+  const { WCU } = exported;
+  const sym = nodecrypto.randomBytes(32);
+  const want = nodecrypto.createHash('sha256').update(sym).digest('hex');
+  let got = null, topicErr = null;
+  try { got = await WCU.topicOf(sym); } catch (e) { topicErr = e; }
+  check('a pairing topic is sha256 of its own symKey', () => {
+    if (topicErr) throw topicErr;
+    if (got !== want) throw Error(`got ${got}, want ${want}`);
+    return 'derivation agrees with node';
+  });
+}
 
 check('no async errors from load-time code paths', () => {
   if (asyncErrors.length) {

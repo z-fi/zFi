@@ -1169,6 +1169,93 @@ body.modal-open { overflow: hidden; }
   padding: 4px 0;
 }
 
+/* Loading skeletons. Without this the .skeleton nodes are invisible boxes,
+   so every "loading" state read as an empty panel. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 37%, var(--surface) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-sheen 1.4s ease-in-out infinite;
+  border: 1px solid var(--border-muted);
+}
+@keyframes skeleton-sheen {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+.proposal-skeleton {
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-bottom: 12px;
+}
+.proposal-skeleton .skeleton { border: none; }
+.proposal-skeleton-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+
+/* Proposal list chrome */
+.proposals-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.proposal-filter {
+  font-family: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  border: 1px solid var(--border-muted);
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.proposal-filter:hover { color: var(--fg); border-color: var(--fg-dim); }
+.proposal-filter.active { color: var(--fg); border-color: var(--fg); background: var(--surface-hover); }
+.proposal-filter-count { opacity: 0.6; margin-left: 4px; }
+
+/* Quorum / countdown strip */
+.proposal-progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  margin-bottom: 5px;
+}
+.proposal-progress strong { color: var(--fg); font-weight: 600; }
+.proposal-progress .met { color: var(--green); }
+.proposal-quorum-bar {
+  position: relative;
+  height: 3px;
+  background: var(--divider);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.proposal-quorum-bar-fill { height: 100%; background: var(--fg-dim); transition: width 0.3s; }
+.proposal-quorum-bar-fill.met { background: var(--green); }
+.proposal-vote-pct { color: var(--fg-dim); font-size: 10px; }
+.proposal-connect-hint {
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-style: italic;
+  padding: 4px 0;
+}
+.proposal-error {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--fg-dim);
+  font-size: 13px;
+}
+.proposal-error-msg { color: var(--red); margin-bottom: 12px; }
+
 /* Futarchy rewards */
 .futarchy-reward-box {
   margin-top: 12px;

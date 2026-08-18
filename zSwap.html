@@ -41,6 +41,7 @@ letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .pill:hover,.pill:focus-within{opacity:.6}
 .panel select,.dly select{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;max-width:8em;font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
 .panel select:focus{outline:0}
+option,optgroup{background-color:var(--c);color:var(--f)}
 svg{vertical-align:middle;flex-shrink:0}
 .flip{display:flex;align-items:center;justify-content:center;margin:-.62em auto;width:2em;height:2em;border-radius:50%;border:3px solid var(--c);background:var(--c);cursor:pointer;color:var(--m);padding:0;box-shadow:0 1px 2px #0000000f;transition:background .25s,color .25s,transform .25s}
 .flip:hover{background:var(--fh);color:var(--f);transform:rotate(180deg)}
@@ -56,7 +57,8 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqfee{color:var(--m);font-size:.72em}
 .lqtag{font-size:.62em;padding:.1em .4em;border-radius:.35em;border:1px solid var(--e);color:var(--m)}
 .lqmeta{font-size:.7em;color:var(--m);margin-top:.25em;display:flex;align-items:center;gap:.4em}
-.lqmeta>.lqbtn,.lqmine>.lqbtn{margin-left:auto;min-width:7em}
+.lqacts{display:flex;gap:.4em;margin-top:.5em}
+.lqacts>.lqbtn{flex:1}
 .lqmine{font-size:.7em;margin-top:.25em;display:flex;align-items:center;gap:.4em}
 .lqempty{padding:.9em .7em;font-size:.75em;color:var(--m);text-align:center}
 .lqnewtog{width:100%;margin-top:.55em}
@@ -164,6 +166,8 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .docs p{margin:0 0 .7em;padding:0 .2em;font-size:.72em;line-height:1.6;color:var(--n)}
 .docs b{color:var(--f);font-weight:600}
 .docs em{font-style:normal;color:var(--m)}
+.docsmore{padding:.75em .2em .2em;font-size:.7em;color:var(--m)}
+.docs summary em{display:inline-flex;align-items:center;margin:0 auto 0 .5em;opacity:.75}
 .lngap{font-size:.6em;text-transform:uppercase;letter-spacing:.1em;color:var(--m);margin:.9em .2em .1em}
 .lnhdr{margin-bottom:.2em}
 #lnSub{color:var(--m);text-transform:none;letter-spacing:0}
@@ -223,6 +227,21 @@ border-radius:.5em;box-shadow:0 4px 12px #0000001f,0 16px 40px #00000024;overflo
 #tkFind{border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);
 font:inherit;font-size:.8em;padding:.7em .8em;outline:0;flex:none}
 #tkList{overflow-y:auto;overscroll-behavior:contain}
+#wkWrap{position:fixed;inset:0;z-index:60;background:#0006;display:flex;align-items:center;justify-content:center}
+#wkWrap.hide{display:none}
+#wkPanel{width:min(19em,calc(100vw - 2em));background:var(--c);border:1px solid var(--e);
+border-radius:.5em;overflow:hidden;box-shadow:0 16px 40px #00000024;
+max-height:min(32em,calc(100vh - 2em));display:flex;flex-direction:column}
+#wkHdr{flex:none}
+#wkList{overflow-y:auto;overscroll-behavior:contain}
+#wkHdr{padding:.7em .8em;border-bottom:1px solid var(--e);font-size:.72em;
+letter-spacing:.09em;text-transform:uppercase;color:var(--m)}
+#wkList img,#wkList .wki{width:20px;height:20px;border-radius:50%;flex:none}
+.wcq{padding:.7em .8em 0}
+.wcn{padding:.55em .8em .85em;font-size:.72em;color:var(--m)}
+.wcnode{padding-top:0;opacity:.85}
+#wkList .wki{display:block}
+#wkList .wki svg{width:100%;height:100%;display:block}
 .tkg{padding:.55em .8em .25em;font-size:.62em;letter-spacing:.09em;text-transform:uppercase;color:var(--m)}
 .tkr{display:flex;align-items:flex-start;gap:.55em;width:100%;box-sizing:border-box;
 padding:.5em .8em;border:0;background:transparent;color:var(--f);font:inherit;
@@ -288,6 +307,7 @@ background:var(--e);margin:.5em auto .1em}
 <small id="floorNote" class="hide" role="status" aria-live="polite"></small>
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
+<div id="wkWrap" class="hide"><div id="wkPanel" role="dialog" aria-modal="true" aria-label="Choose a wallet"><div id="wkHdr">Choose a wallet</div><div id="wkList" role="listbox"></div></div></div>
 <div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens"><div id="tkList" role="listbox"></div></div>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
@@ -308,10 +328,10 @@ background:var(--e);margin:.5em auto .1em}
 <p><b>Dutch decay</b> &mdash; starts above your floor and falls to it over a window you choose. It has two clocks: the decay, then how long it rests at the floor before the escrow returns to you. Set that to <em>Forever</em> and it waits until you cancel.</p>
 <p><b>Climbing bid</b> &mdash; the mirror: a bid that rises toward a ceiling you name.</p>
 <p>Orders are escrowed on chain when placed, so a fill cannot fail for want of funds, and cancelling returns the escrow. Boards are denominated in WETH &mdash; an order asking for ETH is asking for WETH, and pays out as such.</p></details>
-<details><summary>Liquidity <em>the droplet</em></summary>
+<details><summary>Liquidity <em><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></em></summary>
 <p>Precision pools are <b>bands</b>, not endless curves. A position earns fees only while the price is inside its band, and holds one asset or the other at the edges. A wider band is safer and earns less; a narrow one is the opposite.</p>
 <p>The bar on each row shows where the price sits in that band. <em>Out of range</em> means it is earning nothing right now.</p></details>
-<details><summary>Launching a coin <em>the coin</em></summary>
+<details><summary>Launching a coin <em><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></em></summary>
 <p>One transaction, and no ether needed aside from gas. A fixed supply is minted, your allocation is paid to you immediately, and <b>everything else is seeded into a fresh ETH pool</b> &mdash; one-sided, so the pool opens holding only your token.</p>
 <p><b>Starting market cap</b> is the pool's virtual ether reserve. It sets the opening price and how hard that price is to move, which are the same dial: roughly that much buying moves the market halfway. Small numbers mean the first buyer takes a large share of the supply, which is why the form says what one ether would buy.</p>
 <p><b>Creator keeps</b> is a share of the token SUPPLY, minted straight to you when the coin launches &mdash; tokens, not ether, and not a fee on trading. Keep 10% of a billion and 100,000,000 land in your wallet at once, unlocked, with nothing vesting.</p>
@@ -322,9 +342,10 @@ background:var(--e);margin:.5em auto .1em}
 <p>The <b>tithe</b> is burned to Ethereum itself. The ether goes to the BETH burner, which destroys it and mints a BETH receipt recording that it happened. Nobody can spend it and it cannot be redeemed &mdash; the ether no longer exists. What it buys is a smaller ether supply, which accrues to everyone holding ether rather than to us.</p>
 <p>The token side of collected fees is burned outright too &mdash; a launched coin's supply only ever falls.</p></details>
 <details><summary>What this page is</summary>
-<p>There is no server. This page is a contract on Ethereum and its bytes cannot be changed by anyone, us included &mdash; a new version is a new address, not an edit. It talks to your wallet and to Ethereum, and to nothing else.</p>
+<p>There is no server. This page is a contract on Ethereum and its bytes cannot be changed by anyone, us included &mdash; a new version is a new address, not an edit. It talks to your wallet and to Ethereum, and to nothing else. Connecting by <b>WalletConnect</b> is the one exception: that needs WalletConnect's relay to reach your phone, and a read node, which you can point anywhere you like.</p>
 <p>Your keys never leave your wallet. Nothing here custodies your funds; every trade settles from your address to a contract you can read.</p>
 <p>The token list is <b>zList</b>, ranked on chain by conviction staking. Anything not on it can still be traded by pasting its address.</p></details>
+<div class="docsmore">Longer notes at <a href="https://docs.zswap.wei.limo" target="_blank" rel="noopener">docs.zswap.wei.limo</a></div>
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#" role="button">how it works</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by onchain conviction staking. Stake to move a token up the list - or to get one listed at all.">token list</a></span></footer>
 </div>
@@ -334,7 +355,7 @@ ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#101010':'#fafafa'};ic();
 const ZSWAP_VERSION="0.2";
 const ZSWAP_SELF="";
-const ZSWAP_PREVIOUS="";
+const ZSWAP_PREVIOUS="0x00000095643CFfA7D9fae407a84dfCB6406456c6";
 const ZLIST_URL="https://0x0000006d936ba3653b8854490e16e782cd32a9a8.w4eth.io/";
 const selfFromUrl=()=>{
 const h=(location.hostname||"").split(".");
@@ -720,7 +741,9 @@ LAUNCHED.push({addr:a,sym,pool:pools[pi]||""});
 }
 }catch{}
 const anchors=BUILTIN.filter(b=>(b.addr===ZERO||b.addr===WETH)&&!next.some(x=>x.addr===b.addr));
-TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,...mine);
+const bornAt=new Set(born.map(x=>x.addr.toLowerCase()));
+TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,
+...mine.filter(t=>!bornAt.has(t.addr.toLowerCase())));
 setListNote(rankFellBack?"Ranked by listing order — conviction unavailable":"");
 }catch(e){setListSource("could not be reached")}
 }
@@ -767,9 +790,11 @@ return{best:{source:Number(num(k)),feeBps:num(k+1),amountIn:ai,amountOut:ao},sou
 };
 const merge=(est,exe)=>{if(!est)return exe;if(!exe)return null;return{...exe,best:est.best}};
 const NO_WALLET="No wallet detected.";
-const rpc=(method,params)=>window.ethereum
-?window.ethereum.request({method,params})
-:Promise.reject(Object.assign(Error(NO_WALLET),{noWallet:true}));
+let PROV=null;
+const prov=()=>PROV||window.ethereum;
+const rpc=(method,params)=>{const e=prov();
+return e?e.request({method,params})
+:Promise.reject(Object.assign(Error(NO_WALLET),{noWallet:true}))};
 const rpcRead=async(method,params,tries=4)=>{
 let last;
 for(let i=0;i<tries;i++){
@@ -1300,7 +1325,28 @@ r.appendChild(tx);
 if(opt.value===tkSel.value){const m=document.createElement("span");m.className="tkmark";m.textContent="✓";r.appendChild(m)}
 frag.appendChild(r);n++;
 }
-if(!n){const e=document.createElement("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
+if(!n){
+const a=/^0x[0-9a-f]{40}$/.test(q)?q:"";
+if(a){
+const r=document.createElement("button");
+r.type="button";r.className="tkr";
+const tx=document.createElement("span");tx.className="tkt";
+const top=document.createElement("span");top.className="tks";
+const b=document.createElement("b");b.textContent="Use "+short(a);top.appendChild(b);
+tx.appendChild(top);
+const d=document.createElement("span");d.className="tkd";
+d.textContent="Not listed \u2014 read it from chain";
+tx.appendChild(d);r.appendChild(tx);
+r.onclick=async e=>{
+e.stopPropagation();
+if(r.dataset.busy)return;
+r.dataset.busy="1";b.textContent="Reading\u2026";
+try{const i=await addCustomToken(a);rebuild();tkChoose(String(i))}
+catch(e){delete r.dataset.busy;b.textContent="Use "+short(a);
+d.textContent=(e&&e.message)||"could not read that address"}};
+frag.appendChild(r);
+}else{const e=document.createElement("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
+}
 tkList.appendChild(frag);
 tkCur=-1;
 };
@@ -1482,13 +1528,511 @@ swap.textContent="Swap";swap.disabled=false;
 };
 syncIcons(); render();
 const isRejection=e=>e?.code===4001||/user\s+reject|user\s+denied/i.test(e?.message||"");
+const W6963=[];
+addEventListener("eip6963:announceProvider",e=>{
+const d=e.detail;
+if(!d||!d.provider||!d.info||W6963.some(x=>x.info.uuid===d.info.uuid))return;
+W6963.push(d)});
+const wkScan=()=>{try{dispatchEvent(new Event("eip6963:requestProvider"))}catch{}};
+wkScan();
+const WC_PID="1e8390ef1c1d8a185e035912a1409749";
+const WC_ICON='<svg viewBox="0 0 400 400" fill="none" aria-hidden="true"><circle cx="200" cy="200" r="200" fill="#3396ff"/><path fill="#fff" d="m122.519 148.965c42.791-41.729 112.171-41.729 154.962 0l5.15 5.022c2.14 2.086 2.14 5.469 0 7.555l-17.617 17.18c-1.07 1.043-2.804 1.043-3.874 0l-7.087-6.911c-29.853-29.111-78.253-29.111-108.106 0l-7.59 7.401c-1.07 1.043-2.804 1.043-3.874 0l-17.617-17.18c-2.14-2.086-2.14-5.469 0-7.555zm191.397 35.529 15.679 15.29c2.14 2.086 2.14 5.469 0 7.555l-70.7 68.944c-2.139 2.087-5.608 2.087-7.748 0l-50.178-48.931c-.535-.522-1.402-.522-1.937 0l-50.178 48.931c-2.139 2.087-5.608 2.087-7.748 0l-70.7015-68.945c-2.1396-2.086-2.1396-5.469 0-7.555l15.6795-15.29c2.1396-2.087 5.6085-2.087 7.7481 0l50.1789 48.932c.535.522 1.402.522 1.937 0l50.177-48.932c2.139-2.087 5.608-2.087 7.748 0l50.179 48.932c.535.522 1.402.522 1.937 0l50.179-48.931c2.139-2.087 5.608-2.087 7.748 0z"/></svg>';
+const WCU=(()=>{
+const rl=(v,c)=>(v<<c|v>>>(32-c))>>>0;
+const wds=b=>{const o=[];for(let i=0;i<b.length;i+=4)o.push((b[i]|b[i+1]<<8|b[i+2]<<16|b[i+3]<<24)>>>0);return o};
+function cblk(x,k,n,c){
+const s=[0x61707865,0x3320646e,0x79622d32,0x6b206574,
+k[0],k[1],k[2],k[3],k[4],k[5],k[6],k[7],c,n[0],n[1],n[2]];
+for(let i=0;i<16;i++)x[i]=s[i];
+for(let r=0;r<10;r++){
+const q=(a,b,cc,d)=>{
+x[a]=(x[a]+x[b])>>>0;x[d]=rl(x[d]^x[a],16);
+x[cc]=(x[cc]+x[d])>>>0;x[b]=rl(x[b]^x[cc],12);
+x[a]=(x[a]+x[b])>>>0;x[d]=rl(x[d]^x[a],8);
+x[cc]=(x[cc]+x[d])>>>0;x[b]=rl(x[b]^x[cc],7)};
+q(0,4,8,12);q(1,5,9,13);q(2,6,10,14);q(3,7,11,15);
+q(0,5,10,15);q(1,6,11,12);q(2,7,8,13);q(3,4,9,14);}
+for(let i=0;i<16;i++)x[i]=(x[i]+s[i])>>>0;}
+function chacha(key,nonce,ctr,src){
+const k=wds(key),n=wds(nonce),x=new Uint32Array(16),out=new Uint8Array(src.length);
+for(let p=0;p<src.length;p+=64){cblk(x,k,n,ctr++);
+for(let i=0;i<64&&p+i<src.length;i++)out[p+i]=src[p+i]^(x[i>>2]>>>((i&3)*8)&255);}
+return out}
+function poly(msg,key){
+const P=(1n<<130n)-5n;
+let r=0n,sk=0n;
+for(let i=15;i>=0;i--)r=(r<<8n)|BigInt(key[i]);
+r&=0x0ffffffc0ffffffc0ffffffc0fffffffn;
+for(let i=31;i>=16;i--)sk=(sk<<8n)|BigInt(key[i]);
+let a=0n;
+for(let i=0;i<msg.length;i+=16){
+const n=Math.min(16,msg.length-i);
+let b=0n;
+for(let j=n-1;j>=0;j--)b=(b<<8n)|BigInt(msg[i+j]);
+a=((a+b+(1n<<BigInt(8*n)))*r)%P;}
+a=(a+sk)&((1n<<128n)-1n);
+const o=new Uint8Array(16);
+for(let i=0;i<16;i++){o[i]=Number(a&255n);a>>=8n}
+return o}
+const p16=n=>n%16?16-n%16:0;
+const le64=n=>{const b=new Uint8Array(8);for(let i=0;i<8;i++){b[i]=n&255;n=Math.floor(n/256)}return b};
+function tagOf(ct,key,nonce){
+const otk=chacha(key,nonce,0,new Uint8Array(32));
+const pad=new Uint8Array(p16(ct.length));
+const m=new Uint8Array(ct.length+pad.length+16);
+m.set(ct);m.set(pad,ct.length);
+m.set(le64(0),ct.length+pad.length);m.set(le64(ct.length),ct.length+pad.length+8);
+return poly(m,otk)}
+const seal=(key,nonce,pt)=>{
+const ct=chacha(key,nonce,1,pt),tg=tagOf(ct,key,nonce);
+const o=new Uint8Array(ct.length+16);o.set(ct);o.set(tg,ct.length);return o};
+const open=(key,nonce,box)=>{
+if(box.length<16)return null;
+const ct=box.subarray(0,box.length-16),tg=box.subarray(box.length-16);
+const w=tagOf(ct,key,nonce);
+let bad=0;for(let i=0;i<16;i++)bad|=w[i]^tg[i];
+return bad?null:chacha(key,nonce,1,ct)};
+const hex=b=>{let s="";for(const x of b)s+=x.toString(16).padStart(2,"0");return s};
+const unhex=h=>{const b=new Uint8Array(h.length/2);
+for(let i=0;i<b.length;i++)b[i]=parseInt(h.substr(i*2,2),16);return b};
+const bin=b=>{let s="";for(let i=0;i<b.length;i+=4096)s+=String.fromCharCode.apply(null,b.subarray(i,i+4096));return s};
+const b64=b=>btoa(bin(b));
+const unb64=s=>{const t=atob(s),b=new Uint8Array(t.length);
+for(let i=0;i<t.length;i++)b[i]=t.charCodeAt(i);return b};
+const b64u=b=>b64(b).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const utf8=s=>new TextEncoder().encode(s);
+const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const b58=b=>{let n=0n;for(const x of b)n=n*256n+BigInt(x);
+let s="";while(n>0n){s=B58[Number(n%58n)]+s;n/=58n}
+for(const x of b){if(x)break;s="1"+s}return s};
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+const sha256=async b=>new Uint8Array(await crypto.subtle.digest("SHA-256",b));
+const topicOf=async k=>hex(await sha256(k));
+const encode=(symKey,payload,senderPub)=>{
+const iv=rnd(12),pt=utf8(JSON.stringify(payload));
+const sealed=seal(symKey,iv,pt);
+const t=senderPub?1:0;
+const head=senderPub?1+32:1;
+const out=new Uint8Array(head+12+sealed.length);
+out[0]=t;
+if(senderPub)out.set(senderPub,1);
+out.set(iv,head);out.set(sealed,head+12);
+return b64(out)};
+const decode=(symKey,msg)=>{
+const b=unb64(msg);
+if(!b.length)return null;
+const t=b[0];
+if(t!==0&&t!==1)return null;
+const head=t===1?33:1;
+if(b.length<head+12+16)return null;
+const iv=b.subarray(head,head+12),box=b.subarray(head+12);
+const pt=open(symKey,iv,box);
+if(!pt)return null;
+try{return JSON.parse(new TextDecoder().decode(pt))}catch{return null}};
+const didKey=pub=>{const b=new Uint8Array(34);b[0]=0xed;b[1]=0x01;b.set(pub,2);
+return"did:key:z"+b58(b)};
+async function relayJwt(aud){
+let kp;
+try{kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])}
+catch{throw Error("This browser cannot do Ed25519. WalletConnect needs a newer "
++"browser; an extension wallet works here today.")}
+const pub=new Uint8Array(await crypto.subtle.exportKey("raw",kp.publicKey));
+const iss=didKey(pub);
+const iat=Math.floor(Date.now()/1e3);
+const h=b64u(utf8(JSON.stringify({alg:"EdDSA",typ:"JWT"})));
+const p=b64u(utf8(JSON.stringify({iss,sub:hex(rnd(32)),aud,iat,exp:iat+86400})));
+const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},kp.privateKey,utf8(h+"."+p)));
+return h+"."+p+"."+b64u(sig)}
+async function kex(){
+let kp;
+try{kp=await crypto.subtle.generateKey({name:"X25519"},true,["deriveBits"])}
+catch{throw Error("This browser cannot do X25519. WalletConnect needs a newer "
++"browser; an extension wallet works here today.")}
+const pub=new Uint8Array(await crypto.subtle.exportKey("raw",kp.publicKey));
+return{priv:kp.privateKey,pub}}
+async function sessionKey(priv,peerHex){
+const peer=await crypto.subtle.importKey("raw",unhex(peerHex),{name:"X25519"},false,[]);
+const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"X25519",public:peer},priv,256));
+const hk=await crypto.subtle.importKey("raw",bits,"HKDF",false,["deriveBits"]);
+const out=await crypto.subtle.deriveBits(
+{name:"HKDF",hash:"SHA-256",salt:new Uint8Array(0),info:new Uint8Array(0)},hk,256);
+return new Uint8Array(out)}
+return{seal,open,chacha,poly,hex,unhex,b64,unb64,b64u,b58,didKey,rnd,sha256,
+topicOf,encode,decode,relayJwt,kex,sessionKey};
+})();
+const WCCLI=(U,WSC)=>{
+const RELAY="wss://relay.walletconnect.org";
+const T_PROPOSE=1100,T_APPROVE=1101,T_SETTLE=1102,T_SETTLE_RES=1103,T_REQ=1108,T_RES=1109;
+const TTL=300,STTL=604800;
+let sock=null,nextId=1,waiters={},subs={},onEvent=null,alive=false,gone="";
+const rpcId=()=>Date.now()*1000+(nextId++%1000);
+const sendRaw=o=>{
+if(!alive)throw Error(gone||"The wallet connection is closed.");
+sock.send(JSON.stringify(o))};
+function drop(why){
+if(!alive&&gone)return;
+alive=false;gone=why;
+const ws=waiters;waiters={};subs={};
+for(const k in ws)ws[k].rej(Error(why));
+if(onEvent)onEvent({t:"closed",why})}
+function relayCall(method,params){
+const id=rpcId();
+return new Promise((res,rej)=>{
+waiters[id]={res,rej};
+sendRaw({id,jsonrpc:"2.0",method,params});
+setTimeout(()=>{if(waiters[id]){delete waiters[id];rej(Error("relay timeout"))}},15000)})}
+function handle(raw){
+let m;try{m=JSON.parse(raw)}catch{return}
+if(m.method==="irn_subscription"){
+sendRaw({id:m.id,jsonrpc:"2.0",result:true});
+const d=m.params&&m.params.data;
+if(d&&subs[d.topic])subs[d.topic](d.message);
+return}
+if(m.id&&waiters[m.id]){
+const w=waiters[m.id];delete waiters[m.id];
+if(m.error)w.rej(Error(m.error.message||"relay error"));else w.res(m.result)}}
+async function connect(projectId){
+try{sock&&sock.close()}catch{}
+sock=null;alive=false;gone="";waiters={};subs={};
+const jwt=await U.relayJwt(RELAY);
+const url=`${RELAY}/?auth=${jwt}&projectId=${projectId}&ua=zswap`;
+const ws=WSC(url);
+sock=ws;
+await new Promise((res,rej)=>{
+let d=0;
+const t=setTimeout(()=>{if(!d){d=1;rej(Error("The relay did not answer."))}},15000);
+const fail=m=>{try{ws.close()}catch{}if(sock===ws)sock=null;rej(Error(m))};
+const end=f=>x=>{if(d)return;d=1;clearTimeout(t);f(x)};
+sock.onopen=end(()=>{alive=true;res()});
+sock.onerror=end(()=>fail("The relay could not be reached."));
+sock.onclose=end(e=>fail("The relay closed the connection"
++(e&&e.code?" (code "+e.code+(e.reason?": "+e.reason:"")+")":"")+"."))})
+sock.onclose=()=>drop("The relay connection dropped. Reconnect your wallet.");
+sock.onmessage=e=>handle(typeof e.data==="string"?e.data:"");
+}
+const subscribe=async(topic,fn)=>{subs[topic]=fn;await relayCall("irn_subscribe",{topic})};
+const publish=(topic,message,tag,ttl)=>
+relayCall("irn_publish",{topic,message,ttl:ttl||TTL,tag,prompt:tag===T_PROPOSE||tag===T_REQ});
+async function pair(projectId,meta){
+await connect(projectId);
+const symKey=U.rnd(32);
+const pTopic=await U.topicOf(symKey);
+const kp=await U.kex();
+const proposeId=rpcId();
+let settle=null;
+const done=new Promise((res,rej)=>{settle={res,rej}});
+await subscribe(pTopic,async msg=>{
+const m=U.decode(symKey,msg);
+if(!m||m.id!==proposeId)return;
+if(m.error)return settle.rej(Error(m.error.message||"rejected"));
+const rp=m.result&&m.result.responderPublicKey;
+if(!rp)return;
+const sKey=await U.sessionKey(kp.priv,rp);
+const sTopic=await U.topicOf(sKey);
+await subscribe(sTopic,async smsg=>{
+const s=U.decode(sKey,smsg);
+if(!s)return;
+if(s.method==="wc_sessionSettle"){
+await publish(sTopic,U.encode(sKey,{id:s.id,jsonrpc:"2.0",result:true}),T_SETTLE_RES,STTL);
+const ns=s.params&&s.params.namespaces||{};
+const accts=[];
+for(const k in ns)for(const a of ns[k].accounts||[])accts.push(a);
+settle.res({topic:sTopic,key:sKey,accounts:accts,
+methods:(ns.eip155&&ns.eip155.methods)||[]});
+return}
+if(s.method==="wc_sessionDelete")return drop("The wallet ended the session.");
+if(s.method&&onEvent)onEvent({t:"session",m:s});
+if(s.id&&waiters["s"+s.id]){
+const w=waiters["s"+s.id];delete waiters["s"+s.id];
+if(s.error)w.rej(Object.assign(Error(s.error.message||"rejected"),{code:s.error.code}));
+else w.res(s.result)}});
+});
+const proposal={id:proposeId,jsonrpc:"2.0",method:"wc_sessionPropose",params:{
+relays:[{protocol:"irn"}],
+proposer:{publicKey:U.hex(kp.pub),metadata:meta},
+requiredNamespaces:{},
+optionalNamespaces:{eip155:{chains:["eip155:1"],
+methods:["eth_sendTransaction","personal_sign","eth_signTypedData_v4",
+"eth_call","eth_chainId","eth_accounts","eth_getBalance",
+"wallet_switchEthereumChain"],
+events:["chainChanged","accountsChanged"]}}}};
+await publish(pTopic,U.encode(symKey,proposal),T_PROPOSE);
+const uri=`wc:${pTopic}@2?relay-protocol=irn&symKey=${U.hex(symKey)}`;
+return{uri,done}}
+function request(sess,method,params){
+const id=rpcId();
+const body={id,jsonrpc:"2.0",method:"wc_sessionRequest",
+params:{request:{method,params:params||[]},chainId:"eip155:1"}};
+const p=new Promise((res,rej)=>{
+waiters["s"+id]={res,rej};
+setTimeout(()=>{if(waiters["s"+id]){delete waiters["s"+id];rej(Error("wallet timed out"))}},300000)});
+publish(sess.topic,U.encode(sess.key,body),T_REQ).catch(e=>{
+const w=waiters["s"+id];if(!w)return;delete waiters["s"+id];w.rej(e)});
+return p}
+return{pair,request,close:()=>{drop("The wallet connection was closed.");try{sock&&sock.close()}catch{}sock=null},
+on:f=>{onEvent=f},_relayCall:relayCall};
+};
+const QR8=(()=>{
+const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+(()=>{let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x&256)x^=285}
+for(let i=255;i<512;i++)EXP[i]=EXP[i-255]})();
+const mul=(a,b)=>a&&b?EXP[LOG[a]+LOG[b]]:0;
+const gen=n=>{let p=[1];
+for(let i=0;i<n;i++){const q=new Array(p.length+1).fill(0);
+for(let j=0;j<p.length;j++){q[j]^=mul(p[j],EXP[i]);q[j+1]^=p[j]}p=q}
+return p};
+const rs=(data,n)=>{
+const g=gen(n),r=new Uint8Array(data.length+n);
+r.set(data);
+for(let i=0;i<data.length;i++){
+const c=r[i];if(!c)continue;
+for(let j=0;j<=n;j++)r[i+j]^=mul(g[n-j],c)}
+return r.subarray(data.length)};
+const SZ=49,NBLK=2,DPB=97,ECB=24,ALIGN=[6,24,42];
+const bch=(v,g,n)=>{let d=v<<n;
+const bits=x=>{let c=0;while(x){c++;x>>>=1}return c};
+const gl=bits(g);
+while(bits(d)>=gl)d^=g<<(bits(d)-gl);
+return d};
+const fmtBits=mask=>{
+const v=(1<<3)|mask;
+return ((v<<10)|bch(v,0x537,10))^0x5412};
+const verBits=()=>(8<<12)|bch(8,0x1f25,12);
+function encode(str){
+const bytes=new TextEncoder().encode(str);
+if(bytes.length>NBLK*DPB-2)throw Error("pairing code too long to draw");
+const bits=[];
+const push=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1)};
+push(4,4);push(bytes.length,8);
+for(const b of bytes)push(b,8);
+const cap=(NBLK*DPB)*8;
+for(let i=0;i<4&&bits.length<cap;i++)bits.push(0);
+while(bits.length%8)bits.push(0);
+const cw=[];
+for(let i=0;i<bits.length;i+=8){let v=0;for(let j=0;j<8;j++)v=(v<<1)|bits[i+j];cw.push(v)}
+const pads=[0xec,0x11];
+for(let i=0;cw.length<NBLK*DPB;i++)cw.push(pads[i%2]);
+const blocks=[],ecs=[];
+for(let i=0;i<NBLK;i++){
+const d=Uint8Array.from(cw.slice(i*DPB,(i+1)*DPB));
+blocks.push(d);ecs.push(rs(d,ECB))}
+const out=[];
+for(let i=0;i<DPB;i++)for(const b of blocks)out.push(b[i]);
+for(let i=0;i<ECB;i++)for(const e of ecs)out.push(e[i]);
+return out}
+function frame(){
+const m=[],fn=[];
+for(let i=0;i<SZ;i++){m.push(new Array(SZ).fill(0));fn.push(new Array(SZ).fill(0))}
+const put=(r,c,v)=>{m[r][c]=v;fn[r][c]=1};
+const finder=(r,c)=>{
+for(let i=-1;i<8;i++)for(let j=-1;j<8;j++){
+const rr=r+i,cc=c+j;
+if(rr<0||cc<0||rr>=SZ||cc>=SZ)continue;
+const on=(i>=0&&i<=6&&(j===0||j===6))||(j>=0&&j<=6&&(i===0||i===6))||(i>=2&&i<=4&&j>=2&&j<=4);
+put(rr,cc,on?1:0)}};
+finder(0,0);finder(0,SZ-7);finder(SZ-7,0);
+for(const r of ALIGN)for(const c of ALIGN){
+if((r===6&&c===6)||(r===6&&c===ALIGN[ALIGN.length-1])||(r===ALIGN[ALIGN.length-1]&&c===6))continue;
+for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++)
+put(r+i,c+j,(Math.abs(i)===2||Math.abs(j)===2||(i===0&&j===0))?1:0)}
+for(let i=8;i<SZ-8;i++){put(6,i,i%2?0:1);put(i,6,i%2?0:1)}
+put(SZ-8,8,1);
+for(let i=0;i<9;i++){if(!fn[8][i])put(8,i,0);if(!fn[i][8])put(i,8,0)}
+for(let i=0;i<8;i++){if(!fn[8][SZ-1-i])put(8,SZ-1-i,0);if(!fn[SZ-1-i][8])put(SZ-1-i,8,0)}
+const vb=verBits();
+for(let i=0;i<18;i++){
+const b=(vb>>i)&1,r=Math.floor(i/3),c=i%3;
+put(SZ-11+c,r,b);put(r,SZ-11+c,b)}
+return{m,fn}}
+function place(m,fn,cw){
+let bit=0,up=1;
+const get=i=>(cw[i>>3]>>(7-(i&7)))&1;
+for(let c=SZ-1;c>0;c-=2){
+if(c===6)c--;
+for(let k=0;k<SZ;k++){
+const r=up?SZ-1-k:k;
+for(let j=0;j<2;j++){
+const cc=c-j;
+if(fn[r][cc])continue;
+m[r][cc]=bit<cw.length*8?get(bit):0;bit++}}
+up^=1}}
+const maskFn=(k,r,c)=>[
+(r+c)%2===0,r%2===0,c%3===0,(r+c)%3===0,
+(((r/2)|0)+((c/3)|0))%2===0,((r*c)%2+(r*c)%3)===0,
+(((r*c)%2+(r*c)%3)%2)===0,(((r+c)%2+(r*c)%3)%2)===0][k];
+function penalty(m){
+let p=0;
+for(let i=0;i<SZ;i++){
+let rc=1,cc=1;
+for(let j=1;j<SZ;j++){
+rc=m[i][j]===m[i][j-1]?rc+1:1;if(rc===5)p+=3;else if(rc>5)p++;
+cc=m[j][i]===m[j-1][i]?cc+1:1;if(cc===5)p+=3;else if(cc>5)p++}}
+for(let i=0;i<SZ-1;i++)for(let j=0;j<SZ-1;j++){
+const s=m[i][j]+m[i][j+1]+m[i+1][j]+m[i+1][j+1];
+if(s===0||s===4)p+=3}
+const pat=[1,0,1,1,1,0,1];
+const hit=(get)=>{
+for(let i=0;i<SZ;i++)for(let j=0;j<SZ-6;j++){
+let okk=1;for(let k=0;k<7;k++)if(get(i,j+k)!==pat[k]){okk=0;break}
+if(!okk)continue;
+let before=1,after=1;
+for(let k=j-4;k<j;k++)if(k<0||get(i,k)!==0){before=0;break}
+for(let k=j+7;k<j+11;k++)if(k>=SZ||get(i,k)!==0){after=0;break}
+if(before||after)p+=40}};
+hit((i,j)=>m[i][j]);hit((i,j)=>m[j][i]);
+let dark=0;for(let i=0;i<SZ;i++)for(let j=0;j<SZ;j++)dark+=m[i][j];
+p+=Math.floor(Math.abs(dark*100/(SZ*SZ)-50)/5)*10;
+return p}
+function build(str){
+const cw=encode(str);
+let best=null,bestP=Infinity,bestK=0;
+for(let k=0;k<8;k++){
+const{m,fn}=frame();
+place(m,fn,cw);
+for(let r=0;r<SZ;r++)for(let c=0;c<SZ;c++)
+if(!fn[r][c]&&maskFn(k,r,c))m[r][c]^=1;
+const f=fmtBits(k);
+for(let i=0;i<8;i++){
+const b=(f>>i)&1;
+if(i<6)m[i][8]=b;else if(i===6)m[7][8]=b;else m[8][8]=b;
+m[8][SZ-1-i]=b}
+for(let i=8;i<15;i++){
+const b=(f>>i)&1,c=14-i;
+if(c<6)m[8][c]=b;else m[8][7]=b;
+m[SZ-1-c][8]=b}
+m[SZ-8][8]=1;
+const p=penalty(m);
+if(p<bestP){bestP=p;best=m;bestK=k}}
+return{size:SZ,modules:best,mask:bestK}}
+return{build,_encode:encode};
+})();
+const RPC_STORE="zswap:rpc";
+const WC_NODE="https://ethereum.publicnode.com";
+const wcNode=()=>{try{const v=localStorage.getItem(RPC_STORE);
+if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return WC_NODE};
+const wcHost=()=>{try{return new URL(wcNode()).host}catch{return wcNode()}};
+const WC_SIGN=["eth_sendTransaction","eth_signTransaction","personal_sign","eth_sign",
+"eth_signTypedData","eth_signTypedData_v3","eth_signTypedData_v4"];
+const wcToWallet=m=>m.indexOf("wallet_")===0||WC_SIGN.indexOf(m)>=0;
+let wcRid=0;
+async function wcRpc(method,params){
+let r;
+try{r=await fetch(wcNode(),{method:"POST",headers:{"content-type":"application/json"},
+body:JSON.stringify({id:++wcRid,jsonrpc:"2.0",method,params:params||[]})})}
+catch{throw Error("Could not reach "+wcHost()+" for reads. Pick another node from the WalletConnect panel.")}
+if(!r.ok)throw Error(wcHost()+" answered "+r.status+" for reads.");
+const j=await r.json();
+if(j&&j.error)throw Object.assign(Error(j.error.message||"the read node refused"),{code:j.error.code});
+return j?j.result:null}
+const wcRelay=WCCLI(WCU,u=>new WebSocket(u));
+const qrSvg=m=>{let d="";
+for(let r=0;r<m.size;r++)for(let c=0;c<m.size;c++)if(m.modules[r][c])d+="M"+c+" "+r+"h1v1h-1z";
+return '<svg viewBox="-4 -4 '+(m.size+8)+" "+(m.size+8)+'" role="img" aria-label="WalletConnect pairing code" style="width:100%;height:auto;background:#fff;border-radius:.3em"><path fill="#000" d="'+d+'"/></svg>'};
+const wcShow=uri=>{
+wkList.textContent="";
+const box=document.createElement("div");
+box.className="wcq";
+box.innerHTML=qrSvg(QR8.build(uri));
+const cp=document.createElement("button");
+cp.type="button";cp.className="fclink";cp.textContent="copy link";
+cp.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(uri);cp.textContent="copied"};
+const note=document.createElement("div");
+note.className="wcn";
+note.textContent="Scan with a mobile wallet, or ";
+note.appendChild(cp);
+const nd=document.createElement("div");
+nd.className="wcn wcnode";
+nd.appendChild(document.createTextNode("Reads via "+wcHost()+" "));
+const ch=document.createElement("button");
+ch.type="button";ch.className="fclink";ch.textContent="change";
+ch.onclick=()=>{
+const v=prompt("HTTPS Ethereum RPC used for reads while WalletConnect is connected."
++" Signing always goes to your wallet. Leave blank for the default.",wcNode());
+if(v===null)return;
+const t=v.trim();
+try{if(!t)localStorage.removeItem(RPC_STORE);
+else if(/^https:\/\/\S+$/i.test(t))localStorage.setItem(RPC_STORE,t);
+else return}catch{}
+nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
+nd.appendChild(ch);
+wkList.appendChild(box);wkList.appendChild(note);wkList.appendChild(nd);
+wkHdr.textContent="WalletConnect";
+wkWrap.classList.remove("hide");
+return new Promise((res,rej)=>{
+const esc=e=>{if(e.key==="Escape")stop()};
+const stop=()=>{removeEventListener("keydown",esc);wkWrap.onclick=null;rej(Object.assign(Error(""),{code:4001}))};
+wkWrap.onclick=e=>{if(e.target===wkWrap)stop()};
+addEventListener("keydown",esc);
+wcShow.settle=()=>{removeEventListener("keydown",esc);wkWrap.onclick=null;res()}})};
+async function wcConnect(){
+const meta={name:"zSwap",description:"zSwap",url:location.origin,icons:[]};
+const{uri,done}=await wcRelay.pair(WC_PID,meta);
+const bail=wcShow(uri);
+stat.textContent="Scan the code with your wallet.";
+let sess;
+try{sess=await Promise.race([done,bail])}
+catch(e){wcRelay.close();throw e}
+finally{if(wcShow.settle)wcShow.settle();
+wkHdr.textContent="Choose a wallet";
+wkWrap.classList.add("hide")}
+const accts=sess.accounts.map(a=>a.split(":").pop());
+if(!accts.length){wcRelay.close();throw Error("That wallet approved no account.")}
+wcRead=sess.methods.indexOf("eth_call")>=0;
+const read=async(method,params)=>{
+try{return await wcRpc(method,params)}
+catch(e){
+if(e&&e.code!==undefined||!wcRead)throw e;
+return wcRelay.request(sess,method,params||[])}};
+wcRelay.on(ev=>{if(ev&&ev.t==="closed")location.reload()});
+return{request:({method,params})=>
+method==="eth_requestAccounts"||method==="eth_accounts"?Promise.resolve(accts):
+method==="eth_chainId"?Promise.resolve("0x1"):
+wcToWallet(method)?wcRelay.request(sess,method,params||[]):
+read(method,params),
+on:()=>{}}}
+let wcRead=true;
+const wkWrap=document.getElementById("wkWrap"),wkList=document.getElementById("wkList");
+const wkChoices=()=>W6963.map(d=>({name:d.info.name,icon:d.info.icon,get:()=>d.provider}))
+.concat([{name:"WalletConnect",svg:WC_ICON,get:wcConnect}]);
+const wkPick=cs=>new Promise(res=>{
+wkList.textContent="";
+let done=false;
+const end=v=>{if(done)return;done=true;
+wkWrap.classList.add("hide");removeEventListener("keydown",esc);res(v)};
+const esc=e=>{if(e.key==="Escape")end(null)};
+cs.forEach(c=>{
+const b=document.createElement("button");
+b.type="button";b.className="tkr";b.setAttribute("role","option");
+if(c.icon){const im=document.createElement("img");im.src=c.icon;im.alt="";b.appendChild(im)}
+else if(c.svg){const sp=document.createElement("span");sp.className="wki";sp.innerHTML=c.svg;b.appendChild(sp)}
+b.appendChild(document.createTextNode(c.name));
+b.onclick=()=>end(c);
+wkList.appendChild(b)});
+wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
+addEventListener("keydown",esc);
+wkWrap.classList.remove("hide");
+wkList.firstChild?.focus()});
+async function wkResolve(){
+if(PROV)return true;
+wkScan();
+const inj=window.ethereum;
+if(W6963.length<2&&inj)return true;
+const cs=wkChoices();
+const c=await wkPick(cs);
+if(!c)return false;
+stat.textContent="Connecting…";
+try{PROV=await c.get()}
+catch(e){if(!isRejection(e))err(e);return false}
+wkBind(PROV);
+return true}
 async function connect(){
-if(!window.ethereum){stat.textContent=NO_WALLET;return}
 if(connecting)return;
 connecting=true;
+try{
+if(!await wkResolve())return;
+if(!prov()){stat.textContent=NO_WALLET;return}
 swap.textContent="Connecting…";swap.disabled=true;
 lnGo.textContent="Connecting…";lnGo.disabled=true;
-try{
 let accs;
 try{accs=await rpc("eth_requestAccounts",[])}
 catch(e){err(e);return}
@@ -1800,10 +2344,10 @@ let p=isIn
 ?planBookExactIn(candidates,swapAmt,seedOut,tail&&seedOut!==r.best.amountOut?tailDelta:r.best.amountIn)
 :planBookExactOut(candidates,swapAmt,seedIn,tail&&seedIn!==r.best.amountIn?tailDelta:r.best.amountOut);
 plannerBounded=!!(p&&p.bounded);
-let amm=null;
+let amm=null,ammFor=null;
 for(let round=0;p&&(isIn?p.ammIn:p.ammOut)&&round<2;round++){
 const rem=isIn?p.ammIn:p.ammOut;
-amm=await quoteRem(rem,!isIn).catch(()=>null);
+amm=await quoteRem(rem,!isIn).catch(()=>null);ammFor=rem;
 if(!amm)break;
 const next=isIn
 ?planBookExactIn(candidates,swapAmt,amm.best.amountOut,rem)
@@ -1814,7 +2358,8 @@ p=next;plannerBounded=plannerBounded||!!p.bounded;if(stable)break;
 }
 if(p){
 const rem=isIn?p.ammIn:p.ammOut;
-amm=rem?await quoteRem(rem,!isIn).catch(()=>null):null;
+if(!rem)amm=null;
+else if(!(amm&&ammFor===rem))amm=await quoteRem(rem,!isIn).catch(()=>null);
 if(!rem||amm){
 const recipient=rcv||acct;
 const ammBudget=amm?(isIn?rem:amm.amountLimit):0n;
@@ -2035,11 +2580,16 @@ stat.textContent=msg;
 }
 flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
 const sameAcct=(a,b)=>!!a&&!!b&&a.toLowerCase()===b.toLowerCase();
+const wkBind=eth=>{
+if(!eth||eth.__zb)return;
+eth.__zb=1;
+eth.on?.("chainChanged",cid=>{if(connecting||(+cid===1&&account))return;location.reload()});
+eth.on?.("accountsChanged",accs=>{if(connecting||sameAcct(accs?.[0],account))return;location.reload()});
+};
 const wireWallet=eth=>{
 if(!eth||wireWallet.done)return;
 wireWallet.done=true;
-eth.on?.("chainChanged",cid=>{if(connecting||(+cid===1&&account))return;location.reload()});
-eth.on?.("accountsChanged",accs=>{if(connecting||sameAcct(accs?.[0],account))return;location.reload()});
+wkBind(eth);
 (async()=>{
 if(sessionStorage.getItem("dc"))return;
 try{
@@ -2087,8 +2637,8 @@ footAddr.innerHTML+=` · <a href="${url}" target="_blank" rel="noopener" `
 }catch{}
 })();
 };
-wireWallet(window.ethereum);
-if(!window.ethereum)window.addEventListener("ethereum#initialized",()=>wireWallet(window.ethereum),{once:true});
+wireWallet(prov());
+if(!prov())window.addEventListener("ethereum#initialized",()=>wireWallet(prov()),{once:true});
 setTimeout(burnTotal,0);
 setTimeout(loadEthUsd,0);
 const SEL_TRANSFER="a9059cbb";
@@ -2404,6 +2954,7 @@ const MAX_BOOK_LEGS=32,AON_PAIR_SEEDS=24;
 function planBookExactIn(rows,amountIn,ammOut,ammIn){
 if(!amountIn||!ammIn)return null;
 let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aB<=amountIn)
+&&(!o.floor||(o.price>0n&&o.initial>0n))
 &&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
 const candidateCapped=c.length>256;
 const aonCount=c.reduce((n,o)=>n+!o.pf,0);
@@ -2447,6 +2998,7 @@ const cheaperRate=(a,b)=>a.aB*b.aA<b.aB*a.aA;
 function planBookExactOut(rows,amountOut,ammIn,ammOut){
 if(!amountOut||!ammOut)return null;
 let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aA<=amountOut)
+&&(!o.floor||(o.price>0n&&o.initial>0n))
 &&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
 const candidateCapped=c.length>256;
 const aonCount=c.reduce((n,o)=>n+!o.pf,0);
@@ -2614,15 +3166,12 @@ price:b.price,initial:b.initial,anyId:b.anyId,isNFT:b.isNFT?1:0,
 }
 return rows;
 }
-async function loadBook(){
+const loadBook=()=>loadBookRun().catch(()=>{});
+async function loadBookRun(){
 if(tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
 const my=++bookSeq;
-const live=[];
-for(const b of BOARDS){
-let code="0x";
-try{code=await rpc("eth_getCode",[b.a,L])}catch{}
-if(code.length>4)live.push(b);
-}
+const live=(await Promise.all(BOARDS.map(b=>
+rpc("eth_getCode",[b.a,L]).then(c=>(c||"").length>4?b:null,()=>null)))).filter(Boolean);
 if(my!==bookSeq)return;
 if(!live.length){
 bookRows=[];bookLegs=[];
@@ -2641,8 +3190,10 @@ const ids=[];for(let i=hi-1;i>=lo;--i)ids.push(i);
 let raw="";
 try{raw=await rpc(C,[{to:b.a,data:"0x"+SEL_GETORDERS+encUint(32)+encUint(ids.length)+ids.map(i=>encUint(i)).join("")},L])}catch{continue}
 if(my!==bookSeq)return;
-const h=strip0x(raw);if(!h)continue;
-const w=WORDS(b.v2),n=Number(BigInt("0x"+h.slice(64,128)));
+const h=strip0x(raw);if(h.length<128)continue;
+const w=WORDS(b.v2),words=(h.length-128)/64;
+let n=Number(BigInt("0x"+h.slice(64,128)));
+if(!Number.isSafeInteger(n)||n*w>words)n=Math.floor(words/w);
 const at=(r,k)=>BigInt("0x"+h.slice(128+(r*w+k)*64,128+(r*w+k+1)*64));
 const ad=(r,k)=>"0x"+h.slice(128+(r*w+k)*64+24,128+(r*w+k+1)*64);
 for(let r=0;r<n&&r<ids.length;++r){
@@ -3343,6 +3894,7 @@ function lqRow(o,t0,t1){
 const px=bandPrice(o.px,t0.dec,t1.dec),lo=bandPrice(o.sl,t0.dec,t1.dec),hi=bandPrice(o.sh,t0.dec,t1.dec);
 const inRange=px>=lo&&px<=hi&&o.liq>0n;
 const mine=o.shares>0n;
+const sole=mine&&o.shares===o.liq;
 const p=`data-pool="${o.pool}"`;
 return `<div class="lqrow${inRange?"":" out"}" ${p}>`
 +`<div class="lqband"><b>${fmtPx(lo)} – ${fmtPx(hi)}</b> <span class="lqfee" title="${o.cbps>0n
@@ -3354,11 +3906,13 @@ o.cbps>0n?` — ${(Number(o.fee)*(10000-Number(o.cbps))/10000/10000).toFixed(2)}
 ?` <span class="lqtag" title="The widest band this page creates: 1000x either side of the opening price, a millionfold span. Price is effectively always inside it, so the position behaves like an ordinary constant-product pool. It is still bounded - no band here is infinite.">full range</span>`:"")
 +(inRange?"":` <span class="lqtag">out of range</span>`)+`</div>`
 +lqBar(lo,hi,px)
-+`<div class="lqmeta">${fmtPx(px)} ${t1.sym} per ${t0.sym}`
-+` · holds ${trimAmt(o.r0,t0.dec)} ${t0.sym} + ${trimAmt(o.r1,t1.dec)} ${t1.sym}`
-+` <button class="lqbtn" data-act="a" ${p}>Add</button></div>`
-+(mine?`<div class="lqmine">yours: ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}`
-+` <button class="lqbtn" data-act="w" ${p}>Withdraw all</button></div>`:"")
++`<div class="lqmeta">now ${fmtPx(px)} ${t1.sym} per ${t0.sym}`
++(sole?"":` \u00b7 pool ${trimAmt(o.r0,t0.dec)} ${t0.sym} + ${trimAmt(o.r1,t1.dec)} ${t1.sym}`)
++`</div>`
++(mine?`<div class="lqmine">yours ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}</div>`:"")
++`<div class="lqacts"><button class="lqbtn" data-act="a" ${p}>Add</button>`
++(mine?`<button class="lqbtn" data-act="w" ${p}>Withdraw all</button>`:"")
++`</div>`
 +`<div class="lqadd hide">`
 +(o.liq>0n
 ?`<label class="lqzap"><input type="checkbox" class="lqz"> One-sided — deposit just ${t0.sym} or just ${t1.sym}</label>`:"")
@@ -3792,6 +4346,7 @@ const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
 const i=src===ins[0]?0:src===ins[1]?1:-1;
 if(i<0)return;
 const other=ins[1-i],v=src.value.trim();
+box.dataset.mir=String(1-i);
 if(!v){other.value="";return}
 try{
 const raw=parseUnits(v,i===0?t0.dec:t1.dec);
@@ -3799,23 +4354,29 @@ other.value=formatUnits(i===0?raw*row.r1/row.r0:raw*row.r0/row.r1,i===0?t1.dec:t
 }catch{}
 }
 lqList.addEventListener("input",e=>{
-if(!e.target.classList.contains("lqin"))return;
 const box=e.target.closest(".lqadd");
-if(box){lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
-if(e.target.closest(".lqnew")){clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
+if(box&&e.target.classList.contains("lqin")){
+box.querySelector('[data-act="ac"]').disabled=true;
+lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
+const nb=e.target.closest(".lqnew");
+if(nb){nb.querySelector("#lqCreate").disabled=true;
+clearTimeout(lqPvT);lqPvT=setTimeout(lqNewPreview,300)}
 });
 lqList.addEventListener("change",e=>{
 if(e.target.id==="lqFee"||e.target.id==="lqRange")return lqNewPreview();
 if(!e.target.classList.contains("lqz"))return;
 const box=e.target.closest(".lqadd"),ins=box.querySelectorAll(".lqin");
 const on=e.target.checked;
+const mir=box.dataset.mir;
+if(on&&mir&&ins[0].value.trim()&&ins[1].value.trim())ins[+mir].value="";
 if(!on)lqMirror(box,ins[0]);
 box.querySelector('[data-act="ac"]').textContent=on?"Zap in":"Add liquidity";
 lqPreview(box);
 });
 let lqNewSeq=0;
 let lqPvT2;
-const lqPreviewSoon=()=>{clearTimeout(lqPvT2);lqPvT2=setTimeout(lqNewPreview,320)};
+const lqPreviewSoon=()=>{const g=lqList.querySelector("#lqCreate");if(g)g.disabled=true;
+clearTimeout(lqPvT2);lqPvT2=setTimeout(lqNewPreview,320)};
 async function lqNewPreview(){
 const box=lqList.querySelector(".lqnew");
 if(!box)return;
@@ -3989,7 +4550,8 @@ return;
 }
 if(act==="w"){
 if(row.shares===0n)return;
-await doRemove(pool,row.shares,t0,t1);
+++busy;b.disabled=true;
+try{await doRemove(pool,row.shares,t0,t1)}finally{--busy;b.disabled=false}
 return;
 }
 if(act==="ac"){
@@ -3999,7 +4561,8 @@ if(isZap(box)){
 const z=zapSide(box,t0,t1);
 if(z.err){stat.textContent=z.err;return}
 if(!z.amt)return;
-await doZap(pool,z.tok,z.amt);
+++busy;b.disabled=true;
+try{await doZap(pool,z.tok,z.amt)}finally{--busy;b.disabled=false}
 return;
 }
 let a0,a1;
@@ -4007,7 +4570,8 @@ try{
 a0=parseUnits(ins[0].value.trim(),t0.dec);a1=parseUnits(ins[1].value.trim(),t1.dec);
 }catch{stat.textContent="Invalid amount";return}
 if(!a0||!a1)return;
-await doAdd(pool,a0,a1,t0,t1);
+++busy;b.disabled=true;
+try{await doAdd(pool,a0,a1,t0,t1)}finally{--busy;b.disabled=false}
 }
 };
 footDoc.setAttribute("aria-expanded","false");
@@ -4370,6 +4934,7 @@ if(c&&"0x"+strip0x(c).slice(24)===owner.toLowerCase())token=candidate;
 if(token){
 try{
 const idx=await addCustomToken(token);
+TOKENS[idx].launched=1;
 rebuild();
 fromSel.value=String(Math.max(0,TOKENS.findIndex(t=>t.addr===ZERO)));
 fromSel.dataset.prev=fromSel.value;
@@ -4431,7 +4996,7 @@ return f.addr.toLowerCase()<t.addr.toLowerCase()?[f,t]:[t,f]};
 let chLoading="";
 async function loadChart(){
 const p0=chPair();
-const k0=p0?p0[0].addr+":"+p0[1].addr:"";
+const k0=chPairKey(p0);
 if(k0&&chLoading===k0)return;
 chBars=null;chPools=null;
 const p=p0;
@@ -4495,7 +5060,7 @@ if(my===chSeq)syncChartUI();
 const chPoolsAt=step=>chPools&&chPools[step]||0;
 const chLabel=p=>chInv?`${p[0].sym} per ${p[1].sym}`:`${p[1].sym} per ${p[0].sym}`;
 async function chFloorFor(p){
-const key=p?`${p[0].addr}:${p[1].addr}`:"";
+const key=chPairKey(p);
 if(key===chFloorKey)return;
 chFloorKey=key;chFloor=0;chSupply=0;
 const tok=p&&p[1]&&p[1].launched?p[1].addr:"";
@@ -4828,7 +5393,7 @@ const syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-
 syncStops();for(const el of TABS)el.addEventListener("click",syncStops);
 for(const el of TABS)el.addEventListener("keyup",syncStops);}
 applyLink();
-if(window.ethereum)loadTokenList().then(()=>{
+if(prov())loadTokenList().then(()=>{
 adoptList(pairAddrs());
 return applyLink();
 }).catch(()=>{});

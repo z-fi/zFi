@@ -250,3 +250,37 @@ describe('launched coins are findable', () => {
     p.close();
   });
 });
+/**
+ * Launching a coin from this page routes it through addCustomToken, so it is
+ * saved to localStorage as one of "your" tokens. The factory then reports the
+ * same coin as launched, and the list rebuild appended both copies: the custom
+ * survivors were deduped against the registry only, never against the launched
+ * set. The picker showed the coin twice, and the copy without `launched` quoted
+ * no floor and drew no floor line - so which of two identical-looking options
+ * you clicked decided whether you got the floor price.
+ */
+test('a coin you launched yourself is listed once, as launched', async () => {
+  const rows = [row('ETH', A.ZERO, { p: 'Native' })];
+  const chain = new MockChain();
+  chain.registry = rows;
+  chain.conviction = [1];
+  chain.setToken(COIN_A, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' });
+  chain.setNative(A.ACCOUNT, 10n * ETH);
+  chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+  chain.setLaunched([{ pool: POOL_A, token: COIN_A }]);
+  const p = await loadPage({
+    chain, hash: null,
+    // Exactly what the launch flow leaves behind in the creator's browser.
+    storage: { 'zswap:custom': JSON.stringify([{ sym: 'ZCAT', addr: COIN_A, dec: 18, std: 'ft' }]) },
+  });
+  await p.connect({ pin: false });
+  await p.settle();
+  const hits = syms(p).filter(s => s === 'ZCAT');
+  assert.equal(hits.length, 1, `the launcher saw their own coin ${hits.length} times`);
+  // Only the launched copy carries a pool-depth line, so this is the copy that
+  // survived - the custom one would render bare.
+  p.click('toPick');
+  assert.match(rowFor(p, 'ZCAT').textContent, /liquidity/,
+    'the copy that survived is the custom one, which knows no floor');
+  p.close();
+});

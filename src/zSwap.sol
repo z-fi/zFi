@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-/// @title zSwap v0.1
+/// @title zSwap v0.2
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (240945 B) is the runtime bytecode of
-///      15 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (287734 B) is the runtime bytecode of
+///      12 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 10 data contracts
+///      compatibility (ERC-4804). Splitting the page across 12 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 4815 B headroom).
+///      (24576 B per chunk, 7178 B headroom).
 ///
 ///      The count is a headroom decision, not a hard requirement, but it can
 ///      only be chosen once for a given deployment: it is fixed in the
@@ -22,23 +22,23 @@ pragma solidity ^0.8.36;
 ///      observed rate of growth instead and lasted one release. Fifteen
 ///      followed it, at 350 KB and 97% full.
 ///
-///      Nine is not a continuation of that series. The page source carried its
-///      own documentation - about 45% of it - and that was being deployed too;
-///      stripping it took 354 KB to 198 KB, which is what makes a smaller count
-///      possible at all. It costs six data-contract deployments per version.
+///      Twelve is not a continuation of that series. The page source carried
+///      its own documentation - about 45% of it - and that was being deployed
+///      too; stripping it is what makes a count this small possible at all. It
+///      costs twelve data-contract deployments per version.
 ///
 ///      IT ALSO SPENDS THE SLACK. Every earlier count had comments in it, so a
 ///      page against its ceiling could always be cut back without touching a
-///      feature. That valve is gone: 198 KB is the page itself, 89% of what
-///      ten chunks hold, and the next ~23 KB of growth needs a larger count -
+///      feature. That valve is gone: 281 KB is the page itself, 97% of what
+///      twelve chunks hold, and the next ~7 KB of growth needs a larger count -
 ///      which means a new wrapper, a new salt and a new address.
 ///
 ///      The count cannot simply be padded, either: every chunk must be
 ///      non-empty and distinct (see the constructor below), so a count far
 ///      above what the page needs does not deploy. That is the real bound on
-///      this number - not caution, but the fact that 9 chunks require a page
-///      of at least 9 bytes' worth of distinct slices and, more practically,
-///      that ceil(len/9) must stay under EIP-170 while len/9 stays non-zero.
+///      this number - not caution, but the fact that 12 chunks require a page
+///      of at least 12 bytes' worth of distinct slices and, more practically,
+///      that ceil(len/12) must stay under EIP-170 while len/12 stays non-zero.
 ///
 /// HOW TO READ THE DAPP
 ///   cast call <addr> "html()(string)" --rpc-url <rpc> > zSwap.html
@@ -193,9 +193,9 @@ pragma solidity ^0.8.36;
 ///   BOLD->rETH priced ~$28 through a skewed V4 pool where 3-hop gave ~$36.
 contract zSwap {
     string public constant NAME = "zSwap";
-    string public constant VERSION = "0.1";
+    string public constant VERSION = "0.2";
 
-    /// @dev The HTML payload lives in nine separate data contracts whose
+    /// @dev The HTML payload lives in twelve separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -215,6 +215,11 @@ contract zSwap {
     ///      EIP-170's 24,576. The count is a consequence of the page's size and
     ///      the cap, nothing more.
     address public immutable DATA11;
+    /// @dev A twelfth chunk. Hand-rolling the WalletConnect client put ~14 KB
+    ///      of protocol into the page so it need not fetch a 635 KB bundle from
+    ///      a host at run time. Eleven chunks would need 24,762 each against
+    ///      EIP-170's 24,576. The count follows the page's size and the cap.
+    address public immutable DATA12;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -222,7 +227,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own ten chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own twelve chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -314,13 +319,13 @@ contract zSwap {
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
     ///      instead of a parameter list, a temporary array and 15 assignments.
-    constructor(address dao, address previous, address[11] memory d) {
+    constructor(address dao, address previous, address[12] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 11; ++i) {
+        for (uint256 i; i != 12; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 11; ++j) {
+            for (uint256 j = i + 1; j != 12; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -335,6 +340,7 @@ contract zSwap {
         DATA9 = d[8];
         DATA10 = d[9];
         DATA11 = d[10];
+        DATA12 = d[11];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -459,7 +465,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all ten chunks in one pass: each chunk
+    /// @dev Reassembles the page from all twelve chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///
@@ -472,14 +478,14 @@ contract zSwap {
     /// cursor advances by construction, so the tenth chunk lands after the
     /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[11] memory d = [
-            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11
+        address[12] memory d = [
+            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
             let body := add(s, 0x20)
             let at := body
-            for { let i := 0 } lt(i, 11) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, 12) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)

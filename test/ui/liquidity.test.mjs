@@ -118,7 +118,7 @@ describe('the panel', () => {
     await p.waitFor(() => rows(p).length, { label: 'bands' });
     const meta = rows(p)[0].querySelector('.lqmeta').textContent;
     assert.match(meta, /3,000 USDC per ETH/, 'the price carries its units');
-    assert.match(meta, /holds 100 ETH \+ 300000 USDC/, 'and the reserves are named as reserves');
+    assert.match(meta, /pool 100 ETH \+ 300000 USDC/, 'and the reserves are named as the pool\'s');
     assert.ok(!/ETH \/ /.test(meta), 'no slash between two token amounts');
     p.close();
   });
@@ -144,7 +144,8 @@ describe('the panel', () => {
     const p = await setup();
     await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
     // 10% of supply, so 10% of both reserves.
-    assert.match(rows(p)[0].textContent, /yours: 10 ETH \+ 30,?000 USDC|yours: 10 ETH \+ 30000 USDC/);
+    assert.match(rows(p)[0].textContent, /yours 10 ETH \+ 30,?000 USDC/,
+      'the holding is read off the pool balance');
     // The old path asked the lens for a page of the factory's GLOBAL pool list;
     // a holding outside page one was invisible with nothing to say so.
     assert.equal(p.chain.calls.some(c => c.selector === 'dc9d54ef'), false,
@@ -152,6 +153,29 @@ describe('the panel', () => {
     const asked = p.chain.calls.filter(c =>
       c.selector === SEL.BALANCEOF && c.to === POOL_A.toLowerCase());
     assert.ok(asked.length, 'the pool itself is asked for the LP balance');
+    p.close();
+  });
+
+  test('the sole LP is not told the same numbers twice', async () => {
+    // Own the whole band and "pool holds X + Y" and "yours X + Y" are the same
+    // two numbers on consecutive lines. The row was five lines deep with the
+    // middle one carrying nothing, which is most of why the panel read as
+    // dense. The pool's side is worth saying only when it differs from yours.
+    const p = await setup({ shares: BAND_A.liquidity });
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    const row = rows(p)[0].textContent;
+    assert.match(row, /yours 100 ETH \+ 300000 USDC/, 'the holding is still stated');
+    assert.ok(!/pool 100 ETH/.test(row), 'the pool reserves are repeated back at the sole LP');
+    assert.match(row, /now 3,000 USDC per ETH/, 'the price still carries its units');
+    p.close();
+  });
+
+  test('a partial LP is still shown what the pool holds', async () => {
+    const p = await setup({ shares: BAND_A.liquidity / 10n });
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    const row = rows(p)[0].textContent;
+    assert.match(row, /pool 100 ETH \+ 300000 USDC/, 'the pool side went missing when it matters');
+    assert.match(row, /yours 10 ETH \+ 30000 USDC/, 'and the holding alongside it');
     p.close();
   });
 
@@ -1106,6 +1130,83 @@ describe('telling a moved price from a short pool', () => {
       { label: 'the explanation' });
     assert.equal(p.chain.sent.length, 0, 'and nothing may go out');
     assert.equal(p.asked.confirm.length, 0);
+    p.close();
+  });
+});
+
+/**
+ * A ZAP NAMES THE TOKEN IT IS BUYING, AND KEEPS THE SIDE THE DEPOSITOR CHOSE.
+ *
+ * Both halves of this were the same mistake in two places: the form treats the
+ * two boxes symmetrically until something has to say which one is the deposit.
+ *
+ * The preview line was written for token0 and hard-coded token1 as the thing
+ * bought, so a token1 zap read "swaps 1,500 of 3,000 USDC for USDC" - a line
+ * that describes no trade at all, on the screen whose entire job is to say
+ * that half the deposit gets traded at the pool's fee.
+ *
+ * The toggle had the mirror image of it. Below the checkbox the two boxes are a
+ * RATIO and the page fills the counterpart in as you type; above it they are
+ * one deposit and a filled counterpart is an ambiguity. Turning one-sided on
+ * therefore refused the very state the form had just written itself, and told
+ * the depositor to clear a field they never typed.
+ */
+describe('a one-sided deposit', () => {
+  const openAdd = async p => {
+    await p.waitFor(() => btn(p, 'a'), { label: 'add button' });
+    p.click(btn(p, 'a'));
+    const box = rows(p)[0].querySelector('.lqadd');
+    await p.waitFor(() => !box.classList.contains('hide'), { label: 'add form' });
+    return box;
+  };
+  const toggle = async (p, box, on) => {
+    const z = box.querySelector('.lqz');
+    z.checked = on;
+    z.dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await p.settle();
+  };
+
+  test('names the other token as what the swap leg buys', async () => {
+    const p = await setup();
+    const box = await openAdd(p);
+    await toggle(p, box, true);
+    typeInto(p, box.querySelectorAll('.lqin')[1], '3000');
+    await p.waitFor(() => /swaps/.test(box.querySelector('.lqpv').textContent),
+      { label: 'token-side zap preview', timeout: 6000 });
+    const line = box.querySelector('.lqpv').textContent;
+    assert.match(line, /USDC for ETH/, 'a USDC zap buys the other side, not itself');
+    assert.doesNotMatch(line, /USDC for USDC/, 'no deposit ever trades a token for itself');
+    p.close();
+  });
+
+  test('drops the mirrored counterpart instead of asking for it back', async () => {
+    // Type ONE side with the checkbox off: the page mirrors the other. Turning
+    // it on must keep the typed side and discard the page's own arithmetic.
+    const p = await setup();
+    const box = await openAdd(p);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '2');
+    await p.waitFor(() => i1.value !== '', { label: 'the mirror to fill' });
+    await toggle(p, box, true);
+    assert.equal(i0.value, '2', 'the side the depositor typed survives');
+    assert.equal(i1.value, '', 'the side the page wrote does not');
+    await p.waitFor(() => /swaps/.test(box.querySelector('.lqpv').textContent),
+      { label: 'the zap preview', timeout: 6000 });
+    assert.doesNotMatch(box.querySelector('.lqpv').textContent, /One side only/,
+      'the form must not refuse a state it wrote itself');
+    p.close();
+  });
+
+  test('still refuses two sides the depositor actually typed', async () => {
+    const p = await setup();
+    const box = await openAdd(p);
+    await toggle(p, box, true);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '2');
+    typeInto(p, i1, '3000');
+    await p.waitFor(() => /One side only/.test(box.querySelector('.lqpv').textContent),
+      { label: 'the ambiguity to be named', timeout: 6000 });
+    assert.equal(box.querySelector('[data-act="ac"]').disabled, true);
     p.close();
   });
 });

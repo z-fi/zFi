@@ -569,3 +569,74 @@ describe('creating a band', () => {
     p.close();
   });
 });
+
+/**
+ * THE FORM HAS TO ANSWER THE FIELD YOU ARE TYPING IN.
+ *
+ * The two price boxes revealed by "Custom prices" carry no `.lqin` class - they
+ * are the form's own fields, not a deposit tile - and the panel's input handler
+ * began by discarding every event whose target lacked that class. So typing a
+ * low and a high produced nothing at all: no band line, no seed, and Create
+ * stayed disabled behind "Name both prices" until the depositor happened to
+ * touch an amount or a select afterwards, which is the one thing a filled-in
+ * form gives you no reason to do.
+ *
+ * The fixture masked it exactly as a person would not: `fill()` writes the
+ * prices FIRST and the amounts SECOND, and the amount is what used to wake the
+ * preview. These two drive the fields in the order a depositor meets them.
+ */
+describe('the create form reacts to its own fields', () => {
+  const typeIn = async (p, id, v) => {
+    const el = form(p).querySelector('#' + id);
+    el.value = v;
+    el.dispatchEvent(new p.window.Event('input', { bubbles: true }));
+    await new Promise(r => p.window.setTimeout(r, 420));
+    await p.settle();
+  };
+
+  test('a custom band priced after the deposit still arms Create', async () => {
+    const p = await setup();
+    await fill(p, good);
+    await preset(p, 'custom');
+    // Nothing but the two prices from here on: no amount, no select.
+    await typeIn(p, 'lqLo', '1000');
+    await typeIn(p, 'lqHi', '5000');
+    await p.waitFor(() => p.$('lqCreate').disabled === false,
+      { label: 'the prices alone to arm the form', timeout: 6000 });
+    assert.match(p.$('lqRangeOut').textContent, /1,?000/, 'and the band is drawn from them');
+    assert.match(p.$('lqPv').textContent, /Seeds/, 'with a seed the depositor can read');
+    p.close();
+  });
+
+  test('an opening price typed for a one-sided band is read as well', async () => {
+    // A single-asset deposit has no ratio to price itself from, so #lqPx IS the
+    // opening price - the same field, reached the same way.
+    const p = await setup();
+    await fill(p, { a0: '1', a1: '' });
+    await preset(p, 'custom');
+    await typeIn(p, 'lqLo', '1000');
+    await typeIn(p, 'lqHi', '5000');
+    await typeIn(p, 'lqPx', '1000');
+    await p.waitFor(() => p.$('lqCreate').disabled === false,
+      { label: 'the opening price to arm the form', timeout: 6000 });
+    assert.match(p.$('lqRangeOut').textContent, /opens at/);
+    p.close();
+  });
+
+  test('editing an amount disarms Create until it has been re-quoted', async () => {
+    // The button sends `box.dataset` - the numbers of the LAST preview. While a
+    // debounce was pending, those disagreed with what was on screen, so a
+    // create clicked inside that window seeded amounts the depositor had
+    // already replaced.
+    const p = await setup();
+    await custom(p);
+    await p.waitFor(() => p.$('lqCreate').disabled === false, { label: 'a good preview' });
+    p.$('amt').value = '2';
+    p.type('amt', '2');
+    assert.equal(p.$('lqCreate').disabled, true,
+      'a stale seed must not be sendable, not even for a debounce');
+    await p.waitFor(() => p.$('lqCreate').disabled === false,
+      { label: 'the re-quote', timeout: 6000 });
+    p.close();
+  });
+});

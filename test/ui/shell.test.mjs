@@ -329,12 +329,18 @@ describe('accessibility and shell affordances', () => {
     p3.close();
   });
 
-  test('a wallet-less browser says so instead of failing silently', async () => {
+  test('a wallet-less browser is offered a way in, not a dead end', async () => {
+    // This used to print "No wallet detected" and stop, which is a true
+    // statement and a useless one: the person reading it has no wallet to
+    // press. A desktop browser with no extension is exactly the case
+    // WalletConnect exists for, so it is offered instead of announced.
     const dom = await loadPage({ chain: new MockChain() });
     dom.window.ethereum = undefined;
     dom.click('swap');
     await dom.settle();
-    assert.match(dom.text('stat'), /No wallet detected/);
+    assert.ok(!dom.$('wkWrap').classList.contains('hide'), 'no wallet chooser appeared');
+    const rows = [...dom.$('wkList').querySelectorAll('.tkr')].map(r => r.textContent);
+    assert.deepEqual(rows, ['WalletConnect'], 'the chooser did not offer WalletConnect');
     dom.close();
   });
 });
@@ -372,6 +378,23 @@ describe('the footer', () => {
     const link = p.$('footAddr').querySelector('a');
     assert.ok(link, 'an address in the hostname should become a link');
     assert.match(link.getAttribute('href'), new RegExp(addr, 'i'));
+    p.close();
+  });
+
+  test('a successor build links back to the version it succeeded', async () => {
+    // ZSWAP_PREVIOUS is hand-written and baked into immutable bytes - nothing
+    // derives it, and it cannot be corrected after deploy. Left empty, a
+    // successor ships looking like a root: the chain still records the parent,
+    // but the page gives a reader no way back to it. The address here is the
+    // deployed root, so this test also fails if a future build forgets to
+    // re-point it at ITS predecessor.
+    const ROOT = '0x00000095643CFfA7D9fae407a84dfCB6406456c6';
+    const self = '0x00000000000000000000000000000000000000ab';
+    const p = await loadPage({ chain: new MockChain(), url: `https://${self}.1.w3link.io/` });
+    await p.settle();
+    const hrefs = [...p.$('footAddr').querySelectorAll('a')].map(a => a.getAttribute('href'));
+    assert.ok(hrefs.some(h => new RegExp(ROOT, 'i').test(h)),
+      `no link back to the predecessor; footer had ${hrefs.join(', ') || 'no links'}`);
     p.close();
   });
 

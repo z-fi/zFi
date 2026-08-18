@@ -509,3 +509,37 @@ test("finding the launched coin", async (t) => {
     p.close();
   });
 });
+
+/**
+ * THE COIN YOU JUST MADE IS A LAUNCHED COIN.
+ *
+ * `launched` is not decoration: it is the flag the swap tab reads before asking
+ * the launcher what a sale would redeem for, and the flag the chart reads
+ * before drawing a floor line and a market cap. Discovery sets it on every coin
+ * the factory scan finds - which is every launched coin EXCEPT the one launched
+ * in this session, because that one arrives through `addCustomToken`, the path
+ * an arbitrary pasted address takes.
+ *
+ * So the creator was the one person shown none of it, on the coin they had the
+ * most reason to look at, until the next reload happened to re-discover it.
+ */
+test("a freshly launched coin is treated as launched", async (t) => {
+  const COIN = "0x" + "77".repeat(20);
+
+  await t.test("carries the flag its own floor and mcap readouts depend on", async () => {
+    const chain = new MockChain().setToken(COIN, {symbol: "ZCAT", decimals: 18, name: "Zero Cat"});
+    chain.launchToken = COIN;
+    const p = await open_({chain});
+    p.type("lnName", "Zero Cat");
+    p.type("lnSym", "ZCAT");
+    p.click("lnGo");
+    await p.waitFor(() => /is live/.test(p.text("stat")), {label: "the launch to settle"});
+
+    const sel = p.$("toSel");
+    const opt = sel.options[sel.selectedIndex];
+    assert.match(opt.textContent, /ZCAT/, "the coin is the output token");
+    assert.equal(opt.parentElement.label, "Launched on zSwap — not curated",
+      "and the list files it where launched coins go, which is the flag itself");
+    p.close();
+  });
+});
