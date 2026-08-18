@@ -618,7 +618,15 @@ body.modal-open { overflow: hidden; }
   display: none;
   margin-bottom: 40px;
 }
-.dao-dashboard.show { display: block; }
+.dao-dashboard.show { display: block; animation: dao-fade-in 0.25s ease-out; }
+/* The dashboard used to appear as a hard cut from the hero. */
+@keyframes dao-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dao-dashboard.show { animation: none; }
+}
 .dao-dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -1205,6 +1213,8 @@ body.modal-open { overflow: hidden; }
 }
 .proposal-skeleton .skeleton { border: none; }
 .proposal-skeleton-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+/* Sized to a real treasury tile so swapping in the loaded asset causes no reflow. */
+.treasury-skeleton { height: 100px; }
 
 /* Proposal list chrome */
 .proposals-toolbar {
@@ -12224,9 +12234,13 @@ body.modal-open { overflow: hidden; }
           const treasuryTokens = getNetwork().treasuryTokens;
           const result = await withRpcFallback(async (rpcProvider) => {
             const viewHelper = new ethers.Contract(VIEW_HELPER_ADDRESS, VIEW_HELPER_ABI, rpcProvider);
+            // proposalCount must match fetchUserDAOs' 200. At 5 the read-only pass
+            // rendered the OLDEST five proposals (the window counts forward from
+            // proposalStart), and connecting a wallet then replaced them with the full
+            // set — the list visibly jumped from a stale preview to different content.
             return await viewHelper.getDAOWithDAICO(
               address,
-              0, 5, 0, 200,
+              0, 200, 0, 200,
               treasuryTokens, treasuryTokens
             );
           });
@@ -12315,9 +12329,17 @@ body.modal-open { overflow: hidden; }
         // Revealing early means whatever the last DAO left behind would show until each
         // section re-renders, so blank them first: an empty panel is honest, another DAO's
         // treasury is not.
-        for (const id of ['treasuryAssets', 'governanceInfo', 'salesInfo', 'tributeOffers', 'allowancesInfo']) {
+        // Panels that are about to be refilled get placeholders rather than being
+        // blanked. An empty treasury box and a loading treasury box looked identical,
+        // so the dashboard read as finished-and-empty until each read landed.
+        for (const id of ['governanceInfo', 'salesInfo', 'tributeOffers', 'allowancesInfo']) {
           const node = document.getElementById(id);
           if (node) node.innerHTML = '';
+        }
+        const treasuryNode = document.getElementById('treasuryAssets');
+        if (treasuryNode) {
+          treasuryNode.innerHTML = Array.from({ length: 6 }, () =>
+            '<div class="skeleton treasury-skeleton"></div>').join('');
         }
         // Proposals are the slowest section and the one users came for, so it gets
         // skeletons rather than a blank panel that reads as "no proposals".
@@ -14886,8 +14908,10 @@ body.modal-open { overflow: hidden; }
         const daoAddress = currentDAO.dao.dao;
 
         try {
-          proposalsList.innerHTML = '';
-
+          // Deliberately NOT cleared here. The config read below is awaited, and wiping
+          // the list first meant the skeleton flashed to an empty panel and back on
+          // every render that had to fetch its own config. The list is replaced in one
+          // shot further down, once there is something to put in it.
           const proposalsToolbar = document.getElementById('proposalsToolbar');
 
           const proposals = currentDAO.dao.proposals || [];
@@ -15031,6 +15055,10 @@ body.modal-open { overflow: hidden; }
             }
           }
         }
+
+        // Built off-document and swapped in one shot at the end, so the list never
+        // shows a half-rendered state and never appends onto the previous pass.
+        const proposalsFragment = document.createDocumentFragment();
 
         proposalsReversed.forEach(proposal => {
           const proposalDiv = document.createElement('div');
@@ -15334,8 +15362,14 @@ body.modal-open { overflow: hidden; }
             if (votesEl && !proposalDiv.querySelector('.futarchy-reward-box')) votesEl.style.marginBottom = '0';
           }
 
-          proposalsList.appendChild(proposalDiv);
+          proposalsFragment.appendChild(proposalDiv);
         });
+
+        // Connecting a wallet re-renders this same list. Rebuilding it used to reset
+        // the scroll box to the top mid-read; keep the user where they were.
+        const priorScroll = proposalsList.scrollTop;
+        proposalsList.replaceChildren(proposalsFragment);
+        if (priorScroll > 0) proposalsList.scrollTop = priorScroll;
         } catch (error) {
           logger.error('Error rendering proposals:', error);
           // A retry in place beats telling the user to reload the whole dashboard.
@@ -17425,7 +17459,24 @@ body.modal-open { overflow: hidden; }
         let deepLinkLoad = Promise.resolve();
         if (deepLink && readOnlyProvider) {
           showStatus('Loading DAO…', false);
+          // Reveal the dashboard shell up front. It used to stay hidden behind the hero
+          // for the whole view-helper read, so a shared link showed the fire animation
+          // and then dropped the entire populated dashboard in at once. Now the frame
+          // and its placeholders are on screen immediately and fill in place.
+          const dl = DOMCache.dashboardTitle;
+          if (dl) dl.textContent = 'Loading…';
+          const dlAddr = DOMCache.daoAddressText;
+          if (dlAddr) dlAddr.textContent = `${deepLink.address.slice(0, 6)}...${deepLink.address.slice(-4)}`;
+          hideHeroFire();
+          DOMCache.daoGallery.classList.remove('show');
+          DOMCache.daoDashboard.classList.add('show');
+          document.body.classList.add('dao-open');
           showProposalsSkeleton();
+          const dlTreasury = document.getElementById('treasuryAssets');
+          if (dlTreasury) {
+            dlTreasury.innerHTML = Array.from({ length: 6 }, () =>
+              '<div class="skeleton treasury-skeleton"></div>').join('');
+          }
           deepLinkLoad = openDAOByAddress(deepLink.address)
             .catch(error => {
               logger.error('Failed to load deep-linked DAO:', error);
