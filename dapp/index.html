@@ -9832,8 +9832,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (_dlMode === 'cause') {
         coinSetLaunchType('cause');
         if (_sp.get('ongoing') === '1') causeSetOngoing(true);
-        if (_sp.get('raise')) $('causeRaise').value = _sp.get('raise');
-        if (_sp.get('days')) $('causeDeadline').value = _sp.get('days');
+        // Same sanitizers a typed edit goes through. A link is untrusted input, and
+        // an unfiltered value only fails much later at submit time, where it reads as
+        // a disabled button with no obvious cause.
+        if (_sp.get('raise')) coinSetNumFromURL('causeRaise', _sp.get('raise'), true);
+        if (_sp.get('days')) coinSetNumFromURL('causeDeadline', _sp.get('days'), false);
         if (_sp.get('tap') === '1') {
           $('causeTapEnabled').checked = true;
           causeTapToggle();
@@ -9841,9 +9844,16 @@ document.addEventListener("DOMContentLoaded", () => {
             $('causeTapInstant').checked = true;
             causeTapInstantToggle();
           }
-          if (_sp.get('beneficiary')) $('causeTapBeneficiary').value = _sp.get('beneficiary');
-          if (_sp.get('months')) $('causeTapMonths').value = _sp.get('months');
-          if (_sp.get('rate')) $('causeTapEthRate').value = _sp.get('rate');
+          if (_sp.get('beneficiary')) {
+            $('causeTapBeneficiary').value = _sp.get('beneficiary');
+            // Assigning .value fires no input event, so nothing kicks resolution off.
+            // A raw 0x survives (coinGetResolved short-circuits on it), but a .eth/.wei
+            // name never resolves and coinValidateForm() then blocks the CTA forever on
+            // "Waiting for the beneficiary address to resolve", with no visible reason.
+            onCoinAddressInput('causeTapBeneficiary', 'causeTapBeneficiaryResolved');
+          }
+          if (_sp.get('months')) coinSetNumFromURL('causeTapMonths', _sp.get('months'), false);
+          if (_sp.get('rate')) coinSetNumFromURL('causeTapEthRate', _sp.get('rate'), true);
         }
         coinUpdatePreview();
       } else if (_dlMode === 'nft') {

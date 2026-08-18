@@ -1120,6 +1120,10 @@ const SHARE_SALE_ABI = [
 ];
 
 // TapVest module
+// Mirrors COIN_TAP_FAST_ONGOING_RATE in dapp/modules/coin.js — the rate the launcher
+// gives an open-ended fast tap (~86 ETH/day). This page does not load that module, so
+// the value is restated rather than imported; keep the two in step.
+const COIN_TAP_FAST_ONGOING_RATE = 10n ** 15n;
 const TAP_VEST = '0x0000000060cdD33cbE020fAE696E70E7507bF56D';
 const TAP_VEST_ABI = [
   'function claim(address dao) returns (uint256 claimed)',
@@ -1633,18 +1637,50 @@ async function fetchMetadata(contractURI) {
       metadata = JSON.parse(contractURI);
     } else if (contractURI.startsWith('data:')) {
       const json = contractURI.split(',').slice(1).join(',');
-      metadata = contractURI.startsWith('data:application/json;base64,') ? JSON.parse(atob(json)) : JSON.parse(decodeURIComponent(json));
+      if (contractURI.startsWith('data:application/json;base64,')) {
+        metadata = JSON.parse(atob(json));
+      } else {
+        // `;utf8,` payloads are NOT percent-encoded, and DUNABrandRenderer emits one.
+        // decodeURIComponent() throws on a bare '%' — reachable through any DAO name —
+        // and the catch below turns that into {}, which drops the coin to the wrong
+        // detail page. Parse as written first, and only percent-decode as a fallback
+        // for the genuinely encoded `;charset=utf-8,` documents.
+        try { metadata = JSON.parse(json); } catch { metadata = JSON.parse(decodeURIComponent(json)); }
+      }
     } else {
       // Walks every gateway before giving up — a single unreachable host used to
       // return {} here, which drops the coin to the wrong detail page.
       metadata = await ipfsFetchJson(contractURI);
     }
+    metadata = await mergeCharterMetadata(metadata);
     _metadataCache[contractURI] = metadata;
     if (contractURI.startsWith('ipfs://')) {
       try { localStorage.setItem('zfi_meta_' + contractURI.slice(7, 27), JSON.stringify(metadata)); } catch {}
     }
     return metadata;
   } catch { return {}; }
+}
+
+// A DAO rendered by DUNABrandRenderer returns the covenant composed with the few
+// branding fields worth putting on-chain (image, launchType) and links the rest —
+// banner, description, socials, creator — as `external_url`. Fold that document in so
+// every caller sees the same shape it saw when the pin WAS the contractURI.
+//
+// On-chain fields win: they are what the DAO actually committed to, and the pinned
+// document is mutable-by-reupload in a way the renderer's output is not. A pin that
+// fails to fetch degrades to the on-chain half rather than to nothing.
+async function mergeCharterMetadata(metadata) {
+  if (!metadata || metadata.charter !== 'duna') return metadata;
+  const pin = metadata.external_url;
+  if (!pin || typeof pin !== 'string' || !pin.startsWith('ipfs://')) return metadata;
+  try {
+    const pinned = await ipfsFetchJson(pin);
+    if (!pinned || typeof pinned !== 'object') return metadata;
+    // Drop empty on-chain strings so they don't mask a real pinned value.
+    const onchain = {};
+    for (const [k, v] of Object.entries(metadata)) if (v !== '' && v != null) onchain[k] = v;
+    return { ...pinned, ...onchain };
+  } catch { return metadata; }
 }
 
 function symbolSVG(symbol, size) {
@@ -5404,8 +5440,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const tapBudget = tapAllowance; // remaining budget
   const tapElapsed = hasTap && tapLastClaim > 0 ? BigInt(Math.floor(Date.now() / 1000) - tapLastClaim) : 0n;
   const tapPending = hasTap ? tapRate * tapElapsed : 0n; // ETH owed since last claim
-  const tapInstant = tapRate >= ethers.parseEther('0.001'); // >= 0.001 ETH/sec (~86 ETH/day) = effectively instant
   const tapOpenBudget = tapBudget >= 2n ** 128n;
+  // "Fast" is a statement about how long the remaining budget takes to drain, not
+  // about the raw rate. The launcher sets an instant tap to raise/3600, so a fixed
+  // rate threshold (the old `>= 0.001 ETH/sec`) called every fast tap under 3.6 ETH a
+  // vesting tap — and small causes are the common case. Comparing budget to rate is
+  // scale-free, and it stays honest as a real vest winds down: once what is left
+  // genuinely is withdrawable within the hour, saying so is correct.
+  // Open-ended taps have no budget to divide, so they keep the absolute test.
+  const tapInstant = tapOpenBudget
+    ? tapRate >= COIN_TAP_FAST_ONGOING_RATE
+    : (tapRate > 0n && tapBudget > 0n && tapBudget / tapRate <= 7200n);
   const tapRatePerDay = (hasTap && !tapInstant) ? Number(tapRate) * 86400 / 1e18 : 0;
 
   // User balance
@@ -5482,6 +5527,29 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       </div>
     </div>
   `;
+
+  // Charter — a cause that declares the DUNA covenant links the live document.
+  // `charter_uri` is present when the DAO is rendered by DUNABrandRenderer (the
+  // covenant IS its contractURI); a pinned-metadata cause only declares `charter`,
+  // so it links the renderer that generates the covenant for this DAO instead.
+  if (metadata.charter === 'duna') {
+    // charterSource is "eip155:1:0x…" — strip the CAIP-2 prefix for an explorer link.
+    const charterRenderer = typeof metadata.charterSource === 'string'
+      ? (metadata.charterSource.split(':').pop() || '') : '';
+    const charterHref = metadata.charter_uri
+      || (ethers.isAddress(charterRenderer) ? `https://etherscan.io/address/${charterRenderer}#readContract` : null);
+    html += `
+      <div class="section-card" style="margin-bottom:14px">
+        <div class="section-title">Charter</div>
+        <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">
+          Operates as a Wyoming Decentralized Unincorporated Nonprofit Association
+          (W.S. 17-32-101 et seq.). Members defer to this contract for internal
+          governance and retain ragequit rights.
+          ${charterHref ? `<a href="${escAttr(charterHref)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Read the on-chain covenant</a>.` : ''}
+        </div>
+      </div>
+    `;
+  }
 
   // Progress meters — ETH-denominated funding + treasury/deployed split. Shown
   // for open-ended sales too (as a running total), which the old shares-based bar
@@ -6024,6 +6092,10 @@ async function renderCoinPage(daoAddr) {
       { target: sharesAddr, allowFailure: true, callData: new ethers.Interface(ERC20_ABI).encodeFunctionData('totalSupply') }) - 1;
     const usdIdx = cachedUsd > 0 ? -1 : detailCalls.push(
       { target: CHAINLINK_ETH_USD, allowFailure: true, callData: clIface.encodeFunctionData('latestAnswer') }) - 1;
+    // Cause detection must not depend on metadata alone — see the dispatch below.
+    const shareSaleIdx = detailCalls.push(
+      { target: SHARE_SALE, allowFailure: true,
+        callData: new ethers.Interface(SHARE_SALE_ABI).encodeFunctionData('sales', [daoAddr]) }) - 1;
 
     const [metadata, detailRes] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
@@ -6040,9 +6112,23 @@ async function renderCoinPage(daoAddr) {
     if (contSaleConfig?.icon && metadata && !metadata.image) metadata.image = contSaleConfig.icon;
     _coinMeta = metadata;
 
-    // Cause coin detection — render simplified sale page
+    // Cause coin detection — render simplified sale page.
+    //
+    // `launchType` is the fast path, but it is not evidence: it lives in a document
+    // fetched over HTTP, and when that fetch fails fetchMetadata() returns {} and the
+    // DAICO silently renders as a generic DAO — no buy form, no funding meter, no tap
+    // panel. That has happened once already through a dead IPFS gateway (see IPFS_GWS).
+    // A configured ShareSale is the same fact stated on-chain, so ask the chain when
+    // the metadata does not say.
+    const shareSalePrice = mcDecode(detailRes[shareSaleIdx],
+      new ethers.Interface(SHARE_SALE_ABI), 'sales', null)?.price ?? 0n;
+    const isCauseOnchain = shareSalePrice > 0n;
     if (metadata && metadata.launchType === 'cause') {
       renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen);
+      return;
+    }
+    if (isCauseOnchain && !(metadata && metadata.launchType)) {
+      renderCauseCoinPage(daoAddr, data, metadata || {}, ethUsd, gen);
       return;
     }
 

@@ -32,6 +32,28 @@ const CLASSICAL_LAUNCH_ABI = [
 const SAFE_SUMMONER = '0x00000000004473e1f31C8266612e7FD5504e6f2a';
 const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
 const TAP_VEST = '0x0000000060cdD33cbE020fAE696E70E7507bF56D';
+
+// DUNABrandRenderer — composes the on-chain Wyoming DUNA covenant with a DAO's own
+// branding so a cause carries both through the single contractURI() slot.
+//
+// Moloch.contractURI() returns `_orgURI` when it is set and only reaches the renderer
+// when it is empty, so pinning metadata into orgURI (what this file did before, and
+// still does when this address is blank) displaces the covenant entirely. The composed
+// path instead summons with an EMPTY orgURI and registers the same pinned document on
+// the renderer, which re-renders the covenant against live DAO state on every read.
+//
+// LEAVE THIS EMPTY UNTIL THE CONTRACT IS DEPLOYED. A non-empty address with no code
+// would be stored as the DAO's renderer and contractURI() would then decode empty
+// returndata — every cause page would break. `coinCauseUsesDUNA()` is the single gate;
+// with it false the launch is byte-identical to the pinned-orgURI path it replaces.
+// Contract: src/dao/DUNABrandRenderer.sol · tests: test/DUNABrandRenderer.t.sol
+const DUNA_RENDERER = '';
+const DUNA_RENDERER_ABI = ['function setBranding(string metadata, string image, string launchType)'];
+
+function coinCauseUsesDUNA() {
+  return !!DUNA_RENDERER && ethers.isAddress(DUNA_RENDERER) && DUNA_RENDERER !== ZERO_ADDRESS;
+}
+
 const SAFE_SUMMONER_ABI = [{
   inputs: [
     { type: 'string', name: 'orgName' },
@@ -151,10 +173,27 @@ function coinNumInput(el, decimal) {
   coinFormChanged();
 }
 
+// Seed a numeric field from a deeplink through the same filter a keystroke gets.
+// Deliberately does NOT call coinFormChanged(): the deeplink applies several fields
+// and then updates the preview once, and re-entering it per field would also rewrite
+// the URL mid-parse from a half-applied form.
+function coinSetNumFromURL(id, raw, decimal) {
+  const el = $(id);
+  if (!el) return;
+  let v = String(raw == null ? '' : raw).replace(decimal ? /[^0-9.]/g : /[^0-9]/g, '');
+  if (decimal) {
+    const i = v.indexOf('.');
+    if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
+  }
+  if (v) el.value = v;
+}
+
 // Symbols are tickers — uppercase, no whitespace or punctuation.
 function coinSymbolInput(el) {
   const before = el.value;
-  const v = before.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // 10 chars, matching what the deeplink parser already enforces on a shared link —
+  // without this the two disagree and a typed symbol can be longer than a linked one.
+  const v = before.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   if (v !== before) {
     const pos = Math.max(0, el.selectionStart - (before.length - v.length));
     el.value = v;
@@ -490,7 +529,11 @@ function coinUpdatePreview() {
       // value. Surfacing it avoids a surprise in the wallet confirm dialog.
       `<dt>You pay now</dt><dd>${ethers.formatEther(priceWei)} ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>`;
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>` +
+      // Say which legal wrapper the DAO launches under, and be honest about where
+      // it lives: composed into contractURI itself, or declared in the metadata
+      // while contractURI carries the pin.
+      `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Wyoming DUNA covenant &middot; ${coinCauseUsesDUNA() ? 'rendered on-chain alongside your branding' : 'declared in metadata'}</div>`;
     $('coinCausePreviewWrap').style.display = '';
     $('coinCurvePreviewWrap').style.display = 'none';
     coinApplyValidation();
@@ -679,6 +722,12 @@ async function coinLaunch() {
     } else {
       metadata.launchType = 'cause';
       metadata.creatorWallet = address;
+      // Declare the charter in the pinned document too, not only in the composed
+      // renderer output. On the composed path this is belt-and-braces; on the pinned
+      // path it is the only record, and it still points a reader at a renderer that
+      // regenerates this DAO's covenant against live state.
+      metadata.charter = 'duna';
+      metadata.charterSource = 'eip155:1:' + (coinCauseUsesDUNA() ? DUNA_RENDERER : COIN_RENDERER);
     }
     if (_coinImageFile) {
       coinShowStatus('Uploading logo to IPFS...');
@@ -825,19 +874,34 @@ async function coinLaunch() {
         rollbackExpiry: 0n
       };
 
+      // Covenant + branding, or branding alone. The composed path hands Moloch an
+      // empty orgURI so contractURI() falls through to DUNABrandRenderer, and seeds
+      // the branding through extraCalls — those execute from the DAO's own context
+      // during init, so this costs no extra transaction and no extra signature.
+      const useDUNA = coinCauseUsesDUNA();
+      const summonURI = useDUNA ? '' : orgURI;
+      const renderer = useDUNA ? DUNA_RENDERER : COIN_RENDERER;
+      const extraCalls = useDUNA
+        ? [[
+            DUNA_RENDERER,
+            0n,
+            new ethers.Interface(DUNA_RENDERER_ABI).encodeFunctionData('setBranding', [orgURI, metadata.image, 'cause'])
+          ]]
+        : [];
+
       coinShowStatus('Please confirm the transaction in your wallet...');
       const safeSummoner = new ethers.Contract(SAFE_SUMMONER, SAFE_SUMMONER_ABI, _signer);
       const tx = await safeSummoner.safeSummonDAICO(
-        name, symbol, orgURI,
+        name, symbol, summonURI,
         1000, // quorumBps: 10%
         true, // ragequittable
-        '0x000000000011C799980827F52d3137b4abD6E654', // RENDERER
+        renderer,
         salt,
         initHolders, initShares,
         [], // initLoot
         safeConfig,
         saleModule, tapModule, seedModule,
-        [], // extraCalls
+        extraCalls,
         { value: priceWei } // creator pays for their 1 share — full ragequit symmetry
       );
 
@@ -869,7 +933,8 @@ async function coinLaunch() {
         tapSummary +
         `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +
-        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>`
+        ` &middot; <a href="./dao/#/dao/1/${daoAddress}">Manage DAO</a>` +
+        (useDUNA ? `<br><span style="font-size:11px;color:var(--fg-dim)">Operating under the Wyoming DUNA covenant, rendered on-chain</span>` : '')
       );
       return;
     }
