@@ -1050,8 +1050,8 @@ body.modal-open { overflow: hidden; }
 /* Proposal list items */
 .proposal-item {
   border: 1px solid var(--border);
-  padding: 20px;
-  margin-bottom: 12px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
   overflow: hidden;
   transition: border-color 0.2s;
 }
@@ -1090,9 +1090,19 @@ body.modal-open { overflow: hidden; }
 .proposal-state.unopened { border-color: var(--fg-dim); color: var(--fg-dim); background: var(--surface); }
 .proposal-description {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--fg);
+  /* Long governance descriptions ran to four or five lines and pushed the votes
+     out of view; two lines is enough to identify one, click reveals the rest. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
 }
+.proposal-description.expanded { -webkit-line-clamp: unset; }
+.proposal-calldata-link { color: var(--fg-dim); text-decoration: none; }
+.proposal-calldata-link:hover { color: var(--fg); }
 .proposal-meta {
   display: flex;
   align-items: center;
@@ -1117,10 +1127,14 @@ body.modal-open { overflow: hidden; }
 .proposal-vote-bar-abstain { background: var(--border-muted); }
 .proposal-votes {
   display: flex;
-  gap: 20px;
-  margin-bottom: 14px;
+  gap: 18px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
+/* Collapse the gap when the actions row is empty (resolved proposals) so a
+   closed proposal is visibly a shorter card than a live one. */
+.proposal-actions:empty { display: none; }
+.proposal-item .proposal-votes:last-child { margin-bottom: 0; }
 .proposal-vote-stat {
   font-size: 12px;
   display: flex;
@@ -2642,6 +2656,9 @@ body.modal-open { overflow: hidden; }
             </div>
             <button class="chatroom-button" onclick="createProposal()">Create &amp; Publish</button>
           </details>
+
+          <!-- Filter chips: populated with live counts by renderProposals -->
+          <div class="proposals-toolbar" id="proposalsToolbar" style="display: none;"></div>
 
           <!-- Proposals List -->
           <div id="proposalsList">
@@ -12298,10 +12315,14 @@ body.modal-open { overflow: hidden; }
         // Revealing early means whatever the last DAO left behind would show until each
         // section re-renders, so blank them first: an empty panel is honest, another DAO's
         // treasury is not.
-        for (const id of ['treasuryAssets', 'proposalsList', 'governanceInfo', 'salesInfo', 'tributeOffers', 'allowancesInfo']) {
+        for (const id of ['treasuryAssets', 'governanceInfo', 'salesInfo', 'tributeOffers', 'allowancesInfo']) {
           const node = document.getElementById(id);
           if (node) node.innerHTML = '';
         }
+        // Proposals are the slowest section and the one users came for, so it gets
+        // skeletons rather than a blank panel that reads as "no proposals".
+        _proposalFilter = 'all';
+        showProposalsSkeleton();
 
         // Show the shell now. The header, address and stats are already populated, and the
         // sections below fill in as their reads land — previously every one of them had to
@@ -14794,9 +14815,69 @@ body.modal-open { overflow: hidden; }
 
       // Render proposals
       let proposalsRenderId = 0; // Counter to track the most recent render
+      // Vote weights are 18-decimal but almost always small, round numbers. Printing the
+      // raw formatUnits string gave "1.0" next to "1234.000000000000000001"; this keeps
+      // the column readable while never rounding a non-zero tally down to "0".
+      function fmtVoteAmount(weiValue) {
+        const n = parseFloat(ethers.formatUnits(weiValue, 18));
+        if (n === 0) return '0';
+        if (n < 0.0001) return '<0.0001';
+        if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(2).replace(/\.?0+$/, '') + 'K';
+        return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+      }
+
+      // Short countdown for proposal deadlines ("2d 3h", "14m").
+      function fmtCountdown(seconds) {
+        const s = Math.max(0, Math.floor(Number(seconds)));
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`;
+        if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        if (m > 0) return `${m}m`;
+        return `${s}s`;
+      }
+
+      // Placeholder cards so an in-flight proposals read looks like loading rather than
+      // like a DAO with no proposals.
+      function showProposalsSkeleton(count = 2) {
+        const list = document.getElementById('proposalsList');
+        if (!list) return;
+        const toolbar = document.getElementById('proposalsToolbar');
+        if (toolbar) toolbar.style.display = 'none';
+        list.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+          const card = document.createElement('div');
+          card.className = 'proposal-skeleton';
+          card.innerHTML = `
+            <div class="proposal-skeleton-row">
+              <div class="skeleton" style="height: 14px; flex: 1;"></div>
+              <div class="skeleton" style="height: 16px; width: 64px;"></div>
+            </div>
+            <div class="skeleton" style="height: 4px; width: 100%; margin-bottom: 12px;"></div>
+            <div class="proposal-skeleton-row" style="margin-bottom: 0;">
+              <div class="skeleton" style="height: 12px; width: 72px;"></div>
+              <div class="skeleton" style="height: 12px; width: 72px;"></div>
+              <div class="skeleton" style="height: 12px; width: 72px;"></div>
+            </div>`;
+          list.appendChild(card);
+        }
+      }
+
+      // Which state bucket the list is filtered to. Persists across re-renders (a vote or
+      // a refresh should not silently throw the user back to "All").
+      let _proposalFilter = 'all';
+      function setProposalFilter(filter) {
+        _proposalFilter = filter;
+        renderProposals(_lastProposalsConfig);
+      }
+      let _lastProposalsConfig;
+
       async function renderProposals(prefetchedConfig) {
         const proposalsList = document.getElementById('proposalsList');
         if (!proposalsList || !currentDAO?.dao) return;
+        _lastProposalsConfig = prefetchedConfig;
 
         // Increment render ID and capture it - only the most recent render should update DOM
         const thisRenderId = ++proposalsRenderId;
@@ -14807,8 +14888,11 @@ body.modal-open { overflow: hidden; }
         try {
           proposalsList.innerHTML = '';
 
+          const proposalsToolbar = document.getElementById('proposalsToolbar');
+
           const proposals = currentDAO.dao.proposals || [];
           if (proposals.length === 0) {
+          if (proposalsToolbar) proposalsToolbar.style.display = 'none';
           proposalsList.innerHTML = '<p style="text-align: center; color: var(--fg-dim); font-style: italic; margin-top: 1rem;">No proposals yet.</p>';
           return;
         }
@@ -14852,7 +14936,48 @@ body.modal-open { overflow: hidden; }
         });
 
         // Reverse to show most recent first
-        const proposalsReversed = [...uniqueProposals].reverse();
+        const allProposalsReversed = [...uniqueProposals].reverse();
+
+        // Bucket by lifecycle stage so a long history does not bury the proposals that
+        // still need a vote or an execution.
+        const FILTER_BUCKETS = {
+          all: () => true,
+          // 1 = Active, 0 = Unopened (both still open to voting)
+          open: p => [0, 1].includes(Number(p.state)),
+          // 2 = Queued, 3 = Succeeded — waiting on someone to queue or execute
+          ready: p => [2, 3].includes(Number(p.state)),
+          // 4 = Defeated, 5 = Expired, 6 = Executed
+          closed: p => [4, 5, 6].includes(Number(p.state))
+        };
+        const filterCounts = {};
+        for (const key of Object.keys(FILTER_BUCKETS)) {
+          filterCounts[key] = allProposalsReversed.filter(FILTER_BUCKETS[key]).length;
+        }
+
+        // A filter whose bucket emptied since the user picked it would show a blank list
+        // with no explanation, so fall back to All.
+        if (!FILTER_BUCKETS[_proposalFilter] || filterCounts[_proposalFilter] === 0) {
+          _proposalFilter = 'all';
+        }
+
+        if (proposalsToolbar) {
+          const chips = [
+            ['all', 'All'],
+            ['open', 'Open'],
+            ['ready', 'Ready'],
+            ['closed', 'Closed']
+          ];
+          proposalsToolbar.innerHTML = chips.map(([key, label]) => `
+            <button class="proposal-filter ${_proposalFilter === key ? 'active' : ''}"
+                    onclick="setProposalFilter('${key}')"
+                    ${filterCounts[key] === 0 ? 'disabled style="opacity:0.4;cursor:default;"' : ''}>
+              ${label}<span class="proposal-filter-count">${filterCounts[key]}</span>
+            </button>`).join('');
+          // Only worth the vertical space once there is more than one proposal to sort through
+          proposalsToolbar.style.display = allProposalsReversed.length > 1 ? 'flex' : 'none';
+        }
+
+        const proposalsReversed = allProposalsReversed.filter(FILTER_BUCKETS[_proposalFilter]);
 
         // Check if user has voted on any proposals (use voters data from view helper - no RPC calls!)
         const userVoteStatus = {};
@@ -15009,20 +15134,15 @@ body.modal-open { overflow: hidden; }
           }
 
           // Create SwissKnife link if calldata exists and is not empty
+          // Folded into the meta line rather than claiming a bordered row of its own —
+          // it is a reference link, not an action.
           let calldataLink = '';
           if (proposalCalldata && proposalCalldata !== '0x' && proposalCalldata.length > 2) {
-            calldataLink = `
-              <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-muted);">
-                <a href="https://calldata.swiss-knife.xyz/decoder?calldata=${proposalCalldata}"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   style="font-size: 0.8rem; color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; opacity: 0.8; transition: opacity 0.3s ease;"
-                   onmouseover="this.style.opacity='1'"
-                   onmouseout="this.style.opacity='0.8'">
-                  <span>🔍</span> Decode calldata on SwissKnife
-                </a>
-              </div>
-            `;
+            calldataLink = `<span class="proposal-meta-sep">&middot;</span>
+              <a class="proposal-calldata-link"
+                 href="https://calldata.swiss-knife.xyz/decoder?calldata=${proposalCalldata}"
+                 target="_blank" rel="noopener noreferrer"
+                 title="Decode this proposal's calldata on SwissKnife">decode calldata &nearr;</a>`;
           }
 
           // Check futarchy state and user receipts
@@ -15100,36 +15220,94 @@ body.modal-open { overflow: hidden; }
           const againstPct = totalVotes > 0 ? (againstFloat / totalVotes * 100) : 0;
           const abstainPct = totalVotes > 0 ? (abstainFloat / totalVotes * 100) : 0;
 
+          // Quorum progress. Moloch.state() gates on total turnout (for + against +
+          // abstain) against both an absolute floor and a bps share of the snapshot
+          // supply; whichever is stricter is the one worth showing.
+          const gov = currentDAO.dao.gov || {};
+          const turnoutWei = BigInt(proposal.forVotes) + BigInt(proposal.againstVotes) + BigInt(proposal.abstainVotes);
+          const supplySnapshot = BigInt(proposal.supplySnapshot || 0);
+          const quorumBps = BigInt(gov.quorumBps || 0);
+          const quorumAbsolute = BigInt(gov.quorumAbsolute || 0);
+          const bpsQuorum = supplySnapshot > 0n && quorumBps > 0n
+            ? (quorumBps * supplySnapshot) / 10000n
+            : 0n;
+          const quorumNeeded = bpsQuorum > quorumAbsolute ? bpsQuorum : quorumAbsolute;
+
+          let quorumUI = '';
+          // Only informative while the outcome is still open — once a proposal has
+          // resolved, the state badge already says what happened.
+          if (quorumNeeded > 0n && state <= 1) {
+            const quorumMet = turnoutWei >= quorumNeeded;
+            const quorumPct = quorumMet
+              ? 100
+              : Number((turnoutWei * 10000n) / quorumNeeded) / 100;
+            quorumUI = `
+              <div class="proposal-progress">
+                <span>Quorum ${quorumMet ? '<span class="met">met</span>' : `<strong>${quorumPct.toFixed(1)}%</strong>`}</span>
+                <span><strong>${fmtVoteAmount(turnoutWei)}</strong> / ${fmtVoteAmount(quorumNeeded)}</span>
+              </div>
+              <div class="proposal-quorum-bar">
+                <div class="proposal-quorum-bar-fill ${quorumMet ? 'met' : ''}" style="width:${Math.min(100, quorumPct)}%"></div>
+              </div>`;
+          }
+
+          // Deadline strip: an open proposal expires at createdAt + TTL, a queued one
+          // unlocks at queuedAt + delay. Both were previously invisible until the
+          // proposal had already slipped into Expired.
+          let deadlineUI = '';
+          const proposalTTL = Number(gov.proposalTTL || 0);
+          const createdAt = Number(proposal.createdAt || 0);
+          if (state <= 1 && proposalTTL > 0 && createdAt > 0) {
+            const expiresAt = createdAt + proposalTTL;
+            const left = expiresAt - currentTime;
+            deadlineUI = left > 0
+              ? `<div class="proposal-progress"><span>Voting closes in <strong>${fmtCountdown(left)}</strong></span></div>`
+              : `<div class="proposal-progress"><span>Voting window closed</span></div>`;
+          } else if (state === 2 && queuedAt > 0 && timelockDelay > 0 && currentTime < queuedAt + timelockDelay) {
+            deadlineUI = `<div class="proposal-progress"><span>Executable in <strong>${fmtCountdown(queuedAt + timelockDelay - currentTime)}</strong></span></div>`;
+          }
+
+          const pct = v => totalVotes > 0 ? `<span class="proposal-vote-pct">${v.toFixed(0)}%</span>` : '';
+
           proposalDiv.innerHTML = `
             <div class="proposal-header">
               <div class="proposal-header-left">
-                <div class="proposal-description">${escapeHtml(description)}</div>
+                <div class="proposal-description" onclick="this.classList.toggle('expanded')"
+                     title="Click to expand">${escapeHtml(description)}</div>
                 <div class="proposal-meta">
                   <span title="${fullProposalId}" style="cursor: pointer;" onclick="copyProposalId('${fullProposalId}', '${proposal.id}')" id="copy-proposal-${proposal.id}">${truncatedId}</span>
                   ${proposerDisplay ? `<span class="proposal-meta-sep">&middot;</span>${proposerDisplay}` : ''}
+                  ${calldataLink}
                   ${verificationBadge}
                 </div>
               </div>
               <span class="proposal-state ${stateClass}">${stateText}</span>
             </div>
+            ${deadlineUI}
             ${totalVotes > 0 ? `<div class="proposal-vote-bar"><div class="proposal-vote-bar-for" style="width:${forPct}%"></div><div class="proposal-vote-bar-against" style="width:${againstPct}%"></div><div class="proposal-vote-bar-abstain" style="width:${abstainPct}%"></div></div>` : ''}
             <div class="proposal-votes">
               <div class="proposal-vote-stat">
                 <span class="proposal-vote-label for">For</span>
-                <span class="proposal-vote-value">${forVotes}</span>
+                <span class="proposal-vote-value" title="${forVotes}">${fmtVoteAmount(proposal.forVotes)}</span>
+                ${pct(forPct)}
               </div>
               <div class="proposal-vote-stat">
                 <span class="proposal-vote-label against">Against</span>
-                <span class="proposal-vote-value">${againstVotes}</span>
+                <span class="proposal-vote-value" title="${againstVotes}">${fmtVoteAmount(proposal.againstVotes)}</span>
+                ${pct(againstPct)}
               </div>
               <div class="proposal-vote-stat">
                 <span class="proposal-vote-label">Abstain</span>
-                <span class="proposal-vote-value">${abstainVotes}</span>
+                <span class="proposal-vote-value" title="${abstainVotes}">${fmtVoteAmount(proposal.abstainVotes)}</span>
+                ${pct(abstainPct)}
               </div>
             </div>
-            ${calldataLink}
+            ${quorumUI}
             <div class="proposal-actions">
-              ${!userHasVoted && state === 1 ? `
+              ${!_connectedAddress && state === 1 ? `
+                <span class="proposal-connect-hint">Connect a wallet to vote on this proposal.</span>
+              ` : ''}
+              ${_connectedAddress && !userHasVoted && state === 1 ? `
                 <button class="proposal-button for" onclick="voteOnProposal('${proposal.id.toString()}', 1)">Vote For</button>
                 <button class="proposal-button against" onclick="voteOnProposal('${proposal.id.toString()}', 0)">Vote Against</button>
                 <button class="proposal-button" onclick="voteOnProposal('${proposal.id.toString()}', 2)">Abstain</button>
@@ -15147,11 +15325,25 @@ body.modal-open { overflow: hidden; }
             ${futarchyUI}
           `;
 
+          // Resolved proposals have no actions; the empty row otherwise leaves dead
+          // space that makes a closed proposal look as tall as a live one.
+          const actionsEl = proposalDiv.querySelector('.proposal-actions');
+          if (actionsEl && !actionsEl.textContent.trim() && !actionsEl.querySelector('button')) {
+            actionsEl.remove();
+            const votesEl = proposalDiv.querySelector('.proposal-votes');
+            if (votesEl && !proposalDiv.querySelector('.futarchy-reward-box')) votesEl.style.marginBottom = '0';
+          }
+
           proposalsList.appendChild(proposalDiv);
         });
         } catch (error) {
           logger.error('Error rendering proposals:', error);
-          proposalsList.innerHTML = '<p style="text-align: center; color: var(--red); font-style: italic; margin-top: 1rem;">Failed to load proposals. Please try refreshing.</p>';
+          // A retry in place beats telling the user to reload the whole dashboard.
+          proposalsList.innerHTML = `
+            <div class="proposal-error">
+              <div class="proposal-error-msg">Could not load proposals.</div>
+              <button class="proposal-button" onclick="renderProposals()">Retry</button>
+            </div>`;
           showStatus('Failed to load proposals', true);
         }
       }
@@ -17224,16 +17416,37 @@ body.modal-open { overflow: hidden; }
           logger.error('Failed to initialize read-only provider:', error);
         }
 
-        // Check for deep link - if present, load DAOs immediately (read-only)
+        // Check for deep link - if present, load DAOs immediately (read-only).
+        // Deliberately NOT awaited before walletInit: a slow view-helper read used to
+        // hold up the connect button entirely, so a shared link looked like a dead page
+        // to anyone who wanted to connect while it loaded. onConnect awaits the same
+        // promise, so ordering between the two is still deterministic.
         const deepLink = parseDAODeepLink();
+        let deepLinkLoad = Promise.resolve();
         if (deepLink && readOnlyProvider) {
-          try {
-            showStatus('Loading DAO...', false);
-            await openDAOByAddress(deepLink.address);
-          } catch (error) {
-            logger.error('Failed to load deep-linked DAO:', error);
-            showStatus('Failed to load DAO. Please try connecting your wallet.', true);
-          }
+          showStatus('Loading DAO…', false);
+          showProposalsSkeleton();
+          deepLinkLoad = openDAOByAddress(deepLink.address)
+            .catch(error => {
+              logger.error('Failed to load deep-linked DAO:', error);
+              showStatus('Failed to load DAO. Connect a wallet or retry.', true);
+              return false;
+            })
+            .then(opened => {
+              // openDAOByAddress reports a miss by returning false, so the skeleton has
+              // to be cleared here or it spins forever on a bad link.
+              if (!opened) {
+                const list = document.getElementById('proposalsList');
+                if (list && list.querySelector('.proposal-skeleton')) {
+                  list.innerHTML = `
+                    <div class="proposal-error">
+                      <div class="proposal-error-msg">No DAO found at this address on ${escapeHtml(getNetwork().name || 'this network')}.</div>
+                      <button class="proposal-button" onclick="location.reload()">Retry</button>
+                    </div>`;
+                }
+              }
+              return opened;
+            });
         }
 
         // Initialize shared wallet (handles auto-reconnect, UI injection, EIP-6963)
@@ -17243,6 +17456,9 @@ body.modal-open { overflow: hidden; }
             try {
               showStatus('Fetching your DAOs...', false);
               await fetchUserDAOs();
+              // Let the read-only deep-link open finish before re-rendering the same
+              // dashboard with signer context, or the two render passes interleave.
+              await deepLinkLoad;
               const dl = parseDAODeepLink();
               if (userDAOs.length > 0) {
                 hideHeroFire();
@@ -17320,6 +17536,7 @@ body.modal-open { overflow: hidden; }
         });
 
         // If we have a deep link and a DAO was loaded, scroll to the dashboard
+        await deepLinkLoad;
         if (deepLink && currentDAO) {
           requestAnimationFrame(() => {
             setTimeout(() => {
