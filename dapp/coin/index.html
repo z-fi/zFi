@@ -5825,8 +5825,32 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           ${tapOpenBudget ? '' : `<dt>Remaining</dt><dd>${tapOpenBudget ? budgetDisplay : ethAmount(budgetDisplay, 11)}</dd>`}
           <dt>Beneficiary</dt><dd><a href="https://etherscan.io/address/${tapBeneficiary}" target="_blank" style="color:inherit">${beneficiaryShort}</a></dd>
         </dl>
-        ${_connectedAddress && _connectedAddress.toLowerCase() === tapBeneficiary.toLowerCase() ? `<button class="swap-btn" style="width:100%;font-size:12px;margin-top:8px;background:var(--btn-bg);color:var(--btn-fg)" onclick="causeTapClaim('${daoAddr}')">Claim Tap</button>
-        <div id="causeTapStatus" style="margin-top:8px"></div>` : ''}
+        ${(() => {
+          // TapVest.claim() takes no caller check at all — it reads the beneficiary out
+          // of storage and forwards there, so anyone may trigger it and only the
+          // beneficiary can ever receive it. The button was gated to the beneficiary,
+          // which was stricter than the contract; a keeper or a supporter can push the
+          // vested amount through for them.
+          //
+          // It is still the one control here that moves money away from the people
+          // reading the page: until it is claimed, vested ETH sits in the treasury where
+          // ragequit reaches it. So a non-beneficiary is told exactly what the click
+          // does and where the money goes, rather than being offered a bare "Claim".
+          // TapVest rounds a capped claim down to whole seconds and reverts if that
+          // comes to zero, so anything under one second of vesting has no button.
+          if (claimable <= 0n || (tapRate > 0n && claimable < tapRate)) return '';
+          const isBeneficiary = _connectedAddress
+            && _connectedAddress.toLowerCase() === tapBeneficiary.toLowerCase();
+          const label = isBeneficiary
+            ? `Claim ${pendingEth} ETH`
+            : `Send ${pendingEth} ETH to beneficiary`;
+          const style = isBeneficiary
+            ? 'background:var(--btn-bg);color:var(--btn-fg)'
+            : 'background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)';
+          return `<button class="swap-btn" style="width:100%;font-size:12px;margin-top:8px;${style}" onclick="causeTapClaim('${daoAddr}')">${label}</button>
+        ${isBeneficiary ? '' : `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">Anyone can release vested funds; they can only ever go to the beneficiary. Until then this ETH stays in the treasury, where redeeming still reaches it.</div>`}
+        <div id="causeTapStatus" style="margin-top:8px"></div>`;
+        })()}
       </div>
     `;
   }
