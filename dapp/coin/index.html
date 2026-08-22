@@ -6196,20 +6196,17 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
     <div style="font-size:15px;font-weight:600;color:${tone || 'var(--fg)'};font-variant-numeric:tabular-nums">${value}</div>
   </div>`;
 
-  el.innerHTML = `<div class="section-card">
-    <div class="section-title" style="color:var(--green)">Sold out</div>
-    <div style="font-size:22px;font-weight:700;display:inline-flex;align-items:center;gap:7px;margin-bottom:10px">
-      ${ethGlyph(20)}${eth(gross)} ETH<span style="font-size:12px;font-weight:400;color:var(--fg-muted)">raised${filled ? ` in ${filled}` : ''}</span>
-    </div>
-    ${known ? `<div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border-muted)">
-      ${figure('refunded', eth(burned * price / E) + ' ETH', 'var(--fg-muted)')}
-      ${figure('net', eth(net) + ' ETH', 'var(--green)')}
-      ${figure('shares held', fmtTokenAmount(heldShares.toString()))}
-    </div>` : `<div style="font-size:11px;color:var(--fg-dim)">held by ${fmtTokenAmount(heldShares.toString())} shares</div>`}
-    <div style="font-size:10px;color:var(--fg-dim);margin-top:10px;line-height:1.5">
-      Every authorised share was minted. Redeemed shares are not put back up for sale;
-      reopening takes a DAO vote.
-    </div>
+  // The headline carries what was raised and the SOLD tile carries the share count, so
+  // repeating either here is noise. The one thing neither can say is how fast it went.
+  // The gross-versus-net arithmetic goes on hover, for the reader who wants to check
+  // rather than the reader who is scrolling past.
+  const detail = known
+    ? `${eth(gross)} ETH minted \u00b7 ${eth(burned * price / E)} refunded \u00b7 ${eth(net)} ETH net`
+    : '';
+  el.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">
+    <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}${known
+      ? ` &middot; <span title="${detail}" style="border-bottom:1px dotted var(--border);cursor:help">after refunds</span>`
+      : ''}
   </div>`;
 }
 
