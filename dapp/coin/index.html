@@ -974,6 +974,49 @@ async function ipfsFetchJson(uri, timeoutMs) {
   }
 }
 
+// A cause summoned through SafeSummoner never lands in the registry scanDAICOs walks.
+// Until an indexer covers them, the handful worth showing are read straight off chain
+// and shaped like a scan row so every consumer below stays unchanged.
+const OUT_OF_BAND_CAUSES = ['0xD5dcE9BEE03e69362981afE48323A657fCceB8bE'];
+const OOB_IFACE = new ethers.Interface([
+  'function sales(address) view returns (address token, address payToken, uint40 deadline, uint256 price)',
+  'function allowance(address token, address spender) view returns (uint256)',
+  'function name(uint256) view returns (string)',
+  'function symbol(uint256) view returns (string)',
+  'function contractURI() view returns (string)',
+  'function shares() view returns (address)',
+  'function totalSupply() view returns (uint256)'
+]);
+
+async function fetchOutOfBandCause(rpc, dao) {
+  const call = (to, data) => rpc.call({ to, data });
+  const dec = (fn, d) => OOB_IFACE.decodeFunctionResult(fn, d);
+  const sale = dec('sales', await call(SHARE_SALE, OOB_IFACE.encodeFunctionData('sales', [dao])));
+  if (!sale.price || sale.price === 0n) return null;
+  const [nm, sym, uri, sharesAddr, allowance] = await Promise.all([
+    call(dao, OOB_IFACE.encodeFunctionData('name', [0n])).then(d => dec('name', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('symbol', [0n])).then(d => dec('symbol', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('contractURI', [])).then(d => dec('contractURI', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('shares', [])).then(d => dec('shares', d)[0]),
+    call(dao, OOB_IFACE.encodeFunctionData('allowance', [dao, SHARE_SALE])).then(d => dec('allowance', d)[0]).catch(() => 0n)
+  ]);
+  const [supply, treasury] = await Promise.all([
+    call(sharesAddr, OOB_IFACE.encodeFunctionData('totalSupply', [])).then(d => dec('totalSupply', d)[0]),
+    rpc.getBalance(dao)
+  ]);
+  const sold = supply > 10n ** 18n ? supply - 10n ** 18n : 0n;
+  return {
+    dao,
+    meta: { name: nm, symbol: sym, contractURI: uri, sharesToken: sharesAddr,
+            lootToken: ZERO, badgesToken: ZERO, renderer: ZERO },
+    sales: [{ tribTkn: ZERO, tribAmt: sale.price, forAmt: 10n ** 18n, forTkn: ZERO,
+              deadline: sale.deadline, remainingSupply: allowance, totalSupply: sold + allowance,
+              treasuryBalance: treasury, allowance, lpBps: 0, maxSlipBps: 0, feeOrHook: 30n }],
+    tap: { ops: ZERO, tribTkn: ZERO, ratePerSec: 0n, lastClaim: 0n,
+           claimable: 0n, pending: 0n, treasuryBalance: treasury, tapAllowance: 0n }
+  };
+}
+
 // ABIs
 const SCAN_ABI = [
   'function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])'
@@ -3102,7 +3145,15 @@ async function _galleryRenderFresh(gen) {
     const [daicos, curveTokenAddrs, nftAuctions, zammV0Coins] = await Promise.all([
       withRPC(async rpc => {
         const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
-        return await helper.scanDAICOs(0, 500, [ZERO]);
+        const scanned = Array.from(await helper.scanDAICOs(0, 500, [ZERO]));
+        // Causes summoned through SafeSummoner are not in the registry this helper
+        // walks, so no window finds them — CELL comes back empty at every offset.
+        // Read the few that matter directly and prepend them in the same shape.
+        const seen = new Set(scanned.map(d => d.dao.toLowerCase()));
+        const extra = (await Promise.all(OUT_OF_BAND_CAUSES
+          .filter(a => !seen.has(a.toLowerCase()))
+          .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
+        return extra.concat(scanned);
       }),
       fetchCurveTokenList(),
       fetchNftAuctions(),

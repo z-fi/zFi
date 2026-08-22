@@ -1921,6 +1921,55 @@ let _daicoRawCache = null; // raw scanDAICOs result
 let _daicoRawPromise = null; // in-flight scan promise
 const DAICO_IPFS_GW = IPFS_GATEWAYS[0];
 
+// Causes summoned through SafeSummoner never enter the registry scanDAICOs walks, so
+// the helper cannot see them however wide the window — CELL returns nothing at any
+// offset. Rather than wait on a new indexer, the ones worth surfacing are read
+// directly and spliced into the scan result in the shape the rest of this file
+// already consumes. Everything here is a live read; only the address is hardcoded.
+const OUT_OF_BAND_CAUSES = ['0xD5dcE9BEE03e69362981afE48323A657fCceB8bE'];
+const SHARE_SALE_ADDR = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
+const OOB_IFACE = new ethers.Interface([
+  'function sales(address) view returns (address token, address payToken, uint40 deadline, uint256 price)',
+  'function allowance(address token, address spender) view returns (uint256)',
+  'function name(uint256) view returns (string)',
+  'function symbol(uint256) view returns (string)',
+  'function contractURI() view returns (string)',
+  'function shares() view returns (address)',
+  'function totalSupply() view returns (uint256)'
+]);
+
+async function fetchOutOfBandCause(rpc, dao) {
+  const call = async (to, data) => rpc.call({ to, data });
+  const dec = (fn, d) => OOB_IFACE.decodeFunctionResult(fn, d);
+  const sale = dec('sales', await call(SHARE_SALE_ADDR, OOB_IFACE.encodeFunctionData('sales', [dao])));
+  const price = sale.price;
+  if (!price || price === 0n) return null; // not a share sale after all
+  const [nm, sym, uri, sharesAddr, allowance] = await Promise.all([
+    call(dao, OOB_IFACE.encodeFunctionData('name', [0n])).then(d => dec('name', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('symbol', [0n])).then(d => dec('symbol', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('contractURI', [])).then(d => dec('contractURI', d)[0]).catch(() => ''),
+    call(dao, OOB_IFACE.encodeFunctionData('shares', [])).then(d => dec('shares', d)[0]),
+    call(dao, OOB_IFACE.encodeFunctionData('allowance', [dao, SHARE_SALE_ADDR])).then(d => dec('allowance', d)[0]).catch(() => 0n)
+  ]);
+  const [supply, treasury] = await Promise.all([
+    call(sharesAddr, OOB_IFACE.encodeFunctionData('totalSupply', [])).then(d => dec('totalSupply', d)[0]),
+    rpc.getBalance(dao)
+  ]);
+  // The founder's single share is minted at summon, not sold.
+  const sold = supply > 10n ** 18n ? supply - 10n ** 18n : 0n;
+  return {
+    dao,
+    meta: { name: nm, symbol: sym, contractURI: uri, sharesToken: sharesAddr,
+            lootToken: ZERO_ADDRESS, badgesToken: ZERO_ADDRESS, renderer: ZERO_ADDRESS },
+    // price is ETH-per-1e18-shares, which is exactly tribAmt/forAmt.
+    sales: [{ tribTkn: ZERO_ADDRESS, tribAmt: price, forAmt: 10n ** 18n, forTkn: ZERO_ADDRESS,
+              deadline: sale.deadline, remainingSupply: allowance, totalSupply: sold + allowance,
+              treasuryBalance: treasury, allowance, lpBps: 0, maxSlipBps: 0, feeOrHook: 30n }],
+    tap: { ops: ZERO_ADDRESS, tribTkn: ZERO_ADDRESS, ratePerSec: 0n, lastClaim: 0n,
+           claimable: 0n, pending: 0n, treasuryBalance: treasury, tapAllowance: 0n }
+  };
+}
+
 async function fetchDaicoScan() {
   if (_daicoRawCache) return _daicoRawCache;
   if (_daicoRawPromise) return _daicoRawPromise;
@@ -1928,7 +1977,12 @@ async function fetchDaicoScan() {
     try {
       const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
       const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
-      _daicoRawCache = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+      const scanned = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+      const seen = new Set(scanned.map(d => d.dao.toLowerCase()));
+      const extra = (await Promise.all(OUT_OF_BAND_CAUSES
+        .filter(a => !seen.has(a.toLowerCase()))
+        .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
+      _daicoRawCache = extra.concat(Array.from(scanned));
       return _daicoRawCache;
     } catch (e) {
       _daicoRawPromise = null;
