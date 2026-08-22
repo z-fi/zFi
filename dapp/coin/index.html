@@ -1025,11 +1025,10 @@ async function fetchOutOfBandCause(rpc, dao) {
 }
 
 // The view helper takes an explicit address, so it answers for causes the registry
-// scan cannot enumerate. One call returns the DAO's proposals and its chat, which is
-// everything the governance panel below needs.
-const DAO_VIEW_ABI = [{"inputs": [{"internalType": "address", "name": "dao", "type": "address"}, {"internalType": "uint256", "name": "proposalStart", "type": "uint256"}, {"internalType": "uint256", "name": "proposalCount", "type": "uint256"}, {"internalType": "uint256", "name": "messageStart", "type": "uint256"}, {"internalType": "uint256", "name": "messageCount", "type": "uint256"}, {"internalType": "address[]", "name": "treasuryTokens", "type": "address[]"}, {"internalType": "address[]", "name": "tribTokens", "type": "address[]"}], "name": "getDAOWithDAICO", "outputs": [{"components": [{"components": [{"internalType": "address", "name": "dao", "type": "address"}, {"components": [{"internalType": "string", "name": "name", "type": "string"}, {"internalType": "string", "name": "symbol", "type": "string"}, {"internalType": "string", "name": "contractURI", "type": "string"}, {"internalType": "address", "name": "sharesToken", "type": "address"}, {"internalType": "address", "name": "lootToken", "type": "address"}, {"internalType": "address", "name": "badgesToken", "type": "address"}, {"internalType": "address", "name": "renderer", "type": "address"}], "internalType": "struct DAOMeta", "name": "meta", "type": "tuple"}, {"components": [{"internalType": "uint96", "name": "proposalThreshold", "type": "uint96"}, {"internalType": "uint96", "name": "minYesVotesAbsolute", "type": "uint96"}, {"internalType": "uint96", "name": "quorumAbsolute", "type": "uint96"}, {"internalType": "uint64", "name": "proposalTTL", "type": "uint64"}, {"internalType": "uint64", "name": "timelockDelay", "type": "uint64"}, {"internalType": "uint16", "name": "quorumBps", "type": "uint16"}, {"internalType": "bool", "name": "ragequittable", "type": "bool"}, {"internalType": "uint256", "name": "autoFutarchyParam", "type": "uint256"}, {"internalType": "uint256", "name": "autoFutarchyCap", "type": "uint256"}, {"internalType": "address", "name": "rewardToken", "type": "address"}], "internalType": "struct DAOGovConfig", "name": "gov", "type": "tuple"}, {"components": [{"internalType": "uint256", "name": "sharesTotalSupply", "type": "uint256"}, {"internalType": "uint256", "name": "lootTotalSupply", "type": "uint256"}, {"internalType": "uint256", "name": "sharesHeldByDAO", "type": "uint256"}, {"internalType": "uint256", "name": "lootHeldByDAO", "type": "uint256"}], "internalType": "struct DAOTokenSupplies", "name": "supplies", "type": "tuple"}, {"components": [{"components": [{"internalType": "address", "name": "token", "type": "address"}, {"internalType": "uint256", "name": "balance", "type": "uint256"}], "internalType": "struct TokenBalance[]", "name": "balances", "type": "tuple[]"}], "internalType": "struct DAOTreasury", "name": "treasury", "type": "tuple"}, {"components": [{"internalType": "address", "name": "account", "type": "address"}, {"internalType": "uint256", "name": "shares", "type": "uint256"}, {"internalType": "uint256", "name": "loot", "type": "uint256"}, {"internalType": "uint16", "name": "seatId", "type": "uint16"}, {"internalType": "uint256", "name": "votingPower", "type": "uint256"}, {"internalType": "address[]", "name": "delegates", "type": "address[]"}, {"internalType": "uint32[]", "name": "delegatesBps", "type": "uint32[]"}], "internalType": "struct MemberView[]", "name": "members", "type": "tuple[]"}, {"components": [{"internalType": "uint256", "name": "id", "type": "uint256"}, {"internalType": "address", "name": "proposer", "type": "address"}, {"internalType": "uint8", "name": "state", "type": "uint8"}, {"internalType": "uint48", "name": "snapshotBlock", "type": "uint48"}, {"internalType": "uint64", "name": "createdAt", "type": "uint64"}, {"internalType": "uint64", "name": "queuedAt", "type": "uint64"}, {"internalType": "uint256", "name": "supplySnapshot", "type": "uint256"}, {"internalType": "uint96", "name": "forVotes", "type": "uint96"}, {"internalType": "uint96", "name": "againstVotes", "type": "uint96"}, {"internalType": "uint96", "name": "abstainVotes", "type": "uint96"}, {"components": [{"internalType": "bool", "name": "enabled", "type": "bool"}, {"internalType": "address", "name": "rewardToken", "type": "address"}, {"internalType": "uint256", "name": "pool", "type": "uint256"}, {"internalType": "bool", "name": "resolved", "type": "bool"}, {"internalType": "uint8", "name": "winner", "type": "uint8"}, {"internalType": "uint256", "name": "finalWinningSupply", "type": "uint256"}, {"internalType": "uint256", "name": "payoutPerUnit", "type": "uint256"}], "internalType": "struct FutarchyView", "name": "futarchy", "type": "tuple"}, {"components": [{"internalType": "address", "name": "voter", "type": "address"}, {"internalType": "uint8", "name": "support", "type": "uint8"}, {"internalType": "uint256", "name": "weight", "type": "uint256"}], "internalType": "struct VoterView[]", "name": "voters", "type": "tuple[]"}], "internalType": "struct ProposalView[]", "name": "proposals", "type": "tuple[]"}, {"components": [{"internalType": "uint256", "name": "index", "type": "uint256"}, {"internalType": "string", "name": "text", "type": "string"}], "internalType": "struct MessageView[]", "name": "messages", "type": "tuple[]"}], "internalType": "struct DAOLens", "name": "dao", "type": "tuple"}, {"components": [{"internalType": "address", "name": "tribTkn", "type": "address"}, {"internalType": "uint256", "name": "tribAmt", "type": "uint256"}, {"internalType": "uint256", "name": "forAmt", "type": "uint256"}, {"internalType": "address", "name": "forTkn", "type": "address"}, {"internalType": "uint40", "name": "deadline", "type": "uint40"}, {"internalType": "uint256", "name": "remainingSupply", "type": "uint256"}, {"internalType": "uint256", "name": "totalSupply", "type": "uint256"}, {"internalType": "uint256", "name": "treasuryBalance", "type": "uint256"}, {"internalType": "uint256", "name": "allowance", "type": "uint256"}, {"internalType": "uint16", "name": "lpBps", "type": "uint16"}, {"internalType": "uint16", "name": "maxSlipBps", "type": "uint16"}, {"internalType": "uint256", "name": "feeOrHook", "type": "uint256"}], "internalType": "struct SaleView[]", "name": "sales", "type": "tuple[]"}, {"components": [{"internalType": "address", "name": "ops", "type": "address"}, {"internalType": "address", "name": "tribTkn", "type": "address"}, {"internalType": "uint128", "name": "ratePerSec", "type": "uint128"}, {"internalType": "uint64", "name": "lastClaim", "type": "uint64"}, {"internalType": "uint256", "name": "claimable", "type": "uint256"}, {"internalType": "uint256", "name": "pending", "type": "uint256"}, {"internalType": "uint256", "name": "treasuryBalance", "type": "uint256"}, {"internalType": "uint256", "name": "tapAllowance", "type": "uint256"}], "internalType": "struct TapView", "name": "tap", "type": "tuple"}], "internalType": "struct DAICOLens", "name": "out", "type": "tuple"}], "stateMutability": "view", "type": "function"}];
-const PROPOSAL_STATE = ['Unopened','Active','Queued','Succeeded','Defeated','Expired','Executed'];
-const CAUSE_CHAT_ABI = ['function chat(string) payable', 'function badges() view returns (address)'];
+// scan cannot enumerate. Same signature loadProposals uses — one shape, not two.
+const DAO_VIEW_ABI = [
+  'function getDAOWithDAICO(address dao, uint256 propStart, uint256 propCount, uint256 msgStart, uint256 msgCount, address[] treasuryTokens, address[] tribTokens) view returns (tuple(tuple(address dao, tuple(string,string,string,address,address,address,address) meta, tuple(uint96,uint96,uint96,uint64,uint64,uint16,bool,uint256,uint256,address) gov, tuple(uint256,uint256,uint256,uint256) supplies, tuple(tuple(address,uint256)[]) treasury, tuple(address,uint256,uint256,uint16,uint256,address[],uint32[])[] members, tuple(uint256 id, address proposer, uint8 state, uint48 snapshotBlock, uint64 createdAt, uint64 queuedAt, uint256 supplySnapshot, uint96 forVotes, uint96 againstVotes, uint96 abstainVotes, tuple(bool,address,uint256,bool,uint8,uint256,uint256) futarchy, tuple(address,uint8,uint256)[] voters)[] proposals, tuple(uint256 index, string text)[] messages) base, tuple(address,uint256,uint256,address,uint40,uint256,uint256,uint256,uint256,uint16,uint16,uint256)[] sales, tuple(address,address,uint128,uint64,uint256,uint256,uint256,uint256) tap))'
+];
 
 // ABIs
 const SCAN_ABI = [
@@ -5832,8 +5831,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     `;
   }
 
-  // Governance info. #causeGovAlert and #causeGovFeed fill in from a second read so
-  // the page paints without waiting on them.
+  // Governance info. #causeGovAlert fills in from a second read so the page paints
+  // without waiting on it.
   html += `
     <div id="causeGovAlert"></div>
     <div class="section-card" style="background:var(--surface)">
@@ -5842,9 +5841,23 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequittable<br>
         Share holders can ragequit at any time for a pro-rata refund.
       </div>
-      <div id="causeGovFeed"></div>
       <div style="margin-top:8px">
         <a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Manage DAO &rarr;</a>
+      </div>
+    </div>
+  `;
+
+  // Proposals & chat — the same drawer the standard DAICO page uses, so a cause gets
+  // the discussion list, the vote bars and the quorum readout rather than a second,
+  // thinner implementation of the same thing.
+  html += `
+    <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
+      <button class="drawer-toggle" onclick="toggleProposals()">
+        <span>Proposals &amp; Chat</span>
+        <span class="arrow">&#9660;</span>
+      </button>
+      <div class="activity-body">
+        <div id="proposalsContent"><div class="activity-empty">Click to load</div></div>
       </div>
     </div>
   `;
@@ -6015,121 +6028,40 @@ async function refreshCauseStats(daoAddr, metadata) {
 // the moment the page said nothing about. Moloch's timelock lets a proposal execute
 // two days after it is queued; a holder who objects can leave with their pro-rata
 // share, but only if they know it is coming. So the countdown leads, in red, above
-// everything else on the page's governance card.
+// everything else — the drawer below carries the detail, but a holder should not have
+// to open a drawer to learn the clock is running.
 async function loadCauseGovernance(daoAddr, gen) {
-  const alertEl = $('causeGovAlert'), feedEl = $('causeGovFeed');
-  if (!alertEl && !feedEl) return;
+  const alertEl = $('causeGovAlert');
+  if (!alertEl) return;
   let view;
   try {
     view = await withRPC(async rpc => {
       const helper = new ethers.Contract(VIEW_HELPER, DAO_VIEW_ABI, rpc);
-      return await helper.getDAOWithDAICO(daoAddr, 0, 200, 0, 200, [], []);
+      return await helper.getDAOWithDAICO(daoAddr, 0, 50, 0, 0, [], [ZERO]);
     });
   } catch { return; }
   if (gen !== _renderGen) return;
 
-  const props = Array.from(view.dao.proposals || []);
-  const msgs = Array.from(view.dao.messages || []);
+  const queued = Array.from(view?.base?.proposals || []).filter(p => Number(p.state) === 2);
   const now = Math.floor(Date.now() / 1000);
-  // The window counts forward from the start index, so the newest are at the end.
-  const recent = props.slice(-5).reverse();
-
-  const queued = props.filter(p => Number(p.state) === 2);
-  if (alertEl) {
-    alertEl.innerHTML = queued.map(p => {
-      const readyAt = Number(p.queuedAt) + 172800; // timelockDelay
-      const left = readyAt - now;
-      const when = left <= 0 ? 'executable now'
-        : left < 3600 ? `in ${Math.ceil(left / 60)} min`
-        : left < 86400 ? `in ${Math.floor(left / 3600)}h`
-        : `in ${Math.floor(left / 86400)}d ${Math.floor((left % 86400) / 3600)}h`;
-      return `<div class="section-card" style="border-color:var(--red);background:var(--surface);margin-bottom:14px">
-        <div class="section-title" style="color:var(--red)">Proposal executes ${when}</div>
-        <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">
-          A passed proposal is in its timelock. Anything the DAO can do to its treasury
-          happens when that runs out. If you disagree with it, redeeming your shares
-          before then returns your pro-rata share of the treasury &mdash; afterwards may be
-          too late.
-          <div style="margin-top:6px">
-            <a href="../dao/#/dao/1/${daoAddr}" style="color:var(--red);text-decoration:underline">Review it &rarr;</a>
-          </div>
+  alertEl.innerHTML = queued.map(p => {
+    const left = Number(p.queuedAt) + 172800 - now; // timelockDelay
+    const when = left <= 0 ? 'executable now'
+      : left < 3600 ? `in ${Math.ceil(left / 60)} min`
+      : left < 86400 ? `in ${Math.floor(left / 3600)}h`
+      : `in ${Math.floor(left / 86400)}d ${Math.floor((left % 86400) / 3600)}h`;
+    return `<div class="section-card" style="border-color:var(--red);background:var(--surface);margin-bottom:14px">
+      <div class="section-title" style="color:var(--red)">Proposal executes ${when}</div>
+      <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">
+        A passed proposal is in its timelock. Anything the DAO can do to its treasury
+        happens when that runs out. If you disagree with it, redeeming your shares before
+        then returns your pro-rata share of the treasury &mdash; afterwards may be too late.
+        <div style="margin-top:6px">
+          <a href="../dao/#/dao/1/${daoAddr}" style="color:var(--red);text-decoration:underline">Review it &rarr;</a>
         </div>
-      </div>`;
-    }).join('');
-  }
-  if (!feedEl) return;
-
-  let html = '';
-  if (recent.length) {
-    html += `<div style="margin-top:12px;border-top:1px solid var(--border-muted);padding-top:10px">
-      <div style="font-size:10px;color:var(--fg-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px">Proposals (${view.dao.proposals.length})</div>`;
-    for (const p of recent) {
-      const st = PROPOSAL_STATE[Number(p.state)] || 'Unknown';
-      const colour = st === 'Queued' ? 'var(--red)'
-        : st === 'Executed' ? 'var(--green)'
-        : st === 'Defeated' || st === 'Expired' ? 'var(--fg-dim)' : 'var(--fg-muted)';
-      const supply = BigInt(p.supplySnapshot || 0n);
-      const cast = BigInt(p.forVotes) + BigInt(p.againstVotes) + BigInt(p.abstainVotes);
-      const turnout = supply > 0n ? Number(cast * 1000n / supply) / 10 : 0;
-      html += `<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0">
-        <span style="color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">#${p.id.toString().slice(0, 8)}&hellip;</span>
-        <span style="color:var(--fg-dim);flex-shrink:0">${turnout.toFixed(1)}% turnout &middot; <b style="color:${colour};font-weight:600">${st}</b></span>
-      </div>`;
-    }
-    html += `</div>`;
-  }
-
-  // Shareholder chat. The seat is a badge minted by the shares transfer hook, so every
-  // buyer has one; a holder whose seat never minted is told why rather than left with
-  // a bare revert.
-  const recentMsgs = msgs.slice(-8);
-  html += `<div style="margin-top:12px;border-top:1px solid var(--border-muted);padding-top:10px">
-    <div style="font-size:10px;color:var(--fg-dim);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px">Shareholder chat${msgs.length ? ` (${msgs.length})` : ''}</div>`;
-  html += recentMsgs.length
-    ? recentMsgs.map(m => `<div style="font-size:11px;color:var(--fg-muted);line-height:1.5;padding:3px 0;word-break:break-word">${escText(m.text)}</div>`).join('')
-    : `<div style="font-size:11px;color:var(--fg-dim)">No messages yet.</div>`;
-  if (_connectedAddress) {
-    html += `<div style="display:flex;gap:6px;margin-top:8px">
-      <input id="causeChatInput" type="text" maxlength="280" placeholder="Say something to holders"
-        style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:12px;outline:none">
-      <button class="coin-tpl-btn" style="font-size:10px;padding:4px 10px" onclick="causeChatSend('${daoAddr}')">Send</button>
-    </div>
-    <div id="causeChatStatus" style="font-size:10px;color:var(--fg-dim);margin-top:4px"></div>`;
-  }
-  html += `</div>`;
-  feedEl.innerHTML = html;
-}
-
-async function causeChatSend(daoAddr) {
-  const input = $('causeChatInput'), status = $('causeChatStatus');
-  const text = (input?.value || '').trim();
-  if (!text) return;
-  const s = _signer || await connectWallet();
-  if (!s) return;
-  const say = m => { if (status) status.textContent = m; };
-  try {
-    const dao = new ethers.Contract(daoAddr, CAUSE_CHAT_ABI, s);
-    // chat() gates on the badge, not on shares. Preflight so a missing seat reads as
-    // an explanation instead of an opaque Unauthorized revert.
-    try {
-      const badgesAddr = await dao.badges();
-      const badges = new ethers.Contract(badgesAddr, ['function balanceOf(address) view returns (uint256)'], s);
-      if ((await badges.balanceOf(await s.getAddress())) === 0n) {
-        say('Your shareholder seat is not minted. A zero-value self-transfer of shares mints it.');
-        return;
-      }
-    } catch {}
-    say('Confirm in your wallet\u2026');
-    const tx = await dao.chat(text);
-    say('Sending\u2026');
-    await tx.wait();
-    input.value = '';
-    say('Sent.');
-    loadCauseGovernance(daoAddr, _renderGen);
-  } catch (e) {
-    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) { say(''); return; }
-    say(e.shortMessage || e.message || 'Failed to send.');
-  }
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function causeSwitchMode(mode) {
