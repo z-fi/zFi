@@ -12297,6 +12297,33 @@ body.modal-open { overflow: hidden; }
           return;
         }
 
+        // A DAO reached by address — a deep link from a cause page, a search, a pasted
+        // link — is fetched with getDAOWithDAICO(address), which knows nothing about who
+        // is looking at it. It arrives with member: null, and null is read downstream as
+        // "not a member" rather than "not asked yet": the ragequit modal refuses to open
+        // with "You are not a member of this DAO" even for someone holding shares. The
+        // balances are two calls away, so ask before concluding.
+        if (!currentDAO.member && _connectedAddress && currentDAO.dao.meta.sharesToken) {
+          try {
+            const erc20 = ['function balanceOf(address) view returns (uint256)'];
+            const [shares, loot] = await withRpcFallback(async (rpcProvider) => {
+              const sh = new ethers.Contract(currentDAO.dao.meta.sharesToken, erc20, rpcProvider);
+              const lt = currentDAO.dao.meta.lootToken
+                ? new ethers.Contract(currentDAO.dao.meta.lootToken, erc20, rpcProvider) : null;
+              return await Promise.all([
+                sh.balanceOf(_connectedAddress),
+                lt ? lt.balanceOf(_connectedAddress) : Promise.resolve(0n)
+              ]);
+            });
+            if (gen !== _daoLoadGen) return;
+            if (shares > 0n || loot > 0n) {
+              currentDAO.member = { shares: shares.toString(), loot: loot.toString() };
+            }
+          } catch (e) {
+            logger.warn('Could not read membership for deep-linked DAO:', e);
+          }
+        }
+
         // Hide navigation buttons early (before rendering which might fail)
         // nav buttons handled by CSS
 
