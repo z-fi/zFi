@@ -1724,6 +1724,27 @@ function symbolSVG(symbol, size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/2}" fill="var(--surface)"/><text x="${size/2}" y="${size*0.65}" text-anchor="middle" font-size="${size*0.45}" fill="var(--fg)" font-family="Helvetica,Arial,sans-serif" font-weight="700">${escText(letter)}</text></svg>`;
 }
 
+// Two glyphs carry the whole cause page: the ETH it is denominated in and the coin
+// it is selling. ETH_ICON is already a coloured faceted diamond, which is all the
+// colour this layout wants — the brutalism stays, the money gets a face.
+function ethGlyph(px) {
+  px = px || 13;
+  return `<span style="display:inline-flex;vertical-align:-0.15em;width:${px}px;height:${px}px">`
+    + ETH_ICON.replace('width="24" height="24"', `width="${px}" height="${px}"`) + `</span>`;
+}
+
+// The cause's own logo at glyph scale, for the places that talk about its shares.
+function causeGlyph(meta, metadata, px) {
+  px = px || 13;
+  return `<span style="display:inline-flex;vertical-align:-0.15em;width:${px}px;height:${px}px;`
+    + `border-radius:50%;overflow:hidden;flex-shrink:0">${logoHTML(meta, metadata, px)}</span>`;
+}
+
+// An ETH amount with its glyph attached, so a column of numbers reads as money.
+function ethAmount(text, px) {
+  return `<span style="display:inline-flex;align-items:center;gap:4px">${ethGlyph(px)}<span>${text}</span></span>`;
+}
+
 function logoHTML(meta, metadata, size) {
   size = size || 40;
   const imgUrl = resolveIPFS(metadata.image);
@@ -5576,7 +5597,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const targetEth = Number(ethers.formatEther(targetWei));
   html += `
     <div id="causeRaisedRow" style="margin-bottom:10px">
-      <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
+      <span style="font-size:18px;font-weight:700;display:inline-flex;align-items:center;gap:6px">${ethGlyph(17)}${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
       <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(targetEth) + ' ETH target' : ''}</span>
       <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
       ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
@@ -5590,12 +5611,12 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     <div id="causeStatsGrid" class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Price</div>
-        <div style="font-weight:600">${fmtPriceWei(price)}</div>
+        <div style="font-weight:600">${ethAmount(fmtPriceWei(price), 11)}</div>
         <div style="font-size:9px;color:var(--fg-dim)">per share &middot; ${fmtSharesPerEth(price)}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Sold</div>
-        <div id="causeSoldVal" style="font-weight:600">${soldFmt}</div>
+        <div style="font-weight:600;display:inline-flex;align-items:center;gap:5px">${causeGlyph(data.meta, metadata, 11)}<span id="causeSoldVal">${soldFmt}</span></div>
         <div id="causeSoldCap" style="font-size:9px;color:var(--fg-dim)">${(isOpenCap || cap === 0n) ? 'shares' : 'of ' + capFmt}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
@@ -5640,8 +5661,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       <div class="section-card">
         <div class="section-title">Buy Shares</div>
         <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="causeModeShares" onclick="causeSwitchMode('shares')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Shares</button>
-          <button id="causeModeEth" onclick="causeSwitchMode('eth')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">ETH</button>
+          <button id="causeModeShares" onclick="causeSwitchMode('shares')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px">${causeGlyph(data.meta, metadata, 14)}Shares</button>
+          <button id="causeModeEth" onclick="causeSwitchMode('eth')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px">${ethGlyph(14)}ETH</button>
         </div>
         <div style="display:flex;gap:4px;margin-bottom:6px">
           <input id="causeBuyAmount" type="text" inputmode="decimal" placeholder="0.00" aria-label="Buy amount" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="causeUpdateBuyQuote()">
@@ -5673,7 +5694,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     html += `
       <div style="margin-top:4px;margin-bottom:14px">
         <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
-          <span style="font-size:10px">&#9654;</span> Redeem shares for ETH
+          <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} shares for ${ethGlyph(12)} ETH
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
           <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Ragequit burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury.</div>
@@ -5713,10 +5734,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         <div class="section-title">Tap Vesting</div>
         ${(!tapInstant && treasuryETH > 0n) ? `<div id="causeTapRunway" style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">${causeRunwayHTML(treasuryETH, tapRate, saleEnded)}</div>` : ''}
         <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-          <dt>Rate</dt><dd>${rateDisplay}</dd>
-          <dt>Claimable</dt><dd>~${pendingEth} ETH</dd>
-          ${unfunded > 0n ? `<dt>Vested, unfunded</dt><dd style="color:var(--red)">${fmtETH(unfunded)}</dd>` : ''}
-          ${tapOpenBudget ? '' : `<dt>Remaining</dt><dd>${budgetDisplay}</dd>`}
+          <dt>Rate</dt><dd>${tapInstant ? rateDisplay : ethAmount(rateDisplay, 11)}</dd>
+          <dt>Claimable</dt><dd>${ethAmount('~' + pendingEth + ' ETH', 11)}</dd>
+          ${unfunded > 0n ? `<dt>Vested, unfunded</dt><dd style="color:var(--red)">${ethAmount(fmtETH(unfunded), 11)}</dd>` : ''}
+          ${tapOpenBudget ? '' : `<dt>Remaining</dt><dd>${tapOpenBudget ? budgetDisplay : ethAmount(budgetDisplay, 11)}</dd>`}
           <dt>Beneficiary</dt><dd><a href="https://etherscan.io/address/${tapBeneficiary}" target="_blank" style="color:inherit">${beneficiaryShort}</a></dd>
         </dl>
         ${_connectedAddress && _connectedAddress.toLowerCase() === tapBeneficiary.toLowerCase() ? `<button class="swap-btn" style="width:100%;font-size:12px;margin-top:8px;background:var(--btn-bg);color:var(--btn-fg)" onclick="causeTapClaim('${daoAddr}')">Claim Tap</button>
@@ -5995,12 +6016,13 @@ function causeUpdateBuyQuote() {
   const rows = [
     `<div style="display:flex;justify-content:space-between;gap:8px">
        <span style="color:var(--fg)"><b style="font-weight:600">${sharesFmt}</b> shares</span>
-       <span style="color:var(--fg);font-variant-numeric:tabular-nums"><b style="font-weight:600">${fmtNum(Number(ethers.formatEther(cost)))}</b> ETH</span>
+       <span style="color:var(--fg);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:4px">${ethGlyph(12)}<b style="font-weight:600">${fmtNum(Number(ethers.formatEther(cost)))}</b> ETH</span>
      </div>`,
     `<div style="color:var(--fg-dim);margin-top:3px">${ownPct >= 0.01 ? ownPct.toFixed(2) : '<0.01'}% of the DAO after this buy</div>`
   ];
   if (treasury >= 0n && redeem > 0n) {
     rows.push(`<div style="color:var(--fg-dim);margin-top:2px">redeemable now for ~${fmtNum(redeemEth)} ETH &middot; falls as the tap draws</div>`);
+
   }
   if (capped) {
     rows.push(`<div style="color:var(--red);margin-top:3px">only ${sharesFmt} shares left in the sale &mdash; reduced to fit</div>`);
