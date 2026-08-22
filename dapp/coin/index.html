@@ -5746,7 +5746,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // skipped entirely.
   html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH)}</div>`;
 
-  // Buy form (if sale active)
+  // Buy form (if sale active); a closed sale gets its closing summary in the same place.
+  if (saleEnded) html += `<div id="causeSaleClose"></div>`;
   if (!saleEnded) {
     html += `
       <div class="section-card">
@@ -5952,6 +5953,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.sharesSupply = sharesTotalSupply.toString();
   app.dataset.lootSupply = lootTotalSupply.toString();
 
+  if (saleEnded && sold > 0n && price > 0n) {
+    loadCauseSaleClose(daoAddr, sharesAddr, sold, price, gen).catch(() => {});
+  }
+
   // Proposals and chat come from a second read so they cannot delay first paint.
   loadCauseGovernance(daoAddr, gen).catch(() => {});
 
@@ -6117,6 +6122,66 @@ async function loadCauseGovernance(daoAddr, gen) {
       </div>
     </div>`;
   }).join('');
+}
+
+// Redeeming burns shares, and the sale's allowance is spent at mint and never given
+// back — so a refund permanently removes that much capacity from the raise. There is
+// no counter for it on chain (Moloch.ragequit emits nothing), so it has to come from
+// burn logs, which only some RPCs will serve. Returns null when none will, and the
+// caller says the part it can always say.
+async function fetchRedeemedShares(sharesAddr) {
+  const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 amount)']);
+  try {
+    return await withRPC(async rpc => {
+      const head = await rpc.getBlockNumber();
+      const logs = await rpc.getLogs({
+        address: sharesAddr,
+        fromBlock: head - 9000 > 0 ? head - 9000 : 0,
+        toBlock: head,
+        topics: [iface.getEvent('Transfer').topicHash, null, ethers.zeroPadValue(ZERO, 32)]
+      });
+      let burned = 0n;
+      for (const l of logs) burned += iface.parseLog(l).args.amount;
+      return burned;
+    });
+  } catch { return null; }
+}
+
+// The closing summary, in the space the buy form used to hold. A sale that ends
+// short of its number looks like a shortfall unless the page says why, and here the
+// why is the refund guarantee working: people took money back, and every share they
+// returned was one the sale could no longer sell.
+async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
+  const el = $('causeSaleClose');
+  if (!el) return;
+  const burned = await fetchRedeemedShares(sharesAddr);
+  if (gen !== _renderGen || !el.isConnected) return;
+  const E = ethers.parseEther('1');
+  const raised = heldShares * price / E;
+  let detail;
+  if (burned !== null && burned > 0n) {
+    // Allowance is spent, so everything ever minted is held-plus-burnt: the number the
+    // sale was authorised for, recovered without needing to have recorded it.
+    const authorised = heldShares + burned;
+    detail = `<b style="color:var(--fg);font-weight:600">${fmtNum(Number(ethers.formatEther(burned * price / E)))} ETH</b> was redeemed while the sale ran.
+      Redeeming returns shares to the holder but not to the sale, so the raise closed at
+      ${fmtNum(Number(ethers.formatEther(raised)))} of the
+      ${fmtNum(Number(ethers.formatEther(authorised * price / E)))} ETH it was authorised for.
+      That is the refund guarantee working, not a shortfall.`;
+  } else {
+    detail = `Every share this sale was authorised to mint has been minted. Redeeming returns
+      shares to the holder but not to the sale, so any refund taken along the way lowered
+      what the raise could finally reach.`;
+  }
+  el.innerHTML = `<div class="section-card">
+    <div class="section-title">Sale closed</div>
+    <div style="font-size:18px;font-weight:700;display:inline-flex;align-items:center;gap:6px;margin-bottom:2px">
+      ${ethGlyph(17)}${fmtNum(Number(ethers.formatEther(raised)))} ETH
+    </div>
+    <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">held by ${fmtTokenAmount(heldShares.toString())} shares</div>
+    <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">${detail}</div>
+    <div style="font-size:10px;color:var(--fg-dim);margin-top:8px;line-height:1.5">Reopening it would take a DAO vote to grant the sale a fresh allowance.</div>
+  </div>`;
 }
 
 function causeSwitchMode(mode) {
