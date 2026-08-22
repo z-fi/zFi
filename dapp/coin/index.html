@@ -2764,7 +2764,7 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
     const pct = Number(raisedWei * 10000n / targetWei) / 100;
     const targetEth = Number(ethers.formatEther(targetWei));
     html += causeMeter(
-      'funded',
+      `<span title="What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.">funded</span>`,
       `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
       pct, pct >= 100
     );
@@ -5654,7 +5654,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         <h2>${escText(coinName)} <span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(coinSymbol)}</span>
-          ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} shares</div>` : ''}
+          ${_connectedAddress && userBalance > 0n ? `<div class="coin-user-balance">you hold ${balFmt} shares</div>` : ''}
         </div>
         ${metadata.creatorWallet ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${metadata.creatorWallet}" target="_blank" style="color:inherit">${metadata.creatorWallet.slice(0,6)}&hellip;${metadata.creatorWallet.slice(-4)}</a></div>` : ''}
       </div>
@@ -5683,7 +5683,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   html += `
     <div id="causeRaisedRow" style="margin-bottom:10px">
       <span style="font-size:18px;font-weight:700;display:inline-flex;align-items:center;gap:6px">${ethGlyph(17)}${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
-      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(targetEth) + ' ETH target' : ''}</span>
+      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(targetEth) + ' ETH' : ''}</span>
       <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
       ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
     </div>
@@ -5776,6 +5776,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Ragequit — collapsible, understated. Safety net, not a primary action.
   if (userBalance > 0n && treasuryETH > 0n) {
     const rqTreasuryFmt = Number(ethers.formatEther(treasuryETH)).toFixed(4);
+    // Redemption uses the same denominator the DAO does: shares + loot.
+    const rqDenom = sharesTotalSupply + lootTotalSupply;
+    const myValue = rqDenom > 0n ? treasuryETH * userBalance / rqDenom : 0n;
+    const myPct = rqDenom > 0n ? Number(userBalance * 10000n / rqDenom) / 100 : 0;
     html += `
       <div style="margin-top:4px;margin-bottom:14px">
         <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
@@ -5792,6 +5796,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
             <button class="coin-tpl-btn" onclick="causeSetRqPct(50)" style="font-size:9px;padding:3px 6px">50%</button>
             <button class="coin-tpl-btn" onclick="causeSetRqPct(75)" style="font-size:9px;padding:3px 6px">75%</button>
             <button class="coin-tpl-btn" onclick="causeSetRqPct(100)" style="font-size:9px;padding:3px 6px">100%</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--fg-muted);padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border-muted)">
+            <span>you hold <b style="color:var(--fg);font-weight:600">${fmtTokenAmount(userBalance.toString())}</b> shares &middot; ${myPct >= 0.01 ? myPct.toFixed(2) : '<0.01'}% of the DAO</span>
+            <span style="flex-shrink:0">worth ${ethAmount('~' + fmtEthBal(Number(ethers.formatEther(myValue))) + ' ETH', 11)}</span>
           </div>
           <div id="causeRqQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter shares to see redemption value</div>
           <button class="swap-btn" style="width:100%;font-size:12px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeRagequit('${daoAddr}')">Redeem</button>
@@ -5995,7 +6003,7 @@ async function refreshCauseStats(daoAddr, metadata) {
       const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
       raisedEl.innerHTML = `
         <span style="font-size:18px;font-weight:700">${raisedEth.toFixed(raisedEth > 0 && raisedEth < 0.0001 ? 8 : 4)} ETH</span>
-        <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(Number(ethers.formatEther(targetWei))) + ' ETH target' : ''}</span>
+        <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">raised${targetWei > 0n ? ' of ' + fmtNum(Number(ethers.formatEther(targetWei))) + ' ETH' : ''}</span>
         <span style="font-size:11px;color:var(--fg-muted)">${raisedUsd}</span>
         ${treasuryDiffers ? `<div style="font-size:11px;color:var(--fg-dim);margin-top:2px">${treasuryEth.toFixed(treasuryEth > 0 && treasuryEth < 0.0001 ? 8 : 4)} ETH treasury${treasuryUsd}</div>` : ''}
       `;
