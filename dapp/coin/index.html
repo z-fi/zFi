@@ -219,6 +219,41 @@ input {
 .stat-label { color:var(--fg-muted); }
 .stat-value { font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0; }
 .progress-bar { height:6px;background:var(--border-muted);overflow:hidden;margin:8px 0; }
+
+/* A cause's summary pairs. `.coin-summary` was used by the tap panel but never
+   defined, so it fell back to the browser's <dl> default and rendered eight
+   stacked lines — label above value, value indented — for four facts. */
+.coin-summary {
+  display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;align-items:baseline;
+}
+.coin-summary dt { color:var(--fg-dim);white-space:nowrap; }
+.coin-summary dd { margin:0;text-align:right;font-variant-numeric:tabular-nums; }
+
+/* Funding meter. The old bar was a row of monospace block characters, which at a
+   low percentage collapsed to a single smudge and never lined up with its own
+   track. A real track renders any percentage honestly, including 1.3%. */
+.cause-meter { margin-bottom:12px; }
+.cause-meter-head {
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:10px;color:var(--fg-dim);margin-bottom:5px;
+}
+.cause-meter-head b { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
+.cause-meter-track {
+  height:8px;background:var(--border-muted);border-radius:4px;overflow:hidden;
+}
+.cause-meter-fill {
+  height:100%;background:var(--fg);border-radius:4px;
+  transition:width 400ms cubic-bezier(0.4,0,0.2,1);min-width:2px;
+}
+.cause-meter-fill.is-full { background:var(--green); }
+
+/* The title sits over the banner, so give the image a scrim to sit the text on
+   rather than letting it fight whatever the creator uploaded. */
+.coin-banner { position:relative; }
+.coin-banner::after {
+  content:'';position:absolute;left:0;right:0;bottom:0;height:60%;pointer-events:none;
+  background:linear-gradient(to bottom, transparent, rgba(0,0,0,0.75));
+}
 .progress-fill { height:100%;transition:width 0.3s; }
 
 /* Swap tile */
@@ -2614,6 +2649,15 @@ function causeMeterRow(label, value, bar) {
 
 // Inner HTML of #causeMeters. Shared by first render and the live refresh so the
 // two can never drift.
+function causeMeter(label, value, pct, full) {
+  return `<div class="cause-meter">
+    <div class="cause-meter-head"><span>${label}</span><span>${value}</span></div>
+    <div class="cause-meter-track"><div class="cause-meter-fill${full ? ' is-full' : ''}" style="width:${Math.max(Math.min(pct, 100), 0)}%"></div></div>
+  </div>`;
+}
+
+// Inner HTML of #causeMeters. Shared by first render and the live refresh so the
+// two can never drift.
 function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
   const raisedEth = Number(ethers.formatEther(raisedWei));
   let html = '';
@@ -2621,37 +2665,34 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
   if (targetWei > 0n) {
     const pct = Number(raisedWei * 10000n / targetWei) / 100;
     const targetEth = Number(ethers.formatEther(targetWei));
-    html += causeMeterRow(
+    html += causeMeter(
       'funded',
-      `${fmtNum(raisedEth)} / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
-      causeBarHTML([
-        { flex: Math.min(pct, 100), ch: '█', color: pct >= 100 ? 'var(--green)' : 'var(--fg)' },
-        { flex: Math.max(100 - pct, 0), ch: '░', color: 'var(--fg-dim)' },
-      ])
+      `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
+      pct, pct >= 100
     );
   } else if (raisedWei > 0n) {
-    html += causeMeterRow('funded', `${fmtNum(raisedEth)} ETH &middot; open-ended`,
-      causeBarHTML([{ flex: 100, ch: '█', color: 'var(--fg)' }]));
+    html += causeMeter('funded', `<b>${fmtNum(raisedEth)}</b> ETH &middot; open-ended`, 100, false);
   }
 
-  // Treasury split: what is still here (and ragequittable) vs what has left via
-  // the tap. Only meaningful once something has been raised.
+  // What is still here (and so still ragequittable) versus what the tap has taken.
+  // A bar for this is only worth its space once the two differ: before the first
+  // claim it is a full-width slab that says the same thing every time. That state
+  // is a one-line fact, not a chart.
   if (raisedWei > 0n) {
     const held = treasuryWei > raisedWei ? raisedWei : treasuryWei;
     const deployed = raisedWei > treasuryWei ? raisedWei - treasuryWei : 0n;
-    const heldPct = Number(held * 10000n / raisedWei) / 100;
     const heldEth = Number(ethers.formatEther(held));
-    const deployedEth = Number(ethers.formatEther(deployed));
-    html += causeMeterRow(
-      'treasury',
-      deployed > 0n
-        ? `${fmtNum(heldEth)} held &middot; ${fmtNum(deployedEth)} deployed`
-        : `${fmtNum(heldEth)} ETH held &middot; fully ragequittable`,
-      causeBarHTML([
-        { flex: heldPct, ch: '█', color: 'var(--green)' },
-        { flex: 100 - heldPct, ch: '▒', color: 'var(--fg-dim)' },
-      ])
-    );
+    if (deployed > 0n) {
+      const heldPct = Number(held * 10000n / raisedWei) / 100;
+      html += causeMeter(
+        'treasury',
+        `<b>${fmtNum(heldEth)}</b> held &middot; ${fmtNum(Number(ethers.formatEther(deployed)))} deployed`,
+        heldPct, false
+      );
+    } else {
+      html += `<div style="font-size:10px;color:var(--fg-dim);margin-bottom:12px">`
+        + `treasury <b style="color:var(--green);font-weight:600">${fmtNum(heldEth)} ETH</b> &middot; every share still redeemable in full</div>`;
+    }
   }
 
   return html;
@@ -2687,6 +2728,29 @@ function fmtEthBal(v) {
 function fmtETH(wei) {
   return fmtEthBal(Number(ethers.formatEther(wei))) + ' ETH';
 }
+// A share price is quoted, read aloud and compared — so it has to be a number a
+// person can hold in their head. Sub-microether prices fall off fmtNum's exponential
+// cliff and render as "3.33e-7 ETH", which tells a buyer nothing about what a share
+// costs. Gwei carries the same value in two friendly digits.
+function fmtPriceWei(wei) {
+  if (wei <= 0n) return '0 ETH';
+  const eth = Number(ethers.formatEther(wei));
+  if (eth >= 0.0001) return fmtNum(eth) + ' ETH';
+  const gwei = Number(wei) / 1e9;
+  if (gwei >= 0.01) return (gwei >= 100 ? Math.round(gwei).toLocaleString() : Number(gwei.toPrecision(3)).toString()) + ' gwei';
+  return wei.toString() + ' wei';
+}
+
+// The other half of a price: how much of the thing one ETH actually buys.
+function fmtSharesPerEth(price) {
+  if (price <= 0n) return '';
+  const per = Number(ethers.formatEther(ethers.parseEther('1') * ethers.parseEther('1') / price));
+  if (per >= 1e6) return (per / 1e6).toFixed(per >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M per ETH';
+  if (per >= 1e3) return Math.round(per / 1e3) + 'k per ETH';
+  if (per >= 1) return Math.round(per).toLocaleString() + ' per ETH';
+  return '';
+}
+
 function fmtNum(v) {
   if (v >= 1) return v.toFixed(4);
   if (v >= 0.001) return v.toFixed(6);
@@ -4089,9 +4153,12 @@ async function renderCurveCoinPage(tokenAddr, curve, gen) {
     </div>
   `;
 
+  // Fine print: the covenant, then the contracts it all points at.
+  html += `<div style="margin-top:20px;padding-top:12px;border-top:1px solid var(--border-muted)">${charterHTML}</div>`;
+
   // Links
   html += `
-    <div style="margin-top:16px;font-size:11px;color:var(--fg-dim)">
+    <div style="font-size:11px;color:var(--fg-dim);margin-bottom:24px">
       <a href="https://etherscan.io/address/${tokenAddr}" target="_blank" style="color:inherit">Token</a>
       &middot; <a href="https://etherscan.io/address/${CURVE_SALE}" target="_blank" style="color:inherit">Curve</a>
       &middot; <a href="https://etherscan.io/address/${curve.creator}" target="_blank" style="color:inherit">Creator</a>
@@ -5523,8 +5590,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     <div id="causeStatsGrid" class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Price</div>
-        <div style="font-weight:600">${fmtNum(priceEth)} ETH</div>
-        <div style="font-size:9px;color:var(--fg-dim)">per share</div>
+        <div style="font-weight:600">${fmtPriceWei(price)}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">per share &middot; ${fmtSharesPerEth(price)}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Sold</div>
@@ -5543,21 +5610,21 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // `charter_uri` is present when the DAO is rendered by DUNABrandRenderer (the
   // covenant IS its contractURI); a pinned-metadata cause only declares `charter`,
   // so it links the renderer that generates the covenant for this DAO instead.
+  let charterHTML = '';
   if (metadata.charter === 'duna') {
     // charterSource is "eip155:1:0x…" — strip the CAIP-2 prefix for an explorer link.
     const charterRenderer = typeof metadata.charterSource === 'string'
       ? (metadata.charterSource.split(':').pop() || '') : '';
     const charterHref = metadata.charter_uri
       || (ethers.isAddress(charterRenderer) ? `https://etherscan.io/address/${charterRenderer}#readContract` : null);
-    html += `
-      <div class="section-card" style="margin-bottom:14px">
-        <div class="section-title">Charter</div>
-        <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">
-          Operates as a Wyoming Decentralized Unincorporated Nonprofit Association
-          (W.S. 17-32-101 et seq.). Members defer to this contract for internal
-          governance and retain ragequit rights.
-          ${charterHref ? `<a href="${escAttr(charterHref)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Read the on-chain covenant</a>.` : ''}
-        </div>
+    // The covenant matters legally and almost never to the person reading the page,
+    // so it keeps its place on the record without taking a card's worth of attention
+    // above the fold. It sits with the other fine print, at the foot.
+    charterHTML = `
+      <div style="font-size:10px;color:var(--fg-dim);line-height:1.6;margin-bottom:12px">
+        Wyoming Decentralized Unincorporated Nonprofit Association (W.S. 17-32-101 et seq.).
+        Members defer to this contract for internal governance and retain ragequit rights.
+        ${charterHref ? `<a href="${escAttr(charterHref)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Covenant</a>.` : ''}
       </div>
     `;
   }
@@ -5585,6 +5652,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <button class="coin-tpl-btn" onclick="causeSetBuyAmt(1000)" style="font-size:10px;padding:4px 8px">1k</button>
           <button class="coin-tpl-btn" onclick="causeSetBuyAmt(10000)" style="font-size:10px;padding:4px 8px">10k</button>
           <button class="coin-tpl-btn" onclick="causeSetBuyAmt(100000)" style="font-size:10px;padding:4px 8px">100k</button>
+          <button class="coin-tpl-btn" onclick="causeSetBuyMax()" style="font-size:10px;padding:4px 8px">Max</button>
         </div>
         <div id="causeBuyPresetsEth" class="coin-preset-row" style="display:none;gap:4px;margin-bottom:8px">
           <button class="coin-tpl-btn" onclick="causeSetBuyEth(0.01)" style="font-size:10px;padding:4px 8px">.01</button>
@@ -5703,6 +5771,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.totalSupply = (sharesTotalSupply + lootTotalSupply).toString();
   app.dataset.userBalance = userBalance.toString();
   app.dataset.tapRate = tapRate.toString();
+  // The sale can only mint what is left of its allowance; the buy form clamps to it
+  // rather than letting someone sign a transaction the contract will revert.
+  app.dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
+  app.dataset.sharesSupply = sharesTotalSupply.toString();
+  app.dataset.lootSupply = lootTotalSupply.toString();
 
   // Auto-refresh sale stats every 30s (partial update, preserves inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
@@ -5819,6 +5892,9 @@ async function refreshCauseStats(daoAddr, metadata) {
     // Update stored data
     $('app').dataset.treasury = treasuryETH.toString();
     $('app').dataset.userBalance = userBalance.toString();
+    $('app').dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
+    $('app').dataset.sharesSupply = sharesTotalSupply.toString();
+    causeUpdateBuyQuote();
   } catch (e) { console.warn('Cause stats refresh failed:', e); }
 }
 
@@ -5851,6 +5927,16 @@ function causeSetBuyAmt(amt) {
   causeUpdateBuyQuote();
 }
 
+// Every share the sale can still mint. Open-ended sales have no such number, so the
+// button stands down rather than inventing one.
+function causeSetBuyMax() {
+  const remaining = BigInt($('app')?.dataset.saleRemaining || '0');
+  if (remaining <= 0n) return;
+  if (_causeBuyMode !== 'shares') causeSwitchMode('shares');
+  $('causeBuyAmount').value = String(Math.floor(Number(ethers.formatEther(remaining))));
+  causeUpdateBuyQuote();
+}
+
 function causeSetBuyEth(amt) {
   if (_causeBuyMode !== 'eth') causeSwitchMode('eth');
   $('causeBuyAmount').value = amt;
@@ -5868,29 +5954,58 @@ function _causeSharesToCost(shares, price) {
   return (shares * price + ethers.parseEther('1') - 1n) / ethers.parseEther('1');
 }
 
+// What a buyer needs before signing is not just "cost: 0.3330 ETH". It is how much
+// of the DAO that buys, what it is worth if they walk away immediately, and whether
+// the sale can even mint it. The contract enforces the last one by reverting; the
+// form should say so first.
 function causeUpdateBuyQuote() {
   const el = $('causeBuyQuote');
   if (!el) return;
+  const ds = $('app')?.dataset || {};
   const amt = parseFloat($('causeBuyAmount')?.value || '0');
-  const priceStr = $('app')?.dataset.price;
   if (!amt || amt <= 0) { el.textContent = 'Enter amount to see quote'; return; }
-  if (!priceStr) { el.textContent = 'Sale data not loaded'; return; }
-  const price = BigInt(priceStr);
-  if (_causeBuyMode === 'eth') {
-    const ethWei = ethers.parseEther(String(amt));
-    const shares = _causeEthToShares(ethWei, price);
-    if (shares <= 0n) { el.textContent = 'Amount too small'; return; }
-    const sharesNum = Number(ethers.formatEther(shares));
-    if (sharesNum < 1) { el.textContent = 'Amount too small'; return; }
-    const sharesFmt = sharesNum.toLocaleString(undefined, { maximumFractionDigits: 0 });
-    const cost = _causeSharesToCost(shares, price);
-    const costEth = Number(ethers.formatEther(cost));
-    el.textContent = '\u2248 ' + sharesFmt + ' shares (cost: ' + fmtNum(costEth) + ' ETH)';
-  } else {
-    const shares = ethers.parseEther(String(amt));
-    const cost = _causeSharesToCost(shares, price);
-    el.textContent = 'Cost: ' + fmtNum(Number(ethers.formatEther(cost))) + ' ETH';
+  if (!ds.price) { el.textContent = 'Sale data not loaded'; return; }
+
+  const price = BigInt(ds.price);
+  const E = ethers.parseEther('1');
+  let shares;
+  try {
+    shares = _causeBuyMode === 'eth'
+      ? _causeEthToShares(ethers.parseEther(String(amt)), price)
+      : ethers.parseEther(String(amt));
+  } catch { el.textContent = 'Enter a valid amount'; return; }
+  if (shares <= 0n || Number(ethers.formatEther(shares)) < 1) { el.textContent = 'Amount too small'; return; }
+
+  // Clamp to what the sale can still mint. 0 means open-ended, so no ceiling.
+  const remaining = BigInt(ds.saleRemaining || '0');
+  let capped = false;
+  if (remaining > 0n && shares > remaining) { shares = remaining; capped = true; }
+
+  const cost = _causeSharesToCost(shares, price);
+  const sharesFmt = Number(ethers.formatEther(shares)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+  // Ownership and redemption share the same denominator the DAO uses for ragequit:
+  // shares + loot, after this purchase mints.
+  const supplyAfter = BigInt(ds.sharesSupply || ds.totalSupply || '0') + BigInt(ds.lootSupply || '0') + shares;
+  const ownPct = supplyAfter > 0n ? Number(shares * 1000000n / supplyAfter) / 10000 : 0;
+  const treasury = BigInt(ds.treasury || '0');
+  const redeem = supplyAfter > 0n ? (treasury + cost) * shares / supplyAfter : 0n;
+  const redeemEth = Number(ethers.formatEther(redeem));
+
+  const rows = [
+    `<div style="display:flex;justify-content:space-between;gap:8px">
+       <span style="color:var(--fg)"><b style="font-weight:600">${sharesFmt}</b> shares</span>
+       <span style="color:var(--fg);font-variant-numeric:tabular-nums"><b style="font-weight:600">${fmtNum(Number(ethers.formatEther(cost)))}</b> ETH</span>
+     </div>`,
+    `<div style="color:var(--fg-dim);margin-top:3px">${ownPct >= 0.01 ? ownPct.toFixed(2) : '<0.01'}% of the DAO after this buy</div>`
+  ];
+  if (treasury >= 0n && redeem > 0n) {
+    rows.push(`<div style="color:var(--fg-dim);margin-top:2px">redeemable now for ~${fmtNum(redeemEth)} ETH &middot; falls as the tap draws</div>`);
   }
+  if (capped) {
+    rows.push(`<div style="color:var(--red);margin-top:3px">only ${sharesFmt} shares left in the sale &mdash; reduced to fit</div>`);
+  }
+  el.innerHTML = rows.join('');
 }
 
 async function causeBuy(daoAddr) {
