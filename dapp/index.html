@@ -1987,6 +1987,9 @@ async function searchDaicoCoins() {
 // The collector DAO holds the slot whenever the scan can see it; anything else only
 // gets it when the collector DAO is missing.
 const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
+// A live cause fundraise leads, because it is the one with a deadline and a bar that
+// moves. The collector DAO keeps its slot underneath rather than losing it.
+const DAICO_LEAD_DAO = '0xd5dce9bee03e69362981afe48323a657fcceb8be';
 // Its DAO metadata carries no image, and its phase-0 share sale is long closed — the
 // scan's sales[0] would report a stale "1.8 ETH raised / 100%". Shares now sell through
 // the continuous sale, so the live measures are whether that sale is open and how much
@@ -2065,12 +2068,47 @@ async function loadLiveSale() {
     }
     const el = $('liveSalesSection');
     if (!el) return;
+
+    // The lead cause, if the scan can see it and it is still selling.
+    const leadRaw = daicos.find(d => d.dao.toLowerCase() === DAICO_LEAD_DAO);
+    let lead = null;
+    if (leadRaw && leadRaw !== pinned) {
+      lead = asCard(leadRaw);
+      const ls = leadRaw.sales && leadRaw.sales.length > 0 ? leadRaw.sales[0] : null;
+      if (ls && ls.deadline && BigInt(ls.deadline) > now) {
+        const daysLeft = Number((BigInt(ls.deadline) - now) / 86400n);
+        lead.meta = (lead.raisedETH > 0 ? lead.raisedETH.toFixed(3) + ' ETH raised' : 'Sale live')
+          + ' \u00b7 ' + (daysLeft > 0 ? daysLeft + 'd left' : 'closing today');
+      }
+      if (leadRaw.meta && leadRaw.meta.contractURI) {
+        try {
+          let u = leadRaw.meta.contractURI;
+          const apply = m => {
+            if (m.image) { const i = m.image.startsWith('ipfs://') ? DAICO_IPFS_GW + m.image.slice(7) : m.image;
+              if (i.startsWith('https://') || i.startsWith('data:image/')) lead.icon = i; }
+            if (m.name) lead.name = m.name;
+          };
+          if (u.trimStart().startsWith('{')) apply(JSON.parse(u));
+          else if (u.startsWith('data:')) apply(JSON.parse(decodeURIComponent(u.split(',').slice(1).join(','))));
+          else { if (u.startsWith('ipfs://')) u = DAICO_IPFS_GW + u.slice(7); apply(await (await fetch(u)).json()); }
+        } catch {}
+      }
+    }
+
+    el.innerHTML = `<div class="sec-head"><span>DAICOs</span></div>`
+      + [lead, s].filter(Boolean).map(liveSaleCardHTML).join('');
+    if (_activeTab === 'swap') el.style.display = '';
+  } catch (e) { console.warn('Live sale load failed:', e); }
+}
+
+// One card, so the lead cause and the collector DAO can never drift apart visually.
+function liveSaleCardHTML(s) {
     const logo = s.icon
       ? `<img class="live-sale-logo" src="${escAttr(s.icon)}" alt="" onerror="this.outerHTML='<div class=\\'live-sale-logo-ph\\'>${escAttr(s.symbol?.[0]||'?')}</div>'">`
       : `<div class="live-sale-logo-ph">${esc(s.symbol?.[0] || '?')}</div>`;
     const displayName = s.name && s.name.length > 1 ? s.name : s.symbol || '???';
     const ethFmt = s.raisedETH >= 1 ? s.raisedETH.toFixed(1) : s.raisedETH >= 0.01 ? s.raisedETH.toFixed(2) : s.raisedETH.toFixed(3);
-    el.innerHTML = `<div class="sec-head"><span>DAICOs</span></div><a class="live-sale-card" href="coin/#${s.dao}">
+    return `<a class="live-sale-card" href="coin/#${s.dao}">
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
@@ -2079,8 +2117,6 @@ async function loadLiveSale() {
       ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
       <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
     </a>`;
-    if (_activeTab === 'swap') el.style.display = '';
-  } catch (e) { console.warn('Live sale load failed:', e); }
 }
 setTimeout(loadLiveSale, 500);
 

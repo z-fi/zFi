@@ -3286,18 +3286,26 @@ async function _galleryRenderFresh(gen) {
       const isCause = md && md.launchType === 'cause';
       const isTest = cardName === 'test';
       if (isTest) testCount++;
-      const isLowMcap = !isTest && !isCause && mcapETH < 0.05;
+      const isAlwaysShown = ['0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853',
+                             '0xd5dce9bee03e69362981afe48323a657fcceb8be'].includes(cardAddr);
+      const isLowMcap = !isTest && !isCause && !isAlwaysShown && mcapETH < 0.05;
       if (isLowMcap) lowMcapCount++;
       const isSpam = _spamSet.has(cardAddr);
       if (isSpam) spamCount++;
       const isCollect = md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector');
       const isFund = md && md.launchType === 'fund';
-      const isLegacy = !isCause && !isCollect && (isFund || (md && md.template && !md.launchType));
+      const isLegacy = !isCause && !isCollect && !isAlwaysShown && (isFund || (md && md.template && !md.launchType));
       if (isLegacy) legacyCount++;
 
       // Determine if coin is inactive (no trades in last 3 days)
-      // FWC collector DAO is always shown
-      const ALWAYS_SHOW = ['0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853'];
+      // FWC collector DAO is always shown, and so is the CELL cause: its metadata
+      // lives on IPFS, and when that read is slow or a gateway is down `md` comes back
+      // empty, which drops isCause to false — and a cause has no zAMM pool to price, so
+      // it lands in the low-liquidity bucket and vanishes from a gallery that counted it.
+      const ALWAYS_SHOW = [
+        '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853',
+        '0xd5dce9bee03e69362981afe48323a657fcceb8be'
+      ];
       let isInactive = false;
       if (hasPool && !isSpam && !isCause && !ALWAYS_SHOW.includes(d.dao.toLowerCase())) {
         const tokenKey = d.meta.sharesToken.toLowerCase();
