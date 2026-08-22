@@ -6159,7 +6159,7 @@ async function fetchSaleHistory(sharesAddr) {
         if (a && b) filledSec = b.timestamp - a.timestamp;
       }
       return { burned, filledSec };
-    });
+    }, 20000); // a log range plus two blocks, against a default sized for one call
   } catch { return null; }
 }
 
@@ -6184,7 +6184,7 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
   const burned = hist ? hist.burned : null;
   const filled = hist ? fmtFillTime(hist.filledSec) : null;
   const E = ethers.parseEther('1');
-  const eth = v => fmtNum(Number(ethers.formatEther(v)));
+  const eth = v => fmtEthBal(Number(ethers.formatEther(v)));
   const net = heldShares * price / E;
   const known = burned !== null && burned > 0n;
   // Allowance is spent, so held plus burnt is everything the sale ever minted — the
