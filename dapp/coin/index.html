@@ -5803,7 +5803,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} shares for ${ethGlyph(12)} ETH
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
-          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Ragequit burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury.</div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury, paid immediately.${saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.' : ' Burnt shares are not returned to the sale for someone else to buy.'}</div>
           <div style="display:flex;gap:4px;margin-bottom:6px">
             <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Shares to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
             <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">shares</span>
@@ -6128,13 +6128,14 @@ async function loadCauseGovernance(daoAddr, gen) {
   }).join('');
 }
 
-// Redeeming burns shares, and the sale's allowance is spent at mint and never given
-// back — so a refund permanently removes that much capacity from the raise. There is
-// no counter for it on chain (Moloch.ragequit emits nothing), so it has to come from
-// burn logs, which only some RPCs will serve. Returns null when none will, and the
-// caller says the part it can always say.
-async function fetchRedeemedShares(sharesAddr) {
+// One pass over the shares token's Transfer log gives both halves of the sale's story:
+// mints (from zero) date it, burns (to zero) measure what came back. Moloch.ragequit
+// emits nothing of its own and no counter exists on chain, so this is the only source —
+// and not every RPC will serve logs. Returns null when none will, and callers fall back
+// to what they can say without it.
+async function fetchSaleHistory(sharesAddr) {
   const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 amount)']);
+  const Z32 = ethers.zeroPadValue(ZERO, 32);
   try {
     return await withRPC(async rpc => {
       const head = await rpc.getBlockNumber();
@@ -6142,13 +6143,33 @@ async function fetchRedeemedShares(sharesAddr) {
         address: sharesAddr,
         fromBlock: head - 9000 > 0 ? head - 9000 : 0,
         toBlock: head,
-        topics: [iface.getEvent('Transfer').topicHash, null, ethers.zeroPadValue(ZERO, 32)]
+        topics: [iface.getEvent('Transfer').topicHash]
       });
-      let burned = 0n;
-      for (const l of logs) burned += iface.parseLog(l).args.amount;
-      return burned;
+      let burned = 0n, firstMint = null, lastMint = null;
+      for (const l of logs) {
+        if (l.topics[2] === Z32) { burned += iface.parseLog(l).args.amount; continue; }
+        if (l.topics[1] === Z32) {
+          if (firstMint === null) firstMint = l.blockNumber;
+          lastMint = l.blockNumber;
+        }
+      }
+      let filledSec = null;
+      if (firstMint !== null && lastMint !== null && lastMint > firstMint) {
+        const [a, b] = await Promise.all([rpc.getBlock(firstMint), rpc.getBlock(lastMint)]);
+        if (a && b) filledSec = b.timestamp - a.timestamp;
+      }
+      return { burned, filledSec };
     });
   } catch { return null; }
+}
+
+// How long a sale took to fill, in words. Four hours against a nine day window is the
+// strongest thing this page can say about demand, and nothing was saying it.
+function fmtFillTime(sec) {
+  if (!sec || sec <= 0) return null;
+  if (sec < 5400) return `${Math.max(1, Math.round(sec / 60))} minutes`;
+  if (sec < 172800) return `${Math.round(sec / 3600)} hours`;
+  return `${Math.round(sec / 86400)} days`;
 }
 
 // The closing summary, in the space the buy form used to hold. It states the three
@@ -6158,8 +6179,10 @@ async function fetchRedeemedShares(sharesAddr) {
 async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
   const el = $('causeSaleClose');
   if (!el) return;
-  const burned = await fetchRedeemedShares(sharesAddr);
+  const hist = await fetchSaleHistory(sharesAddr);
   if (gen !== _renderGen || !el.isConnected) return;
+  const burned = hist ? hist.burned : null;
+  const filled = hist ? fmtFillTime(hist.filledSec) : null;
   const E = ethers.parseEther('1');
   const eth = v => fmtNum(Number(ethers.formatEther(v)));
   const net = heldShares * price / E;
@@ -6176,7 +6199,7 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
   el.innerHTML = `<div class="section-card">
     <div class="section-title" style="color:var(--green)">Sold out</div>
     <div style="font-size:22px;font-weight:700;display:inline-flex;align-items:center;gap:7px;margin-bottom:10px">
-      ${ethGlyph(20)}${eth(gross)} ETH<span style="font-size:12px;font-weight:400;color:var(--fg-muted)">raised</span>
+      ${ethGlyph(20)}${eth(gross)} ETH<span style="font-size:12px;font-weight:400;color:var(--fg-muted)">raised${filled ? ` in ${filled}` : ''}</span>
     </div>
     ${known ? `<div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border-muted)">
       ${figure('refunded', eth(burned * price / E) + ' ETH', 'var(--fg-muted)')}
