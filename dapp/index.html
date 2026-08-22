@@ -1900,11 +1900,16 @@ const ZORG_DAO_TOKEN = "0x00a6bA94BBb5474725515De88fE04F854f2dCb12";
 // way zOrg is — a first-party DAO token with a live zAMM ETH pool.
 const FWC_DAO_TOKEN = "0x883d646d0C8202Aa23F01d4aF45E4E73804c3a49";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)", "function ownerOf(uint256) view returns (address)"];
+// ipfs.io is listed last on purpose: it serves <img> fine but sends no
+// Access-Control-Allow-Origin, so every fetch() for a metadata document from a
+// browser fails CORS. It was first, which meant a cause's launchType could not be
+// read, the page fell back to the generic DAO render, and the gallery filed the
+// coin as low-liquidity. Our own pinning provider holds every zFi pin, so it leads.
 const IPFS_GATEWAYS = [
-  "https://ipfs.io/ipfs/",
   "https://ipfs.filebase.io/ipfs/",   // our own pinning provider — holds every zFi pin
   "https://dweb.link/ipfs/",
-  "https://w3s.link/ipfs/"
+  "https://w3s.link/ipfs/",
+  "https://ipfs.io/ipfs/"   // last: no CORS header, fetch() from a browser fails
 ];
 const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, WETH_ADDRESS, ZORG_DAO_TOKEN, ZORG_PAY_TOKEN, FWC_DAO_TOKEN, BOLD_ADDRESS, LUSD_ADDRESS, DAI_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, STETH_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS].map(a => a.toLowerCase()));
 // DAICO graduated coin discovery (search-triggered only)
@@ -4206,7 +4211,9 @@ async function updateBalances() {
 
     setText("fromBalance", `Balance: ${fromStr}`);
     setText("toBalance", `Balance: ${toStr}`);
-    ppUpdateDepositBalanceDisplay();
+    // privacy-pools.js is loaded on demand, so on any other tab this is simply not
+    // there yet — and calling it threw out of updateBalances on every refresh.
+    if (typeof ppUpdateDepositBalanceDisplay === 'function') ppUpdateDepositBalanceDisplay();
   } catch (e) {
     console.error("Balance update error:", e);
   }

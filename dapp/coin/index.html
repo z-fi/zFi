@@ -904,11 +904,16 @@ const ZERO = ethers.ZeroAddress;
 // Ordered gateway list, not a single host. Metadata drives launch-type routing
 // (renderCoinPage dispatches on metadata.launchType), so one unreachable gateway
 // used to mean a cause coin silently rendered as a generic legacy DAO page.
+// ipfs.io is listed last on purpose: it serves <img> fine but sends no
+// Access-Control-Allow-Origin, so every fetch() for a metadata document from a
+// browser fails CORS. It was first, which meant a cause's launchType could not be
+// read, the page fell back to the generic DAO render, and the gallery filed the
+// coin as low-liquidity. Our own pinning provider holds every zFi pin, so it leads.
 const IPFS_GWS = [
-  'https://ipfs.io/ipfs/',
   'https://ipfs.filebase.io/ipfs/',   // our own pinning provider — holds every zFi pin
   'https://dweb.link/ipfs/',
-  'https://w3s.link/ipfs/'
+  'https://w3s.link/ipfs/',
+  'https://ipfs.io/ipfs/'   // last: no CORS header, fetch() from a browser fails
 ];
 const IPFS_GW = IPFS_GWS[0];
 
@@ -933,24 +938,40 @@ function ipfsNormalize(uri) {
   return u;
 }
 
+// Gateways are raced, not walked. Walking them in order cost the FIRST gateway's
+// timeout before the second was even tried — 8s each, four of them, so a coin page
+// whose metadata lived behind a slow or dead host sat blank for up to 32 seconds
+// while every on-chain read had already landed in a few hundred milliseconds. The
+// detail page awaits this alongside its multicall, so that wait was the page.
+//
+// The documents are small, immutable and cached in localStorage after the first hit,
+// so asking four hosts at once costs little and returns at the speed of the fastest
+// one that answers. Order still expresses preference: a gateway earlier in the list
+// wins a tie, because a response already in hand beats one still in flight.
 async function ipfsFetchJson(uri, timeoutMs) {
   uri = ipfsNormalize(uri);
   const paths = uri.startsWith('ipfs://')
     ? IPFS_GWS.map(g => g + uri.slice(7))
     : [uri.startsWith('ar://') ? 'https://arweave.net/' + uri.slice(5) : uri];
-  let lastErr = null;
-  for (const url of paths) {
-    const ac = new AbortController();
-    const to = setTimeout(() => ac.abort(), timeoutMs || 8000);
-    try {
+
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), timeoutMs || 8000);
+  try {
+    return await Promise.any(paths.map(async (url, i) => {
+      // A few ms of stagger keeps the preferred gateway ahead without serialising.
+      if (i > 0) await new Promise(r => setTimeout(r, i * 120));
+      if (ac.signal.aborted) throw new Error('aborted');
       const r = await fetch(url, { signal: ac.signal });
       if (!r.ok) throw new Error('http ' + r.status);
       return await r.json();
-    } catch (e) {
-      lastErr = e;
-    } finally { clearTimeout(to); }
+    }));
+  } catch (e) {
+    // AggregateError when every gateway failed; surface something callers can log.
+    throw (e && e.errors && e.errors[0]) || e || new Error('unreachable');
+  } finally {
+    clearTimeout(to);
+    ac.abort(); // cancel the losers
   }
-  throw lastErr || new Error('unreachable');
 }
 
 // ABIs
