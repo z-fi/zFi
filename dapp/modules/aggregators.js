@@ -6,6 +6,32 @@ const _extPriceMaxSize = 100;
 // How long the quote will keep waiting on external aggregator prices once the
 // on-chain route is already decoded. See settleWithin below.
 const EXT_PRICE_DEADLINE_MS = 1500;
+
+// ---- Provider circuit breaker ----
+// An aggregator that answers 401/403/429 is not rate-limiting one request, it is
+// refusing this origin — OpenOcean's v4 endpoint began 403ing every call, and each
+// quote paid for a request that could never return a route while the console filled
+// with failures. Three consecutive refusals and the provider is left alone for the
+// rest of the session; anything that recovers on its own gets its counter reset by
+// the first response that is not a refusal.
+const _providerStrikes = new Map();
+const PROVIDER_STRIKE_LIMIT = 3;
+function providerIsDown(name) {
+  return (_providerStrikes.get(name) || 0) >= PROVIDER_STRIKE_LIMIT;
+}
+// A refusal is about the caller, not the pair: 404/422 usually mean "no route for
+// this pair", which is a normal answer and must not count against the provider.
+function noteProviderResponse(name, status) {
+  if (status === 401 || status === 403 || status === 429) {
+    const n = (_providerStrikes.get(name) || 0) + 1;
+    _providerStrikes.set(name, n);
+    if (n === PROVIDER_STRIKE_LIMIT) {
+      console.info(`[aggregators] ${name} refused ${n} times (last ${status}); skipping it this session.`);
+    }
+  } else {
+    _providerStrikes.delete(name);
+  }
+}
 function cachedFetch(key, fetchFn) {
   const cached = _extPriceCache.get(key);
   if (cached && Date.now() - cached.t < _extPriceTTL) {
@@ -438,6 +464,7 @@ function ooToken(addr) {
 }
 async function getOpenOceanPrice(sellToken, buyToken, sellAmount) {
   if (OPENOCEANOL_ADDRESS === ZERO_ADDRESS) return null;
+  if (providerIsDown('openocean')) return null;
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 4000);
   try {
@@ -447,6 +474,7 @@ async function getOpenOceanPrice(sellToken, buyToken, sellAmount) {
       slippage: '0.5', account: OPENOCEANOL_ADDRESS,
     });
     const resp = await fetch(`${OPENOCEAN_API}/v4/eth/swap?${params}`, { signal: ac.signal });
+    noteProviderResponse('openocean', resp.status);
     if (!resp.ok) return null;
     const json = await resp.json();
     const d = json?.data;
@@ -456,6 +484,7 @@ async function getOpenOceanPrice(sellToken, buyToken, sellAmount) {
 }
 async function getOpenOceanQuote(sellToken, buyToken, sellAmount, slippageBps) {
   if (OPENOCEANOL_ADDRESS === ZERO_ADDRESS) return null;
+  if (providerIsDown('openocean')) return null;
   const ac = new AbortController();
   const tid = setTimeout(() => ac.abort(), 5000);
   try {
@@ -466,6 +495,7 @@ async function getOpenOceanQuote(sellToken, buyToken, sellAmount, slippageBps) {
       account: OPENOCEANOL_ADDRESS,
     });
     const resp = await fetch(`${OPENOCEAN_API}/v4/eth/swap?${params}`, { signal: ac.signal });
+    noteProviderResponse('openocean', resp.status);
     if (!resp.ok) return null;
     const json = await resp.json();
     const d = json?.data;

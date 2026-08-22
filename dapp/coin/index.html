@@ -978,6 +978,13 @@ async function ipfsFetchJson(uri, timeoutMs) {
 // Until an indexer covers them, the handful worth showing are read straight off chain
 // and shaped like a scan row so every consumer below stays unchanged.
 const OUT_OF_BAND_CAUSES = ['0xD5dcE9BEE03e69362981afE48323A657fCceB8bE'];
+
+// Never bucketed away as low-liquidity, legacy or inactive. A cause has no zAMM pool
+// to price, so those buckets fall back to metadata — and metadata lives on IPFS, which
+// is exactly the read that can fail. The out-of-band causes are here by construction
+// rather than by a second copy of their addresses; the collector DAO joins them.
+const FWC_COLLECTOR_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
+const ALWAYS_SHOW_ADDRS = OUT_OF_BAND_CAUSES.map(a => a.toLowerCase()).concat([FWC_COLLECTOR_DAO]);
 const OOB_IFACE = new ethers.Interface([
   'function sales(address) view returns (address token, address payToken, uint40 deadline, uint256 price)',
   'function allowance(address token, address spender) view returns (uint256)',
@@ -3358,8 +3365,7 @@ async function _galleryRenderFresh(gen) {
       const isCause = md && md.launchType === 'cause';
       const isTest = cardName === 'test';
       if (isTest) testCount++;
-      const isAlwaysShown = ['0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853',
-                             '0xd5dce9bee03e69362981afe48323a657fcceb8be'].includes(cardAddr);
+      const isAlwaysShown = ALWAYS_SHOW_ADDRS.includes(cardAddr);
       const isLowMcap = !isTest && !isCause && !isAlwaysShown && mcapETH < 0.05;
       if (isLowMcap) lowMcapCount++;
       const isSpam = _spamSet.has(cardAddr);
@@ -3370,14 +3376,7 @@ async function _galleryRenderFresh(gen) {
       if (isLegacy) legacyCount++;
 
       // Determine if coin is inactive (no trades in last 3 days)
-      // FWC collector DAO is always shown, and so is the CELL cause: its metadata
-      // lives on IPFS, and when that read is slow or a gateway is down `md` comes back
-      // empty, which drops isCause to false — and a cause has no zAMM pool to price, so
-      // it lands in the low-liquidity bucket and vanishes from a gallery that counted it.
-      const ALWAYS_SHOW = [
-        '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853',
-        '0xd5dce9bee03e69362981afe48323a657fcceb8be'
-      ];
+      const ALWAYS_SHOW = ALWAYS_SHOW_ADDRS;
       let isInactive = false;
       if (hasPool && !isSpam && !isCause && !ALWAYS_SHOW.includes(d.dao.toLowerCase())) {
         const tokenKey = d.meta.sharesToken.toLowerCase();
