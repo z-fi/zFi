@@ -2764,8 +2764,10 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
     const pct = Number(raisedWei * 10000n / targetWei) / 100;
     const targetEth = Number(ethers.formatEther(targetWei));
     html += causeMeter(
-      `<span title="What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.">funded</span>`,
-      `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
+      pct >= 100 ? 'funded' : `<span title="What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.">funded</span>`,
+      pct >= 100
+        ? `<b>${fmtNum(raisedEth)}</b> ETH &middot; complete`
+        : `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
       pct, pct >= 100
     );
   } else if (raisedWei > 0n) {
@@ -5618,7 +5620,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
-  const saleEnded = !saleActive || (!isOpenCap && !contSaleActive && cap > 0n && sold >= cap);
+  const soldOut = !isOpenCap && !contSaleActive && cap > 0n && sold >= cap;
+  const saleEnded = !saleActive || soldOut;
 
   // Tap state — rate/beneficiary from TapVest.taps(), budget from DAO allowance
   const hasTap = tapData && BigInt(tapData.ratePerSec) > 0n;
@@ -5712,8 +5715,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
-        <div id="causeStatusVal" style="font-weight:600;color:${saleEnded ? 'var(--fg-muted)' : 'var(--green)'}">${saleEnded ? 'Ended' : 'Active'}</div>
-        <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
+        <div id="causeStatusVal" style="font-weight:600;color:${soldOut || !saleEnded ? 'var(--green)' : 'var(--fg-muted)'}">${soldOut ? 'Sold out' : saleEnded ? 'Ended' : 'Active'}</div>
+        <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${soldOut ? 'every share minted' : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
       </div>
     </div>
   `;
@@ -6015,7 +6018,8 @@ async function refreshCauseStats(daoAddr, metadata) {
     // sold-out sale, not an unmetered one.
     const isOpenCap = contSaleLive || cap >= 2n ** 128n
       || (saleAllowance === 0n && sold === 0n && price > 0n && saleActive);
-    const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
+    const soldOut = !isOpenCap && cap > 0n && sold >= cap;
+    const saleEnded = !saleActive || soldOut;
     const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
     const raisedEth = Number(ethers.formatEther(raisedWei));
     const treasuryEth = Number(ethers.formatEther(treasuryETH));
@@ -6049,12 +6053,12 @@ async function refreshCauseStats(daoAddr, metadata) {
     // Update status
     const statusEl = $('causeStatusVal');
     if (statusEl) {
-      statusEl.textContent = saleEnded ? 'Ended' : 'Active';
-      statusEl.style.color = saleEnded ? 'var(--fg-muted)' : 'var(--green)';
+      statusEl.textContent = soldOut ? 'Sold out' : saleEnded ? 'Ended' : 'Active';
+      statusEl.style.color = (soldOut || !saleEnded) ? 'var(--green)' : 'var(--fg-muted)';
     }
     const dlEl = $('causeDeadlineVal');
     if (dlEl) {
-      dlEl.textContent = saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline';
+      dlEl.textContent = soldOut ? 'every share minted' : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline';
       dlEl.style.color = (saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800) ? 'var(--red)' : 'var(--fg-dim)';
     }
 
@@ -6147,40 +6151,42 @@ async function fetchRedeemedShares(sharesAddr) {
   } catch { return null; }
 }
 
-// The closing summary, in the space the buy form used to hold. A sale that ends
-// short of its number looks like a shortfall unless the page says why, and here the
-// why is the refund guarantee working: people took money back, and every share they
-// returned was one the sale could no longer sell.
+// The closing summary, in the space the buy form used to hold. It states the three
+// figures and stops: what came in, what went back, what stayed. An earlier version led
+// with the net and then argued the refund was not a shortfall, which is a case nobody
+// asked it to make — and making it unprompted is what makes a number look like bad news.
 async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
   const el = $('causeSaleClose');
   if (!el) return;
   const burned = await fetchRedeemedShares(sharesAddr);
   if (gen !== _renderGen || !el.isConnected) return;
   const E = ethers.parseEther('1');
-  const raised = heldShares * price / E;
-  let detail;
-  if (burned !== null && burned > 0n) {
-    // Allowance is spent, so everything ever minted is held-plus-burnt: the number the
-    // sale was authorised for, recovered without needing to have recorded it.
-    const authorised = heldShares + burned;
-    detail = `<b style="color:var(--fg);font-weight:600">${fmtNum(Number(ethers.formatEther(burned * price / E)))} ETH</b> was redeemed while the sale ran.
-      Redeeming returns shares to the holder but not to the sale, so the raise closed at
-      ${fmtNum(Number(ethers.formatEther(raised)))} of the
-      ${fmtNum(Number(ethers.formatEther(authorised * price / E)))} ETH it was authorised for.
-      That is the refund guarantee working, not a shortfall.`;
-  } else {
-    detail = `Every share this sale was authorised to mint has been minted. Redeeming returns
-      shares to the holder but not to the sale, so any refund taken along the way lowered
-      what the raise could finally reach.`;
-  }
+  const eth = v => fmtNum(Number(ethers.formatEther(v)));
+  const net = heldShares * price / E;
+  const known = burned !== null && burned > 0n;
+  // Allowance is spent, so held plus burnt is everything the sale ever minted — the
+  // gross, recovered without the page having had to record it.
+  const gross = known ? (heldShares + burned) * price / E : net;
+
+  const figure = (label, value, tone) => `<div style="flex:1;min-width:96px">
+    <div style="font-size:9px;letter-spacing:0.05em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:3px">${label}</div>
+    <div style="font-size:15px;font-weight:600;color:${tone || 'var(--fg)'};font-variant-numeric:tabular-nums">${value}</div>
+  </div>`;
+
   el.innerHTML = `<div class="section-card">
-    <div class="section-title">Sale closed</div>
-    <div style="font-size:18px;font-weight:700;display:inline-flex;align-items:center;gap:6px;margin-bottom:2px">
-      ${ethGlyph(17)}${fmtNum(Number(ethers.formatEther(raised)))} ETH
+    <div class="section-title" style="color:var(--green)">Sold out</div>
+    <div style="font-size:22px;font-weight:700;display:inline-flex;align-items:center;gap:7px;margin-bottom:10px">
+      ${ethGlyph(20)}${eth(gross)} ETH<span style="font-size:12px;font-weight:400;color:var(--fg-muted)">raised</span>
     </div>
-    <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">held by ${fmtTokenAmount(heldShares.toString())} shares</div>
-    <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">${detail}</div>
-    <div style="font-size:10px;color:var(--fg-dim);margin-top:8px;line-height:1.5">Reopening it would take a DAO vote to grant the sale a fresh allowance.</div>
+    ${known ? `<div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border-muted)">
+      ${figure('refunded', eth(burned * price / E) + ' ETH', 'var(--fg-muted)')}
+      ${figure('net', eth(net) + ' ETH', 'var(--green)')}
+      ${figure('shares held', fmtTokenAmount(heldShares.toString()))}
+    </div>` : `<div style="font-size:11px;color:var(--fg-dim)">held by ${fmtTokenAmount(heldShares.toString())} shares</div>`}
+    <div style="font-size:10px;color:var(--fg-dim);margin-top:10px;line-height:1.5">
+      Every authorised share was minted. Redeemed shares are not put back up for sale;
+      reopening takes a DAO vote.
+    </div>
   </div>`;
 }
 
