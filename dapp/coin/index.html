@@ -2657,13 +2657,24 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
   return html;
 }
 
-// Days of runway left at the current tap rate, given what is in the treasury.
-function causeRunwayHTML(treasuryWei, ratePerSec) {
+// How long what is in the treasury lasts at the current tap rate.
+//
+// This is NOT runway while the sale is still filling: a cause that has raised 1% of
+// its goal will always show a short number, because the rate is sized to the whole
+// raise and the treasury only holds the part that has arrived. Calling that "runway"
+// and painting it red reads as "this project is dying" when it actually means "the
+// tap is faster than the money in the door" — true of every healthy cause on day one.
+// So the alarm is reserved for a sale that has finished, where the figure really is
+// how long the beneficiary can keep going.
+function causeRunwayHTML(treasuryWei, ratePerSec, saleEnded) {
   if (ratePerSec <= 0n || treasuryWei <= 0n) return '';
   const days = Number(treasuryWei / ratePerSec) / 86400;
   if (!isFinite(days) || days <= 0) return '';
-  const txt = days >= 365 ? '>1 year' : days >= 1 ? `~${Math.round(days)} days` : '<1 day';
-  return `<span style="color:${days < 14 ? 'var(--red)' : 'inherit'}">${txt} of runway at this rate</span>`;
+  const txt = days >= 365 ? '>1 year' : days >= 1 ? `~${Math.round(days)} days` : 'under a day';
+  const label = saleEnded
+    ? `${txt} of runway at this rate`
+    : `treasury covers ${txt} at this rate &middot; grows as the sale fills`;
+  return `<span style="color:${saleEnded && days < 14 ? 'var(--red)' : 'inherit'}">${label}</span>`;
 }
 
 // A balance is read, not computed against: six decimals of ETH is noise nobody acts on,
@@ -5342,7 +5353,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const ssIface = new ethers.Interface(SHARE_SALE_ABI);
   const tvIface = new ethers.Interface(TAP_VEST_ABI);
   const erc20I = new ethers.Interface(ERC20_ABI);
-  const daoAllowanceABI = ['function allowance(address spender, address token) view returns (uint256)'];
+  const daoAllowanceABI = ['function allowance(address token, address spender) view returns (uint256)'];
   const daoI = new ethers.Interface(daoAllowanceABI);
 
   const lootAddr = data.meta.lootToken;
@@ -5352,9 +5363,9 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
     { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
     // Remaining sale allowance — minting mode uses dao address as sentinel token
-    { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
+    { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, SHARE_SALE]) },
     // Remaining tap allowance = budget remaining
-    { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [TAP_VEST, ZERO]) },
+    { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [ZERO, TAP_VEST]) },
     // Loot total supply (needed for ragequit denominator: shares + loot)
     { target: lootAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) }
   ];
@@ -5618,18 +5629,25 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Tap vesting section
   if (hasTap) {
-    const budgetDisplay = tapOpenBudget ? 'unlimited' : Number(ethers.formatEther(tapBudget)).toFixed(4) + ' ETH';
-    const claimable = tapPending > tapBudget ? tapBudget : tapPending > treasuryETH ? treasuryETH : tapPending;
-    const pendingEth = Number(ethers.formatEther(claimable)).toFixed(4);
+    const budgetDisplay = tapOpenBudget ? 'unlimited' : fmtETH(tapBudget);
+    // Vesting accrues from the moment the tap was configured, not from the moment the
+    // money arrives, so a tap can be owed more than the DAO holds. TapVest pays
+    // min(vested, budget, treasury) — the shortfall is not forfeited, it lands the
+    // instant the treasury covers it, which is what a backer needs told before buying.
+    const vested = tapPending > tapBudget ? tapBudget : tapPending;
+    const claimable = vested > treasuryETH ? treasuryETH : vested;
+    const unfunded = vested - claimable;
+    const pendingEth = fmtEthBal(Number(ethers.formatEther(claimable)));
     const rateDisplay = tapInstant ? 'Instant (all funds to beneficiary)' : `~${tapRatePerDay < 0.0001 ? tapRatePerDay.toPrecision(2) : tapRatePerDay.toFixed(4)} ETH/day`;
     const beneficiaryShort = tapBeneficiary.slice(0, 6) + '\u2026' + tapBeneficiary.slice(-4);
     html += `
       <div class="section-card" style="background:var(--surface)">
         <div class="section-title">Tap Vesting</div>
-        ${(!tapInstant && treasuryETH > 0n) ? `<div id="causeTapRunway" style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">${causeRunwayHTML(treasuryETH, tapRate)}</div>` : ''}
+        ${(!tapInstant && treasuryETH > 0n) ? `<div id="causeTapRunway" style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">${causeRunwayHTML(treasuryETH, tapRate, saleEnded)}</div>` : ''}
         <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
           <dt>Rate</dt><dd>${rateDisplay}</dd>
           <dt>Claimable</dt><dd>~${pendingEth} ETH</dd>
+          ${unfunded > 0n ? `<dt>Vested, unfunded</dt><dd style="color:var(--red)">${fmtETH(unfunded)}</dd>` : ''}
           ${tapOpenBudget ? '' : `<dt>Remaining</dt><dd>${budgetDisplay}</dd>`}
           <dt>Beneficiary</dt><dd><a href="https://etherscan.io/address/${tapBeneficiary}" target="_blank" style="color:inherit">${beneficiaryShort}</a></dd>
         </dl>
@@ -5704,12 +5722,12 @@ async function refreshCauseStats(daoAddr, metadata) {
     if (!sharesAddr) return;
     const ssIface = new ethers.Interface(SHARE_SALE_ABI);
     const erc20I = new ethers.Interface(ERC20_ABI);
-    const daoI = new ethers.Interface(['function allowance(address spender, address token) view returns (uint256)']);
+    const daoI = new ethers.Interface(['function allowance(address token, address spender) view returns (uint256)']);
     const mc3Calls = [
       { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
       { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
       { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
-      { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [SHARE_SALE, daoAddr]) },
+      { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, SHARE_SALE]) },
     ];
     if (_connectedAddress) {
       mc3Calls.push({ target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
@@ -5795,7 +5813,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     const runwayEl = $('causeTapRunway');
     if (runwayEl) {
       const rate = BigInt($('app').dataset.tapRate || '0');
-      runwayEl.innerHTML = causeRunwayHTML(treasuryETH, rate);
+      runwayEl.innerHTML = causeRunwayHTML(treasuryETH, rate, saleEnded);
     }
 
     // Update stored data
