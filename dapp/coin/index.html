@@ -5608,7 +5608,13 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const now = Math.floor(Date.now() / 1000);
   const daicoSaleActive = saleDeadline === 0 || now < saleDeadline;
   const saleActive = daicoSaleActive || contSaleActive;
-  const isOpenCap = cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && daicoSaleActive) || contSaleActive;
+  // A sold-out sale and a sale that never used DAO allowances both read zero here, and
+  // treating the first as the second says "open-ended", drops the goal, keeps the buy
+  // form up and sends people at a buy() that reverts on remaining == 0. Shares already
+  // minted are the tell: if any exist, the allowance was set and is now spent.
+  const isOpenCap = cap >= 2n ** 128n
+    || (saleAllowance === 0n && sold === 0n && price > 0n && daicoSaleActive)
+    || contSaleActive;
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
@@ -6000,7 +6006,10 @@ async function refreshCauseStats(daoAddr, metadata) {
     // cap. Without this the 30s refresh flips Status back to "Ended" under an open sale.
     const contSaleLive = !!$('app')?.dataset?.contSale;
     const saleActive = contSaleLive || saleDeadline === 0 || now < saleDeadline;
-    const isOpenCap = contSaleLive || cap >= 2n ** 128n || (saleAllowance === 0n && price > 0n && saleActive);
+    // Same reading as the first render: zero allowance with shares already minted is a
+    // sold-out sale, not an unmetered one.
+    const isOpenCap = contSaleLive || cap >= 2n ** 128n
+      || (saleAllowance === 0n && sold === 0n && price > 0n && saleActive);
     const saleEnded = !saleActive || (!isOpenCap && cap > 0n && sold >= cap);
     const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
     const raisedEth = Number(ethers.formatEther(raisedWei));
