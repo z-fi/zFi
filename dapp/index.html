@@ -1586,6 +1586,14 @@ body.modal-open { overflow: hidden; }
     </div>
     <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="causeSellLoot" onchange="coinUpdatePreview()">
+        <span>Sell Loot</span>
+        <span style="font-size:11px;color:var(--fg-dim)">(optional &mdash; backers get non-voting loot; you keep governance)</span>
+      </label>
+      <div style="font-size:11px;color:var(--fg-dim);line-height:1.5;margin-bottom:4px">Loot redeems for its pro-rata share of the treasury exactly as shares do &mdash; it just does not vote.</div>
+    </div>
+    <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
         <input type="checkbox" id="causeTapEnabled" onchange="causeTapToggle()">
         <span>Tap Vesting</span>
         <span style="font-size:11px;color:var(--fg-dim)">(optional &mdash; drip treasury ETH to a beneficiary)</span>
@@ -10084,6 +10092,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Same sanitizers a typed edit goes through. A link is untrusted input, and
         // an unfiltered value only fails much later at submit time, where it reads as
         // a disabled button with no obvious cause.
+        if (_sp.get('loot') === '1') $('causeSellLoot').checked = true;
         if (_sp.get('raise')) coinSetNumFromURL('causeRaise', _sp.get('raise'), true);
         if (_sp.get('days')) coinSetNumFromURL('causeDeadline', _sp.get('days'), false);
         if (_sp.get('tap') === '1') {

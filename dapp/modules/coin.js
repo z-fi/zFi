@@ -42,6 +42,10 @@ const SHARE_OFFERING_ABI = [
   'function configure(address token, address payToken, uint256 price, uint40 deadline, uint256 cap)'
 ];
 const MOLOCH_ALLOWANCE_ABI = ['function setAllowance(address spender, address token, uint256 amount)'];
+// ShareOffering keys a sale to a mint sentinel: the DAO's own address mints shares,
+// address(1007) mints loot. Loot carries the same ragequit claim on the treasury and no
+// vote, so a cause can raise without handing governance to whoever shows up with ETH.
+const LOOT_SENTINEL = '0x00000000000000000000000000000000000003EF';
 const TAP_VEST = '0x0000000060cdD33cbE020fAE696E70E7507bF56D';
 
 // DUNABrandRenderer — composes the on-chain Wyoming DUNA covenant with a DAO's own
@@ -495,6 +499,8 @@ function coinUpdatePreview() {
     const raiseWei = (ongoing ? null : coinParseEth($('causeRaise').value)) ?? ethers.parseEther('10');
     const days = coinParseCount($('causeDeadline').value) ?? 30;
     const totalShares = ongoing ? 'unlimited' : '10M';
+    const sellLoot = !!$('causeSellLoot')?.checked;
+    const unit = sellLoot ? 'loot' : 'shares';
     const tapOn = $('causeTapEnabled').checked;
     const tapInstant = $('causeTapInstant').checked;
     const tapMonths = coinParseCount($('causeTapMonths').value) ?? 12;
@@ -532,15 +538,16 @@ function coinUpdatePreview() {
       (ongoing
         ? `<dt>Mode</dt><dd>Ongoing (no cap, no deadline)</dd>`
         : `<dt>Raise</dt><dd>${ethers.formatEther(raiseWei)} ${ethMini}</dd>`) +
-      `<dt>Shares</dt><dd>${totalShares} (proportional to ETH contributed)</dd>` +
-      `<dt>Price</dt><dd>${perMilStr} ${ethMini} per 1M shares</dd>` +
+      `<dt>${sellLoot ? 'Loot' : 'Shares'}</dt><dd>${totalShares} (proportional to ETH contributed)</dd>` +
+      `<dt>Price</dt><dd>${perMilStr} ${ethMini} per 1M ${unit}</dd>` +
       (ongoing ? '' : `<dt>Deadline</dt><dd>${days} days</dd>`) +
       (tapOn ? `<dt>Tap</dt><dd>${tapDesc}</dd>` : '') +
       // The creator buys their own single share at launch, so the tx carries
       // value. Surfacing it avoids a surprise in the wallet confirm dialog.
       `<dt>You pay now</dt><dd>${ethers.formatEther(priceWei)} ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable shares</div>` +
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
+      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Backers hold non-voting loot &mdash; redeemable pro-rata, no say in governance. Your founding share keeps the vote.</div>` : '') +
       // Say which legal wrapper the DAO launches under, and be honest about where
       // it lives: composed into contractURI itself, or declared in the metadata
       // while contractURI carries the pin.
@@ -733,6 +740,10 @@ async function coinLaunch() {
     } else {
       metadata.launchType = 'cause';
       metadata.creatorWallet = address;
+      // Which token the sale mints. The chain says the same thing through the offering's
+      // `token` sentinel; recording it here lets a reader label the raise before any
+      // contract read lands.
+      if ($('causeSellLoot')?.checked) metadata.saleToken = 'loot';
       // Declare the charter in the pinned document too, not only in the composed
       // renderer output. On the composed path this is belt-and-braces; on the pinned
       // path it is the only record, and it still points a reader at a renderer that
@@ -776,6 +787,10 @@ async function coinLaunch() {
     // --- Cause DAICO path (SafeSummoner.safeSummonDAICO) ---
     if (_coinLaunchType === 'cause') {
       const ongoing = _causeOngoing;
+      // Sell loot rather than shares: same ragequit claim on the treasury, no vote. The
+      // founder's single share is minted either way, so a loot raise leaves governance
+      // with the creator instead of handing it to whoever buys in.
+      const sellLoot = !!$('causeSellLoot')?.checked;
       // coinValidateForm() already rejected unparseable input; `?? 0n` only keeps
       // the ongoing branch (where these fields are hidden) from reading null.
       const raiseWei = ongoing ? 0n : (coinParseEth($('causeRaise').value) ?? 0n);
@@ -910,15 +925,23 @@ async function coinLaunch() {
       const predictedDao = coinPredict(initHolders, initShares, salt).dao;
       // The ceiling is a target SUPPLY, so the founder's single share counts toward it.
       // Everything else the offering may mint is sold.
-      const supplyCap = ongoing ? ethers.MaxUint256 : ethers.parseEther('10000000');
+      // Shares and loot are counted separately, and the founder's share only lands in the
+      // shares supply — so the loot ceiling is the sellable amount outright, while the
+      // shares ceiling has to carry that one founding share on top of it. Either way
+      // 9,999,999 units are for sale and the raise comes to the number on the form.
+      const supplyCap = ongoing ? ethers.MaxUint256
+        : ethers.parseEther(sellLoot ? '9999999' : '10000000');
       // Allowance is the outer bound on everything this contract may ever mint; the cap
       // is the live one. It has to exceed the cap or it becomes the binding number again
       // and refunds start shrinking the sale exactly as they did before.
+      // Both the allowance and the sale are keyed to the same mint sentinel, or the
+      // offering holds permission to mint one token and terms describing the other.
+      const saleToken = sellLoot ? LOOT_SENTINEL : predictedDao;
       extraCalls.push(
         [predictedDao, 0n, new ethers.Interface(MOLOCH_ALLOWANCE_ABI)
-          .encodeFunctionData('setAllowance', [SHARE_OFFERING, predictedDao, ethers.MaxUint256])],
+          .encodeFunctionData('setAllowance', [SHARE_OFFERING, saleToken, ethers.MaxUint256])],
         [SHARE_OFFERING, 0n, new ethers.Interface(SHARE_OFFERING_ABI)
-          .encodeFunctionData('configure', [predictedDao, ZERO_ADDRESS, priceWei, deadline, supplyCap])]
+          .encodeFunctionData('configure', [saleToken, ZERO_ADDRESS, priceWei, deadline, supplyCap])]
       );
 
       coinShowStatus('Please confirm the transaction in your wallet...');
@@ -960,8 +983,9 @@ async function coinLaunch() {
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
         (ongoing
-          ? `Sale: Ongoing &middot; 1 ETH = 1M shares<br>`
-          : `Sale: ${ethers.formatEther(raiseWei)} ETH &middot; 10M shares &middot; ${days}d<br>`) +
+          ? `Sale: Ongoing &middot; 1 ETH = 1M ${sellLoot ? 'loot' : 'shares'}<br>`
+          : `Sale: ${ethers.formatEther(raiseWei)} ETH &middot; 10M ${sellLoot ? 'loot' : 'shares'} &middot; ${days}d<br>`) +
+        (sellLoot ? `Backers hold non-voting loot &middot; you keep the vote<br>` : '') +
         tapSummary +
         `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
         ` &middot; <a href="./coin/#${daoAddress}">View Coin</a>` +

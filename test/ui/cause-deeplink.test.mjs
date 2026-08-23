@@ -164,6 +164,28 @@ test('cause deeplink', async (t) => {
     assert.equal(api.coinValidateForm(), null, 'form should fall back to a launchable default');
   });
 
+  await t.test('a loot cause sells loot and says so before it is launched', async () => {
+    // The only thing separating a loot raise from a share raise in the calldata is the
+    // mint sentinel the offering is configured with, and nothing downstream re-derives
+    // it — so the checkbox has to reach both the preview and the summon, or backers buy
+    // the wrong token with no sign anything went differently.
+    const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause&loot=1#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    assert.equal($(w, 'causeSellLoot').checked, true, 'the link did not tick the loot box');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /loot/i, 'the preview never mentions loot');
+    assert.match(preview, /non-voting/i, 'the preview does not say loot has no vote');
+  });
+
+  await t.test('a cause sells shares unless the loot box is ticked', async () => {
+    const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    assert.equal($(w, 'causeSellLoot').checked, false, 'loot is not the default');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /per 1M shares/, 'the default preview stopped pricing shares');
+    assert.ok(!/non-voting/i.test(preview), 'a share raise should not claim to be non-voting');
+  });
+
   await t.test('open-ended links skip the raise and deadline entirely', async () => {
     const { w, api, missing } = await boot('?symbol=BEE&name=Bees&mode=cause&ongoing=1#coin');
     if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
