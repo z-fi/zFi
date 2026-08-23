@@ -6351,6 +6351,236 @@ async function causeReopenPropose(daoAddr) {
   }
 }
 
+const PFACTORY = '0x000000Eb27B557aB426d9E99cFd54EC455799e81';
+const PRECISION_FEE = 3000n;            // 0.3%, zSwap's own default
+const LQ_WIDTHS = [1000, 100, 10, 2];   // widest first
+const LQ_WAD = 10n ** 18n;
+const SEL_POOLFOR = '0x83bd1387';
+const SEL_PAIR_COUNT = '0x355da246';
+const SEL_CREATE_SEED = '0x7163352a';
+const ZSWAP_URL = 'https://zswap.wei.limo/';
+
+function causeZSwapLink(sharesAddr, lq) {
+  return `${ZSWAP_URL}#token=eth&out=${sharesAddr}${lq ? '&lq=1' : ''}`;
+}
+
+const _w = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
+const _a = a => ethers.zeroPadValue((a || ZERO).toLowerCase(), 32).slice(2);
+
+// price (t1 per t0, human units) -> sqrt price in the factory's fixed-point form
+function pxToSqrt(px, d0, d1) {
+  const raw = px * 10 ** (d1 - d0);
+  if (!isFinite(raw) || raw <= 0) return 0n;
+  return BigInt(Math.round(Math.sqrt(raw) * 1e9)) * 10n ** 9n;
+}
+
+// The opening price a pair of deposits implies inside a band, by bisection.
+function lqSeedPrice(sl, sh, in0, in1) {
+  const L = Number(sl), H = Number(sh), x = Number(in0), y = Number(in1), W = 1e18;
+  const g = t => (x * t * H * (t - L)) / ((H - t) * W * y * W);
+  let lo = L, hi = H;
+  for (let i = 0; i < 90; i++) { const m = (lo + hi) / 2; if (g(m) < 1) lo = m; else hi = m; }
+  const t = (lo + hi) / 2;
+  if (!(t > L && t < H)) return 0n;
+  return BigInt(Math.round(t));
+}
+
+// token0, token1, sqrtLo, sqrtHi, fee, hook, owner, salt — flattened, as the factory wants it.
+function causeMarket(t0, t1, sl, sh) {
+  return _a(t0) + _a(t1) + _w(sl) + _w(sh) + _w(PRECISION_FEE) + _a(ZERO) + _a(ZERO) + _w(0);
+}
+
+function causeSortedPair(sharesAddr) {
+  return ZERO.toLowerCase() < sharesAddr.toLowerCase() ? [ZERO, sharesAddr] : [sharesAddr, ZERO];
+}
+
+// Ask the factory where this band would live. Deterministic, so it answers before the
+// pool exists — no CREATE2 arithmetic to reimplement or get wrong.
+async function causePoolFor(market) {
+  try {
+    const res = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_POOLFOR + market }));
+    const addr = ethers.getAddress('0x' + res.slice(-40));
+    return addr === ZERO ? null : addr;
+  } catch { return null; }
+}
+
+// Build the widest band the factory will actually accept for these amounts.
+async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
+  const [t0, t1] = causeSortedPair(sharesAddr);
+  const ethIs0 = t0 === ZERO;
+  const a0 = ethIs0 ? ethAmt : shareAmt;
+  const a1 = ethIs0 ? shareAmt : ethAmt;
+  const px = Number(ethers.formatEther(a1)) / Number(ethers.formatEther(a0));
+  if (!(px > 0)) return null;
+
+  for (const mult of LQ_WIDTHS) {
+    const sl = pxToSqrt(px / mult, 18, 18);
+    const sh = pxToSqrt(px * mult, 18, 18);
+    if (!sl || !sh || sh <= sl) continue;
+    const sp = lqSeedPrice(sl, sh, a0, a1);
+    if (!sp) continue;
+    const market = causeMarket(t0, t1, sl, sh);
+    const data = SEL_CREATE_SEED + market + _w(sp) + _w(a0) + _w(a1) + _w(0) + _a(from);
+    try {
+      // The factory is the authority on whether this seed is admissible. Ask it.
+      await withRPC(rpc => rpc.call({ from, to: PFACTORY, data, value: ethers.toBeHex(ethAmt) }));
+      return { mult, market, data, sl, sh, sp, px };
+    } catch { /* band refused — try a narrower one */ }
+  }
+  return null;
+}
+
+async function loadCausePool(daoAddr, sharesAddr, gen) {
+  const el = $('causePool');
+  if (!el) return;
+  const ds = $('app')?.dataset || {};
+  const treasury = BigInt(ds.treasury || '0');
+  const supply = BigInt(ds.sharesSupply || '0') + BigInt(ds.lootSupply || '0');
+  if (supply <= 0n) return;
+  const floor = treasury * LQ_WAD / supply;
+  // The price buyers actually paid is the honest opening mark: seeding under it sells
+  // the pool cheaper than the sale did, seeding over it marks your own book up.
+  const salePx = BigInt(ds.price || '0');
+  const held = BigInt(ds.userBalance || '0');
+  const sym = escText(ds.sym || 'shares');
+  $('app').dataset.floor = floor.toString();
+
+  // The band bounds are part of the market struct, so every width is a different pool
+  // address — probing one representative band would only answer "is there a 1000x pool",
+  // and the bounds of any band that does exist are unknowable from here anyway. pairCount
+  // is the question actually being asked: does this pair have any Precision pool at all.
+  const [t0, t1] = causeSortedPair(sharesAddr);
+  let pairPools = 0;
+  try {
+    const res = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_PAIR_COUNT + _a(t0) + _a(t1) }));
+    pairPools = Number(BigInt(res || '0x0'));
+  } catch {}
+  if (gen !== _renderGen || !el.isConnected) return;
+  const has = pairPools > 0;
+
+  el.innerHTML = `<div class="section-card">
+    <div class="section-title">Market</div>
+    <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
+      <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
+      ${salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
+      ${has ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
+    </dl>
+    ${has ? `<a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box" href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener">Trade $${sym} on zSwap</a>`
+    : `<div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
+        No market yet. A 0.3% full-range band gives $${sym} a price. Seed it above the
+        redemption number &mdash; a band under it is bought out and redeemed for the difference,
+        and the difference is the DAO's money.
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input id="causePoolEth" type="text" inputmode="decimal" placeholder="ETH" aria-label="ETH to seed"
+          style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote('eth')">
+        <input id="causePoolShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares to seed"
+          style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote('shares')">
+      </div>
+      ${held > 0n ? `<div style="font-size:10px;color:var(--fg-dim);margin-bottom:8px">
+        you hold ${fmtTokenAmount(held.toString())} &middot;
+        <a href="#" onclick="causePoolFill(${held / 4n}n);return false" style="color:var(--fg-muted);text-decoration:underline">quarter</a> &middot;
+        <a href="#" onclick="causePoolFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a> &middot;
+        <a href="#" onclick="causePoolFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a>
+      </div>` : ''}
+      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter both sides &mdash; the ratio sets the opening price</div>
+      <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeCreatePool('${sharesAddr}')">Create pool</button>
+      <div id="causePoolStatus" style="margin-top:8px"></div>
+      <div style="margin-top:8px;text-align:center">
+        <a href="${causeZSwapLink(sharesAddr, true)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Other fees and bands on zSwap &rarr;</a>
+      </div>`}
+  </div>`;
+}
+
+// The ratio is the whole decision, and it is the one part a person cannot do in their
+// head: 15,000 shares at 333 gwei is 0.004995 ETH, which nobody guesses. So typing one
+// side fills the other at the sale price, and typing over that fill takes control back.
+let _poolEthTouched = false;
+
+function causePoolFill(weiAmt) {
+  const box = $('causePoolShares');
+  if (!box) return;
+  box.value = ethers.formatEther(BigInt(weiAmt)).replace(/\.0$/, '');
+  _poolEthTouched = false;   // a balance shortcut is a fresh start, so re-pair the ETH side
+  causePoolQuote('shares');
+}
+
+function causePoolQuote(src) {
+  const el = $('causePoolQuote');
+  if (!el) return;
+  if (src === 'eth') _poolEthTouched = true;
+
+  const salePx = BigInt($('app')?.dataset.price || '0');
+  const floor = BigInt($('app')?.dataset.floor || '0');
+  const shBox = $('causePoolEth') && $('causePoolShares');
+
+  // Typing shares prices them at the sale price, unless the ETH side is being driven by hand.
+  if (src === 'shares' && !_poolEthTouched && salePx > 0n && shBox) {
+    const raw = $('causePoolShares').value.trim();
+    let paired = '';
+    if (raw) { try { paired = ethers.formatEther(ethers.parseEther(raw) * salePx / LQ_WAD); } catch {} }
+    $('causePoolEth').value = paired;
+  }
+
+  const e = parseFloat($('causePoolEth')?.value || '0');
+  const sh = parseFloat($('causePoolShares')?.value || '0');
+  if (!e || !sh || e <= 0 || sh <= 0) {
+    el.innerHTML = salePx > 0n
+      ? 'Enter shares &mdash; the ETH side fills at the sale price, and the ratio sets the opening price'
+      : 'Enter both sides &mdash; the ratio sets the opening price';
+    return;
+  }
+  let px;
+  try { px = ethers.parseEther(String(e)) * LQ_WAD / ethers.parseEther(String(sh)); }
+  catch { el.textContent = 'Enter a valid amount'; return; }
+
+  let html = `Opening price ${fmtPriceWei(px)} per share, 0.3% fee, full range.`;
+  if (salePx > 0n && px !== salePx) {
+    const d = Number((px - salePx) * 10000n / salePx) / 100;
+    html += ` ${d > 0 ? '+' : ''}${d.toFixed(1)}% vs the sale.`;
+  }
+  if (floor > 0n && px < floor) {
+    html += `<div style="color:var(--red);margin-top:4px">Below the ${fmtPriceWei(floor)} redemption price &mdash; this band can be bought out and redeemed for the difference.</div>`;
+  }
+  el.innerHTML = html;
+}
+
+
+async function causeCreatePool(sharesAddr) {
+  const status = $('causePoolStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const e = parseFloat($('causePoolEth')?.value || '0');
+  const sh = parseFloat($('causePoolShares')?.value || '0');
+  if (!e || !sh || e <= 0 || sh <= 0) { say('Enter both sides.'); return; }
+  try {
+    const me = await sgn.getAddress();
+    const ethAmt = ethers.parseEther(String(e));
+    const shAmt = ethers.parseEther(String(sh));
+
+    const token = new ethers.Contract(sharesAddr, ERC20_ABI, sgn);
+    if ((await token.allowance(me, PFACTORY)) < shAmt) {
+      say('Approving shares\u2026');
+      await (await token.approve(PFACTORY, ethers.MaxUint256)).wait();
+    }
+
+    say('Finding the widest band the factory accepts\u2026');
+    const band = await causeBand(sharesAddr, ethAmt, shAmt, me);
+    if (!band) { say('The factory refuses these amounts at every width. Try a different ratio or more of each side.', 'var(--red)'); return; }
+
+    say(`Confirm in your wallet \u2014 0.3% fee, ${band.mult}\u00d7 either side of ${fmtPriceWei(ethers.parseEther(String(e)) * LQ_WAD / ethers.parseEther(String(sh)))}.`);
+    const tx = await sgn.sendTransaction({ to: PFACTORY, data: band.data, value: ethAmt });
+    say(`Creating the pool\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Pool created.', 'var(--green)');
+    loadCausePool($('app')?.dataset.dao, sharesAddr, _renderGen).catch(() => {});
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
+  }
+}
+
 function causeSwitchMode(mode) {
   _causeBuyMode = mode;
   const sharesBtn = $('causeModeShares');
