@@ -2784,7 +2784,12 @@ function causeMeter(label, value, pct, full) {
 
 // Inner HTML of #causeMeters. Shared by first render and the live refresh so the
 // two can never drift.
-function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
+function causeMetersHTML(raisedWei, targetWei, treasuryWei, healing) {
+  // A ShareSale ceiling is what is left of a draining allowance, so redeeming lowers it.
+  // An offering's is a supply target the sale keeps whatever holders do.
+  const capNote = healing
+    ? 'The total this sale may raise, at the fixed price. Redeemed shares return their room to it, so it does not move.'
+    : 'What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.';
   const raisedEth = Number(ethers.formatEther(raisedWei));
   let html = '';
 
@@ -2792,7 +2797,7 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
     const pct = Number(raisedWei * 10000n / targetWei) / 100;
     const targetEth = Number(ethers.formatEther(targetWei));
     html += causeMeter(
-      pct >= 100 ? 'funded' : `<span title="What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.">funded</span>`,
+      pct >= 100 ? 'funded' : `<span title="${capNote}">funded</span>`,
       pct >= 100
         ? `<b>${fmtNum(raisedEth)}</b> ETH &middot; complete`
         : `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
@@ -5761,7 +5766,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Progress meters — ETH-denominated funding + funding progress. Shown
   // for open-ended sales too (as a running total), which the old shares-based bar
   // skipped entirely.
-  html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH)}</div>`;
+  html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH, usesOffering)}</div>`;
 
   // Buy form (if sale active); a closed sale gets its closing summary in the same place.
   if (saleEnded) html += `<div id="causeSaleClose"></div>`;
@@ -5818,7 +5823,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} shares for ${ethGlyph(12)} ETH
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
-          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury, paid immediately.${saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.' : ' Burnt shares are not returned to the sale for someone else to buy.'}</div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury, paid immediately.${usesOffering
+            ? ' Burnt shares return their room to the sale, so redeeming costs the raise nothing.'
+            : (saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.'
+                         : ' Burnt shares are not returned to the sale for someone else to buy.')}</div>
           <div style="display:flex;gap:4px;margin-bottom:6px">
             <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Shares to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
             <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">shares</span>
@@ -5907,7 +5915,9 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // somebody arriving at a finished cause is here to do. Folded shut for the same
   // reason the redeem panel is: available, not advertised.
   let reopenHTML = '';
-  if (saleEnded && !isOpenCap && price > 0n && userBalance > 0n
+  // Only reachable on the legacy singleton: an offering's ceiling survives redemption,
+  // so a sale on it never closes short and has nothing to reopen.
+  if (!usesOffering && saleEnded && !isOpenCap && price > 0n && userBalance > 0n
       && saleDeadline > 0 && saleDeadline - now > 172800) {
     const daysLeft = Math.floor((saleDeadline - now) / 86400);
     reopenHTML = `
@@ -6004,9 +6014,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   loadCausePool(daoAddr, sharesAddr, gen).catch(() => {});
 
-  if (saleEnded && sold > 0n && price > 0n) {
-    loadCauseSaleClose(daoAddr, sharesAddr, sold, price, gen).catch(() => {});
-  }
+  if (saleEnded && sold > 0n) loadCauseSaleClose(daoAddr, sharesAddr, gen).catch(() => {});
 
   // Proposals and chat come from a second read so they cannot delay first paint.
   loadCauseGovernance(daoAddr, gen).catch(() => {});
@@ -6124,7 +6132,7 @@ async function refreshCauseStats(daoAddr, metadata) {
 
     // Update progress meters
     const metersEl = $('causeMeters');
-    if (metersEl) metersEl.innerHTML = causeMetersHTML(raisedWei, targetWei, treasuryETH);
+    if (metersEl) metersEl.innerHTML = causeMetersHTML(raisedWei, targetWei, treasuryETH, usesOffering);
 
     // Runway moves with the treasury, so recompute it from the rate stashed at render
     const runwayEl = $('causeTapRunway');
@@ -6182,12 +6190,10 @@ async function loadCauseGovernance(daoAddr, gen) {
   }).join('');
 }
 
-// One pass over the shares token's Transfer log gives both halves of the sale's story:
-// mints (from zero) date it, burns (to zero) measure what came back. Moloch.ragequit
-// emits nothing of its own and no counter exists on chain, so this is the only source —
-// and not every RPC will serve logs. Returns null when none will, and callers fall back
-// to what they can say without it.
-async function fetchSaleHistory(sharesAddr) {
+// Mints date the sale: the first and last of them are when it opened and when it
+// filled. Not every RPC serves logs, so this returns null rather than pretending, and
+// the caller simply says less.
+async function fetchSaleFillTime(sharesAddr) {
   const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 amount)']);
   const Z32 = ethers.zeroPadValue(ZERO, 32);
   try {
@@ -6197,23 +6203,14 @@ async function fetchSaleHistory(sharesAddr) {
         address: sharesAddr,
         fromBlock: head - 9000 > 0 ? head - 9000 : 0,
         toBlock: head,
-        topics: [iface.getEvent('Transfer').topicHash]
+        topics: [iface.getEvent('Transfer').topicHash, Z32]
       });
-      let burned = 0n, firstMint = null, lastMint = null;
-      for (const l of logs) {
-        if (l.topics[2] === Z32) { burned += iface.parseLog(l).args.amount; continue; }
-        if (l.topics[1] === Z32) {
-          if (firstMint === null) firstMint = l.blockNumber;
-          lastMint = l.blockNumber;
-        }
-      }
-      let filledSec = null;
-      if (firstMint !== null && lastMint !== null && lastMint > firstMint) {
-        const [a, b] = await Promise.all([rpc.getBlock(firstMint), rpc.getBlock(lastMint)]);
-        if (a && b) filledSec = b.timestamp - a.timestamp;
-      }
-      return { burned, filledSec };
-    }, 20000); // a log range plus two blocks, against a default sized for one call
+      if (logs.length < 2) return null;
+      const [a, b] = await Promise.all([
+        rpc.getBlock(logs[0].blockNumber), rpc.getBlock(logs[logs.length - 1].blockNumber)
+      ]);
+      return a && b && b.timestamp > a.timestamp ? b.timestamp - a.timestamp : null;
+    }, 20000);
   } catch { return null; }
 }
 
@@ -6230,231 +6227,16 @@ function fmtFillTime(sec) {
 // figures and stops: what came in, what went back, what stayed. An earlier version led
 // with the net and then argued the refund was not a shortfall, which is a case nobody
 // asked it to make — and making it unprompted is what makes a number look like bad news.
-async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
+async function loadCauseSaleClose(daoAddr, sharesAddr, gen) {
   const el = $('causeSaleClose');
   if (!el) return;
-  const hist = await fetchSaleHistory(sharesAddr);
+  const filled = fmtFillTime(await fetchSaleFillTime(sharesAddr));
   if (gen !== _renderGen || !el.isConnected) return;
-  const burned = hist ? hist.burned : null;
-  const filled = hist ? fmtFillTime(hist.filledSec) : null;
-  const E = ethers.parseEther('1');
-  const eth = v => fmtEthBal(Number(ethers.formatEther(v)));
-  const net = heldShares * price / E;
-  const known = burned !== null && burned > 0n;
-  // Allowance is spent, so held plus burnt is everything the sale ever minted — the
-  // gross, recovered without the page having had to record it.
-  const gross = known ? (heldShares + burned) * price / E : net;
-
-  const figure = (label, value, tone) => `<div style="flex:1;min-width:96px">
-    <div style="font-size:9px;letter-spacing:0.05em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:3px">${label}</div>
-    <div style="font-size:15px;font-weight:600;color:${tone || 'var(--fg)'};font-variant-numeric:tabular-nums">${value}</div>
-  </div>`;
-
-  // The headline carries what was raised and the SOLD tile carries the share count, so
-  // repeating either here is noise. The one thing neither can say is how fast it went.
-  // The gross-versus-net arithmetic goes on hover, for the reader who wants to check
-  // rather than the reader who is scrolling past.
-  const detail = known
-    ? `${eth(gross)} ETH minted \u00b7 ${eth(burned * price / E)} refunded \u00b7 ${eth(net)} ETH net`
-    : '';
+  // The headline carries what was raised and the SOLD tile the share count. How fast it
+  // went is the only thing neither can say, so it is the only thing here.
   el.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">
-    <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}${known
-      ? ` &middot; <span title="${detail}" style="border-bottom:1px dotted var(--border);cursor:help">after refunds</span>`
-      : ''}
+    <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}
   </div>`;
-}
-
-// A cause seeds no pool at launch, so when its sale closes there is no way in for
-// anyone new and the shares have no price. Precision pools are that market.
-//
-// The band maths zSwap uses to validate a seed — lqSeedQuote and everything under it —
-// is ~150 lines of fixed-point that mirrors on-chain invariants exactly, and a copy of
-// it here could silently disagree with the factory about what is valid. So this ports
-// only the two small pure pieces it genuinely needs (a price to sqrt form, and the seed
-// price a pair of amounts implies) and lets the factory itself be the validator: every
-// candidate band is eth_called before it is offered, exactly as zSwap does before it
-// sends. Widest band that the contract accepts wins, which is what "full range" means
-// here — and it cannot drift from the contract, because the contract decides.
-const PFACTORY = '0x000000Eb27B557aB426d9E99cFd54EC455799e81';
-const PRECISION_FEE = 3000n;            // 0.3%, zSwap's own default
-const LQ_WIDTHS = [1000, 100, 10, 2];   // widest first
-const LQ_WAD = 10n ** 18n;
-const SEL_POOLFOR = '0x83bd1387';
-const SEL_PAIR_COUNT = '0x355da246';
-const SEL_CREATE_SEED = '0x7163352a';
-const ZSWAP_URL = 'https://zswap.wei.limo/';
-
-function causeZSwapLink(sharesAddr, lq) {
-  return `${ZSWAP_URL}#token=eth&out=${sharesAddr}${lq ? '&lq=1' : ''}`;
-}
-
-const _w = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
-const _a = a => ethers.zeroPadValue((a || ZERO).toLowerCase(), 32).slice(2);
-
-// price (t1 per t0, human units) -> sqrt price in the factory's fixed-point form
-function pxToSqrt(px, d0, d1) {
-  const raw = px * 10 ** (d1 - d0);
-  if (!isFinite(raw) || raw <= 0) return 0n;
-  return BigInt(Math.round(Math.sqrt(raw) * 1e9)) * 10n ** 9n;
-}
-
-// The opening price a pair of deposits implies inside a band, by bisection.
-function lqSeedPrice(sl, sh, in0, in1) {
-  const L = Number(sl), H = Number(sh), x = Number(in0), y = Number(in1), W = 1e18;
-  const g = t => (x * t * H * (t - L)) / ((H - t) * W * y * W);
-  let lo = L, hi = H;
-  for (let i = 0; i < 90; i++) { const m = (lo + hi) / 2; if (g(m) < 1) lo = m; else hi = m; }
-  const t = (lo + hi) / 2;
-  if (!(t > L && t < H)) return 0n;
-  return BigInt(Math.round(t));
-}
-
-// token0, token1, sqrtLo, sqrtHi, fee, hook, owner, salt — flattened, as the factory wants it.
-function causeMarket(t0, t1, sl, sh) {
-  return _a(t0) + _a(t1) + _w(sl) + _w(sh) + _w(PRECISION_FEE) + _a(ZERO) + _a(ZERO) + _w(0);
-}
-
-function causeSortedPair(sharesAddr) {
-  return ZERO.toLowerCase() < sharesAddr.toLowerCase() ? [ZERO, sharesAddr] : [sharesAddr, ZERO];
-}
-
-// Ask the factory where this band would live. Deterministic, so it answers before the
-// pool exists — no CREATE2 arithmetic to reimplement or get wrong.
-async function causePoolFor(market) {
-  try {
-    const res = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_POOLFOR + market }));
-    const addr = ethers.getAddress('0x' + res.slice(-40));
-    return addr === ZERO ? null : addr;
-  } catch { return null; }
-}
-
-// Build the widest band the factory will actually accept for these amounts.
-async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
-  const [t0, t1] = causeSortedPair(sharesAddr);
-  const ethIs0 = t0 === ZERO;
-  const a0 = ethIs0 ? ethAmt : shareAmt;
-  const a1 = ethIs0 ? shareAmt : ethAmt;
-  const px = Number(ethers.formatEther(a1)) / Number(ethers.formatEther(a0));
-  if (!(px > 0)) return null;
-
-  for (const mult of LQ_WIDTHS) {
-    const sl = pxToSqrt(px / mult, 18, 18);
-    const sh = pxToSqrt(px * mult, 18, 18);
-    if (!sl || !sh || sh <= sl) continue;
-    const sp = lqSeedPrice(sl, sh, a0, a1);
-    if (!sp) continue;
-    const market = causeMarket(t0, t1, sl, sh);
-    const data = SEL_CREATE_SEED + market + _w(sp) + _w(a0) + _w(a1) + _w(0) + _a(from);
-    try {
-      // The factory is the authority on whether this seed is admissible. Ask it.
-      await withRPC(rpc => rpc.call({ from, to: PFACTORY, data, value: ethers.toBeHex(ethAmt) }));
-      return { mult, market, data, sl, sh, sp, px };
-    } catch { /* band refused — try a narrower one */ }
-  }
-  return null;
-}
-
-async function loadCausePool(daoAddr, sharesAddr, gen) {
-  const el = $('causePool');
-  if (!el) return;
-  const ds = $('app')?.dataset || {};
-  const treasury = BigInt(ds.treasury || '0');
-  const supply = BigInt(ds.sharesSupply || '0') + BigInt(ds.lootSupply || '0');
-  if (supply <= 0n) return;
-  const floor = treasury * LQ_WAD / supply;
-  const sym = escText(ds.sym || 'shares');
-  $('app').dataset.floor = floor.toString();
-
-  // The band bounds are part of the market struct, so every width is a different pool
-  // address — probing one representative band would only answer "is there a 1000x pool",
-  // and the bounds of any band that does exist are unknowable from here anyway. pairCount
-  // is the question actually being asked: does this pair have any Precision pool at all.
-  const [t0, t1] = causeSortedPair(sharesAddr);
-  let pairPools = 0;
-  try {
-    const res = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_PAIR_COUNT + _a(t0) + _a(t1) }));
-    pairPools = Number(BigInt(res || '0x0'));
-  } catch {}
-  if (gen !== _renderGen || !el.isConnected) return;
-  const has = pairPools > 0;
-
-  el.innerHTML = `<div class="section-card">
-    <div class="section-title">Market</div>
-    <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-      <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
-      ${has ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
-    </dl>
-    ${has ? `<a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box" href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener">Trade $${sym} on zSwap</a>`
-    : `<div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
-        No market yet. A 0.3% full-range band gives $${sym} a price. Seed it above the
-        redemption number &mdash; a band under it is bought out and redeemed for the difference,
-        and the difference is the DAO's money.
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:6px">
-        <input id="causePoolEth" type="text" inputmode="decimal" placeholder="ETH" aria-label="ETH to seed"
-          style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote()">
-        <input id="causePoolShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares to seed"
-          style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote()">
-      </div>
-      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter both sides &mdash; the ratio sets the opening price</div>
-      <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeCreatePool('${sharesAddr}')">Create pool</button>
-      <div id="causePoolStatus" style="margin-top:8px"></div>
-      <div style="margin-top:8px;text-align:center">
-        <a href="${causeZSwapLink(sharesAddr, true)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Other fees and bands on zSwap &rarr;</a>
-      </div>`}
-  </div>`;
-}
-
-function causePoolQuote() {
-  const el = $('causePoolQuote');
-  if (!el) return;
-  const e = parseFloat($('causePoolEth')?.value || '0');
-  const sh = parseFloat($('causePoolShares')?.value || '0');
-  if (!e || !sh || e <= 0 || sh <= 0) { el.textContent = 'Enter both sides \u2014 the ratio sets the opening price'; return; }
-  let px;
-  try { px = ethers.parseEther(String(e)) * LQ_WAD / ethers.parseEther(String(sh)); }
-  catch { el.textContent = 'Enter a valid amount'; return; }
-  const floor = BigInt($('app')?.dataset.floor || '0');
-  let html = `Opening price ${fmtPriceWei(px)} per share, 0.3% fee, full range.`;
-  if (floor > 0n && px < floor) {
-    html += `<div style="color:var(--red);margin-top:4px">Below the ${fmtPriceWei(floor)} redemption price &mdash; this band can be bought out and redeemed for the difference.</div>`;
-  }
-  el.innerHTML = html;
-}
-
-async function causeCreatePool(sharesAddr) {
-  const status = $('causePoolStatus');
-  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
-  const sgn = _signer || await connectWallet();
-  if (!sgn) return;
-  const e = parseFloat($('causePoolEth')?.value || '0');
-  const sh = parseFloat($('causePoolShares')?.value || '0');
-  if (!e || !sh || e <= 0 || sh <= 0) { say('Enter both sides.'); return; }
-  try {
-    const me = await sgn.getAddress();
-    const ethAmt = ethers.parseEther(String(e));
-    const shAmt = ethers.parseEther(String(sh));
-
-    const token = new ethers.Contract(sharesAddr, ERC20_ABI, sgn);
-    if ((await token.allowance(me, PFACTORY)) < shAmt) {
-      say('Approving shares\u2026');
-      await (await token.approve(PFACTORY, ethers.MaxUint256)).wait();
-    }
-
-    say('Finding the widest band the factory accepts\u2026');
-    const band = await causeBand(sharesAddr, ethAmt, shAmt, me);
-    if (!band) { say('The factory refuses these amounts at every width. Try a different ratio or more of each side.', 'var(--red)'); return; }
-
-    say(`Confirm in your wallet \u2014 0.3% fee, ${band.mult}\u00d7 either side of ${fmtPriceWei(ethers.parseEther(String(e)) * LQ_WAD / ethers.parseEther(String(sh)))}.`);
-    const tx = await sgn.sendTransaction({ to: PFACTORY, data: band.data, value: ethAmt });
-    say(`Creating the pool\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
-    await tx.wait();
-    say('Pool created.', 'var(--green)');
-    loadCausePool($('app')?.dataset.dao, sharesAddr, _renderGen).catch(() => {});
-  } catch (err) {
-    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
-    say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
-  }
 }
 
 function causeSwitchMode(mode) {
