@@ -179,8 +179,30 @@ test('cause deeplink', async (t) => {
     assert.match(note, /non-voting/i, 'the option never says loot has no vote');
     const preview = $(w, 'coinCausePreview').textContent;
     assert.match(preview, /per 1M loot/, 'the preview still prices the raise in shares');
-    assert.match(preview, /founding share keeps the vote/i,
+    assert.match(preview, /founding share/i,
       'the preview does not say where the vote ends up');
+  });
+
+  await t.test('a loot raise says who holds the vote, not just who does not', async () => {
+    // Only shares vote and only shares count toward quorum, so a loot raise leaves the
+    // founder's single share as the entire electorate. That is the fact a backer needs
+    // before funding, and "non-voting loot" alone does not state it.
+    const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause&loot=1#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /whole electorate/i, 'the preview understates the founder\'s control');
+    assert.match(preview, /quorum/i, 'the preview does not say quorum is shares-only');
+  });
+
+  await t.test('loot plus a fast tap says what that costs a backer', async () => {
+    // Ragequit reaches the treasury; a fast tap empties it in about an hour. Each is
+    // disclosed on its own, and the combination is the one that leaves a backer least.
+    const { w, missing } = await boot(
+      '?symbol=BEE&name=Bees&mode=cause&loot=1&tap=1&instant=1&beneficiary=' + BENEFICIARY + '#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /only reaches what is still in the treasury/i,
+      'the fast-tap-plus-loot combination is not called out');
   });
 
   await t.test('a cause sells shares unless the loot box is ticked', async () => {

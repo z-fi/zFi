@@ -31,8 +31,23 @@ const PRECISION_LAUNCHER = '0x0000002fC8E77585A008Aa45d78A71ad36293aEe';
 const PRECISION_LAUNCHER_LENS = '0x00000041201F1542EE49F9722b2590DEDFE4296B';
 const PRECISION_LAUNCH_ABI = [
   'function launch(string name,string symbol,string uri,uint256 supply,uint256 allocBps,uint256 startMcapWei,address owner) returns (address token,address pool)',
+  'function launchWithArt(string name,string symbol,string uri,uint256 supply,uint256 allocBps,uint256 startMcapWei,address owner,bytes image,uint8 mime) returns (address token,address pool)',
   'event Launched(address indexed token,address indexed pool,address indexed creator,uint256 supply,uint256 allocBps,uint256 startMcapWei)'
 ];
+// On-chain art. The launcher stores the image as contract code, so a launched coin
+// carries its own logo with no pinning service to keep paying and no gateway to go
+// dark — which is why the coin path does not touch IPFS at all any more.
+//
+// IMPORTANT: with an image stored, the token's contractURI() assembles its own JSON
+// document and uses the stored `uri` string as the DESCRIPTION. So the coin path
+// passes the description there, not a metadata pointer. See PrecisionLauncher.
+const COIN_MIME = { 'image/png': 0, 'image/webp': 1, 'image/svg+xml': 2, 'image/gif': 3, 'image/jpeg': 4 };
+const COIN_MIME_NAME = ['image/png', 'image/webp', 'image/svg+xml', 'image/gif', 'image/jpeg', 'image/avif'];
+// The contract's own ceiling is one SSTORE2 write; the budget is what we compress
+// toward, since calldata is 16 gas a byte and nobody wants a 24 KB launch.
+const COIN_MAX_ART = 24575;
+const COIN_ART_BUDGET = 8192;
+
 // Mirrors the launcher's own guards, so the form rejects what the contract would.
 const COIN_MAX_ALLOC_BPS = 2000n;      // 20%
 const COIN_MIN_MCAP_WEI = 1000000000000n;
@@ -469,8 +484,14 @@ function coinSetLaunchType(type) {
   const nftWrap = $('coinNftWrap'); if (nftWrap) nftWrap.style.display = isNft ? '' : 'none';
   $('coinCurvePreviewWrap').style.display = 'none';
   $('coinCausePreviewWrap').style.display = 'none';
-  // Socials irrelevant for NFT auctions; symbol field too (single asset, no ticker).
-  $('coinSocialsWrap').style.display = isNft ? 'none' : '';
+  // Socials have nowhere to live on a coin: its metadata is the document the token
+  // assembles itself, which carries a name, a symbol, a description and an image and
+  // nothing else. Rather than collect links that would be silently dropped, hide them —
+  // same reasoning as NFT mode, different cause.
+  $('coinSocialsWrap').style.display = (isNft || isCoin) ? 'none' : '';
+  // Banner likewise: on-chain art is the logo only.
+  const bannerLabel = document.querySelector('label[for="coinBannerInput"]');
+  if (bannerLabel) bannerLabel.style.display = isCoin ? 'none' : '';
   const symWrap = document.querySelector('#coinTab .coin-name-row > .section:nth-child(2)');
   if (symWrap) symWrap.style.display = isNft ? 'none' : '';
 
@@ -601,7 +622,14 @@ function coinUpdatePreview() {
       `<dt>You pay now</dt><dd><b>${ethers.formatEther(priceWei)}</b> ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
-      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share keeps the vote.</div>` : '') +
+      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share is the whole electorate &mdash; only shares vote and only shares count toward quorum, so you carry every proposal alone. Backers fund the treasury and can ragequit out of it; they cannot govern it.</div>` : '') +
+      // Ragequit reaches the treasury, not money already out of it. A fast tap empties
+      // the treasury in about an hour, so the two together leave a backer with the least
+      // of any combination this form can produce — which is worth saying at the moment
+      // both boxes are ticked, not in a doc nobody opens.
+      (sellLoot && tapOn && tapInstant
+        ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">With a fast tap, the raise reaches the beneficiary in about an hour, and ragequit only reaches what is still in the treasury.</div>`
+        : '') +
       // Say which legal wrapper the DAO launches under, and be honest about where
       // it lives: composed into contractURI itself, or declared in the metadata
       // while contractURI carries the pin.
@@ -647,7 +675,8 @@ function coinUpdatePreview() {
       `<dt>You pay now</dt><dd><b>0</b> ${ethMini} <span style="color:var(--fg-dim)">(gas only)</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">Full-range pool on zFi&rsquo;s AMM &middot; liquidity locked in the launcher &middot; collectable fees split 80% creator / 10% protocol / 10% burned to Ethereum</div>` +
-      `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Holders can always burn back to the launcher for their share of the pool&rsquo;s ether.</div>`;
+      `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Holders can always burn back to the launcher for their share of the pool&rsquo;s ether.</div>` +
+      `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Name, symbol, description and logo are stored on the token as contract code &mdash; no IPFS, nothing to pin, no gateway to go dark. All editable later.</div>`;
     $('coinCurvePreviewWrap').style.display = '';
     $('coinCausePreviewWrap').style.display = 'none';
   }
@@ -701,6 +730,54 @@ function coinGenerateBanner(text) {
 
 function coinSvgToFile(svg, filename) {
   return new File([svg], filename, { type: 'image/svg+xml' });
+}
+
+// ---- On-chain art ----
+// Squeeze an image down to something worth putting in calldata. Ported from the
+// zSwap launcher form so a coin launched from either page compresses identically.
+// Tries progressively smaller sides and lossier encodings, returns the first that
+// fits the budget, and falls back to the smallest that at least fits the contract.
+const _coinBlobText = b => b.text ? b.text() : new Promise((res, rej) => {
+  const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsText(b);
+});
+const _coinBlobBytes = async b => b.arrayBuffer ? new Uint8Array(await b.arrayBuffer()) : await new Promise((res, rej) => {
+  const r = new FileReader(); r.onload = () => res(new Uint8Array(r.result)); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b);
+});
+
+async function coinPrepareArt(file) {
+  // SVG is already the smallest form of a flat mark — strip the parts a renderer
+  // does not need rather than rasterising something that was never a bitmap.
+  if (/svg/.test(file.type)) {
+    const bytes = new TextEncoder().encode((await _coinBlobText(file))
+      .replace(/<\?xml[^>]*\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE[^>]*>/gi, '')
+      .replace(/>\s+</g, '><').trim());
+    if (bytes.length > COIN_MAX_ART) {
+      throw new Error(`That SVG is ${(bytes.length / 1024).toFixed(1)} KB and the on-chain limit is 24 KB.`);
+    }
+    return { bytes, mime: COIN_MIME['image/svg+xml'] };
+  }
+  const bmp = await createImageBitmap(file);
+  let smallest = null;
+  for (const side of [512, 384, 256, 192, 128, 96, 64]) {
+    for (const [type, q] of [['image/webp', 1], ['image/png', undefined], ['image/webp', 0.85], ['image/webp', 0.6]]) {
+      const sc = Math.min(1, side / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(bmp.width * sc));
+      cv.height = Math.max(1, Math.round(bmp.height * sc));
+      const cx = cv.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise(r => cv.toBlob(r, type, q));
+      // A browser that cannot encode the requested type hands back a PNG under the
+      // wrong label, which would be stored with a mime that does not match its bytes.
+      if (!blob || blob.type !== type) continue;
+      const bytes = await _coinBlobBytes(blob);
+      if (!smallest || bytes.length < smallest.bytes.length) smallest = { bytes, mime: COIN_MIME[type] };
+      if (bytes.length <= COIN_ART_BUDGET) return { bytes, mime: COIN_MIME[type] };
+    }
+  }
+  if (smallest && smallest.bytes.length <= COIN_MAX_ART) return smallest;
+  throw new Error('That image will not compress small enough. Flat colours and simple shapes do far better than photographs.');
 }
 
 async function coinPinFile(file, cachedCID) {
@@ -798,7 +875,78 @@ async function coinLaunch() {
     const address = await _signer.getAddress();
     coinShowStatus('Preparing coin launch...');
 
-    // Pin images + metadata to IPFS (or fallback to data URI)
+    // --- PrecisionLauncher path: nothing off-chain ---
+    // No pin, no CID, no gateway. The launcher stores the image as contract code and
+    // assembles the whole ERC-7572 document on read, so the coin describes itself with
+    // no external dependency — which is also why this path returns before the IPFS
+    // block below that the cause path still needs.
+    if (_coinLaunchType === 'coin') {
+      const supply = coinParseSupply($('coinSupply').value) ?? 0n;
+      const supplyWei = supply * 10n ** 18n;
+      const mcapWei = coinParseEth($('coinMcap').value) ?? 0n;
+      const allocBps = coinParseAllocBps($('coinAlloc').value) ?? 0n;
+
+      // A launch always carries a mark. With no upload the generated SVG goes
+      // on-chain too — it is a few hundred bytes and it means no coin ever renders
+      // as a broken image.
+      coinShowStatus(_coinImageFile ? 'Compressing logo\u2026' : 'Generating logo\u2026');
+      const art = await coinPrepareArt(_coinImageFile
+        || coinSvgToFile(coinGenerateLogo(symbol), 'logo.svg'));
+
+      const launchIface = new ethers.Interface(PRECISION_LAUNCH_ABI);
+      const data = launchIface.encodeFunctionData('launchWithArt', [
+        name,                       // token name
+        symbol,                     // token symbol
+        desc,                       // becomes the document's `description`
+        supplyWei,                  // total supply, 18 decimals
+        allocBps,                   // creator allocation, bps of supply
+        mcapWei,                    // opening valuation of the POOLED supply, in wei
+        address,                    // owner: metadata rights, creator fees, allocation
+        '0x' + Array.from(art.bytes, b => b.toString(16).padStart(2, '0')).join(''),
+        art.mime
+      ]);
+
+      coinShowStatus('Please confirm the transaction in your wallet...');
+      const tx = await _signer.sendTransaction({ to: PRECISION_LAUNCHER, data });
+      coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
+      const receipt = await tx.wait();
+
+      // The token address is CREATE-derived from the launcher's nonce, so unlike the
+      // CREATE2 path this replaced it cannot be predicted before the tx — the event
+      // is the only source.
+      let tokenAddress = null, poolAddress = null;
+      const launchedTopic = ethers.id('Launched(address,address,address,uint256,uint256,uint256)');
+      for (const log of receipt.logs) {
+        if (log.topics[0] === launchedTopic && log.address.toLowerCase() === PRECISION_LAUNCHER.toLowerCase()) {
+          tokenAddress = ethers.getAddress('0x' + log.topics[1].slice(26));
+          poolAddress = ethers.getAddress('0x' + log.topics[2].slice(26));
+          break;
+        }
+      }
+
+      // The coin list is enumerated from the launcher and cached, so without this a
+      // creator who just launched would not find their own coin on the list they get
+      // sent to.
+      if (tokenAddress) window.launchRegistry?.note(tokenAddress);
+
+      const allocPct = Number(allocBps) / 100;
+      launched = true;
+      coinShowStatus(
+        `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
+        (tokenAddress ? `Token: <a href="https://etherscan.io/address/${tokenAddress}" target="_blank">${tokenAddress}</a><br>` : '') +
+        `Supply: ${coinAbbrevCount(supply)} &middot; Pooled: ${allocBps ? (100 - allocPct) + '%' : '100%'}` +
+        (allocBps ? ` &middot; You keep: ${allocPct}%` : '') + `<br>` +
+        `Opening market cap: ${ethers.formatEther(mcapWei)} ETH &middot; 1% swap fee<br>` +
+        `<span style="font-size:11px;color:var(--fg-dim)">Name, symbol, description and logo all live on the token itself</span><br><br>` +
+        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
+        (tokenAddress ? ` &middot; <a href="./coin/#${tokenAddress}">View Coin</a>` : '') +
+        (poolAddress ? ` &middot; <a href="https://etherscan.io/address/${poolAddress}" target="_blank">Pool</a>` : '')
+      );
+      return;
+    }
+
+    // Pin images + metadata to IPFS (or fallback to data URI). Cause only — the coin
+    // path returned above with everything on-chain.
     const metadata = { name, symbol };
     if (desc) metadata.description = desc;
     const twitter = $('coinTwitter').value.trim().replace(/^@/,'');
@@ -808,24 +956,18 @@ async function coinLaunch() {
     if (telegram) metadata.telegram = telegram;
     if (discord) metadata.discord = discord;
     if (_coinTemplate) metadata.template = _coinTemplate;
-    if (_coinLaunchType === 'coin') {
-      metadata.launchType = 'curve';
-      metadata.creator = '';
-      metadata.creatorWallet = address;
-    } else {
-      metadata.launchType = 'cause';
-      metadata.creatorWallet = address;
-      // Which token the sale mints. The chain says the same thing through the offering's
-      // `token` sentinel; recording it here lets a reader label the raise before any
-      // contract read lands.
-      if ($('causeSellLoot')?.checked) metadata.saleToken = 'loot';
-      // Declare the charter in the pinned document too, not only in the composed
-      // renderer output. On the composed path this is belt-and-braces; on the pinned
-      // path it is the only record, and it still points a reader at a renderer that
-      // regenerates this DAO's covenant against live state.
-      metadata.charter = 'duna';
-      metadata.charterSource = 'eip155:1:' + (coinCauseUsesDUNA() ? DUNA_RENDERER : COIN_RENDERER);
-    }
+    metadata.launchType = 'cause';
+    metadata.creatorWallet = address;
+    // Which token the sale mints. The chain says the same thing through the offering's
+    // `token` sentinel; recording it here lets a reader label the raise before any
+    // contract read lands.
+    if ($('causeSellLoot')?.checked) metadata.saleToken = 'loot';
+    // Declare the charter in the pinned document too, not only in the composed
+    // renderer output. On the composed path this is belt-and-braces; on the pinned
+    // path it is the only record, and it still points a reader at a renderer that
+    // regenerates this DAO's covenant against live state.
+    metadata.charter = 'duna';
+    metadata.charterSource = 'eip155:1:' + (coinCauseUsesDUNA() ? DUNA_RENDERER : COIN_RENDERER);
     if (_coinImageFile) {
       coinShowStatus('Uploading logo to IPFS...');
       _coinImageCID = await coinPinFile(_coinImageFile, _coinImageCID);
@@ -1070,70 +1212,6 @@ async function coinLaunch() {
       return;
     }
 
-    // --- PrecisionLauncher path ---
-    if (_coinLaunchType === 'coin') {
-      // The launcher stores this string verbatim as the token's ERC-7572
-      // contractURI, so the pinned document is what every reader resolves.
-      // NOTE: do NOT also store an on-chain image through the launcher's
-      // `launchWithArt`/`setImage` — with an image set, contractURI() assembles
-      // its own document and demotes this URI to the `description` field, which
-      // would strand the banner, socials and description pinned above.
-      const metadataUri = orgURI;
-
-      const supply = coinParseSupply($('coinSupply').value) ?? 0n;
-      const supplyWei = supply * 10n ** 18n;
-      const mcapWei = coinParseEth($('coinMcap').value) ?? 0n;
-      const allocBps = coinParseAllocBps($('coinAlloc').value) ?? 0n;
-
-      const launchIface = new ethers.Interface(PRECISION_LAUNCH_ABI);
-      const data = launchIface.encodeFunctionData('launch', [
-        name,          // token name
-        symbol,        // token symbol
-        metadataUri,   // contractURI — IPFS pointer, or inline JSON fallback
-        supplyWei,     // total supply, 18 decimals
-        allocBps,      // creator allocation, bps of supply
-        mcapWei,       // opening valuation of the POOLED supply, in wei
-        address        // owner: holds metadata rights, collects creator fees,
-                       // and receives the allocation
-      ]);
-
-      coinShowStatus('Please confirm the transaction in your wallet...');
-      const tx = await _signer.sendTransaction({ to: PRECISION_LAUNCHER, data });
-      coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
-      const receipt = await tx.wait();
-
-      // The token address is CREATE-derived from the launcher's nonce, so unlike
-      // the CREATE2 path this replaced it cannot be predicted before the tx —
-      // the event is the only source.
-      let tokenAddress = null, poolAddress = null;
-      const launchedTopic = ethers.id('Launched(address,address,address,uint256,uint256,uint256)');
-      for (const log of receipt.logs) {
-        if (log.topics[0] === launchedTopic && log.address.toLowerCase() === PRECISION_LAUNCHER.toLowerCase()) {
-          tokenAddress = ethers.getAddress('0x' + log.topics[1].slice(26));
-          poolAddress = ethers.getAddress('0x' + log.topics[2].slice(26));
-          break;
-        }
-      }
-
-      // The coin list is enumerated from the launcher and cached, so without this
-      // a creator who just launched would not find their own coin on the list
-      // they get sent to.
-      if (tokenAddress) window.launchRegistry?.note(tokenAddress);
-
-      const allocPct = Number(allocBps) / 100;
-      launched = true;
-      coinShowStatus(
-        `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
-        (tokenAddress ? `Token: <a href="https://etherscan.io/address/${tokenAddress}" target="_blank">${tokenAddress}</a><br>` : '') +
-        `Supply: ${coinAbbrevCount(supply)} &middot; Pooled: ${allocBps ? (100 - allocPct).toFixed(allocPct % 1 ? 2 : 0) + '%' : '100%'}` +
-        (allocBps ? ` &middot; You keep: ${allocPct}%` : '') + `<br>` +
-        `Opening market cap: ${ethers.formatEther(mcapWei)} ETH &middot; 1% swap fee<br><br>` +
-        `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
-        (tokenAddress ? ` &middot; <a href="./coin/#${tokenAddress}">View Coin</a>` : '') +
-        (poolAddress ? ` &middot; <a href="https://etherscan.io/address/${poolAddress}" target="_blank">Pool</a>` : '')
-      );
-      return;
-    }
   } catch (e) {
     if ((e.message || '').toLowerCase().includes('user rejected') || e.code === 'ACTION_REJECTED') {
       coinShowStatus('Launch cancelled', false);
