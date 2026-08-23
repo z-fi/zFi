@@ -547,7 +547,7 @@ function coinUpdatePreview() {
       `<dt>You pay now</dt><dd>${ethers.formatEther(priceWei)} ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
-      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Backers hold non-voting loot &mdash; redeemable pro-rata, no say in governance. Your founding share keeps the vote.</div>` : '') +
+      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share keeps the vote.</div>` : '') +
       // Say which legal wrapper the DAO launches under, and be honest about where
       // it lives: composed into contractURI itself, or declared in the metadata
       // while contractURI carries the pin.

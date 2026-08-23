@@ -711,7 +711,7 @@ body.modal-open { overflow: hidden; }
   .coin-upload-banner { height:50px; }
   #coinLaunchBtn { min-height:48px;font-size:14px; }
   #coinSocialsWrap button { min-height:44px; }
-  #causeTapEnabled, #causeTapInstant { width:20px;height:20px; }
+  #causeSellLoot, #causeTapEnabled, #causeTapInstant { width:20px;height:20px; }
 }
 @media (max-width: 380px) {
   body { padding: 70px 12px 20px; }
@@ -811,6 +811,19 @@ body.modal-open { overflow: hidden; }
 }
 
 /* Coin tab */
+/* An optional extra, stated as a checkbox and a sentence. The base `label` rule is
+   uppercase and tracked out, which is right for a field name and wrong for the sentence
+   explaining it — without the override the note shouts as loudly as the option it
+   qualifies. The name holds its line so a two-word option cannot break in half under
+   flex ("SELL" / "LOOT"); the note is what wraps. */
+.coin-opt { display:flex;align-items:baseline;gap:8px;cursor:pointer;margin-bottom:10px; }
+.coin-opt input[type="checkbox"] { flex-shrink:0;align-self:flex-start;margin:1px 0 0; }
+.coin-opt-name { white-space:nowrap;flex-shrink:0;color:var(--fg-muted); }
+.coin-opt-note {
+  font-size:11px;color:var(--fg-dim);text-transform:none;letter-spacing:normal;line-height:1.5;
+}
+.coin-opt input[type="checkbox"]:checked ~ .coin-opt-name { color:var(--fg); }
+
 .coin-name-row { display:flex;gap:12px;margin-bottom:14px; }
 .coin-name-row .section { flex:2;margin-bottom:0; }
 .coin-name-row .section:last-child { flex:1; }
@@ -1585,18 +1598,15 @@ body.modal-open { overflow: hidden; }
       <div style="font-size:12px;color:var(--fg-dim);line-height:1.5">Open-ended fundraise. No target, no deadline. Anyone can contribute ETH for shares at any time. <span style="text-decoration:underline;cursor:pointer" onclick="causeSetOngoing(false)">Set a target instead</span></div>
     </div>
     <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+      <label class="coin-opt">
         <input type="checkbox" id="causeSellLoot" onchange="coinUpdatePreview()">
-        <span>Sell Loot</span>
-        <span style="font-size:11px;color:var(--fg-dim)">(optional &mdash; backers get non-voting loot; you keep governance)</span>
+        <span class="coin-opt-name">Sell Loot</span>
+        <span class="coin-opt-note">backers hold non-voting loot &mdash; same pro-rata claim on the treasury, no say in governance</span>
       </label>
-      <div style="font-size:11px;color:var(--fg-dim);line-height:1.5;margin-bottom:4px">Loot redeems for its pro-rata share of the treasury exactly as shares do &mdash; it just does not vote.</div>
-    </div>
-    <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+      <label class="coin-opt">
         <input type="checkbox" id="causeTapEnabled" onchange="causeTapToggle()">
-        <span>Tap Vesting</span>
-        <span style="font-size:11px;color:var(--fg-dim)">(optional &mdash; drip treasury ETH to a beneficiary)</span>
+        <span class="coin-opt-name">Tap Vesting</span>
+        <span class="coin-opt-note">drip treasury ETH to a beneficiary</span>
       </label>
       <div id="causeTapFields" style="display:none">
         <div class="section" style="margin-bottom:10px">
@@ -1604,10 +1614,10 @@ body.modal-open { overflow: hidden; }
           <input type="text" id="causeTapBeneficiary" placeholder="0x address, name.wei, or name.eth" style="font-size:16px" oninput="onCoinAddressInput('causeTapBeneficiary','causeTapBeneficiaryResolved')">
           <div id="causeTapBeneficiaryResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+        <label class="coin-opt">
           <input type="checkbox" id="causeTapInstant" onchange="causeTapInstantToggle()">
-          <span>Fast</span>
-          <span style="font-size:11px;color:var(--fg-dim)">(funds go to the beneficiary with no vesting schedule &mdash; the full raise is withdrawable after about an hour)</span>
+          <span class="coin-opt-name">Fast</span>
+          <span class="coin-opt-note">no vesting schedule &mdash; the full raise is withdrawable after about an hour</span>
         </label>
         <div id="causeTapRateFields">
           <div id="causeTapMonthsWrap" style="margin-bottom:10px">

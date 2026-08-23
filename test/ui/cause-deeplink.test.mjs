@@ -172,9 +172,15 @@ test('cause deeplink', async (t) => {
     const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause&loot=1#coin');
     if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
     assert.equal($(w, 'causeSellLoot').checked, true, 'the link did not tick the loot box');
+    // The two surfaces divide the statement between them and neither repeats the
+    // other: the checkbox says what you are choosing, the preview says what it does
+    // to governance once deployed. Both halves have to be present.
+    const note = w.document.querySelector('#causeSellLoot ~ .coin-opt-note').textContent;
+    assert.match(note, /non-voting/i, 'the option never says loot has no vote');
     const preview = $(w, 'coinCausePreview').textContent;
-    assert.match(preview, /loot/i, 'the preview never mentions loot');
-    assert.match(preview, /non-voting/i, 'the preview does not say loot has no vote');
+    assert.match(preview, /per 1M loot/, 'the preview still prices the raise in shares');
+    assert.match(preview, /founding share keeps the vote/i,
+      'the preview does not say where the vote ends up');
   });
 
   await t.test('a cause sells shares unless the loot box is ticked', async () => {
@@ -183,7 +189,8 @@ test('cause deeplink', async (t) => {
     assert.equal($(w, 'causeSellLoot').checked, false, 'loot is not the default');
     const preview = $(w, 'coinCausePreview').textContent;
     assert.match(preview, /per 1M shares/, 'the default preview stopped pricing shares');
-    assert.ok(!/non-voting/i.test(preview), 'a share raise should not claim to be non-voting');
+    assert.ok(!/keeps the vote/i.test(preview),
+      'a share raise should not claim the founder keeps the vote');
   });
 
   await t.test('open-ended links skip the raise and deadline entirely', async () => {
