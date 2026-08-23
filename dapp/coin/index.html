@@ -7030,7 +7030,106 @@ const BOARD_PF_ABI = [
   'function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB)',
   'function fillOrderWithEth(uint256 orderId, uint256 deadline) payable',
   'function fillOrderUnwrap(uint256 orderId, uint256 deadline, uint256 fillAmountB)',
+  // Orders are posted on the partial-fill board so a thin coin's large order can be
+  // taken in pieces. An all-or-nothing bid for 20,000 shares is a bid almost nobody
+  // holds enough to fill.
+  'function createOrder(address tokenA, uint256 amountA, address tokenB, uint256 amountB, bool partialFill) returns (uint256)',
+  'function createOrderWithEth(address tokenB, uint256 amountB, bool partialFill) payable returns (uint256)',
 ];
+
+let _orderSide = 'bid';
+
+function causeOrderToggle() {
+  const f = $('causeOrderForm');
+  if (!f) return;
+  const open = f.style.display === 'none';
+  f.style.display = open ? '' : 'none';
+  const b = $('causeOrderOpen');
+  if (b) b.textContent = open ? 'cancel' : '+ post';
+  if (open) causeOrderSide(_orderSide);
+}
+
+function causeOrderSide(side) {
+  _orderSide = side;
+  for (const t of ['bid', 'ask']) {
+    const b = $('causeOrderTab_' + t);
+    if (b) {
+      b.style.color = t === side ? 'var(--fg)' : 'var(--fg-dim)';
+      b.style.borderBottomColor = t === side ? 'var(--fg)' : 'transparent';
+    }
+  }
+  const go = $('causeOrderGo');
+  if (go) go.textContent = !_connectedAddress ? 'Connect wallet'
+    : (side === 'bid' ? 'Post bid' : 'Post ask');
+  causeOrderQuote();
+}
+
+// A limit order is a price and a size; the ETH leg follows from them. Asking for the ETH
+// leg directly is how you get orders priced by accident.
+function causeOrderQuote() {
+  const el = $('causeOrderQuote');
+  if (!el) return;
+  const sh = parseFloat(($('causeOrderShares')?.value || '').trim() || '0');
+  const gw = parseFloat(($('causeOrderPrice')?.value || '').trim() || '0');
+  const go = $('causeOrderGo');
+  if (!sh || !gw || sh <= 0 || gw <= 0) {
+    el.textContent = 'How many shares, and at what price each';
+    if (go) go.disabled = !!_connectedAddress;
+    return;
+  }
+  let ethWei;
+  try { ethWei = ethers.parseEther(String(sh)) * BigInt(Math.round(gw * 1e9)) / LQ_WAD; }
+  catch { el.textContent = 'Enter a valid amount'; return; }
+  if (ethWei <= 0n) { el.textContent = 'Too small to price'; if (go) go.disabled = true; return; }
+  if (go) go.disabled = false;
+  const floor = BigInt($('app')?.dataset.floor || '0');
+  const sym = escText(($('app')?.dataset.sym) || 'shares');
+  el.innerHTML = _orderSide === 'bid'
+    ? `You lock ${fmtNum(Number(ethers.formatEther(ethWei)))} ETH and receive up to ${fmtTokenAmount(ethers.parseEther(String(sh)).toString())} ${sym} if filled.`
+    : `You lock ${fmtTokenAmount(ethers.parseEther(String(sh)).toString())} ${sym} and receive up to ${fmtNum(Number(ethers.formatEther(ethWei)))} ETH if filled.`;
+  if (floor > 0n && BigInt(Math.round(gw * 1e9)) < floor) {
+    el.innerHTML += `<div style="color:var(--red);margin-top:3px">Below the ${causeGwei(floor)} redemption price. A holder does better burning the shares than filling this.</div>`;
+  }
+}
+
+async function causeOrderPost() {
+  const st = $('causeBookStatus');
+  const say = (m, c) => { if (st) st.innerHTML = m ? `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>` : ''; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const sh = parseFloat(($('causeOrderShares')?.value || '').trim() || '0');
+  const gw = parseFloat(($('causeOrderPrice')?.value || '').trim() || '0');
+  if (!sh || !gw || sh <= 0 || gw <= 0) { say('Enter a size and a price.'); return; }
+  const shares = _causePoolCache?.shares || $('app')?.dataset.shares;
+  if (!shares) return;
+  try {
+    const me = await sgn.getAddress();
+    const shWei = ethers.parseEther(String(sh));
+    const ethWei = shWei * BigInt(Math.round(gw * 1e9)) / LQ_WAD;
+    const board = new ethers.Contract(SWAPBOARD_PF, BOARD_PF_ABI, sgn);
+    let tx;
+    if (_orderSide === 'bid') {
+      // Paying ETH: the board wraps it, so the maker never handles WETH either.
+      say('Confirm in your wallet\u2026');
+      tx = await board.createOrderWithEth(shares, shWei, true, { value: ethWei });
+    } else {
+      const token = new ethers.Contract(shares, ERC20_ABI, sgn);
+      if ((await token.allowance(me, SWAPBOARD_PF)) < shWei) {
+        say('Approving shares\u2026');
+        await (await token.approve(SWAPBOARD_PF, ethers.MaxUint256)).wait();
+      }
+      say('Confirm in your wallet\u2026');
+      tx = await board.createOrder(shares, shWei, BOARD_WETH, ethWei, true);
+    }
+    say(`Posting\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Posted.', 'var(--green)');
+    await loadCausePool($('app')?.dataset.dao, shares, _renderGen, true).catch(() => {});
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
+  }
+}
 
 let _causeBook = [];
 
@@ -7238,8 +7337,32 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-muted)">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
           <span style="font-size:10px;letter-spacing:0.08em;color:var(--fg-dim)">ORDERS${_causeBook.length ? ` <span style="color:var(--fg-muted)">${_causeBook.length}</span>` : ''}</span>
-          <a href="../orderbook/?token0=${encodeURIComponent(ZERO)}&token1=${encodeURIComponent(sharesAddr)}&label1=${encodeURIComponent(sym)}" style="font-size:10px;color:var(--fg-muted);text-decoration:underline">post an order &rarr;</a>
+          <button id="causeOrderOpen" onclick="causeOrderToggle()" style="background:none;border:none;color:var(--fg-muted);font:inherit;font-size:10px;text-decoration:underline;cursor:pointer;padding:0">+ post</button>
         </div>
+
+        <div id="causeOrderForm" style="display:none;border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="display:flex;gap:14px;border-bottom:1px solid var(--border-muted);margin-bottom:10px">
+            <button id="causeOrderTab_bid" onclick="causeOrderSide('bid')" style="background:none;border:none;border-bottom:2px solid var(--fg);color:var(--fg);font:inherit;font-size:11px;padding:0 0 6px;cursor:pointer">Bid</button>
+            <button id="causeOrderTab_ask" onclick="causeOrderSide('ask')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:11px;padding:0 0 6px;cursor:pointer">Ask</button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:baseline">
+            <input id="causeOrderShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares"
+              style="flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font:inherit;font-size:15px;outline:none;padding:4px 0" oninput="causeOrderQuote()">
+            <span style="font-size:10px;color:var(--fg-dim)">at</span>
+            <span style="flex:1;min-width:0;display:inline-flex;align-items:baseline;gap:4px">
+              <input id="causeOrderPrice" type="text" inputmode="decimal" placeholder="price" aria-label="Price per share in gwei"
+                style="flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font:inherit;font-size:15px;outline:none;padding:4px 0" oninput="causeOrderQuote()">
+              <span style="font-size:10px;color:var(--fg-dim)">gwei</span>
+            </span>
+          </div>
+          <div id="causeOrderQuote" style="font-size:11px;color:var(--fg-muted);margin:10px 0;min-height:30px;line-height:1.5">How many shares, and at what price each</div>
+          <button id="causeOrderGo" class="swap-btn" style="width:100%;font-size:12px" onclick="causeOrderPost()" disabled>Post bid</button>
+          <div style="font-size:10px;color:var(--fg-dim);margin-top:8px;line-height:1.5">
+            Partial fills are allowed, so a large order can be taken in pieces. It rests
+            until filled or cancelled &mdash; cancel from the <a href="../orderbook/?token0=${encodeURIComponent(ZERO)}&token1=${encodeURIComponent(sharesAddr)}&label1=${encodeURIComponent(sym)}" style="color:var(--fg-muted)">orderbook</a>.
+          </div>
+        </div>
+
         ${causeBookHTML(_causeBook, sym)}
         <div id="causeBookStatus" style="margin-top:8px"></div>
       </div>
