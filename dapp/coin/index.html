@@ -6611,8 +6611,43 @@ async function causeTape(poolAddr, ethIs0) {
 // on one axis: where the coin trades relative to the floor it can always be redeemed at.
 // So this is a price ruler, not a time series — floor on the left, spot on the right,
 // fills marked where they landed. Log-spaced, because day one spans 24x.
+// Once the tape holds enough distinct bars to have a shape, time is worth an axis and
+// the ruler stops being the better picture. Below that it is not: three prints on a time
+// axis is a dot and a lot of whitespace, which is what a lone candle looks like too.
+function causeTimeChart(bars, floorWei, spotWei) {
+  const closes = bars.map(b => b.c).filter(v => v > 0);
+  const floor = Number(floorWei || 0), spot = Number(spotWei || 0);
+  const all = closes.concat([floor, spot].filter(v => v > 0));
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const L = Math.log(lo * 0.9), span = Math.log(hi * 1.1) - L || 1;
+  const W = 300, H = 74, PAD = 4;
+  const y = v => PAD + (1 - (Math.log(v) - L) / span) * (H - PAD * 2);
+  const x = i => PAD + (i / (bars.length - 1)) * (W - PAD * 2);
+
+  let svg = '';
+  for (const [v, col] of [[floor, 'var(--fg-dim)'], [spot, 'var(--green)']]) {
+    if (v > 0) svg += `<line x1="0" y1="${y(v).toFixed(1)}" x2="${W}" y2="${y(v).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`;
+  }
+  svg += `<polyline points="${bars.map((b, i) => `${x(i).toFixed(1)},${y(b.c).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--fg-muted)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  bars.forEach((b, i) => { svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(b.c).toFixed(1)}" r="2" fill="var(--fg-muted)"/>`; });
+
+  const trades = bars.reduce((t, b) => t + b.n, 0);
+  return `<div style="margin:2px 0 12px">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block"
+      role="img" aria-label="executed price over time against the redemption floor">${svg}</svg>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:2px">
+      <span>${fmtPriceWei(BigInt(Math.round(floor)))} floor</span>
+      <span>${trades} fill${trades === 1 ? '' : 's'} &middot; executed, fee included</span>
+      <span style="color:var(--green)">${fmtPriceWei(BigInt(Math.round(spot)))} now</span>
+    </div></div>`;
+}
+
 function causeChart(bars, floorWei, saleWei, spotWei) {
   const floor = Number(floorWei || 0), spot = Number(spotWei || 0), sale = Number(saleWei || 0);
+  // Three bars is the point where a line says more than a ruler does.
+  if (bars.filter(b => b.c > 0).length >= 3 && Number(spotWei) > 0) {
+    return causeTimeChart(bars.filter(b => b.c > 0), floorWei, spotWei);
+  }
   const fills = bars.filter(b => b.c > 0).map(b => b.c);
   const all = [floor, spot, sale, ...fills].filter(v => v > 0);
   if (all.length < 2) return '';
@@ -6769,54 +6804,72 @@ function _encSnwap(tokenIn, amountIn, recipient, tokenOut, minOut, executor, dat
 }
 
 let _causeGlyph = '';
+let _causeEthBalFetching = false;
 let _swapSide = 'buy';
 let _swapSeq = 0;
 let _swapQuote = null;
 
+function causeSwapFlip() {
+  causeSwapSide(_swapSide === 'buy' ? 'sell' : 'buy');
+}
+
+// Paints both halves of the tile from one side value, so the two can never disagree
+// about which way the trade runs — which they did when the tabs were markup and the
+// direction was a module variable that a repaint did not touch.
 function causeSwapSide(side) {
   _swapSide = side;
-  for (const t of ['buy', 'sell']) {
-    const b = $('causeSwapTab_' + t);
-    if (b) {
-      b.style.color = t === side ? 'var(--fg)' : 'var(--fg-dim)';
-      b.style.borderBottomColor = t === side ? 'var(--fg)' : 'transparent';
-    }
-  }
   const ds = $('app')?.dataset || {};
   const sym = escText(ds.sym || 'shares');
-  const symEl = $('causeSwapSym');
-  if (symEl) symEl.innerHTML = side === 'buy'
-    ? `${ethGlyph(15)}<span style="margin-left:5px">ETH</span>`
-    : `${_causeGlyph}<span style="margin-left:5px">${sym}</span>`;
+  const held = BigInt(ds.userBalance || '0');
+  const bal = _ethBalance || 0n;
+  const buying = side === 'buy';
+
+  const ethTag = `${ethGlyph(15)}<span style="margin-left:5px">ETH</span>`;
+  const coinTag = `${_causeGlyph}<span style="margin-left:5px">${sym}</span>`;
+  const inSym = $('causeSwapSym'), outSym = $('causeSwapOutSym');
+  if (inSym) inSym.innerHTML = buying ? ethTag : coinTag;
+  if (outSym) outSym.innerHTML = buying ? coinTag : ethTag;
+
   const inp = $('causeSwapAmt');
   if (inp) inp.value = '';
+  const out = $('causeSwapOut');
+  if (out) out.textContent = '0.0';
 
-  // Both sides get a balance and a max. On the buy side max holds a little ETH back:
-  // spending the whole balance leaves nothing to pay for the transaction doing it.
-  const hold = $('causeSwapHold');
+  // The pay side carries the balance and its shortcuts; the receive side just says
+  // what you already hold, so there is nothing to click that would overwrite a quote.
+  const hold = $('causeSwapHold'), outHold = $('causeSwapOutHold');
+  const ethLine = _connectedAddress ? `balance ${fmtNum(Number(ethers.formatEther(bal)))} ETH` : 'connect to trade';
+  const coinLine = held > 0n ? `you hold ${fmtTokenAmount(held.toString())}` : 'you hold none';
   if (hold) {
-    if (side === 'buy') {
-      const bal = _ethBalance || 0n;
-      const GAS_KEEP = 3000000000000000n;   // 0.003 ETH
+    if (buying) {
+      // Max keeps a little ETH back: spending the whole balance leaves nothing to pay
+      // for the transaction that spends it.
+      const GAS_KEEP = 3000000000000000n;
       const max = bal > GAS_KEEP ? bal - GAS_KEEP : 0n;
-      hold.innerHTML = _connectedAddress
-        ? `<span>balance ${fmtNum(Number(ethers.formatEther(bal)))} ETH</span>`
-          + (max > 0n ? `<a href="#" onclick="causeSwapFill(${max}n);return false" style="color:var(--fg-muted);text-decoration:underline">max</a>` : '')
-        : `<span>connect to trade</span>`;
+      hold.innerHTML = `<span>${ethLine}</span>`
+        + (max > 0n ? `<a href="#" onclick="causeSwapFill(${max}n);return false" style="color:var(--fg-muted);text-decoration:underline">max</a>` : '');
     } else {
-      const held = BigInt(ds.userBalance || '0');
-      hold.innerHTML = held > 0n
-        ? `<span>you hold ${fmtTokenAmount(held.toString())}</span>
-           <span><a href="#" onclick="causeSwapFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a>
-           &middot; <a href="#" onclick="causeSwapFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a></span>`
-        : `<span>you hold none</span>`;
+      hold.innerHTML = `<span>${coinLine}</span>`
+        + (held > 0n ? `<span><a href="#" onclick="causeSwapFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a>
+           &middot; <a href="#" onclick="causeSwapFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a></span>` : '');
     }
   }
+  if (outHold) outHold.textContent = buying ? coinLine : ethLine;
+
   const go = $('causeSwapGo');
-  if (go) go.innerHTML = side === 'buy'
-    ? `Buy ${_causeGlyph} ${sym}` : `Sell ${_causeGlyph} ${sym}`;
+  if (go) go.innerHTML = buying ? `Buy ${_causeGlyph} ${sym}` : `Sell ${_causeGlyph} ${sym}`;
   _swapQuote = null;
   causeSwapQuote();
+  // _ethBalance is filled by loadBalances, which needs a signer and the coin data and so
+  // may not have run when this paints. A connected wallet being told it holds 0 ETH is
+  // worse than a blank, so fetch it once and repaint rather than believing the default.
+  if (buying && _connectedAddress && bal === 0n && !_causeEthBalFetching) {
+    _causeEthBalFetching = true;
+    withRPC(rpc => rpc.getBalance(_connectedAddress))
+      .then(v => { if (v > 0n) { _ethBalance = v; if ($('causeSwapAmt') && _swapSide === 'buy') causeSwapSide('buy'); } })
+      .catch(() => {})
+      .finally(() => { _causeEthBalFetching = false; });
+  }
 }
 
 function causeSwapFill(weiAmt) {
@@ -6838,6 +6891,8 @@ async function causeSwapQuote() {
   if (!amt || amt <= 0) {
     el.textContent = _swapSide === 'buy' ? 'How much ETH to spend' : 'How many shares to sell';
     _swapQuote = null; if (btn) btn.disabled = true;
+    const ob = $('causeSwapOut');
+    if (ob) { ob.textContent = '0.0'; ob.style.color = 'var(--fg-dim)'; }
     return;
   }
   let amountIn;
@@ -6865,6 +6920,13 @@ async function causeSwapQuote() {
     const slipPct = spot > 0n ? Number((eff - spot) * 10000n / spot) / 100 : null;
     _swapQuote = { pool, out, amountIn, tokenIn, eff };
     if (btn) btn.disabled = false;
+    const outBox = $('causeSwapOut');
+    if (outBox) {
+      outBox.textContent = _swapSide === 'buy'
+        ? fmtTokenAmount(out.toString())
+        : fmtNum(Number(ethers.formatEther(out)));
+      outBox.style.color = 'var(--fg)';
+    }
 
     const sym = escText(($('app')?.dataset.sym) || 'shares');
     const outTxt = _swapSide === 'buy'
@@ -6990,18 +7052,30 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
     </dl>
     ${spark}
     ${has && pool ? `
-      <div style="display:flex;gap:16px;border-bottom:1px solid var(--border-muted);margin:14px 0 0">
-        <button id="causeSwapTab_buy" onclick="causeSwapSide('buy')" style="background:none;border:none;border-bottom:2px solid var(--fg);color:var(--fg);font:inherit;font-size:12px;padding:0 0 7px;cursor:pointer">Buy</button>
-        <button id="causeSwapTab_sell" onclick="causeSwapSide('sell')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:12px;padding:0 0 7px;cursor:pointer">Sell</button>
-      </div>
-      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-top:12px">
+      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-top:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <input id="causeSwapAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to swap"
             style="flex:1;min-width:0;background:none;border:none;color:var(--fg);font:inherit;font-size:22px;outline:none;padding:0" oninput="causeSwapQuote()">
-          <span id="causeSwapSym" style="font-size:13px;color:var(--fg-muted);white-space:nowrap">ETH</span>
+          <span id="causeSwapSym" style="display:inline-flex;align-items:center;font-size:13px;color:var(--fg-muted);white-space:nowrap"></span>
         </div>
         <div id="causeSwapHold" style="font-size:10px;color:var(--fg-dim);margin-top:8px;display:flex;justify-content:space-between;gap:8px"></div>
       </div>
+
+      <div style="display:flex;justify-content:center;margin:-9px 0;position:relative;z-index:1">
+        <button onclick="causeSwapFlip()" aria-label="Swap direction" title="Swap direction"
+          style="width:26px;height:26px;border-radius:7px;border:1px solid var(--border-muted);background:var(--bg);color:var(--fg-muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+        </button>
+      </div>
+
+      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;background:var(--surface)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="causeSwapOut" style="flex:1;min-width:0;font-size:22px;color:var(--fg-dim);overflow:hidden;text-overflow:ellipsis">0.0</div>
+          <span id="causeSwapOutSym" style="display:inline-flex;align-items:center;font-size:13px;color:var(--fg-muted);white-space:nowrap"></span>
+        </div>
+        <div id="causeSwapOutHold" style="font-size:10px;color:var(--fg-dim);margin-top:8px"></div>
+      </div>
+
       <div id="causeSwapQuote" style="font-size:11px;color:var(--fg-muted);margin:10px 0;min-height:32px;line-height:1.6">How much ETH to spend</div>
       <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:10px">
         <span>Max slippage</span>

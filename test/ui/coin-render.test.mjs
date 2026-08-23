@@ -95,7 +95,27 @@ test('the Market tile renders against real pool values without reaching out of s
   assert.match(out, /Depth/);
   assert.doesNotMatch(out, /undefined/, 'a rendered "undefined" means a value went missing');
 
-  // And the tabs must paint without throwing, which is what repaints call.
-  w.causeSwapSide('sell');
+  // The tile is two panels and a flipper now, and both halves are painted from one
+  // side value. They must never disagree about which way the trade runs.
+  const doc = w.document;
   w.causeSwapSide('buy');
+  const buyIn = doc.getElementById('causeSwapSym').textContent;
+  const buyOut = doc.getElementById('causeSwapOutSym').textContent;
+  assert.match(buyIn, /ETH/);
+  assert.match(buyOut, /CELL/);
+
+  w.causeSwapFlip();
+  assert.match(doc.getElementById('causeSwapSym').textContent, /CELL/, 'flip must swap the pay side');
+  assert.match(doc.getElementById('causeSwapOutSym').textContent, /ETH/, 'flip must swap the receive side');
+
+  w.causeSwapFlip();
+  assert.equal(doc.getElementById('causeSwapSym').textContent, buyIn, 'flipping twice returns to where it started');
+  assert.equal(doc.getElementById('causeSwapOutSym').textContent, buyOut);
+
+  // Switching sides must clear the old side's numbers rather than leave them to be read
+  // as a quote for the new direction.
+  doc.getElementById('causeSwapAmt').value = '123';
+  w.causeSwapFlip();
+  assert.equal(doc.getElementById('causeSwapAmt').value, '');
+  assert.equal(doc.getElementById('causeSwapOut').textContent, '0.0');
 });

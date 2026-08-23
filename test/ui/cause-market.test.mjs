@@ -38,8 +38,9 @@ const M = new Function('ethers', [
   grab(/function causePoolPrice[\s\S]*?\n}/),
   grab(/const _unf = [^\n]*/),
   grab(/function causeTapeBars[\s\S]*?\n}/),
+  grab(/function causeTimeChart[\s\S]*?\n}\n/),
   grab(/function causeChart[\s\S]*?\n}\n/),
-  'return { causeSortedPair, causeSpotPrice, causePoolPrice, causeTapeBars, causeChart };',
+  'return { causeSortedPair, causeSpotPrice, causePoolPrice, causeTapeBars, causeChart, causeTimeChart };',
 ].join('\n'))(ethers);
 
 const CELL = '0xf142CfA6Ca3DFa4A131f12aACEF4890e390d70D6';
@@ -124,4 +125,28 @@ test('the price is the marginal one, not the reserve ratio', () => {
 
   // A 0.001 ETH buy filled at 8,216.3 gwei. Against spot that is a cost, not a discount.
   assert.ok((8216.3 - spot) / spot > 0, 'a buy must never price below spot');
+});
+
+test('the chart switches to a time axis only once there is a shape to draw', () => {
+  const floor = 328522781932n, sale = 333000000000n, spot = 7879700000000n;
+  const bar = c => ({ b: 1, o: c, c, hi: c, lo: c, n: 1 });
+
+  // One or two prints on a time axis is a dot and a lot of whitespace — the exact thing
+  // that makes a lone candle useless. Stay on the ruler.
+  const thin = M.causeChart([bar(1.6e12), bar(1.9e12)], floor, sale, spot);
+  assert.match(thin, /floor/);
+  assert.doesNotMatch(thin, /<polyline/, 'two bars should not pretend to be a time series');
+
+  // Three is where a line starts carrying information the ruler cannot.
+  const rich = M.causeChart([bar(1.6e12), bar(1.9e12), bar(4.2e12), bar(7.1e12)], floor, sale, spot);
+  assert.match(rich, /<polyline/, 'four bars should plot over time');
+  assert.match(rich, /4 fills/);
+
+  // Both modes must keep every drawn coordinate inside their own viewBox.
+  for (const [svg, h] of [[thin, 34], [rich, 74]]) {
+    const box = svg.match(/viewBox="0 0 300 (\d+)"/);
+    assert.equal(Number(box[1]), h);
+    for (const m of svg.matchAll(/(?:cy|y1|y2)="([\d.]+)"/g))
+      assert.ok(+m[1] >= 0 && +m[1] <= h, `y=${m[1]} escapes the ${h}px box`);
+  }
 });
