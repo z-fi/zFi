@@ -2171,9 +2171,14 @@ async function loadLiveSale() {
       lead = asCard(leadRaw);
       const ls = leadRaw.sales && leadRaw.sales.length > 0 ? leadRaw.sales[0] : null;
       if (ls && ls.deadline && BigInt(ls.deadline) > now) {
+        // A countdown on a sale with nothing left to buy is an invitation to a closed
+        // door: the card was reading "100.0%" and "7d left" at the same time. What is
+        // worth saying about a sale that filled is that it filled.
+        const soldOut = ls.remainingSupply != null && BigInt(ls.remainingSupply) === 0n;
         const daysLeft = Number((BigInt(ls.deadline) - now) / 86400n);
         lead.meta = (lead.raisedETH > 0 ? lead.raisedETH.toFixed(3) + ' ETH raised' : 'Sale live')
-          + ' \u00b7 ' + (daysLeft > 0 ? daysLeft + 'd left' : 'closing today');
+          + ' \u00b7 ' + (soldOut ? 'sold out'
+                       : daysLeft > 0 ? daysLeft + 'd left' : 'closing today');
       }
       if (leadRaw.meta && leadRaw.meta.contractURI) {
         try {
