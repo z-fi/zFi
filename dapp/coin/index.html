@@ -6047,7 +6047,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   let reopenHTML = '';
   // Only reachable on the legacy singleton: an offering's ceiling survives redemption,
   // so a sale on it never closes short and has nothing to reopen.
-  if (!usesOffering && saleEnded && !isOpenCap && price > 0n && userBalance > 0n
+  // Not gated on userBalance: that comes from a multicall entry that reads 0 when the
+  // request fails, so a dropped read hid the panel entirely rather than showing a button
+  // that could explain itself. Proposing needs a share and the button says so when it has
+  // to; deciding whether to propose does not need one.
+  if (!usesOffering && saleEnded && !isOpenCap && price > 0n
       && saleDeadline > 0 && saleDeadline - now > 172800) {
     const daysLeft = Math.floor((saleDeadline - now) / 86400);
     reopenHTML = `
@@ -6443,6 +6447,12 @@ function causeReopenQuote() {
     <div style="margin-top:3px">Two proposals, ${fmtTokenAmount(quorum.toString())} shares of turnout each, then a two day timelock.</div>`;
 }
 
+// Shared by the token row and anything else that hands over a string to paste elsewhere.
+function causeCopyText(text, btn) {
+  const done = () => { if (!btn) return; const was = btn.textContent; btn.textContent = 'copied'; setTimeout(() => { btn.textContent = was; }, 1200); };
+  try { navigator.clipboard.writeText(text).then(done, () => {}); } catch (_) {}
+}
+
 async function causeReopenPropose(daoAddr) {
   const status = $('causeReopenStatus');
   const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
@@ -6468,9 +6478,15 @@ async function causeReopenPropose(daoAddr) {
       say(`Opening: ${st.label}\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
       await tx.wait();
     }
+    // Both proposals need other holders, and the moment to ask is now, not after the tab
+    // is closed. Hand over a link that is ready to paste rather than a page to describe.
+    const voteUrl = new URL('../dao/#/dao/1/' + daoAddr, location.href).href;
     say(`Both proposals are open and your shares vote for them. Both must pass before the
-      sale runs again &mdash; send holders
-      <a href="../dao/#/dao/1/${daoAddr}" style="color:inherit;text-decoration:underline">the DAO page</a>.
+      sale runs again, so holders need to vote.
+      <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+        <a href="${voteUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Open the vote</a>
+        <button onclick="causeCopyText('${voteUrl}', this)" style="background:none;border:1px solid var(--border-muted);border-radius:5px;color:var(--fg-muted);font:inherit;font-size:10px;padding:3px 8px;cursor:pointer">copy link</button>
+      </div>
       <div style="margin-top:4px;font-family:ui-monospace,monospace;font-size:10px;color:var(--fg-dim)">
         #${ids[0].toString().slice(0, 12)}\u2026 &middot; #${ids[1].toString().slice(0, 12)}\u2026</div>`, 'var(--green)');
     loadCauseGovernance(daoAddr, _renderGen).catch(() => {});
