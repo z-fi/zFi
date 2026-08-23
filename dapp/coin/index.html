@@ -6430,7 +6430,7 @@ async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
   return null;
 }
 
-async function loadCausePool(daoAddr, sharesAddr, gen) {
+async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
   const el = $('causePool');
   if (!el) return;
   const ds = $('app')?.dataset || {};
@@ -6456,14 +6456,16 @@ async function loadCausePool(daoAddr, sharesAddr, gen) {
     pairPools = Number(BigInt(res || '0x0'));
   } catch {}
   if (gen !== _renderGen || !el.isConnected) return;
-  const has = pairPools > 0;
+  // A caller who just watched the create confirm knows better than a lagging read. Without
+  // this the panel repaints the seed form over a pool that exists, inviting a second one.
+  const has = pairPools > 0 || !!knownHasPool;
 
   el.innerHTML = `<div class="section-card">
     <div class="section-title">Market</div>
     <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
       <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
       ${salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
-      ${has ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
+      ${has && pairPools > 0 ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
     </dl>
     ${has ? `<a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box" href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener">Trade $${sym} on zSwap</a>`
     : `<div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
@@ -6546,6 +6548,29 @@ function causePoolQuote(src) {
 }
 
 
+// The panel reads pair counts from the public RPCs in withRPC, but a create is confirmed
+// on the wallet's own node, and those are not the same machine. Re-reading the instant
+// tx.wait() resolves finds pairCount still 0 on a lagging node and repaints the seed form
+// over a pool that already exists. So ask the node that mined it — it cannot be behind
+// itself — and give the read path a few seconds to agree before painting.
+async function causeAwaitPool(sharesAddr, sgn) {
+  const [t0, t1] = causeSortedPair(sharesAddr);
+  const data = SEL_PAIR_COUNT + _a(t0) + _a(t1);
+  const count = async caller => {
+    try { return Number(BigInt(await caller({ to: PFACTORY, data }) || '0x0')); } catch { return 0; }
+  };
+  // The mining node is authoritative and answers immediately.
+  if (sgn?.provider && await count(c => sgn.provider.call(c)) > 0) {
+    // Then let the public side catch up, so the repaint reads a pool rather than a gap.
+    for (let i = 0; i < 8; i++) {
+      if (await count(c => withRPC(rpc => rpc.call(c))) > 0) return true;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return true;   // it exists; the panel will settle on the next 30s tick regardless
+  }
+  return false;
+}
+
 async function causeCreatePool(sharesAddr) {
   const status = $('causePoolStatus');
   const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
@@ -6573,8 +6598,9 @@ async function causeCreatePool(sharesAddr) {
     const tx = await sgn.sendTransaction({ to: PFACTORY, data: band.data, value: ethAmt });
     say(`Creating the pool\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
     await tx.wait();
-    say('Pool created.', 'var(--green)');
-    loadCausePool($('app')?.dataset.dao, sharesAddr, _renderGen).catch(() => {});
+    say('Pool created \u2014 loading the market\u2026', 'var(--green)');
+    const confirmed = await causeAwaitPool(sharesAddr, sgn);
+    await loadCausePool($('app')?.dataset.dao, sharesAddr, _renderGen, confirmed).catch(() => {});
   } catch (err) {
     if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
     say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
