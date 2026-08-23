@@ -2369,6 +2369,17 @@ function startPropCountdowns() {
   _propTimer = setInterval(tick, 1000);
 }
 
+// The proposals drawer renders open now. Nothing calls toggleProposals to trigger its
+// first load in that case, so it would sit open reading "Click to load" — worse than
+// closed, because it looks like the answer and is not. During a vote, proposals are the
+// reason someone opens this page at all.
+function causeOpenProposals(daoAddr) {
+  const el = $('proposalsDrawer');
+  if (!el || el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  loadProposals(daoAddr).catch(() => {});
+}
+
 function toggleProposals() {
   const el = $('proposalsDrawer');
   if (!el) return;
@@ -6148,7 +6159,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // the discussion list, the vote bars and the quorum readout rather than a second,
   // thinner implementation of the same thing.
   html += `
-    <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
+    <div class="drawer open" id="proposalsDrawer" data-dao="${daoAddr}">
       <button class="drawer-toggle" onclick="toggleProposals()">
         <span>Proposals &amp; Chat</span>
         <span class="arrow">&#9660;</span>
@@ -6217,6 +6228,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Proposals and chat come from a second read so they cannot delay first paint.
   loadCauseGovernance(daoAddr, gen).catch(() => {});
+  causeOpenProposals(daoAddr);
 
   // Auto-refresh sale stats every 30s (partial update, preserves inputs)
   if (_causeRefreshTimer) clearInterval(_causeRefreshTimer);
@@ -8964,7 +8976,7 @@ async function renderCoinPage(daoAddr) {
 
     // Proposals drawer (lazy-loaded)
     html += `
-      <div class="drawer" id="proposalsDrawer" data-dao="${daoAddr}">
+      <div class="drawer open" id="proposalsDrawer" data-dao="${daoAddr}">
         <button class="drawer-toggle" onclick="toggleProposals()">
           <span>Proposals &amp; Chat</span>
           <span class="arrow">&#9660;</span>
@@ -8987,6 +8999,7 @@ async function renderCoinPage(daoAddr) {
 
     // Store data for swap
     app.innerHTML = html;
+    causeOpenProposals(daoAddr);
 
     app.dataset.dao = daoAddr;
     app.dataset.shares = sharesAddr;
