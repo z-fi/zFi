@@ -1744,11 +1744,13 @@ function _rpcDeadline(promise, ms) {
 // tripled, which produced more 429s. The failure fed itself. A node that says "too many"
 // is told, and skipped until it has had time to forget.
 const _rpcCooldownUntil = new Array(RPCS.length).fill(0);
-const RPC_COOLDOWN_MS = 20000;
-const _rpcThrottled = e => {
-  const m = String(e?.info?.responseStatus || e?.shortMessage || e?.message || e);
-  return /\b(429|403)\b|too many requests|rate limit|forbidden/i.test(m);
-};
+// Same split dapp/index.html arrived at: rate limiting is a queue and clears in seconds,
+// while a 403 is the node declining to serve you at all and will not change its mind soon.
+// One window for both either sidelines a healthy node or keeps hammering a closed door.
+const _rpcErrText = e => String(e?.info?.responseStatus || e?.shortMessage || e?.message || e);
+const _rpcRateLimited = e => /\b429\b|too many requests|rate limit/i.test(_rpcErrText(e));
+const _rpcRefused = e => /\b(403|401)\b|forbidden|unauthorized|invalid api key/i.test(_rpcErrText(e));
+const _rpcPenalty = e => _rpcRateLimited(e) ? 5000 : _rpcRefused(e) ? 120000 : 0;
 
 async function withRPC(fn, timeoutMs) {
   const now = Date.now();
@@ -1765,7 +1767,8 @@ async function withRPC(fn, timeoutMs) {
       return result;
     } catch (e) {
       last = e;
-      if (_rpcThrottled(e)) _rpcCooldownUntil[i] = Date.now() + RPC_COOLDOWN_MS;
+      const penalty = _rpcPenalty(e);
+      if (penalty) _rpcCooldownUntil[i] = Date.now() + penalty;
     }
   }
   throw last;
@@ -10346,7 +10349,19 @@ pruneCoinCaches();
 // onConnect fires after tryAutoConnect resolves, which happens AFTER the initial
 // route()/renderGallery() runs. Without a re-render here, _userIsVerified stays
 // false and the spam buttons never paint on cold load.
-walletInit({ appName: 'zFi Coins', onConnect: [updateModeButton, loadBalances, () => { const h = location.hash.replace('#','').trim(); if (!(h && h.startsWith('0x') && h.length === 42)) renderGallery(); }], onDisconnect: [updateModeButton, () => { _userIsVerified = false; }] });
+// Everything on a cause page that reads _connectedAddress has to be told when it changes.
+// updateModeButton predates the Market tile and only knows the older buttons, so the tile
+// kept whatever it painted on load — "Connect wallet" on a page with a wallet connected.
+// The balance shortcuts and the chat composer have the same dependency.
+function causeOnWalletChange() {
+  try {
+    if ($('causeSwapAmt')) causeSwapSide(_swapSide);
+    const dao = $('app')?.dataset.dao;
+    if (dao && $('causeChatBox')) causeChatCompose(dao).catch(() => {});
+  } catch (_) {}
+}
+
+walletInit({ appName: 'zFi Coins', onConnect: [updateModeButton, causeOnWalletChange, loadBalances, () => { const h = location.hash.replace('#','').trim(); if (!(h && h.startsWith('0x') && h.length === 42)) renderGallery(); }], onDisconnect: [updateModeButton, causeOnWalletChange, () => { _userIsVerified = false; }] });
 route();
 </script>
 </body>
