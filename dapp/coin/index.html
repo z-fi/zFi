@@ -5929,7 +5929,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // a holder can always get their share of the treasury back is the last thing that
   // should vanish quietly. Disconnected sees it too, since knowing redemption exists is
   // most of why it matters.
-  if (treasuryETH > 0n) {
+  // Rendered unconditionally. Gating it on a number that arrives over the network means a
+  // single failed multicall entry — the read yields 0 and `?? 0n` makes that look real —
+  // silently removes the one control that guarantees a holder can always take their share
+  // of the treasury back. Whether this DAO is ragequittable does not depend on an RPC.
+  {
     const rqTreasuryFmt = Number(ethers.formatEther(treasuryETH)).toFixed(4);
     // Redemption uses the same denominator the DAO does: shares + loot.
     const rqDenom = sharesTotalSupply + lootTotalSupply;
@@ -5948,7 +5952,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} shares for ${ethGlyph(12)} ETH
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
-          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${rqTreasuryFmt} ETH treasury, paid immediately.${usesOffering
+          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${treasuryETH > 0n ? rqTreasuryFmt + ' ETH' : 'DAO'} treasury, paid immediately.${usesOffering
             ? ' Burnt shares return their room to the sale, so redeeming costs the raise nothing.'
             : (saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.'
                          : ' Burnt shares are not returned to the sale for someone else to buy.')}</div>
@@ -6996,9 +7000,12 @@ async function causeSwapQuote() {
     const outTxt = _swapSide === 'buy'
       ? `<span style="display:inline-flex;align-items:center;gap:4px">${_causeGlyph}${fmtTokenAmount(out.toString())} ${sym}</span>`
       : `${ethAmount(fmtNum(Number(ethers.formatEther(out))), 13)} ETH`;
-    el.innerHTML = `<span>${fmtPriceWei(eff)} per share effective`
-      + (slipPct !== null ? ` &middot; <span style="color:${Math.abs(slipPct) > 10 ? 'var(--red)' : 'var(--fg-dim)'}">${slipPct > 0 ? '+' : ''}${slipPct.toFixed(1)}% vs spot</span>` : '')
-      + `</span><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
+    // Below a quarter the number is just how a curve works and saying it every time trains
+    // people to ignore it. Above, it is the trade eating the band and worth interrupting for.
+    const heavy = slipPct !== null && Math.abs(slipPct) >= 25;
+    el.innerHTML = `<span>${fmtPriceWei(eff)} per share</span>`
+      + (heavy ? `<div style="color:var(--red);margin-top:3px">This trade moves the price ${slipPct > 0 ? '+' : ''}${slipPct.toFixed(0)}% on its own \u2014 the band is thin at this size.</div>` : '')
+      + `<div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch {
     if (my !== _swapSeq) return;
     el.textContent = 'Could not quote that.'; if (btn) btn.disabled = true;
@@ -7218,8 +7225,8 @@ async function causeBookLoad(sharesAddr) {
 function causeBookHTML(orders, sym) {
   if (!orders.length) {
     return `<div style="font-size:10px;color:var(--fg-dim);line-height:1.6">
-      No resting orders. A limit order lets someone name a price and wait, instead of
-      taking whatever the band quotes — which for a pool this thin is most of the price.
+      No resting orders. A limit order names a price and waits to be filled, rather than
+      taking whatever the pool quotes at the moment of the trade.
     </div>`;
   }
   const spot = _causePoolCache?.spot || 0n;
