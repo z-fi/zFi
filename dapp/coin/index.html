@@ -2014,6 +2014,7 @@ async function loadHolders(daoAddr) {
         </div>`;
       });
       content.innerHTML = html;
+    causeChatCompose(daoAddr).catch(() => {});
     }
 
     // Show immediately with addresses
@@ -2374,6 +2375,73 @@ function collapseList(root, selector, keep, label) {
   items[keep - 1].after(btn);
 }
 
+// ---------------------------------------------------------------- chat
+const CAUSE_CHAT_ABI = [
+  'function chat(string) payable',
+  'function badges() view returns (address)',
+];
+
+// Painted after the drawer so a slow badge read cannot hold up the messages themselves.
+async function causeChatCompose(daoAddr) {
+  const box = $('causeChatBox');
+  if (!box) return;
+  if (!_connectedAddress) {
+    box.innerHTML = `<div style="font-size:11px;color:var(--fg-dim)">Connect a wallet to post.</div>`;
+    return;
+  }
+  let canPost = false;
+  try {
+    const badges = await withRPC(rpc => new ethers.Contract(daoAddr, CAUSE_CHAT_ABI, rpc).badges());
+    const bal = await withRPC(rpc => new ethers.Contract(badges, ERC20_ABI, rpc).balanceOf(_connectedAddress));
+    canPost = bal > 0n;
+  } catch { canPost = false; }
+  if (!$('causeChatBox')) return;
+
+  if (!canPost) {
+    box.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);line-height:1.5">
+      The chatroom is open to badge holders. Shares alone do not carry one.</div>`;
+    return;
+  }
+  box.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <textarea id="causeChatInput" rows="1" placeholder="Say something to the DAO" aria-label="Message"
+        style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font:inherit;font-size:12px;outline:none;resize:none;overflow:hidden"
+        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();causeChatSend('${daoAddr}')}"></textarea>
+      <button id="causeChatGo" class="swap-btn" style="font-size:11px;padding:5px 12px;white-space:nowrap" onclick="causeChatSend('${daoAddr}')">Post</button>
+    </div>
+    <div id="causeChatStatus" style="margin-top:6px"></div>`;
+}
+
+async function causeChatSend(daoAddr) {
+  const input = $('causeChatInput'), btn = $('causeChatGo'), st = $('causeChatStatus');
+  const say = (m, c) => { if (st) st.innerHTML = m ? `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>` : ''; };
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  // The message goes on chain, so a double press would post it twice and pay twice.
+  if (btn?.disabled) return;
+  if (btn) btn.disabled = true;
+  input.disabled = true;
+  try {
+    say('Confirm in your wallet\u2026');
+    const tx = await new ethers.Contract(daoAddr, CAUSE_CHAT_ABI, sgn).chat(text);
+    say(`Posting\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    input.value = '';
+    say('');
+    await loadProposals(daoAddr);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) say('');
+    else say(escText(err.shortMessage || err.message || 'Failed to post.'), 'var(--red)');
+  } finally {
+    if ($('causeChatGo')) $('causeChatGo').disabled = false;
+    if ($('causeChatInput')) $('causeChatInput').disabled = false;
+  }
+}
+
 async function loadProposals(daoAddr) {
   const content = $('proposalsContent');
   if (!content) return;
@@ -2562,10 +2630,12 @@ async function loadProposals(daoAddr) {
     // proposals underneath. Each message clamps to three lines so a long thread cannot
     // bury them.
     let html = '';
-    if (chatHtml) {
-      html += `<div class="prop-sec-head prop-sec-first">Discussion <span>${chat.length}</span></div>`;
-      html += `<div class="prop-chat-list">${chatHtml}</div>`;
-    }
+    html += `<div class="prop-sec-head prop-sec-first">Discussion <span>${chat.length}</span></div>`;
+    // The drawer could read the room and not speak in it, which sent anyone with something
+    // to say to the DAO page for one line of text. Moloch gates chat() on a badge rather
+    // than on shares, so the box asks that question and says so when the answer is no.
+    html += `<div id="causeChatBox" style="margin:0 14px 10px"></div>`;
+    if (chatHtml) html += `<div class="prop-chat-list">${chatHtml}</div>`;
     html += `<div class="prop-sec-head${chatHtml ? '' : ' prop-sec-first'}">Proposals <span>${proposals.length}</span></div>`;
     html += propHtml;
     html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
