@@ -7895,6 +7895,38 @@ let _parkedQuote = null; // { args, resolve, reject } waiting for a slot
 // quote.multicall, so overwriting that field is enough to reroute any of them. Curve is
 // the exception: executeSwap branches on isCurvePath before it looks at the quote, so a
 // precision win there would be listed and then ignored. It is skipped rather than lied about.
+// The case precision exists for is the one where nothing else answers, and getQuote
+// THROWS there — "Best swap quote failed" — rather than returning an empty result. A
+// .then() handler never runs on a rejection, so the first version of this raced only
+// against quotes that already existed and stayed silent on every pool it was built to
+// find. This is the rejection path: no competitor, so precision answers alone or the
+// original error stands.
+async function _precisionOnly(args, err) {
+  try {
+    if (args.exactOut) throw err;
+    const f = tokens[args.fromSnap], t = tokens[args.toSnap];
+    if (!f?.address || !t?.address) throw err;
+    const amountIn = safeParseUnits(args.amtStr, f.decimals);
+    if (!amountIn || amountIn <= 0n) throw err;
+    const receiver = getReceiver();
+    const q = await quoteRPC.call(rpc =>
+      quotePrecisionBest(rpc, f.address, t.address, amountIn, _connectedAddress || receiver));
+    if (!q) throw err;
+    const minOut = q.out - (q.out * BigInt(slippageBps)) / 10000n;
+    const built = buildPrecisionMulticall(f.address, t.address, amountIn, minOut, receiver, q.pool);
+    return {
+      expectedOutput: q.out, requiredInput: amountIn,
+      sourceA: 'Precision', sourceB: null,
+      isTwoHop: false, isSplit: false, splitLegs: null,
+      isPrecision: true, precisionPool: q.pool,
+      multicall: built.multicall, calls: built.calls, msgValue: built.msgValue,
+      allQuotes: [{ source: 'Precision', sourceId: 7, feeBps: 0n, amountIn, amountOut: q.out }],
+    };
+  } catch (_) {
+    throw err;   // nothing found either: the page should say what it would have said
+  }
+}
+
 async function _racePrecision(quote, args) {
   try {
     if (!quote || args.exactOut) return quote;
@@ -7914,7 +7946,7 @@ function _runQuote(args) {
   return withRetry(() => args.exactOut
     ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
     : getQuote(args.amtStr, args.fromSnap, args.toSnap),
-  ).then(q => _racePrecision(q, args)).finally(() => {
+  ).then(q => _racePrecision(q, args), err => _precisionOnly(args, err)).finally(() => {
     _quoteActive--;
     const parked = _parkedQuote;
     if (parked) {

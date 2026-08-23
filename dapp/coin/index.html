@@ -6828,8 +6828,10 @@ function causeSwapSide(side) {
     : (buying ? coinLine : ethLine);
 
   const go = $('causeSwapGo');
-  if (go) go.innerHTML = lq
-    ? `Add ${buying ? ethGlyph(14) : _causeGlyph} liquidity`
+  // Naming the action while disconnected promises something the press cannot do. The
+  // rest of this page has always said "Connect Wallet" here; the tile was the exception.
+  if (go) go.innerHTML = !_connectedAddress ? 'Connect wallet'
+    : lq ? `Add ${buying ? ethGlyph(14) : _causeGlyph} liquidity`
     : (buying ? `Buy ${_causeGlyph} ${sym}` : `Sell ${_causeGlyph} ${sym}`);
   _swapQuote = null;
   causeSwapQuote();
@@ -6869,7 +6871,7 @@ async function causeSwapQuote() {
     el.textContent = _causeMode === 'lq'
       ? (_swapSide === 'buy' ? 'How much ETH to add' : 'How many shares to add')
       : (_swapSide === 'buy' ? 'How much ETH to spend' : 'How many shares to sell');
-    _swapQuote = null; if (btn) btn.disabled = true;
+    _swapQuote = null; if (btn) btn.disabled = !!_connectedAddress;
     const ob = $('causeSwapOut');
     if (ob) { ob.textContent = '0.0'; ob.style.color = 'var(--fg-dim)'; }
     return;
@@ -6954,9 +6956,12 @@ async function causeSwapQuote() {
 async function causeSwapGo() {
   const status = $('causeSwapStatus');
   const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
-  if (!_swapQuote || !_causePoolCache) return;
+  // Connect first: the button says "Connect wallet" when there is no signer, and it has
+  // to honour that even with the amount box empty, which is exactly when someone presses it.
   const sgn = _signer || await connectWallet();
   if (!sgn) return;
+  if (!_causePoolCache) return;
+  if (!_swapQuote) { causeSwapSide(_swapSide); return; }
   const { pool, out, amountIn, tokenIn, portion, zap } = _swapQuote;
   const shares = _causePoolCache.shares;
   const tokenOut = tokenIn === ZERO ? shares : ZERO;

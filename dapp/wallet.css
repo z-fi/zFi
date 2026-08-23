@@ -6,22 +6,32 @@
   font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
   z-index:100;
 }
+/* Both states are a chip with a status light, because the question a person has when
+   they glance up here is binary — am I connected — and the old styling answered it with
+   a 0.2 difference in opacity and a dot that only existed on one of the two answers. */
 .wallet button {
-  margin:0; padding:0; border:none; text-transform:lowercase;
-  background:none; color:var(--fg); opacity:0.5;
-  font-size:11px; font-weight:400; letter-spacing:0.05em;
-  text-decoration:underline; text-underline-offset:3px;
-}
-.wallet button:hover { background:none; opacity:1; }
-/* Connected: a live dot gives the bare address some status affordance —
-   without it the account reads as static page text, not a control. */
-.wallet button.connected {
-  opacity:0.7; font-weight:600; text-transform:none; text-decoration:none;
+  margin:0; padding:5px 10px; text-transform:lowercase;
+  background:none; color:var(--fg); opacity:0.75;
+  border:1px solid var(--border-muted); border-radius:999px;
+  font-size:11px; font-weight:500; letter-spacing:0.03em;
+  text-decoration:none;
   display:inline-flex; align-items:center; gap:6px;
+  transition:opacity 0.15s, border-color 0.15s;
+}
+.wallet button::before {
+  content:''; width:6px; height:6px; border-radius:50%; flex-shrink:0;
+  /* Disconnected reads as an empty socket rather than an off light. */
+  background:none; box-shadow:inset 0 0 0 1px currentColor; opacity:0.55;
+}
+.wallet button:hover { background:none; opacity:1; border-color:var(--fg-muted); }
+
+.wallet button.connected {
+  opacity:1; font-weight:600; text-transform:none;
+  border-color:var(--border-muted);
 }
 .wallet button.connected::before {
-  content:''; width:5px; height:5px; border-radius:50%;
-  background:#22c55e; flex-shrink:0;
+  background:#22c55e; box-shadow:0 0 0 2px color-mix(in srgb, #22c55e 22%, transparent);
+  opacity:1;
 }
 
 /* Wallet modal */
@@ -64,7 +74,7 @@ body.modal-open { overflow:hidden; }
 /* Mobile */
 @media (max-width: 600px) {
   .wallet { top:12px; right:16px; }
-  .wallet button { font-size:12px; padding:12px 0; }
+  .wallet button { font-size:12px; padding:7px 12px; }
   .wallet-modal-overlay { padding:0; padding-top:0; align-items:flex-end; }
   .wallet-modal { max-width:100%; margin:0; border-left:none; border-right:none; border-bottom:none; max-height:85vh; max-height:85dvh; padding:16px; padding-bottom:max(16px, env(safe-area-inset-bottom)); }
   .wallet-option { padding:14px 16px; }

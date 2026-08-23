@@ -88,3 +88,57 @@ test('the page still declares the source it races', () => {
   assert.match(html, /_racePrecision\(q, args\)/, 'the race must stay wired into _runQuote');
   assert.match(html, /r\.isPrecision = false/, 'isPrecision must clear with the other winner flags');
 });
+
+test('precision answers when nothing else does, which is the case it exists for', async () => {
+  // getQuote THROWS on a pair no source can route — "Best swap quote failed" — instead of
+  // returning an empty result. The race was attached with .then(), which never runs on a
+  // rejection, so it stayed silent on exactly the pools it was written to find. zQuoter
+  // returns amountOut 0 on all fourteen of its sources for ETH -> CELL.
+  const src = fs.readFileSync(path.join(ROOT, 'dapp/index.html'), 'utf8');
+  assert.match(src, /_racePrecision\(q, args\), err => _precisionOnly\(args, err\)/,
+    'the rejection handler must be wired, not just the fulfilment one');
+
+  const grabf = re => { const m = src.match(re); assert.ok(m, 'not found: ' + re); return m[0]; };
+  const ZERO = '0x0000000000000000000000000000000000000000';
+  const CELL = '0xf142CfA6Ca3DFa4A131f12aACEF4890e390d70D6';
+  const POOL = '0xaf9f2e884798e4b63abc9fc6879cd74bd21c8157';
+
+  // A stub pool: quoteBest answers, so the only thing under test is the rescue itself.
+  const RPC = { call: async ({ data }) =>
+    data.startsWith('0x2adaa389')
+      ? '0x' + POOL.slice(2).padStart(64, '0') + (12345n).toString(16).padStart(64, '0')
+      : '0x' };
+
+  const M = new Function('ethers', 'ROUTER_IFACE', 'RPC', [
+    `const ZERO_ADDRESS='${ZERO}';`,
+    `const tokens={ETH:{address:'${ZERO}',decimals:18},CELL:{address:'${CELL}',decimals:18}};`,
+    'const slippageBps=100;',
+    `const _connectedAddress='${ZERO}';`,
+    `const getReceiver=()=>'${ZERO}';`,
+    'const safeParseUnits=(v,d)=>ethers.parseUnits(String(v),d);',
+    'const quoteRPC={call:fn=>fn(RPC)};',
+    grabf(/const PPLENS_ADDRESS = [\s\S]*?const _pWord = [^\n]*/),
+    grabf(/async function quotePrecisionBest[\s\S]*?\n}/),
+    grabf(/function buildPrecisionMulticall[\s\S]*?\n}/),
+    grabf(/async function _precisionOnly[\s\S]*?\n}/),
+    'return { _precisionOnly };',
+  ].join('\n'))(ethers, ROUTER_IFACE, RPC);
+
+  const boom = new Error('Best swap quote failed');
+  const q = await M._precisionOnly({ fromSnap: 'ETH', toSnap: 'CELL', amtStr: '0.001', exactOut: false }, boom);
+
+  assert.equal(q.sourceA, 'Precision');
+  assert.equal(q.expectedOutput, 12345n);
+  assert.equal(q.msgValue, ethers.parseEther('0.001'), 'native in must fund the call');
+  assert.equal(q.precisionPool.toLowerCase(), POOL.toLowerCase());
+  assert.equal(ROUTER_IFACE.decodeFunctionData('multicall', q.multicall)[0].length, 1);
+  // The renderer reads these; a quote missing them paints undefined.
+  for (const k of ['expectedOutput', 'requiredInput', 'sourceA', 'isTwoHop', 'isSplit', 'allQuotes'])
+    assert.ok(k in q, `the renderer reads quote.${k}`);
+
+  // Exact-out has no lens behind it, so it must hand back the original failure untouched
+  // rather than invent an answer.
+  await assert.rejects(
+    () => M._precisionOnly({ fromSnap: 'ETH', toSnap: 'CELL', amtStr: '0.001', exactOut: true }, boom),
+    /Best swap quote failed/);
+});
