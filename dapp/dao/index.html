@@ -5202,8 +5202,15 @@ body.modal-open { overflow: hidden; }
         // Display user's shares and loot
         const shares = ethers.formatUnits(member.shares, 18);
         const loot = ethers.formatUnits(member.loot, 18);
-        document.getElementById('ragequitUserShares').textContent = parseFloat(shares).toFixed(4);
-        document.getElementById('ragequitUserLoot').textContent = parseFloat(loot).toFixed(4);
+        const sharesEl = document.getElementById('ragequitUserShares');
+        const lootEl = document.getElementById('ragequitUserLoot');
+        sharesEl.textContent = parseFloat(shares).toFixed(4);
+        lootEl.textContent = parseFloat(loot).toFixed(4);
+        // Four decimals is a display, and toFixed ROUNDS: a balance of 18013.60289907
+        // shows as 18013.6029, which is more than the holder has. Max read that string
+        // back and the burn reverted for the difference. Keep the exact figure alongside.
+        sharesEl.dataset.exact = shares;
+        lootEl.dataset.exact = loot;
 
         // Clear inputs
         getEl('ragequitSharesInput').value = '';
@@ -5433,10 +5440,12 @@ body.modal-open { overflow: hidden; }
 
       // Set max shares in ragequit modal
       function setRagequitMaxShares() {
-        const sharesText = document.getElementById('ragequitUserShares')?.textContent;
-        if (sharesText && sharesText !== '0') {
+        const el = document.getElementById('ragequitUserShares');
+        // The exact balance, never the rounded display.
+        const amt = el?.dataset.exact || el?.textContent;
+        if (amt && parseFloat(amt) > 0) {
           const input = getEl('ragequitSharesInput');
-          input.value = sharesText;
+          input.value = amt;
 
           // Visual feedback
           input.style.borderColor = 'var(--border)';
@@ -5448,10 +5457,12 @@ body.modal-open { overflow: hidden; }
 
       // Set max loot in ragequit modal
       function setRagequitMaxLoot() {
-        const lootText = document.getElementById('ragequitUserLoot')?.textContent;
-        if (lootText && lootText !== '0') {
+        const el = document.getElementById('ragequitUserLoot');
+        // The exact balance, never the rounded display.
+        const amt = el?.dataset.exact || el?.textContent;
+        if (amt && parseFloat(amt) > 0) {
           const input = getEl('ragequitLootInput');
-          input.value = lootText;
+          input.value = amt;
 
           // Visual feedback
           input.style.borderColor = 'var(--border)';
