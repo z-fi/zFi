@@ -769,7 +769,7 @@ input {
 <script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
 <script src="../modules/precision.js"></script>
-<script src="../modules/curve-registry.js"></script>
+<script src="../modules/launch-registry.js"></script>
 <!-- Pool Mint/Burn logs, used lazily to date the DAO's LP position. Deferred: nothing
      on first paint depends on it. -->
 <script defer src="../modules/pool-events.js"></script>
@@ -1121,126 +1121,6 @@ const MC3_ABI = [
 // was being rebuilt several times per multicall on timer-driven refresh paths.
 const _mc3Iface = new ethers.Interface(MC3_ABI);
 
-// ClassicalCurveSale
-const CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
-const CURVE_SALE_ABI = [
-  'function curves(address token) view returns (address creator, uint256 cap, uint256 sold, uint256 virtualReserve, uint256 startPrice, uint256 endPrice, uint16 feeBps, uint16 poolFeeBps, uint256 raisedETH, uint256 graduationTarget, uint256 lpTokens, address lpRecipient, bool graduated, bool seeded, uint16 sniperFeeBps, uint16 sniperDuration, uint16 maxBuyBps, uint40 launchTime)',
-  'function observationCount(address token) view returns (uint256)',
-  'function observe(address token, uint256 from, uint256 to) view returns (uint256[])',
-  'function quote(address token, uint256 amount) view returns (uint256)',
-  'function graduable(address token) view returns (bool)',
-  'function graduate(address token) returns (uint256 liquidity)',
-  'function buyExactIn(address token, uint256 minAmountOut, uint256 deadline) payable',
-  'function sell(address token, uint256 amount, uint256 minProceeds, uint256 deadline)',
-  // Routed swap: required post-graduation when creatorFee.beneficiary is set.
-  // Same signature as ZAMM.swapExactIn — CURVE_SALE forwards to ZAMM and skims the creator fee.
-  'function swapExactIn(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountIn, uint256 amountOutMin, bool zeroForOne, address to, uint256 deadline) payable returns (uint256 amountOut)',
-  'function creatorFees(address token) view returns (address beneficiary, uint16 buyBps, uint16 sellBps, bool buyOnInput, bool sellOnInput)',
-  'function creatorVests(address token) view returns (uint128 total, uint128 claimed, uint40 start, uint40 cliff, uint40 duration)',
-  // Custom errors. Without these fragments ethers can't decode a revert and every
-  // failure surfaces as a bare "execution reverted" — which also silently killed
-  // the Graduated() auto-recovery in curveBuy(), since it matches on the message
-  // text. Each selector below was confirmed against mainnet via eth_simulateV1.
-  'error Graduated()',        // 0x9d4b7885 — buy/sell after the curve completed
-  'error NotGraduable()',     // 0x9804bf8d — graduate() before the trigger is met
-  'error Slippage()',         // 0x7dd37f70 — minAmountOut / minProceeds not met
-  'error DeadlineExpired()',  // 0x1ab7da6b
-  'error ZeroAmount()',       // 0x1f2a2005
-  'error TransferFromFailed()'// 0x7939f424 — selling more tokens than you hold
-];
-
-// The sale contract does not constrain launch parameters — it only bounds them
-// (feeBps up to 100%, lpTokens may be 0, lpRecipient may be any address). Our own
-// launcher hardcodes a safe template, but anyone can call launch() directly and the
-// result appears in this list looking identical. These checks read the values the
-// coin actually launched with, so a card never advertises properties it doesn't have.
-//
-// lpRecipient is deliberately re-read rather than trusted from an earlier load: the
-// creator can call setLpRecipient right up until the graduating buy lands, so a coin
-// can show burn-address LP for its whole bonding phase and still redirect it.
-const CURVE_BURN_ADDRS = new Set([ZERO, '0x000000000000000000000000000000000000dead']);
-
-function curveLpIsPermanent(curve) {
-  try { return CURVE_BURN_ADDRS.has(String(curve.lpRecipient).toLowerCase()) && BigInt(curve.lpTokens) > 0n; }
-  catch { return false; }
-}
-
-// Human-readable reasons this coin deviates from the standard template. Empty array
-// means it matches what the launcher produces.
-//
-// `vest` is the creatorVests entry and is optional -- callers that haven't read it
-// pass nothing and simply get the checks that curves() alone can answer.
-function curveParamWarnings(curve, vest) {
-  const out = [];
-  try {
-    const feeBps = Number(curve.feeBps);
-    if (feeBps > 300) out.push(`${(feeBps / 100).toFixed(2)}% trading fee to the creator on every buy and sell`);
-    if (BigInt(curve.lpTokens) === 0n) {
-      out.push('no tokens reserved for liquidity — the creator receives the raised ETH instead of a pool being seeded');
-    } else if (!CURVE_BURN_ADDRS.has(String(curve.lpRecipient).toLowerCase())) {
-      out.push('LP tokens go to the creator on graduation, so the liquidity can be withdrawn');
-    }
-    // Supply minted beyond cap + lpTokens is escrowed for the creator and unlocks on
-    // graduation, subject to whatever cliff and duration they chose. It is invisible
-    // in curves(), and it dilutes every buyer, so it belongs on the card.
-    if (vest) {
-      const total = BigInt(vest.total ?? vest[0] ?? 0);
-      if (total > 0n) {
-        const supply = BigInt(curve.cap) + BigInt(curve.lpTokens) + total;
-        const pct = supply > 0n ? Number((total * 10000n) / supply) / 100 : 0;
-        const cliff = Number(vest.cliff ?? vest[3] ?? 0);
-        const duration = Number(vest.duration ?? vest[4] ?? 0);
-        const when = duration === 0
-          ? (cliff === 0 ? 'unlocking in full at graduation' : `unlocking in full ${fmtDuration(cliff)} after graduation`)
-          : `vesting over ${fmtDuration(duration)}${cliff ? ` after a ${fmtDuration(cliff)} cliff` : ''}`;
-        out.push(`${pct.toFixed(1)}% of supply is allocated to the creator, ${when}`);
-      }
-    }
-  } catch {}
-  return out;
-}
-
-// Coarse duration for the vesting note -- "3 months" reads better than "7776000s".
-function fmtDuration(secs) {
-  if (!secs) return '0s';
-  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]];
-  for (const [name, size] of units) {
-    if (secs >= size) {
-      const n = Math.round(secs / size);
-      return `${n} ${name}${n === 1 ? '' : 's'}`;
-    }
-  }
-  return `${secs} seconds`;
-}
-
-// Custom-error name -> what actually went wrong, in the user's terms. Ethers gives
-// us the bare error name once the fragments above are present; this turns it into
-// something a trader can act on.
-const CURVE_ERROR_TEXT = {
-  Graduated: 'This coin just graduated — liquidity moved to zAMM. Reloading the trade panel...',
-  NotGraduable: 'Not ready to graduate yet.',
-  Slippage: 'Price moved past your slippage tolerance. Raise slippage or try a smaller size.',
-  DeadlineExpired: 'The transaction sat too long and expired. Try again.',
-  ZeroAmount: 'Enter an amount greater than zero.',
-  TransferFromFailed: 'Token transfer failed — check your balance.'
-};
-
-// Pull a friendly message out of an ethers error, falling back to its own text.
-function curveErrText(e) {
-  const name = e?.revert?.name || (typeof e?.errorName === 'string' ? e.errorName : null);
-  if (name && CURVE_ERROR_TEXT[name]) return CURVE_ERROR_TEXT[name];
-  const msg = e?.shortMessage || e?.reason || (e?.message || '').split('\n')[0] || 'Trade failed';
-  return msg.length < 120 ? msg : 'Trade failed';
-}
-
-// True when the revert means "the curve finished" — the page should flip to the
-// post-graduation zAMM panel rather than leave a stale bonding-curve form up.
-function curveIsGraduatedErr(e) {
-  return (e?.revert?.name === 'Graduated')
-    || e?.data === '0x9d4b7885'
-    || /Graduated/i.test(e?.shortMessage || '')
-    || /Graduated/i.test(e?.message || '');
-}
 
 // ShareSale module
 const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
@@ -1288,11 +1168,12 @@ function decodeObservations(rawArray) {
   });
 }
 
-// ClassicalCurveSale token discovery — newest-first addresses rebuilt from the
-// sale contract's own launch logs (dapp/modules/curve-registry.js).
-async function fetchCurveTokenList() {
-  if (!window.curveRegistry) return [];
-  return await window.curveRegistry.tokens();
+// Launched-coin discovery — newest-first LaunchInfo rows straight from the
+// launcher's lens (dapp/modules/launch-registry.js). Names, symbols, supplies and
+// both prices arrive with the list, so a card needs no follow-up read but the logo.
+async function fetchLaunchedCoins() {
+  if (!window.launchRegistry) return [];
+  return await window.launchRegistry.launches();
 }
 
 // ==================== NFT AUCTION DISCOVERY (Dutchboard listings) ====================
@@ -2125,34 +2006,31 @@ function toggleCurveHolders() {
 }
 
 // Holder discovery is entirely on-chain: candidates come from the token's own
-// Transfer logs (scanned back from launchTime), and balances come from a single
-// multicall of balanceOf. There is no off-chain index to fall out of sync — which
-// also means the panel is bounded by what the public RPCs will serve for eth_getLogs.
+// Transfer logs, and balances come from a single multicall of balanceOf. There is no
+// off-chain index to fall out of sync — which also means the panel is bounded by what
+// the public RPCs will serve for eth_getLogs.
 async function loadCurveHolders(tokenAddr) {
   const content = $('curveHoldersContent');
   if (!content) return;
   content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
 
-  // Tag map for well-known addresses so users can tell pool/curve/burn balances apart from real holders.
-  const curve = _curveData;
-  const creatorAddr = curve?.creator ? curve.creator.toLowerCase() : null;
+  // Tag map for well-known addresses so users can tell pool/launcher/burn balances
+  // apart from real holders. The launcher holds the locked position, so it is the
+  // largest "holder" of every launched coin and would otherwise read as a whale.
+  const creatorAddr = _lcInfo?.creator && _lcInfo.creator !== ZERO ? _lcInfo.creator.toLowerCase() : null;
   const TAG = {
-    [CURVE_SALE.toLowerCase()]: { label: 'Curve', cls: 'holder-tag-pool' },
+    [LAUNCHER.toLowerCase()]: { label: 'Launcher', cls: 'holder-tag-pool' },
     [ZAMM.toLowerCase()]: { label: 'Pool', cls: 'holder-tag-pool' },
     '0x000000000000000000000000000000000000dead': { label: 'Burn', cls: 'holder-tag-dao' },
   };
+  if (_lcInfo?.pool) TAG[_lcInfo.pool.toLowerCase()] = { label: 'Pool', cls: 'holder-tag-pool' };
   if (creatorAddr) TAG[creatorAddr] = { label: 'Creator', cls: 'holder-tag-badge' };
 
   async function fallbackTransferScan() {
     const latestBlock = await withRPC(async rpc => rpc.getBlockNumber());
-    const nowSec = Math.floor(Date.now() / 1000);
-    const launchTime = curve ? Number(curve.launchTime) : 0;
-    const SEC_PER_BLOCK = 12;
-    // Estimate launch block from the on-chain launchTime; cap ~30 days back as a safety bound
-    // since public RPCs reject huge ranges, and the curve token couldn't have existed before that.
-    const blocksBack = launchTime > 0
-      ? Math.min(216000, Math.ceil((nowSec - launchTime) / SEC_PER_BLOCK) + 200)
-      : 50000;
+    // No launch timestamp is available without an archive read, so scan a fixed
+    // window back. ~30 days is the practical ceiling public RPCs will serve.
+    const blocksBack = 216000;
     const fromBlock = Math.max(0, latestBlock - blocksBack);
     const transferTopic = ethers.id('Transfer(address,address,uint256)');
     const CHUNK = 9000;
@@ -3201,9 +3079,8 @@ function route() {
   if (_causeRefreshTimer) { clearInterval(_causeRefreshTimer); _causeRefreshTimer = null; }
   _pollers.clear();
   _causeBuyMode = 'shares';
-  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
-  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
+  if (_lcQuoteTimer) { clearTimeout(_lcQuoteTimer); _lcQuoteTimer = null; }
+  ++_lcQuoteSeq;
   const hash = location.hash.replace('#','').trim();
   if (hash && hash.startsWith('0x') && hash.length === 42) {
     renderCoinPage(hash);
@@ -3252,14 +3129,11 @@ function _galleryCacheSave(html, connectedAddress, userVerified) {
 
 async function renderGallery() {
   const gen = ++_renderGen;
-  // Invalidate any in-flight curve/zamm quote so its async callback can't write into the
-  // newly-rendered gallery DOM. _renderGen guards _galleryRenderFresh; these guard the
-  // already-fired quote setTimeout bodies that are mid-await on RPC.
-  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
-  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
-  ++_curveQuoteGen;
-  ++_curveZammQuoteGen;
+  // Invalidate any in-flight pool quote so its async callback can't write into the
+  // newly-rendered gallery DOM. _renderGen guards _galleryRenderFresh; this guards the
+  // already-fired quote setTimeout body that is mid-await on RPC.
+  if (_lcQuoteTimer) { clearTimeout(_lcQuoteTimer); _lcQuoteTimer = null; }
+  ++_lcQuoteSeq;
   updateOGMeta('COIN', 'Trade coins on zFi - the most secure-by-default exchange', '');
   const app = $('app');
 
@@ -3304,8 +3178,8 @@ async function _galleryRenderFresh(gen) {
   const app = $('app');
 
   try {
-    // Fetch DAICOs, ClassicalCurveSale tokens, NFT auctions, and ZAMM v0 coins in parallel.
-    const [daicos, curveTokenAddrs, nftAuctions, zammV0Coins] = await Promise.all([
+    // Fetch DAICOs, launched coins, NFT auctions, and ZAMM v0 coins in parallel.
+    const [daicos, launchRowsAll, nftAuctions, zammV0Coins] = await Promise.all([
       withRPC(async rpc => {
         const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
         const scanned = Array.from(await helper.scanDAICOs(0, 500, [ZERO]));
@@ -3318,12 +3192,12 @@ async function _galleryRenderFresh(gen) {
           .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
         return extra.concat(scanned);
       }),
-      fetchCurveTokenList(),
+      fetchLaunchedCoins(),
       fetchNftAuctions(),
       fetchZammV0CoinsForGallery()
     ]);
 
-    if ((!daicos || daicos.length === 0) && curveTokenAddrs.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
+    if ((!daicos || daicos.length === 0) && launchRowsAll.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
       if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
@@ -3384,45 +3258,17 @@ async function _galleryRenderFresh(gen) {
     // skip the inactive-coin heuristic — coins are simply not flagged inactive.
     const activityPromise = Promise.resolve(null);
 
-    // Build curve multicall in advance so it runs in parallel with DAICO data
     const daicoAddrs = new Set(filtered.map(d => d.dao.toLowerCase()));
-    const curveAddrs = curveTokenAddrs.filter(a => !daicoAddrs.has(a.toLowerCase()) && !EXCLUDED_COINS.has(a.toLowerCase()));
-    const csIface = curveAddrs.length > 0 ? new ethers.Interface(CURVE_SALE_ABI) : null;
-    const curveUriI = curveAddrs.length > 0 ? new ethers.Interface(['function contractURI() view returns (string)']) : null;
-    const curveNameI = curveAddrs.length > 0 ? new ethers.Interface(['function name() view returns (string)', 'function symbol() view returns (string)']) : null;
-    const curvePoolI = curveAddrs.length > 0 ? new ethers.Interface(ZAMM_POOLS_ABI) : null;
-    let curveMcCalls = [];
-    // Per-token call count. Named so adding a read stays a one-line change instead of
-    // an off-by-one hunt through every curveMcRes[i * N + k] below.
-    const CURVE_MC_STRIDE = 6;
-    for (const addr of curveAddrs) {
-      curveMcCalls.push(
-        { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('curves', [addr]) },
-        { target: addr, allowFailure: true, callData: curveUriI.encodeFunctionData('contractURI') },
-        { target: addr, allowFailure: true, callData: curveNameI.encodeFunctionData('name') },
-        { target: addr, allowFailure: true, callData: curveNameI.encodeFunctionData('symbol') },
-        // Post-graduation the curve's sold/virtualReserve freeze, so the card's mcap
-        // (and the low-mcap filter and mcap sort that read it) would stay pinned to the
-        // graduation price. Read the zAMM pool for the live number.
-        { target: ZAMM, allowFailure: true, callData: curvePoolI.encodeFunctionData('pools', [computePoolId(ZERO, addr, 0n, 0n, CURVE_HOOK_FEE)]) },
-        // A launch may mint more than cap + lpTokens and escrow the remainder as a
-        // creator allocation that unlocks at graduation. Nothing in curves() reveals it.
-        { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorVests', [addr]) }
-      );
-    }
+    const launchRows = launchRowsAll.filter(r => !daicoAddrs.has(r.token) && !EXCLUDED_COINS.has(r.token));
 
-    const [allMetadata, mcResults, ethUsd, activityGql, curveMcRes] = await Promise.all([
+    const [allMetadata, mcResults, ethUsd, activityGql] = await Promise.all([
       Promise.all(filtered.map(d => fetchMetadata(d.meta.contractURI))),
       withRPC(async rpc => {
         const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
         return await mc.aggregate3(poolCalls);
       }).catch(() => poolCalls.map(() => ({ success: false }))),
       getEthUsd(),
-      activityPromise,
-      curveMcCalls.length > 0 ? withRPC(async rpc => {
-        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-        return await mc.aggregate3(curveMcCalls);
-      }).catch(() => curveMcCalls.map(() => ({ success: false }))) : Promise.resolve([])
+      activityPromise
     ]);
 
     // Process activity results if freshly fetched
@@ -3568,111 +3414,84 @@ async function _galleryRenderFresh(gen) {
       cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam, isInactive, isLegacy, isLowMcap, isCause });
     }
 
-    // ── Curve coin cards (multicall data already fetched in Phase 2 above) ──
-    if (curveAddrs.length > 0 && curveMcRes.length > 0) {
-      // Fetch all curve metadata in parallel
-      const curveMetaPromises = curveAddrs.map((_, i) => {
-        const uriRes = curveMcRes[i * CURVE_MC_STRIDE + 1];
-        if (!uriRes || !uriRes.success) return Promise.resolve(null);
-        try {
-          const uri = curveUriI.decodeFunctionResult('contractURI', uriRes.returnData)[0];
-          return uri ? fetchMetadata(uri).catch(() => null) : Promise.resolve(null);
-        } catch { return Promise.resolve(null); }
-      });
-      const curveMetadatas = await Promise.all(curveMetaPromises);
+    // ── Launched coin cards ──
+    // Everything a card needs — name, symbol, supply, both prices — already came
+    // back in the LaunchInfo rows, so the only extra read is contractURI for the
+    // logo. That one is batched in FIVES rather than all at once: a coin whose
+    // image lives on-chain returns a ~44 KB inline document, and thirty of those
+    // in one multicall is a response big enough to fail.
+    if (launchRows.length > 0) {
+      const uriI = new ethers.Interface(['function contractURI() view returns (string)']);
+      const uris = [];
+      for (let b = 0; b < launchRows.length; b += 5) {
+        const batch = launchRows.slice(b, b + 5);
+        const res = await mcAggregate(batch.map(r => ({
+          target: r.token, allowFailure: true, callData: uriI.encodeFunctionData('contractURI')
+        }))).catch(() => batch.map(() => null));
+        for (const one of res) {
+          let u = '';
+          try { u = one?.success ? uriI.decodeFunctionResult('contractURI', one.returnData)[0] : ''; } catch {}
+          uris.push(u);
+        }
+      }
+      if (gen !== _renderGen) return;
+      const launchMetas = await Promise.all(uris.map(u => u ? fetchMetadata(u).catch(() => null) : Promise.resolve(null)));
       if (gen !== _renderGen) return;
 
-      for (let i = 0; i < curveAddrs.length; i++) {
-        const tokenAddr = curveAddrs[i];
-        const cRes = curveMcRes[i * CURVE_MC_STRIDE];
-        if (!cRes.success) continue;
-        let curve;
-        try { curve = csIface.decodeFunctionResult('curves', cRes.returnData); } catch { continue; }
-        if (!curve.creator || curve.creator === ZERO) continue;
+      for (let i = 0; i < launchRows.length; i++) {
+        const row = launchRows[i];
+        const meta = launchMetas[i] || {};
+        const lName = row.name || meta.name || 'Unknown';
+        const lSym = row.symbol || meta.symbol || '???';
+        const fdvEth = Number(row.fullyDilutedWei) / 1e18;
+        const backingEth = Number(row.backingEth) / 1e18;
 
-        const cMeta = curveMetadatas[i] || {};
-        let cName, cSym;
-        try { cName = curveNameI.decodeFunctionResult('name', curveMcRes[i * CURVE_MC_STRIDE + 2].returnData)[0]; } catch { cName = cMeta.name || 'Unknown'; }
-        try { cSym = curveNameI.decodeFunctionResult('symbol', curveMcRes[i * CURVE_MC_STRIDE + 3].returnData)[0]; } catch { cSym = cMeta.symbol || '???'; }
-
-        const sold = BigInt(curve.sold);
-        const cap = BigInt(curve.cap);
-        const virtualReserve = BigInt(curve.virtualReserve);
-        const startPrice = BigInt(curve.startPrice);
-        const raisedETH = BigInt(curve.raisedETH);
-        const graduationTarget = BigInt(curve.graduationTarget);
-        const graduated = curve.graduated;
-        const seeded = curve.seeded;
-
-        const remaining = virtualReserve - sold;
-        let spotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
-        // Once seeded, price lives in the zAMM pool — the curve figures are frozen.
-        if (seeded && curveMcRes[i * CURVE_MC_STRIDE + 4]?.success) {
-          try {
-            const pr = curvePoolI.decodeFunctionResult('pools', curveMcRes[i * CURVE_MC_STRIDE + 4].returnData);
-            const r0 = BigInt(pr[0]), r1 = BigInt(pr[1]);
-            if (r0 > 0n && r1 > 0n) spotPrice = (r0 * (10n ** 18n)) / r1;
-          } catch {}
-        }
-        const spotPriceEth = Number(spotPrice) / 1e18;
-        const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
-        // When graduationTarget > 0 the curve graduates on raisedETH ≥ target, not full cap sale.
-        // XYK pricing back-loads ETH into the last ~30% of supply, so a coin can be ~90% to
-        // graduation while only ~50% sold. Use the binding criterion (max of both) for the bar
-        // and label so progress is monotonic and matches what's shown on the detail page.
-        const ethPct = graduationTarget > 0n
-          ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
-          : 0;
-        const progressPct = Math.max(salePct, ethPct);
-        const curveMcap = spotPriceEth * 1e9; // 1B supply FDV
-        const cSaleActive = !graduated && cap > 0n && sold < cap;
-
-        const cCardName = cName.toLowerCase();
-        const cCardSym = cSym.toLowerCase();
-        const cCardAddr = tokenAddr.toLowerCase();
-        const isTest = cCardName === 'test';
-        if (isTest) { testCount++; }
-        const isLowMcap = !isTest && !cSaleActive && curveMcap < 0.05;
+        const cardName = lName.toLowerCase();
+        const cardSym = lSym.toLowerCase();
+        const cardAddr = row.token;
+        const isTest = cardName === 'test';
+        if (isTest) testCount++;
+        const isLowMcap = !isTest && fdvEth < 0.05;
         if (isLowMcap) lowMcapCount++;
-        const isSpam = _spamSet.has(cCardAddr);
+        const isSpam = _spamSet.has(cardAddr);
         if (isSpam) spamCount++;
 
-        // Only claim permanent LP when this coin actually burns it, and surface any
-        // other deviation from the standard template as a "!" badge on the card.
-        let cVest = null;
-        try {
-          const vr = curveMcRes[i * CURVE_MC_STRIDE + 5];
-          if (vr?.success) cVest = csIface.decodeFunctionResult('creatorVests', vr.returnData);
-        } catch {}
-        const cCurveWarnings = curveParamWarnings(curve, cVest);
-        const cCurveBadgeTitle = curveLpIsPermanent(curve)
-          ? 'bonding curve · permanent LP'
-          : 'bonding curve';
+        // How much of the valuation is ether a holder could actually redeem. It is
+        // the one number that separates a market with something under it from one
+        // priced entirely on hope, and it is not derivable from FDV alone.
+        const backedPct = fdvEth > 0 ? Math.min(100, (backingEth / fdvEth) * 100) : 0;
+        const bars = Math.round(backedPct / 10);
 
-        const mcapDisplay = curveMcap > 1e-6 ? fmtMcap(curveMcap) : '';
-        const mcapUsd = curveMcap > 1e-6 && ethUsd > 0 ? fmtUsd(curveMcap * ethUsd) : '';
-        const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : `${progressPct.toFixed(1)}% bonded`;
-        const logoImg = cMeta.image ? resolveIPFS(cMeta.image) : null;
+        const mcapDisplay = fdvEth > 1e-6 ? fmtMcap(fdvEth) : '';
+        const mcapUsd = fdvEth > 1e-6 && ethUsd > 0 ? fmtUsd(fdvEth * ethUsd) : '';
+        const statusText = row.floorPrice > 0n
+          ? `${backedPct < 0.1 ? '<0.1' : backedPct.toFixed(1)}% backed by ether`
+          : 'No buys yet';
+        const allocPct = Number(row.allocBps) / 100;
+        const badgeTitle = 'single-sided full-range pool, liquidity locked in the launcher'
+          + (row.allocBps ? ` \u00b7 creator kept ${allocPct}%` : '');
+
+        const logoImg = meta.image ? resolveIPFS(meta.image) : null;
         const logoEl = logoImg
-          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
-          : symbolSVG(cSym, 40);
+          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(lSym))},40)">`
+          : symbolSVG(lSym, 40);
 
-        const cCardHTML = `
-          <a href="#${tokenAddr}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cCardName)}" data-symbol="${escText(cCardSym)}" data-addr="${cCardAddr}" style="position:relative">
-            ${spamBtnHTML(cCardAddr, isSpam)}
+        const cardHTML = `
+          <a href="#${row.token}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+            ${spamBtnHTML(cardAddr, isSpam)}
             <div class="coin-card-head">
               <div class="coin-logo">${logoEl}</div>
               <div>
-                <div class="coin-card-name">${escText(cName)}</div>
-                <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(cCurveBadgeTitle)}">curve</span>${cCurveWarnings.length ? `<span class="coin-tpl-badge coin-tpl-warn" title="${escAttr(cCurveWarnings.join(' \u00b7 '))}">!</span>` : ''}</div>
+                <div class="coin-card-name">${escText(lName)}</div>
+                <div class="coin-card-symbol">$${escText(lSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">coin</span></div>
               </div>
             </div>
-            <div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(progressPct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(progressPct,100) / 10))}</div>
+            <div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
             <div class="coin-card-stat">${statusText}</div>
             ${mcapDisplay ? `<div class="coin-card-mcap">FDV ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cCardHTML, key: cCardName + '|' + cCardSym, mcap: curveMcap, r0: 0n, poolDeep: false, saleActive: cSaleActive, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false, isCurve: true });
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth, r0: row.reserve0, poolDeep: false, saleActive: false, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false, isLaunched: true });
       }
     }
 
@@ -3695,19 +3514,18 @@ async function _galleryRenderFresh(gen) {
     const allGroups = [...groups.values()];
     for (const group of allGroups) group.sort((a, b) => b.mcap - a.mcap);
 
-    // Classify each group as curve or DAICO based on its top (highest-mcap) card.
-    // Mixed-type stacks (rare — same name/symbol shared across launch types) follow
-    // their top card into whichever section it belongs to.
-    const curveGroups = [];
+    // Classify each group as a launched coin or a DAICO based on its top
+    // (highest-mcap) card. Mixed-type stacks (rare — same name/symbol shared across
+    // launch types) follow their top card into whichever section it belongs to.
+    const launchedGroups = [];
     const daicoGroups = [];
     for (const group of allGroups) {
-      if (group[0]?.isCurve) curveGroups.push(group);
+      if (group[0]?.isLaunched) launchedGroups.push(group);
       else daicoGroups.push(group);
     }
     // DAICOs: finalized (post-sale) before in-sale; finalized sub-sorts by LP
-    // depth (r0), in-sale sub-sorts by mcap. Curve cards never capture r0, so
-    // a separate sort uses mcap for both halves — graduated/seeded first, then
-    // still-bonding by mcap (which tracks sale progress on a curve).
+    // depth (r0), in-sale sub-sorts by mcap. A launched coin has no sale phase —
+    // it is a market from the first block — so those sort on FDV alone.
     const daicoSort = (a, b) => {
       const aTop = a[0], bTop = b[0];
       const aFinalized = !aTop.saleActive;
@@ -3716,14 +3534,7 @@ async function _galleryRenderFresh(gen) {
       if (aFinalized) return aTop.r0 > bTop.r0 ? -1 : aTop.r0 < bTop.r0 ? 1 : 0;
       return bTop.mcap - aTop.mcap;
     };
-    const curveSort = (a, b) => {
-      const aTop = a[0], bTop = b[0];
-      const aFinalized = !aTop.saleActive;
-      const bFinalized = !bTop.saleActive;
-      if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
-      return bTop.mcap - aTop.mcap;
-    };
-    curveGroups.sort(curveSort);
+    launchedGroups.sort((a, b) => b[0].mcap - a[0].mcap);
     daicoGroups.sort(daicoSort);
 
     function renderGroup(group) {
@@ -3740,10 +3551,10 @@ async function _galleryRenderFresh(gen) {
       return out;
     }
 
-    if (curveGroups.length > 0) {
-      const n = curveGroups.reduce((s, g) => s + g.length, 0);
-      grid += `<div class="coin-grid-section" data-section="curve">Curve coins <span class="count">${n}</span></div>`;
-      for (const group of curveGroups) grid += renderGroup(group);
+    if (launchedGroups.length > 0) {
+      const n = launchedGroups.reduce((s, g) => s + g.length, 0);
+      grid += `<div class="coin-grid-section" data-section="launched">Coins <span class="count">${n}</span></div>`;
+      for (const group of launchedGroups) grid += renderGroup(group);
     }
     if (daicoGroups.length > 0) {
       const n = daicoGroups.reduce((s, g) => s + g.length, 0);
@@ -3897,27 +3708,7 @@ let _poolReserve1 = 0n;
 let _poolSupply = 0n; // total LP supply for the zAMM pool
 let _lpBalance = 0n;
 
-// ==================== CURVE COIN PAGE ====================
-let _curveSlippageBps = 300; // 3% default
-let _curveTokenAddr = null;
-let _curveData = null;
-let _curveObs = [];
-let _curveEthUsd = 0;
-let _curveBalance = 0n;
-// Live creator-fee config so post-grad routed swaps charge the right amount.
-// _curveCreatorRouted is true when beneficiary != 0 (i.e. ZAMM direct swaps would revert with Unauthorized).
-// *OnInput flags determine which leg of the swap is taxed; quote/minOut math diverges based on them.
-let _curveCreatorBuyBps = 0;
-let _curveCreatorSellBps = 0;
-let _curveCreatorBuyOnInput = false;
-let _curveCreatorSellOnInput = false;
-let _curveCreatorRouted = false;
-// Single-flight guard so a quick double-click can't enqueue two trades.
-let _curveTrading = false;
-// Chart mode: 'curve' (bonding-curve trajectory) or 'price' (price line + trade dots over time).
-// In-memory only — defaults to 'curve' every page load since it tells the more complete story
-// for a coin you've never seen. Toggle holds for the session only; no persistence needed.
-let _curveChartMode = 'curve';
+// ==================== COIN FORMATTERS ====================
 
 function formatEthPrice(val) {
   if (val === 0) return '0';
@@ -3946,1727 +3737,460 @@ function fmtTokenAmount(weiStr) {
   return v.toFixed(2);
 }
 
-async function renderCurveCoinPage(tokenAddr, curve, gen) {
+// ---- Launched coin state ----
+// A launched coin has no phases: the pool its launch seeded is the market from the
+// first block, so there is one panel here and one price, where the bonding-curve
+// page this replaced had a pre-graduation curve, a graduation step and a separate
+// post-graduation pool panel that each priced the same coin differently.
+let _lcInfo = null;
+let _lcToken = null;
+let _lcPool = null;
+let _lcSide = 'buy';
+let _lcSlipPct = 3;
+let _lcQuote = null;
+let _lcQuoteSeq = 0;
+let _lcQuoteTimer = null;
+let _lcBalance = 0n;
+let _lcEthUsd = 0;
+let _lcTrading = false;
+
+const LAUNCHER = '0x0000002fC8E77585A008Aa45d78A71ad36293aEe';
+const LAUNCHER_ABI = [
+  'function redeem(address token, uint256 amount, uint256 minEthOut, address to) returns (uint256 ethOut)',
+  'function quoteRedeem(address token, uint256 amount) view returns (uint256 ethOut)',
+  'function floorPrice(address token) view returns (uint256)',
+  'function collectFees(address token)'
+];
+
+async function renderLaunchedCoinPage(tokenAddr, info, gen) {
   const app = $('app');
-  _curveTokenAddr = tokenAddr;
-  _curveData = curve;
-  _curveEffectiveFee = null;
-  // Invalidate any in-flight quote from a previous coin so its callback can't write into
-  // the freshly-rendered DOM. clearTimeout stops not-yet-fired timers; the gen bump guards
-  // already-fired async callbacks awaiting their RPC response.
-  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
-  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
-  ++_curveQuoteGen;
-  ++_curveZammQuoteGen;
+  _lcToken = tokenAddr;
+  _lcInfo = info;
+  _lcPool = info.pool;
+  _lcQuote = null;
+  ++_lcQuoteSeq;
+  if (_lcQuoteTimer) { clearTimeout(_lcQuoteTimer); _lcQuoteTimer = null; }
 
-  const sold = BigInt(curve.sold);
-  const cap = BigInt(curve.cap);
-  const virtualReserve = BigInt(curve.virtualReserve);
-  const startPrice = BigInt(curve.startPrice);
-  const raisedETH = BigInt(curve.raisedETH);
-  const graduated = curve.graduated;
-  const seeded = curve.seeded;
-  const launchTime = Number(curve.launchTime);
-
-  // Spot price. Pre-graduation this is the bonding curve. Post-graduation the
-  // curve's sold/virtualReserve freeze at their graduation values, so this formula
-  // would pin the header (and FDV) to the graduation price forever while real
-  // trading moves the zAMM pool. Verified on a simulated graduation: one 3 ETH buy
-  // left this reading 143% below the actual pool price. `let` so the post-multicall
-  // block below can swap in the live pool spot once reserves are known.
-  const remaining = virtualReserve - sold;
-  const curveSpotPrice = remaining > 0n ? (startPrice * virtualReserve * virtualReserve) / (remaining * remaining) : 0n;
-  let spotPrice = curveSpotPrice;
-  let spotPriceEth = Number(spotPrice) / 1e18;
-  const salePct = cap > 0n ? Number((sold * 10000n) / cap) / 100 : 0;
-  let fdvEth = spotPriceEth * 1e9;
-
-  // Graduation progress tracks whichever criterion the contract actually uses:
-  //   graduationTarget > 0 → triggers on raisedETH ≥ target (sold/cap is misleading because
-  //                          XYK pricing back-loads ETH into the last ~30% of supply).
-  //   graduationTarget == 0 → triggers on full cap sale, so sold/cap is the right metric.
-  const graduationTarget = BigInt(curve.graduationTarget);
-  const targetGated = graduationTarget > 0n;
-  const ethPct = targetGated && raisedETH > 0n
-    ? Math.min(100, Number(raisedETH * 10000n / graduationTarget) / 100)
-    : 0;
-  const progressPct = targetGated ? ethPct : Math.min(100, salePct);
-  const progressLabel = targetGated ? 'graduation' : 'curve';
-
-  // Batch: obsCount + graduable + ETH/USD + token name/symbol + contractURI + creatorFees + balance via multicall
-  const csIface = new ethers.Interface(CURVE_SALE_ABI);
   const erc20I = new ethers.Interface(ERC20_ABI);
-  const nameI = new ethers.Interface(['function name() view returns (string)', 'function symbol() view returns (string)']);
-
-  const uriI = new ethers.Interface(['function contractURI() view returns (string)']);
-  const mc3Calls = [
-    { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('observationCount', [tokenAddr]) },
-    { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('graduable', [tokenAddr]) },
-    { target: CHAINLINK_ETH_USD, allowFailure: true, callData: new ethers.Interface(CHAINLINK_ABI).encodeFunctionData('latestAnswer') },
-    { target: tokenAddr, allowFailure: true, callData: nameI.encodeFunctionData('name') },
-    { target: tokenAddr, allowFailure: true, callData: nameI.encodeFunctionData('symbol') },
-    { target: tokenAddr, allowFailure: true, callData: uriI.encodeFunctionData('contractURI') },
-    // Post-grad routing: read live creator fee so swap quotes & minOut match what the contract will actually charge.
-    { target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorFees', [tokenAddr]) },
-    // Post-graduation the live price lives in the zAMM pool, not the frozen curve.
-    { target: ZAMM, allowFailure: true, callData: new ethers.Interface(ZAMM_POOLS_ABI).encodeFunctionData('pools', [computePoolId(ZERO, tokenAddr, 0n, 0n, CURVE_HOOK_FEE)]) }
+  const clI = new ethers.Interface(CHAINLINK_ABI);
+  const calls = [
+    { target: CHAINLINK_ETH_USD, allowFailure: true, callData: clI.encodeFunctionData('latestAnswer') }
   ];
   if (_connectedAddress) {
-    mc3Calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
+    calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
   }
-  // Appended last, after the optional balance, so the fixed indices above keep meaning
-  // what they say whether or not a wallet is connected.
-  const vestIdx = mc3Calls.length;
-  mc3Calls.push({ target: CURVE_SALE, allowFailure: true, callData: csIface.encodeFunctionData('creatorVests', [tokenAddr]) });
-
-  const mcRes = await withRPC(async rpc => {
-    const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-    return await mc.aggregate3(mc3Calls);
-  }).catch(() => mc3Calls.map(() => ({ success: false })));
-  if (gen !== _renderGen) return;
-
-  const obsCount = mcRes[0].success ? Number(csIface.decodeFunctionResult('observationCount', mcRes[0].returnData)[0]) : 0;
-  const graduable = mcRes[1].success ? csIface.decodeFunctionResult('graduable', mcRes[1].returnData)[0] : false;
-  const ethUsd = mcRes[2].success ? Number(new ethers.Interface(CHAINLINK_ABI).decodeFunctionResult('latestAnswer', mcRes[2].returnData)[0]) / 1e8 : 0;
-  const tokenName = mcRes[3].success ? nameI.decodeFunctionResult('name', mcRes[3].returnData)[0] : 'Unknown';
-  const tokenSymbol = mcRes[4].success ? nameI.decodeFunctionResult('symbol', mcRes[4].returnData)[0] : '???';
-  const contractURI = mcRes[5].success ? uriI.decodeFunctionResult('contractURI', mcRes[5].returnData)[0] : '';
-  let cfBeneficiary = ZERO, cfBuyBps = 0, cfSellBps = 0, cfBuyOnInput = false, cfSellOnInput = false;
-  if (mcRes[6].success) {
-    try {
-      const cf = csIface.decodeFunctionResult('creatorFees', mcRes[6].returnData);
-      cfBeneficiary = cf[0]; cfBuyBps = Number(cf[1]); cfSellBps = Number(cf[2]);
-      // *OnInput flags decide which leg is taxed — quote and minOut math diverges based on them.
-      // Defaults (false) match the prior assumption (sellOnInput=false), so existing pools are unaffected.
-      cfBuyOnInput = Boolean(cf[3]); cfSellOnInput = Boolean(cf[4]);
-    } catch {}
-  }
-  _curveCreatorBuyBps = cfBuyBps;
-  _curveCreatorSellBps = cfSellBps;
-  _curveCreatorBuyOnInput = cfBuyOnInput;
-  _curveCreatorSellOnInput = cfSellOnInput;
-  _curveCreatorRouted = cfBeneficiary !== ZERO;
-  // Pool reserves are index 7; the optional balanceOf now lands at 8.
-  if (seeded && mcRes[7]?.success) {
-    try {
-      const pr = new ethers.Interface(ZAMM_POOLS_ABI).decodeFunctionResult('pools', mcRes[7].returnData);
-      const r0 = BigInt(pr[0]), r1 = BigInt(pr[1]);
-      if (r0 > 0n && r1 > 0n) {
-        spotPrice = (r0 * (10n ** 18n)) / r1;   // ETH per whole token, 1e18-scaled
-        spotPriceEth = Number(spotPrice) / 1e18;
-        fdvEth = spotPriceEth * 1e9;
-      }
-    } catch {}
-  }
-  const tokenBalance = (_connectedAddress && mcRes[8]?.success) ? erc20I.decodeFunctionResult('balanceOf', mcRes[8].returnData)[0] : 0n;
-  let curveVest = null;
-  try {
-    if (mcRes[vestIdx]?.success) curveVest = csIface.decodeFunctionResult('creatorVests', mcRes[vestIdx].returnData);
-  } catch {}
-
-  _curveEthUsd = ethUsd;
-  _curveBalance = tokenBalance;
-
-  // Resolve metadata + load observations in parallel (both depend on phase 1 results)
-  const [curveMeta, observations] = await Promise.all([
-    contractURI ? fetchMetadata(contractURI).catch(() => null) : Promise.resolve(null),
-    obsCount > 0 ? withRPC(async rpc => {
-      const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
-      return decodeObservations(await cs.observe(tokenAddr, Math.max(0, obsCount - 500), obsCount));
-    }).catch(() => []) : Promise.resolve([])
+  const [meta, res] = await Promise.all([
+    fetchMetadata(info.contractURI).catch(() => null),
+    mcAggregate(calls).catch(() => calls.map(() => ({ success: false })))
   ]);
-  _curveObs = observations;
-  const bannerUrl = curveMeta ? resolveIPFS(curveMeta.banner) : null;
-  const curveDesc = curveMeta ? curveMeta.description : null;
   if (gen !== _renderGen) return;
 
-  const raisedFmt = Number(ethers.formatEther(raisedETH)).toFixed(4);
-  const raisedUsd = ethUsd ? ' ($' + (Number(ethers.formatEther(raisedETH)) * ethUsd).toFixed(2) + ')' : '';
-  const balFmt = tokenBalance > 0n ? fmtTokenAmount(tokenBalance.toString()) : '0';
+  _lcEthUsd = res[0]?.success ? Number(clI.decodeFunctionResult('latestAnswer', res[0].returnData)[0]) / 1e8 : 0;
+  _lcBalance = (_connectedAddress && res[1]?.success)
+    ? erc20I.decodeFunctionResult('balanceOf', res[1].returnData)[0] : 0n;
 
-  // Price change from observations
-  let priceChangeHTML = '';
-  if (observations.length >= 2) {
-    const prices = observations.map(o => Number(BigInt(o.price)) / 1e18);
-    const first = prices[0], last = prices[prices.length - 1];
-    const pct = first > 0 ? ((last - first) / first) * 100 : 0;
-    const isUp = last >= first;
-    priceChangeHTML = `<span style="font-size:13px;font-weight:600;color:${isUp ? 'var(--green)' : 'var(--red)'};margin-left:8px">${formatPct(pct)}</span>`;
-  }
+  const md = meta || {};
+  const name = info.name || md.name || 'Unknown';
+  const sym = info.symbol || md.symbol || '???';
+  const desc = md.description || '';
+  const bannerUrl = md.banner ? resolveIPFS(md.banner) : null;
 
-  const perMil = spotPriceEth * 1e6;
-  const perMilUsd = ethUsd ? ' <span style="font-size:11px;color:var(--fg-muted)">($' + (perMil * ethUsd < 0.01 ? (perMil * ethUsd).toExponential(2) : (perMil * ethUsd).toFixed(2)) + ')</span>' : '';
+  updateOGMeta(`${name} ($${sym})`, desc || `Trade ${sym} on zFi`, md.image ? resolveIPFS(md.image) : '');
 
-  const statusColor = seeded ? 'var(--green)' : graduated ? '#FF9800' : 'var(--fg)';
-  const statusText = seeded ? 'Graduated' : graduated ? 'Ready to LP' : 'Active';
+  const marketEth = Number(info.marketPrice) / 1e18;
+  const floorEth = Number(info.floorPrice) / 1e18;
+  const fdvEth = Number(info.fullyDilutedWei) / 1e18;
+  const backingEth = Number(info.backingEth) / 1e18;
+  // The premium is what the market pays over what the coin can be burned back for.
+  // Both prices are marginal and fee-free, so they are directly comparable.
+  const premiumPct = floorEth > 0 ? ((marketEth - floorEth) / floorEth) * 100 : null;
+  const perMil = marketEth * 1e6;
+  const perMilUsd = _lcEthUsd
+    ? ` <span style="font-size:11px;color:var(--fg-muted)">($${perMil * _lcEthUsd < 0.01 ? (perMil * _lcEthUsd).toExponential(2) : (perMil * _lcEthUsd).toFixed(2)})</span>` : '';
+  const balFmt = _lcBalance > 0n ? fmtTokenAmount(_lcBalance.toString()) : '0';
+  const allocPct = Number(info.allocBps) / 100;
+  const badgeTitle = 'single-sided full-range pool · liquidity locked in the launcher'
+    + (info.allocBps ? ` · creator kept ${allocPct}% at launch` : '');
 
-  // Creator earnings from observations (volume × effective fee at trade time / 10000).
-  // Mirrors ClassicalCurveSale._effectiveFee so the displayed total matches what the contract
-  // actually paid out — using the static feeBps under-counts trades inside the sniper window.
-  const baseFeeBps = Number(curve.feeBps);
-  const sniperFeeBps = Number(curve.sniperFeeBps);
-  const sniperDuration = Number(curve.sniperDuration);
-  const launchTimeSec = Number(curve.launchTime);
-  function _effFeeAt(ts) {
-    if (sniperFeeBps === 0 || sniperDuration === 0) return baseFeeBps;
-    const elapsed = ts - launchTimeSec;
-    if (elapsed >= sniperDuration) return baseFeeBps;
-    if (elapsed <= 0) return sniperFeeBps;
-    return baseFeeBps + Math.floor((sniperFeeBps - baseFeeBps) * (sniperDuration - elapsed) / sniperDuration);
-  }
-  let creatorEarnings = 0;
-  for (const obs of observations) {
-    const vol = Number(BigInt(obs.volume)) / 1e18;
-    creatorEarnings += vol * _effFeeAt(obs.timestamp) / 10000;
-  }
-  const earningsFmt = creatorEarnings >= 0.0001 ? creatorEarnings.toFixed(4) : creatorEarnings > 0 ? creatorEarnings.toExponential(2) : '0';
-  const earningsUsd = ethUsd && creatorEarnings > 0 ? ' ($' + (creatorEarnings * ethUsd).toFixed(2) + ')' : '';
+  const _ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
+  const _tokTag = `<span class="swap-token-tag">$${escText(sym)}</span>`;
+  const _arrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
+  const slipBtns = [1, 3, 5, 10].map(pct =>
+    `<button class="coin-tpl-btn${pct === _lcSlipPct ? ' active' : ''}" onclick="lcSetSlippage(${pct},this)" style="font-size:9px;padding:3px 6px">${pct}%</button>`).join('');
 
-  let html = `
+  app.innerHTML = `
     <a href="#" class="back-link">&larr; All Coins</a>
     ${bannerUrl ? `<div class="coin-banner"><img src="${escAttr(bannerUrl)}" alt="" onerror="if(!ipfsNextGateway(this))this.parentNode.style.display='none'"></div>` : ''}
     <div class="coin-detail-head">
-      <div class="coin-detail-logo">${curveMeta ? logoHTML({symbol: tokenSymbol}, curveMeta, 64) : symbolSVG(tokenSymbol, 64)}</div>
+      <div class="coin-detail-logo">${logoHTML({ symbol: sym }, md, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
-        <h2>${escText(tokenName)} <span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(curveLpIsPermanent(curve) ? 'bonding curve \u00b7 permanent LP' : 'bonding curve')}">curve</span></h2>
+        <h2>${escText(name)} <span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">coin</span></h2>
         <div class="coin-symbol-row">
-          <span>$${escText(tokenSymbol)}</span>
+          <span>$${escText(sym)}</span>
           ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} tokens</div>` : ''}
         </div>
-        <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${curve.creator}" target="_blank" style="color:inherit">${curve.creator.slice(0,6)}&hellip;${curve.creator.slice(-4)}</a></div>
+        <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">by <a href="https://etherscan.io/address/${info.creator}" target="_blank" style="color:inherit">${info.creator.slice(0,6)}&hellip;${info.creator.slice(-4)}</a></div>
       </div>
     </div>
 
-    ${(() => {
-      const w = curveParamWarnings(curve, curveVest);
-      return w.length ? `<div class="curve-param-notice"><strong>Launched with non-standard settings.</strong> This coin was configured directly rather than through the launcher, so it does not carry the usual terms:<ul>${w.map(x => `<li>${escText(x)}</li>`).join('')}</ul></div>` : '';
-    })()}
+    ${desc || (md.twitter || md.telegram || md.discord) ? `<div class="section-card">${desc ? `<div class="desc-text">${escText(desc)}</div>` : ''}${(md.twitter || md.telegram || md.discord) ? renderSocials(md, !!desc) : ''}</div>` : ''}
 
-    ${curveDesc || (curveMeta && (curveMeta.twitter || curveMeta.telegram || curveMeta.discord)) ? `<div class="section-card">${curveDesc ? `<div class="desc-text">${escText(curveDesc)}</div>` : ''}${curveMeta && (curveMeta.twitter || curveMeta.telegram || curveMeta.discord) ? renderSocials(curveMeta, !!curveDesc) : ''}</div>` : ''}
-
-    <!-- Price header -->
-    <div style="margin-bottom:10px;display:flex;align-items:baseline;flex-wrap:wrap">
+    <div style="margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap">
       <span style="font-size:18px;font-weight:700">${formatEthPrice(perMil)} ETH</span>
-      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">per 1M</span>${perMilUsd}${priceChangeHTML}
+      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">per 1M</span>${perMilUsd}
+      ${premiumPct !== null ? `<span style="font-size:13px;font-weight:600;color:${premiumPct >= 0 ? 'var(--green)' : 'var(--red)'};margin-left:8px" title="What the market charges over the redemption floor">${formatPct(premiumPct)} vs floor</span>` : ''}
     </div>
 
-    <!-- Price chart with mode toggle -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <div style="font-size:9px;color:var(--fg-dim);letter-spacing:0.05em;text-transform:uppercase">${_curveChartMode === 'price' ? 'Price (per 1M)' : 'Bonding curve'}</div>
-      <div style="display:inline-flex;border:1px solid var(--border-muted);border-radius:4px;overflow:hidden">
-        <button id="curveChartCurveBtn" onclick="setCurveChartMode('curve')" style="padding:3px 10px;background:${_curveChartMode === 'curve' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_curveChartMode === 'curve' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:10px;font-weight:600;cursor:pointer">Curve</button>
-        <button id="curveChartPriceBtn" onclick="setCurveChartMode('price')" style="padding:3px 10px;background:${_curveChartMode === 'price' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_curveChartMode === 'price' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:10px;font-weight:600;cursor:pointer">Price</button>
-      </div>
-    </div>
-    <canvas id="curveChart" style="width:100%;height:200px;border-radius:6px;background:var(--surface);margin-bottom:12px"></canvas>
-
-    <!-- Stats grid -->
     <div class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
-        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Raised</div>
-        <div style="font-weight:600">${raisedFmt} ETH</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${raisedUsd}</div>
+        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">FDV</div>
+        <div style="font-weight:600">${fdvEth > 1e-6 ? fmtMcap(fdvEth) : '—'}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${fdvEth > 1e-6 && _lcEthUsd > 0 ? fmtUsd(fdvEth * _lcEthUsd) : 'at market price'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
-        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Sold</div>
-        <div style="font-weight:600">${salePct.toFixed(1)}%</div>
-        <div style="font-size:9px;color:var(--fg-dim)">of curve supply</div>
+      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Ether the locked position would release in full. This is what backs the floor.">
+        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Backing</div>
+        <div style="font-weight:600">${backingEth >= 0.0001 ? backingEth.toFixed(4) : backingEth > 0 ? backingEth.toExponential(2) : '0'} ETH</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${fdvEth > 0 ? (Math.min(100, backingEth / fdvEth * 100)).toFixed(1) + '% of FDV' : 'in the pool'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
-        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Fees</div>
-        <div style="font-weight:600">${earningsFmt} ETH</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${earningsUsd || 'to creator'}</div>
+      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Burn back to the launcher for this much ether per token, at any time. It only ever rises.">
+        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Floor</div>
+        <div style="font-weight:600">${floorEth > 0 ? formatEthPrice(floorEth * 1e6) : '—'}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 ? 'ETH per 1M' : 'no buys yet'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
-        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
-        <div style="font-weight:600;color:${statusColor}">${statusText}</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${observations.length} trades</div>
+      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Live supply. Redemptions and fee burns retire it — a launched coin's supply only ever falls.">
+        <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Supply</div>
+        <div style="font-weight:600">${fmtTokenAmount(info.totalSupply.toString())}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${fmtTokenAmount(info.circulating.toString())} outside the pool</div>
       </div>
     </div>
 
-    <!-- Progress bar (graduation criterion: ETH-target if set, otherwise sold/cap) -->
-    <div style="margin-bottom:14px;font-family:monospace">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
-        <span>${progressLabel}</span>
-        <span>${progressPct.toFixed(1)}%</span>
+    <div class="section-card">
+      <div style="display:flex;margin-bottom:10px;border:1px solid var(--border-muted);border-radius:6px;overflow:hidden">
+        <button id="lcBuyBtn" onclick="lcSwitchSide('buy')" style="flex:1;padding:8px;background:${_lcSide === 'buy' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_lcSide === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:12px;font-weight:600;cursor:pointer">Buy</button>
+        <button id="lcSellBtn" onclick="lcSwitchSide('sell')" style="flex:1;padding:8px;background:${_lcSide === 'sell' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_lcSide === 'sell' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:12px;font-weight:600;cursor:pointer">Sell</button>
       </div>
-      <div style="font-family:monospace;font-size:11px;line-height:1;color:var(--fg-dim);display:flex;width:100%"><span style="flex:${Math.max(progressPct,0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100-progressPct,0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
+
+      <div class="swap-tile">
+        <div class="swap-tile-label">You pay</div>
+        <div class="swap-tile-row">
+          <input id="lcAmount" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to spend" oninput="lcQuoteDebounced()">
+          <span id="lcInTag">${_lcSide === 'buy' ? _ethTag : _tokTag}</span>
+        </div>
+        <div id="lcPctRow" style="display:${_lcSide === 'sell' ? 'flex' : 'none'};gap:4px;margin-top:6px">
+          ${[25, 50, 75, 100].map(p => `<button class="coin-tpl-btn" onclick="lcSetSellPct(${p})" style="font-size:9px;padding:3px 6px">${p === 100 ? 'Max' : p + '%'}</button>`).join('')}
+        </div>
+      </div>
+      <div class="swap-tile-arrow">${_arrowSvg}</div>
+      <div class="swap-tile">
+        <div class="swap-tile-label">You receive</div>
+        <div class="swap-tile-row">
+          <div id="lcOut" class="curve-out-amount placeholder">0</div>
+          <span id="lcOutTag">${_lcSide === 'buy' ? _tokTag : _ethTag}</span>
+        </div>
+        <div id="lcOutSub" class="curve-out-sub">&nbsp;</div>
+      </div>
+
+      <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
+        <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
+        ${slipBtns}
+      </div>
+
+      <button id="lcGo" class="swap-btn" style="width:100%;margin-top:10px" onclick="lcTrade()">${_connectedAddress ? (_lcSide === 'buy' ? 'Buy' : 'Sell') : 'Connect Wallet'}</button>
+      <div id="lcStatus" style="margin-top:8px"></div>
+
+      <div style="margin-top:10px;font-size:11px;color:var(--fg-muted);line-height:1.6">
+        1% swap fee. Half stays in the pool as reserves, which raises the floor for every
+        holder; the rest splits 80% creator, 10% protocol, 10% burned to Ethereum.
+      </div>
     </div>
-    <div id="curveSniperNotice" style="display:none"></div>
-  `;
 
-  // Render the slippage row with the persisted selection marked active. The previous
-  // hardcoded `active` on the 3% button desynced from _curveSlippageBps after every
-  // re-render — UI said 3% while the next trade actually used the user's last pick.
-  const _slipRowHTML = (() => {
-    const opts = [1, 3, 5, 10];
-    const cur = _curveSlippageBps / 100;
-    const btns = opts.map(p => `<button class="coin-tpl-btn${p === cur ? ' active' : ''}" onclick="curveSetSlippage(${p},this)" style="font-size:9px;padding:3px 6px">${p}%</button>`).join('');
-    return `<div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-      <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
-      ${btns}
-    </div>`;
-  })();
-
-  // Trade panel (pre-graduation). Swap-tile layout: pay section → directional arrow → receive
-  // section → fee/price/min-received breakdown. Quote functions populate the receive side and
-  // the breakdown rows directly so users can see exactly what they'll get and what minOut the
-  // contract will be called with.
-  if (!graduated) {
-    const _arrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
-    const _balShort = tokenBalance > 0n ? fmtTokenAmount(tokenBalance.toString()) : '0';
-    const _ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
-    const _tokTag = `<span class="swap-token-tag">$${escText(tokenSymbol)}</span>`;
-    html += `
-      <div class="section-card">
-        <div class="section-title">Trade</div>
-        <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="curveBuyBtn" onclick="curveSwitchSide('buy')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Buy</button>
-          <button id="curveSellBtn" onclick="curveSwitchSide('sell')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">Sell</button>
-        </div>
-
-        <!-- BUY: pay ETH → receive tokens -->
-        <div id="curveBuyWrap">
-          <div class="swap-section">
-            <div class="swap-section-head"><label>You pay</label></div>
-            <div style="display:flex;gap:8px;align-items:flex-end">
-              <input id="curveBuyAmount" type="text" inputmode="decimal" placeholder="0.0" aria-label="ETH amount to buy" oninput="curveUpdateBuyQuote()">
-              ${_ethTag}
-            </div>
-            <div class="swap-pct-row">
-              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.005)">0.005</button>
-              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.01)">0.01</button>
-              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.05)">0.05</button>
-              <button class="swap-pct-btn" onclick="curveSetBuyAmt(0.1)">0.1</button>
-            </div>
-          </div>
-          <div class="swap-arrow-row"><div class="curve-dir-arrow">${_arrowSvg}</div></div>
-          <div class="swap-section">
-            <div class="swap-section-head"><label>You receive (estimated)</label></div>
-            <div class="curve-out-row">
-              <div id="curveBuyOut" class="curve-out-amount placeholder">0</div>
-              ${_tokTag}
-            </div>
-            <div id="curveBuyOutSub" class="curve-out-sub">&nbsp;</div>
-          </div>
-          <div id="curveBuyCapNote" style="display:none;font-size:11px;line-height:1.5;color:#FF9800;margin-top:6px"></div>
-          <div id="curveBuyDetails" class="curve-details" style="display:none">
-            <div class="curve-details-row"><span>Price</span><span class="v" id="curveBuyDetPrice">—</span></div>
-            <div class="curve-details-row"><span>Curve fee</span><span class="v" id="curveBuyDetFee">—</span></div>
-            <div class="curve-details-row"><span>Min received</span><span class="v" id="curveBuyDetMin">—</span></div>
-          </div>
-          <button class="action-btn" style="margin-top:12px" onclick="curveBuy()">${_connectedAddress ? 'Buy ' + escText(tokenSymbol) : 'Connect Wallet'}</button>
-        </div>
-
-        <!-- SELL: pay tokens → receive ETH -->
-        <div id="curveSellWrap" style="display:none">
-          <div class="swap-section">
-            <div class="swap-section-head">
-              <label>You pay</label>
-              <span class="swap-balance" onclick="curveSetSellPct(100)" title="Click to use full balance">Balance: ${_balShort}</span>
-            </div>
-            <div style="display:flex;gap:8px;align-items:flex-end">
-              <input id="curveSellAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" oninput="curveUpdateSellQuote()">
-              ${_tokTag}
-            </div>
-            <div class="swap-pct-row">
-              <button class="swap-pct-btn" onclick="curveSetSellPct(25)">25%</button>
-              <button class="swap-pct-btn" onclick="curveSetSellPct(50)">50%</button>
-              <button class="swap-pct-btn" onclick="curveSetSellPct(75)">75%</button>
-              <button class="swap-pct-btn" onclick="curveSetSellPct(100)">Max</button>
-            </div>
-          </div>
-          <div class="swap-arrow-row"><div class="curve-dir-arrow">${_arrowSvg}</div></div>
-          <div class="swap-section">
-            <div class="swap-section-head"><label>You receive (estimated)</label></div>
-            <div class="curve-out-row">
-              <div id="curveSellOut" class="curve-out-amount placeholder">0</div>
-              ${_ethTag}
-            </div>
-            <div id="curveSellOutSub" class="curve-out-sub">&nbsp;</div>
-          </div>
-          <div id="curveSellDetails" class="curve-details" style="display:none">
-            <div class="curve-details-row"><span>Price</span><span class="v" id="curveSellDetPrice">—</span></div>
-            <div class="curve-details-row"><span>Curve fee</span><span class="v" id="curveSellDetFee">—</span></div>
-            <div class="curve-details-row"><span>Min received</span><span class="v" id="curveSellDetMin">—</span></div>
-          </div>
-          <button class="action-btn" style="margin-top:12px;background:var(--red);color:#fff" onclick="curveSell()">${_connectedAddress ? 'Sell ' + escText(tokenSymbol) : 'Connect Wallet'}</button>
-        </div>
-
-        ${_slipRowHTML}
-        <div id="curveTradeStatus" style="margin-top:8px"></div>
+    ${info.floorPrice > 0n ? `
+    <div class="section-card">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:6px">Redeem at the floor</div>
+      <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:8px">
+        Burn ${escText(sym)} back to the launcher for its share of the pool's ether. This is a
+        second exit, not the only one — take it when the market is paying less than the floor,
+        and sell into the pool when it is paying more.
       </div>
-    `;
-  }
-
-  // Graduation button — visible only when the curve has hit its trigger (sold == cap if
-  // graduationTarget == 0, else raisedETH >= graduationTarget) and the LP hasn't been
-  // seeded yet. The call is permissionless: any wallet can pay the gas to seed.
-  if (graduable && !seeded) {
-    const _gradTrigger = targetGated ? 'ETH target reached' : 'curve fully sold';
-    html += `
-      <div style="margin-bottom:14px">
-        <button class="swap-btn" style="width:100%;background:#FF9800;color:#fff;font-size:13px" onclick="curveGraduate()">${_connectedAddress ? 'Graduate to zAMM' : 'Connect Wallet to Graduate'}</button>
-        <div style="font-size:10px;color:var(--fg-dim);text-align:center;margin-top:4px">${_gradTrigger} — anyone can seed the LP now</div>
-        <div id="curveGradStatus" style="margin-top:8px"></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="lcRedeemAmount" type="text" inputmode="decimal" placeholder="Amount of ${escAttr(sym)}" oninput="lcRedeemQuoteDebounced()" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none">
+        <button class="coin-tpl-btn" onclick="lcSetRedeemMax()" style="font-size:9px;padding:3px 6px">Max</button>
       </div>
-    `;
-  }
+      <div id="lcRedeemQuote" style="font-size:11px;color:var(--fg-muted);margin-top:6px;min-height:16px">&nbsp;</div>
+      <button id="lcRedeemGo" class="swap-btn" style="width:100%;margin-top:8px" onclick="lcRedeem()">${_connectedAddress ? 'Redeem' : 'Connect Wallet'}</button>
+      <div id="lcRedeemStatus" style="margin-top:8px"></div>
+    </div>` : ''}
 
-  // zAMM swap panel (post-graduation)
-  if (seeded) {
-    html += `
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--surface);border-radius:6px;font-size:11px;color:var(--fg-dim)">Graduated &mdash; liquidity is now on zAMM. Trade below.</div>
-      <div class="section-card">
-        <div class="section-title">Trade</div>
-        <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="curveZammBuyBtn" onclick="curveZammSide('buy')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer">Buy</button>
-          <button id="curveZammSellBtn" onclick="curveZammSide('sell')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer">Sell</button>
-        </div>
-        <div id="curveZammBuyWrap">
-          <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveZammBuyInput" type="text" inputmode="decimal" placeholder="0.00" aria-label="ETH amount to buy" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('buy')">
-            <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">ETH</span>
-          </div>
-          <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
-            <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.005';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.005</button>
-            <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.01';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.01</button>
-            <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.05';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.05</button>
-            <button class="coin-tpl-btn" onclick="$('curveZammBuyInput').value='0.1';curveZammQuote('buy')" style="font-size:10px;padding:4px 8px">.1</button>
-          </div>
-          <div id="curveZammBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
-          <button class="swap-btn" style="width:100%;font-size:13px" onclick="curveZammSwap('buy')">Buy</button>
-        </div>
-        <div id="curveZammSellWrap" style="display:none">
-          <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="curveZammSellInput" type="text" inputmode="decimal" placeholder="0" aria-label="Token amount to sell" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="curveZammQuote('sell')">
-            <span style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">tokens</span>
-          </div>
-          <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
-            <button class="coin-tpl-btn" onclick="curveZammSellPct(25)" style="font-size:10px;padding:4px 8px">25%</button>
-            <button class="coin-tpl-btn" onclick="curveZammSellPct(50)" style="font-size:10px;padding:4px 8px">50%</button>
-            <button class="coin-tpl-btn" onclick="curveZammSellPct(75)" style="font-size:10px;padding:4px 8px">75%</button>
-            <button class="coin-tpl-btn" onclick="curveZammSellPct(100)" style="font-size:10px;padding:4px 8px">100%</button>
-          </div>
-          <div id="curveZammSellQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
-          <button class="swap-btn" style="width:100%;font-size:13px;background:var(--red);color:#fff" onclick="curveZammSwap('sell')">Sell</button>
-        </div>
-        ${_slipRowHTML}
-        <div id="curveTradeStatus" style="margin-top:8px"></div>
-      </div>
-    `;
-  }
+    <div class="section-card" style="font-size:11px;color:var(--fg-muted);line-height:1.7">
+      <div>Token <a href="https://etherscan.io/address/${info.token}" target="_blank" style="color:inherit;text-decoration:underline">${info.token.slice(0,10)}&hellip;${info.token.slice(-6)}</a></div>
+      <div>Pool <a href="https://etherscan.io/address/${info.pool}" target="_blank" style="color:inherit;text-decoration:underline">${info.pool.slice(0,10)}&hellip;${info.pool.slice(-6)}</a></div>
+      <div style="margin-top:6px"><a href="../?to=${info.token}" style="color:inherit;text-decoration:underline">Trade on the swap page — every route, not just this pool &rarr;</a></div>
+    </div>
 
-  // Trade history from observations
-  if (observations.length > 0) {
-    const rows = observations.slice().reverse().slice(0, 50).map(o => {
-      const cls = o.isSell ? 'evt-sell' : 'evt-buy';
-      const label = o.isSell ? 'Sell' : 'Buy';
-      // Price in wei-of-ETH per wei-of-token (1e18-scaled) → render as ETH per 1M tokens to match
-      // the page header and chart Y axis. Otherwise a fresh-curve trade reads as "1.67e-9" which
-      // is technically correct but useless to humans.
-      const priceEthPerMil = (Number(BigInt(o.price)) / 1e18) * 1e6;
-      // Volume is the ETH cost/proceeds in wei (uint80 packed). Render with adaptive precision so
-      // sub-0.01-ETH trades don't collapse to "0.00" the way fmtTokenAmount used to render them.
-      const volEth = Number(ethers.formatEther(o.volume));
-      const vol = volEth >= 1 ? volEth.toFixed(3)
-                : volEth >= 0.001 ? volEth.toFixed(5)
-                : volEth >= 0.000001 ? volEth.toFixed(7)
-                : volEth > 0 ? volEth.toExponential(2)
-                : '0';
-      return `<tr class="${cls}">
-        <td>${fmtAge(o.timestamp)}</td>
-        <td class="evt-type">${label}</td>
-        <td>${formatEthPrice(priceEthPerMil)}</td>
-        <td>${vol}</td>
-      </tr>`;
-    }).join('');
-    html += `
-      <div class="drawer open">
-        <button class="drawer-toggle" onclick="this.parentElement.classList.toggle('open')">
-          <span>Trade History (${observations.length})</span>
-          <span class="arrow">&#9660;</span>
-        </button>
-        <div class="activity-body" style="display:block">
-          <table class="activity-table">
-            <thead><tr><th>Age</th><th>Type</th><th>Price (ETH/1M)</th><th>ETH</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-
-  // Holders drawer — candidates from Transfer logs, then batch balanceOf on-chain
-  html += `
-    <div class="drawer" id="curveHoldersDrawer" data-token="${tokenAddr}">
-      <button class="drawer-toggle" onclick="toggleCurveHolders()">
+    <div class="drawer" id="curveHoldersDrawer" data-token="${info.token}">
+      <div class="drawer-head" onclick="toggleCurveHolders()">
         <span>Holders</span>
-        <span class="arrow">&#9660;</span>
-      </button>
+        <span class="drawer-arrow">&#9660;</span>
+      </div>
       <div class="drawer-body" id="curveHoldersContent"></div>
     </div>
   `;
-
-  // Fine print: the covenant, then the contracts it all points at.
-  html += `<div style="margin-top:20px;padding-top:12px;border-top:1px solid var(--border-muted)">${charterHTML}</div>`;
-
-  // Links
-  html += `
-    <div style="font-size:11px;color:var(--fg-dim);margin-bottom:24px">
-      <a href="https://etherscan.io/address/${tokenAddr}" target="_blank" style="color:inherit">Token</a>
-      &middot; <a href="https://etherscan.io/address/${CURVE_SALE}" target="_blank" style="color:inherit">Curve</a>
-      &middot; <a href="https://etherscan.io/address/${curve.creator}" target="_blank" style="color:inherit">Creator</a>
-    </div>
-  `;
-
-  app.innerHTML = html;
-
-  // Draw price chart in the user-selected mode (curve trajectory or OHLCV candles).
-  drawCurveChartActive($('curveChart'), observations);
-  // Re-render on viewport changes so the canvas stays sharp on resize / orientation flips.
-  _attachCurveChartResize($('curveChart'));
-
-  // Anti-sniper window: the launch fee starts elevated and decays to the base fee
-  // over sniperDuration. Quotes already price this in, but nothing explained *why*
-  // an early buyer is paying 5% instead of 1%, or that simply waiting is cheaper.
-  startCurveSniperNotice(baseFeeBps, sniperFeeBps, sniperDuration, launchTimeSec, graduated);
 }
 
-function startCurveSniperNotice(baseFeeBps, sniperFeeBps, sniperDuration, launchTimeSec, graduated) {
-  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
-  const el = $('curveSniperNotice');
-  if (!el) return;
-  if (graduated || !sniperDuration || sniperFeeBps <= baseFeeBps) { el.style.display = 'none'; return; }
-
-  const tick = () => {
-    const node = $('curveSniperNotice');
-    if (!node || !node.isConnected) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; return; }
-    const left = (launchTimeSec + sniperDuration) - Math.floor(Date.now() / 1000);
-    if (left <= 0) {
-      node.style.display = 'none';
-      clearInterval(_curveSniperTimer);
-      _curveSniperTimer = null;
-      return;
-    }
-    // Mirrors ClassicalCurveSale._effectiveFee (and _effFeeAt above).
-    const elapsed = sniperDuration - left;
-    const feeNow = baseFeeBps + Math.floor((sniperFeeBps - baseFeeBps) * (sniperDuration - elapsed) / sniperDuration);
-    const mins = Math.floor(left / 60), secs = left % 60;
-    const leftTxt = mins > 0 ? `${mins}m ${String(secs).padStart(2, '0')}s` : `${secs}s`;
-    const pct = Math.max(0, Math.min(100, (elapsed / sniperDuration) * 100));
-    node.style.display = '';
-    node.innerHTML = `
-      <div style="margin-bottom:14px;padding:8px 10px;border-radius:6px;background:var(--surface);border-left:3px solid #FF9800">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;font-weight:600;color:#FF9800">Anti-sniper fee active &mdash; ${(feeNow / 100).toFixed(2)}%</span>
-          <span style="font-size:11px;color:var(--fg-muted)">${leftTxt} until ${(baseFeeBps / 100).toFixed(2)}%</span>
-        </div>
-        <div style="font-family:monospace;font-size:10px;line-height:1;color:var(--fg-dim);display:flex;width:100%;margin-top:5px"><span style="flex:${Math.max(pct, 0.5)};overflow:hidden;white-space:nowrap">${'█'.repeat(200)}</span><span style="flex:${Math.max(100 - pct, 0.5)};overflow:hidden;white-space:nowrap">${'░'.repeat(200)}</span></div>
-        <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">Buying now costs more. The fee decays to ${(baseFeeBps / 100).toFixed(2)}% and goes to the creator either way.</div>
-      </div>`;
-  };
-  tick();
-  _curveSniperTimer = setInterval(tick, 1000);
+function lcSwitchSide(side) {
+  _lcSide = side;
+  _lcQuote = null;
+  ++_lcQuoteSeq;
+  const buy = side === 'buy';
+  const b = $('lcBuyBtn'), s = $('lcSellBtn');
+  if (b) { b.style.background = buy ? 'var(--btn-bg)' : 'transparent'; b.style.color = buy ? 'var(--btn-fg)' : 'var(--fg-muted)'; }
+  if (s) { s.style.background = buy ? 'transparent' : 'var(--btn-bg)'; s.style.color = buy ? 'var(--fg-muted)' : 'var(--btn-fg)'; }
+  const sym = _lcInfo?.symbol || '???';
+  const ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
+  const tokTag = `<span class="swap-token-tag">$${escText(sym)}</span>`;
+  if ($('lcInTag')) $('lcInTag').innerHTML = buy ? ethTag : tokTag;
+  if ($('lcOutTag')) $('lcOutTag').innerHTML = buy ? tokTag : ethTag;
+  if ($('lcPctRow')) $('lcPctRow').style.display = buy ? 'none' : 'flex';
+  const amt = $('lcAmount'); if (amt) amt.value = '';
+  lcSetOut('0', '&nbsp;', true);
+  const go = $('lcGo'); if (go) { go.textContent = _connectedAddress ? (buy ? 'Buy' : 'Sell') : 'Connect Wallet'; go.disabled = false; }
+  if ($('lcStatus')) $('lcStatus').innerHTML = '';
 }
 
-// ---- Chart ----
-// Bonding-curve view: X axis is supply sold (0% → 100%), Y axis is price (start → end).
-// The full curve is drawn as the backdrop so the chart is meaningful with zero trades.
-// Each historical trade is plotted as a dot at its derived position on the curve, so
-// even a coin with one or two buys looks like a real chart — buy positions land where
-// the price curve says they should, and the user sees the whole curve they're trading on.
-function drawCurveChart(canvas, observations) {
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const cssW = rect.width || 440, cssH = rect.height || 200;
-  canvas.width = Math.round(cssW * dpr);
-  canvas.height = Math.round(cssH * dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  const w = cssW, h = cssH;
-  const dark = document.documentElement.classList.contains('dark');
-  const mutedColor = dark ? '#666' : '#888';
-  const dimColor = dark ? '#444' : '#bbb';
-  const gridColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const bgColor = dark ? '#000' : '#fff';
-  const buyColor = '#4CAF50';
-  const sellColor = '#EF5350';
-
-  // Curve params from on-chain config. Fall back to a soft message if missing.
-  const curve = _curveData;
-  if (!curve || !curve.cap || BigInt(curve.cap) === 0n) {
-    ctx.fillStyle = mutedColor;
-    ctx.font = '12px Helvetica,Arial,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Curve not configured', w / 2, h / 2);
-    return;
+function lcSetSlippage(pct, btn) {
+  _lcSlipPct = pct;
+  if (btn && btn.parentElement) {
+    for (const b of btn.parentElement.querySelectorAll('.coin-tpl-btn')) b.classList.remove('active');
+    btn.classList.add('active');
   }
-
-  // Layout
-  const LEFT = Math.max(40, w * 0.10);
-  const RIGHT = 14, TOP = 14, BOTTOM = 18;
-  const chartH = h - TOP - BOTTOM;
-  const chartW = w - LEFT - RIGHT;
-  const fontSize = Math.max(8, Math.min(10, w * 0.024));
-
-  // Numeric curve — work in human units (1e18-scaled → float). Loses precision
-  // for absurdly large supplies but the curve at 1B token / 1e9-wei start price
-  // sits comfortably in float64.
-  const cap = Number(BigInt(curve.cap)) / 1e18;
-  const sold = Number(BigInt(curve.sold)) / 1e18;
-  const startPrice = Number(BigInt(curve.startPrice)) / 1e18;
-  const endPrice = Number(BigInt(curve.endPrice)) / 1e18;
-  const vr = Number(BigInt(curve.virtualReserve)) / 1e18;
-  const flat = endPrice <= startPrice;
-
-  const priceAt = (x) => {
-    if (flat) return startPrice;
-    const denom = vr - x;
-    return denom > 0 ? startPrice * vr * vr / (denom * denom) : endPrice;
-  };
-
-  // Y range: full curve span so the curve always fits exactly.
-  // Add a small visual headroom so the line doesn't kiss the edges.
-  const yMin = startPrice;
-  const yMax = flat ? startPrice * 1.001 : endPrice;
-  const yPad = (yMax - yMin) * 0.05;
-  const yLo = yMin - yPad, yHi = yMax + yPad;
-  const yToPx = (p) => {
-    const t = (p - yLo) / (yHi - yLo);
-    return TOP + chartH - Math.max(0, Math.min(1, t)) * chartH;
-  };
-  const xToPx = (x) => LEFT + (Math.max(0, Math.min(cap, x)) / cap) * chartW;
-
-  // Grid (4 vertical, 3 horizontal)
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 0.5;
-  for (let g = 1; g < 4; g++) {
-    const gx = LEFT + (g / 4) * chartW;
-    ctx.beginPath(); ctx.moveTo(gx, TOP); ctx.lineTo(gx, h - BOTTOM); ctx.stroke();
-  }
-  for (let g = 1; g < 3; g++) {
-    const gy = TOP + (g / 3) * chartH;
-    ctx.beginPath(); ctx.moveTo(LEFT, gy); ctx.lineTo(w - RIGHT, gy); ctx.stroke();
-  }
-  // Frame
-  ctx.strokeStyle = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  ctx.beginPath(); ctx.moveTo(LEFT, TOP); ctx.lineTo(LEFT, h - BOTTOM); ctx.lineTo(w - RIGHT, h - BOTTOM); ctx.stroke();
-
-  // Sample the curve once and reuse for fill + stroke.
-  const N = 96;
-  const ptsX = new Array(N + 1), ptsY = new Array(N + 1);
-  for (let i = 0; i <= N; i++) {
-    const x = (i / N) * cap;
-    ptsX[i] = xToPx(x);
-    ptsY[i] = yToPx(priceAt(x));
-  }
-  const soldPx = xToPx(sold);
-  const soldPy = yToPx(priceAt(sold));
-
-  // Sold-region fill (under curve, left of current sold)
-  if (sold > 0) {
-    ctx.fillStyle = buyColor + '18';
-    ctx.beginPath();
-    ctx.moveTo(LEFT, h - BOTTOM);
-    for (let i = 0; i <= N; i++) {
-      const x = (i / N) * cap;
-      if (x > sold) break;
-      ctx.lineTo(ptsX[i], ptsY[i]);
-    }
-    ctx.lineTo(soldPx, soldPy);
-    ctx.lineTo(soldPx, h - BOTTOM);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Curve — unsold portion (dashed, muted)
-  ctx.strokeStyle = mutedColor;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i <= N; i++) {
-    const x = (i / N) * cap;
-    if (x < sold) continue;
-    if (!started) { ctx.moveTo(soldPx, soldPy); started = true; }
-    ctx.lineTo(ptsX[i], ptsY[i]);
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Curve — sold portion (solid, accent)
-  if (sold > 0) {
-    ctx.strokeStyle = buyColor;
-    ctx.lineWidth = 1.75;
-    ctx.beginPath();
-    ctx.moveTo(LEFT, yToPx(priceAt(0)));
-    for (let i = 0; i <= N; i++) {
-      const x = (i / N) * cap;
-      if (x > sold) break;
-      ctx.lineTo(ptsX[i], ptsY[i]);
-    }
-    ctx.lineTo(soldPx, soldPy);
-    ctx.stroke();
-  }
-
-  // Trade markers — derive supply position from price using the inverse curve formula:
-  // x = vr · (1 − √(startPrice / price)). For the flat-curve degenerate case we have
-  // no positional information from price alone, so trades collapse onto the current sold marker.
-  if (observations && observations.length > 0) {
-    for (const o of observations) {
-      const price = Number(BigInt(o.price)) / 1e18;
-      let xPos;
-      if (flat) {
-        xPos = sold;
-      } else {
-        const ratio = startPrice / price;
-        xPos = ratio > 0 && ratio <= 1 ? vr * (1 - Math.sqrt(ratio)) : sold;
-      }
-      const mx = xToPx(xPos);
-      const my = yToPx(price);
-      ctx.fillStyle = o.isSell ? sellColor : buyColor;
-      ctx.strokeStyle = bgColor;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(mx, my, 2.75, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    }
-  }
-
-  // Current spot marker — slightly larger ring at (sold, current price)
-  ctx.fillStyle = buyColor;
-  ctx.strokeStyle = bgColor;
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(soldPx, soldPy, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-  // Y-axis price labels (start, mid, end) — per 1M tokens, matching the header.
-  // Anchor at the actual y-pixel for each value so labels sit on their data point
-  // rather than drifting up to the chart edge (yHi/yLo are padded above/below).
-  ctx.fillStyle = mutedColor;
-  ctx.font = `${fontSize}px monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(formatEthPrice(yMax * 1e6), LEFT - 4, yToPx(yMax));
-  ctx.fillText(formatEthPrice(((yMax + yMin) / 2) * 1e6), LEFT - 4, yToPx((yMax + yMin) / 2));
-  ctx.fillText(formatEthPrice(yMin * 1e6), LEFT - 4, yToPx(yMin));
-  ctx.fillStyle = dimColor;
-  ctx.font = `${Math.max(7, fontSize - 1)}px monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-  ctx.fillText('ETH/1M', LEFT - 4, TOP);
-
-  // X-axis labels: 0%, 50%, 100% (supply sold)
-  ctx.fillStyle = mutedColor;
-  ctx.font = `${fontSize}px monospace`;
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';
-  ctx.fillText('0%', LEFT, h - BOTTOM + 3);
-  ctx.textAlign = 'center';
-  ctx.fillText('50%', LEFT + chartW / 2, h - BOTTOM + 3);
-  ctx.textAlign = 'right';
-  ctx.fillText('100%', w - RIGHT, h - BOTTOM + 3);
-
-  // Floating "X.X% sold" label near the spot marker — flips to the other side
-  // of the marker so it doesn't run off the right edge as graduation approaches.
-  const soldPct = cap > 0 ? (sold / cap * 100) : 0;
-  if (soldPct > 0.05) {
-    const labelText = soldPct.toFixed(soldPct < 1 ? 2 : 1) + '% sold';
-    ctx.font = `bold ${fontSize}px monospace`;
-    const labelW = ctx.measureText(labelText).width;
-    const onLeft = (soldPx + 8 + labelW) > (w - RIGHT);
-    ctx.textAlign = onLeft ? 'right' : 'left';
-    const lx = onLeft ? soldPx - 6 : soldPx + 6;
-    const ly = Math.max(TOP + 2, soldPy - 10);
-    // tiny pill background for readability over the curve
-    const padX = 3, padY = 2;
-    ctx.fillStyle = dark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.85)';
-    ctx.fillRect(
-      onLeft ? lx - labelW - padX : lx - padX,
-      ly - padY,
-      labelW + padX * 2,
-      fontSize + padY * 2
-    );
-    ctx.fillStyle = buyColor;
-    ctx.textBaseline = 'top';
-    ctx.fillText(labelText, lx, ly);
-  }
+  lcQuoteDebounced();
 }
 
-// Dispatches to the active chart renderer. Both modes share the same canvas so the toggle
-// is a swap-in-place — no layout reflow.
-function drawCurveChartActive(canvas, observations) {
-  if (_curveChartMode === 'price') drawPriceChart(canvas, observations);
-  else drawCurveChart(canvas, observations);
+function lcSetSellPct(pct) {
+  if (_lcBalance === 0n) return;
+  const amt = pct === 100 ? _lcBalance : (_lcBalance * BigInt(pct)) / 100n;
+  const el = $('lcAmount');
+  if (el) { el.value = ethers.formatUnits(amt, 18); lcQuoteDebounced(); }
 }
 
-// Without this, the canvas keeps its initial CSS-pixel size after the user resizes the
-// window or rotates the device — the bitmap stretches/blurs because we set width/height
-// from getBoundingClientRect() once at draw time.
-let _curveChartResizeObserver = null;
-function _attachCurveChartResize(canvas) {
-  if (_curveChartResizeObserver) { _curveChartResizeObserver.disconnect(); _curveChartResizeObserver = null; }
-  if (!canvas || typeof ResizeObserver === 'undefined') return;
-  _curveChartResizeObserver = new ResizeObserver(() => {
-    if (canvas.isConnected) drawCurveChartActive(canvas, _curveObs);
-  });
-  _curveChartResizeObserver.observe(canvas);
-}
-
-// User-facing chart-mode toggle. Re-renders against cached observations — no extra RPC.
-function setCurveChartMode(mode) {
-  if (mode !== 'curve' && mode !== 'price') return;
-  if (_curveChartMode === mode) return;
-  _curveChartMode = mode;
-  // Update toggle button styles
-  const curveBtn = $('curveChartCurveBtn'), priceBtn = $('curveChartPriceBtn');
-  if (curveBtn && priceBtn) {
-    curveBtn.style.background = mode === 'curve' ? 'var(--btn-bg)' : 'transparent';
-    curveBtn.style.color = mode === 'curve' ? 'var(--btn-fg)' : 'var(--fg-muted)';
-    priceBtn.style.background = mode === 'price' ? 'var(--btn-bg)' : 'transparent';
-    priceBtn.style.color = mode === 'price' ? 'var(--btn-fg)' : 'var(--fg-muted)';
-  }
-  // Update the small label above the toggle.
-  const labelEl = curveBtn ? curveBtn.parentElement.previousElementSibling : null;
-  if (labelEl) labelEl.textContent = mode === 'price' ? 'Price (per 1M)' : 'Bonding curve';
-  drawCurveChartActive($('curveChart'), _curveObs);
-}
-
-// ---- Price chart (line + trade dots + volume) ----
-// Bonding-phase trades are sparse — usually a handful per day — so candlestick bucketing produces
-// noisy single-trade dojis that don't communicate anything. Instead we show every individual trade
-// as a coloured dot at its (timestamp, price), connect them with a line so the price evolution
-// reads at a glance, and display per-trade volume bars below. This works for 1 trade or 500.
-function drawPriceChart(canvas, observations) {
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const cssW = rect.width || 440, cssH = rect.height || 200;
-  canvas.width = Math.round(cssW * dpr);
-  canvas.height = Math.round(cssH * dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  const w = cssW, h = cssH;
-  const dark = document.documentElement.classList.contains('dark');
-  const mutedColor = dark ? '#666' : '#888';
-  const dimColor = dark ? '#444' : '#bbb';
-  const gridColor = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const bgColor = dark ? '#000' : '#fff';
-  const buyColor = '#4CAF50';
-  const sellColor = '#EF5350';
-  const lineColor = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)';
-
-  // Empty state — brand-new coins with zero trades yet.
-  if (!observations || observations.length === 0) {
-    ctx.fillStyle = mutedColor;
-    ctx.font = '12px Helvetica,Arial,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('No trades yet', w / 2, h / 2);
-    ctx.fillStyle = dimColor;
-    ctx.font = '10px Helvetica,Arial,sans-serif';
-    ctx.fillText('Be the first buyer to start the chart', w / 2, h / 2 + 16);
-    return;
-  }
-
-  // Decode + sort. observe() returns insertion order which is monotonic, but sort defensively.
-  const trades = observations.slice().sort((a, b) => a.timestamp - b.timestamp).map(o => ({
-    ts: o.timestamp,
-    price: Number(BigInt(o.price)) / 1e18,
-    volume: Number(BigInt(o.volume)) / 1e18,
-    isSell: o.isSell,
-  })).filter(t => Number.isFinite(t.price) && t.price > 0);
-
-  if (trades.length === 0) {
-    ctx.fillStyle = mutedColor;
-    ctx.font = '12px Helvetica,Arial,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('No price data', w / 2, h / 2);
-    return;
-  }
-
-  // Layout: price area top ~75%, volume bars bottom ~20%, gap between.
-  const LEFT = Math.max(40, w * 0.10);
-  const RIGHT = 14, TOP = 14, BOTTOM = 18;
-  const VGAP = 6;
-  const usableH = h - TOP - BOTTOM;
-  const volH = Math.max(20, usableH * 0.20);
-  const priceH = usableH - volH - VGAP;
-  const chartW = w - LEFT - RIGHT;
-  const fontSize = Math.max(8, Math.min(10, w * 0.024));
-
-  // Y (price) range: trade min/max with 10% padding. Single-price coin gets a synthetic ±5% window.
-  let pMin = Infinity, pMax = -Infinity;
-  for (const t of trades) { if (t.price > pMax) pMax = t.price; if (t.price < pMin) pMin = t.price; }
-  if (pMax === pMin) { const p = pMax || 1; pMax = p * 1.05; pMin = p * 0.95; }
-  const pPad = (pMax - pMin) * 0.10;
-  const pLo = Math.max(0, pMin - pPad), pHi = pMax + pPad;
-  const yToPx = p => TOP + priceH - ((p - pLo) / (pHi - pLo)) * priceH;
-
-  // X (time) range: first trade → last trade with 5% right padding.
-  // Only extend to "now" when the last trade is genuinely stale (>24h or >50% past the trade span)
-  // — for active coins, hugging the data is more readable than padding to the right edge.
-  const tFirst = trades[0].ts;
-  const tLast = trades[trades.length - 1].ts;
-  const tradeSpan = tLast - tFirst;
-  const nowSec = Math.floor(Date.now() / 1000);
-  const staleThreshold = Math.max(86400, tradeSpan); // 1d or full span, whichever is larger
-  const extendToNow = (nowSec - tLast) > staleThreshold;
-  const rightPad = Math.max(60, tradeSpan * 0.05); // ≥60s so single-trade coins don't collapse
-  const tMin = tFirst;
-  const tMax = extendToNow ? nowSec : (tLast + rightPad);
-  const tRange = Math.max(60, tMax - tMin);
-  const xToPx = ts => LEFT + ((ts - tMin) / tRange) * chartW;
-
-  // Volume range
-  let vMax = 0;
-  for (const t of trades) if (t.volume > vMax) vMax = t.volume;
-  if (vMax === 0) vMax = 1;
-  const vToH = v => (v / vMax) * volH;
-  const volTop = TOP + priceH + VGAP;
-
-  // Grid (3 horizontal in price area, 4 vertical across)
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 0.5;
-  for (let g = 1; g < 3; g++) {
-    const gy = TOP + (g / 3) * priceH;
-    ctx.beginPath(); ctx.moveTo(LEFT, gy); ctx.lineTo(w - RIGHT, gy); ctx.stroke();
-  }
-  for (let g = 1; g < 4; g++) {
-    const gx = LEFT + (g / 4) * chartW;
-    ctx.beginPath(); ctx.moveTo(gx, TOP); ctx.lineTo(gx, h - BOTTOM); ctx.stroke();
-  }
-  // Frame
-  ctx.strokeStyle = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  ctx.beginPath(); ctx.moveTo(LEFT, TOP); ctx.lineTo(LEFT, h - BOTTOM); ctx.lineTo(w - RIGHT, h - BOTTOM); ctx.stroke();
-  // Volume separator
-  ctx.strokeStyle = gridColor;
-  ctx.beginPath(); ctx.moveTo(LEFT, volTop - VGAP / 2); ctx.lineTo(w - RIGHT, volTop - VGAP / 2); ctx.stroke();
-
-  // Filled area beneath the price line — green if final price ≥ first, red otherwise.
-  // Gives the chart visual weight even with sparse trades.
-  if (trades.length >= 2) {
-    const overallUp = trades[trades.length - 1].price >= trades[0].price;
-    ctx.fillStyle = (overallUp ? buyColor : sellColor) + '15';
-    ctx.beginPath();
-    ctx.moveTo(xToPx(trades[0].ts), TOP + priceH);
-    for (const t of trades) ctx.lineTo(xToPx(t.ts), yToPx(t.price));
-    ctx.lineTo(xToPx(trades[trades.length - 1].ts), TOP + priceH);
-    ctx.closePath();
-    ctx.fill();
-
-    // Connecting line through trade prices
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 1.25;
-    ctx.beginPath();
-    ctx.moveTo(xToPx(trades[0].ts), yToPx(trades[0].price));
-    for (let i = 1; i < trades.length; i++) ctx.lineTo(xToPx(trades[i].ts), yToPx(trades[i].price));
-    ctx.stroke();
-  }
-
-  // Volume bars per trade — width is fixed-pixel, color matches the trade direction.
-  const volBarW = Math.max(2, Math.min(chartW / Math.max(trades.length, 4) * 0.6, 8));
-  for (const t of trades) {
-    const vh = vToH(t.volume);
-    if (vh <= 0) continue;
-    ctx.fillStyle = (t.isSell ? sellColor : buyColor) + 'aa';
-    ctx.fillRect(xToPx(t.ts) - volBarW / 2, volTop + (volH - vh), volBarW, vh);
-  }
-
-  // Trade dots — drawn last so they sit on top of the line. White ring for contrast.
-  for (const t of trades) {
-    const cx = xToPx(t.ts), cy = yToPx(t.price);
-    ctx.fillStyle = t.isSell ? sellColor : buyColor;
-    ctx.strokeStyle = bgColor;
-    ctx.lineWidth = 1.25;
-    ctx.beginPath(); ctx.arc(cx, cy, 3.25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-
-  // Last-price dotted line spanning the chart, with a coloured tag on the right edge.
-  const last = trades[trades.length - 1];
-  const lastY = yToPx(last.price);
-  const isUpOverall = trades.length >= 2 ? last.price >= trades[0].price : true;
-  ctx.strokeStyle = mutedColor;
-  ctx.setLineDash([2, 3]);
-  ctx.beginPath(); ctx.moveTo(LEFT, lastY); ctx.lineTo(w - RIGHT, lastY); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Y-axis price labels (max, mid, min) — per 1M tokens, matching the page header.
-  ctx.fillStyle = mutedColor;
-  ctx.font = `${fontSize}px monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(formatEthPrice(pHi * 1e6), LEFT - 4, TOP + 4);
-  ctx.fillText(formatEthPrice(((pHi + pLo) / 2) * 1e6), LEFT - 4, TOP + priceH / 2);
-  ctx.fillText(formatEthPrice(pLo * 1e6), LEFT - 4, TOP + priceH - 4);
-
-  // Last-price tag (coloured chip on the right)
-  const lastLabel = formatEthPrice(last.price * 1e6);
-  const tagColor = isUpOverall ? buyColor : sellColor;
-  ctx.font = `bold ${fontSize}px monospace`;
-  const llW = ctx.measureText(lastLabel).width;
-  ctx.fillStyle = tagColor;
-  ctx.fillRect(w - RIGHT - llW - 6, lastY - fontSize / 2 - 2, llW + 6, fontSize + 4);
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'right';
-  ctx.fillText(lastLabel, w - RIGHT - 3, lastY);
-
-  // Unit labels
-  ctx.fillStyle = dimColor;
-  ctx.font = `${Math.max(7, fontSize - 1)}px monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-  ctx.fillText('ETH/1M', LEFT - 4, TOP);
-  // Volume is gross ETH per trade (pre-fee, same unit the trade-history table shows).
-  ctx.fillText('ETH vol', LEFT - 4, volTop);
-  // Tag the largest bar with its ETH amount so the absolute scale is visible at a glance.
-  // Without this the user can only see relative bar heights, not whether trades are 0.001 or 10 ETH.
-  if (vMax > 0) {
-    const vMaxLabel = vMax >= 1 ? vMax.toFixed(3)
-      : vMax >= 0.001 ? vMax.toFixed(4)
-      : vMax >= 0.000001 ? vMax.toFixed(6)
-      : vMax.toExponential(1);
-    ctx.fillStyle = mutedColor;
-    ctx.font = `${Math.max(7, fontSize - 1)}px monospace`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.fillText('max ' + vMaxLabel, w - RIGHT, volTop);
-  }
-
-  // X-axis time labels — format adapts to the range (HH:MM under 1d, MM-DD beyond).
-  const fmtT = (ts) => {
-    const d = new Date(ts * 1000);
-    const pad = n => String(n).padStart(2, '0');
-    return tRange < 86400 ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  };
-  ctx.fillStyle = mutedColor;
-  ctx.font = `${fontSize}px monospace`;
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'left';
-  ctx.fillText(fmtT(tMin), LEFT, h - BOTTOM + 3);
-  if (tRange > 60 * 5) {
-    ctx.textAlign = 'center';
-    ctx.fillText(fmtT(Math.floor((tMin + tMax) / 2)), LEFT + chartW / 2, h - BOTTOM + 3);
-    ctx.textAlign = 'right';
-    ctx.fillText(fmtT(tMax), w - RIGHT, h - BOTTOM + 3);
-  }
-
-  // Trade count + total volume + time-since-last in top-right corner.
-  // Total volume is the sum of all gross ETH amounts (matches what's behind the volume bars below).
-  const ago = nowSec - tLast;
-  const agoLabel = ago < 60 ? ago + 's' : ago < 3600 ? Math.floor(ago / 60) + 'm' : ago < 86400 ? Math.floor(ago / 3600) + 'h' : Math.floor(ago / 86400) + 'd';
-  let totalVol = 0;
-  for (const t of trades) totalVol += t.volume;
-  const totalVolLabel = totalVol >= 1 ? totalVol.toFixed(3)
-    : totalVol >= 0.001 ? totalVol.toFixed(4)
-    : totalVol >= 0.000001 ? totalVol.toFixed(6)
-    : totalVol > 0 ? totalVol.toExponential(1)
-    : '0';
-  const header = trades.length + (trades.length === 1 ? ' trade' : ' trades')
-    + ' · ' + totalVolLabel + ' ETH · last ' + agoLabel + ' ago';
-  ctx.fillStyle = dimColor;
-  ctx.font = `${Math.max(7, fontSize - 1)}px monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-  ctx.fillText(header, w - RIGHT, TOP);
-}
-
-// ---- Trade helpers ----
-function curveSwitchSide(side) {
-  const buyBtn = $('curveBuyBtn'), sellBtn = $('curveSellBtn');
-  buyBtn.style.background = side === 'buy' ? 'var(--btn-bg)' : 'transparent';
-  buyBtn.style.color = side === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)';
-  sellBtn.style.background = side === 'sell' ? 'var(--red)' : 'transparent';
-  sellBtn.style.color = side === 'sell' ? '#fff' : 'var(--fg-muted)';
-  $('curveBuyWrap').style.display = side === 'buy' ? '' : 'none';
-  $('curveSellWrap').style.display = side === 'sell' ? '' : 'none';
-}
-
-function curveSetBuyAmt(amt) {
-  $('curveBuyAmount').value = amt;
-  curveUpdateBuyQuote();
-}
-
-async function curveSetSellPct(pct) {
-  // For 100% in particular, _curveBalance is set at render time and may be stale if the user
-  // received/transferred tokens since then. Refresh from chain so the displayed quote matches
-  // what the contract will actually consume (curveSell caps to bal anyway, so the tx is safe;
-  // this is purely UX correctness on the Min-received row).
-  if (_signer && _connectedAddress) {
-    try {
-      const bal = await withRPC(async rpc => {
-        const t = new ethers.Contract(_curveTokenAddr, ERC20_ABI, rpc);
-        return await t.balanceOf(_connectedAddress);
-      });
-      _curveBalance = bal;
-    } catch {} // fall through to cached balance
-  }
-  if (_curveBalance <= 0n) return;
-  const amt = _curveBalance * BigInt(pct) / 100n;
-  $('curveSellAmount').value = ethers.formatEther(amt);
-  curveUpdateSellQuote();
-}
-
-function curveSetSlippage(pct, btn) {
-  _curveSlippageBps = pct * 100;
-  btn.parentElement.querySelectorAll('.coin-tpl-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  // Refresh the visible quote so the "Min received" row matches the new slippage immediately
-  // instead of waiting for the next input change. Debounced inside each quote fn.
-  if ($('curveBuyWrap') && $('curveBuyWrap').style.display !== 'none' && $('curveBuyAmount')?.value) {
-    curveUpdateBuyQuote();
-  } else if ($('curveSellWrap') && $('curveSellWrap').style.display !== 'none' && $('curveSellAmount')?.value) {
-    curveUpdateSellQuote();
-  } else if ($('curveZammBuyWrap') && $('curveZammBuyWrap').style.display !== 'none' && $('curveZammBuyInput')?.value) {
-    curveZammQuote('buy');
-  } else if ($('curveZammSellWrap') && $('curveZammSellWrap').style.display !== 'none' && $('curveZammSellInput')?.value) {
-    curveZammQuote('sell');
-  }
-}
-
-// Mirror of ClassicalCurveSale._effectiveFee for client-side fallback. The execution path
-// caches the on-chain effectiveFee in _curveEffectiveFee, but quotes can race the trade
-// (preset → click Buy before the 300ms debounce fires). Falling back to the static base
-// curve.feeBps under-counts the real fee inside the sniper-decay window, which makes
-// minOut/minProceeds too tight and the contract reverts with Slippage().
-function _effFeeNow(curve) {
-  const baseFee = Number(curve.feeBps);
-  const sniperFee = Number(curve.sniperFeeBps);
-  const sniperDuration = Number(curve.sniperDuration);
-  if (sniperFee === 0 || sniperDuration === 0) return baseFee;
-  const elapsed = Math.floor(Date.now() / 1000) - Number(curve.launchTime);
-  if (elapsed >= sniperDuration) return baseFee;
-  if (elapsed <= 0) return sniperFee;
-  return baseFee + Math.floor((sniperFee - baseFee) * (sniperDuration - elapsed) / sniperDuration);
-}
-
-// On-chain quote via ClassicalCurveSale view functions (authoritative, includes sniper fee)
-let _curveQuoteTimer = null;
-let _curveSniperTimer = null;
-// Bumps every time a new quote is dispatched. Async callbacks that resolve after the user
-// changed input or navigated away check against this and skip their DOM write — otherwise
-// stale results overwrite fresh ones.
-let _curveQuoteGen = 0;
-let _curveEffectiveFee = null; // cached for execution path
-const CURVE_QUOTE_ABI = [
-  'function quote(address token, uint256 amount) view returns (uint256)',
-  'function quoteSell(address token, uint256 amount) view returns (uint256)',
-  'function effectiveFee(address token) view returns (uint256)'
-];
-const _cqIface = new ethers.Interface(CURVE_QUOTE_ABI);
-
-// Client-side token estimate (matches contract's buyExactIn) — used to feed into on-chain quote()
-function _curveEstTokens(curve, netETH) {
-  const vr = BigInt(curve.virtualReserve);
-  const sold = BigInt(curve.sold);
-  const cap = BigInt(curve.cap);
-  const R = vr - sold;
-  if (R <= 0n) return 0n;
-  const startPrice = BigInt(curve.startPrice);
-  const endPrice = BigInt(curve.endPrice);
-  if (startPrice <= 0n) return 0n;
-  let tokens;
-  if (endPrice === startPrice) { tokens = netETH * (10n**18n) / startPrice; }
-  else { const A = startPrice * vr * vr / (R * (10n**18n)); tokens = netETH * R / (A + netETH); }
-  const remaining = cap - sold;
-  if (tokens > remaining) tokens = remaining;
-  const maxBuy = BigInt(curve.maxBuyBps);
-  if (maxBuy > 0n) { const mx = cap * maxBuy / 10000n; if (tokens > mx) tokens = mx; }
-  return tokens;
-}
-
-// Render-state helpers for the read-only receive box. Centralising the className/textContent
-// pair keeps the empty/quoting/error/quoted transitions consistent across both sides.
-function _curveSetOut(outEl, subEl, detEl, state, text, sub) {
-  if (!outEl) return;
-  outEl.textContent = text || '';
-  outEl.className = 'curve-out-amount' + (state === 'idle' ? ' placeholder' : state === 'quoting' || state === 'error' ? ' muted' : '');
+function lcSetOut(text, sub, placeholder) {
+  const out = $('lcOut'), subEl = $('lcOutSub');
+  if (out) { out.textContent = text; out.classList.toggle('placeholder', !!placeholder); }
   if (subEl) subEl.innerHTML = sub || '&nbsp;';
-  if (detEl) detEl.style.display = state === 'quoted' ? '' : 'none';
-  // The cap warning belongs to a specific quote — drop it on idle/quoting/error
-  // so a stale "this buy is capped" can't outlive the number it described.
-  const capEl = $('curveBuyCapNote');
-  if (capEl && state !== 'quoted') { capEl.innerHTML = ''; capEl.style.display = 'none'; }
 }
 
-// Adaptive ETH formatter — readable across the 7+ orders of magnitude curve trades span.
-function _curveFmtEth(n) {
-  if (!Number.isFinite(n) || n === 0) return '0';
-  if (n < 0.0001) return n.toExponential(2);
-  if (n < 1) return n.toFixed(6);
-  if (n < 1000) return n.toFixed(4);
-  return n.toFixed(2);
+function lcQuoteDebounced() {
+  if (_lcQuoteTimer) clearTimeout(_lcQuoteTimer);
+  _lcQuoteTimer = setTimeout(lcQuote, 300);
 }
 
-function curveUpdateBuyQuote() {
-  const outEl = $('curveBuyOut'), subEl = $('curveBuyOutSub'), detEl = $('curveBuyDetails');
-  if (!outEl || !_curveData) return;
-  const v = parseFloat($('curveBuyAmount')?.value || '0');
-  if (!v || v <= 0) {
-    // Clear any pending quote — otherwise a 300ms-stale callback overwrites the idle state.
-    // clearTimeout only stops not-yet-fired timers; bumping the gen is what cancels an
-    // already-fired callback that's mid-await on RPC.
-    if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-    ++_curveQuoteGen;
-    _curveSetOut(outEl, subEl, detEl, 'idle', '0');
-    return;
-  }
-  _curveSetOut(outEl, subEl, detEl, 'quoting', 'Quoting...');
-  if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
-  // Generation token: an async quote that resolves after the user has typed something else
-  // (or navigated away) skips its DOM write. Without this, the latest displayed numbers can
-  // be from the second-to-last input.
-  const myGen = ++_curveQuoteGen;
-  _curveQuoteTimer = setTimeout(async () => {
-    try {
-      const tokenAddr = _curveTokenAddr;
-      const ethWei = ethers.parseEther(String(v));
-      const curve = _curveData;
-      // Sniper-aware fallback: during the decay window the real fee is above curve.feeBps,
-      // and feeding the lower number into estTokens produces an over-tight minOut downstream.
-      const estFee = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
-      const estNet = ethWei * 10000n / BigInt(10000 + estFee);
-      const estTokens = _curveEstTokens(curve, estNet);
-      if (estTokens <= 0n) { _curveSetOut(outEl, subEl, detEl, 'error', 'Curve fully sold'); return; }
-      const mc3Calls = [
-        { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('effectiveFee', [tokenAddr]) },
-        { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quote', [tokenAddr, estTokens]) }
-      ];
-      const mcRes = await withRPC(async rpc => {
-        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-        return await mc.aggregate3(mc3Calls);
-      });
-      if (myGen !== _curveQuoteGen) return; // user changed input or navigated since dispatch
-      const feeBps = mcRes[0].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[0].returnData)[0]) : _effFeeNow(curve);
-      _curveEffectiveFee = feeBps;
-      if (!mcRes[1].success) { _curveSetOut(outEl, subEl, detEl, 'error', 'Quote unavailable'); return; }
-      let cost = _cqIface.decodeFunctionResult('quote', mcRes[1].returnData)[0];
-      let tokens = estTokens;
-      if (Math.abs(feeBps - estFee) > 10) {
-        const netETH = ethWei * 10000n / BigInt(10000 + feeBps);
-        tokens = _curveEstTokens(curve, netETH);
-        try {
-          const reQuoteRes = await withRPC(async rpc => {
-            const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-            return await mc.aggregate3([{ target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quote', [tokenAddr, tokens]) }]);
-          });
-          if (myGen !== _curveQuoteGen) return;
-          if (reQuoteRes[0].success) cost = _cqIface.decodeFunctionResult('quote', reQuoteRes[0].returnData)[0];
-        } catch {}
-      }
-      const feeEth = cost * BigInt(feeBps) / 10000n;
-      const minTokens = tokens * BigInt(10000 - _curveSlippageBps) / 10000n;
+// Both sides quote through the same lens call the swap page uses, so the number here
+// and the number there come from one source rather than two that can disagree.
+async function lcQuote() {
+  const my = ++_lcQuoteSeq;
+  const raw = ($('lcAmount')?.value || '').trim();
+  _lcQuote = null;
+  if (!raw || !(parseFloat(raw) > 0)) { lcSetOut('0', '&nbsp;', true); return; }
 
-      // Avg execution price (cost / tokens) rendered per 1M tokens to match the page header.
-      const tokensFloat = Number(tokens) / 1e18;
-      const costFloat = Number(cost) / 1e18;
-      const feeFloat = Number(feeEth) / 1e18;
-      const ethPerMil = tokensFloat > 0 ? (costFloat / tokensFloat) * 1e6 : 0;
+  let amountIn;
+  try { amountIn = ethers.parseUnits(raw, 18); } catch { lcSetOut('0', 'Invalid amount', true); return; }
+  if (amountIn <= 0n) { lcSetOut('0', '&nbsp;', true); return; }
 
-      // _curveEstTokens clamps the estimate to maxBuyBps (10% of supply on a
-      // standard launch) and to remaining supply. Without a notice, "You pay 1 ETH"
-      // sits next to a token count that corresponds to a far smaller spend.
-      // Verified against mainnet via eth_simulateV1: buyExactIn does NOT revert
-      // past the cap — it fills exactly maxBuyBps and refunds the surplus in the
-      // same tx. So this is a "you won't get the size you asked for" notice, not
-      // a failure warning.
-      const capTokens = BigInt(curve.maxBuyBps) > 0n ? BigInt(curve.cap) * BigInt(curve.maxBuyBps) / 10000n : 0n;
-      const leftTokens = BigInt(curve.cap) - BigInt(curve.sold);
-      let capNote = '';
-      if (capTokens > 0n && tokens >= capTokens) capNote = `max ${(Number(curve.maxBuyBps) / 100).toFixed(0)}% of supply per tx`;
-      else if (leftTokens > 0n && tokens >= leftTokens) capNote = 'only ' + fmtTokenAmount(leftTokens.toString()) + ' left on the curve';
-      const totalCost = cost + feeEth;
-      const capped = !!capNote && totalCost < (ethWei * 99n / 100n);
-
-      outEl.textContent = fmtTokenAmount(tokens.toString());
-      outEl.className = 'curve-out-amount';
-      subEl.textContent = 'Avg ' + formatEthPrice(ethPerMil) + ' ETH / 1M';
-
-      const capEl = $('curveBuyCapNote');
-      if (capEl) {
-        const refund = ethWei > totalCost ? ethWei - totalCost : 0n;
-        capEl.innerHTML = capped
-          ? `Capped &mdash; ${escText(capNote)}. About ${escText(_curveFmtEth(Number(totalCost) / 1e18))} ETH fills; the remaining ~${escText(_curveFmtEth(Number(refund) / 1e18))} ETH is refunded in the same transaction.`
-          : '';
-        capEl.style.display = capped ? '' : 'none';
-      }
-
-      $('curveBuyDetPrice').textContent = formatEthPrice(ethPerMil) + ' ETH / 1M';
-      $('curveBuyDetFee').textContent = _curveFmtEth(feeFloat) + ' ETH (' + (feeBps / 100).toFixed(2) + '%)';
-      $('curveBuyDetMin').textContent = fmtTokenAmount(minTokens.toString()) + ' (' + (_curveSlippageBps / 100) + '% slip)';
-      detEl.style.display = '';
-    } catch (e) {
-      if (myGen !== _curveQuoteGen) return;
-      _curveSetOut(outEl, subEl, detEl, 'error', 'Quote failed');
-    }
-  }, 300);
-}
-
-function curveUpdateSellQuote() {
-  const outEl = $('curveSellOut'), subEl = $('curveSellOutSub'), detEl = $('curveSellDetails');
-  if (!outEl || !_curveData) return;
-  const v = parseFloat($('curveSellAmount')?.value || '0');
-  if (!v || v <= 0) {
-    // Same idle-clear pattern as the buy side — bump gen to cancel any already-fired
-    // callback awaiting RPC, otherwise it'll write stale data over the idle state.
-    if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-    ++_curveQuoteGen;
-    _curveSetOut(outEl, subEl, detEl, 'idle', '0');
-    return;
-  }
-  _curveSetOut(outEl, subEl, detEl, 'quoting', 'Quoting...');
-  if (_curveQuoteTimer) clearTimeout(_curveQuoteTimer);
-  const myGen = ++_curveQuoteGen;
-  _curveQuoteTimer = setTimeout(async () => {
-    try {
-      const tokenAddr = _curveTokenAddr;
-      let amount = ethers.parseEther(String(v));
-      let capped = false;
-      if (_curveBalance > 0n && amount > _curveBalance) { amount = _curveBalance; capped = true; }
-      if (amount <= 0n) { _curveSetOut(outEl, subEl, detEl, 'idle', '0'); return; }
-      const mc3Calls = [
-        { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('quoteSell', [tokenAddr, amount]) },
-        { target: CURVE_SALE, allowFailure: true, callData: _cqIface.encodeFunctionData('effectiveFee', [tokenAddr]) }
-      ];
-      const mcRes = await withRPC(async rpc => {
-        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-        return await mc.aggregate3(mc3Calls);
-      });
-      if (myGen !== _curveQuoteGen) return;
-      if (!mcRes[0].success) { _curveSetOut(outEl, subEl, detEl, 'error', 'Quote unavailable'); return; }
-      const gross = _cqIface.decodeFunctionResult('quoteSell', mcRes[0].returnData)[0];
-      const feeBps = mcRes[1].success ? Number(_cqIface.decodeFunctionResult('effectiveFee', mcRes[1].returnData)[0]) : _effFeeNow(_curveData);
-      _curveEffectiveFee = feeBps;
-      const fee = gross * BigInt(feeBps) / 10000n;
-      const net = gross - fee;
-      const minNet = net * BigInt(10000 - _curveSlippageBps) / 10000n;
-
-      const netFloat = Number(net) / 1e18;
-      const grossFloat = Number(gross) / 1e18;
-      const feeFloat = Number(fee) / 1e18;
-      const amountFloat = Number(amount) / 1e18;
-      const ethPerMil = amountFloat > 0 ? (grossFloat / amountFloat) * 1e6 : 0;
-
-      outEl.textContent = _curveFmtEth(netFloat);
-      outEl.className = 'curve-out-amount';
-      const usdSub = (_curveEthUsd && netFloat > 0) ? '≈ $' + (netFloat * _curveEthUsd).toFixed(2) : '';
-      const cappedTag = capped ? ' <span style="color:var(--fg-dim)">(capped to balance)</span>' : '';
-      subEl.innerHTML = (usdSub || '&nbsp;') + cappedTag;
-
-      $('curveSellDetPrice').textContent = formatEthPrice(ethPerMil) + ' ETH / 1M';
-      $('curveSellDetFee').textContent = _curveFmtEth(feeFloat) + ' ETH (' + (feeBps / 100).toFixed(2) + '%)';
-      $('curveSellDetMin').textContent = _curveFmtEth(Number(minNet) / 1e18) + ' ETH (' + (_curveSlippageBps / 100) + '% slip)';
-      detEl.style.display = '';
-    } catch (e) {
-      if (myGen !== _curveQuoteGen) return;
-      _curveSetOut(outEl, subEl, detEl, 'error', 'Quote failed');
-    }
-  }, 300);
-}
-
-async function curveBuy() {
-  if (_curveTrading) return;
-  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
-  const tokenAddr = _curveTokenAddr;
-  // Snapshot _renderGen so we can detect navigation away during the tx and avoid
-  // forcing the user back to this coin's detail page when the post-trade re-render fires.
-  const _myRenderGen = _renderGen;
-  const amtStr = ($('curveBuyAmount')?.value || '').trim();
-  if (!amtStr || isNaN(amtStr) || Number(amtStr) <= 0) {
-    $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Enter a valid ETH amount</div>';
-    return;
-  }
-  const ethWei = ethers.parseEther(amtStr);
-
-  // Compute minAmountOut using cached effectiveFee + client estimate + slippage.
-  // Sniper-aware fallback (not curve.feeBps) so a click before the quote debounce fires
-  // still uses an approximation of the live decay-window fee — otherwise minOut overshoots
-  // and the contract reverts with Slippage().
-  const curve = _curveData;
-  const feeBps = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
-  const netETH = ethWei * 10000n / BigInt(10000 + feeBps);
-  const approxTokens = _curveEstTokens(curve, netETH);
-  const minOut = approxTokens * BigInt(10000 - _curveSlippageBps) / 10000n;
-
-  const deadline = BigInt(Math.floor(Date.now() / 1000)) + 600n;
-  _curveTrading = true;
-  $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming...</div>`;
+  const buy = _lcSide === 'buy';
+  const tokenIn = buy ? ZERO : _lcToken;
+  const tokenOut = buy ? _lcToken : ZERO;
+  lcSetOut('…', 'Quoting…', true);
   try {
-    const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
-    const tx = await cs.buyExactIn(tokenAddr, minOut, deadline, { value: ethWei });
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
-    const receipt = await tx.wait();
+    const [c0, c1] = tokenIn.toLowerCase() < tokenOut.toLowerCase() ? [tokenIn, tokenOut] : [tokenOut, tokenIn];
+    const me = _connectedAddress || ZERO;
+    const data = SEL_QUOTE_BEST + _a(c0) + _a(c1) + _a(me) + _a(tokenIn) + _w(amountIn) + _w(0) + _w(LQ_SCAN);
+    const res = await withRPC(rpc => rpc.call({ to: PPLENS, data }));
+    if (my !== _lcQuoteSeq) return;
+    if (!res || res.length < 130) { lcSetOut('0', 'No route for that size.', true); return; }
+    const h = res.slice(2);
+    const pool = '0x' + h.slice(24, 64);
+    const out = BigInt('0x' + h.slice(64, 128));
+    if (out <= 0n || /^0x0{40}$/i.test(pool)) { lcSetOut('0', 'No route for that size.', true); return; }
 
-    const purchaseTopic = ethers.id('Purchase(address,address,uint256,uint256,uint256)');
-    let tokenAmount = 0n;
-    for (const log of receipt.logs) {
-      if (log.topics[0] === purchaseTopic && log.address.toLowerCase() === CURVE_SALE.toLowerCase()) {
-        const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256'], log.data);
-        tokenAmount = decoded[0]; break;
-      }
-    }
-
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${fmtTokenAmount(tokenAmount.toString())} tokens! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
-    $('curveBuyAmount').value = '';
-    // Re-render immediately so a buy that triggered graduation flips the UI to the post-grad panel
-    // before the user can click Buy again on the now-stale form.
-    // Await so _curveTrading stays held until the new panel is on screen,
-    // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    // Skip the re-render if the user navigated away during the tx — otherwise we'd force them
-    // back to this coin's detail page, with a hash that no longer matches the displayed content.
-    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
-  } catch (e) {
-    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
-    } else {
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
-      // Graduated() — another buyer pushed the curve over the line between
-      // our quote and submit. Flip the panel to post-grad so the user can
-      // retry on the right path without manually refreshing.
-      if (curveIsGraduatedErr(e)) {
-        setTimeout(() => renderCoinPage(tokenAddr), 800);
-      }
-    }
-  } finally {
-    _curveTrading = false;
-  }
-}
-
-async function curveSell() {
-  if (_curveTrading) return;
-  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
-  // Set the guard synchronously, before any await, so a double-click can't fire two
-  // concurrent balanceOf+quoteSell paths and emit two sell txs back-to-back.
-  _curveTrading = true;
-  const tokenAddr = _curveTokenAddr;
-  // Snapshot _renderGen so we can detect navigation away during the tx and avoid
-  // forcing the user back to this coin's detail page when the post-trade re-render fires.
-  const _myRenderGen = _renderGen;
-  const amtStr = ($('curveSellAmount')?.value || '').trim();
-  if (!amtStr || isNaN(amtStr) || Number(amtStr) <= 0) {
-    $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Enter a valid token amount</div>';
-    _curveTrading = false; return;
-  }
-  let tokenWei = ethers.parseEther(amtStr);
-  const address = await _signer.getAddress();
-
-  // Cap to actual balance
-  $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Checking balance...</div>`;
-  const tokenContract = new ethers.Contract(tokenAddr, ERC20_ABI, _signer);
-  const bal = await tokenContract.balanceOf(address);
-  if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; _curveTrading = false; return; }
-  if (tokenWei > bal) tokenWei = bal;
-
-  // Compute minProceeds using on-chain quoteSell + cached fee, single multicall.
-  // Sniper-aware fallback (not curve.feeBps) so a click before the quote debounce fires
-  // still uses an approximation of the live decay-window fee — otherwise minProceeds
-  // overshoots and the contract reverts with Slippage().
-  const curve = _curveData;
-  let gross;
-  const feeBps = _curveEffectiveFee != null ? _curveEffectiveFee : _effFeeNow(curve);
-  try {
-    gross = await withRPC(async rpc => {
-      const cs = new ethers.Contract(CURVE_SALE, CURVE_QUOTE_ABI, rpc);
-      return await cs.quoteSell(tokenAddr, tokenWei);
-    });
+    _lcQuote = { pool, out, amountIn, tokenIn, tokenOut };
+    const outTxt = buy ? fmtTokenAmount(out.toString()) : fmtNum(Number(ethers.formatEther(out)));
+    // Effective price is what this trade actually pays, which matters more than spot.
+    const eff = buy ? (amountIn * LQ_WAD) / out : (out * LQ_WAD) / amountIn;
+    const usd = _lcEthUsd > 0
+      ? (buy ? Number(ethers.formatEther(amountIn)) : Number(ethers.formatEther(out))) * _lcEthUsd : 0;
+    lcSetOut(outTxt,
+      `${fmtPriceWei(eff)} per token` + (usd > 0 ? ` · ${fmtUsd(usd)}` : '')
+      + ` · reverts below ${100 - _lcSlipPct}% of this`, false);
+    const go = $('lcGo'); if (go) go.disabled = false;
   } catch {
-    // Don't fall back to startPrice — current spot can be ~100× higher on a
-    // near-graduated curve, collapsing minProceeds to ~1% of fair value.
-    $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Quote unavailable — try again in a moment</div>';
-    _curveTrading = false; return;
-  }
-  const fee = gross * BigInt(feeBps) / 10000n;
-  const net = gross - fee;
-  const minProceeds = net * BigInt(10000 - _curveSlippageBps) / 10000n;
-
-  const deadline = BigInt(Math.floor(Date.now() / 1000)) + 600n;
-  $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming sell...</div>`;
-  try {
-    // No approval needed: launch() clones make CURVE_SALE the immutable hook, and the clone's
-    // transferFrom skips the allowance check when msg.sender == hook. CURVE_SALE.sell pulls via
-    // safeTransferFrom from msg.sender, so the call succeeds with zero allowance.
-    const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
-    const tx = await cs.sell(tokenAddr, tokenWei, minProceeds, deadline);
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
-    const receipt = await tx.wait();
-
-    const soldTopic = ethers.id('Sold(address,address,uint256,uint256,uint256)');
-    let proceeds = 0n;
-    for (const log of receipt.logs) {
-      if (log.topics[0] === soldTopic && log.address.toLowerCase() === CURVE_SALE.toLowerCase()) {
-        const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256'], log.data);
-        proceeds = decoded[1]; break;
-      }
-    }
-
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Sold for ${(Number(proceeds) / 1e18).toFixed(4)} ETH! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
-    $('curveSellAmount').value = '';
-    // Await so _curveTrading stays held until the new panel is on screen,
-    // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    // Skip if user navigated away — see curveBuy for rationale.
-    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
-  } catch (e) {
-    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
-    } else {
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
-      // Graduated mid-flight — flip to post-grad panel.
-      if (curveIsGraduatedErr(e)) {
-        setTimeout(() => renderCoinPage(tokenAddr), 800);
-      }
-    }
-  } finally {
-    _curveTrading = false;
+    if (my !== _lcQuoteSeq) return;
+    lcSetOut('0', 'Could not quote that.', true);
   }
 }
 
-let _graduating = false;
-async function curveGraduate() {
-  if (_graduating) return;
-  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
-  const btn = document.querySelector('[onclick="curveGraduate()"]');
-  _graduating = true;
+async function lcTrade() {
+  if (_lcTrading) return;
+  const status = $('lcStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:12px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  if (!_lcQuote) { lcQuote(); return; }
+
+  _lcTrading = true;
+  const btn = $('lcGo');
   if (btn) btn.disabled = true;
-  // Snapshot at start so we can skip the post-tx re-render if the user navigated away.
-  const _myRenderGen = _renderGen;
-  const _myToken = _curveTokenAddr;
+  const { pool, out, amountIn, tokenIn, tokenOut } = _lcQuote;
+  const minOut = out - (out * BigInt(Math.round(_lcSlipPct * 100))) / 10000n;
   try {
-    const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
-    const tx = await cs.graduate(_myToken);
-    $('curveGradStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Graduating... <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
-    await tx.wait();
-    $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">Graduated! LP seeded on zAMM.</div>`;
-    if (_myRenderGen === _renderGen) await renderCoinPage(_myToken);
-  } catch (e) {
-    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      $('curveGradStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
+    const me = await sgn.getAddress();
+    // Never hand tokens to an address the factory does not vouch for.
+    const okPool = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_ISPOOL + _a(pool) }));
+    if (!okPool || _dec1(okPool, 0) !== 1n) { say('That address is not a Precision pool — refusing to send.', 'var(--red)'); return; }
+
+    const routeData = _encPRoute([pool], tokenIn, tokenOut, amountIn, minOut, me);
+    const routed = _encSnwap(tokenIn, amountIn, me, tokenOut, minOut, PROUTE, routeData);
+    let data, value;
+    if (tokenIn === ZERO) {
+      // Native in: the router is funded by the call itself, so one leg and no approval.
+      data = routed; value = amountIn;
     } else {
-      $('curveGradStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
-    }
-  } finally {
-    _graduating = false;
-    if (btn) btn.disabled = false;
-  }
-}
-
-// ---- zAMM swap for graduated curve coins ----
-// Pool key: token0=ETH(zero), token1=token, feeOrHook = uint160(CURVE_SALE) | (1<<255)
-const CURVE_HOOK_FEE = BigInt(CURVE_SALE) | (1n << 255n);
-let _curveZammQuoteTimer = null;
-// Stale-callback guard for the post-grad ZAMM quote (mirrors _curveQuoteGen for the
-// pre-grad bonding-curve quote). Bumped on each dispatch and on every nav entry.
-let _curveZammQuoteGen = 0;
-
-function curveZammSide(side) {
-  const buyBtn = $('curveZammBuyBtn'), sellBtn = $('curveZammSellBtn');
-  buyBtn.style.background = side === 'buy' ? 'var(--btn-bg)' : 'transparent';
-  buyBtn.style.color = side === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)';
-  sellBtn.style.background = side === 'sell' ? 'var(--red)' : 'transparent';
-  sellBtn.style.color = side === 'sell' ? '#fff' : 'var(--fg-muted)';
-  $('curveZammBuyWrap').style.display = side === 'buy' ? '' : 'none';
-  $('curveZammSellWrap').style.display = side === 'sell' ? '' : 'none';
-}
-
-async function curveZammSellPct(pct) {
-  // Refresh balance from chain so the post-grad 100% sell quote matches the actual on-chain
-  // amount swapExactIn will consume. _curveBalance from render is stale once the user receives
-  // or transfers tokens out-of-band; the swap path itself caps to bal so the tx is safe.
-  if (_signer && _connectedAddress) {
-    try {
-      const bal = await withRPC(async rpc => {
-        const t = new ethers.Contract(_curveTokenAddr, ERC20_ABI, rpc);
-        return await t.balanceOf(_connectedAddress);
-      });
-      _curveBalance = bal;
-    } catch {} // fall through to cached balance
-  }
-  if (_curveBalance <= 0n) return;
-  const amt = _curveBalance * BigInt(pct) / 100n;
-  $('curveZammSellInput').value = ethers.formatEther(amt);
-  curveZammQuote('sell');
-}
-
-function curveZammQuote(side) {
-  const isBuy = side === 'buy';
-  const el = $(isBuy ? 'curveZammBuyQuote' : 'curveZammSellQuote');
-  if (!el) return;
-  const raw = $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput')?.value || '';
-  const v = parseFloat(raw);
-  if (!v || v <= 0) {
-    // Bump gen alongside clearing the timer so an already-fired callback mid-await
-    // can't write stale numbers over the just-set idle text.
-    if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
-    ++_curveZammQuoteGen;
-    el.textContent = 'Enter amount to see quote';
-    return;
-  }
-  el.innerHTML = `<span style="opacity:0.5">Quoting...</span>`;
-  if (_curveZammQuoteTimer) clearTimeout(_curveZammQuoteTimer);
-  // Generation token: a first quote that resolves after the user types a second amount
-  // would otherwise overwrite the new "Quoting..." with stale results before the second
-  // debounce fires. Latest dispatch wins.
-  const myGen = ++_curveZammQuoteGen;
-  _curveZammQuoteTimer = setTimeout(async () => {
-    try {
-      const amount = ethers.parseEther(String(v));
-      const tokenAddr = _curveTokenAddr;
-      // Read live creator fees alongside the quote so the UI matches what curveZammSwap will
-      // compute at submit time. Without this, a creator that updates their fee between render
-      // and trade will see displayed quote and on-chain expectedOut diverge by `bps`, and a
-      // tight slippage setting reverts with Slippage().
-      // Match the contract's routed swap. The fee can be taken from either side per direction:
-      //   buyOnInput=true:  ETH tax skimmed before pool sees msg.value
-      //   buyOnInput=false: pool sees full ETH, tokens taxed before user receives them
-      //   sellOnInput=true: token tax skimmed before pool sees amountIn
-      //   sellOnInput=false: pool sees full tokens, ETH taxed before user receives it
-      const tokenIn = isBuy ? ZERO : tokenAddr;
-      const tokenOut = isBuy ? tokenAddr : ZERO;
-      const [cfLive, quote] = await withRPC(async rpc => {
-        const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
-        const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
-        // Quote against the post-input-fee amount when the *OnInput flag is true. We have to
-        // fetch creatorFees first because swapAmount depends on the *OnInput flag.
-        const cf = await cs.creatorFees(tokenAddr);
-        const buyOnInputLive = Boolean(cf.buyOnInput);
-        const sellOnInputLive = Boolean(cf.sellOnInput);
-        const buyBpsLive = BigInt(cf.buyBps || 0);
-        const sellBpsLive = BigInt(cf.sellBps || 0);
-        const swapAmount = isBuy
-          ? (buyOnInputLive ? amount * (10000n - buyBpsLive) / 10000n : amount)
-          : (sellOnInputLive ? amount * (10000n - sellBpsLive) / 10000n : amount);
-        const q = await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, swapAmount);
-        return [cf, q];
-      });
-      if (myGen !== _curveZammQuoteGen) return; // user changed input or navigated since dispatch
-      const buyBps = BigInt(cfLive.buyBps || 0);
-      const sellBps = BigInt(cfLive.sellBps || 0);
-      const buyOnInput = Boolean(cfLive.buyOnInput);
-      const sellOnInput = Boolean(cfLive.sellOnInput);
-      // Refresh cached state so the next swap submit sees the same numbers we just quoted against.
-      _curveCreatorBuyBps = Number(buyBps);
-      _curveCreatorSellBps = Number(sellBps);
-      _curveCreatorBuyOnInput = buyOnInput;
-      _curveCreatorSellOnInput = sellOnInput;
-      let out = quote.amountOut;
-      // Tax the output side only when the corresponding *OnInput flag is false.
-      if (isBuy && !buyOnInput) out = out * (10000n - buyBps) / 10000n;
-      if (!isBuy && !sellOnInput) out = out * (10000n - sellBps) / 10000n;
-      if (isBuy) {
-        el.innerHTML = '~' + fmtTokenAmount(out.toString()) + ' tokens';
-      } else {
-        el.innerHTML = '~' + (Number(ethers.formatEther(out))).toFixed(4) + ' ETH';
+      // Token in: the router pulls, so it needs an allowance, and the checkpoint binds
+      // the pull to this exact route so a funded router cannot be spent by another one.
+      const token = new ethers.Contract(_lcToken, ERC20_ABI, sgn);
+      if ((await token.allowance(me, ZROUTER)) < amountIn) {
+        say('Approving…');
+        await (await token.approve(ZROUTER, ethers.MaxUint256)).wait();
       }
-    } catch {
-      if (myGen !== _curveZammQuoteGen) return;
-      el.textContent = 'Quote failed';
+      const checkpoint = _encSnwap(ZERO, 0n, me, ZERO, 0n, PROUTE,
+        SEL_PCHECKPOINT + _a(_lcToken) + ethers.keccak256('0x' + routeData.replace(/^0x/, '')).slice(2) + _a(me));
+      data = ROUTER_IFACE.encodeFunctionData('multicall', [['0x' + checkpoint.replace(/^0x/, ''), '0x' + routed.replace(/^0x/, '')]]);
+      value = 0n;
     }
-  }, 300);
-}
-
-async function curveZammSwap(side) {
-  if (_curveTrading) return;
-  if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
-  // Set the guard synchronously so a double-click can't fire two concurrent
-  // balanceOf+quote paths and submit two routed swaps back-to-back.
-  _curveTrading = true;
-  const isBuy = side === 'buy';
-  const raw = $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput')?.value || '';
-  const v = parseFloat(raw);
-  if (!v || v <= 0) {
-    $('curveTradeStatus').innerHTML = `<div style="color:var(--red);font-size:12px">Enter a valid amount</div>`;
-    _curveTrading = false; return;
-  }
-  let amount = ethers.parseEther(String(v));
-  const tokenAddr = _curveTokenAddr;
-  // Snapshot at start so we can skip the post-tx re-render if the user navigated away.
-  const _myRenderGen = _renderGen;
-  const address = await _signer.getAddress();
-  // Cap sell to actual balance
-  if (!isBuy) {
-    const token = new ethers.Contract(tokenAddr, ERC20_ABI, _signer);
-    const bal = await token.balanceOf(address);
-    if (bal === 0n) { $('curveTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">No tokens to sell</div>'; _curveTrading = false; return; }
-    if (amount > bal) amount = bal;
-  }
-  const tokenIn = isBuy ? ZERO : tokenAddr;
-  const tokenOut = isBuy ? tokenAddr : ZERO;
-  const poolKey = { id0: 0, id1: 0, token0: ZERO, token1: tokenAddr, feeOrHook: CURVE_HOOK_FEE };
-  const deadline = BigInt(Math.floor(Date.now() / 1000)) + 600n;
-
-  $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Quoting...</div>`;
-  try {
-    // Read live creator fee at submit time. Cached values from the render-time
-    // multicall can be stale if the creator updates `creatorFees` between
-    // render and confirmation, leading to a Slippage() revert because
-    // expectedOut would be computed against the wrong leg.
-    const csIfaceLive = new ethers.Interface(CURVE_SALE_ABI);
-    const cfLive = await withRPC(async rpc => {
-      const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, rpc);
-      return await cs.creatorFees(tokenAddr);
-    });
-    const buyBps = BigInt(cfLive.buyBps || 0);
-    const sellBps = BigInt(cfLive.sellBps || 0);
-    const buyOnInput = Boolean(cfLive.buyOnInput);
-    const sellOnInput = Boolean(cfLive.sellOnInput);
-    // Refresh cached state so subsequent quote/render reads stay in sync.
-    _curveCreatorBuyBps = Number(buyBps);
-    _curveCreatorSellBps = Number(sellBps);
-    _curveCreatorBuyOnInput = buyOnInput;
-    _curveCreatorSellOnInput = sellOnInput;
-
-    // Quote against the amount the pool actually sees, branching on the *OnInput flag for
-    // each side. Without this branch, swapping a pool whose creator picked buyOnInput=false
-    // or sellOnInput=true produces an expectedOut off by `bps`, making minOut too tight and
-    // forcing a Slippage() revert on every routed swap.
-    const swapAmount = isBuy
-      ? (buyOnInput ? amount * (10000n - buyBps) / 10000n : amount)
-      : (sellOnInput ? amount * (10000n - sellBps) / 10000n : amount);
-    const quote = await withRPC(async rpc => {
-      const quoter = new ethers.Contract(ZQUOTER, QUOTE_ABI, rpc);
-      return await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, swapAmount);
-    });
-    // Expected user output after the routed creator fee. Tax the output side only when the
-    // corresponding *OnInput flag is false (otherwise the tax was already taken from input).
-    let expectedOut = quote.amountOut;
-    if (isBuy && !buyOnInput) expectedOut = expectedOut * (10000n - buyBps) / 10000n;
-    if (!isBuy && !sellOnInput) expectedOut = expectedOut * (10000n - sellBps) / 10000n;
-    const minOut = expectedOut * BigInt(10000 - _curveSlippageBps) / 10000n;
-
-    // No approval: launch() clones exempt the hook (=CURVE_SALE) from the allowance check.
-    // CURVE_SALE.swapExactIn pulls tokens with safeTransferFrom, which the clone honours allowance-free.
-
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming...</div>`;
-    // Route through CURVE_SALE so the creator fee is paid and the routing-enforcement check passes.
-    // Direct ZAMM.swapExactIn would revert with Unauthorized whenever creatorFees[token].beneficiary != 0.
-    const cs = new ethers.Contract(CURVE_SALE, CURVE_SALE_ABI, _signer);
-    const tx = await cs.swapExactIn(
-      poolKey, amount, minOut, isBuy, address, deadline,
-      { value: isBuy ? amount : 0n }
-    );
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
+    say('Confirm in your wallet…');
+    const tx = await sgn.sendTransaction({ to: ZROUTER, data: data.startsWith('0x') ? data : '0x' + data, value });
+    say(`Swapping… <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
     await tx.wait();
-
-
-    $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--green)">${isBuy ? 'Bought' : 'Sold'}! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
-    $(isBuy ? 'curveZammBuyInput' : 'curveZammSellInput').value = '';
-    // Await so _curveTrading stays held until the new panel is on screen,
-    // preventing a stale-form double-click from hitting Graduated() between completion and re-render.
-    // Skip if user navigated away — see curveBuy for rationale.
-    if (_myRenderGen === _renderGen) await renderCoinPage(tokenAddr);
-  } catch (e) {
-    if ((e.message || '').includes('user rejected') || e.code === 'ACTION_REJECTED') {
-      $('curveTradeStatus').innerHTML = '<div style="font-size:12px;color:var(--fg-dim)">Cancelled</div>';
-    } else {
-      $('curveTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(curveErrText(e))}</div>`;
-    }
+    say('Done.', 'var(--green)');
+    const amt = $('lcAmount'); if (amt) amt.value = '';
+    _lcQuote = null;
+    const myGen = _renderGen;
+    if (myGen === _renderGen) await renderCoinPage(_lcToken);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.reason || err.message || 'Failed.'), 'var(--red)');
   } finally {
-    _curveTrading = false;
+    _lcTrading = false;
+    const b = $('lcGo'); if (b) b.disabled = false;
   }
 }
+
+function lcSetRedeemMax() {
+  const el = $('lcRedeemAmount');
+  if (el && _lcBalance > 0n) { el.value = ethers.formatUnits(_lcBalance, 18); lcRedeemQuote(); }
+}
+
+let _lcRedeemTimer = null;
+function lcRedeemQuoteDebounced() {
+  if (_lcRedeemTimer) clearTimeout(_lcRedeemTimer);
+  _lcRedeemTimer = setTimeout(lcRedeemQuote, 300);
+}
+
+async function lcRedeemQuote() {
+  const el = $('lcRedeemQuote');
+  if (!el) return;
+  const raw = ($('lcRedeemAmount')?.value || '').trim();
+  if (!raw || !(parseFloat(raw) > 0)) { el.innerHTML = '&nbsp;'; return; }
+  let amount;
+  try { amount = ethers.parseUnits(raw, 18); } catch { el.textContent = 'Invalid amount'; return; }
+  try {
+    const iface = new ethers.Interface(LAUNCHER_ABI);
+    const res = await withRPC(rpc => rpc.call({ to: LAUNCHER, data: iface.encodeFunctionData('quoteRedeem', [_lcToken, amount]) }));
+    const ethOut = iface.decodeFunctionResult('quoteRedeem', res)[0];
+    if (ethOut === 0n) { el.textContent = 'Nothing to redeem at that size.'; return; }
+    const usd = _lcEthUsd > 0 ? ` · ${fmtUsd(Number(ethers.formatEther(ethOut)) * _lcEthUsd)}` : '';
+    el.textContent = `${fmtNum(Number(ethers.formatEther(ethOut)))} ETH${usd}`;
+  } catch {
+    el.textContent = 'Could not quote that.';
+  }
+}
+
+async function lcRedeem() {
+  const status = $('lcRedeemStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:12px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const raw = ($('lcRedeemAmount')?.value || '').trim();
+  if (!raw || !(parseFloat(raw) > 0)) return;
+  let amount;
+  try { amount = ethers.parseUnits(raw, 18); } catch { return; }
+
+  const btn = $('lcRedeemGo');
+  if (btn) btn.disabled = true;
+  try {
+    const me = await sgn.getAddress();
+    const iface = new ethers.Interface(LAUNCHER_ABI);
+    // Quote at send time so minEthOut reflects the floor as it stands now, not as it
+    // stood when the box was typed into. The floor only rises, so this is protection
+    // against a stale quote rather than against the floor moving away.
+    const quoted = iface.decodeFunctionResult('quoteRedeem',
+      await withRPC(rpc => rpc.call({ to: LAUNCHER, data: iface.encodeFunctionData('quoteRedeem', [_lcToken, amount]) })))[0];
+    if (quoted === 0n) { say('Nothing to redeem at that size.', 'var(--red)'); return; }
+    const minOut = quoted - (quoted * BigInt(Math.round(_lcSlipPct * 100))) / 10000n;
+
+    say('Confirm in your wallet…');
+    const tx = await sgn.sendTransaction({
+      to: LAUNCHER,
+      data: iface.encodeFunctionData('redeem', [_lcToken, amount, minOut, me])
+    });
+    say(`Redeeming… <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Done.', 'var(--green)');
+    const el = $('lcRedeemAmount'); if (el) el.value = '';
+    await renderCoinPage(_lcToken);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.reason || err.message || 'Failed.'), 'var(--red)');
+  } finally {
+    const b = $('lcRedeemGo'); if (b) b.disabled = false;
+  }
+}
+
 
 // ==================== CAUSE COIN PAGE ====================
+
+// What the sale actually took in, from its own Purchase events.
+//
+// Everything else here is derived from live supply, which is right for "what is
+// outstanding" and wrong for "what was raised": a redemption burns shares, so a figure
+// computed from supply walks backwards every time someone exits. CELL sold 9,999,999
+// shares for 3.33 ETH and has had 1,891,890 burned since — the page was reporting 2.700
+// and calling it the raise. The treasury falls when a holder leaves. The raise does not.
+const SALE_PURCHASE_TOPIC = ethers.id('Purchase(address,address,uint256,uint256)');
+const SALE_FIRST_BLOCK = 25000000;
+const _everRaised = new Map();
+async function causeEverRaised(saleAddr, dao) {
+  const key = saleAddr.toLowerCase() + ':' + dao.toLowerCase();
+  if (_everRaised.has(key)) return _everRaised.get(key);
+  const pending = (async () => {
+    try {
+      const logs = await withRPC(rpc => rpc.getLogs({
+        address: saleAddr,
+        topics: [SALE_PURCHASE_TOPIC, ethers.zeroPadValue(dao.toLowerCase(), 32)],
+        fromBlock: SALE_FIRST_BLOCK, toBlock: 'latest',
+      }));
+      let shares = 0n, cost = 0n;
+      for (const l of logs) {
+        const d = l.data.slice(2);
+        if (d.length < 128) continue;
+        shares += BigInt('0x' + d.slice(0, 64));
+        cost += BigInt('0x' + d.slice(64, 128));
+      }
+      return cost > 0n ? { shares, cost } : null;
+    } catch { return null; }   // the supply-derived figures remain the fallback
+  })();
+  _everRaised.set(key, pending);
+  return pending;
+}
 
 async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const app = $('app');
@@ -5790,7 +4314,13 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const isOpenCap = cap >= 2n ** 128n
     || (!usesOffering && saleAllowance === 0n && sold === 0n && price > 0n && daicoSaleActive)
     || contSaleActive;
-  const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
+  // The headline is the raise, so it uses the figure that cannot move under a
+  // redemption; the treasury line beneath it stays live. That is the honest split
+  // between what came in and what is still here.
+  const _ever = await causeEverRaised(usesOffering ? SHARE_OFFERING : SHARE_SALE, daoAddr).catch(() => null);
+  const soldEver = _ever && _ever.shares > sold ? _ever.shares : sold;
+  const raisedWei = _ever ? _ever.cost
+                  : (price > 0n ? sold * price / ethers.parseEther('1') : 0n);
   const raisedEth = Number(ethers.formatEther(raisedWei));
   const priceEth = Number(ethers.formatEther(price));
   const soldOut = !isOpenCap && !contSaleActive && cap > 0n && sold >= cap;
@@ -5860,7 +4390,12 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const treasuryDiffers = Math.abs(treasuryEth - raisedEth) > 0.0001;
   // Target = every share the sale can still mint, at the fixed price. Undefined
   // for open-ended sales, which get a running total instead of a percentage.
-  const targetWei = (!isOpenCap && cap > 0n && price > 0n) ? cap * price / ethers.parseEther('1') : 0n;
+  // A cap from current supply can fall under what the events prove was sold, which
+  // would render "9,999,999 of 8,108,108". Take the larger: the real ceiling.
+  const capEver = cap > soldEver ? cap : soldEver;
+  const targetWei = (!isOpenCap && capEver > 0n && price > 0n)
+    ? (_ever && capEver === soldEver ? _ever.cost : capEver * price / ethers.parseEther('1'))
+    : 0n;
   const targetEth = Number(ethers.formatEther(targetWei));
   html += `
     <div id="causeRaisedRow" style="margin-bottom:10px">
@@ -5872,8 +4407,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   `;
 
   // Stats grid
-  const capFmt = isOpenCap ? 'Open' : (cap > 0n ? Number(ethers.formatEther(cap)).toLocaleString(undefined, {maximumFractionDigits: 0}) : 'Open');
-  const soldFmt = Number(ethers.formatEther(sold)).toLocaleString(undefined, {maximumFractionDigits: 0});
+  const capFmt = isOpenCap ? 'Open' : (capEver > 0n ? Number(ethers.formatEther(capEver)).toLocaleString(undefined, {maximumFractionDigits: 0}) : 'Open');
+  const soldFmt = Number(ethers.formatEther(soldEver)).toLocaleString(undefined, {maximumFractionDigits: 0});
   html += `
     <div id="causeStatsGrid" class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
@@ -7991,38 +6526,37 @@ async function renderCoinPage(daoAddr) {
   if (_vaultRefreshTimer) { clearInterval(_vaultRefreshTimer); _vaultRefreshTimer = null; }
   _pollers.clear();
   const gen = ++_renderGen;
-  // Invalidate any in-flight curve/zamm quote so its async callback can't write into a
-  // freshly-rendered detail page. renderCurveCoinPage bumps these on its own, but if we
-  // route to a DAICO detail instead, that path never touches them and a mid-await curve
-  // quote would null-deref on $('curveBuyDetPrice') etc.
-  if (_curveQuoteTimer) { clearTimeout(_curveQuoteTimer); _curveQuoteTimer = null; }
-  if (_curveZammQuoteTimer) { clearTimeout(_curveZammQuoteTimer); _curveZammQuoteTimer = null; }
-  if (_curveSniperTimer) { clearInterval(_curveSniperTimer); _curveSniperTimer = null; }
-  ++_curveQuoteGen;
-  ++_curveZammQuoteGen;
+  // Invalidate any in-flight pool quote so its async callback can't write into a
+  // freshly-rendered detail page. renderLaunchedCoinPage bumps these on its own, but
+  // if we route to a DAICO detail instead, that path never touches them and a
+  // mid-await quote would null-deref on $('lcOut').
+  if (_lcQuoteTimer) { clearTimeout(_lcQuoteTimer); _lcQuoteTimer = null; }
+  ++_lcQuoteSeq;
   const app = $('app');
   app.innerHTML = `
     <a href="#" class="back-link">&larr; All Coins</a>
     <div class="loading">${zfiLoadingSVG(48)}Loading coin data...</div>
   `;
 
-  // Try ClassicalCurveSale and DAICO path in parallel — use whichever matches
+  // A launched coin and a DAICO are two different things at the same kind of
+  // address, so ask both and take whichever answers. `infoFor` returns an empty
+  // struct — not a revert — for anything this launcher did not launch, which is
+  // what makes the two answers safe to race.
   try {
-    const curveIface = new ethers.Interface(CURVE_SALE_ABI);
     const daicoIface = new ethers.Interface(GET_DAICO_ABI);
-    const routeRes = await mcAggregate([
-      { target: CURVE_SALE, allowFailure: true, callData: curveIface.encodeFunctionData('curves', [daoAddr]) },
-      { target: VIEW_HELPER, allowFailure: true, callData: daicoIface.encodeFunctionData('getDAICO', [daoAddr, [ZERO]]) },
-    ]).catch(() => []);
-    const curveDecoded = mcDecode(routeRes[0], curveIface, 'curves', null);
-    const curveData = (curveDecoded && curveDecoded.creator && curveDecoded.creator !== ZERO) ? curveDecoded : null;
-    const daicoData = mcDecode(routeRes[1], daicoIface, 'getDAICO', null)?.[0] ?? null;
+    const [launchInfo, routeRes] = await Promise.all([
+      window.launchRegistry ? window.launchRegistry.infoFor(daoAddr).catch(() => null) : Promise.resolve(null),
+      mcAggregate([
+        { target: VIEW_HELPER, allowFailure: true, callData: daicoIface.encodeFunctionData('getDAICO', [daoAddr, [ZERO]]) },
+      ]).catch(() => [])
+    ]);
+    const daicoData = mcDecode(routeRes[0], daicoIface, 'getDAICO', null)?.[0] ?? null;
     if (gen !== _renderGen) return;
 
-    if (curveData) {
-      // Return the promise so callers (e.g. curveBuy/curveSell) that `await renderCoinPage(...)`
-      // actually wait for the new panel to be on screen before releasing _curveTrading.
-      return renderCurveCoinPage(daoAddr, curveData, gen);
+    if (launchInfo) {
+      // Return the promise so callers that `await renderCoinPage(...)` after a trade
+      // actually wait for the new panel to be on screen.
+      return renderLaunchedCoinPage(daoAddr, launchInfo, gen);
     }
 
     const data = daicoData;
