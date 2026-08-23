@@ -6107,8 +6107,16 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
             One proposal: it grants the mint allowance and sets the terms together, so the
             sale either reopens or does not.
           </div>
-          <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="shares to authorise" aria-label="Shares to authorise"
-            style="width:100%;padding:5px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:13px;outline:none;box-sizing:border-box" oninput="causeReopenQuote()">
+          <div style="display:flex;gap:10px;align-items:baseline">
+            <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="${UNIT} to authorise" aria-label="${UNIT_TITLE} to authorise"
+              style="flex:1;min-width:0;padding:5px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:13px;outline:none" oninput="causeReopenQuote()">
+            <span style="font-size:10px;color:var(--fg-dim)">at</span>
+            <span style="flex:0 0 110px;display:inline-flex;align-items:baseline;gap:4px">
+              <input id="causeReopenPrice" type="text" inputmode="decimal" value="${Number(price) / 1e9}" aria-label="Price per share in gwei"
+                style="flex:1;min-width:0;padding:5px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:13px;outline:none" oninput="causeReopenQuote()">
+              <span style="font-size:10px;color:var(--fg-dim)">gwei</span>
+            </span>
+          </div>
           <div id="causeReopenQuote" style="font-size:10px;color:var(--fg-muted);margin:6px 0;min-height:26px;line-height:1.5">Enter how many shares to authorise</div>
           <button class="swap-btn" style="width:100%;font-size:11px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeReopenPropose('${daoAddr}')">Open the proposal and vote</button>
           <div id="causeReopenStatus" style="margin-top:6px"></div>
@@ -6527,12 +6535,23 @@ function causeReopenQuote() {
   // not a thing anyone means to authorise.
   const n = Math.floor(Number(raw));
   if (!Number.isSafeInteger(n) || n <= 0) { el.textContent = 'Enter a whole number of shares'; return; }
-  const price = BigInt(ds.price || '0');
+  const gw = parseFloat(($('causeReopenPrice')?.value || '').trim());
+  const price = Number.isFinite(gw) && gw > 0 ? BigInt(Math.round(gw * 1e9)) : BigInt(ds.price || '0');
+  if (price <= 0n) { el.textContent = 'Enter a price per share'; return; }
   const wei = ethers.parseEther(String(n));
-  const eth = price > 0n ? wei * price / ethers.parseEther('1') : 0n;
+  const eth = wei * price / ethers.parseEther('1');
   const quorum = BigInt(ds.sharesSupply || '0') / 10n;
-  el.innerHTML = `Authorises <b style="color:var(--fg)">${fmtEthBal(Number(ethers.formatEther(eth)))} ETH</b> more at ${fmtPriceWei(price)}.
-    <div style="margin-top:3px">One proposal, ${fmtTokenAmount(quorum.toString())} shares of turnout, then a two day timelock.</div>`;
+  const floor = BigInt(ds.floor || '0');
+  const spot = _causePoolCache?.spot || 0n;
+  el.innerHTML = `Authorises <b style="color:var(--fg)">${fmtEthBal(Number(ethers.formatEther(eth)))} ETH</b> more at ${causeGwei(price)}.
+    <div style="margin-top:3px">One proposal, ${fmtTokenAmount(quorum.toString())} ${UNIT} of turnout, then a two day timelock.</div>`
+    + (floor > 0n && price < floor
+        // Minting under the floor hands the buyer more treasury than they paid in, and the
+        // difference comes out of every existing holder's claim.
+        ? `<div style="color:var(--red);margin-top:3px">Below the ${causeGwei(floor)} redemption price \u2014 every share sold here dilutes existing holders.</div>`
+        : spot > 0n
+          ? `<div style="color:var(--fg-dim);margin-top:3px">Floor ${causeGwei(floor)} &middot; market ${causeGwei(spot)}.</div>`
+          : '');
 }
 
 // Shared by the token row and anything else that hands over a string to paste elsewhere.
@@ -6553,7 +6572,9 @@ async function causeReopenPropose(daoAddr) {
   try {
     const steps = causeReopenSteps(
       daoAddr, ethers.parseEther(String(n)),
-      BigInt(ds.price || '0'), Number(ds.saleDeadline || '0'), BigInt(ds.sharesSupply || '0')
+      (() => { const g = parseFloat(($('causeReopenPrice')?.value || '').trim());
+               return Number.isFinite(g) && g > 0 ? BigInt(Math.round(g * 1e9)) : BigInt(ds.price || '0'); })(),
+      Number(ds.saleDeadline || '0'), BigInt(ds.sharesSupply || '0')
     );
     const dao = new ethers.Contract(daoAddr, MOLOCH_PROP_ABI, sgn);
     const ids = [];
