@@ -8041,15 +8041,15 @@ const P_SEL_QUOTE_BEST = '0x2adaa389';
 const P_SEL_ROUTE = '0x5d6498e1';
 const P_SEL_CHECKPOINT = '0x0b7c6c6c';
 const P_LQ_SCAN = 128n;
-const _pa = a => ethers.zeroPadValue((a || ZERO_ADDRESS).toLowerCase(), 32).slice(2);
-const _pw = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
+const _pAddr = a => ethers.zeroPadValue((a || ZERO_ADDRESS).toLowerCase(), 32).slice(2);
+const _pWord = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
 
 async function quotePrecisionBest(rpc, tokenIn, tokenOut, amountIn, sender) {
   if (!amountIn || amountIn <= 0n) return null;
   if (!tokenIn || !tokenOut || tokenIn.toLowerCase() === tokenOut.toLowerCase()) return null;
   const [c0, c1] = tokenIn.toLowerCase() < tokenOut.toLowerCase() ? [tokenIn, tokenOut] : [tokenOut, tokenIn];
-  const data = P_SEL_QUOTE_BEST + _pa(c0) + _pa(c1) + _pa(sender || ZERO_ADDRESS)
-             + _pa(tokenIn) + _pw(amountIn) + _pw(0) + _pw(P_LQ_SCAN);
+  const data = P_SEL_QUOTE_BEST + _pAddr(c0) + _pAddr(c1) + _pAddr(sender || ZERO_ADDRESS)
+             + _pAddr(tokenIn) + _pWord(amountIn) + _pWord(0) + _pWord(P_LQ_SCAN);
   try {
     const raw = await rpc.call({ to: PPLENS_ADDRESS, data });
     if (!raw || raw.length < 130) return null;
@@ -8065,8 +8065,8 @@ async function quotePrecisionBest(rpc, tokenIn, tokenOut, amountIn, sender) {
 // allowance — which zFi already grants it, being the same router — and a checkpoint
 // binding that pull to this exact route, or a funded router can be spent by another one.
 function buildPrecisionMulticall(tokenIn, tokenOut, amountIn, minOut, to, pool) {
-  const routeData = P_SEL_ROUTE + _pw(192) + _pa(tokenIn) + _pa(tokenOut)
-                  + _pw(amountIn) + _pw(minOut) + _pa(to) + _pw(1) + _pa(pool);
+  const routeData = P_SEL_ROUTE + _pWord(192) + _pAddr(tokenIn) + _pAddr(tokenOut)
+                  + _pWord(amountIn) + _pWord(minOut) + _pAddr(to) + _pWord(1) + _pAddr(pool);
   const routed = ROUTER_IFACE.encodeFunctionData('snwap', [
     tokenIn, amountIn, to, tokenOut, minOut, PROUTE_ADDRESS, routeData,
   ]);
@@ -8076,7 +8076,7 @@ function buildPrecisionMulticall(tokenIn, tokenOut, amountIn, minOut, to, pool) 
   }
   const checkpoint = ROUTER_IFACE.encodeFunctionData('snwap', [
     ZERO_ADDRESS, 0n, to, ZERO_ADDRESS, 0n, PROUTE_ADDRESS,
-    P_SEL_CHECKPOINT + _pa(tokenIn) + ethers.keccak256(routeData).slice(2) + _pa(to),
+    P_SEL_CHECKPOINT + _pAddr(tokenIn) + ethers.keccak256(routeData).slice(2) + _pAddr(to),
   ]);
   return { multicall: ROUTER_IFACE.encodeFunctionData('multicall', [[checkpoint, routed]]),
            calls: [checkpoint, routed], msgValue: 0n };

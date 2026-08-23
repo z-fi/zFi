@@ -29,7 +29,7 @@ const ROUTER_IFACE = new ethers.Interface([
 ]);
 const M = new Function('ethers', 'ROUTER_IFACE', [
   "const ZERO_ADDRESS='0x0000000000000000000000000000000000000000';",
-  grab(/const PPLENS_ADDRESS = [\s\S]*?const _pw = [^\n]*/),
+  grab(/const PPLENS_ADDRESS = [\s\S]*?const _pWord = [^\n]*/),
   grab(/function buildPrecisionMulticall[\s\S]*?\n}/),
   'return { buildPrecisionMulticall, PROUTE_ADDRESS, PPLENS_ADDRESS };',
 ].join('\n'))(ethers, ROUTER_IFACE);
