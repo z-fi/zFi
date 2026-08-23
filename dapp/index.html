@@ -6334,6 +6334,7 @@ async function getZOrgQuote(fromAmountStr, fromSym) {
 }
 
 </script>
+<script src="./modules/precision.js"></script>
 <script src="./modules/aggregators.js"></script>
 <script>
 
@@ -8067,14 +8068,16 @@ function _resetExtFlags(r) { for (const d of _AGG_DEFS) r[d.flag] = false; r.isC
 // a token can have both: zOrg has a precision band AND a zap, a DAICO coin has one AND a
 // primary sale. Whichever returns more of the output token should win, and on some sizes
 // that is not the precision pool.
-const PPLENS_ADDRESS = '0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB';
-const PROUTE_ADDRESS = '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB';
-const P_SEL_QUOTE_BEST = '0x2adaa389';
-const P_SEL_ROUTE = '0x5d6498e1';
-const P_SEL_CHECKPOINT = '0x0b7c6c6c';
+// From modules/precision.js. Aliased rather than renamed at every call site: the names
+// below are what this page's code already reads, and a rename is churn with a chance of
+// a typo, not a simplification.
+const PPLENS_ADDRESS = PRECISION_LENS;
+const PROUTE_ADDRESS = PRECISION_ROUTE;
+const P_SEL_QUOTE_BEST = PSEL.quoteBest;
+const P_SEL_ROUTE = PSEL.route;
+const P_SEL_CHECKPOINT = PSEL.checkpoint;
 const P_LQ_SCAN = 128n;
-const _pAddr = a => ethers.zeroPadValue((a || ZERO_ADDRESS).toLowerCase(), 32).slice(2);
-const _pWord = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
+const _pAddr = pAddr, _pWord = pWord;
 
 async function quotePrecisionBest(rpc, tokenIn, tokenOut, amountIn, sender) {
   if (!amountIn || amountIn <= 0n) return null;

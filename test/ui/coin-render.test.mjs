@@ -40,13 +40,19 @@ function boot() {
   w.getWalletConnectTxOverrides = () => ({});
   w.EthereumProvider = { init: async () => ({ on() {}, enable: async () => [] }) };
 
+  // A browser puts every classic script's top-level const into ONE shared global lexical
+  // environment; jsdom's w.eval gives each call its own, so evaluating the page a script
+  // at a time hides every cross-script reference behind a false ReferenceError. Evaluate
+  // modules/precision.js and the page's inline scripts as one unit, which is what the
+  // browser effectively does for name resolution.
   const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   const errs = [];
   // The last statement routes on load and paints the gallery, which needs a network this
   // test does not give it. Neutralise it so a boot failure is about the page, not the stub.
-  for (const src of scripts) {
-    try { w.eval(src.replace(/\nroute\(\);?\s*$/, '\n')); } catch (e) { errs.push(e); }
-  }
+  const joined = [fs.readFileSync(path.join(ROOT, 'dapp/modules/precision.js'), 'utf8')]
+    .concat(scripts.map(src => src.replace(/\nroute\(\);?\s*$/, '\n')))
+    .join('\n;\n');
+  try { w.eval(joined); } catch (e) { errs.push(e); }
   return { w, errs };
 }
 

@@ -27,9 +27,12 @@ const ROUTER_IFACE = new ethers.Interface([
   'function multicall(bytes[]) payable returns (bytes[])',
   'function snwap(address tokenIn,uint256 amountIn,address recipient,address tokenOut,uint256 amountOutMin,address executor,bytes executorData) payable returns (uint256)',
 ]);
+// The page aliases these off modules/precision.js, so the module comes along.
+const MODULE_SRC = fs.readFileSync(path.join(ROOT, 'dapp/modules/precision.js'), 'utf8');
 const M = new Function('ethers', 'ROUTER_IFACE', [
+  MODULE_SRC,
   "const ZERO_ADDRESS='0x0000000000000000000000000000000000000000';",
-  grab(/const PPLENS_ADDRESS = [\s\S]*?const _pWord = [^\n]*/),
+  grab(/const PPLENS_ADDRESS = [\s\S]*?const _pAddr = pAddr, _pWord = pWord;/),
   grab(/function buildPrecisionMulticall[\s\S]*?\n}/),
   'return { buildPrecisionMulticall, PROUTE_ADDRESS, PPLENS_ADDRESS };',
 ].join('\n'))(ethers, ROUTER_IFACE);
@@ -117,7 +120,8 @@ test('precision answers when nothing else does, which is the case it exists for'
     `const getReceiver=()=>'${ZERO}';`,
     'const safeParseUnits=(v,d)=>ethers.parseUnits(String(v),d);',
     'const quoteRPC={call:fn=>fn(RPC)};',
-    grabf(/const PPLENS_ADDRESS = [\s\S]*?const _pWord = [^\n]*/),
+    MODULE_SRC,
+    grabf(/const PPLENS_ADDRESS = [\s\S]*?const _pAddr = pAddr, _pWord = pWord;/),
     grabf(/async function quotePrecisionBest[\s\S]*?\n}/),
     grabf(/function buildPrecisionMulticall[\s\S]*?\n}/),
     grabf(/async function _precisionOnly[\s\S]*?\n}/),

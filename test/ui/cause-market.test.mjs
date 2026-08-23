@@ -202,8 +202,12 @@ test('the droplet swaps what the form does, and liquidity opens on the ETH side'
   // zapIn's swap leg runs at minOut = 0 by design, so the form has to say how much of
   // the deposit is exposed to the band's depth.
   assert.match(src, /fills at any price/, 'a heavy swap portion must be called out');
-  assert.match(src, /SEL_ZAPIN = '0xc98c2c0b'/);
-  assert.match(src, /SEL_PREVIEW_ZAP = '0xe7cddab0'/);
+  // The selectors live in modules/precision.js now; the page names the role, not the bytes.
+  assert.match(src, /SEL_ZAPIN = PSEL\.zapIn/);
+  assert.match(src, /SEL_PREVIEW_ZAP = PSEL\.previewZap/);
+  const mod = fs.readFileSync(path.join(ROOT, 'dapp/modules/precision.js'), 'utf8');
+  assert.match(mod, /zapIn:\s*'0xc98c2c0b'/, 'zapIn selector changed under the page');
+  assert.match(mod, /previewZap:\s*'0xe7cddab0'/, 'previewZap selector changed under the page');
 
   // A zap's routed leg declares the POOL as its output, not the paired token.
   assert.match(src, /zap \? pool : tokenOut/,

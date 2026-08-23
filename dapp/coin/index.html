@@ -768,6 +768,7 @@ input {
 <script src="../vendor/ethers.min.js"></script>
 <script src="../vendor/walletconnect.min.js"></script>
 <script src="../wallet.js"></script>
+<script src="../modules/precision.js"></script>
 <script src="../modules/curve-registry.js"></script>
 <!-- Pool Mint/Burn logs, used lazily to date the DAO's LP position. Deferred: nothing
      on first paint depends on it. -->
@@ -6424,21 +6425,20 @@ async function causeReopenPropose(daoAddr) {
   }
 }
 
-const PFACTORY = '0x000000Eb27B557aB426d9E99cFd54EC455799e81';
+const PFACTORY = PRECISION_FACTORY;   // modules/precision.js
 const PRECISION_FEE = 3000n;            // 0.3%, zSwap's own default
 const LQ_WIDTHS = [1000, 100, 10, 2];   // widest first
 const LQ_WAD = 10n ** 18n;
-const SEL_POOLFOR = '0x83bd1387';
-const SEL_PAIR_COUNT = '0x355da246';
-const SEL_CREATE_SEED = '0x7163352a';
+const SEL_POOLFOR = PSEL.poolFor;
+const SEL_PAIR_COUNT = PSEL.pairCount;
+const SEL_CREATE_SEED = PSEL.createSeed;
 const ZSWAP_URL = 'https://zswap.wei.limo/';
 
 function causeZSwapLink(sharesAddr, lq) {
   return `${ZSWAP_URL}#token=eth&out=${sharesAddr}${lq ? '&lq=1' : ''}`;
 }
 
-const _w = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
-const _a = a => ethers.zeroPadValue((a || ZERO).toLowerCase(), 32).slice(2);
+const _w = pWord, _a = pAddr;   // modules/precision.js
 
 // price (t1 per t0, human units) -> sqrt price in the factory's fixed-point form
 function pxToSqrt(px, d0, d1) {
@@ -6506,15 +6506,15 @@ async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
 // ---------------------------------------------------------------- market data
 // Two lenses and a tape. The lens enumerates a pair's pools with their bounds and
 // reserves; PLQLENS prices a deposit; the pool's own tape carries the candles.
-const PPLENS = '0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB';
-const PLQLENS = '0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E';
-const SEL_MARKETS = '0x29c21083';
-const SEL_TAPE = '0x29a65241';
-const SEL_PREVIEW_ADD = '0xe03ec807';
-const SEL_ADDEXACT = '0xcc0025e4';
-const SEL_ZAPIN = '0xc98c2c0b';
-const SEL_PREVIEW_ZAP = '0xe7cddab0';
-const SEL_ISPOOL = '0x5b16ebb7';
+const PPLENS = PRECISION_LENS;
+const PLQLENS = PRECISION_LQ_LENS;
+const SEL_MARKETS = PSEL.markets;
+const SEL_TAPE = PSEL.tape;
+const SEL_PREVIEW_ADD = PSEL.previewAdd;
+const SEL_ADDEXACT = PSEL.addExact;
+const SEL_ZAPIN = PSEL.zapIn;
+const SEL_PREVIEW_ZAP = PSEL.previewZap;
+const SEL_ISPOOL = PSEL.isPool;
 const PI_WORDS = 19, PI_POOL = 0, PI_SL = 3, PI_SH = 4, PI_FEE = 5,
       PI_R0 = 6, PI_R1 = 7, PI_PX = 8, PI_LIQ = 9;
 const LQ_SCAN = 32;
@@ -6713,10 +6713,10 @@ function causeChart(bars, floorWei, saleWei, spotWei) {
 // ---------------------------------------------------------------- swap
 // zSwap's precision path, narrowed to the one pair this page has: ETH against the
 // cause's own shares. The router funds an executor, the executor walks the pools.
-const PROUTE = '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB';
-const SEL_PROUTE = '0x5d6498e1';
-const SEL_PCHECKPOINT = '0x0b7c6c6c';
-const SEL_QUOTE_BEST = '0x2adaa389';
+const PROUTE = PRECISION_ROUTE;
+const SEL_PROUTE = PSEL.route;
+const SEL_PCHECKPOINT = PSEL.checkpoint;
+const SEL_QUOTE_BEST = PSEL.quoteBest;
 // A band holding a fraction of an ETH moves several percent under any trade worth making,
 // so a tight tolerance here does not protect anyone — it just reverts and charges gas.
 let _causeSlipPct = 5;
