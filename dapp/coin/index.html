@@ -3539,7 +3539,7 @@ async function _galleryRenderFresh(gen) {
             <div class="coin-logo">${logoHTML(d.meta, md)}</div>
             <div>
               <div class="coin-card-name">${escText(d.meta.name || 'Unnamed')}</div>
-              <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.launchType === 'cause' ? `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span>` : md && md.launchType === 'curve' ? `<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span>` : md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector') ? `<span class="coin-tpl-badge coin-tpl-simple" title="collector DAO">collect</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
+              <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.launchType === 'cause' ? `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable${md.saleToken === 'loot' ? ' &middot; backers hold non-voting loot' : ''}">cause${md.saleToken === 'loot' ? ' &middot; loot' : ''}</span>` : md && md.launchType === 'curve' ? `<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span>` : md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector') ? `<span class="coin-tpl-badge coin-tpl-simple" title="collector DAO">collect</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
             </div>
           </div>
           ${isCause && md.description
@@ -5821,7 +5821,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     <div class="coin-detail-head">
       <div class="coin-detail-logo">${logoHTML(data.meta, metadata, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
-        <h2>${escText(coinName)} <span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable">cause</span></h2>
+        <h2>${escText(coinName)} <span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable${saleIsLoot ? ' &middot; backers hold non-voting loot' : ''}">cause${saleIsLoot ? ' &middot; loot' : ''}</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(coinSymbol)}</span>
           ${_connectedAddress && userBalance > 0n ? `<div class="coin-user-balance">you hold ${balFmt} ${UNIT}</div>` : ''}
