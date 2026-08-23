@@ -5973,10 +5973,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     const myCost = price > 0n ? userBalance * price / ethers.parseEther('1') : 0n;
     const myDelta = myValue - myCost;
     const myDeltaPct = myCost > 0n ? Number(myDelta * 1000000n / myCost) / 10000 : 0;
+    // This was an 11px dim-grey line with no border, sitting between two bordered cards —
+    // present, and repeatedly not found by someone looking for it. Redemption is the one
+    // thing a holder is always entitled to, so it gets the same weight as the panels
+    // around it rather than the least weight on the page.
     html += `
-      <div style="margin-top:4px;margin-bottom:14px">
-        <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
-          <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} ${UNIT} for ${ethGlyph(12)} ETH
+      <div class="section-card" style="background:var(--surface);margin-top:4px;margin-bottom:14px;padding:0;overflow:hidden">
+        <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;font-size:12px;color:var(--fg);background:transparent;border:none;cursor:pointer;font-family:inherit;text-align:left">
+          <span style="font-size:10px;color:var(--fg-dim)">&#9654;</span>
+          <span style="font-weight:600">Redeem</span>
+          <span style="color:var(--fg-muted);font-weight:400">${causeGlyph(data.meta, metadata, 12)} ${UNIT} for ${ethGlyph(12)} ETH</span>
+          ${userBalance > 0n && rqDenom > 0n ? `<span style="margin-left:auto;color:var(--fg-dim);font-size:11px">your share \u2248 ${fmtETH(myValue)} ETH</span>` : ''}
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
           <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your ${UNIT} for a pro-rata portion of the ${treasuryETH > 0n ? rqTreasuryFmt + ' ETH' : 'DAO'} treasury, paid immediately.${usesOffering
