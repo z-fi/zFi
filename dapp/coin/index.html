@@ -5751,6 +5751,31 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Buy form (if sale active); a closed sale gets its closing summary in the same place.
   if (saleEnded) html += `<div id="causeSaleClose"></div>`;
+
+  // A closed sale can be reopened by granting the sale a fresh allowance, which is a
+  // vote. Only shown to someone who can actually start one — proposing needs a share of
+  // voting power — and only while the deadline still has room for the two day timelock.
+  if (saleEnded && !isOpenCap && price > 0n && userBalance > 0n
+      && saleDeadline > 0 && saleDeadline - now > 172800) {
+    const daysLeft = Math.floor((saleDeadline - now) / 86400);
+    html += `
+      <div class="section-card">
+        <div class="section-title">Reopen the sale</div>
+        <div style="font-size:11px;color:var(--fg-dim);line-height:1.6;margin-bottom:10px">
+          Redeemed shares are never resold, so refunds close a sale early. Granting the
+          sale a fresh allowance lets it run again until the deadline, ${daysLeft} day${daysLeft === 1 ? '' : 's'} from now.
+          It takes a vote and a two day timelock.
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px">
+          <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="shares to authorise" aria-label="Shares to authorise"
+            style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeReopenQuote()">
+        </div>
+        <div id="causeReopenQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter how many shares to authorise</div>
+        <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeReopenPropose('${daoAddr}')">Open proposal and vote</button>
+        <div id="causeReopenStatus" style="margin-top:8px"></div>
+      </div>
+    `;
+  }
   if (!saleEnded) {
     html += `
       <div class="section-card">
@@ -6254,6 +6279,72 @@ async function loadCausePool(daoAddr, sharesAddr, gen) {
       <a href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Trade $${sym} &rarr;</a>
     </div>
   </div>`;
+}
+
+// Refunds destroy sale capacity: the allowance is spent at mint and never restored, so
+// a share redeemed is a share the sale can never sell again. That is recoverable — the
+// DAO can grant a fresh allowance — but only by vote, and nothing on the page said so
+// or offered to start one.
+//
+// The nonce is derived from the amount rather than random, so everyone who opens "grant
+// N shares" lands on the same proposal id and their votes accumulate instead of
+// splitting across duplicates.
+const MOLOCH_PROP_ABI = [
+  'function proposalId(uint8 op, address to, uint256 value, bytes data, bytes32 nonce) view returns (uint256)',
+  'function castVote(uint256 id, uint8 support)',
+  'function state(uint256 id) view returns (uint8)',
+  'function setAllowance(address spender, address token, uint256 amount)'
+];
+
+function causeReopenCalldata(daoAddr, sharesWei) {
+  return new ethers.Interface(MOLOCH_PROP_ABI)
+    .encodeFunctionData('setAllowance', [SHARE_SALE, daoAddr, sharesWei]);
+}
+function causeReopenNonce(sharesWei) {
+  return ethers.keccak256(ethers.toUtf8Bytes('zfi.cause.reopen.' + sharesWei.toString()));
+}
+
+function causeReopenQuote() {
+  const el = $('causeReopenQuote');
+  if (!el) return;
+  const ds = $('app')?.dataset || {};
+  const n = parseFloat($('causeReopenShares')?.value || '0');
+  if (!n || n <= 0) { el.textContent = 'Enter how many shares to authorise'; return; }
+  const price = BigInt(ds.price || '0');
+  const wei = ethers.parseEther(String(Math.floor(n)));
+  const eth = price > 0n ? wei * price / ethers.parseEther('1') : 0n;
+  const quorum = BigInt(ds.sharesSupply || '0') / 10n;
+  el.innerHTML = `Authorises <b style="color:var(--fg)">${fmtEthBal(Number(ethers.formatEther(eth)))} ETH</b> of new capacity at ${fmtPriceWei(price)}.
+    <div style="margin-top:3px">Needs ${fmtTokenAmount(quorum.toString())} shares to vote, then a two day timelock.</div>`;
+}
+
+async function causeReopenPropose(daoAddr) {
+  const status = $('causeReopenStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const n = parseFloat($('causeReopenShares')?.value || '0');
+  if (!n || n <= 0) { say('Enter how many shares to authorise.'); return; }
+  try {
+    const wei = ethers.parseEther(String(Math.floor(n)));
+    const data = causeReopenCalldata(daoAddr, wei);
+    const nonce = causeReopenNonce(wei);
+    const dao = new ethers.Contract(daoAddr, MOLOCH_PROP_ABI, sgn);
+    const id = await dao.proposalId(0, daoAddr, 0n, data, nonce);
+    say('Confirm in your wallet \u2014 this opens the proposal and votes for it.');
+    const tx = await dao.castVote(id, 1);
+    say(`Opening \u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    const share = `${location.origin}${location.pathname}#${daoAddr}`;
+    say(`Proposal open and your shares are voting for it.
+      <div style="margin-top:4px">It needs more holders to reach quorum \u2014 send them this page, or
+      <a href="../dao/#/dao/1/${daoAddr}" style="color:inherit;text-decoration:underline">the DAO page</a> to vote.</div>
+      <div style="margin-top:4px;font-family:monospace;font-size:10px;word-break:break-all;color:var(--fg-dim)">#${id.toString()}</div>`, 'var(--green)');
+    loadCauseGovernance(daoAddr, _renderGen).catch(() => {});
+  } catch (e) {
+    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(e.shortMessage || e.message || 'Failed.'), 'var(--red)');
+  }
 }
 
 function causeSwitchMode(mode) {
