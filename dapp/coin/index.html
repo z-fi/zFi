@@ -6569,12 +6569,17 @@ async function causeReopenPropose(daoAddr) {
   const n = Math.floor(Number(raw));
   if (!raw || isNaN(raw) || !Number.isSafeInteger(n) || n <= 0) { say('Enter a whole number of shares.'); return; }
   const ds = $('app')?.dataset || {};
+  // The same figures the quote showed, recomputed here so the published description and
+  // the calldata cannot disagree about what was proposed.
+  const _g = parseFloat(($('causeReopenPrice')?.value || '').trim());
+  const priceWei = Number.isFinite(_g) && _g > 0 ? BigInt(Math.round(_g * 1e9)) : BigInt(ds.price || '0');
+  const gweiLabel = Number(priceWei) / 1e9;
+  const raiseWei = ethers.parseEther(String(n)) * priceWei / ethers.parseEther('1');
+  const UNIT_LABEL = ds.saleUnit || 'shares';
   try {
     const steps = causeReopenSteps(
       daoAddr, ethers.parseEther(String(n)),
-      (() => { const g = parseFloat(($('causeReopenPrice')?.value || '').trim());
-               return Number.isFinite(g) && g > 0 ? BigInt(Math.round(g * 1e9)) : BigInt(ds.price || '0'); })(),
-      Number(ds.saleDeadline || '0'), BigInt(ds.sharesSupply || '0')
+      priceWei, Number(ds.saleDeadline || '0'), BigInt(ds.sharesSupply || '0')
     );
     const dao = new ethers.Contract(daoAddr, MOLOCH_PROP_ABI, sgn);
     const ids = [];
@@ -6587,6 +6592,25 @@ async function causeReopenPropose(daoAddr) {
       say(`Opening: ${st.label}\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
       await tx.wait();
     }
+    // A Moloch proposal is a bare intent hash until it executes: Opened carries only the
+    // id, and nothing on chain says what the calldata does. Holders were being asked to
+    // vote on "Proposal". The DAO page's answer is a chat message carrying the preimage
+    // and a description, which both pages already decode and verify by recomputing the
+    // id — so the reopen publishes one too, rather than inventing a second convention.
+    try {
+      const desc = `Reopen the sale on ShareOffering: authorise ${Number(n).toLocaleString()} ${UNIT_LABEL}`
+        + ` at ${gweiLabel} gwei (${fmtEthBal(Number(ethers.formatEther(raiseWei)))} ETH), `
+        + `${CAUSE_REOPEN_WINDOW_DAYS}-day window. Redeemed ${UNIT_LABEL} return their room to the sale.`;
+      const payload = { type: 'PROPOSAL', op: 0, to: steps[0].to, value: '0',
+                        data: steps[0].data, nonce: steps[0].nonce, description: desc };
+      say('Publishing what the proposal does\u2026 confirm to post it to the DAO chat.');
+      const ctx = await dao.chat(`<<<PROPOSAL_DATA\n${JSON.stringify(payload, null, 2)}\nPROPOSAL_DATA>>>`);
+      await ctx.wait();
+    } catch (_) {
+      // A badge is required to post and the vote is already cast; losing the description
+      // is worth saying nothing about beyond leaving the proposal listed.
+    }
+
     // Both proposals need other holders, and the moment to ask is now, not after the tab
     // is closed. Hand over a link that is ready to paste rather than a page to describe.
     const voteUrl = new URL('../dao/#/dao/1/' + daoAddr, location.href).href;
