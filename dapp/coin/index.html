@@ -6430,6 +6430,222 @@ async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
   return null;
 }
 
+// ---------------------------------------------------------------- market data
+// Two lenses and a tape. The lens enumerates a pair's pools with their bounds and
+// reserves; PLQLENS prices a deposit; the pool's own tape carries the candles.
+const PPLENS = '0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB';
+const PLQLENS = '0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E';
+const SEL_MARKETS = '0x29c21083';
+const SEL_TAPE = '0x29a65241';
+const SEL_PREVIEW_ADD = '0xe03ec807';
+const SEL_ADDEXACT = '0xcc0025e4';
+const SEL_ISPOOL = '0x5b16ebb7';
+const PI_WORDS = 19, PI_POOL = 0, PI_SL = 3, PI_SH = 4, PI_FEE = 5,
+      PI_R0 = 6, PI_R1 = 7, PI_PX = 8, PI_LIQ = 9;
+const LQ_SCAN = 32;
+const _dec1 = (h, i) => BigInt('0x' + h.slice(2).slice(i * 64, (i + 1) * 64));
+
+// Pools for the ETH/shares pair, richest first. Reserves are what the page prices
+// against: the tape is executed prices and its own source says not to price on it.
+async function causePools(sharesAddr) {
+  const [t0, t1] = causeSortedPair(sharesAddr);
+  const data = SEL_MARKETS + _a(t0) + _a(t1) + _a(ZERO) + _w(0) + _w(LQ_SCAN) + _w(0);
+  let raw;
+  try { raw = await withRPC(rpc => rpc.call({ to: PPLENS, data })); } catch { return []; }
+  if (!raw || raw.length < 130) return [];
+  const h = raw.slice(2);
+  const n = Number(BigInt('0x' + h.slice(64, 128)));
+  const out = [];
+  for (let i = 0; i < n && i < LQ_SCAN; i++) {
+    const base = 128 + i * PI_WORDS * 64;
+    const at = k => BigInt('0x' + h.slice(base + k * 64, base + (k + 1) * 64));
+    out.push({
+      pool: '0x' + h.slice(base + PI_POOL * 64 + 24, base + (PI_POOL + 1) * 64),
+      sl: at(PI_SL), sh: at(PI_SH), fee: at(PI_FEE),
+      r0: at(PI_R0), r1: at(PI_R1), liq: at(PI_LIQ),
+    });
+  }
+  return out.sort((x, y) => (y.liq > x.liq ? 1 : y.liq < x.liq ? -1 : 0));
+}
+
+// ETH per share, in wei, from reserves. token0 is ETH whenever it sorts first.
+function causePoolPrice(pool, sharesAddr) {
+  const [t0] = causeSortedPair(sharesAddr);
+  const ethIs0 = t0 === ZERO;
+  const eth = ethIs0 ? pool.r0 : pool.r1;
+  const sh = ethIs0 ? pool.r1 : pool.r0;
+  return sh > 0n ? eth * LQ_WAD / sh : 0n;
+}
+
+// The tape packs OHLC into one word per bar as a 24-bit mantissa and an 8-bit
+// exponent. Prices are raw token1-per-token0 at 1e18 and decimals are the reader's
+// problem; both sides here are 18, so the only work is inverting to wei-per-share.
+const _unf = v => (v & 0xffffff) * 2 ** (v >>> 24);
+function causeTapeBars(raw, ethIs0) {
+  if (!raw || raw.length < 130) return [];
+  const h = raw.slice(2);
+  const n = Number(BigInt('0x' + h.slice(64, 128)));
+  const bars = [];
+  for (let j = 0; j < n; j++) {
+    const w = BigInt('0x' + h.slice(128 + j * 64, 128 + (j + 1) * 64));
+    if (!w) continue;
+    const trades = Number((w >> 192n) & 0xffffn);
+    if (!trades) continue;
+    const f = k => _unf(Number((w >> BigInt(k)) & 0xffffffffn));
+    // token1-per-token0 when ETH is token0 inverts; when shares are token0 it is
+    // already ETH per share.
+    const px = v => (v > 0 ? (ethIs0 ? 1e36 / v : v) : 0);
+    bars.push({ b: Number(w & 0xffffffffn), o: px(f(32)), c: px(f(128)),
+                hi: px(f(64)), lo: px(f(96)), n: trades });
+  }
+  return bars;
+}
+
+async function causeTape(poolAddr, ethIs0) {
+  // Fine bars are what a young pool has; the coarse tape only fills once fine bars
+  // finish and fold. Take whichever window actually carries prints, preferring the
+  // one with more of them rather than discarding a lone fine bar for an empty coarse.
+  let best = [];
+  for (const win of [300, 14400]) {
+    try {
+      const raw = await withRPC(rpc => rpc.call({ to: poolAddr, data: SEL_TAPE + _w(win) + _w(256) }));
+      const bars = causeTapeBars(raw, ethIs0);
+      if (bars.length > best.length) best = bars;
+      if (best.length > 1) break;
+    } catch {}
+  }
+  return best;
+}
+
+
+// A sparkline, not a trading chart. It answers "what has actually traded here",
+// which for a pool this young is a handful of prints.
+function causeSpark(bars) {
+  if (!bars.length) return '';
+  if (bars.length === 1) {
+    return `<div style="font-size:10px;color:var(--fg-dim);margin:6px 0 2px">
+      One bar so far &mdash; ${bars[0].n} trade${bars[0].n === 1 ? '' : 's'} at
+      ${fmtPriceWei(BigInt(Math.round(bars[0].c)))}.</div>`;
+  }
+  const xs = bars.map(b => b.c).filter(v => v > 0);
+  const lo = Math.min(...xs), hi = Math.max(...xs), span = hi - lo || 1;
+  const W = 260, H = 40;
+  const pts = bars.map((b, i) => {
+    const x = (i / (bars.length - 1)) * W;
+    const y = H - ((b.c - lo) / span) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const up = bars[bars.length - 1].c >= bars[0].c;
+  const col = up ? 'var(--green)' : 'var(--red)';
+  return `<div style="margin:8px 0 2px">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:40px;display:block" aria-label="executed price history">
+      <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:2px">
+      <span>${fmtPriceWei(BigInt(Math.round(lo)))}</span>
+      <span>${bars.reduce((t, b) => t + b.n, 0)} trades</span>
+      <span>${fmtPriceWei(BigInt(Math.round(hi)))}</span>
+    </div></div>`;
+}
+
+// ---------------------------------------------------------------- add liquidity
+let _lpEthTouched = false;
+let _causePoolCache = null;
+
+function causeLpFill(weiAmt) {
+  const box = $('causeLpShares');
+  if (!box) return;
+  box.value = ethers.formatEther(BigInt(weiAmt)).replace(/\.0$/, '');
+  _lpEthTouched = false;
+  causeLpQuote('shares');
+}
+
+// A deposit into a live pool has to arrive at the pool's ratio or the surplus is
+// refunded, so typing one side fills the other at the price the pool is actually at.
+async function causeLpQuote(src) {
+  const el = $('causeLpQuote');
+  if (!el || !_causePoolCache) return;
+  if (src === 'eth') _lpEthTouched = true;
+  const { pool, price } = _causePoolCache;
+
+  if (src === 'shares' && !_lpEthTouched && price > 0n) {
+    const raw = $('causeLpShares').value.trim();
+    let paired = '';
+    if (raw) { try { paired = ethers.formatEther(ethers.parseEther(raw) * price / LQ_WAD); } catch {} }
+    $('causeLpEth').value = paired;
+  }
+
+  const e = parseFloat($('causeLpEth')?.value || '0');
+  const sh = parseFloat($('causeLpShares')?.value || '0');
+  if (!e || !sh || e <= 0 || sh <= 0) { el.textContent = 'Enter shares \u2014 the ETH side fills at the pool price'; return; }
+
+  const [t0] = causeSortedPair(_causePoolCache.shares);
+  const ethIs0 = t0 === ZERO;
+  let a0, a1;
+  try {
+    const ethAmt = ethers.parseEther(String(e)), shAmt = ethers.parseEther(String(sh));
+    a0 = ethIs0 ? ethAmt : shAmt; a1 = ethIs0 ? shAmt : ethAmt;
+  } catch { el.textContent = 'Enter a valid amount'; return; }
+
+  el.textContent = 'Pricing\u2026';
+  try {
+    const r = await withRPC(rpc => rpc.call({ to: PLQLENS, data: SEL_PREVIEW_ADD + _a(pool) + _w(a0) + _w(a1) }));
+    if (!r || _dec1(r, 0) !== 1n) { el.textContent = 'The pool would refuse this deposit.'; return; }
+    const lp = _dec1(r, 1), u0 = _dec1(r, 2), u1 = _dec1(r, 3);
+    const usedEth = ethIs0 ? u0 : u1, usedSh = ethIs0 ? u1 : u0;
+    _causePoolCache.lp = lp;
+    const back = (a0 - u0) + (a1 - u1) > 0n;
+    el.innerHTML = `Adds ${ethAmount(ethers.formatEther(usedEth), 8)} ETH and `
+      + `${fmtTokenAmount(usedSh.toString())} shares for ${ethAmount(ethers.formatEther(lp), 6)} LP.`
+      + (back ? `<div style="color:var(--fg-dim);margin-top:3px">The rest is refunded in the same transaction.</div>` : '');
+  } catch { el.textContent = 'Could not price this deposit.'; }
+}
+
+async function causeAddLiquidity() {
+  const status = $('causeLpStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  if (!_causePoolCache) return;
+  const { pool, shares } = _causePoolCache;
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const e = parseFloat($('causeLpEth')?.value || '0');
+  const sh = parseFloat($('causeLpShares')?.value || '0');
+  if (!e || !sh || e <= 0 || sh <= 0) { say('Enter both sides.'); return; }
+  try {
+    const me = await sgn.getAddress();
+    const [t0] = causeSortedPair(shares);
+    const ethIs0 = t0 === ZERO;
+    const ethAmt = ethers.parseEther(String(e)), shAmt = ethers.parseEther(String(sh));
+    const a0 = ethIs0 ? ethAmt : shAmt, a1 = ethIs0 ? shAmt : ethAmt;
+
+    // Never hand tokens to an address the factory does not vouch for.
+    const ok = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_ISPOOL + _a(pool) }));
+    if (!ok || _dec1(ok, 0) !== 1n) { say('That address is not a Precision pool \u2014 refusing to send.', 'var(--red)'); return; }
+
+    const r = await withRPC(rpc => rpc.call({ to: PLQLENS, data: SEL_PREVIEW_ADD + _a(pool) + _w(a0) + _w(a1) }));
+    if (!r || _dec1(r, 0) !== 1n) { say('The pool would refuse this deposit.', 'var(--red)'); return; }
+    const minLp = _dec1(r, 1) * 99n / 100n;   // 1%, and the pool refunds the surplus anyway
+
+    const token = new ethers.Contract(shares, ERC20_ABI, sgn);
+    if ((await token.allowance(me, pool)) < shAmt) {
+      say('Approving shares\u2026');
+      await (await token.approve(pool, ethers.MaxUint256)).wait();
+    }
+    say('Confirm in your wallet\u2026');
+    const tx = await sgn.sendTransaction({
+      to: pool, value: ethIs0 ? a0 : 0n,
+      data: SEL_ADDEXACT + _w(0) + _w(a0) + _w(a1) + _w(minLp) + _a(me),
+    });
+    say(`Adding\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Added.', 'var(--green)');
+    await loadCausePool($('app')?.dataset.dao, shares, _renderGen, true).catch(() => {});
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
+  }
+}
+
 async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
   const el = $('causePool');
   if (!el) return;
@@ -6445,10 +6661,8 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
   const sym = escText(ds.sym || 'shares');
   $('app').dataset.floor = floor.toString();
 
-  // The band bounds are part of the market struct, so every width is a different pool
-  // address — probing one representative band would only answer "is there a 1000x pool",
-  // and the bounds of any band that does exist are unknowable from here anyway. pairCount
-  // is the question actually being asked: does this pair have any Precision pool at all.
+  // pairCount answers "is there any pool at all" in one call, which is all the empty
+  // state needs. The lens below answers what and where, and only runs once there is one.
   const [t0, t1] = causeSortedPair(sharesAddr);
   let pairPools = 0;
   try {
@@ -6460,14 +6674,63 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
   // this the panel repaints the seed form over a pool that exists, inviting a second one.
   const has = pairPools > 0 || !!knownHasPool;
 
+  // Reserves, bounds and the tape all come from the pool itself once one exists.
+  let pool = null, spot = 0n, spark = '';
+  if (has) {
+    const pools = await causePools(sharesAddr);
+    if (gen !== _renderGen || !el.isConnected) return;
+    pool = pools[0] || null;
+    if (pool) {
+      spot = causePoolPrice(pool, sharesAddr);
+      _causePoolCache = { pool: pool.pool, shares: sharesAddr, price: spot };
+      const bars = await causeTape(pool.pool, t0 === ZERO);
+      if (gen !== _renderGen || !el.isConnected) return;
+      spark = causeSpark(bars);
+    }
+  }
+
+  const ethSide = pool ? (t0 === ZERO ? pool.r0 : pool.r1) : 0n;
+  const shSide = pool ? (t0 === ZERO ? pool.r1 : pool.r0) : 0n;
+  const vsSale = spot > 0n && salePx > 0n
+    ? Number((spot - salePx) * 10000n / salePx) / 100 : null;
+
   el.innerHTML = `<div class="section-card">
     <div class="section-title">Market</div>
     <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
+      ${spot > 0n ? `<dt>Price</dt><dd><b style="color:var(--fg)">${ethAmount(fmtPriceWei(spot), 11)}</b>${
+        vsSale !== null ? ` <span style="color:var(--fg-dim)">${vsSale > 0 ? '+' : ''}${vsSale.toFixed(0)}% vs sale</span>` : ''}</dd>` : ''}
       <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
-      ${salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
+      ${spot === 0n && salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
+      ${pool ? `<dt>Depth</dt><dd>${ethAmount(ethers.formatEther(ethSide), 6)} ETH &middot; ${fmtTokenAmount(shSide.toString())} ${sym}</dd>` : ''}
       ${has && pairPools > 0 ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
     </dl>
-    ${has ? `<a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box" href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener">Trade $${sym} on zSwap</a>`
+    ${spark}
+    ${has ? `<a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box" href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener">Trade $${sym} on zSwap</a>
+      ${pool ? `<details style="margin-top:10px">
+        <summary style="cursor:pointer;font-size:11px;color:var(--fg-muted)">Add liquidity</summary>
+        <div style="margin-top:8px">
+          <div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin-bottom:8px">
+            Deposits arrive at the pool's ratio and the surplus comes straight back, so the
+            price does not move. It deepens the band you are already in &mdash; a different
+            band is a different pool.
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <input id="causeLpEth" type="text" inputmode="decimal" placeholder="ETH" aria-label="ETH to add"
+              style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeLpQuote('eth')">
+            <input id="causeLpShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares to add"
+              style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeLpQuote('shares')">
+          </div>
+          ${held > 0n ? `<div style="font-size:10px;color:var(--fg-dim);margin-bottom:8px">
+            you hold ${fmtTokenAmount(held.toString())} &middot;
+            <a href="#" onclick="causeLpFill(${held / 4n}n);return false" style="color:var(--fg-muted);text-decoration:underline">quarter</a> &middot;
+            <a href="#" onclick="causeLpFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a> &middot;
+            <a href="#" onclick="causeLpFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a>
+          </div>` : ''}
+          <div id="causeLpQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter shares &mdash; the ETH side fills at the pool price</div>
+          <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeAddLiquidity()">Add liquidity</button>
+          <div id="causeLpStatus" style="margin-top:8px"></div>
+        </div>
+      </details>` : ''}`
     : `<div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
         No market yet. A 0.3% full-range band gives $${sym} a price. Seed it above the
         redemption number &mdash; a band under it is bought out and redeemed for the difference,
@@ -6485,7 +6748,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
         <a href="#" onclick="causePoolFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a> &middot;
         <a href="#" onclick="causePoolFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a>
       </div>` : ''}
-      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter both sides &mdash; the ratio sets the opening price</div>
+      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter shares &mdash; the ETH side fills at the sale price, and the ratio sets the opening price</div>
       <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeCreatePool('${sharesAddr}')">Create pool</button>
       <div id="causePoolStatus" style="margin-top:8px"></div>
       <div style="margin-top:8px;text-align:center">
