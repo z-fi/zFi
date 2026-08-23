@@ -119,3 +119,28 @@ test('the Market tile renders against real pool values without reaching out of s
   assert.equal(doc.getElementById('causeSwapAmt').value, '');
   assert.equal(doc.getElementById('causeSwapOut').textContent, '0.0');
 });
+
+test('balance shortcuts fill a number a person can read, without overshooting', async () => {
+  const { w } = boot();
+  const doc = w.document;
+  doc.body.innerHTML += '<input id="causeSwapAmt">';
+  w.causeSwapQuote = () => {};   // the fill is what is under test, not the quote
+
+  // A real holding: 18,013.602899070631317592 shares.
+  const held = 18013602899070631317592n;
+
+  // "all" must stay exact — trimming it strands dust that can never be sold.
+  w.causeSwapFill(held, true);
+  assert.equal(doc.getElementById('causeSwapAmt').value, '18013.602899070631317592');
+
+  // Everything else trims, and trims DOWN, so a shortcut never asks for more than is held.
+  w.causeSwapFill(held / 2n);
+  const half = doc.getElementById('causeSwapAmt').value;
+  assert.equal(half, '9006.801449');
+  assert.ok(w.ethers.parseEther(half) <= held / 2n, 'a trimmed fill must never round up');
+  assert.ok(half.split('.')[1].length <= 6, 'six decimals is the readable limit');
+
+  // A whole number should not acquire a decimal point on the way through.
+  w.causeSwapFill(5000000000000000000000n);
+  assert.equal(doc.getElementById('causeSwapAmt').value, '5000');
+});

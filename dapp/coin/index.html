@@ -2702,7 +2702,7 @@ function daoStakeHint(sharesWei, minting) {
     const total = held > 0n ? Number(((held + sharesWei) * 1000000n) / after) / 10000 : 0;
     return `<div class="swap-stake">&asymp; ${fmtPct(pct)} of the DAO`
       + (held > 0n ? ` &middot; you would hold ${fmtPct(total)}` : '')
-      + `</div><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
+      + `</span><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch { return ''; }
 }
 
@@ -6851,7 +6851,7 @@ function causeSwapSide(side) {
     } else {
       hold.innerHTML = `<span>${coinLine}</span>`
         + (held > 0n ? `<span><a href="#" onclick="causeSwapFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a>
-           &middot; <a href="#" onclick="causeSwapFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a></span>` : '');
+           &middot; <a href="#" onclick="causeSwapFill(${held}n,true);return false" style="color:var(--fg-muted);text-decoration:underline">all</a></span>` : '');
     }
   }
   if (outHold) outHold.textContent = buying ? coinLine : ethLine;
@@ -6872,10 +6872,14 @@ function causeSwapSide(side) {
   }
 }
 
-function causeSwapFill(weiAmt) {
+function causeSwapFill(weiAmt, exact) {
   const box = $('causeSwapAmt');
   if (!box) return;
-  box.value = ethers.formatEther(BigInt(weiAmt)).replace(/\.0$/, '');
+  const v = BigInt(weiAmt);
+  // Trimming rounds DOWN, never up: a shortcut must not ask for more than is held.
+  box.value = exact
+    ? ethers.formatEther(v).replace(/\.0$/, '')
+    : ethers.formatEther(v - (v % 10n ** 12n)).replace(/\.0$/, '').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   causeSwapQuote();
 }
 
@@ -6932,10 +6936,9 @@ async function causeSwapQuote() {
     const outTxt = _swapSide === 'buy'
       ? `<span style="display:inline-flex;align-items:center;gap:4px">${_causeGlyph}${fmtTokenAmount(out.toString())} ${sym}</span>`
       : `${ethAmount(fmtNum(Number(ethers.formatEther(out))), 13)} ETH`;
-    el.innerHTML = `You get about <b style="color:var(--fg)">${outTxt}</b>`
-      + `<div style="margin-top:3px">${fmtPriceWei(eff)} per share effective`
+    el.innerHTML = `<span>${fmtPriceWei(eff)} per share effective`
       + (slipPct !== null ? ` &middot; <span style="color:${Math.abs(slipPct) > 10 ? 'var(--red)' : 'var(--fg-dim)'}">${slipPct > 0 ? '+' : ''}${slipPct.toFixed(1)}% vs spot</span>` : '')
-      + `</div><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
+      + `</span><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch {
     if (my !== _swapSeq) return;
     el.textContent = 'Could not quote that.'; if (btn) btn.disabled = true;
