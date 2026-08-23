@@ -816,13 +816,25 @@ body.modal-open { overflow: hidden; }
    explaining it — without the override the note shouts as loudly as the option it
    qualifies. The name holds its line so a two-word option cannot break in half under
    flex ("SELL" / "LOOT"); the note is what wraps. */
-.coin-opt { display:flex;align-items:baseline;gap:8px;cursor:pointer;margin-bottom:10px; }
-.coin-opt input[type="checkbox"] { flex-shrink:0;align-self:flex-start;margin:1px 0 0; }
-.coin-opt-name { white-space:nowrap;flex-shrink:0;color:var(--fg-muted); }
+.coin-opts { display:grid;grid-template-columns:auto max-content 1fr;gap:10px;align-items:baseline; }
+.coin-opt-fields { margin-left:30px; }
+.coin-opt { display:contents; }
+.coin-opt input[type="checkbox"] { align-self:start;margin:1px 0 0;cursor:pointer; }
+.coin-opt-name { white-space:nowrap;color:var(--fg-muted);cursor:pointer; }
 .coin-opt-note {
-  font-size:11px;color:var(--fg-dim);text-transform:none;letter-spacing:normal;line-height:1.5;
+  font-size:11px;color:var(--fg-dim);text-transform:none;letter-spacing:normal;
+  line-height:1.5;cursor:pointer;
 }
 .coin-opt input[type="checkbox"]:checked ~ .coin-opt-name { color:var(--fg); }
+
+/* The unit beside a field, not folded into its label. */
+.coin-field { display:flex;align-items:center;gap:6px; }
+.coin-field input { flex:1; }
+.coin-unit {
+  display:inline-flex;align-items:center;gap:3px;flex-shrink:0;
+  font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-muted);
+}
+.coin-unit svg { vertical-align:-1px; }
 
 .coin-name-row { display:flex;gap:12px;margin-bottom:14px; }
 .coin-name-row .section { flex:2;margin-bottom:0; }
@@ -856,7 +868,8 @@ body.modal-open { overflow: hidden; }
 
 .coin-summary { display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:1.6; }
 .coin-summary dt { color:var(--fg-muted);grid-column:1; }
-.coin-summary dd { font-weight:600;margin:0;grid-column:2; }
+.coin-summary dd { margin:0;grid-column:2;color:var(--fg); }
+.coin-summary dd b { font-weight:600; }
 .coin-summary dd svg { vertical-align:-1px; }
 
 .coin-tpl-toggle { display:flex;gap:0;margin-bottom:14px; }
@@ -1545,10 +1558,10 @@ body.modal-open { overflow: hidden; }
 <div class="swap-card" style="position:relative">
   <div id="coinLaunchAnim" class="coin-launch-anim"></div>
   <div class="coin-tpl-toggle">
-    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Curve</button>
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Coin</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('cause')">Cause</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('nft')">NFT</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>curve</strong> — bonding curve launch. 800M tokens on curve, 200M seed LP at graduation. 16x price range from start to graduation (~5.33 ETH raised). 1% trade fee to creator. LP tokens burned for permanent liquidity. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.<br><br><strong>nft</strong> — Dutch auction for a single NFT, settled in ETH. Price decays linearly from start to floor over the chosen duration. First buyer wins at current price. Seller can cancel anytime. Two-step flow: approve token, then list.</span></span>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>coin</strong> — one transaction, no ether needed. The supply is minted, your allocation is paid to you, and everything else seeds a fresh ETH pool — one-sided, so the pool opens holding only your token and is a live market from the first block. 1% swap fee: half stays in the pool as reserves, raising the floor for every holder; the rest splits 80% creator, 10% protocol, 10% burned to Ethereum. Liquidity is locked in the launcher permanently. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.<br><br><strong>nft</strong> — Dutch auction for a single NFT, settled in ETH. Price decays linearly from start to floor over the chosen duration. First buyer wins at current price. Seller can cancel anytime. Two-step flow: approve token, then list.</span></span>
   </div>
 
 
@@ -1580,53 +1593,94 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
+  <div id="coinCoinWrap" style="margin-bottom:14px">
+    <div style="margin-bottom:14px">
+      <label>Supply</label>
+      <div class="coin-field">
+        <input type="text" id="coinSupply" placeholder="1,000,000,000" inputmode="decimal" style="font-size:16px" value="1,000,000,000" autocomplete="off" oninput="coinNumInput(this,false);coinFormChanged()">
+        <span class="coin-unit">Tokens</span>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px">Starting market cap
+        <span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip">The pool holds NO ether at launch &mdash; this is its virtual ether reserve, and it is the only thing deciding where your market opens. It sets the opening price and how hard that price is to move, which are the same dial: roughly this much buying moves the market halfway. Small numbers mean the first buyer takes a huge share of the supply.</span></span>
+      </label>
+      <div class="coin-field">
+        <input type="text" id="coinMcap" placeholder="30" inputmode="decimal" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,true);coinFormChanged()">
+        <span class="coin-unit"><svg width="14" height="14" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>ETH</span>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px">Creator keeps
+        <span class="info-tip"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip">A share of the token SUPPLY, minted straight to you at launch &mdash; tokens, not ether, and not a fee on trading. Whatever you keep does not go into the pool, and selling it later pulls ether back out of that pool. Capped at 20%.</span></span>
+      </label>
+      <div class="coin-field">
+        <input type="text" id="coinAlloc" placeholder="0" inputmode="decimal" style="font-size:16px" value="0" autocomplete="off" oninput="coinNumInput(this,true);coinFormChanged()">
+        <span class="coin-unit">%</span>
+      </div>
+    </div>
+  </div>
+
   <div id="coinCauseWrap" style="display:none;margin-bottom:14px">
-    <div id="causeRaiseWrap" style="margin-bottom:10px">
+    <div id="causeRaiseWrap" style="margin-bottom:14px">
       <label style="display:flex;align-items:center;gap:6px">Raise
         <span id="causeOpenLink" style="font-size:11px;color:var(--fg-dim);cursor:pointer;text-decoration:underline;text-transform:none;font-weight:normal" onclick="causeSetOngoing(true)">or open-ended</span>
       </label>
-      <div style="display:flex;align-items:center;gap:6px">
-        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:16px;flex:1" value="10" autocomplete="off" oninput="coinNumInput(this,true)">
-        <span style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--fg-muted);flex-shrink:0"><svg width="14" height="14" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>ETH</span>
+      <div class="coin-field">
+        <input type="text" id="causeRaise" placeholder="10" inputmode="decimal" style="font-size:16px" value="10" autocomplete="off" oninput="coinNumInput(this,true)">
+        <span class="coin-unit"><svg width="14" height="14" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>ETH</span>
       </div>
     </div>
-    <div id="causeDeadlineWrap" style="margin-bottom:10px">
-      <label>Deadline (days)</label>
-      <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,false)">
+    <div id="causeDeadlineWrap" style="margin-bottom:14px">
+      <label>Deadline</label>
+      <div class="coin-field">
+        <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,false)">
+        <span class="coin-unit">Days</span>
+      </div>
     </div>
     <div id="causeOngoingWrap" style="display:none;margin-bottom:10px">
       <div style="font-size:12px;color:var(--fg-dim);line-height:1.5">Open-ended fundraise. No target, no deadline. Anyone can contribute ETH for shares at any time. <span style="text-decoration:underline;cursor:pointer" onclick="causeSetOngoing(false)">Set a target instead</span></div>
     </div>
     <div style="border-top:1px solid var(--border-muted);padding-top:12px;margin-top:12px">
-      <label class="coin-opt">
-        <input type="checkbox" id="causeSellLoot" onchange="coinUpdatePreview()">
-        <span class="coin-opt-name">Sell Loot</span>
-        <span class="coin-opt-note">backers hold non-voting loot &mdash; same pro-rata claim on the treasury, no say in governance</span>
-      </label>
-      <label class="coin-opt">
-        <input type="checkbox" id="causeTapEnabled" onchange="causeTapToggle()">
-        <span class="coin-opt-name">Tap Vesting</span>
-        <span class="coin-opt-note">drip treasury ETH to a beneficiary</span>
-      </label>
-      <div id="causeTapFields" style="display:none">
+      <div class="coin-opts">
+        <label class="coin-opt">
+          <input type="checkbox" id="causeSellLoot" onchange="coinUpdatePreview()">
+          <span class="coin-opt-name">Sell Loot</span>
+          <span class="coin-opt-note">backers hold non-voting loot &mdash; same pro-rata claim on the treasury, no say in governance</span>
+        </label>
+        <label class="coin-opt">
+          <input type="checkbox" id="causeTapEnabled" onchange="causeTapToggle()">
+          <span class="coin-opt-name">Tap Vesting</span>
+          <span class="coin-opt-note">drip treasury ETH to a beneficiary</span>
+        </label>
+      </div>
+      <div id="causeTapFields" class="coin-opt-fields" style="display:none;margin-top:14px">
         <div class="section" style="margin-bottom:10px">
           <label>Beneficiary Wallet</label>
           <input type="text" id="causeTapBeneficiary" placeholder="0x address, name.wei, or name.eth" style="font-size:16px" oninput="onCoinAddressInput('causeTapBeneficiary','causeTapBeneficiaryResolved')">
           <div id="causeTapBeneficiaryResolved" style="display:none;font-size:12px;margin-top:4px;color:var(--fg-muted);word-break:break-all"></div>
         </div>
-        <label class="coin-opt">
-          <input type="checkbox" id="causeTapInstant" onchange="causeTapInstantToggle()">
-          <span class="coin-opt-name">Fast</span>
-          <span class="coin-opt-note">no vesting schedule &mdash; the full raise is withdrawable after about an hour</span>
-        </label>
+        <div class="coin-opts" style="margin-bottom:10px">
+          <label class="coin-opt">
+            <input type="checkbox" id="causeTapInstant" onchange="causeTapInstantToggle()">
+            <span class="coin-opt-name">Fast</span>
+            <span class="coin-opt-note">no vesting schedule &mdash; the full raise is withdrawable after about an hour</span>
+          </label>
+        </div>
         <div id="causeTapRateFields">
           <div id="causeTapMonthsWrap" style="margin-bottom:10px">
-            <label>Vesting Duration (months)</label>
-            <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" autocomplete="off" oninput="coinNumInput(this,false)">
+            <label>Vesting Duration</label>
+            <div class="coin-field">
+              <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" autocomplete="off" oninput="coinNumInput(this,false)">
+              <span class="coin-unit">Months</span>
+            </div>
           </div>
           <div id="causeTapEthRateWrap" style="display:none;margin-bottom:10px">
-            <label>Rate (ETH/month)</label>
-            <input type="text" id="causeTapEthRate" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" autocomplete="off" oninput="coinNumInput(this,true)">
+            <label>Rate</label>
+            <div class="coin-field">
+              <input type="text" id="causeTapEthRate" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" autocomplete="off" oninput="coinNumInput(this,true)">
+              <span class="coin-unit">ETH / mo</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1693,7 +1747,7 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
-  <div id="coinFormHint" style="display:none;font-size:11px;color:var(--fg-dim);margin-bottom:8px;text-align:center;line-height:1.5"></div>
+  <div id="coinFormHint" style="display:none;font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5"></div>
   <button id="coinLaunchBtn" class="swap-btn" disabled style="letter-spacing:0.1em;text-transform:uppercase" onclick="coinLaunch()">Launch Coin</button>
   <div id="coinLaunchProgress" class="coin-launch-progress"><div class="coin-launch-progress-fill"></div></div>
 
@@ -2084,6 +2138,43 @@ async function searchDaicoCoins() {
 const DAICO_PINNED_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
 // A live cause fundraise leads, because it is the one with a deadline and a bar that
 // moves. The collector DAO keeps its slot underneath rather than losing it.
+// What a sale actually raised, from its own Purchase events.
+//
+// The card derived this from live supply — sold = totalSupply - remainingSupply - so every
+// redemption walked the headline down. CELL sold 9,999,999 shares for 3.33 ETH and has
+// since had 1,891,890 burned, which is the entire difference between the 3.33 that arrived
+// and the 2.700 the card was printing. Money that came in does not come back out of the
+// history when a holder later exits; the treasury falls, the raise does not.
+//
+// Events are the only source that cannot move: ShareSale keeps no cumulative total, and
+// anything derived from supply necessarily shrinks with it. One bounded query per sale,
+// cached for the session.
+const SALE_PURCHASE_TOPIC = ethers.id('Purchase(address,address,uint256,uint256)');
+const _raisedCache = new Map();
+async function saleEverRaised(saleAddr, dao) {
+  const key = saleAddr.toLowerCase() + ':' + dao.toLowerCase();
+  if (_raisedCache.has(key)) return _raisedCache.get(key);
+  const pending = (async () => {
+    try {
+      const logs = await quoteRPC.call(rpc => rpc.getLogs({
+        address: saleAddr,
+        topics: [SALE_PURCHASE_TOPIC, ethers.zeroPadValue(dao.toLowerCase(), 32)],
+        fromBlock: SALE_FIRST_BLOCK, toBlock: 'latest',
+      }));
+      let cost = 0n;
+      for (const l of logs) {
+        const d = l.data.slice(2);
+        if (d.length >= 128) cost += BigInt('0x' + d.slice(64, 128));
+      }
+      return cost;
+    } catch { return null; }   // fall back to the supply-derived figure
+  })();
+  _raisedCache.set(key, pending);
+  return pending;
+}
+
+// ShareSale's first mainnet activity; nothing to find before it.
+const SALE_FIRST_BLOCK = 25000000;
 const DAICO_LEAD_DAO = '0xd5dce9bee03e69362981afe48323a657fcceb8be';
 // Its DAO metadata carries no image, and its phase-0 share sale is long closed — the
 // scan's sales[0] would report a stale "1.8 ETH raised / 100%". Shares now sell through
@@ -2170,6 +2261,11 @@ async function loadLiveSale() {
     if (leadRaw && leadRaw !== pinned) {
       lead = asCard(leadRaw);
       const ls = leadRaw.sales && leadRaw.sales.length > 0 ? leadRaw.sales[0] : null;
+      // Prefer the figure that cannot shrink under a redemption.
+      try {
+        const ever = await saleEverRaised(SHARE_SALE_ADDR, leadRaw.dao);
+        if (ever && ever > 0n) lead.raisedETH = Number(ethers.formatEther(ever));
+      } catch (_) {}
       if (ls && ls.deadline && BigInt(ls.deadline) > now) {
         // A countdown on a sale with nothing left to buy is an invitation to a closed
         // door: the card was reading "100.0%" and "7d left" at the same time. What is
