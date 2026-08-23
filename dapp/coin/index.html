@@ -5918,14 +5918,14 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   if (!saleEnded) {
     html += `
       <div class="section-card">
-        <div class="section-title">Buy Shares</div>
+        <div class="section-title">Buy ${UNIT_TITLE}</div>
         <div class="coin-side-toggle" style="display:flex;gap:0;margin-bottom:8px;border:1px solid var(--border-muted);overflow:hidden">
-          <button id="causeModeShares" onclick="causeSwitchMode('shares')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px">${causeGlyph(data.meta, metadata, 14)}Shares</button>
+          <button id="causeModeShares" onclick="causeSwitchMode('shares')" style="flex:1;padding:8px;background:var(--btn-bg);border:none;color:var(--btn-fg);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px">${causeGlyph(data.meta, metadata, 14)}${UNIT_TITLE}</button>
           <button id="causeModeEth" onclick="causeSwitchMode('eth')" style="flex:1;padding:8px;background:transparent;border:none;color:var(--fg-muted);font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px">${ethGlyph(14)}ETH</button>
         </div>
         <div style="display:flex;gap:4px;margin-bottom:6px">
           <input id="causeBuyAmount" type="text" inputmode="decimal" placeholder="0.00" aria-label="Buy amount" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none" oninput="causeUpdateBuyQuote()">
-          <span id="causeBuyUnit" style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">shares</span>
+          <span id="causeBuyUnit" style="font-size:12px;color:var(--fg-muted);align-self:flex-end;padding-bottom:10px">${UNIT}</span>
         </div>
         <div id="causeBuyPresets" class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
           <button class="coin-tpl-btn" onclick="causeSetBuyAmt(100)" style="font-size:10px;padding:4px 8px">100</button>
@@ -5941,7 +5941,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <button class="coin-tpl-btn" onclick="causeSetBuyEth(0.5)" style="font-size:10px;padding:4px 8px">.5</button>
         </div>
         <div id="causeBuyQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter amount to see quote</div>
-        <button class="swap-btn" id="causeBuyBtn" style="width:100%;font-size:13px" onclick="causeBuy('${daoAddr}')">${_connectedAddress ? 'Buy Shares' : 'Connect Wallet'}</button>
+        <button class="swap-btn" id="causeBuyBtn" style="width:100%;font-size:13px" onclick="causeBuy('${daoAddr}')">${_connectedAddress ? 'Buy ' + UNIT_TITLE : 'Connect Wallet'}</button>
         <div id="causeTradeStatus" style="margin-top:8px"></div>
       </div>
     `;
@@ -5976,17 +5976,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     html += `
       <div style="margin-top:4px;margin-bottom:14px">
         <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
-          <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} shares for ${ethGlyph(12)} ETH
+          <span style="font-size:10px">&#9654;</span> Redeem ${causeGlyph(data.meta, metadata, 12)} ${UNIT} for ${ethGlyph(12)} ETH
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
-          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your shares for a pro-rata portion of the ${treasuryETH > 0n ? rqTreasuryFmt + ' ETH' : 'DAO'} treasury, paid immediately.${usesOffering
-            ? ' Burnt shares return their room to the sale, so redeeming costs the raise nothing.'
+          <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your ${UNIT} for a pro-rata portion of the ${treasuryETH > 0n ? rqTreasuryFmt + ' ETH' : 'DAO'} treasury, paid immediately.${usesOffering
+            ? ` Burnt ${UNIT} return their room to the sale, so redeeming costs the raise nothing.`
             : (saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.'
                          : ' Burnt shares are not returned to the sale for someone else to buy.')}</div>
           ${!_connectedAddress ? `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">Connect a wallet to redeem.</div>` : ''}
           <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Shares to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
-            <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">shares</span>
+            <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="${UNIT_TITLE} to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
+            <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">${UNIT}</span>
           </div>
           <div class="coin-preset-row" style="display:flex;gap:4px;margin-bottom:8px">
             <button class="coin-tpl-btn" onclick="causeSetRqPct(25)" style="font-size:9px;padding:3px 6px">25%</button>
@@ -5995,7 +5995,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
             <button class="coin-tpl-btn" onclick="causeSetRqPct(100)" style="font-size:9px;padding:3px 6px">100%</button>
           </div>
           <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--fg-muted);padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--border-muted)">
-            <span>you hold <b style="color:var(--fg);font-weight:600">${fmtTokenAmount(userBalance.toString())}</b> shares &middot; ${myPct >= 0.01 ? myPct.toFixed(2) : '<0.01'}% of the DAO</span>
+            <span>you hold <b style="color:var(--fg);font-weight:600">${fmtTokenAmount(userBalance.toString())}</b> ${UNIT} &middot; ${myPct >= 0.01 ? myPct.toFixed(2) : '<0.01'}% of the DAO</span>
             <span style="flex-shrink:0">worth ${ethAmount('~' + fmtEthBal(Number(ethers.formatEther(myValue))) + ' ETH', 11)}</span>
           </div>
           ${myCost > 0n ? `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--fg-dim);margin-top:-4px;margin-bottom:8px">
@@ -6005,7 +6005,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
                 : (myDelta > 0n ? '+' : '') + myDeltaPct.toFixed(2) + '% \u00b7 the tap has drawn against it'
             }</span>
           </div>` : ''}
-          <div id="causeRqQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter shares to see redemption value</div>
+          <div id="causeRqQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;min-height:16px">Enter ${UNIT} to see redemption value</div>
           <button class="swap-btn" style="width:100%;font-size:12px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeRagequit('${daoAddr}')">Redeem</button>
           <div id="causeRqStatus" style="margin-top:8px"></div>
         </div>
@@ -6078,9 +6078,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // request fails, so a dropped read hid the panel entirely rather than showing a button
   // that could explain itself. Proposing needs a share and the button says so when it has
   // to; deciding whether to propose does not need one.
-  if (!usesOffering && saleEnded && !isOpenCap && price > 0n
-      && saleDeadline > 0 && saleDeadline - now > 172800) {
-    const daysLeft = Math.floor((saleDeadline - now) / 86400);
+  if (!usesOffering && saleEnded && !isOpenCap && price > 0n) {
+    const daysLeft = CAUSE_REOPEN_WINDOW_DAYS;
     reopenHTML = `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-muted)">
         <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:2px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
@@ -6089,7 +6088,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         <div style="display:none;padding-top:8px">
           <div style="font-size:10px;color:var(--fg-dim);line-height:1.6;margin-bottom:8px">
             Reopens the sale on ShareOffering, where redeemed shares hand their room back
-            instead of closing it early, and runs to the deadline ${daysLeft} day${daysLeft === 1 ? '' : 's'} away.
+            instead of closing it early, and runs for ${daysLeft} days from the day the vote executes.
             One proposal: it grants the mint allowance and sets the terms together, so the
             sale either reopens or does not.
           </div>
@@ -6111,7 +6110,9 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       <div class="section-title">Governance</div>
       <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
         10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequittable<br>
-        Share holders can ragequit at any time for a pro-rata refund.
+        ${saleIsLoot
+          ? 'Loot holders can ragequit at any time for a pro-rata refund. Loot does not vote &mdash; governance sits with the shares.'
+          : 'Share holders can ragequit at any time for a pro-rata refund.'}
       </div>
       ${reopenHTML}
       <div style="margin-top:8px">
@@ -6151,6 +6152,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     <div style="margin-top:16px;font-size:11px;color:var(--fg-dim)">
       <a href="https://etherscan.io/address/${daoAddr}" target="_blank" style="color:inherit">DAO</a>
       &middot; <a href="https://etherscan.io/address/${sharesAddr}" target="_blank" style="color:inherit">Shares</a>
+      ${saleIsLoot ? `&middot; <a href="https://etherscan.io/address/${lootAddr}" target="_blank" style="color:inherit">Loot</a>` : ''}
       &middot; <a href="https://etherscan.io/address/${saleContract}" target="_blank" style="color:inherit">Sale Contract</a>
       ${metadata.creatorWallet ? `&middot; <a href="https://etherscan.io/address/${metadata.creatorWallet}" target="_blank" style="color:inherit">Creator</a>` : ''}
     </div>
@@ -6161,6 +6163,11 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Store for buy/ragequit functions
   app.dataset.dao = daoAddr;
   app.dataset.shares = sharesAddr;
+  // The buy/redeem handlers run from a click long after this render, so which token the
+  // sale mints travels with the DOM rather than in a module variable a re-render resets.
+  app.dataset.saleIsLoot = saleIsLoot ? '1' : '';
+  app.dataset.soldToken = soldToken;
+  app.dataset.unit = UNIT;
   app.dataset.contSale = contSaleActive ? contSaleAddr : '';
   app.dataset.price = price.toString();
   app.dataset.treasury = treasuryETH.toString();
@@ -6169,17 +6176,21 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.tapRate = tapRate.toString();
   app.dataset.saleContract = saleContract;
   app.dataset.saleDeadline = String(saleDeadline);
-  // The sale can only mint what is left of its allowance; the buy form clamps to it
-  // rather than letting someone sign a transaction the contract will revert.
-  app.dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
+  // The sale can only mint what is left, and the buy form clamps to it rather than
+  // letting someone sign a transaction the contract will revert. On ShareSale that is
+  // the undrained allowance; on ShareOffering the allowance is deliberately unbounded
+  // and the gap to the supply ceiling is the real number.
+  app.dataset.saleRemaining = (isOpenCap ? 0n
+    : usesOffering ? (cap > sold ? cap - sold : 0n)
+    : saleAllowance).toString();
   app.dataset.sharesSupply = sharesTotalSupply.toString();
   app.dataset.lootSupply = lootTotalSupply.toString();
   app.dataset.sym = coinSymbol;
   _causeGlyph = causeGlyph(data.meta, metadata, 15);
 
-  loadCausePool(daoAddr, sharesAddr, gen).catch(() => {});
+  loadCausePool(daoAddr, soldToken, gen).catch(() => {});
 
-  if (saleEnded && sold > 0n) loadCauseSaleClose(daoAddr, sharesAddr, gen).catch(() => {});
+  if (saleEnded && sold > 0n) loadCauseSaleClose(daoAddr, soldToken, gen).catch(() => {});
 
   // Proposals and chat come from a second read so they cannot delay first paint.
   loadCauseGovernance(daoAddr, gen).catch(() => {});
@@ -6200,6 +6211,12 @@ async function refreshCauseStats(daoAddr, metadata) {
   try {
     const sharesAddr = $('app')?.dataset?.shares;
     if (!sharesAddr) return;
+    // Follow the token the sale actually mints — on a loot cause the shares supply is
+    // the founder's single share and never moves, so metering against it would report
+    // every raise as stuck at zero.
+    const saleIsLoot = !!$('app')?.dataset.saleIsLoot;
+    const soldToken = $('app')?.dataset.soldToken || sharesAddr;
+    const unit = $('app')?.dataset.unit || 'shares';
     const ssIface = new ethers.Interface(
       ($('app')?.dataset.saleContract || '').toLowerCase() === SHARE_OFFERING.toLowerCase()
         ? SHARE_OFFERING_ABI : SHARE_SALE_ABI);
@@ -6208,11 +6225,11 @@ async function refreshCauseStats(daoAddr, metadata) {
     const mc3Calls = [
       { target: $('app')?.dataset.saleContract || SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
       { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
-      { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
+      { target: soldToken, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
       { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, $('app')?.dataset.saleContract || SHARE_SALE]) },
     ];
     if (_connectedAddress) {
-      mc3Calls.push({ target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
+      mc3Calls.push({ target: soldToken, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
     }
     const mcRes = await withRPC(async rpc => {
       const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
@@ -6220,20 +6237,25 @@ async function refreshCauseStats(daoAddr, metadata) {
     }).catch(() => []);
     if (gen !== _renderGen) return;
 
-    let saleData = null, treasuryETH = 0n, sharesTotalSupply = 0n, saleAllowance = 0n, userBalance = 0n;
+    let saleData = null, treasuryETH = 0n, soldTokenSupply = 0n, saleAllowance = 0n, userBalance = 0n;
     if (mcRes[0]?.success) try { saleData = ssIface.decodeFunctionResult('sales', mcRes[0].returnData); } catch {}
     if (mcRes[1]?.success) try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[1].returnData)[0]; } catch {}
-    if (mcRes[2]?.success) try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[2].returnData)[0]; } catch {}
+    if (mcRes[2]?.success) try { soldTokenSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[2].returnData)[0]; } catch {}
     if (mcRes[3]?.success) try { saleAllowance = daoI.decodeFunctionResult('allowance', mcRes[3].returnData)[0]; } catch {}
     if (_connectedAddress && mcRes[4]?.success) try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[4].returnData)[0]; } catch {}
 
     const price = saleData ? BigInt(saleData.price) : 0n;
     const creatorShares = ethers.parseEther('1');
-    const sold = sharesTotalSupply > creatorShares ? sharesTotalSupply - creatorShares : 0n;
+    // The founder's share lands in the shares supply, never the loot supply.
+    const sold = saleIsLoot
+      ? soldTokenSupply
+      : (soldTokenSupply > creatorShares ? soldTokenSupply - creatorShares : 0n);
     const usesOffering = ($('app')?.dataset.saleContract || '').toLowerCase() === SHARE_OFFERING.toLowerCase();
     const cap = usesOffering
-      ? (saleData && saleData.cap !== undefined && BigInt(saleData.cap) > creatorShares
-          ? BigInt(saleData.cap) - creatorShares : 0n)
+      ? (saleData && saleData.cap !== undefined
+          ? (saleIsLoot ? BigInt(saleData.cap)
+             : (BigInt(saleData.cap) > creatorShares ? BigInt(saleData.cap) - creatorShares : 0n))
+          : 0n)
       : sold + saleAllowance;
     const saleDeadline = saleData ? Number(saleData.deadline) : 0;
     const now = Math.floor(Date.now() / 1000);
@@ -6274,7 +6296,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     const capEl = $('causeSoldCap');
     if (capEl) {
       const capFmt = isOpenCap ? 'Open' : (cap > 0n ? Number(ethers.formatEther(cap)).toLocaleString(undefined, {maximumFractionDigits: 0}) : 'Open');
-      capEl.textContent = (isOpenCap || cap === 0n) ? 'shares' : 'of ' + capFmt;
+      capEl.textContent = (isOpenCap || cap === 0n) ? unit : 'of ' + capFmt;
     }
 
     // Update status
@@ -6285,14 +6307,14 @@ async function refreshCauseStats(daoAddr, metadata) {
     }
     const dlEl = $('causeDeadlineVal');
     if (dlEl) {
-      dlEl.textContent = soldOut ? 'every share minted' : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline';
+      dlEl.textContent = soldOut ? `every ${saleIsLoot ? 'loot unit' : 'share'} minted` : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline';
       dlEl.style.color = (saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800) ? 'var(--red)' : 'var(--fg-dim)';
     }
 
     // Update user balance
     if (_connectedAddress) {
       const balEl = document.querySelector('.coin-user-balance');
-      if (balEl) balEl.textContent = (userBalance > 0n ? fmtTokenAmount(userBalance.toString()) : '0') + ' shares';
+      if (balEl) balEl.textContent = (userBalance > 0n ? fmtTokenAmount(userBalance.toString()) : '0') + ' ' + unit;
     }
 
     // Update progress meters
@@ -6309,8 +6331,11 @@ async function refreshCauseStats(daoAddr, metadata) {
     // Update stored data
     $('app').dataset.treasury = treasuryETH.toString();
     $('app').dataset.userBalance = userBalance.toString();
-    $('app').dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
-    $('app').dataset.sharesSupply = sharesTotalSupply.toString();
+    $('app').dataset.saleRemaining = (isOpenCap ? 0n
+      : usesOffering ? (cap > sold ? cap - sold : 0n)
+      : saleAllowance).toString();
+    if (saleIsLoot) $('app').dataset.lootSupply = soldTokenSupply.toString();
+    else $('app').dataset.sharesSupply = soldTokenSupply.toString();
     causeUpdateBuyQuote();
   } catch (e) { console.warn('Cause stats refresh failed:', e); }
 }
@@ -6437,6 +6462,7 @@ const MOLOCH_PROP_ABI = [
 // offering, and Moloch's multicall delegatecalls into itself so it cannot reach the
 // second. Nonces are derived from their contents, so separate holders proposing the same
 // reopening land on the same ids and their votes accumulate.
+const CAUSE_REOPEN_WINDOW_DAYS = 45;
 function causeReopenSteps(daoAddr, sharesWei, price, deadline, supplyNow) {
   // One proposal, not two. Moloch's multicall delegatecalls into itself so it cannot reach
   // an external contract, which is what sent this down the two-proposal path originally —
@@ -6456,11 +6482,17 @@ function causeReopenSteps(daoAddr, sharesWei, price, deadline, supplyNow) {
   // configure() wants a target SUPPLY, so it is everything outstanding now plus the room
   // being authorised — not the room on its own.
   const cap = supplyNow + sharesWei;
+  // The deadline is baked in at proposal time but only takes effect at execution, which is
+  // up to nine days later: seven for the TTL to reach quorum, two more for the timelock.
+  // Reusing the sale's existing deadline meant a vote could pass and write a date already
+  // in the past, leaving a configured sale that reverts Expired on the first buy. So the
+  // window is measured from now and sized to survive the lifecycle with room to sell.
+  const freshDeadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(CAUSE_REOPEN_WINDOW_DAYS) * 86400n;
   const inner = [
     { target: daoAddr, value: 0n,
       data: molochI.encodeFunctionData('setAllowance', [SHARE_OFFERING, daoAddr, ethers.MaxUint256]) },
     { target: SHARE_OFFERING, value: 0n,
-      data: offerI.encodeFunctionData('configure', [daoAddr, ZERO, price, deadline, cap]) },
+      data: offerI.encodeFunctionData('configure', [daoAddr, ZERO, price, freshDeadline, cap]) },
   ];
   return [
     { label: 'reopen the sale',
@@ -7643,7 +7675,7 @@ function causeSwitchMode(mode) {
   } else {
     sharesBtn.style.background = 'var(--btn-bg)'; sharesBtn.style.color = 'var(--btn-fg)';
     ethBtn.style.background = 'transparent'; ethBtn.style.color = 'var(--fg-muted)';
-    unit.textContent = 'shares';
+    unit.textContent = $('app')?.dataset.unit || 'shares';
     presetsShares.style.display = 'flex'; presetsEth.style.display = 'none';
   }
   $('causeBuyAmount').value = '';
@@ -7713,6 +7745,7 @@ function causeUpdateBuyQuote() {
 
   const cost = _causeSharesToCost(shares, price);
   const sharesFmt = Number(ethers.formatEther(shares)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const unit = ds.unit || 'shares';
 
   // Ownership and redemption share the same denominator the DAO uses for ragequit:
   // shares + loot, after this purchase mints.
@@ -7724,7 +7757,7 @@ function causeUpdateBuyQuote() {
 
   const rows = [
     `<div style="display:flex;justify-content:space-between;gap:8px">
-       <span style="color:var(--fg)"><b style="font-weight:600">${sharesFmt}</b> shares</span>
+       <span style="color:var(--fg)"><b style="font-weight:600">${sharesFmt}</b> ${unit}</span>
        <span style="color:var(--fg);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:4px">${ethGlyph(12)}<b style="font-weight:600">${fmtNum(Number(ethers.formatEther(cost)))}</b> ETH</span>
      </div>`,
     `<div style="color:var(--fg-dim);margin-top:3px">${ownPct >= 0.01 ? ownPct.toFixed(2) : '<0.01'}% of the DAO after this buy</div>`
@@ -7734,7 +7767,7 @@ function causeUpdateBuyQuote() {
 
   }
   if (capped) {
-    rows.push(`<div style="color:var(--red);margin-top:3px">only ${sharesFmt} shares left in the sale &mdash; reduced to fit</div>`);
+    rows.push(`<div style="color:var(--red);margin-top:3px">only ${sharesFmt} ${unit} left in the sale &mdash; reduced to fit</div>`);
   }
   el.innerHTML = rows.join('');
 }
@@ -7758,7 +7791,7 @@ async function causeBuy(daoAddr) {
     const ethWei = ethers.parseEther(amtStr);
     shareAmt = _causeEthToShares(ethWei, price);
     if (shareAmt <= 0n) {
-      $('causeTradeStatus').innerHTML = '<div style="color:var(--red);font-size:12px">Amount too small for any shares</div>';
+      $('causeTradeStatus').innerHTML = `<div style="color:var(--red);font-size:12px">Amount too small for any ${$('app')?.dataset.unit || 'shares'}</div>`;
       return;
     }
     cost = _causeSharesToCost(shareAmt, price);
@@ -7785,7 +7818,7 @@ async function causeBuy(daoAddr) {
     statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
 
-    statusEl.innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${Number(ethers.formatEther(shareAmt)).toLocaleString()} shares! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
+    statusEl.innerHTML = `<div style="font-size:12px;color:var(--green)">Bought ${Number(ethers.formatEther(shareAmt)).toLocaleString()} ${$('app')?.dataset.unit || 'shares'}! <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a></div>`;
     $('causeBuyAmount').value = '';
     setTimeout(() => refreshCauseStats(daoAddr, null), 2000);
   } catch (e) {
@@ -7832,7 +7865,7 @@ function causeUpdateRqQuote() {
   const el = $('causeRqQuote');
   if (!el) return;
   const raw = ($('causeRqAmount')?.value || '').trim();
-  if (!raw || isNaN(raw) || Number(raw) <= 0) { el.textContent = 'Enter shares to see redemption value'; return; }
+  if (!raw || isNaN(raw) || Number(raw) <= 0) { el.textContent = `Enter ${$('app')?.dataset.unit || 'shares'} to see redemption value`; return; }
   const sharesToBurn = ethers.parseEther(raw);
   const treasury = BigInt($('app')?.dataset.treasury || '0');
   const totalSupply = BigInt($('app')?.dataset.totalSupply || '0');
@@ -7844,18 +7877,22 @@ function causeUpdateRqQuote() {
 async function causeRagequit(daoAddr) {
   if (!_signer) { if (typeof connectWallet === 'function') connectWallet(); return; }
   const raw = ($('causeRqAmount')?.value || '').trim();
+  const unit = $('app')?.dataset.unit || 'shares';
   if (!raw || isNaN(raw) || Number(raw) <= 0) {
-    $('causeRqStatus').innerHTML = '<div style="font-size:12px;color:var(--red)">Enter shares to burn</div>';
+    $('causeRqStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">Enter ${unit} to burn</div>`;
     return;
   }
-  const sharesToBurn = ethers.parseEther(raw);
+  const amountToBurn = ethers.parseEther(raw);
   const rqQuoteText = $('causeRqQuote')?.textContent || '';
-  if (!confirm(`Redeem ${raw} shares? This will permanently burn them.${rqQuoteText ? '\n' + rqQuoteText : ''}`)) return;
+  if (!confirm(`Redeem ${raw} ${unit}? This will permanently burn them.${rqQuoteText ? '\n' + rqQuoteText : ''}`)) return;
   const statusEl = $('causeRqStatus');
   statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming...</div>`;
   try {
     const dao = new ethers.Contract(daoAddr, RAGEQUIT_ABI, _signer);
-    const tx = await dao.ragequit([ZERO], sharesToBurn, 0);
+    // ragequit(tokens, sharesToBurn, lootToBurn) — a loot sale's holders own no shares,
+    // so burning the wrong slot reverts on a zero balance.
+    const isLoot = !!$('app')?.dataset.saleIsLoot;
+    const tx = await dao.ragequit([ZERO], isLoot ? 0n : amountToBurn, isLoot ? amountToBurn : 0n);
     statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
 
