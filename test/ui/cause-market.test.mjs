@@ -38,9 +38,12 @@ const M = new Function('ethers', [
   grab(/function causePoolPrice[\s\S]*?\n}/),
   grab(/const _unf = [^\n]*/),
   grab(/function causeTapeBars[\s\S]*?\n}/),
+  "const fmtNum=v=>v>=1?v.toFixed(4):String(v);",
+  grab(/function causeGwei[\s\S]*?\n}\n/),
+  grab(/function causeVsSale[\s\S]*?\n}\n/),
   grab(/function causeTimeChart[\s\S]*?\n}\n/),
   grab(/function causeChart[\s\S]*?\n}\n/),
-  'return { causeSortedPair, causeSpotPrice, causePoolPrice, causeTapeBars, causeChart, causeTimeChart };',
+  'return { causeSortedPair, causeSpotPrice, causePoolPrice, causeTapeBars, causeChart, causeTimeChart, causeGwei, causeVsSale };',
 ].join('\n'))(ethers);
 
 const CELL = '0xf142CfA6Ca3DFa4A131f12aACEF4890e390d70D6';
@@ -149,4 +152,36 @@ test('the chart switches to a time axis only once there is a shape to draw', () 
     for (const m of svg.matchAll(/(?:cy|y1|y2)="([\d.]+)"/g))
       assert.ok(+m[1] >= 0 && +m[1] <= h, `y=${m[1]} escapes the ${h}px box`);
   }
+});
+
+test('bars come off the tape newest-first, so the chart must sort them into time order', () => {
+  // Real slots from the live pool's ring buffer, in the order it returns them: the
+  // bucket index DESCENDS with array position. Plotting them as given drew CELL falling
+  // from 280,287 to 1,627 gwei when it had in fact risen through exactly those prices.
+  const word = (bucket, closePacked, trades) =>
+    (BigInt(trades) << 192n) | (BigInt(closePacked) << 128n) | BigInt(bucket);
+  const raw = '0x' + '0'.repeat(64) + (3).toString(16).padStart(64, '0')
+    + [word(5958235, 0x0d000001, 3), word(5958225, 0x0e000001, 1), word(5958207, 0x0f000001, 3)]
+        .map(w => w.toString(16).padStart(64, '0')).join('');
+
+  const bars = M.causeTapeBars(raw, true);
+  assert.equal(bars.length, 3);
+  assert.deepEqual(bars.map(b => b.b), [5958207, 5958225, 5958235], 'bars must run oldest to newest');
+
+  // With ETH as token0 the tape value inverts, so a rising bucket must give a rising price.
+  assert.ok(bars[0].c < bars[1].c && bars[1].c < bars[2].c,
+    'sorted bars should show the price climbing, matching what the pool actually did');
+});
+
+test('one unit across rows meant to be compared, and multiples people can hold', () => {
+  // 0.00029868 ETH next to 326 gwei is two units pretending to be a comparison.
+  assert.equal(M.causeGwei(298680000000000n), '298,680 gwei');
+  assert.equal(M.causeGwei(326000000000n), '326 gwei');
+  // Only past a whole ETH does the unit earn a switch.
+  assert.match(M.causeGwei(2000000000000000000n), /ETH$/);
+
+  // 89,594% is a number nobody reads. 897x is one they do.
+  assert.equal(M.causeVsSale(298680000000000n, 333000000000n), '897\u00d7 vs sale');
+  assert.match(M.causeVsSale(383000000000n, 333000000000n), /^\+15% vs sale$/);
+  assert.equal(M.causeVsSale(0n, 333000000000n), '');
 });

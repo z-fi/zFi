@@ -6586,7 +6586,9 @@ function causeTapeBars(raw, ethIs0) {
     bars.push({ b: Number(w & 0xffffffffn), o: px(f(32)), c: px(f(128)),
                 hi: px(f(64)), lo: px(f(96)), n: trades });
   }
-  return bars;
+  // The tape is a ring buffer: slot order is not time order, and it comes back newest
+  // first. Sort by bucket so a chart plots left to right in the direction time runs.
+  return bars.sort((a, b) => a.b - b.b);
 }
 
 async function causeTape(poolAddr, ethIs0) {
@@ -6636,10 +6638,37 @@ function causeTimeChart(bars, floorWei, spotWei) {
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block"
       role="img" aria-label="executed price over time against the redemption floor">${svg}</svg>
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:2px">
-      <span>${fmtPriceWei(BigInt(Math.round(floor)))} floor</span>
+      <span>${causeGwei(BigInt(Math.round(floor)))} floor</span>
       <span>${trades} fill${trades === 1 ? '' : 's'} &middot; executed, fee included</span>
-      <span style="color:var(--green)">${fmtPriceWei(BigInt(Math.round(spot)))} now</span>
+      <span style="color:var(--green)">${causeGwei(BigInt(Math.round(spot)))} now</span>
     </div></div>`;
+}
+
+// One unit for the whole tile. fmtPriceWei is right on its own — it picks whatever reads
+// best for a single number — but a column of prices meant to be compared has to agree,
+// and "0.00029868 ETH" above "326 gwei" is two units pretending to be a comparison.
+function causeGwei(wei) {
+  const v = BigInt(wei || 0);
+  if (v <= 0n) return '0';
+  const eth = Number(ethers.formatEther(v));
+  if (eth >= 1) return fmtNum(eth) + ' ETH';
+  const g = Number(v) / 1e9;
+  return (g >= 100 ? Math.round(g).toLocaleString()
+        : g >= 1 ? Number(g.toPrecision(4)).toString()
+        : Number(g.toPrecision(2)).toString()) + ' gwei';
+}
+
+// Past about ten-fold a percentage stops being read and starts being counted. 89,594%
+// is 897x, and one of those two is a number a person can hold in their head.
+function causeVsSale(spot, sale) {
+  if (!(spot > 0n) || !(sale > 0n)) return '';
+  const r = Number(spot) / Number(sale);
+  // A multiple wants significant figures, not decimal places: 897x, 12.4x, 0.08x.
+  if (r >= 10) return `${Math.round(r).toLocaleString()}\u00d7 vs sale`;
+  if (r >= 2) return `${r.toFixed(1)}\u00d7 vs sale`;
+  if (r <= 0.5) return `${Number(r.toPrecision(2))}\u00d7 vs sale`;
+  const pct = (r - 1) * 100;
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(0)}% vs sale`;
 }
 
 function causeChart(bars, floorWei, saleWei, spotWei) {
@@ -6670,9 +6699,9 @@ function causeChart(bars, floorWei, saleWei, spotWei) {
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:34px;display:block"
       role="img" aria-label="where the coin trades between its redemption floor and spot">${svg}</svg>
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:1px">
-      <span>${fmtPriceWei(BigInt(Math.round(lo)))} floor</span>
+      <span>${causeGwei(BigInt(Math.round(lo)))} floor</span>
       <span>${trades ? `${trades} fill${trades === 1 ? '' : 's'}` : 'no trades yet'}</span>
-      <span style="color:var(--green)">${fmtPriceWei(BigInt(Math.round(spot)))} now</span>
+      <span style="color:var(--green)">${causeGwei(BigInt(Math.round(spot)))} now</span>
     </div></div>`;
 }
 
@@ -7040,16 +7069,15 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
 
   const ethSide = pool ? (t0 === ZERO ? pool.r0 : pool.r1) : 0n;
   const shSide = pool ? (t0 === ZERO ? pool.r1 : pool.r0) : 0n;
-  const vsSale = spot > 0n && salePx > 0n
-    ? Number((spot - salePx) * 10000n / salePx) / 100 : null;
+  const vsSale = causeVsSale(spot, salePx);
 
   el.innerHTML = `<div class="section-card">
     <div class="section-title">Market</div>
     <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-      ${spot > 0n ? `<dt>Price</dt><dd><b style="color:var(--fg)">${ethAmount(fmtPriceWei(spot), 11)}</b>${
-        vsSale !== null ? ` <span style="color:var(--fg-dim)">${vsSale > 0 ? '+' : ''}${vsSale.toFixed(0)}% vs sale</span>` : ''}</dd>` : ''}
-      <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
-      ${spot === 0n && salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
+      ${spot > 0n ? `<dt>Price</dt><dd><b style="color:var(--fg)">${ethAmount(causeGwei(spot), 11)}</b>${
+        vsSale ? ` <span style="color:var(--fg-dim)">${vsSale}</span>` : ''}</dd>` : ''}
+      <dt>Redemption</dt><dd>${ethAmount(causeGwei(floor), 11)}</dd>
+      ${spot === 0n && salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(causeGwei(salePx), 11)}</dd>` : ''}
       ${pool ? `<dt>Depth</dt><dd>${ethAmount(fmtNum(Number(ethers.formatEther(ethSide))), 11)} ETH &middot; <span style="display:inline-flex;align-items:center;gap:4px">${_causeGlyph}${fmtTokenAmount(shSide.toString())}</span></dd>` : ''}
       ${has && pairPools > 0 ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
     </dl>
