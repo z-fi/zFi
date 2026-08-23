@@ -6462,13 +6462,30 @@ async function causePools(sharesAddr) {
     out.push({
       pool: '0x' + h.slice(base + PI_POOL * 64 + 24, base + (PI_POOL + 1) * 64),
       sl: at(PI_SL), sh: at(PI_SH), fee: at(PI_FEE),
-      r0: at(PI_R0), r1: at(PI_R1), liq: at(PI_LIQ),
+      r0: at(PI_R0), r1: at(PI_R1), liq: at(PI_LIQ), sqrtP: at(PI_PX),
     });
   }
   return out.sort((x, y) => (y.liq > x.liq ? 1 : y.liq < x.liq ? -1 : 0));
 }
 
-// ETH per share, in wei, from reserves. token0 is ETH whenever it sorts first.
+// Marginal price: what the next infinitesimal trade pays, which is THE price. PI_PX is
+// a sqrt scaled by 1e18, the same convention as the band bounds. This is NOT the reserve
+// ratio — in a concentrated position the two differ, here by 17%, and using reserves as
+// the price made buys look 11% cheaper than spot when they are really 4% dearer.
+// Confirmed by shrinking a quote until it converges: 7,903.7 gwei against 7,880.5 here,
+// the gap being the 0.3% fee a quote includes and a marginal price does not.
+function causeSpotPrice(pool, sharesAddr) {
+  const [t0] = causeSortedPair(sharesAddr);
+  const px = pool.sqrtP || 0n;
+  if (px <= 0n) return 0n;
+  // sqrt is of raw token1-per-token0; both sides here are 18 decimals.
+  return t0 === ZERO
+    ? (10n ** 54n) / (px * px)      // ETH is token0, so invert
+    : (px * px) / (10n ** 18n);     // ETH is token1, already ETH per share
+}
+
+// The ratio a deposit must arrive at, which is the reserve ratio and not the price.
+// previewAdd on the live pool takes 1 ETH per 108,158.97 CELL, exactly this.
 function causePoolPrice(pool, sharesAddr) {
   const [t0] = causeSortedPair(sharesAddr);
   const ethIs0 = t0 === ZERO;
@@ -6754,7 +6771,7 @@ async function causeSwapQuote() {
     // Effective price is what this trade actually pays, which in a band this thin is
     // the number that matters far more than spot.
     const eff = _swapSide === 'buy' ? amountIn * LQ_WAD / out : out * LQ_WAD / amountIn;
-    const spot = _causePoolCache.price || 0n;
+    const spot = _causePoolCache.spot || 0n;
     const slipPct = spot > 0n ? Number((eff - spot) * 10000n / spot) / 100 : null;
     _swapQuote = { pool, out, amountIn, tokenIn, eff };
     if (btn) btn.disabled = false;
@@ -6855,8 +6872,11 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
     if (gen !== _renderGen || !el.isConnected) return;
     pool = pools[0] || null;
     if (pool) {
-      spot = causePoolPrice(pool, sharesAddr);
-      _causePoolCache = { pool: pool.pool, shares: sharesAddr, price: spot };
+      spot = causeSpotPrice(pool, sharesAddr);
+      // price is the deposit ratio and spot is the marginal price; the LP form needs the
+      // former or the pool refunds the difference, the quote needs the latter.
+      _causePoolCache = { pool: pool.pool, shares: sharesAddr,
+                          price: causePoolPrice(pool, sharesAddr), spot };
       const bars = await causeTape(pool.pool, t0 === ZERO);
       if (gen !== _renderGen || !el.isConnected) return;
       spark = causeChart(bars, floor, salePx, spot);

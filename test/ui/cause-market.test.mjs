@@ -34,11 +34,12 @@ const M = new Function('ethers', [
   "const fmtPriceWei=v=>String(v);",
   "const BigIntRound=v=>BigInt(Math.round(v));",
   grab(/function causeSortedPair[\s\S]*?\n}/),
+  grab(/function causeSpotPrice[\s\S]*?\n}/),
   grab(/function causePoolPrice[\s\S]*?\n}/),
   grab(/const _unf = [^\n]*/),
   grab(/function causeTapeBars[\s\S]*?\n}/),
   grab(/function causeChart[\s\S]*?\n}\n/),
-  'return { causeSortedPair, causePoolPrice, causeTapeBars, causeChart };',
+  'return { causeSortedPair, causeSpotPrice, causePoolPrice, causeTapeBars, causeChart };',
 ].join('\n'))(ethers);
 
 const CELL = '0xf142CfA6Ca3DFa4A131f12aACEF4890e390d70D6';
@@ -99,4 +100,26 @@ test('the chart anchors trades to the floor and the sale price, not to themselve
 
 test('with no pool and no trades there is nothing to draw', () => {
   assert.equal(M.causeChart([], 0n, 0n, 0n), '');
+});
+
+test('the price is the marginal one, not the reserve ratio', () => {
+  // Real words from pool 0xaf9f2e88…: the sqrt and the reserves disagree by 17%,
+  // which is normal for a concentrated position and was briefly shipped as a bug —
+  // quotes compared against the reserve ratio made a buy look 11% BELOW spot when a
+  // buy can only ever fill at or above it.
+  const pool = {
+    sqrtP: 356242404745870914368n,
+    r0: 25020744727485219n,
+    r1: 2706218041194631472538n,
+  };
+  const spot = Number(M.causeSpotPrice(pool, CELL)) / 1e9;
+  const ratio = Number(M.causePoolPrice(pool, CELL)) / 1e9;
+
+  // Shrinking a real quote converged on 7,903.7 gwei, which is spot plus the 0.3% fee.
+  assert.ok(spot > 7870 && spot < 7890, `spot ${spot} should be ~7880 gwei`);
+  assert.ok(ratio > 9240 && ratio < 9250, `deposit ratio ${ratio} should be ~9245.6 gwei`);
+  assert.ok(ratio > spot, 'the two must not be conflated');
+
+  // A 0.001 ETH buy filled at 8,216.3 gwei. Against spot that is a cost, not a discount.
+  assert.ok((8216.3 - spot) / spot > 0, 'a buy must never price below spot');
 });
