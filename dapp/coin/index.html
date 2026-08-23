@@ -2802,26 +2802,9 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei) {
     html += causeMeter('funded', `<b>${fmtNum(raisedEth)}</b> ETH &middot; open-ended`, 100, false);
   }
 
-  // What is still here (and so still ragequittable) versus what the tap has taken.
-  // A bar for this is only worth its space once the two differ: before the first
-  // claim it is a full-width slab that says the same thing every time. That state
-  // is a one-line fact, not a chart.
-  if (raisedWei > 0n) {
-    const held = treasuryWei > raisedWei ? raisedWei : treasuryWei;
-    const deployed = raisedWei > treasuryWei ? raisedWei - treasuryWei : 0n;
-    const heldEth = Number(ethers.formatEther(held));
-    if (deployed > 0n) {
-      const heldPct = Number(held * 10000n / raisedWei) / 100;
-      html += causeMeter(
-        'treasury',
-        `<b>${fmtNum(heldEth)}</b> held &middot; ${fmtNum(Number(ethers.formatEther(deployed)))} deployed`,
-        heldPct, false
-      );
-    } else {
-      html += `<div style="font-size:10px;color:var(--fg-dim);margin-bottom:12px">`
-        + `treasury <b style="color:var(--green);font-weight:600">${fmtNum(heldEth)} ETH</b> &middot; every share still redeemable in full</div>`;
-    }
-  }
+  // Only the funding bar earns its space: the headline already carries the treasury,
+  // and how much the tap has drawn is the difference between the tap panel's budget and
+  // its Remaining. A second bar sitting at ~100% until late in a vest said neither.
 
   return html;
 }
@@ -5775,7 +5758,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     `;
   }
 
-  // Progress meters — ETH-denominated funding + treasury/deployed split. Shown
+  // Progress meters — ETH-denominated funding + funding progress. Shown
   // for open-ended sales too (as a running total), which the old shares-based bar
   // skipped entirely.
   html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH)}</div>`;
@@ -5783,30 +5766,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Buy form (if sale active); a closed sale gets its closing summary in the same place.
   if (saleEnded) html += `<div id="causeSaleClose"></div>`;
 
-  // A closed sale can be reopened by granting the sale a fresh allowance, which is a
-  // vote. Only shown to someone who can actually start one — proposing needs a share of
-  // voting power — and only while the deadline still has room for the two day timelock.
-  if (saleEnded && !isOpenCap && price > 0n && userBalance > 0n
-      && saleDeadline > 0 && saleDeadline - now > 172800) {
-    const daysLeft = Math.floor((saleDeadline - now) / 86400);
-    html += `
-      <div class="section-card">
-        <div class="section-title">Reopen the sale</div>
-        <div style="font-size:11px;color:var(--fg-dim);line-height:1.6;margin-bottom:10px">
-          Redeemed shares are never resold, so refunds close a sale early. Granting the
-          sale a fresh allowance lets it run again until the deadline, ${daysLeft} day${daysLeft === 1 ? '' : 's'} from now.
-          It takes a vote and a two day timelock.
-        </div>
-        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px">
-          <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="shares to authorise" aria-label="Shares to authorise"
-            style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeReopenQuote()">
-        </div>
-        <div id="causeReopenQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter how many shares to authorise</div>
-        <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeReopenPropose('${daoAddr}')">Open proposal and vote</button>
-        <div id="causeReopenStatus" style="margin-top:8px"></div>
-      </div>
-    `;
-  }
   if (!saleEnded) {
     html += `
       <div class="section-card">
@@ -5943,6 +5902,33 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     `;
   }
 
+  // Reopening a closed sale is a governance action, so it sits with the governance
+  // block at the foot rather than where the buy form used to be — it is not what
+  // somebody arriving at a finished cause is here to do. Folded shut for the same
+  // reason the redeem panel is: available, not advertised.
+  let reopenHTML = '';
+  if (saleEnded && !isOpenCap && price > 0n && userBalance > 0n
+      && saleDeadline > 0 && saleDeadline - now > 172800) {
+    const daysLeft = Math.floor((saleDeadline - now) / 86400);
+    reopenHTML = `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-muted)">
+        <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:6px;width:100%;padding:2px 0;font-size:11px;color:var(--fg-dim);background:transparent;border:none;cursor:pointer;font-family:inherit">
+          <span style="font-size:10px">&#9654;</span> Reopen the sale
+        </button>
+        <div style="display:none;padding-top:8px">
+          <div style="font-size:10px;color:var(--fg-dim);line-height:1.6;margin-bottom:8px">
+            Redeemed shares are not resold, so refunds close a sale early. A fresh
+            allowance lets it run again until the deadline, ${daysLeft} day${daysLeft === 1 ? '' : 's'} away.
+          </div>
+          <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="shares to authorise" aria-label="Shares to authorise"
+            style="width:100%;padding:5px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:13px;outline:none;box-sizing:border-box" oninput="causeReopenQuote()">
+          <div id="causeReopenQuote" style="font-size:10px;color:var(--fg-muted);margin:6px 0;min-height:26px;line-height:1.5">Enter how many shares to authorise</div>
+          <button class="swap-btn" style="width:100%;font-size:11px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeReopenPropose('${daoAddr}')">Open proposal and vote</button>
+          <div id="causeReopenStatus" style="margin-top:6px"></div>
+        </div>
+      </div>`;
+  }
+
   // Governance info. #causeGovAlert fills in from a second read so the page paints
   // without waiting on it.
   html += `
@@ -5954,6 +5940,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequittable<br>
         Share holders can ragequit at any time for a pro-rata refund.
       </div>
+      ${reopenHTML}
       <div style="margin-top:8px">
         <a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Manage DAO &rarr;</a>
       </div>
