@@ -3178,31 +3178,16 @@ async function _galleryRenderFresh(gen) {
   const app = $('app');
 
   try {
-    // Fetch DAICOs, launched coins, NFT auctions, and ZAMM v0 coins in parallel.
-    const [daicos, launchRowsAll, nftAuctions, zammV0Coins] = await Promise.all([
-      withRPC(async rpc => {
-        const helper = new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc);
-        const scanned = Array.from(await helper.scanDAICOs(0, 500, [ZERO]));
-        // Causes summoned through SafeSummoner are not in the registry this helper
-        // walks, so no window finds them — CELL comes back empty at every offset.
-        // Read the few that matter directly and prepend them in the same shape.
-        const seen = new Set(scanned.map(d => d.dao.toLowerCase()));
-        const extra = (await Promise.all(OUT_OF_BAND_CAUSES
-          .filter(a => !seen.has(a.toLowerCase()))
-          .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
-        return extra.concat(scanned);
-      // The DAICO scan is one 500-entry read against a helper contract, and it is the
-      // heaviest call on this page — the one most likely to time out on a public node.
-      // It used to take the whole gallery down with it: launched coins come from a
-      // different contract entirely and have no reason to disappear because a cause
-      // scan failed.
-      }).catch(() => []),
+    // Launched coins and NFT auctions. The gallery used to also scan DAICOs and
+    // ZAMM v0 coins; both are gone from the LIST, not from the site — a cause still
+    // renders at its own address, it is simply no longer advertised here. Everything
+    // this page invites you to buy is now one kind of thing with one set of terms.
+    const [launchRowsAll, nftAuctions] = await Promise.all([
       fetchLaunchedCoins(),
-      fetchNftAuctions(),
-      fetchZammV0CoinsForGallery()
+      fetchNftAuctions()
     ]);
 
-    if ((!daicos || daicos.length === 0) && launchRowsAll.length === 0 && nftAuctions.length === 0 && (!zammV0Coins || zammV0Coins.length === 0)) {
+    if (launchRowsAll.length === 0 && nftAuctions.length === 0) {
       if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
@@ -3223,81 +3208,25 @@ async function _galleryRenderFresh(gen) {
       '0x7dDECc13905448159d5462bF49ac7C48f348d18C',
       '0xF792394938E553eA4cdbFa984509550A5fe335e5'
     ].map(a => a.toLowerCase()));
-    let filtered = (daicos || []).filter(d => !EXCLUDED_COINS.has(d.dao.toLowerCase()));
-
     // Load cached spam list synchronously (zero latency), refresh in background
     loadSpamListCached();
     loadSpamListFresh(); // fire-and-forget; updates _spamSet + localStorage for next visit
 
-    // Fetch metadata, pool reserves, and ETH/USD price in parallel
-    // Batch ZORG balance check into the same multicall3 as pool reserves
-    const zammI = new ethers.Interface(ZAMM_POOLS_ABI);
-    const erc20I = new ethers.Interface(ERC20_ABI);
-    const poolCalls = filtered.map(d => {
-      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
-      const feeOrHook = sale ? BigInt(sale.feeOrHook) : 30n;
-      const poolId = computePoolId(ZERO, d.meta.sharesToken, 0n, 0n, feeOrHook);
-      return { target: ZAMM, allowFailure: true, callData: zammI.encodeFunctionData('pools', [poolId]) };
-    });
-    // Append ZORG balance check to the same multicall batch (if wallet connected)
-    if (_connectedAddress) {
-      poolCalls.push({ target: ZORG_TOKEN, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
-    }
+    const launchRows = launchRowsAll.filter(r => !EXCLUDED_COINS.has(r.token));
 
-    // Build activity map from cache or prepare to fetch in parallel
-    const INACTIVE_DAYS = 3;
-    const INACTIVE_MS = INACTIVE_DAYS * 86400 * 1000;
-    const ACTIVITY_CACHE_KEY = 'zfi_activity_cache';
-    const ACTIVITY_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-    let activityMap = {}; // token address (lowercase) -> updatedAt (ms)
-    let activityCached = false;
-    try {
-      const cached = JSON.parse(localStorage.getItem(ACTIVITY_CACHE_KEY) || '{}');
-      if (cached._ts && (Date.now() - cached._ts) < ACTIVITY_CACHE_TTL) {
-        activityMap = cached;
-        activityCached = true;
-      }
-    } catch {}
-
-    // Pool activity/recency came from the coinchan indexer (retired). Without it we
-    // skip the inactive-coin heuristic — coins are simply not flagged inactive.
-    const activityPromise = Promise.resolve(null);
-
-    const daicoAddrs = new Set(filtered.map(d => d.dao.toLowerCase()));
-    const launchRows = launchRowsAll.filter(r => !daicoAddrs.has(r.token) && !EXCLUDED_COINS.has(r.token));
-
-    const [allMetadata, mcResults, ethUsd, activityGql] = await Promise.all([
-      Promise.all(filtered.map(d => fetchMetadata(d.meta.contractURI))),
-      withRPC(async rpc => {
-        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-        return await mc.aggregate3(poolCalls);
-      }).catch(() => poolCalls.map(() => ({ success: false }))),
+    const [ethUsd, zorgRes] = await Promise.all([
       getEthUsd(),
-      activityPromise
+      _connectedAddress
+        ? mcAggregate([{ target: ZORG_TOKEN, allowFailure: true,
+            callData: new ethers.Interface(ERC20_ABI).encodeFunctionData('balanceOf', [_connectedAddress]) }])
+            .catch(() => [])
+        : Promise.resolve([])
     ]);
-
-    // Process activity results if freshly fetched
-    if (activityGql && !activityCached) {
-      const pools = activityGql?.data?.pools?.items || [];
-      for (const p of pools) {
-        const token = (p.token1 && p.token1 !== '0x0000000000000000000000000000000000000000') ? p.token1
-                    : (p.token0 && p.token0 !== '0x0000000000000000000000000000000000000000') ? p.token0
-                    : null;
-        if (!token) continue;
-        const key = token.toLowerCase();
-        const ts = Number(p.updatedAt);
-        if (!activityMap[key] || ts > activityMap[key]) activityMap[key] = ts;
-      }
-      activityMap._ts = Date.now();
-      try { localStorage.setItem(ACTIVITY_CACHE_KEY, JSON.stringify(activityMap)); } catch {}
-    }
-
-    // Extract pool results (first N entries) and ZORG balance (last entry if wallet connected)
-    const poolResults = mcResults.slice(0, filtered.length);
-    if (_connectedAddress && mcResults.length > filtered.length) {
-      const zorgResult = mcResults[filtered.length];
+    // Spam flagging is gated on holding enough ZORG, so the buttons a card renders
+    // depend on this and it has to land before the cards are built.
+    if (_connectedAddress && zorgRes[0]?.success) {
       try {
-        const bal = zorgResult.success ? erc20I.decodeFunctionResult('balanceOf', zorgResult.returnData)[0] : 0n;
+        const bal = new ethers.Interface(ERC20_ABI).decodeFunctionResult('balanceOf', zorgRes[0].returnData)[0];
         _userIsVerified = bal >= ZORG_VERIFY_THRESHOLD;
       } catch { _userIsVerified = false; }
     }
@@ -3307,117 +3236,6 @@ async function _galleryRenderFresh(gen) {
     let testCount = 0;
     let lowMcapCount = 0;
     let spamCount = 0;
-    let inactiveCount = 0;
-    let legacyCount = 0;
-    for (let i = 0; i < filtered.length; i++) {
-      const d = filtered[i];
-      const md = allMetadata[i];
-      const _cs = CONTINUOUS_SALES[d.dao.toLowerCase()];
-      if (_cs?.icon && md && !md.image) md.image = _cs.icon;
-      const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
-
-      let salePct = 0;
-      if (sale && sale.totalSupply > 0n) {
-        const saleTeamBps = md && md.teamBps ? BigInt(md.teamBps) : 0n;
-        const saleAlloc = saleTeamBps > 0n ? sale.totalSupply * (10000n - saleTeamBps) / 10000n : sale.totalSupply;
-        const soldShares = saleAlloc > sale.remainingSupply ? saleAlloc - sale.remainingSupply : 0n;
-        if (saleAlloc > 0n) salePct = Number((soldShares * 10000n) / saleAlloc) / 100;
-      }
-
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      const contSaleConfig = CONTINUOUS_SALES[d.dao.toLowerCase()];
-      const hasContSale = !!contSaleConfig;
-      const saleActive = hasContSale || (sale && sale.remainingSupply > 0n && sale.allowance > 0n && sale.forAmt > 0n && (sale.deadline === 0n || now <= BigInt(sale.deadline)));
-
-      // Market cap (circulating): price * circulating supply
-      // Circulating = total - unsold - team locked
-      let mcapETH = 0;
-      let poolR0 = 0n;
-      let poolR1 = 0n;
-      const pr = poolResults[i];
-      if (pr && pr.success) {
-        try {
-          const decoded = zammI.decodeFunctionResult('pools', pr.returnData);
-          poolR0 = decoded[0];
-          poolR1 = decoded[1];
-        } catch(e) {}
-      }
-      const coinTotalSupply = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
-      const treasuryETH = sale ? sale.treasuryBalance : 0n;
-      const teamBps = md && md.teamBps ? md.teamBps : 0;
-      const teamLocked = teamBps > 0 ? coinTotalSupply * teamBps / 10000 : 0;
-      const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
-      const circulating = coinTotalSupply - unsold - teamLocked;
-      // Price: pool spot if sale ended or pool is deep, else sale price
-      const lpTokens = Number(ethers.formatEther(poolR1));
-      const hasPool = poolR0 > 0n && poolR1 > 0n;
-      const poolDeep = hasPool && lpTokens > coinTotalSupply * 0.01;
-      const usePool = hasPool && (!saleActive || poolDeep);
-      if (circulating > 0) {
-        if (hasContSale && treasuryETH > 0n) {
-          // Collector DAO: treasury-backed valuation (ragequittable ETH)
-          mcapETH = Number(ethers.formatEther(treasuryETH));
-        } else if (usePool) {
-          mcapETH = (Number(ethers.formatEther(poolR0)) / lpTokens) * circulating;
-        } else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
-          mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
-        }
-      }
-      const mcapDisplay = mcapETH > 1e-6 ? fmtMcap(mcapETH) : '';
-      const mcapUsd = mcapETH > 1e-6 && ethUsd > 0 ? fmtUsd(mcapETH * ethUsd) : '';
-
-      const cardName = (md.name || d.meta.name || '').toLowerCase();
-      const cardSym = (md.symbol || d.meta.symbol || '').toLowerCase();
-      const cardAddr = d.dao.toLowerCase();
-      const isCause = md && md.launchType === 'cause';
-      const isTest = cardName === 'test';
-      if (isTest) testCount++;
-      const isAlwaysShown = ALWAYS_SHOW_ADDRS.includes(cardAddr);
-      const isLowMcap = !isTest && !isCause && !isAlwaysShown && mcapETH < 0.05;
-      if (isLowMcap) lowMcapCount++;
-      const isSpam = _spamSet.has(cardAddr);
-      if (isSpam) spamCount++;
-      const isCollect = md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector');
-      const isFund = md && md.launchType === 'fund';
-      const isLegacy = !isCause && !isCollect && !isAlwaysShown && (isFund || (md && md.template && !md.launchType));
-      if (isLegacy) legacyCount++;
-
-      // Determine if coin is inactive (no trades in last 3 days)
-      const ALWAYS_SHOW = ALWAYS_SHOW_ADDRS;
-      let isInactive = false;
-      if (hasPool && !isSpam && !isCause && !ALWAYS_SHOW.includes(d.dao.toLowerCase())) {
-        const tokenKey = d.meta.sharesToken.toLowerCase();
-        const updatedAtMs = activityMap[tokenKey];
-        // Only mark inactive if we have a real updatedAt that's older than 3 days
-        if (typeof updatedAtMs === 'number' && updatedAtMs > 0 && (Date.now() - updatedAtMs) > INACTIVE_MS) {
-          isInactive = true;
-          inactiveCount++;
-        }
-      }
-
-      const cardHTML = `
-        <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isInactive ? ' coin-inactive' : ''}${isLegacy ? ' coin-legacy' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
-          ${spamBtnHTML(cardAddr, isSpam)}
-          <div class="coin-card-head">
-            <div class="coin-logo">${logoHTML(d.meta, md)}</div>
-            <div>
-              <div class="coin-card-name">${escText(d.meta.name || 'Unnamed')}</div>
-              <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${md && md.launchType === 'cause' ? `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable${md.saleToken === 'loot' ? ' &middot; backers hold non-voting loot' : ''}">cause${md.saleToken === 'loot' ? ' &middot; loot' : ''}</span>` : md && md.launchType === 'curve' ? `<span class="coin-tpl-badge coin-tpl-simple" title="bonding curve &middot; permanent LP">curve</span>` : md && (md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector') ? `<span class="coin-tpl-badge coin-tpl-simple" title="collector DAO">collect</span>` : md && md.launchType === 'fund' ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>` : md && md.template ? `<span class="coin-tpl-badge" title="${escText(md.template)} template"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>` : ''}</div>
-            </div>
-          </div>
-          ${isCause && md.description
-            ? `<div class="coin-card-stat" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escText(md.description)}</div>`
-            : `<div class="coin-card-bar">${'█'.repeat(Math.round(Math.min(salePct,100) / 10))}${'░'.repeat(10 - Math.round(Math.min(salePct,100) / 10))}</div>
-          <div class="coin-card-stat">${hasContSale ? 'Continuous sale' : saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>`}
-          ${hasContSale
-            ? `<div class="coin-card-mcap" style="color:var(--fg-muted);font-weight:400">Collector DAO</div>`
-            : (isCollect && treasuryETH > 0n)
-            ? `<div class="coin-card-mcap">Treasury ${fmtMcap(Number(ethers.formatEther(treasuryETH)))}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)}</span>` : ''}</div>`
-            : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
-        </a>
-      `;
-      cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, r0: poolR0, poolDeep, saleActive, isTest, isSpam, isInactive, isLegacy, isLowMcap, isCause });
-    }
 
     // ── Launched coin cards ──
     // Everything a card needs — name, symbol, supply, both prices — already came
@@ -3496,20 +3314,16 @@ async function _galleryRenderFresh(gen) {
             ${mcapDisplay ? `<div class="coin-card-mcap">FDV ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth, r0: row.reserve0, poolDeep: false, saleActive: false, isTest, isSpam, isInactive: false, isLegacy: false, isLowMcap, isCause: false, isLaunched: true });
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth, isTest, isSpam, isLowMcap });
       }
     }
 
-    // Group by name|symbol, stack duplicates (exclude spam/inactive from grouping)
+    // Group by name|symbol, stack duplicates (spam and dust are hidden, not grouped)
     const groups = new Map();
     const spamCards = [];
-    const inactiveCards = [];
-    const legacyCards = [];
     const lowMcapCards = [];
     for (const c of cards) {
       if (c.isSpam) { spamCards.push(c); continue; }
-      if (c.isInactive) { inactiveCards.push(c); continue; }
-      if (c.isLegacy) { legacyCards.push(c); continue; }
       if (c.isLowMcap) { lowMcapCards.push(c); continue; }
       if (!groups.has(c.key)) groups.set(c.key, []);
       groups.get(c.key).push(c);
@@ -3518,29 +3332,9 @@ async function _galleryRenderFresh(gen) {
     let grid = '';
     const allGroups = [...groups.values()];
     for (const group of allGroups) group.sort((a, b) => b.mcap - a.mcap);
-
-    // Classify each group as a launched coin or a DAICO based on its top
-    // (highest-mcap) card. Mixed-type stacks (rare — same name/symbol shared across
-    // launch types) follow their top card into whichever section it belongs to.
-    const launchedGroups = [];
-    const daicoGroups = [];
-    for (const group of allGroups) {
-      if (group[0]?.isLaunched) launchedGroups.push(group);
-      else daicoGroups.push(group);
-    }
-    // DAICOs: finalized (post-sale) before in-sale; finalized sub-sorts by LP
-    // depth (r0), in-sale sub-sorts by mcap. A launched coin has no sale phase —
-    // it is a market from the first block — so those sort on FDV alone.
-    const daicoSort = (a, b) => {
-      const aTop = a[0], bTop = b[0];
-      const aFinalized = !aTop.saleActive;
-      const bFinalized = !bTop.saleActive;
-      if (aFinalized !== bFinalized) return aFinalized ? -1 : 1;
-      if (aFinalized) return aTop.r0 > bTop.r0 ? -1 : aTop.r0 < bTop.r0 ? 1 : 0;
-      return bTop.mcap - aTop.mcap;
-    };
-    launchedGroups.sort((a, b) => b[0].mcap - a[0].mcap);
-    daicoGroups.sort(daicoSort);
+    // Every card is the same kind of thing now, so there is one section and one sort:
+    // a launched coin has no sale phase to rank before or after, only a valuation.
+    allGroups.sort((a, b) => b[0].mcap - a[0].mcap);
 
     function renderGroup(group) {
       if (group.length === 1) return group[0].html;
@@ -3556,20 +3350,13 @@ async function _galleryRenderFresh(gen) {
       return out;
     }
 
-    if (launchedGroups.length > 0) {
-      const n = launchedGroups.reduce((s, g) => s + g.length, 0);
+    if (allGroups.length > 0) {
+      const n = allGroups.reduce((s, g) => s + g.length, 0);
       grid += `<div class="coin-grid-section" data-section="launched">Coins <span class="count">${n}</span></div>`;
-      for (const group of launchedGroups) grid += renderGroup(group);
-    }
-    if (daicoGroups.length > 0) {
-      const n = daicoGroups.reduce((s, g) => s + g.length, 0);
-      grid += `<div class="coin-grid-section" data-section="daico">DAICOs <span class="count">${n}</span></div>`;
-      for (const group of daicoGroups) grid += renderGroup(group);
+      for (const group of allGroups) grid += renderGroup(group);
     }
     // Append hidden cards individually (hidden by CSS, searchable)
     for (const c of lowMcapCards) grid += c.html;
-    for (const c of legacyCards) grid += c.html;
-    for (const c of inactiveCards) grid += c.html;
     for (const c of spamCards) grid += c.html;
 
     // NFT auctions: enrich via one batched multicall3 instead of N×3 RPC reads per
@@ -3590,27 +3377,7 @@ async function _galleryRenderFresh(gen) {
       grid = nftHeader + nftHtml + grid;
     } catch (e) { console.warn('NFT auction rendering failed:', e); }
 
-    // ZAMM coins — top by liquidity, appended at the bottom of the gallery.
-    let zammV0Count = 0;
-    try {
-      if (Array.isArray(zammV0Coins) && zammV0Coins.length > 0) {
-        const zammHtml = zammV0Coins.map(renderZammV0CoinCard).join('');
-        zammV0Count = zammV0Coins.length;
-        // Flagged ZAMM v0 coins are hidden by CSS like the rest — count them so the
-        // "N coins hidden" footer stays accurate.
-        for (const zc of zammV0Coins) {
-          const cid = (() => { try { return BigInt(zc.coinId); } catch { return null; } })();
-          const zAddr = (cid !== null && cid < (1n << 160n))
-            ? '0x' + cid.toString(16).padStart(40, '0')
-            : COINS_SINGLETON.toLowerCase();
-          if (_spamSet.has(zAddr)) { spamCount++; zammV0Count--; }
-        }
-        const zammHeader = `<div class="coin-grid-section" data-section="zamm">ZAMM coins <span class="count">${zammV0Count}</span></div>`;
-        grid = grid + zammHeader + zammHtml;
-      }
-    } catch (e) { console.warn('ZAMM coins rendering failed:', e); }
-
-    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0) + zammV0Count;
+    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0);
     const _countLabel = nftAuctionCount > 0
       ? `${_coinTotal} coins &middot; ${nftAuctionCount} auction${nftAuctionCount === 1 ? '' : 's'}`
       : `${_coinTotal}`;
@@ -3626,11 +3393,9 @@ async function _galleryRenderFresh(gen) {
       <div class="coin-grid" id="coinGrid">${grid}</div>
       ${(() => {
         const parts = [];
-        if (legacyCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleLegacyCoins()">${legacyCount} legacy</span>`);
-        if (inactiveCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleInactiveCoins()">${inactiveCount} inactive</span>`);
         if (spamCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleSpamCoins()" id="spamCountLabel">${spamCount} flagged</span>`);
         if (lowMcapCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleLowMcapCoins()">${lowMcapCount} low-liquidity</span>`);
-        const total = legacyCount + inactiveCount + spamCount + lowMcapCount;
+        const total = spamCount + lowMcapCount;
         return total > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${total} coins hidden (${parts.join(' · ')})</div>` : '';
       })()}
       <div id="spamCount" data-count="${spamCount}" style="display:none"></div>
@@ -5618,6 +5383,32 @@ function causeSwapFill(weiAmt, exact) {
 
 // One quote per keystroke would outrun the RPC and paint answers out of order, so
 // each carries a sequence and a stale one is dropped rather than shown.
+// Best execution across the two venues this page can reach.
+//
+// The pool prices a continuous curve; the book is a set of fixed-size orders at fixed
+// prices. Comparing them means asking each what THIS trade gets, not what their headline
+// price is. A partial-fill order can be taken for any slice up to its size; an
+// all-or-nothing one only helps if the trade is at least as large as the order.
+function causeBookBest(side, amountIn) {
+  if (!Array.isArray(_causeBook) || amountIn <= 0n) return null;
+  // Buying takes an ask; selling hits a bid.
+  const want = side === 'buy' ? false : true;
+  let best = null;
+  for (const o of _causeBook) {
+    if (o.bid !== want) continue;
+    // What the taker supplies, and what the order pays out for it.
+    const supply = side === 'buy' ? o.ethAmt : o.coinAmt;
+    const payout = side === 'buy' ? o.coinAmt : o.ethAmt;
+    if (supply <= 0n || payout <= 0n) continue;
+    let spend, out;
+    if (amountIn >= supply) { spend = supply; out = payout; }        // fills it entirely
+    else if (o.partial) { spend = amountIn; out = payout * amountIn / supply; }
+    else continue;                                                   // too small to clear it
+    if (!best || out * (best.spend || 1n) > best.out * spend) best = { o, spend, out };
+  }
+  return best;
+}
+
 async function causeSwapQuote() {
   const el = $('causeSwapQuote');
   if (!el || !_causePoolCache) return;
@@ -5688,13 +5479,22 @@ async function causeSwapQuote() {
     const eff = _swapSide === 'buy' ? amountIn * LQ_WAD / out : out * LQ_WAD / amountIn;
     const spot = _causePoolCache.spot || 0n;
     const slipPct = spot > 0n ? Number((eff - spot) * 10000n / spot) / 100 : null;
-    _swapQuote = { pool, out, amountIn, tokenIn, eff };
+    // Route to whichever venue actually pays more for this trade.
+    const bk = causeBookBest(_swapSide, amountIn);
+    const useBook = bk && bk.out * amountIn > out * bk.spend;
+    if (useBook) {
+      const bEff = _swapSide === 'buy' ? bk.spend * LQ_WAD / bk.out : bk.out * LQ_WAD / bk.spend;
+      _swapQuote = { book: bk.o, spend: bk.spend, out: bk.out, amountIn: bk.spend, tokenIn, eff: bEff };
+    } else {
+      _swapQuote = { pool, out, amountIn, tokenIn, eff };
+    }
     if (btn) btn.disabled = false;
+    const shown = _swapQuote.out;
     const outBox = $('causeSwapOut');
     if (outBox) {
       outBox.textContent = _swapSide === 'buy'
-        ? fmtTokenAmount(out.toString())
-        : fmtNum(Number(ethers.formatEther(out)));
+        ? fmtTokenAmount(shown.toString())
+        : fmtNum(Number(ethers.formatEther(shown)));
       outBox.style.color = 'var(--fg)';
     }
 
@@ -5704,8 +5504,11 @@ async function causeSwapQuote() {
       : `${ethAmount(fmtNum(Number(ethers.formatEther(out))), 13)} ETH`;
     // Below a quarter the number is just how a curve works and saying it every time trains
     // people to ignore it. Above, it is the trade eating the band and worth interrupting for.
-    const heavy = slipPct !== null && Math.abs(slipPct) >= 25;
-    el.innerHTML = `<span>${fmtPriceWei(eff)} per share</span>`
+    const heavy = !_swapQuote.book && slipPct !== null && Math.abs(slipPct) >= 25;
+    el.innerHTML = `<span>${fmtPriceWei(_swapQuote.eff)} per share</span>`
+      + (_swapQuote.book
+          ? `<div style="color:var(--fg-dim);margin-top:3px">Filling a resting order \u2014 a fixed price, so no slippage and nothing moves.</div>`
+          : '')
       + (heavy ? `<div style="color:var(--red);margin-top:3px">This trade moves the price ${slipPct > 0 ? '+' : ''}${slipPct.toFixed(0)}% on its own \u2014 the band is thin at this size.</div>` : '')
       + `<div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch {
@@ -5723,6 +5526,7 @@ async function causeSwapGo() {
   if (!sgn) return;
   if (!_causePoolCache) return;
   if (!_swapQuote) { causeSwapSide(_swapSide); return; }
+  if (_swapQuote.book) { await causeBookFill(String(_swapQuote.book.id)); return; }
   const { pool, out, amountIn, tokenIn, portion, zap } = _swapQuote;
   const shares = _causePoolCache.shares;
   const tokenOut = tokenIn === ZERO ? shares : ZERO;
