@@ -3191,7 +3191,12 @@ async function _galleryRenderFresh(gen) {
           .filter(a => !seen.has(a.toLowerCase()))
           .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
         return extra.concat(scanned);
-      }),
+      // The DAICO scan is one 500-entry read against a helper contract, and it is the
+      // heaviest call on this page — the one most likely to time out on a public node.
+      // It used to take the whole gallery down with it: launched coins come from a
+      // different contract entirely and have no reason to disappear because a cause
+      // scan failed.
+      }).catch(() => []),
       fetchLaunchedCoins(),
       fetchNftAuctions(),
       fetchZammV0CoinsForGallery()
@@ -6838,18 +6843,6 @@ async function renderCoinPage(daoAddr) {
       html += `</div>`;
     }
 
-    // curve launch info
-    if (metadata.launchType === 'curve') {
-      html += `
-        <div class="section-card" style="background:var(--surface)">
-          <div class="section-title">bonding curve</div>
-          <div style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
-            800M on curve &middot; 200M seed LP at graduation<br>
-            1% trade fee &middot; permanent LP &middot; 16x price range
-          </div>
-        </div>
-      `;
-    }
 
     // Sale section (drawer if ended, full card if live)
     const hasDaicoSale = sale && sale.forAmt > 0n;
@@ -9064,6 +9057,21 @@ pruneCoinCaches();
 // The balance shortcuts and the chat composer have the same dependency.
 function causeOnWalletChange() {
   try {
+    // The dataset carries the balance as it was when the page rendered, and a page that
+    // rendered before the wallet connected recorded zero. Repainting from that told a
+    // holder of 18,013 shares they held none. Re-read it, then paint.
+    const app = $('app'), shares = app?.dataset.shares;
+    if (app && shares && _connectedAddress) {
+      withRPC(rpc => new ethers.Contract(shares, ERC20_ABI, rpc).balanceOf(_connectedAddress))
+        .then(b => {
+          if (app.dataset.userBalance === b.toString()) return;
+          app.dataset.userBalance = b.toString();
+          if ($('causeSwapAmt')) causeSwapSide(_swapSide);
+        })
+        .catch(() => {});
+    } else if (app && !_connectedAddress) {
+      app.dataset.userBalance = '0';
+    }
     if ($('causeSwapAmt')) causeSwapSide(_swapSide);
     const dao = $('app')?.dataset.dao;
     if (dao && $('causeChatBox')) causeChatCompose(dao).catch(() => {});
