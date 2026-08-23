@@ -7008,6 +7008,125 @@ async function causeSwapGo() {
   }
 }
 
+// ---------------------------------------------------------------- order book
+// A band prices every trade against its own depth, which is why this coin went 333 gwei
+// to 280,287 and back inside a day. A resting order does not: a maker posts a price and
+// a holder either takes it or does not, and nothing moves in between. For a coin this
+// thin that is the difference between distributing and being volatile at.
+//
+// Swapboard already abstracts WETH on both sides — fillOrderWithEth when you pay, and
+// fillOrderUnwrap when you are paid — so nobody here ever holds or approves WETH.
+const SWAPBOARD = '0x000000fF3D7A2d373615141d7489Ca66683DbecF';
+const SWAPBOARD_PF = '0x00000000CC3915a0f5F98CBdC558Ac1a8e85B831';
+const SWAPBOARD_VIEW = '0x51B33f0dd2680ba3f8C1cF30C33aeD8BFca1DF38';
+const BOARD_WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+const BOARD_VIEW_ABI = ['function getAllActiveOrders(address boardV1, address boardV2) view returns (tuple(uint256 orderId, address maker, bool partialFill, address tokenA, uint256 amountA, string symbolA, uint8 decimalsA, address tokenB, uint256 amountB, string symbolB, uint8 decimalsB, address board)[])'];
+const BOARD_ABI = [
+  'function fillOrder(uint256 orderId, uint256 deadline)',
+  'function fillOrderWithEth(uint256 orderId, uint256 deadline) payable',
+  'function fillOrderUnwrap(uint256 orderId, uint256 deadline)',
+];
+const BOARD_PF_ABI = [
+  'function fillOrder(uint256 orderId, uint256 deadline, uint256 fillAmountB)',
+  'function fillOrderWithEth(uint256 orderId, uint256 deadline) payable',
+  'function fillOrderUnwrap(uint256 orderId, uint256 deadline, uint256 fillAmountB)',
+];
+
+let _causeBook = [];
+
+// Every resting order on either board where one side is this coin and the other is ETH.
+// A bid offers ETH and wants the coin, so a holder fills it to sell; an ask is the reverse.
+async function causeBookLoad(sharesAddr) {
+  const isEth = a => a.toLowerCase() === BOARD_WETH.toLowerCase() || a === ZERO;
+  const isCoin = a => a.toLowerCase() === sharesAddr.toLowerCase();
+  let all;
+  try {
+    all = await withRPC(rpc =>
+      new ethers.Contract(SWAPBOARD_VIEW, BOARD_VIEW_ABI, rpc).getAllActiveOrders(SWAPBOARD, SWAPBOARD_PF));
+  } catch { return []; }
+  const out = [];
+  for (const o of all) {
+    const bid = isEth(o.tokenA) && isCoin(o.tokenB);
+    const ask = isCoin(o.tokenA) && isEth(o.tokenB);
+    if (!bid && !ask) continue;
+    const ethAmt = bid ? o.amountA : o.amountB;
+    const coinAmt = bid ? o.amountB : o.amountA;
+    if (coinAmt === 0n) continue;
+    out.push({
+      id: o.orderId, board: o.board, partial: o.partialFill, maker: o.maker,
+      bid, ethAmt, coinAmt,
+      // What one whole share costs in this order, which is the only number worth sorting on.
+      price: ethAmt * LQ_WAD / coinAmt,
+    });
+  }
+  // Best first from the filler's point of view: highest bid, cheapest ask.
+  out.sort((a, b) => (a.bid === b.bid) ? (a.bid ? (b.price > a.price ? 1 : -1) : (a.price > b.price ? 1 : -1)) : (a.bid ? -1 : 1));
+  return out;
+}
+
+function causeBookHTML(orders, sym) {
+  if (!orders.length) {
+    return `<div style="font-size:10px;color:var(--fg-dim);line-height:1.6">
+      No resting orders. A limit order lets someone name a price and wait, instead of
+      taking whatever the band quotes — which for a pool this thin is most of the price.
+    </div>`;
+  }
+  const spot = _causePoolCache?.spot || 0n;
+  const row = o => {
+    const vs = spot > 0n ? Number((o.price - spot) * 10000n / spot) / 100 : null;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:11px">
+      <span style="width:34px;color:${o.bid ? 'var(--green)' : 'var(--red)'};font-weight:600">${o.bid ? 'BID' : 'ASK'}</span>
+      <span style="flex:1;color:var(--fg)">${causeGwei(o.price)}</span>
+      <span style="flex:1;color:var(--fg-muted)">${fmtTokenAmount(o.coinAmt.toString())} ${escText(sym)}</span>
+      <span style="flex:1;color:var(--fg-dim)">${fmtNum(Number(ethers.formatEther(o.ethAmt)))} ETH</span>
+      ${vs !== null ? `<span style="width:52px;text-align:right;color:var(--fg-dim)">${vs > 0 ? '+' : ''}${vs.toFixed(0)}%</span>` : ''}
+      <button class="swap-btn" style="font-size:10px;padding:4px 10px;white-space:nowrap"
+        onclick="causeBookFill('${o.id}')">${o.bid ? 'Sell into' : 'Buy'}</button>
+    </div>`;
+  };
+  return `<div>${orders.map(row).join('')}</div>`;
+}
+
+async function causeBookFill(idStr) {
+  const st = $('causeBookStatus');
+  const say = (m, c) => { if (st) st.innerHTML = m ? `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>` : ''; };
+  const o = _causeBook.find(x => String(x.id) === String(idStr));
+  if (!o) return;
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  try {
+    const me = await sgn.getAddress();
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    const pf = o.board.toLowerCase() === SWAPBOARD_PF.toLowerCase();
+    const board = new ethers.Contract(o.board, pf ? BOARD_PF_ABI : BOARD_ABI, sgn);
+    let tx;
+    if (o.bid) {
+      // Filling a bid means handing over the coin and being paid in ETH: approve the
+      // coin, then take the unwrap variant so no WETH ever reaches the wallet.
+      const token = new ethers.Contract(_causePoolCache.shares, ERC20_ABI, sgn);
+      if ((await token.allowance(me, o.board)) < o.coinAmt) {
+        say('Approving shares\u2026');
+        await (await token.approve(o.board, ethers.MaxUint256)).wait();
+      }
+      say('Confirm in your wallet\u2026');
+      tx = pf ? await board.fillOrderUnwrap(o.id, deadline, o.coinAmt)
+              : await board.fillOrderUnwrap(o.id, deadline);
+    } else {
+      // Filling an ask means paying ETH for the coin; the board wraps it for us.
+      say('Confirm in your wallet\u2026');
+      tx = await board.fillOrderWithEth(o.id, deadline, { value: o.ethAmt });
+    }
+    say(`Filling\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Filled.', 'var(--green)');
+    await loadCausePool($('app')?.dataset.dao, _causePoolCache.shares, _renderGen, true).catch(() => {});
+    loadBalances?.();
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(err.shortMessage || err.message || 'Failed.'), 'var(--red)');
+  }
+}
+
 async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
   const el = $('causePool');
   if (!el) return;
@@ -7053,6 +7172,8 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       const bars = await causeTape(pool.pool, t0 === ZERO);
       if (gen !== _renderGen || !el.isConnected) return;
       spark = causeChart(bars, floor, salePx, spot);
+      _causeBook = await causeBookLoad(sharesAddr);
+      if (gen !== _renderGen || !el.isConnected) return;
     }
   }
 
@@ -7114,7 +7235,15 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       </div>
       <button id="causeSwapGo" class="swap-btn" style="width:100%;font-size:12px" onclick="causeSwapGo()" disabled>Swap</button>
       <div id="causeSwapStatus" style="margin-top:8px"></div>
-      <div style="margin-top:10px;text-align:center">
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-muted)">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:10px;letter-spacing:0.08em;color:var(--fg-dim)">ORDERS${_causeBook.length ? ` <span style="color:var(--fg-muted)">${_causeBook.length}</span>` : ''}</span>
+          <a href="../orderbook/?token0=${encodeURIComponent(ZERO)}&token1=${encodeURIComponent(sharesAddr)}&label1=${encodeURIComponent(sym)}" style="font-size:10px;color:var(--fg-muted);text-decoration:underline">post an order &rarr;</a>
+        </div>
+        ${causeBookHTML(_causeBook, sym)}
+        <div id="causeBookStatus" style="margin-top:8px"></div>
+      </div>
+      <div style="margin-top:12px;text-align:center">
         <a href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Other routes and bands on zSwap &rarr;</a>
       </div>`
     : `<div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
