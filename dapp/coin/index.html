@@ -1739,15 +1739,54 @@ function _rpcDeadline(promise, ms) {
     new Promise((_, rej) => { t = setTimeout(() => rej(new Error('RPC timeout')), ms); })
   ]);
 }
+// A rate-limited provider used to cost three requests instead of one: the loop simply
+// walked to the next endpoint, so once the public nodes started answering 429 every read
+// tripled, which produced more 429s. The failure fed itself. A node that says "too many"
+// is told, and skipped until it has had time to forget.
+const _rpcCooldownUntil = new Array(RPCS.length).fill(0);
+const RPC_COOLDOWN_MS = 20000;
+const _rpcThrottled = e => {
+  const m = String(e?.info?.responseStatus || e?.shortMessage || e?.message || e);
+  return /\b(429|403)\b|too many requests|rate limit|forbidden/i.test(m);
+};
+
 async function withRPC(fn, timeoutMs) {
-  for (let i = 0; i < _rpcProviders.length; i++) {
+  const now = Date.now();
+  // Rotate as before, but put anything in cooldown at the back rather than dropping it —
+  // if every node is cooling, the page still has to make the call with something.
+  const order = _rpcProviders.map((_, i) => (rpcIdx + i) % _rpcProviders.length)
+    .sort((a, b) => (_rpcCooldownUntil[a] > now ? 1 : 0) - (_rpcCooldownUntil[b] > now ? 1 : 0));
+  let last;
+  for (let k = 0; k < order.length; k++) {
+    const i = order[k];
     try {
-      const rpc = _rpcProviders[(rpcIdx + i) % _rpcProviders.length];
-      const result = await _rpcDeadline(Promise.resolve(fn(rpc)), timeoutMs || RPC_TIMEOUT_MS);
-      rpcIdx = (rpcIdx + i) % _rpcProviders.length;
+      const result = await _rpcDeadline(Promise.resolve(fn(_rpcProviders[i])), timeoutMs || RPC_TIMEOUT_MS);
+      rpcIdx = i;
       return result;
-    } catch(e) { if (i === _rpcProviders.length - 1) throw e; }
+    } catch (e) {
+      last = e;
+      if (_rpcThrottled(e)) _rpcCooldownUntil[i] = Date.now() + RPC_COOLDOWN_MS;
+    }
   }
+  throw last;
+}
+
+// Reads that repeat identically within a paint — the same lens call from a render and
+// from the refresh that follows it — should be one request, not two. Keyed by the caller,
+// held only while in flight plus a beat, so nothing here is a stale-data cache.
+const _rpcInflight = new Map();
+function withRPCOnce(key, fn, ttlMs) {
+  const hit = _rpcInflight.get(key);
+  if (hit && Date.now() < hit.until) return hit.p;
+  const p = withRPC(fn).finally(() => {
+    const cur = _rpcInflight.get(key);
+    if (cur && cur.p === p) setTimeout(() => {
+      const c = _rpcInflight.get(key);
+      if (c && c.p === p) _rpcInflight.delete(key);
+    }, ttlMs || 3000);
+  });
+  _rpcInflight.set(key, { p, until: Date.now() + (ttlMs || 3000) });
+  return p;
 }
 
 function resolveIPFS(uri) {
@@ -5879,7 +5918,15 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   }
 
   // Ragequit — collapsible, understated. Safety net, not a primary action.
-  if (userBalance > 0n && treasuryETH > 0n) {
+  //
+  // Gated on the treasury alone, not on the holder's balance. It used to require
+  // userBalance > 0, which reads as sensible and is not: that number comes out of a
+  // multicall entry that yields 0 when the read fails, so a rate-limited RPC deleted the
+  // redemption panel rather than showing a stale figure. The one control that guarantees
+  // a holder can always get their share of the treasury back is the last thing that
+  // should vanish quietly. Disconnected sees it too, since knowing redemption exists is
+  // most of why it matters.
+  if (treasuryETH > 0n) {
     const rqTreasuryFmt = Number(ethers.formatEther(treasuryETH)).toFixed(4);
     // Redemption uses the same denominator the DAO does: shares + loot.
     const rqDenom = sharesTotalSupply + lootTotalSupply;
@@ -5902,6 +5949,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
             ? ' Burnt shares return their room to the sale, so redeeming costs the raise nothing.'
             : (saleEnded ? ' Burnt shares are not resold, so the sale cannot replace them.'
                          : ' Burnt shares are not returned to the sale for someone else to buy.')}</div>
+          ${!_connectedAddress ? `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px">Connect a wallet to redeem.</div>` : ''}
           <div style="display:flex;gap:4px;margin-bottom:6px">
             <input id="causeRqAmount" type="text" inputmode="decimal" placeholder="0" aria-label="Shares to redeem" style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causeUpdateRqQuote()">
             <span style="font-size:11px;color:var(--fg-muted);align-self:flex-end;padding-bottom:8px">shares</span>
@@ -6526,7 +6574,8 @@ async function causePools(sharesAddr) {
   const [t0, t1] = causeSortedPair(sharesAddr);
   const data = SEL_MARKETS + _a(t0) + _a(t1) + _a(ZERO) + _w(0) + _w(LQ_SCAN) + _w(0);
   let raw;
-  try { raw = await withRPC(rpc => rpc.call({ to: PPLENS, data })); } catch { return []; }
+  try { raw = await withRPCOnce('pools:' + sharesAddr.toLowerCase(), rpc => rpc.call({ to: PPLENS, data }), 5000); }
+  catch { return []; }
   if (!raw || raw.length < 130) return [];
   const h = raw.slice(2);
   const n = Number(BigInt('0x' + h.slice(64, 128)));
@@ -6602,7 +6651,7 @@ async function causeTape(poolAddr, ethIs0) {
   let best = [];
   for (const win of [300, 14400]) {
     try {
-      const raw = await withRPC(rpc => rpc.call({ to: poolAddr, data: SEL_TAPE + _w(win) + _w(256) }));
+      const raw = await withRPCOnce(`tape:${poolAddr}:${win}`, rpc => rpc.call({ to: poolAddr, data: SEL_TAPE + _w(win) + _w(256) }), 15000);
       const bars = causeTapeBars(raw, ethIs0);
       if (bars.length > best.length) best = bars;
       if (best.length > 1) break;
@@ -7140,8 +7189,8 @@ async function causeBookLoad(sharesAddr) {
   const isCoin = a => a.toLowerCase() === sharesAddr.toLowerCase();
   let all;
   try {
-    all = await withRPC(rpc =>
-      new ethers.Contract(SWAPBOARD_VIEW, BOARD_VIEW_ABI, rpc).getAllActiveOrders(SWAPBOARD, SWAPBOARD_PF));
+    all = await withRPCOnce('board:all', rpc =>
+      new ethers.Contract(SWAPBOARD_VIEW, BOARD_VIEW_ABI, rpc).getAllActiveOrders(SWAPBOARD, SWAPBOARD_PF), 15000);
   } catch { return []; }
   const out = [];
   for (const o of all) {

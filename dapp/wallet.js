@@ -161,7 +161,7 @@ function showWalletModal() {
 function renderWalletModal(wallets) {
   const container = document.getElementById('walletOptions');
   if (_connectedAddress) {
-    const displayName = document.getElementById('walletBtn').textContent;
+    const displayName = document.getElementById('walletBtn')?.textContent || 'connect';
     const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
     container.innerHTML = `<div style="padding:12px;border:1px solid currentColor;margin-bottom:12px;"><div style="font-weight:600;margin-bottom:6px;">Connected</div>${showName ? `<div style="font-size:16px;margin-bottom:4px;">${_esc(displayName)}</div>` : ''}<div style="font-size:12px;word-break:break-all;opacity:0.6;">${_esc(_connectedAddress)}</div></div><div class="wallet-option disconnect" onclick="disconnectWallet()"><span class="wallet-option-name">Disconnect</span></div>`;
   } else {
@@ -246,15 +246,15 @@ async function connectWithWallet(walletKey, options = {}) {
     const chainId = await walletProvider.request({ method: 'eth_chainId' });
     if (BigInt(chainId) !== 1n) {
       try { await walletProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); const nc = await walletProvider.request({ method: 'eth_chainId' }); if (BigInt(nc) !== 1n) throw new Error('Chain switch failed'); }
-      catch (switchErr) { if (!silent) console.error('Chain switch failed:', switchErr); document.getElementById('walletBtn').textContent = 'connect'; if (!silent && typeof showStatus === 'function') showStatus('Please switch to Ethereum mainnet in your wallet.', 'error'); if (walletKey === 'walletconnect') { try { _walletConnectProvider?.disconnect(); } catch (e) {} _walletConnectProvider = null; } _isWalletConnect = false; _wcDeepLink = null; return; }
+      catch (switchErr) { if (!silent) console.error('Chain switch failed:', switchErr); { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.textContent = 'connect'; } if (!silent && typeof showStatus === 'function') showStatus('Please switch to Ethereum mainnet in your wallet.', 'error'); if (walletKey === 'walletconnect') { try { _walletConnectProvider?.disconnect(); } catch (e) {} _walletConnectProvider = null; } _isWalletConnect = false; _wcDeepLink = null; return; }
     }
     _walletProvider = new ethers.BrowserProvider(walletProvider);
     _signer = await _walletProvider.getSigner();
     _connectedAddress = await _signer.getAddress();
     const oldWP = _connectedWalletProvider;
     _connectedWalletProvider = walletProvider;
-    document.getElementById('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
-    document.getElementById('walletBtn').classList.add('connected');
+    { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4); }
+    { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.classList.add('connected'); }
     resolveWeiName(_connectedAddress);
     updateWcBanner();
     // ERC-5792: probe wallet_sendCalls support (non-blocking, no delay to connect)
@@ -285,7 +285,7 @@ async function connectWithWallet(walletKey, options = {}) {
             _walletProvider = new ethers.BrowserProvider(_connectedWalletProvider);
             _signer = await _walletProvider.getSigner();
             _connectedAddress = await _signer.getAddress();
-            document.getElementById('walletBtn').textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4);
+            { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.textContent = _connectedAddress.slice(0, 6) + '...' + _connectedAddress.slice(-4); }
             resolveWeiName(_connectedAddress);
             for (const fn of _onConnectCallbacks) { try { fn(); } catch (e) { console.error('onConnect callback error:', e); } }
           } catch (e) { console.error('Account change re-derive failed, reloading:', e); window.location.reload(); }
@@ -321,7 +321,7 @@ async function connectWithWallet(walletKey, options = {}) {
   } catch (error) {
     if (silent) console.warn('Auto-connect failed:', error?.message || error);
     else console.error('Wallet connect error:', error);
-    document.getElementById('walletBtn').textContent = 'connect';
+    { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.textContent = 'connect'; }
     if (silent) {
       // Auto-connect failed silently — clean up WC provider if applicable
       if (_walletConnectProvider) { try { _walletConnectProvider.disconnect(); } catch (_) {} _walletConnectProvider = null; }
@@ -347,8 +347,8 @@ window.disconnectWallet = function() {
   _walletEventHandlers = null;
   if (_walletConnectProvider) { try { _walletConnectProvider.disconnect(); } catch (e) {} _walletConnectProvider = null; }
   _walletProvider = null; _signer = null; _connectedAddress = null; _connectedWalletProvider = null; _isWalletConnect = false; _wcDeepLink = null; _walletSendCalls = false;
-  document.getElementById('walletBtn').textContent = 'connect';
-  document.getElementById('walletBtn').classList.remove('connected');
+  { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.textContent = 'connect'; }
+  { const _wb = document.getElementById('walletBtn'); if (_wb) _wb.classList.remove('connected'); }
   updateWcBanner();
   closeWalletModal();
   try { localStorage.removeItem('zfi_wallet'); localStorage.removeItem('zfi_wallet_name'); } catch (e) {}
@@ -361,16 +361,33 @@ window.connectWallet = async function() {
   return null;
 };
 
+// RPCS[0] was pinned for the life of the tab, so whichever endpoint happened to be first
+// was a single point of failure for everything in here. When it started answering 403 —
+// which public nodes do under load — the wallet had no second option, and a connected
+// account read as unnamed with no indication why.
 let _rpcProvider = null;
-function getRpcProvider() {
-  if (!_rpcProvider) _rpcProvider = new ethers.JsonRpcProvider(RPCS[0], 1, { staticNetwork: true });
+let _rpcIdx = 0;
+function getRpcProvider(next) {
+  if (next || !_rpcProvider) {
+    if (next) _rpcIdx = (_rpcIdx + 1) % RPCS.length;
+    _rpcProvider = new ethers.JsonRpcProvider(RPCS[_rpcIdx], 1, { staticNetwork: true });
+  }
   return _rpcProvider;
 }
 
 function resolveWeiName(addr) {
+  // A name is cosmetic, so this never retries hard — but one throttled endpoint should
+  // not be the reason an address never resolves, and the next read starts on a fresh one.
+  const attempt = provider => {
+    const ns = new ethers.Contract(WEINS, WEINS_ABI, provider);
+    return ns.reverseResolve(addr).then(name => {
+      const btn = document.getElementById('walletBtn');
+      if (name && btn && _connectedAddress === addr) btn.textContent = name.toLowerCase();
+      return true;
+    });
+  };
   try {
-    const ns = new ethers.Contract(WEINS, WEINS_ABI, getRpcProvider());
-    ns.reverseResolve(addr).then(name => { if (name && _connectedAddress === addr) document.getElementById('walletBtn').textContent = name.toLowerCase(); }).catch(() => {});
+    attempt(getRpcProvider()).catch(() => attempt(getRpcProvider(true)).catch(() => {}));
   } catch (e) {}
 }
 window.resolveWeiName = resolveWeiName;
