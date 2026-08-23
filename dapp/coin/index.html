@@ -2014,7 +2014,6 @@ async function loadHolders(daoAddr) {
         </div>`;
       });
       content.innerHTML = html;
-    causeChatCompose(daoAddr).catch(() => {});
     }
 
     // Show immediately with addresses
@@ -2640,6 +2639,9 @@ async function loadProposals(daoAddr) {
     html += propHtml;
     html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
     content.innerHTML = html;
+    // Fills #causeChatBox, which only exists in the markup above. The badge read runs
+    // after the paint so a slow lookup delays the compose box and never the messages.
+    causeChatCompose(daoAddr).catch(() => {});
 
     // Wired after render because the list is rebuilt wholesale via innerHTML, which
     // discards any handler attached to the previous nodes.

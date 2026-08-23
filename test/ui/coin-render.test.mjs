@@ -144,3 +144,35 @@ test('balance shortcuts fill a number a person can read, without overshooting', 
   w.causeSwapFill(5000000000000000000000n);
   assert.equal(doc.getElementById('causeSwapAmt').value, '5000');
 });
+
+test('the chat composer initialises in the drawer that actually contains it', async () => {
+  // This shipped broken: a first-match edit put causeChatCompose inside loadHolders,
+  // where #causeChatBox does not exist, so it bailed on its own guard and the Proposals
+  // & Chat drawer rendered an empty div. The contract call had been proven on a fork;
+  // the wiring that reaches it never had been. Both pages share loadProposals, so this
+  // covers the cause page and the DAICO page at once.
+  const { w } = boot();
+  const src = fs.readFileSync(path.join(ROOT, 'dapp/coin/index.html'), 'utf8');
+
+  const callLine = src.split('\n').findIndex(l => l.includes('causeChatCompose(daoAddr).catch'));
+  assert.ok(callLine > 0, 'nothing initialises the compose box');
+
+  // Walk back to the enclosing top-level function and insist it is the right one.
+  let owner = null;
+  for (let i = callLine; i >= 0; i--) {
+    const m = src.split('\n')[i].match(/^(?:async )?function ([A-Za-z_$][\w$]*)/);
+    if (m) { owner = m[1]; break; }
+  }
+  assert.equal(owner, 'loadProposals',
+    `the composer is initialised from ${owner}, which does not render #causeChatBox`);
+
+  // And the box it fills must be emitted by that same function.
+  const body = src.slice(src.indexOf('async function loadProposals'), src.indexOf('\n}\n', src.indexOf('async function loadProposals')));
+  assert.match(body, /id="causeChatBox"/, 'loadProposals must render the box it fills');
+
+  // The composer bails without a wallet rather than offering an input that cannot post.
+  w.document.body.innerHTML += '<div id="causeChatBox"></div>';
+  w._connectedAddress = null;
+  await w.causeChatCompose('0xD5dcE9BEE03e69362981afE48323A657fCceB8bE');
+  assert.match(w.document.getElementById('causeChatBox').innerHTML, /Connect a wallet/);
+});
