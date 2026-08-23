@@ -185,3 +185,27 @@ test('one unit across rows meant to be compared, and multiples people can hold',
   assert.match(M.causeVsSale(383000000000n, 333000000000n), /^\+15% vs sale$/);
   assert.equal(M.causeVsSale(0n, 333000000000n), '');
 });
+
+test('the droplet swaps what the form does, and liquidity opens on the ETH side', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'dapp/coin/index.html'), 'utf8');
+
+  // One tile, two jobs. A second form would mean two places to keep correct.
+  assert.match(src, /causeSetMode\(_causeMode === 'lq' \? 'swap' : 'lq'\)/,
+    'the droplet must toggle the mode of the existing tile');
+  assert.doesNotMatch(src, /function causeAddLiquidity/,
+    'the two-sided form should be gone, not left as a second way to do this');
+
+  // Entering liquidity mode picks ETH: that leg BUYS the coin. Zapping the token side
+  // sells it into its own band, which is the wrong direction for a DAICO holder.
+  assert.match(src, /if \(entering\) _swapSide = 'buy';/);
+
+  // zapIn's swap leg runs at minOut = 0 by design, so the form has to say how much of
+  // the deposit is exposed to the band's depth.
+  assert.match(src, /fills at any price/, 'a heavy swap portion must be called out');
+  assert.match(src, /SEL_ZAPIN = '0xc98c2c0b'/);
+  assert.match(src, /SEL_PREVIEW_ZAP = '0xe7cddab0'/);
+
+  // A zap's routed leg declares the POOL as its output, not the paired token.
+  assert.match(src, /zap \? pool : tokenOut/,
+    'a zap returns LP, so the snwap leg must name the pool as tokenOut');
+});
