@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Test, console} from "../lib/forge-std/src/Test.sol";
-import {ShareSaleV2} from "../src/dao/ShareSaleV2.sol";
+import {ShareOffering} from "../src/dao/ShareOffering.sol";
 
 interface IMolochX {
     function shares() external view returns (address);
@@ -24,7 +24,7 @@ contract GriefTest is Test {
     function setUp() public {
         // foundry.toml pins fork_block_number long before this DAO existed, so under the
         // default profile there is nothing here to attack. Needs a fork at head:
-        //   forge test --match-path test/ShareSaleV2.t.sol \
+        //   forge test --match-path test/ShareOffering.t.sol \
         //     --fork-url <archive> --fork-block-number $(cast block-number --rpc-url <archive>)
         if (DAO.code.length == 0) { vm.skip(true); return; }
         sh = IERC20X(IMolochX(DAO).shares());
@@ -57,7 +57,7 @@ contract GriefTest is Test {
 
     /// V2: same attack, capacity derived from live supply, so the burn gives it back.
     function test_v2_griefAchievesNothing() public {
-        ShareSaleV2 v2 = new ShareSaleV2();
+        ShareOffering v2 = new ShareOffering();
         uint256 cap = sh.totalSupply() + 1_000_000e18;
 
         vm.startPrank(DAO);
@@ -89,7 +89,7 @@ contract GriefTest is Test {
 
     /// The cap still binds, however much anyone pays.
     function test_v2_capHolds() public {
-        ShareSaleV2 v2 = new ShareSaleV2();
+        ShareOffering v2 = new ShareOffering();
         uint256 cap = sh.totalSupply() + 100e18;
         vm.startPrank(DAO);
         IMolochX(DAO).setAllowance(address(v2), DAO, type(uint256).max);

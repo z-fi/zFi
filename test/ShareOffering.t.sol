@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Test, console} from "../lib/forge-std/src/Test.sol";
-import {ShareSaleV2} from "../src/dao/ShareSaleV2.sol";
+import {ShareOffering} from "../src/dao/ShareOffering.sol";
 
 interface IMolochX {
     function shares() external view returns (address);
@@ -21,15 +21,14 @@ interface IERC20X {
 contract PathsTest is Test {
     address constant DAO = 0xD5dcE9BEE03e69362981afE48323A657fCceB8bE;
     uint256 constant PRICE = 333_000_000_000;
-    ShareSaleV2 v2;
+    ShareOffering v2;
     IERC20X sh;
     address buyer = address(0xB0B);
 
     function setUp() public {
-        // Needs a fork at or after this DAO's summon; foundry.toml pins earlier.
         if (DAO.code.length == 0) { vm.skip(true); return; }
         sh = IERC20X(IMolochX(DAO).shares());
-        v2 = new ShareSaleV2();
+        v2 = new ShareOffering();
         vm.prank(DAO);
         IMolochX(DAO).setAllowance(address(v2), DAO, type(uint256).max);
     }
@@ -97,22 +96,27 @@ contract PathsTest is Test {
 
     function test_configureRejectsZeroes() public {
         vm.startPrank(DAO);
-        vm.expectRevert(ShareSaleV2.ZeroPrice.selector);
+        vm.expectRevert(ShareOffering.ZeroPrice.selector);
         v2.configure(DAO, address(0), 0, 0, 1000e18);
-        vm.expectRevert(ShareSaleV2.ZeroCap.selector);
+        vm.expectRevert(ShareOffering.ZeroCap.selector);
         v2.configure(DAO, address(0), PRICE, 0, 0);
         vm.stopPrank();
     }
 
+    /// An outsider cannot even describe a sale of someone else's token: configure keys
+    /// to msg.sender and the sentinel must match it, so there is no slot to point at
+    /// another DAO. The DAO's own sale is untouched either way.
     function test_outsiderCannotConfigureAnotherDao() public {
         _cfgEth(0);
         vm.prank(address(0xBAD));
-        v2.configure(DAO, address(0), 1, 0, type(uint256).max); // writes sales[0xBAD]
+        vm.expectRevert(ShareOffering.NotMintable.selector);
+        v2.configure(DAO, address(0), 1, 0, type(uint256).max);
+
         vm.deal(buyer, 10 ether);
         uint256 before = buyer.balance;
         vm.prank(buyer);
         v2.buy{value: 1 ether}(DAO, 1000e18);
-        assertEq(before - buyer.balance, 1000 * PRICE, "attacker repriced the DAO's sale");
+        assertEq(before - buyer.balance, 1000 * PRICE, "DAO's own price should stand");
     }
 
     function test_capBelowSupplyIsInert() public {
@@ -142,8 +146,8 @@ contract PathsTest is Test {
 }
 
 contract Reenter {
-    ShareSaleV2 immutable v2; address immutable dao; uint256 public depth;
-    constructor(ShareSaleV2 a, address d) { v2 = a; dao = d; }
+    ShareOffering immutable v2; address immutable dao; uint256 public depth;
+    constructor(ShareOffering a, address d) { v2 = a; dao = d; }
     function go(uint256 n, uint256 over) external {
         v2.buy{value: n * 333_000_000_000 + over}(dao, n * 1e18);
     }

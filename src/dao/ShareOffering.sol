@@ -1,45 +1,42 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-/// @title ShareSaleV2
-/// @notice Singleton for selling DAO shares or loot, with the sale's ceiling expressed
-///         as a target supply rather than a spend budget.
+/// @title ShareOffering
+/// @notice Sells DAO shares or loot at a fixed price, up to a ceiling on total supply.
 ///
-/// WHY THIS EXISTS
-///
-/// The original ShareSale meters a sale with a Moloch allowance. Allowance is spent at
-/// mint and is never restored, so a share that is minted and then redeemed removes that
-/// much capacity from the sale permanently. On a live cause that cost 1,891,891 shares —
-/// 0.63 ETH of a 3.33 ETH raise — and shut the sale eight days early.
-///
-/// That is also an attack. Buying and immediately ragequitting returns nearly all of the
-/// ETH (a flat price means treasury-per-share is the price), so for gas plus a little
-/// vesting drift anyone can burn a sale's whole allowance and deny the raise. Reopening
-/// by vote does not help: the same trick works on the new allowance.
-///
-/// The fix is to stop treating capacity as a budget that drains. `cap` here is a ceiling
-/// on the sold token's total supply, checked live at every buy:
+/// The ceiling is a supply target, not a spend budget:
 ///
 ///     remaining = cap - token.totalSupply()
 ///
-/// A burn lowers totalSupply, so capacity comes back on its own. Round-tripping returns
-/// the shares and returns the capacity with them; a griefer can churn but cannot deny.
+/// It is read at every buy, so redeemed shares return their room to the offering. How
+/// much may be issued and how much is currently held stay independent, which is what a
+/// refundable raise wants — otherwise every refund quietly shrinks the offering.
 ///
-/// THE ALLOWANCE IS STILL THERE, AND STILL DRAINS
+/// Setup, as DAO initCalls or a proposal:
+///   1. dao.setAllowance(offering, token, headroom)
+///   2. offering.configure(token, payToken, price, deadline, cap)   // called BY the dao
 ///
-/// Minting goes through Moloch.spendAllowance, which decrements. So the DAO must grant
-/// this contract more allowance than the cap, or the allowance becomes the binding
-/// constraint again and the old behaviour returns. Grant a multiple of the cap: it is
-/// the number of times the sale can be fully round-tripped before needing a top-up, and
-/// it bounds what a bug in this contract could ever mint. Do not grant type(uint256).max
-/// for the convenience of never thinking about it — that is an unbounded mint permit.
-contract ShareSaleV2 {
+/// `token` is a mint sentinel: the DAO's own address for shares, address(1007) for loot.
+/// A supply ceiling only describes a token this contract is the one minting, so
+/// configure() admits nothing else.
+///
+/// `headroom` must exceed `cap`. Minting spends Moloch allowance and burning does not
+/// return it, so the allowance is the outer bound on everything this contract may ever
+/// mint, and the cap is the live one. The multiple is how many times the offering can be
+/// sold out and fully redeemed before it needs topping up. type(uint256).max makes that
+/// unlimited and leaves this contract's own arithmetic as the only limit, so it is a
+/// choice to make deliberately.
+///
+/// Pricing is 1e18-scaled: cost = amount * price / 1e18, rounded up.
+contract ShareOffering {
     error InsufficientPayment();
     error NotConfigured();
     error UnexpectedETH();
     error ZeroAmount();
     error ZeroPrice();
     error ZeroCap();
+    error NotMintable();
+    error Reentrancy();
     error Expired();
 
     event Configured(
@@ -57,6 +54,27 @@ contract ShareSaleV2 {
 
     mapping(address dao => Sale) public sales;
 
+    /// @dev buy() hands control to the caller twice before it is finished: once when it
+    ///      refunds excess ETH, and once when it delivers the token. Neither can be used
+    ///      to mint past the cap — the allowance is already spent and totalSupply already
+    ///      raised by then — but a guard costs one transient slot and removes the need to
+    ///      re-derive that every time this is read. Same slot pattern as Moloch.
+    uint256 constant _REENTRANCY_GUARD_SLOT = 0x929eee149b4bd21268;
+
+    modifier nonReentrant() {
+        assembly ("memory-safe") {
+            if tload(_REENTRANCY_GUARD_SLOT) {
+                mstore(0x00, 0xab143c06) // Reentrancy()
+                revert(0x1c, 0x04)
+            }
+            tstore(_REENTRANCY_GUARD_SLOT, address())
+        }
+        _;
+        assembly ("memory-safe") {
+            tstore(_REENTRANCY_GUARD_SLOT, 0)
+        }
+    }
+
     constructor() payable {}
 
     /// @notice Configure a sale. Must be called by the DAO, which keys it to msg.sender.
@@ -68,6 +86,8 @@ contract ShareSaleV2 {
     {
         if (price == 0) revert ZeroPrice();
         if (cap == 0) revert ZeroCap();
+        // A supply ceiling is only meaningful for a token this sale mints.
+        if (token != msg.sender && token != address(1007)) revert NotMintable();
         sales[msg.sender] = Sale(token, payToken, deadline, price, cap);
         emit Configured(msg.sender, token, payToken, price, deadline, cap);
     }
@@ -83,7 +103,7 @@ contract ShareSaleV2 {
     }
 
     /// @notice Buy shares or loot. Caps to `remaining`; pass type(uint256).max for all of it.
-    function buy(address dao, uint256 amount) public payable {
+    function buy(address dao, uint256 amount) public payable nonReentrant {
         if (amount == 0) revert ZeroAmount();
         Sale memory s = sales[dao];
         if (s.price == 0) revert NotConfigured();
@@ -91,7 +111,7 @@ contract ShareSaleV2 {
 
         address tokenAddr = _resolve(dao, s.token);
 
-        // Derived live, so a burn since the last buy has already given the room back.
+        // Read live: a burn since the last buy has already returned the room.
         uint256 supply = totalSupplyOf(tokenAddr);
         uint256 room = s.cap > supply ? s.cap - supply : 0;
         uint256 allowed = IMoloch(dao).allowance(s.token, address(this));
@@ -101,11 +121,19 @@ contract ShareSaleV2 {
 
         uint256 cost = (amount * s.price + 1e18 - 1) / 1e18; // round up: no dust
 
+        // Judge the payment before minting against it. The transaction would revert
+        // either way, but nothing should mint on a path already known to fail.
+        bool native = s.payToken == address(0);
+        if (native) {
+            if (msg.value < cost) revert InsufficientPayment();
+        } else if (msg.value != 0) {
+            revert UnexpectedETH();
+        }
+
         // EFFECTS before INTERACTIONS.
         IMoloch(dao).spendAllowance(s.token, amount);
 
-        if (s.payToken == address(0)) {
-            if (msg.value < cost) revert InsufficientPayment();
+        if (native) {
             safeTransferETH(dao, cost);
             if (msg.value > cost) {
                 unchecked {
@@ -113,7 +141,6 @@ contract ShareSaleV2 {
                 }
             }
         } else {
-            if (msg.value != 0) revert UnexpectedETH();
             safeTransferFrom(s.payToken, dao, cost);
         }
 
@@ -121,10 +148,9 @@ contract ShareSaleV2 {
         emit Purchase(dao, msg.sender, amount, cost);
     }
 
+    /// @dev configure() admits only the two sentinels, so this is total.
     function _resolve(address dao, address token) internal view returns (address) {
-        if (token == dao) return address(IMoloch(dao).shares());
-        if (token == address(1007)) return address(IMoloch(dao).loot());
-        return token;
+        return token == dao ? address(IMoloch(dao).shares()) : address(IMoloch(dao).loot());
     }
 }
 
