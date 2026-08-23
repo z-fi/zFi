@@ -7890,12 +7890,31 @@ let _pendingQuoteSeq = 0;
 let _quoteActive = 0;
 let _parkedQuote = null; // { args, resolve, reject } waiting for a slot
 
+// Race a precision pool against whatever the path returned. Every quote — generic,
+// zOrg, DAICO, zAMM — arrives here, and every one of them hands executeSwap a
+// quote.multicall, so overwriting that field is enough to reroute any of them. Curve is
+// the exception: executeSwap branches on isCurvePath before it looks at the quote, so a
+// precision win there would be listed and then ignored. It is skipped rather than lied about.
+async function _racePrecision(quote, args) {
+  try {
+    if (!quote || args.exactOut) return quote;
+    if (typeof isCurvePath === 'function' && isCurvePath(args.fromSnap, args.toSnap)) return quote;
+    const f = tokens[args.fromSnap], t = tokens[args.toSnap];
+    if (!f?.address || !t?.address) return quote;
+    const amountIn = safeParseUnits(args.amtStr, f.decimals);
+    if (!amountIn || amountIn <= 0n) return quote;
+    await quoteRPC.call(rpc => addPrecisionCandidate(
+      quote, rpc, f.address, t.address, amountIn, getReceiver(), slippageBps));
+  } catch (_) {}
+  return quote;
+}
+
 function _runQuote(args) {
   _quoteActive++;
   return withRetry(() => args.exactOut
     ? getExactOutQuote(args.amtStr, args.fromSnap, args.toSnap)
     : getQuote(args.amtStr, args.fromSnap, args.toSnap),
-  ).finally(() => {
+  ).then(q => _racePrecision(q, args)).finally(() => {
     _quoteActive--;
     const parked = _parkedQuote;
     if (parked) {
@@ -8004,7 +8023,87 @@ const _AGG_DEFS = [
 
 // Helpers derived from _AGG_DEFS
 function _isAggWinner(q) { return _AGG_DEFS.some(d => q[d.flag]); }
-function _resetExtFlags(r) { for (const d of _AGG_DEFS) r[d.flag] = false; r.isCow = false; }
+function _resetExtFlags(r) { for (const d of _AGG_DEFS) r[d.flag] = false; r.isCow = false; r.isPrecision = false; }
+
+// ---------------------------------------------------------------- precision pools
+// zQuoter covers Uniswap, Sushi, Curve, zAMM and Lido; the aggregators cover what their
+// indexers know. Precision pools are in neither, so a coin whose only market is one —
+// every zFi cause coin from the moment it seeds a band — quotes zero across all fourteen
+// sources and the page reports no route while a pool sits there holding liquidity.
+//
+// It is added as one more candidate racing the rest rather than as an override, because
+// a token can have both: zOrg has a precision band AND a zap, a DAICO coin has one AND a
+// primary sale. Whichever returns more of the output token should win, and on some sizes
+// that is not the precision pool.
+const PPLENS_ADDRESS = '0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB';
+const PROUTE_ADDRESS = '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB';
+const P_SEL_QUOTE_BEST = '0x2adaa389';
+const P_SEL_ROUTE = '0x5d6498e1';
+const P_SEL_CHECKPOINT = '0x0b7c6c6c';
+const P_LQ_SCAN = 128n;
+const _pa = a => ethers.zeroPadValue((a || ZERO_ADDRESS).toLowerCase(), 32).slice(2);
+const _pw = v => ethers.zeroPadValue(ethers.toBeHex(BigInt(v)), 32).slice(2);
+
+async function quotePrecisionBest(rpc, tokenIn, tokenOut, amountIn, sender) {
+  if (!amountIn || amountIn <= 0n) return null;
+  if (!tokenIn || !tokenOut || tokenIn.toLowerCase() === tokenOut.toLowerCase()) return null;
+  const [c0, c1] = tokenIn.toLowerCase() < tokenOut.toLowerCase() ? [tokenIn, tokenOut] : [tokenOut, tokenIn];
+  const data = P_SEL_QUOTE_BEST + _pa(c0) + _pa(c1) + _pa(sender || ZERO_ADDRESS)
+             + _pa(tokenIn) + _pw(amountIn) + _pw(0) + _pw(P_LQ_SCAN);
+  try {
+    const raw = await rpc.call({ to: PPLENS_ADDRESS, data });
+    if (!raw || raw.length < 130) return null;
+    const h = raw.slice(2);
+    const pool = '0x' + h.slice(24, 64);
+    const out = BigInt('0x' + h.slice(64, 128));
+    if (out <= 0n || /^0x0{40}$/i.test(pool)) return null;
+    return { pool, out };
+  } catch { return null; }
+}
+
+// Native in is one leg funded by the call. Token in is a pull, so the router needs an
+// allowance — which zFi already grants it, being the same router — and a checkpoint
+// binding that pull to this exact route, or a funded router can be spent by another one.
+function buildPrecisionMulticall(tokenIn, tokenOut, amountIn, minOut, to, pool) {
+  const routeData = P_SEL_ROUTE + _pw(192) + _pa(tokenIn) + _pa(tokenOut)
+                  + _pw(amountIn) + _pw(minOut) + _pa(to) + _pw(1) + _pa(pool);
+  const routed = ROUTER_IFACE.encodeFunctionData('snwap', [
+    tokenIn, amountIn, to, tokenOut, minOut, PROUTE_ADDRESS, routeData,
+  ]);
+  if (tokenIn === ZERO_ADDRESS) {
+    return { multicall: ROUTER_IFACE.encodeFunctionData('multicall', [[routed]]),
+             calls: [routed], msgValue: amountIn };
+  }
+  const checkpoint = ROUTER_IFACE.encodeFunctionData('snwap', [
+    ZERO_ADDRESS, 0n, to, ZERO_ADDRESS, 0n, PROUTE_ADDRESS,
+    P_SEL_CHECKPOINT + _pa(tokenIn) + ethers.keccak256(routeData).slice(2) + _pa(to),
+  ]);
+  return { multicall: ROUTER_IFACE.encodeFunctionData('multicall', [[checkpoint, routed]]),
+           calls: [checkpoint, routed], msgValue: 0n };
+}
+
+// Quote it, list it, and take it only if it beats whatever is already winning.
+async function addPrecisionCandidate(result, rpc, fromAddr, toAddr, amountIn, receiver, slippageBps) {
+  if (!result) return;
+  const q = await quotePrecisionBest(rpc, fromAddr, toAddr, amountIn, _connectedAddress || receiver);
+  if (!q) return;
+  const minOut = q.out - (q.out * BigInt(slippageBps || 100)) / 10000n;
+  const built = buildPrecisionMulticall(fromAddr, toAddr, amountIn, minOut, receiver, q.pool);
+  const extra = { multicall: built.multicall, calls: built.calls, msgValue: built.msgValue,
+                  precisionPool: q.pool, isTwoHop: false, isSplit: false, splitLegs: null };
+  if (!Array.isArray(result.allQuotes)) result.allQuotes = [];
+  result.allQuotes.push({ source: 'Precision', sourceId: 7, feeBps: 0n,
+                          amountIn, amountOut: q.out,
+                          _winnerArgs: ['isPrecision', 'Precision', extra] });
+  if (q.out > (result.expectedOutput ?? 0n)) {
+    _resetExtFlags(result);
+    result.isPrecision = true;
+    result.sourceA = 'Precision';
+    result.sourceB = null;
+    result.expectedOutput = q.out;
+    Object.assign(result, extra);
+  }
+}
 
 // Fetch a fresh firm quote for the winning aggregator and build the snwap call.
 // q: quote object with aggregator flags (is0x, isParaswap, etc.) and associated data
