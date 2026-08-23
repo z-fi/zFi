@@ -6015,7 +6015,15 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Tap vesting section
   if (hasTap) {
-    const budgetDisplay = tapOpenBudget ? 'unlimited' : fmtETH(tapBudget);
+    // "Remaining" was the DAO's allowance to TapVest — an authorisation ceiling, which the
+    // launcher sets from the raise the sale was AIMING for. CELL aimed at 3.33 ETH and took
+    // 2.70, so the ceiling has always been above anything that could actually be paid, and
+    // reading it as money still owed overstates the tap by the difference. TapVest pays
+    // min(vested, budget, treasury), so the binding figure is the smaller of the ceiling
+    // and what the DAO actually holds. That is the number a beneficiary can still receive.
+    const tapPayable = tapOpenBudget ? treasuryETH : (tapBudget < treasuryETH ? tapBudget : treasuryETH);
+    const budgetDisplay = fmtETH(tapPayable);
+    const tapCeilingAbove = !tapOpenBudget && tapBudget > treasuryETH;
     // Vesting accrues from the moment the tap was configured, not from the moment the
     // money arrives, so a tap can be owed more than the DAO holds. TapVest pays
     // min(vested, budget, treasury) — the shortfall is not forfeited, it lands the
@@ -6034,7 +6042,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
           <dt>Rate</dt><dd>${tapInstant ? rateDisplay : ethAmount(rateDisplay, 11)}</dd>
           <dt>Claimable</dt><dd>${ethAmount('~' + pendingEth + ' ETH', 11)}</dd>
           ${unfunded > 0n ? `<dt>Vested, unfunded</dt><dd style="color:var(--red)">${ethAmount(fmtETH(unfunded), 11)}</dd>` : ''}
-          ${tapOpenBudget ? '' : `<dt>Remaining</dt><dd>${tapOpenBudget ? budgetDisplay : ethAmount(budgetDisplay, 11)}</dd>`}
+          <dt>Remaining</dt><dd>${ethAmount(budgetDisplay, 11)}${tapCeilingAbove ? `<span style="color:var(--fg-dim)"> of the treasury</span>` : ''}</dd>
           <dt>Beneficiary</dt><dd><a href="https://etherscan.io/address/${tapBeneficiary}" target="_blank" style="color:inherit">${beneficiaryShort}</a></dd>
         </dl>
         ${(() => {
