@@ -32,12 +32,13 @@ const M = new Function('ethers', [
   "const ZERO='0x0000000000000000000000000000000000000000';",
   "const LQ_WAD=10n**18n;",
   "const fmtPriceWei=v=>String(v);",
+  "const BigIntRound=v=>BigInt(Math.round(v));",
   grab(/function causeSortedPair[\s\S]*?\n}/),
   grab(/function causePoolPrice[\s\S]*?\n}/),
   grab(/const _unf = [^\n]*/),
   grab(/function causeTapeBars[\s\S]*?\n}/),
-  grab(/function causeSpark[\s\S]*?\n}/),
-  'return { causeSortedPair, causePoolPrice, causeTapeBars, causeSpark };',
+  grab(/function causeChart[\s\S]*?\n}\n/),
+  'return { causeSortedPair, causePoolPrice, causeTapeBars, causeChart };',
 ].join('\n'))(ethers);
 
 const CELL = '0xf142CfA6Ca3DFa4A131f12aACEF4890e390d70D6';
@@ -74,15 +75,28 @@ test('tape decodes to the price a buyer actually paid', () => {
   assert.ok(closeGwei < 5000, 'tape close should not be reading as spot');
 });
 
-test('a lone bar renders as a sentence, not a flat line pretending to be a chart', () => {
-  const one = M.causeSpark([{ b: 1, o: 1e12, c: 1.6e12, hi: 1.6e12, lo: 1e12, n: 3 }]);
-  assert.match(one, /3 trades/);
-  assert.doesNotMatch(one, /<polyline/);
-  assert.equal(M.causeSpark([]), '');
-  const many = M.causeSpark([
-    { b: 1, o: 1e12, c: 1e12, hi: 1e12, lo: 1e12, n: 1 },
-    { b: 2, o: 1e12, c: 2e12, hi: 2e12, lo: 1e12, n: 2 },
-  ]);
-  assert.match(many, /<polyline/);
-  assert.match(many, /3 trades/);
+test('the chart anchors trades to the floor and the sale price, not to themselves', () => {
+  const floor = 328522781932n, sale = 333000000000n, spot = 9245600000000n;
+  const bars = [{ b: 1, o: 1.948e12, c: 1.627e12, hi: 1.948e12, lo: 1.627e12, n: 3 }];
+  const out = M.causeChart(bars, floor, sale, spot);
+
+  // A single print still draws: the reference lines carry the picture.
+  assert.match(out, /<svg/);
+  assert.match(out, /redemption/);
+  assert.match(out, /now/);
+  assert.match(out, /3 trades on the tape/);
+
+  // Every drawn y must land inside the viewBox. A linear axis would push the floor
+  // off the bottom once spot is 28x above it, which is the bug the log scale fixes.
+  const ys = [...out.matchAll(/(?:y1|y2|cy)="([\d.]+)"/g)].map(m => parseFloat(m[1]));
+  assert.ok(ys.length > 0, 'nothing was drawn');
+  for (const y of ys) assert.ok(y >= 0 && y <= 96, `y=${y} escapes the 96px viewBox`);
+
+  // The floor line must sit below the spot line: lower price, larger y.
+  const floorY = ys[0];
+  assert.ok(floorY > Math.min(...ys), 'the redemption floor should sit at the bottom');
+});
+
+test('with no pool and no trades there is nothing to draw', () => {
+  assert.equal(M.causeChart([], 0n, 0n, 0n), '');
 });
