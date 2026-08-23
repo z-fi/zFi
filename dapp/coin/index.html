@@ -5766,6 +5766,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Progress meters — ETH-denominated funding + funding progress. Shown
   // for open-ended sales too (as a running total), which the old shares-based bar
   // skipped entirely.
+  html += causeTokenRow(sharesAddr, coinSymbol);
+
   html += `<div id="causeMeters" style="margin-bottom:14px">${causeMetersHTML(raisedWei, targetWei, treasuryETH, usesOffering)}</div>`;
 
   // Buy form (if sale active); a closed sale gets its closing summary in the same place.
@@ -5927,13 +5929,14 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
         </button>
         <div style="display:none;padding-top:8px">
           <div style="font-size:10px;color:var(--fg-dim);line-height:1.6;margin-bottom:8px">
-            Redeemed shares are not resold, so refunds close a sale early. A fresh
-            allowance lets it run again until the deadline, ${daysLeft} day${daysLeft === 1 ? '' : 's'} away.
+            Reopens the sale on ShareOffering, where redeemed shares hand their room back
+            instead of closing it early, and runs to the deadline ${daysLeft} day${daysLeft === 1 ? '' : 's'} away.
+            Two proposals.
           </div>
           <input id="causeReopenShares" type="text" inputmode="numeric" placeholder="shares to authorise" aria-label="Shares to authorise"
             style="width:100%;padding:5px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:13px;outline:none;box-sizing:border-box" oninput="causeReopenQuote()">
           <div id="causeReopenQuote" style="font-size:10px;color:var(--fg-muted);margin:6px 0;min-height:26px;line-height:1.5">Enter how many shares to authorise</div>
-          <button class="swap-btn" style="width:100%;font-size:11px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeReopenPropose('${daoAddr}')">Open proposal and vote</button>
+          <button class="swap-btn" style="width:100%;font-size:11px;background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted)" onclick="causeReopenPropose('${daoAddr}')">Open both proposals and vote</button>
           <div id="causeReopenStatus" style="margin-top:6px"></div>
         </div>
       </div>`;
@@ -6005,6 +6008,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.userBalance = userBalance.toString();
   app.dataset.tapRate = tapRate.toString();
   app.dataset.saleContract = saleContract;
+  app.dataset.saleDeadline = String(saleDeadline);
   // The sale can only mint what is left of its allowance; the buy form clamps to it
   // rather than letting someone sign a transaction the contract will revert.
   app.dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
@@ -6237,6 +6241,114 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, gen) {
   el.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">
     <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}
   </div>`;
+}
+
+function causeCopyToken(addr, el) {
+  navigator.clipboard.writeText(addr).then(() => {
+    const t = el.querySelector('.copy-label');
+    if (!t) return;
+    const was = t.textContent;
+    t.textContent = 'copied';
+    setTimeout(() => { t.textContent = was; }, 1400);
+  }).catch(() => {});
+}
+
+function causeTokenRow(sharesAddr, sym) {
+  return `<button onclick="causeCopyToken('${sharesAddr}', this)" title="${sharesAddr}"
+      style="display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;margin-bottom:14px;
+             background:var(--surface);border:1px solid var(--border-muted);border-radius:6px;
+             color:var(--fg-muted);font-family:inherit;font-size:10px;cursor:pointer;text-align:left">
+    <span style="color:var(--fg-dim);flex-shrink:0">$${escText(sym)}</span>
+    <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sharesAddr}</span>
+    <span class="copy-label" style="margin-left:auto;color:var(--fg-dim);flex-shrink:0">copy</span>
+  </button>`;
+}
+
+const MOLOCH_PROP_ABI = [
+  'function proposalId(uint8 op, address to, uint256 value, bytes data, bytes32 nonce) view returns (uint256)',
+  'function castVote(uint256 id, uint8 support)',
+  'function setAllowance(address spender, address token, uint256 amount)'
+];
+
+// Reopening moves the sale onto ShareOffering rather than refilling the singleton that
+// let it close short, because capacity granted there survives redemption. That takes two
+// proposals: setAllowance is the DAO acting on itself, configure is a call out to the
+// offering, and Moloch's multicall delegatecalls into itself so it cannot reach the
+// second. Nonces are derived from their contents, so separate holders proposing the same
+// reopening land on the same ids and their votes accumulate.
+function causeReopenSteps(daoAddr, sharesWei, price, deadline, supplyNow) {
+  const molochI = new ethers.Interface(MOLOCH_PROP_ABI);
+  const offerI = new ethers.Interface([
+    'function configure(address token, address payToken, uint256 price, uint40 deadline, uint256 cap)'
+  ]);
+  // configure() wants a target SUPPLY, so it is everything outstanding now plus the room
+  // being authorised — not the room on its own.
+  const cap = supplyNow + sharesWei;
+  return [
+    { label: 'grant the allowance',
+      to: daoAddr,
+      data: molochI.encodeFunctionData('setAllowance', [SHARE_OFFERING, daoAddr, ethers.MaxUint256]),
+      nonce: ethers.keccak256(ethers.toUtf8Bytes('zfi.cause.reopen.allow.' + SHARE_OFFERING.toLowerCase())) },
+    { label: 'set the sale terms',
+      to: SHARE_OFFERING,
+      data: offerI.encodeFunctionData('configure', [daoAddr, ZERO, price, deadline, cap]),
+      nonce: ethers.keccak256(ethers.toUtf8Bytes('zfi.cause.reopen.cfg.' + cap.toString())) }
+  ];
+}
+
+function causeReopenQuote() {
+  const el = $('causeReopenQuote');
+  if (!el) return;
+  const ds = $('app')?.dataset || {};
+  const raw = ($('causeReopenShares')?.value || '').trim();
+  if (!raw || isNaN(raw) || Number(raw) <= 0) { el.textContent = 'Enter how many shares to authorise'; return; }
+  // Whole shares only: parseEther on "1e6" or "1,000" throws, and a fractional share is
+  // not a thing anyone means to authorise.
+  const n = Math.floor(Number(raw));
+  if (!Number.isSafeInteger(n) || n <= 0) { el.textContent = 'Enter a whole number of shares'; return; }
+  const price = BigInt(ds.price || '0');
+  const wei = ethers.parseEther(String(n));
+  const eth = price > 0n ? wei * price / ethers.parseEther('1') : 0n;
+  const quorum = BigInt(ds.sharesSupply || '0') / 10n;
+  el.innerHTML = `Authorises <b style="color:var(--fg)">${fmtEthBal(Number(ethers.formatEther(eth)))} ETH</b> more at ${fmtPriceWei(price)}.
+    <div style="margin-top:3px">Two proposals, ${fmtTokenAmount(quorum.toString())} shares of turnout each, then a two day timelock.</div>`;
+}
+
+async function causeReopenPropose(daoAddr) {
+  const status = $('causeReopenStatus');
+  const say = (m, c) => { if (status) status.innerHTML = `<div style="font-size:11px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>`; };
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const raw = ($('causeReopenShares')?.value || '').trim();
+  const n = Math.floor(Number(raw));
+  if (!raw || isNaN(raw) || !Number.isSafeInteger(n) || n <= 0) { say('Enter a whole number of shares.'); return; }
+  const ds = $('app')?.dataset || {};
+  try {
+    const steps = causeReopenSteps(
+      daoAddr, ethers.parseEther(String(n)),
+      BigInt(ds.price || '0'), Number(ds.saleDeadline || '0'), BigInt(ds.sharesSupply || '0')
+    );
+    const dao = new ethers.Contract(daoAddr, MOLOCH_PROP_ABI, sgn);
+    const ids = [];
+    for (let i = 0; i < steps.length; i++) {
+      const st = steps[i];
+      const id = await dao.proposalId(0, st.to, 0n, st.data, st.nonce);
+      ids.push(id);
+      say(`Proposal ${i + 1} of ${steps.length} &mdash; ${st.label}. Confirm in your wallet.`);
+      const tx = await dao.castVote(id, 1);
+      say(`Opening: ${st.label}\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+      await tx.wait();
+    }
+    say(`Both proposals are open and your shares vote for them. Both must pass before the
+      sale runs again &mdash; send holders
+      <a href="../dao/#/dao/1/${daoAddr}" style="color:inherit;text-decoration:underline">the DAO page</a>.
+      <div style="margin-top:4px;font-family:ui-monospace,monospace;font-size:10px;color:var(--fg-dim)">
+        #${ids[0].toString().slice(0, 12)}\u2026 &middot; #${ids[1].toString().slice(0, 12)}\u2026</div>`, 'var(--green)');
+    loadCauseGovernance(daoAddr, _renderGen).catch(() => {});
+  } catch (e) {
+    if (e.code === 'ACTION_REJECTED' || (e.message || '').includes('user rejected')) { say(''); return; }
+    say(escText(e.shortMessage || e.message || 'Failed.'), 'var(--red)');
+  }
 }
 
 function causeSwitchMode(mode) {
