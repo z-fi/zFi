@@ -2316,42 +2316,33 @@ function liveSaleCardHTML(s) {
 }
 setTimeout(loadLiveSale, 500);
 
-// ---- Curve coins tile + dropdown integration ----
-// Surfaces ClassicalCurveSale coins created via /coin so they're discoverable + swappable
-// from the swap tab. Tile shows the 3 most recent; the broader fetch is also injected into
-// the `tokens` dropdown so users can search by symbol/name/address and trade in either direction.
-const CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
-const CURVE_SALE_IFACE = new ethers.Interface([
-  'function curves(address token) view returns (address creator, uint256 cap, uint256 sold, uint256 virtualReserve, uint256 startPrice, uint256 endPrice, uint16 feeBps, uint16 poolFeeBps, uint256 raisedETH, uint256 graduationTarget, uint256 lpTokens, address lpRecipient, bool graduated, bool seeded, uint16 sniperFeeBps, uint16 sniperDuration, uint16 maxBuyBps, uint40 launchTime)',
-  'function quote(address token, uint256 amount) view returns (uint256)',
-  'function quoteSell(address token, uint256 amount) view returns (uint256)',
-  'function effectiveFee(address token) view returns (uint256)',
-  'function creatorFees(address token) view returns (address beneficiary, uint16 buyBps, uint16 sellBps, bool buyOnInput, bool sellOnInput)',
-  'function buyExactIn(address token, uint256 minAmountOut, uint256 deadline) payable',
-  'function sell(address token, uint256 amount, uint256 minProceeds, uint256 deadline)',
-  'function swapExactIn(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) poolKey, uint256 amountIn, uint256 amountOutMin, bool zeroForOne, address to, uint256 deadline) payable returns (uint256 amountOut)',
-]);
-// Pool key for graduated curve coins on ZAMM: feeOrHook = uint160(CURVE_SALE) | (1<<255).
-const CURVE_HOOK_FEE = BigInt(CURVE_SALE) | (1n << 255n);
-const CURVE_TOKEN_IFACE = new ethers.Interface([
+// ---- Launched coins: dropdown integration ----
+// Surfaces coins launched through /coin so they are searchable and tradeable from
+// the swap tab. They need no special routing: a launch seeds a full-range,
+// single-sided Precision pool, and the quote race already has a Precision source,
+// so once a coin is in `tokens` it quotes like anything else.
+//
+// This REPLACED a ClassicalCurveSale integration that carried its own buy/sell/
+// graduation calldata paths, because a bonding curve is not a pool and could not
+// be quoted by anything the page already had.
+const LAUNCH_TOKEN_IFACE = new ethers.Interface([
   'function name() view returns (string)',
   'function symbol() view returns (string)',
 ]);
 
-// Curve launches are not featured on the swap page — the lander's highlights are
-// the DAICO link and the orderbook ticker. This only registers the coins in the
-// token picker so they stay searchable and tradeable.
-let _curveLoading = false;
-async function registerCurveCoins() {
-  _curveLoading = true;
+// Launches are not featured on the swap page — the lander's highlights are the
+// DAICO link and the orderbook ticker. This only registers the coins in the token
+// picker so they stay searchable and tradeable.
+let _launchLoading = false;
+async function registerLaunchedCoins() {
+  _launchLoading = true;
   try {
-    // Recent curve launches come from the sale contract's own logs
-    // (dapp/modules/curve-registry.js). Falls back silently to nothing if the
-    // RPC is down — tile just stays hidden.
-    if (!window.curveRegistry) return;
-    const launched = await window.curveRegistry.tokens();
-    if (launched.length === 0) return;
-    const rpc = new ethers.JsonRpcProvider('https://ethereum.publicnode.com', 1, { staticNetwork: true });
+    // One `eth_call` to PrecisionLauncherLens, names and symbols included
+    // (dapp/modules/launch-registry.js). Falls back silently to nothing if the
+    // RPC is down — the picker just doesn't gain these entries.
+    if (!window.launchRegistry) return;
+    const rows = await window.launchRegistry.launches();
+    if (!rows.length) return;
 
     // Pull the ZORG-DAO spam list from the shared cache the coin gallery maintains.
     // Cache-only (no RPC) on the lander — gallery visits refresh it in the background.
@@ -2361,91 +2352,50 @@ async function registerCurveCoins() {
       if (cached) spamSet = new Set((JSON.parse(cached).addrs) || []);
     } catch {}
 
-    // Drop spam-flagged tokens up front so we don't waste a multicall slot decoding them.
-    const ordered = launched.filter(a => !spamSet.has(a.toLowerCase())).slice(0, 50);
-    if (ordered.length === 0) return;
-
-    // Multicall curves() + name/symbol for each token in one round-trip.
-    const CALLS_PER = 3;
-    const calls = [];
-    for (const addr of ordered) {
-      calls.push([CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('curves', [addr])]);
-      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('name', [])]);
-      calls.push([addr, true, CURVE_TOKEN_IFACE.encodeFunctionData('symbol', [])]);
-    }
-    const mcRaw = await rpc.call({
-      to: MULTICALL3_ADDRESS,
-      data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls])
-    });
-    const mcRes = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', mcRaw)[0];
-
-    const decode = (res, fn) => {
-      if (!res || !res.success || res.returnData === '0x') return null;
-      try { return CURVE_TOKEN_IFACE.decodeFunctionResult(fn, res.returnData)[0]; } catch { return null; }
-    };
-
-    for (let i = 0; i < ordered.length; i++) {
-      const tokenAddr = ordered[i];
-      const base = i * CALLS_PER;
-      if (!mcRes[base].success) continue;
-      let curve;
-      try { curve = CURVE_SALE_IFACE.decodeFunctionResult('curves', mcRes[base].returnData); }
-      catch { continue; }
-      const r = {
-        token_address: tokenAddr,
-        name: decode(mcRes[base + 1], 'name'),
-        symbol: decode(mcRes[base + 2], 'symbol'),
-      };
-      // Skip uninitialised slots (creator==0 means the token isn't actually configured here).
-      if (!curve.creator || curve.creator === ethers.ZeroAddress) continue;
-
-      const rawSym = String(r.symbol || '???').trim();
-      // Sanitise symbol for use as a tokens[] key + URL param (matches validateTokenList rules).
+    for (const row of rows.filter(r => !spamSet.has(r.token)).slice(0, 50)) {
+      const rawSym = String(row.symbol || '???').trim();
+      // Sanitise for use as a tokens[] key + URL param (matches validateTokenList rules).
       const safeSym = rawSym.replace(/[^A-Za-z0-9.$_-]/g, '').slice(0, 24) || 'COIN';
-      const displayName = r.name || rawSym;
-
-      // Inject into the dropdown so users can search/select. Collide-safe key:
-      // if the symbol is already taken by a different address, suffix with .curve-{addr-prefix}.
-      // Keep `symbol` as the raw user-supplied string so non-ASCII symbols still display correctly
-      // (the picker falls back to the key when sanitisation strips the symbol entirely).
       try {
-        const checksummed = ethers.getAddress(r.token_address);
+        const checksummed = ethers.getAddress(row.token);
+        // Collide-safe key: if the symbol is taken by a different address, suffix
+        // it. `symbol` keeps the raw user-supplied string so non-ASCII symbols
+        // still display (the picker falls back to the key when sanitising empties it).
         let key = safeSym;
         const existing = tokens[key];
         if (existing && existing.address.toLowerCase() !== checksummed.toLowerCase()) {
-          key = safeSym + '.curve-' + r.token_address.slice(2, 6).toLowerCase();
+          key = safeSym + '.coin-' + row.token.slice(2, 6);
         }
-        // Skip if collision still hits a non-curve token (e.g. user-added custom).
-        if (!tokens[key] || tokens[key]._isCurveCoin) {
+        // Skip if the collision still hits a non-launched token (e.g. user-added custom).
+        if (!tokens[key] || tokens[key]._isLaunchedCoin) {
           tokens[key] = {
             address: checksummed,
             symbol: rawSym || safeSym,
             decimals: 18,
-            name: displayName,
-            _isCurveCoin: true,
-            _curveSeeded: !!curve.seeded,
-            _curveGraduated: !!curve.graduated,
+            name: row.name || rawSym,
+            _isLaunchedCoin: true,
+            _launchPool: row.pool,
           };
         }
       } catch {} // bad address — skip injection
     }
 
-    // Re-render an open token modal in case the user is searching while curves arrive.
+    // Re-render an open token modal in case the user is searching while these arrive.
     try { if (currentModal && $('tokenSearchInput')) renderTokenList($('tokenSearchInput').value || ''); } catch {}
-  } catch (e) { console.warn('Curve coin registration failed:', e); }
-  finally { _curveLoading = false; }
+  } catch (e) { console.warn('Launched coin registration failed:', e); }
+  finally { _launchLoading = false; }
 }
 
-// Nothing on the swap page renders curve coins any more — they exist so the
-// picker can find them. So the log scan and its multicall no longer fire 200ms
-// into the load, ahead of the quote and the ranking: they go with the rest of the
-// list loading (idle, after the bundled fetch), and the modal asks again in case
-// it opens first. Idempotent, so both paths are safe.
-let _curveCoinsStarted = false;
-function ensureCurveCoins() {
-  if (_curveCoinsStarted) return;
-  _curveCoinsStarted = true;
-  registerCurveCoins();
+// Nothing on the swap page renders launched coins — they exist so the picker can
+// find them. So the registry read no longer fires 200ms into the load, ahead of
+// the quote and the ranking: it goes with the rest of the list loading (idle,
+// after the bundled fetch), and the modal asks again in case it opens first.
+// Idempotent, so both paths are safe.
+let _launchedCoinsStarted = false;
+function ensureLaunchedCoins() {
+  if (_launchedCoinsStarted) return;
+  _launchedCoinsStarted = true;
+  registerLaunchedCoins();
 }
 
 // ---- DOM helpers ----
@@ -2624,13 +2574,13 @@ try {
 
 function saveCustomTokens() {
   try {
-    // Exclude DAICO/curve coins — those are re-discovered on every page load and would
+    // Exclude DAICO/launched coins — those are re-discovered on every page load and would
     // otherwise leak into the "Custom" group via localStorage with their flags stripped.
     const custom = Object.values(tokens).filter(t =>
       !BUILTIN_ADDRS.has(t.address.toLowerCase())
       && !weiListTokenSource.has(t.symbol)
       && !t._isDaicoCoin
-      && !t._isCurveCoin
+      && !t._isLaunchedCoin
       && !t._isZammCoin
     );
     localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
@@ -3012,7 +2962,7 @@ async function loadBundledTokenList() {
   // eth_call, and chaining them would make the picker wait on the slower.
   loadZListRanking();
   loadUniswapTokenList();
-  ensureCurveCoins();
+  ensureLaunchedCoins();
   // Kick ZAMM v0 discovery in parallel with Uniswap rather than chaining behind it —
   // they're independent endpoints, and a slow Uniswap fetch would otherwise delay
   // ZAMM-coin deeplink resolution. Internal idempotency guard prevents double-fire.
@@ -3436,7 +3386,7 @@ function renderTokenList(filter) {
   // Each group used to re-scan the whole `tokens` map — eight passes over a map
   // that is well past a thousand entries once Uniswap's list lands.
   const recent = [], held = [], ranked = [], builtin = [],
-        daico = [], curve = [], zammCoins = [], custom = [];
+        daico = [], launched = [], zammCoins = [], custom = [];
   const byWeiList = new Map();            // listName → syms
   const score = new Map();                // sym → search score
   const recentOrder = new Map();
@@ -3468,7 +3418,7 @@ function renderTokenList(filter) {
       continue;
     }
     if (t._isDaicoCoin) { daico.push(sym); continue; }
-    if (t._isCurveCoin) { curve.push(sym); continue; }
+    if (t._isLaunchedCoin) { launched.push(sym); continue; }
     if (t._isZammCoin) { zammCoins.push(sym); continue; }
     custom.push(sym);
   }
@@ -3485,7 +3435,7 @@ function renderTokenList(filter) {
   ranked.sort(byScore((a, b) => rankOf(a) - rankOf(b)));
   builtin.sort(byScore());
   daico.sort(byScore());
-  curve.sort(byScore());
+  launched.sort(byScore());
   zammCoins.sort(byScore((a, b) => (tokens[b].liquidityEth || 0) - (tokens[a].liquidityEth || 0)));
   custom.sort(byScore());
 
@@ -3508,7 +3458,7 @@ function renderTokenList(filter) {
     push('list:' + listName, listName, byWeiList.get(listName) || [], { listName });
   }
   push('daico', 'DAICO coins', daico);
-  push('curve', 'Curve coins', curve);
+  push('launched', 'Launched coins', launched);
   push('zamm', 'ZAMM coins', zammCoins);
   push('custom', 'Custom', custom);
 
@@ -4561,19 +4511,19 @@ async function handleAmountChange() {
     return;
   }
 
-  // Curve coins only trade against ETH (pre-grad uses CURVE_SALE.buyExactIn/sell directly,
-  // post-grad uses CURVE_SALE.swapExactIn against the ETH-quoted hooked pool). Anything else —
-  // e.g. user landed via ?from=USDC&to=COIN, or flipped a non-ETH pair into a curve coin —
-  // would otherwise fall through to ZRouter and surface a generic "Quote failed". Surface a
-  // specific error so the user knows the actual constraint.
-  const _fromIsCurve = tokens[fromToken]?._isCurveCoin;
-  const _toIsCurve = tokens[toToken]?._isCurveCoin;
-  const _otherSide = _fromIsCurve ? toToken : (_toIsCurve ? fromToken : null);
-  if ((_fromIsCurve || _toIsCurve) && _otherSide && tokens[_otherSide]?.address !== ZERO_ADDRESS) {
+  // A launched coin's only market is the single-sided ETH pool its launch seeded,
+  // so ETH is the only side that quotes. Anything else — e.g. user landed via
+  // ?from=USDC&to=COIN, or flipped a non-ETH pair into a launched coin — would
+  // otherwise fall through to ZRouter and surface a generic "Quote failed".
+  // Surface a specific error so the user knows the actual constraint.
+  const _fromIsLaunched = tokens[fromToken]?._isLaunchedCoin;
+  const _toIsLaunched = tokens[toToken]?._isLaunchedCoin;
+  const _otherSide = _fromIsLaunched ? toToken : (_toIsLaunched ? fromToken : null);
+  if ((_fromIsLaunched || _toIsLaunched) && _otherSide && tokens[_otherSide]?.address !== ZERO_ADDRESS) {
     dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, "Curve coins trade against ETH only");
+    setText(swapBtn, "Launched coins trade against ETH only");
     setDisabled(swapBtn, true);
     return;
   }
@@ -4940,9 +4890,6 @@ async function handleAmountChange() {
         if (allowance < amountIn) btnLabel = "Approve & " + btnLabel;
       } else if (isRagequit) {
         // No approval needed for ragequit — DAO burns msg.sender's shares directly
-      } else if (isCurvePath(fromSnap, toSnap)) {
-        // No approval needed for curve sells — launch() clones exempt CURVE_SALE (the hook)
-        // from the allowance check, so transferFrom succeeds with zero allowance.
       } else if (isZOrgSell) {
         // Ragequit doesn't need approval, but second step (ZAMM sell) might
         // Check ZAMM allowance against router for the sell leg
@@ -5328,25 +5275,12 @@ function collectorSaleFor(sym) {
   return addr ? COLLECTOR_SALES[addr.toLowerCase()] || null : null;
 }
 
-// Curve coin (ClassicalCurveSale launch): ETH ↔ coin only.
-// Pre-graduation routes through CURVE_SALE.buyExactIn / .sell; post-graduation routes through
-// CURVE_SALE.swapExactIn (which forwards to the ZAMM hooked pool and skims the creator fee).
-function isCurveBuyPath(fromSym, toSym) {
-  return tokens[fromSym]?.address === ZERO_ADDRESS && tokens[toSym]?._isCurveCoin === true;
-}
-function isCurveSellPath(fromSym, toSym) {
-  return tokens[fromSym]?._isCurveCoin === true && tokens[toSym]?.address === ZERO_ADDRESS;
-}
-function isCurvePath(fromSym, toSym) {
-  return isCurveBuyPath(fromSym, toSym) || isCurveSellPath(fromSym, toSym);
-}
 function isExactOutDisabled(fromSym, toSym) {
   return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
     || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
     || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
     || isZammCoinBuyPath(fromSym, toSym) || isZammCoinSellPath(fromSym, toSym)
-    || (isDaicoCoinBuyPath(fromSym, toSym) && !collectorSaleFor(toSym))
-    || isCurvePath(fromSym, toSym);
+    || (isDaicoCoinBuyPath(fromSym, toSym) && !collectorSaleFor(toSym));
 }
 
 // ---- Leg 1 for a collector-DAO route: whichever quoter is better ----
@@ -5601,183 +5535,6 @@ async function getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym) {
   });
 }
 
-// ---- ClassicalCurveSale quote: ETH ↔ curve coin ----
-// Mirrors coin/index.html's _curveEstTokens — feeds an estimate into on-chain quote() to verify cost.
-function curveEstTokens(curve, netETH) {
-  const vr = BigInt(curve.virtualReserve);
-  const sold = BigInt(curve.sold);
-  const cap = BigInt(curve.cap);
-  const R = vr - sold;
-  if (R <= 0n) return 0n;
-  const startPrice = BigInt(curve.startPrice);
-  const endPrice = BigInt(curve.endPrice);
-  if (startPrice <= 0n) return 0n;
-  let tokens;
-  if (endPrice === startPrice) tokens = netETH * (10n ** 18n) / startPrice;
-  else { const A = startPrice * vr * vr / (R * (10n ** 18n)); tokens = netETH * R / (A + netETH); }
-  const remaining = cap - sold;
-  if (tokens > remaining) tokens = remaining;
-  const maxBuy = BigInt(curve.maxBuyBps);
-  if (maxBuy > 0n) { const mx = cap * maxBuy / 10000n; if (tokens > mx) tokens = mx; }
-  return tokens;
-}
-
-async function getCurveQuote(fromAmountStr, fromSym, toSym) {
-  const isBuy = isCurveBuyPath(fromSym, toSym);
-  const coinSym = isBuy ? toSym : fromSym;
-  const coinData = tokens[coinSym];
-  const tokenAddr = coinData.address;
-  const fromData = tokens[fromSym];
-  const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
-  readSlippage(true);
-  const slip = BigInt(slippageBps);
-  const receiver = getReceiver();
-  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
-
-  return await quoteRPC.call(async (rpc) => {
-    // Single batch: curves() + creatorFees() + effectiveFee() — fresh state on every quote.
-    const stateCalls = [
-      [CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('curves', [tokenAddr])],
-      [CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('creatorFees', [tokenAddr])],
-      [CURVE_SALE, true, CURVE_SALE_IFACE.encodeFunctionData('effectiveFee', [tokenAddr])],
-    ];
-    const sRaw = await rpc.call({ to: MULTICALL3_ADDRESS, data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [stateCalls]) });
-    const sRes = MULTICALL3_IFACE.decodeFunctionResult('aggregate3', sRaw)[0];
-    if (!sRes[0].success) throw new Error('Curve state unavailable');
-    const curve = CURVE_SALE_IFACE.decodeFunctionResult('curves', sRes[0].returnData);
-    const cFee = sRes[1].success ? CURVE_SALE_IFACE.decodeFunctionResult('creatorFees', sRes[1].returnData) : null;
-    const effFee = sRes[2].success
-      ? Number(CURVE_SALE_IFACE.decodeFunctionResult('effectiveFee', sRes[2].returnData)[0])
-      : Number(curve.feeBps);
-    // Refresh cached state (used by tile, dropdown rendering).
-    coinData._curveSeeded = !!curve.seeded;
-    coinData._curveGraduated = !!curve.graduated;
-    const buyBps = cFee ? Number(cFee.buyBps) : 0;
-    const sellBps = cFee ? Number(cFee.sellBps) : 0;
-
-    const refAmount = isBuy ? 10n ** 16n : 10n ** 18n; // 0.01 ETH for buy spot, 1 token for sell spot
-
-    if (curve.seeded) {
-      // Post-grad: route through CURVE_SALE.swapExactIn → ZAMM hooked pool.
-      // Buy: contract takes buyBps from input ETH (poolSeesAmount = amountIn * (1 - buyBps/10000))
-      // Sell: contract takes sellBps from output ETH after swap (userOut = ammOut * (1 - sellBps/10000))
-      const tokenIn = isBuy ? ZERO_ADDRESS : tokenAddr;
-      const tokenOut = isBuy ? tokenAddr : ZERO_ADDRESS;
-      const poolSees = isBuy ? amountIn * (10000n - BigInt(buyBps)) / 10000n : amountIn;
-
-      const quoter = getQuoterBaseContract(rpc);
-      let amountOut = 0n;
-      if (amountIn > 0n) {
-        const q = await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, poolSees, { blockTag: 'latest' });
-        amountOut = q.amountOut;
-        if (!isBuy) amountOut = amountOut * (10000n - BigInt(sellBps)) / 10000n;
-      }
-      const minOut = amountOut * (10000n - slip) / 10000n;
-      const poolKey = { id0: 0, id1: 0, token0: ZERO_ADDRESS, token1: tokenAddr, feeOrHook: CURVE_HOOK_FEE };
-      const calldata = CURVE_SALE_IFACE.encodeFunctionData('swapExactIn', [
-        poolKey, amountIn, minOut, isBuy, receiver, deadline
-      ]);
-      const value = isBuy ? amountIn : 0n;
-
-      let spotOut = 0n;
-      try {
-        const spotPoolSees = isBuy ? refAmount * (10000n - BigInt(buyBps)) / 10000n : refAmount;
-        const sq = await quoter.quoteZAMM(false, CURVE_HOOK_FEE, tokenIn, tokenOut, 0, 0, spotPoolSees, { blockTag: 'latest' });
-        spotOut = sq.amountOut;
-        if (!isBuy) spotOut = spotOut * (10000n - BigInt(sellBps)) / 10000n;
-      } catch {}
-
-      return {
-        expectedOutput: amountOut,
-        directCurve: true,
-        curveTarget: CURVE_SALE,
-        curveCalldata: calldata,
-        curveValue: value,
-        msgValue: value,
-        multicall: null, calls: null,
-        isTwoHop: false, isSplit: false, splitLegs: null,
-        sourceA: 'Curve LP', sourceB: null,
-        allQuotes: [{ source: 'Curve LP', sourceId: 99, feeBps: BigInt(isBuy ? buyBps : sellBps), amountIn, amountOut }],
-        spotRate: spotOut > 0n ? spotOut : null,
-        spotRefAmount: refAmount,
-      };
-    }
-
-    // Pre-graduation: bonding-curve trade via buyExactIn / sell.
-    if (isBuy) {
-      let expectedOutput = 0n;
-      if (amountIn > 0n) {
-        const netETH = amountIn * 10000n / BigInt(10000 + effFee);
-        expectedOutput = curveEstTokens(curve, netETH);
-      }
-      if (expectedOutput <= 0n) throw new Error('Curve sold out or invalid amount');
-      const minOut = expectedOutput * (10000n - slip) / 10000n;
-      const calldata = CURVE_SALE_IFACE.encodeFunctionData('buyExactIn', [tokenAddr, minOut, deadline]);
-
-      let spotOut = 0n;
-      try {
-        const spotNet = refAmount * 10000n / BigInt(10000 + effFee);
-        spotOut = curveEstTokens(curve, spotNet);
-      } catch {}
-
-      return {
-        expectedOutput,
-        directCurve: true,
-        curveTarget: CURVE_SALE,
-        curveCalldata: calldata,
-        curveValue: amountIn,
-        msgValue: amountIn,
-        multicall: null, calls: null,
-        isTwoHop: false, isSplit: false, splitLegs: null,
-        sourceA: 'Curve', sourceB: null,
-        allQuotes: [{ source: 'Curve', sourceId: 99, feeBps: BigInt(effFee), amountIn, amountOut: expectedOutput }],
-        spotRate: spotOut > 0n ? spotOut : null,
-        spotRefAmount: refAmount,
-      };
-    }
-
-    // Pre-grad sell: ETH out from selling tokens.
-    let expectedOutput = 0n;
-    if (amountIn > 0n) {
-      const sellRaw = await rpc.call({
-        to: CURVE_SALE,
-        data: CURVE_SALE_IFACE.encodeFunctionData('quoteSell', [tokenAddr, amountIn])
-      });
-      const gross = CURVE_SALE_IFACE.decodeFunctionResult('quoteSell', sellRaw)[0];
-      const fee = gross * BigInt(effFee) / 10000n;
-      expectedOutput = gross - fee;
-    }
-    const minOut = expectedOutput * (10000n - slip) / 10000n;
-    const calldata = CURVE_SALE_IFACE.encodeFunctionData('sell', [tokenAddr, amountIn, minOut, deadline]);
-
-    let spotOut = 0n;
-    try {
-      const sRaw2 = await rpc.call({
-        to: CURVE_SALE,
-        data: CURVE_SALE_IFACE.encodeFunctionData('quoteSell', [tokenAddr, refAmount])
-      });
-      const sGross = CURVE_SALE_IFACE.decodeFunctionResult('quoteSell', sRaw2)[0];
-      spotOut = sGross - sGross * BigInt(effFee) / 10000n;
-    } catch {}
-
-    return {
-      expectedOutput,
-      directCurve: true,
-      curveTarget: CURVE_SALE,
-      curveCalldata: calldata,
-      curveValue: 0n,
-      msgValue: 0n,
-      multicall: null, calls: null,
-      isTwoHop: false, isSplit: false, splitLegs: null,
-      sourceA: 'Curve', sourceB: null,
-      allQuotes: [{ source: 'Curve', sourceId: 99, feeBps: BigInt(effFee), amountIn, amountOut: expectedOutput }],
-      spotRate: spotOut > 0n ? spotOut : null,
-      spotRefAmount: refAmount,
-    };
-  });
-}
-
-// ---- zAMM reverse quote: ZAMM → ETH (client-side AMM math) ----
 function getZammAmountOut(amtIn, resIn, resOut, feeBps) {
   if (amtIn === 0n || resIn === 0n || resOut === 0n) return 0n;
   const amtFee = amtIn * (10000n - feeBps);
@@ -6646,11 +6403,6 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   // DAICO graduated coin buy: ETH → coin via ZAMM hooked pool
   if (isDaicoCoinBuyPath(fromSym, toSym)) {
     return await getDaicoCoinBuyQuote(fromAmountStr, fromSym, toSym);
-  }
-
-  // Curve coin (ClassicalCurveSale): ETH ↔ coin, pre-grad via curve / post-grad via hooked zAMM
-  if (isCurvePath(fromSym, toSym)) {
-    return await getCurveQuote(fromAmountStr, fromSym, toSym);
   }
 
   const receiver = getReceiver();
@@ -8012,9 +7764,7 @@ let _parkedQuote = null; // { args, resolve, reject } waiting for a slot
 
 // Race a precision pool against whatever the path returned. Every quote — generic,
 // zOrg, DAICO, zAMM — arrives here, and every one of them hands executeSwap a
-// quote.multicall, so overwriting that field is enough to reroute any of them. Curve is
-// the exception: executeSwap branches on isCurvePath before it looks at the quote, so a
-// precision win there would be listed and then ignored. It is skipped rather than lied about.
+// quote.multicall, so overwriting that field is enough to reroute any of them.
 // The case precision exists for is the one where nothing else answers, and getQuote
 // THROWS there — "Best swap quote failed" — rather than returning an empty result. A
 // .then() handler never runs on a rejection, so the first version of this raced only
@@ -8050,7 +7800,6 @@ async function _precisionOnly(args, err) {
 async function _racePrecision(quote, args) {
   try {
     if (!quote || args.exactOut) return quote;
-    if (typeof isCurvePath === 'function' && isCurvePath(args.fromSnap, args.toSnap)) return quote;
     const f = tokens[args.fromSnap], t = tokens[args.toSnap];
     if (!f?.address || !t?.address) return quote;
     const amountIn = safeParseUnits(args.amtStr, f.decimals);
@@ -8609,72 +8358,6 @@ async function executeSwap() {
       }
 
       swapBtn.textContent = "Sell Complete!";
-      $("fromAmount").value = "";
-      $("toAmount").value = "";
-      $("quoteInfo").style.display = "none";
-      stopQuoteRefresh();
-      _swapResetTimer = setTimeout(() => {
-        updateBalances();
-        swapBtn.textContent = "Enter an amount";
-        swapBtn.disabled = true;
-      }, 1500);
-      return;
-    }
-
-    // ---- Curve coin (ETH ↔ ClassicalCurveSale token): direct contract call, no router ----
-    // No ERC20 approval is needed for the sell side: launch() clones make CURVE_SALE the immutable
-    // hook and exempt it from the allowance check, so transferFrom succeeds with zero allowance.
-    if (isCurvePath(fromToken, toToken)) {
-      const isBuy = isCurveBuyPath(fromToken, toToken);
-      const fromSnap = fromToken, toSnap = toToken;
-      swapBtn.innerHTML = `${zfiLoadingSVG(14)} ${isBuy ? 'Preparing buy...' : 'Preparing sell...'}`;
-      swapBtn.disabled = true;
-
-      const fromData = tokens[fromSnap];
-      const amountIn = safeParseUnits(amtStr, fromData.decimals);
-      // Pre-swap balance check (curve sells must hold the coin; buys must hold ETH for value+gas).
-      let tokenBal = getCachedBalance(fromData.address);
-      if (tokenBal == null) {
-        tokenBal = fromData.address === ZERO_ADDRESS
-          ? await _walletProvider.getBalance(_connectedAddress)
-          : await erc20Read(fromData.address).balanceOf(_connectedAddress);
-        setCachedBalance(fromData.address, tokenBal);
-      }
-      if (tokenBal < amountIn) {
-        swapBtn.textContent = `Insufficient ${fromSnap} balance`;
-        swapBtn.disabled = false;
-        _swapResetTimer = setTimeout(() => { handleAmountChange(); }, 3000);
-        _swapBusy = false;
-        return;
-      }
-
-      // Re-quote at exec time so minOut reflects fresh curve state (sold/graduated may have moved).
-      let quote;
-      try {
-        quote = await withRetry(() => getCurveQuote(amtStr, fromSnap, toSnap));
-      } catch (qErr) {
-        showStatus(qErr?.shortMessage || qErr?.message || "Quote failed", "error");
-        swapBtn.textContent = "Quote failed";
-        swapBtn.disabled = false;
-        _swapBusy = false;
-        return;
-      }
-
-      swapBtn.innerHTML = `${zfiLoadingSVG(14)} Confirming...`;
-      const tx = await wcTransaction(
-        _signer.sendTransaction({
-          to: quote.curveTarget,
-          data: quote.curveCalldata,
-          value: quote.curveValue,
-        }),
-        `Confirm ${isBuy ? 'buy' : 'sell'} in your wallet`
-      );
-      swapBtn.innerHTML = `Confirming... <a href="https://etherscan.io/tx/${escAttr(tx.hash)}" target="_blank" style="color:inherit;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
-
-      const receipt = await waitForTx(tx);
-      if (receipt.status === 0) throw new Error(`${isBuy ? 'Buy' : 'Sell'} transaction failed`);
-
-      swapBtn.textContent = isBuy ? "Buy Complete!" : "Sell Complete!";
       $("fromAmount").value = "";
       $("toAmount").value = "";
       $("quoteInfo").style.display = "none";
@@ -9900,7 +9583,7 @@ function openTokenModal(side) {
   // the modal before requestIdleCallback fires).
   if (!_uniswapLoaded && !_uniswapLoading) loadUniswapTokenList();
   if (!_zammCoinsLoaded && !_zammCoinsLoading) loadZammV0Coins();
-  ensureCurveCoins();
+  ensureLaunchedCoins();
 }
 
 function closeTokenModal() {
@@ -9953,8 +9636,8 @@ function selectToken(symbol) {
     if (_srcField && _srcField.value) reQuoteDebounced();
     return;
   }
-  // Curve coins are ETH-paired: selecting one forces the other side to ETH (both buy and sell allowed).
-  if (tokens[symbol]?._isCurveCoin) {
+  // Launched coins are ETH-paired: selecting one forces the other side to ETH (both directions allowed).
+  if (tokens[symbol]?._isLaunchedCoin) {
     if (currentModal === "from") { fromToken = symbol; toToken = "ETH"; }
     else { fromToken = "ETH"; toToken = symbol; }
     updateTokenDisplay();
@@ -10382,7 +10065,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         // Wait until the async discovery loaders (bundled list, Uniswap, ZAMM v0)
         // finish — they may register the address with proper routing flags
-        // (`_isZammCoin`, `_isCurveCoin`). If we run the ERC20-symbol fallback
+        // (`_isZammCoin`, `_isLaunchedCoin`). If we run the ERC20-symbol fallback
         // first, it overwrites the slot with a generic entry and `_registerZammCoin`
         // bails out (same-address guard), leaving the swap pipeline unable to
         // route via swapVZ. Poll up to 3.5s, checking after each tick so we
@@ -10403,9 +10086,9 @@ document.addEventListener("DOMContentLoaded", () => {
           const stillLoading = (typeof _bundledLoading !== 'undefined' && _bundledLoading)
             || (typeof _uniswapLoading !== 'undefined' && _uniswapLoading)
             || (typeof _zammCoinsLoading !== 'undefined' && _zammCoinsLoading)
-            // Curve registration no longer runs on a fixed 200ms timer, so an
-            // address deeplink to a curve coin has to wait on it explicitly.
-            || (typeof _curveLoading !== 'undefined' && _curveLoading);
+            // Launched-coin registration no longer runs on a fixed 200ms timer, so
+            // an address deeplink to one has to wait on it explicitly.
+            || (typeof _launchLoading !== 'undefined' && _launchLoading);
           if (!stillLoading && waited >= 800) break;
         }
         // Final check before falling back to on-chain reads.
@@ -10622,7 +10305,7 @@ function switchTab(tab) {
 }
 
 </script>
-<script src="./modules/curve-registry.js"></script>
+<script src="./modules/launch-registry.js"></script>
 <script>
 
 // Wallet init runs last: an eager reconnect fires onConnect synchronously off

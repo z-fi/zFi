@@ -22,12 +22,21 @@ const COIN_SHARE_BURNER = '0x000000000040084694F7B6fb2846D067B4c3Aa9f';
 
 const COIN_PIN_URL = 'https://api.zfi.wei.is';
 
-// ClassicalCurveSale deployment
-const CLASSICAL_CURVE_SALE = '0x000000005d9b18764E12E5aeefD6dA73110F85eb';
-const CLASSICAL_TOKEN_IMPL = '0xC54843C7419B3B7813d4C1065dA7f88104cdb047';
-const CLASSICAL_LAUNCH_ABI = [
-  'function launch(address,string,string,string,uint256,bytes32,uint256,uint256,uint256,uint16,uint256,uint256,address,uint16,uint16,uint16,uint16,tuple(address,uint16,uint16,bool,bool),uint40,uint40) returns (address)'
+// PrecisionLauncher — the launch format zSwap uses. One transaction, no ether:
+// the supply is minted, the creator's allocation is paid out, and the rest seeds a
+// one-sided ETH pool that is a live market from the first block. This REPLACED the
+// ClassicalCurveSale bonding-curve launch, which had a graduation step and is no
+// longer offered here.
+const PRECISION_LAUNCHER = '0x0000002fC8E77585A008Aa45d78A71ad36293aEe';
+const PRECISION_LAUNCHER_LENS = '0x00000041201F1542EE49F9722b2590DEDFE4296B';
+const PRECISION_LAUNCH_ABI = [
+  'function launch(string name,string symbol,string uri,uint256 supply,uint256 allocBps,uint256 startMcapWei,address owner) returns (address token,address pool)',
+  'event Launched(address indexed token,address indexed pool,address indexed creator,uint256 supply,uint256 allocBps,uint256 startMcapWei)'
 ];
+// Mirrors the launcher's own guards, so the form rejects what the contract would.
+const COIN_MAX_ALLOC_BPS = 2000n;      // 20%
+const COIN_MIN_MCAP_WEI = 1000000000000n;
+const COIN_MIN_POOLED = 2000000000000n;
 
 const SAFE_SUMMONER = '0x00000000004473e1f31C8266612e7FD5504e6f2a';
 // ShareSale meters a sale with allowance alone, and allowance is spent at mint and not
@@ -171,6 +180,35 @@ function coinParseCount(v) {
   return Number.isSafeInteger(n) ? n : null;
 }
 
+// Supply is a whole-token count that can exceed Number.MAX_SAFE_INTEGER, so it
+// parses to a bigint rather than going through coinParseCount(). Commas are
+// tolerated because the field ships with a comma-grouped default.
+function coinParseSupply(v) {
+  const s = String(v == null ? '' : v).trim().replace(/,/g, '');
+  if (!/^\d+$/.test(s)) return null;
+  const n = BigInt(s);
+  return n > 0n ? n : null;
+}
+
+// A percentage with up to two decimals -> bps, exactly. Parsed as a string for
+// the same reason coinParseEth() is: 12.34 * 100 is 1233.9999999999998.
+function coinParseAllocBps(v) {
+  const s = String(v == null ? '' : v).trim().replace(/,/g, '');
+  if (!s) return 0n;
+  const m = /^(\d*)(?:\.(\d{0,2})\d*)?$/.exec(s);
+  if (!m || (!m[1] && !m[2])) return null;
+  return BigInt(m[1] || '0') * 100n + BigInt((m[2] || '').padEnd(2, '0'));
+}
+
+function coinAbbrevCount(n) {
+  const v = BigInt(n);
+  if (v >= 10n ** 12n) return (Number(v / 10n ** 9n) / 1000).toString() + 'T';
+  if (v >= 10n ** 9n) return (Number(v / 10n ** 6n) / 1000).toString() + 'B';
+  if (v >= 10n ** 6n) return (Number(v / 1000n) / 1000).toString() + 'M';
+  if (v >= 1000n) return (Number(v) / 1000).toString() + 'K';
+  return v.toString();
+}
+
 // Live input sanitizers so the numeric fields can't hold characters that would
 // only fail later at submit time.
 function coinNumInput(el, decimal) {
@@ -234,6 +272,21 @@ function coinValidateForm() {
   const symbol = ($('coinSymbol')?.value || '').trim();
   if (name.length < 2) return 'Enter a name (at least 2 characters)';
   if (!symbol) return 'Enter a symbol';
+
+  if (_coinLaunchType === 'coin') {
+    const supply = coinParseSupply($('coinSupply').value);
+    if (supply === null) return 'Enter a supply';
+    const alloc = coinParseAllocBps($('coinAlloc').value);
+    if (alloc === null) return 'Enter a valid creator percentage';
+    if (alloc > COIN_MAX_ALLOC_BPS) return 'Creator keeps is capped at 20%';
+    const mcap = coinParseEth($('coinMcap').value);
+    if (mcap === null || mcap < COIN_MIN_MCAP_WEI) return 'Starting market cap is too small to price';
+    // The launcher prices the pool off the POOLED supply, so an allocation that
+    // leaves too little behind fails there rather than here unless it is caught.
+    const pooledWei = supply * 10n ** 18n - (supply * 10n ** 18n * alloc) / 10000n;
+    if (pooledWei < COIN_MIN_POOLED) return 'Too little supply reaches the pool to price a market';
+    return null;
+  }
   if (_coinLaunchType !== 'cause') return null;
 
   if (!_causeOngoing) {
@@ -412,6 +465,7 @@ function coinSetLaunchType(type) {
   const isNft = type === 'nft';
   const isCause = type === 'cause';
   $('coinCauseWrap').style.display = isCause ? '' : 'none';
+  const coinWrap = $('coinCoinWrap'); if (coinWrap) coinWrap.style.display = isCoin ? '' : 'none';
   const nftWrap = $('coinNftWrap'); if (nftWrap) nftWrap.style.display = isNft ? '' : 'none';
   $('coinCurvePreviewWrap').style.display = 'none';
   $('coinCausePreviewWrap').style.display = 'none';
@@ -518,14 +572,14 @@ function coinUpdatePreview() {
     let tapDesc = '';
     if (tapOn) {
       if (tapInstant) {
-        tapDesc = 'Fast (no vesting; full raise withdrawable in ~1h)';
+        tapDesc = '<b>Fast</b> <span style="color:var(--fg-dim)">(no vesting; full raise withdrawable in ~1h)</span>';
       } else if (ongoing) {
         const rateWei = tapRateWei / COIN_SEC_PER_MONTH;
-        tapDesc = `~${perDay(rateWei)} ${ethMini}/day (~${ethers.formatEther(tapRateWei)} ${ethMini}/mo)`;
+        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day <span style="color:var(--fg-dim)">(~${ethers.formatEther(tapRateWei)} ${ethMini}/mo)</span>`;
       } else {
         const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
         const rateWei = totalSec > 0n ? raiseWei / totalSec : 0n;
-        tapDesc = `~${perDay(rateWei)} ${ethMini}/day over ${tapMonths}mo`;
+        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day over ${tapMonths}mo`;
       }
     }
 
@@ -536,15 +590,15 @@ function coinUpdatePreview() {
     p.innerHTML =
       `<dl class="coin-summary">` +
       (ongoing
-        ? `<dt>Mode</dt><dd>Ongoing (no cap, no deadline)</dd>`
-        : `<dt>Raise</dt><dd>${ethers.formatEther(raiseWei)} ${ethMini}</dd>`) +
-      `<dt>${sellLoot ? 'Loot' : 'Shares'}</dt><dd>${totalShares} (proportional to ETH contributed)</dd>` +
-      `<dt>Price</dt><dd>${perMilStr} ${ethMini} per 1M ${unit}</dd>` +
-      (ongoing ? '' : `<dt>Deadline</dt><dd>${days} days</dd>`) +
+        ? `<dt>Mode</dt><dd><b>Ongoing</b> <span style="color:var(--fg-dim)">(no cap, no deadline)</span></dd>`
+        : `<dt>Raise</dt><dd><b>${ethers.formatEther(raiseWei)}</b> ${ethMini}</dd>`) +
+      `<dt>${sellLoot ? 'Loot' : 'Shares'}</dt><dd><b>${totalShares}</b> <span style="color:var(--fg-dim)">(proportional to ETH contributed)</span></dd>` +
+      `<dt>Price</dt><dd><b>${perMilStr}</b> ${ethMini} per 1M ${unit}</dd>` +
+      (ongoing ? '' : `<dt>Deadline</dt><dd><b>${days}</b> days</dd>`) +
       (tapOn ? `<dt>Tap</dt><dd>${tapDesc}</dd>` : '') +
       // The creator buys their own single share at launch, so the tx carries
       // value. Surfacing it avoids a surprise in the wallet confirm dialog.
-      `<dt>You pay now</dt><dd>${ethers.formatEther(priceWei)} ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
+      `<dt>You pay now</dt><dd><b>${ethers.formatEther(priceWei)}</b> ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
       (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share keeps the vote.</div>` : '') +
@@ -559,20 +613,41 @@ function coinUpdatePreview() {
   }
 
   if (_coinLaunchType === 'coin') {
+    // Every figure here is derived from the same bigints coinLaunch() sends, so
+    // the preview cannot drift from what actually gets deployed.
+    const supply = coinParseSupply($('coinSupply').value) ?? 1_000_000_000n;
+    const allocBps = coinParseAllocBps($('coinAlloc').value) ?? 0n;
+    const mcapWei = coinParseEth($('coinMcap').value) ?? ethers.parseEther('30');
+    const supplyWei = supply * 10n ** 18n;
+    const allocWei = (supplyWei * allocBps) / 10000n;
+    const pooledWei = supplyWei - allocWei;
+
+    // The pool opens one-sided: `mcapWei` is its virtual ETH reserve against
+    // `pooledWei` of token, so the marginal opening price is their ratio, and a
+    // buy of `x` ether takes x/(mcap+x) of the pooled supply.
+    const priceWei = pooledWei > 0n ? (mcapWei * 10n ** 18n) / pooledWei : 0n;
+    const oneEth = 10n ** 18n;
+    const firstEth = pooledWei > 0n ? (pooledWei * oneEth) / (mcapWei + oneEth) : 0n;
+    const firstPct = pooledWei > 0n ? (Number(firstEth * 10000n / pooledWei) / 100) : 0;
+    const fmtTok = (wei) => coinAbbrevCount(wei / 10n ** 18n);
+    const priceStr = priceWei === 0n ? '0'
+      : Number(priceWei) / 1e18 < 0.00000001 ? Number(priceWei / 1n).toExponential(2) + ' wei'
+      : (Number(priceWei) / 1e18).toPrecision(3);
+    const allocPct = Number(allocBps) / 100;
+
     const p = $('coinCurvePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
-      `<dt>Supply</dt><dd>1B tokens (18 decimals)</dd>` +
-      `<dt>Curve</dt><dd>800M on bonding curve</dd>` +
-      `<dt>LP Seed</dt><dd>200M tokens at graduation</dd>` +
-      `<dt>Graduation</dt><dd>~5.33 ${ethMini} raised &rarr; LP seeded</dd>` +
-      `<dt>Price Range</dt><dd>16x from start to graduation</dd>` +
-      `<dt>Trade Fee</dt><dd>1% &rarr; creator</dd>` +
-      `<dt>Sniper Fee</dt><dd>5% first 5 min (decays to 1%)</dd>` +
-      `<dt>Max Buy</dt><dd>10% per tx</dd>` +
-      `<dt>You pay now</dt><dd>0 ${ethMini} <span style="color:var(--fg-dim)">(gas only)</span></dd>` +
+      `<dt>Supply</dt><dd><b>${coinAbbrevCount(supply)}</b> tokens <span style="color:var(--fg-dim)">(18 decimals)</span></dd>` +
+      `<dt>Into the pool</dt><dd><b>${fmtTok(pooledWei)}</b> <span style="color:var(--fg-dim)">(${(100 - allocPct)}% of supply, one-sided)</span></dd>` +
+      (allocBps ? `<dt>You keep</dt><dd><b>${fmtTok(allocWei)}</b> <span style="color:var(--fg-dim)">(${allocPct}%, unlocked, at launch)</span></dd>` : '') +
+      `<dt>Opening price</dt><dd><b>${priceStr}</b> ${ethMini} per token</dd>` +
+      `<dt>First ${ethMini}1 buys</dt><dd><b>${fmtTok(firstEth)}</b> <span style="color:var(--fg-dim)">(${firstPct < 0.01 ? '<0.01' : firstPct.toFixed(2)}% of the pool)</span></dd>` +
+      `<dt>Swap fee</dt><dd><b>1%</b> <span style="color:var(--fg-dim)">(half retained as reserves, raising the floor)</span></dd>` +
+      `<dt>You pay now</dt><dd><b>0</b> ${ethMini} <span style="color:var(--fg-dim)">(gas only)</span></dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">LP tokens burned (permanent liquidity) &middot; 0.25% pool fee post-graduation &middot; 0.05% creator fee post-graduation</div>`;
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">Full-range pool on zFi&rsquo;s AMM &middot; liquidity locked in the launcher &middot; collectable fees split 80% creator / 10% protocol / 10% burned to Ethereum</div>` +
+      `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Holders can always burn back to the launcher for their share of the pool&rsquo;s ether.</div>`;
     $('coinCurvePreviewWrap').style.display = '';
     $('coinCausePreviewWrap').style.display = 'none';
   }
@@ -995,91 +1070,67 @@ async function coinLaunch() {
       return;
     }
 
-    // --- ClassicalCurveSale path ---
+    // --- PrecisionLauncher path ---
     if (_coinLaunchType === 'coin') {
-      // onchain contractURI = IPFS pointer or data URI with full metadata
+      // The launcher stores this string verbatim as the token's ERC-7572
+      // contractURI, so the pinned document is what every reader resolves.
+      // NOTE: do NOT also store an on-chain image through the launcher's
+      // `launchWithArt`/`setImage` — with an image set, contractURI() assembles
+      // its own document and demotes this URI to the `description` field, which
+      // would strand the banner, socials and description pinned above.
       const metadataUri = orgURI;
 
-      const launchIface = new ethers.Interface(CLASSICAL_LAUNCH_ABI);
+      const supply = coinParseSupply($('coinSupply').value) ?? 0n;
+      const supplyWei = supply * 10n ** 18n;
+      const mcapWei = coinParseEth($('coinMcap').value) ?? 0n;
+      const allocBps = coinParseAllocBps($('coinAlloc').value) ?? 0n;
 
-      // CREATE2 prediction: salt = keccak256(abi.encode(sender, name, symbol, salt))
-      // Init code = PUSH0 minimal proxy (same pattern as coinMinimalProxy)
-      const abiCoder = new ethers.AbiCoder();
-
-      // Mine for vanity address starting with 0x00 (~2000 attempts, ~99.96% chance)
-      // Yield every 200 iterations to keep UI responsive
-      coinShowStatus('Mining vanity address...');
-      let bestSalt = salt;
-      let bestAddr = null;
-      const VANITY_ATTEMPTS = 2000;
-      for (let i = 0; i < VANITY_ATTEMPTS; i++) {
-        if (i > 0 && i % 200 === 0) await new Promise(r => setTimeout(r, 0));
-        const trySalt = ethers.hexlify(ethers.randomBytes(32));
-        const create2Salt = ethers.keccak256(abiCoder.encode(
-          ['address', 'string', 'string', 'bytes32'],
-          [address, name, symbol, trySalt]
-        ));
-        const addr = coinCreate2(CLASSICAL_CURVE_SALE, create2Salt, CLASSICAL_TOKEN_IMPL);
-        if (addr.startsWith('0x00')) {
-          bestSalt = trySalt;
-          bestAddr = addr;
-          break;
-        }
-        bestSalt = trySalt;
-        bestAddr = addr;
-      }
-
-      coinShowStatus('Please confirm the transaction in your wallet...');
+      const launchIface = new ethers.Interface(PRECISION_LAUNCH_ABI);
       const data = launchIface.encodeFunctionData('launch', [
-        address,                                    // creator
-        name,                                       // name
-        symbol,                                     // symbol
-        metadataUri,                                // uri (IPFS pointer or inline JSON fallback)
-        '1000000000000000000000000000',             // supply: 1B tokens
-        bestSalt,                                   // salt
-        '800000000000000000000000000',              // cap: 800M
-        '1666666667',                               // startPrice
-        '26666666672',                              // endPrice
-        100,                                        // feeBps: 1%
-        '0',                                        // graduationTarget: sell full cap
-        '200000000000000000000000000',              // lpTokens: 200M
-        ethers.ZeroAddress,                         // lpRecipient: burn (permanent LP)
-        25,                                         // poolFeeBps: 0.25%
-        500,                                        // sniperFeeBps: 5%
-        300,                                        // sniperDuration: 5 min
-        1000,                                       // maxBuyBps: 10%
-        [address, 5, 5, true, false],               // creatorFee tuple
-        0,                                          // vestCliff
-        0                                           // vestDuration
+        name,          // token name
+        symbol,        // token symbol
+        metadataUri,   // contractURI — IPFS pointer, or inline JSON fallback
+        supplyWei,     // total supply, 18 decimals
+        allocBps,      // creator allocation, bps of supply
+        mcapWei,       // opening valuation of the POOLED supply, in wei
+        address        // owner: holds metadata rights, collects creator fees,
+                       // and receives the allocation
       ]);
 
-      const tx = await _signer.sendTransaction({ to: CLASSICAL_CURVE_SALE, data });
+      coinShowStatus('Please confirm the transaction in your wallet...');
+      const tx = await _signer.sendTransaction({ to: PRECISION_LAUNCHER, data });
       coinShowStatus(`Transaction submitted. <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a> Waiting for confirmation...`);
       const receipt = await tx.wait();
 
-      // Token address: use predicted address or parse from TokenCreated event
-      let tokenAddress = bestAddr;
-      const tokenCreatedTopic = ethers.id('TokenCreated(address,address)');
+      // The token address is CREATE-derived from the launcher's nonce, so unlike
+      // the CREATE2 path this replaced it cannot be predicted before the tx —
+      // the event is the only source.
+      let tokenAddress = null, poolAddress = null;
+      const launchedTopic = ethers.id('Launched(address,address,address,uint256,uint256,uint256)');
       for (const log of receipt.logs) {
-        if (log.topics[0] === tokenCreatedTopic && log.address.toLowerCase() === CLASSICAL_CURVE_SALE.toLowerCase()) {
-          tokenAddress = ethers.getAddress('0x' + log.topics[2].slice(26));
+        if (log.topics[0] === launchedTopic && log.address.toLowerCase() === PRECISION_LAUNCHER.toLowerCase()) {
+          tokenAddress = ethers.getAddress('0x' + log.topics[1].slice(26));
+          poolAddress = ethers.getAddress('0x' + log.topics[2].slice(26));
           break;
         }
       }
 
-      // The coin list is rebuilt from the sale's launch logs and cached for five
-      // minutes, so without this a creator who just launched would not find their
-      // own coin on the list they get sent to.
-      if (tokenAddress) window.curveRegistry?.note(tokenAddress);
+      // The coin list is enumerated from the launcher and cached, so without this
+      // a creator who just launched would not find their own coin on the list
+      // they get sent to.
+      if (tokenAddress) window.launchRegistry?.note(tokenAddress);
 
+      const allocPct = Number(allocBps) / 100;
       launched = true;
       coinShowStatus(
         `<strong>Launched!</strong> <strong>${escText(name)}</strong> ($${escText(symbol)})<br><br>` +
         (tokenAddress ? `Token: <a href="https://etherscan.io/address/${tokenAddress}" target="_blank">${tokenAddress}</a><br>` : '') +
-        `Supply: 1B &middot; Curve: 800M &middot; LP: 200M<br>` +
-        `16x price range &middot; ~5.33 ETH graduation<br><br>` +
+        `Supply: ${coinAbbrevCount(supply)} &middot; Pooled: ${allocBps ? (100 - allocPct).toFixed(allocPct % 1 ? 2 : 0) + '%' : '100%'}` +
+        (allocBps ? ` &middot; You keep: ${allocPct}%` : '') + `<br>` +
+        `Opening market cap: ${ethers.formatEther(mcapWei)} ETH &middot; 1% swap fee<br><br>` +
         `<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
-        (tokenAddress ? ` &middot; <a href="./coin/#${tokenAddress}">View Coin</a>` : '')
+        (tokenAddress ? ` &middot; <a href="./coin/#${tokenAddress}">View Coin</a>` : '') +
+        (poolAddress ? ` &middot; <a href="https://etherscan.io/address/${poolAddress}" target="_blank">Pool</a>` : '')
       );
       return;
     }

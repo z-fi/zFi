@@ -296,7 +296,7 @@ body { max-width:560px; }
 <script src="../wallet.js"></script>
 <script>
 // Deployed contract + worker
-const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
+const DUTCH_AUCTION = '0x000000a213b430D14Bae6062c176289B05e04489';
 const WORKER_URL = 'https://api.zfi.wei.is';
 
 const RPCS = [
@@ -307,10 +307,10 @@ const RPCS = [
 
 const AUCTION_ABI = [
   'function priceOf(uint256) view returns (uint256)',
-  'function costOf(uint256,uint128) view returns (uint256)',
+  'function quoteFill(uint256,uint128) view returns (bool fillable, uint256 cost)',
   'function nextId() view returns (uint256)',
-  'function getAuction(uint256) view returns (tuple(uint256 id, address seller, address token, bool isNFT, uint40 startTime, uint40 duration, uint128 startPrice, uint128 endPrice, uint128 initial, uint128 remaining, uint256[] ids, uint256 price))',
-  'function fill(uint256,uint128) payable',
+  'function getListing(uint256) view returns (tuple(uint256 id, address seller, address token, address quote, bool isNFT, uint40 startTime, uint40 duration, uint96 startPrice, uint96 endPrice, uint128 initial, uint128 remaining, uint40 expiry, uint256[] ids, uint256 price, bool takeable))',
+  'function fill(uint256,uint128,address,uint256) payable',
   'function cancel(uint256)',
   'event Filled(uint256 indexed id, address indexed seller, address indexed buyer, uint256 amount, uint256 paid)',
   'event Cancelled(uint256 indexed id)'
@@ -447,7 +447,7 @@ function renderTimeBar(pct, width=28) {
 
 // ---- Page state ----
 let _auctionId = null;
-let _auction = null;       // AuctionView tuple from getAuction
+let _auction = null;       // ListingView tuple from getListing
 let _closedKind = null;    // 'sold' | 'cancelled' | null — only meaningful when seller == 0
 let _closedInfo = null;    // { price, buyer, blockNumber } for sold
 let _meta = null;          // display metadata (custom override or NFT-native)
@@ -588,17 +588,21 @@ function classifyState() {
   const now = Math.floor(Date.now()/1000);
   const start = Number(a.startTime);
   const end = start + Number(a.duration);
+  // Dutchboard listings may carry a hard expiry, after which nothing can be
+  // filled and only the seller's reclaim is left. It is independent of the
+  // decay window: an expiry can land before the curve has run out.
+  if (Number(a.expiry) !== 0 && now >= Number(a.expiry)) return 'expired';
   if (now < start) return 'pending';
   if (now >= end) return 'ended'; // still live at floor — can be filled at endPrice
   return 'live';
 }
 
 function setStateClass(state) {
-  document.body.classList.remove('state-live','state-sold','state-ended','state-cancelled','state-pending','state-closed');
+  document.body.classList.remove('state-live','state-sold','state-ended','state-cancelled','state-pending','state-closed','state-expired');
   document.body.classList.add('state-' + state);
   const tag = $('stateTag');
   const tagTxt = {
-    live: 'Live', sold: 'Sold', ended: 'Ended', cancelled: 'Cancelled', pending: 'Scheduled', closed: 'Closed'
+    live: 'Live', sold: 'Sold', ended: 'Ended', cancelled: 'Cancelled', pending: 'Scheduled', closed: 'Closed', expired: 'Expired'
   }[state] || '—';
   tag.textContent = tagTxt;
 
@@ -614,6 +618,10 @@ function setStateClass(state) {
     overlay.classList.add('open');
     badge.textContent = 'ENDED';
     sub.textContent = _auction ? `floor · ${fmtETH(_auction.endPrice)} Ξ · still fillable` : '';
+  } else if (state === 'expired') {
+    overlay.classList.add('open');
+    badge.textContent = 'EXPIRED';
+    sub.textContent = 'past its expiry · no longer fillable';
   } else if (state === 'cancelled') {
     overlay.classList.add('open');
     badge.textContent = 'CANCELLED';
@@ -708,7 +716,7 @@ function renderPriceAndTime() {
   } else if (state === 'pending') {
     displayPriceWei = a.startPrice;
     displayElapsed = 0;
-  } else if (state === 'ended') {
+  } else if (state === 'ended' || state === 'expired') {
     displayPriceWei = a.endPrice;
     displayElapsed = dur;
   } else {
@@ -731,6 +739,7 @@ function renderPriceAndTime() {
 
   // Delta / label
   const priceLabel = state === 'sold' ? 'Sold At'
+    : state === 'expired' ? 'Expired'
     : state === 'ended' ? 'Floor Price'
     : state === 'pending' ? 'Start Price'
     : state === 'cancelled' ? 'Closed'
@@ -783,6 +792,7 @@ function renderActions() {
   wrap.innerHTML = '';
   const state = classifyState();
   const isBuyable = state === 'live' || state === 'ended' || state === 'pending';
+  // 'expired' deliberately absent: the board refuses those fills.
   const isSeller = _signer && _auction && _auction.seller !== ethers.ZeroAddress &&
     _connectedAddress && _connectedAddress.toLowerCase() === _auction.seller.toLowerCase();
 
@@ -824,7 +834,7 @@ function renderAll() {
 async function loadAuctionState() {
   const a = await withRPC(rpc => {
     const c = new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc);
-    return c.getAuction(_auctionId);
+    return c.getListing(_auctionId);
   });
   return a;
 }
@@ -894,6 +904,14 @@ async function init() {
     nextIdChecked = true;
   } catch {}
   if (_auction.seller === ethers.ZeroAddress && !nextIdChecked) { showNotFound(); return; }
+
+  // Every price on this page is denominated in Ξ. Dutchboard lets a seller be
+  // paid in any ERC-20, and rendering one of those as ETH would misprice the
+  // Buy button by whatever the quote token is worth — refuse instead.
+  if (_auction.seller !== ethers.ZeroAddress && _auction.quote !== ethers.ZeroAddress) {
+    showError('This listing is priced in an ERC-20 quote token, which this page cannot display.');
+    return;
+  }
 
   // Load metadata and ETH price in parallel.
   await Promise.all([loadMetadata(), loadEthUsd()]);
@@ -967,18 +985,22 @@ async function confirmBuy() {
   st.style.display = '';
   st.classList.remove('err');
   try {
-    // Fetch on-chain price fresh so we submit an accurate msg.value.
+    // Quote fresh so we submit an accurate msg.value. quoteFill, not priceOf:
+    // a zero price means two different things there — a closed listing and a
+    // lot that legitimately decayed to a 0 Ξ floor — and only quoteFill
+    // separates them. Its `fillable` flag also folds in the refusals the board
+    // would revert on anyway (not open yet, expired, frozen).
     st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Quoting…</div>`;
-    const priceWei = await withRPC(rpc => new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc).priceOf(_auctionId));
-    // priceOf returns 0 for BOTH a closed listing AND a live listing that
-    // decayed to endPrice=0 (legitimate when the seller picked the 0% floor).
-    // Distinguish via seller: 0x0 means the slot was deleted; anything else
-    // is still fillable — including at msg.value = 0.
-    if (_auction.seller === ethers.ZeroAddress) throw new Error('Auction is closed');
+    const [fillable, priceWei] = await withRPC(rpc =>
+      new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, rpc).quoteFill(_auctionId, 0));
+    if (!fillable) throw new Error('Auction is not fillable right now');
 
     st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Submit in your wallet…</div>`;
     const c = new ethers.Contract(DUTCH_AUCTION, AUCTION_ABI, _signer);
-    const tx = await c.fill(_auctionId, 0, { value: priceWei });
+    // NFT delivery is a plain transferFrom, so `to` is the buyer's own address;
+    // maxCost is the quote we just showed, which caps a decay race in our favour.
+    const buyer = await _signer.getAddress();
+    const tx = await c.fill(_auctionId, 0, buyer, priceWei, { value: priceWei });
     st.innerHTML = `<div class="spin">◐</div><div style="margin-top:8px">Waiting for confirmation…</div><div style="margin-top:6px;font-size:11px"><a href="https://etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener">${tx.hash.slice(0,10)}…</a></div>`;
     const receipt = await tx.wait();
     // Pull final paid price from Filled event to show accurate sold amount.

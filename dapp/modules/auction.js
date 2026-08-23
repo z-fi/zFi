@@ -1,14 +1,19 @@
 // ==================== NFT DUTCH AUCTION ====================
 // Third tab of the coin launch page. Lists a single ERC721 NFT as a
-// Dutch auction (linear price decay in ETH) via the deployed DutchAuction.
+// Dutch auction (linear price decay in ETH) via the deployed Dutchboard.
 // There is no off-chain index, so buyers always see the NFT's native tokenURI —
 // the gallery and detail page both read it straight from the token contract.
 
-const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
+const DUTCH_AUCTION = '0x000000a213b430D14Bae6062c176289B05e04489';
+
+// Dutchboard takes a `quote` asset the seller is paid in; address(0) is native
+// ETH, which is what this form lists in. `listNFT` is overloaded (the second
+// form carries a hard expiry), so calls go through the full signature.
+const AUCTION_QUOTE_ETH = '0x0000000000000000000000000000000000000000';
 
 const DUTCH_AUCTION_ABI = [
-  'function listNFT(address token, uint256[] ids, uint128 startPrice, uint128 endPrice, uint40 startTime, uint40 duration) returns (uint256)',
-  'event Created(uint256 indexed id, address indexed seller, address indexed token)'
+  'function listNFT(address token, address quote, uint256[] ids, uint256 startPrice, uint256 endPrice, uint40 startTime, uint40 duration) returns (uint256)',
+  'event Created(uint256 indexed id, address indexed seller, address indexed token, address quote)'
 ];
 
 const ERC721_ABI = [
@@ -296,9 +301,9 @@ function _activateChipByNumber(row, n) {
   });
 }
 // The chips only ever pass values the contract accepts, but ?mode=nft deeplinks
-// call these with whatever was in the URL. DutchAuction.listNFT rejects
+// call these with whatever was in the URL. Dutchboard.listNFT rejects
 // duration == 0 and endPrice > startPrice, and a negative reaches ethers as an
-// out-of-range uint40/uint128 — so an unclamped link builds a form that can only
+// out-of-range uint40/uint96 — so an unclamped link builds a form that can only
 // fail, after the wallet prompt, with a raw revert. Clamp at the setter so every
 // caller is covered rather than just the deeplink path.
 function _auctionClampFloor(pct) {
@@ -409,7 +414,7 @@ function auctionUpdatePreview() {
   `;
 }
 
-// Two-step launch: approve the NFT for DutchAuction, then listNFT.
+// Two-step launch: approve the NFT for Dutchboard, then listNFT.
 async function auctionLaunch() {
   if (!_signer) { connectWallet(); return; }
   if (!_auctionNftMeta) { coinShowStatus('Enter NFT contract and token id first', true); return; }
@@ -464,7 +469,9 @@ async function auctionLaunch() {
     // --- Step 2: listNFT ---
     coinShowStatus('Listing on auction (2/2)...');
     const auction = new ethers.Contract(DUTCH_AUCTION, DUTCH_AUCTION_ABI, _signer);
-    const tx = await auction.listNFT(contract, [tokenId], startPrice, endPrice, 0, duration);
+    const tx = await auction['listNFT(address,address,uint256[],uint256,uint256,uint40,uint40)'](
+      contract, AUCTION_QUOTE_ETH, [tokenId], startPrice, endPrice, 0, duration
+    );
     const receipt = await tx.wait();
 
     // Extract auction id from the Created event in the listNFT receipt.

@@ -1295,15 +1295,15 @@ async function fetchCurveTokenList() {
   return await window.curveRegistry.tokens();
 }
 
-// ==================== NFT AUCTION DISCOVERY (Dutch auction listings) ====================
-// Source of truth is on-chain: getAuctions(start, end) returns the flat struct
+// ==================== NFT AUCTION DISCOVERY (Dutchboard listings) ====================
+// Source of truth is on-chain: getListings(start, end) returns the flat struct
 // snapshot for every id in [start, end). Display metadata comes from the NFT's
 // own tokenURI at render time.
 
-const DUTCH_AUCTION = '0x0000000003635fd3852E772C6E09Ce2aF25d7133';
+const DUTCH_AUCTION = '0x000000a213b430D14Bae6062c176289B05e04489';
 const DUTCH_AUCTION_ABI = [
   'function nextId() view returns (uint256)',
-  'function getAuctions(uint256,uint256) view returns (tuple(uint256 id, address seller, address token, bool isNFT, uint40 startTime, uint40 duration, uint128 startPrice, uint128 endPrice, uint128 initial, uint128 remaining, uint256[] ids, uint256 price)[])'
+  'function getListings(uint256,uint256) view returns (tuple(uint256 id, address seller, address token, address quote, bool isNFT, uint40 startTime, uint40 duration, uint96 startPrice, uint96 endPrice, uint128 initial, uint128 remaining, uint40 expiry, uint256[] ids, uint256 price, bool takeable)[])'
 ];
 const NFT_ERC721_ABI_MIN = [
   'function tokenURI(uint256) view returns (string)',
@@ -1312,9 +1312,10 @@ const NFT_ERC721_ABI_MIN = [
 ];
 const WORKER_PROXY = 'https://api.zfi.wei.is/proxy-metadata';
 
-// Fetch up to the last N auctions (cheaper than the full history) and keep
-// only live NFT listings (seller != 0 and isNFT). Closed listings are filtered
-// out so the gallery only shows buyable items.
+// Fetch up to the last N listings (cheaper than the full history) and keep only
+// live NFT lots (seller != 0 and isNFT). Closed listings are filtered out so the
+// gallery only shows buyable items. ERC-20-quoted lots are dropped too: every
+// card prices itself in Ξ, and Dutchboard lets a seller be paid in any token.
 async function fetchNftAuctions(limit = 60) {
   try {
     const rows = await withRPC(async rpc => {
@@ -1322,9 +1323,9 @@ async function fetchNftAuctions(limit = 60) {
       const nextId = await c.nextId();
       if (nextId === 0n) return [];
       const start = nextId > BigInt(limit) ? nextId - BigInt(limit) : 0n;
-      return await c.getAuctions(start, nextId);
+      return await c.getListings(start, nextId);
     });
-    return rows.filter(a => a.seller !== ZERO && a.isNFT);
+    return rows.filter(a => a.seller !== ZERO && a.isNFT && a.quote === ZERO);
   } catch (e) {
     console.warn('fetchNftAuctions failed:', e);
     return [];
@@ -3763,7 +3764,7 @@ async function _galleryRenderFresh(gen) {
     let nftAuctionCount = 0;
     try {
       const enriched = await batchEnrichNftAuctions(nftAuctions);
-      // Newest first — getAuctions already returns in id order, so reverse.
+      // Newest first — getListings already returns in id order, so reverse.
       enriched.reverse();
       const nftHtml = enriched.map(({a, meta}) => renderNftAuctionCard(a, meta)).join('');
       nftAuctionCount = enriched.length;
