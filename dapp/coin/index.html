@@ -5890,6 +5890,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Governance info. #causeGovAlert fills in from a second read so the page paints
   // without waiting on it.
   html += `
+    <div id="causePool"></div>
     <div id="causeGovAlert"></div>
     <div class="section-card" style="background:var(--surface)">
       <div class="section-title">Governance</div>
@@ -5955,6 +5956,9 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
   app.dataset.sharesSupply = sharesTotalSupply.toString();
   app.dataset.lootSupply = lootTotalSupply.toString();
+  app.dataset.sym = coinSymbol;
+
+  loadCausePool(daoAddr, sharesAddr, gen).catch(() => {});
 
   if (saleEnded && sold > 0n && price > 0n) {
     loadCauseSaleClose(daoAddr, sharesAddr, sold, price, gen).catch(() => {});
@@ -6207,6 +6211,48 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, heldShares, price, gen) {
     <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}${known
       ? ` &middot; <span title="${detail}" style="border-bottom:1px dotted var(--border);cursor:help">after refunds</span>`
       : ''}
+  </div>`;
+}
+
+// A cause never seeds a pool at launch, so when its sale closes there is no way in for
+// anyone new and no price for the shares anywhere. Precision pools on zSwap are where
+// that gets fixed, and the band maths behind them — ticks, bounds, LP preview — lives
+// there. Rebuilding it here would be a second, thinner copy of something already
+// correct, so this page states what it knows that zSwap cannot, and hands off.
+const ZSWAP_URL = 'https://0xe686952842627A2cf81DF42CCaD54ef98046DB8D.1.w3link.io/';
+
+function causeZSwapLink(sharesAddr, lq) {
+  return `${ZSWAP_URL}#token=eth&out=${sharesAddr}${lq ? '&lq=1' : ''}`;
+}
+
+async function loadCausePool(daoAddr, sharesAddr, gen) {
+  const el = $('causePool');
+  if (!el) return;
+  const ds = $('app')?.dataset || {};
+  const E = ethers.parseEther('1');
+  const treasury = BigInt(ds.treasury || '0');
+  const supply = BigInt(ds.sharesSupply || '0') + BigInt(ds.lootSupply || '0');
+  if (supply <= 0n) return;
+  // Redemption is a standing bid every share can be sold into at any moment. It is the
+  // one number a pool has to be priced against, and zSwap has no way to know it.
+  const floor = treasury * E / supply;
+  const sym = escText(ds.sym || 'shares');
+
+  el.innerHTML = `<div class="section-card">
+    <div class="section-title">Market</div>
+    <dl class="coin-summary" style="font-size:12px;line-height:1.8;color:var(--fg-muted)">
+      <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
+    </dl>
+    <div style="font-size:10px;color:var(--fg-dim);line-height:1.5;margin:8px 0 10px">
+      Every share can be redeemed for this at any time, so a band priced below it can be
+      bought out and redeemed for the difference &mdash; and the difference comes from the
+      treasury. It also falls as the tap draws, at ${fmtEthBal(Number(ethers.formatEther(BigInt(ds.tapRate || '0'))) * 86400)} ETH a day.
+    </div>
+    <a class="swap-btn" style="display:block;width:100%;font-size:12px;text-align:center;text-decoration:none;box-sizing:border-box"
+       href="${causeZSwapLink(sharesAddr, true)}" target="_blank" rel="noopener">Add liquidity on zSwap</a>
+    <div style="margin-top:8px;text-align:center">
+      <a href="${causeZSwapLink(sharesAddr, false)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-muted);text-decoration:underline">Trade $${sym} &rarr;</a>
+    </div>
   </div>`;
 }
 

@@ -5345,8 +5345,13 @@ if(fromSel.value===toSel.value){
 const alt=String(TOKENS.findIndex((x,i)=>String(i)!==fromSel.value&&(t==="book"||x.std!=="nft")));
 if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
-if(lqMode&&(fi>=0||oi>=0||to||n||!isNaN(lk)))lqSet(false);
+const wantLq=q.get("lq")==="1";
+if(!wantLq&&lqMode&&(fi>=0||oi>=0||to||n||!isNaN(lk)))lqSet(false);
 setTab(t);
+// A link can ask for liquidity mode outright. Naming a pair otherwise turns it off,
+// which is right for a shared swap but wrong for a page sending someone here to seed
+// a band for exactly that pair.
+if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to)rc.value=to;
 if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
 const v=String(os.find(o=>o>=lk)??os[os.length-1]);
