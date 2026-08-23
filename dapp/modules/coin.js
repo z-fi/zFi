@@ -30,7 +30,18 @@ const CLASSICAL_LAUNCH_ABI = [
 ];
 
 const SAFE_SUMMONER = '0x00000000004473e1f31C8266612e7FD5504e6f2a';
+// ShareSale meters a sale with allowance alone, and allowance is spent at mint and not
+// restored at burn — so on a refundable raise every redemption permanently shrinks the
+// sale. CELL lost 1,891,891 shares of capacity that way. ShareOffering reads the ceiling
+// off live supply instead, so redeemed shares return their room.
+//
+// Kept here because causes launched before the switch are still read through it.
 const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
+const SHARE_OFFERING = '0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1';
+const SHARE_OFFERING_ABI = [
+  'function configure(address token, address payToken, uint256 price, uint40 deadline, uint256 cap)'
+];
+const MOLOCH_ALLOWANCE_ABI = ['function setAllowance(address spender, address token, uint256 amount)'];
 const TAP_VEST = '0x0000000060cdD33cbE020fAE696E70E7507bF56D';
 
 // DUNABrandRenderer — composes the on-chain Wyoming DUNA covenant with a DAO's own
@@ -835,9 +846,12 @@ async function coinLaunch() {
         };
       }
 
+      // The sale is wired by hand below rather than through SafeSummoner's SaleModule,
+      // which can only emit ShareSale's four-argument configure. Leaving the module empty
+      // keeps SafeSummoner from granting an allowance to a singleton nothing will use.
       const saleModule = {
-        singleton: SHARE_SALE, payToken: ZERO_ADDRESS, deadline,
-        price: priceWei, cap: capShares, sellLoot: false, minting: true
+        singleton: ZERO_ADDRESS, payToken: ZERO_ADDRESS, deadline: 0n,
+        price: 0n, cap: 0n, sellLoot: false, minting: false
       };
       const seedModule = {
         singleton: ZERO_ADDRESS, tokenA: ZERO_ADDRESS, amountA: 0n,
@@ -889,6 +903,24 @@ async function coinLaunch() {
           ]]
         : [];
 
+      // Wire the sale to ShareOffering. Both calls run from the DAO's own context during
+      // init: setAllowance is onlyDAO, and configure keys the sale to msg.sender, so the
+      // DAO has to be the one making them. The address is predicted rather than known
+      // because none of this exists until the summon returns.
+      const predictedDao = coinPredict(initHolders, initShares, salt).dao;
+      // The ceiling is a target SUPPLY, so the founder's single share counts toward it.
+      // Everything else the offering may mint is sold.
+      const supplyCap = ongoing ? ethers.MaxUint256 : ethers.parseEther('10000000');
+      // Allowance is the outer bound on everything this contract may ever mint; the cap
+      // is the live one. It has to exceed the cap or it becomes the binding number again
+      // and refunds start shrinking the sale exactly as they did before.
+      extraCalls.push(
+        [predictedDao, 0n, new ethers.Interface(MOLOCH_ALLOWANCE_ABI)
+          .encodeFunctionData('setAllowance', [SHARE_OFFERING, predictedDao, ethers.MaxUint256])],
+        [SHARE_OFFERING, 0n, new ethers.Interface(SHARE_OFFERING_ABI)
+          .encodeFunctionData('configure', [predictedDao, ZERO_ADDRESS, priceWei, deadline, supplyCap])]
+      );
+
       coinShowStatus('Please confirm the transaction in your wallet...');
       const safeSummoner = new ethers.Contract(SAFE_SUMMONER, SAFE_SUMMONER_ABI, _signer);
       const tx = await safeSummoner.safeSummonDAICO(
@@ -909,7 +941,7 @@ async function coinLaunch() {
       const receipt = await tx.wait();
 
       const predicted = coinPredict(initHolders, initShares, salt);
-      const daoAddress = predicted.dao;
+      const daoAddress = predicted.dao; // === predictedDao, recomputed for shares/loot
 
       // Report the rate actually encoded in tapModule rather than recomputing
       // from the form, so the receipt can't disagree with the deployed vest.

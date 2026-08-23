@@ -1230,6 +1230,16 @@ const SHARE_SALE_ABI = [
   'function buy(address dao, uint256 amount) payable',
   'function sales(address dao) view returns (address token, address payToken, uint40 deadline, uint256 price)'
 ];
+// Causes summoned from now on meter their sale against a supply ceiling instead of a
+// draining allowance, so redeemed shares return their room. Same buy(), one more field
+// on sales(), and `cap` means a target total supply rather than a spend budget — which
+// is why the two are read separately rather than through one ABI.
+const SHARE_OFFERING = '0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1';
+const SHARE_OFFERING_ABI = [
+  'function buy(address dao, uint256 amount) payable',
+  'function sales(address dao) view returns (address token, address payToken, uint40 deadline, uint256 price, uint256 cap)',
+  'function remaining(address dao) view returns (uint256)'
+];
 
 // TapVest module
 // Mirrors COIN_TAP_FAST_ONGOING_RATE in dapp/modules/coin.js — the rate the launcher
@@ -5526,6 +5536,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Fetch ShareSale price + TapVest state + treasury + supply + balance in one multicall
   const ssIface = new ethers.Interface(SHARE_SALE_ABI);
+  const soIface = new ethers.Interface(SHARE_OFFERING_ABI);
   const tvIface = new ethers.Interface(TAP_VEST_ABI);
   const erc20I = new ethers.Interface(ERC20_ABI);
   const daoAllowanceABI = ['function allowance(address token, address spender) view returns (uint256)'];
@@ -5534,6 +5545,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const lootAddr = data.meta.lootToken;
   const mc3Calls = [
     { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
+    { target: SHARE_OFFERING, allowFailure: true, callData: soIface.encodeFunctionData('sales', [daoAddr]) },
+    { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, SHARE_OFFERING]) },
     { target: TAP_VEST, allowFailure: true, callData: tvIface.encodeFunctionData('taps', [daoAddr]) },
     { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
     { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
@@ -5561,34 +5574,28 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   }).catch(() => mc3Calls.map(() => ({ success: false })));
   if (gen !== _renderGen) return;
 
-  let saleData = null, tapData = null, treasuryETH = 0n, sharesTotalSupply = 0n, lootTotalSupply = 0n, saleAllowance = 0n, tapAllowance = 0n, userBalance = 0n;
-  if (mcRes[0].success) {
-    try { saleData = ssIface.decodeFunctionResult('sales', mcRes[0].returnData); } catch {}
-  }
-  if (mcRes[1].success) {
-    try { tapData = tvIface.decodeFunctionResult('taps', mcRes[1].returnData); } catch {}
-  }
-  if (mcRes[2]?.success) {
-    try { treasuryETH = _mc3Iface.decodeFunctionResult('getEthBalance', mcRes[2].returnData)[0]; } catch {}
-  }
-  if (mcRes[3]?.success) {
-    try { sharesTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[3].returnData)[0]; } catch {}
-  }
-  if (mcRes[4]?.success) {
-    try { saleAllowance = daoI.decodeFunctionResult('allowance', mcRes[4].returnData)[0]; } catch {}
-  }
-  if (mcRes[5]?.success) {
-    try { tapAllowance = daoI.decodeFunctionResult('allowance', mcRes[5].returnData)[0]; } catch {}
-  }
-  if (mcRes[6]?.success) {
-    try { lootTotalSupply = erc20I.decodeFunctionResult('totalSupply', mcRes[6].returnData)[0]; } catch {}
-  }
-  if (_connectedAddress && mcRes[7]?.success) {
-    try { userBalance = erc20I.decodeFunctionResult('balanceOf', mcRes[7].returnData)[0]; } catch {}
-  }
+  let saleData = null, offerData = null, tapData = null, treasuryETH = 0n, sharesTotalSupply = 0n,
+      lootTotalSupply = 0n, saleAllowance = 0n, offerAllowance = 0n, tapAllowance = 0n, userBalance = 0n;
+  const I = { sale: 0, offer: 1, offerAllow: 2, tap: 3, eth: 4, supply: 5, allow: 6, tapAllow: 7, loot: 8, bal: 9 };
+  const at = (k, f) => { const r = mcRes[I[k]]; if (r?.success) { try { return f(r.returnData); } catch {} } return undefined; };
+  saleData      = at('sale',       d => ssIface.decodeFunctionResult('sales', d)) ?? null;
+  offerData     = at('offer',      d => soIface.decodeFunctionResult('sales', d)) ?? null;
+  offerAllowance= at('offerAllow', d => daoI.decodeFunctionResult('allowance', d)[0]) ?? 0n;
+  tapData       = at('tap',        d => tvIface.decodeFunctionResult('taps', d)) ?? null;
+  treasuryETH   = at('eth',        d => _mc3Iface.decodeFunctionResult('getEthBalance', d)[0]) ?? 0n;
+  sharesTotalSupply = at('supply', d => erc20I.decodeFunctionResult('totalSupply', d)[0]) ?? 0n;
+  saleAllowance = at('allow',      d => daoI.decodeFunctionResult('allowance', d)[0]) ?? 0n;
+  tapAllowance  = at('tapAllow',   d => daoI.decodeFunctionResult('allowance', d)[0]) ?? 0n;
+  lootTotalSupply = at('loot',     d => erc20I.decodeFunctionResult('totalSupply', d)[0]) ?? 0n;
+  if (_connectedAddress) userBalance = at('bal', d => erc20I.decodeFunctionResult('balanceOf', d)[0]) ?? 0n;
+
+  // A cause is on one singleton or the other; whichever names a price owns this sale.
+  const usesOffering = !!(offerData && BigInt(offerData.price) > 0n);
+  if (usesOffering) { saleData = offerData; saleAllowance = offerAllowance; }
+  const saleContract = usesOffering ? SHARE_OFFERING : SHARE_SALE;
   // Continuous Sale state
   let contSaleActive = false;
-  const contSaleIdx = contSaleAddr ? (_connectedAddress ? 8 : 7) : -1;
+  const contSaleIdx = contSaleAddr ? (_connectedAddress ? 10 : 9) : -1;
   if (contSaleAddr && contSaleIdx >= 0 && mcRes[contSaleIdx]?.success) {
     try {
       const csI = new ethers.Interface(CONTINUOUS_SALE_ABI);
@@ -5605,7 +5612,13 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Cap = sold + remaining allowance to ShareSale
   // SafeSummoner DAOs may not use DAO-level allowance — if allowance is 0 but sale
   // has a price and no expired deadline, treat as open-ended
-  const cap = sold + saleAllowance;
+  // ShareSale's ceiling is what is left of a draining allowance, so the total is what
+  // has sold plus that. ShareOffering states a target SUPPLY outright and grants itself
+  // far more allowance than it will use, so the allowance says nothing — subtract the
+  // founder share to get a number comparable with `sold`.
+  const cap = usesOffering
+    ? (BigInt(saleData.cap) > creatorShares ? BigInt(saleData.cap) - creatorShares : 0n)
+    : sold + saleAllowance;
   const saleDeadline = saleData ? Number(saleData.deadline) : 0;
   const now = Math.floor(Date.now() / 1000);
   const daicoSaleActive = saleDeadline === 0 || now < saleDeadline;
@@ -5615,7 +5628,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // form up and sends people at a buy() that reverts on remaining == 0. Shares already
   // minted are the tell: if any exist, the allowance was set and is now spent.
   const isOpenCap = cap >= 2n ** 128n
-    || (saleAllowance === 0n && sold === 0n && price > 0n && daicoSaleActive)
+    || (!usesOffering && saleAllowance === 0n && sold === 0n && price > 0n && daicoSaleActive)
     || contSaleActive;
   const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
   const raisedEth = Number(ethers.formatEther(raisedWei));
@@ -5960,7 +5973,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     <div style="margin-top:16px;font-size:11px;color:var(--fg-dim)">
       <a href="https://etherscan.io/address/${daoAddr}" target="_blank" style="color:inherit">DAO</a>
       &middot; <a href="https://etherscan.io/address/${sharesAddr}" target="_blank" style="color:inherit">Shares</a>
-      &middot; <a href="https://etherscan.io/address/${SHARE_SALE}" target="_blank" style="color:inherit">Sale Contract</a>
+      &middot; <a href="https://etherscan.io/address/${saleContract}" target="_blank" style="color:inherit">Sale Contract</a>
       ${metadata.creatorWallet ? `&middot; <a href="https://etherscan.io/address/${metadata.creatorWallet}" target="_blank" style="color:inherit">Creator</a>` : ''}
     </div>
   `;
@@ -5976,6 +5989,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.totalSupply = (sharesTotalSupply + lootTotalSupply).toString();
   app.dataset.userBalance = userBalance.toString();
   app.dataset.tapRate = tapRate.toString();
+  app.dataset.saleContract = saleContract;
   // The sale can only mint what is left of its allowance; the buy form clamps to it
   // rather than letting someone sign a transaction the contract will revert.
   app.dataset.saleRemaining = (isOpenCap ? 0n : saleAllowance).toString();
@@ -6008,14 +6022,16 @@ async function refreshCauseStats(daoAddr, metadata) {
   try {
     const sharesAddr = $('app')?.dataset?.shares;
     if (!sharesAddr) return;
-    const ssIface = new ethers.Interface(SHARE_SALE_ABI);
+    const ssIface = new ethers.Interface(
+      ($('app')?.dataset.saleContract || '').toLowerCase() === SHARE_OFFERING.toLowerCase()
+        ? SHARE_OFFERING_ABI : SHARE_SALE_ABI);
     const erc20I = new ethers.Interface(ERC20_ABI);
     const daoI = new ethers.Interface(['function allowance(address token, address spender) view returns (uint256)']);
     const mc3Calls = [
-      { target: SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
+      { target: $('app')?.dataset.saleContract || SHARE_SALE, allowFailure: true, callData: ssIface.encodeFunctionData('sales', [daoAddr]) },
       { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [daoAddr]) },
       { target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) },
-      { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, SHARE_SALE]) },
+      { target: daoAddr, allowFailure: true, callData: daoI.encodeFunctionData('allowance', [daoAddr, $('app')?.dataset.saleContract || SHARE_SALE]) },
     ];
     if (_connectedAddress) {
       mc3Calls.push({ target: sharesAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
@@ -6036,7 +6052,11 @@ async function refreshCauseStats(daoAddr, metadata) {
     const price = saleData ? BigInt(saleData.price) : 0n;
     const creatorShares = ethers.parseEther('1');
     const sold = sharesTotalSupply > creatorShares ? sharesTotalSupply - creatorShares : 0n;
-    const cap = sold + saleAllowance;
+    const usesOffering = ($('app')?.dataset.saleContract || '').toLowerCase() === SHARE_OFFERING.toLowerCase();
+    const cap = usesOffering
+      ? (saleData && saleData.cap !== undefined && BigInt(saleData.cap) > creatorShares
+          ? BigInt(saleData.cap) - creatorShares : 0n)
+      : sold + saleAllowance;
     const saleDeadline = saleData ? Number(saleData.deadline) : 0;
     const now = Math.floor(Date.now() / 1000);
     // A live continuous sale keeps minting open regardless of the DAICO's own deadline or
@@ -6046,7 +6066,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     // Same reading as the first render: zero allowance with shares already minted is a
     // sold-out sale, not an unmetered one.
     const isOpenCap = contSaleLive || cap >= 2n ** 128n
-      || (saleAllowance === 0n && sold === 0n && price > 0n && saleActive);
+      || (!usesOffering && saleAllowance === 0n && sold === 0n && price > 0n && saleActive);
     const soldOut = !isOpenCap && cap > 0n && sold >= cap;
     const saleEnded = !saleActive || soldOut;
     const raisedWei = price > 0n ? sold * price / ethers.parseEther('1') : 0n;
@@ -6583,7 +6603,8 @@ async function causeBuy(daoAddr) {
 
   statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} Confirming...</div>`;
   try {
-    const ss = new ethers.Contract(SHARE_SALE, SHARE_SALE_ABI, _signer);
+    // buy() is identical on both singletons; only which one holds this sale differs.
+    const ss = new ethers.Contract($('app')?.dataset.saleContract || SHARE_SALE, SHARE_SALE_ABI, _signer);
     const tx = await ss.buy(daoAddr, shareAmt, { value: cost });
     statusEl.innerHTML = `<div style="font-size:12px">${zfiLoadingSVG(14)} <a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></div>`;
     await tx.wait();
@@ -6764,6 +6785,9 @@ async function renderCoinPage(daoAddr) {
     const shareSaleIdx = detailCalls.push(
       { target: SHARE_SALE, allowFailure: true,
         callData: new ethers.Interface(SHARE_SALE_ABI).encodeFunctionData('sales', [daoAddr]) }) - 1;
+    const offeringIdx = detailCalls.push(
+      { target: SHARE_OFFERING, allowFailure: true,
+        callData: new ethers.Interface(SHARE_OFFERING_ABI).encodeFunctionData('sales', [daoAddr]) }) - 1;
 
     const [metadata, detailRes] = await Promise.all([
       fetchMetadata(data.meta.contractURI),
@@ -6790,7 +6814,9 @@ async function renderCoinPage(daoAddr) {
     // the metadata does not say.
     const shareSalePrice = mcDecode(detailRes[shareSaleIdx],
       new ethers.Interface(SHARE_SALE_ABI), 'sales', null)?.price ?? 0n;
-    const isCauseOnchain = shareSalePrice > 0n;
+    const offeringPrice = mcDecode(detailRes[offeringIdx],
+      new ethers.Interface(SHARE_OFFERING_ABI), 'sales', null)?.price ?? 0n;
+    const isCauseOnchain = shareSalePrice > 0n || offeringPrice > 0n;
     if (metadata && metadata.launchType === 'cause') {
       renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen);
       return;
