@@ -2702,7 +2702,7 @@ function daoStakeHint(sharesWei, minting) {
     const total = held > 0n ? Number(((held + sharesWei) * 1000000n) / after) / 10000 : 0;
     return `<div class="swap-stake">&asymp; ${fmtPct(pct)} of the DAO`
       + (held > 0n ? ` &middot; you would hold ${fmtPct(total)}` : '')
-      + `</div>`;
+      + `</div><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch { return ''; }
 }
 
@@ -6085,6 +6085,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   app.dataset.sharesSupply = sharesTotalSupply.toString();
   app.dataset.lootSupply = lootTotalSupply.toString();
   app.dataset.sym = coinSymbol;
+  _causeGlyph = causeGlyph(data.meta, metadata, 15);
 
   loadCausePool(daoAddr, sharesAddr, gen).catch(() => {});
 
@@ -6605,61 +6606,38 @@ async function causeTape(poolAddr, ethIs0) {
 }
 
 
-// A one-candle chart is a true picture of nothing, and that is what a young cause
-// coin has: the tape holds a handful of prints. What a holder actually wants to know
-// is where those prints sit relative to the two numbers that anchor this coin — the
-// redemption floor underneath it and the price the sale charged — so the chart plots
-// all of them on one log scale. Log, because floor to spot spans 28x on day one and a
-// linear axis would flatten every trade onto the bottom edge.
+// A young cause coin has a handful of prints, and a tall time-axis chart drawn over
+// three of them is mostly empty space with a dot in it. What actually needs saying fits
+// on one axis: where the coin trades relative to the floor it can always be redeemed at.
+// So this is a price ruler, not a time series — floor on the left, spot on the right,
+// fills marked where they landed. Log-spaced, because day one spans 24x.
 function causeChart(bars, floorWei, saleWei, spotWei) {
-  const marks = [];
-  const push = (v, cls, label) => { const n = Number(v); if (n > 0) marks.push({ v: n, cls, label }); };
-  push(floorWei, 'floor', 'redemption');
-  if (saleWei && floorWei && Math.abs(Number(saleWei) - Number(floorWei)) / Number(floorWei) > 0.02) push(saleWei, 'sale', 'sale');
-  push(spotWei, 'spot', 'now');
-  const traded = bars.filter(b => b.c > 0);
-  if (!marks.length && !traded.length) return '';
-
-  const all = marks.map(m => m.v).concat(traded.flatMap(b => [b.lo, b.hi, b.c])).filter(v => v > 0);
-  if (!all.length) return '';
+  const floor = Number(floorWei || 0), spot = Number(spotWei || 0), sale = Number(saleWei || 0);
+  const fills = bars.filter(b => b.c > 0).map(b => b.c);
+  const all = [floor, spot, sale, ...fills].filter(v => v > 0);
+  if (all.length < 2) return '';
   const lo = Math.min(...all), hi = Math.max(...all);
-  const L = Math.log(lo * 0.85), H = Math.log(hi * 1.18);
-  const span = H - L || 1;
-  const W = 300, HT = 96, PAD = 6;
-  const y = v => PAD + (1 - (Math.log(v) - L) / span) * (HT - PAD * 2);
+  const L = Math.log(lo), span = Math.log(hi) - L || 1;
+  const W = 300, H = 34, PAD = 4;
+  const x = v => PAD + ((Math.log(v) - L) / span) * (W - PAD * 2);
+  const AX = 20;
 
-  const col = { floor: 'var(--fg-dim)', sale: 'var(--fg-muted)', spot: 'var(--green)' };
-  let svg = '';
-  for (const m of marks) {
-    const yy = y(m.v).toFixed(1);
-    svg += `<line x1="0" y1="${yy}" x2="${W}" y2="${yy}" stroke="${col[m.cls]}" stroke-width="1"`
-        + (m.cls === 'spot' ? '' : ' stroke-dasharray="3 3"') + ' vector-effect="non-scaling-stroke"/>';
-  }
-  // Trades sit left to right in the order the tape holds them.
-  const n = traded.length;
-  traded.forEach((b, i) => {
-    const x = n === 1 ? W * 0.5 : PAD + (i / (n - 1)) * (W - PAD * 2);
-    const up = b.c >= b.o;
-    const c = up ? 'var(--green)' : 'var(--red)';
-    if (b.hi > b.lo) svg += `<line x1="${x.toFixed(1)}" y1="${y(b.hi).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y(b.lo).toFixed(1)}" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-    svg += `<circle cx="${x.toFixed(1)}" cy="${y(b.c).toFixed(1)}" r="2.5" fill="${c}"/>`;
-  });
-  if (n > 1) {
-    const pts = traded.map((b, i) => `${(PAD + (i / (n - 1)) * (W - PAD * 2)).toFixed(1)},${y(b.c).toFixed(1)}`).join(' ');
-    svg = `<polyline points="${pts}" fill="none" stroke="var(--fg-muted)" stroke-width="1" vector-effect="non-scaling-stroke"/>` + svg;
-  }
+  let svg = `<line x1="${PAD}" y1="${AX}" x2="${W - PAD}" y2="${AX}" stroke="var(--border-muted)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  const tick = (v, col, h) => `<line x1="${x(v).toFixed(1)}" y1="${AX - h}" x2="${x(v).toFixed(1)}" y2="${AX + h}" stroke="${col}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  if (floor > 0) svg += tick(floor, 'var(--fg-dim)', 5);
+  if (sale > 0 && floor > 0 && Math.abs(sale - floor) / floor > 0.02) svg += tick(sale, 'var(--fg-dim)', 4);
+  // Fills sit on the ruler at the price they got, which is the whole point of the tape.
+  for (const f of fills) svg += `<circle cx="${x(f).toFixed(1)}" cy="${AX}" r="2.5" fill="var(--fg-muted)"/>`;
+  if (spot > 0) svg += tick(spot, 'var(--green)', 7);
 
-  const trades = traded.reduce((t, b) => t + b.n, 0);
-  const legend = marks.map(m =>
-    `<span style="color:${col[m.cls]}">&mdash;&nbsp;${m.label} ${fmtPriceWei(BigInt(Math.round(m.v)))}</span>`).join('&nbsp;&nbsp;');
-
-  return `<div style="margin:10px 0 2px">
-    <svg viewBox="0 0 ${W} ${HT}" preserveAspectRatio="none" style="width:100%;height:96px;display:block"
-      role="img" aria-label="executed trades against the redemption floor and sale price">${svg}</svg>
-    <div style="font-size:9px;color:var(--fg-dim);margin-top:4px;line-height:1.6">
-      ${legend}
-      <div style="margin-top:2px">${trades ? `${trades} trade${trades === 1 ? '' : 's'} on the tape` : 'no trades yet'}
-      &middot; executed prices, fee included</div>
+  const trades = bars.reduce((t, b) => t + b.n, 0);
+  return `<div style="margin:2px 0 12px">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:34px;display:block"
+      role="img" aria-label="where the coin trades between its redemption floor and spot">${svg}</svg>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:1px">
+      <span>${fmtPriceWei(BigInt(Math.round(lo)))} floor</span>
+      <span>${trades ? `${trades} fill${trades === 1 ? '' : 's'}` : 'no trades yet'}</span>
+      <span style="color:var(--green)">${fmtPriceWei(BigInt(Math.round(spot)))} now</span>
     </div></div>`;
 }
 
@@ -6710,8 +6688,8 @@ async function causeLpQuote(src) {
     const usedEth = ethIs0 ? u0 : u1, usedSh = ethIs0 ? u1 : u0;
     _causePoolCache.lp = lp;
     const back = (a0 - u0) + (a1 - u1) > 0n;
-    el.innerHTML = `Adds ${ethAmount(ethers.formatEther(usedEth), 8)} ETH and `
-      + `${fmtTokenAmount(usedSh.toString())} shares for ${ethAmount(ethers.formatEther(lp), 6)} LP.`
+    el.innerHTML = `Adds ${ethAmount(fmtNum(Number(ethers.formatEther(usedEth))), 11)} ETH and `
+      + `${fmtTokenAmount(usedSh.toString())} shares for ${fmtNum(Number(ethers.formatEther(lp)))} LP.`
       + (back ? `<div style="color:var(--fg-dim);margin-top:3px">The rest is refunded in the same transaction.</div>` : '');
   } catch { el.textContent = 'Could not price this deposit.'; }
 }
@@ -6768,7 +6746,16 @@ const PROUTE = '0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB';
 const SEL_PROUTE = '0x5d6498e1';
 const SEL_PCHECKPOINT = '0x0b7c6c6c';
 const SEL_QUOTE_BEST = '0x2adaa389';
-const CAUSE_SLIP_BPS = 200n;   // 2%; a band this thin moves under its own trade
+// A band holding a fraction of an ETH moves several percent under any trade worth making,
+// so a tight tolerance here does not protect anyone — it just reverts and charges gas.
+let _causeSlipPct = 5;
+const causeSlipBps = () => BigInt(Math.round(Math.min(50, Math.max(0.1, _causeSlipPct)) * 100));
+
+function causeSetSlip(v) {
+  const n = parseFloat(v);
+  if (!isNaN(n)) _causeSlipPct = Math.min(50, Math.max(0.1, n));
+  causeSwapQuote();
+}
 
 const _encPRoute = (pools, tokenIn, tokenOut, amountIn, minOut, to) =>
   SEL_PROUTE + _w(192) + _a(tokenIn) + _a(tokenOut) + _w(amountIn)
@@ -6781,20 +6768,53 @@ function _encSnwap(tokenIn, amountIn, recipient, tokenOut, minOut, executor, dat
     + _a(recipient) + _a(tokenOut) + _w(minOut) + _a(executor) + _w(224) + body;
 }
 
+let _causeGlyph = '';
 let _swapSide = 'buy';
 let _swapSeq = 0;
 let _swapQuote = null;
 
 function causeSwapSide(side) {
   _swapSide = side;
-  for (const s of ['buy', 'sell']) {
-    const b = $('causeSwapTab_' + s);
-    if (b) { b.style.color = s === side ? 'var(--fg)' : 'var(--fg-dim)'; b.style.borderBottomColor = s === side ? 'var(--fg)' : 'transparent'; }
+  for (const t of ['buy', 'sell']) {
+    const b = $('causeSwapTab_' + t);
+    if (b) {
+      b.style.color = t === side ? 'var(--fg)' : 'var(--fg-dim)';
+      b.style.borderBottomColor = t === side ? 'var(--fg)' : 'transparent';
+    }
   }
+  const ds = $('app')?.dataset || {};
+  const sym = escText(ds.sym || 'shares');
+  const symEl = $('causeSwapSym');
+  if (symEl) symEl.innerHTML = side === 'buy'
+    ? `${ethGlyph(15)}<span style="margin-left:5px">ETH</span>`
+    : `${_causeGlyph}<span style="margin-left:5px">${sym}</span>`;
   const inp = $('causeSwapAmt');
-  if (inp) { inp.value = ''; inp.placeholder = side === 'buy' ? 'ETH' : 'shares'; }
-  const hint = $('causeSwapHold');
-  if (hint) hint.style.display = side === 'sell' ? '' : 'none';
+  if (inp) inp.value = '';
+
+  // Both sides get a balance and a max. On the buy side max holds a little ETH back:
+  // spending the whole balance leaves nothing to pay for the transaction doing it.
+  const hold = $('causeSwapHold');
+  if (hold) {
+    if (side === 'buy') {
+      const bal = _ethBalance || 0n;
+      const GAS_KEEP = 3000000000000000n;   // 0.003 ETH
+      const max = bal > GAS_KEEP ? bal - GAS_KEEP : 0n;
+      hold.innerHTML = _connectedAddress
+        ? `<span>balance ${fmtNum(Number(ethers.formatEther(bal)))} ETH</span>`
+          + (max > 0n ? `<a href="#" onclick="causeSwapFill(${max}n);return false" style="color:var(--fg-muted);text-decoration:underline">max</a>` : '')
+        : `<span>connect to trade</span>`;
+    } else {
+      const held = BigInt(ds.userBalance || '0');
+      hold.innerHTML = held > 0n
+        ? `<span>you hold ${fmtTokenAmount(held.toString())}</span>
+           <span><a href="#" onclick="causeSwapFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a>
+           &middot; <a href="#" onclick="causeSwapFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a></span>`
+        : `<span>you hold none</span>`;
+    }
+  }
+  const go = $('causeSwapGo');
+  if (go) go.innerHTML = side === 'buy'
+    ? `Buy ${_causeGlyph} ${sym}` : `Sell ${_causeGlyph} ${sym}`;
   _swapQuote = null;
   causeSwapQuote();
 }
@@ -6848,12 +6868,12 @@ async function causeSwapQuote() {
 
     const sym = escText(($('app')?.dataset.sym) || 'shares');
     const outTxt = _swapSide === 'buy'
-      ? `${fmtTokenAmount(out.toString())} ${sym}`
-      : `${ethAmount(ethers.formatEther(out), 8)} ETH`;
+      ? `<span style="display:inline-flex;align-items:center;gap:4px">${_causeGlyph}${fmtTokenAmount(out.toString())} ${sym}</span>`
+      : `${ethAmount(fmtNum(Number(ethers.formatEther(out))), 13)} ETH`;
     el.innerHTML = `You get about <b style="color:var(--fg)">${outTxt}</b>`
       + `<div style="margin-top:3px">${fmtPriceWei(eff)} per share effective`
       + (slipPct !== null ? ` &middot; <span style="color:${Math.abs(slipPct) > 10 ? 'var(--red)' : 'var(--fg-dim)'}">${slipPct > 0 ? '+' : ''}${slipPct.toFixed(1)}% vs spot</span>` : '')
-      + `</div><div style="color:var(--fg-dim);margin-top:3px">2% slippage allowed. Reverts rather than filling worse.</div>`;
+      + `</div><div style="color:var(--fg-dim);margin-top:3px">Reverts rather than filling worse than ${_causeSlipPct}%.</div>`;
   } catch {
     if (my !== _swapSeq) return;
     el.textContent = 'Could not quote that.'; if (btn) btn.disabled = true;
@@ -6869,7 +6889,7 @@ async function causeSwapGo() {
   const { pool, out, amountIn, tokenIn } = _swapQuote;
   const shares = _causePoolCache.shares;
   const tokenOut = tokenIn === ZERO ? shares : ZERO;
-  const minOut = out - (out * CAUSE_SLIP_BPS) / 10000n;
+  const minOut = out - (out * causeSlipBps()) / 10000n;
   try {
     const me = await sgn.getAddress();
     const routeData = _encPRoute([pool], tokenIn, tokenOut, amountIn, minOut, me);
@@ -6965,23 +6985,32 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
         vsSale !== null ? ` <span style="color:var(--fg-dim)">${vsSale > 0 ? '+' : ''}${vsSale.toFixed(0)}% vs sale</span>` : ''}</dd>` : ''}
       <dt>Redemption</dt><dd>${ethAmount(fmtPriceWei(floor), 11)}</dd>
       ${spot === 0n && salePx > 0n ? `<dt>Sale price</dt><dd>${ethAmount(fmtPriceWei(salePx), 11)}</dd>` : ''}
-      ${pool ? `<dt>Depth</dt><dd>${ethAmount(ethers.formatEther(ethSide), 6)} ETH &middot; ${fmtTokenAmount(shSide.toString())} ${sym}</dd>` : ''}
+      ${pool ? `<dt>Depth</dt><dd>${ethAmount(fmtNum(Number(ethers.formatEther(ethSide))), 11)} ETH &middot; <span style="display:inline-flex;align-items:center;gap:4px">${_causeGlyph}${fmtTokenAmount(shSide.toString())}</span></dd>` : ''}
       ${has && pairPools > 0 ? `<dt>Pools</dt><dd>${pairPools} on zSwap</dd>` : ''}
     </dl>
     ${spark}
     ${has && pool ? `
-      <div style="display:flex;gap:16px;border-bottom:1px solid var(--border-muted);margin:12px 0 10px">
-        <button id="causeSwapTab_buy" onclick="causeSwapSide('buy')" style="background:none;border:none;border-bottom:2px solid var(--fg);color:var(--fg);font:inherit;font-size:12px;padding:0 0 6px;cursor:pointer">Buy</button>
-        <button id="causeSwapTab_sell" onclick="causeSwapSide('sell')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:12px;padding:0 0 6px;cursor:pointer">Sell</button>
+      <div style="display:flex;gap:16px;border-bottom:1px solid var(--border-muted);margin:14px 0 0">
+        <button id="causeSwapTab_buy" onclick="causeSwapSide('buy')" style="background:none;border:none;border-bottom:2px solid var(--fg);color:var(--fg);font:inherit;font-size:12px;padding:0 0 7px;cursor:pointer">Buy</button>
+        <button id="causeSwapTab_sell" onclick="causeSwapSide('sell')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:12px;padding:0 0 7px;cursor:pointer">Sell</button>
       </div>
-      <input id="causeSwapAmt" type="text" inputmode="decimal" placeholder="ETH" aria-label="Amount to swap"
-        style="width:100%;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:16px;outline:none;box-sizing:border-box" oninput="causeSwapQuote()">
-      <div id="causeSwapHold" style="font-size:10px;color:var(--fg-dim);margin-top:6px;display:none">
-        ${held > 0n ? `you hold ${fmtTokenAmount(held.toString())} &middot;
-          <a href="#" onclick="causeSwapFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a> &middot;
-          <a href="#" onclick="causeSwapFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a>` : 'you hold none'}
+      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-top:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="causeSwapAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to swap"
+            style="flex:1;min-width:0;background:none;border:none;color:var(--fg);font:inherit;font-size:22px;outline:none;padding:0" oninput="causeSwapQuote()">
+          <span id="causeSwapSym" style="font-size:13px;color:var(--fg-muted);white-space:nowrap">ETH</span>
+        </div>
+        <div id="causeSwapHold" style="font-size:10px;color:var(--fg-dim);margin-top:8px;display:flex;justify-content:space-between;gap:8px"></div>
       </div>
-      <div id="causeSwapQuote" style="font-size:11px;color:var(--fg-muted);margin:8px 0;min-height:44px;line-height:1.5">How much ETH to spend</div>
+      <div id="causeSwapQuote" style="font-size:11px;color:var(--fg-muted);margin:10px 0;min-height:32px;line-height:1.6">How much ETH to spend</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:10px">
+        <span>Max slippage</span>
+        <span>
+          <input id="causeSlipInput" type="text" inputmode="decimal" value="5" aria-label="Max slippage percent"
+            style="width:34px;text-align:right;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg-muted);font:inherit;font-size:10px;outline:none"
+            oninput="causeSetSlip(this.value)">%
+        </span>
+      </div>
       <button id="causeSwapGo" class="swap-btn" style="width:100%;font-size:12px" onclick="causeSwapGo()" disabled>Swap</button>
       <div id="causeSwapStatus" style="margin-top:8px"></div>
       <div style="margin-top:10px;text-align:center">

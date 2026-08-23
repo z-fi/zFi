@@ -76,26 +76,28 @@ test('tape decodes to the price a buyer actually paid', () => {
   assert.ok(closeGwei < 5000, 'tape close should not be reading as spot');
 });
 
-test('the chart anchors trades to the floor and the sale price, not to themselves', () => {
-  const floor = 328522781932n, sale = 333000000000n, spot = 9245600000000n;
+test('the chart is a price ruler: floor left, spot right, fills where they landed', () => {
+  const floor = 328522781932n, sale = 333000000000n, spot = 7879700000000n;
   const bars = [{ b: 1, o: 1.948e12, c: 1.627e12, hi: 1.948e12, lo: 1.627e12, n: 3 }];
   const out = M.causeChart(bars, floor, sale, spot);
 
-  // A single print still draws: the reference lines carry the picture.
   assert.match(out, /<svg/);
-  assert.match(out, /redemption/);
+  assert.match(out, /floor/);
   assert.match(out, /now/);
-  assert.match(out, /3 trades on the tape/);
+  assert.match(out, /3 fills/);
 
-  // Every drawn y must land inside the viewBox. A linear axis would push the floor
-  // off the bottom once spot is 28x above it, which is the bug the log scale fixes.
-  const ys = [...out.matchAll(/(?:y1|y2|cy)="([\d.]+)"/g)].map(m => parseFloat(m[1]));
-  assert.ok(ys.length > 0, 'nothing was drawn');
-  for (const y of ys) assert.ok(y >= 0 && y <= 96, `y=${y} escapes the 96px viewBox`);
+  // Everything drawn stays inside the 300-wide viewBox.
+  const xs = [...out.matchAll(/(?:x1|x2|cx)="([\d.]+)"/g)].map(m => parseFloat(m[1]));
+  assert.ok(xs.length > 0, 'nothing was drawn');
+  for (const x of xs) assert.ok(x >= 0 && x <= 300, `x=${x} escapes the viewBox`);
 
-  // The floor line must sit below the spot line: lower price, larger y.
-  const floorY = ys[0];
-  assert.ok(floorY > Math.min(...ys), 'the redemption floor should sit at the bottom');
+  // The fill at 1,627 gwei sits between the 328 floor and the 7,880 spot, and the log
+  // spacing has to keep it there — on a linear axis it would collapse onto the floor.
+  const fill = parseFloat(out.match(/<circle cx="([\d.]+)"/)[1]);
+  const ticks = [...out.matchAll(/<line x1="([\d.]+)" y1="\d+"/g)].map(m => parseFloat(m[1]));
+  const floorX = Math.min(...ticks), spotX = Math.max(...ticks);
+  assert.ok(fill > floorX && fill < spotX, `fill at ${fill} should sit between ${floorX} and ${spotX}`);
+  assert.ok(fill > 300 * 0.3, 'a log axis should not crush the fill against the floor');
 });
 
 test('with no pool and no trades there is nothing to draw', () => {
