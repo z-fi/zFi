@@ -256,8 +256,58 @@ input {
 }
 .progress-fill { height:100%;transition:width 0.3s; }
 
-/* Swap tile */
-.swap-tile { position:relative; }
+/* Swap tile. The pay/receive pair on a simple coin is a card each — the label,
+   the amount and the token mark on one line — with the direction arrow notched
+   between them. The pieces below were used by the markup before they were ever
+   styled, which left the tag wrapping under a full-width input. */
+.swap-tile {
+  position:relative;background:var(--surface);border:1px solid var(--border-muted);
+  border-radius:10px;padding:10px 12px;
+}
+.swap-tile-label {
+  font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--fg-dim);margin-bottom:2px;
+}
+.swap-tile-row { display:flex;align-items:center;gap:10px;min-width:0; }
+.swap-tile-row input {
+  flex:1;min-width:0;width:100%;padding:2px 0;background:transparent;border:none;outline:none;
+  font-size:26px;font-weight:500;font-family:inherit;color:var(--fg);
+  font-variant-numeric:tabular-nums;
+}
+.swap-tile-row input::placeholder { color:var(--input-ph); }
+/* The receive side is read-only, so it borrows the input's metrics rather than
+   its chrome — no rule, no focus state, same baseline. */
+.swap-tile-row .simple-out-amount {
+  flex:1;min-width:0;padding:2px 0;border-bottom:none;min-height:0;
+  font-size:26px;font-weight:500;line-height:1.2;
+}
+.swap-tile-row .swap-token-tag {
+  padding:5px 10px;border-radius:999px;background:var(--bg);
+  border:1px solid var(--border-muted);font-size:12px;
+}
+/* Notched into the seam between the two tiles, so the pair reads as one control. */
+.swap-tile-arrow {
+  position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+  width:26px;height:26px;margin:-13px auto;border-radius:50%;
+  background:var(--bg);border:1px solid var(--border-muted);color:var(--fg-muted);
+}
+.swap-tile-arrow svg { display:block; }
+.swap-tile + .swap-tile { margin-top:6px; }
+/* Small muted pills — slippage, sell percentages. Without this they inherited the
+   page's primary button fill and shouted louder than the trade button. */
+.coin-tpl-btn {
+  background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);
+  border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;
+  transition:background 0.15s,color 0.15s,border-color 0.15s;
+}
+.coin-tpl-btn:hover { color:var(--fg);border-color:var(--border); }
+.coin-tpl-btn.active { background:var(--fg);color:var(--bg);border-color:var(--fg); }
+.swap-btn {
+  padding:13px;border:none;border-radius:8px;font-size:14px;font-weight:700;
+  letter-spacing:0.04em;font-family:inherit;cursor:pointer;
+  background:var(--btn-bg);color:var(--btn-fg);
+}
+.swap-btn:hover:not(:disabled) { background:var(--btn-hover); }
 /* Pay-asset picker on the Sale tab. A native <select> cannot render the token
    marks, so this is a button plus a popover list. */
 .sale-pay-picker { position:relative; display:inline-block; }
@@ -1891,7 +1941,7 @@ async function loadHolders(daoAddr) {
     });
     const members = result.base.members;
     if (!members || members.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No shareholders yet</div>';
+      content.innerHTML = '<div class="activity-empty">No holders yet</div>';
       return;
     }
     const totalSupply = result.base.supplies.sharesTotalSupply + result.base.supplies.lootTotalSupply;
@@ -1908,7 +1958,7 @@ async function loadHolders(daoAddr) {
       });
 
     if (sorted.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No shareholders yet</div>';
+      content.innerHTML = '<div class="activity-empty">No holders yet</div>';
       return;
     }
 
@@ -2336,7 +2386,7 @@ async function causeChatCompose(daoAddr) {
 
   if (!canPost) {
     box.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);line-height:1.5">
-      The chatroom is open to badge holders. Shares alone do not carry one.</div>`;
+      The chatroom is open to badge holders. Holding ${causeUnit()} alone does not carry one.</div>`;
     return;
   }
   box.innerHTML = `
@@ -2798,7 +2848,7 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei, healing) {
   // A ShareSale ceiling is what is left of a draining allowance, so redeeming lowers it.
   // An offering's is a supply target the sale keeps whatever holders do.
   const capNote = healing
-    ? 'The total this sale may raise, at the fixed price. Redeemed shares return their room to it, so it does not move.'
+    ? `The total this sale may raise, at the fixed price. Redeemed ${causeUnit()} return their room to it, so it does not move.`
     : 'What the sale can still reach: shares already sold plus every share it may still mint, at the fixed price. Redeeming burns shares, and the sale cannot re-mint them, so this can fall.';
   const raisedEth = Number(ethers.formatEther(raisedWei));
   let html = '';
@@ -3576,7 +3626,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
   const premiumPct = floorEth > 0 ? ((marketEth - floorEth) / floorEth) * 100 : null;
   const perMil = marketEth * 1e6;
   const perMilUsd = _lcEthUsd
-    ? ` <span style="font-size:11px;color:var(--fg-muted)">($${perMil * _lcEthUsd < 0.01 ? (perMil * _lcEthUsd).toExponential(2) : (perMil * _lcEthUsd).toFixed(2)})</span>` : '';
+    ? `<span style="font-size:11px;color:var(--fg-muted);margin-left:6px">$${perMil * _lcEthUsd < 0.01 ? (perMil * _lcEthUsd).toExponential(2) : (perMil * _lcEthUsd).toFixed(2)}</span>` : '';
   const balFmt = _lcBalance > 0n ? fmtTokenAmount(_lcBalance.toString()) : '0';
   const allocPct = Number(info.allocBps) / 100;
   const badgeTitle = 'single-sided full-range pool · liquidity locked in the launcher'
@@ -3607,7 +3657,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
 
     <div style="margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap">
       <span style="font-size:18px;font-weight:700">${formatEthPrice(perMil)} ETH</span>
-      <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">per 1M</span>${perMilUsd}
+      <span style="font-size:11px;color:var(--fg-muted);margin-left:5px">per 1M</span>${perMilUsd}
       ${premiumPct !== null ? `<span style="font-size:13px;font-weight:600;color:${premiumPct >= 0 ? 'var(--green)' : 'var(--red)'};margin-left:8px" title="What the market charges over the redemption floor">${formatPct(premiumPct)} vs floor</span>` : ''}
     </div>
 
@@ -4063,6 +4113,12 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const soldToken = saleIsLoot ? lootAddr : sharesAddr;
   const UNIT = saleIsLoot ? 'loot' : 'shares';
   const UNIT_TITLE = saleIsLoot ? 'Loot' : 'Shares';
+  // Published before the markup is assembled rather than after it is installed, because
+  // causeMetersHTML and friends read it back while building — set afterwards, a loot
+  // cause painted "shares" once and then corrected itself on the first refresh.
+  app.dataset.saleIsLoot = saleIsLoot ? '1' : '';
+  app.dataset.soldToken = soldToken;
+  app.dataset.unit = UNIT;
   const userBalance = saleIsLoot ? lootBalance : shareBalance;
   // Continuous Sale state
   let contSaleActive = false;
@@ -4506,11 +4562,13 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     </div>
   `;
 
-  // Shareholders drawer (reuses loadHolders from standard DAICO page)
+  // Holders drawer (reuses loadHolders from the standard DAICO page, which already
+  // counts shares + loot per member — so it is right for a loot cause and only the
+  // heading was not).
   html += `
     <div class="drawer" id="holdersDrawer" data-dao="${daoAddr}">
       <button class="drawer-toggle" onclick="toggleHolders()">
-        <span>Shareholders</span>
+        <span>Holders</span>
         <span class="arrow">&#9660;</span>
       </button>
       <div class="drawer-body" id="holdersContent"></div>
@@ -4533,11 +4591,6 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // Store for buy/ragequit functions
   app.dataset.dao = daoAddr;
   app.dataset.shares = sharesAddr;
-  // The buy/redeem handlers run from a click long after this render, so which token the
-  // sale mints travels with the DOM rather than in a module variable a re-render resets.
-  app.dataset.saleIsLoot = saleIsLoot ? '1' : '';
-  app.dataset.soldToken = soldToken;
-  app.dataset.unit = UNIT;
   app.dataset.contSale = contSaleActive ? contSaleAddr : '';
   app.dataset.price = price.toString();
   app.dataset.treasury = treasuryETH.toString();
@@ -4814,6 +4867,12 @@ function causeCopyToken(addr, el) {
     setTimeout(() => { t.textContent = was; }, 1400);
   }).catch(() => {});
 }
+
+// What this cause calls the token it sold. The trading, pool and order panels are built
+// by click handlers that run long after the render that worked it out, so they read it
+// back off the DOM rather than each re-deriving it from the sale.
+function causeUnit() { return $('app')?.dataset.unit || 'shares'; }
+function causeUnitOne() { return causeUnit() === 'loot' ? 'loot' : 'share'; }
 
 function causeTokenRow(sharesAddr, sym) {
   return `<button onclick="causeCopyToken('${sharesAddr}', this)" title="${sharesAddr}"
@@ -5453,8 +5512,8 @@ async function causeSwapQuote() {
   const amt = parseFloat(raw || '0');
   if (!amt || amt <= 0) {
     el.textContent = _causeMode === 'lq'
-      ? (_swapSide === 'buy' ? 'How much ETH to add' : 'How many shares to add')
-      : (_swapSide === 'buy' ? 'How much ETH to spend' : 'How many shares to sell');
+      ? (_swapSide === 'buy' ? 'How much ETH to add' : `How much ${causeUnit()} to add`)
+      : (_swapSide === 'buy' ? 'How much ETH to spend' : `How much ${causeUnit()} to sell`);
     _swapQuote = null; if (btn) btn.disabled = !!_connectedAddress;
     const ob = $('causeSwapOut');
     if (ob) { ob.textContent = '0.0'; ob.style.color = 'var(--fg-dim)'; }
@@ -5540,7 +5599,7 @@ async function causeSwapQuote() {
     // Below a quarter the number is just how a curve works and saying it every time trains
     // people to ignore it. Above, it is the trade eating the band and worth interrupting for.
     const heavy = !_swapQuote.book && slipPct !== null && Math.abs(slipPct) >= 25;
-    el.innerHTML = `<span>${fmtPriceWei(_swapQuote.eff)} per share</span>`
+    el.innerHTML = `<span>${fmtPriceWei(_swapQuote.eff)} per ${causeUnitOne()}</span>`
       + (_swapQuote.book
           ? `<div style="color:var(--fg-dim);margin-top:3px">Filling a resting order \u2014 a fixed price, so no slippage and nothing moves.</div>`
           : '')
@@ -5585,7 +5644,7 @@ async function causeSwapGo() {
       // the pull to this exact route so a funded router cannot be spent by another one.
       const token = new ethers.Contract(shares, ERC20_ABI, sgn);
       if ((await token.allowance(me, ZROUTER)) < amountIn) {
-        say('Approving shares\u2026');
+        say(`Approving ${causeUnit()}\u2026`);
         await (await token.approve(ZROUTER, ethers.MaxUint256)).wait();
       }
       const checkpoint = _encSnwap(ZERO, 0n, me, ZERO, 0n, PROUTE,
@@ -5673,7 +5732,7 @@ function causeOrderQuote() {
   const gw = parseFloat(($('causeOrderPrice')?.value || '').trim() || '0');
   const go = $('causeOrderGo');
   if (!sh || !gw || sh <= 0 || gw <= 0) {
-    el.textContent = 'How many shares, and at what price each';
+    el.textContent = `How much ${causeUnit()}, and at what price each`;
     if (go) go.disabled = !!_connectedAddress;
     return;
   }
@@ -5688,7 +5747,7 @@ function causeOrderQuote() {
     ? `You lock ${fmtNum(Number(ethers.formatEther(ethWei)))} ETH and receive up to ${fmtTokenAmount(ethers.parseEther(String(sh)).toString())} ${sym} if filled.`
     : `You lock ${fmtTokenAmount(ethers.parseEther(String(sh)).toString())} ${sym} and receive up to ${fmtNum(Number(ethers.formatEther(ethWei)))} ETH if filled.`;
   if (floor > 0n && BigInt(Math.round(gw * 1e9)) < floor) {
-    el.innerHTML += `<div style="color:var(--red);margin-top:3px">Below the ${causeGwei(floor)} redemption price. A holder does better burning the shares than filling this.</div>`;
+    el.innerHTML += `<div style="color:var(--red);margin-top:3px">Below the ${causeGwei(floor)} redemption price. A holder does better burning the ${causeUnit()} than filling this.</div>`;
   }
 }
 
@@ -5715,7 +5774,7 @@ async function causeOrderPost() {
     } else {
       const token = new ethers.Contract(shares, ERC20_ABI, sgn);
       if ((await token.allowance(me, SWAPBOARD_PF)) < shWei) {
-        say('Approving shares\u2026');
+        say(`Approving ${causeUnit()}\u2026`);
         await (await token.approve(SWAPBOARD_PF, ethers.MaxUint256)).wait();
       }
       say('Confirm in your wallet\u2026');
@@ -5804,7 +5863,7 @@ async function causeBookFill(idStr) {
       // coin, then take the unwrap variant so no WETH ever reaches the wallet.
       const token = new ethers.Contract(_causePoolCache.shares, ERC20_ABI, sgn);
       if ((await token.allowance(me, o.board)) < o.coinAmt) {
-        say('Approving shares\u2026');
+        say(`Approving ${causeUnit()}\u2026`);
         await (await token.approve(o.board, ethers.MaxUint256)).wait();
       }
       say('Confirm in your wallet\u2026');
@@ -5946,11 +6005,11 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
             <button id="causeOrderTab_ask" onclick="causeOrderSide('ask')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:11px;padding:0 0 6px;cursor:pointer">Ask</button>
           </div>
           <div style="display:flex;gap:10px;align-items:baseline">
-            <input id="causeOrderShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares"
+            <input id="causeOrderShares" type="text" inputmode="decimal" placeholder="${causeUnit()}" aria-label="${causeUnit()}"
               style="flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font:inherit;font-size:15px;outline:none;padding:4px 0" oninput="causeOrderQuote()">
             <span style="font-size:10px;color:var(--fg-dim)">at</span>
             <span style="flex:1;min-width:0;display:inline-flex;align-items:baseline;gap:4px">
-              <input id="causeOrderPrice" type="text" inputmode="decimal" placeholder="price" aria-label="Price per share in gwei"
+              <input id="causeOrderPrice" type="text" inputmode="decimal" placeholder="price" aria-label="Price per ${causeUnitOne()} in gwei"
                 style="flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font:inherit;font-size:15px;outline:none;padding:4px 0" oninput="causeOrderQuote()">
               <span style="font-size:10px;color:var(--fg-dim)">gwei</span>
             </span>
@@ -5977,7 +6036,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       <div style="display:flex;gap:8px;margin-bottom:6px">
         <input id="causePoolEth" type="text" inputmode="decimal" placeholder="ETH" aria-label="ETH to seed"
           style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote('eth')">
-        <input id="causePoolShares" type="text" inputmode="decimal" placeholder="shares" aria-label="Shares to seed"
+        <input id="causePoolShares" type="text" inputmode="decimal" placeholder="${causeUnit()}" aria-label="${causeUnit()} to seed"
           style="flex:1;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none" oninput="causePoolQuote('shares')">
       </div>
       ${held > 0n ? `<div style="font-size:10px;color:var(--fg-dim);margin-bottom:8px">
@@ -5986,7 +6045,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
         <a href="#" onclick="causePoolFill(${held / 2n}n);return false" style="color:var(--fg-muted);text-decoration:underline">half</a> &middot;
         <a href="#" onclick="causePoolFill(${held}n);return false" style="color:var(--fg-muted);text-decoration:underline">all</a>
       </div>` : ''}
-      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter shares &mdash; the ETH side fills at the sale price, and the ratio sets the opening price</div>
+      <div id="causePoolQuote" style="font-size:11px;color:var(--fg-muted);margin-bottom:8px;min-height:30px;line-height:1.5">Enter ${causeUnit()} &mdash; the ETH side fills at the sale price, and the ratio sets the opening price</div>
       <button class="swap-btn" style="width:100%;font-size:12px" onclick="causeCreatePool('${sharesAddr}')">Create pool</button>
       <div id="causePoolStatus" style="margin-top:8px"></div>
       <div style="margin-top:8px;text-align:center">
@@ -6033,7 +6092,7 @@ function causePoolQuote(src) {
   const sh = parseFloat($('causePoolShares')?.value || '0');
   if (!e || !sh || e <= 0 || sh <= 0) {
     el.innerHTML = salePx > 0n
-      ? 'Enter shares &mdash; the ETH side fills at the sale price, and the ratio sets the opening price'
+      ? `Enter ${causeUnit()} &mdash; the ETH side fills at the sale price, and the ratio sets the opening price`
       : 'Enter both sides &mdash; the ratio sets the opening price';
     return;
   }
@@ -6041,7 +6100,7 @@ function causePoolQuote(src) {
   try { px = ethers.parseEther(String(e)) * LQ_WAD / ethers.parseEther(String(sh)); }
   catch { el.textContent = 'Enter a valid amount'; return; }
 
-  let html = `Opening price ${fmtPriceWei(px)} per share, 0.3% fee, full range.`;
+  let html = `Opening price ${fmtPriceWei(px)} per ${causeUnitOne()}, 0.3% fee, full range.`;
   if (salePx > 0n && px !== salePx) {
     const d = Number((px - salePx) * 10000n / salePx) / 100;
     html += ` ${d > 0 ? '+' : ''}${d.toFixed(1)}% vs the sale.`;
@@ -6091,7 +6150,7 @@ async function causeCreatePool(sharesAddr) {
 
     const token = new ethers.Contract(sharesAddr, ERC20_ABI, sgn);
     if ((await token.allowance(me, PFACTORY)) < shAmt) {
-      say('Approving shares\u2026');
+      say(`Approving ${causeUnit()}\u2026`);
       await (await token.approve(PFACTORY, ethers.MaxUint256)).wait();
     }
 
@@ -8899,9 +8958,9 @@ function causeOnWalletChange() {
     // The dataset carries the balance as it was when the page rendered, and a page that
     // rendered before the wallet connected recorded zero. Repainting from that told a
     // holder of 18,013 shares they held none. Re-read it, then paint.
-    const app = $('app'), shares = app?.dataset.shares;
-    if (app && shares && _connectedAddress) {
-      withRPC(rpc => new ethers.Contract(shares, ERC20_ABI, rpc).balanceOf(_connectedAddress))
+    const app = $('app'), held = app?.dataset.soldToken || app?.dataset.shares;
+    if (app && held && _connectedAddress) {
+      withRPC(rpc => new ethers.Contract(held, ERC20_ABI, rpc).balanceOf(_connectedAddress))
         .then(b => {
           if (app.dataset.userBalance === b.toString()) return;
           app.dataset.userBalance = b.toString();
