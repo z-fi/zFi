@@ -623,6 +623,21 @@ input {
 .prop-state.defeated,.prop-state.expired { border-color:var(--red);color:var(--red);background:var(--status-error); }
 .prop-state.unopened { border-color:var(--fg-dim);color:var(--fg-dim); }
 .prop-votes { display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px;font-size:11px;color:var(--fg-muted);font-variant-numeric:tabular-nums; }
+/* Voting sits with the proposal it decides. Understated: three peers, none of them the
+   page's call to action, since which way to vote is not the page's opinion. */
+.prop-vote { display:flex;gap:6px;margin-top:8px; }
+.prop-vote-btn {
+  flex:1;padding:5px 8px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;
+  background:transparent;border:1px solid var(--border-muted);border-radius:5px;color:var(--fg-muted);
+  transition:color .15s,border-color .15s;
+}
+.prop-vote-btn:hover:not(:disabled) { color:var(--fg);border-color:var(--border); }
+.prop-vote-btn.for:hover:not(:disabled) { color:var(--green);border-color:var(--green); }
+.prop-vote-btn.against:hover:not(:disabled) { color:var(--red);border-color:var(--red); }
+.prop-vote-btn:disabled { opacity:.5;cursor:default; }
+.prop-voted { margin-top:8px;font-size:11px;color:var(--fg-muted); }
+.prop-voted .for { color:var(--green); }
+.prop-voted .against { color:var(--red); }
 .prop-votes .for { color:var(--green); }
 .prop-votes .against { color:var(--red); }
 /* A tally of zero is context, not a result — keep it readable but out of the way. */
@@ -700,6 +715,7 @@ input {
   .coin-user-balance { font-size:11px; }
   /* Ragequit / collapsible panels */
   .coin-rq-toggle { min-height:44px;padding:10px 0; }
+  .prop-vote-btn { min-height:36px; }
 }
 @media (max-width: 380px) {
   body { padding:70px 12px 20px; }
@@ -2392,6 +2408,29 @@ async function loadProposals(daoAddr) {
       const tally = (label, v, cls) =>
         `<span class="${v > 0 ? '' : 'zero'}">${cls ? `<span class="${cls}">${label}</span>` : label} ${v.toLocaleString(undefined,{maximumFractionDigits:0})}</span>`;
 
+      // Voting, where the proposal is rather than on another page. `voters` comes back in
+      // the same read that drew the bar, so whether this wallet has already voted is known
+      // without asking the chain again — and a holder who has voted is shown what they
+      // voted rather than a pair of buttons that would revert.
+      const mine = _connectedAddress
+        ? Array.from(p.voters || []).find(v => String(v[0]).toLowerCase() === _connectedAddress.toLowerCase())
+        : null;
+      const myWeight = mine ? Number(ethers.formatEther(mine[2] ?? 0n)) : 0;
+      const SUPPORT = { 0: 'against', 1: 'for', 2: 'abstain' };
+      let voteHTML = '';
+      if (state === 1) {                       // Active: the only state a vote lands in
+        if (mine) {
+          voteHTML = `<div class="prop-voted">You voted <b class="${SUPPORT[Number(mine[1])] || ''}">${SUPPORT[Number(mine[1])] || 'unknown'}</b>${myWeight > 0 ? ` with ${myWeight.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''}</div>`;
+        } else {
+          const idStr = id.toString();
+          voteHTML = `<div class="prop-vote">
+            <button type="button" class="prop-vote-btn for" onclick="causeVote('${daoAddr}','${idStr}',1,this)">For</button>
+            <button type="button" class="prop-vote-btn against" onclick="causeVote('${daoAddr}','${idStr}',0,this)">Against</button>
+            <button type="button" class="prop-vote-btn" onclick="causeVote('${daoAddr}','${idStr}',2,this)">Abstain</button>
+          </div>`;
+        }
+      }
+
       const metaBits = [];
       if (timeHTML) metaBits.push(timeHTML);
       if (createdAt > 0) metaBits.push(`<span title="${new Date(createdAt * 1000).toLocaleString()}">${fmtAgo(createdAt)}</span>`);
@@ -2417,6 +2456,7 @@ async function loadProposals(daoAddr) {
           ${tally('Abstain', abstainF, '')}
           ${scale > 0 ? `<span class="prop-turnout${quorumMet ? ' met' : ''}" title="${turnoutPct.toFixed(1)}% of ${fmtShares(p.supplySnapshot || 0n)} shares voted">${turnoutText}</span>` : ''}
         </div>
+        ${voteHTML}
         <div class="prop-meta">
           ${metaBits.join('<span class="sep">&middot;</span>')}
           <span class="prop-id" title="Proposal ID ${id.toString()}">#${shortId}</span>
@@ -2450,7 +2490,7 @@ async function loadProposals(daoAddr) {
     if (chatHtml) html += `<div class="prop-chat-list">${chatHtml}</div>`;
     html += `<div class="prop-sec-head${chatHtml ? '' : ' prop-sec-first'}">Proposals <span>${proposals.length}</span></div>`;
     html += propHtml;
-    html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Vote &amp; manage proposals in DAO page</a></div>`;
+    html += `<div style="text-align:center;margin-top:14px"><a href="../dao/#/dao/1/${daoAddr}" style="font-size:11px;color:var(--fg-muted)">Open, queue and execute in the DAO page</a></div>`;
     content.innerHTML = html;
     // Fills #causeChatBox, which only exists in the markup above. The badge read runs
     // after the paint so a slow lookup delays the compose box and never the messages.
@@ -6364,19 +6404,36 @@ function causeBookHTML(orders, sym) {
     </div>`;
   }
   const spot = _causePoolCache?.spot || 0n;
+  // An order is only worth taking if it beats the other venue on the same screen. An ask
+  // above spot and a bid below it lose to the pool, and the book was presenting those with
+  // the same weight — and the same white button — as one that wins. It listed the
+  // arithmetic and left the reader to do the comparison the whole page exists to make.
+  const beatsPool = o => spot <= 0n ? true : (o.bid ? o.price > spot : o.price < spot);
+  const anyGood = orders.some(beatsPool);
   const row = o => {
     const vs = spot > 0n ? Number((o.price - spot) * 10000n / spot) / 100 : null;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:11px">
+    const good = beatsPool(o);
+    // The edge, stated from the filler's side: what taking this saves against the pool.
+    const edge = vs === null ? null : (o.bid ? vs : -vs);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:11px;${good ? '' : 'opacity:.55'}">
       <span style="width:34px;color:${o.bid ? 'var(--green)' : 'var(--red)'};font-weight:600">${o.bid ? 'BID' : 'ASK'}</span>
       <span style="flex:1;color:var(--fg)">${causeGwei(o.price)}</span>
       <span style="flex:1;color:var(--fg-muted)">${fmtTokenAmount(o.coinAmt.toString())} ${escText(sym)}</span>
       <span style="flex:1;color:var(--fg-dim)">${fmtNum(Number(ethers.formatEther(o.ethAmt)))} ETH</span>
-      ${vs !== null ? `<span style="width:52px;text-align:right;color:var(--fg-dim)">${vs > 0 ? '+' : ''}${vs.toFixed(0)}%</span>` : ''}
-      <button class="swap-btn" style="font-size:10px;padding:4px 10px;white-space:nowrap"
+      ${edge !== null ? `<span style="width:80px;text-align:right;color:${good ? 'var(--green)' : 'var(--fg-dim)'}"
+        title="${good ? 'Better than the pool at this size' : 'The pool is the better side of this trade'}">${
+          good ? `+${Math.abs(edge).toFixed(0)}% vs pool` : `${Math.abs(edge).toFixed(0)}% worse`}</span>` : ''}
+      <button class="swap-btn" style="font-size:10px;padding:4px 10px;white-space:nowrap${good ? '' : ';background:transparent;color:var(--fg-muted);border:1px solid var(--border-muted)'}"
         onclick="causeBookFill('${o.id}')">${o.bid ? 'Sell into' : 'Buy'}</button>
     </div>`;
   };
-  return `<div>${orders.map(row).join('')}</div>`;
+  const note = (spot > 0n && !anyGood)
+    ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
+        Every resting order is priced worse than the pool right now &mdash; the swap above
+        fills better. These are what someone is asking for, not what the coin is worth.
+      </div>`
+    : '';
+  return `<div>${orders.map(row).join('')}</div>${note}`;
 }
 
 async function causeBookFill(idStr) {
@@ -6873,6 +6930,39 @@ async function causeBuy(daoAddr) {
       const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0];
       $('causeTradeStatus').innerHTML = `<div style="font-size:12px;color:var(--red)">${escText(msg.length < 100 ? msg : 'Buy failed')}</div>`;
     }
+  }
+}
+
+/// Cast a vote from the coin page. Weight comes from the snapshot, so this needs no
+/// balance read — the contract rejects a zero-weight voter and the message says so.
+async function causeVote(daoAddr, idStr, support, btn) {
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const row = btn?.closest('.prop-vote');
+  const restore = row ? row.innerHTML : '';
+  const say = (m, c) => { if (row) row.innerHTML = `<span style="font-size:11px;color:${c || 'var(--fg-muted)'}">${m}</span>`; };
+  if (row) row.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  try {
+    say('Confirm in your wallet\u2026');
+    const dao = new ethers.Contract(daoAddr, MOLOCH_PROP_ABI, sgn);
+    const tx = await dao.castVote(BigInt(idStr), support);
+    say(`Voting\u2026 <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    say('Voted.', 'var(--green)');
+    loadCauseGovernance(daoAddr, _renderGen).catch(() => {});
+    const drawer = $('proposalsDrawer');
+    if (drawer && drawer.classList.contains('open')) loadProposals(daoAddr);
+  } catch (e) {
+    if (e.code === 'ACTION_REJECTED' || /user rejected/.test(e.message || '')) {
+      if (row) row.innerHTML = restore;
+      return;
+    }
+    const msg = e.shortMessage || e.reason || (e.message || '').split('\n')[0] || 'Failed.';
+    // Moloch reverts an unweighted voter with Unauthorized, which as raw text tells a
+    // holder nothing about why their shares did not count.
+    say(/Unauthorized/i.test(msg)
+      ? 'No voting weight at this proposal\u2019s snapshot \u2014 shares bought after it opened do not vote on it.'
+      : escText(msg.length < 100 ? msg : 'Vote failed.'), 'var(--red)');
   }
 }
 
