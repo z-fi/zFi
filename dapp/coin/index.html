@@ -3157,16 +3157,27 @@ async function _galleryRenderFresh(gen) {
         const isSpam = _spamSet.has(cardAddr);
         if (isSpam) spamCount++;
 
-        // How much of the valuation is ether a holder could actually redeem. It is
-        // the one number that separates a market with something under it from one
-        // priced entirely on hope, and it is not derivable from FDV alone.
-        const backedPct = fdvEth > 0 ? Math.min(100, (backingEth / fdvEth) * 100) : 0;
+        // What a buyer gets back if the market walks away: the redemption floor as a
+        // fraction of the price they would pay for the same tokens.
+        //
+        // This used to divide the pot by FDV, which is the wrong denominator and made
+        // every coin look unbacked. `redeem()` pays pro-rata against circulating supply
+        // and explicitly excludes the tokens sitting inside the pool — and on a young
+        // launch that is most of the supply. ZCAT read "12.8% backed" while its floor
+        // was 93% of spot, because 86% of its supply had no claim to begin with.
+        const marketPer = Number(row.marketPrice), floorPer = Number(row.floorPrice);
+        const backedPct = marketPer > 0 ? Math.min(100, (floorPer / marketPer) * 100) : 0;
         const bars = Math.round(backedPct / 10);
 
+        // The pool's ether is what a trader can actually get in and out against, and it
+        // is what the gallery is ranked by — so the card shows it next to the valuation
+        // rather than leaving FDV to speak alone.
+        const liqDisplay = backingEth >= 0.01 ? backingEth.toFixed(2)
+          : backingEth > 0 ? backingEth.toFixed(4) : '0';
         const mcapDisplay = fdvEth > 1e-6 ? fmtMcap(fdvEth) : '';
         const mcapUsd = fdvEth > 1e-6 && ethUsd > 0 ? fmtUsd(fdvEth * ethUsd) : '';
         const statusText = row.floorPrice > 0n
-          ? `${backedPct < 0.1 ? '<0.1' : backedPct.toFixed(1)}% backed by ether`
+          ? `Floor at ${backedPct < 1 ? '<1' : backedPct.toFixed(0)}% of price`
           : 'No buys yet';
         const allocPct = Number(row.allocBps) / 100;
         const badgeTitle = 'single-sided full-range pool, liquidity locked in the launcher'
@@ -3187,9 +3198,9 @@ async function _galleryRenderFresh(gen) {
                 <div class="coin-card-symbol">$${escText(lSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">simple</span></div>
               </div>
             </div>
-            <div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
-            <div class="coin-card-stat">${statusText}</div>
-            ${mcapDisplay ? `<div class="coin-card-mcap">FDV ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
+            <div class="coin-card-bar" title="How much of the price you pay is redeemable from the pool at any time. It only ever rises.">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
+            <div class="coin-card-stat" title="Burn the coin back to the launcher for its share of the pool's ether. This is that floor, against what the market is charging.">${statusText}</div>
+            <div class="coin-card-mcap"><span title="Ether in the pool — what you can trade in and out against.">${liqDisplay} &Xi; pool</span>${mcapDisplay ? ` &middot; <span title="Spot price times total supply.">FDV ${mcapDisplay}</span>${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}` : ''}</div>
           </a>
         `;
         // Ranked on liquidity, not FDV. FDV is spot price times full supply, so a coin
@@ -3699,7 +3710,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Ether the locked position would release in full. This is what backs the floor.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Backing</div>
         <div style="font-weight:600">${backingEth >= 0.0001 ? backingEth.toFixed(4) : backingEth > 0 ? backingEth.toExponential(2) : '0'} ETH</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${fdvEth > 0 ? (Math.min(100, backingEth / fdvEth * 100)).toFixed(1) + '% of FDV' : 'in the pool'}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 && marketEth > 0 ? 'floor is ' + Math.min(100, floorEth / marketEth * 100).toFixed(0) + '% of price' : 'in the pool'}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Burn back to the launcher for this much ether per token, at any time. It only ever rises.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Floor</div>
