@@ -3,18 +3,19 @@ pragma solidity ^0.8.24;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
 
-interface IDutchAuction {
+interface IDutchboard {
     function listNFT(
         address token,
+        address quote,
         uint256[] calldata ids,
-        uint128 startPrice,
-        uint128 endPrice,
+        uint256 startPrice,
+        uint256 endPrice,
         uint40 startTime,
         uint40 duration
     ) external returns (uint256 id);
 
     function priceOf(uint256 id) external view returns (uint256);
-    function fill(uint256 id, uint128 take) external payable;
+    function fill(uint256 id, uint128 take, address to, uint256 maxCost) external payable;
     function cancel(uint256 id) external;
 }
 
@@ -26,10 +27,12 @@ interface IERC721 {
 }
 
 /// Mirrors the NFT branch of dapp/modules/auction.js against the deployed
-/// DutchAuction: the same two-step approve-then-list the UI performs, with the
+/// Dutchboard: the same two-step approve-then-list the UI performs, with the
 /// same startTime/duration/endPrice arithmetic, and the decay curve the form draws.
 contract AuctionLaunchSimTest is Test {
-    IDutchAuction constant AUCTION = IDutchAuction(0x0000000003635fd3852E772C6E09Ce2aF25d7133);
+    IDutchboard constant AUCTION = IDutchboard(0x000000a213b430D14Bae6062c176289B05e04489);
+    /// The form lists in native ETH, which Dutchboard spells as a zero `quote`.
+    address constant QUOTE_ETH = address(0);
     // Milady Maker — an entry from the dapp's POPULAR_NFT_COLLECTIONS, so the
     // listing runs against a real collection rather than a local mock.
     IERC721 constant NFT = IERC721(0x5Af0D9827E0c53E4799BB226655A1de152A425a5);
@@ -44,7 +47,9 @@ contract AuctionLaunchSimTest is Test {
     uint256 tokenId;
 
     function setUp() public {
-        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")), 25_640_000);
+        // Unpinned: Dutchboard postdates the block this suite used against the
+        // old DutchAuction, and the fixture only needs a live NFT owner.
+        vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth-mainnet.public.blastapi.io")));
         vm.deal(seller, 10 ether);
         vm.deal(buyer, 1000 ether);
 
@@ -68,7 +73,7 @@ contract AuctionLaunchSimTest is Test {
         if (NFT.getApproved(tokenId) != address(AUCTION)) NFT.approve(address(AUCTION), tokenId);
         // Step 2: list. startTime 0 means "start now" — the contract substitutes
         // block.timestamp. A literal 0 would otherwise be a fully-elapsed auction.
-        id = AUCTION.listNFT(address(NFT), ids, startPrice, endPrice, 0, uint40(durationDays) * 86400);
+        id = AUCTION.listNFT(address(NFT), QUOTE_ETH, ids, startPrice, endPrice, 0, uint40(durationDays) * 86400);
         vm.stopPrank();
     }
 
@@ -122,7 +127,7 @@ contract AuctionLaunchSimTest is Test {
         assertEq(AUCTION.priceOf(id), 0, "0% floor did not decay to zero");
 
         vm.prank(buyer);
-        AUCTION.fill{value: 0}(id, 0);
+        AUCTION.fill{value: 0}(id, 0, buyer, 0);
         assertEq(NFT.ownerOf(tokenId), buyer, "buyer could not take the NFT for free at a 0% floor");
     }
 
@@ -146,15 +151,15 @@ contract AuctionLaunchSimTest is Test {
 
         // floor > 100%: endPrice above startPrice.
         vm.expectRevert();
-        AUCTION.listNFT(address(NFT), ids, 10 ether, 20 ether, 0, 3 days);
+        AUCTION.listNFT(address(NFT), QUOTE_ETH, ids, 10 ether, 20 ether, 0, 3 days);
 
         // duration 0.
         vm.expectRevert();
-        AUCTION.listNFT(address(NFT), ids, 10 ether, 0.1 ether, 0, 0);
+        AUCTION.listNFT(address(NFT), QUOTE_ETH, ids, 10 ether, 0.1 ether, 0, 0);
 
         // start price 0.
         vm.expectRevert();
-        AUCTION.listNFT(address(NFT), ids, 0, 0, 0, 3 days);
+        AUCTION.listNFT(address(NFT), QUOTE_ETH, ids, 0, 0, 0, 3 days);
         vm.stopPrank();
     }
 
@@ -166,7 +171,7 @@ contract AuctionLaunchSimTest is Test {
         uint256 before = seller.balance;
 
         vm.prank(buyer);
-        AUCTION.fill{value: price}(id, 0);
+        AUCTION.fill{value: price}(id, 0, buyer, price);
 
         assertEq(NFT.ownerOf(tokenId), buyer, "buyer did not receive the NFT");
         assertEq(seller.balance - before, price, "seller was not paid the live price");

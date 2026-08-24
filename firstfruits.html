@@ -1,0 +1,2090 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firstfruits — Charitable Giving on Ethereum</title>
+<meta name="description" content="Charitable giving on Ethereum. Stake ETH or rETH into the vault — your principal stays withdrawable, and the Rocket Pool staking yield it earns is routed to causes you choose.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cg fill='%2338a83c'%3E%3Cpath d='M20.5 2.5C21.6 11 17.5 18 11 21.5 10 13 14 6 20.5 2.5Z'/%3E%3Cpath d='M2.2 8.5C7.6 9.8 10.6 14.4 10.9 21.4 5.6 20.1 2.5 15.5 2.2 8.5Z'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<meta name="theme-color" id="tc" content="#fcfcfc">
+<style>
+/* Palette lifted from the production build's Skeleton "cerberus" theme:
+   neutral surfaces at chroma 0, a single blue primary at hue 258. */
+:root{
+color-scheme:light;
+--s50:oklch(99% 0 0);--s100:oklch(91% 0 0);--s200:oklch(81% 0 0);--s300:oklch(72% 0 0);
+--s800:oklch(32% 0 0);--s900:oklch(25% 0 0);--s950:oklch(18% 0 0);
+--p400:oklch(63% .19 255.71);--p500:oklch(57% .21 258.29);
+--bg:oklch(96.5% 0 0);--card:var(--s50);--sunk:oklch(93.5% 0 0);--line:oklch(87% 0 0);
+--fg:oklch(18% 0 0);--mut:oklch(45% 0 0);--pri:var(--p500);
+--k:oklch(18% 0 0);--kf:#fff;--kh:oklch(30% 0 0);
+--good:oklch(52% .16 149);--bad:oklch(55% .21 25);
+--shadow:0 1px 2px #0000000a,0 4px 16px #0000000d;
+--r:.75rem;--r-lg:1rem;
+}
+.d{
+color-scheme:dark;
+--bg:oklch(13% 0 0);--card:oklch(17.5% 0 0);--sunk:oklch(22.5% 0 0);--line:oklch(29% 0 0);
+--fg:oklch(97% 0 0);--mut:oklch(70% 0 0);--pri:var(--p400);
+--k:oklch(97% 0 0);--kf:oklch(13% 0 0);--kh:oklch(85% 0 0);
+--good:oklch(75% .16 149);--bad:oklch(70% .18 25);
+--shadow:0 1px 2px #00000059,0 12px 32px #0000004d;
+}
+*{box-sizing:border-box}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans",Arial,sans-serif;
+line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+h1,h2,h3,p{margin:0}
+
+/* Full bleed with generous gutters, as the hosted build does (lg:px-18).
+   A centred max-width column was the single thing that made this page read
+   cramped next to it: the hero has to be able to breathe. */
+.wrap{padding:0 1rem}
+@media(min-width:640px){.wrap{padding:0 1.5rem}}
+@media(min-width:1024px){.wrap{padding:0 4.5rem}}
+.mut{color:var(--mut)}
+.hide{display:none!important}
+
+/* --------------------------------------------------------------- app bar */
+.bar{position:sticky;top:0;z-index:20;background:color-mix(in oklab,var(--sunk) 90%,transparent);
+backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.bar .wrap{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:1rem;height:4.25rem}
+.brand{display:flex;align-items:center;gap:.55rem;text-decoration:none;font-size:1.125rem;font-weight:600}
+.brand svg{width:2rem;height:2rem;flex:0 0 auto}
+.nav{display:none;justify-content:center;gap:1.75rem}
+@media(min-width:768px){.nav{display:flex}}
+.nav a{font-size:.875rem;text-decoration:none;opacity:.75;padding:.4rem 0;
+display:inline-flex;align-items:center;min-height:1.75rem;
+border-bottom:2px solid transparent;transition:opacity .15s,border-color .15s}
+.nav a:hover{opacity:1;border-bottom-color:var(--pri)}
+.trail{display:flex;align-items:center;gap:.5rem;justify-self:end;min-width:0}
+.chip{display:inline-flex;align-items:center;gap:.5rem;background:var(--card);
+border:1px solid var(--line);border-radius:var(--r);padding:.5rem .85rem;font:inherit;
+font-size:.875rem;cursor:pointer;color:var(--fg);min-width:0;max-width:min(16rem,42vw);
+transition:border-color .15s}
+.chip:hover{border-color:var(--pri)}
+.chip b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .bal{color:var(--mut);font-variant-numeric:tabular-nums}
+@media(max-width:560px){.chip .bal{display:none}}
+/* A name in the chip is as long as somebody chose to make it. Below this the
+   bar has no room to spare, so the controls shrink and the name truncates
+   rather than pushing the page sideways. */
+@media(max-width:430px){
+.bar .wrap{gap:.45rem;height:3.85rem}
+.chip{padding:.4rem .6rem;font-size:.8125rem}
+.icon-btn{width:2.35rem;height:2.35rem}
+.brand{font-size:1.0625rem;gap:.4rem}
+.brand svg{width:1.75rem;height:1.75rem}}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:2.6rem;height:2.6rem;
+border:1px solid var(--line);border-radius:var(--r);background:var(--card);color:var(--fg);
+cursor:pointer;transition:border-color .15s,color .15s}
+.icon-btn:hover{border-color:var(--pri);color:var(--pri)}
+
+/* ---------------------------------------------------------------- pieces */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+box-shadow:var(--shadow)}
+.badge{display:inline-flex;align-items:center;gap:.75rem;background:var(--sunk);
+border-radius:999px;padding:.4rem 1.15rem .4rem .4rem;font-weight:600}
+.badge svg{width:2rem;height:2rem}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
+background:var(--sunk);color:var(--fg);border:1px solid transparent;border-radius:var(--r);
+padding:.65rem 1.1rem;font:inherit;font-weight:500;cursor:pointer;text-decoration:none;
+white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.btn:hover:not(:disabled){border-color:var(--line);background:color-mix(in oklab,var(--sunk) 82%,var(--fg) 8%)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-lg{padding:.9rem 1.6rem;font-size:1.0625rem}
+.btn-block{width:100%}
+.btn-pri{background:var(--k);color:var(--kf)}
+.btn-pri:hover:not(:disabled){background:var(--kh);border-color:transparent}
+.btn-sm{padding:.4rem .8rem;font-size:.8125rem;font-weight:600}
+
+/* ----------------------------------------------------------------- hero */
+.hero{padding:2.5rem 0 3rem}
+@media(min-width:1024px){.hero{padding:4.5rem 0 5rem}}
+.hero-grid{display:grid;gap:3rem;align-items:center}
+@media(min-width:1024px){.hero-grid{grid-template-columns:1.05fr .95fr;gap:4rem}}
+h1.big{font-size:2.5rem;line-height:1.08;font-weight:700;letter-spacing:-.025em;margin-top:1.5rem}
+@media(min-width:640px){h1.big{font-size:3.25rem}}
+@media(min-width:1024px){h1.big{font-size:4rem}}
+h1.big .accent{color:var(--pri)}
+.lead{margin-top:1.5rem;font-size:1.125rem;color:var(--mut);max-width:38rem}
+@media(min-width:640px){.lead{font-size:1.1875rem}}
+.ctas{margin-top:2rem;display:flex;flex-direction:column;gap:1rem}
+@media(min-width:640px){.ctas{flex-direction:row;flex-wrap:wrap;align-items:center}}
+.feats{margin-top:2.75rem;display:grid;gap:1.5rem;font-size:.9375rem}
+@media(min-width:640px){.feats{grid-template-columns:repeat(3,1fr);gap:1.25rem}}
+.feat{display:flex;align-items:flex-start;gap:.85rem}
+.feat .ico{display:flex;align-items:center;justify-content:center;width:3rem;height:3rem;
+flex:0 0 auto;border-radius:var(--r)}
+.feat p{font-weight:600;line-height:1.35}
+.feat p+p{margin-top:.15rem;font-weight:400;font-size:.875rem;color:var(--mut)}
+.i-blue{background:color-mix(in oklab,oklch(60% .2 258) 13%,transparent);color:oklch(52% .2 258)}
+.i-green{background:color-mix(in oklab,oklch(60% .17 149) 13%,transparent);color:oklch(48% .16 149)}
+.i-amber{background:color-mix(in oklab,oklch(75% .16 70) 16%,transparent);color:oklch(55% .15 70)}
+.d .i-blue{color:oklch(74% .16 258)}
+.d .i-green{color:oklch(78% .15 149)}
+.d .i-amber{color:oklch(84% .13 70)}
+
+/* -------------------------------------------------------- overview card */
+.ov{padding:1.75rem}
+.ov-hd{display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+border-bottom:1px solid var(--line);padding-bottom:1.1rem}
+.ov-hd h2{font-size:1.1875rem;font-weight:600}
+.tvl{padding-top:1.25rem}
+.tvl .big{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem;margin-top:.15rem}
+.tvl .big b{font-size:2.25rem;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.tvl .big .sym{font-size:1.375rem;color:var(--mut)}
+.tvl .big .usd{font-size:1rem;color:var(--mut);font-variant-numeric:tabular-nums}
+.tiles{margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+.tile{background:var(--sunk);border-radius:var(--r);padding:1.05rem 1.15rem}
+.tile span{font-size:.75rem;color:var(--mut)}
+.tile b{display:block;margin-top:.3rem;font-size:1.1875rem;font-weight:600;
+font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.3}
+.tile .usd{font-size:.8125rem;font-weight:400;color:var(--mut)}
+
+/* -------------------------------------------------------------- section */
+section{padding:0 0 3.5rem}
+@media(min-width:1024px){section{padding:0 0 4.5rem}}
+.sec-h{font-size:1.625rem;font-weight:600;letter-spacing:-.01em}
+.sec-sub{margin-top:.35rem;color:var(--mut);font-size:.9375rem}
+
+/* ---------------------------------------------------------- manage panes */
+/* Grid and flex children default to min-width:auto, i.e. min-content. A pane
+   holding a big number input and a row of nowrap buttons therefore refuses to
+   go below ~520px and drags the whole document sideways on a phone. Letting
+   them shrink is what keeps the page one column wide. */
+.manage{display:grid;gap:1.25rem;margin-top:1.75rem}
+.manage>*,.split-2>*,.hero-grid>*,.cz-grid>*,.kv>*,.foot-grid>*{min-width:0}
+.field,.field-row,.field-hd,.tabs,.tabs button,.split,.acts,.act,.act .who{min-width:0}
+@media(min-width:1024px){.manage{grid-template-columns:1.15fr .85fr;gap:1.5rem;align-items:start}}
+.pane{padding:1.75rem}
+.tabs{display:flex;gap:.2rem;background:var(--sunk);padding:.28rem;border-radius:var(--r);margin-bottom:1.25rem}
+.tabs button{flex:1;padding:.6rem .3rem;font:inherit;font-size:.75rem;font-weight:600;
+text-transform:uppercase;letter-spacing:.06em;border:0;border-radius:calc(var(--r) - .28rem);
+background:transparent;color:var(--mut);cursor:pointer;transition:background .15s,color .15s}
+.tabs button.on{background:var(--k);color:var(--kf)}
+.tabs button:hover:not(.on){color:var(--fg)}
+.field{background:var(--sunk);border:1px solid transparent;border-radius:var(--r);
+padding:.95rem 1.1rem;margin:.6rem 0;transition:border-color .15s}
+.field:hover{border-color:var(--line)}
+.field:focus-within{border-color:var(--pri)}
+.field-hd{display:flex;justify-content:space-between;align-items:center;gap:.5rem;
+font-size:.75rem;color:var(--mut)}
+.field-hd .lbl{text-transform:uppercase;letter-spacing:.07em}
+.field-row{display:flex;gap:.6rem;align-items:center;margin-top:.5rem}
+.field input{flex:1;min-width:0;width:100%;font:inherit;font-size:1.75rem;font-weight:500;
+letter-spacing:-.02em;border:0;background:transparent;color:var(--fg);outline:0;padding:0;
+font-variant-numeric:tabular-nums}
+.field input::placeholder{color:var(--mut);opacity:.4}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+select{appearance:none;-webkit-appearance:none;font:inherit;font-size:.9375rem;font-weight:600;
+color:var(--fg);cursor:pointer;border:0;padding:0 1rem 0 0;max-width:9rem;text-overflow:ellipsis;
+background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23888'/%3E%3C/svg%3E") no-repeat right center}
+option{background:var(--card);color:var(--fg)}
+.hint{font-size:.8125rem;color:var(--mut);margin-top:.65rem;line-height:1.6}
+.tin{width:100%;padding:.7rem .85rem;font:inherit;font-size:.9375rem;border:1px solid var(--line);
+border-radius:var(--r);background:var(--sunk);color:var(--fg);outline:0;transition:border-color .15s}
+.tin:focus{border-color:var(--pri)}
+.rowline{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;
+padding:.55rem 0;font-size:.9375rem;color:var(--mut);border-bottom:1px solid var(--line)}
+.rowline:last-child{border-bottom:0}
+.rowline b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.split{display:flex;gap:.6rem;align-items:center;margin:.45rem 0}
+/* A <select> is as wide as its longest option, and cause names are chosen by
+   strangers. Basis zero plus min-width zero lets it take the row's leftovers
+   instead of setting the row's width. */
+.split select{flex:1 1 0;min-width:0;width:100%;max-width:none}
+.split input{flex:0 0 3.75rem;width:3.75rem;text-align:right;font:inherit;font-size:.9375rem;font-weight:600;
+border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);outline:0;
+font-variant-numeric:tabular-nums;padding:.1rem 0}
+.split input:focus{border-bottom-color:var(--pri)}
+.bar-track{position:relative;height:.375rem;border-radius:999px;background:var(--line);
+margin:.85rem 0 .3rem;overflow:hidden}
+.bar-track>i{position:absolute;inset:0 auto 0 0;background:var(--pri);border-radius:999px;
+transition:width .2s}
+.acts{display:flex;gap:.6rem;margin-top:1rem;flex-wrap:wrap}
+.acts>*{flex:1 1 7rem}
+#stat{margin-top:1.1rem;font-size:.875rem;color:var(--mut);text-align:center;overflow-wrap:anywhere}
+#stat a{color:var(--pri)}
+#stat.err{color:var(--bad)}
+#stat.ok{color:var(--good)}
+.pos-empty{padding:2rem 0;text-align:center;color:var(--mut);font-size:.9375rem}
+
+/* ---------------------------------------------------------------- steps */
+/* Horizontal with arrows on wide screens, exactly as the hosted build does;
+   stacked rows below that, where a five-across row would be unreadable. */
+.steps{margin-top:1.75rem;display:grid;gap:1.5rem}
+@media(min-width:640px){.steps{grid-template-columns:repeat(3,1fr);gap:2rem 1.25rem}}
+@media(min-width:1100px){.steps{display:flex;align-items:flex-start;gap:.5rem}}
+.step{display:flex;align-items:center;gap:1rem}
+@media(min-width:640px){.step{flex-direction:column;text-align:center;gap:1rem}}
+@media(min-width:1100px){.step{flex:1;min-width:0}}
+.step .ico{display:flex;align-items:center;justify-content:center;width:3.5rem;height:3.5rem;
+flex:0 0 auto;border-radius:var(--r-lg);
+background:color-mix(in oklab,var(--pri) 13%,transparent);color:var(--pri)}
+@media(min-width:640px){.step .ico{width:5rem;height:5rem}}
+.step p{font-size:1rem;font-weight:600}
+.step p+p{margin-top:.4rem;font-weight:400;font-size:.875rem;color:var(--mut)}
+.arrow{display:none;color:var(--mut);opacity:.45;height:5rem;align-items:center;flex:0 0 1.25rem}
+@media(min-width:1100px){.arrow{display:flex}}
+
+/* --------------------------------------------------------------- causes */
+.cz-grid{display:grid;gap:1.25rem;margin-top:1.75rem;
+grid-template-columns:repeat(auto-fill,minmax(17.5rem,1fr))}
+.cz{padding:1.35rem;display:flex;flex-direction:column;gap:.85rem}
+.cz.off{opacity:.55}
+.cz-t{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
+.cz-t h3{font-size:1.0625rem;font-weight:600;overflow-wrap:anywhere;line-height:1.3}
+.cz-n{font-size:.75rem;color:var(--mut);font-variant-numeric:tabular-nums;flex:0 0 auto;
+padding-top:.15rem}
+.cz-rows{margin-top:auto}
+.cz .rowline{font-size:.875rem;padding:.4rem 0}
+.cz-to{font-size:.8125rem;color:var(--mut);text-decoration:none;align-self:flex-start;
+display:inline-flex;align-items:center;min-height:1.75rem;padding:.2rem 0;
+border-bottom:1px solid var(--line)}
+.cz-to:hover{color:var(--pri)}
+.cz .acts{margin-top:.35rem}
+
+/* ---------------------------------------------------- transparency / cta */
+.kv{display:grid;gap:1rem;margin-top:1.5rem;
+grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))}
+.kv div{background:var(--sunk);border-radius:var(--r);padding:1rem 1.15rem}
+.kv span{display:block;font-size:.75rem;color:var(--mut)}
+.kv a{font-size:.875rem;color:var(--pri);overflow-wrap:anywhere;text-decoration:none;
+display:inline-block;min-height:1.75rem;padding-top:.15rem}
+.kv a:hover{text-decoration:underline}
+.band{background:color-mix(in oklab,var(--pri) 12%,var(--bg))}
+.band .wrap{display:flex;flex-direction:column;align-items:center;gap:1.5rem;text-align:center;
+padding-top:3rem;padding-bottom:3rem}
+@media(min-width:640px){.band .wrap{flex-direction:row;justify-content:space-between;text-align:left}}
+.band b{font-size:1.375rem;font-weight:700}
+
+/* --------------------------------------------------------------- footer */
+footer{border-top:1px solid var(--line);background:var(--card)}
+footer .wrap{padding-top:3rem;padding-bottom:3rem}
+.foot-grid{display:grid;gap:2.5rem}
+@media(min-width:640px){.foot-grid{grid-template-columns:2fr 1fr 1fr}}
+footer h2{font-size:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+footer ul{margin:1rem 0 0;padding:0;list-style:none;display:grid;gap:.75rem;font-size:.875rem}
+footer ul a{opacity:.8;text-decoration:none;display:inline-flex;align-items:center;min-height:1.75rem}
+footer ul a:hover{opacity:1;color:var(--pri)}
+.foot-end{margin-top:2.5rem;border-top:1px solid var(--line);padding-top:1.5rem;
+display:flex;flex-direction:column;gap:.5rem;font-size:.75rem;color:var(--mut)}
+@media(min-width:640px){.foot-end{flex-direction:row;align-items:center;justify-content:space-between}}
+
+/* ------------------------------------------------------------- sparkline */
+.spark{margin-top:.9rem;width:100%;height:5.5rem;display:block}
+.spark .ln{fill:none;stroke:var(--pri);stroke-width:2;vector-effect:non-scaling-stroke;
+stroke-linejoin:round;stroke-linecap:round}
+.spark .fl{fill:url(#sparkfill);stroke:none}
+.delta{font-size:.8125rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--good)}
+.delta.dn{color:var(--bad)}
+.delta.flat{color:var(--mut)}
+
+/* --------------------------------------------------------------- marquee */
+/* The hosted build scrolls its causes; same idea, and it pauses on hover so a
+   name can actually be read. Duplicated once so the loop has no seam. */
+.marq{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6rem,#000 calc(100% - 6rem),transparent);
+mask-image:linear-gradient(90deg,transparent,#000 6rem,#000 calc(100% - 6rem),transparent);
+padding:.25rem 0 3rem}
+.marq-in{display:flex;gap:1rem;width:max-content;animation:marq 48s linear infinite}
+.marq:hover .marq-in,.marq:focus-within .marq-in{animation-play-state:paused}
+@keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.marq-in{animation:none}.marq{overflow-x:auto;mask-image:none;-webkit-mask-image:none}}
+.marq-i{display:inline-flex;align-items:center;gap:.6rem;background:var(--sunk);
+border:1px solid transparent;border-radius:999px;padding:.6rem 1.1rem;font-size:.875rem;
+white-space:nowrap;text-decoration:none;transition:border-color .15s}
+.marq-i:hover{border-color:var(--pri)}
+.marq-i b{font-weight:600}
+.marq-i span{color:var(--mut);font-variant-numeric:tabular-nums}
+
+/* -------------------------------------------------------------- activity */
+.acty{display:flex;flex-direction:column}
+.act{display:flex;align-items:center;gap:.85rem;padding:.8rem 0;border-bottom:1px solid var(--line)}
+.act:last-child{border-bottom:0}
+.act .ico{display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;
+flex:0 0 auto;border-radius:.6rem}
+.act .who{min-width:0;flex:1}
+.act .who b{display:block;font-size:.875rem;font-weight:600}
+.act .who span{display:block;font-size:.75rem;color:var(--mut);overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.act .amt{text-align:right;flex:0 0 auto}
+.act .amt b{display:block;font-size:.8125rem;font-weight:600;font-variant-numeric:tabular-nums}
+.act .amt span{display:block;font-size:.75rem;color:var(--mut)}
+.act a{color:var(--mut);flex:0 0 auto;display:inline-flex;align-items:center;
+justify-content:center;width:1.75rem;height:1.75rem;margin-right:-.35rem}
+.act a:hover{color:var(--pri)}
+.split-2{display:grid;gap:1.25rem;margin-top:1.75rem}
+@media(min-width:1024px){.split-2{grid-template-columns:2fr 1fr;gap:1.5rem;align-items:start}}
+.stale{font-size:.75rem;color:var(--mut)}
+
+/* ---------------------------------------------------------------- modal */
+.modal{position:fixed;inset:0;z-index:40;background:#0000008c;display:flex;
+align-items:center;justify-content:center;padding:1rem}
+.modal .card{width:100%;max-width:22rem;padding:1.5rem}
+.wrow{display:flex;align-items:center;gap:.75rem;width:100%;padding:.75rem .85rem;margin:.35rem 0;
+border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--fg);
+font:inherit;font-weight:600;cursor:pointer;transition:background .15s}
+.wrow:hover{background:var(--sunk)}
+.wrow img{width:1.5rem;height:1.5rem;border-radius:.35rem}
+.wrow .wki{width:1.5rem;height:1.5rem;flex:0 0 auto;line-height:0}
+.wrow .wki svg{width:100%;height:100%}
+#wcQR svg{width:100%;height:auto;background:#fff;border-radius:.6rem;display:block}
+</style>
+
+<header class="bar"><div class="wrap">
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M20.5 2.5C21.6 11 17.5 18 11 21.5 10 13 14 6 20.5 2.5Z"/><path d="M2.2 8.5C7.6 9.8 10.6 14.4 10.9 21.4 5.6 20.1 2.5 15.5 2.2 8.5Z"/></g></svg>
+    <span>Firstfruits</span>
+  </a>
+  <nav class="nav">
+    <a href="#vault">Dashboard</a>
+    <a href="#causes">Causes</a>
+    <a href="#how">How it works</a>
+  </nav>
+  <div class="trail">
+    <button class="chip" id="connect"><span class="bal" id="chipBal"></span><b id="chipAddr">Connect Wallet</b></button>
+    <button class="icon-btn" id="node" title="Read node" aria-label="Read node"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg></button>
+    <button class="icon-btn" id="theme" title="Switch theme" aria-label="Switch theme"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+  </div>
+</div></header>
+
+<main id="top">
+
+<!-- ------------------------------------------------------------------ HERO -->
+<div class="hero"><div class="wrap"><div class="hero-grid">
+  <div>
+    <span class="badge">
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><defs><style> .rp-c1 { mask: url(#rp-mask); } .rp-c2 { fill: url(#rp-linear-gradient-3); } .rp-c3 { fill: url(#rp-linear-gradient-2); } .rp-c4 { fill: url(#rp-linear-gradient); } .rp-c5 { fill: #fff; } </style><linearGradient id="rp-linear-gradient" x1="1023.49" y1="-10427.81" x2="1134.36" y2="-10538.68" gradientTransform="translate(1158.93 -10403.25) rotate(-180)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f2681d"/><stop offset="1" stop-color="#f89863"/></linearGradient><linearGradient id="rp-linear-gradient-2" x1="-1320.91" y1="-116.53" x2="-1180.26" y2="-116.53" gradientTransform="translate(1046.7 -721.9) rotate(-45)" xlink:href="#linear-gradient"/><linearGradient id="rp-linear-gradient-3" x1="-13.5" y1="174.98" x2="163.35" y2="-1.86" gradientTransform="translate(83.15 -27.63) rotate(45)" gradientUnits="userSpaceOnUse"><stop offset=".11" stop-color="#000"/><stop offset=".13" stop-color="#050505"/><stop offset=".15" stop-color="#131313"/><stop offset=".18" stop-color="#2c2c2c"/><stop offset=".21" stop-color="#4e4e4e"/><stop offset=".24" stop-color="#7a7a7a"/><stop offset=".27" stop-color="#afafaf"/><stop offset=".3" stop-color="#ededed"/><stop offset=".31" stop-color="#fff"/><stop offset=".41" stop-color="#fff"/><stop offset=".75" stop-color="#fff"/><stop offset=".81" stop-color="#fff"/><stop offset=".82" stop-color="#f7f7f7"/><stop offset=".83" stop-color="#e3e3e3"/><stop offset=".85" stop-color="#c1c1c1"/><stop offset=".87" stop-color="#939393"/><stop offset=".88" stop-color="#585858"/><stop offset=".9" stop-color="#101010"/><stop offset=".91" stop-color="#000"/></linearGradient><mask id="rp-mask" x="-220.31" y="-220.31" width="600.61" height="600.61" maskUnits="userSpaceOnUse"><g><rect class="rp-c2" x="-50.12" y="31.18" width="250.09" height="110.77" transform="translate(-39.26 78.33) rotate(-45)"/><g><path class="rp-c5" d="M80,265.31c-102.18,0-185.31-83.13-185.31-185.31S-22.18-105.31,80-105.31,265.31-22.18,265.31,80s-83.13,185.31-185.31,185.31Z"/><path d="M80,9.69c38.83,0,70.31,31.48,70.31,70.31s-31.48,70.31-70.31,70.31S9.69,118.83,9.69,80,41.17,9.69,80,9.69M80-220.31c-40.44,0-79.79,7.97-116.96,23.69-35.79,15.14-67.88,36.76-95.39,64.26-27.51,27.51-49.13,59.6-64.26,95.39-15.72,37.17-23.69,76.52-23.69,116.96s7.97,79.79,23.69,116.96c15.14,35.79,36.76,67.88,64.26,95.39,27.51,27.51,59.6,49.13,95.39,64.26,37.17,15.72,76.52,23.69,116.96,23.69s79.79-7.97,116.96-23.69c35.79-15.14,67.88-36.76,95.39-64.26s49.13-59.6,64.26-95.39c15.72-37.17,23.69-76.52,23.69-116.96s-7.97-79.79-23.69-116.96c-15.14-35.79-36.76-67.88-64.26-95.39-27.51-27.51-59.6-49.13-95.39-64.26-37.17-15.72-76.52-23.69-116.96-23.69h0Z"/></g></g></mask></defs><g id="rp-Logomark"><g id="rp-Logo_BG"><circle class="rp-c4" cx="80" cy="80" r="78.4"/><path id="rp-bg" class="rp-c3" d="M80,9.67c-38.84,0-70.33,31.48-70.33,70.33,0,35.42,26.19,64.73,60.28,69.6,1.32.2,2.66.35,4.02.46,1.33.12,2.67.19,4.02.23.67.02,1.34.03,2.01.03s1.34,0,2.01-.03c1.35-.03,2.69-.11,4.02-.23,1.35-.11,2.69-.26,4.02-.45,34.08-4.87,60.28-34.18,60.28-69.61,0-38.85-31.49-70.33-70.33-70.33Z"/></g><g class="rp-c1"><path id="rp-Logo_Rocket" class="rp-c5" d="M59.68,108.85l-24.96,24.96c1.03.88,2.09,1.72,3.16,2.52l24.64-24.64-2.84-2.84ZM48.31,97.48l-24.63,24.63c.79,1.07,1.64,2.13,2.52,3.17l24.96-24.95-2.84-2.84ZM59.59,97.57l-30.72,30.72c.46.49.93.97,1.4,1.44s.96.94,1.44,1.4l30.72-30.72-2.84-2.84ZM115.23,44.78c-4.53-1.24-10.26-.38-16.2,2.3-5.25,2.36-10.66,6.14-15.54,11.15-2.2,2.25-4.15,4.61-5.83,7l-9.59,1.17-10.69,13.83,10.05,2.6c-.57,2.29-.84,4.5-.8,6.55l-2.53,3.29,3.25,3.25,3.28-2.52c2.06.04,4.26-.23,6.55-.8l2.6,10.05,13.81-10.68,1.16-9.6c2.4-1.69,4.77-3.64,7.03-5.85,5.01-4.89,8.8-10.31,11.16-15.57,2.67-5.93,3.52-11.66,2.29-16.18ZM96.09,72.78c-3.02,3.02-7.45,3.49-9.9,1.04-2.44-2.44-1.98-6.88,1.04-9.9,3.01-3.01,7.45-3.48,9.89-1.03,2.44,2.44,1.98,6.88-1.03,9.89Z"/></g></g></svg>
+      <span style="font-size:1.0625rem">Built with rETH</span>
+    </span>
+    <h1 class="big">Stake ETH.<br><span class="accent">Give what grows.</span></h1>
+    <p class="lead">Firstfruits is a charitable-giving vault. Stake ETH, earn staking yield via rETH, and the yield is routed to causes you care about. Your principal stays yours and is withdrawable anytime.</p>
+    <div class="ctas">
+      <a href="#vault" class="btn btn-lg">Stake ETH Now →</a>
+      <a href="#causes" class="btn btn-lg">Explore Causes</a>
+    </div>
+    <div class="feats">
+      <div class="feat"><span class="ico i-blue"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></span>
+        <div><p>Principal always yours</p><p>Withdraw your ETH anytime.</p></div></div>
+      <div class="feat"><span class="ico i-green"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.5-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z"/></svg></span>
+        <div><p>Powered by rETH</p><p>Secure liquid staking.</p></div></div>
+      <div class="feat"><span class="ico i-amber"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
+        <div><p>Give automatically</p><p>Yield routed based on your splits.</p></div></div>
+    </div>
+  </div>
+
+  <div class="card ov">
+    <div class="ov-hd"><h2>Vault Overview</h2><span class="mut" style="font-size:.75rem" id="blockAt"></span></div>
+    <div class="tvl">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:.75rem">
+        <p class="mut" style="font-size:.875rem">Total Value Locked</p>
+        <span class="delta hide" id="sDelta"></span>
+      </div>
+      <div class="big"><b id="sTvl">…</b><span class="sym">Ξ</span><span class="usd" id="sTvlUsd"></span></div>
+      <div id="readPick" class="hide">
+        <p class="hint" style="margin-top:.75rem">No wallet found. This page reads Ethereum
+          directly — pick a node to read from, or set your own with the globe icon.
+          Nothing is contacted until you choose. A read node sees your IP address and
+          what you look up; it never sees a key, and nothing you sign passes through it.</p>
+        <div class="acts" id="readOpts"></div>
+      </div>
+      <svg class="spark hide" id="spark" viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity=".28"/>
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path class="fl" id="sparkFill" d=""/><path class="ln" id="sparkLine" d=""/>
+      </svg>
+    </div>
+    <div class="tiles">
+      <div class="tile"><span>Total Causes</span><b id="sCauses">…</b></div>
+      <div class="tile"><span>Total Patrons</span><b id="sPatrons">…</b></div>
+      <div class="tile"><span>Total Yield Donated</span><b id="sGiven">…<span class="usd" id="sGivenUsd"></span></b></div>
+      <div class="tile"><span>Current rETH APY</span><b id="sApy">…</b></div>
+    </div>
+    <a href="#vault" class="btn btn-block btn-lg" style="margin-top:1.5rem">Manage Vault</a>
+  </div>
+</div></div></div>
+
+<!-- --------------------------------------------------------------- MARQUEE -->
+<div class="marq"><div class="marq-in" id="marq"></div></div>
+
+<!-- ----------------------------------------------------------- MANAGE VAULT -->
+<section id="vault"><div class="wrap">
+  <h2 class="sec-h">Manage Vault</h2>
+  <p class="sec-sub">Reads and writes the vault contract directly, from your own wallet.</p>
+  <div class="manage">
+
+    <div class="card pane">
+      <div class="tabs">
+        <button id="tGive" class="on">Stake</button>
+        <button id="tWd">Withdraw</button>
+        <button id="tNew">New cause</button>
+      </div>
+
+      <div id="pGive">
+        <div class="field">
+          <div class="field-hd"><span class="lbl">Stake</span><span id="balLbl"></span></div>
+          <div class="field-row">
+            <input id="amt" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+            <select id="asset"><option value="eth">ETH</option><option value="reth">rETH</option></select>
+            <button class="btn btn-sm" id="max">MAX</button>
+          </div>
+          <p class="hint" id="amtNote"></p>
+        </div>
+        <div class="field">
+          <div class="field-hd"><span class="lbl">Designate the yield</span><span id="bpsLeft"></span></div>
+          <div id="splits"></div>
+          <div class="bar-track"><i id="bpsBar" style="width:0"></i></div>
+          <div class="field-row"><button class="btn btn-sm" id="addSplit">+ Cause</button>
+            <span class="hint" id="splitNote" style="margin:0"></span></div>
+        </div>
+        <button class="btn btn-pri btn-block btn-lg" id="doGive" style="margin-top:1rem">Connect wallet</button>
+        <p class="hint">Your principal stays withdrawable. Only the rETH appreciation above your principal is routed to the causes you name; anything left undesignated accrues to your bank.</p>
+      </div>
+
+      <div id="pWd" class="hide">
+        <div class="field">
+          <div class="field-hd"><span class="lbl">Withdraw principal</span><span id="wMax"></span></div>
+          <div class="field-row">
+            <input id="wAmt" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+            <select id="wAsset"><option value="eth">as ETH</option><option value="reth">as rETH</option></select>
+            <button class="btn btn-sm" id="wMaxBtn">MAX</button>
+          </div>
+        </div>
+        <button class="btn btn-pri btn-block btn-lg" id="doWithdraw" style="margin-top:1rem">Withdraw</button>
+        <p class="hint">Withdrawing settles your pending yield first, so your causes are paid before your principal leaves. MAX asks the contract for its own maximum rather than the number shown, so a harvest landing in between cannot make it stale.</p>
+      </div>
+
+      <div id="pNew" class="hide">
+        <input class="tin" id="czName" placeholder="Name" maxlength="120" autocomplete="off">
+        <input class="tin" id="czRecip" placeholder="Recipient — 0x address, or a .wei / .gwei / .eth name" style="margin-top:.6rem" autocomplete="off">
+        <input class="tin" id="czOwner" placeholder="Owner — address or name. Blank = you" style="margin-top:.6rem" autocomplete="off">
+        <p class="hint" id="czResolved"></p>
+        <button class="btn btn-pri btn-block btn-lg" id="doCreate" style="margin-top:1rem">Create cause</button>
+        <p class="hint">Causes are permissionless: anyone may create one, and the name is fixed at creation. The owner manages the recipient and the active flag; claimed yield only ever goes to the recipient.</p>
+      </div>
+
+      <p id="stat"></p>
+    </div>
+
+    <div class="card pane">
+      <div class="ov-hd" style="padding-bottom:1rem;margin-bottom:.5rem"><h2>Your Position</h2></div>
+      <div id="posBody">
+        <div class="rowline"><span>Withdrawable principal</span><b id="pPrincipal">—</b></div>
+        <div class="rowline"><span>rETH held for you</span><b id="pReth">—</b></div>
+        <div class="rowline"><span>Pending yield</span><b id="pPending">—</b></div>
+        <div class="rowline"><span>Banked, undesignated</span><b id="pBank">—</b></div>
+        <div class="rowline"><span>Your designation</span><b id="curSplitSum">—</b></div>
+        <p class="hint" id="curSplits"></p>
+        <div class="acts">
+          <button class="btn btn-sm" id="doHarvest">Harvest</button>
+          <button class="btn btn-sm" id="doBank">Bank → ETH</button>
+          <button class="btn btn-sm" id="doBankR">Bank → rETH</button>
+        </div>
+        <p class="hint">Harvest settles yield accrued so far and routes it by your designation. It is permissionless — anyone may harvest for anyone, and it pays the same causes either way.</p>
+      </div>
+      <p class="pos-empty" id="posEmpty">Connect a wallet to see your position.</p>
+    </div>
+
+  </div>
+</div></section>
+
+<!-- ------------------------------------------------- HOW IT WORKS + ACTIVITY -->
+<section><div class="wrap"><div class="split-2">
+  <div class="card pane" id="how">
+    <h2 class="sec-h">How Firstfruits Works</h2>
+    <div class="steps">
+      <div class="step"><span class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 12L2 9Z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></svg></span>
+        <div><p>1. Deposit</p><p>Deposit ETH or rETH into the vault.</p></div></div>
+      <div class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+      <div class="step"><span class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.5-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z"/></svg></span>
+        <div><p>2. Earn</p><p>ETH is staked, which returns rETH to the vault.</p></div></div>
+      <div class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+      <div class="step"><span class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+        <div><p>3. Yield</p><p>rETH appreciates over time, generating staking yield.</p></div></div>
+      <div class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+      <div class="step"><span class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
+        <div><p>4. Give</p><p>Yield is routed to your chosen causes.</p></div></div>
+      <div class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+      <div class="step"><span class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span>
+        <div><p>5. Withdraw</p><p>Your principal is always yours and withdrawable.</p></div></div>
+    </div>
+  </div>
+
+  <div class="card pane">
+    <div class="ov-hd" style="padding-bottom:1rem;margin-bottom:.25rem">
+      <h2>Recent Activity</h2>
+      <a id="lnkAll" target="_blank" rel="noreferrer" style="font-size:.8125rem;color:var(--pri);text-decoration:none;display:inline-flex;align-items:center;min-height:1.75rem;padding:0 .2rem">View All</a>
+    </div>
+    <div class="acty" id="acty"><p class="pos-empty">Loading…</p></div>
+  </div>
+</div></div></section>
+
+<!-- ---------------------------------------------------------------- CAUSES -->
+<section id="causes"><div class="wrap">
+  <h2 class="sec-h">Causes</h2>
+  <p class="sec-sub">Permissionless: anyone may create one. Claiming pays the recipient, whoever calls it.</p>
+  <div class="cz-grid" id="czList"></div>
+</div></section>
+
+<!-- ---------------------------------------------------------- TRANSPARENCY -->
+<section><div class="wrap"><div class="card" style="padding:1.75rem">
+  <h2 style="font-size:1.1875rem;font-weight:600">Protocol Transparency</h2>
+  <p class="sec-sub">Firstfruits is non-custodial and open source. Every number on this page is read from one of these.</p>
+  <div class="kv">
+    <div><span>Vault Contract</span><a id="lnkVault" target="_blank" rel="noreferrer"></a></div>
+    <div><span>rETH Token</span><a id="lnkReth" target="_blank" rel="noreferrer"></a></div>
+    <div><span>Chainlink ETH/USD</span><a id="lnkFeed" target="_blank" rel="noreferrer"></a></div>
+    <div><span>Rocket Pool Balances</span><a id="lnkNb" target="_blank" rel="noreferrer"></a></div>
+    <div><span>Multicall3</span><a id="lnkMc" target="_blank" rel="noreferrer"></a></div>
+  </div>
+  <p style="margin-top:1.25rem"><a href="https://github.com/unattended-backpack/firstfruits" target="_blank" rel="noreferrer" style="font-size:.875rem;color:var(--pri);text-decoration:none;display:inline-flex;align-items:center;min-height:1.75rem">View source on GitHub ↗</a></p>
+</div></div></section>
+
+<div class="band"><div class="wrap">
+  <div><b>Start giving what grows.</b><p class="mut">Stake ETH. Earn yield. Change the world.</p></div>
+  <button class="btn btn-pri btn-lg" id="connect2">Connect Wallet →</button>
+</div></div>
+
+</main>
+
+<footer><div class="wrap">
+  <div class="foot-grid">
+    <div>
+      <span class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M20.5 2.5C21.6 11 17.5 18 11 21.5 10 13 14 6 20.5 2.5Z"/><path d="M2.2 8.5C7.6 9.8 10.6 14.4 10.9 21.4 5.6 20.1 2.5 15.5 2.2 8.5Z"/></g></svg><span>Firstfruits</span></span>
+      <p class="sec-sub" style="margin-top:.75rem;max-width:26rem">A charitable-giving vault built with rETH. Stake ETH, donate the yield, keep your principal.</p>
+    </div>
+    <div>
+      <h2>Resources</h2>
+      <ul>
+        <li><a href="https://docs.rocketpool.net/liquid-staking/overview" target="_blank" rel="noreferrer">RocketPool Docs</a></li>
+        <li><a href="https://github.com/unattended-backpack/firstfruits" target="_blank" rel="noreferrer">Contracts</a></li>
+        <li><a href="https://firstfruits-ui.vercel.app/" target="_blank" rel="noreferrer">Hosted UI</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>This page</h2>
+      <ul>
+        <li><span class="mut" id="pageWhere">—</span></li>
+        <li><span class="mut">No server, no indexer, no API</span></li>
+        <li><span class="mut" id="scanState">—</span></li>
+        <li id="newerLi" class="hide"><a id="newerLink" href="#">A newer version exists ↗</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-end">
+    <span>VPL Copyleft 2026 Firstfruits. Non-custodial and open source.</span>
+    <span style="font-style:italic">“Honour the Lord with thy substance, and with the firstfruits of all thine increase.”</span>
+  </div>
+</div></footer>
+
+<div id="wcm" class="modal hide"><div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <b>WalletConnect</b><button class="btn btn-sm" id="wcX">Close</button></div>
+  <div id="wcQR"></div>
+  <p class="hint" style="text-align:center">Scan with a mobile wallet, or
+    <button class="btn btn-sm" id="wcCopy" style="margin-left:.35rem">copy link</button></p>
+</div></div>
+
+<div id="wpick" class="modal hide"><div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <b>Connect a wallet</b><button class="btn btn-sm" id="wpX">Close</button></div>
+  <div id="wpList"></div><p class="hint" id="wpNone"></p>
+</div></div>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------ CONSTANTS */
+const VAULT="0xff0000000674ffb069f73038b0a54c7937552088";
+const RETH="0xae78736cd615f374d3085123a210448e74fc6393";
+const MC3="0xca11bde05977b3631167028862be2a173976ca11";
+/* Chainlink ETH/USD. The hosted UI takes its dollar figures from a price API;
+   this is the same number with an onchain source, so the page keeps its one
+   rule - it reads contracts, and nothing else. */
+const FEED="0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419";
+const FEED_STALE=172800;
+/* RocketNetworkBalances. Its BalancesUpdated carries totalEth and rethSupply,
+   whose ratio IS the rETH exchange rate at that block - so the rate's history
+   is readable from logs, with no archive node and no API. That is where the
+   APY on the overview card comes from. */
+const NETBAL="0x1d9f14c6bfd8358b589964bad8665add248e9473";
+const T_BALANCES="0xdd27295717c4fbd48b1840f846e18be6f0b7bd6b55608e697e53b15848cecdf9";
+/* The vault's first log - its OwnershipTransferred, at construction. Nothing
+   about the vault exists before this block, so no scan needs to look earlier. */
+const FROM_BLOCK=25606349;
+const MONTH_BLOCKS=216000;
+const ZERO="0x0000000000000000000000000000000000000000";
+const MAXU=(1n<<256n)-1n;
+const CHAIN=1;
+const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
+const SCAN="https://etherscan.io/";
+
+const F_NEXTID="2ee997b3",F_TPRINC="6dcf1bb2",F_TRETH="fb470ae9",F_TCLAIM="30b7262b";
+const F_CAUSES="538a942a",F_PATRONS="2ef46320",F_WABLE="c6f27781",F_PEND="c7bf1980",F_ALLOCS="c3d38897";
+const F_DEPOSIT="d0e30db0",F_DEPDES="8f18037a",F_DEPR="3f683618",F_DEPRDES="fc64748f";
+const F_HARVEST="0e5c011e",F_WITHDRAW="2e1a7d4d",F_WITHDRAWR="545bbfab";
+const F_WBANK="be2ff4a9",F_WBANKR="3ea428fc",F_CREATE="0d50288f",F_CLAIMR="fbf0c32c";
+const F_RATE="e6aa216c",F_BALOF="70a08231",F_ALLOW="dd62ed3e",F_APPROVE="095ea7b3";
+const F_ROUND="feaf968c";
+
+/* Vault event topics, in the order the contract declares them. */
+const EV={
+"0x73a19dd210f1a7f902193214c0ee91dd35ee5b4d920cba8d519eca65a7b488ca":"Deposited",
+"0x92ccf450a286a957af52509bc1c9939d1a6a481783e142e41e2499f0bb66ebc6":"Withdrawn",
+"0x83d60b29d1376b78e2812b4cc06063732827c1a52185be1924c2da49bddbb7cb":"WithdrawnReth",
+"0xb128f8ed07afeffa77252a341109d9b8385f636972cebf4cc805c719f62dc34b":"Designated",
+"0x121c5042302bae5fc561fbc64368f297ca60a880878e1e3a7f7e9380377260bf":"Harvested",
+"0x43ea0a5f330260fa4368797b43381bb76160b10aeaadc04b44a4ede0eaeb5405":"YieldAllocated",
+"0xc2e35536eefd471aca99dde2e590c28ef94138fbbde462a6435a974ef13c3d1b":"YieldBanked",
+"0x45100ac04e0460052b03b152802b617a82911c0f9e2cda3cca3ce2beabe084a5":"BankWithdrawn",
+"0xbb86fa658458b7cfb6d419368d2a53ea0de9d8471bc613b7c0056dbe4274063d":"BankWithdrawnReth",
+"0x70c09a3e66772b4e5784521a55d55e52685a4fe55e1ba0e75a12b00fcefece58":"ClaimedReth",
+"0x47d233d25e187b6f6551b80ef65950d72ec02e429466b784516231e6042d134f":"ClaimedEther",
+"0x03836492d478204a7f42dac4e381ea2786322654273cd6babf5cfe823fd586cc":"CauseCreated"};
+
+/* -------------------------------------------------------------- ABI I/O */
+const strip0x=h=>String(h==null?"":h).replace(/^0x/,"");
+const pad32=h=>strip0x(h).padStart(64,"0");
+const encUint=v=>BigInt(v).toString(16).padStart(64,"0");
+const encAddr=a=>pad32(String(a).toLowerCase());
+const encBool=b=>encUint(b?1:0);
+const encBytes=b=>{let h="";for(const x of b)h+=x.toString(16).padStart(2,"0");
+return encUint(b.length)+(h?h.padEnd(Math.ceil(h.length/64)*64,"0"):"")};
+const encStr=s=>encBytes(new TextEncoder().encode(s));
+const encAllocs=a=>encUint(a.length)+a.map(x=>encUint(x.id)+encUint(x.bps)).join("");
+const word=(h,i)=>strip0x(h).slice(i*64,(i+1)*64);
+const uword=(h,i)=>{const w=word(h,i);return w?BigInt("0x"+w):0n};
+const aword=(h,i)=>"0x"+word(h,i).slice(24);
+const hexNum=n=>"0x"+Number(n).toString(16);
+const decStrAt=(h,byteOff)=>{const s=strip0x(h),i=byteOff*2;
+const len=Number(BigInt("0x"+s.slice(i,i+64)));if(!len)return"";
+const raw=s.slice(i+64,i+64+len*2),b=new Uint8Array(len);
+for(let k=0;k<len;k++)b[k]=parseInt(raw.slice(k*2,k*2+2),16);
+return new TextDecoder().decode(b)};
+
+const encAgg3=cs=>{let head="",tail="",off=cs.length*32;
+for(const c of cs){const d=strip0x(c.data),len=d.length/2;
+const body=encAddr(c.to)+encBool(true)+encUint(96)+encUint(len)+d.padEnd(Math.ceil(d.length/64)*64,"0");
+head+=encUint(off);tail+=body;off+=body.length/2}
+return"0x82ad56cb"+pad32("20")+encUint(cs.length)+head+tail};
+const decAgg3=hex=>{const h=strip0x(hex),at=i=>h.slice(i*64,(i+1)*64);
+const n=Number(BigInt("0x"+at(1))),out=[];
+for(let i=0;i<n;i++){const rel=Number(BigInt("0x"+at(2+i)))/32,w=2+rel;
+const ok=BigInt("0x"+at(w))===1n,bo=Number(BigInt("0x"+at(w+1)))/32,lw=w+bo;
+const len=Number(BigInt("0x"+at(lw)));
+out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
+return out};
+const mc3=async cs=>cs.length?decAgg3(await rpcRead(C,[{to:MC3,data:encAgg3(cs)},L])):[];
+
+/* ------------------------------------------------------------- NUMBERS */
+const fmt=(v,dp=4,dec=18)=>{
+if(v==null)return"—";
+v=BigInt(v);const neg=v<0n;if(neg)v=-v;
+const base=10n**BigInt(dec);
+let s=(v/base).toString();
+let frac=(v%base).toString().padStart(dec,"0").slice(0,dp).replace(/0+$/,"");
+if(v>0n&&v<base&&!frac){dp=Math.min(dec,8);frac=(v%base).toString().padStart(dec,"0").slice(0,dp).replace(/0+$/,"")}
+s=s.replace(/\B(?=(\d{3})+(?!\d))/g,",");
+return (neg?"-":"")+s+(frac?"."+frac:"")};
+const parseAmt=(t,dec=18)=>{
+t=String(t||"").trim().replace(/,/g,"");
+if(!/^\d*\.?\d*$/.test(t)||t===""||t===".")return null;
+const[i,f=""]=t.split(".");
+if(f.length>dec)return null;
+return BigInt((i||"0")+f.padEnd(dec,"0"))};
+const shortAddr=a=>a?a.slice(0,6)+"…"+a.slice(-4):"";
+const isAddr=a=>/^0x[0-9a-fA-F]{40}$/.test(String(a||"").trim());
+const ago=t=>{
+if(!t)return"";
+const s=Math.max(0,Math.floor(Date.now()/1000)-t);
+if(s<90)return"just now";
+if(s<5400)return Math.round(s/60)+"m ago";
+if(s<172800)return Math.round(s/3600)+"h ago";
+return Math.round(s/86400)+"d ago"};
+
+/* ------------------------------------------------- WALLETCONNECT (PORTED)
+   Lifted verbatim from zSwap v0.2: the ChaCha20-Poly1305 / X25519 / Ed25519
+   helpers, the relay client, and a QR encoder - about 16 KB of protocol,
+   carried so the page need not fetch a 635 KB bundle from a host at run time.
+   A page that can never be updated cannot depend on a CDN still being there.
+   It is self-contained: it touches no DOM and no state of this page, which is
+   what made it portable at all. */
+const WC_PID="1e8390ef1c1d8a185e035912a1409749";
+const WC_ICON='<svg viewBox="0 0 400 400" fill="none" aria-hidden="true"><circle cx="200" cy="200" r="200" fill="#3396ff"/><path fill="#fff" d="m122.519 148.965c42.791-41.729 112.171-41.729 154.962 0l5.15 5.022c2.14 2.086 2.14 5.469 0 7.555l-17.617 17.18c-1.07 1.043-2.804 1.043-3.874 0l-7.087-6.911c-29.853-29.111-78.253-29.111-108.106 0l-7.59 7.401c-1.07 1.043-2.804 1.043-3.874 0l-17.617-17.18c-2.14-2.086-2.14-5.469 0-7.555zm191.397 35.529 15.679 15.29c2.14 2.086 2.14 5.469 0 7.555l-70.7 68.944c-2.139 2.087-5.608 2.087-7.748 0l-50.178-48.931c-.535-.522-1.402-.522-1.937 0l-50.178 48.931c-2.139 2.087-5.608 2.087-7.748 0l-70.7015-68.945c-2.1396-2.086-2.1396-5.469 0-7.555l15.6795-15.29c2.1396-2.087 5.6085-2.087 7.7481 0l50.1789 48.932c.535.522 1.402.522 1.937 0l50.177-48.932c2.139-2.087 5.608-2.087 7.748 0l50.179 48.932c.535.522 1.402.522 1.937 0l50.179-48.931c2.139-2.087 5.608-2.087 7.748 0z"/></svg>';
+const WCU=(()=>{
+const rl=(v,c)=>(v<<c|v>>>(32-c))>>>0;
+const wds=b=>{const o=[];for(let i=0;i<b.length;i+=4)o.push((b[i]|b[i+1]<<8|b[i+2]<<16|b[i+3]<<24)>>>0);return o};
+function cblk(x,k,n,c){
+const s=[0x61707865,0x3320646e,0x79622d32,0x6b206574,
+k[0],k[1],k[2],k[3],k[4],k[5],k[6],k[7],c,n[0],n[1],n[2]];
+for(let i=0;i<16;i++)x[i]=s[i];
+for(let r=0;r<10;r++){
+const q=(a,b,cc,d)=>{
+x[a]=(x[a]+x[b])>>>0;x[d]=rl(x[d]^x[a],16);
+x[cc]=(x[cc]+x[d])>>>0;x[b]=rl(x[b]^x[cc],12);
+x[a]=(x[a]+x[b])>>>0;x[d]=rl(x[d]^x[a],8);
+x[cc]=(x[cc]+x[d])>>>0;x[b]=rl(x[b]^x[cc],7)};
+q(0,4,8,12);q(1,5,9,13);q(2,6,10,14);q(3,7,11,15);
+q(0,5,10,15);q(1,6,11,12);q(2,7,8,13);q(3,4,9,14);}
+for(let i=0;i<16;i++)x[i]=(x[i]+s[i])>>>0;}
+function chacha(key,nonce,ctr,src){
+const k=wds(key),n=wds(nonce),x=new Uint32Array(16),out=new Uint8Array(src.length);
+for(let p=0;p<src.length;p+=64){cblk(x,k,n,ctr++);
+for(let i=0;i<64&&p+i<src.length;i++)out[p+i]=src[p+i]^(x[i>>2]>>>((i&3)*8)&255);}
+return out}
+function poly(msg,key){
+const P=(1n<<130n)-5n;
+let r=0n,sk=0n;
+for(let i=15;i>=0;i--)r=(r<<8n)|BigInt(key[i]);
+r&=0x0ffffffc0ffffffc0ffffffc0fffffffn;
+for(let i=31;i>=16;i--)sk=(sk<<8n)|BigInt(key[i]);
+let a=0n;
+for(let i=0;i<msg.length;i+=16){
+const n=Math.min(16,msg.length-i);
+let b=0n;
+for(let j=n-1;j>=0;j--)b=(b<<8n)|BigInt(msg[i+j]);
+a=((a+b+(1n<<BigInt(8*n)))*r)%P;}
+a=(a+sk)&((1n<<128n)-1n);
+const o=new Uint8Array(16);
+for(let i=0;i<16;i++){o[i]=Number(a&255n);a>>=8n}
+return o}
+const p16=n=>n%16?16-n%16:0;
+const le64=n=>{const b=new Uint8Array(8);for(let i=0;i<8;i++){b[i]=n&255;n=Math.floor(n/256)}return b};
+function tagOf(ct,key,nonce){
+const otk=chacha(key,nonce,0,new Uint8Array(32));
+const pad=new Uint8Array(p16(ct.length));
+const m=new Uint8Array(ct.length+pad.length+16);
+m.set(ct);m.set(pad,ct.length);
+m.set(le64(0),ct.length+pad.length);m.set(le64(ct.length),ct.length+pad.length+8);
+return poly(m,otk)}
+const seal=(key,nonce,pt)=>{
+const ct=chacha(key,nonce,1,pt),tg=tagOf(ct,key,nonce);
+const o=new Uint8Array(ct.length+16);o.set(ct);o.set(tg,ct.length);return o};
+const open=(key,nonce,box)=>{
+if(box.length<16)return null;
+const ct=box.subarray(0,box.length-16),tg=box.subarray(box.length-16);
+const w=tagOf(ct,key,nonce);
+let bad=0;for(let i=0;i<16;i++)bad|=w[i]^tg[i];
+return bad?null:chacha(key,nonce,1,ct)};
+const hex=b=>{let s="";for(const x of b)s+=x.toString(16).padStart(2,"0");return s};
+const unhex=h=>{const b=new Uint8Array(h.length/2);
+for(let i=0;i<b.length;i++)b[i]=parseInt(h.substr(i*2,2),16);return b};
+const bin=b=>{let s="";for(let i=0;i<b.length;i+=4096)s+=String.fromCharCode.apply(null,b.subarray(i,i+4096));return s};
+const b64=b=>btoa(bin(b));
+const unb64=s=>{const t=atob(s),b=new Uint8Array(t.length);
+for(let i=0;i<t.length;i++)b[i]=t.charCodeAt(i);return b};
+const b64u=b=>b64(b).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const utf8=s=>new TextEncoder().encode(s);
+const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const b58=b=>{let n=0n;for(const x of b)n=n*256n+BigInt(x);
+let s="";while(n>0n){s=B58[Number(n%58n)]+s;n/=58n}
+for(const x of b){if(x)break;s="1"+s}return s};
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+const sha256=async b=>new Uint8Array(await crypto.subtle.digest("SHA-256",b));
+const topicOf=async k=>hex(await sha256(k));
+const encode=(symKey,payload,senderPub)=>{
+const iv=rnd(12),pt=utf8(JSON.stringify(payload));
+const sealed=seal(symKey,iv,pt);
+const t=senderPub?1:0;
+const head=senderPub?1+32:1;
+const out=new Uint8Array(head+12+sealed.length);
+out[0]=t;
+if(senderPub)out.set(senderPub,1);
+out.set(iv,head);out.set(sealed,head+12);
+return b64(out)};
+const decode=(symKey,msg)=>{
+const b=unb64(msg);
+if(!b.length)return null;
+const t=b[0];
+if(t!==0&&t!==1)return null;
+const head=t===1?33:1;
+if(b.length<head+12+16)return null;
+const iv=b.subarray(head,head+12),box=b.subarray(head+12);
+const pt=open(symKey,iv,box);
+if(!pt)return null;
+try{return JSON.parse(new TextDecoder().decode(pt))}catch{return null}};
+const didKey=pub=>{const b=new Uint8Array(34);b[0]=0xed;b[1]=0x01;b.set(pub,2);
+return"did:key:z"+b58(b)};
+async function relayJwt(aud){
+let kp;
+try{kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"])}
+catch{throw Error("This browser cannot do Ed25519. WalletConnect needs a newer "
++"browser; an extension wallet works here today.")}
+const pub=new Uint8Array(await crypto.subtle.exportKey("raw",kp.publicKey));
+const iss=didKey(pub);
+const iat=Math.floor(Date.now()/1e3);
+const h=b64u(utf8(JSON.stringify({alg:"EdDSA",typ:"JWT"})));
+const p=b64u(utf8(JSON.stringify({iss,sub:hex(rnd(32)),aud,iat,exp:iat+86400})));
+const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},kp.privateKey,utf8(h+"."+p)));
+return h+"."+p+"."+b64u(sig)}
+async function kex(){
+let kp;
+try{kp=await crypto.subtle.generateKey({name:"X25519"},true,["deriveBits"])}
+catch{throw Error("This browser cannot do X25519. WalletConnect needs a newer "
++"browser; an extension wallet works here today.")}
+const pub=new Uint8Array(await crypto.subtle.exportKey("raw",kp.publicKey));
+return{priv:kp.privateKey,pub}}
+async function sessionKey(priv,peerHex){
+const peer=await crypto.subtle.importKey("raw",unhex(peerHex),{name:"X25519"},false,[]);
+const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"X25519",public:peer},priv,256));
+const hk=await crypto.subtle.importKey("raw",bits,"HKDF",false,["deriveBits"]);
+const out=await crypto.subtle.deriveBits(
+{name:"HKDF",hash:"SHA-256",salt:new Uint8Array(0),info:new Uint8Array(0)},hk,256);
+return new Uint8Array(out)}
+return{seal,open,chacha,poly,hex,unhex,b64,unb64,b64u,b58,didKey,rnd,sha256,
+topicOf,encode,decode,relayJwt,kex,sessionKey};
+})();
+const WCCLI=(U,WSC)=>{
+const RELAY="wss://relay.walletconnect.org";
+const T_PROPOSE=1100,T_APPROVE=1101,T_SETTLE=1102,T_SETTLE_RES=1103,T_REQ=1108,T_RES=1109;
+const TTL=300,STTL=604800;
+let sock=null,nextId=1,waiters={},subs={},onEvent=null,alive=false,gone="";
+const rpcId=()=>Date.now()*1000+(nextId++%1000);
+const sendRaw=o=>{
+if(!alive)throw Error(gone||"The wallet connection is closed.");
+sock.send(JSON.stringify(o))};
+function drop(why){
+if(!alive&&gone)return;
+alive=false;gone=why;
+const ws=waiters;waiters={};subs={};
+for(const k in ws)ws[k].rej(Error(why));
+if(onEvent)onEvent({t:"closed",why})}
+function relayCall(method,params){
+const id=rpcId();
+return new Promise((res,rej)=>{
+waiters[id]={res,rej};
+sendRaw({id,jsonrpc:"2.0",method,params});
+setTimeout(()=>{if(waiters[id]){delete waiters[id];rej(Error("relay timeout"))}},15000)})}
+function handle(raw){
+let m;try{m=JSON.parse(raw)}catch{return}
+if(m.method==="irn_subscription"){
+sendRaw({id:m.id,jsonrpc:"2.0",result:true});
+const d=m.params&&m.params.data;
+if(d&&subs[d.topic])subs[d.topic](d.message);
+return}
+if(m.id&&waiters[m.id]){
+const w=waiters[m.id];delete waiters[m.id];
+if(m.error)w.rej(Error(m.error.message||"relay error"));else w.res(m.result)}}
+async function connect(projectId){
+try{sock&&sock.close()}catch{}
+sock=null;alive=false;gone="";waiters={};subs={};
+const jwt=await U.relayJwt(RELAY);
+const url=`${RELAY}/?auth=${jwt}&projectId=${projectId}&ua=zswap`;
+const ws=WSC(url);
+sock=ws;
+await new Promise((res,rej)=>{
+let d=0;
+const t=setTimeout(()=>{if(!d){d=1;rej(Error("The relay did not answer."))}},15000);
+const fail=m=>{try{ws.close()}catch{}if(sock===ws)sock=null;rej(Error(m))};
+const end=f=>x=>{if(d)return;d=1;clearTimeout(t);f(x)};
+sock.onopen=end(()=>{alive=true;res()});
+sock.onerror=end(()=>fail("The relay could not be reached."));
+sock.onclose=end(e=>fail("The relay closed the connection"
++(e&&e.code?" (code "+e.code+(e.reason?": "+e.reason:"")+")":"")+"."))})
+sock.onclose=()=>drop("The relay connection dropped. Reconnect your wallet.");
+sock.onmessage=e=>handle(typeof e.data==="string"?e.data:"");
+}
+const subscribe=async(topic,fn)=>{subs[topic]=fn;await relayCall("irn_subscribe",{topic})};
+const publish=(topic,message,tag,ttl)=>
+relayCall("irn_publish",{topic,message,ttl:ttl||TTL,tag,prompt:tag===T_PROPOSE||tag===T_REQ});
+async function pair(projectId,meta){
+await connect(projectId);
+const symKey=U.rnd(32);
+const pTopic=await U.topicOf(symKey);
+const kp=await U.kex();
+const proposeId=rpcId();
+let settle=null;
+const done=new Promise((res,rej)=>{settle={res,rej}});
+await subscribe(pTopic,async msg=>{
+const m=U.decode(symKey,msg);
+if(!m||m.id!==proposeId)return;
+if(m.error)return settle.rej(Error(m.error.message||"rejected"));
+const rp=m.result&&m.result.responderPublicKey;
+if(!rp)return;
+const sKey=await U.sessionKey(kp.priv,rp);
+const sTopic=await U.topicOf(sKey);
+await subscribe(sTopic,async smsg=>{
+const s=U.decode(sKey,smsg);
+if(!s)return;
+if(s.method==="wc_sessionSettle"){
+await publish(sTopic,U.encode(sKey,{id:s.id,jsonrpc:"2.0",result:true}),T_SETTLE_RES,STTL);
+const ns=s.params&&s.params.namespaces||{};
+const accts=[];
+for(const k in ns)for(const a of ns[k].accounts||[])accts.push(a);
+settle.res({topic:sTopic,key:sKey,accounts:accts,
+methods:(ns.eip155&&ns.eip155.methods)||[]});
+return}
+if(s.method==="wc_sessionDelete")return drop("The wallet ended the session.");
+if(s.method&&onEvent)onEvent({t:"session",m:s});
+if(s.id&&waiters["s"+s.id]){
+const w=waiters["s"+s.id];delete waiters["s"+s.id];
+if(s.error)w.rej(Object.assign(Error(s.error.message||"rejected"),{code:s.error.code}));
+else w.res(s.result)}});
+});
+const proposal={id:proposeId,jsonrpc:"2.0",method:"wc_sessionPropose",params:{
+relays:[{protocol:"irn"}],
+proposer:{publicKey:U.hex(kp.pub),metadata:meta},
+requiredNamespaces:{},
+optionalNamespaces:{eip155:{chains:["eip155:1"],
+methods:["eth_sendTransaction","personal_sign","eth_signTypedData_v4",
+"eth_call","eth_chainId","eth_accounts","eth_getBalance",
+"wallet_switchEthereumChain"],
+events:["chainChanged","accountsChanged"]}}}};
+await publish(pTopic,U.encode(symKey,proposal),T_PROPOSE);
+const uri=`wc:${pTopic}@2?relay-protocol=irn&symKey=${U.hex(symKey)}`;
+return{uri,done}}
+function request(sess,method,params){
+const id=rpcId();
+const body={id,jsonrpc:"2.0",method:"wc_sessionRequest",
+params:{request:{method,params:params||[]},chainId:"eip155:1"}};
+const p=new Promise((res,rej)=>{
+waiters["s"+id]={res,rej};
+setTimeout(()=>{if(waiters["s"+id]){delete waiters["s"+id];rej(Error("wallet timed out"))}},300000)});
+publish(sess.topic,U.encode(sess.key,body),T_REQ).catch(e=>{
+const w=waiters["s"+id];if(!w)return;delete waiters["s"+id];w.rej(e)});
+return p}
+return{pair,request,close:()=>{drop("The wallet connection was closed.");try{sock&&sock.close()}catch{}sock=null},
+on:f=>{onEvent=f},_relayCall:relayCall};
+};
+const QR8=(()=>{
+const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+(()=>{let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x&256)x^=285}
+for(let i=255;i<512;i++)EXP[i]=EXP[i-255]})();
+const mul=(a,b)=>a&&b?EXP[LOG[a]+LOG[b]]:0;
+const gen=n=>{let p=[1];
+for(let i=0;i<n;i++){const q=new Array(p.length+1).fill(0);
+for(let j=0;j<p.length;j++){q[j]^=mul(p[j],EXP[i]);q[j+1]^=p[j]}p=q}
+return p};
+const rs=(data,n)=>{
+const g=gen(n),r=new Uint8Array(data.length+n);
+r.set(data);
+for(let i=0;i<data.length;i++){
+const c=r[i];if(!c)continue;
+for(let j=0;j<=n;j++)r[i+j]^=mul(g[n-j],c)}
+return r.subarray(data.length)};
+const SZ=49,NBLK=2,DPB=97,ECB=24,ALIGN=[6,24,42];
+const bch=(v,g,n)=>{let d=v<<n;
+const bits=x=>{let c=0;while(x){c++;x>>>=1}return c};
+const gl=bits(g);
+while(bits(d)>=gl)d^=g<<(bits(d)-gl);
+return d};
+const fmtBits=mask=>{
+const v=(1<<3)|mask;
+return ((v<<10)|bch(v,0x537,10))^0x5412};
+const verBits=()=>(8<<12)|bch(8,0x1f25,12);
+function encode(str){
+const bytes=new TextEncoder().encode(str);
+if(bytes.length>NBLK*DPB-2)throw Error("pairing code too long to draw");
+const bits=[];
+const push=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1)};
+push(4,4);push(bytes.length,8);
+for(const b of bytes)push(b,8);
+const cap=(NBLK*DPB)*8;
+for(let i=0;i<4&&bits.length<cap;i++)bits.push(0);
+while(bits.length%8)bits.push(0);
+const cw=[];
+for(let i=0;i<bits.length;i+=8){let v=0;for(let j=0;j<8;j++)v=(v<<1)|bits[i+j];cw.push(v)}
+const pads=[0xec,0x11];
+for(let i=0;cw.length<NBLK*DPB;i++)cw.push(pads[i%2]);
+const blocks=[],ecs=[];
+for(let i=0;i<NBLK;i++){
+const d=Uint8Array.from(cw.slice(i*DPB,(i+1)*DPB));
+blocks.push(d);ecs.push(rs(d,ECB))}
+const out=[];
+for(let i=0;i<DPB;i++)for(const b of blocks)out.push(b[i]);
+for(let i=0;i<ECB;i++)for(const e of ecs)out.push(e[i]);
+return out}
+function frame(){
+const m=[],fn=[];
+for(let i=0;i<SZ;i++){m.push(new Array(SZ).fill(0));fn.push(new Array(SZ).fill(0))}
+const put=(r,c,v)=>{m[r][c]=v;fn[r][c]=1};
+const finder=(r,c)=>{
+for(let i=-1;i<8;i++)for(let j=-1;j<8;j++){
+const rr=r+i,cc=c+j;
+if(rr<0||cc<0||rr>=SZ||cc>=SZ)continue;
+const on=(i>=0&&i<=6&&(j===0||j===6))||(j>=0&&j<=6&&(i===0||i===6))||(i>=2&&i<=4&&j>=2&&j<=4);
+put(rr,cc,on?1:0)}};
+finder(0,0);finder(0,SZ-7);finder(SZ-7,0);
+for(const r of ALIGN)for(const c of ALIGN){
+if((r===6&&c===6)||(r===6&&c===ALIGN[ALIGN.length-1])||(r===ALIGN[ALIGN.length-1]&&c===6))continue;
+for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++)
+put(r+i,c+j,(Math.abs(i)===2||Math.abs(j)===2||(i===0&&j===0))?1:0)}
+for(let i=8;i<SZ-8;i++){put(6,i,i%2?0:1);put(i,6,i%2?0:1)}
+put(SZ-8,8,1);
+for(let i=0;i<9;i++){if(!fn[8][i])put(8,i,0);if(!fn[i][8])put(i,8,0)}
+for(let i=0;i<8;i++){if(!fn[8][SZ-1-i])put(8,SZ-1-i,0);if(!fn[SZ-1-i][8])put(SZ-1-i,8,0)}
+const vb=verBits();
+for(let i=0;i<18;i++){
+const b=(vb>>i)&1,r=Math.floor(i/3),c=i%3;
+put(SZ-11+c,r,b);put(r,SZ-11+c,b)}
+return{m,fn}}
+function place(m,fn,cw){
+let bit=0,up=1;
+const get=i=>(cw[i>>3]>>(7-(i&7)))&1;
+for(let c=SZ-1;c>0;c-=2){
+if(c===6)c--;
+for(let k=0;k<SZ;k++){
+const r=up?SZ-1-k:k;
+for(let j=0;j<2;j++){
+const cc=c-j;
+if(fn[r][cc])continue;
+m[r][cc]=bit<cw.length*8?get(bit):0;bit++}}
+up^=1}}
+const maskFn=(k,r,c)=>[
+(r+c)%2===0,r%2===0,c%3===0,(r+c)%3===0,
+(((r/2)|0)+((c/3)|0))%2===0,((r*c)%2+(r*c)%3)===0,
+(((r*c)%2+(r*c)%3)%2)===0,(((r+c)%2+(r*c)%3)%2)===0][k];
+function penalty(m){
+let p=0;
+for(let i=0;i<SZ;i++){
+let rc=1,cc=1;
+for(let j=1;j<SZ;j++){
+rc=m[i][j]===m[i][j-1]?rc+1:1;if(rc===5)p+=3;else if(rc>5)p++;
+cc=m[j][i]===m[j-1][i]?cc+1:1;if(cc===5)p+=3;else if(cc>5)p++}}
+for(let i=0;i<SZ-1;i++)for(let j=0;j<SZ-1;j++){
+const s=m[i][j]+m[i][j+1]+m[i+1][j]+m[i+1][j+1];
+if(s===0||s===4)p+=3}
+const pat=[1,0,1,1,1,0,1];
+const hit=(get)=>{
+for(let i=0;i<SZ;i++)for(let j=0;j<SZ-6;j++){
+let okk=1;for(let k=0;k<7;k++)if(get(i,j+k)!==pat[k]){okk=0;break}
+if(!okk)continue;
+let before=1,after=1;
+for(let k=j-4;k<j;k++)if(k<0||get(i,k)!==0){before=0;break}
+for(let k=j+7;k<j+11;k++)if(k>=SZ||get(i,k)!==0){after=0;break}
+if(before||after)p+=40}};
+hit((i,j)=>m[i][j]);hit((i,j)=>m[j][i]);
+let dark=0;for(let i=0;i<SZ;i++)for(let j=0;j<SZ;j++)dark+=m[i][j];
+p+=Math.floor(Math.abs(dark*100/(SZ*SZ)-50)/5)*10;
+return p}
+function build(str){
+const cw=encode(str);
+let best=null,bestP=Infinity,bestK=0;
+for(let k=0;k<8;k++){
+const{m,fn}=frame();
+place(m,fn,cw);
+for(let r=0;r<SZ;r++)for(let c=0;c<SZ;c++)
+if(!fn[r][c]&&maskFn(k,r,c))m[r][c]^=1;
+const f=fmtBits(k);
+for(let i=0;i<8;i++){
+const b=(f>>i)&1;
+if(i<6)m[i][8]=b;else if(i===6)m[7][8]=b;else m[8][8]=b;
+m[8][SZ-1-i]=b}
+for(let i=8;i<15;i++){
+const b=(f>>i)&1,c=14-i;
+if(c<6)m[8][c]=b;else m[8][7]=b;
+m[SZ-1-c][8]=b}
+m[SZ-8][8]=1;
+const p=penalty(m);
+if(p<bestP){bestP=p;best=m;bestK=k}}
+return{size:SZ,modules:best,mask:bestK}}
+return{build,_encode:encode};
+})();
+const qrSvg=m=>{let d="";
+for(let r=0;r<m.size;r++)for(let c=0;c<m.size;c++)if(m.modules[r][c])d+="M"+c+" "+r+"h1v1h-1z";
+return '<svg viewBox="-4 -4 '+(m.size+8)+" "+(m.size+8)+'" role="img" aria-label="WalletConnect pairing code" style="width:100%;height:auto;background:#fff;border-radius:.3em"><path fill="#000" d="'+d+'"/></svg>'};
+
+/* -------------------------------------------------------------- WALLET */
+const NODE_KEY="firstfruits:rpc";
+let PROV=null,account=null;
+const readNode=()=>{try{return localStorage.getItem(NODE_KEY)||""}catch{return""}};
+const NO_WALLET="No wallet, and no read node set.";
+const nodeCall=async(method,params)=>{
+const url=readNode();
+if(!url)throw Object.assign(Error(NO_WALLET),{noWallet:true});
+const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
+body:JSON.stringify({id:1,jsonrpc:"2.0",method,params:params||[]})});
+const j=await r.json();
+if(j.error)throw Error(j.error.message||"node error");
+return j.result};
+const rpc=(method,params)=>{
+const e=PROV||window.ethereum;
+return e?e.request({method,params}):nodeCall(method,params)};
+const rpcRead=async(method,params,tries=3)=>{
+let last;
+for(let i=0;i<tries;i++){
+try{return await rpc(method,params)}
+catch(e){last=e;if(e&&e.noWallet)throw e;await new Promise(r=>setTimeout(r,250*(i+1)))}}
+throw last};
+const checkWallet=async()=>{
+if(!account)throw Error("Connect a wallet first.");
+const[c,a]=await Promise.all([rpc(I,[]),rpc("eth_accounts",[])]);
+if(+c!==CHAIN)throw Error("Switch to Ethereum mainnet.");
+if((a[0]||"").toLowerCase()!==account.toLowerCase())throw Error("The wallet changed accounts.")};
+const waitTx=async hash=>{
+const end=Date.now()+600000;let wait=1500;
+while(Date.now()<end){
+try{const r=await rpc("eth_getTransactionReceipt",[hash]);
+if(r){if(r.status!=="0x1")throw Error("Transaction reverted.");return r}
+wait=Math.min(wait+500,5000)}
+catch(e){if(/reverted/.test(e.message||""))throw e}
+await new Promise(r=>setTimeout(r,wait))}
+throw Error("Not mined in time; check your wallet.")};
+
+const providers=[];
+addEventListener("eip6963:announceProvider",e=>{
+const d=e.detail;if(!d||!d.provider)return;
+if(providers.some(p=>p.info.uuid===d.info.uuid))return;
+providers.push(d)});
+try{dispatchEvent(new Event("eip6963:requestProvider"))}catch{}
+
+/* ----------------------------------------------------------------- LOGS */
+/* Every RPC caps eth_getLogs differently - some by block span, some by result
+   count, some not at all - and the page cannot know which one the reader's
+   wallet is pointed at. So it asks for the whole range and halves on refusal
+   until the answer fits, which lands on any cap without being told it. */
+/* Every RPC caps eth_getLogs differently - some by block span, some by result
+   count, some not at all - and the page cannot know which one the reader's
+   wallet is pointed at. So it asks for the whole range, and on refusal walks
+   down a ladder of window sizes until one is accepted.
+   SEQUENTIALLY, and on a budget. Two earlier shapes were measured against real
+   endpoints and both were wrong: recursive halving with no floor turned an
+   archive-gated node's single refusal into 4,920 requests, and fanning the
+   windows out in parallel tripped rate limits that read as further refusals,
+   so a merely range-capped node looked broken. One window at a time, with a
+   hard ceiling on how many, behaves on all three kinds of node. */
+const LADDER=[0,45000,9000,2000],BUDGET=140;
+let logsCapped=false,logSpend=0;
+const oneCall=async(address,topics,from,to)=>{
+if(logSpend>=BUDGET)throw Error("log scan budget spent");
+logSpend++;
+return(await rpcRead("eth_getLogs",
+[{address,topics:topics||[],fromBlock:hexNum(from),toBlock:hexNum(to)}],1))||[]};
+const getLogsWide=async(address,topics,from,to)=>{
+if(from>to)return[];
+let last;
+for(const w of LADDER){
+try{
+if(!w)return await oneCall(address,topics,from,to);
+const out=[];
+for(let a=from;a<=to;a+=w)out.push(...await oneCall(address,topics,a,Math.min(to,a+w-1)));
+logsCapped=true;
+return out;
+}catch(e){
+if(e&&e.noWallet)throw e;
+last=e;
+if(logSpend>=BUDGET)break}}
+throw last||Error("eth_getLogs unavailable")};
+
+/* The reader's own index, in their own browser. A first visit scans the
+   vault's whole life - 57 logs at the time of writing - and every visit after
+   it scans only the blocks since. No server ever holds this. */
+const IDX_KEY="firstfruits:index:v1";
+const loadIdx=()=>{try{const j=JSON.parse(localStorage.getItem(IDX_KEY)||"null");
+return j&&Array.isArray(j.ev)&&j.to>=FROM_BLOCK?j:null}catch{return null}};
+const saveIdx=j=>{try{localStorage.setItem(IDX_KEY,JSON.stringify(j))}catch{}};
+
+const decodeEv=l=>{
+const kind=EV[l.topics[0]];
+if(!kind)return null;
+const d=l.data||"0x";
+return{blk:parseInt(l.blockNumber,16),ix:parseInt(l.logIndex||"0x0",16),kind,tx:l.transactionHash,
+t1:l.topics[1]||"",t2:l.topics[2]||"",
+w0:word(d,0),w1:word(d,1),w2:word(d,2)}};
+
+let chainTip=0;
+const scanVault=async latest=>{
+const cache=loadIdx();
+let evs=cache?cache.ev:[];
+const from=cache?Math.max(FROM_BLOCK,cache.to+1):FROM_BLOCK;
+if(from<=latest){
+const fresh=(await getLogsWide(VAULT,null,from,latest)).map(decodeEv).filter(Boolean);
+/* A reorg can only rewrite the tail, so the tail is what gets dropped. */
+evs=evs.filter(e=>e.blk<from).concat(fresh);
+saveIdx({to:latest,ev:evs.slice(-600)})}
+evs.sort((a,b)=>a.blk-b.blk||a.ix-b.ix);
+return evs};
+
+/* Two NARROW windows rather than one wide one: the oldest rate update about a
+   month back, and the newest. A 10,000-block cap serves both without ever
+   being asked for the 216,000 blocks between them. */
+const readApy=async latest=>{
+const w=9000;
+const[oldLogs,newLogs]=await Promise.all([
+getLogsWide(NETBAL,[T_BALANCES],latest-MONTH_BLOCKS,latest-MONTH_BLOCKS+w),
+getLogsWide(NETBAL,[T_BALANCES],latest-w,latest)]);
+const dec=l=>{const d=l.data;
+const total=uword(d,1),supply=uword(d,3),t=Number(uword(d,4));
+if(supply===0n||!t)return null;
+return{rate:Number(total*(10n**18n)/supply)/1e18,t}};
+const a=(oldLogs.map(dec).filter(Boolean))[0];
+const b=(newLogs.map(dec).filter(Boolean)).pop();
+if(!a||!b||b.t<=a.t||a.rate<=0)return null;
+const years=(365*86400)/(b.t-a.t);
+const apy=(Math.pow(b.rate/a.rate,years)-1)*100;
+return isFinite(apy)&&apy>-50&&apy<100?apy:null};
+
+const tsCache=new Map();
+const blockTimes=async blocks=>{
+const want=[...new Set(blocks)].filter(b=>!tsCache.has(b));
+await Promise.all(want.map(async b=>{
+try{const h=await rpcRead("eth_getBlockByNumber",[hexNum(b),false],2);
+if(h&&h.timestamp)tsCache.set(b,Number(BigInt(h.timestamp)))}catch{}}));
+return tsCache};
+
+
+/* --------------------------------------------------------------- NAMES
+   Ported from zSwap, with the same preferences. Forward resolution picks the
+   registry by suffix: .wei -> WNS, .gwei -> GNS (a WNS NameNFT fork, same
+   interface), .eth -> ENS. Reverse resolution asks all three at once and
+   prefers WNS, then GNS, then ENS.
+
+   A REVERSE RECORD IS A CLAIM, NOT A FACT: anybody may point one at any name.
+   None of them counts until the name resolves FORWARD to the same address,
+   which is why every candidate below is checked before it is shown. */
+const WNS="0x0000000000696760e15f265e828db644a0c242eb";
+const GNS="0x9d51d507bc7264d4fe8ad1cf7fe191933a0a81d6";
+const ENSREG="0x00000000000c2e074ec69a0dfb2997ba6c7d2e1e";
+/* computeId(string) then resolve(uint256) on WNS/GNS; the third is their
+   reverse lookup. ENS keeps resolver(bytes32), addr(bytes32), name(bytes32),
+   plus resolve(bytes,bytes) for wildcard resolvers. */
+const SEL_CID="fb021939",SEL_NRES="4f896d4f",SEL_REV="9af8b7aa";
+const SEL_RSLV="0178b8bf",SEL_EADDR="3b3b57de",SEL_ENAME="691f3431";
+const SEL_ERESOLVE="9061b923",SEL_SUPPORTS="01ffc9a7";
+const NAME_OFFCHAIN="That name keeps its records off chain, and this page reads only on-chain state.";
+
+const hexToBytes=h=>{const t=strip0x(h),o=new Uint8Array(t.length/2);
+for(let i=0;i<o.length;i++)o[i]=parseInt(t.slice(i*2,i*2+2),16);return o};
+const KRC=[1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n];
+const KR=[0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
+const KM=(1n<<64n)-1n;
+const krol=(x,n)=>n?((x<<BigInt(n))|(x>>BigInt(64-n)))&KM:x;
+const KCc=new Array(5),KB=new Array(25);
+const keccak=b=>{const A=new Array(25).fill(0n),rate=136;
+const pad=rate-(b.length%rate),buf=new Uint8Array(b.length+pad);buf.set(b);
+buf[b.length]|=1;buf[buf.length-1]|=0x80;
+for(let o=0;o<buf.length;o+=rate){
+for(let i=0;i<17;i++){let v=0n;for(let j=7;j>=0;j--)v=(v<<8n)|BigInt(buf[o+i*8+j]);A[i]^=v}
+for(let r=0;r<24;r++){
+for(let x=0;x<5;x++)KCc[x]=A[x]^A[x+5]^A[x+10]^A[x+15]^A[x+20];
+for(let x=0;x<5;x++){const D=KCc[(x+4)%5]^krol(KCc[(x+1)%5],1);for(let y=0;y<25;y+=5)A[x+y]^=D}
+for(let x=0;x<5;x++)for(let y=0;y<5;y++)KB[y+5*((2*x+3*y)%5)]=krol(A[x+5*y],KR[x+5*y]);
+for(let x=0;x<5;x++)for(let y=0;y<5;y++)A[x+5*y]=KB[x+5*y]^((~KB[(x+1)%5+5*y]&KM)&KB[(x+2)%5+5*y]);
+A[0]^=KRC[r]}}
+let out="";for(let i=0;i<4;i++){let v=A[i];for(let j=0;j<8;j++){out+=Number(v&0xffn).toString(16).padStart(2,"0");v>>=8n}}
+return"0x"+out};
+const namehash=name=>{
+let node="00".repeat(32);
+if(name){const parts=String(name).toLowerCase().split(".");
+for(let i=parts.length-1;i>=0;i--){
+const label=strip0x(keccak(new TextEncoder().encode(parts[i])));
+node=strip0x(keccak(hexToBytes(node+label)))}}
+return node};
+const decodeString=hex=>{
+const h=strip0x(hex||"");
+if(!h)return"";
+if(h.length<=64)return new TextDecoder().decode(hexToBytes(h)).replace(/\0+$/,"");
+const off=Number(BigInt("0x"+h.slice(0,64)))*2;
+const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
+if(!Number.isSafeInteger(off)||!Number.isSafeInteger(len)||off+64+len>h.length)return"";
+return new TextDecoder().decode(hexToBytes(h.slice(off+64,off+64+len)))};
+const retAddr=h=>{const t=strip0x(h||"");
+if(t.length<64)return"";
+const a="0x"+t.slice(24,64).toLowerCase();
+return /^0x0{40}$/.test(a)?"":a};
+const nameOk=n=>/^[\x21-\x7e]+$/.test(n)&&n.split(".").every(l=>l.length>0);
+const supports=id=>"0x"+SEL_SUPPORTS+id.padEnd(64,"0");
+
+/* WNS and GNS: a name hashes to an id, and the id resolves to an address. */
+const nsFwd=async(reg,n)=>{
+const id=await rpcRead(C,[{to:reg,data:"0x"+SEL_CID+pad32("20")+encStr(n)},L],3);
+if(strip0x(id||"").length!==64)return"";
+return retAddr(await rpcRead(C,[{to:reg,data:"0x"+SEL_NRES+strip0x(id)},L],3))};
+
+/* ENS, including wildcard resolvers (ENSIP-10): walk up to the nearest
+   resolver, and use resolve(dnsname, calldata) when that resolver is not the
+   name's own. A resolver that answers with OffchainLookup is saying its records
+   live somewhere this page will not go, and it says so rather than showing a
+   zero. */
+const encHexBytes=h=>{h=strip0x(h);return encUint(h.length/2)+h.padEnd(Math.ceil(h.length/64)*64,"0")};
+const dnsEnc=n=>{let h="";
+for(const l of n.split(".")){const b=new TextEncoder().encode(l);
+h+=b.length.toString(16).padStart(2,"0");
+for(const x of b)h+=x.toString(16).padStart(2,"0")}
+return h+"00"};
+const encResolve=(dns,inner)=>{const a=encHexBytes(dns);
+return pad32("40")+encUint(64+a.length/2)+a+encHexBytes(inner)};
+const decBytes=hex=>{const h=strip0x(hex||"");
+if(h.length<128)return"";
+const off=Number(BigInt("0x"+h.slice(0,64)))*2;
+if(!Number.isSafeInteger(off)||off+64>h.length)return"";
+const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
+if(!Number.isSafeInteger(len)||off+64+len>h.length)return"";
+return"0x"+h.slice(off+64,off+64+len)};
+const ensFind=async n=>{const parts=n.split("."),
+nodes=parts.map((_,i)=>namehash(parts.slice(i).join(".")));
+const rs=await Promise.all(nodes.map(nd=>
+rpcRead(C,[{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)},L],3).catch(()=>null)));
+for(let i=0;i<nodes.length;i++){const r=retAddr(rs[i]);
+if(r)return{r,nd:nodes[i],exact:i===0}}
+return null};
+const ensWild=async r=>{
+try{const x=await rpcRead(C,[{to:r,data:supports(SEL_ERESOLVE)},L],1);
+return strip0x(x||"").length===64&&BigInt(x)===1n}catch{return false}};
+const ensFwd=async n=>{
+const f=await ensFind(n);
+if(!f)return"";
+const inner="0x"+SEL_EADDR+pad32(f.nd);
+if(f.exact)return retAddr(await rpcRead(C,[{to:f.r,data:inner},L],3));
+if(!await ensWild(f.r))return"";
+try{return retAddr(decBytes(await rpcRead(C,
+[{to:f.r,data:"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner)},L],1)))}
+catch(e){
+if(/556f1830/i.test((e&&e.data?JSON.stringify(e.data):"")+((e&&e.message)||"")))
+throw Object.assign(Error(NAME_OFFCHAIN),{offchain:true});
+return""}};
+const ensRevName=async(nd,r)=>{
+if(!r)return"";
+try{return decodeString(await rpcRead(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L],1)).trim()}
+catch{return""}};
+
+const nameFwd=n=>{
+n=String(n||"").trim();
+if(!n||!nameOk(n))return Promise.resolve("");
+return /\.gwei$/i.test(n)?nsFwd(GNS,n)
+:/\.wei$/i.test(n)?nsFwd(WNS,n)
+:/\.eth$/i.test(n)?ensFwd(n)
+:Promise.resolve("")};
+const FWD_TTL=30000;
+const fwdCache=new Map();
+const nameFwdCached=n=>{const hit=fwdCache.get(n);
+if(hit&&hit.exp>Date.now())return hit.p;
+const p=nameFwd(n);
+fwdCache.set(n,{p,exp:Date.now()+FWD_TTL});
+p.catch(()=>fwdCache.delete(n));
+return p};
+
+const nameRev=async a=>{
+const nd=namehash(strip0x(a).toLowerCase()+".addr.reverse");
+const[w,g,er]=await Promise.all([
+{to:WNS,data:"0x"+SEL_REV+encAddr(a)},
+{to:GNS,data:"0x"+SEL_REV+encAddr(a)},
+{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)}]
+.map(c=>rpcRead(C,[c,L],3).catch(()=>null)));
+const str=h=>{try{return h?decodeString(h).trim():""}catch{return""}};
+const agrees=async n=>{
+if(!n||!nameOk(n.toLowerCase()))return"";
+let f="";
+try{f=await nameFwdCached(n.toLowerCase())}catch{}
+return f&&f.toLowerCase()===String(a).toLowerCase()?n:""};
+return await agrees(str(w))||await agrees(str(g))
+||await agrees(await ensRevName(nd,retAddr(er)))||""};
+
+/* ------------------------------------------------------------- EIP-5792
+   rETH has no permit - checked: DOMAIN_SEPARATOR() and nonces() both revert -
+   so staking it always needs an approval first. Where the wallet can batch,
+   that approval and the deposit become one confirmation; where it cannot,
+   they stay two transactions and nothing else changes. */
+const capsFor=(c,id)=>{
+for(const key of Object.keys(c||{})){
+try{if(BigInt(key)===id)return c[key]}catch{}}
+return undefined};
+const canBatch=async owner=>{
+try{const c=await rpc("wallet_getCapabilities",[owner]);
+const k=capsFor(c,BigInt(CHAIN))!==undefined?capsFor(c,BigInt(CHAIN)):capsFor(c,0n);
+return!!(k&&k.atomic&&(k.atomic.status==="supported"||k.atomic.status==="ready"))}
+catch{return false}};
+const sendBatch=async(owner,calls)=>{
+const res=await rpc("wallet_sendCalls",[{version:"2.0.0",chainId:"0x1",
+from:owner,atomicRequired:true,calls}]);
+const id=typeof res==="string"?res:res.id;
+for(let i=0;i<600;i++){
+try{const st=await rpc("wallet_getCallsStatus",[id]);
+const rs=(st&&st.receipts)||[];
+if(rs.some(r=>r&&r.status==="0x0"))throw Error("batch reverted");
+const last=rs[rs.length-1],x=last&&(last.transactionHash||last.hash);
+if(x)return x;
+const q=String(st&&st.status);
+if(q==="400"||q==="500"||/fail|revert|reject/i.test(q))throw Error("batch failed");
+}catch(e){if(/^batch /.test(e.message))throw e}
+await new Promise(r=>setTimeout(r,1000))}
+throw Error("batch timed out")};
+
+/* ---------------------------------------------------------------- STATE */
+let vault={causes:[],rate:0n,principal:0n,reth:0n,claim:0n};
+let me={reth:0n,principal:0n,bank:0n,withdrawable:0n,pendReth:0n,pendEth:0n,allocs:[],
+ethBal:0n,rethBal:0n,allowance:0n};
+let usdPerEth=null,apy=null,patrons=null,series=null,delta30=null,activity=null;
+let myName="";
+let splits=[];
+let busy=false;
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const setStat=(msg,cls)=>{const el=$("stat");el.className=cls||"";el.innerHTML=msg||""};
+const txLink=h=>'<a href="'+SCAN+'tx/'+h+'" target="_blank" rel="noreferrer">'+h.slice(0,10)+"…</a>";
+const usd=v=>{
+if(usdPerEth==null||v==null)return"";
+const cents=BigInt(v)*usdPerEth/(10n**24n);
+const d=Number(cents)/100;
+if(!isFinite(d))return"";
+return "($"+(d>=100?Math.round(d).toLocaleString("en-US")
+:d.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}))+")"};
+
+/* ------------------------------------------------------------ READ NODE
+   A page with no wallet has nowhere to read from. Shipping a default endpoint
+   would make it work out of the box, at the cost of every reader silently
+   handing their IP and their queries to a host they never picked - and on an
+   immutable page that choice can never be revisited. So the node is offered,
+   never assumed: nothing is contacted until somebody taps one, and the tap is
+   remembered. The suggestions differ in what they will serve, which decides
+   whether the history-derived figures appear at all, so they say so. */
+/* Four rather than three, because this list can never be edited: if one host
+   goes away the others still work, and the globe icon still takes any URL.
+   Labels are measured, not assumed - each was probed for whether it serves
+   eth_getLogs at all, and over what span. */
+const READ_NODES=[
+["publicnode","https://ethereum-rpc.publicnode.com","state only"],
+["dRPC","https://eth.drpc.org","full, windowed"],
+["MEV Blocker","https://rpc.mevblocker.io","full, windowed"],
+["Tenderly","https://gateway.tenderly.co/public/mainnet","full"]];
+const showReadPick=()=>{
+const box=$("readOpts");
+if(!box.childElementCount){
+box.innerHTML=READ_NODES.map((n,i)=>
+'<button class="btn btn-sm" data-n="'+i+'" title="'+esc(n[1])+'">'+esc(n[0])
++' <span class="mut" style="font-weight:400">· '+esc(n[2])+"</span></button>").join("");
+for(const el of box.querySelectorAll("button[data-n]"))
+el.onclick=()=>{const u=READ_NODES[+el.dataset.n][1];
+try{localStorage.setItem(NODE_KEY,u)}catch{}
+$("readPick").classList.add("hide");
+setStat("Reading through "+u.replace(/^https:\/\//,"")+".");
+refresh()}}
+$("readPick").classList.remove("hide")};
+
+/* ---------------------------------------------------------------- THEME */
+const paint=on=>{document.documentElement.classList.toggle("d",on);
+$("tc").content=on?"#212121":"#fcfcfc"};
+let pref=null;
+try{pref=localStorage.getItem("firstfruits:theme")}catch{}
+const sysDark=matchMedia("(prefers-color-scheme:dark)");
+paint(pref?pref==="d":sysDark.matches);
+sysDark.addEventListener("change",e=>{if(!pref)paint(e.matches)});
+$("theme").onclick=()=>{
+pref=document.documentElement.classList.contains("d")?"l":"d";
+paint(pref==="d");
+try{localStorage.setItem("firstfruits:theme",pref)}catch{}};
+
+$("node").onclick=()=>{
+const t=prompt("HTTPS Ethereum RPC for reads when no wallet is connected.\n"
++"Leave blank to clear. The page uses your wallet when there is one.",readNode()||"");
+if(t===null)return;
+const v=t.trim();
+try{if(!v)localStorage.removeItem(NODE_KEY);
+else if(/^https:\/\/\S+$/i.test(v))localStorage.setItem(NODE_KEY,v);
+else return setStat("Read node must be an https:// URL.","err")}catch{}
+setStat(v?"Read node set.":"Read node cleared.","ok");
+refresh()};
+
+/* ----------------------------------------------------------------- TABS */
+const TABS=[["tGive","pGive"],["tWd","pWd"],["tNew","pNew"]];
+const showTab=id=>{for(const[t,p]of TABS){
+$(t).classList.toggle("on",t===id);$(p).classList.toggle("hide",t!==id)}};
+for(const[t]of TABS)$(t).onclick=()=>showTab(t);
+
+/* ---------------------------------------------------------------- READS */
+const loadVault=async()=>{
+const base=await mc3([
+{to:VAULT,data:"0x"+F_NEXTID},{to:VAULT,data:"0x"+F_TPRINC},
+{to:VAULT,data:"0x"+F_TRETH},{to:VAULT,data:"0x"+F_TCLAIM},
+{to:RETH,data:"0x"+F_RATE},{to:FEED,data:"0x"+F_ROUND}]);
+const next=base[0]?Number(uword(base[0],0)):1;
+vault.principal=base[1]?uword(base[1],0):0n;
+vault.reth=base[2]?uword(base[2],0):0n;
+vault.claim=base[3]?uword(base[3],0):0n;
+vault.rate=base[4]?uword(base[4],0):0n;
+usdPerEth=null;
+if(base[5]){
+const answer=uword(base[5],1),updatedAt=Number(uword(base[5],3));
+const age=Math.floor(Date.now()/1000)-updatedAt;
+if(answer>0n&&updatedAt>0&&age<FEED_STALE)usdPerEth=answer}
+const ids=[];for(let i=1;i<next;i++)ids.push(i);
+const raw=await mc3(ids.map(i=>({to:VAULT,data:"0x"+F_CAUSES+encUint(i)})));
+vault.causes=ids.map((id,k)=>{
+const h=raw[k];if(!h)return null;
+return{id,owner:aword(h,0),pending:aword(h,1),recipient:aword(h,2),
+active:uword(h,3)===1n,name:decStrAt(h,Number(uword(h,4))),
+claimable:uword(h,5),harvested:uword(h,6)}}).filter(Boolean)};
+
+const loadMe=async()=>{
+if(!account){me={reth:0n,principal:0n,bank:0n,withdrawable:0n,pendReth:0n,pendEth:0n,
+allocs:[],ethBal:0n,rethBal:0n,allowance:0n};return}
+const[r,bal]=await Promise.all([
+mc3([{to:VAULT,data:"0x"+F_PATRONS+encAddr(account)},
+{to:VAULT,data:"0x"+F_WABLE+encAddr(account)},
+{to:VAULT,data:"0x"+F_PEND+encAddr(account)},
+{to:VAULT,data:"0x"+F_ALLOCS+encAddr(account)},
+{to:RETH,data:"0x"+F_BALOF+encAddr(account)},
+{to:RETH,data:"0x"+F_ALLOW+encAddr(account)+encAddr(VAULT)}]),
+rpcRead("eth_getBalance",[account,L]).catch(()=>"0x0")]);
+me.reth=r[0]?uword(r[0],0):0n;
+me.principal=r[0]?uword(r[0],1):0n;
+me.bank=r[0]?uword(r[0],2):0n;
+me.withdrawable=r[1]?uword(r[1],0):0n;
+me.pendReth=r[2]?uword(r[2],0):0n;
+me.pendEth=r[2]?uword(r[2],1):0n;
+me.rethBal=r[4]?uword(r[4],0):0n;
+me.allowance=r[5]?uword(r[5],0):0n;
+me.ethBal=BigInt(bal||0);
+me.allocs=[];
+if(r[3]){const n=Number(uword(r[3],1));
+for(let i=0;i<n;i++)me.allocs.push({id:Number(uword(r[3],2+i*2)),bps:Number(uword(r[3],3+i*2))})}};
+
+/* The history the overview card needs, all of it derived from the vault's own
+   logs: who has ever staked, what the principal was at each block, and the
+   feed of what happened. */
+const loadHistory=async()=>{
+logSpend=0;
+const tip=Number(BigInt(await rpcRead("eth_blockNumber",[])));
+chainTip=tip;
+$("blockAt").textContent="block "+tip;
+const[evs,rate]=await Promise.all([
+scanVault(tip),
+readApy(tip).catch(()=>null)]);
+apy=rate;
+
+const seen=new Set();
+for(const e of evs)if(e.kind==="Deposited")seen.add(e.t1);
+patrons=seen.size;
+
+/* Walk backwards from the principal the contract reports now, undoing each
+   event, so the curve ends on the live number rather than near it. */
+const pts=[{blk:tip,v:vault.principal}];
+let v=vault.principal;
+for(let i=evs.length-1;i>=0;i--){
+const e=evs[i];
+if(e.kind==="Deposited")v-=BigInt("0x"+(e.w1||"0"));
+else if(e.kind==="Withdrawn")v+=BigInt("0x"+(e.w0||"0"));
+else if(e.kind==="WithdrawnReth")v+=BigInt("0x"+(e.w1||"0"));
+else continue;
+if(v<0n)v=0n;
+pts.push({blk:e.blk,v})}
+pts.push({blk:FROM_BLOCK,v:0n});
+pts.reverse();
+series=pts;
+/* A 30-day change needs 30 days of vault. This one is younger than that, so
+   the window is whatever history exists and the label says which - a shorter
+   span named honestly beats a "30D" that silently measures 26. */
+const cut=tip-MONTH_BLOCKS;
+let base=null;
+for(const p of pts){if(p.blk<=cut&&p.v>0n)base=p;else if(p.blk>cut)break}
+if(!base)base=pts.find(p=>p.v>0n)||null;
+if(base&&base.v>0n){
+const days=Math.max(1,Math.round((tip-base.blk)*12/86400));
+delta30={pct:Number((vault.principal-base.v)*10000n/base.v)/100,
+label:days>=29?"30D":days+"D"}}
+else delta30=null;
+
+const kinds={Deposited:1,Withdrawn:1,WithdrawnReth:1,YieldAllocated:1,
+ClaimedReth:1,ClaimedEther:1,CauseCreated:1,BankWithdrawn:1,BankWithdrawnReth:1};
+const feed=evs.filter(e=>kinds[e.kind]).slice(-7).reverse();
+await blockTimes(feed.map(e=>e.blk));
+activity=feed;
+$("scanState").textContent=evs.length+" events indexed in your browser"
++(logsCapped?", in windows":"")};
+
+let refreshing=false;
+const refresh=async()=>{
+if(refreshing)return;refreshing=true;
+try{
+await loadVault();
+await loadMe();
+if(!splits.length&&me.allocs.length)splits=me.allocs.map(a=>({id:a.id,bps:a.bps}));
+render();
+if(account&&myName==="")nameRev(account).then(n=>{if(n){myName=n;render()}}).catch(()=>{});
+try{await loadHistory();render()}
+catch(e){
+/* The chain-derived half is allowed to fail on its own. An RPC that will not
+   serve logs costs the reader four numbers, not the page. */
+patrons=null;apy=null;series=null;activity=[];
+render();
+/* Name the reason. A reader whose node will not serve logs can point the page
+   at one that will, but only if the page says what went wrong. */
+$("scanState").textContent="No log history: "
++String(e&&e.message||e).slice(0,80)}
+}catch(e){
+if(e&&e.noWallet){
+$("sTvl").textContent="—";
+showReadPick();
+}else setStat(String(e.message||e),"err");
+}finally{refreshing=false}};
+
+/* --------------------------------------------------------------- RENDER */
+const rethToEth=r=>vault.rate?r*vault.rate/(10n**18n):0n;
+const ethToReth=e=>vault.rate?e*(10n**18n)/vault.rate:0n;
+
+const render=()=>{
+if(vault.rate)$("readPick").classList.add("hide");
+$("sTvl").textContent=fmt(vault.principal,4);
+$("sTvlUsd").textContent=usd(vault.principal);
+$("sCauses").textContent=vault.causes.length;
+$("sPatrons").textContent=patrons==null?"—":patrons;
+$("sApy").textContent=apy==null?"—":apy.toFixed(2)+"%";
+const given=vault.causes.reduce((a,c)=>a+c.harvested,0n);
+$("sGiven").firstChild.textContent=fmt(given,4)+" rETH ";
+$("sGivenUsd").textContent=usd(rethToEth(given));
+
+const d=$("sDelta");
+if(delta30==null)d.classList.add("hide");
+else{d.classList.remove("hide");
+d.className="delta"+(delta30.pct>0.005?"":delta30.pct<-0.005?" dn":" flat");
+d.textContent=(delta30.pct>0?"+":"")+delta30.pct.toFixed(2)+"% ("+delta30.label+")"}
+drawSpark();
+
+const link=(id,addr)=>{const a=$(id);
+a.href=SCAN+"address/"+addr;a.textContent=shortAddr(addr)+" ↗"};
+link("lnkVault",VAULT);link("lnkReth",RETH);link("lnkFeed",FEED);
+link("lnkNb",NETBAL);link("lnkMc",MC3);
+$("lnkAll").href=SCAN+"address/"+VAULT;
+
+$("chipAddr").textContent=account?(myName||shortAddr(account)):"Connect Wallet";
+$("connect").title=account||"Connect a wallet";
+$("chipBal").textContent=account?fmt(me.ethBal,4)+" ETH":"";
+$("posBody").classList.toggle("hide",!account);
+$("posEmpty").classList.toggle("hide",!!account);
+
+const eth=$("asset").value==="eth";
+$("balLbl").textContent=account?(eth?fmt(me.ethBal,4)+" ETH":fmt(me.rethBal,4)+" rETH"):"";
+const amt=parseAmt($("amt").value);
+$("amtNote").textContent=amt&&vault.rate
+?(eth?"≈ "+fmt(ethToReth(amt),4)+" rETH at the current rate "+usd(amt)
+:"≈ "+fmt(rethToEth(amt),4)+" ETH of principal "+usd(rethToEth(amt))):"";
+
+renderSplits();
+syncBps();
+$("doGive").textContent=!account?"Connect wallet"
+:(amt&&amt>0n?"Stake "+fmt(amt,4)+" "+(eth?"ETH":"rETH"):"Enter an amount");
+
+$("pPrincipal").textContent=fmt(me.withdrawable,5)+" ETH";
+$("pReth").textContent=fmt(me.reth,5)+" rETH";
+$("pPending").textContent=fmt(me.pendReth,6)+" rETH";
+$("pBank").textContent=fmt(me.bank,6)+" rETH";
+$("wMax").textContent=$("wAsset").value==="eth"?fmt(me.withdrawable,5)+" ETH":fmt(me.reth,5)+" rETH";
+$("curSplitSum").textContent=me.allocs.length
+?(me.allocs.reduce((a,x)=>a+x.bps,0)/100).toFixed(2)+"%":"none";
+$("curSplits").innerHTML=me.allocs.length
+?me.allocs.map(a=>{const c=vault.causes.find(c=>c.id===a.id);
+return (a.bps/100).toFixed(2)+"% → "+(c?esc(c.name):"cause #"+a.id)}).join("<br>")
+:"Undesignated — all yield accrues to your bank.";
+$("doHarvest").disabled=busy||!account||me.reth===0n;
+$("doBank").disabled=$("doBankR").disabled=busy||!account||me.bank===0n;
+$("doWithdraw").disabled=busy||!account||me.reth===0n;
+
+renderCauses();renderMarquee();renderActivity()};
+
+const drawSpark=()=>{
+const el=$("spark");
+if(!series||series.length<2){el.classList.add("hide");return}
+const cut=chainTip-MONTH_BLOCKS;
+let pts=series.filter(p=>p.blk>=cut);
+if(pts.length<2)pts=series.slice(-2);
+if(pts[0].blk>cut)pts=[{blk:cut,v:pts[0].v}].concat(pts);
+const xs=pts.map(p=>p.blk),ys=pts.map(p=>Number(p.v)/1e18);
+const x0=Math.min(...xs),x1=Math.max(...xs);
+const lo=Math.min(...ys),hi=Math.max(...ys);
+if(x1===x0){el.classList.add("hide");return}
+const pad=(hi-lo)*.25||Math.max(hi*.05,1e-9);
+const yLo=Math.max(0,lo-pad),yHi=hi+pad;
+const X=b=>((b-x0)/(x1-x0))*300;
+const Y=v=>78-((v-yLo)/((yHi-yLo)||1))*72;
+/* Principal only moves when someone deposits or withdraws, so the honest
+   shape is a step, not a curve through empty blocks. */
+let d="";
+pts.forEach((p,i)=>{const x=X(p.blk),y=Y(Number(p.v)/1e18);
+d+=i?" L"+x.toFixed(1)+" "+(Y(Number(pts[i-1].v)/1e18)).toFixed(1)+" L"+x.toFixed(1)+" "+y.toFixed(1)
+:"M"+x.toFixed(1)+" "+y.toFixed(1)});
+$("sparkLine").setAttribute("d",d);
+$("sparkFill").setAttribute("d",d+" L300 80 L0 80 Z");
+el.classList.remove("hide")};
+
+const syncBps=()=>{
+const sum=splits.reduce((a,s)=>a+(s.bps||0),0);
+$("bpsLeft").textContent=(sum/100).toFixed(2)+"% designated";
+$("bpsBar").style.width=Math.min(100,sum/100)+"%";
+$("splitNote").textContent=sum>10000?"Over 100%."
+:(sum<10000?(10000-sum)/100+"% banks to you.":"");
+$("doGive").disabled=busy||(!!account&&(!parseAmt($("amt").value)||sum>10000))};
+
+const renderSplits=()=>{
+const box=$("splits");
+const opts=vault.causes.filter(c=>c.active);
+if(!opts.length){box.innerHTML='<p class="hint" style="margin:0">No active cause to name yet.</p>';return}
+if(!splits.length){
+box.innerHTML='<p class="hint" style="margin:0">No cause named — the yield banks to you until you name one.</p>';return}
+box.innerHTML=splits.map((s,i)=>
+'<div class="split"><select data-i="'+i+'">'
++opts.map(c=>'<option value="'+c.id+'"'+(c.id===s.id?" selected":"")+">"+esc(c.name)+"</option>").join("")
++'</select><input data-b="'+i+'" type="text" inputmode="decimal" value="'+(s.bps/100)+'">'
++'<span class="mut" style="font-size:.8125rem">%</span>'
++'<button class="btn btn-sm" data-x="'+i+'" aria-label="Remove">×</button></div>').join("");
+for(const el of box.querySelectorAll("select[data-i]"))
+el.onchange=e=>{splits[+e.target.dataset.i].id=Number(e.target.value)};
+for(const el of box.querySelectorAll("input[data-b]"))
+el.oninput=e=>{const v=parseFloat(e.target.value);
+splits[+e.target.dataset.b].bps=Number.isFinite(v)?Math.round(v*100):0;
+syncBps()};
+for(const el of box.querySelectorAll("button[data-x]"))
+el.onclick=e=>{splits.splice(+e.currentTarget.dataset.x,1);render()}};
+
+const addToSplits=id=>{
+if(!splits.some(s=>s.id===id)){
+const left=Math.max(0,10000-splits.reduce((a,s)=>a+(s.bps||0),0));
+splits.push({id,bps:left||0})}
+showTab("tGive");render();
+$("vault").scrollIntoView({behavior:"smooth",block:"start"})};
+
+const renderMarquee=()=>{
+const box=$("marq");
+if(!vault.causes.length){box.innerHTML="";return}
+const one=vault.causes.map(c=>
+'<a class="marq-i" href="#causes"><span style="color:var(--warn,#e0a13a)">★</span>'
++"<b>"+esc(c.name)+"</b><span>"+fmt(c.harvested,5)+" rETH raised</span></a>").join("");
+box.innerHTML=one+one};
+
+const ACT={
+Deposited:["Vault Deposit","i-blue"],Withdrawn:["Withdrawal","i-amber"],
+WithdrawnReth:["Withdrawal","i-amber"],YieldAllocated:["Donation Sent","i-green"],
+ClaimedReth:["Claimed","i-green"],ClaimedEther:["Claimed","i-green"],
+CauseCreated:["Cause Created","i-blue"],BankWithdrawn:["Bank Withdrawal","i-amber"],
+BankWithdrawnReth:["Bank Withdrawal","i-amber"]};
+const HEART='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
+const DOWN='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>';
+const UP='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
+const STAR='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3 6.6 7 .9-5.1 4.8 1.3 7L12 18l-6.2 3.3 1.3-7L2 9.5l7-.9z"/></svg>';
+
+const renderActivity=()=>{
+const box=$("acty");
+if(activity==null){box.innerHTML='<p class="pos-empty">Loading…</p>';return}
+if(!activity.length){box.innerHTML='<p class="pos-empty">No activity readable from this RPC.</p>';return}
+box.innerHTML=activity.map(e=>{
+const[label,tone]=ACT[e.kind]||[e.kind,"i-blue"];
+let sub="",amt="",ico=DOWN;
+const causeName=id=>{const c=vault.causes.find(c=>c.id===id);return c?esc(c.name):"cause #"+id};
+if(e.kind==="Deposited"){
+sub="From "+shortAddr("0x"+e.t1.slice(26));
+amt=fmt(BigInt("0x"+(e.w1||"0")),4)+" Ξ"}
+else if(e.kind==="Withdrawn"||e.kind==="WithdrawnReth"||e.kind==="BankWithdrawn"||e.kind==="BankWithdrawnReth"){
+ico=UP;
+sub=shortAddr("0x"+e.t1.slice(26));
+amt=fmt(BigInt("0x"+(e.w0||"0")),4)+(e.kind==="Withdrawn"||e.kind==="BankWithdrawn"?" Ξ":" rETH")}
+else if(e.kind==="YieldAllocated"){
+ico=HEART;
+sub=causeName(Number(BigInt(e.t2||"0x0")));
+amt=fmt(BigInt("0x"+(e.w0||"0")),4)+" rETH"}
+else if(e.kind==="ClaimedReth"||e.kind==="ClaimedEther"){
+ico=HEART;
+sub=causeName(Number(BigInt(e.t1||"0x0")));
+amt=fmt(BigInt("0x"+(e.w0||"0")),4)+" rETH"}
+else if(e.kind==="CauseCreated"){
+ico=STAR;
+sub=causeName(Number(BigInt(e.t1||"0x0")));
+amt=""}
+return '<div class="act"><span class="ico '+tone+'">'+ico+"</span>"
++'<span class="who"><b>'+label+"</b><span>"+sub+"</span></span>"
++'<span class="amt"><b>'+amt+"</b><span>"+ago(tsCache.get(e.blk))+"</span></span>"
++'<a href="'+SCAN+"tx/"+e.tx+'" target="_blank" rel="noreferrer" aria-label="View transaction">'
++'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a></div>'}).join("")};
+
+const renderCauses=()=>{
+const box=$("czList");
+if(!vault.causes.length){box.innerHTML='<p class="hint">No causes yet.</p>';return}
+box.innerHTML=vault.causes.map(c=>
+'<div class="card cz'+(c.active?"":" off")+'">'
++'<div class="cz-t"><h3>'+esc(c.name)+'</h3><span class="cz-n">#'+c.id+(c.active?"":" · inactive")+'</span></div>'
++'<div class="cz-rows">'
++'<div class="rowline"><span>Given to date</span><b>'+fmt(c.harvested,5)+" rETH</b></div>"
++'<div class="rowline"><span>Awaiting claim</span><b>'+fmt(c.claimable,5)+" rETH</b></div>"
++"</div>"
++'<a class="cz-to" href="'+SCAN+"address/"+c.recipient+'" target="_blank" rel="noreferrer">'+shortAddr(c.recipient)+" ↗</a>"
++'<div class="acts"><button class="btn btn-sm" data-claim="'+c.id+'"'+(c.claimable>0n?"":" disabled")+">Claim</button>"
++'<button class="btn btn-sm" data-add="'+c.id+'"'+(c.active?"":" disabled")+">Designate</button></div>"
++"</div>").join("");
+for(const el of box.querySelectorAll("button[data-claim]"))
+el.onclick=()=>send("Claim",{to:VAULT,data:"0x"+F_CLAIMR+encUint(el.dataset.claim)});
+for(const el of box.querySelectorAll("button[data-add]"))
+el.onclick=()=>addToSplits(Number(el.dataset.add))};
+
+/* -------------------------------------------------------------- ACTIONS */
+const send=async(label,tx)=>{
+if(busy)return false;
+try{
+busy=true;render();
+await checkWallet();
+setStat(label+": confirm in your wallet…");
+const hash=Array.isArray(tx)
+?await sendBatch(account,tx)
+:await rpc(S,[Object.assign({from:account},tx)]);
+setStat(label+" sent "+txLink(hash));
+await waitTx(hash);
+setStat(label+" confirmed "+txLink(hash),"ok");
+busy=false;
+await refresh();
+return true;
+}catch(e){
+busy=false;
+const m=String(e&&(e.data&&e.data.message||e.message)||e);
+setStat(/user rejected|denied/i.test(m)?"Cancelled.":m,"err");
+render();
+return false}
+finally{busy=false}};
+
+const cleanSplits=()=>{
+const out=splits.filter(s=>s.bps>0).map(s=>({id:Number(s.id),bps:Number(s.bps)}));
+const seen=new Set();
+for(const s of out){if(seen.has(s.id))throw Error("The same cause is named twice.");seen.add(s.id)}
+out.sort((a,b)=>a.id-b.id);
+if(out.reduce((a,s)=>a+s.bps,0)>10000)throw Error("Designation exceeds 100%.");
+return out};
+const sameAsChain=o=>o.length===me.allocs.length
+&&o.every((s,i)=>s.id===me.allocs[i].id&&s.bps===me.allocs[i].bps);
+
+$("amt").oninput=()=>render();
+$("asset").onchange=()=>render();
+$("wAsset").onchange=()=>render();
+$("max").onclick=()=>{
+$("amt").value=$("asset").value==="eth"
+?fmt(me.ethBal>10n**16n?me.ethBal-10n**16n:0n,8)
+:fmt(me.rethBal,8);
+render()};
+$("wMaxBtn").onclick=()=>{
+$("wAmt").value=$("wAsset").value==="eth"?fmt(me.withdrawable,10):fmt(me.reth,10)};
+$("addSplit").onclick=()=>{
+const opts=vault.causes.filter(c=>c.active);
+if(!opts.length)return setStat("No active cause to name yet.","err");
+const free=opts.find(c=>!splits.some(s=>s.id===c.id))||opts[0];
+const left=Math.max(0,10000-splits.reduce((a,s)=>a+(s.bps||0),0));
+splits.push({id:free.id,bps:left||0});render()};
+
+$("doGive").onclick=async()=>{
+try{
+if(!account)return connect();
+const eth=$("asset").value==="eth";
+const amt=parseAmt($("amt").value);
+if(!amt||amt<=0n)throw Error("Enter an amount.");
+const o=cleanSplits();
+const keep=sameAsChain(o);
+if(eth){
+if(amt>me.ethBal)throw Error("More than your ETH balance.");
+const data=keep?"0x"+F_DEPOSIT:"0x"+F_DEPDES+pad32("20")+encAllocs(o);
+return send("Stake",{to:VAULT,data,value:"0x"+amt.toString(16)})}
+if(amt>me.rethBal)throw Error("More than your rETH balance.");
+const data=keep?"0x"+F_DEPR+encUint(amt)
+:"0x"+F_DEPRDES+encUint(amt)+pad32("40")+encAllocs(o);
+if(me.allowance>=amt)return send("Stake rETH",{to:VAULT,data});
+const approve={to:RETH,data:"0x"+F_APPROVE+encAddr(VAULT)+encUint(amt)};
+if(await canBatch(account))
+return send("Stake rETH",[approve,{to:VAULT,data}]);
+const okd=await send("Approve rETH",approve);
+if(!okd)return;
+return send("Stake rETH",{to:VAULT,data});
+}catch(e){setStat(String(e.message||e),"err")}};
+
+$("doWithdraw").onclick=()=>{
+try{
+const eth=$("wAsset").value==="eth";
+const cap=eth?me.withdrawable:me.reth;
+let amt=parseAmt($("wAmt").value);
+if(amt==null||amt<=0n)throw Error("Enter an amount.");
+if(amt>=cap)amt=MAXU;
+send("Withdraw",{to:VAULT,data:"0x"+(eth?F_WITHDRAW:F_WITHDRAWR)+encUint(amt)});
+}catch(e){setStat(String(e.message||e),"err")}};
+
+$("doHarvest").onclick=()=>send("Harvest",{to:VAULT,data:"0x"+F_HARVEST+encAddr(account)});
+$("doBank").onclick=()=>send("Bank withdrawal",{to:VAULT,data:"0x"+F_WBANK+encUint(MAXU)});
+$("doBankR").onclick=()=>send("Bank withdrawal",{to:VAULT,data:"0x"+F_WBANKR+encUint(MAXU)});
+
+/* A name is only usable once it is shown resolving to an address, so the
+   destination is visible before anything is signed. */
+const resolved={};
+const showResolved=()=>{
+const bits=[];
+for(const[id,label]of[["czRecip","Recipient"],["czOwner","Owner"]]){
+const v=$(id).value.trim();
+if(!v||isAddr(v))continue;
+bits.push(label+" "+esc(v)+" → "+(resolved[v]===undefined?"resolving…"
+:resolved[v]==="offchain"?NAME_OFFCHAIN
+:!resolved[v]?"not registered":shortAddr(resolved[v])))}
+$("czResolved").innerHTML=bits.join("<br>")};
+const wantName=async v=>{
+if(!v||isAddr(v)||resolved[v]!==undefined)return;
+resolved[v]=undefined;
+const a=await nameFwdCached(v).catch(e=>e&&e.offchain?"offchain":"");
+resolved[v]=a;showResolved()};
+for(const id of["czRecip","czOwner"])
+$(id).oninput=()=>{const v=$(id).value.trim();showResolved();wantName(v)};
+
+const asAddress=async v=>{
+v=String(v||"").trim();
+if(isAddr(v))return v;
+const a=resolved[v]&&resolved[v]!=="offchain"?resolved[v]:await nameFwdCached(v);
+if(!a||a==="offchain")throw Error("“"+v+"” does not resolve to an address.");
+return a};
+
+$("doCreate").onclick=async()=>{
+try{
+if(!account)return connect();
+const name=$("czName").value.trim();
+if(!name)throw Error("Give the cause a name — it is fixed at creation.");
+const recip=await asAddress($("czRecip").value);
+const owner=$("czOwner").value.trim()?await asAddress($("czOwner").value):account;
+send("Create cause",{to:VAULT,
+data:"0x"+F_CREATE+encAddr(owner)+encAddr(recip)+pad32("60")+encStr(name)});
+}catch(e){setStat(String(e.message||e),"err")}};
+
+/* --------------------------------------------------- WALLETCONNECT GLUE */
+const WC_SIGN=["eth_sendTransaction","eth_signTransaction","personal_sign","eth_sign",
+"eth_signTypedData","eth_signTypedData_v3","eth_signTypedData_v4"];
+const wcToWallet=m=>m.indexOf("wallet_")===0||WC_SIGN.indexOf(m)>=0;
+const wcRelay=WCCLI(WCU,u=>new WebSocket(u));
+let wcRid=0;
+const wcHttp=async(method,params)=>{
+const url=readNode();
+if(!url)throw Object.assign(Error(NO_WALLET),{noWallet:true});
+const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
+body:JSON.stringify({id:++wcRid,jsonrpc:"2.0",method,params:params||[]})});
+const j=await r.json();
+if(j&&j.error)throw Object.assign(Error(j.error.message||"the read node refused"),{code:j.error.code});
+return j?j.result:null};
+
+const wcShowQR=uri=>{
+$("wcQR").innerHTML=qrSvg(QR8.build(uri));
+$("wcCopy").onclick=()=>{try{navigator.clipboard.writeText(uri);
+$("wcCopy").textContent="copied"}catch{}};
+$("wcm").classList.remove("hide");
+return new Promise((res,rej)=>{
+const bail=()=>{cleanup();rej(Object.assign(Error(""),{code:4001}))};
+const key=e=>{if(e.key==="Escape")bail()};
+const cleanup=()=>{removeEventListener("keydown",key);$("wcm").onclick=null;
+$("wcX").onclick=null;wcShowQR.settle=null};
+addEventListener("keydown",key);
+$("wcX").onclick=bail;
+$("wcm").onclick=e=>{if(e.target===$("wcm"))bail()};
+wcShowQR.settle=()=>{cleanup();res()}})};
+const wcCloseQR=()=>{if(wcShowQR.settle)wcShowQR.settle();
+$("wcm").classList.add("hide");$("wcCopy").textContent="copy link"};
+
+async function wcConnect(){
+const meta={name:"Firstfruits",description:"Charitable giving on Ethereum",
+url:location.origin,icons:[]};
+const{uri,done}=await wcRelay.pair(WC_PID,meta);
+const bail=wcShowQR(uri);
+setStat("Scan the code with your wallet.");
+let sess;
+try{sess=await Promise.race([done,bail])}
+catch(e){wcRelay.close();throw e}
+finally{wcCloseQR()}
+const accts=sess.accounts.map(a=>a.split(":").pop());
+if(!accts.length){wcRelay.close();throw Error("That wallet approved no account.")}
+/* A phone wallet signs; it does not necessarily serve reads. Prefer a node the
+   reader named, fall back to the session only if it offers eth_call, and say
+   plainly what to do when neither is true rather than rendering an empty page. */
+const canRead=sess.methods.indexOf("eth_call")>=0;
+const read=(method,params)=>{
+if(readNode())return wcHttp(method,params);
+if(canRead)return wcRelay.request(sess,method,params||[]);
+return Promise.reject(Object.assign(
+Error("This wallet does not answer reads. Name a read node with the globe icon."),
+{noWallet:true}))};
+wcRelay.on(ev=>{if(ev&&ev.t==="closed")location.reload()});
+return{request:({method,params})=>
+method==="eth_requestAccounts"||method==="eth_accounts"?Promise.resolve(accts):
+method==="eth_chainId"?Promise.resolve("0x1"):
+wcToWallet(method)?wcRelay.request(sess,method,params||[]):read(method,params),
+on:()=>{}}}
+
+/* ------------------------------------------------------------- CONNECT */
+const bind=p=>{
+PROV=p;
+if(!p||!p.on)return;
+p.on("accountsChanged",a=>{account=(a&&a[0]||"").toLowerCase()||null;
+myName="";if(!account)PROV=null;render();refresh()});
+p.on("chainChanged",()=>location.reload())};
+
+const use=async get=>{
+$("wpick").classList.add("hide");
+try{
+const p=typeof get==="function"?await get():get;
+if(!p)return;
+bind(p);
+const accs=await rpc("eth_requestAccounts",[]);
+account=(accs&&accs[0]||"").toLowerCase()||null;
+myName="";
+let cid=await rpc(I,[]);
+if(+cid!==CHAIN){
+try{await rpc("wallet_switchEthereumChain",[{chainId:"0x1"}]);cid=await rpc(I,[])}catch{}
+if(+cid!==CHAIN)setStat("This vault is on Ethereum mainnet; your wallet is elsewhere.","err")}
+splits=[];
+await refresh();
+}catch(e){
+PROV=null;account=null;render();
+setStat(/rejected/i.test(String(e.message||e))?"Cancelled.":String(e.message||e),"err")}};
+
+const connect=()=>{
+if(account){
+account=null;PROV=null;splits=[];myName="";render();setStat("Disconnected.");return refresh()}
+const choices=providers.map(p=>({name:p.info.name,icon:p.info.icon,get:()=>p.provider}));
+if(!choices.length&&window.ethereum)
+choices.push({name:"Browser wallet",get:()=>window.ethereum});
+/* Always offered, injected wallet or not: it is the only route for a phone. */
+choices.push({name:"WalletConnect",svg:WC_ICON,get:wcConnect});
+const list=$("wpList");
+list.innerHTML=choices.map((c,i)=>
+'<button class="wrow" data-w="'+i+'">'
++(c.icon?'<img src="'+esc(c.icon)+'" alt="">':'<span class="wki">'+(c.svg||"")+"</span>")
++"<span>"+esc(c.name)+"</span></button>").join("");
+$("wpNone").textContent="";
+for(const el of list.querySelectorAll("button[data-w]"))
+el.onclick=()=>use(choices[+el.dataset.w].get);
+$("wpick").classList.remove("hide")};
+
+$("connect").onclick=connect;
+$("connect2").onclick=()=>{if(!account)connect();else $("vault").scrollIntoView({behavior:"smooth"})};
+$("wpX").onclick=()=>$("wpick").classList.add("hide");
+$("wpick").onclick=e=>{if(e.target===$("wpick"))$("wpick").classList.add("hide")};
+
+/* ------------------------------------------------------------- SUCCESSOR
+   A pointer nobody reads moves nobody. This asks the contract serving the page
+   for the newest version in its own lineage - and it can only know which
+   contract that is from the GATEWAY HOSTNAME, because a page that wrote its
+   own address into itself would change the chunks the address is derived from,
+   and no salt solves that fixpoint. So a file opened from disk simply does not
+   get this notice.
+
+   It SAYS, it does not send: no redirect, no auto-navigation, nothing on
+   screen is rewritten. The bytes stay the bytes that were audited, and leaving
+   them is the reader's decision. Every failure is silent, because a missing
+   notice is a smaller harm than a wrong one. */
+const SEL_LATEST="52bfe789";
+const selfAddress=()=>{
+const m=/^(0x[0-9a-fA-F]{40})\./.exec(location.hostname||"");
+return m?m[1].toLowerCase():""};
+const checkSuccessor=async()=>{
+const here=selfAddress();
+if(!here)return;
+try{
+const tip=aword(await rpcRead(C,[{to:here,data:"0x"+SEL_LATEST},L],1),0);
+if(!tip||tip===ZERO||tip.toLowerCase()===here)return;
+$("newerLink").href=location.href.replace(here,tip.toLowerCase())
+.replace(here.replace(/^0x/,""),tip.toLowerCase().replace(/^0x/,""));
+$("newerLi").classList.remove("hide")}
+catch{}};
+
+/* ---------------------------------------------------------------- START */
+$("pageWhere").textContent=/\.w4eth\.|\.w3link\.|\.eth\.limo$/.test(location.host)
+?"Served from Ethereum":"Served from "+(location.host||"a file");
+render();
+(async()=>{
+const p=providers.length===1?providers[0].provider:window.ethereum;
+if(p){
+try{bind(p);const a=await p.request({method:"eth_accounts"});
+if(a&&a[0])account=a[0].toLowerCase();else PROV=p}
+catch{PROV=p}}
+refresh();
+checkSuccessor()})();
+setInterval(()=>{if(!busy&&!document.hidden)refresh()},30000);
+</script>
