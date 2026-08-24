@@ -4061,32 +4061,59 @@ async function lcQuote() {
     // curve — and on any coin whose floor has been lifted by burns — redeeming pays more.
     // The page explains that in the redeem drawer; it is worth saying at the moment the
     // choice is actually being made, with this trade's numbers rather than in general.
-    if (!buy) {
-      lcCompareToFloor(amountIn, out, my).catch(() => {});
-    }
+    lcCompareToFloor(buy, buy ? out : amountIn, out, my).catch(() => {});
   } catch {
     if (my !== _lcQuoteSeq) return;
     lcSetOut('0', 'Could not quote that.', true);
   }
 }
 
-/// What the same tokens would fetch at the floor, said only when it beats the pool.
-async function lcCompareToFloor(amountIn, poolOut, seq) {
-  if (!_lcToken || amountIn <= 0n) return;
+/// The floor, priced against the trade on screen. Both sides of a trade have a stake in
+/// it and the page only ever spoke to one of them.
+///
+/// Selling: redemption is a second venue, and the one that wins on any size large enough
+/// to walk the curve. Said only when it pays more than the pool.
+///
+/// Buying: the floor is what the tokens being bought could be burned back for, so the gap
+/// is the part of the price with nothing under it. Said always, because a buyer cannot
+/// infer it from a quote — and it is not always bad news: a coin whose floor has been
+/// lifted above the market by burns is one where the purchase is redeemable for more than
+/// it cost, which is the opposite warning and worth as much.
+async function lcCompareToFloor(buying, tokenAmt, poolOut, seq) {
+  if (!_lcToken || tokenAmt <= 0n) return;
   const iface = new ethers.Interface(LAUNCHER_ABI);
   const redeemOut = await withRPC(rpc => rpc.call({
-    to: LAUNCHER, data: iface.encodeFunctionData('quoteRedeem', [_lcToken, amountIn])
+    to: LAUNCHER, data: iface.encodeFunctionData('quoteRedeem', [_lcToken, tokenAmt])
   })).then(r => iface.decodeFunctionResult('quoteRedeem', r)[0]).catch(() => 0n);
   if (seq !== _lcQuoteSeq) return;              // a newer quote has already answered
-  if (redeemOut <= poolOut) return;             // the pool is the better exit; say nothing
   const el = $('lcOutSub');
-  if (!el) return;
-  const better = Number(ethers.formatEther(redeemOut - poolOut));
-  const pct = poolOut > 0n ? Number((redeemOut - poolOut) * 10000n / poolOut) / 100 : 0;
-  el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeeming pays
-    ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH for these
-    &mdash; ${pct >= 0.1 ? '+' + pct.toFixed(1) + '%' : '+' + better.toFixed(6) + ' ETH'} over this sale.
-    <span style="color:var(--fg-muted)">Open “Redeem at the floor” below.</span></div>`;
+  if (!el || redeemOut <= 0n) return;
+
+  if (!buying) {
+    if (redeemOut <= poolOut) return;           // the pool is the better exit; say nothing
+    const better = Number(ethers.formatEther(redeemOut - poolOut));
+    const pct = poolOut > 0n ? Number((redeemOut - poolOut) * 10000n / poolOut) / 100 : 0;
+    el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeeming pays
+      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH for these
+      &mdash; ${pct >= 0.1 ? '+' + pct.toFixed(1) + '%' : '+' + better.toFixed(6) + ' ETH'} over this sale.
+      <span style="color:var(--fg-muted)">Open “Redeem at the floor” below.</span></div>`;
+    return;
+  }
+
+  // `_lcQuote.amountIn` is the ETH going in; redeemOut is what comes back out if the
+  // tokens bought were burned immediately.
+  const spend = _lcQuote?.amountIn || 0n;
+  if (spend <= 0n) return;
+  const ratio = Number(redeemOut * 10000n / spend) / 100;
+  if (ratio >= 100) {
+    el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeemable now for
+      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH &mdash; ${ratio.toFixed(0)}% of what
+      this costs. The floor sits above the market, so burning beats selling.</div>`;
+  } else {
+    el.innerHTML += `<div style="color:var(--fg-muted);margin-top:3px">Redeemable now for
+      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH &mdash; ${ratio < 1 ? '<1' : ratio.toFixed(0)}%
+      of what this costs. The rest is what the market is paying above the floor.</div>`;
+  }
 }
 
 async function lcTrade() {
@@ -6396,11 +6423,22 @@ async function causeBookLoad(sharesAddr) {
   return out;
 }
 
+// Where these orders actually live. An order book with no venue named reads as the page's
+// own list; it is Swapboard's, and escrowed there rather than here.
+function causeBoardLink(addr) {
+  const a = addr || SWAPBOARD_PF;
+  const known = a.toLowerCase() === SWAPBOARD_PF.toLowerCase() ? 'Swapboard'
+    : a.toLowerCase() === SWAPBOARD.toLowerCase() ? 'Swapboard' : 'board';
+  return `<a href="https://etherscan.io/address/${escAttr(a)}" target="_blank" rel="noopener"
+    style="color:inherit;text-decoration:underline">${known}</a>`;
+}
+
 function causeBookHTML(orders, sym) {
   if (!orders.length) {
     return `<div style="font-size:10px;color:var(--fg-dim);line-height:1.6">
-      No resting orders. A limit order names a price and waits to be filled, rather than
-      taking whatever the pool quotes at the moment of the trade.
+      No resting orders on ${causeBoardLink(SWAPBOARD_PF)}. A limit order names a price and
+      waits to be filled, rather than taking whatever the pool quotes at the moment of the
+      trade.
     </div>`;
   }
   const spot = _causePoolCache?.spot || 0n;
@@ -6469,7 +6507,14 @@ function causeBookHTML(orders, sym) {
         any slice, so its size is a ceiling rather than a commitment.
       </div>`
     : '';
-  return `<div>${orders.map(row).join('')}</div>${note}`;
+  // One line naming the venue, and the escrow fact that goes with it: the maker's tokens
+  // are held by the board, so a fill settles against it rather than against a promise.
+  const boards = [...new Set(orders.map(o => (o.board || SWAPBOARD_PF).toLowerCase()))];
+  const venue = `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
+    Resting on ${boards.map(b => causeBoardLink(b)).join(' and ')}, which escrows the maker&rsquo;s
+    ${escText(sym)} until a fill or a cancel.
+  </div>`;
+  return `<div>${orders.map(row).join('')}</div>${note}${venue}`;
 }
 
 async function causeBookFill(idStr) {
