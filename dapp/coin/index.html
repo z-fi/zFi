@@ -6418,6 +6418,14 @@ function causeBookHTML(orders, sym) {
   // So: name the winner where the arithmetic proves one, and otherwise state the distance
   // from spot as the fact it is, without dimming an order the pool may be unable to beat.
   const beatsPool = o => spot > 0n && (o.bid ? o.price > spot : o.price < spot);
+  // The other half of the comparison, from reserves rather than from price: an order for
+  // more than the pool holds is not something the pool is losing to — it is size the pool
+  // has no way to serve. CELL's asks are 50K–100K against a pool holding about 13.9K.
+  const coinRes = _causePoolCache?.coinRes || 0n;
+  const ethRes = _causePoolCache?.ethRes || 0n;
+  const outsizesPool = o => o.bid
+    ? (ethRes > 0n && o.ethAmt > ethRes)
+    : (coinRes > 0n && o.coinAmt > coinRes);
   const anyGood = orders.some(beatsPool);
   const row = o => {
     const vs = spot > 0n ? Number((o.price - spot) * 10000n / spot) / 100 : null;
@@ -6427,16 +6435,26 @@ function causeBookHTML(orders, sym) {
       <span style="flex:1;color:var(--fg)">${causeGwei(o.price)}</span>
       <span style="flex:1;color:var(--fg-muted)">${fmtTokenAmount(o.coinAmt.toString())} ${escText(sym)}</span>
       <span style="flex:1;color:var(--fg-dim)">${fmtNum(Number(ethers.formatEther(o.ethAmt)))} ETH</span>
-      ${vs !== null ? `<span style="width:86px;text-align:right;color:${good ? 'var(--green)' : 'var(--fg-dim)'}"
+      ${vs !== null ? `<span style="width:96px;text-align:right;color:${good ? 'var(--green)' : outsizesPool(o) ? 'var(--fg-muted)' : 'var(--fg-dim)'}"
         title="${good
           ? 'Better than the pool at any size — a pool buy fills at or above spot, a pool sell at or below it'
-          : 'Against the pool\u2019s marginal price. Whether the pool actually beats this depends on its depth at this size, which this row does not measure.'}">${
-          good ? `beats pool ${Math.abs(vs).toFixed(0)}%` : `${vs > 0 ? '+' : ''}${vs.toFixed(0)}% vs spot`}</span>` : ''}
+          : outsizesPool(o)
+          ? 'Larger than the pool\u2019s whole reserve on that side, so the pool cannot fill this at any price'
+          : 'Against the pool\u2019s marginal price. Whether the pool beats this at this size depends on how far the trade walks the band.'}">${
+          good ? `beats pool ${Math.abs(vs).toFixed(0)}%`
+          : outsizesPool(o) ? 'beyond pool depth'
+          : `${vs > 0 ? '+' : ''}${vs.toFixed(0)}% vs spot`}</span>` : ''}
       <button class="swap-btn" style="font-size:10px;padding:4px 10px;white-space:nowrap${good ? '' : ';background:transparent;color:var(--fg-muted);border:1px solid var(--border-muted)'}"
         onclick="causeBookFill('${o.id}')">${o.bid ? 'Sell into' : 'Buy'}</button>
     </div>`;
   };
-  const note = (spot > 0n && !anyGood)
+  const allBeyond = spot > 0n && orders.length > 0 && orders.every(outsizesPool);
+  const note = allBeyond
+    ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
+        Every order here is larger than the pool&rsquo;s reserve on that side. The pool cannot
+        fill these at any price, so the comparison is not one the swap above can win.
+      </div>`
+    : (spot > 0n && !anyGood)
     ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
         Nothing here is under the pool&rsquo;s spot price. For a size the pool can serve, the
         swap above fills better; for one it cannot, these are the only offers there are.
@@ -6525,8 +6543,13 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       // former or the pool refunds the difference, the quote needs the latter.
       // PI_LIQ is the band's LP supply: it matched the pool's own totalSupply exactly
       // on the live pool, which is what makes a "share of the band" figure honest.
+      // Reserves come back in the same lens read and used to be dropped here, which left
+      // the book with a price and no way to know whether the pool could serve a size.
+      const [pt0] = causeSortedPair(sharesAddr);
       _causePoolCache = { pool: pool.pool, shares: sharesAddr,
-                          price: causePoolPrice(pool, sharesAddr), spot, lpSupply: pool.liq };
+                          price: causePoolPrice(pool, sharesAddr), spot, lpSupply: pool.liq,
+                          ethRes: pt0 === ZERO ? pool.r0 : pool.r1,
+                          coinRes: pt0 === ZERO ? pool.r1 : pool.r0 };
       const bars = await causeTape(pool.pool, t0 === ZERO);
       if (gen !== _renderGen || !el.isConnected) return;
       spark = causeChart(bars, floor, salePx, spot);
