@@ -256,44 +256,63 @@ input {
 }
 .progress-fill { height:100%;transition:width 0.3s; }
 
-/* Swap tile. The pay/receive pair on a simple coin is a card each — the label,
-   the amount and the token mark on one line — with the direction arrow notched
-   between them. The pieces below were used by the markup before they were ever
-   styled, which left the tag wrapping under a full-width input. */
-.swap-tile {
-  position:relative;background:var(--surface);border:1px solid var(--border-muted);
-  border-radius:10px;padding:10px 12px;
+/* Swap tile */
+.swap-tile { position:relative; }
+
+/* The main swap page's card, lifted verbatim (dapp/index.html) — the two amount
+   fields as distinct panels with the flipper straddling the seam. The pair here is
+   fixed to ETH/this coin, so the token marks are plain labels, not pickers. */
+.swap-panel {
+  background:var(--surface);border:1px solid var(--border-muted);
+  padding:14px 14px 12px;margin-bottom:0;
 }
-.swap-tile-label {
-  font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
-  color:var(--fg-dim);margin-bottom:2px;
+.swap-arrow + .swap-panel { border-top:none;margin-bottom:16px; }
+.swap-panel .token-select {
+  display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;padding:4px 2px;
+  font-size:12px;text-transform:uppercase;letter-spacing:0.05em;cursor:default;
 }
-.swap-tile-row { display:flex;align-items:center;gap:10px;min-width:0; }
-.swap-tile-row input {
-  flex:1;min-width:0;width:100%;padding:2px 0;background:transparent;border:none;outline:none;
-  font-size:26px;font-weight:500;font-family:inherit;color:var(--fg);
-  font-variant-numeric:tabular-nums;
+.swap-panel .token-icon { width:24px;height:24px;display:inline-flex;align-items:center;flex-shrink:0; }
+.swap-panel .token-icon img, .swap-panel .token-icon svg { width:24px;height:24px;border-radius:50%;object-fit:cover; }
+.swap-panel .token-symbol { font-weight:600;color:var(--fg); }
+.swap-panel .token-header {
+  display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;min-width:0;
 }
-.swap-tile-row input::placeholder { color:var(--input-ph); }
-/* The receive side is read-only, so it borrows the input's metrics rather than
-   its chrome — no rule, no focus state, same baseline. */
-.swap-tile-row .simple-out-amount {
-  flex:1;min-width:0;padding:2px 0;border-bottom:none;min-height:0;
-  font-size:26px;font-weight:500;line-height:1.2;
+.swap-panel .token-header label {
+  display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;
+  color:var(--fg-muted);margin:0;
 }
-.swap-tile-row .swap-token-tag {
-  padding:5px 10px;border-radius:999px;background:var(--bg);
-  border:1px solid var(--border-muted);font-size:12px;
+.swap-panel .amount-input {
+  width:100%;border:none;border-bottom:none;outline:none;background:transparent;color:var(--fg);
+  padding:2px 0;font-family:inherit;font-weight:400;font-size:28px;font-variant-numeric:tabular-nums;
 }
-/* Notched into the seam between the two tiles, so the pair reads as one control. */
-.swap-tile-arrow {
-  position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
-  width:26px;height:26px;margin:-13px auto;border-radius:50%;
-  background:var(--bg);border:1px solid var(--border-muted);color:var(--fg-muted);
+.swap-panel .amount-input::placeholder { color:var(--input-ph); }
+/* The receive side is read-only, so it borrows the input's metrics, not its chrome. */
+.swap-panel .simple-out-amount {
+  border-bottom:none;padding:2px 0;min-height:0;font-size:28px;line-height:1.2;
 }
-.swap-tile-arrow svg { display:block; }
-.swap-tile + .swap-tile { margin-top:6px; }
-/* Small muted pills — slippage, sell percentages. Without this they inherited the
+.swap-panel .balance {
+  font-size:12px;color:var(--fg-muted);margin-top:2px;display:flex;align-items:center;gap:6px;
+}
+.swap-panel .max-btn {
+  padding:2px 4px;border:none;background:none;color:var(--fg-dim);font-size:10px;font-weight:600;
+  letter-spacing:0.03em;text-transform:uppercase;cursor:pointer;margin:0;border-radius:3px;
+  transition:color 0.15s,background 0.15s;
+}
+.swap-panel .max-btn:hover { color:var(--fg);background:var(--surface-hover); }
+/* The facing edges carry the gutter the flipper sits in; without it the button
+   lands on top of the 25/50/75/100 row. */
+.swap-panel:has(+ .swap-arrow) { padding-bottom:26px; }
+.swap-arrow + .swap-panel { padding-top:26px; }
+.swap-arrow { display:flex;justify-content:center;margin:-16px 0;position:relative;z-index:2; }
+.arrow-btn {
+  background:var(--bg);border:1px solid var(--border);border-radius:0;width:32px;height:32px;
+  display:inline-flex;align-items:center;justify-content:center;padding:0;margin:0;cursor:pointer;
+  transition:transform 0.3s ease,background 0.2s,border-color 0.2s;
+}
+.arrow-btn:hover { transform:rotate(180deg);background:var(--btn-bg);border-color:var(--btn-bg); }
+.arrow-btn:hover svg { stroke:var(--btn-fg); }
+.arrow-btn svg { stroke:var(--fg);transition:stroke 0.2s; }
+/* Small muted pills — slippage, presets, Max. Without this they inherited the
    page's primary button fill and shouted louder than the trade button. */
 .coin-tpl-btn {
   background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);
@@ -484,14 +503,14 @@ input {
 
 /* Collapsible drawer */
 .drawer { border:1px solid var(--border);margin-bottom:16px;overflow:hidden; }
-.drawer-toggle {
+.drawer-head, .drawer-toggle {
   display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;
   font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);
   background:transparent;border:none;width:100%;text-align:left;
 }
-.drawer-toggle:hover { background:var(--surface); }
-.drawer-toggle .arrow { transition:transform 0.2s;font-size:10px; }
-.drawer.open .drawer-toggle .arrow { transform:rotate(180deg); }
+.drawer-head:hover, .drawer-toggle:hover { background:var(--surface); }
+.drawer-head .drawer-arrow, .drawer-toggle .arrow { transition:transform 0.2s;font-size:10px; }
+.drawer.open .drawer-head .drawer-arrow, .drawer.open .drawer-toggle .arrow { transform:rotate(180deg); }
 .drawer-body { display:none;padding:0 16px 16px; }
 .drawer.open .drawer-body { display:block; }
 
@@ -696,7 +715,7 @@ input {
   .activity-table { min-width:480px; }
   .desc-text { font-size:12px; }
   .links-row { gap:10px;font-size:11px; }
-  .drawer-toggle { padding:10px 12px; }
+  .drawer-head, .drawer-toggle { padding:10px 12px; }
   /* Detail page stats grid: 4-col → 2x2 */
   .coin-stat-grid { grid-template-columns:1fr 1fr !important; }
   /* Touch-friendly preset & slippage buttons */
@@ -3573,6 +3592,9 @@ let _lcQuoteTimer = null;
 let _lcBalance = 0n;
 let _lcEthUsd = 0;
 let _lcTrading = false;
+let _lcEthTag = '', _lcTokTag = '';
+
+const ETH_MARK = `<svg viewBox="0 0 256 417" fill="currentColor" opacity="0.6"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg>`;
 
 const LAUNCHER = '0x0000002fC8E77585A008Aa45d78A71ad36293aEe';
 const LAUNCHER_ABI = [
@@ -3632,8 +3654,11 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
   const badgeTitle = 'single-sided full-range pool · liquidity locked in the launcher'
     + (info.allocBps ? ` · creator kept ${allocPct}% at launch` : '');
 
-  const _ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
-  const _tokTag = `<span class="swap-token-tag">$${escText(sym)}</span>`;
+  // The pair is fixed, so these are labels rather than pickers — same mark as the
+  // swap page's token-select, minus the chevron and the modal behind it.
+  _lcEthTag = `<span class="token-select"><span class="token-icon">${ETH_MARK}</span><span class="token-symbol">ETH</span></span>`;
+  _lcTokTag = `<span class="token-select"><span class="token-icon">${logoHTML({ symbol: sym }, md, 24)}</span><span class="token-symbol">${escText(sym)}</span></span>`;
+  const _ethTag = _lcEthTag, _tokTag = _lcTokTag;
   const _arrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
   const slipBtns = [1, 3, 5, 10].map(pct =>
     `<button class="coin-tpl-btn${pct === _lcSlipPct ? ' active' : ''}" onclick="lcSetSlippage(${pct},this)" style="font-size:9px;padding:3px 6px">${pct}%</button>`).join('');
@@ -3687,37 +3712,40 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     </div>
 
     <div class="section-card">
-      <div style="display:flex;margin-bottom:10px;border:1px solid var(--border-muted);border-radius:6px;overflow:hidden">
-        <button id="lcBuyBtn" onclick="lcSwitchSide('buy')" style="flex:1;padding:8px;background:${_lcSide === 'buy' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_lcSide === 'buy' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:12px;font-weight:600;cursor:pointer">Buy</button>
-        <button id="lcSellBtn" onclick="lcSwitchSide('sell')" style="flex:1;padding:8px;background:${_lcSide === 'sell' ? 'var(--btn-bg)' : 'transparent'};border:none;color:${_lcSide === 'sell' ? 'var(--btn-fg)' : 'var(--fg-muted)'};font-size:12px;font-weight:600;cursor:pointer">Sell</button>
-      </div>
-
-      <div class="swap-tile">
-        <div class="swap-tile-label">You pay</div>
-        <div class="swap-tile-row">
-          <input id="lcAmount" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to spend" oninput="lcQuoteDebounced()">
+      <div class="swap-panel">
+        <div class="token-header">
+          <label>From</label>
           <span id="lcInTag">${_lcSide === 'buy' ? _ethTag : _tokTag}</span>
         </div>
-        <div id="lcPctRow" style="display:${_lcSide === 'sell' ? 'flex' : 'none'};gap:4px;margin-top:6px">
-          ${[25, 50, 75, 100].map(p => `<button class="coin-tpl-btn" onclick="lcSetSellPct(${p})" style="font-size:9px;padding:3px 6px">${p === 100 ? 'Max' : p + '%'}</button>`).join('')}
+        <input id="lcAmount" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to spend" oninput="lcQuoteDebounced()" autocomplete="off">
+        <div class="balance">
+          <span id="lcInBal">${lcBalanceLabel()}</span>
+          <span id="lcPctRow" style="display:${_lcSide === 'sell' ? 'contents' : 'none'}">
+            <span style="color:var(--fg-dim)">&middot;</span>
+            ${[25, 50, 75, 100].map(p => `<button class="max-btn" type="button" onclick="lcSetSellPct(${p})">${p}%</button>`).join('')}
+          </span>
         </div>
       </div>
-      <div class="swap-tile-arrow">${_arrowSvg}</div>
-      <div class="swap-tile">
-        <div class="swap-tile-label">You receive</div>
-        <div class="swap-tile-row">
-          <div id="lcOut" class="simple-out-amount placeholder">0</div>
+      <div class="swap-arrow">
+        <button class="arrow-btn" onclick="lcFlipSide()" title="Flip direction" aria-label="Flip direction">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.5"><path d="M7 10L12 15L17 10"/></svg>
+        </button>
+      </div>
+      <div class="swap-panel">
+        <div class="token-header">
+          <label>To</label>
           <span id="lcOutTag">${_lcSide === 'buy' ? _tokTag : _ethTag}</span>
         </div>
-        <div id="lcOutSub" class="simple-out-sub">&nbsp;</div>
+        <div id="lcOut" class="simple-out-amount placeholder">0.0</div>
+        <div class="balance"><span id="lcOutSub">Balance: --</span></div>
       </div>
 
-      <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
-        <span style="font-size:10px;color:var(--fg-dim)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
+      <div class="coin-slippage-row" style="display:flex;align-items:center;gap:6px;margin:0 0 10px">
+        <span style="font-size:11px;color:var(--fg-muted)" title="Max price movement you'll accept. Higher = more likely to execute, lower = better price.">Slippage</span>
         ${slipBtns}
       </div>
 
-      <button id="lcGo" class="swap-btn" style="width:100%;margin-top:10px" onclick="lcTrade()">${_connectedAddress ? (_lcSide === 'buy' ? 'Buy' : 'Sell') : 'Connect Wallet'}</button>
+      <button id="lcGo" class="action-btn" style="width:100%" onclick="lcTrade()">${_connectedAddress ? (_lcSide === 'buy' ? 'Buy' : 'Sell') : 'Connect Wallet'}</button>
       <div id="lcStatus" style="margin-top:8px"></div>
 
       <div style="margin-top:10px;font-size:11px;color:var(--fg-muted);line-height:1.6">
@@ -3780,22 +3808,31 @@ async function loadLaunchedChart(info, gen) {
   } catch { /* a chart is not worth an error banner */ }
 }
 
+// Balance under the pay field. On the buy side the coin balance is not what you are
+// spending, so it says nothing rather than something irrelevant.
+function lcBalanceLabel() {
+  if (!_connectedAddress) return 'Balance: --';
+  return _lcSide === 'sell' ? `Balance: ${fmtTokenAmount(_lcBalance.toString())}` : 'Balance: --';
+}
+
+// The flip arrow reads the current side at click time; the panel is patched in
+// place rather than re-rendered, so a side baked into the markup would go stale.
+function lcFlipSide() { lcSwitchSide(_lcSide === 'buy' ? 'sell' : 'buy'); }
+
 function lcSwitchSide(side) {
   _lcSide = side;
   _lcQuote = null;
   ++_lcQuoteSeq;
   const buy = side === 'buy';
-  const b = $('lcBuyBtn'), s = $('lcSellBtn');
-  if (b) { b.style.background = buy ? 'var(--btn-bg)' : 'transparent'; b.style.color = buy ? 'var(--btn-fg)' : 'var(--fg-muted)'; }
-  if (s) { s.style.background = buy ? 'transparent' : 'var(--btn-bg)'; s.style.color = buy ? 'var(--fg-muted)' : 'var(--btn-fg)'; }
-  const sym = _lcInfo?.symbol || '???';
-  const ethTag = `<span class="swap-token-tag"><span class="eth-icon">Ξ</span>ETH</span>`;
-  const tokTag = `<span class="swap-token-tag">$${escText(sym)}</span>`;
-  if ($('lcInTag')) $('lcInTag').innerHTML = buy ? ethTag : tokTag;
-  if ($('lcOutTag')) $('lcOutTag').innerHTML = buy ? tokTag : ethTag;
-  if ($('lcPctRow')) $('lcPctRow').style.display = buy ? 'none' : 'flex';
+
+  if ($('lcInTag')) $('lcInTag').innerHTML = buy ? _lcEthTag : _lcTokTag;
+  if ($('lcOutTag')) $('lcOutTag').innerHTML = buy ? _lcTokTag : _lcEthTag;
+  if ($('lcPctRow')) $('lcPctRow').style.display = buy ? 'none' : 'contents';
+  // The balance shortcut only means anything when the token is what you are spending.
+  const bal = $('lcInBal');
+  if (bal) bal.textContent = lcBalanceLabel();
   const amt = $('lcAmount'); if (amt) amt.value = '';
-  lcSetOut('0', '&nbsp;', true);
+  lcSetOut('0.0', 'Balance: --', true);
   const go = $('lcGo'); if (go) { go.textContent = _connectedAddress ? (buy ? 'Buy' : 'Sell') : 'Connect Wallet'; go.disabled = false; }
   if ($('lcStatus')) $('lcStatus').innerHTML = '';
 }
@@ -3833,11 +3870,11 @@ async function lcQuote() {
   const my = ++_lcQuoteSeq;
   const raw = ($('lcAmount')?.value || '').trim();
   _lcQuote = null;
-  if (!raw || !(parseFloat(raw) > 0)) { lcSetOut('0', '&nbsp;', true); return; }
+  if (!raw || !(parseFloat(raw) > 0)) { lcSetOut('0.0', 'Balance: --', true); return; }
 
   let amountIn;
   try { amountIn = ethers.parseUnits(raw, 18); } catch { lcSetOut('0', 'Invalid amount', true); return; }
-  if (amountIn <= 0n) { lcSetOut('0', '&nbsp;', true); return; }
+  if (amountIn <= 0n) { lcSetOut('0.0', 'Balance: --', true); return; }
 
   const buy = _lcSide === 'buy';
   const tokenIn = buy ? ZERO : _lcToken;
