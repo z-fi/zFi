@@ -3852,7 +3852,9 @@ async function loadLaunchedChart(info, gen) {
     if (!el) return;
     // No sale price on a launched coin — it never had a fixed-price phase — so the
     // ruler marks the floor and spot only.
-    el.innerHTML = causeChart(bars, info.floorPrice, 0n, info.marketPrice);
+    // Same unit as the header: wei-per-token scaled to a 1M lot, ETH or gwei by size.
+    const per1M = wei => { const f = fmtPer1M(wei / 1e18 * 1e6); return `${f.v} ${f.unit}`; };
+    el.innerHTML = causeChart(bars, info.floorPrice, 0n, info.marketPrice, per1M);
   } catch { /* a chart is not worth an error banner */ }
 }
 
@@ -5531,7 +5533,7 @@ async function causeTape(poolAddr, ethIs0) {
 // Log scale because a coin's first day routinely spans 20x and a linear axis renders
 // that as a flat line with one spike. `preserveAspectRatio` stays at the default so
 // candle bodies keep their proportions instead of being stretched by the viewport.
-function causeTimeChart(bars, floorWei, spotWei, winSecs) {
+function causeTimeChart(bars, floorWei, spotWei, winSecs, fmt) {
   const floor = Number(floorWei || 0), spot = Number(spotWei || 0);
   const vals = [];
   for (const b of bars) { if (b.hi > 0) vals.push(b.hi); if (b.lo > 0) vals.push(b.lo); }
@@ -5576,6 +5578,11 @@ function causeTimeChart(bars, floorWei, spotWei, winSecs) {
     svg += `<line x1="0" y1="${y(spot).toFixed(2)}" x2="${W}" y2="${y(spot).toFixed(2)}" stroke="var(--green)" stroke-width="1" stroke-dasharray="2 2" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
   }
 
+  // A launched coin is quoted per 1M tokens everywhere else on the page. Printing the
+  // chart's axis per single token put two different gwei figures for the same price on
+  // one screen — "4,410 gwei per 1M" in the header over "0.0044 gwei now" on the chart.
+  const price = fmt || (v => causeGwei(BigInt(Math.round(v))));
+
   const lbl = (v, text, col) => {
     const t = yFrac(v);
     // Nudge labels off the very edge so they are not clipped by the container.
@@ -5585,7 +5592,7 @@ function causeTimeChart(bars, floorWei, spotWei, winSecs) {
   let labels = '';
   for (const f of [0, 0.5, 1]) {
     const v = Math.exp(L + span * f);
-    labels += lbl(v, escText(causeGwei(BigInt(Math.round(v)))), 'var(--fg-dim)');
+    labels += lbl(v, escText(price(v)), 'var(--fg-dim)');
   }
   if (floor > 0) {
     labels += `<span style="position:absolute;left:2px;top:calc(${(Math.min(0.97, Math.max(0.03, yFrac(floor))) * 100).toFixed(2)}% - 6px);font-size:10px;line-height:12px;color:var(--fg-dim);background:var(--bg);padding:0 3px;pointer-events:none">floor</span>`;
@@ -5606,7 +5613,7 @@ function causeTimeChart(bars, floorWei, spotWei, winSecs) {
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:4px">
       <span>${spanLabel ? spanLabel + ' of tape' : 'pool tape'}</span>
       <span>${trades} fill${trades === 1 ? '' : 's'} &middot; executed, fee included</span>
-      <span style="color:var(--green)">${escText(causeGwei(BigInt(Math.round(spot))))} now</span>
+      <span style="color:var(--green)">${escText(price(spot))} now</span>
     </div></div>`;
 }
 
@@ -5637,7 +5644,7 @@ function causeVsSale(spot, sale) {
   return `${pct > 0 ? '+' : ''}${pct.toFixed(0)}% vs sale`;
 }
 
-function causeChart(bars, floorWei, saleWei, spotWei) {
+function causeChart(bars, floorWei, saleWei, spotWei, fmt) {
   const floor = Number(floorWei || 0), spot = Number(spotWei || 0), sale = Number(saleWei || 0);
   // Any tape at all gets a real chart. This used to require three buckets and fall back
   // to a one-axis price ruler below that — but a ruler with a knob on it reads as a
@@ -5646,7 +5653,7 @@ function causeChart(bars, floorWei, saleWei, spotWei) {
   // anything else.
   const live = bars.filter(b => b.c > 0);
   if (live.length >= 1 && Number(spotWei) > 0) {
-    return causeTimeChart(live, floorWei, spotWei, bars._win);
+    return causeTimeChart(live, floorWei, spotWei, bars._win, fmt);
   }
   const fills = bars.filter(b => b.c > 0).map(b => b.c);
   const all = [floor, spot, sale, ...fills].filter(v => v > 0);
