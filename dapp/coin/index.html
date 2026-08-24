@@ -6404,33 +6404,42 @@ function causeBookHTML(orders, sym) {
     </div>`;
   }
   const spot = _causePoolCache?.spot || 0n;
-  // An order is only worth taking if it beats the other venue on the same screen. An ask
-  // above spot and a bid below it lose to the pool, and the book was presenting those with
-  // the same weight — and the same white button — as one that wins. It listed the
-  // arithmetic and left the reader to do the comparison the whole page exists to make.
-  const beatsPool = o => spot <= 0n ? true : (o.bid ? o.price > spot : o.price < spot);
+  // Only half of this comparison can be made honestly from what the page has.
+  //
+  // `spot` is the pool's MARGINAL price — what an infinitesimal trade gets. A real buy
+  // executes at or above it and a real sell at or below it, because size moves the curve.
+  // So "cheaper than spot" is a safe verdict: an ask under spot beats the pool at every
+  // size. "Dearer than spot" is not, because it depends on depth the page has not read —
+  // and CELL is the case that shows why, with three asks for 50K–100K against a pool
+  // holding ~13.9K. The pool is not the better venue there; it cannot serve that size at
+  // all. Calling those orders "85% worse" was a verdict drawn from a number that knows
+  // nothing about size.
+  //
+  // So: name the winner where the arithmetic proves one, and otherwise state the distance
+  // from spot as the fact it is, without dimming an order the pool may be unable to beat.
+  const beatsPool = o => spot > 0n && (o.bid ? o.price > spot : o.price < spot);
   const anyGood = orders.some(beatsPool);
   const row = o => {
     const vs = spot > 0n ? Number((o.price - spot) * 10000n / spot) / 100 : null;
     const good = beatsPool(o);
-    // The edge, stated from the filler's side: what taking this saves against the pool.
-    const edge = vs === null ? null : (o.bid ? vs : -vs);
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:11px;${good ? '' : 'opacity:.55'}">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted);font-size:11px">
       <span style="width:34px;color:${o.bid ? 'var(--green)' : 'var(--red)'};font-weight:600">${o.bid ? 'BID' : 'ASK'}</span>
       <span style="flex:1;color:var(--fg)">${causeGwei(o.price)}</span>
       <span style="flex:1;color:var(--fg-muted)">${fmtTokenAmount(o.coinAmt.toString())} ${escText(sym)}</span>
       <span style="flex:1;color:var(--fg-dim)">${fmtNum(Number(ethers.formatEther(o.ethAmt)))} ETH</span>
-      ${edge !== null ? `<span style="width:80px;text-align:right;color:${good ? 'var(--green)' : 'var(--fg-dim)'}"
-        title="${good ? 'Better than the pool at this size' : 'The pool is the better side of this trade'}">${
-          good ? `+${Math.abs(edge).toFixed(0)}% vs pool` : `${Math.abs(edge).toFixed(0)}% worse`}</span>` : ''}
+      ${vs !== null ? `<span style="width:86px;text-align:right;color:${good ? 'var(--green)' : 'var(--fg-dim)'}"
+        title="${good
+          ? 'Better than the pool at any size — a pool buy fills at or above spot, a pool sell at or below it'
+          : 'Against the pool\u2019s marginal price. Whether the pool actually beats this depends on its depth at this size, which this row does not measure.'}">${
+          good ? `beats pool ${Math.abs(vs).toFixed(0)}%` : `${vs > 0 ? '+' : ''}${vs.toFixed(0)}% vs spot`}</span>` : ''}
       <button class="swap-btn" style="font-size:10px;padding:4px 10px;white-space:nowrap${good ? '' : ';background:transparent;color:var(--fg-muted);border:1px solid var(--border-muted)'}"
         onclick="causeBookFill('${o.id}')">${o.bid ? 'Sell into' : 'Buy'}</button>
     </div>`;
   };
   const note = (spot > 0n && !anyGood)
     ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
-        Every resting order is priced worse than the pool right now &mdash; the swap above
-        fills better. These are what someone is asking for, not what the coin is worth.
+        Nothing here is under the pool&rsquo;s spot price. For a size the pool can serve, the
+        swap above fills better; for one it cannot, these are the only offers there are.
       </div>`
     : '';
   return `<div>${orders.map(row).join('')}</div>${note}`;
