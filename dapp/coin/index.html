@@ -142,13 +142,13 @@ input {
   opacity:1;color:#FF9800;cursor:help;
 }
 /* Same signal at the top of a coin's own page, where there is room to spell it out. */
-.curve-param-notice {
+.simple-param-notice {
   margin:10px 0;padding:10px 12px;border-radius:6px;
   border:1px solid #FF9800;background:color-mix(in srgb, #FF9800 8%, transparent);
   font-size:13px;line-height:1.5;color:var(--fg);
 }
-.curve-param-notice strong { color:#FF9800; }
-.curve-param-notice ul { margin:6px 0 0;padding-left:18px; }
+.simple-param-notice strong { color:#FF9800; }
+.simple-param-notice ul { margin:6px 0 0;padding-left:18px; }
 
 /* Stacked duplicates: a single grid cell that renders the canonical card up
    front, with a paper-stack shadow hinting at hidden variants. The badge
@@ -405,32 +405,32 @@ input {
 
 /* Curve swap-tile pieces — the receive side is read-only (quote-driven) so it can't reuse
    `.swap-section input`; this gives the same visual weight as the input side. */
-.curve-out-row { display:flex;gap:8px;align-items:flex-end; }
-.curve-out-amount {
+.simple-out-row { display:flex;gap:8px;align-items:flex-end; }
+.simple-out-amount {
   flex:1;font-size:22px;font-weight:400;color:var(--fg);
   padding:8px 0;border-bottom:1.5px solid var(--border);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   min-height:40px;line-height:24px;font-variant-numeric:tabular-nums;
 }
-.curve-out-amount.placeholder { color:var(--input-ph); }
-.curve-out-amount.muted { color:var(--fg-muted);font-style:italic; }
-.curve-out-sub { font-size:11px;color:var(--fg-muted);margin-top:4px;min-height:14px;font-variant-numeric:tabular-nums; }
-.curve-dir-arrow {
+.simple-out-amount.placeholder { color:var(--input-ph); }
+.simple-out-amount.muted { color:var(--fg-muted);font-style:italic; }
+.simple-out-sub { font-size:11px;color:var(--fg-muted);margin-top:4px;min-height:14px;font-variant-numeric:tabular-nums; }
+.simple-dir-arrow {
   width:28px;height:28px;border:1px solid var(--border-muted);background:var(--bg);
   display:inline-flex;align-items:center;justify-content:center;
   color:var(--fg-muted);
 }
-.curve-dir-arrow svg { display:block; }
-.curve-details {
+.simple-dir-arrow svg { display:block; }
+.simple-details {
   margin:10px 0 0;padding:8px 10px;background:var(--surface);font-size:11px;
   border:1px solid var(--border-muted);
 }
-.curve-details-row {
+.simple-details-row {
   display:flex;justify-content:space-between;align-items:center;
   padding:2px 0;color:var(--fg-muted);
 }
-.curve-details-row .v { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
-.curve-details-row .v.warn { color:var(--red); }
+.simple-details-row .v { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
+.simple-details-row .v.warn { color:var(--red); }
 
 /* Collapsible drawer */
 .drawer { border:1px solid var(--border);margin-bottom:16px;overflow:hidden; }
@@ -1995,13 +1995,13 @@ async function loadHolders(daoAddr) {
   }
 }
 
-function toggleCurveHolders() {
-  const el = $('curveHoldersDrawer');
+function toggleSimpleHolders() {
+  const el = $('simpleHoldersDrawer');
   if (!el) return;
   el.classList.toggle('open');
   if (el.classList.contains('open') && !el.dataset.loaded) {
     el.dataset.loaded = '1';
-    loadCurveHolders(el.dataset.token);
+    loadSimpleHolders(el.dataset.token);
   }
 }
 
@@ -2009,8 +2009,8 @@ function toggleCurveHolders() {
 // Transfer logs, and balances come from a single multicall of balanceOf. There is no
 // off-chain index to fall out of sync — which also means the panel is bounded by what
 // the public RPCs will serve for eth_getLogs.
-async function loadCurveHolders(tokenAddr) {
-  const content = $('curveHoldersContent');
+async function loadSimpleHolders(tokenAddr) {
+  const content = $('simpleHoldersContent');
   if (!content) return;
   content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
 
@@ -2106,7 +2106,7 @@ async function loadCurveHolders(tokenAddr) {
       return;
     }
 
-    function renderCurveHolderRows(names) {
+    function renderSimpleHolderRows(names) {
       let html = '';
       const maxBal = holders.reduce((mx, h) => (h.bal > mx ? h.bal : mx), 0n);
       holders.forEach((h, i) => {
@@ -2127,7 +2127,7 @@ async function loadCurveHolders(tokenAddr) {
     }
 
     const names = new Array(holders.length).fill('');
-    renderCurveHolderRows(names);
+    renderSimpleHolderRows(names);
 
     // Background reverse-resolve .wei names \u2014 only for addresses we don't already have a tag for.
     try {
@@ -2148,7 +2148,7 @@ async function loadCurveHolders(tokenAddr) {
           if (decoded[0]) names[i] = decoded[0].toLowerCase();
         } catch {}
       }
-      renderCurveHolderRows(names);
+      renderSimpleHolderRows(names);
     } catch {}
   } catch (e) {
     content.innerHTML = '<div class="activity-empty">Failed to load holders</div>';
@@ -3306,7 +3306,7 @@ async function _galleryRenderFresh(gen) {
               <div class="coin-logo">${logoEl}</div>
               <div>
                 <div class="coin-card-name">${escText(lName)}</div>
-                <div class="coin-card-symbol">$${escText(lSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">coin</span></div>
+                <div class="coin-card-symbol">$${escText(lSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">simple</span></div>
               </div>
             </div>
             <div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
@@ -3594,7 +3594,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     <div class="coin-detail-head">
       <div class="coin-detail-logo">${logoHTML({ symbol: sym }, md, 64)}</div>
       <div class="coin-detail-title" style="flex:1">
-        <h2>${escText(name)} <span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">coin</span></h2>
+        <h2>${escText(name)} <span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">simple</span></h2>
         <div class="coin-symbol-row">
           <span>$${escText(sym)}</span>
           ${_connectedAddress ? `<div class="coin-user-balance">${balFmt} tokens</div>` : ''}
@@ -3610,6 +3610,8 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <span style="font-size:11px;color:var(--fg-muted);margin-left:2px">per 1M</span>${perMilUsd}
       ${premiumPct !== null ? `<span style="font-size:13px;font-weight:600;color:${premiumPct >= 0 ? 'var(--green)' : 'var(--red)'};margin-left:8px" title="What the market charges over the redemption floor">${formatPct(premiumPct)} vs floor</span>` : ''}
     </div>
+
+    <div id="lcChart"></div>
 
     <div class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
@@ -3654,10 +3656,10 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div class="swap-tile">
         <div class="swap-tile-label">You receive</div>
         <div class="swap-tile-row">
-          <div id="lcOut" class="curve-out-amount placeholder">0</div>
+          <div id="lcOut" class="simple-out-amount placeholder">0</div>
           <span id="lcOutTag">${_lcSide === 'buy' ? _tokTag : _ethTag}</span>
         </div>
-        <div id="lcOutSub" class="curve-out-sub">&nbsp;</div>
+        <div id="lcOutSub" class="simple-out-sub">&nbsp;</div>
       </div>
 
       <div class="coin-slippage-row" style="display:flex;align-items:center;gap:4px;margin-top:8px">
@@ -3697,14 +3699,35 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div style="margin-top:6px"><a href="../?to=${info.token}" style="color:inherit;text-decoration:underline">Trade on the swap page — every route, not just this pool &rarr;</a></div>
     </div>
 
-    <div class="drawer" id="curveHoldersDrawer" data-token="${info.token}">
-      <div class="drawer-head" onclick="toggleCurveHolders()">
+    <div class="drawer" id="simpleHoldersDrawer" data-token="${info.token}">
+      <div class="drawer-head" onclick="toggleSimpleHolders()">
         <span>Holders</span>
         <span class="drawer-arrow">&#9660;</span>
       </div>
-      <div class="drawer-body" id="curveHoldersContent"></div>
+      <div class="drawer-body" id="simpleHoldersContent"></div>
     </div>
   `;
+
+  // The price history is the pool's own on-chain tape — a ring buffer of OHLC
+  // buckets the pool writes as it trades — so there is no indexer behind this and
+  // nothing to fall out of sync. Loaded after the page is on screen: it is one more
+  // call against the pool, and the page is worth reading without it.
+  //
+  // ETH is token0 in every launched pool, so the tape's token1-per-token0 prices
+  // invert to ETH per token — which is what `ethIs0` tells causeTapeBars to do.
+  loadLaunchedChart(info, gen);
+}
+
+async function loadLaunchedChart(info, gen) {
+  try {
+    const bars = await causeTape(info.pool, true);
+    if (gen !== _renderGen) return;
+    const el = $('lcChart');
+    if (!el) return;
+    // No sale price on a launched coin — it never had a fixed-price phase — so the
+    // ruler marks the floor and spot only.
+    el.innerHTML = causeChart(bars, info.floorPrice, 0n, info.marketPrice);
+  } catch { /* a chart is not worth an error banner */ }
 }
 
 function lcSwitchSide(side) {
@@ -4277,6 +4300,7 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   // single failed multicall entry — the read yields 0 and `?? 0n` makes that look real —
   // silently removes the one control that guarantees a holder can always take their share
   // of the treasury back. Whether this DAO is ragequittable does not depend on an RPC.
+  let redeemHTML = '';
   {
     const rqTreasuryFmt = Number(ethers.formatEther(treasuryETH)).toFixed(4);
     // Redemption uses the same denominator the DAO does: shares + loot.
@@ -4290,17 +4314,19 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
     const myCost = price > 0n ? userBalance * price / ethers.parseEther('1') : 0n;
     const myDelta = myValue - myCost;
     const myDeltaPct = myCost > 0n ? Number(myDelta * 1000000n / myCost) / 10000 : 0;
-    // This was an 11px dim-grey line with no border, sitting between two bordered cards —
-    // present, and repeatedly not found by someone looking for it. Redemption is the one
-    // thing a holder is always entitled to, so it gets the same weight as the panels
-    // around it rather than the least weight on the page.
-    html += `
-      <div class="section-card" style="background:var(--surface);margin-top:4px;margin-bottom:14px;padding:0;overflow:hidden">
-        <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;font-size:12px;color:var(--fg);background:transparent;border:none;cursor:pointer;font-family:inherit;text-align:left">
+    // Findable, not offered. It stays a full row rather than the 11px dim line it used to
+    // be, because a holder looking for it has to be able to find it — but the bold verb,
+    // the token-for-token glyph pair and the running "your share ≈ X ETH" made it read as
+    // a trade to consider next to the buy form. Redeeming is a right to exercise if this
+    // stops being something you want to fund, not a move to weigh against holding: it
+    // takes your money back out of the cause you funded. So it states what it is and
+    // keeps its figures inside, where someone who has opened it will see them.
+    redeemHTML = `
+      <div class="section-card" style="background:transparent;border:1px solid var(--border-muted);margin-bottom:14px;padding:0;overflow:hidden">
+        <button class="coin-rq-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'" style="display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;font-size:12px;color:var(--fg-muted);background:transparent;border:none;cursor:pointer;font-family:inherit;text-align:left">
           <span style="font-size:10px;color:var(--fg-dim)">&#9654;</span>
-          <span style="font-weight:600">Redeem</span>
-          <span style="color:var(--fg-muted);font-weight:400">${causeGlyph(data.meta, metadata, 12)} ${UNIT} for ${ethGlyph(12)} ETH</span>
-          ${userBalance > 0n && rqDenom > 0n ? `<span style="margin-left:auto;color:var(--fg-dim);font-size:11px">your share \u2248 ${fmtETH(myValue)} ETH</span>` : ''}
+          <span>Redemption</span>
+          <span style="color:var(--fg-dim);font-size:11px">your ${UNIT} for a pro-rata share of the treasury</span>
         </button>
         <div style="display:none;padding:12px;border:1px solid var(--border-muted);background:var(--surface)">
           <div style="font-size:11px;color:var(--fg-dim);margin-bottom:8px;line-height:1.5">Burns your ${UNIT} for a pro-rata portion of the ${treasuryETH > 0n ? rqTreasuryFmt + ' ETH' : 'DAO'} treasury, paid immediately.${usesOffering
@@ -4443,6 +4469,10 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
 
   // Governance info. #causeGovAlert fills in from a second read so the page paints
   // without waiting on it.
+  // Below the tap, with governance — the things that describe a holder's standing in the
+  // DAO, rather than in among the things a visitor came to do.
+  html += redeemHTML;
+
   html += `
     <div id="causePool"></div>
     <div id="causeGovAlert"></div>
