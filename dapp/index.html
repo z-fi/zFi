@@ -2450,9 +2450,9 @@ function liveSaleCardHTML(s) {
       ${logo}
       <div class="live-sale-info">
         <div class="live-sale-name">${esc(displayName)}${s.symbol && displayName !== s.symbol ? ` <span style="color:var(--fg-muted);font-weight:400">$${esc(s.symbol)}</span>` : ''}</div>
-        <div class="live-sale-meta">${esc(s.meta || (s.raisedETH > 0 ? ethFmt + ' ETH raised' : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'))}</div>
+        <div class="live-sale-meta">${esc(s.meta || (s.raisedETH > 0 ? ethFmt + ' ETH raised' + (s.pct >= 99.95 ? ' \u00b7 trading' : '') : s.pct > 0 ? s.pct.toFixed(1) + '% sold' : s.hasSale ? 'Sale live' : 'Collector DAO'))}</div>
       </div>
-      ${s.pct > 0 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
+      ${s.pct > 0 && s.pct < 99.95 ? `<div class="live-sale-pct">${s.pct.toFixed(1)}%</div>
       <div class="live-sale-bar"><div class="live-sale-bar-fill" style="width:${Math.min(s.pct, 100).toFixed(1)}%"></div></div>` : ''}
     </a>`;
 }
