@@ -1,7 +1,7 @@
 // ---- zAMM pool registry (indexer-free) ----
 // Pool IDs are keccak hashes of the PoolKey, so they cannot be inverted. This module
-// rebuilds keys deterministically from on-chain launcher state (DAICO scan, curve
-// sales), a hardcoded legacy pool, and user-saved keys, then verifies every candidate
+// rebuilds keys deterministically from on-chain launcher state (DAICO scan), a
+// hardcoded legacy pool, and user-saved keys, then verifies every candidate
 // against on-chain reserves. Token metadata is read from the chain as well.
 // Consumers: liquidity, orderbook. Requires ethers.
 (function () {
@@ -24,10 +24,7 @@ const VIEW_HELPER = "0x00000000006631040967E58e3430e4B77921a2db";
 const SCAN_ABI = [
   "function scanDAICOs(uint256 daoStart, uint256 daoCount, address[] tribTokens) view returns (tuple(address dao, tuple(string name, string symbol, string contractURI, address sharesToken, address lootToken, address badgesToken, address renderer) meta, tuple(address tribTkn, uint256 tribAmt, uint256 forAmt, address forTkn, uint40 deadline, uint256 remainingSupply, uint256 totalSupply, uint256 treasuryBalance, uint256 allowance, uint16 lpBps, uint16 maxSlipBps, uint256 feeOrHook)[] sales, tuple(address ops, address tribTkn, uint128 ratePerSec, uint64 lastClaim, uint256 claimable, uint256 pending, uint256 treasuryBalance, uint256 tapAllowance) tap)[])"
 ];
-const CURVE_SALE = "0x000000005d9b18764E12E5aeefD6dA73110F85eb";
-const CURVE_SALE_ABI = [
-  "function curves(address token) view returns (address creator, uint256 cap, uint256 sold, uint256 virtualReserve, uint256 startPrice, uint256 endPrice, uint16 feeBps, uint16 poolFeeBps, uint256 raisedETH, uint256 graduationTarget, uint256 lpTokens, address lpRecipient, bool graduated, bool seeded, uint16 sniperFeeBps, uint16 sniperDuration, uint16 maxBuyBps, uint40 launchTime)"
-];
+
 // V1 (ZAMM Hooked) PoolKey: uint256 feeOrHook
 const V1_ABI = [
   "function addLiquidity(tuple(uint256 id0, uint256 id1, address token0, address token1, uint256 feeOrHook) key, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address to, uint256 deadline) payable returns (uint256 amount0, uint256 amount1, uint256 liquidity)",
@@ -237,38 +234,13 @@ async function discoverDaicoPools() {
   }
 }
 
-// Curve-launched coins: pool key is (ETH, token, 0, 0, curve.poolFeeBps) on V1.
-// Tokens come from the sale contract's launch logs; every pool derived from them
-// is then verified against on-chain reserves before it is shown.
-async function discoverCurvePools() {
-  // Launch registry from the sale contract's own logs (dapp/modules/curve-registry.js).
-  const addrs = window.curveRegistry ? await window.curveRegistry.tokens() : [];
-  if (!addrs.length) return [];
-  try {
-    const iface = new ethers.Interface(CURVE_SALE_ABI);
-    const results = await batchRead(addrs.map(a => ({ target: CURVE_SALE, iface, fn: 'curves', args: [a] })));
-    const out = [];
-    for (let i = 0; i < addrs.length; i++) {
-      const c = results[i];
-      if (!c) continue;
-      const fee = BigInt(c.poolFeeBps ?? 0);
-      if (fee === 0n) continue;
-      out.push(makeEntry(ZERO, ethers.getAddress(addrs[i]), 0n, 0n, fee, false));
-    }
-    return out;
-  } catch (e) {
-    console.warn("discoverCurvePools:", e);
-    return [];
-  }
-}
-
 // Build the registry, then verify each candidate against on-chain reserves.
 async function discoverPools() {
   if (_discovering) return _discovering;
   _discovering = (async () => {
     const seeds = [legacyEntry(), ...loadCustomPools()];
-    const [daico, curve] = await Promise.all([discoverDaicoPools(), discoverCurvePools()]);
-    for (const e of [...seeds, ...daico, ...curve]) registerEntry(e);
+    const daico = await discoverDaicoPools();
+    for (const e of [...seeds, ...daico]) registerEntry(e);
 
     const entries = [...new Set(_registry.values())];
     const v0i = new ethers.Interface(V0_ABI);

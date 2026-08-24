@@ -182,3 +182,86 @@ test('the chat composer initialises in the drawer that actually contains it', as
   await w.causeChatCompose('0xD5dcE9BEE03e69362981afE48323A657fCceB8bE');
   assert.match(w.document.getElementById('causeChatBox').innerHTML, /Connect a wallet/);
 });
+
+// The launched-coin detail page is the same failure mode as the Market tile above:
+// one big template literal that parses fine and throws on the first render. It also
+// has to hold up with no floor (a coin nobody has bought yet), which is the branch
+// most likely to be written against a coin that has already traded.
+test('the launched coin page renders from a LaunchInfo, with and without a floor', async () => {
+  const { w } = boot();
+  const info = {
+    token: '0x6404e57f917a7baf6e26cda37c93aeefd4771417',
+    pool: '0xaf9f2e884798e4b63abc9fc6879cd74bd21c8157',
+    creator: '0x1111111111111111111111111111111111111111',
+    owner: '0x1111111111111111111111111111111111111111',
+    name: 'Free Roman', symbol: 'FREEROMAN',
+    contractURI: 'data:application/json,' + encodeURIComponent(JSON.stringify({
+      name: 'Free Roman', symbol: 'FREEROMAN', description: 'a coin', image: ''
+    })),
+    totalSupply: 1000000000000000000000000000n,
+    circulating: 12000000000000000000000000n,
+    backingEth: 700000000000000000n,
+    floorPrice: 61205827814n,
+    marketPrice: 60927114987n,
+    reserve0: 700000000000000000n, reserve1: 988000000000000000000000000n,
+    lpHeld: 1n, allocBps: 0n,
+    fullyDilutedWei: 42039700000000000000n,
+    pendingFeeEth: 0n, pendingBurn: 0n,
+  };
+  w.mcAggregate = async calls => calls.map(() => ({ success: false, returnData: '0x' }));
+  w.fetchMetadata = async () => ({ description: 'a coin' });
+  w.updateOGMeta = () => {};
+
+  // The page's `_renderGen` is a script-scoped `let` this sandbox cannot read, and it
+  // has not been bumped: route() is neutralised at boot, so it is still 0.
+  await w.renderLaunchedCoinPage(info.token, info, 0);
+  let out = w.document.getElementById('app').innerHTML;
+  assert.match(out, /Free Roman/);
+  assert.match(out, /lcAmount/, 'the trade input must render');
+  assert.match(out, /Redeem at the floor/, 'a coin with a floor must offer the redemption');
+  assert.doesNotMatch(out, /undefined/, 'a rendered "undefined" means a value went missing');
+
+  // Nobody has bought yet: no floor, no redemption panel, and no NaN where a
+  // premium would be.
+  await w.renderLaunchedCoinPage(info.token, { ...info, floorPrice: 0n, backingEth: 0n }, 0);
+  out = w.document.getElementById('app').innerHTML;
+  assert.doesNotMatch(out, /Redeem at the floor/);
+  assert.doesNotMatch(out, /NaN/);
+  assert.doesNotMatch(out, /undefined/);
+});
+
+// The gallery builds its cards in a template literal too, and the launched-coin card
+// is the one every new coin gets. Render it with no DAICOs, no auctions and nothing
+// else in play, so a throw can only be about this card.
+test('the gallery renders a launched coin card', async () => {
+  const { w } = boot();
+  const row = {
+    token: '0x6404e57f917a7baf6e26cda37c93aeefd4771417',
+    pool: '0xaf9f2e884798e4b63abc9fc6879cd74bd21c8157',
+    creator: '0x1111111111111111111111111111111111111111',
+    owner: '0x1111111111111111111111111111111111111111',
+    name: 'Free Roman', symbol: 'FREEROMAN', contractURI: '',
+    totalSupply: 10n ** 27n, circulating: 12n * 10n ** 24n,
+    backingEth: 700000000000000000n,
+    floorPrice: 61205827814n, marketPrice: 60927114987n,
+    reserve0: 700000000000000000n, reserve1: 988n * 10n ** 24n,
+    lpHeld: 1n, allocBps: 0n, fullyDilutedWei: 42n * 10n ** 18n,
+    pendingFeeEth: 0n, pendingBurn: 0n,
+  };
+  w.launchRegistry = { launches: async () => [row], tokens: async () => [row.token], note() {} };
+  w.withRPC = async () => { throw new Error('no DAICO scan in this test'); };
+  w.mcAggregate = async calls => calls.map(() => ({ success: false, returnData: '0x' }));
+  w.fetchMetadata = async () => ({});
+  w.fetchNftAuctions = async () => [];
+  w.fetchZammV0CoinsForGallery = async () => [];
+  w.getEthUsd = async () => 3000;
+  w.loadSpamListCached = () => {}; w.loadSpamListFresh = () => {};
+  w.updateOGMeta = () => {}; w._galleryCacheLoad = () => null; w._galleryCacheSave = () => {};
+
+  await w.renderGallery();
+  const out = w.document.getElementById('app').innerHTML;
+  assert.match(out, /FREEROMAN/i, 'the launched coin must reach the grid');
+  assert.match(out, /backed by ether/, 'the card states what actually backs the price');
+  assert.doesNotMatch(out, /undefined/);
+  assert.doesNotMatch(out, /NaN/);
+});

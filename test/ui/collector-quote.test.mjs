@@ -316,13 +316,13 @@ test('neighbouring quote helpers survived the edits', async (t) => {
   const w = await boot();
   if (!w) { t.skip('page did not boot'); return; }
   const probe = w.document.createElement('script');
-  probe.textContent = `window.__present = ['isExactOutDisabled','isCurveBuyPath','isCurveSellPath',
-    'isCurvePath','getCurveQuote','getZammCoinBuyQuote','getDaicoCoinBuyQuote']
+  probe.textContent = `window.__present = ['isExactOutDisabled','getZammCoinBuyQuote',
+    'getDaicoCoinBuyQuote','registerLaunchedCoins']
     .filter(n => { try { return typeof eval(n) === 'function'; } catch { return false; } });`;
   w.document.body.appendChild(probe);
   const present = w.__present ?? [];
-  for (const n of ['isExactOutDisabled', 'isCurveBuyPath', 'isCurveSellPath', 'isCurvePath',
-                   'getCurveQuote', 'getZammCoinBuyQuote', 'getDaicoCoinBuyQuote']) {
+  for (const n of ['isExactOutDisabled', 'getZammCoinBuyQuote', 'getDaicoCoinBuyQuote',
+                   'registerLaunchedCoins']) {
     assert.ok(present.includes(n), `${n} is missing from the page`);
   }
 });
