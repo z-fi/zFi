@@ -1261,7 +1261,7 @@ async function coinLaunch() {
         `DAO: <a href="https://etherscan.io/address/${daoAddress}" target="_blank">${daoAddress}</a><br>` +
         (ongoing
           ? `Sale: Ongoing &middot; 1 ETH = 1M ${sellLoot ? 'loot' : 'shares'}<br>`
-          : `Sale: ${ethers.formatEther(raiseWei)} ETH &middot; 10M ${sellLoot ? 'loot' : 'shares'} &middot; ${days}d<br>`) +
+          : `Sale: ${ethers.formatEther(raiseWei)} ETH &middot; 10M ${sellLoot ? 'loot' : 'shares'} &middot; ${coinDurationLabel('causeDeadline')}<br>`) +
         (sellLoot ? `Backers hold non-voting loot &middot; you keep the vote<br>` : '') +
         tapSummary +
         `<br><a href="https://etherscan.io/tx/${tx.hash}" target="_blank">View tx</a>` +
