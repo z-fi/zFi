@@ -2663,13 +2663,20 @@ function causeMetersHTML(raisedWei, targetWei, treasuryWei, healing) {
   if (targetWei > 0n) {
     const pct = Number(raisedWei * 10000n / targetWei) / 100;
     const targetEth = Number(ethers.formatEther(targetWei));
-    html += causeMeter(
-      pct >= 100 ? 'funded' : `<span title="${capNote}">funded</span>`,
-      pct >= 100
-        ? `<b>${fmtNum(raisedEth)}</b> ETH &middot; complete`
-        : `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
-      pct, pct >= 100
-    );
+    if (pct >= 100) {
+      // A bar with nowhere left to go is a progress meter reporting that there is no
+      // progress to make. What is true of a funded cause is that it has its money and is
+      // getting on with it — the treasury is live, the tap is running, the token trades.
+      // So it states the raise and stands down, rather than drawing a finished race.
+      html += `<div style="font-size:11px;color:var(--fg-muted);margin-bottom:14px">
+        <b style="color:var(--fg)">${fmtNum(raisedEth)}</b> ETH raised &middot; fully funded</div>`;
+    } else {
+      html += causeMeter(
+        `<span title="${capNote}">funded</span>`,
+        `<b>${fmtNum(raisedEth)}</b> / ${fmtNum(targetEth)} ETH &middot; ${pct.toFixed(1)}%`,
+        pct, false
+      );
+    }
   } else if (raisedWei > 0n) {
     html += causeMeter('funded', `<b>${fmtNum(raisedEth)}</b> ETH &middot; open-ended`, 100, false);
   }
@@ -3263,7 +3270,7 @@ async function _galleryRenderFresh(gen) {
               </div>
             </div>
             ${capUnits > 0n ? `<div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>` : ''}
-            <div class="coin-card-stat">${raisedEth > 0 ? fmtEthBal(raisedEth) + ' ETH raised' : 'No backers yet'}${live ? '' : ' &middot; closed'}</div>
+            <div class="coin-card-stat">${raisedEth > 0 ? fmtEthBal(raisedEth) + ' ETH raised' : 'No backers yet'}${live ? '' : (raisedEth > 0 ? ' &middot; trading' : ' &middot; closed')}</div>
             ${treasuryEth > 0 ? `<div class="coin-card-mcap">Treasury ${fmtMcap(treasuryEth)}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(treasuryEth * ethUsd)}</span>` : ''}</div>` : ''}
           </a>
         `;
@@ -3823,11 +3830,25 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
           that stays locked.
         </div>
         <div class="swap-dir" style="margin-bottom:12px">
-          <button id="lcLpAddTab" class="active" onclick="lcLpSwitch('add')">Add</button>
+          <button id="lcLpZapTab" class="active" onclick="lcLpSwitch('zap')">Zap ETH</button>
+          <button id="lcLpAddTab" onclick="lcLpSwitch('add')">Add both</button>
           <button id="lcLpRemoveTab" onclick="lcLpSwitch('remove')">Remove</button>
         </div>
 
-        <div id="lcLpAddPane">
+        <div id="lcLpZapPane">
+          <div class="swap-panel">
+            <div class="token-header"><label>ETH in</label>${_ethTag}</div>
+            <input id="lcLpZapEth" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" oninput="lcLpZapQuoteDebounced()" autocomplete="off">
+            <div class="balance"><span id="lcLpZapBal">Balance: --</span></div>
+          </div>
+          <div id="lcLpZapNote" style="font-size:11px;color:var(--fg-muted);margin-top:8px;min-height:16px;line-height:1.6">
+            The pool sells the right portion of your ether for ${escText(sym)} and deposits both
+            sides, so you do not have to hold the coin first.
+          </div>
+          <button id="lcLpZapGo" class="action-btn" style="width:100%;margin-top:8px" onclick="lcLpZap()">${_connectedAddress ? 'Zap in' : 'Connect Wallet'}</button>
+        </div>
+
+        <div id="lcLpAddPane" style="display:none">
           <div class="swap-panel">
             <div class="token-header"><label>ETH</label>${_ethTag}</div>
             <input id="lcLpEth" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" oninput="lcLpPair()" autocomplete="off">
@@ -4129,16 +4150,18 @@ const PRECISION_LP_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function totalSupply() view returns (uint256)'
 ];
-let _lcLpSide = 'add';
+let _lcLpSide = 'zap';
 let _lcLpBal = 0n, _lcLpSupply = 0n, _lcLpR0 = 0n, _lcLpR1 = 0n;
+let _lcZapQuote = null;
 
 function lcLpSwitch(side) {
   _lcLpSide = side;
-  const add = side === 'add';
-  $('lcLpAddTab')?.classList.toggle('active', add);
-  $('lcLpRemoveTab')?.classList.toggle('active', !add);
-  if ($('lcLpAddPane')) $('lcLpAddPane').style.display = add ? '' : 'none';
-  if ($('lcLpRemovePane')) $('lcLpRemovePane').style.display = add ? 'none' : '';
+  for (const [k, tab, pane] of [['zap', 'lcLpZapTab', 'lcLpZapPane'],
+                                ['add', 'lcLpAddTab', 'lcLpAddPane'],
+                                ['remove', 'lcLpRemoveTab', 'lcLpRemovePane']]) {
+    $(tab)?.classList.toggle('active', side === k);
+    if ($(pane)) $(pane).style.display = side === k ? '' : 'none';
+  }
 }
 
 // Reserves and the caller's LP balance in one batch, refreshed when the drawer opens
@@ -4167,6 +4190,7 @@ async function lcLpRefresh() {
     ? `Balance: ${eth >= 0.0001 || eth === 0 ? eth.toFixed(4) : eth.toExponential(2)} ETH` : 'Balance: --';
   if ($('lcLpTokBal')) $('lcLpTokBal').textContent = _connectedAddress
     ? `Balance: ${fmtTokenAmount(_lcBalance.toString())}` : 'Balance: --';
+  if ($('lcLpZapBal')) $('lcLpZapBal').textContent = $('lcLpEthBal')?.textContent || 'Balance: --';
   if ($('lcLpBal')) $('lcLpBal').textContent = _connectedAddress
     ? `Balance: ${ethers.formatUnits(_lcLpBal, 18)}` : 'Balance: --';
   lcLpPair();
@@ -4176,6 +4200,44 @@ async function lcLpRefresh() {
 // The coin leg that pairs with the ether leg is fixed by the reserves — a deposit at any
 // other ratio is refunded down to this one, so showing anything else would be a lie about
 // what the transaction spends.
+// The lens answers what the deposit will actually consume and hand back. The pool
+// refunds a deposit that is off-ratio rather than failing, so "you will deposit X and
+// get Y back" is not something a UI can work out from reserves alone — which is why
+// PrecisionLiquidityLens exposes it.
+async function lcLpPreviewAdd(amount0, amount1) {
+  try {
+    const r = await withRPC(rpc => rpc.call({
+      to: PLQLENS, data: SEL_PREVIEW_ADD + _a(_lcPool) + _w(amount0) + _w(amount1) }));
+    if (!r || _dec1(r, 0) !== 1n) return null;
+    return { lp: _dec1(r, 1), used0: _dec1(r, 2), used1: _dec1(r, 3),
+             refund0: _dec1(r, 4), refund1: _dec1(r, 5) };
+  } catch { return null; }
+}
+
+let _lcZapTimer = null;
+function lcLpZapQuoteDebounced() {
+  if (_lcZapTimer) clearTimeout(_lcZapTimer);
+  _lcZapTimer = setTimeout(lcLpZapQuote, 350);
+}
+
+async function lcLpZapQuote() {
+  const note = $('lcLpZapNote');
+  const raw = ($('lcLpZapEth')?.value || '').trim();
+  const say = m => { if (note) note.innerHTML = m; };
+  if (!raw || !(parseFloat(raw) > 0)) {
+    say(`The pool sells the right portion of your ether for ${escText(_lcInfo?.symbol || '')} and deposits both sides, so you do not have to hold the coin first.`);
+    _lcZapQuote = null; return;
+  }
+  let wei;
+  try { wei = ethers.parseEther(raw); } catch { say('Invalid amount.'); _lcZapQuote = null; return; }
+  const pv = await causeZapPreview(_lcPool, ZERO, wei);
+  if (!pv) { say('<span style="color:var(--red)">The pool cannot take a zap that size right now.</span>'); _lcZapQuote = null; return; }
+  _lcZapQuote = { amountIn: wei, portion: pv.portion, lp: pv.lp };
+  const sup = _lcLpSupply > 0n ? _lcLpSupply + pv.lp : pv.lp;
+  const share = sup > 0n ? Number(pv.lp * 10000n / sup) / 100 : 0;
+  say(`Sells ${Number(ethers.formatEther(pv.portion)).toFixed(5)} of your ${Number(ethers.formatEther(wei)).toFixed(5)} ETH for ${escText(_lcInfo?.symbol || '')}, then deposits both sides &mdash; about ${share.toFixed(2)}% of the pool.`);
+}
+
 function lcLpPair() {
   const note = $('lcLpAddNote'), out = $('lcLpTok');
   const raw = ($('lcLpEth')?.value || '').trim();
@@ -4188,10 +4250,18 @@ function lcLpPair() {
   if (out) { out.textContent = fmtTokenAmount(tok.toString()); out.classList.remove('placeholder'); }
   if (_connectedAddress && tok > _lcBalance) {
     setNote(`<span style="color:var(--red)">You hold ${fmtTokenAmount(_lcBalance.toString())} ${escText(_lcInfo?.symbol || '')} — not enough for that much ETH.</span>`);
-  } else {
-    const share = _lcLpSupply > 0n ? Number(wei * 10000n / (_lcLpR0 + wei)) / 100 : 100;
-    setNote(`About ${share.toFixed(2)}% of the pool after the deposit.`);
+    return;
   }
+  setNote('Checking…');
+  const cushioned = tok * (10000n + BigInt(Math.round(_lcSlipPct * 100))) / 10000n;
+  lcLpPreviewAdd(wei, cushioned).then(pv => {
+    if ($('lcLpEth')?.value.trim() !== raw) return;   // the box moved on
+    if (!pv) { setNote('The pool cannot take a deposit that size right now.'); return; }
+    const sup = _lcLpSupply > 0n ? _lcLpSupply + pv.lp : pv.lp;
+    const share = sup > 0n ? Number(pv.lp * 10000n / sup) / 100 : 0;
+    const back = pv.refund1 > 0n ? `, ${fmtTokenAmount(pv.refund1.toString())} refunded` : '';
+    setNote(`Deposits ${Number(ethers.formatEther(pv.used0)).toFixed(5)} ETH + ${fmtTokenAmount(pv.used1.toString())} ${escText(_lcInfo?.symbol || '')}${back} — about ${share.toFixed(2)}% of the pool.`);
+  });
 }
 
 function lcLpSetPct(pct) {
@@ -4216,6 +4286,51 @@ function lcLpQuoteRemove() {
 function _lcLpSay(m, c) {
   const el = $('lcLpStatus');
   if (el) el.innerHTML = m ? `<div style="font-size:12px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>` : '';
+}
+
+// Single-sided deposit. zapIn lives behind the route executor, so it goes out the same
+// way the cause page's swaps do: the router is funded by the call and hands the executor
+// the encoded route. The pool picks the split itself, which is the whole point — the
+// deposit ratio on a concentrated position is not something a user can work out.
+async function lcLpZap() {
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const raw = ($('lcLpZapEth')?.value || '').trim();
+  if (!raw || !(parseFloat(raw) > 0)) return;
+  const btn = $('lcLpZapGo');
+  if (btn) btn.disabled = true;
+  try {
+    const me = await sgn.getAddress();
+    let amountIn;
+    try { amountIn = ethers.parseEther(raw); } catch { return; }
+    // Re-price at send time: the split is only optimal for the state it was read against.
+    const pv = await causeZapPreview(_lcPool, ZERO, amountIn);
+    if (!pv || pv.lp === 0n) { _lcLpSay('The pool cannot take a zap that size right now.', 'var(--red)'); return; }
+    // Never hand funds to an address the factory does not vouch for.
+    const okPool = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_ISPOOL + _a(_lcPool) }));
+    if (!okPool || _dec1(okPool, 0) !== 1n) { _lcLpSay('That address is not a Precision pool — refusing to send.', 'var(--red)'); return; }
+
+    const minLP = pv.lp - (pv.lp * BigInt(Math.round(_lcSlipPct * 100))) / 10000n;
+    const routeData = SEL_ZAPIN + _a(_lcPool) + _a(ZERO) + _w(amountIn) + _w(pv.portion) + _w(minLP) + _a(me) + _a(me);
+    const routed = _encSnwap(ZERO, amountIn, me, _lcPool, minLP, PROUTE, routeData);
+
+    _lcLpSay('Confirm in your wallet…');
+    const tx = await sgn.sendTransaction({
+      to: ZROUTER,
+      data: routed.startsWith('0x') ? routed : '0x' + routed,
+      value: amountIn
+    });
+    _lcLpSay(`Zapping… <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    _lcLpSay('Done.', 'var(--green)');
+    const el = $('lcLpZapEth'); if (el) el.value = '';
+    await renderCoinPage(_lcToken);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { _lcLpSay(''); return; }
+    _lcLpSay(escText(err.shortMessage || err.reason || err.message || 'Failed.'), 'var(--red)');
+  } finally {
+    const b = $('lcLpZapGo'); if (b) b.disabled = false;
+  }
 }
 
 async function lcLpAdd() {
@@ -4631,8 +4746,8 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
-        <div id="causeStatusVal" style="font-weight:600;color:${soldOut || !saleEnded ? 'var(--green)' : 'var(--fg-muted)'}">${soldOut ? 'Sold out' : saleEnded ? 'Ended' : 'Active'}</div>
-        <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${soldOut ? `every ${saleIsLoot ? 'loot unit' : 'share'} minted` : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
+        <div id="causeStatusVal" style="font-weight:600;color:${soldOut || !saleEnded ? 'var(--green)' : 'var(--fg-muted)'}">${soldOut ? 'Trading' : saleEnded ? 'Ended' : 'Active'}</div>
+        <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${soldOut ? 'sale complete' : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
       </div>
     </div>
   `;
@@ -5085,7 +5200,7 @@ async function refreshCauseStats(daoAddr, metadata) {
     // Update status
     const statusEl = $('causeStatusVal');
     if (statusEl) {
-      statusEl.textContent = soldOut ? 'Sold out' : saleEnded ? 'Ended' : 'Active';
+      statusEl.textContent = soldOut ? 'Trading' : saleEnded ? 'Ended' : 'Active';
       statusEl.style.color = (soldOut || !saleEnded) ? 'var(--green)' : 'var(--fg-muted)';
     }
     const dlEl = $('causeDeadlineVal');
@@ -5213,7 +5328,7 @@ async function loadCauseSaleClose(daoAddr, sharesAddr, gen) {
   // The headline carries what was raised and the SOLD tile the share count. How fast it
   // went is the only thing neither can say, so it is the only thing here.
   el.innerHTML = `<div style="font-size:11px;color:var(--fg-dim);margin-bottom:14px">
-    <b style="color:var(--green);font-weight:600">Sold out</b>${filled ? ` in ${filled}` : ''}
+    <b style="color:var(--green);font-weight:600">Fully funded</b>${filled ? ` in ${filled}` : ''}
   </div>`;
 }
 
@@ -5477,6 +5592,7 @@ const SEL_MARKETS = PSEL.markets;
 const SEL_TAPE = PSEL.tape;
 const SEL_ZAPIN = PSEL.zapIn;
 const SEL_PREVIEW_ZAP = PSEL.previewZap;
+const SEL_PREVIEW_ADD = PSEL.previewAdd;
 const SEL_ISPOOL = PSEL.isPool;
 const PI_WORDS = 19, PI_POOL = 0, PI_SL = 3, PI_SH = 4, PI_FEE = 5,
       PI_R0 = 6, PI_R1 = 7, PI_PX = 8, PI_LIQ = 9;
