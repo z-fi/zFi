@@ -6418,14 +6418,19 @@ function causeBookHTML(orders, sym) {
   // So: name the winner where the arithmetic proves one, and otherwise state the distance
   // from spot as the fact it is, without dimming an order the pool may be unable to beat.
   const beatsPool = o => spot > 0n && (o.bid ? o.price > spot : o.price < spot);
-  // The other half of the comparison, from reserves rather than from price: an order for
-  // more than the pool holds is not something the pool is losing to — it is size the pool
-  // has no way to serve. CELL's asks are 50K–100K against a pool holding about 13.9K.
+  // The other half of the comparison, from reserves rather than price: an order the pool
+  // cannot fill is not one the pool is beating.
+  //
+  // Only an all-or-nothing order can be beyond reach that way. A partial-fill order states
+  // a MAXIMUM, not a requirement — any slice up to its size can be taken — so the pool
+  // competes for every amount it has depth for, and there the price decides. CELL's three
+  // asks are all partial fill: 50K–100K listed against an 11,778 reserve, but a buyer who
+  // wants 5K can take 5K from either side, and the pool is at 540 gwei against their 1,000.
   const coinRes = _causePoolCache?.coinRes || 0n;
   const ethRes = _causePoolCache?.ethRes || 0n;
-  const outsizesPool = o => o.bid
+  const outsizesPool = o => !o.partial && (o.bid
     ? (ethRes > 0n && o.ethAmt > ethRes)
-    : (coinRes > 0n && o.coinAmt > coinRes);
+    : (coinRes > 0n && o.coinAmt > coinRes));
   const anyGood = orders.some(beatsPool);
   const row = o => {
     const vs = spot > 0n ? Number((o.price - spot) * 10000n / spot) / 100 : null;
@@ -6449,6 +6454,8 @@ function causeBookHTML(orders, sym) {
     </div>`;
   };
   const allBeyond = spot > 0n && orders.length > 0 && orders.every(outsizesPool);
+  // Sizes the pool can serve at all — the ceiling under which its price is the one to beat.
+  const depthTxt = coinRes > 0n ? fmtTokenAmount(coinRes.toString()) : '';
   const note = allBeyond
     ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
         Every order here is larger than the pool&rsquo;s reserve on that side. The pool cannot
@@ -6456,8 +6463,10 @@ function causeBookHTML(orders, sym) {
       </div>`
     : (spot > 0n && !anyGood)
     ? `<div style="font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.5">
-        Nothing here is under the pool&rsquo;s spot price. For a size the pool can serve, the
-        swap above fills better; for one it cannot, these are the only offers there are.
+        Nothing here is under the pool&rsquo;s spot price${depthTxt ? `, and the pool has
+        ${depthTxt} ${escText(sym)} to sell` : ''}. Up to that, the swap above fills better;
+        past it these are the only offers there are. A partial-fill order can be taken for
+        any slice, so its size is a ceiling rather than a commitment.
       </div>`
     : '';
   return `<div>${orders.map(row).join('')}</div>${note}`;
