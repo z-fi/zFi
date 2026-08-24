@@ -3836,24 +3836,20 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     ${info.floorPrice > 0n ? `
     <div class="drawer" id="lcRedeemDrawer">
       <div class="drawer-head" onclick="this.parentElement.classList.toggle('open')">
-        <span>Redeem at the floor &middot; ${fmtPer1M(floorEth * 1e6).v} ${fmtPer1M(floorEth * 1e6).unit} per 1M</span>
+        <span>Redeem at the floor <span style="color:var(--fg-dim);font-weight:400">&middot; ${fmtPer1M(floorEth * 1e6).v} ${fmtPer1M(floorEth * 1e6).unit} per 1M</span></span>
         <span class="drawer-arrow">&#9660;</span>
       </div>
       <div class="drawer-body">
         <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:10px">
-          The launcher holds this pool's liquidity. Burn ${escText(sym)} back to it and you get
-          your share of the ether inside — no buyer needed, at whatever the floor is when you
-          call it. That rate is the ether behind the position divided across the circulating
-          supply, so it moves as the coin trades rather than only ever rising.
+          A second exit, priced off the ether behind the pool rather than off demand: burn
+          ${escText(sym)} and take your share of it, no buyer needed. Every size pays the same
+          rate, so it is the quote that does not get worse the more you sell.
           <br><br>
-          The rate does not move with your size: the payout is linear in the amount burnt, so
-          the first token out and the last are worth the same.
           ${floorEth > marketEth
-            ? `The pool is currently paying less than the floor at any size, so redeeming beats
-               selling outright — there is no amount small enough for the pool to win.`
-            : `Selling into the pool pays more for a small amount and less as the amount grows,
-               so redeeming is the better exit once you are selling enough to move the price —
-               which is exactly when the pool is worst to you.`}
+            ? `Right now it pays more than the pool does, at any size.`
+            : `Right now the pool pays more, until your sale is big enough to move the price.`}
+          The rate is not fixed — it tracks the ether behind the position, so it moves as the
+          coin trades.
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <input id="lcRedeemAmount" type="text" inputmode="decimal" placeholder="Amount of ${escAttr(sym)}" oninput="lcRedeemQuoteDebounced()" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none">
@@ -4100,10 +4096,10 @@ async function lcCompareToFloor(buying, tokenAmt, poolOut, seq) {
     if (redeemOut <= poolOut) return;           // the pool is the better exit; say nothing
     const better = Number(ethers.formatEther(redeemOut - poolOut));
     const pct = poolOut > 0n ? Number((redeemOut - poolOut) * 10000n / poolOut) / 100 : 0;
-    el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeeming pays
-      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH for these
-      &mdash; ${pct >= 0.1 ? '+' + pct.toFixed(1) + '%' : '+' + better.toFixed(6) + ' ETH'} over this sale.
-      <span style="color:var(--fg-muted)">Open “Redeem at the floor” below.</span></div>`;
+    el.innerHTML += `<div style="color:var(--fg-muted);margin-top:3px">Redeeming these pays
+      <span style="color:var(--green)">${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH</span>,
+      ${pct >= 0.1 ? '+' + pct.toFixed(1) + '%' : '+' + better.toFixed(6) + ' ETH'} on this sale
+      &mdash; see “Redeem at the floor” below.</div>`;
     return;
   }
 
@@ -4113,13 +4109,13 @@ async function lcCompareToFloor(buying, tokenAmt, poolOut, seq) {
   if (spend <= 0n) return;
   const ratio = Number(redeemOut * 10000n / spend) / 100;
   if (ratio >= 100) {
-    el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeemable now for
-      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH &mdash; ${ratio.toFixed(0)}% of what
-      this costs. The floor sits above the market, so burning beats selling.</div>`;
+    el.innerHTML += `<div style="color:var(--fg-muted);margin-top:3px">Redeemable now for
+      <span style="color:var(--green)">${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH</span>,
+      ${ratio.toFixed(0)}% of what this costs — the floor is above the market.</div>`;
   } else {
     el.innerHTML += `<div style="color:var(--fg-muted);margin-top:3px">Redeemable now for
-      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH &mdash; ${ratio < 1 ? '<1' : ratio.toFixed(0)}%
-      of what this costs. The rest is what the market is paying above the floor.</div>`;
+      ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH, ${ratio < 1 ? '<1' : ratio.toFixed(0)}%
+      of what this costs — the rest is what the market pays above the floor.</div>`;
   }
 }
 
