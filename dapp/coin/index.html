@@ -3273,13 +3273,21 @@ async function _galleryRenderFresh(gen) {
       !causeAddrs.has(d.dao.toLowerCase()) && !EXCLUDED_COINS.has(d.dao.toLowerCase()));
     if (daicos.length > 0) {
       const zammI = new ethers.Interface(ZAMM_POOLS_ABI);
-      const [daicoMetas, poolRes] = await Promise.all([
+      // A collector DAO keeps almost nothing at its own address — it converts ether into
+      // the things it collects, and holds the rest in a vault. Its ether has to be looked
+      // for where it actually is, or the metric punishes it for doing its job.
+      const vaultOf = d => CONTINUOUS_SALES[d.dao.toLowerCase()]?.vault || null;
+      const [daicoMetas, poolRes, vaultRes] = await Promise.all([
         Promise.all(daicos.map(d => fetchMetadata(d.meta.contractURI).catch(() => null))),
         mcAggregate(daicos.map(d => {
           const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
           const poolId = computePoolId(ZERO, d.meta.sharesToken, 0n, 0n, sale ? BigInt(sale.feeOrHook) : 30n);
           return { target: ZAMM, allowFailure: true, callData: zammI.encodeFunctionData('pools', [poolId]) };
-        })).catch(() => daicos.map(() => null))
+        })).catch(() => daicos.map(() => null)),
+        mcAggregate(daicos.map(d => ({
+          target: MC3, allowFailure: true,
+          callData: _mc3Iface.encodeFunctionData('getEthBalance', [vaultOf(d) || d.dao])
+        }))).catch(() => daicos.map(() => null))
       ]);
       if (gen !== _renderGen) return;
       const nowSec = BigInt(Math.floor(Date.now() / 1000));
@@ -3307,7 +3315,9 @@ async function _galleryRenderFresh(gen) {
           try { const dec = zammI.decodeFunctionResult('pools', pr.returnData); poolR0 = dec[0]; poolR1 = dec[1]; } catch {}
         }
         const totalSupplyN = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
-        const treasuryETH = sale ? sale.treasuryBalance : 0n;
+        const vaultETH = vaultOf(d) ? (mcDecode(vaultRes[i], _mc3Iface, 'getEthBalance', [0n])[0] ?? 0n) : 0n;
+        // What the DAO can actually reach, wherever it is kept.
+        const treasuryETH = (sale ? sale.treasuryBalance : 0n) + vaultETH;
         const teamLocked = md.teamBps ? totalSupplyN * Number(md.teamBps) / 10000 : 0;
         const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
         const circulating = totalSupplyN - unsold - teamLocked;
@@ -3352,16 +3362,17 @@ async function _galleryRenderFresh(gen) {
             <div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
             <div class="coin-card-stat">${hasContSale ? 'Continuous sale' : saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>
             ${hasContSale
-              ? `<div class="coin-card-mcap" style="color:var(--fg-muted);font-weight:400">Collector DAO</div>`
+              ? `<div class="coin-card-mcap">${treasuryETH > 0n ? `Treasury ${fmtMcap(Number(ethers.formatEther(treasuryETH)))}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)}</span>` : ''}` : `<span style="color:var(--fg-muted);font-weight:400">Collector DAO</span>`}</div>`
               : (isCollect && treasuryETH > 0n)
               ? `<div class="coin-card-mcap">Treasury ${fmtMcap(Number(ethers.formatEther(treasuryETH)))}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)}</span>` : ''}</div>`
               : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
         // Ranked on the ether behind it, like everything else here — a launched coin by
-        // what its pool holds, a cause and a DAICO by their treasury. Market cap is what
-        // the card SHOWS; it is not what the page sorts on, and letting a DAICO fall back
-        // to it ranked a speculative valuation against other coins' redeemable ether.
+        // what its pool holds, a cause and a DAICO by their treasury, counting a collector
+        // DAO's vault as part of that. Market cap is what the card SHOWS; it is not what
+        // the page sorts on, and letting a DAICO fall back to it ranked a speculative
+        // valuation against other coins' redeemable ether.
         cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH,
                      sortKey: Number(ethers.formatEther(treasuryETH)), isTest, isSpam });
       }
