@@ -3375,7 +3375,12 @@ async function _galleryRenderFresh(gen) {
             ${mcapDisplay ? `<div class="coin-card-mcap">FDV ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth, isTest, isSpam, isLowMcap });
+        // Ranked on liquidity, not FDV. FDV is spot price times full supply, so a coin
+        // whose pool has never been traded still reports whatever tick it was seeded at
+        // and outranks coins with real ether behind them. `backingEth` is what the
+        // locked position would actually release.
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth,
+                     sortKey: backingEth, isTest, isSpam, isLowMcap });
       }
     }
 
@@ -3427,7 +3432,7 @@ async function _galleryRenderFresh(gen) {
           </a>
         `;
         cards.push({ html: cardHTML, key: cName.toLowerCase() + '|' + cSym.toLowerCase(),
-                     mcap: treasuryEth, isTest: false, isSpam, isLowMcap: false });
+                     mcap: treasuryEth, sortKey: treasuryEth, isTest: false, isSpam, isLowMcap: false });
       }
     }
 
@@ -3444,10 +3449,12 @@ async function _galleryRenderFresh(gen) {
     let stackedCount = 0;
     let grid = '';
     const allGroups = [...groups.values()];
-    for (const group of allGroups) group.sort((a, b) => b.mcap - a.mcap);
+    const _rank = c => (c.sortKey ?? c.mcap ?? 0);
+    for (const group of allGroups) group.sort((a, b) => _rank(b) - _rank(a));
     // Every card is the same kind of thing now, so there is one section and one sort:
-    // a launched coin has no sale phase to rank before or after, only a valuation.
-    allGroups.sort((a, b) => b[0].mcap - a[0].mcap);
+    // a launched coin has no sale phase to rank before or after, only the ether behind
+    // it — its pool's backing, or a cause's treasury.
+    allGroups.sort((a, b) => _rank(b[0]) - _rank(a[0]));
 
     function renderGroup(group) {
       if (group.length === 1) return group[0].html;
@@ -3637,6 +3644,7 @@ let _lcBalance = 0n;
 let _lcEthUsd = 0;
 let _lcTrading = false;
 let _lcEthTag = '', _lcTokTag = '';
+let _lcEthBalance = 0n;
 
 const ETH_MARK = `<svg viewBox="0 0 256 417" fill="currentColor" opacity="0.6"><path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/><path d="M127.962 0L0 212.32l127.962 75.639V154.158z"/><path d="M127.961 312.187l-1.575 1.92V414.55l1.575 4.6L256 236.587z"/><path d="M127.962 419.15V312.187L0 236.587z"/></svg>`;
 
@@ -3664,6 +3672,9 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
   ];
   if (_connectedAddress) {
     calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('balanceOf', [_connectedAddress]) });
+    // Multicall3 can read a plain ether balance, so the buy side's balance costs
+    // nothing beyond one more slot in a batch that is already going out.
+    calls.push({ target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [_connectedAddress]) });
   }
   const [meta, res] = await Promise.all([
     fetchMetadata(info.contractURI).catch(() => null),
@@ -3674,6 +3685,8 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
   _lcEthUsd = res[0]?.success ? Number(clI.decodeFunctionResult('latestAnswer', res[0].returnData)[0]) / 1e8 : 0;
   _lcBalance = (_connectedAddress && res[1]?.success)
     ? erc20I.decodeFunctionResult('balanceOf', res[1].returnData)[0] : 0n;
+  _lcEthBalance = (_connectedAddress && res[2]?.success)
+    ? _mc3Iface.decodeFunctionResult('getEthBalance', res[2].returnData)[0] : 0n;
 
   const md = meta || {};
   const name = info.name || md.name || 'Unknown';
@@ -3764,7 +3777,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
         <input id="lcAmount" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to spend" oninput="lcQuoteDebounced()" autocomplete="off">
         <div class="balance">
           <span id="lcInBal">${lcBalanceLabel()}</span>
-          <span id="lcPctRow" style="display:${_lcSide === 'sell' ? 'contents' : 'none'}">
+          <span id="lcPctRow" style="display:contents">
             <span style="color:var(--fg-dim)">&middot;</span>
             ${[25, 50, 75, 100].map(p => `<button class="max-btn" type="button" onclick="lcSetSellPct(${p})">${p}%</button>`).join('')}
           </span>
@@ -3799,20 +3812,25 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     </div>
 
     ${info.floorPrice > 0n ? `
-    <div class="section-card">
-      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:6px">Redeem at the floor</div>
-      <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:8px">
-        Burn ${escText(sym)} back to the launcher for its share of the pool's ether. This is a
-        second exit, not the only one — take it when the market is paying less than the floor,
-        and sell into the pool when it is paying more.
+    <div class="drawer" id="lcRedeemDrawer">
+      <div class="drawer-head" onclick="this.parentElement.classList.toggle('open')">
+        <span>Redeem at the floor &middot; ${formatEthPrice(floorEth * 1e6)} ETH per 1M</span>
+        <span class="drawer-arrow">&#9660;</span>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input id="lcRedeemAmount" type="text" inputmode="decimal" placeholder="Amount of ${escAttr(sym)}" oninput="lcRedeemQuoteDebounced()" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none">
-        <button class="coin-tpl-btn" onclick="lcSetRedeemMax()" style="font-size:9px;padding:3px 6px">Max</button>
+      <div class="drawer-body">
+        <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:10px">
+          The launcher holds this pool's liquidity. Burn ${escText(sym)} back to it and you get
+          your share of the ether inside — no buyer needed, at a price that only ever rises.
+          It beats selling only while the market is paying less than the floor.
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="lcRedeemAmount" type="text" inputmode="decimal" placeholder="Amount of ${escAttr(sym)}" oninput="lcRedeemQuoteDebounced()" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none">
+          <button class="coin-tpl-btn" onclick="lcSetRedeemMax()" style="font-size:9px;padding:3px 6px">Max</button>
+        </div>
+        <div id="lcRedeemQuote" style="font-size:11px;color:var(--fg-muted);margin-top:6px;min-height:16px">&nbsp;</div>
+        <button id="lcRedeemGo" class="action-btn" style="width:100%;margin-top:8px" onclick="lcRedeem()">${_connectedAddress ? 'Redeem' : 'Connect Wallet'}</button>
+        <div id="lcRedeemStatus" style="margin-top:8px"></div>
       </div>
-      <div id="lcRedeemQuote" style="font-size:11px;color:var(--fg-muted);margin-top:6px;min-height:16px">&nbsp;</div>
-      <button id="lcRedeemGo" class="swap-btn" style="width:100%;margin-top:8px" onclick="lcRedeem()">${_connectedAddress ? 'Redeem' : 'Connect Wallet'}</button>
-      <div id="lcRedeemStatus" style="margin-top:8px"></div>
     </div>` : ''}
 
     <div class="section-card" style="font-size:11px;color:var(--fg-muted);line-height:1.7">
@@ -3849,7 +3867,9 @@ async function loadLaunchedChart(info, gen) {
 // spending, so it says nothing rather than something irrelevant.
 function lcBalanceLabel() {
   if (!_connectedAddress) return 'Balance: --';
-  return _lcSide === 'sell' ? `Balance: ${fmtTokenAmount(_lcBalance.toString())}` : 'Balance: --';
+  if (_lcSide === 'sell') return `Balance: ${fmtTokenAmount(_lcBalance.toString())}`;
+  const eth = Number(_lcEthBalance) / 1e18;
+  return `Balance: ${eth >= 0.0001 || eth === 0 ? eth.toFixed(4) : eth.toExponential(2)} ETH`;
 }
 
 // The flip arrow reads the current side at click time; the panel is patched in
@@ -3864,7 +3884,7 @@ function lcSwitchSide(side) {
 
   if ($('lcInTag')) $('lcInTag').innerHTML = buy ? _lcEthTag : _lcTokTag;
   if ($('lcOutTag')) $('lcOutTag').innerHTML = buy ? _lcTokTag : _lcEthTag;
-  if ($('lcPctRow')) $('lcPctRow').style.display = buy ? 'none' : 'contents';
+
   // The balance shortcut only means anything when the token is what you are spending.
   const bal = $('lcInBal');
   if (bal) bal.textContent = lcBalanceLabel();
@@ -3883,9 +3903,16 @@ function lcSetSlippage(pct, btn) {
   lcQuoteDebounced();
 }
 
+// Percentages apply to whichever asset is in the pay field. On the ETH side 100%
+// leaves a gas reserve — filling the field with the whole balance produces an amount
+// that cannot be sent, which reads as a broken quote rather than as an empty wallet.
+const LC_GAS_RESERVE = 2000000000000000n;   // 0.002 ETH
 function lcSetSellPct(pct) {
-  if (_lcBalance === 0n) return;
-  const amt = pct === 100 ? _lcBalance : (_lcBalance * BigInt(pct)) / 100n;
+  const bal = _lcSide === 'sell'
+    ? _lcBalance
+    : (_lcEthBalance > LC_GAS_RESERVE ? _lcEthBalance - LC_GAS_RESERVE : 0n);
+  if (bal === 0n) return;
+  const amt = pct === 100 ? bal : (bal * BigInt(pct)) / 100n;
   const el = $('lcAmount');
   if (el) { el.value = ethers.formatUnits(amt, 18); lcQuoteDebounced(); }
 }
