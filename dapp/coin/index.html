@@ -1161,13 +1161,14 @@ async function fetchCauses() {
   });
 
   // contractURI last and chunked, for the reason at the top.
-  for (let b = 0; b < causes.length; b += 5) {
-    const batch = causes.slice(b, b + 5);
+  const uriChunks = [];
+  for (let b = 0; b < causes.length; b += 5) uriChunks.push(causes.slice(b, b + 5));
+  await poolMap(uriChunks, 6, async batch => {
     const res = await mcAggregate(batch.map(c =>
       ({ target: c.dao, allowFailure: true, callData: daoI.encodeFunctionData('contractURI') })))
       .catch(() => batch.map(() => null));
     batch.forEach((c, k) => { c.contractURI = mcDecode(res[k], daoI, 'contractURI', [''])[0]; });
-  }
+  });
   return causes;
 }
 
@@ -2186,165 +2187,12 @@ async function loadHolders(daoAddr) {
   }
 }
 
-function toggleSimpleHolders() {
-  const el = $('simpleHoldersDrawer');
-  if (!el) return;
-  el.classList.toggle('open');
-  if (el.classList.contains('open') && !el.dataset.loaded) {
-    el.dataset.loaded = '1';
-    loadSimpleHolders(el.dataset.token);
-  }
-}
-
-// Holder discovery is entirely on-chain: candidates come from the token's own
-// Transfer logs, and balances come from a single multicall of balanceOf. There is no
-// off-chain index to fall out of sync — which also means the panel is bounded by what
-// the public RPCs will serve for eth_getLogs.
-async function loadSimpleHolders(tokenAddr) {
-  const content = $('simpleHoldersContent');
-  if (!content) return;
-  content.innerHTML = `<div class="activity-empty">${zfiLoadingSVG(32)} Loading...</div>`;
-
-  // Tag map for well-known addresses so users can tell pool/launcher/burn balances
-  // apart from real holders. The launcher holds the locked position, so it is the
-  // largest "holder" of every launched coin and would otherwise read as a whale.
-  const creatorAddr = _lcInfo?.creator && _lcInfo.creator !== ZERO ? _lcInfo.creator.toLowerCase() : null;
-  const TAG = {
-    [LAUNCHER.toLowerCase()]: { label: 'Launcher', cls: 'holder-tag-pool' },
-    [ZAMM.toLowerCase()]: { label: 'Pool', cls: 'holder-tag-pool' },
-    '0x000000000000000000000000000000000000dead': { label: 'Burn', cls: 'holder-tag-dao' },
-  };
-  if (_lcInfo?.pool) TAG[_lcInfo.pool.toLowerCase()] = { label: 'Pool', cls: 'holder-tag-pool' };
-  if (creatorAddr) TAG[creatorAddr] = { label: 'Creator', cls: 'holder-tag-badge' };
-
-  async function fallbackTransferScan() {
-    const latestBlock = await withRPC(async rpc => rpc.getBlockNumber());
-    // No launch timestamp is available without an archive read, so scan a fixed
-    // window back. ~30 days is the practical ceiling public RPCs will serve.
-    const blocksBack = 216000;
-    const fromBlock = Math.max(0, latestBlock - blocksBack);
-    const transferTopic = ethers.id('Transfer(address,address,uint256)');
-    const CHUNK = 9000;
-    const ranges = [];
-    for (let s = fromBlock; s <= latestBlock; s += CHUNK) {
-      ranges.push([s, Math.min(s + CHUNK - 1, latestBlock)]);
-    }
-    const logsPerChunk = await Promise.all(ranges.map(([s, e]) =>
-      withRPC(async rpc => rpc.getLogs({
-        address: tokenAddr,
-        topics: [transferTopic],
-        fromBlock: s,
-        toBlock: e
-      })).catch(() => [])
-    ));
-    const ZADDR = ZERO.toLowerCase();
-    const recipients = new Set();
-    for (const logs of logsPerChunk) {
-      for (const log of logs) {
-        if (!log.topics || log.topics.length < 3) continue;
-        // topics[2] = `to` (32-byte padded). Receivers are the only candidates that may currently hold balance.
-        const to = ('0x' + log.topics[2].slice(26)).toLowerCase();
-        if (to !== ZADDR) recipients.add(to);
-      }
-    }
-    return [...recipients];
-  }
-
-  try {
-    // Candidate holders come from the token's own Transfer logs.
-    let candidateAddrs = [];
-    try { candidateAddrs = await fallbackTransferScan(); }
-    catch { candidateAddrs = []; }
-
-    if (candidateAddrs.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No holders yet</div>';
-      return;
-    }
-
-    // Cap candidates so the multicall stays reasonable. Sorting later by balance bubbles real holders up.
-    const addrs = candidateAddrs.slice(0, 200);
-
-    // balanceOf for each candidate + totalSupply, all in one multicall.
-    const erc20I = new ethers.Interface(ERC20_ABI);
-    const calls = addrs.map(a => ({
-      target: tokenAddr, allowFailure: true,
-      callData: erc20I.encodeFunctionData('balanceOf', [a])
-    }));
-    calls.push({ target: tokenAddr, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply', []) });
-    const mcRes = await withRPC(async rpc => {
-      const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-      return await mc.aggregate3(calls);
-    });
-
-    let totalSupply = 0n;
-    const tsRes = mcRes[mcRes.length - 1];
-    if (tsRes.success) {
-      try { totalSupply = erc20I.decodeFunctionResult('totalSupply', tsRes.returnData)[0]; } catch {}
-    }
-
-    const holders = [];
-    for (let i = 0; i < addrs.length; i++) {
-      if (!mcRes[i].success) continue;
-      try {
-        const bal = erc20I.decodeFunctionResult('balanceOf', mcRes[i].returnData)[0];
-        if (bal > 0n) holders.push({ addr: addrs[i], bal });
-      } catch {}
-    }
-    holders.sort((a, b) => a.bal > b.bal ? -1 : a.bal < b.bal ? 1 : 0);
-
-    if (holders.length === 0) {
-      content.innerHTML = '<div class="activity-empty">No holders yet</div>';
-      return;
-    }
-
-    function renderSimpleHolderRows(names) {
-      let html = '';
-      const maxBal = holders.reduce((mx, h) => (h.bal > mx ? h.bal : mx), 0n);
-      holders.forEach((h, i) => {
-        const tag = TAG[h.addr];
-        const short = h.addr.slice(0, 6) + '\u2026' + h.addr.slice(-4);
-        const display = tag ? tag.label : (names[i] || short);
-        const tagHTML = tag ? `<span class="holder-tag ${tag.cls}">${tag.label}</span>` : '';
-        const pctNum = totalSupply > 0n ? Number(h.bal * 10000n / totalSupply) / 100 : 0;
-        const pctColor = pctNum >= 10 ? 'var(--green)' : pctNum >= 1 ? 'var(--fg)' : 'var(--fg-muted)';
-        const barW = maxBal > 0n ? Number(h.bal * 1000n / maxBal) / 10 : 0;
-        html += `<div class="holder-row" style="--w:${barW}%">
-          <div class="holder-addr"><a href="https://etherscan.io/address/${h.addr}" target="_blank" title="${h.addr}">${escText(display)}</a>${tag ? ' ' + tagHTML : ''}</div>
-          <div class="holder-shares">${fmtTokenAmount(h.bal.toString())}</div>
-          <div class="holder-pct" style="color:${pctColor}">${pctNum.toFixed(1)}%</div>
-        </div>`;
-      });
-      content.innerHTML = html;
-    }
-
-    const names = new Array(holders.length).fill('');
-    renderSimpleHolderRows(names);
-
-    // Background reverse-resolve .wei names \u2014 only for addresses we don't already have a tag for.
-    try {
-      const weinsIface = new ethers.Interface(WEINS_ABI);
-      const nameCalls = holders.map(h => ({
-        target: WEINS, allowFailure: true,
-        callData: weinsIface.encodeFunctionData('reverseResolve', [h.addr])
-      }));
-      const nameRes = await withRPC(async rpc => {
-        const mc = new ethers.Contract(MC3, MC3_ABI, rpc);
-        return await mc.aggregate3(nameCalls);
-      });
-      for (let i = 0; i < holders.length; i++) {
-        if (TAG[holders[i].addr]) continue;
-        if (!nameRes[i].success) continue;
-        try {
-          const decoded = weinsIface.decodeFunctionResult('reverseResolve', nameRes[i].returnData);
-          if (decoded[0]) names[i] = decoded[0].toLowerCase();
-        } catch {}
-      }
-      renderSimpleHolderRows(names);
-    } catch {}
-  } catch (e) {
-    content.innerHTML = '<div class="activity-empty">Failed to load holders</div>';
-  }
-}
+// Holders are not indexed here. Discovery meant scanning the token's Transfer logs
+// over a fixed 30-day window and multicalling balanceOf on the first 200 recipients —
+// bounded by what public RPCs will serve for eth_getLogs, which is why it routinely
+// came back empty, and capped in arrival order rather than by balance, so a busy coin
+// showed an arbitrary subset. Etherscan indexes this properly; the detail page links
+// to its holder chart instead.
 
 // ---- LP seed attribution ----
 // The LP-fee estimate credits lifetime pool fee growth to the DAO's units, which is only
@@ -3124,6 +2972,27 @@ async function mcAggregate(calls) {
     return await mc.aggregate3(calls);
   });
 }
+// Run `fn` over `items` with at most `n` in flight. Chunked reads used to run one
+// batch per round trip in a `for` loop, so a gallery of 200 was 40 sequential RPC
+// waits; the chunking is there to bound response size, not to serialise it.
+async function poolMap(items, n, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i], i);
+  }));
+  return out;
+}
+
+// Gallery metadata is best-effort: a card whose document never arrives still has its
+// name, symbol and both prices from the LaunchInfo row, and falls back to a generated
+// mark. ipfsFetchJson walks every gateway before giving up, so without a bound one
+// unreachable pin holds the whole grid for as long as that walk takes. The fetch is
+// left running — it fills the cache for the next visit.
+function metaSoon(p, ms) {
+  return Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]).catch(() => null);
+}
+
 // Decode one aggregate3 slot, or fall back if the call reverted.
 function mcDecode(res, iface, fn, fallback) {
   try {
@@ -3373,10 +3242,19 @@ async function _galleryRenderFresh(gen) {
     // A cause failing to load must not take the launched coins with it — they come from
     // a different contract and have no reason to disappear together, which is the rule
     // the old DAICO scan was given for the same reason.
-    const [launchRowsAll, causeRows, nftAuctions] = await Promise.all([
+    // The ETH price and the ZORG balance gate what the cards render but depend on
+    // none of the coin data, so they ride along with the discovery reads instead of
+    // adding a round trip after them.
+    const [launchRowsAll, causeRows, nftAuctions, ethUsd, zorgRes] = await Promise.all([
       fetchLaunchedCoins(),
       fetchCauses().catch(() => []),
-      fetchNftAuctions()
+      fetchNftAuctions(),
+      getEthUsd(),
+      _connectedAddress
+        ? mcAggregate([{ target: ZORG_TOKEN, allowFailure: true,
+            callData: new ethers.Interface(ERC20_ABI).encodeFunctionData('balanceOf', [_connectedAddress]) }])
+            .catch(() => [])
+        : Promise.resolve([])
     ]);
 
     if (launchRowsAll.length === 0 && causeRows.length === 0 && nftAuctions.length === 0) {
@@ -3406,14 +3284,6 @@ async function _galleryRenderFresh(gen) {
 
     const launchRows = launchRowsAll.filter(r => !EXCLUDED_COINS.has(r.token));
 
-    const [ethUsd, zorgRes] = await Promise.all([
-      getEthUsd(),
-      _connectedAddress
-        ? mcAggregate([{ target: ZORG_TOKEN, allowFailure: true,
-            callData: new ethers.Interface(ERC20_ABI).encodeFunctionData('balanceOf', [_connectedAddress]) }])
-            .catch(() => [])
-        : Promise.resolve([])
-    ]);
     // Spam flagging is gated on holding enough ZORG, so the buttons a card renders
     // depend on this and it has to land before the cards are built.
     if (_connectedAddress && zorgRes[0]?.success) {
@@ -3437,20 +3307,19 @@ async function _galleryRenderFresh(gen) {
     // in one multicall is a response big enough to fail.
     if (launchRows.length > 0) {
       const uriI = new ethers.Interface(['function contractURI() view returns (string)']);
-      const uris = [];
-      for (let b = 0; b < launchRows.length; b += 5) {
-        const batch = launchRows.slice(b, b + 5);
+      const chunks = [];
+      for (let b = 0; b < launchRows.length; b += 5) chunks.push(launchRows.slice(b, b + 5));
+      const uris = (await poolMap(chunks, 6, async batch => {
         const res = await mcAggregate(batch.map(r => ({
           target: r.token, allowFailure: true, callData: uriI.encodeFunctionData('contractURI')
         }))).catch(() => batch.map(() => null));
-        for (const one of res) {
-          let u = '';
-          try { u = one?.success ? uriI.decodeFunctionResult('contractURI', one.returnData)[0] : ''; } catch {}
-          uris.push(u);
-        }
-      }
+        return res.map(one => {
+          try { return one?.success ? uriI.decodeFunctionResult('contractURI', one.returnData)[0] : ''; }
+          catch { return ''; }
+        });
+      })).flat();
       if (gen !== _renderGen) return;
-      const launchMetas = await Promise.all(uris.map(u => u ? fetchMetadata(u).catch(() => null) : Promise.resolve(null)));
+      const launchMetas = await Promise.all(uris.map(u => u ? metaSoon(fetchMetadata(u), 4000) : Promise.resolve(null)));
       if (gen !== _renderGen) return;
 
       for (let i = 0; i < launchRows.length; i++) {
@@ -3517,7 +3386,7 @@ async function _galleryRenderFresh(gen) {
     // behind "show low liquidity" was how these went missing in the first place.
     if (causeRows.length > 0) {
       const causeMetas = await Promise.all(causeRows.map(c =>
-        c.contractURI ? fetchMetadata(c.contractURI).catch(() => null) : Promise.resolve(null)));
+        c.contractURI ? metaSoon(fetchMetadata(c.contractURI), 4000) : Promise.resolve(null)));
       if (gen !== _renderGen) return;
       for (let i = 0; i < causeRows.length; i++) {
         const c = causeRows[i];
@@ -3950,14 +3819,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div>Token <a href="https://etherscan.io/address/${info.token}" target="_blank" style="color:inherit;text-decoration:underline">${info.token.slice(0,10)}&hellip;${info.token.slice(-6)}</a></div>
       <div>Pool <a href="https://etherscan.io/address/${info.pool}" target="_blank" style="color:inherit;text-decoration:underline">${info.pool.slice(0,10)}&hellip;${info.pool.slice(-6)}</a></div>
       <div style="margin-top:6px"><a href="../?to=${info.token}" style="color:inherit;text-decoration:underline">Trade on the swap page — every route, not just this pool &rarr;</a></div>
-    </div>
-
-    <div class="drawer" id="simpleHoldersDrawer" data-token="${info.token}">
-      <div class="drawer-head" onclick="toggleSimpleHolders()">
-        <span>Holders</span>
-        <span class="drawer-arrow">&#9660;</span>
-      </div>
-      <div class="drawer-body" id="simpleHoldersContent"></div>
+      <div><a href="https://etherscan.io/token/tokenholderchart/${info.token}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Holders &amp; distribution on Etherscan &rarr;</a></div>
     </div>
   `;
 

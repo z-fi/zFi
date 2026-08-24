@@ -173,16 +173,19 @@
     const total = Number(num(strip(await call(LENS, SEL_COUNT))));
     if (!total) return [];
     const want = Math.min(total, MAX);
-    const rows = [];
-    // Newest first: walk backwards from the end of the launcher's list.
+    // Newest first: walk backwards from the end of the launcher's list. The page
+    // bounds are known from `total` alone, so the pages are fetched together —
+    // serialising them made a 300-coin gallery six round trips deep for no reason.
+    const spans = [];
     for (let end = total; end > total - want; ) {
       const count = Math.min(PAGE, end - (total - want));
       const start = end - count;
-      const page = decodeArray(await call(LENS, SEL_LAUNCHES + enc(start) + enc(count)));
-      rows.push(...page.reverse());
+      spans.push([start, count]);
       end = start;
     }
-    return rows;
+    const pages = await Promise.all(spans.map(([start, count]) =>
+      call(LENS, SEL_LAUNCHES + enc(start) + enc(count)).then(decodeArray)));
+    return pages.flatMap(page => page.reverse());
   }
 
   // Newest-first LaunchInfo rows. Concurrent callers share one scan; repeat
