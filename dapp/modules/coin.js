@@ -482,7 +482,7 @@ function coinSetLaunchType(type) {
   $('coinCauseWrap').style.display = isCause ? '' : 'none';
   const coinWrap = $('coinCoinWrap'); if (coinWrap) coinWrap.style.display = isCoin ? '' : 'none';
   const nftWrap = $('coinNftWrap'); if (nftWrap) nftWrap.style.display = isNft ? '' : 'none';
-  $('coinCurvePreviewWrap').style.display = 'none';
+  $('coinSimplePreviewWrap').style.display = 'none';
   $('coinCausePreviewWrap').style.display = 'none';
   // Socials have nowhere to live on a coin: its metadata is the document the token
   // assembles itself, which carries a name, a symbol, a description and an image and
@@ -635,7 +635,7 @@ function coinUpdatePreview() {
       // while contractURI carries the pin.
       `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Wyoming DUNA covenant &middot; ${coinCauseUsesDUNA() ? 'rendered on-chain alongside your branding' : 'declared in metadata'}</div>`;
     $('coinCausePreviewWrap').style.display = '';
-    $('coinCurvePreviewWrap').style.display = 'none';
+    $('coinSimplePreviewWrap').style.display = 'none';
     coinApplyValidation();
     return;
   }
@@ -654,7 +654,10 @@ function coinUpdatePreview() {
     // `pooledWei` of token, so the marginal opening price is their ratio, and a
     // buy of `x` ether takes x/(mcap+x) of the pooled supply.
     const priceWei = pooledWei > 0n ? (mcapWei * 10n ** 18n) / pooledWei : 0n;
-    const oneEth = 10n ** 18n;
+    // Net of the 1% swap fee, which the pool takes off the input — quoting this
+    // gross would overstate the first buy by a percent and make the preview a
+    // slightly optimistic number rather than a true one.
+    const oneEth = (10n ** 18n * 99n) / 100n;
     const firstEth = pooledWei > 0n ? (pooledWei * oneEth) / (mcapWei + oneEth) : 0n;
     const firstPct = pooledWei > 0n ? (Number(firstEth * 10000n / pooledWei) / 100) : 0;
     const fmtTok = (wei) => coinAbbrevCount(wei / 10n ** 18n);
@@ -663,13 +666,17 @@ function coinUpdatePreview() {
       : (Number(priceWei) / 1e18).toPrecision(3);
     const allocPct = Number(allocBps) / 100;
 
-    const p = $('coinCurvePreview');
+    const p = $('coinSimplePreview');
     p.innerHTML =
       `<dl class="coin-summary">` +
       `<dt>Supply</dt><dd><b>${coinAbbrevCount(supply)}</b> tokens <span style="color:var(--fg-dim)">(18 decimals)</span></dd>` +
       `<dt>Into the pool</dt><dd><b>${fmtTok(pooledWei)}</b> <span style="color:var(--fg-dim)">(${(100 - allocPct)}% of supply, one-sided)</span></dd>` +
       (allocBps ? `<dt>You keep</dt><dd><b>${fmtTok(allocWei)}</b> <span style="color:var(--fg-dim)">(${allocPct}%, unlocked, at launch)</span></dd>` : '') +
       `<dt>Opening price</dt><dd><b>${priceStr}</b> ${ethMini} per token</dd>` +
+      // `startMcapWei` values the POOLED supply, so with an allocation the fully
+      // diluted number is higher by supply/(supply-alloc). Saying only the one you
+      // typed would understate the dilution by exactly what you kept.
+      (allocBps ? `<dt>Fully diluted</dt><dd><b>${(Number(ethers.formatEther(mcapWei)) * Number(supplyWei) / Number(pooledWei)).toFixed(2)}</b> ${ethMini} <span style="color:var(--fg-dim)">(your ${allocPct}% included)</span></dd>` : '') +
       `<dt>First ${ethMini}1 buys</dt><dd><b>${fmtTok(firstEth)}</b> <span style="color:var(--fg-dim)">(${firstPct < 0.01 ? '<0.01' : firstPct.toFixed(2)}% of the pool)</span></dd>` +
       `<dt>Swap fee</dt><dd><b>1%</b> <span style="color:var(--fg-dim)">(half retained as reserves, raising the floor)</span></dd>` +
       `<dt>You pay now</dt><dd><b>0</b> ${ethMini} <span style="color:var(--fg-dim)">(gas only)</span></dd>` +
@@ -677,7 +684,7 @@ function coinUpdatePreview() {
       `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">Full-range pool on zFi&rsquo;s AMM &middot; liquidity locked in the launcher &middot; collectable fees split 80% creator / 10% protocol / 10% burned to Ethereum</div>` +
       `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Holders can always burn back to the launcher for their share of the pool&rsquo;s ether.</div>` +
       `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Name, symbol, description and logo are stored on the token as contract code &mdash; no IPFS, nothing to pin, no gateway to go dark. All editable later.</div>`;
-    $('coinCurvePreviewWrap').style.display = '';
+    $('coinSimplePreviewWrap').style.display = '';
     $('coinCausePreviewWrap').style.display = 'none';
   }
   coinApplyValidation();

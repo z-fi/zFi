@@ -211,11 +211,24 @@ test('the launched coin page renders from a LaunchInfo, with and without a floor
   w.mcAggregate = async calls => calls.map(() => ({ success: false, returnData: '0x' }));
   w.fetchMetadata = async () => ({ description: 'a coin' });
   w.updateOGMeta = () => {};
+  // One filled 5-minute bucket of the pool's own tape: bucket index, then packed
+  // open/high/low/close, with the trade count in the top word.
+  const bar = (1n << 192n) | (3000000n << 128n) | (3000000n << 96n)
+            | (3000000n << 64n) | (3000000n << 32n) | 12345n;
+  w.withRPCOnce = async (key, fn) => fn({
+    call: async () => '0x' + (32).toString(16).padStart(64, '0')
+      + (1).toString(16).padStart(64, '0') + bar.toString(16).padStart(64, '0'),
+  });
 
   // The page's `_renderGen` is a script-scoped `let` this sandbox cannot read, and it
   // has not been bumped: route() is neutralised at boot, so it is still 0.
   await w.renderLaunchedCoinPage(info.token, info, 0);
+  await new Promise(r => setImmediate(r));   // the chart loads after the paint
   let out = w.document.getElementById('app').innerHTML;
+  assert.match(out, /lcChart/, 'the chart slot must be in the page');
+  // The chart is drawn from the pool's own tape — no indexer — so it must survive
+  // the round trip from packed words to an SVG.
+  assert.match(w.document.getElementById('lcChart').innerHTML, /<svg/, 'the tape must draw');
   assert.match(out, /Free Roman/);
   assert.match(out, /lcAmount/, 'the trade input must render');
   assert.match(out, /Redeem at the floor/, 'a coin with a floor must offer the redemption');

@@ -1559,10 +1559,10 @@ body.modal-open { overflow: hidden; }
 <div class="swap-card" style="position:relative">
   <div id="coinLaunchAnim" class="coin-launch-anim"></div>
   <div class="coin-tpl-toggle">
-    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Coin</button>
+    <button class="coin-tpl-btn active" onclick="coinSetLaunchType('coin')">Simple</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('cause')">Cause</button>
     <button class="coin-tpl-btn" onclick="coinSetLaunchType('nft')">NFT</button>
-    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>coin</strong> — one transaction, no ether needed. The supply is minted, your allocation is paid to you, and everything else seeds a fresh ETH pool — one-sided, so the pool opens holding only your token and is a live market from the first block. 1% swap fee: half stays in the pool as reserves, raising the floor for every holder; the rest splits 80% creator, 10% protocol, 10% burned to Ethereum. Liquidity is locked in the launcher permanently. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.<br><br><strong>nft</strong> — Dutch auction for a single NFT, settled in ETH. Price decays linearly from start to floor over the chosen duration. First buyer wins at current price. Seller can cancel anytime. Two-step flow: approve token, then list.</span></span>
+    <span class="info-tip" style="margin-left:2px"><span class="info-icon" onclick="this.parentElement.classList.toggle('open');event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><span class="info-tooltip"><strong>simple</strong> — one transaction, no ether needed. The supply is minted, your allocation is paid to you, and everything else seeds a fresh ETH pool — one-sided, so the pool opens holding only your token and is a live market from the first block. 1% swap fee: half stays in the pool as reserves, raising the floor for every holder; the rest splits 80% creator, 10% protocol, 10% burned to Ethereum. Liquidity is locked in the launcher permanently. Best for community tokens, memes, and experiments.<br><br><strong>cause</strong> — DAICO fundraise. Fixed-price share sale with optional tap vesting that drips treasury ETH to a beneficiary over time. Ragequittable, 7-day voting, 2-day timelock. Best for projects, protocols, and teams that need operating capital.<br><br><strong>nft</strong> — Dutch auction for a single NFT, settled in ETH. Price decays linearly from start to floor over the chosen duration. First buyer wins at current price. Seller can cancel anytime. Two-step flow: approve token, then list.</span></span>
   </div>
 
 
@@ -1734,10 +1734,10 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 
-  <div id="coinCurvePreviewWrap" style="display:none;margin-bottom:14px">
+  <div id="coinSimplePreviewWrap" style="display:none;margin-bottom:14px">
     <div style="border-top:1px solid var(--border-muted);padding-top:12px">
       <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--fg-muted);margin-bottom:8px">Info</div>
-      <div id="coinCurvePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
+      <div id="coinSimplePreview" style="font-size:12px;line-height:1.7;color:var(--fg)"></div>
     </div>
   </div>
 
@@ -2317,7 +2317,7 @@ function liveSaleCardHTML(s) {
 }
 setTimeout(loadLiveSale, 500);
 
-// ---- Launched coins: dropdown integration ----
+// ---- Simple coins: dropdown integration ----
 // Surfaces coins launched through /coin so they are searchable and tradeable from
 // the swap tab. They need no special routing: a launch seeds a full-range,
 // single-sided Precision pool, and the quote race already has a Precision source,
@@ -3459,7 +3459,7 @@ function renderTokenList(filter) {
     push('list:' + listName, listName, byWeiList.get(listName) || [], { listName });
   }
   push('daico', 'DAICO coins', daico);
-  push('launched', 'Launched coins', launched);
+  push('launched', 'Simple coins', launched);
   push('zamm', 'ZAMM coins', zammCoins);
   push('custom', 'Custom', custom);
 
@@ -4524,7 +4524,7 @@ async function handleAmountChange() {
     dstEl.value = "";
     setShown(quoteInfoEl, false);
     stopQuoteRefresh();
-    setText(swapBtn, "Launched coins trade against ETH only");
+    setText(swapBtn, "Simple coins trade against ETH only");
     setDisabled(swapBtn, true);
     return;
   }
@@ -5276,12 +5276,18 @@ function collectorSaleFor(sym) {
   return addr ? COLLECTOR_SALES[addr.toLowerCase()] || null : null;
 }
 
+// A simple coin's only market is a Precision pool, and the Precision path quotes
+// exact-in only — `_precisionOnly` rethrows on exactOut and `_racePrecision` declines
+// to enter. Without this the receive box stays typeable and the quote fails with a
+// generic "Best swap quote failed", which reads as an outage rather than as a
+// direction this pair does not support.
 function isExactOutDisabled(fromSym, toSym) {
   return isDirectZOrgStake(fromSym, toSym) || isRagequitPath(fromSym, toSym)
     || isZOrgSwap(toSym) || isZammBuyPath(fromSym, toSym)
     || isZammSellPath(fromSym, toSym) || isZOrgSellPath(fromSym, toSym)
     || isZammCoinBuyPath(fromSym, toSym) || isZammCoinSellPath(fromSym, toSym)
-    || (isDaicoCoinBuyPath(fromSym, toSym) && !collectorSaleFor(toSym));
+    || (isDaicoCoinBuyPath(fromSym, toSym) && !collectorSaleFor(toSym))
+    || !!tokens[fromSym]?._isLaunchedCoin || !!tokens[toSym]?._isLaunchedCoin;
 }
 
 // ---- Leg 1 for a collector-DAO route: whichever quoter is better ----
@@ -9786,7 +9792,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (tabParam === 'privacy' || tabParam === 'coin' || tabParam === 'send') return '#' + tabParam;
     const mode = (q.get('mode') || '').toLowerCase();
     if (q.has('name') || q.has('symbol') || q.has('desc')
-      || mode === 'coin' || mode === 'curve' || mode === 'cause' || mode === 'nft') return '#coin';
+      || mode === 'coin' || mode === 'simple' || mode === 'curve' || mode === 'cause' || mode === 'nft') return '#coin';
     return h;
   })();
   // Only a `pp` value the privacy deeplink below can actually act on may
@@ -9939,7 +9945,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // any param that doesn't trigger a follow-up handler (e.g. a lone `start=`
         // without contract+id) would be stripped from the URL. Resync now.
         if (typeof syncCoinURL === 'function') syncCoinURL();
-      } else if (_dlMode === 'curve' || !_dlMode) {
+      } else if (_dlMode === 'simple' || _dlMode === 'curve' || !_dlMode) {
         coinSetLaunchType('coin');
       }
       // Update OG meta for social sharing
@@ -10203,7 +10209,7 @@ const _urlTab = (() => {
     if (q.has('xfer') || q.has('delay')) return 'send';
     const mode = (q.get('mode') || '').toLowerCase();
     if (q.has('name') || q.has('symbol') || q.has('desc')
-      || mode === 'coin' || mode === 'curve' || mode === 'cause' || mode === 'nft') return 'coin';
+      || mode === 'coin' || mode === 'simple' || mode === 'curve' || mode === 'cause' || mode === 'nft') return 'coin';
   } catch (_) {}
   return null;
 })();
