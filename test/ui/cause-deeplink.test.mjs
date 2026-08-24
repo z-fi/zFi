@@ -205,6 +205,25 @@ test('cause deeplink', async (t) => {
       'the fast-tap-plus-loot combination is not called out');
   });
 
+  await t.test('a share raise says the founder does not keep control', async () => {
+    // The unticked box is the default and the one that gives the DAO away. Explaining
+    // only the loot side left the more consequential half of the choice silent.
+    const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /governance passes to them/i,
+      'a share raise does not say where governance ends up');
+  });
+
+  await t.test('a cause with no tap says how money actually leaves', async () => {
+    const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause&loot=1#coin');
+    if (missing.includes('coinValidateForm')) return t.skip('page did not boot');
+    const preview = $(w, 'coinCausePreview').textContent;
+    assert.match(preview, /nothing leaves the treasury by itself/i, 'the no-tap case is unexplained');
+    assert.match(preview, /timelock/i, 'the spend path does not mention the timelock');
+    assert.match(preview, /No minimum/i, 'the form still implies a goal-or-refund raise');
+  });
+
   await t.test('a cause sells shares unless the loot box is ticked', async () => {
     const { w, missing } = await boot('?symbol=BEE&name=Bees&mode=cause#coin');
     if (missing.includes('coinValidateForm')) return t.skip('page did not boot');

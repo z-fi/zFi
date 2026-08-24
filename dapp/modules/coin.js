@@ -621,8 +621,28 @@ function coinUpdatePreview() {
       // value. Surfacing it avoids a surprise in the wallet confirm dialog.
       `<dt>You pay now</dt><dd><b>${ethers.formatEther(priceWei)}</b> ${ethMini} <span style="color:var(--fg-dim)">(your 1 share) + gas</span></dd>` +
       `</dl>` +
-      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
-      (sellLoot ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share is the whole electorate &mdash; only shares vote and only shares count toward quorum, so you carry every proposal alone. Backers fund the treasury and can ragequit out of it; they cannot govern it.</div>` : '') +
+      // "10% quorum" reads as a threshold somebody has to clear. In loot mode it is 10%
+      // of a share supply consisting of your one share, which is the opposite of a
+      // threshold — so it says which supply it means rather than sitting next to
+      // "you carry every proposal alone" looking like a contradiction.
+      `<div style="margin-top:8px;font-size:11px;color:var(--fg-muted)">10% quorum${sellLoot ? ' of the share supply' : ''} &middot; 7d voting &middot; 2d timelock &middot; ragequit &middot; transferable ${unit}</div>` +
+      // Both sides of the checkbox change who ends up in control, and only one of them
+      // was spelled out. The unticked one is the default and the more consequential:
+      // it is the case where the founder does not keep the DAO.
+      (sellLoot
+        ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Your founding share is the whole electorate &mdash; only shares vote and only shares count toward quorum, so you carry every proposal alone. Backers fund the treasury and can ragequit out of it; they cannot govern it.</div>`
+        : `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">Backers vote with what they buy. Sold out, their ${totalShares} shares stand against your one, so governance passes to them &mdash; keep the loot option in mind if you mean to stay in control of the treasury.</div>`) +
+      // With no tap nothing leaves on its own, and the form never said what does move it.
+      // It is the first practical question after "how much can I raise".
+      (!tapOn
+        ? `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">No tap: nothing leaves the treasury by itself. Spending it takes a proposal &mdash; ${sellLoot ? 'which you pass alone' : 'put to the holders'} &mdash; and then a 2-day timelock before it can execute, in which holders who object can redeem.</div>`
+        : '') +
+      // "Raise 10 ETH / Deadline 30 days" is the grammar of a goal-or-refund campaign,
+      // which this is not. The assumption costs a backer more than it costs the founder,
+      // so it is worth one clause rather than a discovery after the fact.
+      (ongoing
+        ? ''
+        : `<div style="margin-top:4px;font-size:11px;color:var(--fg-muted)">No minimum: the sale keeps whatever it raises and closes at the deadline whether or not it fills. Holders can redeem their pro-rata share at any time, so the treasury can shrink as well as grow &mdash; it is not committed capital.</div>`) +
       // Ragequit reaches the treasury, not money already out of it. A fast tap empties
       // the treasury in about an hour, so the two together leave a backer with the least
       // of any combination this form can produce — which is worth saying at the moment

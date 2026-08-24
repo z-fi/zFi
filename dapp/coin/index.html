@@ -4731,8 +4731,13 @@ async function loadCauseGovernance(daoAddr, gen) {
 
   const queued = Array.from(view?.base?.proposals || []).filter(p => Number(p.state) === 2);
   const now = Math.floor(Date.now() / 1000);
+  // The DAO's own delay, not the two days the launcher happens to set. setTimelockDelay
+  // is onlyDAO, so it can be changed — and a shortened one made this banner promise time
+  // that was not there, on the one control whose whole purpose is an accurate deadline.
+  // Same positional gov tuple the proposals drawer reads.
+  const govDelay = Number(view?.base?.gov?.[4] || 0) || 172800;
   alertEl.innerHTML = queued.map(p => {
-    const left = Number(p.queuedAt) + 172800 - now; // timelockDelay
+    const left = Number(p.queuedAt) + govDelay - now;
     const when = left <= 0 ? 'executable now'
       : left < 3600 ? `in ${Math.ceil(left / 60)} min`
       : left < 86400 ? `in ${Math.floor(left / 3600)}h`
@@ -4741,7 +4746,7 @@ async function loadCauseGovernance(daoAddr, gen) {
       <div class="section-title" style="color:var(--red)">Proposal executes ${when}</div>
       <div style="font-size:12px;color:var(--fg-muted);line-height:1.6">
         A passed proposal is in its timelock. Anything the DAO can do to its treasury
-        happens when that runs out. If you disagree with it, redeeming your shares before
+        happens when that runs out. If you disagree with it, redeeming your ${$('app')?.dataset.unit || 'shares'} before
         then returns your pro-rata share of the treasury &mdash; afterwards may be too late.
         <div style="margin-top:6px">
           <a href="../dao/#/dao/1/${daoAddr}" style="color:var(--red);text-decoration:underline">Review it &rarr;</a>
