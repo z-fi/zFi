@@ -3449,9 +3449,6 @@ async function _galleryRenderFresh(gen) {
         const cardAddr = d.dao.toLowerCase();
         const isTest = cardName === 'test';
         if (isTest) testCount++;
-        const isAlwaysShown = ALWAYS_SHOW_ADDRS.includes(cardAddr);
-        const isLowMcap = !isTest && !isAlwaysShown && mcapETH < 0.05;
-        if (isLowMcap) lowMcapCount++;
         const isSpam = _spamSet.has(cardAddr);
         if (isSpam) spamCount++;
         const isCollect = md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector';
@@ -3462,7 +3459,7 @@ async function _galleryRenderFresh(gen) {
           : `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO &middot; shares minted against a sale">daico</span>`;
         const bars = Math.round(Math.min(salePct, 100) / 10);
         const cardHTML = `
-          <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+          <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
             ${spamBtnHTML(cardAddr, isSpam)}
             <div class="coin-card-head">
               <div class="coin-logo">${logoHTML(d.meta, md)}</div>
@@ -3480,7 +3477,7 @@ async function _galleryRenderFresh(gen) {
               : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, isTest, isSpam, isLowMcap });
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, isTest, isSpam });
       }
     }
 
@@ -3517,7 +3514,7 @@ async function _galleryRenderFresh(gen) {
     }
 
     if (allGroups.length > 0) {
-      const n = allGroups.reduce((s, g) => s + g.length, 0);
+      const n = allGroups.reduce((s, g) => s + g.filter(c => !c.isTest).length, 0);
       grid += `<div class="coin-grid-section" data-section="launched">Coins <span class="count">${n}</span></div>`;
       for (const group of allGroups) grid += renderGroup(group);
     }
