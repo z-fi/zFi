@@ -2061,19 +2061,160 @@ async function fetchOutOfBandCause(rpc, dao) {
   };
 }
 
+// Every cause in the summoner's registry, in the shape scanDAICOs returns, so the token
+// search and the live-sale card can consume both without knowing which is which.
+//
+// scanDAICOs only returns a DAO whose sale is configured INSIDE Moloch. A cause keeps its
+// sale in ShareSale or ShareOffering, so the helper never returns one however wide the
+// window — which is why a single address was hardcoded here and every cause launched
+// through this dapp was missing from the token picker and could never lead the landing
+// page. The registry itself has them all: SafeSummoner summons through SUMMONER.summon(),
+// which pushes the DAO onto `daos` like any other.
+const SUMMONER_ADDR = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
+const SUMMONER_IFACE = new ethers.Interface([
+  'function getDAOCount() view returns (uint256)',
+  'function daos(uint256) view returns (address)'
+]);
+const CAUSE_DAO_IFACE = new ethers.Interface([
+  'function name(uint256) view returns (string)',
+  'function symbol(uint256) view returns (string)',
+  'function contractURI() view returns (string)',
+  'function shares() view returns (address)',
+  'function loot() view returns (address)',
+  'function totalSupply() view returns (uint256)'
+]);
+const CAUSE_OFFER_IFACE = new ethers.Interface([
+  'function sales(address dao) view returns (address token, address payToken, uint40 deadline, uint256 price, uint256 cap)'
+]);
+const CAUSE_SALE_IFACE = new ethers.Interface([
+  'function sales(address dao) view returns (address token, address payToken, uint40 deadline, uint256 price)'
+]);
+const CAUSE_LOOT_SENTINEL = '0x00000000000000000000000000000000000003ef';
+const DAICO_ALLOWANCE_IFACE = new ethers.Interface([
+  'function allowance(address token, address spender) view returns (uint256)'
+]);
+
+async function _mc3(calls) {
+  const raw = await quoteRPC.call(
+    rpc => rpc.call({
+      to: MULTICALL3_ADDRESS,
+      data: MULTICALL3_IFACE.encodeFunctionData('aggregate3', [calls.map(c => [c.target, true, c.data])]),
+    }),
+    { timeoutMs: 15000 },
+  );
+  return MULTICALL3_IFACE.decodeFunctionResult('aggregate3', raw)[0];
+}
+function _mcDec(r, iface, fn, dflt) {
+  if (!r || !r.success || r.returnData === '0x') return dflt;
+  try { return iface.decodeFunctionResult(fn, r.returnData); } catch { return dflt; }
+}
+
+async function fetchRegistryCauses() {
+  const ONE = 10n ** 18n;
+  const countRes = await _mc3([{ target: SUMMONER_ADDR, data: SUMMONER_IFACE.encodeFunctionData('getDAOCount') }]);
+  const count = Number(_mcDec(countRes[0], SUMMONER_IFACE, 'getDAOCount', [0n])[0] || 0n);
+  if (!count) return [];
+  const MAX = 200;
+  const idx = [];
+  for (let i = count - 1; i >= 0 && idx.length < MAX; i--) idx.push(i);
+  const addrRes = await _mc3(idx.map(i =>
+    ({ target: SUMMONER_ADDR, data: SUMMONER_IFACE.encodeFunctionData('daos', [i]) })));
+  const daos = idx.map((_, k) => _mcDec(addrRes[k], SUMMONER_IFACE, 'daos', [ZERO_ADDRESS])[0])
+    .filter(a => a && a !== ZERO_ADDRESS);
+  for (const a of OUT_OF_BAND_CAUSES) {
+    if (!daos.some(d => d.toLowerCase() === a.toLowerCase())) daos.push(a);
+  }
+
+  // One trip decides which DAOs are causes and reads what a card needs from them. The
+  // token addresses and treasury are asked for speculatively to save a second trip.
+  const PER = 6;
+  const probe = await _mc3(daos.flatMap(d => ([
+    { target: SHARE_OFFERING_ADDR, data: CAUSE_OFFER_IFACE.encodeFunctionData('sales', [d]) },
+    { target: SHARE_SALE_ADDR, data: CAUSE_SALE_IFACE.encodeFunctionData('sales', [d]) },
+    { target: d, data: CAUSE_DAO_IFACE.encodeFunctionData('shares') },
+    { target: d, data: CAUSE_DAO_IFACE.encodeFunctionData('loot') },
+    { target: d, data: CAUSE_DAO_IFACE.encodeFunctionData('name', [0n]) },
+    { target: MULTICALL3_ADDRESS, data: MULTICALL3_IFACE.encodeFunctionData('getEthBalance', [d]) }
+  ])));
+
+  const found = [];
+  daos.forEach((dao, i) => {
+    const b = i * PER;
+    const off = _mcDec(probe[b], CAUSE_OFFER_IFACE, 'sales', null);
+    const sal = _mcDec(probe[b + 1], CAUSE_SALE_IFACE, 'sales', null);
+    const usesOffering = !!(off && off.price > 0n);
+    const sale = usesOffering ? off : (sal && sal.price > 0n ? sal : null);
+    if (!sale) return;
+    found.push({
+      dao, usesOffering, price: sale.price, deadline: BigInt(sale.deadline),
+      cap: usesOffering ? off.cap : 0n,
+      saleIsLoot: !!(usesOffering && String(off.token).toLowerCase() === CAUSE_LOOT_SENTINEL),
+      sharesToken: _mcDec(probe[b + 2], CAUSE_DAO_IFACE, 'shares', [ZERO_ADDRESS])[0],
+      lootToken: _mcDec(probe[b + 3], CAUSE_DAO_IFACE, 'loot', [ZERO_ADDRESS])[0],
+      name: _mcDec(probe[b + 4], CAUSE_DAO_IFACE, 'name', [''])[0],
+      treasury: _mcDec(probe[b + 5], MULTICALL3_IFACE, 'getEthBalance', [0n])[0]
+    });
+  });
+  if (!found.length) return [];
+
+  const rest = await _mc3(found.flatMap(c => ([
+    { target: c.sharesToken, data: CAUSE_DAO_IFACE.encodeFunctionData('totalSupply') },
+    { target: c.lootToken, data: CAUSE_DAO_IFACE.encodeFunctionData('totalSupply') },
+    { target: c.dao, data: CAUSE_DAO_IFACE.encodeFunctionData('symbol', [0n]) },
+    { target: c.dao, data: CAUSE_DAO_IFACE.encodeFunctionData('contractURI') },
+    { target: c.dao, data: DAICO_ALLOWANCE_IFACE.encodeFunctionData('allowance',
+        [c.dao, c.usesOffering ? SHARE_OFFERING_ADDR : SHARE_SALE_ADDR]) }
+  ])));
+
+  return found.map((c, i) => {
+    const b = i * 5;
+    const shSupply = _mcDec(rest[b], CAUSE_DAO_IFACE, 'totalSupply', [0n])[0];
+    const ltSupply = _mcDec(rest[b + 1], CAUSE_DAO_IFACE, 'totalSupply', [0n])[0];
+    const symbol = _mcDec(rest[b + 2], CAUSE_DAO_IFACE, 'symbol', [''])[0];
+    const contractURI = _mcDec(rest[b + 3], CAUSE_DAO_IFACE, 'contractURI', [''])[0];
+    const allowance = _mcDec(rest[b + 4], DAICO_ALLOWANCE_IFACE, 'allowance', [0n])[0];
+    // The founder's single share is minted at summon, not sold, and always lands in the
+    // share supply — so a loot sale's supply is sold loot and nothing else.
+    const sold = c.saleIsLoot ? ltSupply : (shSupply > ONE ? shSupply - ONE : 0n);
+    // What is left to sell. An offering meters against a supply ceiling and grants itself
+    // an unbounded allowance, so the allowance says nothing there; ShareSale's ceiling IS
+    // its undrained allowance. Reading it wrong leaves a sold-out sale looking open, which
+    // is what decides whether the token search treats it as tradeable.
+    const remaining = c.usesOffering
+      ? (c.cap > sold + ONE ? c.cap - sold - ONE : 0n)
+      : allowance;
+    return {
+      dao: c.dao,
+      meta: { name: c.name, symbol, contractURI, sharesToken: c.saleIsLoot ? c.lootToken : c.sharesToken,
+              lootToken: c.lootToken, badgesToken: ZERO_ADDRESS, renderer: ZERO_ADDRESS },
+      sales: [{ tribTkn: ZERO_ADDRESS, tribAmt: c.price, forAmt: ONE, forTkn: ZERO_ADDRESS,
+                deadline: c.deadline, remainingSupply: remaining, totalSupply: sold + remaining,
+                treasuryBalance: c.treasury, allowance, lpBps: 0, maxSlipBps: 0, feeOrHook: 30n }],
+      tap: { ops: ZERO_ADDRESS, tribTkn: ZERO_ADDRESS, ratePerSec: 0n, lastClaim: 0n,
+             claimable: 0n, pending: 0n, treasuryBalance: c.treasury, tapAllowance: 0n }
+    };
+  });
+}
+
 async function fetchDaicoScan() {
   if (_daicoRawCache) return _daicoRawCache;
   if (_daicoRawPromise) return _daicoRawPromise;
   _daicoRawPromise = (async () => {
     try {
-      const rpc = new ethers.JsonRpcProvider("https://ethereum.publicnode.com", 1, { staticNetwork: true });
-      const helper = new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc);
-      const scanned = await helper.scanDAICOs(0, 500, [ZERO_ADDRESS]);
+      // Ranked fallback rather than one hardcoded node: this used to pin
+      // ethereum.publicnode.com, which the repo's own notes record 403ing.
+      const scanned = await quoteRPC.call(
+        rpc => new ethers.Contract(DAICO_VIEW_HELPER, DAICO_SCAN_ABI, rpc).scanDAICOs(0, 500, [ZERO_ADDRESS]),
+        { timeoutMs: 20000 },
+      ).then(r => Array.from(r)).catch(() => []);
+      // A cause failing must not take the DAICO scan with it, or vice versa.
+      const causes = await fetchRegistryCauses().catch(() => []);
       const seen = new Set(scanned.map(d => d.dao.toLowerCase()));
-      const extra = (await Promise.all(OUT_OF_BAND_CAUSES
-        .filter(a => !seen.has(a.toLowerCase()))
-        .map(a => fetchOutOfBandCause(rpc, a).catch(() => null)))).filter(Boolean);
-      _daicoRawCache = extra.concat(Array.from(scanned));
+      const extra = causes.filter(c => !seen.has(c.dao.toLowerCase()));
+      // Causes last, because loadLiveSale()'s fallback walks this from the end and takes
+      // the first live sale it finds — and the rule it states is that a live cause leads.
+      // Prepending them, as the hardcoded one was, put them at the back of that walk.
+      _daicoRawCache = scanned.concat(extra);
       return _daicoRawCache;
     } catch (e) {
       _daicoRawPromise = null;

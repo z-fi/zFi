@@ -1044,9 +1044,6 @@ async function ipfsFetchJson(uri, timeoutMs) {
   }
 }
 
-// A cause summoned through SafeSummoner never lands in the registry scanDAICOs walks.
-// Until an indexer covers them, the handful worth showing are read straight off chain
-// and shaped like a scan row so every consumer below stays unchanged.
 // Kept only as a floor: whatever else happens, these are shown. Enumeration no longer
 // depends on the list — see fetchCauses().
 const OUT_OF_BAND_CAUSES = ['0xD5dcE9BEE03e69362981afE48323A657fCceB8bE'];
@@ -1178,61 +1175,9 @@ async function fetchCauses() {
 // rather than by a second copy of their addresses; the collector DAO joins them.
 const FWC_COLLECTOR_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
 const ALWAYS_SHOW_ADDRS = OUT_OF_BAND_CAUSES.map(a => a.toLowerCase()).concat([FWC_COLLECTOR_DAO]);
-const OOB_IFACE = new ethers.Interface([
-  'function sales(address) view returns (address token, address payToken, uint40 deadline, uint256 price)',
-  'function allowance(address token, address spender) view returns (uint256)',
-  'function name(uint256) view returns (string)',
-  'function symbol(uint256) view returns (string)',
-  'function contractURI() view returns (string)',
-  'function shares() view returns (address)',
-  'function totalSupply() view returns (uint256)'
-]);
-
-async function fetchOutOfBandCause(rpc, dao) {
-  const call = (to, data) => rpc.call({ to, data });
-  const dec = (fn, d) => OOB_IFACE.decodeFunctionResult(fn, d);
-  // A cause is on ShareOffering or on ShareSale; ask the newer one first and fall back,
-  // otherwise every cause launched from now on reads as "no sale here" and never appears.
-  // sales(address) carries the same selector on both singletons — a selector is name and
-  // inputs only — so one encoding serves, and just the returned tuple differs. Ask the
-  // newer one first and fall back, or every cause launched from now on reads as "no sale
-  // here" and never appears anywhere.
-  const salesCall = OOB_IFACE.encodeFunctionData('sales', [dao]);
-  const OFFER_SHAPE = ['address', 'address', 'uint40', 'uint256', 'uint256'];
-  let sale = null, saleAddr = SHARE_OFFERING_ADDR;
-  try {
-    const raw = await call(SHARE_OFFERING_ADDR, salesCall);
-    const d = ethers.AbiCoder.defaultAbiCoder().decode(OFFER_SHAPE, raw);
-    if (d[3] > 0n) sale = { token: d[0], payToken: d[1], deadline: d[2], price: d[3], cap: d[4] };
-  } catch {}
-  if (!sale) {
-    saleAddr = SHARE_SALE;
-    sale = dec('sales', await call(SHARE_SALE, salesCall));
-  }
-  if (!sale.price || sale.price === 0n) return null;
-  const [nm, sym, uri, sharesAddr, allowance] = await Promise.all([
-    call(dao, OOB_IFACE.encodeFunctionData('name', [0n])).then(d => dec('name', d)[0]).catch(() => ''),
-    call(dao, OOB_IFACE.encodeFunctionData('symbol', [0n])).then(d => dec('symbol', d)[0]).catch(() => ''),
-    call(dao, OOB_IFACE.encodeFunctionData('contractURI', [])).then(d => dec('contractURI', d)[0]).catch(() => ''),
-    call(dao, OOB_IFACE.encodeFunctionData('shares', [])).then(d => dec('shares', d)[0]),
-    call(dao, OOB_IFACE.encodeFunctionData('allowance', [dao, saleAddr])).then(d => dec('allowance', d)[0]).catch(() => 0n)
-  ]);
-  const [supply, treasury] = await Promise.all([
-    call(sharesAddr, OOB_IFACE.encodeFunctionData('totalSupply', [])).then(d => dec('totalSupply', d)[0]),
-    rpc.getBalance(dao)
-  ]);
-  const sold = supply > 10n ** 18n ? supply - 10n ** 18n : 0n;
-  return {
-    dao,
-    meta: { name: nm, symbol: sym, contractURI: uri, sharesToken: sharesAddr,
-            lootToken: ZERO, badgesToken: ZERO, renderer: ZERO },
-    sales: [{ tribTkn: ZERO, tribAmt: sale.price, forAmt: 10n ** 18n, forTkn: ZERO,
-              deadline: sale.deadline, remainingSupply: allowance, totalSupply: sold + allowance,
-              treasuryBalance: treasury, allowance, lpBps: 0, maxSlipBps: 0, feeOrHook: 30n }],
-    tap: { ops: ZERO, tribTkn: ZERO, ratePerSec: 0n, lastClaim: 0n,
-           claimable: 0n, pending: 0n, treasuryBalance: treasury, tapAllowance: 0n }
-  };
-}
+// fetchOutOfBandCause() lived here: a per-DAO read for the one cause the registry scan
+// could not see. fetchCauses() enumerates the registry directly, so there is no longer a
+// cause it cannot find and nothing left to read out of band.
 
 // The view helper takes an explicit address, so it answers for causes the registry
 // scan cannot enumerate. Same signature loadProposals uses — one shape, not two.
@@ -1476,7 +1421,7 @@ async function batchEnrichNftAuctions(auctions) {
     if (oc) {
       const tokenId = a.ids[0];
       try {
-        const md = await auctionFetchMeta(oc.uri);
+        const md = (await metaSoon(auctionFetchMeta(oc.uri), 4000)) || {};
         return {
           a,
           meta: {
@@ -3484,23 +3429,13 @@ async function _galleryRenderFresh(gen) {
     // before the IPFS layer.
     // Time-sensitive listings get prepended above the rest. Failures per auction fall
     // back to a generic "NFT #id" card rather than dropping the whole row.
-    let nftAuctionCount = 0;
-    try {
-      const enriched = await batchEnrichNftAuctions(nftAuctions);
-      // Newest first — getListings already returns in id order, so reverse.
-      enriched.reverse();
-      const nftHtml = enriched.map(({a, meta}) => renderNftAuctionCard(a, meta)).join('');
-      nftAuctionCount = enriched.length;
-      const nftHeader = nftAuctionCount > 0
-        ? `<div class="coin-grid-section" data-section="auctions">Auctions <span class="count">${nftAuctionCount}</span></div>`
-        : '';
-      grid = nftHeader + nftHtml + grid;
-    } catch (e) { console.warn('NFT auction rendering failed:', e); }
-
+    // Auction enrichment used to be awaited here, which meant the coin grid — already
+    // built and holding nothing back — waited on an IPFS document per NFT. Every one of
+    // those walks the gateway list before giving up, so a handful of dead pins held the
+    // whole page for as long as that walk took. The auctions are injected above the
+    // coins when they arrive; see _galleryInjectAuctions below.
     const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0);
-    const _countLabel = nftAuctionCount > 0
-      ? `${_coinTotal} coins &middot; ${nftAuctionCount} auction${nftAuctionCount === 1 ? '' : 's'}`
-      : `${_coinTotal}`;
+    const _countLabel = `${_coinTotal}`;
     // Final gen check before writing: a background refresh that finishes after the user
     // navigated away to a coin detail page would otherwise replace the detail with the gallery.
     if (gen !== _renderGen) return;
@@ -3536,6 +3471,8 @@ async function _galleryRenderFresh(gen) {
     // visibility doesn't leak between accounts; userVerified rides along so the restored
     // buttons match the in-memory verification flag.
     _galleryCacheSave(_galleryHtml, _connectedAddress, _userIsVerified);
+    // Not awaited: the grid is on screen and the auctions land above it when ready.
+    _galleryInjectAuctions(nftAuctions, gen, _coinTotal).catch(() => {});
   } catch(e) {
     // Don't replace the page with a failure banner if the user already navigated
     // away — the cached gallery (or detail page) on screen is more useful than
@@ -3549,6 +3486,24 @@ async function _galleryRenderFresh(gen) {
       <div class="loading">Failed to load coins: ${escText(e.message || '')}</div>
     `;
   }
+}
+
+// Renders the auction row and slots it above the coins, then re-snapshots the gallery
+// so the next visit paints with the auctions already in place.
+async function _galleryInjectAuctions(nftAuctions, gen, coinTotal) {
+  if (!nftAuctions || nftAuctions.length === 0) return;
+  const enriched = await batchEnrichNftAuctions(nftAuctions);
+  if (gen !== _renderGen) return;
+  const grid = $('coinGrid');
+  if (!grid || !enriched.length) return;
+  // Newest first — getListings already returns in id order, so reverse.
+  enriched.reverse();
+  const html = `<div class="coin-grid-section" data-section="auctions">Auctions <span class="count">${enriched.length}</span></div>`
+    + enriched.map(({ a, meta }) => renderNftAuctionCard(a, meta)).join('');
+  grid.insertAdjacentHTML('afterbegin', html);
+  const h1 = document.querySelector('.header h1 span');
+  if (h1) h1.textContent = `(${coinTotal} coins \u00b7 ${enriched.length} auction${enriched.length === 1 ? '' : 's'})`;
+  _galleryCacheSave($('app').innerHTML, _connectedAddress, _userIsVerified);
 }
 
 function toggleStack(el) {
@@ -5322,7 +5277,9 @@ async function causeTape(poolAddr, ethIs0) {
     try {
       const raw = await withRPCOnce(`tape:${poolAddr}:${win}`, rpc => rpc.call({ to: poolAddr, data: SEL_TAPE + _w(win) + _w(256) }), 15000);
       const bars = causeTapeBars(raw, ethIs0);
-      if (bars.length > best.length) best = bars;
+      // The bucket width is what turns bucket indices into a time span on the axis,
+      // and only this loop knows which window actually carried the prints.
+      if (bars.length > best.length) { bars._win = win; best = bars; }
       if (best.length > 1) break;
     } catch {}
   }
@@ -5338,31 +5295,84 @@ async function causeTape(poolAddr, ethIs0) {
 // Once the tape holds enough distinct bars to have a shape, time is worth an axis and
 // the ruler stops being the better picture. Below that it is not: three prints on a time
 // axis is a dot and a lot of whitespace, which is what a lone candle looks like too.
-function causeTimeChart(bars, floorWei, spotWei) {
-  const closes = bars.map(b => b.c).filter(v => v > 0);
+// A real price chart: OHLC candles from the pool's own tape, on a log price scale,
+// with the redemption floor drawn across it. The tape already carries open, high, low
+// and close per bucket — the old chart threw three of those away and drew a polyline
+// through the closes, which is why it read as a squiggle rather than as a market.
+//
+// Log scale because a coin's first day routinely spans 20x and a linear axis renders
+// that as a flat line with one spike. `preserveAspectRatio` stays at the default so
+// candle bodies keep their proportions instead of being stretched by the viewport.
+function causeTimeChart(bars, floorWei, spotWei, winSecs) {
   const floor = Number(floorWei || 0), spot = Number(spotWei || 0);
-  const all = closes.concat([floor, spot].filter(v => v > 0));
-  const lo = Math.min(...all), hi = Math.max(...all);
-  const L = Math.log(lo * 0.9), span = Math.log(hi * 1.1) - L || 1;
-  const W = 300, H = 74, PAD = 4;
-  const y = v => PAD + (1 - (Math.log(v) - L) / span) * (H - PAD * 2);
-  const x = i => PAD + (i / (bars.length - 1)) * (W - PAD * 2);
+  const vals = [];
+  for (const b of bars) { if (b.hi > 0) vals.push(b.hi); if (b.lo > 0) vals.push(b.lo); }
+  if (floor > 0) vals.push(floor);
+  if (spot > 0) vals.push(spot);
+  if (!vals.length) return '';
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  // A flat tape has no range to scale to; give it one so the candles land mid-frame.
+  const L = Math.log(lo * 0.94), span = (Math.log(hi * 1.06) - L) || Math.log(1.5);
+
+  const W = 600, H = 180, PAD_T = 8, PAD_B = 18, AXIS_W = 52;
+  const plotW = W - AXIS_W;
+  const y = v => PAD_T + (1 - (Math.log(Math.max(v, 1e-30)) - L) / span) * (H - PAD_T - PAD_B);
+  const slot = plotW / bars.length;
+  const cx = i => (i + 0.5) * slot;
+  const bodyW = Math.max(1, Math.min(9, slot * 0.66));
 
   let svg = '';
-  for (const [v, col] of [[floor, 'var(--fg-dim)'], [spot, 'var(--green)']]) {
-    if (v > 0) svg += `<line x1="0" y1="${y(v).toFixed(1)}" x2="${W}" y2="${y(v).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`;
+
+  // Three reference prices down the right edge. Log-spaced so they sit where the eye
+  // expects them on a log axis rather than bunching at the top.
+  for (const f of [0, 0.5, 1]) {
+    const v = Math.exp(L + span * f);
+    const yy = y(v);
+    svg += `<line x1="0" y1="${yy.toFixed(1)}" x2="${plotW}" y2="${yy.toFixed(1)}" stroke="var(--border-muted)" stroke-width="0.5"/>`
+        +  `<text x="${plotW + 5}" y="${(yy + 3).toFixed(1)}" font-size="9" fill="var(--fg-dim)">${escText(causeGwei(BigInt(Math.round(v))))}</text>`;
   }
-  svg += `<polyline points="${bars.map((b, i) => `${x(i).toFixed(1)},${y(b.c).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--fg-muted)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-  bars.forEach((b, i) => { svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(b.c).toFixed(1)}" r="2" fill="var(--fg-muted)"/>`; });
+
+  // The floor is the one line that changes what a candle means — anything at or below
+  // it is redeemable for more than the market is paying.
+  if (floor > 0) {
+    const yf = y(floor);
+    svg += `<line x1="0" y1="${yf.toFixed(1)}" x2="${plotW}" y2="${yf.toFixed(1)}" stroke="var(--fg-dim)" stroke-width="1" stroke-dasharray="4 3"/>`
+        +  `<text x="2" y="${(yf - 3).toFixed(1)}" font-size="9" fill="var(--fg-dim)">floor</text>`;
+  }
+
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+    if (!(b.c > 0)) continue;
+    const up = b.c >= b.o;
+    const col = up ? 'var(--green)' : 'var(--red)';
+    const x = cx(i);
+    const yHi = y(b.hi || b.c), yLo = y(b.lo || b.c);
+    const yO = y(b.o || b.c), yC = y(b.c);
+    svg += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${col}" stroke-width="1"/>`;
+    // A doji would render as a zero-height rect and vanish; floor the body at a hairline.
+    const top = Math.min(yO, yC), h = Math.max(0.8, Math.abs(yC - yO));
+    svg += `<rect x="${(x - bodyW / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bodyW.toFixed(1)}" height="${h.toFixed(1)}" fill="${col}"/>`;
+  }
+
+  // Spot last, over the candles: it is the number the header quotes.
+  if (spot > 0) {
+    const ys = y(spot);
+    svg += `<line x1="0" y1="${ys.toFixed(1)}" x2="${plotW}" y2="${ys.toFixed(1)}" stroke="var(--green)" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>`;
+  }
 
   const trades = bars.reduce((t, b) => t + b.n, 0);
+  const spanSecs = winSecs ? (bars[bars.length - 1].b - bars[0].b + 1) * winSecs : 0;
+  const spanLabel = spanSecs >= 86400 ? `${Math.round(spanSecs / 86400)}d`
+    : spanSecs >= 3600 ? `${Math.round(spanSecs / 3600)}h`
+    : spanSecs > 0 ? `${Math.round(spanSecs / 60)}m` : '';
+
   return `<div style="margin:2px 0 12px">
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block"
-      role="img" aria-label="executed price over time against the redemption floor">${svg}</svg>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block"
+      role="img" aria-label="executed price per bucket against the redemption floor">${svg}</svg>
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:2px">
-      <span>${causeGwei(BigInt(Math.round(floor)))} floor</span>
+      <span>${spanLabel ? spanLabel + ' of tape' : 'pool tape'}</span>
       <span>${trades} fill${trades === 1 ? '' : 's'} &middot; executed, fee included</span>
-      <span style="color:var(--green)">${causeGwei(BigInt(Math.round(spot)))} now</span>
+      <span style="color:var(--green)">${escText(causeGwei(BigInt(Math.round(spot))))} now</span>
     </div></div>`;
 }
 
@@ -5395,9 +5405,14 @@ function causeVsSale(spot, sale) {
 
 function causeChart(bars, floorWei, saleWei, spotWei) {
   const floor = Number(floorWei || 0), spot = Number(spotWei || 0), sale = Number(saleWei || 0);
-  // Three bars is the point where a line says more than a ruler does.
-  if (bars.filter(b => b.c > 0).length >= 3 && Number(spotWei) > 0) {
-    return causeTimeChart(bars.filter(b => b.c > 0), floorWei, spotWei);
+  // Any tape at all gets a real chart. This used to require three buckets and fall back
+  // to a one-axis price ruler below that — but a ruler with a knob on it reads as a
+  // slider, not as a price, and a trader looking for a chart found a control instead.
+  // One candle is a thin chart; it is still a chart, and it is not mistakable for
+  // anything else.
+  const live = bars.filter(b => b.c > 0);
+  if (live.length >= 1 && Number(spotWei) > 0) {
+    return causeTimeChart(live, floorWei, spotWei, bars._win);
   }
   const fills = bars.filter(b => b.c > 0).map(b => b.c);
   const all = [floor, spot, sale, ...fills].filter(v => v > 0);
