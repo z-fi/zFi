@@ -3788,6 +3788,54 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       </div>
     </div>` : ''}
 
+    <div class="drawer" id="lcLpDrawer">
+      <div class="drawer-head" onclick="this.parentElement.classList.toggle('open');lcLpRefresh()">
+        <span>Provide liquidity</span>
+        <span class="drawer-arrow">&#9660;</span>
+      </div>
+      <div class="drawer-body">
+        <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:10px">
+          Deposit ETH and ${escText(sym)} together and earn a share of the 1% swap fee.
+          Your position is yours to withdraw — the launcher's seeded liquidity is the part
+          that stays locked.
+        </div>
+        <div class="swap-dir" style="margin-bottom:12px">
+          <button id="lcLpAddTab" class="active" onclick="lcLpSwitch('add')">Add</button>
+          <button id="lcLpRemoveTab" onclick="lcLpSwitch('remove')">Remove</button>
+        </div>
+
+        <div id="lcLpAddPane">
+          <div class="swap-panel">
+            <div class="token-header"><label>ETH</label>${_ethTag}</div>
+            <input id="lcLpEth" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" oninput="lcLpPair()" autocomplete="off">
+            <div class="balance"><span id="lcLpEthBal">Balance: --</span></div>
+          </div>
+          <div class="swap-panel" style="margin-top:6px">
+            <div class="token-header"><label>${escText(sym)}</label>${_tokTag}</div>
+            <div id="lcLpTok" class="simple-out-amount placeholder">0.0</div>
+            <div class="balance"><span id="lcLpTokBal">Balance: --</span></div>
+          </div>
+          <div id="lcLpAddNote" style="font-size:11px;color:var(--fg-muted);margin-top:8px;min-height:16px">&nbsp;</div>
+          <button id="lcLpAddGo" class="action-btn" style="width:100%;margin-top:8px" onclick="lcLpAdd()">${_connectedAddress ? 'Add liquidity' : 'Connect Wallet'}</button>
+        </div>
+
+        <div id="lcLpRemovePane" style="display:none">
+          <div class="swap-panel">
+            <div class="token-header"><label>LP to burn</label></div>
+            <input id="lcLpBurn" class="amount-input" type="text" inputmode="decimal" placeholder="0.0" oninput="lcLpQuoteRemove()" autocomplete="off">
+            <div class="balance">
+              <span id="lcLpBal">Balance: --</span>
+              <span style="color:var(--fg-dim)">&middot;</span>
+              ${[25, 50, 75, 100].map(p => `<button class="max-btn" type="button" onclick="lcLpSetPct(${p})">${p}%</button>`).join('')}
+            </div>
+          </div>
+          <div id="lcLpRemoveNote" style="font-size:11px;color:var(--fg-muted);margin-top:8px;min-height:16px">&nbsp;</div>
+          <button id="lcLpRemoveGo" class="action-btn" style="width:100%;margin-top:8px" onclick="lcLpRemove()">${_connectedAddress ? 'Remove liquidity' : 'Connect Wallet'}</button>
+        </div>
+        <div id="lcLpStatus" style="margin-top:8px"></div>
+      </div>
+    </div>
+
     <div class="section-card" style="font-size:11px;color:var(--fg-muted);line-height:1.7">
       <div>Token <a href="https://etherscan.io/address/${info.token}" target="_blank" style="color:inherit;text-decoration:underline">${info.token.slice(0,10)}&hellip;${info.token.slice(-6)}</a></div>
       <div>Pool <a href="https://etherscan.io/address/${info.pool}" target="_blank" style="color:inherit;text-decoration:underline">${info.pool.slice(0,10)}&hellip;${info.pool.slice(-6)}</a></div>
@@ -4010,6 +4058,208 @@ async function lcRedeemQuote() {
     el.textContent = `${fmtNum(Number(ethers.formatEther(ethOut)))} ETH${usd}`;
   } catch {
     el.textContent = 'Could not quote that.';
+  }
+}
+
+// ---- Liquidity on a launched coin's pool ----
+// PrecisionPool is its own LP token: `balanceOf`/`totalSupply` are LP shares, and both
+// addLiquidityExact and removeLiquidity are permissionless. ETH is token0 in every pool
+// the launcher seeds, so amount0 is the ether leg and amount1 the coin leg.
+//
+// This is not the cause page's LP tab ported over — that one drives zAMM through a pool
+// key. A launched coin lives in a PrecisionPool, which takes plain amounts.
+const PRECISION_LP_ABI = [
+  'function addLiquidityExact(uint256 sqrtPriceInit, uint256 amount0, uint256 amount1, uint256 minLP, address to) payable returns (uint256 lp, uint256 used0, uint256 used1)',
+  'function removeLiquidity(uint256 lp, uint256 min0, uint256 min1, address to) returns (uint256 amount0, uint256 amount1)',
+  'function reserve0() view returns (uint256)',
+  'function reserve1() view returns (uint256)',
+  'function balanceOf(address) view returns (uint256)',
+  'function totalSupply() view returns (uint256)'
+];
+let _lcLpSide = 'add';
+let _lcLpBal = 0n, _lcLpSupply = 0n, _lcLpR0 = 0n, _lcLpR1 = 0n;
+
+function lcLpSwitch(side) {
+  _lcLpSide = side;
+  const add = side === 'add';
+  $('lcLpAddTab')?.classList.toggle('active', add);
+  $('lcLpRemoveTab')?.classList.toggle('active', !add);
+  if ($('lcLpAddPane')) $('lcLpAddPane').style.display = add ? '' : 'none';
+  if ($('lcLpRemovePane')) $('lcLpRemovePane').style.display = add ? 'none' : '';
+}
+
+// Reserves and the caller's LP balance in one batch, refreshed when the drawer opens
+// rather than on every page render — a shut drawer has nothing to show.
+async function lcLpRefresh() {
+  const drawer = $('lcLpDrawer');
+  if (!drawer || !drawer.classList.contains('open') || !_lcPool) return;
+  try {
+    const lpI = new ethers.Interface(PRECISION_LP_ABI);
+    const calls = [
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve0') },
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve1') },
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('totalSupply') }
+    ];
+    if (_connectedAddress) {
+      calls.push({ target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('balanceOf', [_connectedAddress]) });
+    }
+    const res = await mcAggregate(calls);
+    _lcLpR0 = mcDecode(res[0], lpI, 'reserve0', [0n])[0];
+    _lcLpR1 = mcDecode(res[1], lpI, 'reserve1', [0n])[0];
+    _lcLpSupply = mcDecode(res[2], lpI, 'totalSupply', [0n])[0];
+    _lcLpBal = _connectedAddress ? mcDecode(res[3], lpI, 'balanceOf', [0n])[0] : 0n;
+  } catch { return; }
+  const eth = Number(_lcEthBalance) / 1e18;
+  if ($('lcLpEthBal')) $('lcLpEthBal').textContent = _connectedAddress
+    ? `Balance: ${eth >= 0.0001 || eth === 0 ? eth.toFixed(4) : eth.toExponential(2)} ETH` : 'Balance: --';
+  if ($('lcLpTokBal')) $('lcLpTokBal').textContent = _connectedAddress
+    ? `Balance: ${fmtTokenAmount(_lcBalance.toString())}` : 'Balance: --';
+  if ($('lcLpBal')) $('lcLpBal').textContent = _connectedAddress
+    ? `Balance: ${ethers.formatUnits(_lcLpBal, 18)}` : 'Balance: --';
+  lcLpPair();
+  lcLpQuoteRemove();
+}
+
+// The coin leg that pairs with the ether leg is fixed by the reserves — a deposit at any
+// other ratio is refunded down to this one, so showing anything else would be a lie about
+// what the transaction spends.
+function lcLpPair() {
+  const note = $('lcLpAddNote'), out = $('lcLpTok');
+  const raw = ($('lcLpEth')?.value || '').trim();
+  const setNote = m => { if (note) note.innerHTML = m || '&nbsp;'; };
+  if (!raw || !(parseFloat(raw) > 0)) { if (out) { out.textContent = '0.0'; out.classList.add('placeholder'); } setNote(''); return; }
+  if (!(_lcLpR0 > 0n) || !(_lcLpR1 > 0n)) { setNote('Pool has no reserves to pair against.'); return; }
+  let wei;
+  try { wei = ethers.parseEther(raw); } catch { setNote('Invalid amount.'); return; }
+  const tok = wei * _lcLpR1 / _lcLpR0;
+  if (out) { out.textContent = fmtTokenAmount(tok.toString()); out.classList.remove('placeholder'); }
+  if (_connectedAddress && tok > _lcBalance) {
+    setNote(`<span style="color:var(--red)">You hold ${fmtTokenAmount(_lcBalance.toString())} ${escText(_lcInfo?.symbol || '')} — not enough for that much ETH.</span>`);
+  } else {
+    const share = _lcLpSupply > 0n ? Number(wei * 10000n / (_lcLpR0 + wei)) / 100 : 100;
+    setNote(`About ${share.toFixed(2)}% of the pool after the deposit.`);
+  }
+}
+
+function lcLpSetPct(pct) {
+  if (_lcLpBal === 0n) return;
+  const amt = pct === 100 ? _lcLpBal : (_lcLpBal * BigInt(pct)) / 100n;
+  const el = $('lcLpBurn');
+  if (el) { el.value = ethers.formatUnits(amt, 18); lcLpQuoteRemove(); }
+}
+
+function lcLpQuoteRemove() {
+  const note = $('lcLpRemoveNote');
+  const raw = ($('lcLpBurn')?.value || '').trim();
+  const setNote = m => { if (note) note.innerHTML = m || '&nbsp;'; };
+  if (!raw || !(parseFloat(raw) > 0) || !(_lcLpSupply > 0n)) { setNote(''); return; }
+  let lp;
+  try { lp = ethers.parseUnits(raw, 18); } catch { setNote('Invalid amount.'); return; }
+  if (lp > _lcLpBal) { setNote('<span style="color:var(--red)">More than you hold.</span>'); return; }
+  const a0 = lp * _lcLpR0 / _lcLpSupply, a1 = lp * _lcLpR1 / _lcLpSupply;
+  setNote(`Returns about ${Number(ethers.formatEther(a0)).toFixed(5)} ETH + ${fmtTokenAmount(a1.toString())} ${escText(_lcInfo?.symbol || '')}.`);
+}
+
+function _lcLpSay(m, c) {
+  const el = $('lcLpStatus');
+  if (el) el.innerHTML = m ? `<div style="font-size:12px;color:${c || 'var(--fg-muted)'};line-height:1.5">${m}</div>` : '';
+}
+
+async function lcLpAdd() {
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const raw = ($('lcLpEth')?.value || '').trim();
+  if (!raw || !(parseFloat(raw) > 0)) return;
+  if (!(_lcLpR0 > 0n) || !(_lcLpR1 > 0n)) { _lcLpSay('Pool has no reserves to pair against.', 'var(--red)'); return; }
+  const btn = $('lcLpAddGo');
+  if (btn) btn.disabled = true;
+  try {
+    const me = await sgn.getAddress();
+    let amount0;
+    try { amount0 = ethers.parseEther(raw); } catch { return; }
+    // Ratio read at send time, not when the box was typed into: a swap between the two
+    // moves the reserves, and a stale pairing is the amount that gets refunded.
+    const lpI = new ethers.Interface(PRECISION_LP_ABI);
+    const fresh = await mcAggregate([
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve0') },
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve1') }
+    ]);
+    const r0 = mcDecode(fresh[0], lpI, 'reserve0', [0n])[0];
+    const r1 = mcDecode(fresh[1], lpI, 'reserve1', [0n])[0];
+    if (!(r0 > 0n)) { _lcLpSay('Pool has no ether to pair against.', 'var(--red)'); return; }
+    // A slippage cushion on the coin leg only. The pool pulls what it needs and refunds
+    // the rest, so overshooting costs nothing but a larger approval.
+    const amount1 = (amount0 * r1 / r0) * (10000n + BigInt(Math.round(_lcSlipPct * 100))) / 10000n;
+    if (amount1 > _lcBalance) {
+      _lcLpSay(`Not enough ${escText(_lcInfo?.symbol || '')} to pair with that much ETH.`, 'var(--red)');
+      return;
+    }
+
+    const erc20 = new ethers.Contract(_lcToken, ['function allowance(address,address) view returns (uint256)', 'function approve(address,uint256) returns (bool)'], sgn);
+    const allow = await erc20.allowance(me, _lcPool);
+    if (allow < amount1) {
+      _lcLpSay('Approve the pool to spend your coins…');
+      const atx = await erc20.approve(_lcPool, ethers.MaxUint256);
+      await atx.wait();
+    }
+
+    _lcLpSay('Confirm in your wallet…');
+    const pool = new ethers.Contract(_lcPool, PRECISION_LP_ABI, sgn);
+    // minLP of 1: the deposit is priced off reserves read one call ago, and the pool
+    // refunds rather than reprices, so there is no LP amount to bound meaningfully.
+    const tx = await pool.addLiquidityExact(0, amount0, amount1, 1, me, { value: amount0 });
+    _lcLpSay(`Adding… <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    _lcLpSay('Done.', 'var(--green)');
+    const el = $('lcLpEth'); if (el) el.value = '';
+    await renderCoinPage(_lcToken);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { _lcLpSay(''); return; }
+    _lcLpSay(escText(err.shortMessage || err.reason || err.message || 'Failed.'), 'var(--red)');
+  } finally {
+    const b = $('lcLpAddGo'); if (b) b.disabled = false;
+  }
+}
+
+async function lcLpRemove() {
+  const sgn = _signer || await connectWallet();
+  if (!sgn) return;
+  const raw = ($('lcLpBurn')?.value || '').trim();
+  if (!raw || !(parseFloat(raw) > 0)) return;
+  const btn = $('lcLpRemoveGo');
+  if (btn) btn.disabled = true;
+  try {
+    const me = await sgn.getAddress();
+    let lp;
+    try { lp = ethers.parseUnits(raw, 18); } catch { return; }
+    if (lp > _lcLpBal) { _lcLpSay('More than you hold.', 'var(--red)'); return; }
+    const lpI = new ethers.Interface(PRECISION_LP_ABI);
+    const fresh = await mcAggregate([
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve0') },
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('reserve1') },
+      { target: _lcPool, allowFailure: true, callData: lpI.encodeFunctionData('totalSupply') }
+    ]);
+    const r0 = mcDecode(fresh[0], lpI, 'reserve0', [0n])[0];
+    const r1 = mcDecode(fresh[1], lpI, 'reserve1', [0n])[0];
+    const sup = mcDecode(fresh[2], lpI, 'totalSupply', [0n])[0];
+    if (!(sup > 0n)) { _lcLpSay('Pool has no liquidity.', 'var(--red)'); return; }
+    const bps = 10000n - BigInt(Math.round(_lcSlipPct * 100));
+    const min0 = (lp * r0 / sup) * bps / 10000n;
+    const min1 = (lp * r1 / sup) * bps / 10000n;
+
+    _lcLpSay('Confirm in your wallet…');
+    const pool = new ethers.Contract(_lcPool, PRECISION_LP_ABI, sgn);
+    const tx = await pool.removeLiquidity(lp, min0, min1, me);
+    _lcLpSay(`Removing… <a href="https://etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit">view</a>`);
+    await tx.wait();
+    _lcLpSay('Done.', 'var(--green)');
+    const el = $('lcLpBurn'); if (el) el.value = '';
+    await renderCoinPage(_lcToken);
+  } catch (err) {
+    if (err.code === 'ACTION_REJECTED' || (err.message || '').includes('user rejected')) { _lcLpSay(''); return; }
+    _lcLpSay(escText(err.shortMessage || err.reason || err.message || 'Failed.'), 'var(--red)');
+  } finally {
+    const b = $('lcLpRemoveGo'); if (b) b.disabled = false;
   }
 }
 
