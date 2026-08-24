@@ -274,7 +274,10 @@ test('the gallery renders a launched coin card', async () => {
   await w.renderGallery();
   const out = w.document.getElementById('app').innerHTML;
   assert.match(out, /FREEROMAN/i, 'the launched coin must reach the grid');
-  assert.match(out, /backed by ether/, 'the card states what actually backs the price');
+  // The card states the floor as a fraction of the price — the redeemable ether under a
+  // launched coin, which it used to word as "% backed by ether".
+  assert.match(out, /Floor at .*% of price|No buys yet/,
+    'the card states what actually backs the price');
   assert.doesNotMatch(out, /undefined/);
   assert.doesNotMatch(out, /NaN/);
 });

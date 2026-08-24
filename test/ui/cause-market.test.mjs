@@ -32,6 +32,10 @@ const M = new Function('ethers', [
   "const ZERO='0x0000000000000000000000000000000000000000';",
   "const LQ_WAD=10n**18n;",
   "const fmtPriceWei=v=>String(v);",
+  // The chart labels its axis through the page's escaper. Stubbed like the
+  // formatters above rather than grabbed: what is under test here is the
+  // arithmetic and the layout, not escaping.
+  "const escText=s=>String(s);",
   "const BigIntRound=v=>BigInt(Math.round(v));",
   grab(/function causeSortedPair[\s\S]*?\n}/),
   grab(/function causeSpotPrice[\s\S]*?\n}/),
@@ -80,28 +84,56 @@ test('tape decodes to the price a buyer actually paid', () => {
   assert.ok(closeGwei < 5000, 'tape close should not be reading as spot');
 });
 
-test('the chart is a price ruler: floor left, spot right, fills where they landed', () => {
-  const floor = 328522781932n, sale = 333000000000n, spot = 7879700000000n;
+test('the ruler places fills by price, on a log axis, inside its own box', () => {
+  // The ruler is what answers when there is no spot to plot a tape against. With a spot
+  // and any live tape at all, causeChart hands over to the time chart instead — see the
+  // next test — so this pins the ruler by asking for the case only it serves.
+  const floor = 328522781932n, sale = 333000000000n;
   const bars = [{ b: 1, o: 1.948e12, c: 1.627e12, hi: 1.948e12, lo: 1.627e12, n: 3 }];
-  const out = M.causeChart(bars, floor, sale, spot);
+  const out = M.causeChart(bars, floor, sale, 0n);
 
   assert.match(out, /<svg/);
   assert.match(out, /floor/);
-  assert.match(out, /now/);
   assert.match(out, /3 fills/);
 
-  // Everything drawn stays inside the 300-wide viewBox.
+  const vbW = parseFloat(out.match(/viewBox="0 0 ([\d.]+)/)[1]);
   const xs = [...out.matchAll(/(?:x1|x2|cx)="([\d.]+)"/g)].map(m => parseFloat(m[1]));
   assert.ok(xs.length > 0, 'nothing was drawn');
-  for (const x of xs) assert.ok(x >= 0 && x <= 300, `x=${x} escapes the viewBox`);
+  for (const x of xs) assert.ok(x >= 0 && x <= vbW, `x=${x} escapes the ${vbW}-wide viewBox`);
 
-  // The fill at 1,627 gwei sits between the 328 floor and the 7,880 spot, and the log
-  // spacing has to keep it there — on a linear axis it would collapse onto the floor.
+  // The fill sits above the floor rather than collapsed onto it, which is what the log
+  // axis buys: on a linear one the 1,627 gwei fill against a 328 gwei floor crushes left.
   const fill = parseFloat(out.match(/<circle cx="([\d.]+)"/)[1]);
   const ticks = [...out.matchAll(/<line x1="([\d.]+)" y1="\d+"/g)].map(m => parseFloat(m[1]));
-  const floorX = Math.min(...ticks), spotX = Math.max(...ticks);
-  assert.ok(fill > floorX && fill < spotX, `fill at ${fill} should sit between ${floorX} and ${spotX}`);
-  assert.ok(fill > 300 * 0.3, 'a log axis should not crush the fill against the floor');
+  assert.ok(fill > Math.min(...ticks), `fill at ${fill} should sit above the floor tick`);
+  assert.ok(fill > vbW * 0.3, 'a log axis should not crush the fill against the floor');
+});
+
+test('any live tape with a spot plots over time, not on the ruler', () => {
+  // This used to require three prints, on the reasoning that one candle is a dot in a
+  // field of whitespace. It now takes any live bar: a thin chart still reads as a chart,
+  // where a ruler with a marker on it reads as a slider. Both renderers keep whatever
+  // they draw inside their own viewBox, which is the invariant worth holding either way.
+  const floor = 328522781932n, sale = 333000000000n, spot = 7879700000000n;
+  const bar = c => ({ b: 1, o: c, c, hi: c, lo: c, n: 1 });
+
+  const one = M.causeChart([bar(1.6e12)], floor, sale, spot);
+  const many = M.causeChart([bar(1.6e12), bar(1.9e12), bar(4.2e12), bar(7.1e12)], floor, sale, spot);
+
+  for (const [svg, what] of [[one, 'a single bar'], [many, 'four bars']]) {
+    assert.match(svg, /<svg/, `${what} drew nothing`);
+    assert.match(svg, /now/, `${what} lost the spot label`);
+    const box = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+    assert.ok(box, `${what} has no viewBox`);
+    const [w, h] = [parseFloat(box[1]), parseFloat(box[2])];
+    const xs = [...svg.matchAll(/(?:x|x1|x2|cx)="([\d.]+)"/g)].map(m => parseFloat(m[1]));
+    const ys = [...svg.matchAll(/(?:y|y1|y2|cy)="([-\d.]+)"/g)].map(m => parseFloat(m[1]));
+    for (const v of xs) assert.ok(v >= 0 && v <= w, `${what}: x=${v} escapes the ${w}-wide viewBox`);
+    for (const v of ys) assert.ok(v >= 0 && v <= h, `${what}: y=${v} escapes the ${h}-tall viewBox`);
+  }
+
+  // Without a spot there is nothing to plot against, so it falls back to the ruler.
+  assert.match(M.causeChart([bar(1.6e12)], floor, sale, 0n), /floor/);
 });
 
 test('with no pool and no trades there is nothing to draw', () => {
@@ -130,29 +162,6 @@ test('the price is the marginal one, not the reserve ratio', () => {
   assert.ok((8216.3 - spot) / spot > 0, 'a buy must never price below spot');
 });
 
-test('the chart switches to a time axis only once there is a shape to draw', () => {
-  const floor = 328522781932n, sale = 333000000000n, spot = 7879700000000n;
-  const bar = c => ({ b: 1, o: c, c, hi: c, lo: c, n: 1 });
-
-  // One or two prints on a time axis is a dot and a lot of whitespace — the exact thing
-  // that makes a lone candle useless. Stay on the ruler.
-  const thin = M.causeChart([bar(1.6e12), bar(1.9e12)], floor, sale, spot);
-  assert.match(thin, /floor/);
-  assert.doesNotMatch(thin, /<polyline/, 'two bars should not pretend to be a time series');
-
-  // Three is where a line starts carrying information the ruler cannot.
-  const rich = M.causeChart([bar(1.6e12), bar(1.9e12), bar(4.2e12), bar(7.1e12)], floor, sale, spot);
-  assert.match(rich, /<polyline/, 'four bars should plot over time');
-  assert.match(rich, /4 fills/);
-
-  // Both modes must keep every drawn coordinate inside their own viewBox.
-  for (const [svg, h] of [[thin, 34], [rich, 74]]) {
-    const box = svg.match(/viewBox="0 0 300 (\d+)"/);
-    assert.equal(Number(box[1]), h);
-    for (const m of svg.matchAll(/(?:cy|y1|y2)="([\d.]+)"/g))
-      assert.ok(+m[1] >= 0 && +m[1] <= h, `y=${m[1]} escapes the ${h}px box`);
-  }
-});
 
 test('bars come off the tape newest-first, so the chart must sort them into time order', () => {
   // Real slots from the live pool's ring buffer, in the order it returns them: the
