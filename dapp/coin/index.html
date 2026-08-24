@@ -62,7 +62,7 @@ input {
 /* Gallery */
 .coin-grid {
   display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;
-  align-items:start;
+  align-items:stretch;
 }
 .coin-grid-section {
   grid-column:1 / -1;
@@ -79,7 +79,8 @@ input {
 }
 .coin-card {
   border:1px solid var(--border);padding:16px;
-  cursor:pointer;transition:background 0.15s, transform 0.15s;text-decoration:none;color:var(--fg);display:block;
+  cursor:pointer;transition:background 0.15s, transform 0.15s;text-decoration:none;color:var(--fg);
+  display:flex;flex-direction:column;
 }
 .coin-card:hover { background:var(--surface-hover);transform:translateY(-1px); }
 .coin-test { display:none; }
@@ -93,8 +94,6 @@ input {
   font-size:9px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;
   color:var(--red);background:var(--status-error);padding:2px 6px;
 }
-.coin-inactive { display:none; }
-.coin-legacy { display:none; }
 .spam-toggle {
   cursor:pointer;text-decoration:underline;text-decoration-style:dotted;
   text-underline-offset:2px;
@@ -120,7 +119,7 @@ input {
 .coin-card-symbol { font-size:12px;color:var(--fg-muted); }
 .coin-card-bar { margin-top:8px;font-family:monospace;font-size:9px;line-height:1;letter-spacing:0.5px;color:var(--fg-dim);overflow:hidden; }
 .coin-card-stat { font-size:11px;color:var(--fg-muted);margin-top:6px; }
-.coin-card-mcap { font-size:11px;font-weight:600;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:var(--fg); }
+.coin-card-mcap { font-size:11px;font-weight:600;margin-top:auto;padding-top:8px;border-top:1px solid var(--border);color:var(--fg); }
 .coin-card-mcap .usd { font-weight:400;color:var(--fg-muted); }
 .coin-tpl-badge {
   display:inline-flex;align-items:center;vertical-align:middle;margin-left:4px;
@@ -133,21 +132,6 @@ input {
   background:var(--surface);border:1px solid var(--border-muted);
   opacity:1;color:var(--fg-muted);
 }
-/* Marks a curve launched with non-template parameters. Hover gives the reason. */
-.coin-tpl-warn {
-  font-size:9px;font-weight:700;line-height:1;
-  padding:1px 5px;border-radius:3px;
-  background:transparent;border:1px solid #FF9800;
-  opacity:1;color:#FF9800;cursor:help;
-}
-/* Same signal at the top of a coin's own page, where there is room to spell it out. */
-.simple-param-notice {
-  margin:10px 0;padding:10px 12px;border-radius:6px;
-  border:1px solid #FF9800;background:color-mix(in srgb, #FF9800 8%, transparent);
-  font-size:13px;line-height:1.5;color:var(--fg);
-}
-.simple-param-notice strong { color:#FF9800; }
-.simple-param-notice ul { margin:6px 0 0;padding-left:18px; }
 
 /* Stacked duplicates: a single grid cell that renders the canonical card up
    front, with a paper-stack shadow hinting at hidden variants. The badge
@@ -157,6 +141,7 @@ input {
   display:flex;flex-direction:column;gap:8px;
   position:relative;
 }
+.coin-stack > .coin-card:first-of-type { flex:1; }
 .coin-stack > .coin-card:first-of-type {
   box-shadow:
     2px 2px 0 0 var(--bg),
@@ -473,7 +458,6 @@ input {
 
 /* Curve swap-tile pieces — the receive side is read-only (quote-driven) so it can't reuse
    `.swap-section input`; this gives the same visual weight as the input side. */
-.simple-out-row { display:flex;gap:8px;align-items:flex-end; }
 .simple-out-amount {
   flex:1;font-size:22px;font-weight:400;color:var(--fg);
   padding:8px 0;border-bottom:1.5px solid var(--border);
@@ -482,13 +466,6 @@ input {
 }
 .simple-out-amount.placeholder { color:var(--input-ph); }
 .simple-out-amount.muted { color:var(--fg-muted);font-style:italic; }
-.simple-out-sub { font-size:11px;color:var(--fg-muted);margin-top:4px;min-height:14px;font-variant-numeric:tabular-nums; }
-.simple-dir-arrow {
-  width:28px;height:28px;border:1px solid var(--border-muted);background:var(--bg);
-  display:inline-flex;align-items:center;justify-content:center;
-  color:var(--fg-muted);
-}
-.simple-dir-arrow svg { display:block; }
 .simple-details {
   margin:10px 0 0;padding:8px 10px;background:var(--surface);font-size:11px;
   border:1px solid var(--border-muted);
@@ -541,7 +518,6 @@ input {
 .holder-tag { font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap; }
 .holder-tag-pool { background:rgba(59,130,246,0.15);color:#60a5fa; }
 .holder-tag-dao { background:rgba(168,85,247,0.15);color:#c084fc; }
-.holder-tag-badge { background:rgba(234,179,8,0.15);color:#facc15; }
 .holder-shares { font-weight:600;white-space:nowrap; }
 .holder-pct { color:var(--fg-muted);font-size:11px;white-space:nowrap; }
 
@@ -681,11 +657,6 @@ input {
 
 .loading { text-align:center;padding:40px;color:var(--fg-muted);font-size:13px; }
 @keyframes spin { to { transform:rotate(360deg); } }
-.spinner {
-  display:inline-block;width:14px;height:14px;border:2px solid var(--border-muted);
-  border-top:2px solid var(--fg);border-radius:50%;animation:spin 0.8s linear infinite;
-  vertical-align:middle;margin-right:8px;
-}
 
 /* Mobile */
 @media (max-width: 600px) {
@@ -1177,12 +1148,6 @@ async function fetchCauses() {
   return causes;
 }
 
-// Never bucketed away as low-liquidity, legacy or inactive. A cause has no zAMM pool
-// to price, so those buckets fall back to metadata — and metadata lives on IPFS, which
-// is exactly the read that can fail. The out-of-band causes are here by construction
-// rather than by a second copy of their addresses; the collector DAO joins them.
-const FWC_COLLECTOR_DAO = '0xe7aa6ca3a9ca3fe92a425dfead24900b9bf49853';
-const ALWAYS_SHOW_ADDRS = OUT_OF_BAND_CAUSES.map(a => a.toLowerCase()).concat([FWC_COLLECTOR_DAO]);
 // fetchOutOfBandCause() lived here: a per-DAO read for the one cause the registry scan
 // could not see. fetchCauses() enumerates the registry directly, so there is no longer a
 // cause it cannot find and nothing left to read out of band.
@@ -1269,7 +1234,6 @@ const _mc3Iface = new ethers.Interface(MC3_ABI);
 
 // ShareSale module
 const SHARE_SALE = '0x0000000021ea5069B532CeE09058aB9e02EA60f9';
-const SHARE_OFFERING_ADDR = '0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1';
 const SHARE_SALE_ABI = [
   'function buy(address dao, uint256 amount) payable',
   'function sales(address dao) view returns (address token, address payToken, uint40 deadline, uint256 price)'
@@ -1301,17 +1265,6 @@ const TAP_VEST_ABI = [
   'function taps(address dao) view returns (address token, address beneficiary, uint128 ratePerSec, uint64 lastClaim)'
 ];
 
-function decodeObservations(rawArray) {
-  return rawArray.map(packed => {
-    const p = BigInt(packed);
-    return {
-      price: (p >> 128n).toString(),
-      volume: ((p >> 48n) & ((1n << 80n) - 1n)).toString(),
-      timestamp: Number((p >> 8n) & ((1n << 40n) - 1n)),
-      isSell: (p & 1n) === 1n
-    };
-  });
-}
 
 // Launched-coin discovery — newest-first LaunchInfo rows straight from the
 // launcher's lens (dapp/modules/launch-registry.js). Names, symbols, supplies and
@@ -1461,63 +1414,8 @@ function _fmtAuctionDur(sec) {
 // pair) until pass 2 wires per-coin swap routing through the existing
 // computeZammPoolKey / swapVZ infrastructure.
 
-const COINS_SINGLETON = '0x0000000000009710cd229bF635c4500029651eE8';
 
-async function fetchZammV0CoinsForGallery() {
-  // ZAMM v0 gallery listing relied on the coinchan indexer (now retired). The
-  // top-by-liquidity discovery feed is unavailable without it; individual coin
-  // pages still work fully from on-chain reads. Return empty so the gallery
-  // simply omits this section rather than hitting a dead host.
-  return [];
-}
 
-function renderZammV0CoinCard(c) {
-  const sym = String(c.symbol || '').slice(0, 24);
-  const name = c.name || sym;
-  const liq = typeof c.liquidityEth === 'number' ? c.liquidityEth : 0;
-  // Adaptive precision: at the bottom of the gallery, ZAMM v0 coins can have sub-milli-ETH
-  // liquidity. The old 3-decimal floor showed those as "0.000 Ξ" — useless. Carry more
-  // decimals down to the noise floor and fall back to scientific for sub-µETH so users
-  // can still tell a non-zero pool from genuinely empty.
-  const liqFmt = liq >= 10 ? liq.toFixed(1)
-    : liq >= 1 ? liq.toFixed(2)
-    : liq >= 0.0001 ? liq.toFixed(5)
-    : liq > 0 ? liq.toExponential(2)
-    : '0';
-  const holders = typeof c.holders === 'number' ? c.holders : 0;
-  const imgHref = c.imageUrl
-    ? (c.imageUrl.startsWith('ipfs://') ? IPFS_GW + c.imageUrl.slice(7)
-     : c.imageUrl.startsWith('https://') ? c.imageUrl : '')
-    : '';
-  const initial = (sym[0] || '?').toUpperCase();
-  const logoInner = imgHref
-    ? `<img src="${escAttr(imgHref)}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.outerHTML='${escAttr(initial)}'">`
-    : escText(initial);
-  const searchable = `${name} ${sym} zamm coin`.toLowerCase();
-  // Deeplink to the swap page using the coin's ERC20 wrapper address
-  // (= `address(uint160(coinId))`). The swap page's ?to= resolver matches by 0x address,
-  // which is collision-free regardless of how the dropdown suffixes the symbol on its end.
-  // Coins whose coinId doesn't fit in 160 bits don't have an ERC20 wrapper and can't be
-  // routed via sweep — fall back to the canonical ZAMM swap so the click still goes somewhere.
-  const cid = (() => { try { return BigInt(c.coinId); } catch { return null; } })();
-  const wrapperAddr = (cid !== null && cid < (1n << 160n))
-    ? '0x' + cid.toString(16).padStart(40, '0')
-    : null;
-  const href = wrapperAddr ? `../?to=${wrapperAddr}` : `../?to=ZAMM`;
-  const dataAddr = wrapperAddr || COINS_SINGLETON.toLowerCase();
-  const isSpam = _spamSet.has(dataAddr);
-  return `<a href="${href}" class="coin-card${isSpam ? ' coin-spam' : ''}" data-name="${escAttr(searchable)}" data-symbol="${escAttr(sym.toLowerCase())}" data-addr="${dataAddr}" data-coin-id="${escAttr(String(c.coinId))}" style="position:relative">
-      ${spamBtnHTML(dataAddr, isSpam)}
-      <div class="coin-card-head">
-        <div class="coin-logo">${logoInner}</div>
-        <div style="min-width:0;flex:1">
-          <div class="coin-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escText(name)}</div>
-          <div class="coin-card-symbol">$${escText(sym)} &middot; ZAMM</div>
-        </div>
-      </div>
-      <div class="coin-card-stat" style="font-variant-numeric:tabular-nums">${liqFmt} Ξ liq${holders > 0 ? ' &middot; ' + holders.toLocaleString() + ' holders' : ''}</div>
-    </a>`;
-}
 
 function renderNftAuctionCard(a, meta) {
   const now = Math.floor(Date.now()/1000);
@@ -1738,17 +1636,7 @@ function toggleSpamCoins() {
   });
 }
 
-function toggleInactiveCoins() {
-  const cards = document.querySelectorAll('#coinGrid .coin-inactive');
-  const showing = cards.length > 0 && cards[0].style.display === 'block';
-  cards.forEach(c => { c.style.display = showing ? 'none' : 'block'; });
-}
 
-function toggleLegacyCoins() {
-  const cards = document.querySelectorAll('#coinGrid .coin-legacy');
-  const showing = cards.length > 0 && cards[0].style.display === 'block';
-  cards.forEach(c => { c.style.display = showing ? 'none' : 'block'; });
-}
 
 
 let rpcIdx = 0;
@@ -2750,25 +2638,7 @@ function pctBar(pct, color) {
   return `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100).toFixed(1)}%;background:${color}"></div></div>`;
 }
 
-// ---- Cause (DAICO) progress meters ----
-// A cause coin is a fixed-price share sale, so there is no price to chart. What
-// actually moves is: how much of the target is funded, and how much of the raise
-// is still sitting in the treasury (ragequittable) vs already tapped out.
-function causeBarHTML(segments) {
-  // segments: [{flex, ch, color}] — monospace block bar, matches the curve page style.
-  return `<div style="font-family:monospace;font-size:11px;line-height:1;display:flex;width:100%">` +
-    segments.map(s => `<span style="flex:${Math.max(s.flex, 0.5)};overflow:hidden;white-space:nowrap;color:${s.color}">${s.ch.repeat(200)}</span>`).join('') +
-    `</div>`;
-}
 
-function causeMeterRow(label, value, bar) {
-  return `<div style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:2px">
-      <span>${label}</span><span>${value}</span>
-    </div>
-    ${bar}
-  </div>`;
-}
 
 // Inner HTML of #causeMeters. Shared by first render and the live refresh so the
 // two can never drift.
@@ -3477,7 +3347,12 @@ async function _galleryRenderFresh(gen) {
               : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
           </a>
         `;
-        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, isTest, isSpam });
+        // Ranked on the ether behind it, like everything else here — a launched coin by
+        // what its pool holds, a cause and a DAICO by their treasury. Market cap is what
+        // the card SHOWS; it is not what the page sorts on, and letting a DAICO fall back
+        // to it ranked a speculative valuation against other coins' redeemable ether.
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH,
+                     sortKey: Number(ethers.formatEther(treasuryETH)), isTest, isSpam });
       }
     }
 
@@ -3485,7 +3360,11 @@ async function _galleryRenderFresh(gen) {
     const groups = new Map();
     const spamCards = [];
     for (const c of cards) {
-      if (c.isSpam) { spamCards.push(c); continue; }
+      // Test coins are hidden by CSS, not removed, so they stay searchable. Left inside a
+      // group they can end up leading it — and a stack led by a hidden card renders as an
+      // empty cell with a "+1 more" badge floating in it. They go beside the spam ones,
+      // appended on their own, where being hidden costs nothing.
+      if (c.isSpam || c.isTest) { spamCards.push(c); continue; }
       if (!groups.has(c.key)) groups.set(c.key, []);
       groups.get(c.key).push(c);
     }
@@ -3494,9 +3373,10 @@ async function _galleryRenderFresh(gen) {
     const allGroups = [...groups.values()];
     const _rank = c => (c.sortKey ?? c.mcap ?? 0);
     for (const group of allGroups) group.sort((a, b) => _rank(b) - _rank(a));
-    // Every card is the same kind of thing now, so there is one section and one sort:
-    // a launched coin has no sale phase to rank before or after, only the ether behind
-    // it — its pool's backing, or a cause's treasury.
+    // One section and one sort, because there is one question worth ranking on: how much
+    // ether is actually behind this. A launched coin answers with its pool's backing, a
+    // cause and a DAICO with their treasury. Kinds sit together rather than in separate
+    // lists, which only works while they are all measured the same way.
     allGroups.sort((a, b) => _rank(b[0]) - _rank(a[0]));
 
     function renderGroup(group) {
@@ -3514,7 +3394,7 @@ async function _galleryRenderFresh(gen) {
     }
 
     if (allGroups.length > 0) {
-      const n = allGroups.reduce((s, g) => s + g.filter(c => !c.isTest).length, 0);
+      const n = allGroups.reduce((s, g) => s + g.length, 0);
       grid += `<div class="coin-grid-section" data-section="launched">Coins <span class="count">${n}</span></div>`;
       for (const group of allGroups) grid += renderGroup(group);
     }
@@ -3531,7 +3411,7 @@ async function _galleryRenderFresh(gen) {
     // those walks the gateway list before giving up, so a handful of dead pins held the
     // whole page for as long as that walk took. The auctions are injected above the
     // coins when they arrive; see _galleryInjectAuctions below.
-    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.filter(c => !c.isTest).length, 0);
+    const _coinTotal = [...groups.values()].reduce((n, g) => n + g.length, 0);
     const _countLabel = `${_coinTotal}`;
     // Final gen check before writing: a background refresh that finishes after the user
     // navigated away to a coin detail page would otherwise replace the detail with the gallery.
@@ -5461,7 +5341,6 @@ const PFACTORY = PRECISION_FACTORY;   // modules/precision.js
 const PRECISION_FEE = 3000n;            // 0.3%, zSwap's own default
 const LQ_WIDTHS = [1000, 100, 10, 2];   // widest first
 const LQ_WAD = 10n ** 18n;
-const SEL_POOLFOR = PSEL.poolFor;
 const SEL_PAIR_COUNT = PSEL.pairCount;
 const SEL_CREATE_SEED = PSEL.createSeed;
 const ZSWAP_URL = 'https://zswap.wei.limo/';
@@ -5499,15 +5378,6 @@ function causeSortedPair(sharesAddr) {
   return ZERO.toLowerCase() < sharesAddr.toLowerCase() ? [ZERO, sharesAddr] : [sharesAddr, ZERO];
 }
 
-// Ask the factory where this band would live. Deterministic, so it answers before the
-// pool exists — no CREATE2 arithmetic to reimplement or get wrong.
-async function causePoolFor(market) {
-  try {
-    const res = await withRPC(rpc => rpc.call({ to: PFACTORY, data: SEL_POOLFOR + market }));
-    const addr = ethers.getAddress('0x' + res.slice(-40));
-    return addr === ZERO ? null : addr;
-  } catch { return null; }
-}
 
 // Build the widest band the factory will actually accept for these amounts.
 async function causeBand(sharesAddr, ethAmt, shareAmt, from) {
@@ -5542,8 +5412,6 @@ const PPLENS = PRECISION_LENS;
 const PLQLENS = PRECISION_LQ_LENS;
 const SEL_MARKETS = PSEL.markets;
 const SEL_TAPE = PSEL.tape;
-const SEL_PREVIEW_ADD = PSEL.previewAdd;
-const SEL_ADDEXACT = PSEL.addExact;
 const SEL_ZAPIN = PSEL.zapIn;
 const SEL_PREVIEW_ZAP = PSEL.previewZap;
 const SEL_ISPOOL = PSEL.isPool;
