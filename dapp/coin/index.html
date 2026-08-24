@@ -3166,8 +3166,14 @@ async function _galleryRenderFresh(gen) {
         // launch that is most of the supply. ZCAT read "12.8% backed" while its floor
         // was 93% of spot, because 86% of its supply had no claim to begin with.
         const marketPer = Number(row.marketPrice), floorPer = Number(row.floorPrice);
-        const backedPct = marketPer > 0 ? Math.min(100, (floorPer / marketPer) * 100) : 0;
-        const bars = Math.round(backedPct / 10);
+        const backedRatio = marketPer > 0 ? (floorPer / marketPer) : 0;
+        const backedPct = backedRatio * 100;
+        // The bar is a 0–100% meter and stays clamped; the WORDS below it are not, because
+        // a floor above the price is a different situation from a floor exactly at it and
+        // the clamp made the two identical. Burns lift the floor without moving the market,
+        // and in that state redeeming beats selling — which a holder cannot act on if the
+        // card rounds it away to "100% backed".
+        const bars = Math.round(Math.min(100, backedPct) / 10);
 
         // The pool's ether is what a trader can actually get in and out against, and it
         // is what the gallery is ranked by — so the card shows it next to the valuation
@@ -3177,7 +3183,9 @@ async function _galleryRenderFresh(gen) {
         const mcapDisplay = fdvEth > 1e-6 ? fmtMcap(fdvEth) : '';
         const mcapUsd = fdvEth > 1e-6 && ethUsd > 0 ? fmtUsd(fdvEth * ethUsd) : '';
         const statusText = row.floorPrice > 0n
-          ? `${backedPct < 1 ? '<1' : backedPct.toFixed(0)}% backed by ether`
+          ? (backedRatio > 1.005
+              ? `Floor ${((backedRatio - 1) * 100).toFixed(0)}% above price`
+              : `${backedPct < 1 ? '<1' : backedPct.toFixed(0)}% backed by ether`)
           : 'No buys yet';
         const allocPct = Number(row.allocBps) / 100;
         const badgeTitle = 'single-sided full-range pool, liquidity locked in the launcher'
@@ -3986,10 +3994,38 @@ async function lcQuote() {
       `${fmtPriceWei(eff)} per token` + (usd > 0 ? ` · ${fmtUsd(usd)}` : '')
       + ` · reverts below ${100 - _lcSlipPct}% of this`, false);
     const go = $('lcGo'); if (go) go.disabled = false;
+
+    // A sell has a second venue that the pool quote knows nothing about: the floor. It
+    // pays a rate that does not move with size, so on any sale large enough to walk the
+    // curve — and on any coin whose floor has been lifted by burns — redeeming pays more.
+    // The page explains that in the redeem drawer; it is worth saying at the moment the
+    // choice is actually being made, with this trade's numbers rather than in general.
+    if (!buy) {
+      lcCompareToFloor(amountIn, out, my).catch(() => {});
+    }
   } catch {
     if (my !== _lcQuoteSeq) return;
     lcSetOut('0', 'Could not quote that.', true);
   }
+}
+
+/// What the same tokens would fetch at the floor, said only when it beats the pool.
+async function lcCompareToFloor(amountIn, poolOut, seq) {
+  if (!_lcToken || amountIn <= 0n) return;
+  const iface = new ethers.Interface(LAUNCHER_ABI);
+  const redeemOut = await withRPC(rpc => rpc.call({
+    to: LAUNCHER, data: iface.encodeFunctionData('quoteRedeem', [_lcToken, amountIn])
+  })).then(r => iface.decodeFunctionResult('quoteRedeem', r)[0]).catch(() => 0n);
+  if (seq !== _lcQuoteSeq) return;              // a newer quote has already answered
+  if (redeemOut <= poolOut) return;             // the pool is the better exit; say nothing
+  const el = $('lcOutSub');
+  if (!el) return;
+  const better = Number(ethers.formatEther(redeemOut - poolOut));
+  const pct = poolOut > 0n ? Number((redeemOut - poolOut) * 10000n / poolOut) / 100 : 0;
+  el.innerHTML += `<div style="color:var(--green);margin-top:3px">Redeeming pays
+    ${fmtNum(Number(ethers.formatEther(redeemOut)))} ETH for these
+    &mdash; ${pct >= 0.1 ? '+' + pct.toFixed(1) + '%' : '+' + better.toFixed(6) + ' ETH'} over this sale.
+    <span style="color:var(--fg-muted)">Open “Redeem at the floor” below.</span></div>`;
 }
 
 async function lcTrade() {
