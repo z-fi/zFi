@@ -3177,7 +3177,7 @@ async function _galleryRenderFresh(gen) {
         const mcapDisplay = fdvEth > 1e-6 ? fmtMcap(fdvEth) : '';
         const mcapUsd = fdvEth > 1e-6 && ethUsd > 0 ? fmtUsd(fdvEth * ethUsd) : '';
         const statusText = row.floorPrice > 0n
-          ? `Floor at ${backedPct < 1 ? '<1' : backedPct.toFixed(0)}% of price`
+          ? `${backedPct < 1 ? '<1' : backedPct.toFixed(0)}% backed by ether`
           : 'No buys yet';
         const allocPct = Number(row.allocBps) / 100;
         const badgeTitle = 'single-sided full-range pool, liquidity locked in the launcher'
@@ -3198,8 +3198,8 @@ async function _galleryRenderFresh(gen) {
                 <div class="coin-card-symbol">$${escText(lSym)}<span class="coin-tpl-badge coin-tpl-simple" title="${escAttr(badgeTitle)}">simple</span></div>
               </div>
             </div>
-            <div class="coin-card-bar" title="How much of the price you pay is redeemable from the pool at any time. It only ever rises.">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
-            <div class="coin-card-stat" title="Burn the coin back to the launcher for its share of the pool's ether. This is that floor, against what the market is charging.">${statusText}</div>
+            <div class="coin-card-bar" title="How much of the price is ether locked in the pool rather than speculation. The rest is what the market is paying over the redemption floor.">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
+            <div class="coin-card-stat" title="Burn the coin back to the launcher for its share of the pool's ether, at any time and at any size. This is that floor against the market price — the gap is the premium.">${statusText}</div>
             <div class="coin-card-mcap"><span title="Ether in the pool — what you can trade in and out against.">${liqDisplay} &Xi; pool</span>${mcapDisplay ? ` &middot; <span title="Spot price times total supply.">FDV ${mcapDisplay}</span>${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}` : ''}</div>
           </a>
         `;
@@ -3710,7 +3710,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Ether the locked position would release in full. This is what backs the floor.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Backing</div>
         <div style="font-weight:600">${backingEth >= 0.0001 ? backingEth.toFixed(4) : backingEth > 0 ? backingEth.toExponential(2) : '0'} ETH</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 && marketEth > 0 ? 'floor is ' + Math.min(100, floorEth / marketEth * 100).toFixed(0) + '% of price' : 'in the pool'}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 && marketEth > 0 ? Math.min(100, floorEth / marketEth * 100).toFixed(0) + '% of the price' : 'in the pool'}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Burn back to the launcher for this much ether per token, at any time. It only ever rises.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Floor</div>
@@ -3776,8 +3776,11 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       <div class="drawer-body">
         <div style="font-size:11px;color:var(--fg-muted);line-height:1.6;margin-bottom:10px">
           The launcher holds this pool's liquidity. Burn ${escText(sym)} back to it and you get
-          your share of the ether inside — no buyer needed, at a price that only ever rises.
-          It beats selling only while the market is paying less than the floor.
+          your share of the ether inside — no buyer needed, at a rate that only ever rises.
+          <br><br>
+          The rate does not move with your size. Selling into the pool pays more for a small
+          amount and less as the amount grows, so redeeming is the better exit once you are
+          selling enough to move the price — which is exactly when the pool is worst to you.
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <input id="lcRedeemAmount" type="text" inputmode="decimal" placeholder="Amount of ${escAttr(sym)}" oninput="lcRedeemQuoteDebounced()" style="flex:1;padding:8px 0;background:none;border:none;border-bottom:1px solid var(--border-muted);color:var(--fg);font-size:14px;outline:none">
