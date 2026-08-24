@@ -95,7 +95,6 @@ input {
 }
 .coin-inactive { display:none; }
 .coin-legacy { display:none; }
-.coin-lowmcap { display:none; }
 .spam-toggle {
   cursor:pointer;text-decoration:underline;text-decoration-style:dotted;
   text-underline-offset:2px;
@@ -1066,6 +1065,15 @@ const SUMMONER_ABI = [
   'function daos(uint256) view returns (address)'
 ];
 
+/// The classic DAICOs: a DAO whose sale is configured inside Moloch. Distinct from a
+/// cause, which keeps its sale in a singleton and is found through the registry instead —
+/// the two sets do not overlap, and dropping this one took the collector DAO and every
+/// fund launch off the page along with it.
+async function fetchDaicos() {
+  return await withRPC(async rpc =>
+    Array.from(await new ethers.Contract(VIEW_HELPER, SCAN_ABI, rpc).scanDAICOs(0, 500, [ZERO])));
+}
+
 /// Every cause in the registry, newest first, with what a gallery card needs.
 ///
 /// Five round trips, and only the first three scale with the registry:
@@ -1742,11 +1750,6 @@ function toggleLegacyCoins() {
   cards.forEach(c => { c.style.display = showing ? 'none' : 'block'; });
 }
 
-function toggleLowMcapCoins() {
-  const cards = document.querySelectorAll('#coinGrid .coin-lowmcap');
-  const showing = cards.length > 0 && cards[0].style.display === 'block';
-  cards.forEach(c => { c.style.display = showing ? 'none' : 'block'; });
-}
 
 let rpcIdx = 0;
 // Reuse RPC providers instead of creating new ones per call
@@ -3190,9 +3193,10 @@ async function _galleryRenderFresh(gen) {
     // The ETH price and the ZORG balance gate what the cards render but depend on
     // none of the coin data, so they ride along with the discovery reads instead of
     // adding a round trip after them.
-    const [launchRowsAll, causeRows, nftAuctions, ethUsd, zorgRes] = await Promise.all([
+    const [launchRowsAll, causeRows, daicoRows, nftAuctions, ethUsd, zorgRes] = await Promise.all([
       fetchLaunchedCoins(),
       fetchCauses().catch(() => []),
+      fetchDaicos().catch(() => []),
       fetchNftAuctions(),
       getEthUsd(),
       _connectedAddress
@@ -3202,7 +3206,7 @@ async function _galleryRenderFresh(gen) {
         : Promise.resolve([])
     ]);
 
-    if (launchRowsAll.length === 0 && causeRows.length === 0 && nftAuctions.length === 0) {
+    if (launchRowsAll.length === 0 && causeRows.length === 0 && daicoRows.length === 0 && nftAuctions.length === 0) {
       if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
@@ -3241,7 +3245,6 @@ async function _galleryRenderFresh(gen) {
 
     const cards = [];
     let testCount = 0;
-    let lowMcapCount = 0;
     let spamCount = 0;
 
     // ── Launched coin cards ──
@@ -3280,8 +3283,7 @@ async function _galleryRenderFresh(gen) {
         const cardAddr = row.token;
         const isTest = cardName === 'test';
         if (isTest) testCount++;
-        const isLowMcap = !isTest && fdvEth < 0.05;
-        if (isLowMcap) lowMcapCount++;
+
         const isSpam = _spamSet.has(cardAddr);
         if (isSpam) spamCount++;
 
@@ -3306,7 +3308,7 @@ async function _galleryRenderFresh(gen) {
           : symbolSVG(lSym, 40);
 
         const cardHTML = `
-          <a href="#${row.token}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+          <a href="#${row.token}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
             ${spamBtnHTML(cardAddr, isSpam)}
             <div class="coin-card-head">
               <div class="coin-logo">${logoEl}</div>
@@ -3325,7 +3327,7 @@ async function _galleryRenderFresh(gen) {
         // and outranks coins with real ether behind them. `backingEth` is what the
         // locked position would actually release.
         cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth,
-                     sortKey: backingEth, isTest, isSpam, isLowMcap });
+                     sortKey: backingEth, isTest, isSpam });
       }
     }
 
@@ -3377,17 +3379,116 @@ async function _galleryRenderFresh(gen) {
           </a>
         `;
         cards.push({ html: cardHTML, key: cName.toLowerCase() + '|' + cSym.toLowerCase(),
-                     mcap: treasuryEth, sortKey: treasuryEth, isTest: false, isSpam, isLowMcap: false });
+                     mcap: treasuryEth, sortKey: treasuryEth, isTest: false, isSpam });
+      }
+    }
+
+    // ── DAICO cards ──
+    // Collector DAOs, fund launches and the older templates. Priced off the pool once one
+    // is seeded, off the sale price before that, and off the treasury for a collector DAO,
+    // where redeemable ether is the honest valuation.
+    const causeAddrs = new Set(causeRows.map(c => c.dao.toLowerCase()));
+    const daicos = daicoRows.filter(d =>
+      !causeAddrs.has(d.dao.toLowerCase()) && !EXCLUDED_COINS.has(d.dao.toLowerCase()));
+    if (daicos.length > 0) {
+      const zammI = new ethers.Interface(ZAMM_POOLS_ABI);
+      const [daicoMetas, poolRes] = await Promise.all([
+        Promise.all(daicos.map(d => fetchMetadata(d.meta.contractURI).catch(() => null))),
+        mcAggregate(daicos.map(d => {
+          const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+          const poolId = computePoolId(ZERO, d.meta.sharesToken, 0n, 0n, sale ? BigInt(sale.feeOrHook) : 30n);
+          return { target: ZAMM, allowFailure: true, callData: zammI.encodeFunctionData('pools', [poolId]) };
+        })).catch(() => daicos.map(() => null))
+      ]);
+      if (gen !== _renderGen) return;
+      const nowSec = BigInt(Math.floor(Date.now() / 1000));
+      for (let i = 0; i < daicos.length; i++) {
+        const d = daicos[i];
+        const md = daicoMetas[i] || {};
+        const _cs = CONTINUOUS_SALES[d.dao.toLowerCase()];
+        if (_cs?.icon && !md.image) md.image = _cs.icon;
+        const sale = d.sales && d.sales.length > 0 ? d.sales[0] : null;
+
+        let salePct = 0;
+        if (sale && sale.totalSupply > 0n) {
+          const teamBpsB = md.teamBps ? BigInt(md.teamBps) : 0n;
+          const alloc = teamBpsB > 0n ? sale.totalSupply * (10000n - teamBpsB) / 10000n : sale.totalSupply;
+          const soldSh = alloc > sale.remainingSupply ? alloc - sale.remainingSupply : 0n;
+          if (alloc > 0n) salePct = Number((soldSh * 10000n) / alloc) / 100;
+        }
+        const hasContSale = !!_cs;
+        const saleActive = hasContSale || !!(sale && sale.remainingSupply > 0n && sale.allowance > 0n
+          && sale.forAmt > 0n && (sale.deadline === 0n || nowSec <= BigInt(sale.deadline)));
+
+        let poolR0 = 0n, poolR1 = 0n;
+        const pr = poolRes[i];
+        if (pr && pr.success) {
+          try { const dec = zammI.decodeFunctionResult('pools', pr.returnData); poolR0 = dec[0]; poolR1 = dec[1]; } catch {}
+        }
+        const totalSupplyN = sale ? Number(ethers.formatEther(sale.totalSupply)) : Number(COIN_SUPPLY_TOTAL);
+        const treasuryETH = sale ? sale.treasuryBalance : 0n;
+        const teamLocked = md.teamBps ? totalSupplyN * Number(md.teamBps) / 10000 : 0;
+        const unsold = sale ? Number(ethers.formatEther(sale.remainingSupply)) : 0;
+        const circulating = totalSupplyN - unsold - teamLocked;
+        const lpTokens = Number(ethers.formatEther(poolR1));
+        const hasPool = poolR0 > 0n && poolR1 > 0n;
+        const usePool = hasPool && (!saleActive || lpTokens > totalSupplyN * 0.01);
+        let mcapETH = 0;
+        if (circulating > 0) {
+          if (hasContSale && treasuryETH > 0n) mcapETH = Number(ethers.formatEther(treasuryETH));
+          else if (usePool) mcapETH = (Number(ethers.formatEther(poolR0)) / lpTokens) * circulating;
+          else if (sale && sale.tribAmt > 0n && sale.forAmt > 0n) {
+            mcapETH = (Number(ethers.formatEther(sale.tribAmt)) / Number(ethers.formatEther(sale.forAmt))) * circulating;
+          }
+        }
+        const mcapDisplay = mcapETH > 1e-6 ? fmtMcap(mcapETH) : '';
+        const mcapUsd = mcapETH > 1e-6 && ethUsd > 0 ? fmtUsd(mcapETH * ethUsd) : '';
+
+        const cardName = (md.name || d.meta.name || '').toLowerCase();
+        const cardSym = (md.symbol || d.meta.symbol || '').toLowerCase();
+        const cardAddr = d.dao.toLowerCase();
+        const isTest = cardName === 'test';
+        if (isTest) testCount++;
+        const isAlwaysShown = ALWAYS_SHOW_ADDRS.includes(cardAddr);
+        const isLowMcap = !isTest && !isAlwaysShown && mcapETH < 0.05;
+        if (isLowMcap) lowMcapCount++;
+        const isSpam = _spamSet.has(cardAddr);
+        if (isSpam) spamCount++;
+        const isCollect = md.launchType === 'collector' || md.type === 'collector' || md.type === 'fw-collector';
+        const badge = isCollect
+          ? `<span class="coin-tpl-badge coin-tpl-simple" title="collector DAO">collect</span>`
+          : md.launchType === 'fund'
+          ? `<span class="coin-tpl-badge coin-tpl-simple" title="fund launch &middot; ops allocation &middot; tap vesting &middot; governance">fund</span>`
+          : `<span class="coin-tpl-badge coin-tpl-simple" title="DAICO &middot; shares minted against a sale">daico</span>`;
+        const bars = Math.round(Math.min(salePct, 100) / 10);
+        const cardHTML = `
+          <a href="#${d.dao}" class="coin-card${isTest ? ' coin-test' : ''}${isSpam ? ' coin-spam' : ''}${isLowMcap ? ' coin-lowmcap' : ''}" data-name="${escText(cardName)}" data-symbol="${escText(cardSym)}" data-addr="${cardAddr}" style="position:relative">
+            ${spamBtnHTML(cardAddr, isSpam)}
+            <div class="coin-card-head">
+              <div class="coin-logo">${logoHTML(d.meta, md)}</div>
+              <div>
+                <div class="coin-card-name">${escText(d.meta.name || 'Unnamed')}</div>
+                <div class="coin-card-symbol">$${escText(d.meta.symbol || '???')}${badge}</div>
+              </div>
+            </div>
+            <div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>
+            <div class="coin-card-stat">${hasContSale ? 'Continuous sale' : saleActive ? `${salePct.toFixed(1)}% sold` : 'Sale ended'}</div>
+            ${hasContSale
+              ? `<div class="coin-card-mcap" style="color:var(--fg-muted);font-weight:400">Collector DAO</div>`
+              : (isCollect && treasuryETH > 0n)
+              ? `<div class="coin-card-mcap">Treasury ${fmtMcap(Number(ethers.formatEther(treasuryETH)))}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(Number(ethers.formatEther(treasuryETH)) * ethUsd)}</span>` : ''}</div>`
+              : mcapDisplay ? `<div class="coin-card-mcap">MCap ${mcapDisplay}${mcapUsd ? ` <span class="usd">${mcapUsd}</span>` : ''}</div>` : ''}
+          </a>
+        `;
+        cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: mcapETH, isTest, isSpam, isLowMcap });
       }
     }
 
     // Group by name|symbol, stack duplicates (spam and dust are hidden, not grouped)
     const groups = new Map();
     const spamCards = [];
-    const lowMcapCards = [];
     for (const c of cards) {
       if (c.isSpam) { spamCards.push(c); continue; }
-      if (c.isLowMcap) { lowMcapCards.push(c); continue; }
       if (!groups.has(c.key)) groups.set(c.key, []);
       groups.get(c.key).push(c);
     }
@@ -3421,7 +3522,6 @@ async function _galleryRenderFresh(gen) {
       for (const group of allGroups) grid += renderGroup(group);
     }
     // Append hidden cards individually (hidden by CSS, searchable)
-    for (const c of lowMcapCards) grid += c.html;
     for (const c of spamCards) grid += c.html;
 
     // NFT auctions: enrich via one batched multicall3 instead of N×3 RPC reads per
@@ -3449,8 +3549,7 @@ async function _galleryRenderFresh(gen) {
       ${(() => {
         const parts = [];
         if (spamCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleSpamCoins()" id="spamCountLabel">${spamCount} flagged</span>`);
-        if (lowMcapCount > 0) parts.push(`<span class="spam-toggle" onclick="toggleLowMcapCoins()">${lowMcapCount} low-liquidity</span>`);
-        const total = spamCount + lowMcapCount;
+        const total = spamCount;
         return total > 0 ? `<div style="text-align:center;font-size:11px;color:var(--fg-muted);margin-top:16px">${total} coins hidden (${parts.join(' · ')})</div>` : '';
       })()}
       <div id="spamCount" data-count="${spamCount}" style="display:none"></div>
@@ -3565,6 +3664,20 @@ function formatEthPrice(val) {
   return (val / 1000000).toFixed(2) + 'M';
 }
 
+
+// A per-1M price in the unit a person can read. Below 0.0001 ETH the ETH figure goes
+// scientific — "4.41e-6 ETH" is a number most people have to decode rather than see —
+// and gwei carries the same value in plain digits. Above that ETH stays the better unit:
+// 0.0410 ETH is clearer than 41,000,000 gwei.
+function fmtPer1M(eth) {
+  if (!(eth > 0)) return { v: '0', unit: 'ETH' };
+  if (eth >= 0.0001) return { v: formatEthPrice(eth), unit: 'ETH' };
+  const g = eth * 1e9;
+  const v = g >= 100 ? Math.round(g).toLocaleString()
+          : g >= 1 ? Number(g.toPrecision(4)).toString()
+          : Number(g.toPrecision(2)).toString();
+  return { v, unit: 'gwei' };
+}
 
 function formatPct(pct) {
   const abs = Math.abs(pct);
@@ -3693,7 +3806,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     ${desc || (md.twitter || md.telegram || md.discord) ? `<div class="section-card">${desc ? `<div class="desc-text">${escText(desc)}</div>` : ''}${(md.twitter || md.telegram || md.discord) ? renderSocials(md, !!desc) : ''}</div>` : ''}
 
     <div style="margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap">
-      <span style="font-size:18px;font-weight:700">${formatEthPrice(perMil)} ETH</span>
+      <span style="font-size:18px;font-weight:700">${fmtPer1M(perMil).v} ${fmtPer1M(perMil).unit}</span>
       <span style="font-size:11px;color:var(--fg-muted);margin-left:5px">per 1M</span>${perMilUsd}
       ${premiumPct !== null ? `<span style="font-size:13px;font-weight:600;color:${premiumPct >= 0 ? 'var(--green)' : 'var(--red)'};margin-left:8px" title="What the market charges over the redemption floor">${formatPct(premiumPct)} vs floor</span>` : ''}
     </div>
@@ -3713,8 +3826,8 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Burn back to the launcher for this much ether per token, at any time. It only ever rises.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Floor</div>
-        <div style="font-weight:600">${floorEth > 0 ? formatEthPrice(floorEth * 1e6) : '—'}</div>
-        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 ? 'ETH per 1M' : 'no buys yet'}</div>
+        <div style="font-weight:600">${floorEth > 0 ? fmtPer1M(floorEth * 1e6).v : '—'}</div>
+        <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 ? fmtPer1M(floorEth * 1e6).unit + ' per 1M' : 'no buys yet'}</div>
       </div>
       <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Live supply. Redemptions and fee burns retire it — a launched coin's supply only ever falls.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Supply</div>
@@ -3769,7 +3882,7 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     ${info.floorPrice > 0n ? `
     <div class="drawer" id="lcRedeemDrawer">
       <div class="drawer-head" onclick="this.parentElement.classList.toggle('open')">
-        <span>Redeem at the floor &middot; ${formatEthPrice(floorEth * 1e6)} ETH per 1M</span>
+        <span>Redeem at the floor &middot; ${fmtPer1M(floorEth * 1e6).v} ${fmtPer1M(floorEth * 1e6).unit} per 1M</span>
         <span class="drawer-arrow">&#9660;</span>
       </div>
       <div class="drawer-body">
@@ -5564,50 +5677,53 @@ function causeTimeChart(bars, floorWei, spotWei, winSecs) {
   // A flat tape has no range to scale to; give it one so the candles land mid-frame.
   const L = Math.log(lo * 0.94), span = (Math.log(hi * 1.06) - L) || Math.log(1.5);
 
-  const W = 600, H = 180, PAD_T = 8, PAD_B = 18, AXIS_W = 52;
-  const plotW = W - AXIS_W;
-  const y = v => PAD_T + (1 - (Math.log(Math.max(v, 1e-30)) - L) / span) * (H - PAD_T - PAD_B);
-  const slot = plotW / bars.length;
-  const cx = i => (i + 0.5) * slot;
-  const bodyW = Math.max(1, Math.min(9, slot * 0.66));
+  // The SVG stretches to the container on both axes (preserveAspectRatio="none"), which
+  // is what keeps the chart a fixed height instead of growing to a third of the page on
+  // a wide screen. Nothing that must not distort is drawn inside it: strokes carry
+  // non-scaling-stroke, and every label is HTML positioned over the top. Text in a
+  // non-uniformly scaled SVG is text that has been stretched.
+  const H = 100, PAD_T = 6, PAD_B = 6;
+  const yFrac = v => (PAD_T + (1 - (Math.log(Math.max(v, 1e-30)) - L) / span) * (H - PAD_T - PAD_B)) / H;
+  const y = v => yFrac(v) * H;
+  const W = 1000;
+  const slot = W / bars.length;
+  const bodyW = Math.max(2, Math.min(slot * 0.66, 18));
 
   let svg = '';
-
-  // Three reference prices down the right edge. Log-spaced so they sit where the eye
-  // expects them on a log axis rather than bunching at the top.
   for (const f of [0, 0.5, 1]) {
-    const v = Math.exp(L + span * f);
-    const yy = y(v);
-    svg += `<line x1="0" y1="${yy.toFixed(1)}" x2="${plotW}" y2="${yy.toFixed(1)}" stroke="var(--border-muted)" stroke-width="0.5"/>`
-        +  `<text x="${plotW + 5}" y="${(yy + 3).toFixed(1)}" font-size="9" fill="var(--fg-dim)">${escText(causeGwei(BigInt(Math.round(v))))}</text>`;
+    const yy = y(Math.exp(L + span * f));
+    svg += `<line x1="0" y1="${yy.toFixed(2)}" x2="${W}" y2="${yy.toFixed(2)}" stroke="var(--border-muted)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
   }
-
-  // The floor is the one line that changes what a candle means — anything at or below
-  // it is redeemable for more than the market is paying.
   if (floor > 0) {
-    const yf = y(floor);
-    svg += `<line x1="0" y1="${yf.toFixed(1)}" x2="${plotW}" y2="${yf.toFixed(1)}" stroke="var(--fg-dim)" stroke-width="1" stroke-dasharray="4 3"/>`
-        +  `<text x="2" y="${(yf - 3).toFixed(1)}" font-size="9" fill="var(--fg-dim)">floor</text>`;
+    svg += `<line x1="0" y1="${y(floor).toFixed(2)}" x2="${W}" y2="${y(floor).toFixed(2)}" stroke="var(--fg-dim)" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>`;
   }
-
   for (let i = 0; i < bars.length; i++) {
     const b = bars[i];
     if (!(b.c > 0)) continue;
-    const up = b.c >= b.o;
-    const col = up ? 'var(--green)' : 'var(--red)';
-    const x = cx(i);
-    const yHi = y(b.hi || b.c), yLo = y(b.lo || b.c);
+    const col = b.c >= b.o ? 'var(--green)' : 'var(--red)';
+    const x = (i + 0.5) * slot;
+    svg += `<line x1="${x.toFixed(2)}" y1="${y(b.hi || b.c).toFixed(2)}" x2="${x.toFixed(2)}" y2="${y(b.lo || b.c).toFixed(2)}" stroke="${col}" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
     const yO = y(b.o || b.c), yC = y(b.c);
-    svg += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${col}" stroke-width="1"/>`;
-    // A doji would render as a zero-height rect and vanish; floor the body at a hairline.
-    const top = Math.min(yO, yC), h = Math.max(0.8, Math.abs(yC - yO));
-    svg += `<rect x="${(x - bodyW / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bodyW.toFixed(1)}" height="${h.toFixed(1)}" fill="${col}"/>`;
+    // A doji is a zero-height rect, which disappears; floor it at something visible.
+    svg += `<rect x="${(x - bodyW / 2).toFixed(2)}" y="${Math.min(yO, yC).toFixed(2)}" width="${bodyW.toFixed(2)}" height="${Math.max(1.2, Math.abs(yC - yO)).toFixed(2)}" fill="${col}"/>`;
+  }
+  if (spot > 0) {
+    svg += `<line x1="0" y1="${y(spot).toFixed(2)}" x2="${W}" y2="${y(spot).toFixed(2)}" stroke="var(--green)" stroke-width="1" stroke-dasharray="2 2" opacity="0.7" vector-effect="non-scaling-stroke"/>`;
   }
 
-  // Spot last, over the candles: it is the number the header quotes.
-  if (spot > 0) {
-    const ys = y(spot);
-    svg += `<line x1="0" y1="${ys.toFixed(1)}" x2="${plotW}" y2="${ys.toFixed(1)}" stroke="var(--green)" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>`;
+  const lbl = (v, text, col) => {
+    const t = yFrac(v);
+    // Nudge labels off the very edge so they are not clipped by the container.
+    const top = `calc(${(Math.min(0.97, Math.max(0.03, t)) * 100).toFixed(2)}% - 6px)`;
+    return `<span style="position:absolute;right:2px;top:${top};font-size:10px;line-height:12px;color:${col};background:var(--bg);padding:0 3px;pointer-events:none">${text}</span>`;
+  };
+  let labels = '';
+  for (const f of [0, 0.5, 1]) {
+    const v = Math.exp(L + span * f);
+    labels += lbl(v, escText(causeGwei(BigInt(Math.round(v)))), 'var(--fg-dim)');
+  }
+  if (floor > 0) {
+    labels += `<span style="position:absolute;left:2px;top:calc(${(Math.min(0.97, Math.max(0.03, yFrac(floor))) * 100).toFixed(2)}% - 6px);font-size:10px;line-height:12px;color:var(--fg-dim);background:var(--bg);padding:0 3px;pointer-events:none">floor</span>`;
   }
 
   const trades = bars.reduce((t, b) => t + b.n, 0);
@@ -5617,9 +5733,12 @@ function causeTimeChart(bars, floorWei, spotWei, winSecs) {
     : spanSecs > 0 ? `${Math.round(spanSecs / 60)}m` : '';
 
   return `<div style="margin:2px 0 12px">
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block"
-      role="img" aria-label="executed price per bucket against the redemption floor">${svg}</svg>
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:2px">
+    <div style="position:relative;height:150px;padding-right:56px">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block"
+        role="img" aria-label="executed price per bucket against the redemption floor">${svg}</svg>
+      ${labels}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--fg-dim);margin-top:4px">
       <span>${spanLabel ? spanLabel + ' of tape' : 'pool tape'}</span>
       <span>${trades} fill${trades === 1 ? '' : 's'} &middot; executed, fee included</span>
       <span style="color:var(--green)">${escText(causeGwei(BigInt(Math.round(spot))))} now</span>
