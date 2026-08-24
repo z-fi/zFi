@@ -836,6 +836,14 @@ body.modal-open { overflow: hidden; }
   font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-muted);
 }
 .coin-unit svg { vertical-align:-1px; }
+/* A unit that is a choice rather than a statement: same size and colour as the
+   plain unit beside it, so switching hours/days/months does not redraw the row. */
+.coin-unit-select {
+  flex-shrink:0;min-width:78px;
+  font-family:inherit;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--fg-muted);background:transparent;border:1px solid var(--border-muted);
+  border-radius:6px;padding:4px 6px;cursor:pointer;
+}
 
 .coin-name-row { display:flex;gap:12px;margin-bottom:14px; }
 .coin-name-row .section { flex:2;margin-bottom:0; }
@@ -1635,8 +1643,12 @@ body.modal-open { overflow: hidden; }
     <div id="causeDeadlineWrap" style="margin-bottom:14px">
       <label>Deadline</label>
       <div class="coin-field">
-        <input type="text" id="causeDeadline" placeholder="30" inputmode="numeric" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,false)">
-        <span class="coin-unit">Days</span>
+        <input type="text" id="causeDeadline" placeholder="30" inputmode="decimal" style="font-size:16px" value="30" autocomplete="off" oninput="coinNumInput(this,true)">
+        <select id="causeDeadlineUnit" class="coin-unit-select" onchange="coinFormChanged()">
+          <option value="hour">Hours</option>
+          <option value="day" selected>Days</option>
+          <option value="month">Months</option>
+        </select>
       </div>
     </div>
     <div id="causeOngoingWrap" style="display:none;margin-bottom:10px">
@@ -1672,15 +1684,24 @@ body.modal-open { overflow: hidden; }
           <div id="causeTapMonthsWrap" style="margin-bottom:10px">
             <label>Vesting Duration</label>
             <div class="coin-field">
-              <input type="text" id="causeTapMonths" placeholder="12" inputmode="numeric" style="font-size:14px" value="12" autocomplete="off" oninput="coinNumInput(this,false)">
-              <span class="coin-unit">Months</span>
+              <input type="text" id="causeTapMonths" placeholder="12" inputmode="decimal" style="font-size:14px" value="12" autocomplete="off" oninput="coinNumInput(this,true)">
+              <select id="causeTapMonthsUnit" class="coin-unit-select" onchange="coinFormChanged()">
+                <option value="hour">Hours</option>
+                <option value="day">Days</option>
+                <option value="month" selected>Months</option>
+              </select>
             </div>
           </div>
           <div id="causeTapEthRateWrap" style="display:none;margin-bottom:10px">
             <label>Rate</label>
             <div class="coin-field">
               <input type="text" id="causeTapEthRate" placeholder="1" inputmode="decimal" style="font-size:14px" value="1" autocomplete="off" oninput="coinNumInput(this,true)">
-              <span class="coin-unit">ETH / mo</span>
+              <span class="coin-unit" style="min-width:0">ETH /</span>
+              <select id="causeTapEthRateUnit" class="coin-unit-select" onchange="coinFormChanged()">
+                <option value="hour">Hour</option>
+                <option value="day">Day</option>
+                <option value="month" selected>Month</option>
+              </select>
             </div>
           </div>
         </div>
@@ -9603,6 +9624,8 @@ function syncCoinURL() {
     if (raise && raise !== '10') _sp.set('raise', raise);
     const days = $('causeDeadline').value.trim();
     if (days && days !== '30') _sp.set('days', days);
+    const daysUnit = $('causeDeadlineUnit').value;
+    if (daysUnit !== 'day') _sp.set('daysUnit', daysUnit);
     if ($('causeTapEnabled').checked) {
       _sp.set('tap', '1');
       if ($('causeTapInstant').checked) _sp.set('instant', '1');
@@ -9610,8 +9633,12 @@ function syncCoinURL() {
       if (bene) _sp.set('beneficiary', bene);
       const months = $('causeTapMonths').value.trim();
       if (months && months !== '12') _sp.set('months', months);
+      const monthsUnit = $('causeTapMonthsUnit').value;
+      if (monthsUnit !== 'month') _sp.set('monthsUnit', monthsUnit);
       const rate = $('causeTapEthRate').value.trim();
       if (rate && rate !== '1') _sp.set('rate', rate);
+      const rateUnit = $('causeTapEthRateUnit').value;
+      if (rateUnit !== 'month') _sp.set('rateUnit', rateUnit);
     }
   } else if (_coinLaunchType === 'nft') {
     _sp.set('mode', 'nft');
@@ -10036,7 +10063,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // a disabled button with no obvious cause.
         if (_sp.get('loot') === '1') $('causeSellLoot').checked = true;
         if (_sp.get('raise')) coinSetNumFromURL('causeRaise', _sp.get('raise'), true);
-        if (_sp.get('days')) coinSetNumFromURL('causeDeadline', _sp.get('days'), false);
+        if (_sp.get('days')) coinSetNumFromURL('causeDeadline', _sp.get('days'), true);
+        coinSetUnitFromURL('causeDeadlineUnit', _sp.get('daysUnit'));
         if (_sp.get('tap') === '1') {
           $('causeTapEnabled').checked = true;
           causeTapToggle();
@@ -10052,8 +10080,10 @@ document.addEventListener("DOMContentLoaded", () => {
             // "Waiting for the beneficiary address to resolve", with no visible reason.
             onCoinAddressInput('causeTapBeneficiary', 'causeTapBeneficiaryResolved');
           }
-          if (_sp.get('months')) coinSetNumFromURL('causeTapMonths', _sp.get('months'), false);
+          if (_sp.get('months')) coinSetNumFromURL('causeTapMonths', _sp.get('months'), true);
+          coinSetUnitFromURL('causeTapMonthsUnit', _sp.get('monthsUnit'));
           if (_sp.get('rate')) coinSetNumFromURL('causeTapEthRate', _sp.get('rate'), true);
+          coinSetUnitFromURL('causeTapEthRateUnit', _sp.get('rateUnit'));
         }
         coinUpdatePreview();
       } else if (_dlMode === 'nft') {

@@ -11,6 +11,12 @@ const COIN_CLONE_SUFFIX = '0x5af43d5f5f3e6029573d5ffd5b3d5ff3';
 
 const COIN_SUPPLY = 1_000_000_000n;
 const COIN_SEC_PER_MONTH = 2_629_746n;
+// Durations are entered as a number plus a unit, so an hour-long tap or a
+// day-long deadline is expressible without asking for a fraction of a month.
+const COIN_SEC_PER_UNIT = { hour: 3600n, day: 86400n, month: COIN_SEC_PER_MONTH };
+const COIN_UNIT_LABEL = { hour: 'h', day: 'd', month: 'mo' };
+const COIN_MIN_DURATION_SEC = 3600n;      // an hour — below this nothing meaningful accrues
+const COIN_MAX_DURATION_SEC = 3600n * 24n * 3650n; // ten years
 // "Fast" tap: seconds of accrual to withdraw the whole raise. Also fixes the
 // smallest claimable treasury at raise / COIN_TAP_FAST_SEC — see the tap branch
 // of coinLaunch() for why the two are the same number.
@@ -195,6 +201,26 @@ function coinParseCount(v) {
   return Number.isSafeInteger(n) ? n : null;
 }
 
+function coinUnit(id) {
+  const el = $(id + 'Unit');
+  const u = el && el.value;
+  return COIN_SEC_PER_UNIT[u] ? u : 'month';
+}
+
+// A duration field is a decimal amount times its unit, kept in seconds as a
+// bigint so 1.5 days and 0.25 months are exact rather than float-rounded.
+function coinParseDurationSec(id) {
+  const scaled = coinParseEth($(id).value); // reuse the 1e18 fixed-point parser
+  if (scaled === null) return null;
+  return (scaled * COIN_SEC_PER_UNIT[coinUnit(id)]) / 10n ** 18n;
+}
+
+// What the user typed, echoed back for the preview: "30d", "1.5mo".
+function coinDurationLabel(id) {
+  const v = String($(id).value || '').trim();
+  return `${v || '0'}${COIN_UNIT_LABEL[coinUnit(id)]}`;
+}
+
 // Supply is a whole-token count that can exceed Number.MAX_SAFE_INTEGER, so it
 // parses to a bigint rather than going through coinParseCount(). Commas are
 // tolerated because the field ships with a comma-grouped default.
@@ -256,6 +282,14 @@ function coinSetNumFromURL(id, raw, decimal) {
   if (v) el.value = v;
 }
 
+// Units come from a fixed set, so an unknown one leaves the select on its default
+// rather than putting a value in it that coinUnit() would silently reinterpret.
+function coinSetUnitFromURL(id, raw) {
+  const el = $(id);
+  if (!el || !raw || !COIN_SEC_PER_UNIT[raw]) return;
+  el.value = raw;
+}
+
 // Symbols are tickers — uppercase, no whitespace or punctuation.
 function coinSymbolInput(el) {
   const before = el.value;
@@ -307,9 +341,9 @@ function coinValidateForm() {
   if (!_causeOngoing) {
     const raise = coinParseEth($('causeRaise').value);
     if (raise === null || raise < COIN_MIN_RAISE_WEI) return 'Raise must be at least 0.0001 ETH';
-    const days = coinParseCount($('causeDeadline').value);
-    if (days === null || days < 1) return 'Deadline must be at least 1 day';
-    if (days > 3650) return 'Deadline must be 3650 days or less';
+    const deadlineSec = coinParseDurationSec('causeDeadline');
+    if (deadlineSec === null || deadlineSec < COIN_MIN_DURATION_SEC) return 'Deadline must be at least 1 hour';
+    if (deadlineSec > COIN_MAX_DURATION_SEC) return 'Deadline must be 10 years or less';
   }
   if (!$('causeTapEnabled').checked) return null;
 
@@ -318,11 +352,11 @@ function coinValidateForm() {
   if ($('causeTapInstant').checked) return null;
   if (_causeOngoing) {
     const rate = coinParseEth($('causeTapEthRate').value);
-    if (rate === null || rate === 0n) return 'Enter a valid ETH/month rate';
+    if (rate === null || rate === 0n) return 'Enter a valid rate';
   } else {
-    const months = coinParseCount($('causeTapMonths').value);
-    if (months === null || months < 1) return 'Vesting duration must be at least 1 month';
-    if (months > 1200) return 'Vesting duration must be 1200 months or less';
+    const vestSec = coinParseDurationSec('causeTapMonths');
+    if (vestSec === null || vestSec < COIN_MIN_DURATION_SEC) return 'Vesting duration must be at least 1 hour';
+    if (vestSec > COIN_MAX_DURATION_SEC) return 'Vesting duration must be 10 years or less';
   }
   return null;
 }
@@ -572,14 +606,15 @@ function coinUpdatePreview() {
     // Fall back to the placeholder defaults while a field is mid-edit so the
     // preview keeps rendering; coinApplyValidation() is what blocks submission.
     const raiseWei = (ongoing ? null : coinParseEth($('causeRaise').value)) ?? ethers.parseEther('10');
-    const days = coinParseCount($('causeDeadline').value) ?? 30;
+    const deadlineSec = coinParseDurationSec('causeDeadline') ?? 30n * 86400n;
     const totalShares = ongoing ? 'unlimited' : '10M';
     const sellLoot = !!$('causeSellLoot')?.checked;
     const unit = sellLoot ? 'loot' : 'shares';
     const tapOn = $('causeTapEnabled').checked;
     const tapInstant = $('causeTapInstant').checked;
-    const tapMonths = coinParseCount($('causeTapMonths').value) ?? 12;
+    const tapVestSec = coinParseDurationSec('causeTapMonths') ?? 12n * COIN_SEC_PER_MONTH;
     const tapRateWei = coinParseEth($('causeTapEthRate').value) ?? ethers.parseEther('1');
+    const tapRateSec = COIN_SEC_PER_UNIT[coinUnit('causeTapEthRate')];
 
     // Every figure below is computed from the same bigints coinLaunch() sends,
     // so the preview can't drift from what actually gets deployed.
@@ -595,12 +630,11 @@ function coinUpdatePreview() {
       if (tapInstant) {
         tapDesc = '<b>Fast</b> <span style="color:var(--fg-dim)">(no vesting; full raise withdrawable in ~1h)</span>';
       } else if (ongoing) {
-        const rateWei = tapRateWei / COIN_SEC_PER_MONTH;
-        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day <span style="color:var(--fg-dim)">(~${ethers.formatEther(tapRateWei)} ${ethMini}/mo)</span>`;
+        const rateWei = tapRateWei / tapRateSec;
+        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day <span style="color:var(--fg-dim)">(~${ethers.formatEther(tapRateWei)} ${ethMini}/${COIN_UNIT_LABEL[coinUnit('causeTapEthRate')]})</span>`;
       } else {
-        const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
-        const rateWei = totalSec > 0n ? raiseWei / totalSec : 0n;
-        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day over ${tapMonths}mo`;
+        const rateWei = tapVestSec > 0n ? raiseWei / tapVestSec : 0n;
+        tapDesc = `~<b>${perDay(rateWei)}</b> ${ethMini}/day over ${coinDurationLabel('causeTapMonths')}`;
       }
     }
 
@@ -615,7 +649,7 @@ function coinUpdatePreview() {
         : `<dt>Raise</dt><dd><b>${ethers.formatEther(raiseWei)}</b> ${ethMini}</dd>`) +
       `<dt>${sellLoot ? 'Loot' : 'Shares'}</dt><dd><b>${totalShares}</b> <span style="color:var(--fg-dim)">(proportional to ETH contributed)</span></dd>` +
       `<dt>Price</dt><dd><b>${perMilStr}</b> ${ethMini} per 1M ${unit}</dd>` +
-      (ongoing ? '' : `<dt>Deadline</dt><dd><b>${days}</b> days</dd>`) +
+      (ongoing ? '' : `<dt>Deadline</dt><dd><b>${coinDurationLabel('causeDeadline')}</b></dd>`) +
       (tapOn ? `<dt>Tap</dt><dd>${tapDesc}</dd>` : '') +
       // The creator buys their own single share at launch, so the tx carries
       // value. Surfacing it avoids a surprise in the wallet confirm dialog.
@@ -1038,7 +1072,7 @@ async function coinLaunch() {
       // coinValidateForm() already rejected unparseable input; `?? 0n` only keeps
       // the ongoing branch (where these fields are hidden) from reading null.
       const raiseWei = ongoing ? 0n : (coinParseEth($('causeRaise').value) ?? 0n);
-      const days = ongoing ? 0 : (coinParseCount($('causeDeadline').value) ?? 0);
+      const deadlineSec = ongoing ? 0n : (coinParseDurationSec('causeDeadline') ?? 0n);
 
       let priceWei, capShares, deadline;
       if (ongoing) {
@@ -1055,7 +1089,7 @@ async function coinLaunch() {
         // sale free and mint the whole cap to the first caller.
         if (priceWei === 0n) throw new Error('Raise is too small — increase it so each share costs at least 1 wei');
         capShares = ethers.parseEther(String(totalShares - 1n));
-        deadline = BigInt(Math.floor(Date.now() / 1000)) + BigInt(days) * 86400n;
+        deadline = BigInt(Math.floor(Date.now() / 1000)) + deadlineSec;
       }
 
       const tapEnabled = $('causeTapEnabled').checked;
@@ -1088,13 +1122,12 @@ async function coinLaunch() {
         } else if (ongoing) {
           // Ongoing: user-specified ETH/month rate, unlimited budget
           budgetWei = ethers.MaxUint256;
-          rate = (coinParseEth($('causeTapEthRate').value) ?? 0n) / COIN_SEC_PER_MONTH;
+          rate = (coinParseEth($('causeTapEthRate').value) ?? 0n) / COIN_SEC_PER_UNIT[coinUnit('causeTapEthRate')];
           if (rate === 0n) rate = 1n;
         } else {
-          // Fixed: budget = raise, rate = budget / months
-          const tapMonths = coinParseCount($('causeTapMonths').value) ?? 0;
+          // Fixed: budget = raise, rate = budget / vesting duration
+          const totalSec = coinParseDurationSec('causeTapMonths') ?? 0n;
           budgetWei = raiseWei;
-          const totalSec = BigInt(tapMonths) * COIN_SEC_PER_MONTH;
           rate = totalSec > 0n ? budgetWei / totalSec : 0n;
           if (rate === 0n && budgetWei > 0n) rate = 1n;
         }
