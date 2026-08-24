@@ -1047,7 +1047,129 @@ async function ipfsFetchJson(uri, timeoutMs) {
 // A cause summoned through SafeSummoner never lands in the registry scanDAICOs walks.
 // Until an indexer covers them, the handful worth showing are read straight off chain
 // and shaped like a scan row so every consumer below stays unchanged.
+// Kept only as a floor: whatever else happens, these are shown. Enumeration no longer
+// depends on the list — see fetchCauses().
 const OUT_OF_BAND_CAUSES = ['0xD5dcE9BEE03e69362981afE48323A657fCceB8bE'];
+
+// The registry every cause is already in.
+//
+// The note this replaces said causes summoned through SafeSummoner never land in it, and
+// that is not so: SafeSummoner calls SUMMONER.summon(), which pushes the DAO onto `daos`
+// like any other. What is true is that scanDAICOs() does not return them — it wants a
+// sale configured inside Moloch, and a cause keeps its sale in ShareSale or ShareOffering
+// instead. Walking the helper therefore found nothing however wide the window, which is
+// why one address ended up hardcoded and the rest were invisible.
+//
+// Reading the registry directly finds all of them, and asking the two sale singletons
+// which of those DAOs has a price is what makes one a cause. No log scan, no list to
+// maintain: 57 addresses and two multicalls at the time of writing.
+const SUMMONER_ADDR = '0x0000000000330B8df9E3bc5E553074DA58eE9138';
+const SUMMONER_ABI = [
+  'function getDAOCount() view returns (uint256)',
+  'function daos(uint256) view returns (address)'
+];
+
+/// Every cause in the registry, newest first, with what a gallery card needs.
+///
+/// Five round trips, and only the first three scale with the registry:
+///   1. getDAOCount
+///   2. daos(i) for the newest MAX of them
+///   3. both sales(), plus shares/loot/treasury, for every DAO at once — the token
+///      addresses and balance are asked for speculatively so that identifying the causes
+///      and reading them is one trip rather than two. It costs ~32 bytes per DAO per
+///      call and saves a whole round.
+///   4. supplies, for the causes only
+///   5. contractURI, for the causes only, in fives — a DAO whose image lives on-chain
+///      returns a ~44 KB inline document, and a batch of those is a response big enough
+///      to fail. Same reason the launched-coin path chunks it.
+/// The gallery's SWR cache means a repeat visit pays none of this.
+async function fetchCauses() {
+  const sI = new ethers.Interface(SUMMONER_ABI);
+  const count = Number((await mcAggregate([
+    { target: SUMMONER_ADDR, allowFailure: true, callData: sI.encodeFunctionData('getDAOCount') }
+  ]).then(r => mcDecode(r[0], sI, 'getDAOCount', [0n])[0])) || 0n);
+  if (!count) return [];
+
+  // Newest first, and bounded: a gallery is a grid, not an archive. The newest are at
+  // the end of the array, which is why the count has to be read before the addresses.
+  const MAX = 200;
+  const idx = [];
+  for (let i = count - 1; i >= 0 && idx.length < MAX; i--) idx.push(i);
+  const addrRes = await mcAggregate(idx.map(i =>
+    ({ target: SUMMONER_ADDR, allowFailure: true, callData: sI.encodeFunctionData('daos', [i]) })));
+  let daos = idx.map((_, k) => mcDecode(addrRes[k], sI, 'daos', [ZERO])[0]).filter(a => a && a !== ZERO);
+  for (const a of OUT_OF_BAND_CAUSES) {
+    if (!daos.some(d => d.toLowerCase() === a.toLowerCase())) daos.push(a);
+  }
+
+  const offI = new ethers.Interface(SHARE_OFFERING_ABI);
+  const salI = new ethers.Interface(SHARE_SALE_ABI);
+  const daoI = new ethers.Interface([
+    'function name(uint256) view returns (string)',
+    'function symbol(uint256) view returns (string)',
+    'function contractURI() view returns (string)',
+    'function shares() view returns (address)',
+    'function loot() view returns (address)'
+  ]);
+  const PER = 6;
+  const probe = await mcAggregate(daos.flatMap(d => ([
+    { target: SHARE_OFFERING, allowFailure: true, callData: offI.encodeFunctionData('sales', [d]) },
+    { target: SHARE_SALE, allowFailure: true, callData: salI.encodeFunctionData('sales', [d]) },
+    { target: d, allowFailure: true, callData: daoI.encodeFunctionData('shares') },
+    { target: d, allowFailure: true, callData: daoI.encodeFunctionData('loot') },
+    { target: d, allowFailure: true, callData: daoI.encodeFunctionData('name', [0n]) },
+    { target: MC3, allowFailure: true, callData: _mc3Iface.encodeFunctionData('getEthBalance', [d]) }
+  ])));
+
+  // A DAO is a cause if one of the two sale singletons names a price for it.
+  const causes = [];
+  daos.forEach((dao, i) => {
+    const b = i * PER;
+    const off = mcDecode(probe[b], offI, 'sales', null);
+    const sal = mcDecode(probe[b + 1], salI, 'sales', null);
+    const usesOffering = !!(off && BigInt(off.price) > 0n);
+    const sale = usesOffering ? off : (sal && BigInt(sal.price) > 0n ? sal : null);
+    if (!sale) return;
+    causes.push({
+      dao, usesOffering, price: BigInt(sale.price), deadline: Number(sale.deadline),
+      cap: usesOffering ? BigInt(sale.cap) : 0n,
+      // Only an offering can carry the loot sentinel; ShareSale predates it.
+      saleIsLoot: !!(usesOffering && String(sale.token).toLowerCase() === LOOT_SENTINEL),
+      sharesToken: mcDecode(probe[b + 2], daoI, 'shares', [ZERO])[0],
+      lootToken: mcDecode(probe[b + 3], daoI, 'loot', [ZERO])[0],
+      name: mcDecode(probe[b + 4], daoI, 'name', [''])[0],
+      treasury: mcDecode(probe[b + 5], _mc3Iface, 'getEthBalance', [0n])[0]
+    });
+  });
+  if (!causes.length) return [];
+
+  const erc20I = new ethers.Interface(ERC20_ABI);
+  const supRes = await mcAggregate(causes.flatMap(c => ([
+    { target: c.sharesToken, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply') },
+    { target: c.lootToken, allowFailure: true, callData: erc20I.encodeFunctionData('totalSupply') },
+    { target: c.dao, allowFailure: true, callData: daoI.encodeFunctionData('symbol', [0n]) }
+  ])));
+  const ONE = 10n ** 18n;
+  causes.forEach((c, i) => {
+    const sh = mcDecode(supRes[i * 3], erc20I, 'totalSupply', [0n])[0];
+    const lt = mcDecode(supRes[i * 3 + 1], erc20I, 'totalSupply', [0n])[0];
+    c.symbol = mcDecode(supRes[i * 3 + 2], daoI, 'symbol', [''])[0];
+    // The founder's single share is minted at summon, not sold — and it lands in the
+    // share supply, so a loot sale's supply is sold loot and nothing else.
+    c.sold = c.saleIsLoot ? lt : (sh > ONE ? sh - ONE : 0n);
+    c.raised = c.price > 0n ? c.sold * c.price / ONE : 0n;
+  });
+
+  // contractURI last and chunked, for the reason at the top.
+  for (let b = 0; b < causes.length; b += 5) {
+    const batch = causes.slice(b, b + 5);
+    const res = await mcAggregate(batch.map(c =>
+      ({ target: c.dao, allowFailure: true, callData: daoI.encodeFunctionData('contractURI') })))
+      .catch(() => batch.map(() => null));
+    batch.forEach((c, k) => { c.contractURI = mcDecode(res[k], daoI, 'contractURI', [''])[0]; });
+  }
+  return causes;
+}
 
 // Never bucketed away as low-liquidity, legacy or inactive. A cause has no zAMM pool
 // to price, so those buckets fall back to metadata — and metadata lives on IPFS, which
@@ -3247,16 +3369,17 @@ async function _galleryRenderFresh(gen) {
   const app = $('app');
 
   try {
-    // Launched coins and NFT auctions. The gallery used to also scan DAICOs and
-    // ZAMM v0 coins; both are gone from the LIST, not from the site — a cause still
-    // renders at its own address, it is simply no longer advertised here. Everything
-    // this page invites you to buy is now one kind of thing with one set of terms.
-    const [launchRowsAll, nftAuctions] = await Promise.all([
+    // Launched coins, causes and NFT auctions. ZAMM v0 coins stay out of the list.
+    // A cause failing to load must not take the launched coins with it — they come from
+    // a different contract and have no reason to disappear together, which is the rule
+    // the old DAICO scan was given for the same reason.
+    const [launchRowsAll, causeRows, nftAuctions] = await Promise.all([
       fetchLaunchedCoins(),
+      fetchCauses().catch(() => []),
       fetchNftAuctions()
     ]);
 
-    if (launchRowsAll.length === 0 && nftAuctions.length === 0) {
+    if (launchRowsAll.length === 0 && causeRows.length === 0 && nftAuctions.length === 0) {
       if (gen !== _renderGen) return;
       app.innerHTML = `
         <div class="header">
@@ -3384,6 +3507,58 @@ async function _galleryRenderFresh(gen) {
           </a>
         `;
         cards.push({ html: cardHTML, key: cardName + '|' + cardSym, mcap: fdvEth, isTest, isSpam, isLowMcap });
+      }
+    }
+
+    // ── Cause cards ──
+    // A cause has no pool and no FDV; what it has is a treasury that holders can redeem
+    // against, so that is what the card reports and what it sorts on. It is never bucketed
+    // as dust: a small cause is a small cause, not a coin nobody wants, and hiding it
+    // behind "show low liquidity" was how these went missing in the first place.
+    if (causeRows.length > 0) {
+      const causeMetas = await Promise.all(causeRows.map(c =>
+        c.contractURI ? fetchMetadata(c.contractURI).catch(() => null) : Promise.resolve(null)));
+      if (gen !== _renderGen) return;
+      for (let i = 0; i < causeRows.length; i++) {
+        const c = causeRows[i];
+        const md = causeMetas[i] || {};
+        const cName = md.name || c.name || 'Unnamed';
+        const cSym = md.symbol || c.symbol || '???';
+        const addr = c.dao.toLowerCase();
+        if (EXCLUDED_COINS.has(addr)) continue;
+        const isSpam = _spamSet.has(addr);
+        if (isSpam) spamCount++;
+        const raisedEth = Number(ethers.formatEther(c.raised));
+        const treasuryEth = Number(ethers.formatEther(c.treasury));
+        const now = Math.floor(Date.now() / 1000);
+        const live = c.deadline === 0 || now < c.deadline;
+        const unit = c.saleIsLoot ? 'loot' : 'shares';
+        const logoImg = md.image ? resolveIPFS(md.image) : null;
+        const logoEl = logoImg
+          ? `<img src="${escAttr(logoImg)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover" onerror="if(!ipfsNextGateway(this))this.parentNode.innerHTML=symbolSVG(${escAttr(JSON.stringify(cSym))},40)">`
+          : symbolSVG(cSym, 40);
+        // Against the cap where there is one; a running total where there is not.
+        const capUnits = c.usesOffering && c.cap > 0n && c.cap < 2n ** 128n ? c.cap : 0n;
+        const pct = capUnits > 0n && c.sold > 0n
+          ? Math.min(100, Number(c.sold * 10000n / capUnits) / 100) : 0;
+        const bars = Math.round(pct / 10);
+        const cardHTML = `
+          <a href="#${c.dao}" class="coin-card${isSpam ? ' coin-spam' : ''}" data-name="${escText(cName.toLowerCase())}" data-symbol="${escText(cSym.toLowerCase())}" data-addr="${addr}" style="position:relative">
+            ${spamBtnHTML(addr, isSpam)}
+            <div class="coin-card-head">
+              <div class="coin-logo">${logoEl}</div>
+              <div>
+                <div class="coin-card-name">${escText(cName)}</div>
+                <div class="coin-card-symbol">$${escText(cSym)}<span class="coin-tpl-badge coin-tpl-simple" title="DAICO fundraise &middot; ragequittable${c.saleIsLoot ? ' &middot; backers hold non-voting loot' : ''}">cause${c.saleIsLoot ? ' &middot; loot' : ''}</span></div>
+              </div>
+            </div>
+            ${capUnits > 0n ? `<div class="coin-card-bar">${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</div>` : ''}
+            <div class="coin-card-stat">${raisedEth > 0 ? fmtEthBal(raisedEth) + ' ETH raised' : 'No backers yet'}${live ? '' : ' &middot; closed'}</div>
+            ${treasuryEth > 0 ? `<div class="coin-card-mcap">Treasury ${fmtMcap(treasuryEth)}${ethUsd > 0 ? ` <span class="usd">${fmtUsd(treasuryEth * ethUsd)}</span>` : ''}</div>` : ''}
+          </a>
+        `;
+        cards.push({ html: cardHTML, key: cName.toLowerCase() + '|' + cSym.toLowerCase(),
+                     mcap: treasuryEth, isTest: false, isSpam, isLowMcap: false });
       }
     }
 
