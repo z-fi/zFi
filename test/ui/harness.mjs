@@ -94,7 +94,7 @@ export const SEL = {
   GETORDERS: '03652027', BIDS: '4423c5f1',
   INITIAL_B: '878ea250', TOKENURI: 'c87b56dd', LOGOOF: '6ce273ac',
   FLOOR_HIT: '309ce4ce', ORDER_FLOOR: '23e93357', BOL_FLOOR: 'b732d224',
-  NEXTID: '2a58b330', CANCELORD: '514fcac7', CANCEL_UNWRAP: '21dd76f9',
+  NEXTID: '2a58b330', NEXTID2: '61b8ce8c', CANCELORD: '514fcac7', CANCEL_UNWRAP: '21dd76f9',
   DUTCH_CANCEL: '40e58ee5', DUTCH_CANCEL_UNWRAP: '8382de65',
   // The fill entry points carry `fillAmountB` and `minAmountA`: a taker states
   // what it pays and the floor it accepts. The three-and-four-argument
@@ -298,6 +298,10 @@ export class MockChain {
     this.accounts = opts.accounts ?? [A.ACCOUNT];
     this.autoConnected = opts.autoConnected ?? false;
     this.blockNumber = opts.blockNumber ?? '0x1200000';
+    // A block has a time, and anything counting from a commitment has to read
+    // it from here rather than from the local clock: the chain measures a
+    // commitment's age from the block that mined it, not from the click.
+    this.blockTime = opts.blockTime ?? Math.floor(Date.now() / 1000);
     this.gasPrice = opts.gasPrice ?? 10n ** 9n; // 1 gwei
     this.native = new Map();       // address -> wei
     this.erc20 = new Map();        // `${token}:${holder}` -> units
@@ -389,6 +393,14 @@ export class MockChain {
     this.blocked = new Set();
     this.policyUnreadable = false;
     this.rejectNext = null;        // make the next signature/tx a user rejection
+    this.failNextReceipt = false;  // accept the next tx, then mine it reverted
+    this.receiptPending = false;   // a tx the node has not mined yet: receipt is null
+    this.commitAt = Math.floor(Date.now() / 1000); // what commitments() reports
+    this.commitBlocked = false;    // make the commitments() read fail
+    this.garbleNextTxHash = false; // a wallet that answers a send with nonsense
+    this.nextOrderId = 0;          // Swapboard's counter, via nextOrderId()
+    this.nextBoardId = 0;          // Dutchboard/Floorboard's counter, via nextId()
+    this.answers = new Map();      // `${to}:${selector}` -> returndata, for read-only contracts
     this.inFlight = 0;
     this.nonce = 0;
     this.floorBids = [];           // FloorboardView.BidRow fixtures
@@ -466,6 +478,23 @@ export class MockChain {
     }
     return this;
   }
+  /**
+   * Pools that EXIST and answer like pools, but are not in the launcher's
+   * index - the factory never made them, or another creator did. Nothing
+   * discovers these; a test reaches them by putting one in the carried list,
+   * which is the only path by which an address the launcher never made can
+   * reach the launched cohort.
+   */
+  setForeignPools(pools) {
+    this.foreign = pools;
+    for (const {pool} of pools) if (!this.code.has(pool.toLowerCase())) this.code.set(pool.toLowerCase(), '0x60006000');
+    return this;
+  }
+  /** Every pool a fixture has described, launched here or not. */
+  anyPool(to) {
+    return (this.launched || []).find(x => x.pool.toLowerCase() === to)
+      || (this.foreign || []).find(x => x.pool.toLowerCase() === to);
+  }
   setLaunched(pools) {
     this.launched = pools;
     for (const {pool} of pools) if (!this.code.has(pool.toLowerCase())) this.code.set(pool.toLowerCase(), '0x60006000');
@@ -521,6 +550,25 @@ export class MockChain {
     return this;
   }
   setCode(addr, code) { this.code.set(addr.toLowerCase(), code); return this; }
+
+  /**
+   * Answer one `(contract, selector)` with fixed returndata.
+   *
+   * The mock models the contracts the page trades through in real depth,
+   * because their arithmetic is what the page gets wrong. For a contract the
+   * page only READS - a name registry quoting a fee, a lottery reporting its
+   * round - that depth buys nothing: the test cares what the page DOES with
+   * the answer, not that the mock could have derived it. `answer` gives those
+   * a value without a model.
+   *
+   * `hex` may be a FUNCTION of the calldata, for a selector whose reply
+   * depends on its arguments - `isAvailable` over two different labels is one
+   * selector asked twice. It is consulted before every built-in, so it can
+   * also override one.
+   */
+  answer(to, selector, hex) {
+    this.answers.set(`${to.toLowerCase()}:${strip(selector)}`, hex); return this;
+  }
   undeploy(addr) { this.code.set(addr.toLowerCase(), '0x'); return this; }
   /**
    * Make an `eth_call` fail.
@@ -599,9 +647,26 @@ export class MockChain {
         if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
         this.sent.push({ ...params[0] });
         this.applyTx(params[0]);
+        // A transaction that WAS accepted, reported back in a shape the page
+        // cannot follow. Everything downstream of the send fails, but the send
+        // itself happened — so anything the page threw away on that failure is
+        // thrown away wrongly.
+        if (this.garbleNextTxHash) { this.garbleNextTxHash = false; return '0xnot-a-hash'; }
         return '0x' + (++this.nonce).toString(16).padStart(64, '0');
       }
+      case 'eth_getBlockByNumber':
+        return { number: params[0] === 'latest' ? this.blockNumber : params[0],
+                 timestamp: '0x' + BigInt(this.blockTime).toString(16) };
       case 'eth_getTransactionReceipt': {
+        // A node that has accepted a transaction but not yet mined it answers
+        // null, not an error. Anything that reads a mined block's data has to
+        // survive that rather than treat it as a failure.
+        if (this.receiptPending) return null;
+        // A transaction the wallet accepted and the chain then threw out. The
+        // page only learns this here, one poll after it already told the user
+        // "Sent" - so it is the only place a test can exercise what happens on
+        // the far side of acceptance.
+        if (this.failNextReceipt) { this.failNextReceipt = false; return { status: '0x0', transactionHash: params[0], blockNumber: this.blockNumber, logs: [] }; }
         const r = { status: '0x1', transactionHash: params[0], blockNumber: this.blockNumber };
         // `thinReceipts` drops the array entirely rather than emptying it,
         // because that is the shape the wallet RPCs which do this actually
@@ -690,6 +755,12 @@ export class MockChain {
     const sel = data.slice(0, 8);
     this.calls.push({ to, data: '0x' + data, block, selector: sel });
 
+    const canned = this.answers.get(`${to}:${sel}`);
+    if (canned !== undefined) {
+      const v = typeof canned === 'function' ? canned('0x' + data) : canned;
+      if (v !== undefined && v !== null) return v;
+    }
+
     const rv = this.reverts.get(`${to}:${sel}`);
     if (rv) {
       const msg = typeof rv === 'function' ? rv('0x' + data) : rv;
@@ -725,6 +796,14 @@ export class MockChain {
     // last-moment staleness check. Served from the same fixtures as the lens,
     // so a test never has to state a row twice.
     if (to === A.FLOOR.toLowerCase() && sel === SEL.BIDS) return this.floorBid(data);
+    // Dutchboard and Floorboard are the mirror of a Swapboard here: they count
+    // with nextId() and revert on nextOrderId(). Getting this backwards is
+    // silent in the page - the scan's own try/catch eats it and the feature
+    // just renders nothing - so the mock has to be strict about which is which.
+    if (to === A.FLOOR.toLowerCase() || to === A.DUTCH.toLowerCase()) {
+      if (sel === SEL.NEXTID2) return '0x' + u256(this.nextBoardId ?? 0);
+      if (sel === SEL.NEXTID) throw Error('execution reverted');
+    }
     // cancel / cancelUnwrap, which Floorboard shares with Dutchboard. Both
     // boards return nothing; what matters is that the page reaches the right
     // one with the right selector, since a cancel is how escrow comes back.
@@ -913,12 +992,45 @@ export class MockChain {
       const r = this.poolRow(to);
       return '0x' + u256(r?.creatorFeeBps ?? 0n);
     }
+    /* PrecisionPool.hook - also an IMMUTABLE, and zero on every pool the
+       launcher makes. The page refuses to ZAP into a hooked pool, because a
+       hook makes previewZap model a different sender and a different reserve
+       transition than the route actually executes. A row opts in with `hook`
+       in setPools; the default of zero is what a plain pool reports. */
+    if (sel === '7f5a7c7b') {
+      const r = this.poolRow(to);
+      return '0x' + addrWord(r?.hook || ZERO_ADDR);
+    }
+    /* PrecisionPool.feeRecipient - an IMMUTABLE that holds the LAUNCHER on a
+       pool the launcher made, and something else (or nothing) on any other
+       pool. The page carries pools forward from a previous visit through
+       localStorage, which is a store the page itself wrote and so is only as
+       trustworthy as the browser; this is what it checks them against before
+       pricing them as launches. A row opts out with `feeRecipient` in
+       setLaunched. */
+    /* WNS ownerOf / text(id,"score") for a name the score card is asked about.
+       A fixture opts in with `scoreName = {owner, record}`; owner ZERO means the
+       name was never minted. */
+    if (this.scoreName && to === A.WNS.toLowerCase() && (sel === '6352211e' || sel === '308e3386')) {
+      if (sel === '6352211e') {
+        if (!this.scoreName.owner || this.scoreName.owner === ZERO_ADDR) throw Error('nonexistent token');
+        return '0x' + addrWord(this.scoreName.owner);
+      }
+      const v = this.scoreName.record || '';
+      const hex = Buffer.from(v, 'utf8').toString('hex');
+      return '0x' + u256(0x20) + u256(v.length) + hex.padEnd(Math.ceil(hex.length / 64) * 64, '0');
+    }
+    if (sel === '46904840') {
+      const hit = this.anyPool(to);
+      if (!hit) return '0x' + addrWord(ZERO_ADDR);
+      return '0x' + addrWord(hit.feeRecipient || PLAUNCH);
+    }
     if (sel === SEL.RESERVE0) {
-      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      const hit = this.anyPool(to);
       return '0x' + u256(hit?.reserve0 ?? 0n);
     }
     if (sel === SEL.TOKEN1) {
-      const hit = (this.launched || []).find(x => x.pool.toLowerCase() === to);
+      const hit = this.anyPool(to);
       if (hit) return '0x' + addrWord(hit.token);
     }
     if (to === A.PFACTORY.toLowerCase() && sel === SEL.ISPOOL) {
@@ -1298,7 +1410,10 @@ export class MockChain {
   }
 
   board(sel, data) {
-    if (sel === SEL.NEXTID) return '0x' + u256(0);
+    // A Swapboard counts with nextOrderId() and has no nextId() at all; the
+    // real contract has no fallback, so asking for the wrong one reverts.
+    if (sel === SEL.NEXTID) return '0x' + u256(this.nextOrderId ?? 0);
+    if (sel === SEL.NEXTID2) throw Error('execution reverted');
     /**
      * `quoteFill(orderId, fillAmountB) -> (outA, paidB)`.
      *
@@ -1518,7 +1633,7 @@ export function closeAllPages() {
 const PINNED_PAIR = 'token=ETH&out=USDC';
 
 export async function loadPage(opts = {}) {
-  let { chain = new MockChain(), hash = '', storage = {}, patch = [], prefersDark = false } = opts;
+  let { chain = new MockChain(), hash = '', storage = {}, session = {}, patch = [], prefersDark = false } = opts;
   if (hash === '') hash = PINNED_PAIR;
   else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
@@ -1554,12 +1669,125 @@ export async function loadPage(opts = {}) {
     virtualConsole,
     beforeParse(window) {
       for (const [k, v] of Object.entries(storage)) window.localStorage.setItem(k, v);
+      // `dc` lives in sessionStorage: a deliberate disconnect lasts the tab, not forever.
+      for (const [k, v] of Object.entries(session)) window.sessionStorage.setItem(k, v);
 
-      window.ethereum = {
-        isMock: true,
-        request: args => chain.request(args),
-        on: (ev, cb) => { (window.__ethListeners ||= {})[ev] = cb; },
+      // The walletless read layer speaks raw JSON-RPC over HTTP, and jsdom has
+      // no fetch — so the same MockChain serves it here. A POST body is
+      // answered exactly as the provider would answer it, which is what makes
+      // walletless tests exercise the real read path: nodeRead, its failover
+      // and the curated-list adoption all run for real against this stub.
+      // chain.httpLog records the endpoint each call used; chain.fetchMode
+      // ('ok' | 'http429' | 'down') fails every call at the named layer;
+      // chain.failNext fails exactly that many calls before the pool recovers.
+      window.fetch = async (url, init) => {
+        // Not every fetch is JSON-RPC. The solver lanes are plain GETs to an
+        // aggregator, so they arrive with no body at all; `chain.lanes` maps a
+        // URL substring to a canned response (or a status number to refuse
+        // with), and anything unmapped 404s the way an unreachable lane would.
+        const laneHit = Object.entries(chain.lanes || {}).find(([frag]) => String(url).includes(frag));
+        if (laneHit || !init || !init.body) {
+          (chain.httpLog ||= []).push({ url: String(url), method: init && init.method ? init.method : 'GET' });
+          if (!laneHit) return { ok: false, status: 404, json: async () => ({}) };
+          const res = laneHit[1];
+          if (typeof res === 'number') return { ok: false, status: res, json: async () => ({}) };
+          return { ok: true, status: 200, json: async () => res };
+        }
+        const body = JSON.parse(init.body);
+        (chain.httpLog ||= []).push({ url: String(url), method: body.method });
+        const mode = chain.fetchMode || 'ok';
+        const fail = mode !== 'ok' || (chain.failNext > 0 && (chain.failNext--, true));
+        if (fail) {
+          if (mode === 'http429') return { ok: false, status: 429, json: async () => ({}) };
+          throw new Error('connection refused');
+        }
+        let result, error = null;
+        try { result = await chain.request({ method: body.method, params: body.params || [] }); }
+        catch (e) { error = { code: e && e.code !== undefined ? e.code : -32000, message: e.message || 'failed' }; }
+        return {
+          ok: true, status: 200,
+          json: async () => error
+            ? { jsonrpc: '2.0', id: body.id, error }
+            : { jsonrpc: '2.0', id: body.id, result: result === undefined ? null : result },
+        };
       };
+
+      if (!opts.walletless) {
+        window.ethereum = {
+          isMock: true,
+          request: args => chain.request(args),
+          on: (ev, cb) => { (window.__ethListeners ||= {})[ev] = cb; },
+        };
+      }
+
+      /* EIP-6963 wallets, which announce themselves on request rather than
+         sitting on `window.ethereum`. A browser with two wallets installed has
+         exactly one of them on `window.ethereum` and the rest reachable only
+         this way, which is why "reconnect on refresh" cannot just rebind the
+         injected one. `wallets` is [{rdns, name, chain}]. */
+      if (opts.wallets) {
+        window.addEventListener('eip6963:requestProvider', () => {
+          for (const w of opts.wallets) {
+            const provider = {
+              isMock: true, rdns: w.rdns,
+              request: args => (w.chain || chain).request(args),
+              on: () => {},
+            };
+            window.dispatchEvent(new window.CustomEvent('eip6963:announceProvider', {
+              detail: { info: { uuid: w.rdns, name: w.name || w.rdns, rdns: w.rdns, icon: '' }, provider },
+            }));
+          }
+        });
+      }
+
+      // The interaction chime speaks WebAudio, which jsdom has none of. This
+      // stub counts what the page asked the audio system to do — one context
+      // per session, two oscillators per chime, one resume if a chime landed
+      // before a gesture — so tests can pin the sound without hearing it.
+      // Installed only when opts.chime: every other page runs with no
+      // AudioContext at all, which is the silent path the try/catch exists for.
+      if (opts.chime) {
+        window.__chime = { ctx: 0, osc: 0, resumes: 0, notes: [], voices: [] };
+        window.AudioContext = class {
+          constructor() {
+            this.currentTime = 0;
+            this.state = 'running';
+            this.destination = {};
+            window.__chime.ctx++;
+          }
+          resume() { window.__chime.resumes++; this.state = 'running'; return Promise.resolve(); }
+          createOscillator() {
+            // Notes are grouped into VOICES so a test can say "one item-get,
+            // four notes" instead of counting oscillators and hoping. The
+            // boundary is the schedule, not the call stack: within one voice
+            // every note is scheduled strictly later than the one before, so a
+            // start time that fails to advance is the next voice beginning.
+            // Grouping by microtask instead would merge two clicks that land
+            // in the same tick - which is exactly what back-to-back UI clicks
+            // do.
+            const ctx = this;
+            return {
+              type: '', frequency: { value: 0 },
+              connect() {},
+              start(when) {
+                if (ctx._at === undefined || !(when > ctx._at)) window.__chime.voices.push([]);
+                ctx._at = when;
+                const voice = window.__chime.voices[window.__chime.voices.length - 1];
+                window.__chime.osc++;
+                window.__chime.notes.push(this.frequency.value);
+                voice.push(this.frequency.value);
+              },
+              stop() {},
+            };
+          }
+          createGain() {
+            return {
+              gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+              connect() {},
+            };
+          }
+        };
+      }
 
       // jsdom implements these as "not implemented" throwers.
       window.prompt = q => { asked.prompt.push(q); return prompts.length ? prompts.shift() : null; };

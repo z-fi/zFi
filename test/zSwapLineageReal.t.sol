@@ -27,7 +27,7 @@ import {zSwap} from "../src/zSwap.sol";
 ///         cache that were told the answer is fixed must all keep getting the
 ///         same bytes afterwards.
 contract zSwapLineageRealTest is Test {
-    uint256 constant CHUNKS = 12;
+    uint256 constant CHUNKS = 14;
 
     address dao = makeAddr("dao");
 
@@ -107,7 +107,9 @@ contract zSwapLineageRealTest is Test {
         emit log_named_uint("initcode bytes", initcode.length);
         // The chunks are deployed SEPARATELY and are the bulk of the cost; this
         // call only stores fourteen addresses. A figure in the millions would
-        // mean the payload had ended up inside the wrapper.
+        // mean the payload had ended up inside the wrapper. (The curation
+        // satellites are named as constants rather than created here, so they
+        // cost this call nothing - which is part of why they are constants.)
         assertLt(used, 3_000_000, "the successor wrapper should be cheap; the chunks are the expense");
     }
 

@@ -1968,9 +1968,11 @@ const ENSOL_IFACE = new ethers.Interface([
 ]);
 // Bitget integration (disabled until partner key is provisioned)
 const BITGETOL_ADDRESS = "0x0000000000000000000000000000000000000000";
-const BITGET_API = "https://bopenapi.bgwapi.io";
-const BITGET_API_KEY = "";
-const BITGET_API_SECRET = "";
+// Proxied like every other keyed lane: the credential is attached server-side
+// and this page ships none. See the note above _bitgetHeaders in
+// modules/aggregators.js for why the old direct-with-browser-HMAC path was
+// removed rather than left dormant.
+const BITGET_API = "https://api.zfi.wei.is/bitget";
 const BITGETOL_IFACE = new ethers.Interface([
   "function swap(address router, address tokenIn, address tokenOut, address recipient, bytes data)",
 ]);
@@ -8608,7 +8610,12 @@ async function executeSwap() {
       const cowQ = await getCowQuote(fromData.address, toData.address, amountIn, receiver);
       if (!cowQ || !cowQ.quote) {
         if (!quote.multicall) throw new Error("CoW quote unavailable and no on-chain route");
+        // Falling back is right - the user asked for a swap and there is one to
+        // give them, at a price they already saw. Doing it SILENTLY was not:
+        // someone who picked CoW deliberately would get zRouter and never know
+        // their choice had been overridden.
         quote.isCow = false;
+        showStatus("CoW quote unavailable — routing on-chain instead", "");
       } else {
         const q = cowQ.quote;
         const isEthIn = fromData.address === ZERO_ADDRESS;

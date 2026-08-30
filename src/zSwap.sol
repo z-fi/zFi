@@ -1,44 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-/// @title zSwap v0.2
+
+/// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (287734 B) is the runtime bytecode of
-///      12 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (326104 B) is the runtime bytecode of
+///      14 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 12 data contracts
+///      compatibility (ERC-4804). Splitting the page across 14 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 7178 B headroom).
+///      (24576 B per chunk, 17960 B headroom).
 ///
-///      The count is a headroom decision, not a hard requirement, but it can
-///      only be chosen once for a given deployment: it is fixed in the
-///      constructor arity, and the deployed page is immutable. The history is
-///      the argument for the size of this one. Seven was chosen at 165 KB and
-///      was spent by the liquidity panel, the price tape and the V4 routing.
-///      Eight replaced it and never held at all - the page passed that ceiling
-///      before the count reached a deployment. Fourteen was sized to the
-///      observed rate of growth instead and lasted one release. Fifteen
-///      followed it, at 350 KB and 97% full.
-///
-///      Twelve is not a continuation of that series. The page source carried
-///      its own documentation - about 45% of it - and that was being deployed
-///      too; stripping it is what makes a count this small possible at all. It
-///      costs twelve data-contract deployments per version.
-///
-///      IT ALSO SPENDS THE SLACK. Every earlier count had comments in it, so a
-///      page against its ceiling could always be cut back without touching a
-///      feature. That valve is gone: 281 KB is the page itself, 97% of what
-///      twelve chunks hold, and the next ~7 KB of growth needs a larger count -
-///      which means a new wrapper, a new salt and a new address.
-///
-///      The count cannot simply be padded, either: every chunk must be
-///      non-empty and distinct (see the constructor below), so a count far
-///      above what the page needs does not deploy. That is the real bound on
-///      this number - not caution, but the fact that 12 chunks require a page
-///      of at least 12 bytes' worth of distinct slices and, more practically,
-///      that ceil(len/12) must stay under EIP-170 while len/12 stays non-zero.
+///      The chunk count is fixed in the constructor arity and the page is
+///      immutable, so it is sized to ceil(len/14) with headroom for a release
+///      of growth. It cannot be padded arbitrarily: every chunk must be
+///      non-empty and distinct (see the constructor), so ceil(len/14) must
+///      stay under EIP-170 while len/14 stays non-zero. The page is stored
+///      stripped of comments and indentation - every byte is paid for on
+///      chain, forever, by whoever deploys the next version.
 ///
 /// HOW TO READ THE DAPP
 ///   cast call <addr> "html()(string)" --rpc-url <rpc> > zSwap.html
@@ -193,9 +174,9 @@ pragma solidity ^0.8.36;
 ///   BOLD->rETH priced ~$28 through a skewed V4 pool where 3-hop gave ~$36.
 contract zSwap {
     string public constant NAME = "zSwap";
-    string public constant VERSION = "0.2";
+    string public constant VERSION = "0.3";
 
-    /// @dev The HTML payload lives in twelve separate data contracts whose
+    /// @dev The HTML payload lives in fourteen separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -210,24 +191,82 @@ contract zSwap {
     address public immutable DATA8;
     address public immutable DATA9;
     address public immutable DATA10;
-    /// @dev An eleventh chunk. The page outgrew ten: stripped of comments it is
-    ///      still 255,337 bytes, and ten chunks would need 25,534 each against
-    ///      EIP-170's 24,576. The count is a consequence of the page's size and
-    ///      the cap, nothing more.
+    /// @dev An eleventh chunk. The count follows the page's size against
+    ///      EIP-170's 24,576-byte cap, nothing more.
     address public immutable DATA11;
-    /// @dev A twelfth chunk. Hand-rolling the WalletConnect client put ~14 KB
-    ///      of protocol into the page so it need not fetch a 635 KB bundle from
-    ///      a host at run time. Eleven chunks would need 24,762 each against
-    ///      EIP-170's 24,576. The count follows the page's size and the cap.
+    /// @dev A twelfth chunk. Same arithmetic as eleven.
     address public immutable DATA12;
+    /// @dev A thirteenth chunk. Same arithmetic again: ceil(len/14) must stay
+    ///      under EIP-170 with headroom for a release of growth.
+    address public immutable DATA13;
+    /// @dev A fourteenth chunk. The launchpad's economics, the wave clock and
+    ///      the score mint took the page past what thirteen hold. The count is
+    ///      a consequence of the page's size against the cap, and nothing else
+    ///      - but it is not free: the arity is fixed at construction, so it
+    ///      moves the address this version deploys to.
+    address public immutable DATA14;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
 
+    /// @notice The curated public RPC list the page reads through before any
+    ///         wallet is connected. Deployed on its own, verified, and named
+    ///         here as a CONSTANT rather than created in the constructor or
+    ///         passed into it.
+    /// @dev WHY A CONSTANT AND NOT A CONSTRUCTOR ARGUMENT. Both alternatives
+    ///      are worse in the same way. Creating the satellite here would put
+    ///      12KB of code deposit inside every `deployNext` and give each
+    ///      version a fresh, empty roster that the DAO must curate again from
+    ///      nothing. Taking it as an argument would mean the address a version
+    ///      points at is chosen at deploy time by whoever sends the
+    ///      transaction - so a reader auditing this source could not tell
+    ///      which roster the page will actually read, and a deployer could
+    ///      hand it one they had already filled. A constant is the only form
+    ///      where WHAT THE AUDIT READ IS WHAT THE PAGE READS. It is the same
+    ///      reason zSwapResolver's DAO is a constant.
+    ///
+    ///      Verified at etherscan; owner is a two-step transferable address,
+    ///      so the roster's CONTENTS still move - only the address does not.
+    ///      Curating it is the same class of decision as curating the token
+    ///      list, and a hostile entry misprices a quote rather than taking
+    ///      funds.
+    address public constant RPCS = 0x8C7348D039f58C4e9cfA936EF410eec759213b12;
+
+    /// @notice The curated off-chain solver roster the page may race its own
+    ///         venues against. Same reasoning as `RPCS`, same constant form.
+    /// @dev The lanes here are live, but a lane being enabled on chain does
+    ///      nothing on its own: the page has to ask it, apply the handicap,
+    ///      and beat the on-chain best by that margin before anything is
+    ///      offered. zQuoter, the precision pools and the orderbook are never
+    ///      a fallback this switches to - they are a lane that always runs.
+    address public constant SOLVERS = 0xC90137c6754d7134b6721D3a953adBf9e2DB3F09;
+
+    /// @notice The ONE adapter the page will execute a solver's route through.
+    ///
+    /// @dev THIS IS THE PIN, AND IT IS THE WHOLE REASON THE ROSTER IS SAFE TO
+    ///      READ. A solver lane carries an `adapter` address, and the page
+    ///      learns that address by reading `SOLVERS` over an RPC it also
+    ///      learned from chain. Anyone who controls that node controls both
+    ///      answers, and could name an adapter that is not the audited one -
+    ///      at which point every guarantee zSolverFill makes is irrelevant,
+    ///      because zSolverFill never ran.
+    ///
+    ///      So the roster does not get to choose. It may only SELECT among
+    ///      adapters pinned in immutable source, and today that set has one
+    ///      member: the page must refuse any lane whose adapter is not this
+    ///      address. Curating an address is only "governing which code runs"
+    ///      when the set of code that CAN run is fixed somewhere the curator
+    ///      cannot reach. This is that somewhere.
+    ///
+    ///      zSolverFill itself has no owner, no pause and no upgrade path, and
+    ///      routes every untrusted call through a stateless executor that
+    ///      holds no allowance from anyone. See src/utils/zSolverFill.sol.
+    address public constant SOLVER_FILL = 0x7C310e23fB5EA04414Cd2664F84be4749dF86488;
+
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own twelve chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own thirteen chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -257,6 +296,31 @@ contract zSwap {
     // silent, because a missing notice is a smaller harm than a wrong one.
 
     /// @notice The DAO permitted to deploy this version's successor.
+    /// @dev ONE ADDRESS FOR THE LIFE OF THE LINEAGE. Governance may change
+    ///      inside the DAO contract - proposals, shares, whatever its own rules
+    ///      evolve into - but the address must not: `deployNext` answers to
+    ///      this value alone, the successor check demands the same one back,
+    ///      and zSwapResolver's `DAO` constant carries the same address, not
+    ///      re-pointable after deploy. A new governor at a new address is not
+    ///      a rotation; it is a fork of the trust root, and no version of this
+    ///      lineage will follow it.
+    ///
+    ///      THE ROSTERS ARE THE EXCEPTION, DELIBERATELY. zRpcList and
+    ///      zSolverList are named above as constants, but each carries its own
+    ///      transferable two-step `owner` - which is NOT this DAO, and is not
+    ///      required to be.
+    ///      Curation is an ongoing job whose holder will change hands more
+    ///      than once over a page that never can - a signer set rotates, a
+    ///      multisig graduates to a governor, a compromised key has to be
+    ///      abandoned in an afternoon - and answering any of those with a new
+    ///      deploy of the version that names the satellite is the rigidity
+    ///      those satellites exist to relieve. So the LINEAGE's trust root is
+    ///      immovable and the CURATION's is not, and a reader should not be
+    ///      told otherwise: whoever holds a roster's owner can curate it, and
+    ///      that is a different party from this one. What the lineage fixes is
+    ///      WHICH rosters are read and which adapter may run; what those
+    ///      owners control is the contents. Read `owner()` on each before
+    ///      trusting either.
     address public immutable DAO;
 
     /// @notice The version that deployed this one; zero for v0.1.
@@ -319,13 +383,13 @@ contract zSwap {
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
     ///      instead of a parameter list, a temporary array and 15 assignments.
-    constructor(address dao, address previous, address[12] memory d) {
+    constructor(address dao, address previous, address[14] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 12; ++i) {
+        for (uint256 i; i != 14; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 12; ++j) {
+            for (uint256 j = i + 1; j != 14; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -341,6 +405,8 @@ contract zSwap {
         DATA10 = d[9];
         DATA11 = d[10];
         DATA12 = d[11];
+        DATA13 = d[12];
+        DATA14 = d[13];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -381,8 +447,12 @@ contract zSwap {
         // Codeless deploy, or something that is not a zSwap naming this one as
         // its predecessor. `staticcall` rather than the typed call so a missing
         // function is a revert here and not a decode panic: an address with no
-        // code answers successfully with empty returndata.
-        (bool ok, bytes memory ret) = next.staticcall(abi.encodeWithSelector(bytes4(keccak256("PREVIOUS()"))));
+        // code answers successfully with empty returndata. Every probe is
+        // gas-capped: a getter over an immutable costs a few thousand gas, so
+        // 30,000 is roughly ten times an honest answer and the hard ceiling on
+        // what a hostile one can burn inside this check. A probe that runs out
+        // answers `ok == false`, which is the same rejection as every other.
+        (bool ok, bytes memory ret) = next.staticcall{gas: 30_000}(abi.encodeWithSelector(bytes4(keccak256("PREVIOUS()"))));
         if (!ok || ret.length != 32 || abi.decode(ret, (address)) != address(this)) {
             revert NotASuccessor();
         }
@@ -392,8 +462,26 @@ contract zSwap {
         // permanent failure as a codeless deploy, arrived at from the other
         // side. It must also be zero: a version that is born already succeeded
         // is not a new tip, and the walk would step straight past it.
-        (ok, ret) = next.staticcall(abi.encodeWithSelector(bytes4(keccak256("successor()"))));
+        (ok, ret) = next.staticcall{gas: 30_000}(abi.encodeWithSelector(bytes4(keccak256("successor()"))));
         if (!ok || ret.length != 32 || abi.decode(ret, (address)) != address(0)) {
+            revert NotASuccessor();
+        }
+        // THE TRUST ROOT TRAVELS WHOLE. The two probes above verify the
+        // successor's SHAPE; this one verifies its ALLEGIANCE. The lineage is
+        // one chain of custody under one DAO - `deployNext` refused every
+        // caller but this contract's DAO at the top - and a successor whose
+        // `DAO()` named some new address would be a second head on that chain:
+        // the walk would hand it every reader of this name while its own admin
+        // answered to a governance nobody on this lineage ever chose. There is
+        // exactly one DAO address governing the lineage - this contract's
+        // immutable and the resolver's constant carry the same one - and it
+        // stays one address for the lineage's life: governance changes happen
+        // inside the DAO, never by pointing the constants somewhere new. (The
+        // rosters are seeded with it but own a transferable admin of their
+        // own; see the `DAO` natspec. Their curator moving is not a fork of
+        // this lineage, which is precisely why they are satellites.)
+        (ok, ret) = next.staticcall{gas: 30_000}(abi.encodeWithSelector(bytes4(keccak256("DAO()"))));
+        if (!ok || ret.length != 32 || abi.decode(ret, (address)) != DAO) {
             revert NotASuccessor();
         }
         successor = next;
@@ -465,7 +553,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all twelve chunks in one pass: each chunk
+    /// @dev Reassembles the page from all thirteen chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///
@@ -478,14 +566,15 @@ contract zSwap {
     /// cursor advances by construction, so the tenth chunk lands after the
     /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[12] memory d = [
-            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12
+        address[14] memory d = [
+            DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12,
+            DATA13, DATA14
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
             let body := add(s, 0x20)
             let at := body
-            for { let i := 0 } lt(i, 12) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, 14) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)
