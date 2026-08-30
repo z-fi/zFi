@@ -98,6 +98,57 @@ async function filebasePut(env, key, body, contentType) {
   return cid;
 }
 
+// ---------------------------------------------------------------------------
+// Upstream cache for the aggregator proxies.
+//
+// WHY THIS IS WORTH MORE HERE THAN IN THE PAGE. zSwap asks every lane to pay
+// its adapter's executor, so `taker` is a constant rather than the user's
+// address - which means two people quoting the same pair for the same amount
+// send a byte-identical upstream request. A cache in the page can only ever
+// help that one person; this one is shared by everybody, and by the dapp,
+// which spends the same API keys.
+//
+// The TTL is deliberately short. These responses carry executable calldata
+// with a deadline, and the point is to collapse a burst of identical asks,
+// not to serve an old route. In-flight dedup matters as much as the TTL: a
+// dozen people typing at once should cost one upstream call, not a dozen.
+//
+// Failures are never cached. A 429 or a 500 held for even ten seconds turns
+// one upstream hiccup into a lane that looks dead to everyone.
+const UP_TTL = 10_000;
+const UP_MAX = 400;
+const _up = new Map();
+const _upWait = new Map();
+
+async function cachedUpstream(key, go) {
+  const hit = _up.get(key);
+  if (hit && Date.now() - hit.t < UP_TTL) {
+    _up.delete(key);
+    _up.set(key, hit); // LRU touch
+    return { body: hit.body, status: 200, cached: true };
+  }
+  const inflight = _upWait.get(key);
+  if (inflight) return { ...(await inflight), cached: true };
+
+  const p = (async () => {
+    const res = await go();
+    const body = Buffer.from(await res.arrayBuffer());
+    // Only successes are held. A cached 429 turns one upstream hiccup into a
+    // lane that looks dead to every caller for the length of the TTL.
+    if (res.ok) {
+      _up.set(key, { body, t: Date.now() });
+      if (_up.size > UP_MAX) _up.delete(_up.keys().next().value);
+    }
+    return { body, status: res.status };
+  })();
+  _upWait.set(key, p);
+  try {
+    return await p;
+  } finally {
+    _upWait.delete(key);
+  }
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors(request) });
@@ -119,12 +170,12 @@ export default {
       const oxPath = url.pathname.slice(3); // strip "/0x" prefix
       if (!oxPath.startsWith('/swap/allowance-holder/')) return json(request, { error: 'forbidden path' }, 403);
       const oxUrl = `${OX_API}${oxPath}?${url.searchParams}`;
-      const res = await fetch(oxUrl, {
+      const r = await cachedUpstream(`0x|${oxUrl}`, () => fetch(oxUrl, {
         headers: { '0x-api-key': env.OX_API_KEY, '0x-version': 'v2' },
-      });
-      return new Response(res.body, {
-        status: res.status,
-        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      }));
+      return new Response(r.body, {
+        status: r.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json', 'X-Cache': r.cached ? 'HIT' : 'MISS' },
       });
     }
 
@@ -134,12 +185,12 @@ export default {
       const inchPath = url.pathname.slice(6); // strip "/1inch" prefix
       if (!inchPath.startsWith('/swap/')) return json(request, { error: 'forbidden path' }, 403);
       const inchUrl = `${INCH_API}${inchPath}?${url.searchParams}`;
-      const res = await fetch(inchUrl, {
+      const r = await cachedUpstream(`1inch|${inchUrl}`, () => fetch(inchUrl, {
         headers: { 'Authorization': `Bearer ${env.INCH_API_KEY}` },
-      });
-      return new Response(res.body, {
-        status: res.status,
-        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      }));
+      return new Response(r.body, {
+        status: r.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json', 'X-Cache': r.cached ? 'HIT' : 'MISS' },
       });
     }
 
@@ -160,17 +211,17 @@ export default {
         await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(stringToSign)),
       )));
       const okxUrl = `${OKX_API}${requestPath}${qs ? '?' + qs : ''}`;
-      const res = await fetch(okxUrl, {
+      const r = await cachedUpstream(`okx|${okxUrl}`, () => fetch(okxUrl, {
         headers: {
           'OK-ACCESS-KEY': env.OKX_API_KEY,
           'OK-ACCESS-SIGN': sig,
           'OK-ACCESS-TIMESTAMP': timestamp,
           'OK-ACCESS-PASSPHRASE': env.OKX_PASSPHRASE,
         },
-      });
-      return new Response(res.body, {
-        status: res.status,
-        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      }));
+      return new Response(r.body, {
+        status: r.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json', 'X-Cache': r.cached ? 'HIT' : 'MISS' },
       });
     }
 
@@ -182,10 +233,11 @@ export default {
       if (!ensoPath.startsWith('/api/v1/shortcuts/')) return json(request, { error: 'forbidden path' }, 403);
       const headers = { 'Accept': 'application/json' };
       if (env.ENSO_API_KEY) headers['Authorization'] = `Bearer ${env.ENSO_API_KEY}`;
-      const res = await fetch(`${ENSO_API}${ensoPath}?${url.searchParams}`, { headers });
-      return new Response(res.body, {
-        status: res.status,
-        headers: { ...cors(request), 'Content-Type': 'application/json' },
+      const ensoUrl = `${ENSO_API}${ensoPath}?${url.searchParams}`;
+      const r = await cachedUpstream(`enso|${ensoUrl}`, () => fetch(ensoUrl, { headers }));
+      return new Response(r.body, {
+        status: r.status,
+        headers: { ...cors(request), 'Content-Type': 'application/json', 'X-Cache': r.cached ? 'HIT' : 'MISS' },
       });
     }
 
