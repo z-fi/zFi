@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x585543386f78918fb45298107f3c50c3f3251539ef9dc6b743f3f9fe24425622;
-    uint256 constant EXPECTED_LEN = 372985;
+    bytes32 constant EXPECTED_HASH = 0xe74984fd4f53e87311330dd1e31f08ae984de4c32440b38325d659d1f7fd81f9;
+    uint256 constant EXPECTED_LEN = 380270;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -22,6 +22,26 @@ contract zSwapDeployTest is Test {
     }
 
     uint256 constant CHUNKS = 16;
+
+    /// The count lives in this constant, in zSwap's constructor arity, in the
+    /// `lt(i, N)` bound inside `_html`'s assembly, in six build scripts and in
+    /// eight test files. Nothing makes them agree, and twice now they have not:
+    /// once as an `address[15]` in the initcode builder, once as a `lt(i, 15)`
+    /// against a sixteen-slot array, which served a page missing its last chunk
+    /// while compiling perfectly. `build-zSwap-chunks.mjs` guards the deploy
+    /// path; this guards the tests, so a suite cannot go green against an arity
+    /// it no longer shares with the contract.
+    function test_theChunkCountMatchesTheContract() public view {
+        string memory src = vm.readFile("src/zSwap.sol");
+        assertTrue(
+            vm.contains(src, string.concat("address[", vm.toString(CHUNKS), "] memory d)")),
+            "CHUNKS here does not match zSwap.sol's constructor arity"
+        );
+        assertTrue(
+            vm.contains(src, string.concat("lt(i, ", vm.toString(CHUNKS), ")")),
+            "CHUNKS here does not match the loop bound in _html's assembly - a chunk would be dropped"
+        );
+    }
 
     /// @dev Builds zSwap exactly as production does: split zSwap.html into
     /// CHUNKS parts, deploy each as its own data contract, pass them all in.

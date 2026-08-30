@@ -209,6 +209,9 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .rank{display:block;margin-top:.45em;opacity:.72;font-size:.92em;line-height:1.5}
 .rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em}
 .rank i.w{opacity:1;font-weight:600}
+.rank i{cursor:pointer}
+.rank i:hover{opacity:1}
+.rank i.p{opacity:1;text-decoration:underline}
 .rank u{text-decoration:none;color:var(--m)}
 #rate .rk{cursor:pointer;padding:0 .25em;opacity:.6}
 #rate .rk:hover{opacity:1}
@@ -1002,6 +1005,31 @@ try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/
 body:JSON.stringify(body),signal:ac.signal});laneSaw(name,r.status);
 if(!r.ok)return null;return await r.json()}
 catch{return null}finally{clearTimeout(k)}};
+// One quote per keystroke used to mean seven heavy round trips per keystroke.
+// A short TTL plus in-flight dedup turns a burst of typing into one request per
+// lane per pair-and-amount, which is the difference between a lane answering
+// and a lane being rate-limited into silence. The window is deliberately short:
+// a stale route is worse than a slow one, and the adapter's bound is what makes
+// a slightly stale QUOTE safe, not this.
+const LANE_TTL=15000,LANE_MAX=64;
+const _laneHit=new Map(),_laneWait=new Map();
+const laneCached=(k,go)=>{
+const c=_laneHit.get(k);
+if(c&&Date.now()-c.t<LANE_TTL){_laneHit.delete(k);_laneHit.set(k,c);return Promise.resolve(c.v)}
+const w=_laneWait.get(k);
+if(w)return w;
+const pr=go().then(v=>{
+_laneWait.delete(k);_laneHit.set(k,{v,t:Date.now()});
+if(_laneHit.size>LANE_MAX)_laneHit.delete(_laneHit.keys().next().value);
+return v},e=>{_laneWait.delete(k);throw e});
+_laneWait.set(k,pr);return pr};
+
+// Which venue the user has pinned by hand, if any. Null is the default and
+// means "whichever floor is highest", which is the honest answer; this exists
+// because somebody who wants a particular venue is entitled to it, not because
+// overriding is usually a good idea. See where it is applied.
+let laneOverride=null;
+
 const laneGet=async(name,url,ms)=>{
 const ac=new AbortController(),k=setTimeout(()=>ac.abort(),ms);
 try{const r=await fetch(url,{signal:ac.signal});laneSaw(name,r.status);
@@ -1016,6 +1044,45 @@ catch{return null}finally{clearTimeout(k)}};
 // Every lane is asked to pay EXEC, never the user: a delta measured anywhere
 // else could be forged by an unrelated transfer in the same block, so a route
 // that pays the user directly measures nothing and reverts by design.
+// EXACT OUTPUT, where the lane supports it. Three of the seven do: 0x takes
+// `buyAmount`, ParaSwap takes `side=BUY`, Bebop takes `buy_amounts`. 1inch,
+// KyberSwap and Enso are sell-side only, and OKX's buy mode is not the same
+// call - so on an exact-output quote those four simply do not run. That is
+// four fewer challengers, not a broken quote: the chain still priced it.
+//
+// The shape returns {inp, target, spender, data} - what the lane says it needs
+// to SPEND. Lower is better here, which inverts every comparison downstream.
+const SOLVER_SHAPES_OUT={
+"0x":async(ep,f,t,amt,slip,ms)=>{
+const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
+buyAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
+const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
+if(!j||!j.transaction||!j.sellAmount)return null;
+return{inp:BigInt(j.sellAmount),target:j.transaction.to,spender:j.transaction.to,data:j.transaction.data}},
+"ParaSwap":async(ep,f,t,amt,slip,ms)=>{
+const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
+amount:amt.toString(),srcDecimals:"18",destDecimals:"18",side:"BUY",network:"1",version:"6.2"});
+const pr=await laneGet("ParaSwap",`${ep}/prices?${q}`,ms);
+const route=pr&&pr.priceRoute;if(!route||!route.srcAmount)return null;
+const j=await lanePost("ParaSwap",`${ep}/transactions/1?ignoreChecks=true`,{
+srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
+srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
+priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
+if(!j||!j.to||!j.data)return null;
+return{inp:BigInt(route.srcAmount),target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
+"Bebop":async(ep,f,t,amt,slip,ms)=>{
+if(f===ZERO||t===ZERO)return null;
+const q=new URLSearchParams({sell_tokens:f,buy_tokens:t,buy_amounts:amt.toString(),
+taker_address:solverExec,gasless:"false",approval_type:"Standard"});
+const j=await laneGet("Bebop",`${ep}/quote?${q}`,ms);
+const rs=j&&j.routes;if(!rs||!rs.length)return null;
+const route=rs.find(x=>x.type===j.bestPrice)||rs[0];
+const qq=route&&route.quote;if(!qq||!qq.tx||!qq.sellTokens)return null;
+const info=Object.values(qq.sellTokens)[0];
+if(!info||!info.amount||!qq.tx.to)return null;
+return{inp:BigInt(info.amount),target:qq.tx.to,spender:qq.tx.to,data:qq.tx.data}},
+};
+
 const SOLVER_SHAPES={
 "0x":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
@@ -2797,14 +2864,71 @@ if(c&&c!==r&&c.best.amountOut>r.best.amountOut){r=c;hybrid=null}
 // worse than either choice it looked like it was making - and running the
 // lanes walletless is the right one anyway, since the whole point of the
 // read path is that a visitor sees the real best price before connecting.
-if(isIn&&r&&r.amountLimit>0n){
+// EXACT OUTPUT. The whole comparison turns over: a lane offers to SPEND an
+// amount rather than deliver one, and the number it can be held to is a
+// CEILING - `quoted * (1 + slippage)` - not a floor. Lower wins, and the
+// chain's `amountLimit` is already its own ceiling, so the two are compared on
+// the same terms as before, in the other direction.
+//
+// The adapter needs no change for this. `fill` is handed the ceiling as
+// `amountIn` and the exact output as `minOut`: the route spends what it needs,
+// the bound still says what the user must receive, and whatever the route did
+// not spend comes back through the same dust refund a sell-side fill uses.
+if(!isIn&&r&&r.amountLimit>0n&&laneOverride!=="On-chain"){
+try{
+await loadSolvers();
+const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name)&&SOLVER_SHAPES_OUT[x.name]);
+if(lanes.length&&solverFill&&solverExec){
+const dl=new Promise(res=>setTimeout(()=>res(null),SOLVER_DEADLINE));
+const ck=`o|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
+const tried=await Promise.all(lanes.map(x=>Promise.race([
+laneCached(`${x.name}|${ck}`,
+()=>SOLVER_SHAPES_OUT[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE))
+.then(q=>q?{...q,lane:x}:null).catch(()=>null),dl])));
+let win=null;
+for(const c of tried){
+if(!c||!c.inp||!isAddr(c.target)||!/^0x[0-9a-fA-F]*$/.test(c.data||""))continue;
+const ceil=c.inp+(c.inp*slipBps)/10000n;
+if(laneOverride){
+if(c.lane.name!==laneOverride)continue;
+win={...c,ceil,forced:1};break;
+}
+// Cheaper than the chain by at least the lane's handicap.
+if(ceil*(10000n+c.lane.handicapBps)>=r.amountLimit*10000n)continue;
+if(!win||ceil<win.ceil)win={...c,ceil};
+}
+rank=[{n:"On-chain",f:r.amountLimit}];
+for(const c of tried){
+if(!c||!c.inp)continue;
+rank.push({n:c.lane.name,f:c.inp+(c.inp*slipBps)/10000n});
+}
+rank.sort((a,b)=>a.f>b.f?1:a.f<b.f?-1:0); // ascending: cheapest input first
+if(win&&my===seq){
+const ethIn=f.addr===ZERO;
+r={best:{source:SRC_SOLVER,amountIn:win.inp,amountOut:swapAmt,feeBps:0n,
+lane:win.lane.name,forced:win.forced},
+callData:"0x"+SEL_FILL+encAddr(win.target)+encAddr(win.spender)+encAddr(f.addr)
++encUint(win.ceil)+encAddr(t.addr)+encUint(swapAmt)+encAddr(rcv||acct||ZERO)
++encUint(256n)+encUint(BigInt(strip0x(win.data).length/2))
++strip0x(win.data)+"0".repeat((64-(strip0x(win.data).length%64))%64),
+fundedCallData:null,amountLimit:win.ceil,
+msgValue:ethIn?win.ceil:0n,
+to:solverFill,spender:ethIn?null:solverFill};
+hybrid=null;
+}
+}
+}catch{}
+}
+if(isIn&&r&&r.amountLimit>0n&&laneOverride!=="On-chain"){
 try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name));
 if(lanes.length&&solverFill&&solverExec){
 const deadline_=new Promise(res=>setTimeout(()=>res(null),SOLVER_DEADLINE));
+const ck=`${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
 const tried=await Promise.all(lanes.map(x=>Promise.race([
-SOLVER_SHAPES[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE)
+laneCached(`${x.name}|${ck}`,
+()=>SOLVER_SHAPES[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE))
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),
 deadline_])));
 let win=null;
@@ -2812,6 +2936,18 @@ for(const c of tried){
 if(!c||!c.out||!isAddr(c.target)||!/^0x[0-9a-fA-F]*$/.test(c.data||""))continue;
 // The lane's own guaranteed minimum, on the same terms as the chain's.
 const floor=c.out-(c.out*slipBps)/10000n;
+// A HAND-PICKED VENUE SKIPS THE CONTEST, AND ONLY THAT ONE. The handicap and
+// the floor comparison exist to stop a lane winning on a number it will not
+// honour; neither is a reason to overrule somebody who asked for a venue by
+// name. What they are owed instead is the truth about what they picked, which
+// the list shows and the rate line repeats. The BOUND is not negotiable
+// either way: `minOut` is still this lane's floor, still enforced on chain, so
+// a manual pick can cost basis points and cannot cost the trade.
+if(laneOverride){
+if(c.lane.name!==laneOverride)continue;
+win={...c,floor,forced:1};
+break;
+}
 // It must clear the chain's floor by the lane's handicap, not merely reach it.
 if(floor*10000n<=r.amountLimit*(10000n+c.lane.handicapBps))continue;
 if(!win||floor>win.floor)win={...c,floor};
@@ -2827,7 +2963,7 @@ rank.push({n:c.lane.name,f:c.out-(c.out*slipBps)/10000n});
 rank.sort((a,b)=>a.f<b.f?1:a.f>b.f?-1:0);
 if(win&&my===seq){
 const ethIn=f.addr===ZERO;
-r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:win.out,feeBps:0n,lane:win.lane.name},
+r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:win.out,feeBps:0n,lane:win.lane.name,forced:win.forced},
 callData:"0x"+SEL_FILL+encAddr(win.target)+encAddr(win.spender)+encAddr(f.addr)
 +encUint(swapAmt)+encAddr(t.addr)+encUint(win.floor)+encAddr(rcv||acct||ZERO)
 +encUint(256n)+encUint(BigInt(strip0x(win.data).length/2))
@@ -2846,7 +2982,7 @@ if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
 else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
 const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
 const s=r.best.source,raw=SOURCES[s]||"?";
-const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver`:hybrid?"Orderbook + AMM":(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
+const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" \u00b7 pinned":""}`:hybrid?"Orderbook + AMM":(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
 // The lane's name is appended by `src` above. The guaranteed minimum is NOT
 // added here: the `Min` suffix a few lines down already says it, for every
@@ -2864,16 +3000,20 @@ rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",
 // in this page's DOM: they go through `safeSym` and are set as textContent,
 // never parsed as markup.
 rankBox.textContent="";
-if(rank&&rank.length>1&&isIn){
+if(rank&&rank.length>1){
 const top=rank[0].f;
+const worse=isIn?"-":"+";
 for(const x of rank){
 const row=document.createElement("i");
 if(x.f===top)row.className="w";
+if(x.n===laneOverride)row.className+=" p";
+row.title=x.n===laneOverride?"Pinned \u2014 click again for the best floor":"Use this venue";
+row.onclick=()=>{laneOverride=laneOverride===x.n?null:x.n;update()};
 const n=document.createElement("span");
 n.textContent=safeSym(x.n).slice(0,16);
 const v=document.createElement("u");
-const d=top>0n?Number((top-x.f)*10000n/top)/100:0;
-v.textContent=`${trimAmt(x.f,t.dec)}${d>0.004?` \u00b7 -${d.toFixed(2)}%`:""}`;
+const gap=top>0n?Number((x.f>top?x.f-top:top-x.f)*10000n/top)/100:0;
+v.textContent=`${trimAmt(x.f,isIn?t.dec:f.dec)}${gap>0.004?` \u00b7 ${worse}${gap.toFixed(2)}%`:""}`;
 row.append(n,v);
 rankBox.appendChild(row);
 }

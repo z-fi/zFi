@@ -238,6 +238,96 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  // Somebody who asks for a venue by name gets it, even when its floor is
+  // lower - and is told, so the trade-off is visible rather than silent.
+  test('a hand-picked venue overrules the floor comparison, and says so', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://a.example', FILL), lane('ParaSwap', 'https://b.example', FILL)]);
+    chain.lanes = {
+      'a.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+      'b.example/prices': { priceRoute: { destAmount: (3400n * USDC).toString(), srcDecimals: 18, destDecimals: 6, tokenTransferProxy: ROUTER } },
+      'b.example/transactions/1': { to: ROUTER, data: '0x1234' },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3600', 'the best floor did not win by default');
+
+    // Pin the weaker venue by clicking its row.
+    const rows = [...p.$('rankBox').querySelectorAll('i')];
+    const para = rows.find(r => r.textContent.includes('ParaSwap'));
+    assert.ok(para, 'ParaSwap was not listed');
+    para.onclick();
+    await p.settle();
+
+    assert.equal(p.value('outAmt'), '3400', 'the pinned venue was not used');
+    assert.match(p.$('rate').textContent, /ParaSwap solver · pinned/, 'the pin was not disclosed');
+    // The bound still comes from the pinned lane, never from the one it beat.
+    const q = p.window.eval('last');
+    if (q) assert.ok(q.amountLimit < 3400n * USDC, 'minOut was not the pinned lane floor');
+    p.close();
+  });
+
+  test('pinning the chain keeps every lane out of the result', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://a.example', FILL)]);
+    chain.lanes = {
+      'a.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3600');
+
+    const onchain = [...p.$('rankBox').querySelectorAll('i')].find(r => r.textContent.includes('On-chain'));
+    onchain.onclick();
+    await p.settle();
+    assert.equal(p.value('outAmt'), '3000', 'the chain was pinned but a lane still won');
+    p.close();
+  });
+
+  // Exact output inverts everything: the lane offers to SPEND, the number it
+  // can be held to is a ceiling, and cheaper wins.
+  test('an exact-output lane wins by costing less, and bounds the spend', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://o.example', FILL)]);
+    // The chain wants ~1 ETH for 3000 USDC; this lane wants 0.9.
+    chain.lanes = {
+      'o.example': {
+        sellAmount: (9n * 10n ** 17n).toString(),
+        transaction: { to: ROUTER, data: '0xfeed' },
+      },
+    };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC' });
+    await p.connect();
+    // Typing into the RECEIVE box is the exact-output mode.
+    await p.typeAmount('outAmt', '3000');
+
+    const q = p.window.eval('last');
+    assert.ok(q, 'no quote was recorded');
+    assert.equal(q.to.toLowerCase(), FILL.toLowerCase(), 'exact-out did not route through the adapter');
+
+    const iface = new Interface([
+      'function fill(address target,address spender,address tokenIn,uint256 amountIn,address tokenOut,uint256 minOut,address to,bytes data)',
+    ]);
+    const d = iface.parseTransaction({ data: q.callData });
+    // amountIn is the CEILING the user could spend; minOut is the exact output.
+    assert.equal(d.args[5], 3000n * USDC, 'minOut is not the exact output asked for');
+    assert.ok(d.args[3] > 9n * 10n ** 17n, 'amountIn is not a ceiling above the quote');
+    assert.ok(d.args[3] < 10n ** 18n, 'the ceiling is not cheaper than the chain');
+    p.close();
+  });
+
+  test('sell-side-only lanes sit out an exact-output quote', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('1inch', 'https://s.example', FILL)]);
+    chain.lanes = { 's.example': { dstAmount: '1', tx: { to: ROUTER, data: '0x' } } };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC' });
+    await p.connect();
+    await p.typeAmount('outAmt', '3000');
+    assert.ok(!(chain.httpLog || []).some(h => String(h.url).includes('s.example')),
+      'a sell-side-only lane was asked for an exact-output quote');
+    p.close();
+  });
+
   test('a lane that cannot beat the on-chain floor does not win', async () => {
     // The whole point of comparing floors: a lane quoting barely above the
     // chain still loses, because its floor is below the chain's floor.

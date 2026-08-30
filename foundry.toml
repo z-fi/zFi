@@ -88,6 +88,11 @@ gas_limit = "18446744073709551615"
 
 fs_permissions = [
     { access = "read", path = "./zSwap.html" },
+    # zSwap.t.sol reads its own source to check the chunk count in this test
+    # file still matches the constructor arity AND the `lt(i, N)` bound inside
+    # `_html`'s assembly. The compiler catches the first if they drift; nothing
+    # catches the second, and a mismatch there serves a page missing a chunk.
+    { access = "read", path = "./src/zSwap.sol" },
     { access = "read", path = "./firstfruits.html" },
     { access = "read", path = "./script/zSwapRegistry-setHtmlAsTarget.calldata.txt" },
     # The TokenList suites read the frozen deterministic artifacts and write the
